@@ -3,9 +3,9 @@
  */
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static void set_expected(yvex_model_gate_expected_tensor *expected)
 {

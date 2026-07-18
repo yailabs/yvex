@@ -4,7 +4,7 @@
  * File: tests/test_safetensors_header.c
  * Layer: test
  */
-#include "test.h"
+#include "tests/test.h"
 
 #include <errno.h>
 #include <stdint.h>

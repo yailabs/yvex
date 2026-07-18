@@ -8,8 +8,8 @@
  */
 #include <string.h>
 
-#include "yvex_server_private.h"
-#include "test.h"
+#include <yvex/server.h>
+#include "tests/test.h"
 
 static int test_parse_request(void)
 {

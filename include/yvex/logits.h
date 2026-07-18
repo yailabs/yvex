@@ -1,4 +1,10 @@
 /*
+ * Owner: abi.logits (abi).
+ * Owns: the public-abi boundary consumed by repository.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
+ * Boundary: public-abi; moving this contract requires an ownership-manifest change.
+ *
  * YVEX - Logits buffer skeleton
  *
  * File: include/yvex/logits.h
@@ -88,6 +94,10 @@ typedef struct {
     int generation_ready;
     const char *generation_status;
 } yvex_logits_buffer_summary;
+
+int yvex_logits_count_valid(unsigned long long count);
+void yvex_logits_buffer_summary_init(yvex_logits_buffer_summary *out,
+                                     const yvex_logits_buffer_options *options);
 
 int yvex_logits_create(yvex_logits **out,
                        const yvex_model_descriptor *model,

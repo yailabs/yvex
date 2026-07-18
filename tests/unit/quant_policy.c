@@ -8,9 +8,9 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int write_policy(const char *path, const char *qtype)
 {

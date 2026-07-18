@@ -27,7 +27,7 @@ lives in [README.md](../README.md).
 Most consumers should include the umbrella header:
 
 ```c
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 ```
 
 The umbrella header collects the supported public header groups.

@@ -12,8 +12,8 @@
 
 #include <yvex/gguf_qtype.h>
 
-#include "test.h"
-#include "yvex_gguf_private.h"
+#include "tests/test.h"
+#include "src/gguf/private.h"
 
 typedef struct {
     const char *name;

@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-materialize test-runtime-descriptor test-materialize-live-plan test-materialize-live test-attention test-attention-live-plan test-attention-live test-quant test-quant-live-plan test-quant-live test-artifact-writer test-artifact-writer-fault test-artifact-live-plan test-artifact-live-structure test-artifact-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-materialize test-runtime-descriptor test-materialize-live-plan test-materialize-live test-attention test-attention-live-plan test-attention-live test-quant test-quant-live-plan test-quant-live test-artifact-writer test-artifact-writer-fault test-artifact-live-plan test-artifact-live-structure test-artifact-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface test-source-ownership test-repository-layout test-architecture-boundaries smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -56,165 +56,142 @@ LIBYVEX ?= $(LIB_DIR)/libyvex.a
 YVEX_BIN ?= ./yvex
 YVEXD_BIN ?= ./yvexd
 
-CLI_COMMAND_SRCS := src/cli/commands/yvex_generate_cli.c \
-	src/cli/commands/yvex_graph_cli.c \
-	src/cli/commands/yvex_kv_cli.c \
-	src/cli/commands/yvex_model_artifacts_cli.c \
-	src/cli/commands/yvex_model_target_cli.c \
-	src/cli/commands/yvex_sampling_cli.c \
-	$(sort $(filter-out src/cli/commands/yvex_generate_cli.c src/cli/commands/yvex_graph_cli.c src/cli/commands/yvex_kv_cli.c src/cli/commands/yvex_model_artifacts_cli.c src/cli/commands/yvex_model_target_cli.c src/cli/commands/yvex_sampling_cli.c,$(wildcard src/cli/commands/*.c)))
-CLI_INPUT_SRCS := src/cli/input/yvex_generate_args.c \
-	src/cli/input/yvex_graph_args.c \
-	src/cli/input/yvex_kv_args.c \
-	src/cli/input/yvex_model_artifacts_args.c \
-	src/cli/input/yvex_model_target_args.c \
-	src/cli/input/yvex_sampling_args.c \
-	$(sort $(filter-out src/cli/input/yvex_generate_args.c src/cli/input/yvex_graph_args.c src/cli/input/yvex_kv_args.c src/cli/input/yvex_model_artifacts_args.c src/cli/input/yvex_model_target_args.c src/cli/input/yvex_sampling_args.c,$(wildcard src/cli/input/*.c)))
-CLI_RENDER_SRCS := src/cli/render/yvex_generate_render.c \
-	src/cli/render/yvex_generate_trace_render.c \
-	src/cli/render/yvex_graph_render.c \
-	src/cli/render/yvex_kv_render.c \
-	src/cli/render/yvex_model_artifacts_render.c \
-	src/cli/render/yvex_model_target_render.c \
-	src/cli/render/yvex_sampling_render.c \
-	$(sort $(filter-out src/cli/render/yvex_generate_render.c src/cli/render/yvex_generate_trace_render.c src/cli/render/yvex_graph_render.c src/cli/render/yvex_kv_render.c src/cli/render/yvex_model_artifacts_render.c src/cli/render/yvex_model_target_render.c src/cli/render/yvex_sampling_render.c,$(wildcard src/cli/render/*.c)))
+CLI_COMMAND_SRCS := src/cli/commands/generate.c \
+	src/cli/commands/graph.c \
+	src/cli/commands/kv.c \
+	src/cli/commands/model_artifacts.c \
+	src/cli/commands/model_target.c \
+	src/cli/commands/sampling.c \
+	$(sort $(filter-out src/cli/commands/generate.c src/cli/commands/graph.c src/cli/commands/kv.c src/cli/commands/model_artifacts.c src/cli/commands/model_target.c src/cli/commands/sampling.c,$(wildcard src/cli/commands/*.c)))
+CLI_INPUT_SRCS := src/cli/input/generate.c \
+	src/cli/input/graph.c \
+	src/cli/input/kv.c \
+	src/cli/input/model_artifacts.c \
+	src/cli/input/model_target.c \
+	src/cli/input/sampling.c \
+	$(sort $(filter-out src/cli/input/generate.c src/cli/input/graph.c src/cli/input/kv.c src/cli/input/model_artifacts.c src/cli/input/model_target.c src/cli/input/sampling.c,$(wildcard src/cli/input/*.c)))
+CLI_RENDER_SRCS := src/cli/render/generate.c \
+	src/cli/render/generate_trace.c \
+	src/cli/render/graph.c \
+	src/cli/render/kv.c \
+	src/cli/render/model_artifacts.c \
+	src/cli/render/model_target.c \
+	src/cli/render/sampling.c \
+	$(sort $(filter-out src/cli/render/generate.c src/cli/render/generate_trace.c src/cli/render/graph.c src/cli/render/kv.c src/cli/render/model_artifacts.c src/cli/render/model_target.c src/cli/render/sampling.c,$(wildcard src/cli/render/*.c)))
 CLI_MODEL_ARTIFACT_SRCS := $(sort $(wildcard src/cli/model_artifacts/*.c))
 CLI_IO_SRCS := $(sort $(wildcard src/cli/io/*.c))
 
 CORE_SRCS := \
-	src/core/yvex_core.c \
-	src/core/yvex_fs.c \
-	src/core/yvex_sha256.c \
-	src/core/yvex_shard_index.c \
-	src/accounts/yvex_accounts.c \
-	src/artifact/yvex_artifact.c \
-	src/artifact/yvex_artifact_descriptor.c \
-	src/artifact/yvex_artifact_identity.c \
-	src/artifact/yvex_artifact_integrity.c \
-	src/artifact/yvex_artifact_materialize.c \
-	src/artifact/yvex_artifact_report.c \
-	src/artifact/yvex_artifact_roundtrip_gate.c \
-	src/backend/yvex_backend.c \
-	src/backend/yvex_backend_qtype.c \
-	src/backend/yvex_backend_report.c \
-	src/backend/yvex_backend_tensor.c \
-	src/bench/yvex_bench.c \
-	src/eval/yvex_eval.c \
-	src/generation/yvex_decode.c \
-	src/generation/yvex_generation.c \
-	src/generation/yvex_generation_report.c \
-	src/generation/yvex_generation_trace.c \
-	src/generation/yvex_kv.c \
-	src/generation/yvex_kv_report.c \
-	src/generation/yvex_logits.c \
-	src/generation/yvex_sampling.c \
-	src/generation/yvex_sampling_report.c \
+	src/core/status.c \
+	src/core/fs.c \
+	src/core/sha256.c \
+	src/core/shard_index.c \
+	src/accounts/provider.c \
+	src/artifact/core.c \
+	src/artifact/descriptor.c \
+	src/artifact/identity.c \
+	src/artifact/integrity.c \
+	src/artifact/materialize.c \
+	src/artifact/roundtrip_gate.c \
+	src/backend/core.c \
+	src/backend/report.c \
+	src/generation/decode.c \
+	src/generation/core.c \
+	src/generation/report.c \
+	src/generation/trace.c \
+	src/generation/kv.c \
+	src/generation/kv_report.c \
+	src/generation/logits.c \
+	src/generation/sampling.c \
+	src/generation/sampling_report.c \
 	src/gguf/naming.c \
-	src/gguf/gguf.c \
+	src/gguf/core.c \
 	src/gguf/conversion.c \
 	src/gguf/quant.c \
 	src/gguf/tools.c \
-	src/gguf/yvex_gguf_container.c \
-	src/gguf/yvex_gguf_descriptor.c \
-	src/gguf/yvex_gguf_file_sink.c \
-	src/gguf/yvex_gguf_layout_integrity.c \
-	src/gguf/yvex_gguf_layout_map.c \
-	src/gguf/yvex_gguf_metadata.c \
-	src/gguf/yvex_gguf_name_map.c \
-	src/gguf/yvex_gguf_qtype.c \
-	src/gguf/yvex_gguf_range_map.c \
-	src/gguf/yvex_gguf_reader.c \
-	src/gguf/yvex_gguf_report.c \
-	src/gguf/yvex_gguf_roundtrip.c \
-	src/gguf/yvex_gguf_tensor_info.c \
-	src/gguf/yvex_gguf_tokenizer_metadata.c \
-	src/gguf/yvex_gguf_writer.c \
-	src/gguf/yvex_quant_registry.c \
-	src/gguf/yvex_quant_scalar.c \
-	src/gguf/yvex_quant_block.c \
-	src/gguf/yvex_quant_compute.c \
-	src/gguf/yvex_quant_plan.c \
-	src/gguf/yvex_quant_sink.c \
-	src/gguf/yvex_quant_execute.c \
-	src/graph/yvex_deepseek_attention.c \
-	src/graph/yvex_deepseek_attention_internal.c \
-	src/graph/yvex_deepseek_attention_plan.c \
-	src/graph/yvex_deepseek_attention_sink.c \
-	src/graph/yvex_deepseek_attention_compressor.c \
-	src/graph/yvex_deepseek_attention_numeric.c \
-	src/graph/yvex_deepseek_attention_execute.c \
-	src/graph/yvex_deepseek_attention_cuda.c \
-	src/graph/yvex_graph_bind.c \
-	src/graph/yvex_graph.c \
-	src/graph/yvex_graph_execute.c \
-	src/graph/yvex_graph_guard.c \
-	src/graph/yvex_graph_plan.c \
-	src/graph/yvex_graph_primitive.c \
-	src/graph/yvex_graph_report.c \
-	src/graph/yvex_memory_plan.c \
-	src/io/yvex_json_writer.c \
-	src/metrics/yvex_metrics.c \
-	src/metrics/yvex_profile.c \
-	src/model/yvex_model.c \
-	src/model/yvex_model_artifacts.c \
-	src/model/architecture/yvex_deepseek_v4_ir.c \
-	src/model/compilation/yvex_transform_ir.c \
-	src/model/compilation/yvex_transform_ir_identity.c \
-	src/model/compilation/yvex_transform_ir_validate.c \
-	src/model/compilation/yvex_deepseek_transform_ir.c \
-	src/model/compilation/yvex_transform_binding.c \
-	src/model/yvex_runtime_descriptor.c \
-	src/model/yvex_runtime_descriptor_report.c \
-	src/model/artifacts/yvex_model_artifact_check_report.c \
-	src/model/artifacts/yvex_model_artifact_gate.c \
-	src/model/artifacts/yvex_model_artifact_list_report.c \
-	src/model/artifacts/yvex_model_artifact_ref.c \
-	src/model/artifacts/yvex_model_artifact_registry.c \
-	src/model/artifacts/yvex_model_artifact_report.c \
-	src/model/artifacts/yvex_model_artifact_status_report.c \
-	src/model/artifacts/yvex_model_artifact_write.c \
-	src/model/target/yvex_mapping_gate_report.c \
-	src/model/target/yvex_deepseek_payload_handoff.c \
-	src/model/target/yvex_deepseek_gguf_map.c \
-	src/model/target/yvex_deepseek_tensor_coverage.c \
-	src/model/target/yvex_missing_role_report.c \
-	src/model/target/yvex_model_class_profile.c \
-	src/model/target/yvex_model_target_candidates.c \
-	src/model/target/yvex_model_target_catalog.c \
-	src/model/target/yvex_model_target_decision.c \
-	src/model/target/yvex_model_target_report.c \
-	src/model/target/yvex_model_target_sidecar_write.c \
-	src/model/target/yvex_output_head_map_report.c \
-	src/model/target/yvex_qtype_policy_report.c \
-	src/model/target/yvex_qtype_role_support_report.c \
-	src/model/target/yvex_tensor_collection_report.c \
-	src/model/target/yvex_tensor_naming_report.c \
-	src/model/target/yvex_tokenizer_map_report.c \
-	src/runtime/yvex_chat.c \
-	src/runtime/yvex_runtime.c \
-	src/source/yvex_native_weights.c \
-	src/source/yvex_safetensors_header.c \
-	src/source/yvex_source.c \
-	src/source/yvex_source_deepseek.c \
-	src/source/yvex_source_inventory.c \
-	src/source/yvex_source_json.c \
-	src/source/yvex_source_manifest.c \
-	src/source/yvex_source_payload.c \
-	src/source/yvex_source_payload_identity.c \
-	src/source/yvex_source_payload_plan.c \
-	src/source/yvex_source_payload_stream.c \
-	src/source/yvex_source_provenance.c \
-	src/source/yvex_source_report.c \
-	src/source/yvex_source_scan.c \
-	src/source/yvex_source_verify.c \
-	src/source/yvex_source_write.c \
-	src/generation/yvex_prefill.c \
-	src/tokenizer/yvex_token_input.c \
-	src/tokenizer/yvex_tokenizer.c \
-	src/server/yvex_server.c
+	src/gguf/container.c \
+	src/gguf/descriptor.c \
+	src/gguf/file_sink.c \
+	src/gguf/layout_integrity.c \
+	src/gguf/layout_map.c \
+	src/gguf/metadata.c \
+	src/gguf/name_map.c \
+	src/gguf/qtype.c \
+	src/gguf/range_map.c \
+	src/gguf/reader.c \
+	src/gguf/report.c \
+	src/gguf/roundtrip.c \
+	src/gguf/tensor_info.c \
+	src/gguf/tokenizer_metadata.c \
+	src/gguf/writer.c \
+	src/gguf/quant_registry.c \
+	src/gguf/quant_scalar.c \
+	src/gguf/quant_block.c \
+	src/gguf/quant_compute.c \
+	src/gguf/quant_plan.c \
+	src/gguf/quant_sink.c \
+	src/gguf/quant_execute.c \
+	src/graph/attention.c \
+	src/graph/numeric.c \
+	src/graph/families/deepseek_v4.c \
+	src/graph/core.c \
+	src/graph/guard.c \
+	src/graph/plan.c \
+	src/graph/primitive.c \
+	src/graph/report.c \
+	src/graph/memory_plan.c \
+	src/io/writer.c \
+	src/metrics/core.c \
+	src/metrics/profile.c \
+	src/model/core.c \
+	src/model/families/deepseek_v4.c \
+	src/model/compilation/ir.c \
+	src/model/compilation/ir_identity.c \
+	src/model/compilation/ir_validate.c \
+	src/model/compilation/binding.c \
+	src/model/runtime_descriptor.c \
+	src/model/artifacts/gate.c \
+	src/model/artifacts/ref.c \
+	src/model/artifacts/registry.c \
+	src/model/artifacts/report.c \
+	src/model/artifacts/write.c \
+	src/model/target/mapping_gate.c \
+	src/model/target/missing_role.c \
+	src/model/target/model_class_profile.c \
+	src/model/target/candidates.c \
+	src/model/target/catalog.c \
+	src/model/target/decision.c \
+	src/model/target/report.c \
+	src/model/target/sidecar_write.c \
+	src/model/target/output_head_map.c \
+	src/model/target/qtype_policy.c \
+	src/model/target/qtype_role_support.c \
+	src/model/target/tensor_collection.c \
+	src/model/target/tensor_naming.c \
+	src/model/target/tokenizer_map.c \
+	src/runtime/chat.c \
+	src/runtime/core.c \
+	src/source/native_weights.c \
+	src/source/safetensors_header.c \
+	src/source/inventory.c \
+	src/source/json.c \
+	src/source/manifest.c \
+	src/source/payload.c \
+	src/source/payload_identity.c \
+	src/source/payload_plan.c \
+	src/source/payload_stream.c \
+	src/source/provenance.c \
+	src/source/report.c \
+	src/source/scan.c \
+	src/source/verify.c \
+	src/source/write.c \
+	src/generation/prefill.c \
+	src/tokenizer/token_input.c \
+	src/tokenizer/core.c \
+	src/server/core.c
 
 CLI_SRCS := \
-	src/cli/yvex_cli.c \
+	src/cli/main.c \
 	$(CLI_COMMAND_SRCS) \
 	$(CLI_INPUT_SRCS) \
 	$(CLI_MODEL_ARTIFACT_SRCS) \
@@ -222,22 +199,22 @@ CLI_SRCS := \
 	$(CLI_IO_SRCS)
 
 CUDA_SRCS := \
-	src/backend/cuda/cuda_backend.c \
-	src/backend/cuda/cuda_capability.c \
-	src/backend/cuda/cuda_tensor.c \
-	src/backend/cuda/cuda_ops.c \
-	src/backend/cuda/cuda_info.c \
-	src/backend/cuda/cuda_qtype.c \
-	src/backend/cuda/cuda_deepseek_attention.c \
-	src/backend/cuda/cuda_errors.c
+	src/backend/cuda/backend.c \
+	src/backend/cuda/capability.c \
+	src/backend/cuda/tensor.c \
+	src/backend/cuda/ops.c \
+	src/backend/cuda/info.c \
+	src/backend/cuda/qtype.c \
+	src/backend/cuda/families/deepseek_v4.c \
+	src/backend/cuda/errors.c
 
 CUDA_CU_SRCS := \
-	src/backend/cuda/cuda_kernels.cu
+	src/backend/cuda/kernels.cu
 
 CUDA_ARCH_FLAG := $(if $(filter auto,$(YVEX_CUDA_ARCH)),,-arch=$(YVEX_CUDA_ARCH))
 CUDA_PTX := $(patsubst %.cu,$(OBJ_DIR)/%.ptx,$(CUDA_CU_SRCS))
-CUDA_PTX_C := $(OBJ_DIR)/src/backend/cuda/cuda_kernels_ptx.c
-CUDA_PTX_OBJ := $(OBJ_DIR)/src/backend/cuda/cuda_kernels_ptx.o
+CUDA_PTX_C := $(OBJ_DIR)/src/backend/cuda/kernels_ptx.c
+CUDA_PTX_OBJ := $(OBJ_DIR)/src/backend/cuda/kernels_ptx.o
 
 CORE_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 CUDA_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CUDA_SRCS))
@@ -462,13 +439,23 @@ test-docs-surface: tests/test_docs_surface.sh
 test-surface: tests/test_surface.sh
 	sh tests/test_surface.sh
 
+test-source-ownership: tests/test_source_ownership.sh config/source_owners.tsv
+	sh tests/test_source_ownership.sh
+
+test-repository-layout: tests/test_repository_layout.sh Makefile
+	sh tests/test_repository_layout.sh
+
+test-architecture-boundaries: $(LIBYVEX) tests/test_architecture_boundaries.sh
+	sh tests/test_architecture_boundaries.sh
+
 smoke: test-cli
 
-check: check-docs check-guardrails lib cli server test test-cuda-no-nvcc test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke
+check: check-docs check-guardrails lib cli server test test-cuda-no-nvcc test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface test-source-ownership test-repository-layout test-architecture-boundaries smoke
 	@echo "yvex check: ok"
 
 $(LIBYVEX): $(CORE_OBJS)
 	@mkdir -p $(@D)
+	rm -f $@
 	$(AR) rcs $@ $^
 
 $(OBJ_DIR)/%.o: %.c
@@ -487,10 +474,10 @@ $(OBJ_DIR)/%.ptx: %.cu include/yvex/gguf_qtype.h
 	@mkdir -p $(@D)
 	$(NVCC) $(CPPFLAGS) $(NVCCFLAGS) $(CUDA_ARCH_FLAG) -ptx $< -o $@
 
-$(CUDA_PTX_C): $(CUDA_PTX) src/backend/cuda/cuda_kernels.h
+$(CUDA_PTX_C): $(CUDA_PTX) src/backend/cuda/kernels.h
 	@mkdir -p $(@D)
 	@{ \
-		printf '#include "cuda_kernels.h"\n'; \
+		printf '#include "kernels.h"\n'; \
 		printf 'const char yvex_cuda_kernels_ptx[] =\n'; \
 		sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/' $(CUDA_PTX); \
 		printf ';\n'; \
@@ -596,7 +583,10 @@ check-docs:
 	@grep -F "YVEX Runtime Contract" docs/contract.md >/dev/null
 	@grep -F "YVEX Operator Runbook" docs/operator-runbook.md >/dev/null
 
-check-guardrails:
+check-guardrails: $(LIBYVEX)
+	@sh tests/test_source_ownership.sh
+	@sh tests/test_repository_layout.sh
+	@sh tests/test_architecture_boundaries.sh
 	@test ! -e docs/spine.md
 	@test ! -d docs/spines
 	@test ! -d docs/integration
@@ -638,7 +628,6 @@ check-guardrails:
 	@test ! -d cuda
 	@test ! -d gguf
 	@test ! -d models
-	@test -f src/gguf/families.h
 	@test -d tests/vectors
 	@test -f tests/vectors/manifest.json
 	@test -f tests/test.c
@@ -648,9 +637,9 @@ check-guardrails:
 	@test "$$(find tests -maxdepth 1 -type f -name 'test_cli*.sh' | wc -l | tr -d ' ')" = "0"
 	@test -f include/yvex/server.h
 	@test ! -d fixtures
-	@test -f src/cli/yvex_cli.c
+	@test -f src/cli/main.c
 	@test -f src/daemon/yvexd.c
-	@test -f src/server/yvex_server.c
+	@test -f src/server/core.c
 	@test -z "$$(git ls-files 'yvex_*.c')"
 	@test -z "$$(git ls-files 'yvex_*_private.h')"
 	@test ! -d ui

@@ -1,4 +1,10 @@
 /*
+ * Owner: abi.source_manifest (abi).
+ * Owns: the public-abi boundary consumed by repository.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
+ * Boundary: public-abi; moving this contract requires an ownership-manifest change.
+ *
  * YVEX - Open-weight source manifest API
  *
  * File: include/yvex/source_manifest.h

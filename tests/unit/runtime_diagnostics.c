@@ -22,9 +22,9 @@
  */
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 int yvex_test_runtime_diagnostics(void)
 {
@@ -65,8 +65,11 @@ int yvex_test_runtime_diagnostics(void)
     YVEX_TEST_ASSERT(rc == YVEX_OK || rc == YVEX_ERR_UNSUPPORTED,
                      "cuda status visible");
     if (rc == YVEX_OK) {
-        YVEX_TEST_ASSERT(yvex_backend_status_of(cuda) == YVEX_BACKEND_STATUS_READY,
-                         "cuda backend ready visible");
+        yvex_backend_status status = yvex_backend_status_of(cuda);
+
+        YVEX_TEST_ASSERT(status == YVEX_BACKEND_STATUS_READY ||
+                             status == YVEX_BACKEND_STATUS_CONTEXT_READY,
+                         "cuda context or kernels ready visible");
         yvex_backend_close(cuda);
     } else {
         YVEX_TEST_ASSERT(cuda == NULL, "cuda backend not allocated when unsupported");

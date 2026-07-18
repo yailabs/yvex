@@ -25,9 +25,9 @@
  */
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int open_valid_gguf(yvex_artifact **artifact, yvex_gguf **gguf)
 {

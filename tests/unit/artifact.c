@@ -29,7 +29,7 @@
 
 #include <yvex/artifact.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 int yvex_test_artifact(void)
 {

@@ -1,4 +1,10 @@
 /*
+ * Owner: abi.native_weights (abi).
+ * Owns: the public-abi boundary consumed by repository.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
+ * Boundary: public-abi; moving this contract requires an ownership-manifest change.
+ *
  * YVEX - Native open-weight inventory API
  *
  * File: include/yvex/native_weights.h

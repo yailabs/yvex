@@ -11,15 +11,15 @@
  *   facts bound to the opened fixture snapshot.
  * Boundary: fixture materialization is not full runtime support.
  */
-#include "src/artifact/yvex_artifact_materialize.h"
-#include "src/model/yvex_runtime_descriptor.h"
+#include "src/artifact/materialize.h"
+#include "src/model/runtime_descriptor.h"
 
 #include <stdio.h>
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static void fill_fixture_admission(const yvex_artifact *artifact,
                                    const yvex_tensor_table *tensors,

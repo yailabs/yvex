@@ -22,7 +22,7 @@
  */
 #include <yvex/log.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 int yvex_test_log(void)
 {

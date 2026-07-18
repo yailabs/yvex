@@ -85,36 +85,38 @@ unexpected_doc=$(find docs -maxdepth 1 -type f -name '*.md' \
 test -z "$unexpected_doc" || fail "unexpected canonical document: $unexpected_doc"
 
 for heading in \
-  "## 0. Repository Contract" \
-  "## 1. Execution Order" \
-  "## 2. Ownership" \
-  "## 3. Source File Contracts" \
-  "## 4. C Implementation Rules" \
-  "## 5. CLI Rules" \
-  "## 6. Runtime And Backend Rules" \
-  "## 7. Source, Tensor, And Artifact Rules" \
-  "## 8. Evidence Stages" \
-  "## 9. Claims" \
-  "## 10. Docs" \
-  "## 11. Tests" \
-  "## 12. Validation" \
-  "## 13. Review Failure" \
-  "## 14. Final Rule"
+  "## 0. Repository contract" \
+  "## 1. Directory is the namespace" \
+  "## 2. Semantic owner admission" \
+  "## 3. Machine-readable ownership" \
+  "## 4. Generic and family boundaries" \
+  "## 5. C symbols and file contracts" \
+  "## 6. Dependency DAG" \
+  "## 7. Canonical capability ownership" \
+  "## 8. CLI, reports, and output" \
+  "## 9. Evidence and claim discipline" \
+  "## 10. Tests and validation" \
+  "## 11. Project control and closure" \
+  "## 12. Final rule"
 do
   require_text AGENTS.md "$heading"
 done
 
-require_text AGENTS.md '`PROJECT.md` is the single living engineering control file.'
-require_text AGENTS.md 'Only a `milestone` row may become Active Next'
-require_text AGENTS.md 'Temporary or parallel project-control spines are forbidden.'
-require_text AGENTS.md 'Permanent technical documents may link to'
-require_text AGENTS.md 'but may not repeat its current state.'
-require_text AGENTS.md 'DeepSeek-V4-Flash is the sole v0.1.0 release target.'
-require_text AGENTS.md 'Existing Qwen, Gemma, dense/common, MoE, fixture, topology,'
-require_text AGENTS.md 'The logical model is not identified by GGUF or another physical container.'
-require_text AGENTS.md '`TRACK.COMPILATION` owns immutable artifact-neutral transformation plans,'
-require_text AGENTS.md 'The quantizer consumes canonical transformation truth and may not'
-require_text AGENTS.md 'docs/reference-architecture.md'
+require_text AGENTS.md 'A new file is not an implementation convenience.'
+require_text AGENTS.md '`config/source_owners.tsv` is the canonical source-ownership manifest.'
+require_text AGENTS.md '`tests/test_source_ownership.sh` rejects missing and duplicate registrations,'
+require_text AGENTS.md '`tests/test_architecture_boundaries.sh`:'
+require_text AGENTS.md 'basenames are at most 32 characters including the extension;'
+require_text AGENTS.md 'maximum of three production'
+require_text AGENTS.md 'Explicit user authorization is required before:'
+require_text AGENTS.md 'source-relative object paths are mandatory'
+require_text AGENTS.md '`PROJECT.md` is the sole project-control authority.'
+require_text AGENTS.md 'Rank and state remain distinct. There'
+require_text AGENTS.md 'is exactly one active milestone and exactly one Active Next.'
+require_text AGENTS.md 'DeepSeek-V4-Flash is the'
+require_text AGENTS.md 'v0.1.0 release target; it is not automatically supported'
+require_text AGENTS.md '`TRACK.COMPILATION` owns artifact-neutral transformation semantics,'
+require_text AGENTS.md 'Quantization is not a GGUF artifact.'
 require_text AGENTS.md 'tensor proof artifact'
 require_text AGENTS.md 'complete model artifact'
 require_text AGENTS.md 'supported model artifact'
@@ -300,12 +302,12 @@ require_text "$project" 'Manifest v3 binds every shard to its authoritative Hugg
 require_text "$project" 'all 69,187 contributions and mapping identity `1aecbbe25b04de0d` remain exact'
 require_text "$project" 'Production C contains no fallback PTX.'
 require_text "$project" 'A no-`nvcc` build refuses every kernel before dispatch'
-require_text "$project" 'the dedicated DeepSeek attention path executes encoded projections'
-require_text "$project" 'Remaining DeepSeek MoE and transformer operations are unsupported.'
+require_text "$project" 'complete DeepSeek attention CUDA execution is not admitted'
+require_text "$project" '`attention_execution_supported=0`, `attention_cuda_execution_ready=0`, and'
 require_text "$project" '| Recovered IDs | 631 |'
-require_text "$project" '| Explicit new IDs | 48 |'
-require_text "$project" '| Canonical IDs | 679 |'
-require_text "$project" '| First-class milestones | 40 |'
+require_text "$project" '| Explicit new IDs | 49 |'
+require_text "$project" '| Canonical IDs | 680 |'
+require_text "$project" '| First-class milestones | 41 |'
 require_text "$project" '### 3.5 Model Compilation Boundaries'
 require_text "$project" '| `TRACK.COMPILATION` | Artifact-neutral transformation IR'
 require_text "$project" 'verified source facts'
@@ -378,7 +380,7 @@ do
   require_text "$reference" "$source"
 done
 require_text "$reference" 'src/backend/cuda/'
-require_text "$reference" 'src/model/architecture/'
+require_text "$reference" 'src/model/families/'
 require_text "$reference" '8df14cfc8c8a09b4e57f082e59593a3abce4ffb3'
 require_text "$reference" 'V010.REBASE.DEEPSEEK.0'
 require_text "$reference" 'V010.GGUF.ARTIFACT.ABI.1'

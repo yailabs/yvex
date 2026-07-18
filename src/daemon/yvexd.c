@@ -1,14 +1,20 @@
 /*
+ * Owner: daemon.yvexd (daemon).
+ * Owns: the entrypoint boundary consumed by operator.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=entrypoint and visibility=private match config/source_owners.tsv.
+ * Boundary: entrypoint; moving this contract requires an ownership-manifest change.
+ *
  * yvexd.c - Server/provider daemon entrypoint.
  *
  * This file owns argument parsing and process entry for the local provider
- * shell. Server behavior lives in yvex_server.c.
+ * shell. Server behavior lives in core.c.
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
 
 static void print_help(FILE *fp)

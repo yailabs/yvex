@@ -11,8 +11,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "yvex_run_private.h"
-#include "test.h"
+#include "src/runtime/private.h"
+#include "tests/test.h"
 
 static int exists_file(const char *path)
 {

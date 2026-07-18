@@ -1,4 +1,10 @@
 /*
+ * Owner: abi.fs (abi).
+ * Owns: the public-abi boundary consumed by repository.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
+ * Boundary: public-abi; moving this contract requires an ownership-manifest change.
+ *
  * YVEX - Runtime filesystem
  *
  * File: include/yvex/fs.h
@@ -77,7 +83,6 @@ typedef struct {
 
 int yvex_paths_default(yvex_paths *out, yvex_error *err);
 int yvex_paths_project(yvex_paths *out, const char *project_root, yvex_error *err);
-int yvex_paths_print(const yvex_paths *paths, FILE *fp, yvex_error *err);
 int yvex_operator_paths_resolve(const yvex_paths *paths,
                                 const char *explicit_models_root,
                                 yvex_operator_paths *out,
@@ -99,17 +104,10 @@ int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths
                                        size_t cap,
                                        int *out_exists,
                                        yvex_error *err);
-int yvex_operator_paths_print(const yvex_operator_paths *operator_paths,
-                              FILE *fp,
-                              const char *status,
-                              int created,
-                              int include_created,
-                              yvex_error *err);
 
 int yvex_run_id_make(char *out, unsigned long cap, yvex_error *err);
 int yvex_run_dir_prepare(yvex_run_dir *out, const yvex_paths *paths, const char *run_id, yvex_error *err);
 int yvex_run_dir_create(const yvex_run_dir *run, yvex_error *err);
-int yvex_run_dir_print(const yvex_run_dir *run, FILE *fp, yvex_error *err);
 
 #ifdef __cplusplus
 }

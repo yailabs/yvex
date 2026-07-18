@@ -1,4 +1,10 @@
 /*
+ * Owner: abi.gguf_layout (abi).
+ * Owns: the public-abi boundary consumed by repository.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
+ * Boundary: public-abi; moving this contract requires an ownership-manifest change.
+ *
  * YVEX - Canonical GGUF global layout admission
  *
  * File: include/yvex/gguf_layout.h
@@ -101,6 +107,17 @@ typedef struct {
 } yvex_gguf_layout_result;
 
 const char *yvex_gguf_layout_code_name(yvex_gguf_layout_code code);
+
+yvex_gguf_layout_code yvex_gguf_layout_interval_measure(
+    unsigned long long relative_offset,
+    unsigned long long raw_size,
+    unsigned int alignment,
+    unsigned long long *raw_end,
+    unsigned long long *padded_end);
+yvex_gguf_layout_code yvex_gguf_layout_sum_checked(
+    unsigned long long current,
+    unsigned long long addition,
+    unsigned long long *out);
 
 /*
  * Validates one parsed view against the exact opened artifact snapshot. The

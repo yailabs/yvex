@@ -14,15 +14,15 @@ grep -nF 'test: gguf_artifact_abi' "$out" >/dev/null
 # Reports and consumers may not restore whole-file parsing or string-derived
 # failure policy.
 grep -nF '#define YVEX_GGUF_ABI_NEXT_ROW "V010.CUDA.FAILCLOSED.0"' \
-  src/gguf/yvex_gguf_private.h >/dev/null
+  src/gguf/private.h >/dev/null
 grep -nF 'int yvex_artifact_read_at(' include/yvex/artifact.h >/dev/null
 grep -nF 'int yvex_gguf_open_ex(' include/yvex/gguf.h >/dev/null
 grep -nF 'yvex_gguf_parse_result parse_result;' \
-  src/gguf/yvex_gguf_private.h >/dev/null
+  src/gguf/private.h >/dev/null
 grep -nF 'yvex_gguf_reader_stats reader_stats;' \
-  src/gguf/yvex_gguf_private.h >/dev/null
+  src/gguf/private.h >/dev/null
 
-if grep -nE '\b(fseek|ftell|fread)\b' src/artifact/yvex_artifact.c >/dev/null; then
+if grep -nE '\b(fseek|ftell|fread)\b' src/artifact/core.c >/dev/null; then
   echo 'artifact ABI guard: whole-file stdio path returned' >&2
   exit 1
 fi
@@ -30,11 +30,11 @@ if grep -nF 'yvex_artifact_data' src/gguf/*.c >/dev/null; then
   echo 'artifact ABI guard: GGUF parser depends on whole-file artifact data' >&2
   exit 1
 fi
-if grep -nF 'strstr' src/gguf/yvex_gguf_reader.c >/dev/null; then
+if grep -nF 'strstr' src/gguf/reader.c >/dev/null; then
   echo 'artifact ABI guard: reader failure policy depends on error strings' >&2
   exit 1
 fi
-if grep -nE 'for \([^;]+;[^;]+< i;' src/artifact/yvex_artifact_integrity.c >/dev/null; then
+if grep -nE 'for \([^;]+;[^;]+< i;' src/artifact/integrity.c >/dev/null; then
   echo 'artifact ABI guard: integrity restored quadratic duplicate detection' >&2
   exit 1
 fi
@@ -43,8 +43,8 @@ if grep -R -nF 'required_key_count' src/gguf include/yvex >/dev/null; then
   exit 1
 fi
 
-test "$(grep -cF 'yvex_gguf_open_ex(' src/gguf/yvex_gguf_report.c)" -eq 1
-if grep -nF 'yvex_gguf_read_header' src/gguf/yvex_gguf_report.c >/dev/null; then
+test "$(grep -cF 'yvex_gguf_open_ex(' src/gguf/report.c)" -eq 1
+if grep -nF 'yvex_gguf_read_header' src/gguf/report.c >/dev/null; then
   echo 'artifact ABI guard: report reparses the GGUF header' >&2
   exit 1
 fi

@@ -441,7 +441,7 @@ procedures for implemented source, artifact and diagnostic boundaries live in
 | Area | Canonical owner | Responsibility |
 | --- | --- | --- |
 | Verified source | `src/source/` | Provenance, manifests, inventories, payload trust, immutable ranges and bounded delivery. |
-| Logical model | `src/model/architecture/`, `src/model/target/` | Typed family architecture, exact tensor requirements and target-specific mapping evidence. |
+| Logical model | `src/model/families/`, `src/model/target/` | Typed family architecture, exact tensor requirements and target-specific mapping evidence. |
 | Compilation | Compilation track in [`PROJECT.md`](PROJECT.md) | Planned Transformation IR and physical-variant identity; executable owner code is not installed yet. |
 | Physical lowering and artifacts | `src/gguf/`, `src/artifact/`, `src/model/artifacts/` | GGUF ABI and geometry, concrete lowering, read-only artifact admission and artifact lifecycle. |
 | Materialization and runtime | `src/model/`, `src/runtime/`, `src/generation/` | Tensor ownership, runtime coordination and later model-backed state transitions. |

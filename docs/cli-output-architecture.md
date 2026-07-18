@@ -19,7 +19,7 @@ Manual production print sites: 7319.
 | --- | ---: |
 | Root CLI/domain files, `yvex_*.c` | 6901 |
 | GGUF files, `gguf/*.c` | 404 |
-| Daemon/server, `yvexd.c` and `yvex_server.c` | 14 |
+| Daemon/server, `yvexd.c` and `core.c` | 14 |
 | CUDA files, `cuda/*.c` and `cuda/*.cu` | 0 |
 | Public headers, `include/yvex/*.h` | 0 |
 
@@ -56,28 +56,28 @@ Manual production print sites: 7319.
 
 | File | Count | Current pressure |
 | --- | ---: | --- |
-| `yvex_model_artifacts.c` | 2581 | model/download/fullmodel report walls and audit records |
-| `yvex_model.c` | 1409 | model-target, tensor-map, mapping gate, qtype policy, list/table output |
-| `yvex_graph.c` | 690 | graph reports, primitive proofs, execution diagnostics |
-| `yvex_runtime.c` | 432 | runtime reports and operator status surfaces |
-| `yvex_artifact.c` | 365 | artifact inspect/metadata/tensor surfaces |
-| `yvex_kv.c` | 314 | KV reports and diagnostic surfaces |
-| `yvex_source.c` | 308 | source manifest, native inventory, provenance reports |
+| `artifacts.c` | 2581 | model/download/fullmodel report walls and audit records |
+| `core.c` | 1409 | model-target, tensor-map, mapping gate, qtype policy, list/table output |
+| `core.c` | 690 | graph reports, primitive proofs, execution diagnostics |
+| `core.c` | 432 | runtime reports and operator status surfaces |
+| `core.c` | 365 | artifact inspect/metadata/tensor surfaces |
+| `kv.c` | 314 | KV reports and diagnostic surfaces |
+| `core.c` | 308 | source manifest, native inventory, provenance reports |
 | `gguf/tools.c` | 305 | conversion/tooling output and raw-ish evidence |
-| `yvex_generation.c` | 208 | diagnostic generation and trace output |
-| `yvex_accounts.c` | 95 | account/provider status output |
+| `core.c` | 208 | diagnostic generation and trace output |
+| `accounts.c` | 95 | account/provider status output |
 | `gguf/quant.c` | 80 | quant tooling output |
-| `yvex_fs.c` | 75 | path and filesystem status output |
-| `yvex_decode.c` | 69 | diagnostic decode output |
-| `yvex_chat.c` | 65 | interactive shell/status output |
-| `yvex_sampling.c` | 65 | diagnostic sampling output |
-| `yvex_logits.c` | 64 | diagnostic logits output |
-| `yvex_backend.c` | 45 | backend status/probe output |
-| `yvex_tokenizer.c` | 42 | tokenizer diagnostic output |
-| `yvex_metrics.c` | 34 | metrics output |
-| `yvex_profile.c` | 23 | profile output |
+| `fs.c` | 75 | path and filesystem status output |
+| `decode.c` | 69 | diagnostic decode output |
+| `chat.c` | 65 | interactive shell/status output |
+| `sampling.c` | 65 | diagnostic sampling output |
+| `logits.c` | 64 | diagnostic logits output |
+| `core.c` | 45 | backend status/probe output |
+| `core.c` | 42 | tokenizer diagnostic output |
+| `core.c` | 34 | metrics output |
+| `profile.c` | 23 | profile output |
 | `gguf/conversion.c` | 19 | conversion diagnostics |
-| `yvex_cli.c` | 17 | top-level dispatch/help only |
+| `main.c` | 17 | top-level dispatch/help only |
 | `yvexd.c` | 14 | daemon process output |
 
 The immediate concentration is clear: the first four files contain 5112 print
@@ -177,32 +177,32 @@ Renderer ownership should move toward this shape:
 | Diagnostic renderer | Preserve evidence during the transition from audit walls to structured raw output. |
 | Error/log helper | Keep stderr/errors/logs separate from command output. |
 
-`yvex_cli.c` remains top-level dispatch/help only. Domain files may call render
+`main.c` remains top-level dispatch/help only. Domain files may call render
 helpers, but command branches should stop owning full report walls.
 
 ## Renderer Foundation
 
 `V010.CLI.25` adds the first private renderer ownership boundary. The
-implementation is header-only in `yvex_render_private.h` so it does not create a
+implementation is header-only in `src/cli/render/private.h` so it does not create a
 new root implementation unit or a public API. The primitives cover stream/mode
 setup, report titles, key-value fields, numeric fields, compact status,
 top-blocker, next-row, boundary, short sections, inline field groups, and table
 row/header text.
 
 The pilot migration is `models prepare --dry-run` for downloaded/source-backed
-Qwen/Gemma targets. `yvex_model_artifacts.c` now builds a semantic prepare
+Qwen/Gemma targets. `artifacts.c` now builds a semantic prepare
 source report, renders compact porcelain output by default, and keeps the full
 diagnostic evidence under `--audit`.
 
 This is only the foundation. It does not remove all print sites, complete
-`yvex_model_artifacts.c`, migrate `yvex_model.c`, implement uniform JSON output,
+`artifacts.c`, migrate `core.c`, implement uniform JSON output,
 remove existing flags, or add runtime, quantization, artifact, generation, eval,
 benchmark, throughput, or release capability.
 
 ## Base CLI Grammar
 
 `V010.CLI.26` adds the base command grammar and command catalog. The
-implementation keeps `yvex_cli.c` as the top-level grammar/catalog/dispatch
+implementation keeps `main.c` as the top-level grammar/catalog/dispatch
 owner only: it records command group, surface class, purpose, normal usage,
 common example, option-class summary, and boundary metadata for each top-level
 command. Domain files still own behavior, detailed help, semantic reports, and
@@ -381,7 +381,7 @@ boundary and one `models prepare --dry-run` pilot without broad behavior
 changes, runtime claims, JSON claims, or a new command forest.
 
 Phase 2 is complete as `V010.CLI.26`: define the base CLI grammar and grouped
-command catalog in `yvex_cli.c` without moving domain behavior there.
+command catalog in `main.c` without moving domain behavior there.
 
 Phase 3 is complete as `SPINE.CLI.REBASE.1`: rebuild the Operator CLI track as
 shared substrate plus command-family migrations.
@@ -403,7 +403,7 @@ Phase 8 is flag demotion: once porcelain and JSON/raw cover a command family,
 demote `--output table`, reduce `--include-*`, and keep audit only where
 promotion evidence still needs it.
 
-Existing flags stay in place during migration. `yvex_cli.c` stays dispatch-only.
+Existing flags stay in place during migration. `main.c` stays dispatch-only.
 
 ## Non-Goals
 

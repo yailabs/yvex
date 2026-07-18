@@ -80,7 +80,7 @@ function uncode(value) {
 ' "$project" > "$rows"
 
 row_count=$(wc -l < "$rows" | tr -d ' ')
-test "$row_count" -eq 679 || fail "expected 679 canonical IDs, found $row_count"
+test "$row_count" -eq 680 || fail "expected 680 canonical IDs, found $row_count"
 
 cut -f 2 "$rows" | LC_ALL=C sort > "$all_ids"
 unique_count=$(uniq "$all_ids" | wc -l | tr -d ' ')
@@ -91,7 +91,7 @@ duplicate=$(uniq -d "$all_ids" | head -n 1 || true)
 test -z "$duplicate" || fail "duplicate canonical ID: $duplicate"
 
 id_hash=$(sha256sum "$all_ids" | awk '{ print $1 }')
-expected_id_hash=0b930d0fc87512489c500e57e667829dda6300bc4c8840fa75644e768e82084d
+expected_id_hash=f8a5f56fb933f007bf18b944d87227b9915618ab74bceac5bc9c878e62ef9425
 test "$id_hash" = "$expected_id_hash" ||
   fail "canonical ID set changed without an explicit migration: $id_hash"
 
@@ -102,6 +102,7 @@ V010.PROJECT.RECOVERY.1
 V010.DOCS.ARCHITECTURE.0
 V010.PROJECT.COMPILATION.0
 V010.DOCS.README.COMPILATION.0
+V010.REPO.SEMANTIC.COMPRESSION.0
 V010.REBASE.DEEPSEEK.0
 V010.SOURCE.PAYLOAD.STREAM.0
 V010.MAP.GGUF.DEEPSEEK.0
@@ -148,7 +149,7 @@ EOF
 
 LC_ALL=C sort -u "$new_ids" -o "$new_ids"
 new_count=$(wc -l < "$new_ids" | tr -d ' ')
-test "$new_count" -eq 48 || fail "expected 48 explicit new IDs, found $new_count"
+test "$new_count" -eq 49 || fail "expected 49 explicit new IDs, found $new_count"
 
 missing_new=$(comm -23 "$new_ids" "$all_ids" | head -n 1 || true)
 test -z "$missing_new" || fail "explicit new ID is absent: $missing_new"
@@ -348,10 +349,12 @@ grep -F '| `V010.RUNTIME.DESCRIPTOR.GGUF.0` | common | `complete` |' "$project" 
   fail "common runtime descriptor is not complete"
 grep -F '| `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0` | DeepSeek | `complete` |' "$project" >/dev/null ||
   fail "DeepSeek runtime descriptor is not complete"
-grep -F '| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `complete` |' "$project" >/dev/null ||
-  fail "DeepSeek attention is not complete"
-grep -F '| `V010.RUNTIME.DEEPSEEK.KV.0` | DeepSeek | `active` |' "$project" >/dev/null ||
-  fail "DeepSeek KV is not active"
+grep -F '| `V010.REPO.SEMANTIC.COMPRESSION.0` | project | `complete` |' "$project" >/dev/null ||
+  fail "repository semantic compression is not complete"
+grep -F '| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `active` |' "$project" >/dev/null ||
+  fail "DeepSeek attention checkpoint is not active"
+grep -F '| `V010.RUNTIME.DEEPSEEK.KV.0` | DeepSeek | `blocked` |' "$project" >/dev/null ||
+  fail "DeepSeek KV is not blocked"
 grep -F '| V010.MODEL.TRANSFORM.IR.0 | recovered/promoted |' "$project" >/dev/null ||
   fail "quantization does not depend on the transformation IR"
 

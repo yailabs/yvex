@@ -1,11 +1,15 @@
 /*
+ * Owner: gguf.conversion (gguf).
+ * Owns: the file-serialization boundary consumed by artifact,model,quant.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=private match config/source_owners.tsv.
+ * Boundary: file-serialization; moving this contract requires an ownership-manifest change.
+ *
  * gguf/conversion.c - GGUF conversion, mapping, family dispatch, and qtypes.
  *
  * This file owns selected tensor conversion plans and GGUF-facing family
  * mapping. It does not implement model execution.
  */
-
-#include "families.h"
 
 #include <yvex/artifact.h>
 #include <yvex/artifact_naming.h>
@@ -47,7 +51,6 @@ int yvex_weight_mapping_table_add(yvex_weight_mapping_table *table,
                                   int requires_transpose,
                                   yvex_error *err);
 
-void yvex_weight_mapping_print_shape(const unsigned long long *dims, unsigned int rank);
 
 
 /* Conversion planning */
@@ -199,7 +202,7 @@ int yvex_conversion_map_tensor(const char *arch,
         mapped = yvex_qwen_adapter_map_name(native->name, out->target_name, sizeof(out->target_name),
                                             &out->role, &issue);
     } else if (strcmp(arch, "deepseek4") == 0 || strcmp(arch, "deepseek") == 0) {
-        mapped = yvex_deepseek_adapter_map_name(native->name, out->target_name, sizeof(out->target_name),
+        mapped = yvex_gguf_map_deepseek_name(native->name, out->target_name, sizeof(out->target_name),
                                                 &out->role, &issue);
     } else {
         yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "conversion_map", "unsupported architecture: %s", arch);
@@ -1025,7 +1028,7 @@ static int wm_map_native_row(yvex_weight_mapping_table *table,
         mapped = yvex_qwen_adapter_map_name(native->name, target_candidate, sizeof(target_candidate),
                                             &role, &issue);
     } else {
-        mapped = yvex_deepseek_adapter_map_name(native->name, target_candidate, sizeof(target_candidate),
+        mapped = yvex_gguf_map_deepseek_name(native->name, target_candidate, sizeof(target_candidate),
                                                 &role, &issue);
     }
     if (!mapped) {
@@ -1180,24 +1183,6 @@ const yvex_weight_mapping_info *yvex_weight_mapping_table_find_native(const yvex
         }
     }
     return NULL;
-}
-
-
-
-void yvex_weight_mapping_print_shape(const unsigned long long *dims, unsigned int rank)
-{
-    unsigned int i;
-
-    if (!dims || rank == 0) {
-        fprintf(stdout, "unknown");
-        return;
-    }
-    fprintf(stdout, "[");
-    for (i = 0; i < rank; ++i) {
-        if (i) fprintf(stdout, ",");
-        fprintf(stdout, "%llu", dims[i]);
-    }
-    fprintf(stdout, "]");
 }
 
 
@@ -1380,7 +1365,7 @@ static int ds_template_style(const char *native_name,
     return 0;
 }
 
-int yvex_deepseek_adapter_map_name(const char *native_name,
+int yvex_gguf_map_deepseek_name(const char *native_name,
                                    char *target,
                                    size_t target_cap,
                                    yvex_tensor_role *role,

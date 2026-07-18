@@ -54,21 +54,21 @@ Largest outside-writer files:
 
 | Path | Matches | Classification |
 | --- | ---: | --- |
-| `src/model/yvex_model_artifacts.c` | 2558 | major legacy pending |
-| `src/runtime/yvex_runtime.c` | 432 | major legacy pending |
-| `src/artifact/yvex_artifact.c` | 365 | major legacy pending |
+| `src/model/artifacts/` | 2558 | major legacy pending |
+| `src/runtime/core.c` | 432 | major legacy pending |
+| `src/artifact/core.c` | 365 | major legacy pending |
 | `src/gguf/tools.c` | 286 | major legacy pending |
-| `src/accounts/yvex_accounts.c` | 100 | legacy pending |
+| `src/accounts/provider.c` | 100 | legacy pending |
 | `src/gguf/quant.c` | 85 | legacy pending |
-| `src/core/yvex_fs.c` | 75 | legacy pending |
-| `src/runtime/yvex_chat.c` | 70 | legacy pending |
-| `src/generation/yvex_decode.c` | 69 | legacy pending |
-| `src/generation/yvex_logits.c` | 64 | legacy pending |
-| `src/backend/yvex_backend.c` | 45 | legacy pending |
-| `src/tokenizer/yvex_tokenizer.c` | 42 | legacy pending |
-| `src/metrics/yvex_metrics.c` | 41 | legacy pending |
-| `src/source/yvex_source_write.c` | 26 | explicit source writer candidate; needs owner review |
-| `src/graph/yvex_graph_report.c` | 1 | graph dump compatibility residue |
+| `src/core/fs.c` | 75 | legacy pending |
+| `src/runtime/chat.c` | 70 | legacy pending |
+| `src/generation/decode.c` | 69 | legacy pending |
+| `src/generation/logits.c` | 64 | legacy pending |
+| `src/backend/core.c` | 45 | legacy pending |
+| `src/tokenizer/core.c` | 42 | legacy pending |
+| `src/metrics/core.c` | 41 | legacy pending |
+| `src/source/write.c` | 26 | explicit source writer candidate; needs owner review |
+| `src/graph/report.c` | 1 | graph dump compatibility residue |
 
 ## CLI-Shaped Input Inventory
 
@@ -89,14 +89,14 @@ Top non-CLI owners:
 
 | Path | Matches | Classification |
 | --- | ---: | --- |
-| `src/model/yvex_model_artifacts.c` | 34 | major legacy pending |
+| `src/model/artifacts/` | 34 | major legacy pending |
 | `src/gguf/tools.c` | 21 | legacy pending |
-| `src/runtime/yvex_runtime.c` | 19 | legacy pending |
-| `src/artifact/yvex_artifact.c` | 19 | legacy pending |
-| `src/tokenizer/yvex_tokenizer.c` | 9 | legacy pending |
-| `src/backend/yvex_backend.c` | 6 | legacy pending |
-| `src/generation/yvex_logits.c` | 3 | legacy pending |
-| `src/generation/yvex_decode.c` | 3 | legacy pending |
+| `src/runtime/core.c` | 19 | legacy pending |
+| `src/artifact/core.c` | 19 | legacy pending |
+| `src/tokenizer/core.c` | 9 | legacy pending |
+| `src/backend/core.c` | 6 | legacy pending |
+| `src/generation/logits.c` | 3 | legacy pending |
+| `src/generation/decode.c` | 3 | legacy pending |
 
 Some model-target report modules contain output-contract field values such as
 `--output` in row text or test-facing strings; those are not CLI parsers, but
@@ -114,17 +114,17 @@ Non-CLI/core hits:
 
 | Path | Count | Classification |
 | --- | ---: | --- |
-| `src/model/yvex_model_artifacts.c` | 2 | major legacy pending |
-| `src/accounts/yvex_accounts.c` | 1 | legacy pending |
-| `src/artifact/yvex_artifact.c` | 1 | legacy pending |
-| `src/backend/yvex_backend.c` | 1 | legacy pending |
-| `src/generation/yvex_decode.c` | 1 | legacy pending |
-| `src/generation/yvex_logits.c` | 1 | legacy pending |
-| `src/generation/yvex_prefill.c` | 1 | legacy pending |
+| `src/model/artifacts/` | 2 | major legacy pending |
+| `src/accounts/provider.c` | 1 | legacy pending |
+| `src/artifact/core.c` | 1 | legacy pending |
+| `src/backend/core.c` | 1 | legacy pending |
+| `src/generation/decode.c` | 1 | legacy pending |
+| `src/generation/logits.c` | 1 | legacy pending |
+| `src/generation/prefill.c` | 1 | legacy pending |
 | `src/gguf/tools.c` | 1 | legacy pending |
-| `src/runtime/yvex_chat.c` | 1 | legacy pending |
-| `src/runtime/yvex_runtime.c` | 1 | legacy pending |
-| `src/tokenizer/yvex_tokenizer.c` | 1 | legacy pending |
+| `src/runtime/chat.c` | 1 | legacy pending |
+| `src/runtime/core.c` | 1 | legacy pending |
+| `src/tokenizer/core.c` | 1 | legacy pending |
 
 ## Renderer Leakage Inventory
 
@@ -134,7 +134,7 @@ Command:
 git grep -nE 'yvex_backend|yvex_graph_build|yvex_model_ref|native_weight|safetensors|fopen|open\(|read\(|write\(' -- src/cli/render || true
 ```
 
-Result: 34 matches, all in `src/cli/render/yvex_source_render.c`.
+Result: 34 matches, all in `src/cli/render/source.c`.
 
 Classification: advisory false positives. The matches are typed source report
 fields and literal output labels containing `safetensors`; no renderer file IO,
@@ -146,12 +146,12 @@ Threshold: 350 lines.
 
 | Adapter | Lines | Status |
 | --- | ---: | --- |
-| `src/cli/commands/yvex_source_cli.c` | 221 | pass |
-| `src/cli/commands/yvex_kv_cli.c` | 156 | pass |
-| `src/cli/commands/yvex_graph_cli.c` | 129 | pass |
-| `src/cli/commands/yvex_sampling_cli.c` | 115 | pass |
-| `src/cli/commands/yvex_model_target_cli.c` | 112 | pass |
-| `src/cli/commands/yvex_generate_cli.c` | 87 | pass |
+| `src/cli/commands/source.c` | 221 | pass |
+| `src/cli/commands/kv.c` | 156 | pass |
+| `src/cli/commands/graph.c` | 129 | pass |
+| `src/cli/commands/sampling.c` | 115 | pass |
+| `src/cli/commands/model_target.c` | 112 | pass |
+| `src/cli/commands/generate.c` | 87 | pass |
 
 All remaining command adapters are 18-line forwarding adapters.
 
@@ -167,10 +167,10 @@ Findings:
 
 | Path | Classification |
 | --- | --- |
-| `src/accounts/yvex_accounts.c` | provider subprocess capture; legacy pending, not report blob |
+| `src/accounts/provider.c` | provider subprocess capture; legacy pending, not report blob |
 | `include/yvex/log.h` | log sink wording; allowed text description |
 | `include/yvex/status.h` | log sink wording; allowed text description |
-| `src/generation/yvex_kv_report.c` | comment wording only |
+| `src/generation/kv_report.c` | comment wording only |
 
 No model-target `primary_text`, `diagnostic_text`, `raw_output`,
 `report_text`, `captured_text`, or `line_buffer` debt remains.
@@ -187,11 +187,11 @@ Important findings:
 
 | Path | Classification |
 | --- | --- |
-| `src/graph/yvex_graph_report.c` | graph dump compatibility; pending cleanup |
-| `src/cli/yvex_render_private.h` | render boundary helper; pending CLI renderer cleanup |
-| `src/core/yvex_operator_render_private.h` | legacy operator render helper; pending cleanup |
-| `src/accounts/yvex_accounts.c` | legacy provider binary discovery; likely real behavior |
-| `src/runtime/yvex_runtime.c` | direct conversion bridge output; pending cleanup |
+| `src/graph/report.c` | graph dump compatibility; pending cleanup |
+| `src/cli/render/private.h` | render boundary helper; pending CLI renderer cleanup |
+| `src/cli/render/private.h` | legacy operator render helper; pending cleanup |
+| `src/accounts/provider.c` | legacy provider binary discovery; likely real behavior |
+| `src/runtime/core.c` | direct conversion bridge output; pending cleanup |
 | `include/yvex/conversion.h`, `include/yvex/weights.h` | public bridge terminology; not automatically invalid |
 | `src/model/target/*` | semantic compatibility/status field values only; no runner/backend shell |
 
@@ -205,25 +205,25 @@ Thresholds:
 
 | Path | Lines | Severity | Mixes layers |
 | --- | ---: | --- | --- |
-| `src/model/yvex_model_artifacts.c` | 17223 | critical | yes; next row should split model artifacts/control-plane output |
-| `src/runtime/yvex_runtime.c` | 4698 | strong | yes; runtime CLI/report/output residue remains |
-| `src/graph/yvex_graph_primitive.c` | 4538 | strong | likely primitive proof density; needs focused review |
+| `src/model/artifacts/` | 17223 | critical | yes; next row should split model artifacts/control-plane output |
+| `src/runtime/core.c` | 4698 | strong | yes; runtime CLI/report/output residue remains |
+| `src/graph/primitive.c` | 4538 | strong | likely primitive proof density; needs focused review |
 | `src/gguf/quant.c` | 2513 | strong | likely policy/tooling mix; needs focused review |
 | `src/gguf/tools.c` | 2184 | warning | command surface/tooling mix remains |
-| `src/backend/yvex_backend.c` | 2103 | warning | backend report/output residue remains |
-| `src/artifact/yvex_artifact.c` | 1995 | warning | artifact command/report/output residue remains |
+| `src/backend/core.c` | 2103 | warning | backend report/output residue remains |
+| `src/artifact/core.c` | 1995 | warning | artifact command/report/output residue remains |
 | `src/gguf/conversion.c` | 1678 | warning | conversion bridge/map facts need review |
-| `src/source/yvex_source_report.c` | 1466 | warning | source report is large but cell-owned |
-| `src/backend/cuda/cuda_ops.c` | 1352 | warning | CUDA primitive implementation density likely justified |
-| `src/model/yvex_model.c` | 1297 | warning | model registry/materialization facts need review |
-| `src/accounts/yvex_accounts.c` | 1247 | warning | provider execution/capture mix remains |
-| `src/core/yvex_fs.c` | 1217 | warning | filesystem utility/output residue needs review |
-| `src/generation/yvex_generation.c` | 1169 | warning | closed cell but still large enough to monitor |
-| `src/tokenizer/yvex_tokenizer.c` | 1158 | warning | tokenizer command/report residue remains |
-| `src/artifact/yvex_artifact_integrity.c` | 1037 | warning | integrity report/output residue likely |
-| `src/gguf/gguf.c` | 1007 | warning | parser density likely acceptable pending review |
+| `src/source/report.c` | 1466 | warning | source report is large but cell-owned |
+| `src/backend/cuda/ops.c` | 1352 | warning | CUDA primitive implementation density likely justified |
+| `src/model/core.c` | 1297 | warning | model registry/materialization facts need review |
+| `src/accounts/provider.c` | 1247 | warning | provider execution/capture mix remains |
+| `src/core/fs.c` | 1217 | warning | filesystem utility/output residue needs review |
+| `src/generation/core.c` | 1169 | warning | closed cell but still large enough to monitor |
+| `src/tokenizer/core.c` | 1158 | warning | tokenizer command/report residue remains |
+| `src/artifact/integrity.c` | 1037 | warning | integrity report/output residue likely |
+| `src/gguf/core.c` | 1007 | warning | parser density likely acceptable pending review |
 
-Recommended next row should start with the critical `src/model/yvex_model_artifacts.c`
+Recommended next row should start with the critical `src/model/artifacts/`
 residue, not quantization implementation.
 
 ## libyvex Leakage Inventory
@@ -253,7 +253,7 @@ project ledger; these findings do not advance artifact or runtime gates.
 | Row | Purpose |
 | --- | --- |
 | `TOPOLOGY.CELL.CLOSURE.2` | remove or hard-classify the residual direct-output and CLI-shaped domain debt found here |
-| `TOPOLOGY.CELL.MODEL_ARTIFACTS.0` | split `src/model/yvex_model_artifacts.c` into domain/report/input/command/render/write ownership |
+| `TOPOLOGY.CELL.MODEL_ARTIFACTS.0` | split `src/model/artifacts/` into domain/report/input/command/render/write ownership |
 | `TOPOLOGY.CELL.RUNTIME.0` | split runtime report/command/output residue from runtime coordination |
 | `TOPOLOGY.CELL.ARTIFACT.0` | extract artifact inspect/integrity command and rendering surfaces |
 | `TOPOLOGY.CELL.GGUF_TOOLS.0` | split GGUF command/tool output from GGUF parsing/conversion/quant internals |
@@ -275,17 +275,17 @@ absorbed; this audit does not set Active Next.
 
 ## Follow-up: TOPOLOGY.CELL.MODEL_ARTIFACTS.0
 
-Previous `src/model/yvex_model_artifacts.c` direct-output count: 2558.
-New `src/model/yvex_model_artifacts.c` direct-output count: 0.
+Previous `src/model/artifacts/` direct-output count: 2558.
+New `src/model/artifacts/` direct-output count: 0.
 
-Previous `src/model/yvex_model_artifacts.c` line count: 17223.
-New `src/model/yvex_model_artifacts.c` line count: 28.
+Previous `src/model/artifacts/` line count: 17223.
+New `src/model/artifacts/` line count: 28.
 
-CLI include status: cleared from `src/model/yvex_model_artifacts.c` and
+CLI include status: cleared from `src/model/artifacts/` and
 `src/model/artifacts/*`; command-surface includes now live under
-`src/cli/commands/yvex_model_artifacts_cli.c`.
+`src/cli/commands/model_artifacts.c`.
 
-CLI-shaped input status: cleared from `src/model/yvex_model_artifacts.c`,
+CLI-shaped input status: cleared from `src/model/artifacts/`,
 `src/model/artifacts/*`, and the model-artifacts renderer. CLI-shaped parsing
 residue now lives under CLI command/input ownership.
 
@@ -301,8 +301,8 @@ largest audit residue after rerunning the closure audit.
 
 ## Follow-up: TOPOLOGY.CELL.MODEL_ARTIFACTS.1
 
-Previous `src/cli/commands/yvex_model_artifacts_cli.c` line count: 14723.
-New `src/cli/commands/yvex_model_artifacts_cli.c` line count: 142.
+Previous `src/cli/commands/model_artifacts.c` line count: 14723.
+New `src/cli/commands/model_artifacts.c` line count: 142.
 
 Parsing ownership: public command symbols now route through the model-artifacts
 input/report/render contract and a CLI-only transitional surface. Full lexical
@@ -311,11 +311,11 @@ parsing for the historical `models`, `fullmodel`, `attention`, `context`,
 
 Rendering ownership: the public command adapter no longer owns field, table, or
 JSON helper functions. Historical rendering remains in
-`src/cli/model_artifacts/yvex_model_artifacts_surface.c`, not in the domain or
+`src/cli/model_artifacts/`, not in the domain or
 `libyvex.a`.
 
 Remaining model-artifacts command residue:
-`src/cli/model_artifacts/yvex_model_artifacts_surface.c` is still a large
+`src/cli/model_artifacts/` is still a large
 transitional CLI surface at 14724 lines. It preserves current command behavior
 while the adapter is locked down; it is not global closure.
 
@@ -325,32 +325,26 @@ CLI-shaped input status: model-artifacts domain/render remain free of raw
 `argc`/`argv`; raw command vectors remain only in CLI-owned files.
 
 Next recommended row: decompose
-`src/cli/model_artifacts/yvex_model_artifacts_surface.c` by surface into typed
+`src/cli/model_artifacts/` by surface into typed
 input/report/render ownership, starting with `models download` and
 `fullmodel`.
 
 ## Follow-up: TOPOLOGY.CELL.MODEL_ARTIFACTS.2
 
-Previous `src/cli/model_artifacts/yvex_model_artifacts_surface.c` line count:
+Previous `src/cli/model_artifacts/` line count:
 14724.
 
 Final root surface status: deleted.
 
 Final root surface line count: 0.
 
-New command-family surface files:
-`yvex_models_surface.c`, `yvex_models_download_surface.c`,
-`yvex_models_download_write_surface.c`,
-`yvex_models_download_process_surface.c`,
-`yvex_models_download_control_surface.c`,
-`yvex_models_prepare_surface.c`,
-`yvex_models_artifacts_surface.c`, `yvex_fullmodel_surface.c`,
-`yvex_fullmodel_report_surface.c`, `yvex_fullmodel_materialize_surface.c`,
-`yvex_attention_surface.c`, `yvex_context_surface.c`, `yvex_moe_surface.c`,
-and `yvex_tensor_collection_surface.c`.
+Post-compression command-family owners are `models.c`, `download.c`,
+`prepare.c`, `artifacts.c`, `fullmodel.c`, `attention.c`, `context.c`, `moe.c`,
+and `tensors.c`. The former download write/process/control and fullmodel
+report/materialize phase files were merged into those semantic owners.
 
 Largest remaining `src/cli/model_artifacts/*.c` file:
-`src/cli/model_artifacts/yvex_models_prepare_surface.c` at 1838 lines.
+`src/cli/model_artifacts/prepare.c` at 1838 lines.
 
 No `src/cli/model_artifacts/*.c` file is over 2500 lines.
 
@@ -374,22 +368,22 @@ Previous parser-residue matches in `src/cli/model_artifacts`: 235.
 
 Final parser-residue matches in `src/cli/model_artifacts/*.c`: 0.
 
-New render files: `yvex_models_render.c`,
-`yvex_models_artifacts_render.c`, `yvex_models_download_render.c`,
-`yvex_models_download_control_render.c`,
-`yvex_models_download_process_render.c`,
-`yvex_models_download_write_render.c`, `yvex_models_prepare_render.c`,
-`yvex_fullmodel_render.c`, `yvex_fullmodel_report_render.c`,
-`yvex_fullmodel_materialize_render.c`, `yvex_attention_render.c`,
-`yvex_context_render.c`, `yvex_moe_render.c`,
-`yvex_tensor_collection_render.c`, and
-`yvex_model_artifacts_render_common.c`.
+New render files: `models.c`,
+`artifacts.c`, `download.c`,
+`download_control.c`,
+`download_process.c`,
+`download_write.c`, `prepare.c`,
+`fullmodel.c`, `fullmodel_report.c`,
+`fullmodel_materialize.c`, `attention.c`,
+`context.c`, `moe.c`,
+`tensors.c`, and
+`common.c`.
 
 Largest remaining surface file:
-`src/cli/model_artifacts/yvex_model_artifacts_surface_common.c` at 21 lines.
+`src/cli/model_artifacts/surface_common.h` at 21 lines.
 
 Largest new render file:
-`src/cli/render/yvex_models_prepare_render.c` at 1837 lines.
+`src/cli/model_artifacts/prepare.c` at 1837 lines.
 
 Remaining exceptions: the new render files still preserve historical command
 logic as compatibility rendering code. The surface-routing boundary is closed,

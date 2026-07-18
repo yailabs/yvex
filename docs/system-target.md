@@ -16,14 +16,14 @@ Current core areas:
 ```text
 src/cli/                 CLI dispatch, input, surfaces, render, IO
 src/source/              source manifests, provenance, inventory, payload trust/streaming
-src/model/target/        model-target catalogs, exact coverage, maps, gates, qtype reports
-src/model/architecture/  immutable typed family architecture specifications
+src/model/target/        generic target catalogs, gates and qtype reports
+src/model/families/      family architecture, coverage and lowering recipes
 src/model/artifacts/     model registry/ref/gate/report/write ownership
 src/model/               dtype/model tables and runtime descriptor target
 src/gguf/                GGUF parser plus target ABI/writer/roundtrip owners
 src/artifact/            artifact IO, identity, integrity, descriptor gates
-src/graph/               graph construction, plans, bind/execute target owners
-src/backend/             backend abstraction, tensor/qtype/report ownership
+src/graph/               graph core, plans, attention protocol/numeric owners and family recipes
+src/backend/             backend abstraction, compute admission and platform implementations
 src/generation/          legacy proof cells and future runtime implementation owners
 ```
 
@@ -153,75 +153,72 @@ domain algorithms. No writer owns command output.
 | `include/yvex/artifact.h` | read-only file handle, optional explicit mapping, and exact positioned reads |
 | `include/yvex/gguf.h` | public reader budgets, typed parse result, immutable view, metrics, and accessors |
 | `include/yvex/gguf_layout.h` | public typed global layout result, failure categories, byte totals, and IO metrics |
-| `src/gguf/gguf.c` | file-backed GGUF v3 decoding and owned metadata/tensor view |
-| `src/gguf/yvex_gguf_container.c` | magic/version/container ABI |
-| `src/gguf/yvex_gguf_metadata.c` | metadata key/value ABI |
-| `src/gguf/yvex_gguf_tensor_info.c` | tensor_info name/rank/type/shape ABI |
-| `src/gguf/yvex_gguf_qtype.c` | pinned qtype registry and row-aware tensor storage |
-| `src/gguf/yvex_gguf_layout_integrity.c` | canonical ordered layout, padding, aggregate span, tail, and drift admission |
-| `src/gguf/yvex_gguf_range_map.c` | bounded local range arithmetic and canonical layout projection |
-| `src/gguf/yvex_gguf_reader.c` | reader policy, resource defaults, typed failure ABI, and report projection |
-| `src/gguf/yvex_gguf_writer.c` | writer refusal until writer row |
-| `src/gguf/yvex_gguf_roundtrip.c` | writer-reader equivalence boundary |
-| `src/gguf/yvex_gguf_name_map.c` | emitted GGUF tensor names |
-| `src/gguf/yvex_gguf_layout_map.c` | emitted tensor layout/range plan |
-| `src/gguf/yvex_gguf_descriptor.c` | GGUF descriptor facts |
-| `src/gguf/yvex_gguf_report.c` | typed GGUF report facts |
+| `src/gguf/core.c` | file-backed GGUF v3 decoding and owned metadata/tensor view |
+| `src/gguf/container.c` | magic/version/container ABI |
+| `src/gguf/metadata.c` | metadata key/value ABI |
+| `src/gguf/tensor_info.c` | tensor_info name/rank/type/shape ABI |
+| `src/gguf/qtype.c` | pinned qtype registry and row-aware tensor storage |
+| `src/gguf/layout_integrity.c` | canonical ordered layout, padding, aggregate span, tail, and drift admission |
+| `src/gguf/range_map.c` | bounded local range arithmetic and canonical layout projection |
+| `src/gguf/reader.c` | reader policy, resource defaults, typed failure ABI, and report projection |
+| `src/gguf/writer.c` | writer refusal until writer row |
+| `src/gguf/roundtrip.c` | writer-reader equivalence boundary |
+| `src/gguf/name_map.c` | emitted GGUF tensor names |
+| `src/gguf/layout_map.c` | emitted tensor layout/range plan |
+| `src/gguf/descriptor.c` | GGUF descriptor facts |
+| `src/gguf/report.c` | typed GGUF report facts |
 
 ## Artifact And Materialization Target Map
 
 | Owner | Boundary |
 | --- | --- |
-| `src/artifact/yvex_artifact_descriptor.c` | YVEX artifact descriptor facts |
-| `src/artifact/yvex_artifact_materialize.c` | materialization refusal/input contract |
-| `src/artifact/yvex_artifact_roundtrip_gate.c` | emitted artifact roundtrip gate |
-| `src/artifact/yvex_artifact_report.c` | typed artifact summary facts |
+| `src/artifact/descriptor.c` | YVEX artifact descriptor facts |
+| `src/artifact/materialize.c` | materialization refusal/input contract |
+| `src/artifact/roundtrip_gate.c` | emitted artifact roundtrip gate |
 
 ## Runtime Descriptor Target Map
 
 | Owner | Boundary |
 | --- | --- |
-| `src/model/yvex_runtime_descriptor.c` | artifact descriptor to runtime descriptor projection |
-| `src/model/yvex_runtime_descriptor_report.c` | descriptor blocker report facts |
+| `src/model/runtime_descriptor.c` | artifact descriptor to runtime descriptor projection |
 
 ## Model Architecture Target Map
 
 | Owner | Boundary |
 | --- | --- |
-| `src/model/architecture/yvex_deepseek_v4_ir.h` | private typed model, layer, attention, position, KV, mHC, MoE, output, tokenizer, source-constraint, failure, and borrowed-accessor ABI |
-| `src/model/architecture/yvex_deepseek_v4_ir.c` | exact-source admission, cross-field validation, normalized topology derivation, immutable allocation, and cleanup |
-| `src/source/yvex_source_inventory.[ch]` | retained immutable source tensor snapshot, deterministic identity, indexed lookup, one-header-pass and zero-payload-read accounting |
-| `src/model/target/yvex_deepseek_tensor_coverage.[ch]` | complete IR-derived DeepSeek requirement construction, exact source reconciliation, typed refusal, deterministic coverage identity, and immutable lifetime |
-| `src/model/target/yvex_deepseek_gguf_map.[ch]` | canonical indexed DeepSeek contribution/descriptor/metadata plan, source-forced transforms, naming provenance, deterministic identity, and typed refusal |
-| `src/model/target/yvex_tensor_collection_report.c` | release-target collection projection from canonical coverage; Qwen/Gemma evidence remains separate |
-| `src/model/target/yvex_missing_role_report.c` | release-target missing-role projection from canonical coverage |
-| `src/model/target/yvex_mapping_gate_report.c` | operational projection of the canonical mapping plan and payload-streaming handoff |
-| `src/model/target/yvex_model_class_profile.c` | strict source-verification coordination and report ownership for the canonical release target; Qwen/Gemma lexical evidence remains separate |
-| `src/cli/render/yvex_model_target_render.c` | presentation of typed IR facts without architecture decisions |
+| `src/model/families/deepseek_v4.c` | immutable architecture, exact source coverage, family Transformation IR construction, GGUF lowering and payload handoff for the admitted identity |
+| `src/model/families.h` | single private family ABI shared by the family recipe's production consumers |
+| `src/source/inventory.[ch]` | retained immutable source tensor snapshot, deterministic identity, indexed lookup, one-header-pass and zero-payload-read accounting |
+| `src/model/target/tensor_collection.c` | release-target collection projection from canonical coverage; Qwen/Gemma evidence remains separate |
+| `src/model/target/missing_role.c` | release-target missing-role projection from canonical coverage |
+| `src/model/target/mapping_gate.c` | operational projection of the canonical mapping plan and payload-streaming handoff |
+| `src/model/target/model_class_profile.c` | strict source-verification coordination and report ownership for the canonical release target; Qwen/Gemma lexical evidence remains separate |
+| `src/cli/render/model_target.c` | presentation of typed IR facts without architecture decisions |
 
 ## Graph And Backend Target Map
 
 | Owner | Boundary |
 | --- | --- |
-| `src/graph/yvex_graph_bind.c` | runtime descriptor roles to graph bind plan |
-| `src/graph/yvex_graph_execute.c` | future graph execution refusal |
-| `src/backend/yvex_backend_tensor.c` | backend tensor allocation/bind boundary |
-| `src/backend/yvex_backend_qtype.c` | backend qtype compute/refusal matrix |
-| `src/backend/yvex_backend_report.c` | typed device, context, bundle, exact-variant, and memory reports |
-| `src/backend/cuda/cuda_capability.c` | atomic generated-bundle admission, exact CUDA capability, launch/sync demotion, and cleanup failure |
-| `src/backend/cuda/cuda_ops.c` | validated host launch binding for admitted exact variants |
-| `src/backend/cuda/cuda_kernels.cu` | canonical bounded device kernels; generated bundle remains build output |
-| `src/backend/cuda/cuda_qtype.c` | CUDA qtype capability/refusal facts |
+| `src/graph/plan.c` | runtime descriptor roles, immutable graph plan and backend admission facts |
+| `src/graph/attention.c` | generic attention protocol, identity validation and transactional state boundary |
+| `src/graph/numeric.c` | reusable attention numerical operations without family policy |
+| `src/graph/families/deepseek_v4.c` | DeepSeek schedule, recurrence and CPU/CUDA operation composition |
+| `src/backend/core.c` | backend lifecycle, tensor binding and canonical qtype compute projection |
+| `src/backend/report.c` | typed device, context, bundle, exact-variant, and memory reports |
+| `src/backend/cuda/capability.c` | atomic generated-bundle admission, exact CUDA capability, launch/sync demotion, and cleanup failure |
+| `src/backend/cuda/ops.c` | validated host launch binding for admitted exact variants |
+| `src/backend/cuda/kernels.cu` | canonical bounded device kernels; generated bundle remains build output |
+| `src/backend/cuda/qtype.c` | CUDA qtype capability/refusal facts |
 
 ## CLI Target Map
 
 | Layer | Owner |
 | --- | --- |
-| Entry | `src/cli/yvex_cli.c` |
-| Input | `src/cli/input/yvex_<surface>_args.c` |
-| Command | `src/cli/commands/yvex_<surface>_cli.c` |
-| Family surface | `src/cli/model_artifacts/*_surface.c` where required |
-| Render | `src/cli/render/yvex_<surface>_render.c` |
+| Entry | `src/cli/main.c` |
+| Input | `src/cli/input/<surface>.c` |
+| Command | `src/cli/commands/<surface>.c` |
+| Family workflow | `src/cli/model_artifacts/<surface>.c` where required |
+| Render | `src/cli/render/<surface>.c` for typed domain projections |
 | Operator IO | `src/cli/io/*` |
 
 ## GGUF Structural Reader Boundary

@@ -1,4 +1,10 @@
 /*
+ * Owner: abi.server (abi).
+ * Owns: the public-abi boundary consumed by repository.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
+ * Boundary: public-abi; moving this contract requires an ownership-manifest change.
+ *
  * YVEX - Server shell
  *
  * File: include/yvex/server.h
@@ -21,14 +27,33 @@
 #ifndef YVEX_SERVER_H
 #define YVEX_SERVER_H
 
+#include <stddef.h>
+
 #include <yvex/backend.h>
 #include <yvex/engine.h>
+#include <yvex/fs.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct yvex_server yvex_server;
+
+#define YVEX_HTTP_METHOD_CAP 8
+#define YVEX_HTTP_PATH_CAP 256
+#define YVEX_HTTP_BODY_CAP 8192
+#define YVEX_HTTP_RESPONSE_CAP 12288
+
+typedef struct {
+    char method[YVEX_HTTP_METHOD_CAP];
+    char path[YVEX_HTTP_PATH_CAP];
+} yvex_http_request;
+
+typedef struct {
+    int status_code;
+    const char *reason;
+    char body[YVEX_HTTP_BODY_CAP];
+} yvex_http_response;
 
 typedef enum {
     YVEX_SERVER_STATUS_CREATED = 0,
@@ -74,6 +99,19 @@ const char *yvex_server_status_name(yvex_server_status status);
 int yvex_server_get_summary(const yvex_server *server,
                             yvex_server_summary *out,
                             yvex_error *err);
+
+int yvex_http_parse_request(const char *request,
+                            yvex_http_request *out,
+                            yvex_error *err);
+int yvex_http_response_format(char *out,
+                              size_t cap,
+                              const yvex_http_response *response,
+                              yvex_error *err);
+const char *yvex_http_status_reason(int status_code);
+int yvex_server_route(yvex_server *server,
+                      const yvex_http_request *request,
+                      yvex_http_response *response,
+                      yvex_error *err);
 
 #ifdef __cplusplus
 }

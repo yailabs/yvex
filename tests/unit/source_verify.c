@@ -4,13 +4,13 @@
  * Exercises structured DeepSeek source verification with tiny metadata and
  * safetensors headers. No model payload fixture is used.
  */
-#include "test.h"
+#include "tests/test.h"
 
-#include "yvex_model_target_catalog.h"
-#include "src/model/architecture/yvex_deepseek_v4_ir.h"
-#include "yvex_source_inventory.h"
-#include "yvex_source_provenance.h"
-#include "yvex_source_verify.h"
+#include "src/model/target/catalog.h"
+#include "src/model/families.h"
+#include "src/source/inventory.h"
+#include "src/source/provenance.h"
+#include "src/source/verify.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -190,11 +190,11 @@ static int source_verify_make_valid(const char *root)
     snprintf(path, sizeof(path), "%s/.cache/huggingface/download", root);
     if (!source_verify_make_dir(path)) return 0;
     if (!source_verify_write_manifest(root, "huggingface",
-                                      yvex_deepseek_v4_upstream_repo_id,
+                                      yvex_model_target_release_identity()->upstream_repo_id,
                                       "in-progress", source_verify_revision) ||
         !source_verify_write_config(root,
-                                    yvex_deepseek_v4_config_model_type,
-                                    yvex_deepseek_v4_config_architecture)) return 0;
+                                    yvex_model_target_release_identity()->config_model_type,
+                                    yvex_model_target_release_identity()->config_architecture)) return 0;
     snprintf(path, sizeof(path), "%s/tokenizer.json", root);
     if (!source_verify_write_text(path,
                                   "{\"version\":\"1.0\",\"added_tokens\":[{\"id\":129279,\"content\":\"<extra>\"}],"
@@ -379,7 +379,7 @@ int yvex_test_source_verify(void)
                      result.manifest_reopened && result.header_scan_count == 1,
                      "verifier promotes, reopens, and scans headers once");
     YVEX_TEST_ASSERT_STREQ(result.repository_id,
-                           yvex_deepseek_v4_upstream_repo_id,
+                           yvex_model_target_release_identity()->upstream_repo_id,
                            "repository identity matches");
     YVEX_TEST_ASSERT_STREQ(result.revision, source_verify_revision,
                            "exact revision matches");
@@ -423,14 +423,14 @@ int yvex_test_source_verify(void)
         yvex_deepseek_v4_ir_failure failure;
 
         yvex_error_clear(&err);
-        YVEX_TEST_ASSERT(yvex_deepseek_v4_ir_build(
+        YVEX_TEST_ASSERT(yvex_model_register_deepseek_v4()->ir.build(
                              &ir, &result, &failure, &err) != YVEX_OK && !ir &&
                          failure.code ==
                              YVEX_DEEPSEEK_V4_IR_FAILURE_SOURCE_FACT_MISSING,
                          "fixture index identity cannot impersonate pinned release IR");
         YVEX_TEST_ASSERT(result.header_scan_count == 1,
                          "rejected architecture construction performs no rescan");
-        yvex_deepseek_v4_ir_close(ir);
+        yvex_model_register_deepseek_v4()->ir.close(ir);
     }
 
     {
@@ -468,11 +468,11 @@ int yvex_test_source_verify(void)
         unlink(derived_path);
         YVEX_TEST_ASSERT(source_verify_write_manifest(
                              root, "huggingface",
-                             yvex_deepseek_v4_upstream_repo_id,
+                             yvex_model_target_release_identity()->upstream_repo_id,
                              "in-progress", source_verify_revision) &&
                          source_verify_write_upstream_inventory(
                              upstream_path,
-                             yvex_deepseek_v4_upstream_repo_id,
+                             yvex_model_target_release_identity()->upstream_repo_id,
                              source_verify_revision,
                              "model-00001-of-00001.safetensors",
                              (unsigned long long)shard_stat.st_size),
@@ -520,7 +520,7 @@ int yvex_test_source_verify(void)
                      "wrong repository is refused");
 
     YVEX_TEST_ASSERT(source_verify_write_manifest(
-                         root, "local", yvex_deepseek_v4_upstream_repo_id,
+                         root, "local", yvex_model_target_release_identity()->upstream_repo_id,
                          "complete", source_verify_revision),
                      "write unsupported source kind manifest");
     YVEX_TEST_ASSERT(source_verify_run(root, &result, &err) == YVEX_OK &&
@@ -531,7 +531,7 @@ int yvex_test_source_verify(void)
 
     YVEX_TEST_ASSERT(source_verify_write_manifest(
                          root, "huggingface",
-                         yvex_deepseek_v4_upstream_repo_id,
+                         yvex_model_target_release_identity()->upstream_repo_id,
                          "complete", NULL),
                      "write absent revision manifest");
     YVEX_TEST_ASSERT(source_verify_run(root, &result, &err) == YVEX_OK &&
@@ -540,7 +540,7 @@ int yvex_test_source_verify(void)
                      "absent revision is refused");
     YVEX_TEST_ASSERT(source_verify_write_manifest(
                          root, "huggingface",
-                         yvex_deepseek_v4_upstream_repo_id,
+                         yvex_model_target_release_identity()->upstream_repo_id,
                          "complete", "unknown"),
                      "write unverifiable revision manifest");
     YVEX_TEST_ASSERT(source_verify_run(root, &result, &err) == YVEX_OK &&
@@ -550,7 +550,7 @@ int yvex_test_source_verify(void)
                      "unknown revision is not promoted to verified provenance");
     YVEX_TEST_ASSERT(source_verify_write_manifest(
                          root, "huggingface",
-                         yvex_deepseek_v4_upstream_repo_id,
+                         yvex_model_target_release_identity()->upstream_repo_id,
                          "in-progress", source_verify_revision),
                      "write incomplete manifest status");
     YVEX_TEST_ASSERT(source_verify_run(root, &result, &err) == YVEX_OK &&
@@ -562,7 +562,7 @@ int yvex_test_source_verify(void)
     system("rm -rf build/tests/source-verify");
     YVEX_TEST_ASSERT(source_verify_make_valid(root), "recreate wrong config fixture");
     YVEX_TEST_ASSERT(source_verify_write_config(root, "not_deepseek_v4",
-                                                yvex_deepseek_v4_config_architecture),
+                                                yvex_model_target_release_identity()->config_architecture),
                      "write wrong config identity");
     YVEX_TEST_ASSERT(source_verify_run(root, &result, &err) == YVEX_OK &&
                      source_verify_has_blocker(&result, "wrong-source-model-type"),
@@ -628,7 +628,7 @@ int yvex_test_source_verify(void)
                      "recreate manifest promotion refusal fixture");
     YVEX_TEST_ASSERT(source_verify_write_config(
                          root, "not_deepseek_v4",
-                         yvex_deepseek_v4_config_architecture),
+                         yvex_model_target_release_identity()->config_architecture),
                      "invalidate config before manifest promotion");
     YVEX_TEST_ASSERT(source_verify_run_mode(root, 1, &result, &err) == YVEX_OK &&
                      !result.verified && !result.manifest_published &&
@@ -689,7 +689,7 @@ int yvex_test_source_verify(void)
         YVEX_TEST_ASSERT(stat(old_path, &first_stat) == 0 &&
                          source_verify_write_upstream_inventory(
                              upstream_path,
-                             yvex_deepseek_v4_upstream_repo_id,
+                             yvex_model_target_release_identity()->upstream_repo_id,
                              source_verify_revision,
                              "model-00001-of-00001.safetensors",
                              (unsigned long long)first_stat.st_size + 1u),
@@ -721,7 +721,7 @@ int yvex_test_source_verify(void)
         unlink(index_metadata_path);
         YVEX_TEST_ASSERT(source_verify_write_upstream_inventory_two(
                              upstream_path,
-                             yvex_deepseek_v4_upstream_repo_id,
+                             yvex_model_target_release_identity()->upstream_repo_id,
                              source_verify_revision,
                              "model-00001-of-00002.safetensors",
                              (unsigned long long)first_stat.st_size,

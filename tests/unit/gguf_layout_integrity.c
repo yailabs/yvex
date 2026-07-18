@@ -9,10 +9,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
-#include "yvex_gguf_layout_integrity.h"
+#include "tests/test.h"
+#include "include/yvex/gguf_layout.h"
 
 #define LAYOUT_TEST_DIR "build/tests/gguf-layout"
 

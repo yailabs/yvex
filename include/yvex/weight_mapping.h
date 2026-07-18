@@ -1,4 +1,10 @@
 /*
+ * Owner: abi.weight_mapping (abi).
+ * Owns: the public-abi boundary consumed by repository.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
+ * Boundary: public-abi; moving this contract requires an ownership-manifest change.
+ *
  * YVEX - Open-weight tensor mapping API
  *
  * File: include/yvex/weight_mapping.h
@@ -11,6 +17,8 @@
  */
 #ifndef YVEX_WEIGHT_MAPPING_H
 #define YVEX_WEIGHT_MAPPING_H
+
+#include <stddef.h>
 
 #include <yvex/error.h>
 #include <yvex/tensor.h>
@@ -81,6 +89,16 @@ const yvex_weight_mapping_info *yvex_weight_mapping_table_find_native(const yvex
 
 const char *yvex_weight_mapping_status_name(yvex_weight_mapping_status status);
 const char *yvex_weight_mapping_issue_kind_name(yvex_weight_mapping_issue_kind issue);
+int yvex_gguf_map_deepseek_name(const char *native_name,
+                                char *target,
+                                size_t target_cap,
+                                yvex_tensor_role *role,
+                                yvex_weight_mapping_issue_kind *issue);
+int yvex_qwen_adapter_map_name(const char *native_name,
+                               char *target,
+                               size_t target_cap,
+                               yvex_tensor_role *role,
+                               yvex_weight_mapping_issue_kind *issue);
 
 #ifdef __cplusplus
 }

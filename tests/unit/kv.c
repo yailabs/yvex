@@ -23,9 +23,9 @@
 #include <limits.h>
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static void fill_values(float *values, unsigned long long count, float base)
 {

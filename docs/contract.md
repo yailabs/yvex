@@ -276,7 +276,7 @@ translation units. CUDA device kernels live in `.cu` translation units. CUDA
 availability is optional for baseline validation and required for CUDA
 validation. A build without `nvcc` may retain proven Driver API allocation and
 transfer operations, but every kernel variant refuses before dispatch. A CUDA
-build admits only the generated bundle built from `cuda_kernels.cu`; production
+build admits only the generated bundle built from `kernels.cu`; production
 C sources contain no fallback kernel bundle.
 
 The currently admitted kernel variants are bounded F32/F16 embedding, F32

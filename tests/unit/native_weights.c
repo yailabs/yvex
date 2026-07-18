@@ -4,8 +4,8 @@
  * File: tests/test_native_weights.c
  * Layer: test
  */
-#include "test.h"
-#include "src/source/yvex_source_private.h"
+#include "tests/test.h"
+#include "src/source/private.h"
 
 #include <errno.h>
 #include <limits.h>

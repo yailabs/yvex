@@ -8,9 +8,9 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int mkdir_ok(const char *p) { return mkdir(p, 0777) == 0 || errno == EEXIST; }
 

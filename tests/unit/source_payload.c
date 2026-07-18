@@ -8,19 +8,17 @@
  * Invariants: fixtures are generated under build and raw bytes are never printed.
  * Boundary: fixture proof is not DeepSeek live payload trust.
  */
-#include "test.h"
+#include "tests/test.h"
 
-#include "src/core/yvex_sha256.h"
-#include "src/core/yvex_shard_index.h"
-#include "src/source/yvex_source_payload_internal.h"
-#include "src/source/yvex_source_provenance.h"
-#include "src/source/yvex_source_private.h"
-#include "src/model/compilation/yvex_transform_binding.h"
-#include "src/model/compilation/yvex_transform_ir.h"
-#include "src/model/target/yvex_model_target_catalog.h"
-#include "src/gguf/yvex_quant_execute.h"
-#include "src/gguf/yvex_quant_plan.h"
-#include "src/gguf/yvex_quant_sink.h"
+#include "src/core/sha256.h"
+#include "src/core/shard_index.h"
+#include "src/source/private.h"
+#include "src/source/provenance.h"
+#include "src/model/compilation/binding.h"
+#include "src/model/compilation/ir.h"
+#include "src/model/target/catalog.h"
+#include "src/gguf/quant_sink.h"
+#include "src/gguf/quant_plan.h"
 
 #include <yvex/artifact_identity.h>
 

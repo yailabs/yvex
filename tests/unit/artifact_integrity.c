@@ -5,9 +5,9 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int first_issue_is(const yvex_artifact_integrity_report *report,
                           const char *code)

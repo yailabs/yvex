@@ -24,9 +24,9 @@
  */
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static void make_desc(yvex_backend_tensor_desc *desc,
                       const char *name,
@@ -64,8 +64,12 @@ static int test_open_and_unsupported(void)
     YVEX_TEST_ASSERT(rc == YVEX_OK || rc == YVEX_ERR_UNSUPPORTED,
                      "cuda opens or reports unsupported cleanly");
     if (rc == YVEX_OK) {
+        yvex_backend_status status = yvex_backend_status_of(backend);
+
         YVEX_TEST_ASSERT(yvex_backend_kind_of(backend) == YVEX_BACKEND_KIND_CUDA, "cuda kind");
-        YVEX_TEST_ASSERT(yvex_backend_status_of(backend) == YVEX_BACKEND_STATUS_READY, "cuda ready");
+        YVEX_TEST_ASSERT(status == YVEX_BACKEND_STATUS_READY ||
+                             status == YVEX_BACKEND_STATUS_CONTEXT_READY,
+                         "cuda context or kernels ready");
         yvex_backend_close(backend);
     } else {
         YVEX_TEST_ASSERT(backend == NULL, "unsupported backend remains null");

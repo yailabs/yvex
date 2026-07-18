@@ -24,9 +24,9 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int test_engine_opens_fixture(void)
 {

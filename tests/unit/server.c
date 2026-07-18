@@ -8,8 +8,8 @@
  */
 #include <string.h>
 
-#include "yvex_server_private.h"
-#include "test.h"
+#include <yvex/server.h>
+#include "tests/test.h"
 
 static int test_server_summary(void)
 {
@@ -67,7 +67,7 @@ static int test_routes(void)
     rc = yvex_server_route(server, &request, &response, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "health route");
     YVEX_TEST_ASSERT(response.status_code == 200, "health status");
-    YVEX_TEST_ASSERT(strstr(response.body, "\"schema\": \"yvex.health.v1\"") != NULL, "health schema");
+    YVEX_TEST_ASSERT(strstr(response.body, "\"schema\": \"api.health.v1\"") != NULL, "health schema");
 
     strcpy(request.path, "/metrics");
     rc = yvex_server_route(server, &request, &response, &err);

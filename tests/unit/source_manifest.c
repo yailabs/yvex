@@ -8,7 +8,7 @@
  *   Verifies open-weight intake source provenance scanning and manifest writing over a tiny
  *   fake source tree. No external model files are required or committed.
  */
-#include "test.h"
+#include "tests/test.h"
 
 #include <errno.h>
 #include <stdio.h>

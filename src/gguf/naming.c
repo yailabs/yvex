@@ -1,4 +1,10 @@
 /*
+ * Owner: gguf.naming (gguf).
+ * Owns: the reusable-algorithm boundary consumed by artifact,model,quant.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=private match config/source_owners.tsv.
+ * Boundary: reusable-algorithm; moving this contract requires an ownership-manifest change.
+ *
  * gguf/naming.c - YVEX artifact naming helpers.
  *
  * This file owns deterministic artifact filename construction and validation.
@@ -110,10 +116,4 @@ int yvex_artifact_name_suggest(char *out,
         return YVEX_ERR_BOUNDS;
     }
     return YVEX_OK;
-}
-
-
-int yvex_artifact_naming_report_translation_unit_anchor(void)
-{
-    return 0;
 }

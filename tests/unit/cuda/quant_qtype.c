@@ -14,12 +14,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "src/backend/cuda/cuda_qtype.h"
-#include "src/gguf/yvex_quant_numeric.h"
+#include "src/backend/cuda/qtype.h"
+#include "src/gguf/quant_numeric.h"
 
-#include "test.h"
+#include "tests/test.h"
 
 /* Encodes a complete row one canonical block at a time into owned storage. */
 static int quant_cuda_encode_row(unsigned int qtype,

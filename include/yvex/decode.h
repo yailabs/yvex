@@ -1,4 +1,10 @@
 /*
+ * Owner: abi.decode (abi).
+ * Owns: the public-abi boundary consumed by repository.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
+ * Boundary: public-abi; moving this contract requires an ownership-manifest change.
+ *
  * YVEX - Decode step boundary
  *
  * File: include/yvex/decode.h
@@ -74,6 +80,9 @@ typedef struct {
     int generation_ready;
     const char *generation_status;
 } yvex_decode_step_summary;
+
+void yvex_decode_step_summary_init(yvex_decode_step_summary *out,
+                                   const yvex_decode_step_options *options);
 
 int yvex_engine_decode_step(yvex_engine *engine,
                             const yvex_decode_step_options *options,

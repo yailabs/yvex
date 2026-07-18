@@ -1,4 +1,10 @@
 /*
+ * Owner: abi.backend (abi).
+ * Owns: the public-abi boundary consumed by repository.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
+ * Boundary: public-abi; moving this contract requires an ownership-manifest change.
+ *
  * YVEX - Backend ABI
  *
  * File: include/yvex/backend.h
@@ -119,7 +125,7 @@ typedef enum {
     YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32,
     YVEX_BACKEND_VARIANT_ATTENTION_NONCAUSAL_F32,
     YVEX_BACKEND_VARIANT_QTYPE_ROW_DOT,
-    YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION,
+    YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
     YVEX_BACKEND_VARIANT_COUNT
 } yvex_backend_operation_variant;
 
@@ -157,6 +163,13 @@ typedef struct {
 } yvex_backend_capability_result;
 
 typedef struct {
+    const char *backend;
+    const char *qtype;
+    const char *compute_status;
+    const char *reason;
+} yvex_backend_qtype_fact;
+
+typedef struct {
     unsigned long long batch;
     unsigned long long hidden_dim;
     unsigned long long ffn_dim;
@@ -166,6 +179,163 @@ typedef struct {
     int gated;
     const char *activation;
 } yvex_mlp_options;
+
+/*
+ * Encoded attention execution contract.
+ *
+ * This is the backend-facing, family-neutral transport for an admitted
+ * attention recipe.  Model and graph owners select the weights, schedule,
+ * and activation policy; a backend consumes those immutable facts without
+ * reconstructing model topology.  All pointers are borrowed for one call.
+ */
+typedef enum {
+    YVEX_BACKEND_ATTENTION_WEIGHT_Q_A = 0,
+    YVEX_BACKEND_ATTENTION_WEIGHT_Q_A_NORM,
+    YVEX_BACKEND_ATTENTION_WEIGHT_Q_B,
+    YVEX_BACKEND_ATTENTION_WEIGHT_KV,
+    YVEX_BACKEND_ATTENTION_WEIGHT_KV_NORM,
+    YVEX_BACKEND_ATTENTION_WEIGHT_SINKS,
+    YVEX_BACKEND_ATTENTION_WEIGHT_OUT_A,
+    YVEX_BACKEND_ATTENTION_WEIGHT_OUT_B,
+    YVEX_BACKEND_ATTENTION_WEIGHT_MAIN_KV,
+    YVEX_BACKEND_ATTENTION_WEIGHT_MAIN_GATE,
+    YVEX_BACKEND_ATTENTION_WEIGHT_MAIN_APE,
+    YVEX_BACKEND_ATTENTION_WEIGHT_MAIN_NORM,
+    YVEX_BACKEND_ATTENTION_WEIGHT_INDEX_KV,
+    YVEX_BACKEND_ATTENTION_WEIGHT_INDEX_GATE,
+    YVEX_BACKEND_ATTENTION_WEIGHT_INDEX_APE,
+    YVEX_BACKEND_ATTENTION_WEIGHT_INDEX_NORM,
+    YVEX_BACKEND_ATTENTION_WEIGHT_INDEX_Q,
+    YVEX_BACKEND_ATTENTION_WEIGHT_INDEX_PROJECTION,
+    YVEX_BACKEND_ATTENTION_WEIGHT_COUNT
+} yvex_backend_attention_weight_slot;
+
+typedef struct {
+    const unsigned char *encoded;
+    size_t encoded_bytes;
+    unsigned long long row_bytes;
+    unsigned long long row_width;
+    unsigned long long row_count;
+    unsigned int qtype;
+    int present;
+} yvex_backend_attention_weight;
+
+typedef struct {
+    unsigned long long theta;
+    unsigned long long scaling_factor;
+    unsigned long long original_context;
+    unsigned long long beta_fast;
+    unsigned long long beta_slow;
+    unsigned long long rope_dimensions;
+} yvex_backend_attention_position;
+
+typedef struct {
+    int required;
+    unsigned long long block_width;
+    unsigned int quantization;
+    int hadamard;
+} yvex_backend_attention_activation;
+
+typedef struct {
+    int present;
+    unsigned long long ratio;
+    unsigned long long head_dimension;
+    unsigned long long state_width;
+    unsigned long long state_slots;
+    unsigned long long cursor;
+    unsigned long long previous_fill;
+    unsigned long long current_fill;
+    const float *kv_state;
+    const float *score_state;
+    int overlap;
+} yvex_backend_attention_rolling;
+
+typedef struct {
+    unsigned int attention_class;
+    unsigned long long token_position;
+    unsigned long long hidden_width;
+    unsigned long long q_rank;
+    unsigned long long query_heads;
+    unsigned long long head_dimension;
+    unsigned long long kv_width;
+    unsigned long long sliding_window;
+    unsigned long long compression_ratio;
+    unsigned long long output_groups;
+    unsigned long long output_group_input_width;
+    unsigned long long output_rank;
+    unsigned long long indexer_heads;
+    unsigned long long indexer_head_dimension;
+    unsigned long long indexer_topk;
+    double rms_epsilon;
+    yvex_backend_attention_position position;
+    yvex_backend_attention_activation attention_kv_activation;
+    yvex_backend_attention_activation compressor_activation;
+    yvex_backend_attention_activation compressor_rotated_activation;
+    yvex_backend_attention_activation indexer_query_activation;
+    yvex_backend_attention_weight weights[YVEX_BACKEND_ATTENTION_WEIGHT_COUNT];
+    const float *input;
+    const float *local_kv;
+    const unsigned long long *local_positions;
+    unsigned long long local_count;
+    unsigned long long local_stride;
+    const float *compressed_kv;
+    const unsigned long long *compressed_positions;
+    unsigned long long compressed_count;
+    unsigned long long compressed_stride;
+    const float *indexer_kv;
+    const unsigned long long *indexer_positions;
+    unsigned long long indexer_count;
+    unsigned long long indexer_stride;
+    yvex_backend_attention_rolling main_rolling;
+    yvex_backend_attention_rolling indexer_rolling;
+    unsigned long long max_device_bytes;
+} yvex_backend_attention_job;
+
+typedef struct {
+    float *q_low;
+    float *query;
+    float *raw_kv;
+    float *compressed_kv;
+    float *indexer_kv;
+    float *index_query;
+    float *index_weights;
+    float *attention_values;
+    float *output;
+    unsigned long long *compressed_positions;
+    unsigned long long *indexer_positions;
+    unsigned long long *topk_positions;
+    float *main_kv_state;
+    float *main_score_state;
+    float *indexer_kv_state;
+    float *indexer_score_state;
+    unsigned long long compressed_count;
+    unsigned long long indexer_count;
+    unsigned long long topk_count;
+    unsigned long long valid_candidate_count;
+    unsigned long long device_bytes;
+    unsigned long long peak_device_bytes;
+    unsigned long long kernel_launches;
+} yvex_backend_attention_output;
+
+typedef enum {
+    YVEX_BACKEND_ATTENTION_FAILURE_NONE = 0,
+    YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT,
+    YVEX_BACKEND_ATTENTION_FAILURE_CAPABILITY,
+    YVEX_BACKEND_ATTENTION_FAILURE_BUDGET,
+    YVEX_BACKEND_ATTENTION_FAILURE_ALLOCATION,
+    YVEX_BACKEND_ATTENTION_FAILURE_COPY,
+    YVEX_BACKEND_ATTENTION_FAILURE_LAUNCH,
+    YVEX_BACKEND_ATTENTION_FAILURE_SYNCHRONIZE,
+    YVEX_BACKEND_ATTENTION_FAILURE_NUMERIC,
+    YVEX_BACKEND_ATTENTION_FAILURE_CLEANUP
+} yvex_backend_attention_failure_code;
+
+typedef struct {
+    yvex_backend_attention_failure_code code;
+    const char *stage;
+    unsigned long long expected;
+    unsigned long long actual;
+} yvex_backend_attention_failure;
 
 int yvex_backend_open(yvex_backend **out,
                       const yvex_backend_options *options,
@@ -177,6 +347,9 @@ void yvex_backend_close(yvex_backend *backend);
 
 yvex_backend_kind yvex_backend_kind_of(const yvex_backend *backend);
 const char *yvex_backend_kind_name(yvex_backend_kind kind);
+int yvex_backend_kind_parse(const char *name,
+                            yvex_backend_kind *out,
+                            yvex_error *err);
 yvex_backend_status yvex_backend_status_of(const yvex_backend *backend);
 const char *yvex_backend_status_name(yvex_backend_status status);
 
@@ -230,6 +403,9 @@ int yvex_backend_query_capability(const yvex_backend *backend,
 const char *yvex_backend_operation_variant_name(yvex_backend_operation_variant variant);
 const char *yvex_backend_capability_state_name(yvex_backend_capability_state state);
 const char *yvex_backend_capability_reason_name(yvex_backend_capability_reason reason);
+void yvex_backend_qtype_refuse(yvex_backend_qtype_fact *fact,
+                               const char *backend,
+                               const char *qtype);
 
 int yvex_backend_op_embed(yvex_backend *backend,
                           const yvex_device_tensor *embedding,
@@ -280,6 +456,13 @@ int yvex_backend_op_attention(yvex_backend *backend,
                               yvex_device_tensor *probability_scratch,
                               yvex_device_tensor *out,
                               yvex_error *err);
+
+int yvex_backend_attention_execute(
+    yvex_backend *backend,
+    const yvex_backend_attention_job *job,
+    yvex_backend_attention_output *output,
+    yvex_backend_attention_failure *failure,
+    yvex_error *err);
 
 #ifdef __cplusplus
 }

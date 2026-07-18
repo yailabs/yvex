@@ -193,16 +193,16 @@ def main() -> None:
         MAGIC + u32(VERSION) + u64(0) + u64(1) + gguf_string("general.name") + u32(99),
     )
     write(
-        "metadata-string-out-of-bounds.gguf",
+        "metadata-string-oob.gguf",
         MAGIC + u32(VERSION) + u64(0) + u64(1) + gguf_string("general.name") + u32(STRING) + u64(100),
     )
     write(
-        "metadata-array-out-of-bounds.gguf",
+        "metadata-array-oob.gguf",
         MAGIC + u32(VERSION) + u64(0) + u64(1)
         + gguf_string("general.tags") + u32(ARRAY) + u32(UINT32) + u64(3) + u32(1),
     )
     write(
-        "metadata-nested-array-unsupported.gguf",
+        "metadata-nested.gguf",
         MAGIC + u32(VERSION) + u64(0) + u64(1)
         + gguf_string("general.tags") + u32(ARRAY) + u32(ARRAY) + u64(1),
     )
@@ -247,7 +247,7 @@ def main() -> None:
 
     write("valid-tokenizer-simple.gguf", tiny_tensor_file(tokenizer_metadata()))
     write("tokenizer-missing-tokens.gguf", tiny_tensor_file(tokenizer_metadata(include_tokens=False)))
-    write("tokenizer-bad-token-type-len.gguf", tiny_tensor_file(tokenizer_metadata(token_types=[2, 3])))
+    write("tokenizer-type-len.gguf", tiny_tensor_file(tokenizer_metadata(token_types=[2, 3])))
     write("tokenizer-bad-score-len.gguf", tiny_tensor_file(tokenizer_metadata(scores=[0.0, 0.0])))
     write("tokenizer-bad-special-id.gguf", tiny_tensor_file(tokenizer_metadata(special_id=99)))
     write("tokenizer-unsupported-arch.gguf", tiny_tensor_file(tokenizer_metadata(model="mystery-tokenizer")))

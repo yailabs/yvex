@@ -8,9 +8,9 @@
  * Invariants: fixtures remain deterministic and inspect only typed immutable APIs.
  * Boundary: test mutation deliberately probes refusal and never becomes an API.
  */
-#include "test.h"
+#include "tests/test.h"
 
-#include "src/model/compilation/yvex_transform_ir.h"
+#include "src/model/compilation/ir.h"
 
 #include <stdlib.h>
 #include <string.h>

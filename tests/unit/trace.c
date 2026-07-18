@@ -13,9 +13,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int read_file(const char *path, char *buf, size_t cap)
 {

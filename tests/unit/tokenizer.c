@@ -25,9 +25,9 @@
  */
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 typedef struct {
     yvex_artifact *artifact;
@@ -205,7 +205,7 @@ static int test_malformed_and_unsupported(void)
     YVEX_TEST_ASSERT(expect_tokenizer_status("tests/fixtures/gguf/tokenizer-missing-tokens.gguf",
                                              YVEX_ERR_UNSUPPORTED) == 0,
                      "missing tokens unsupported");
-    YVEX_TEST_ASSERT(expect_tokenizer_status("tests/fixtures/gguf/tokenizer-bad-token-type-len.gguf",
+    YVEX_TEST_ASSERT(expect_tokenizer_status("tests/fixtures/gguf/tokenizer-type-len.gguf",
                                              YVEX_ERR_FORMAT) == 0,
                      "bad token type len fails");
     YVEX_TEST_ASSERT(expect_tokenizer_status("tests/fixtures/gguf/tokenizer-bad-score-len.gguf",

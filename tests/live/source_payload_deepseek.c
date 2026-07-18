@@ -8,7 +8,7 @@
  * Boundary: exhaustive source delivery is not conversion, artifact emission, or runtime support.
  */
 #define _POSIX_C_SOURCE 200809L
-#include "src/model/target/yvex_deepseek_payload_handoff.h"
+#include "src/model/families.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -144,28 +144,28 @@ int main(int argc, char **argv)
     options.chunk_bytes = options.budget.chunk_bytes;
     options.page_bytes = options.budget.page_bytes;
     yvex_error_clear(&error);
-    rc = yvex_deepseek_payload_handoff_open(
+    rc = yvex_model_register_deepseek_v4()->payload.open(
         &handoff, &options, &handoff_failure, &error);
     if (rc != YVEX_OK) {
         fprintf(stderr, "handoff_failure=%s payload_failure=%s status=%s where=%s\n",
-                yvex_deepseek_payload_failure_name(handoff_failure.code),
+                yvex_model_register_deepseek_v4()->payload.failure_name(handoff_failure.code),
                 yvex_source_payload_failure_name(
                     handoff_failure.payload_failure.code),
                 yvex_status_name(yvex_error_code(&error)),
                 yvex_error_where(&error));
         return 1;
     }
-    summary = yvex_deepseek_payload_handoff_summary_get(handoff);
+    summary = yvex_model_register_deepseek_v4()->payload.summary(handoff);
     plan_summary = yvex_source_payload_plan_summary_get(
-        yvex_deepseek_payload_handoff_plan(handoff));
+        yvex_model_register_deepseek_v4()->payload.plan(handoff));
     transform_summary = yvex_transform_ir_summary_get(
-        yvex_deepseek_payload_handoff_transform_ir(handoff));
+        yvex_model_register_deepseek_v4()->payload.transform_ir(handoff));
     binding_summary = yvex_transform_binding_summary_get(
-        yvex_deepseek_payload_handoff_binding(handoff));
-    map_summary = yvex_deepseek_gguf_map_summary_get(
-        yvex_deepseek_payload_handoff_map(handoff));
-    verification = yvex_deepseek_payload_handoff_verification(handoff);
-    session = yvex_deepseek_payload_handoff_session(handoff);
+        yvex_model_register_deepseek_v4()->payload.binding(handoff));
+    map_summary = yvex_model_register_deepseek_v4()->lowering.summary(
+        yvex_model_register_deepseek_v4()->payload.map(handoff));
+    verification = yvex_model_register_deepseek_v4()->payload.verification(handoff);
+    session = yvex_model_register_deepseek_v4()->payload.session(handoff);
     if (!summary || !summary->complete || !plan_summary || !transform_summary ||
         !transform_summary->complete || !binding_summary ||
         !binding_summary->complete || !map_summary || !map_summary->complete ||
@@ -203,7 +203,7 @@ int main(int argc, char **argv)
         verification->header_tensor_count != 69187u ||
         verification->header_scan_count != 1u) {
         fprintf(stderr, "live_plan_invariant=failed\n");
-        yvex_deepseek_payload_handoff_close(handoff);
+        yvex_model_register_deepseek_v4()->payload.close(handoff);
         return 1;
     }
     memset(&result, 0, sizeof(result));
@@ -217,7 +217,7 @@ int main(int argc, char **argv)
         sink.context = &sink_state;
         clock_gettime(CLOCK_MONOTONIC, &begin);
         rc = yvex_source_payload_session_verify(
-            session, yvex_deepseek_payload_handoff_plan(handoff), &sink,
+            session, yvex_model_register_deepseek_v4()->payload.plan(handoff), &sink,
             &result, &failure, &error);
         clock_gettime(CLOCK_MONOTONIC, &end);
         elapsed = live_elapsed(&begin, &end);
@@ -228,22 +228,22 @@ int main(int argc, char **argv)
                     yvex_status_name(yvex_error_code(&error)),
                     yvex_error_where(&error), failure.requested_bytes,
                     failure.delivered_bytes);
-            yvex_deepseek_payload_handoff_close(handoff);
+            yvex_model_register_deepseek_v4()->payload.close(handoff);
             return 1;
         }
     }
     if (yvex_source_payload_session_facts_get(session, &facts, &error) !=
         YVEX_OK) {
-        yvex_deepseek_payload_handoff_close(handoff);
+        yvex_model_register_deepseek_v4()->payload.close(handoff);
         return 1;
     }
     rc = yvex_transform_binding_readable_validate(
-        yvex_deepseek_payload_handoff_binding(handoff), &transform_failure,
+        yvex_model_register_deepseek_v4()->payload.binding(handoff), &transform_failure,
         &error);
     binding_readable = rc == YVEX_OK;
     if (!binding_readable) {
         fprintf(stderr, "transform_binding_readability=failed\n");
-        yvex_deepseek_payload_handoff_close(handoff);
+        yvex_model_register_deepseek_v4()->payload.close(handoff);
         return 1;
     }
     if (!plan_only &&
@@ -256,7 +256,7 @@ int main(int argc, char **argv)
          facts.trusted_shard_count != 46u || facts.short_reads != 0u ||
          facts.digest_mismatches != 0u || facts.identity_drifts != 0u)) {
         fprintf(stderr, "live_stream_invariant=failed\n");
-        yvex_deepseek_payload_handoff_close(handoff);
+        yvex_model_register_deepseek_v4()->payload.close(handoff);
         return 1;
     }
     printf("mode=%s\n", plan_only ? "plan-only" : "trust-and-deliver");
@@ -375,6 +375,6 @@ int main(int argc, char **argv)
     printf("output_head_contributions=%llu\n",
            summary->output_head_contributions);
     printf("mtp_contributions=%llu\n", summary->mtp_contributions);
-    yvex_deepseek_payload_handoff_close(handoff);
+    yvex_model_register_deepseek_v4()->payload.close(handoff);
     return 0;
 }

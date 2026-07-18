@@ -6,9 +6,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int write_file(const char *path, const char *text)
 {

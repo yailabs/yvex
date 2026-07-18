@@ -12,7 +12,7 @@
  * Boundary: test-only runner used by normal and sanitizer validation.
  */
 
-#include "test.h"
+#include "tests/test.h"
 
 int yvex_test_gguf_qtype_abi(void);
 int yvex_test_source_payload(void);

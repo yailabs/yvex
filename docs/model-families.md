@@ -316,7 +316,7 @@ the one-million-token context contract, BF16 base weights, FP4 experts, and
 dynamic FP8 E4M3/UE8M0 source constraints. These source constraints do not
 select a GGUF qtype or imply quantization or backend compute support.
 
-`src/model/architecture/yvex_deepseek_v4_ir.[ch]` owns this specification.
+`src/model/families/deepseek_v4.c` owns this specification.
 The tensor-coverage owner consumes it with the retained verified source
 snapshot and reconciles all 69,187 requirements exactly, including distinct
 attention/FFN norms, final and MTP mHC heads, FP4 weights, and FP8 companion

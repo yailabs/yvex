@@ -24,10 +24,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
-#include "yvex_graph_private.h"
+#include "tests/test.h"
+#include "src/graph/private.h"
 
 typedef struct {
     yvex_artifact *artifact;

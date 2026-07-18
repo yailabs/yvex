@@ -1,7 +1,7 @@
 /*
  * YVEX - GGUF parser tests
  *
- * File: tests/test_gguf.c
+ * File: tests/test_core.c
  * Layer: test
  *
  * Purpose:
@@ -28,7 +28,7 @@
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int open_fixture(const char *path, yvex_artifact **out)
 {
@@ -228,9 +228,9 @@ static int test_valid_metadata_and_tensors(void)
 static int test_malformed_metadata(void)
 {
     YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-unknown-type.gguf", YVEX_ERR_UNSUPPORTED) == 0, "unknown metadata type fails");
-    YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-string-out-of-bounds.gguf", YVEX_ERR_FORMAT) == 0, "metadata string out of bounds fails");
-    YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-array-out-of-bounds.gguf", YVEX_ERR_BOUNDS) == 0, "metadata array out of bounds fails");
-    YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-nested-array-unsupported.gguf", YVEX_ERR_BOUNDS) == 0, "truncated nested array fails");
+    YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-string-oob.gguf", YVEX_ERR_FORMAT) == 0, "metadata string out of bounds fails");
+    YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-array-oob.gguf", YVEX_ERR_BOUNDS) == 0, "metadata array out of bounds fails");
+    YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-nested.gguf", YVEX_ERR_BOUNDS) == 0, "truncated nested array fails");
     YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-bool-invalid.gguf", YVEX_ERR_FORMAT) == 0, "invalid bool fails");
     YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-empty-key.gguf", YVEX_ERR_FORMAT) == 0, "empty key fails");
     return 0;

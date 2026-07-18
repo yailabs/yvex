@@ -9,9 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int write_u64_le(FILE *fp, unsigned long long value)
 {

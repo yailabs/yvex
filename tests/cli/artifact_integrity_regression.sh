@@ -274,7 +274,7 @@ for item in \
     "bad-magic:$BAD_MAGIC" \
     "unsupported-version:tests/fixtures/gguf/unsupported-version.gguf" \
     "truncated-header:tests/fixtures/gguf/short-header.gguf" \
-    "malformed-metadata:tests/fixtures/gguf/metadata-string-out-of-bounds.gguf" \
+    "malformed-metadata:tests/fixtures/gguf/metadata-string-oob.gguf" \
     "duplicate-tensor-name:$GEN_DIR/duplicate-tensor-name.gguf" \
     "empty-tensor-name:$GEN_DIR/empty-tensor-name.gguf" \
     "zero-dimension:tests/fixtures/gguf/tensor-dim-zero.gguf" \

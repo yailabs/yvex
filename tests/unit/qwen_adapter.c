@@ -3,8 +3,9 @@
  */
 #include <string.h>
 
-#include "test.h"
-#include "src/gguf/families.h"
+#include <yvex/weight_mapping.h>
+
+#include "tests/test.h"
 
 static int maps(const char *name, yvex_tensor_role role, const char *target)
 {

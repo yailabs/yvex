@@ -19,9 +19,9 @@
  * Expected:
  *   - exits 0 on success
  */
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 int yvex_test_logits(void)
 {

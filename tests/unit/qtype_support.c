@@ -3,12 +3,11 @@
  */
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "src/backend/yvex_backend_qtype.h"
-#include "src/backend/cuda/cuda_qtype.h"
+#include "src/backend/cuda/qtype.h"
 
-#include "test.h"
+#include "tests/test.h"
 
 int yvex_test_qtype_support(void)
 {

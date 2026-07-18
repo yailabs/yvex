@@ -34,8 +34,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "test.h"
-#include "yvex_gguf_private.h"
+#include "tests/test.h"
+#include "src/gguf/private.h"
 
 #define READER_TEST_DIR "build/tests/gguf-reader"
 
@@ -675,7 +675,7 @@ static int test_typed_truncation_boundaries(void)
                                           YVEX_GGUF_PARSE_SECTION_CONTAINER),
                      "container truncation typed");
     YVEX_TEST_ASSERT(expect_typed_refusal(
-                         "tests/fixtures/gguf/metadata-string-out-of-bounds.gguf",
+                         "tests/fixtures/gguf/metadata-string-oob.gguf",
                          YVEX_GGUF_PARSE_MALFORMED_STRING,
                          YVEX_GGUF_PARSE_SECTION_METADATA),
                      "metadata truncation typed");

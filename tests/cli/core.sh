@@ -1367,7 +1367,7 @@ contains "$OUT_DIR/model_target_deepseek_audit.out" "upstream_repository: deepse
 contains "$OUT_DIR/model_target_deepseek_audit.out" "source_directory_leaf: DeepSeek-V4-Flash"
 contains "$OUT_DIR/model_target_deepseek_audit.out" "config_model_type: deepseek_v4"
 contains "$OUT_DIR/model_target_deepseek_audit.out" "config_architecture: DeepseekV4ForCausalLM"
-contains "$OUT_DIR/model_target_deepseek_audit.out" "architecture_ir_owner: src/model/architecture/yvex_deepseek_v4_ir.c"
+contains "$OUT_DIR/model_target_deepseek_audit.out" "architecture_ir_owner: src/model/families/deepseek_v4.c"
 contains "$OUT_DIR/model_target_deepseek_audit.out" "architecture_ir_consumer: canonical-deepseek-gguf-map"
 contains "$OUT_DIR/model_target_deepseek_audit.out" "release_target_next: V010.SOURCE.PAYLOAD.STREAM.0"
 contains "$OUT_DIR/model_target_deepseek_audit.out" "tensor_mapping_gate_status: complete-logical-plan"

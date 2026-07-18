@@ -10,9 +10,9 @@
  */
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int expect_parse_error(const char *text, const char *needle)
 {

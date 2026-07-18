@@ -13,9 +13,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static void make_desc(yvex_backend_tensor_desc *desc,
                       const char *name,

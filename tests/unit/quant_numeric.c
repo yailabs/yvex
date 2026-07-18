@@ -8,9 +8,9 @@
  * Invariants: tests retain no model payload and use deterministic bounded data.
  * Boundary: codec arithmetic is not complete-model quantization evidence.
  */
-#include "test.h"
+#include "tests/test.h"
 
-#include "src/gguf/yvex_quant_numeric.h"
+#include "src/gguf/quant_numeric.h"
 
 #include <float.h>
 #include <math.h>

@@ -35,7 +35,7 @@
 
 #include <yvex/fs.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int ensure_dir(const char *path)
 {

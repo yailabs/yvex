@@ -1,177 +1,53 @@
-#!/usr/bin/env sh
+#!/bin/sh
 set -eu
 
-test -f tests/test.c
-test -f tests/test_cuda.c
-test -f tests/cli.sh
-test -f tests/test.h
-test -d tests/fixtures
-test -d tests/vectors
-test -f tests/vectors/manifest.json
-test -f tests/vectors/tokenizer.jsonl
-test -f tests/vectors/gguf.jsonl
-test -f tests/vectors/cuda.jsonl
+cd "$(dirname "$0")/.."
 
-test -f tests/test_code_natural.sh
-test -f tests/test_docs_surface.sh
-test -f tests/test_source_layout.sh
-test -f include/yvex/decode.h
-test -f include/yvex/logits.h
-test -f include/yvex/sampling.h
-test -f include/yvex/accounts.h
+test -f include/yvex/api.h
+test -f src/cli/main.c
+test -f src/core/operator.h
+test -f src/cli/render/private.h
 
-c_count="$(find tests -maxdepth 1 -type f \( -name 'test.c' -o -name 'test_*.c' \) | wc -l | tr -d ' ')"
-if [ "$c_count" -gt 2 ]; then
-    echo "too many top-level test C runners: $c_count"
-    find tests -maxdepth 1 -type f -name 'test_*.c' | sort
+for surface in backend generate graph kv model_artifacts model_target sampling source; do
+  test -f "src/cli/commands/$surface.c" || {
+    echo "surface: missing command adapter: $surface" >&2
     exit 1
+  }
+  test -f "src/cli/input/$surface.c" || {
+    echo "surface: missing typed input owner: $surface" >&2
+    exit 1
+  }
+done
+
+for surface in backend generate graph kv model_artifacts model_target sampling source; do
+  test -f "src/cli/render/$surface.c" || {
+    echo "surface: missing typed render owner: $surface" >&2
+    exit 1
+  }
+done
+
+for writer in out json table; do
+  test -f "src/cli/io/$writer.c" || {
+    echo "surface: missing CLI byte writer: $writer" >&2
+    exit 1
+  }
+done
+
+if grep -RInE '(^|[^a-zA-Z_])(printf|fprintf|vprintf|vfprintf|puts|fputs|putchar|perror)[[:space:]]*\(' \
+    src/cli/commands src/cli/input; then
+  echo "surface: command/input owner writes operator output" >&2
+  exit 1
 fi
 
-cli_count="$(find tests -maxdepth 1 -type f -name 'test_cli*.sh' | wc -l | tr -d ' ')"
-if [ "$cli_count" -ne 0 ]; then
-    echo "old CLI test scripts remain"
-    find tests -maxdepth 1 -type f -name 'test_cli*.sh' | sort
-    exit 1
+if grep -RInE '\b(argc|argv)\b|usage:[[:space:]]*yvex' \
+    src/model src/graph src/runtime src/generation src/backend src/source src/artifact src/gguf; then
+  echo "surface: domain owner contains CLI grammar" >&2
+  exit 1
 fi
 
-test -d tests/unit
-test -d tests/unit/cuda
-test -d src/cli/commands
-test -d src/cli/input
-test -d src/cli/render
-test -d src/cli/io
-test -d src/io
-test -d src/cli/catalog
-test -d src/cli/schema
+if find . -maxdepth 1 -type f \( -name 'yvex_*.c' -o -name 'yvex_*_private.h' \) -print | grep .; then
+  echo "surface: forbidden root compatibility owner" >&2
+  exit 1
+fi
 
-test -f src/source/yvex_source_private.h
-test -f src/source/yvex_source_manifest.c
-test -f src/source/yvex_source_manifest.h
-test -f src/source/yvex_source_scan.c
-test -f src/source/yvex_source_scan.h
-test -f src/source/yvex_native_weights.c
-test -f src/source/yvex_native_weights.h
-test -f src/source/yvex_safetensors_header.c
-test -f src/source/yvex_safetensors_header.h
-test -f src/source/yvex_source_report.c
-test -f src/source/yvex_source_report.h
-test -f src/source/yvex_source_write.c
-test -f src/source/yvex_source_write.h
-test -f src/cli/input/yvex_source_args.c
-test -f src/cli/input/yvex_source_args.h
-test -f src/cli/render/yvex_source_render.c
-test -f src/cli/render/yvex_source_render.h
-test -f src/io/yvex_json_writer.c
-test -f src/io/yvex_json_writer.h
-test -f src/generation/yvex_generation_report.c
-test -f src/generation/yvex_generation_report.h
-test -f src/generation/yvex_generation_trace.c
-test -f src/generation/yvex_generation_trace.h
-test -f src/generation/yvex_generation_private.h
-test -f src/cli/input/yvex_generate_args.c
-test -f src/cli/input/yvex_generate_args.h
-test -f src/cli/render/yvex_generate_render.c
-test -f src/cli/render/yvex_generate_render.h
-test -f src/cli/render/yvex_generate_trace_render.c
-test -f src/cli/render/yvex_generate_trace_render.h
-test -f src/generation/yvex_kv_report.c
-test -f src/generation/yvex_kv_report.h
-test -f src/generation/yvex_kv_private.h
-test -f src/cli/input/yvex_kv_args.c
-test -f src/cli/input/yvex_kv_args.h
-test -f src/cli/commands/yvex_kv_cli.c
-test -f src/cli/render/yvex_kv_render.c
-test -f src/cli/render/yvex_kv_render.h
-test -f src/cli/catalog/kv_options.def
-test -f src/cli/catalog/kv_fields.def
-test -f src/cli/catalog/kv_boundaries.def
-test -f src/generation/yvex_sampling_report.c
-test -f src/generation/yvex_sampling_report.h
-test -f src/generation/yvex_sampling_private.h
-test -f src/cli/input/yvex_sampling_args.c
-test -f src/cli/input/yvex_sampling_args.h
-test -f src/cli/commands/yvex_sampling_cli.c
-test -f src/cli/render/yvex_sampling_render.c
-test -f src/cli/render/yvex_sampling_render.h
-test -f src/cli/catalog/sampling_options.def
-test -f src/cli/catalog/sampling_fields.def
-test -f src/cli/catalog/sampling_boundaries.def
-test -f src/graph/yvex_graph_report.c
-test -f src/graph/yvex_graph_report.h
-test -f src/graph/yvex_graph_private.h
-test -f src/graph/yvex_memory_plan.c
-test -f src/graph/yvex_memory_plan.h
-test -f src/graph/yvex_graph_plan.c
-test -f src/graph/yvex_graph_plan.h
-test -f src/graph/yvex_graph_guard.c
-test -f src/graph/yvex_graph_guard.h
-test -f src/graph/yvex_graph_primitive.c
-test -f src/graph/yvex_graph_primitive.h
-test -f src/cli/input/yvex_graph_args.c
-test -f src/cli/input/yvex_graph_args.h
-test -f src/cli/commands/yvex_graph_cli.c
-test -f src/cli/render/yvex_graph_render.c
-test -f src/cli/render/yvex_graph_render.h
-test -f src/cli/catalog/graph_options.def
-test -f src/cli/catalog/graph_fields.def
-test -f src/cli/catalog/graph_boundaries.def
-test -f src/model/target/yvex_model_target_report.c
-test -f src/model/target/yvex_model_target_report.h
-test -f src/model/target/yvex_model_target_catalog.c
-test -f src/model/target/yvex_model_target_catalog.h
-test -f src/model/target/yvex_model_target_private.h
-test -f src/cli/input/yvex_model_target_args.c
-test -f src/cli/input/yvex_model_target_args.h
-test -f src/cli/commands/yvex_model_target_cli.c
-test -f src/cli/render/yvex_model_target_render.c
-test -f src/cli/render/yvex_model_target_render.h
-test -f src/cli/catalog/model_target_fields.def
-test -f src/model/artifacts/yvex_model_artifact_registry.c
-test -f src/model/artifacts/yvex_model_artifact_registry.h
-test -f src/model/artifacts/yvex_model_artifact_ref.c
-test -f src/model/artifacts/yvex_model_artifact_ref.h
-test -f src/model/artifacts/yvex_model_artifact_gate.c
-test -f src/model/artifacts/yvex_model_artifact_gate.h
-test -f src/model/artifacts/yvex_model_artifact_report.c
-test -f src/model/artifacts/yvex_model_artifact_report.h
-test -f src/model/artifacts/yvex_model_artifact_status_report.c
-test -f src/model/artifacts/yvex_model_artifact_status_report.h
-test -f src/model/artifacts/yvex_model_artifact_list_report.c
-test -f src/model/artifacts/yvex_model_artifact_list_report.h
-test -f src/model/artifacts/yvex_model_artifact_check_report.c
-test -f src/model/artifacts/yvex_model_artifact_check_report.h
-test -f src/model/artifacts/yvex_model_artifact_write.c
-test -f src/model/artifacts/yvex_model_artifact_write.h
-test -f src/model/artifacts/yvex_model_artifact_private.h
-test -f src/cli/input/yvex_model_artifacts_args.c
-test -f src/cli/input/yvex_model_artifacts_args.h
-test -f src/cli/commands/yvex_model_artifacts_cli.c
-test -f src/cli/render/yvex_model_artifacts_render.c
-test -f src/cli/render/yvex_model_artifacts_render.h
-test -f src/cli/render/yvex_model_artifacts_render_common.c
-test -f src/cli/render/yvex_model_artifacts_render_common.h
-test -f src/cli/render/yvex_models_render.c
-test -f src/cli/render/yvex_models_render.h
-test -f src/cli/render/yvex_models_artifacts_render.c
-test -f src/cli/render/yvex_models_artifacts_render.h
-test -f src/cli/render/yvex_models_download_render.c
-test -f src/cli/render/yvex_models_download_render.h
-test -f src/cli/render/yvex_models_download_control_render.c
-test -f src/cli/render/yvex_models_download_process_render.c
-test -f src/cli/render/yvex_models_download_write_render.c
-test -f src/cli/render/yvex_models_prepare_render.c
-test -f src/cli/render/yvex_models_prepare_render.h
-test -f src/cli/render/yvex_fullmodel_render.c
-test -f src/cli/render/yvex_fullmodel_render.h
-test -f src/cli/render/yvex_attention_render.c
-test -f src/cli/render/yvex_attention_render.h
-test -f src/cli/render/yvex_context_render.c
-test -f src/cli/render/yvex_context_render.h
-test -f src/cli/render/yvex_moe_render.c
-test -f src/cli/render/yvex_moe_render.h
-test -f src/cli/render/yvex_tensor_collection_render.c
-test -f src/cli/render/yvex_tensor_collection_render.h
-test -f src/cli/catalog/model_artifacts_fields.def
-test -f src/cli/catalog/model_artifacts_boundaries.def
-
-echo "test surface: ok"
+echo "surface topology: ok commands=8 inputs=8 renderers=8 writers=3"

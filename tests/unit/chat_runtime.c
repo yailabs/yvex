@@ -21,8 +21,8 @@
  */
 #include <string.h>
 
-#include "yvex_operator_private.h"
-#include "test.h"
+#include "src/core/operator.h"
+#include "tests/test.h"
 
 static int test_runtime_accept_and_reset(void)
 {

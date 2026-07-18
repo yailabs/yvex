@@ -11,13 +11,12 @@
  * Boundary: this runner proves complete artifacts but never materializes them.
  */
 #define _POSIX_C_SOURCE 200809L
-#include "src/artifact/yvex_artifact_roundtrip_gate.h"
-#include "src/artifact/yvex_artifact_descriptor.h"
-#include "src/gguf/yvex_gguf_file_sink.h"
-#include "src/gguf/yvex_quant_execute.h"
-#include "src/model/artifacts/yvex_model_artifact_gate.h"
-#include "src/model/artifacts/yvex_model_artifact_report.h"
-#include "src/model/target/yvex_deepseek_payload_handoff.h"
+#include "src/artifact/roundtrip_gate.h"
+#include "src/gguf/file_sink.h"
+#include "src/gguf/quant_sink.h"
+#include "src/model/artifacts/gate.h"
+#include "src/model/artifacts/report.h"
+#include "src/model/families.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -202,10 +201,10 @@ static int artifact_plan_one(
     int rc;
 
     yvex_error_clear(&error);
-    rc = yvex_deepseek_quant_plan_build_profile(
-        &quant, yvex_deepseek_payload_handoff_transform_ir(handoff),
-        yvex_deepseek_payload_handoff_binding(handoff),
-        yvex_deepseek_payload_handoff_map(handoff), profile, NULL,
+    rc = yvex_quant_plan_build_deepseek_profile(
+        &quant, yvex_model_register_deepseek_v4()->payload.transform_ir(handoff),
+        yvex_model_register_deepseek_v4()->payload.binding(handoff),
+        yvex_model_register_deepseek_v4()->payload.map(handoff), profile, NULL,
         &quant_failure, &error);
     if (rc != YVEX_OK) {
         artifact_print_quant_failure("quant-plan", &quant_failure, &error);
@@ -213,9 +212,9 @@ static int artifact_plan_one(
     }
     yvex_gguf_writer_plan_options_default(&writer_options);
     writer_options.required_execution_identity = execution_identity;
-    rc = yvex_deepseek_gguf_writer_plan_build(
-        &writer, quant, yvex_deepseek_payload_handoff_map(handoff),
-        yvex_deepseek_payload_handoff_verification(handoff),
+    rc = yvex_gguf_writer_build_deepseek(
+        &writer, quant, yvex_model_register_deepseek_v4()->payload.map(handoff),
+        yvex_model_register_deepseek_v4()->payload.verification(handoff),
         &writer_options, &writer_failure, &error);
     if (rc != YVEX_OK) {
         fprintf(stderr,
@@ -357,17 +356,17 @@ static int artifact_structure_one(
     int rc;
 
     yvex_error_clear(&error);
-    rc = yvex_deepseek_quant_plan_build_profile(
-        &quant, yvex_deepseek_payload_handoff_transform_ir(handoff),
-        yvex_deepseek_payload_handoff_binding(handoff),
-        yvex_deepseek_payload_handoff_map(handoff), profile, NULL,
+    rc = yvex_quant_plan_build_deepseek_profile(
+        &quant, yvex_model_register_deepseek_v4()->payload.transform_ir(handoff),
+        yvex_model_register_deepseek_v4()->payload.binding(handoff),
+        yvex_model_register_deepseek_v4()->payload.map(handoff), profile, NULL,
         &quant_failure, &error);
     if (rc != YVEX_OK) goto cleanup;
     yvex_gguf_writer_plan_options_default(&writer_options);
     writer_options.required_execution_identity = execution_identity;
-    rc = yvex_deepseek_gguf_writer_plan_build(
-        &writer, quant, yvex_deepseek_payload_handoff_map(handoff),
-        yvex_deepseek_payload_handoff_verification(handoff),
+    rc = yvex_gguf_writer_build_deepseek(
+        &writer, quant, yvex_model_register_deepseek_v4()->payload.map(handoff),
+        yvex_model_register_deepseek_v4()->payload.verification(handoff),
         &writer_options, &writer_failure, &error);
     if (rc != YVEX_OK) goto cleanup;
     summary = yvex_gguf_writer_plan_summary_get(writer);
@@ -467,10 +466,10 @@ static int artifact_execute_one(
 
     memset(result, 0, sizeof(*result));
     yvex_error_clear(&error);
-    rc = yvex_deepseek_quant_plan_build_profile(
-        &quant, yvex_deepseek_payload_handoff_transform_ir(handoff),
-        yvex_deepseek_payload_handoff_binding(handoff),
-        yvex_deepseek_payload_handoff_map(handoff), profile, NULL,
+    rc = yvex_quant_plan_build_deepseek_profile(
+        &quant, yvex_model_register_deepseek_v4()->payload.transform_ir(handoff),
+        yvex_model_register_deepseek_v4()->payload.binding(handoff),
+        yvex_model_register_deepseek_v4()->payload.map(handoff), profile, NULL,
         &quant_failure, &error);
     if (rc != YVEX_OK) {
         artifact_print_quant_failure("quant-plan", &quant_failure, &error);
@@ -479,9 +478,9 @@ static int artifact_execute_one(
     quant_summary = yvex_quant_plan_summary_get(quant);
     yvex_gguf_writer_plan_options_default(&writer_options);
     writer_options.required_execution_identity = required_execution_identity;
-    rc = yvex_deepseek_gguf_writer_plan_build(
-        &writer, quant, yvex_deepseek_payload_handoff_map(handoff),
-        yvex_deepseek_payload_handoff_verification(handoff),
+    rc = yvex_gguf_writer_build_deepseek(
+        &writer, quant, yvex_model_register_deepseek_v4()->payload.map(handoff),
+        yvex_model_register_deepseek_v4()->payload.verification(handoff),
         &writer_options, &writer_failure, &error);
     if (rc != YVEX_OK) {
         fprintf(stderr, "writer_plan_failure=%s tensor=%llu message=%s\n",
@@ -773,11 +772,11 @@ int main(int argc, char **argv)
     options.chunk_bytes = options.budget.chunk_bytes;
     options.page_bytes = options.budget.page_bytes;
     yvex_error_clear(&error);
-    rc = yvex_deepseek_payload_handoff_open(
+    rc = yvex_model_register_deepseek_v4()->payload.open(
         &handoff, &options, &failure, &error);
     if (rc != YVEX_OK) {
         fprintf(stderr, "handoff_failure=%s where=%s message=%s\n",
-                yvex_deepseek_payload_failure_name(failure.code),
+                yvex_model_register_deepseek_v4()->payload.failure_name(failure.code),
                 yvex_error_where(&error), yvex_error_message(&error));
         return 1;
     }
@@ -789,7 +788,7 @@ int main(int argc, char **argv)
             rc = artifact_plan_one(
                 handoff, YVEX_QUANT_PROFILE_RELEASE_Q8_Q2,
                 SELECTED_EXECUTION_IDENTITY);
-        yvex_deepseek_payload_handoff_close(handoff);
+        yvex_model_register_deepseek_v4()->payload.close(handoff);
         return rc;
     }
     if (!artifact_path_build(
@@ -802,7 +801,7 @@ int main(int argc, char **argv)
             deterministic_path, sizeof(deterministic_path),
             argv[argument + 1],
             "deepseek-v4-flash-q8_0-q2_k-v1.determinism.gguf")) {
-        yvex_deepseek_payload_handoff_close(handoff);
+        yvex_model_register_deepseek_v4()->payload.close(handoff);
         return 1;
     }
     checker = getenv("YVEX_GGML_CHECKER");
@@ -815,7 +814,7 @@ int main(int argc, char **argv)
             rc = artifact_structure_one(
                 handoff, YVEX_QUANT_PROFILE_RELEASE_Q8_Q2,
                 SELECTED_EXECUTION_IDENTITY, checker);
-        yvex_deepseek_payload_handoff_close(handoff);
+        yvex_model_register_deepseek_v4()->payload.close(handoff);
         return rc;
     }
     printf("mode=complete-artifact-emission\n");
@@ -856,6 +855,6 @@ int main(int argc, char **argv)
         printf("materialization_input_ready=1\n");
         printf("runtime_supported=0\n");
     }
-    yvex_deepseek_payload_handoff_close(handoff);
+    yvex_model_register_deepseek_v4()->payload.close(handoff);
     return rc;
 }

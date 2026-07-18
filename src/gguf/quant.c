@@ -1,4 +1,10 @@
 /*
+ * Owner: gguf.quant (gguf).
+ * Owns: the file-serialization boundary consumed by artifact,model,quant.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=private match config/source_owners.tsv.
+ * Boundary: file-serialization; moving this contract requires an ownership-manifest change.
+ *
  * gguf/quant.c - Quantization manifests and calibration metadata.
  *
  * This file owns quantization policy, quant job, imatrix manifest handling,
@@ -14,7 +20,7 @@
 #include <yvex/quant_policy.h>
 #include <yvex/tensor.h>
 
-#include "yvex_quant_numeric.h"
+#include "quant_numeric.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -60,9 +66,6 @@ int yvex_quant_policy_write_json_file(const char *out_path,
                                       const yvex_quant_policy *policy,
                                       yvex_error *err);
 
-void yvex_quant_policy_print_summary(const yvex_quant_policy *policy,
-                                     const char *mode,
-                                     const char *path);
 
 char *yvex_quant_policy_strdup(const char *s);
 yvex_quant_qtype yvex_quant_qtype_from_name(const char *name);
@@ -1675,7 +1678,7 @@ const yvex_quant_policy_rule *yvex_quant_policy_rule_at(const yvex_quant_policy 
 
 
 
-static yvex_quant_qtype yvex_quant_policy_template_qtype_from_dtype(yvex_dtype dtype)
+static yvex_quant_qtype template_qtype_from_dtype(yvex_dtype dtype)
 {
     switch (dtype) {
     case YVEX_DTYPE_F32: return YVEX_QUANT_QTYPE_F32;
@@ -1758,7 +1761,7 @@ int yvex_quant_policy_create_from_template(yvex_quant_policy **out,
         yvex_quant_qtype qtype;
 
         if (!tensor) continue;
-        qtype = yvex_quant_policy_template_qtype_from_dtype(tensor->dtype);
+        qtype = template_qtype_from_dtype(tensor->dtype);
         if (tensor->role != YVEX_TENSOR_ROLE_UNKNOWN) {
             if (qp_has_role_qtype(policy, tensor->role, qtype)) continue;
             rc = yvex_quant_policy_add_rule(policy, YVEX_QUANT_SELECTOR_ROLE,
@@ -1862,7 +1865,7 @@ static char *qj_string(qp_json *j)
     return NULL;
 }
 
-static int yvex_quant_policy_json_skip_value(qp_json *j);
+static int json_skip_value(qp_json *j);
 
 static int qj_skip_literal(qp_json *j, const char *lit)
 {
@@ -1889,7 +1892,7 @@ static int qj_skip_object(qp_json *j)
         free(key);
         rc = qj_expect(j, ':');
         if (rc != YVEX_OK) return rc;
-        rc = yvex_quant_policy_json_skip_value(j);
+        rc = json_skip_value(j);
         if (rc != YVEX_OK) return rc;
         qj_skip_ws(j);
         if (j->p < j->end && *j->p == ',') {
@@ -1915,7 +1918,7 @@ static int qj_skip_array(qp_json *j)
         return YVEX_OK;
     }
     while (j->p < j->end) {
-        rc = yvex_quant_policy_json_skip_value(j);
+        rc = json_skip_value(j);
         if (rc != YVEX_OK) return rc;
         qj_skip_ws(j);
         if (j->p < j->end && *j->p == ',') {
@@ -1931,7 +1934,7 @@ static int qj_skip_array(qp_json *j)
     return qj_fail(j, "unterminated array");
 }
 
-static int yvex_quant_policy_json_skip_value(qp_json *j)
+static int json_skip_value(qp_json *j)
 {
     char *s;
     qj_skip_ws(j);
@@ -1992,7 +1995,7 @@ static int qj_parse_source(qp_json *j, yvex_quant_policy *policy)
             free(policy->template_path);
             policy->template_path = qj_string(j);
         } else {
-            rc = yvex_quant_policy_json_skip_value(j);
+            rc = json_skip_value(j);
         }
         free(key);
         if (rc != YVEX_OK) return rc;
@@ -2046,7 +2049,7 @@ static int qj_parse_rule(qp_json *j, yvex_quant_policy *policy)
         } else if (strcmp(key, "requires_imatrix") == 0) {
             rc = qj_bool(j, &requires_imatrix);
         } else {
-            rc = yvex_quant_policy_json_skip_value(j);
+            rc = json_skip_value(j);
         }
         free(key);
         if (rc != YVEX_OK) goto done;
@@ -2095,7 +2098,7 @@ static int qj_parse_rules(qp_json *j, yvex_quant_policy *policy)
     return qj_fail(j, "unterminated rules array");
 }
 
-static int yvex_quant_policy_json_read_file(const char *path, char **out, unsigned long long *len, yvex_error *err)
+static int json_read_file(const char *path, char **out, unsigned long long *len, yvex_error *err)
 {
     FILE *fp;
     long size;
@@ -2143,7 +2146,7 @@ int yvex_quant_policy_parse_json(yvex_quant_policy **out, const char *path, yvex
         return YVEX_ERR_INVALID_ARG;
     }
     *out = NULL;
-    rc = yvex_quant_policy_json_read_file(path, &buf, &len, err);
+    rc = json_read_file(path, &buf, &len, err);
     if (rc != YVEX_OK) return rc;
     policy = (yvex_quant_policy *)calloc(1, sizeof(*policy));
     if (!policy) {
@@ -2201,7 +2204,7 @@ int yvex_quant_policy_parse_json(yvex_quant_policy **out, const char *path, yvex
         } else if (strcmp(key, "rules") == 0) {
             rc = qj_parse_rules(&j, policy);
         } else {
-            rc = yvex_quant_policy_json_skip_value(&j);
+            rc = json_skip_value(&j);
         }
         free(key);
         if (rc != YVEX_OK) goto fail;
@@ -2304,34 +2307,9 @@ int yvex_quant_policy_write_json_file(const char *out_path,
 
 
 
-void yvex_quant_policy_print_summary(const yvex_quant_policy *policy,
-                                     const char *mode,
-                                     const char *path)
+static yvex_quant_qtype validate_qtype_from_dtype(yvex_dtype dtype)
 {
-    yvex_quant_policy_summary summary;
-    yvex_error err;
-
-    yvex_error_clear(&err);
-    if (!policy || yvex_quant_policy_get_summary(policy, &summary, &err) != YVEX_OK) {
-        return;
-    }
-    fprintf(stdout, "quant policy: %s\n", mode);
-    if (path) fprintf(stdout, "policy: %s\n", path);
-    fprintf(stdout, "name: %s\n", summary.name ? summary.name : "");
-    fprintf(stdout, "architecture: %s\n", summary.architecture ? summary.architecture : "");
-    fprintf(stdout, "rules: %llu\n", summary.rule_count);
-    fprintf(stdout, "issues: %llu\n", summary.issue_count);
-    fprintf(stdout, "requires_imatrix: %llu\n", summary.requires_imatrix_count);
-    fprintf(stdout, "storage_supported: %llu\n", summary.storage_supported_count);
-    fprintf(stdout, "compute_supported: %llu\n", summary.compute_supported_count);
-    fprintf(stdout, "status: %s\n", yvex_quant_policy_status_name(summary.status));
-}
-
-
-
-static yvex_quant_qtype yvex_quant_policy_validate_qtype_from_dtype(yvex_dtype dtype)
-{
-    return yvex_quant_policy_template_qtype_from_dtype(dtype);
+    return template_qtype_from_dtype(dtype);
 }
 
 static void qp_set_summary(yvex_quant_policy *policy,
@@ -2439,7 +2417,7 @@ static int qp_validate_template(yvex_quant_policy *policy,
             else if (rule->selector_kind == YVEX_QUANT_SELECTOR_TENSOR_PATTERN && qp_match_pattern(rule->selector, tensor->name)) applies = 1;
             if (!applies) continue;
             matched = 1;
-            if (yvex_quant_policy_validate_qtype_from_dtype(tensor->dtype) != rule->qtype) {
+            if (validate_qtype_from_dtype(tensor->dtype) != rule->qtype) {
                 (*issues)++;
             }
         }

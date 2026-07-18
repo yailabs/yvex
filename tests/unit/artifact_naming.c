@@ -3,9 +3,9 @@
  */
 #include <string.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int suggest(char *out, size_t n,
                    const char *family,

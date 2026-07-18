@@ -91,7 +91,7 @@ serve_one 18180 health
 http_request 18180 GET /health "$OUT_DIR/health.http"
 wait "$server_pid" || fail "health server failed"
 contains "$OUT_DIR/health.http" "HTTP/1.1 200 OK"
-contains "$OUT_DIR/health.http" "\"schema\": \"yvex.health.v1\""
+contains "$OUT_DIR/health.http" "\"schema\": \"api.health.v1\""
 contains "$OUT_DIR/health.http" "\"generation_available\": false"
 
 serve_one 18181 metrics

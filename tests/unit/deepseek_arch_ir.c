@@ -5,13 +5,12 @@
  * allocation cleanup, and the model-class report consumer without source IO
  * or tensor payload reads.
  */
-#include "test.h"
+#include "tests/test.h"
 
-#include "src/model/architecture/yvex_deepseek_v4_ir.h"
-#include "src/model/compilation/yvex_deepseek_transform_ir.h"
-#include "src/model/target/yvex_model_class_profile.h"
-#include "src/model/target/yvex_model_target_catalog.h"
-#include "src/source/yvex_source_verify.h"
+#include "src/model/families.h"
+#include "src/model/target/model_class_profile.h"
+#include "src/model/target/catalog.h"
+#include "src/source/verify.h"
 
 #include <limits.h>
 #include <stdlib.h>
@@ -56,7 +55,7 @@ static void arch_ir_verification_fixture(yvex_source_verification *source)
                  "/verified/DeepSeek-V4-Flash");
     arch_ir_copy(source->manifest_target_id,
                  sizeof(source->manifest_target_id),
-                 yvex_deepseek_v4_target_id);
+                 yvex_model_target_release_identity()->target_id);
     arch_ir_copy(source->verification_stage,
                  sizeof(source->verification_stage),
                  "exact-source-metadata-header-verified");
@@ -64,20 +63,20 @@ static void arch_ir_verification_fixture(yvex_source_verification *source)
                  sizeof(source->inventory_authority), "upstream-index");
     arch_ir_copy(source->upstream_index_oid,
                  sizeof(source->upstream_index_oid),
-                 yvex_deepseek_v4_upstream_index_oid);
+                 yvex_model_target_release_identity()->upstream_index_oid);
     arch_ir_copy(source->local_index_oid,
                  sizeof(source->local_index_oid),
-                 yvex_deepseek_v4_upstream_index_oid);
+                 yvex_model_target_release_identity()->upstream_index_oid);
     arch_ir_copy(source->source_kind, sizeof(source->source_kind),
                  "huggingface");
     arch_ir_copy(source->repository_id, sizeof(source->repository_id),
-                 yvex_deepseek_v4_upstream_repo_id);
+                 yvex_model_target_release_identity()->upstream_repo_id);
     arch_ir_copy(source->revision, sizeof(source->revision),
-                 yvex_deepseek_v4_upstream_revision);
+                 yvex_model_target_release_identity()->upstream_revision);
     arch_ir_copy(source->model_type, sizeof(source->model_type),
-                 yvex_deepseek_v4_config_model_type);
+                 yvex_model_target_release_identity()->config_model_type);
     arch_ir_copy(source->architecture, sizeof(source->architecture),
-                 yvex_deepseek_v4_config_architecture);
+                 yvex_model_target_release_identity()->config_architecture);
     arch_ir_copy(source->torch_dtype, sizeof(source->torch_dtype),
                  "bfloat16");
     arch_ir_copy(source->expert_dtype, sizeof(source->expert_dtype), "fp4");
@@ -166,7 +165,7 @@ static int arch_ir_build(yvex_source_verification *source,
     yvex_error err;
 
     yvex_error_clear(&err);
-    return yvex_deepseek_v4_ir_build(ir, source, failure, &err);
+    return yvex_model_register_deepseek_v4()->ir.build(ir, source, failure, &err);
 }
 
 static int arch_ir_expect_failure(
@@ -198,7 +197,7 @@ static int test_arch_ir_golden_topology(void)
     arch_ir_verification_fixture(&source);
     YVEX_TEST_ASSERT(arch_ir_build(&source, &ir, &failure) == YVEX_OK && ir,
                      "exact verified target builds architecture IR");
-    model = yvex_deepseek_v4_ir_model(ir);
+    model = yvex_model_register_deepseek_v4()->ir.model(ir);
     YVEX_TEST_ASSERT(model && model->main_layer_count == 43 &&
                      model->auxiliary_layer_count == 1 &&
                      model->hidden_size == 4096 &&
@@ -244,7 +243,7 @@ static int test_arch_ir_golden_topology(void)
                      model->source_header_scan_count == 1,
                      "source constraints remain typed without payload reads");
     YVEX_TEST_ASSERT_STREQ(
-        yvex_deepseek_v4_source_quantization_name(
+        yvex_model_register_deepseek_v4()->ir.source_quantization_name(
             model->source_constraint.quantization),
         "fp8-e4m3-ue8m0-dynamic",
         "source quantization rendering projects the typed constraint");
@@ -266,9 +265,9 @@ static int test_arch_ir_golden_topology(void)
                      model->runtime_sparse_topk_policy_count == 1,
                      "runtime numeric schema is explicit");
 
-    swa = yvex_deepseek_v4_ir_layer_at(ir, 0);
-    csa = yvex_deepseek_v4_ir_layer_at(ir, 2);
-    hca = yvex_deepseek_v4_ir_layer_at(ir, 3);
+    swa = yvex_model_register_deepseek_v4()->ir.layer_at(ir, 0);
+    csa = yvex_model_register_deepseek_v4()->ir.layer_at(ir, 2);
+    hca = yvex_model_register_deepseek_v4()->ir.layer_at(ir, 3);
     YVEX_TEST_ASSERT(swa && csa && hca &&
                      swa->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_SWA &&
                      csa->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA &&
@@ -349,7 +348,7 @@ static int test_arch_ir_golden_topology(void)
                      hca->moe.correction_bias_width == 256,
                      "learned MoE requires hidden-state noaux routing");
 
-    mtp = yvex_deepseek_v4_ir_auxiliary_at(ir, 0);
+    mtp = yvex_model_register_deepseek_v4()->ir.auxiliary_at(ir, 0);
     YVEX_TEST_ASSERT(mtp && mtp->layer.layer_index == 43 &&
                      mtp->layer.attention_class ==
                          YVEX_DEEPSEEK_V4_ATTENTION_SWA &&
@@ -363,10 +362,10 @@ static int test_arch_ir_golden_topology(void)
                      mtp->mhc_head.function_columns == 16384 &&
                      mtp->shares_output_head && mtp->shares_final_norm,
                      "MTP topology is separate from the 43 main layers");
-    YVEX_TEST_ASSERT(yvex_deepseek_v4_ir_layer_at(ir, 43) == NULL &&
-                     yvex_deepseek_v4_ir_auxiliary_at(ir, 1) == NULL,
+    YVEX_TEST_ASSERT(yvex_model_register_deepseek_v4()->ir.layer_at(ir, 43) == NULL &&
+                     yvex_model_register_deepseek_v4()->ir.auxiliary_at(ir, 1) == NULL,
                      "borrowed accessors are bounds checked");
-    yvex_deepseek_v4_ir_close(ir);
+    yvex_model_register_deepseek_v4()->ir.close(ir);
     return 0;
 }
 
@@ -507,7 +506,7 @@ static int test_arch_ir_payload_manifest_stage(void)
     source.manifest_payload_trusted = 1;
     YVEX_TEST_ASSERT(arch_ir_build(&source, &ir, &failure) == YVEX_OK && ir,
                      "trusted v3 payload manifest remains strict IR input");
-    yvex_deepseek_v4_ir_close(ir);
+    yvex_model_register_deepseek_v4()->ir.close(ir);
 
     source.manifest_payload_trusted = 0;
     if (arch_ir_expect_failure(
@@ -558,12 +557,12 @@ static int test_arch_ir_lifetime_and_allocation(void)
                      "build owned lifetime IR");
     memset(source, 0, sizeof(*source));
     free(source);
-    YVEX_TEST_ASSERT_STREQ(yvex_deepseek_v4_ir_model(ir)->repository,
-                           yvex_deepseek_v4_upstream_repo_id,
+    YVEX_TEST_ASSERT_STREQ(yvex_model_register_deepseek_v4()->ir.model(ir)->repository,
+                           yvex_model_target_release_identity()->upstream_repo_id,
                            "IR remains valid after source evidence release");
-    YVEX_TEST_ASSERT(yvex_deepseek_v4_ir_layer_at(ir, 42)->layer_index == 42,
+    YVEX_TEST_ASSERT(yvex_model_register_deepseek_v4()->ir.layer_at(ir, 42)->layer_index == 42,
                      "owned layer collection survives source release");
-    yvex_deepseek_v4_ir_close(ir);
+    yvex_model_register_deepseek_v4()->ir.close(ir);
 
     for (fail_call = 0u; fail_call < 3u; ++fail_call) {
         yvex_source_verification fixture;
@@ -579,7 +578,7 @@ static int test_arch_ir_lifetime_and_allocation(void)
         allocator.context = &state;
         ir = NULL;
         yvex_error_clear(&err);
-        rc = yvex_deepseek_v4_ir_build_with_allocator(
+        rc = yvex_model_register_deepseek_v4()->ir.build_with_allocator(
             &ir, &fixture, &allocator, &failure, &err);
         YVEX_TEST_ASSERT(rc == YVEX_ERR_NOMEM && ir == NULL &&
                          failure.code ==
@@ -615,7 +614,7 @@ static int test_arch_ir_report_consumer_and_family_preservation(void)
     request.kind = YVEX_MODEL_TARGET_COMMAND_CLASS_PROFILE;
     request.mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
     arch_ir_copy(request.target_id, sizeof(request.target_id),
-                 yvex_deepseek_v4_target_id);
+                 yvex_model_target_release_identity()->target_id);
     yvex_error_clear(&err);
     YVEX_TEST_ASSERT(
         yvex_model_class_profile_deepseek_from_verification(
@@ -672,12 +671,12 @@ static int test_runtime_numeric_identity_field_coverage(void)
     yvex_error err;
 
     arch_ir_verification_fixture(&source);
-    YVEX_TEST_ASSERT(yvex_deepseek_v4_ir_build(
+    YVEX_TEST_ASSERT(yvex_model_register_deepseek_v4()->ir.build(
                          &ir, &source, &failure, &err) == YVEX_OK,
                      "identity fixture architecture builds");
     layer = (yvex_deepseek_v4_layer_spec *)
-        yvex_deepseek_v4_ir_layer_at(ir, 2ull);
-    YVEX_TEST_ASSERT(layer && yvex_deepseek_transform_architecture_identity(
+        yvex_model_register_deepseek_v4()->ir.layer_at(ir, 2ull);
+    YVEX_TEST_ASSERT(layer && yvex_model_register_deepseek_v4()->transform.architecture_identity(
                                   ir, baseline),
                      "baseline logical identity exists");
     activation = layer->compressor_rotated_activation;
@@ -685,7 +684,7 @@ static int test_runtime_numeric_identity_field_coverage(void)
 #define ASSERT_ID_MUTATION(change, restore, label) do {                       \
         change;                                                                \
         YVEX_TEST_ASSERT(                                                      \
-            yvex_deepseek_transform_architecture_identity(ir, changed) &&     \
+            yvex_model_register_deepseek_v4()->transform.architecture_identity(ir, changed) &&     \
                 strcmp(baseline, changed) != 0, label);                        \
         restore;                                                               \
     } while (0)
@@ -766,10 +765,10 @@ static int test_runtime_numeric_identity_field_coverage(void)
                        layer->sparse_topk = topk,
                        "top-k output ordering changes identity");
 #undef ASSERT_ID_MUTATION
-    YVEX_TEST_ASSERT(yvex_deepseek_transform_architecture_identity(
+    YVEX_TEST_ASSERT(yvex_model_register_deepseek_v4()->transform.architecture_identity(
                          ir, changed) && strcmp(baseline, changed) == 0,
                      "restored numeric policies restore identity");
-    yvex_deepseek_v4_ir_close(ir);
+    yvex_model_register_deepseek_v4()->ir.close(ir);
     return 0;
 }
 

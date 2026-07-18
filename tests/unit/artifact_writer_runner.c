@@ -7,7 +7,7 @@
  * Invariants: returns nonzero on the first owned suite refusal.
  * Boundary: fixture validation is not target-scale complete emission.
  */
-#include "test.h"
+#include "tests/test.h"
 
 int yvex_test_gguf_writer_artifact(void);
 

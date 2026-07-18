@@ -10,22 +10,20 @@
  *   fixture retains or prints tensor bytes.
  * Boundary: target-shaped operation proof is not a complete-model artifact.
  */
-#include "test.h"
+#include "tests/test.h"
 
-#include "src/artifact/yvex_artifact_descriptor.h"
-#include "src/artifact/yvex_artifact_roundtrip_gate.h"
-#include "src/gguf/yvex_gguf_file_sink.h"
-#include "src/gguf/yvex_gguf_roundtrip.h"
-#include "src/gguf/yvex_gguf_writer.h"
-#include "src/gguf/yvex_quant_execute.h"
-#include "src/gguf/yvex_quant_plan.h"
-#include "src/gguf/yvex_quant_sink.h"
-#include "src/model/compilation/yvex_transform_binding.h"
-#include "src/model/compilation/yvex_transform_ir.h"
-#include "src/model/artifacts/yvex_model_artifact_gate.h"
-#include "src/model/artifacts/yvex_model_artifact_report.h"
-#include "src/model/target/yvex_model_target_catalog.h"
-#include "src/source/yvex_source_private.h"
+#include "src/artifact/roundtrip_gate.h"
+#include "src/gguf/file_sink.h"
+#include "src/gguf/roundtrip.h"
+#include "src/gguf/writer.h"
+#include "src/gguf/quant_sink.h"
+#include "src/gguf/quant_plan.h"
+#include "src/model/compilation/binding.h"
+#include "src/model/compilation/ir.h"
+#include "src/model/artifacts/gate.h"
+#include "src/model/artifacts/report.h"
+#include "src/model/target/catalog.h"
+#include "src/source/private.h"
 
 #include <errno.h>
 #include <limits.h>

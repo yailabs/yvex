@@ -19,23 +19,22 @@
  * Boundary:
  *   fixture numerics prove bounded primitives, not full-model execution.
  */
-#include "test.h"
+#include "tests/test.h"
 
-#include "src/graph/yvex_deepseek_attention.h"
-#include "src/graph/yvex_deepseek_attention_internal.h"
-#include "tests/reference/deepseek_attention_reference.h"
+#include "src/graph/private.h"
+#include "tests/reference/deepseek_attention.h"
 
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static yvex_deepseek_attention_layer_plan layer_fixture(
+static yvex_attention_layer_plan layer_fixture(
     unsigned long long layer_index,
     yvex_deepseek_v4_attention_class attention_class,
     unsigned long long compression_ratio)
 {
-    yvex_deepseek_attention_layer_plan layer;
+    yvex_attention_layer_plan layer;
 
     memset(&layer, 0, sizeof(layer));
     layer.layer_index = layer_index;
@@ -87,9 +86,9 @@ static void fill_scores(float *values,
 }
 
 static void init_rolling_view(
-    yvex_deepseek_attention_rolling_state_view *state,
-    yvex_deepseek_attention_rolling_kind kind,
-    const yvex_deepseek_attention_layer_plan *layer,
+    yvex_attention_rolling_state_view *state,
+    yvex_attention_rolling_kind kind,
+    const yvex_attention_layer_plan *layer,
     unsigned long long next_token_position,
     float *kv,
     float *score)
@@ -132,8 +131,8 @@ static void init_rolling_view(
 }
 
 static void init_rolling_output(
-    yvex_deepseek_attention_rolling_state_output *state,
-    const yvex_deepseek_attention_rolling_state_view *view,
+    yvex_attention_rolling_state_output *state,
+    const yvex_attention_rolling_state_view *view,
     float *kv,
     float *score)
 {
@@ -147,8 +146,8 @@ static void init_rolling_output(
 }
 
 static void output_to_view(
-    yvex_deepseek_attention_rolling_state_view *view,
-    const yvex_deepseek_attention_rolling_state_output *out)
+    yvex_attention_rolling_state_view *view,
+    const yvex_attention_rolling_state_output *out)
 {
     memset(view, 0, sizeof(*view));
     view->present = out->present;
@@ -177,10 +176,10 @@ static void output_to_view(
 }
 
 static void output_to_committed_view(
-    yvex_deepseek_attention_rolling_state_view *view,
-    const yvex_deepseek_attention_rolling_state_output *out,
-    const yvex_deepseek_attention_component_span *kv,
-    const yvex_deepseek_attention_component_span *score)
+    yvex_attention_rolling_state_view *view,
+    const yvex_attention_rolling_state_output *out,
+    const yvex_attention_component_span *kv,
+    const yvex_attention_component_span *score)
 {
     output_to_view(view, out);
     view->kv_state = (const float *)kv->data;
@@ -188,17 +187,17 @@ static void output_to_committed_view(
 }
 
 static int seal_zero_component(
-    yvex_deepseek_attention_state_transaction *transaction,
-    yvex_deepseek_attention_component_kind kind,
-    yvex_deepseek_attention_failure *failure,
+    yvex_attention_state_transaction *transaction,
+    yvex_attention_component_kind kind,
+    yvex_attention_failure *failure,
     yvex_error *err)
 {
-    yvex_deepseek_attention_component_span span;
+    yvex_attention_component_span span;
 
-    if (yvex_deepseek_attention_state_transaction_acquire(
+    if (yvex_attention_state_transaction_acquire(
             transaction, kind, &span, failure, err) != YVEX_OK)
         return 0;
-    if (yvex_deepseek_attention_state_transaction_seal(
+    if (yvex_attention_state_transaction_seal(
             transaction, kind, span.expected_elements, failure, err) != YVEX_OK)
         return 0;
     return 1;
@@ -209,20 +208,21 @@ static int compare_float_ranges(const float *left,
                                 unsigned long long count,
                                 const char *label);
 
-static int test_execution_gate_is_scoped_and_ready(void)
+static int test_execution_gate_is_scoped_and_reopened(void)
 {
     const char *reason = NULL;
 
-    YVEX_TEST_ASSERT(yvex_deepseek_attention_execute_supported(&reason) == 1,
-                     "complete attention executor is admitted");
-    YVEX_TEST_ASSERT(reason == NULL,
-                     "admitted attention has no refusal reason");
+    YVEX_TEST_ASSERT(yvex_attention_execute_supported(&reason) == 0,
+                     "attention executor admission is reopened");
+    YVEX_TEST_ASSERT_STREQ(reason,
+                     "attention-execution-incomplete",
+                     "reopened attention has a stable refusal reason");
     YVEX_TEST_ASSERT_STREQ(
-        yvex_deepseek_attention_status_name(
+        yvex_attention_status_name(
             YVEX_DEEPSEEK_ATTENTION_STATUS_EXECUTION_READY),
         "execution-ready", "execution-ready status name");
     YVEX_TEST_ASSERT_STREQ(
-        yvex_deepseek_attention_failure_name(
+        yvex_attention_failure_name(
             YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY),
         "history", "history failure name");
     return 0;
@@ -230,13 +230,13 @@ static int test_execution_gate_is_scoped_and_ready(void)
 
 static int test_plan_requires_committed_inputs(void)
 {
-    yvex_deepseek_attention_plan *plan = NULL;
-    yvex_deepseek_attention_failure failure;
+    yvex_attention_plan *plan = NULL;
+    yvex_attention_failure failure;
     yvex_error err;
     int rc;
 
     yvex_error_clear(&err);
-    rc = yvex_deepseek_attention_plan_build(
+    rc = yvex_graph_lower_deepseek_v4()->plan_build(
         &plan, NULL, NULL, NULL, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG,
                      "attention plan refuses missing inputs");
@@ -249,14 +249,14 @@ static int test_plan_requires_committed_inputs(void)
 
 static int test_history_contracts(void)
 {
-    yvex_deepseek_attention_layer_plan swa =
+    yvex_attention_layer_plan swa =
         layer_fixture(0ull, YVEX_DEEPSEEK_V4_ATTENTION_SWA, 0ull);
-    yvex_deepseek_attention_layer_plan csa =
+    yvex_attention_layer_plan csa =
         layer_fixture(2ull, YVEX_DEEPSEEK_V4_ATTENTION_CSA, 4ull);
-    yvex_deepseek_attention_layer_plan hca =
+    yvex_attention_layer_plan hca =
         layer_fixture(3ull, YVEX_DEEPSEEK_V4_ATTENTION_HCA, 128ull);
-    yvex_deepseek_attention_history_view history;
-    yvex_deepseek_attention_failure failure;
+    yvex_attention_history_view history;
+    yvex_attention_failure failure;
     yvex_error err;
     float local_kv[128ull * 512ull];
     float compressed_kv[3ull * 512ull];
@@ -287,19 +287,19 @@ static int test_history_contracts(void)
     history.local_kv_stride = 512ull;
     history.local_positions = local_positions;
     yvex_error_clear(&err);
-    rc = yvex_deepseek_attention_history_validate(
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
         &swa, &history, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "SWA accepts immutable local history");
 
     history.local_kv = NULL;
-    rc = yvex_deepseek_attention_history_validate(
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
         &swa, &history, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT,
                      "history count without raw KV storage refuses");
     history.local_kv = local_kv;
 
     history.local_tail_count = 129ull;
-    rc = yvex_deepseek_attention_history_validate(
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
         &csa, &history, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS,
                      "history over sliding window refuses");
@@ -312,7 +312,7 @@ static int test_history_contracts(void)
     history.compressed_kv = compressed_kv;
     history.compressed_kv_stride = 512ull;
     history.compressed_positions = compressed_positions;
-    rc = yvex_deepseek_attention_history_validate(
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
         &swa, &history, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT,
                      "SWA refuses compressed history");
@@ -322,7 +322,7 @@ static int test_history_contracts(void)
     history.indexer_kv = indexer_kv;
     history.indexer_kv_stride = 128ull;
     history.indexer_positions = indexer_positions;
-    rc = yvex_deepseek_attention_history_validate(
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
         &hca, &history, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT,
                      "HCA refuses CSA indexer history");
@@ -337,12 +337,12 @@ static int test_history_contracts(void)
     init_rolling_view(&history.indexer_rolling_state,
                       YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER, &csa, 12ull,
                       indexer_state_kv, indexer_state_score);
-    rc = yvex_deepseek_attention_history_validate(
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
         &csa, &history, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK,
                      "CSA accepts compressed and indexer history");
     history.main_rolling_state.next_token_position = 1ull;
-    rc = yvex_deepseek_attention_history_validate(
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
         &csa, &history, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE,
                      "stale rolling state position refuses");
@@ -351,37 +351,37 @@ static int test_history_contracts(void)
 
 static int test_state_delta_lifecycle(void)
 {
-    yvex_deepseek_attention_layer_plan csa =
+    yvex_attention_layer_plan csa =
         layer_fixture(2ull, YVEX_DEEPSEEK_V4_ATTENTION_CSA, 4ull);
-    yvex_deepseek_attention_layer_plan hca =
+    yvex_attention_layer_plan hca =
         layer_fixture(3ull, YVEX_DEEPSEEK_V4_ATTENTION_HCA, 128ull);
-    yvex_deepseek_attention_state_delta delta;
-    yvex_deepseek_attention_failure failure;
+    yvex_attention_state_delta delta;
+    yvex_attention_failure failure;
     yvex_error err;
     int rc;
 
     yvex_error_clear(&err);
-    rc = yvex_deepseek_attention_state_delta_begin(
+    rc = yvex_attention_state_delta_begin(
         &csa, 3ull, &delta, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "CSA delta begins");
     YVEX_TEST_ASSERT(delta.raw_kv_entries == 1ull &&
                      delta.compressed_kv_entries == 1ull &&
                      delta.indexer_entries == 1ull,
                      "CSA compression boundary publishes indexer delta");
-    rc = yvex_deepseek_attention_state_delta_commit(&delta, &failure, &err);
+    rc = yvex_attention_state_delta_commit(&delta, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && delta.published,
                      "CSA delta commits");
-    rc = yvex_deepseek_attention_state_delta_commit(&delta, &failure, &err);
+    rc = yvex_attention_state_delta_commit(&delta, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE,
                      "committed delta cannot commit twice");
 
-    rc = yvex_deepseek_attention_state_delta_begin(
+    rc = yvex_attention_state_delta_begin(
         &hca, 127ull, &delta, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "HCA delta begins");
     YVEX_TEST_ASSERT(delta.compressed_kv_entries == 1ull &&
                      delta.indexer_entries == 0ull,
                      "HCA compression has no CSA indexer delta");
-    rc = yvex_deepseek_attention_state_delta_abort(&delta, &failure, &err);
+    rc = yvex_attention_state_delta_abort(&delta, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && !delta.published,
                      "aborted delta publishes nothing");
     return 0;
@@ -389,20 +389,20 @@ static int test_state_delta_lifecycle(void)
 
 static int test_transactional_memory_sink(void)
 {
-    yvex_deepseek_attention_layer_plan swa =
+    yvex_attention_layer_plan swa =
         layer_fixture(0ull, YVEX_DEEPSEEK_V4_ATTENTION_SWA, 0ull);
-    yvex_deepseek_attention_history_view history;
-    yvex_deepseek_attention_memory_sink sink;
-    yvex_deepseek_attention_memory_sink sink2;
-    yvex_deepseek_attention_memory_sink_options options;
-    yvex_deepseek_attention_state_transaction transaction;
-    yvex_deepseek_attention_component_span output;
-    yvex_deepseek_attention_component_span raw;
-    const yvex_deepseek_attention_component_span *committed;
+    yvex_attention_history_view history;
+    yvex_attention_memory_sink sink;
+    yvex_attention_memory_sink sink2;
+    yvex_attention_memory_sink_options options;
+    yvex_attention_state_transaction transaction;
+    yvex_attention_component_span output;
+    yvex_attention_component_span raw;
+    const yvex_attention_component_span *committed;
     const char *identity;
     char first_identity[YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP];
     char second_identity[YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP];
-    yvex_deepseek_attention_failure failure;
+    yvex_attention_failure failure;
     yvex_error err;
     float *copy = NULL;
     unsigned long long i;
@@ -414,20 +414,20 @@ static int test_transactional_memory_sink(void)
     memset(second_identity, 0, sizeof(second_identity));
     history.immutable = 1;
     yvex_error_clear(&err);
-    rc = yvex_deepseek_attention_memory_sink_init(
+    rc = yvex_attention_memory_sink_init(
         &sink, NULL, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "memory sink initializes");
-    rc = yvex_deepseek_attention_state_transaction_begin(
+    rc = yvex_attention_state_transaction_begin(
         &sink, &swa, &history, 0ull, 1ull, &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "memory sink transaction begins");
     YVEX_TEST_ASSERT(
-        yvex_deepseek_attention_memory_sink_committed_component(
+        yvex_attention_memory_sink_committed_component(
             &sink, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT) == NULL,
         "component is invisible before commit");
-    YVEX_TEST_ASSERT(yvex_deepseek_attention_memory_sink_identity(&sink) ==
+    YVEX_TEST_ASSERT(yvex_attention_memory_sink_identity(&sink) ==
                          NULL,
                      "sink identity is invisible before commit");
-    rc = yvex_deepseek_attention_state_transaction_acquire(
+    rc = yvex_attention_state_transaction_acquire(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT,
         &output, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "attention output span acquired");
@@ -435,33 +435,33 @@ static int test_transactional_memory_sink(void)
     YVEX_TEST_ASSERT(copy != NULL, "test output copy allocation");
     for (i = 0ull; i < output.expected_elements; ++i)
         copy[i] = (float)(i % 17ull) / 17.0f;
-    rc = yvex_deepseek_attention_state_transaction_write(
+    rc = yvex_attention_state_transaction_write(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT,
         copy, (size_t)output.byte_extent, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "attention output component writes");
-    rc = yvex_deepseek_attention_state_transaction_seal(
+    rc = yvex_attention_state_transaction_seal(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT,
         output.expected_elements, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "attention output component seals");
-    rc = yvex_deepseek_attention_state_transaction_commit(
+    rc = yvex_attention_state_transaction_commit(
         &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE,
                      "incomplete transaction cannot commit");
-    YVEX_TEST_ASSERT(yvex_deepseek_attention_memory_sink_identity(&sink) ==
+    YVEX_TEST_ASSERT(yvex_attention_memory_sink_identity(&sink) ==
                          NULL,
                      "incomplete commit publishes no identity");
-    rc = yvex_deepseek_attention_state_transaction_acquire(
+    rc = yvex_attention_state_transaction_acquire(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV,
         &raw, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "raw local KV span acquired");
-    rc = yvex_deepseek_attention_state_transaction_seal(
+    rc = yvex_attention_state_transaction_seal(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV,
         raw.expected_elements, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "raw local KV component seals");
-    rc = yvex_deepseek_attention_state_transaction_commit(
+    rc = yvex_attention_state_transaction_commit(
         &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "complete transaction commits");
-    committed = yvex_deepseek_attention_memory_sink_committed_component(
+    committed = yvex_attention_memory_sink_committed_component(
         &sink, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT);
     YVEX_TEST_ASSERT(committed != NULL && committed->data != NULL,
                      "committed attention output is visible");
@@ -469,7 +469,7 @@ static int test_transactional_memory_sink(void)
                          (const float *)committed->data, copy,
                          output.expected_elements, "committed-output"),
                      "committed output matches staged data");
-    identity = yvex_deepseek_attention_memory_sink_identity(&sink);
+    identity = yvex_attention_memory_sink_identity(&sink);
     YVEX_TEST_ASSERT(identity != NULL,
                      "committed sink has semantic identity");
     strncpy(first_identity, identity, sizeof(first_identity) - 1u);
@@ -481,57 +481,57 @@ static int test_transactional_memory_sink(void)
         "commit releases all transaction staging");
 
     history.token_count = 1ull;
-    rc = yvex_deepseek_attention_state_transaction_begin(
+    rc = yvex_attention_state_transaction_begin(
         &sink, &swa, &history, 1ull, 1ull, &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "second transaction begins");
-    rc = yvex_deepseek_attention_state_transaction_acquire(
+    rc = yvex_attention_state_transaction_acquire(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT,
         &output, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "abort transaction output acquired");
     ((float *)output.data)[0] = 99.0f;
-    rc = yvex_deepseek_attention_state_transaction_abort(
+    rc = yvex_attention_state_transaction_abort(
         &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "aborted transaction succeeds");
     YVEX_TEST_ASSERT(
         transaction.components[YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT]
                 .data == NULL,
         "abort releases transaction staging");
-    committed = yvex_deepseek_attention_memory_sink_committed_component(
+    committed = yvex_attention_memory_sink_committed_component(
         &sink, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT);
     YVEX_TEST_ASSERT(((const float *)committed->data)[0] == copy[0],
                      "abort preserves previous committed output");
-    YVEX_TEST_ASSERT(strcmp(yvex_deepseek_attention_memory_sink_identity(&sink),
+    YVEX_TEST_ASSERT(strcmp(yvex_attention_memory_sink_identity(&sink),
                             first_identity) == 0,
                      "abort preserves previous committed identity");
-    yvex_deepseek_attention_memory_sink_release(&sink);
+    yvex_attention_memory_sink_release(&sink);
 
-    yvex_deepseek_attention_memory_sink_options_default(&options);
+    yvex_attention_memory_sink_options_default(&options);
     options.fail_acquire_kind =
         YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV;
-    rc = yvex_deepseek_attention_memory_sink_init(
+    rc = yvex_attention_memory_sink_init(
         &sink, &options, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "failure-injection sink initializes");
     history.token_count = 0ull;
-    rc = yvex_deepseek_attention_state_transaction_begin(
+    rc = yvex_attention_state_transaction_begin(
         &sink, &swa, &history, 0ull, 1ull, &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "failure-injection transaction begins");
-    rc = yvex_deepseek_attention_state_transaction_acquire(
+    rc = yvex_attention_state_transaction_acquire(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV,
         &raw, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE,
                      "injected acquire failure is reported");
-    rc = yvex_deepseek_attention_state_transaction_abort(
+    rc = yvex_attention_state_transaction_abort(
         &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK,
                      "transaction can abort after acquire failure");
-    yvex_deepseek_attention_memory_sink_release(&sink);
+    yvex_attention_memory_sink_release(&sink);
 
-    yvex_deepseek_attention_memory_sink_options_default(&options);
+    yvex_attention_memory_sink_options_default(&options);
     options.fail_commit = 1;
-    rc = yvex_deepseek_attention_memory_sink_init(
+    rc = yvex_attention_memory_sink_init(
         &sink, &options, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "commit-failure sink initializes");
-    rc = yvex_deepseek_attention_state_transaction_begin(
+    rc = yvex_attention_state_transaction_begin(
         &sink, &swa, &history, 0ull, 1ull, &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "commit-failure transaction begins");
     YVEX_TEST_ASSERT(
@@ -544,18 +544,18 @@ static int test_transactional_memory_sink(void)
                 YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV,
                 &failure, &err),
         "commit-failure transaction components seal");
-    rc = yvex_deepseek_attention_state_transaction_commit(
+    rc = yvex_attention_state_transaction_commit(
         &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE,
                      "injected commit failure is reported");
     YVEX_TEST_ASSERT(
-        yvex_deepseek_attention_memory_sink_committed_component(
+        yvex_attention_memory_sink_committed_component(
             &sink, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT) == NULL,
         "failed commit publishes nothing");
-    YVEX_TEST_ASSERT(yvex_deepseek_attention_memory_sink_identity(&sink) ==
+    YVEX_TEST_ASSERT(yvex_attention_memory_sink_identity(&sink) ==
                          NULL,
                      "failed commit publishes no identity");
-    rc = yvex_deepseek_attention_state_transaction_abort(
+    rc = yvex_attention_state_transaction_abort(
         &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK,
                      "commit-failure transaction aborts cleanly");
@@ -563,28 +563,28 @@ static int test_transactional_memory_sink(void)
         transaction.components[YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT]
                 .data == NULL,
         "commit-failure abort releases staging");
-    yvex_deepseek_attention_memory_sink_release(&sink);
+    yvex_attention_memory_sink_release(&sink);
 
-    rc = yvex_deepseek_attention_memory_sink_init(
+    rc = yvex_attention_memory_sink_init(
         &sink2, NULL, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK,
                      "determinism sink initializes");
     history.token_count = 0ull;
-    rc = yvex_deepseek_attention_state_transaction_begin(
+    rc = yvex_attention_state_transaction_begin(
         &sink2, &swa, &history, 0ull, 1ull, &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK,
                      "determinism transaction begins");
-    rc = yvex_deepseek_attention_state_transaction_acquire(
+    rc = yvex_attention_state_transaction_acquire(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT,
         &output, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK,
                      "determinism output span acquired");
-    rc = yvex_deepseek_attention_state_transaction_write(
+    rc = yvex_attention_state_transaction_write(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT,
         copy, (size_t)output.byte_extent, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK,
                      "determinism output component writes");
-    rc = yvex_deepseek_attention_state_transaction_seal(
+    rc = yvex_attention_state_transaction_seal(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT,
         output.expected_elements, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK,
@@ -595,17 +595,17 @@ static int test_transactional_memory_sink(void)
             YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV,
             &failure, &err),
         "determinism raw component seals");
-    rc = yvex_deepseek_attention_state_transaction_commit(
+    rc = yvex_attention_state_transaction_commit(
         &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK,
                      "determinism transaction commits");
-    identity = yvex_deepseek_attention_memory_sink_identity(&sink2);
+    identity = yvex_attention_memory_sink_identity(&sink2);
     YVEX_TEST_ASSERT(identity != NULL,
                      "determinism sink has committed identity");
     strncpy(second_identity, identity, sizeof(second_identity) - 1u);
     YVEX_TEST_ASSERT(strcmp(first_identity, second_identity) == 0,
                      "same committed semantic content has stable identity");
-    yvex_deepseek_attention_memory_sink_release(&sink2);
+    yvex_attention_memory_sink_release(&sink2);
     free(copy);
     return 0;
 }
@@ -628,8 +628,8 @@ static int compare_float_ranges(const float *left,
 }
 
 static int run_rolling_sequence(
-    const yvex_deepseek_attention_layer_plan *layer,
-    yvex_deepseek_attention_rolling_kind kind,
+    const yvex_attention_layer_plan *layer,
+    yvex_attention_rolling_kind kind,
     const unsigned long long *partition,
     unsigned long long partition_count,
     unsigned long long token_count,
@@ -648,13 +648,13 @@ static int run_rolling_sequence(
     float index_token_kv[256ull];
     float index_token_score[256ull];
     float index_ape_row[256ull];
-    yvex_deepseek_attention_rolling_state_view before;
-    yvex_deepseek_attention_rolling_state_view index_before;
-    yvex_deepseek_attention_rolling_state_output after;
-    yvex_deepseek_attention_rolling_state_output index_after;
-    yvex_deepseek_attention_memory_sink sink;
-    yvex_deepseek_attention_state_transaction transaction;
-    yvex_deepseek_attention_failure failure;
+    yvex_attention_rolling_state_view before;
+    yvex_attention_rolling_state_view index_before;
+    yvex_attention_rolling_state_output after;
+    yvex_attention_rolling_state_output index_after;
+    yvex_attention_memory_sink sink;
+    yvex_attention_state_transaction transaction;
+    yvex_attention_failure failure;
     yvex_error err;
     unsigned long long head_dim =
         kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER
@@ -685,22 +685,22 @@ static int run_rolling_sequence(
         init_rolling_view(&index_before,
                           YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER, layer,
                           0ull, index_a_kv, index_a_score);
-    if (yvex_deepseek_attention_memory_sink_init(
+    if (yvex_attention_memory_sink_init(
             &sink, NULL, &failure, &err) != YVEX_OK)
         return 0;
     for (part = 0ull; part < partition_count && token < token_count; ++part) {
         unsigned long long limit = token + partition[part];
         if (limit > token_count) limit = token_count;
         while (token < limit) {
-            yvex_deepseek_attention_history_view history;
-            yvex_deepseek_attention_component_span main_kv_span;
-            yvex_deepseek_attention_component_span main_score_span;
-            yvex_deepseek_attention_component_span compressed_span;
-            yvex_deepseek_attention_component_span index_kv_span;
-            yvex_deepseek_attention_component_span index_score_span;
-            yvex_deepseek_attention_component_span index_emit_span;
-            const yvex_deepseek_attention_component_span *committed_kv;
-            const yvex_deepseek_attention_component_span *committed_score;
+            yvex_attention_history_view history;
+            yvex_attention_component_span main_kv_span;
+            yvex_attention_component_span main_score_span;
+            yvex_attention_component_span compressed_span;
+            yvex_attention_component_span index_kv_span;
+            yvex_attention_component_span index_score_span;
+            yvex_attention_component_span index_emit_span;
+            const yvex_attention_component_span *committed_kv;
+            const yvex_attention_component_span *committed_score;
             int emitted = 0;
             int index_emitted = 0;
 
@@ -714,7 +714,7 @@ static int run_rolling_sequence(
             if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA)
                 history.indexer_rolling_state = index_before;
             yvex_error_clear(&err);
-            if (yvex_deepseek_attention_state_transaction_begin(
+            if (yvex_attention_state_transaction_begin(
                     &sink, layer, &history, token, 1ull, &transaction,
                     &failure, &err) != YVEX_OK)
                 goto cleanup;
@@ -727,11 +727,11 @@ static int run_rolling_sequence(
                     YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV,
                     &failure, &err))
                 goto cleanup;
-            if (yvex_deepseek_attention_state_transaction_acquire(
+            if (yvex_attention_state_transaction_acquire(
                     &transaction,
                     YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_KV_STATE,
                     &main_kv_span, &failure, &err) != YVEX_OK ||
-                yvex_deepseek_attention_state_transaction_acquire(
+                yvex_attention_state_transaction_acquire(
                     &transaction,
                     YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_SCORE_STATE,
                     &main_score_span, &failure, &err) != YVEX_OK)
@@ -741,31 +741,31 @@ static int run_rolling_sequence(
                                 (float *)main_score_span.data);
             memset(&compressed_span, 0, sizeof(compressed_span));
             if (((token + 1ull) % layer->compression_ratio) == 0ull &&
-                yvex_deepseek_attention_state_transaction_acquire(
+                yvex_attention_state_transaction_acquire(
                     &transaction,
                     YVEX_DEEPSEEK_ATTENTION_COMPONENT_COMPRESSED_MAIN_KV,
                     &compressed_span, &failure, &err) != YVEX_OK)
                 goto cleanup;
-            if (yvex_deepseek_attention_rolling_state_step_cpu(
+            if (yvex_graph_lower_deepseek_v4()->rolling_state_step_cpu(
                     layer, &before, token_kv, token_score, ape_row, &after,
                     compressed_span.data ? (float *)compressed_span.data
                                          : token_kv,
                     head_dim, &emitted, &failure, &err) != YVEX_OK)
                 goto cleanup;
             if (emitted) {
-                if (yvex_deepseek_attention_state_transaction_seal(
+                if (yvex_attention_state_transaction_seal(
                         &transaction,
                         YVEX_DEEPSEEK_ATTENTION_COMPONENT_COMPRESSED_MAIN_KV,
                         compressed_span.expected_elements, &failure,
                         &err) != YVEX_OK)
                     goto cleanup;
             }
-            if (yvex_deepseek_attention_state_transaction_seal(
+            if (yvex_attention_state_transaction_seal(
                     &transaction,
                     YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_KV_STATE,
                     main_kv_span.expected_elements, &failure, &err) !=
                     YVEX_OK ||
-                yvex_deepseek_attention_state_transaction_seal(
+                yvex_attention_state_transaction_seal(
                     &transaction,
                     YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_SCORE_STATE,
                     main_score_span.expected_elements, &failure, &err) !=
@@ -778,11 +778,11 @@ static int run_rolling_sequence(
                             83ull);
                 fill_scores(index_ape_row, index_before.state_width,
                             token % layer->compression_ratio, 97ull);
-                if (yvex_deepseek_attention_state_transaction_acquire(
+                if (yvex_attention_state_transaction_acquire(
                         &transaction,
                         YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV_STATE,
                         &index_kv_span, &failure, &err) != YVEX_OK ||
-                    yvex_deepseek_attention_state_transaction_acquire(
+                    yvex_attention_state_transaction_acquire(
                         &transaction,
                         YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_SCORE_STATE,
                         &index_score_span, &failure, &err) != YVEX_OK)
@@ -792,12 +792,12 @@ static int run_rolling_sequence(
                                     (float *)index_score_span.data);
                 memset(&index_emit_span, 0, sizeof(index_emit_span));
                 if (emitted &&
-                    yvex_deepseek_attention_state_transaction_acquire(
+                    yvex_attention_state_transaction_acquire(
                         &transaction,
                         YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV,
                         &index_emit_span, &failure, &err) != YVEX_OK)
                     goto cleanup;
-                if (yvex_deepseek_attention_rolling_state_step_cpu(
+                if (yvex_graph_lower_deepseek_v4()->rolling_state_step_cpu(
                         layer, &index_before, index_token_kv,
                         index_token_score, index_ape_row, &index_after,
                         index_emit_span.data ? (float *)index_emit_span.data
@@ -806,37 +806,37 @@ static int run_rolling_sequence(
                         &failure, &err) != YVEX_OK)
                     goto cleanup;
                 if (index_emitted &&
-                    yvex_deepseek_attention_state_transaction_seal(
+                    yvex_attention_state_transaction_seal(
                         &transaction,
                         YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV,
                         index_emit_span.expected_elements, &failure,
                         &err) != YVEX_OK)
                     goto cleanup;
-                if (yvex_deepseek_attention_state_transaction_seal(
+                if (yvex_attention_state_transaction_seal(
                         &transaction,
                         YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV_STATE,
                         index_kv_span.expected_elements, &failure, &err) !=
                         YVEX_OK ||
-                    yvex_deepseek_attention_state_transaction_seal(
+                    yvex_attention_state_transaction_seal(
                         &transaction,
                         YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_SCORE_STATE,
                         index_score_span.expected_elements, &failure, &err) !=
                         YVEX_OK)
                     goto cleanup;
             }
-            if (yvex_deepseek_attention_state_transaction_commit(
+            if (yvex_attention_state_transaction_commit(
                     &transaction, &failure, &err) != YVEX_OK)
                 goto cleanup;
             committed_kv =
-                yvex_deepseek_attention_memory_sink_committed_component(
+                yvex_attention_memory_sink_committed_component(
                     &sink, YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_KV_STATE);
             committed_score =
-                yvex_deepseek_attention_memory_sink_committed_component(
+                yvex_attention_memory_sink_committed_component(
                     &sink, YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_SCORE_STATE);
             if (!committed_kv || !committed_score) goto cleanup;
             if (emitted) {
-                const yvex_deepseek_attention_component_span *committed_emit =
-                    yvex_deepseek_attention_memory_sink_committed_component(
+                const yvex_attention_component_span *committed_emit =
+                    yvex_attention_memory_sink_committed_component(
                         &sink,
                         YVEX_DEEPSEEK_ATTENTION_COMPONENT_COMPRESSED_MAIN_KV);
                 if (!committed_emit) goto cleanup;
@@ -848,12 +848,12 @@ static int run_rolling_sequence(
             output_to_committed_view(&before, &after, committed_kv,
                                      committed_score);
             if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA) {
-                const yvex_deepseek_attention_component_span *ikv =
-                    yvex_deepseek_attention_memory_sink_committed_component(
+                const yvex_attention_component_span *ikv =
+                    yvex_attention_memory_sink_committed_component(
                         &sink,
                         YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV_STATE);
-                const yvex_deepseek_attention_component_span *iscore =
-                    yvex_deepseek_attention_memory_sink_committed_component(
+                const yvex_attention_component_span *iscore =
+                    yvex_attention_memory_sink_committed_component(
                         &sink,
                         YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_SCORE_STATE);
                 if (!ikv || !iscore) goto cleanup;
@@ -873,17 +873,17 @@ static int run_rolling_sequence(
 cleanup:
     if (!result && transaction.status ==
                        YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN)
-        (void)yvex_deepseek_attention_state_transaction_abort(
+        (void)yvex_attention_state_transaction_abort(
             &transaction, &failure, &err);
-    yvex_deepseek_attention_memory_sink_release(&sink);
+    yvex_attention_memory_sink_release(&sink);
     return result;
 }
 
 static int test_rolling_state_chunk_invariance(void)
 {
-    yvex_deepseek_attention_layer_plan csa =
+    yvex_attention_layer_plan csa =
         layer_fixture(2ull, YVEX_DEEPSEEK_V4_ATTENTION_CSA, 4ull);
-    yvex_deepseek_attention_layer_plan hca =
+    yvex_attention_layer_plan hca =
         layer_fixture(3ull, YVEX_DEEPSEEK_V4_ATTENTION_HCA, 128ull);
     unsigned long long one_chunk[] = {10ull};
     unsigned long long irregular[] = {1ull, 3ull, 2ull, 4ull};
@@ -949,7 +949,7 @@ static int test_runtime_hadamard_policy(void)
     const float input[] = {1.0f, -2.0f, 0.5f};
     float reference[3];
     float production[3];
-    yvex_deepseek_attention_failure failure;
+    yvex_attention_failure failure;
     yvex_error err;
     unsigned long long i;
 
@@ -959,7 +959,7 @@ static int test_runtime_hadamard_policy(void)
             input, 3ull, 0.5f, 1, reference),
         "Hadamard reference accepts finite non-power-of-two input");
     YVEX_TEST_ASSERT(
-        yvex_deepseek_attention_hadamard_cpu(
+        yvex_attention_hadamard_cpu(
             input, 3ull, 0.5f, 1, production, &failure, &err) == YVEX_OK,
         "Hadamard CPU accepts finite non-power-of-two input");
     for (i = 0ull; i < 3ull; ++i) {
@@ -978,7 +978,7 @@ static int test_runtime_hadamard_policy(void)
     {
         const float bad[] = {1.0f, NAN};
         YVEX_TEST_ASSERT(
-            yvex_deepseek_attention_hadamard_cpu(
+            yvex_attention_hadamard_cpu(
                 bad, 2ull, 1.0f, 1, production, &failure, &err) != YVEX_OK,
             "Hadamard CPU refuses non-finite input");
         YVEX_TEST_ASSERT(production[0] == 0.0f,
@@ -993,12 +993,12 @@ static int test_runtime_topk_policy(void)
     const unsigned long long ordinals[] = {9ull, 4ull, 2ull, 7ull, 6ull, 5ull};
     unsigned long long selected[6];
     unsigned long long selected_count = 0ull;
-    yvex_deepseek_attention_failure failure;
+    yvex_attention_failure failure;
     yvex_error err;
 
     yvex_error_clear(&err);
     YVEX_TEST_ASSERT(
-        yvex_deepseek_attention_topk_select(
+        yvex_attention_topk_select(
             scores, ordinals, 6ull, 4ull, selected, &selected_count,
             &failure, &err) == YVEX_OK,
         "top-k deterministic selection succeeds");
@@ -1014,7 +1014,7 @@ static int test_runtime_topk_policy(void)
         const unsigned long long zero_ordinals[] = {20ull, 10ull};
         selected_count = 0ull;
         YVEX_TEST_ASSERT(
-            yvex_deepseek_attention_topk_select(
+            yvex_attention_topk_select(
                 zero_scores, zero_ordinals, 2ull, 2ull, selected,
                 &selected_count, &failure, &err) == YVEX_OK,
             "top-k accepts signed zeros");
@@ -1027,7 +1027,7 @@ static int test_runtime_topk_policy(void)
         const float bad_scores[] = {1.0f, INFINITY};
         const unsigned long long bad_ordinals[] = {1ull, 2ull};
         YVEX_TEST_ASSERT(
-            yvex_deepseek_attention_topk_select(
+            yvex_attention_topk_select(
                 bad_scores, bad_ordinals, 2ull, 1ull, selected,
                 &selected_count, &failure, &err) != YVEX_OK,
             "top-k refuses non-finite scores");
@@ -1036,7 +1036,7 @@ static int test_runtime_topk_policy(void)
         const float dup_scores[] = {1.0f, 0.5f};
         const unsigned long long dup_ordinals[] = {3ull, 3ull};
         YVEX_TEST_ASSERT(
-            yvex_deepseek_attention_topk_select(
+            yvex_attention_topk_select(
                 dup_scores, dup_ordinals, 2ull, 1ull, selected,
                 &selected_count, &failure, &err) != YVEX_OK,
             "top-k refuses duplicate ordinals");
@@ -1050,20 +1050,20 @@ static int test_runtime_fp4_fake_quant_policy(void)
     float dequant[6];
     unsigned char codes[6];
     unsigned char scale_code = 0u;
-    yvex_deepseek_attention_failure failure;
+    yvex_attention_failure failure;
     yvex_error err;
 
     yvex_error_clear(&err);
     YVEX_TEST_ASSERT(
-        yvex_deepseek_attention_fp4_e2m1_encode(0.0f) == 0u &&
-        yvex_deepseek_attention_fp4_e2m1_encode(0.6f) == 1u &&
-        yvex_deepseek_attention_fp4_e2m1_encode(-6.5f) == 15u,
+        yvex_attention_fp4_e2m1_encode(0.0f) == 0u &&
+        yvex_attention_fp4_e2m1_encode(0.6f) == 1u &&
+        yvex_attention_fp4_e2m1_encode(-6.5f) == 15u,
         "FP4 E2M1 code thresholds follow pinned codec");
     YVEX_TEST_ASSERT(
-        yvex_deepseek_attention_fp4_e2m1_decode(15u) == -6.0f,
+        yvex_attention_fp4_e2m1_decode(15u) == -6.0f,
         "FP4 E2M1 decode table exposes signed max value");
     YVEX_TEST_ASSERT(
-        yvex_deepseek_attention_fp4_fake_quant_block(
+        yvex_attention_fp4_fake_quant_block(
             input, 6ull, dequant, codes, &scale_code, &failure, &err) ==
             YVEX_OK,
         "FP4 fake quant block succeeds for finite input");
@@ -1078,7 +1078,7 @@ static int test_runtime_fp4_fake_quant_policy(void)
         unsigned char zero_codes[2] = {7u, 7u};
         scale_code = 9u;
         YVEX_TEST_ASSERT(
-            yvex_deepseek_attention_fp4_fake_quant_block(
+            yvex_attention_fp4_fake_quant_block(
                 zeros, 2ull, zero_out, zero_codes, &scale_code, &failure,
                 &err) == YVEX_OK,
             "FP4 fake quant accepts all-zero block");
@@ -1090,7 +1090,7 @@ static int test_runtime_fp4_fake_quant_policy(void)
     {
         const float bad[] = {0.0f, NAN};
         YVEX_TEST_ASSERT(
-            yvex_deepseek_attention_fp4_fake_quant_block(
+            yvex_attention_fp4_fake_quant_block(
                 bad, 2ull, dequant, codes, &scale_code, &failure, &err) !=
                 YVEX_OK,
             "FP4 fake quant refuses non-finite input");
@@ -1104,16 +1104,16 @@ static int test_runtime_fp8_fake_quant_policy(void)
     float dequant[5];
     unsigned char codes[5];
     unsigned char scale_code = 0u;
-    yvex_deepseek_attention_failure failure;
+    yvex_attention_failure failure;
     yvex_error err;
 
     yvex_error_clear(&err);
     YVEX_TEST_ASSERT(
-        yvex_deepseek_attention_fp8_e4m3fn_decode(
-            yvex_deepseek_attention_fp8_e4m3fn_encode(448.0f)) == 448.0f,
+        yvex_attention_fp8_e4m3fn_decode(
+            yvex_attention_fp8_e4m3fn_encode(448.0f)) == 448.0f,
         "FP8 E4M3FN exposes finite max 448");
     YVEX_TEST_ASSERT(
-        yvex_deepseek_attention_fp8_fake_quant_block(
+        yvex_attention_fp8_fake_quant_block(
             input, 5ull, dequant, codes, &scale_code, &failure, &err) ==
             YVEX_OK,
         "FP8 fake quant block succeeds for finite input");
@@ -1128,7 +1128,7 @@ static int test_runtime_fp8_fake_quant_policy(void)
         unsigned char zero_codes[2] = {9u, 9u};
         scale_code = 0u;
         YVEX_TEST_ASSERT(
-            yvex_deepseek_attention_fp8_fake_quant_block(
+            yvex_attention_fp8_fake_quant_block(
                 zeros, 2ull, zero_out, zero_codes, &scale_code, &failure,
                 &err) == YVEX_OK,
             "FP8 fake quant accepts all-zero block");
@@ -1140,7 +1140,7 @@ static int test_runtime_fp8_fake_quant_policy(void)
     {
         const float bad[] = {0.0f, INFINITY};
         YVEX_TEST_ASSERT(
-            yvex_deepseek_attention_fp8_fake_quant_block(
+            yvex_attention_fp8_fake_quant_block(
                 bad, 2ull, dequant, codes, &scale_code, &failure, &err) !=
                 YVEX_OK,
             "FP8 fake quant refuses non-finite input");
@@ -1150,8 +1150,8 @@ static int test_runtime_fp8_fake_quant_policy(void)
 
 static int test_independent_reference_detects_stage_mutations(void)
 {
-    yvex_deepseek_attention_execution_trace production;
-    yvex_deepseek_attention_execution_trace reference;
+    yvex_attention_execution_trace production;
+    yvex_attention_execution_trace reference;
     yvex_test_attention_reference_metrics metrics;
     float input[2] = {0.25f, -0.5f};
     float q_low[2] = {0.5f, -0.25f};
@@ -1344,7 +1344,7 @@ static int test_independent_reference_detects_stage_mutations(void)
 
 int yvex_test_deepseek_attention(void)
 {
-    if (test_execution_gate_is_scoped_and_ready() != 0) return 1;
+    if (test_execution_gate_is_scoped_and_reopened() != 0) return 1;
     if (test_plan_requires_committed_inputs() != 0) return 1;
     if (test_history_contracts() != 0) return 1;
     if (test_state_delta_lifecycle() != 0) return 1;

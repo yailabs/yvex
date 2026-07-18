@@ -1,4 +1,10 @@
 /*
+ * Owner: abi.model_ref (abi).
+ * Owns: the public-abi boundary consumed by repository.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
+ * Boundary: public-abi; moving this contract requires an ownership-manifest change.
+ *
  * YVEX - Model reference resolver API
  *
  * File: include/yvex/model_ref.h
@@ -12,6 +18,7 @@
 #define YVEX_MODEL_REF_H
 
 #include <yvex/error.h>
+#include <yvex/model_registry.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,6 +72,31 @@ typedef struct {
     int execution_ready;
 } yvex_model_ref;
 
+typedef struct {
+    yvex_model_registry_entry entry;
+    char format[16];
+    char architecture[64];
+    char primary_tensor_name[128];
+    char primary_tensor_role[64];
+    char primary_tensor_dtype[32];
+    char primary_tensor_dims[128];
+    char support_level[64];
+} yvex_model_metadata_snapshot;
+
+typedef struct {
+    int required;
+    int passed;
+    char digest_status[16];
+    char identity_status[16];
+    char metadata_status[32];
+    char readiness_status[32];
+    char reason[256];
+    char current_sha256[65];
+    unsigned long long registered_file_size;
+    unsigned long long current_file_size;
+    yvex_model_metadata_drift_report metadata_drift;
+} yvex_model_ref_identity_result;
+
 int yvex_model_ref_resolve(yvex_model_ref *out,
                            const char *input,
                            const yvex_model_ref_options *options,
@@ -74,6 +106,15 @@ void yvex_model_ref_clear(yvex_model_ref *ref);
 
 const char *yvex_model_ref_kind_name(yvex_model_ref_kind kind);
 const char *yvex_model_ref_status_name(yvex_model_ref_status status);
+
+int yvex_model_metadata_snapshot_read(yvex_model_metadata_snapshot *out,
+                                      const char *path_or_alias,
+                                      yvex_error *err);
+void yvex_model_ref_registry_entry_view(const yvex_model_ref *ref,
+                                        yvex_model_registry_entry *out);
+int yvex_model_ref_identity_validate(const yvex_model_ref *ref,
+                                     yvex_model_ref_identity_result *out,
+                                     yvex_error *err);
 
 #ifdef __cplusplus
 }

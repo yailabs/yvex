@@ -9,8 +9,8 @@
  * Boundary: execution mode is added only through the canonical discard sink.
  */
 #define _POSIX_C_SOURCE 200809L
-#include "src/gguf/yvex_quant_execute.h"
-#include "src/model/target/yvex_deepseek_payload_handoff.h"
+#include "src/gguf/quant_sink.h"
+#include "src/model/families.h"
 
 #include <limits.h>
 #include <stdio.h>
@@ -55,9 +55,9 @@ static void quant_print_terminal_context(
 
     if (!handoff || ordinal == ULLONG_MAX) return;
     terminal = yvex_transform_ir_terminal_at(
-        yvex_deepseek_payload_handoff_transform_ir(handoff), ordinal);
-    descriptor = yvex_deepseek_gguf_map_at(
-        yvex_deepseek_payload_handoff_map(handoff), ordinal);
+        yvex_model_register_deepseek_v4()->payload.transform_ir(handoff), ordinal);
+    descriptor = yvex_model_register_deepseek_v4()->lowering.at(
+        yvex_model_register_deepseek_v4()->payload.map(handoff), ordinal);
     if (!terminal || !descriptor) return;
     fprintf(stderr,
             "terminal_context role=%u scope=%u layer=%llu aux=%llu rank=%u dims=%llu,%llu,%llu descriptor_role=%u descriptor_scope=%u descriptor_layer=%llu predictor=%llu descriptor_rank=%u descriptor_dims=%llu,%llu,%llu axes=%u,%u,%u\n",
@@ -125,19 +125,20 @@ int main(int argc, char **argv)
     options.chunk_bytes = options.budget.chunk_bytes;
     options.page_bytes = options.budget.page_bytes;
     yvex_error_clear(&error);
-    rc = yvex_deepseek_payload_handoff_open(
+    rc = yvex_model_register_deepseek_v4()->payload.open(
         &handoff, &options, &handoff_failure, &error);
     if (rc != YVEX_OK) {
         fprintf(stderr, "handoff_failure=%s status=%s where=%s\n",
-                yvex_deepseek_payload_failure_name(handoff_failure.code),
+                yvex_model_register_deepseek_v4()->payload.failure_name(handoff_failure.code),
                 yvex_status_name(yvex_error_code(&error)),
                 yvex_error_where(&error));
         return 1;
     }
-    rc = yvex_deepseek_quant_plan_build(
-        &plan, yvex_deepseek_payload_handoff_transform_ir(handoff),
-        yvex_deepseek_payload_handoff_binding(handoff),
-        yvex_deepseek_payload_handoff_map(handoff), NULL, &failure, &error);
+    rc = yvex_quant_plan_build_deepseek_profile(
+        &plan, yvex_model_register_deepseek_v4()->payload.transform_ir(handoff),
+        yvex_model_register_deepseek_v4()->payload.binding(handoff),
+        yvex_model_register_deepseek_v4()->payload.map(handoff),
+        YVEX_QUANT_PROFILE_RELEASE_Q8_Q2, NULL, &failure, &error);
     if (rc != YVEX_OK) {
         quant_print_terminal_context(handoff, failure.terminal_ordinal);
         fprintf(stderr,
@@ -148,13 +149,13 @@ int main(int argc, char **argv)
                 failure.actual,
                 yvex_status_name(yvex_error_code(&error)),
                 yvex_error_where(&error));
-        yvex_deepseek_payload_handoff_close(handoff);
+        yvex_model_register_deepseek_v4()->payload.close(handoff);
         return 1;
     }
     summary = yvex_quant_plan_summary_get(plan);
     transform_summary = yvex_transform_ir_summary_get(
-        yvex_deepseek_payload_handoff_transform_ir(handoff));
-    verification = yvex_deepseek_payload_handoff_verification(handoff);
+        yvex_model_register_deepseek_v4()->payload.transform_ir(handoff));
+    verification = yvex_model_register_deepseek_v4()->payload.verification(handoff);
     if (!quant_plan_invariants(summary) || !transform_summary ||
         !verification ||
         strcmp(summary->transform_identity,
@@ -163,7 +164,7 @@ int main(int argc, char **argv)
                transform_summary->required_payload_identity) != 0) {
         fprintf(stderr, "quant_plan_invariant=failed\n");
         yvex_quant_plan_release(&plan);
-        yvex_deepseek_payload_handoff_close(handoff);
+        yvex_model_register_deepseek_v4()->payload.close(handoff);
         return 1;
     }
     memset(&execution, 0, sizeof(execution));
@@ -178,7 +179,7 @@ int main(int argc, char **argv)
                     yvex_quant_failure_name(failure.code),
                     yvex_status_name(yvex_error_code(&error)));
             yvex_quant_plan_release(&plan);
-            yvex_deepseek_payload_handoff_close(handoff);
+            yvex_model_register_deepseek_v4()->payload.close(handoff);
             return 1;
         }
         yvex_quant_digest_sink_adapter(digest_sink, &output_sink);
@@ -207,7 +208,7 @@ int main(int argc, char **argv)
                     yvex_error_where(&error));
             yvex_quant_digest_sink_release(&digest_sink);
             yvex_quant_plan_release(&plan);
-            yvex_deepseek_payload_handoff_close(handoff);
+            yvex_model_register_deepseek_v4()->payload.close(handoff);
             return 1;
         }
         if (!execution.complete || !digest_summary.complete ||
@@ -220,16 +221,16 @@ int main(int argc, char **argv)
             fprintf(stderr, "quant_execution_invariant=failed\n");
             yvex_quant_digest_sink_release(&digest_sink);
             yvex_quant_plan_release(&plan);
-            yvex_deepseek_payload_handoff_close(handoff);
+            yvex_model_register_deepseek_v4()->payload.close(handoff);
             return 1;
         }
     }
     if (yvex_source_payload_session_facts_get(
-            yvex_deepseek_payload_handoff_session(handoff), &source_facts,
+            yvex_model_register_deepseek_v4()->payload.session(handoff), &source_facts,
             &error) != YVEX_OK) {
         yvex_quant_digest_sink_release(&digest_sink);
         yvex_quant_plan_release(&plan);
-        yvex_deepseek_payload_handoff_close(handoff);
+        yvex_model_register_deepseek_v4()->payload.close(handoff);
         return 1;
     }
     printf("mode=%s\n", plan_only ? "plan-only" : "execute-discard");
@@ -327,7 +328,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "quant_nonfinite_accounting=overflow\n");
             yvex_quant_digest_sink_release(&digest_sink);
             yvex_quant_plan_release(&plan);
-            yvex_deepseek_payload_handoff_close(handoff);
+            yvex_model_register_deepseek_v4()->payload.close(handoff);
             return 1;
         }
         nonfinite_count += execution.qtype_metrics[qtype].nonfinite_count;
@@ -388,6 +389,6 @@ int main(int argc, char **argv)
                          (double)elapsed : 0.0);
     yvex_quant_digest_sink_release(&digest_sink);
     yvex_quant_plan_release(&plan);
-    yvex_deepseek_payload_handoff_close(handoff);
+    yvex_model_register_deepseek_v4()->payload.close(handoff);
     return 0;
 }

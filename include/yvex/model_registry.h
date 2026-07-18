@@ -1,4 +1,10 @@
 /*
+ * Owner: abi.model_registry (abi).
+ * Owns: the public-abi boundary consumed by repository.
+ * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
+ * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
+ * Boundary: public-abi; moving this contract requires an ownership-manifest change.
+ *
  * YVEX - Local model registry API
  *
  * File: include/yvex/model_registry.h

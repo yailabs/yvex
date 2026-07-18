@@ -11,9 +11,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <yvex/yvex.h>
+#include <yvex/api.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 /* Contract: checks one exact CUDA variant and its admitted bundle/function facts. */
 static int assert_supported_variant(const yvex_backend *backend,

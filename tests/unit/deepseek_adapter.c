@@ -4,9 +4,9 @@
  */
 #include <string.h>
 
-#include "src/gguf/families.h"
+#include <yvex/weight_mapping.h>
 
-#include "test.h"
+#include "tests/test.h"
 
 static int expect_map(const char *native, yvex_tensor_role role, const char *target)
 {
@@ -14,7 +14,7 @@ static int expect_map(const char *native, yvex_tensor_role role, const char *tar
     yvex_tensor_role got_role;
     yvex_weight_mapping_issue_kind issue;
 
-    YVEX_TEST_ASSERT(yvex_deepseek_adapter_map_name(native, out, sizeof(out), &got_role, &issue) == 1,
+    YVEX_TEST_ASSERT(yvex_gguf_map_deepseek_name(native, out, sizeof(out), &got_role, &issue) == 1,
                      "native name maps");
     YVEX_TEST_ASSERT(got_role == role, "role matches");
     YVEX_TEST_ASSERT(strcmp(out, target) == 0, "target matches");
@@ -54,7 +54,7 @@ static int test_unknown(void)
     yvex_tensor_role role;
     yvex_weight_mapping_issue_kind issue;
 
-    YVEX_TEST_ASSERT(yvex_deepseek_adapter_map_name("unknown.weight", out, sizeof(out), &role, &issue) == 0,
+    YVEX_TEST_ASSERT(yvex_gguf_map_deepseek_name("unknown.weight", out, sizeof(out), &role, &issue) == 0,
                      "unknown native name unmapped");
     YVEX_TEST_ASSERT(role == YVEX_TENSOR_ROLE_UNKNOWN, "unknown role");
     YVEX_TEST_ASSERT(issue == YVEX_WEIGHT_MAPPING_ISSUE_UNKNOWN_NATIVE_NAME, "unknown native issue");
