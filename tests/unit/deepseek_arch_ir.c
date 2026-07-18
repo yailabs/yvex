@@ -8,6 +8,7 @@
 #include "test.h"
 
 #include "src/model/architecture/yvex_deepseek_v4_ir.h"
+#include "src/model/compilation/yvex_deepseek_transform_ir.h"
 #include "src/model/target/yvex_model_class_profile.h"
 #include "src/model/target/yvex_model_target_catalog.h"
 #include "src/source/yvex_source_verify.h"
@@ -255,6 +256,15 @@ static int test_arch_ir_golden_topology(void)
         model->vllm_revision,
         "8df14cfc8c8a09b4e57f082e59593a3abce4ffb3",
         "vLLM interpretation baseline is immutable");
+    YVEX_TEST_ASSERT_STREQ(
+        model->hadamard_revision,
+        "Dao-AILab/fast-hadamard-transform:v1.1.0.post2:"
+        "e7706faf8d1c3b9f241e36860640ad1dac644ede",
+        "Hadamard transform authority is pinned");
+    YVEX_TEST_ASSERT(model->runtime_numeric_schema_version == 1 &&
+                     model->runtime_activation_policy_count == 3 &&
+                     model->runtime_sparse_topk_policy_count == 1,
+                     "runtime numeric schema is explicit");
 
     swa = yvex_deepseek_v4_ir_layer_at(ir, 0);
     csa = yvex_deepseek_v4_ir_layer_at(ir, 2);
@@ -276,6 +286,43 @@ static int test_arch_ir_golden_topology(void)
                      csa->indexer_topk == 512 &&
                      csa->kv.requires_indexer_cache,
                      "CSA compressor indexer and KV state are explicit");
+    YVEX_TEST_ASSERT(
+        swa->attention_kv_activation.required &&
+        swa->attention_kv_activation.quantization ==
+            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT &&
+        swa->attention_kv_activation.block_width == 64 &&
+        swa->attention_kv_activation.pre_transform ==
+            YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE &&
+        !swa->compressor_activation.required,
+        "SWA owns only runtime KV fake quantization");
+    YVEX_TEST_ASSERT(
+        csa->compressor_activation.required &&
+        csa->compressor_activation.block_width == 64 &&
+        csa->compressor_rotated_activation.required &&
+        csa->compressor_rotated_activation.quantization ==
+            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT &&
+        csa->compressor_rotated_activation.block_width == 32 &&
+        csa->compressor_rotated_activation.pre_transform ==
+            YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_DAO_FHT_V1_1_0_POST2 &&
+        csa->compressor_rotated_activation.zero_pad_hadamard_to_power_of_two,
+        "CSA separates source 128x128 quantization from runtime activation quantization");
+    YVEX_TEST_ASSERT(
+        csa->indexer_query_activation.required &&
+        csa->indexer_query_activation.block_width == 32 &&
+        csa->sparse_topk.required &&
+        csa->sparse_topk.policy ==
+            YVEX_DEEPSEEK_V4_RUNTIME_TOPK_YVEX_SCORE_DESC_ORDINAL_ASC_V1 &&
+        csa->sparse_topk.k == 512 &&
+        csa->sparse_topk.equal_score_ordinal_ascending &&
+        csa->sparse_topk.duplicate_ordinal_refused,
+        "CSA owns deterministic sparse top-k policy");
+    YVEX_TEST_ASSERT(
+        hca->compressor_activation.required &&
+        hca->compressor_activation.block_width == 64 &&
+        !hca->compressor_rotated_activation.required &&
+        !hca->indexer_query_activation.required &&
+        !hca->sparse_topk.required,
+        "HCA owns non-rotated runtime compressor quantization without CSA indexer policy");
     YVEX_TEST_ASSERT(csa->attention_input_norm.required &&
                      csa->attention_input_norm.width == 4096 &&
                      csa->post_attention_ffn_norm.required &&
@@ -611,12 +658,128 @@ static int test_arch_ir_report_consumer_and_family_preservation(void)
     return 0;
 }
 
+/* Every runtime numeric policy field is semantic input to logical identity. */
+static int test_runtime_numeric_identity_field_coverage(void)
+{
+    yvex_source_verification source;
+    yvex_deepseek_v4_ir *ir = NULL;
+    yvex_deepseek_v4_ir_failure failure;
+    yvex_deepseek_v4_layer_spec *layer;
+    yvex_deepseek_v4_runtime_activation_policy activation;
+    yvex_deepseek_v4_runtime_sparse_topk_policy topk;
+    char baseline[YVEX_TRANSFORM_IR_IDENTITY_CAP];
+    char changed[YVEX_TRANSFORM_IR_IDENTITY_CAP];
+    yvex_error err;
+
+    arch_ir_verification_fixture(&source);
+    YVEX_TEST_ASSERT(yvex_deepseek_v4_ir_build(
+                         &ir, &source, &failure, &err) == YVEX_OK,
+                     "identity fixture architecture builds");
+    layer = (yvex_deepseek_v4_layer_spec *)
+        yvex_deepseek_v4_ir_layer_at(ir, 2ull);
+    YVEX_TEST_ASSERT(layer && yvex_deepseek_transform_architecture_identity(
+                                  ir, baseline),
+                     "baseline logical identity exists");
+    activation = layer->compressor_rotated_activation;
+    topk = layer->sparse_topk;
+#define ASSERT_ID_MUTATION(change, restore, label) do {                       \
+        change;                                                                \
+        YVEX_TEST_ASSERT(                                                      \
+            yvex_deepseek_transform_architecture_identity(ir, changed) &&     \
+                strcmp(baseline, changed) != 0, label);                        \
+        restore;                                                               \
+    } while (0)
+    ASSERT_ID_MUTATION(layer->compressor_rotated_activation.required ^= 1,
+                       layer->compressor_rotated_activation = activation,
+                       "activation required changes identity");
+    ASSERT_ID_MUTATION(layer->compressor_rotated_activation.stage =
+                           YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_ATTENTION_KV_NON_ROPE,
+                       layer->compressor_rotated_activation = activation,
+                       "activation stage changes identity");
+    ASSERT_ID_MUTATION(layer->compressor_rotated_activation.quantization =
+                           YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT,
+                       layer->compressor_rotated_activation = activation,
+                       "activation qtype changes identity");
+    ASSERT_ID_MUTATION(layer->compressor_rotated_activation.block_axis =
+                           YVEX_DEEPSEEK_V4_RUNTIME_AXIS_NONE,
+                       layer->compressor_rotated_activation = activation,
+                       "activation axis changes identity");
+    ASSERT_ID_MUTATION(layer->compressor_rotated_activation.block_width += 1ull,
+                       layer->compressor_rotated_activation = activation,
+                       "activation block width changes identity");
+    ASSERT_ID_MUTATION(layer->compressor_rotated_activation.scale_format =
+                           YVEX_DEEPSEEK_V4_RUNTIME_SCALE_NONE,
+                       layer->compressor_rotated_activation = activation,
+                       "activation scale format changes identity");
+    ASSERT_ID_MUTATION(layer->compressor_rotated_activation.scale_dtype =
+                           YVEX_NATIVE_DTYPE_F32,
+                       layer->compressor_rotated_activation = activation,
+                       "activation scale dtype changes identity");
+    ASSERT_ID_MUTATION(layer->compressor_rotated_activation.pre_transform =
+                           YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE,
+                       layer->compressor_rotated_activation = activation,
+                       "Hadamard policy changes identity");
+    ASSERT_ID_MUTATION(layer->compressor_rotated_activation.tail_policy =
+                           YVEX_DEEPSEEK_V4_RUNTIME_TAIL_NONE,
+                       layer->compressor_rotated_activation = activation,
+                       "activation tail changes identity");
+    ASSERT_ID_MUTATION(layer->compressor_rotated_activation.nonfinite_policy =
+                           (yvex_deepseek_v4_runtime_nonfinite_policy)1,
+                       layer->compressor_rotated_activation = activation,
+                       "activation finite policy changes identity");
+    ASSERT_ID_MUTATION(layer->compressor_rotated_activation.fake_quant_inplace ^= 1,
+                       layer->compressor_rotated_activation = activation,
+                       "activation publication mode changes identity");
+    ASSERT_ID_MUTATION(
+        layer->compressor_rotated_activation.zero_pad_hadamard_to_power_of_two ^= 1,
+        layer->compressor_rotated_activation = activation,
+        "Hadamard padding changes identity");
+    ASSERT_ID_MUTATION(layer->sparse_topk.required ^= 1,
+                       layer->sparse_topk = topk,
+                       "top-k requirement changes identity");
+    ASSERT_ID_MUTATION(layer->sparse_topk.version += 1u,
+                       layer->sparse_topk = topk,
+                       "top-k version changes identity");
+    ASSERT_ID_MUTATION(layer->sparse_topk.policy =
+                           YVEX_DEEPSEEK_V4_RUNTIME_TOPK_NONE,
+                       layer->sparse_topk = topk,
+                       "top-k policy changes identity");
+    ASSERT_ID_MUTATION(layer->sparse_topk.k -= 1ull,
+                       layer->sparse_topk = topk,
+                       "top-k cardinality changes identity");
+    ASSERT_ID_MUTATION(layer->sparse_topk.reject_nonfinite ^= 1,
+                       layer->sparse_topk = topk,
+                       "top-k finite policy changes identity");
+    ASSERT_ID_MUTATION(layer->sparse_topk.score_descending ^= 1,
+                       layer->sparse_topk = topk,
+                       "top-k score ordering changes identity");
+    ASSERT_ID_MUTATION(layer->sparse_topk.equal_score_ordinal_ascending ^= 1,
+                       layer->sparse_topk = topk,
+                       "top-k tie ordering changes identity");
+    ASSERT_ID_MUTATION(layer->sparse_topk.plus_zero_equals_minus_zero ^= 1,
+                       layer->sparse_topk = topk,
+                       "top-k signed-zero rule changes identity");
+    ASSERT_ID_MUTATION(layer->sparse_topk.duplicate_ordinal_refused ^= 1,
+                       layer->sparse_topk = topk,
+                       "top-k duplicate rule changes identity");
+    ASSERT_ID_MUTATION(layer->sparse_topk.output_ranked_order ^= 1,
+                       layer->sparse_topk = topk,
+                       "top-k output ordering changes identity");
+#undef ASSERT_ID_MUTATION
+    YVEX_TEST_ASSERT(yvex_deepseek_transform_architecture_identity(
+                         ir, changed) && strcmp(baseline, changed) == 0,
+                     "restored numeric policies restore identity");
+    yvex_deepseek_v4_ir_close(ir);
+    return 0;
+}
+
 int yvex_test_deepseek_arch_ir(void)
 {
     if (test_arch_ir_golden_topology() != 0) return 1;
     if (test_arch_ir_refusal_matrix() != 0) return 1;
     if (test_arch_ir_payload_manifest_stage() != 0) return 1;
     if (test_arch_ir_lifetime_and_allocation() != 0) return 1;
+    if (test_runtime_numeric_identity_field_coverage() != 0) return 1;
     if (test_arch_ir_report_consumer_and_family_preservation() != 0) return 1;
     return 0;
 }

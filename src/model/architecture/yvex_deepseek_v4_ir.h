@@ -52,6 +52,7 @@ typedef enum {
     YVEX_DEEPSEEK_V4_IR_FAILURE_INVALID_EXPERT_TOPK,
     YVEX_DEEPSEEK_V4_IR_FAILURE_TOKENIZER_OUTPUT_MISMATCH,
     YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_SOURCE_CONSTRAINT,
+    YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_RUNTIME_NUMERIC,
     YVEX_DEEPSEEK_V4_IR_FAILURE_NUMERIC_VALUE,
     YVEX_DEEPSEEK_V4_IR_FAILURE_ARITHMETIC_OVERFLOW,
     YVEX_DEEPSEEK_V4_IR_FAILURE_ALLOCATION
@@ -70,6 +71,7 @@ typedef enum {
     YVEX_DEEPSEEK_V4_IR_COMPONENT_TOKENIZER,
     YVEX_DEEPSEEK_V4_IR_COMPONENT_AUXILIARY,
     YVEX_DEEPSEEK_V4_IR_COMPONENT_SOURCE_CONSTRAINT,
+    YVEX_DEEPSEEK_V4_IR_COMPONENT_RUNTIME_NUMERIC,
     YVEX_DEEPSEEK_V4_IR_COMPONENT_ALLOCATION
 } yvex_deepseek_v4_ir_component;
 
@@ -118,6 +120,77 @@ typedef enum {
 typedef enum {
     YVEX_DEEPSEEK_V4_SOURCE_QUANT_FP8_E4M3_UE8M0_DYNAMIC = 0
 } yvex_deepseek_v4_source_quantization;
+
+typedef enum {
+    YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_NONE = 0,
+    YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_ATTENTION_KV_NON_ROPE,
+    YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_COMPRESSOR_NON_ROTATED,
+    YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_COMPRESSOR_ROTATED,
+    YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_INDEXER_QUERY_ROTATED
+} yvex_deepseek_v4_runtime_activation_stage;
+
+typedef enum {
+    YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_NONE = 0,
+    YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT,
+    YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT
+} yvex_deepseek_v4_runtime_activation_quantization;
+
+typedef enum {
+    YVEX_DEEPSEEK_V4_RUNTIME_AXIS_NONE = 0,
+    YVEX_DEEPSEEK_V4_RUNTIME_AXIS_FINAL_DIMENSION
+} yvex_deepseek_v4_runtime_axis;
+
+typedef enum {
+    YVEX_DEEPSEEK_V4_RUNTIME_SCALE_NONE = 0,
+    YVEX_DEEPSEEK_V4_RUNTIME_SCALE_UE8M0
+} yvex_deepseek_v4_runtime_scale_format;
+
+typedef enum {
+    YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE = 0,
+    YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_DAO_FHT_V1_1_0_POST2
+} yvex_deepseek_v4_runtime_transform;
+
+typedef enum {
+    YVEX_DEEPSEEK_V4_RUNTIME_TAIL_NONE = 0,
+    YVEX_DEEPSEEK_V4_RUNTIME_TAIL_EXACT_OR_SHORT_FINAL_BLOCK
+} yvex_deepseek_v4_runtime_tail_policy;
+
+typedef enum {
+    YVEX_DEEPSEEK_V4_RUNTIME_NONFINITE_REFUSE = 0
+} yvex_deepseek_v4_runtime_nonfinite_policy;
+
+typedef enum {
+    YVEX_DEEPSEEK_V4_RUNTIME_TOPK_NONE = 0,
+    YVEX_DEEPSEEK_V4_RUNTIME_TOPK_YVEX_SCORE_DESC_ORDINAL_ASC_V1
+} yvex_deepseek_v4_runtime_sparse_topk_policy_id;
+
+typedef struct {
+    int required;
+    yvex_deepseek_v4_runtime_activation_stage stage;
+    yvex_deepseek_v4_runtime_activation_quantization quantization;
+    yvex_deepseek_v4_runtime_axis block_axis;
+    unsigned long long block_width;
+    yvex_deepseek_v4_runtime_scale_format scale_format;
+    yvex_native_dtype scale_dtype;
+    yvex_deepseek_v4_runtime_transform pre_transform;
+    yvex_deepseek_v4_runtime_tail_policy tail_policy;
+    yvex_deepseek_v4_runtime_nonfinite_policy nonfinite_policy;
+    int fake_quant_inplace;
+    int zero_pad_hadamard_to_power_of_two;
+} yvex_deepseek_v4_runtime_activation_policy;
+
+typedef struct {
+    int required;
+    unsigned int version;
+    yvex_deepseek_v4_runtime_sparse_topk_policy_id policy;
+    unsigned long long k;
+    int reject_nonfinite;
+    int score_descending;
+    int equal_score_ordinal_ascending;
+    int plus_zero_equals_minus_zero;
+    int duplicate_ordinal_refused;
+    int output_ranked_order;
+} yvex_deepseek_v4_runtime_sparse_topk_policy;
 
 typedef struct {
     yvex_deepseek_v4_ir_failure_code code;
@@ -256,6 +329,11 @@ typedef struct {
     yvex_deepseek_v4_kv_spec kv;
     yvex_deepseek_v4_mhc_spec mhc;
     yvex_deepseek_v4_moe_spec moe;
+    yvex_deepseek_v4_runtime_activation_policy attention_kv_activation;
+    yvex_deepseek_v4_runtime_activation_policy compressor_activation;
+    yvex_deepseek_v4_runtime_activation_policy compressor_rotated_activation;
+    yvex_deepseek_v4_runtime_activation_policy indexer_query_activation;
+    yvex_deepseek_v4_runtime_sparse_topk_policy sparse_topk;
     yvex_deepseek_v4_norm_spec attention_input_norm;
     yvex_deepseek_v4_norm_spec post_attention_ffn_norm;
     yvex_deepseek_v4_attention_tensor_spec tensors;
@@ -329,6 +407,10 @@ typedef struct {
     char paper_revision[32];
     char sglang_revision[64];
     char vllm_revision[64];
+    char hadamard_revision[128];
+    unsigned int runtime_numeric_schema_version;
+    unsigned long long runtime_activation_policy_count;
+    unsigned long long runtime_sparse_topk_policy_count;
     unsigned long long hidden_size;
     unsigned long long vocabulary_size;
     unsigned long long maximum_context;
@@ -414,5 +496,13 @@ const char *yvex_deepseek_v4_source_expert_dtype_name(
     yvex_deepseek_v4_source_expert_dtype dtype);
 const char *yvex_deepseek_v4_source_quantization_name(
     yvex_deepseek_v4_source_quantization quantization);
+const char *yvex_deepseek_v4_runtime_activation_stage_name(
+    yvex_deepseek_v4_runtime_activation_stage stage);
+const char *yvex_deepseek_v4_runtime_activation_quantization_name(
+    yvex_deepseek_v4_runtime_activation_quantization quantization);
+const char *yvex_deepseek_v4_runtime_transform_name(
+    yvex_deepseek_v4_runtime_transform transform);
+const char *yvex_deepseek_v4_runtime_sparse_topk_policy_name(
+    yvex_deepseek_v4_runtime_sparse_topk_policy_id policy);
 
 #endif

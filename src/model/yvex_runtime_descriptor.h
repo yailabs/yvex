@@ -26,6 +26,7 @@
 #define YVEX_RUNTIME_DESCRIPTOR_H
 
 #include "src/artifact/yvex_artifact_materialize.h"
+#include "src/model/architecture/yvex_deepseek_v4_ir.h"
 
 #include <yvex/gguf_qtype.h>
 #include <yvex/tensor.h>
@@ -84,7 +85,13 @@ typedef struct {
     yvex_runtime_descriptor_status status;
     char artifact_identity[YVEX_SHA256_HEX_CAP];
     char materialization_plan_identity[YVEX_MATERIALIZATION_IDENTITY_CAP];
+    char logical_model_identity[YVEX_RUNTIME_DESCRIPTOR_IDENTITY_CAP];
     char runtime_descriptor_identity[YVEX_RUNTIME_DESCRIPTOR_IDENTITY_CAP];
+    char runtime_numeric_identity[YVEX_RUNTIME_DESCRIPTOR_IDENTITY_CAP];
+    char runtime_hadamard_revision[128];
+    unsigned int runtime_numeric_schema_version;
+    unsigned long long runtime_activation_policy_count;
+    unsigned long long runtime_sparse_topk_policy_count;
     unsigned long long tensor_count;
     unsigned long long payload_bytes;
     unsigned long long qtype_tensor_counts[YVEX_RUNTIME_DESCRIPTOR_QTYPE_CAP];
@@ -128,6 +135,7 @@ int yvex_runtime_descriptor_build_deepseek(
     const yvex_complete_artifact_admission *admission,
     const yvex_materialization_session *session,
     const yvex_deepseek_gguf_map *deepseek_map,
+    const yvex_deepseek_v4_ir *architecture_ir,
     yvex_runtime_descriptor_failure *failure,
     yvex_error *err);
 void yvex_runtime_descriptor_close(yvex_runtime_descriptor *descriptor);

@@ -73,6 +73,7 @@ const char *yvex_backend_operation_variant_name(yvex_backend_operation_variant v
     case YVEX_BACKEND_VARIANT_ROPE_F32: return "rope-f32";
     case YVEX_BACKEND_VARIANT_MATMUL_F32: return "matmul-f32";
     case YVEX_BACKEND_VARIANT_QTYPE_ROW_DOT: return "qtype-row-dot";
+    case YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION: return "deepseek-attention";
     case YVEX_BACKEND_VARIANT_MLP_DENSE_F32: return "mlp-dense-f32";
     case YVEX_BACKEND_VARIANT_MLP_ROUTED_F32: return "mlp-routed-f32";
     case YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32: return "attention-causal-f32";
@@ -422,6 +423,7 @@ static void backend_variant_dtypes(yvex_backend_capability_result *out)
         out->output_dtype = YVEX_DTYPE_F32;
         break;
     case YVEX_BACKEND_VARIANT_QTYPE_ROW_DOT:
+    case YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION:
         out->input_dtype = YVEX_DTYPE_UNKNOWN;
         out->weight_dtype = YVEX_DTYPE_UNKNOWN;
         out->output_dtype = YVEX_DTYPE_F32;

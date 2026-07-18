@@ -348,8 +348,10 @@ grep -F '| `V010.RUNTIME.DESCRIPTOR.GGUF.0` | common | `complete` |' "$project" 
   fail "common runtime descriptor is not complete"
 grep -F '| `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0` | DeepSeek | `complete` |' "$project" >/dev/null ||
   fail "DeepSeek runtime descriptor is not complete"
-grep -F '| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `active` |' "$project" >/dev/null ||
-  fail "DeepSeek attention is not active"
+grep -F '| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `complete` |' "$project" >/dev/null ||
+  fail "DeepSeek attention is not complete"
+grep -F '| `V010.RUNTIME.DEEPSEEK.KV.0` | DeepSeek | `active` |' "$project" >/dev/null ||
+  fail "DeepSeek KV is not active"
 grep -F '| V010.MODEL.TRANSFORM.IR.0 | recovered/promoted |' "$project" >/dev/null ||
   fail "quantization does not depend on the transformation IR"
 

@@ -44,6 +44,7 @@ int yvex_test_token_input(void);
 int yvex_test_prompt(void);
 int yvex_test_shape(void);
 int yvex_test_graph(void);
+int yvex_test_deepseek_attention(void);
 int yvex_test_memory_plan(void);
 int yvex_test_planner(void);
 int yvex_test_backend_cpu(void);
@@ -151,6 +152,7 @@ static int run_graph_planner(void)
 {
     if (run_test("shape", yvex_test_shape) != 0) return 1;
     if (run_test("graph", yvex_test_graph) != 0) return 1;
+    if (run_test("deepseek_attention", yvex_test_deepseek_attention) != 0) return 1;
     if (run_test("memory_plan", yvex_test_memory_plan) != 0) return 1;
     if (run_test("planner", yvex_test_planner) != 0) return 1;
     return 0;

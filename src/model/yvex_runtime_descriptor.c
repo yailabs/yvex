@@ -26,6 +26,7 @@
 #include "yvex_runtime_descriptor.h"
 
 #include "src/core/yvex_sha256.h"
+#include "src/model/compilation/yvex_deepseek_transform_ir.h"
 
 #include <limits.h>
 #include <stdio.h>
@@ -180,6 +181,118 @@ static void runtime_hash_text(yvex_sha256 *hash, const char *text)
     if (len) (void)yvex_sha256_update(hash, text, (size_t)len);
 }
 
+static void runtime_hash_activation_policy(
+    yvex_sha256 *hash,
+    const yvex_deepseek_v4_runtime_activation_policy *policy)
+{
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->required : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->stage : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->quantization : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->block_axis : 0ull);
+    runtime_hash_u64(hash, policy ? policy->block_width : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->scale_format : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->scale_dtype : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->pre_transform : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->tail_policy : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->nonfinite_policy : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->fake_quant_inplace : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->zero_pad_hadamard_to_power_of_two : 0ull);
+}
+
+static void runtime_hash_sparse_topk_policy(
+    yvex_sha256 *hash,
+    const yvex_deepseek_v4_runtime_sparse_topk_policy *policy)
+{
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->required : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->version : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->policy : 0ull);
+    runtime_hash_u64(hash, policy ? policy->k : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->reject_nonfinite : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->score_descending : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->equal_score_ordinal_ascending : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->plus_zero_equals_minus_zero : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->duplicate_ordinal_refused : 0ull);
+    runtime_hash_u64(hash, policy ? (unsigned long long)policy->output_ranked_order : 0ull);
+}
+
+static int runtime_fill_deepseek_numeric_summary(
+    yvex_runtime_descriptor *descriptor,
+    const yvex_deepseek_v4_ir *architecture_ir,
+    yvex_runtime_descriptor_failure *failure,
+    yvex_error *err)
+{
+    const yvex_deepseek_v4_model_spec *model;
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    unsigned long long i;
+    unsigned long long layer_count;
+
+    model = yvex_deepseek_v4_ir_model(architecture_ir);
+    if (!descriptor || !model) {
+        return runtime_reject(
+            failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE,
+            NULL, YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, err,
+            YVEX_ERR_FORMAT,
+            "DeepSeek runtime descriptor requires architecture numeric contract");
+    }
+    if (model->runtime_numeric_schema_version == 0u ||
+        model->runtime_activation_policy_count == 0ull ||
+        !model->hadamard_revision[0]) {
+        return runtime_reject(
+            failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE,
+            NULL, YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, err,
+            YVEX_ERR_FORMAT,
+            "DeepSeek architecture runtime numeric contract is incomplete");
+    }
+    if (!yvex_deepseek_transform_architecture_identity(
+            architecture_ir, descriptor->summary.logical_model_identity)) {
+        return runtime_reject(
+            failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE,
+            NULL, YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, err,
+            YVEX_ERR_FORMAT,
+            "DeepSeek logical-model identity encoding failed");
+    }
+    descriptor->summary.runtime_numeric_schema_version =
+        model->runtime_numeric_schema_version;
+    descriptor->summary.runtime_activation_policy_count =
+        model->runtime_activation_policy_count;
+    descriptor->summary.runtime_sparse_topk_policy_count =
+        model->runtime_sparse_topk_policy_count;
+    (void)snprintf(descriptor->summary.runtime_hadamard_revision,
+                   sizeof(descriptor->summary.runtime_hadamard_revision),
+                   "%s", model->hadamard_revision);
+
+    yvex_sha256_init(&hash);
+    runtime_hash_text(&hash, "yvex.runtime.numeric.deepseek-v4.v1");
+    runtime_hash_text(&hash, model->hadamard_revision);
+    runtime_hash_text(&hash, model->sglang_revision);
+    runtime_hash_u64(&hash, model->runtime_numeric_schema_version);
+    runtime_hash_u64(&hash, model->runtime_activation_policy_count);
+    runtime_hash_u64(&hash, model->runtime_sparse_topk_policy_count);
+    layer_count = yvex_deepseek_v4_ir_layer_count(architecture_ir);
+    runtime_hash_u64(&hash, layer_count);
+    for (i = 0ull; i < layer_count; ++i) {
+        const yvex_deepseek_v4_layer_spec *layer =
+            yvex_deepseek_v4_ir_layer_at(architecture_ir, i);
+        if (!layer) {
+            return runtime_reject(
+                failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE,
+                NULL, i, 1ull, 0ull, err, YVEX_ERR_FORMAT,
+                "DeepSeek architecture layer missing during numeric projection");
+        }
+        runtime_hash_u64(&hash, layer->layer_index);
+        runtime_hash_u64(&hash, (unsigned long long)layer->attention_class);
+        runtime_hash_activation_policy(&hash, &layer->attention_kv_activation);
+        runtime_hash_activation_policy(&hash, &layer->compressor_activation);
+        runtime_hash_activation_policy(&hash, &layer->compressor_rotated_activation);
+        runtime_hash_activation_policy(&hash, &layer->indexer_query_activation);
+        runtime_hash_sparse_topk_policy(&hash, &layer->sparse_topk);
+    }
+    (void)yvex_sha256_final(&hash, digest);
+    yvex_sha256_hex(digest, descriptor->summary.runtime_numeric_identity);
+    return YVEX_OK;
+}
+
 static void runtime_compute_identity(yvex_runtime_descriptor *descriptor)
 {
     yvex_sha256 hash;
@@ -190,6 +303,14 @@ static void runtime_compute_identity(yvex_runtime_descriptor *descriptor)
     runtime_hash_text(&hash, descriptor->summary.artifact_identity);
     runtime_hash_text(&hash,
                       descriptor->summary.materialization_plan_identity);
+    runtime_hash_text(&hash, descriptor->summary.logical_model_identity);
+    runtime_hash_text(&hash, descriptor->summary.runtime_numeric_identity);
+    runtime_hash_u64(&hash,
+                     descriptor->summary.runtime_numeric_schema_version);
+    runtime_hash_u64(&hash,
+                     descriptor->summary.runtime_activation_policy_count);
+    runtime_hash_u64(&hash,
+                     descriptor->summary.runtime_sparse_topk_policy_count);
     runtime_hash_u64(&hash, descriptor->count);
     runtime_hash_u64(&hash, descriptor->summary.payload_bytes);
     runtime_hash_u64(&hash, descriptor->summary.layer_count);
@@ -412,6 +533,7 @@ int yvex_runtime_descriptor_build_deepseek(
     const yvex_complete_artifact_admission *admission,
     const yvex_materialization_session *session,
     const yvex_deepseek_gguf_map *deepseek_map,
+    const yvex_deepseek_v4_ir *architecture_ir,
     yvex_runtime_descriptor_failure *failure,
     yvex_error *err)
 {
@@ -421,12 +543,12 @@ int yvex_runtime_descriptor_build_deepseek(
     int rc;
 
     if (out) *out = NULL;
-    if (!deepseek_map)
+    if (!deepseek_map || !architecture_ir)
         return runtime_reject(
             failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_INVALID_ARGUMENT,
             NULL, YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, err,
             YVEX_ERR_INVALID_ARG,
-            "DeepSeek runtime descriptor requires canonical GGUF map");
+            "DeepSeek runtime descriptor requires canonical GGUF map and architecture IR");
     map_summary = yvex_deepseek_gguf_map_summary_get(deepseek_map);
     if (!map_summary || !map_summary->complete)
         return runtime_reject(
@@ -437,6 +559,12 @@ int yvex_runtime_descriptor_build_deepseek(
     rc = yvex_runtime_descriptor_build(
         &descriptor, admission, session, failure, err);
     if (rc != YVEX_OK) return rc;
+    rc = runtime_fill_deepseek_numeric_summary(
+        descriptor, architecture_ir, failure, err);
+    if (rc != YVEX_OK) {
+        yvex_runtime_descriptor_close(descriptor);
+        return rc;
+    }
     if (descriptor->count != map_summary->descriptor_count) {
         yvex_runtime_descriptor_close(descriptor);
         return runtime_reject(

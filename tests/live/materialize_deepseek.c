@@ -153,6 +153,8 @@ int main(int argc, char **argv)
     yvex_materialization_failure materialization_failure;
     yvex_runtime_descriptor *descriptor = NULL;
     yvex_runtime_descriptor_failure descriptor_failure;
+    yvex_deepseek_v4_ir *architecture_ir = NULL;
+    yvex_deepseek_v4_ir_failure architecture_failure;
     const yvex_materialization_summary *plan_summary;
     const yvex_materialization_summary *session_summary;
     const yvex_runtime_descriptor_summary *descriptor_summary;
@@ -199,6 +201,20 @@ int main(int argc, char **argv)
                 yvex_error_message(&err));
         return 1;
     }
+    rc = yvex_deepseek_v4_ir_build(
+        &architecture_ir, yvex_deepseek_payload_handoff_verification(handoff),
+        &architecture_failure, &err);
+    if (rc != YVEX_OK) {
+        fprintf(stderr,
+                "architecture_failure=%s component=%s field=%s layer=%llu expected=%llu actual=%llu message=%s\n",
+                yvex_deepseek_v4_ir_failure_name(architecture_failure.code),
+                yvex_deepseek_v4_ir_component_name(architecture_failure.component),
+                architecture_failure.field ? architecture_failure.field : "",
+                architecture_failure.layer_index, architecture_failure.expected,
+                architecture_failure.actual, yvex_error_message(&err));
+        yvex_deepseek_payload_handoff_close(handoff);
+        return 1;
+    }
     memset(&artifact_options, 0, sizeof(artifact_options));
     artifact_options.path = artifact_path;
     artifact_options.readonly = 1;
@@ -217,6 +233,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "artifact_open_failure where=%s message=%s\n",
                 yvex_error_where(&err), yvex_error_message(&err));
         yvex_deepseek_payload_handoff_close(handoff);
+        yvex_deepseek_v4_ir_close(architecture_ir);
         yvex_tensor_table_close(tensors);
         yvex_gguf_close(gguf);
         yvex_artifact_close(artifact);
@@ -303,7 +320,8 @@ int main(int argc, char **argv)
         goto cleanup_fail;
     rc = yvex_runtime_descriptor_build_deepseek(
         &descriptor, &admission, session,
-        yvex_deepseek_payload_handoff_map(handoff), &descriptor_failure, &err);
+        yvex_deepseek_payload_handoff_map(handoff), architecture_ir,
+        &descriptor_failure, &err);
     if (rc != YVEX_OK) {
         print_descriptor_failure("descriptor", &descriptor_failure, &err);
         goto cleanup_fail;
@@ -322,6 +340,12 @@ int main(int argc, char **argv)
            yvex_runtime_descriptor_status_name(descriptor_summary->status));
     printf("runtime_descriptor_identity=%s\n",
            descriptor_summary->runtime_descriptor_identity);
+    printf("runtime_numeric_identity=%s\n",
+           descriptor_summary->runtime_numeric_identity);
+    printf("runtime_numeric_schema_version=%u\n",
+           descriptor_summary->runtime_numeric_schema_version);
+    printf("runtime_hadamard_revision=%s\n",
+           descriptor_summary->runtime_hadamard_revision);
     printf("runtime_tensor_count=%llu\n", descriptor_summary->tensor_count);
     printf("runtime_missing_bindings=%llu\n",
            descriptor_summary->missing_required_bindings);
@@ -337,6 +361,7 @@ int main(int argc, char **argv)
     yvex_tensor_table_close(tensors);
     yvex_gguf_close(gguf);
     yvex_artifact_close(artifact);
+    yvex_deepseek_v4_ir_close(architecture_ir);
     yvex_deepseek_payload_handoff_close(handoff);
     return 0;
 
@@ -348,6 +373,7 @@ cleanup_fail:
     yvex_tensor_table_close(tensors);
     yvex_gguf_close(gguf);
     yvex_artifact_close(artifact);
+    yvex_deepseek_v4_ir_close(architecture_ir);
     yvex_deepseek_payload_handoff_close(handoff);
     return 1;
 }

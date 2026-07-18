@@ -92,6 +92,8 @@ test -f src/model/yvex_runtime_descriptor_report.c
 test -f src/model/yvex_runtime_descriptor_report.h
 test -f tests/unit/materialization_runtime.c
 test -f tests/live/materialize_deepseek.c
+test -f tests/unit/deepseek_attention.c
+test -f tests/live/attention_deepseek.c
 test -f src/model/target/yvex_model_target_catalog.c
 test -f src/model/target/yvex_model_target_catalog.h
 test -f src/model/target/yvex_model_target_decision.c
@@ -267,6 +269,20 @@ test -f src/graph/yvex_graph_guard.c
 test -f src/graph/yvex_graph_guard.h
 test -f src/graph/yvex_graph_primitive.c
 test -f src/graph/yvex_graph_primitive.h
+test -f src/graph/yvex_deepseek_attention.c
+test -f src/graph/yvex_deepseek_attention.h
+test -f src/graph/yvex_deepseek_attention_internal.h
+test -f src/graph/yvex_deepseek_attention_internal.c
+test -f src/graph/yvex_deepseek_attention_plan.c
+test -f src/graph/yvex_deepseek_attention_sink.c
+test -f src/graph/yvex_deepseek_attention_compressor.c
+test -f src/graph/yvex_deepseek_attention_numeric.c
+test -f src/graph/yvex_deepseek_attention_execute.c
+test -f src/graph/yvex_deepseek_attention_cuda.c
+test -f src/backend/cuda/cuda_deepseek_attention.c
+test -f src/backend/cuda/cuda_deepseek_attention.h
+test -f tests/reference/deepseek_attention_reference.c
+test -f tests/reference/deepseek_attention_reference.h
 test -f src/graph/yvex_graph_bind.c
 test -f src/graph/yvex_graph_bind.h
 test -f src/graph/yvex_graph_execute.c
@@ -346,6 +362,8 @@ test -f tests/unit/gguf_qtype_abi.c
 test -x tests/test_gguf_qtype_abi.sh
 grep -nF 'test-materialize-live-plan' Makefile >/dev/null
 grep -nF 'test-materialize-live' Makefile >/dev/null
+grep -nF 'test-attention-live-plan' Makefile >/dev/null
+grep -nF 'test-attention-live' Makefile >/dev/null
 grep -nF 'test-runtime-descriptor' Makefile >/dev/null
 test -f src/cli/commands/yvex_quant_cli.c
 test -f src/cli/io/yvex_cli_out.c
@@ -1306,6 +1324,14 @@ printf '%s\n' "$CORE_BLOCK" | grep -F 'src/backend/yvex_backend.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/backend/yvex_backend_qtype.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/backend/yvex_backend_tensor.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_graph.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_deepseek_attention.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_deepseek_attention_internal.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_deepseek_attention_plan.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_deepseek_attention_sink.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_deepseek_attention_compressor.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_deepseek_attention_numeric.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_deepseek_attention_execute.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_deepseek_attention_cuda.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_graph_bind.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_graph_execute.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/gguf/yvex_gguf_container.c' >/dev/null

@@ -86,7 +86,7 @@ static int deepseek_identity_double(yvex_sha256 *hash, double value)
 }
 
 /* Encodes the admitted logical architecture without native structure bytes. */
-static int deepseek_architecture_identity(
+int yvex_deepseek_transform_architecture_identity(
     const yvex_deepseek_v4_ir *architecture,
     char output[YVEX_TRANSFORM_IR_IDENTITY_CAP])
 {
@@ -105,12 +105,42 @@ static int deepseek_architecture_identity(
         return 0; } while (0)
 #define ID_DOUBLE(value) do { if (!deepseek_identity_double(&hash, (value))) \
         return 0; } while (0)
+#define ID_RUNTIME_ACTIVATION(policy) do {                                   \
+        ID_U64((policy).required);                                           \
+        ID_U64((policy).stage);                                              \
+        ID_U64((policy).quantization);                                       \
+        ID_U64((policy).block_axis);                                         \
+        ID_U64((policy).block_width);                                        \
+        ID_U64((policy).scale_format);                                       \
+        ID_U64((policy).scale_dtype);                                        \
+        ID_U64((policy).pre_transform);                                      \
+        ID_U64((policy).tail_policy);                                        \
+        ID_U64((policy).nonfinite_policy);                                   \
+        ID_U64((policy).fake_quant_inplace);                                 \
+        ID_U64((policy).zero_pad_hadamard_to_power_of_two);                  \
+    } while (0)
+#define ID_RUNTIME_TOPK(topk_obj) do {                                       \
+        ID_U64((topk_obj).required);                                         \
+        ID_U64((topk_obj).version);                                          \
+        ID_U64((topk_obj).policy);                                           \
+        ID_U64((topk_obj).k);                                                \
+        ID_U64((topk_obj).reject_nonfinite);                                 \
+        ID_U64((topk_obj).score_descending);                                 \
+        ID_U64((topk_obj).equal_score_ordinal_ascending);                    \
+        ID_U64((topk_obj).plus_zero_equals_minus_zero);                      \
+        ID_U64((topk_obj).duplicate_ordinal_refused);                        \
+        ID_U64((topk_obj).output_ranked_order);                              \
+    } while (0)
     ID_TEXT(domain);
     ID_TEXT(model->target_id);
     ID_TEXT(model->family);
     ID_TEXT(model->architecture);
     ID_TEXT(model->repository);
     ID_TEXT(model->revision);
+    ID_TEXT(model->hadamard_revision);
+    ID_U64(model->runtime_numeric_schema_version);
+    ID_U64(model->runtime_activation_policy_count);
+    ID_U64(model->runtime_sparse_topk_policy_count);
     ID_U64(model->hidden_size);
     ID_U64(model->vocabulary_size);
     ID_U64(model->maximum_context);
@@ -242,6 +272,11 @@ static int deepseek_architecture_identity(
         ID_U64(layer->moe.requires_hidden_state);
         ID_U64(layer->moe.requires_correction_bias);
         ID_U64(layer->moe.normalize_topk_probabilities);
+        ID_RUNTIME_ACTIVATION(layer->attention_kv_activation);
+        ID_RUNTIME_ACTIVATION(layer->compressor_activation);
+        ID_RUNTIME_ACTIVATION(layer->compressor_rotated_activation);
+        ID_RUNTIME_ACTIVATION(layer->indexer_query_activation);
+        ID_RUNTIME_TOPK(layer->sparse_topk);
         ID_U64(layer->attention_input_norm.required);
         ID_U64(layer->attention_input_norm.width);
         ID_U64(layer->post_attention_ffn_norm.required);
@@ -348,6 +383,11 @@ static int deepseek_architecture_identity(
         ID_U64(aux->layer.moe.requires_hidden_state);
         ID_U64(aux->layer.moe.requires_correction_bias);
         ID_U64(aux->layer.moe.normalize_topk_probabilities);
+        ID_RUNTIME_ACTIVATION(aux->layer.attention_kv_activation);
+        ID_RUNTIME_ACTIVATION(aux->layer.compressor_activation);
+        ID_RUNTIME_ACTIVATION(aux->layer.compressor_rotated_activation);
+        ID_RUNTIME_ACTIVATION(aux->layer.indexer_query_activation);
+        ID_RUNTIME_TOPK(aux->layer.sparse_topk);
         ID_U64(aux->layer.attention_input_norm.required);
         ID_U64(aux->layer.attention_input_norm.width);
         ID_U64(aux->layer.post_attention_ffn_norm.required);
@@ -395,6 +435,8 @@ static int deepseek_architecture_identity(
         ID_U64(aux->shares_output_head);
         ID_U64(aux->shares_final_norm);
     }
+#undef ID_RUNTIME_TOPK
+#undef ID_RUNTIME_ACTIVATION
 #undef ID_DOUBLE
 #undef ID_TEXT
 #undef ID_U64
@@ -1266,7 +1308,8 @@ int yvex_deepseek_transform_ir_build(
     rc = deepseek_validate_inputs(&deepseek, verification, architecture,
                                   coverage, failure, err);
     if (rc != YVEX_OK) return rc;
-    if (!deepseek_architecture_identity(architecture, logical_identity))
+    if (!yvex_deepseek_transform_architecture_identity(
+            architecture, logical_identity))
         return deepseek_refuse(
             &deepseek, YVEX_TRANSFORM_FAILURE_IDENTITY_ENCODING,
             1u, 0u, "deepseek_transform_architecture_identity");

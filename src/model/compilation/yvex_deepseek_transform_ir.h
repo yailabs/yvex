@@ -34,6 +34,13 @@
 #define YVEX_DEEPSEEK_TRANSFORM_MAIN_TERMINAL_COUNT 1328ull
 #define YVEX_DEEPSEEK_TRANSFORM_AUX_TERMINAL_COUNT 32ull
 
+/* Encodes the complete admitted logical architecture using the canonical
+ * compilation-domain identity. It performs no IO or allocation and publishes
+ * no partial output on failure. */
+int yvex_deepseek_transform_architecture_identity(
+    const yvex_deepseek_v4_ir *architecture,
+    char output[YVEX_TRANSFORM_IR_IDENTITY_CAP]);
+
 int yvex_deepseek_transform_ir_build(
     yvex_transform_ir **out,
     const yvex_source_verification *verification,

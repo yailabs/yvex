@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-materialize test-runtime-descriptor test-materialize-live-plan test-materialize-live test-quant test-quant-live-plan test-quant-live test-artifact-writer test-artifact-writer-fault test-artifact-live-plan test-artifact-live-structure test-artifact-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-materialize test-runtime-descriptor test-materialize-live-plan test-materialize-live test-attention test-attention-live-plan test-attention-live test-quant test-quant-live-plan test-quant-live test-artifact-writer test-artifact-writer-fault test-artifact-live-plan test-artifact-live-structure test-artifact-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -136,6 +136,14 @@ CORE_SRCS := \
 	src/gguf/yvex_quant_plan.c \
 	src/gguf/yvex_quant_sink.c \
 	src/gguf/yvex_quant_execute.c \
+	src/graph/yvex_deepseek_attention.c \
+	src/graph/yvex_deepseek_attention_internal.c \
+	src/graph/yvex_deepseek_attention_plan.c \
+	src/graph/yvex_deepseek_attention_sink.c \
+	src/graph/yvex_deepseek_attention_compressor.c \
+	src/graph/yvex_deepseek_attention_numeric.c \
+	src/graph/yvex_deepseek_attention_execute.c \
+	src/graph/yvex_deepseek_attention_cuda.c \
 	src/graph/yvex_graph_bind.c \
 	src/graph/yvex_graph.c \
 	src/graph/yvex_graph_execute.c \
@@ -220,6 +228,7 @@ CUDA_SRCS := \
 	src/backend/cuda/cuda_ops.c \
 	src/backend/cuda/cuda_info.c \
 	src/backend/cuda/cuda_qtype.c \
+	src/backend/cuda/cuda_deepseek_attention.c \
 	src/backend/cuda/cuda_errors.c
 
 CUDA_CU_SRCS := \
@@ -246,11 +255,14 @@ SOURCE_PAYLOAD_LIVE_RUNNER := $(TEST_DIR)/source_payload_deepseek
 QUANT_LIVE_RUNNER := $(TEST_DIR)/quant_deepseek
 ARTIFACT_LIVE_RUNNER := $(TEST_DIR)/artifact_deepseek
 MATERIALIZE_LIVE_RUNNER := $(TEST_DIR)/materialize_deepseek
+ATTENTION_LIVE_RUNNER := $(TEST_DIR)/attention_deepseek
 OFFICIAL_GGUF_CHECKER := $(TEST_DIR)/ggml_gguf_check
 CUDA_TEST_RUNNER := $(TEST_DIR)/test_cuda
 
 TEST_UNIT_SRCS := $(sort $(filter-out tests/unit/quant_runner.c tests/unit/artifact_writer_runner.c,$(wildcard tests/unit/*.c)))
 TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(TEST_UNIT_SRCS))
+TEST_REFERENCE_SRCS := $(sort $(wildcard tests/reference/*.c))
+TEST_REFERENCE_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(TEST_REFERENCE_SRCS))
 
 QUANT_TEST_UNIT_SRCS := \
 	tests/unit/gguf_qtype_abi.c \
@@ -381,6 +393,15 @@ test-materialize-live-plan: $(MATERIALIZE_LIVE_RUNNER)
 test-materialize-live: $(MATERIALIZE_LIVE_RUNNER)
 	$(MATERIALIZE_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
 
+test-attention: $(TEST_RUNNER)
+	$(TEST_RUNNER)
+
+test-attention-live-plan: $(ATTENTION_LIVE_RUNNER)
+	$(ATTENTION_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
+test-attention-live: $(ATTENTION_LIVE_RUNNER)
+	$(ATTENTION_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
 test-source-payload-live-plan: $(SOURCE_PAYLOAD_LIVE_RUNNER)
 	$(SOURCE_PAYLOAD_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
 
@@ -487,9 +508,9 @@ $(YVEXD_BIN): src/daemon/yvexd.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(TEST_RUNNER): tests/test.c $(TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
+$(TEST_RUNNER): tests/test.c $(TEST_UNIT_OBJS) $(TEST_REFERENCE_OBJS) $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)
-	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/test.c $(TEST_UNIT_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/test.c $(TEST_UNIT_OBJS) $(TEST_REFERENCE_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
 $(QUANT_TEST_RUNNER): tests/unit/quant_runner.c $(QUANT_TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)
@@ -514,6 +535,10 @@ $(ARTIFACT_LIVE_RUNNER): tests/live/artifact_deepseek.c $(LIBYVEX)
 $(MATERIALIZE_LIVE_RUNNER): tests/live/materialize_deepseek.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+$(ATTENTION_LIVE_RUNNER): tests/live/attention_deepseek.c $(TEST_REFERENCE_OBJS) $(LIBYVEX)
+	@mkdir -p $(@D)
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(TEST_REFERENCE_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
 $(OFFICIAL_GGUF_CHECKER): tests/external/ggml_gguf_check.cpp
 	@test "$$(git -C "$(PINNED_GGML_ROOT)" rev-parse HEAD)" = af97976c7810cdabb1863172f31c432dab767de7

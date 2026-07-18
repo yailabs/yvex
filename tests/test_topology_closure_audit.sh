@@ -356,6 +356,8 @@ test -x tests/test_gguf_artifact_abi.sh
 test -x tests/test_gguf_qtype_abi.sh
 test -f tests/unit/materialization_runtime.c
 test -f tests/live/materialize_deepseek.c
+test -f tests/unit/deepseek_attention.c
+test -f tests/live/attention_deepseek.c
 grep -nF 'test-materialize-live-plan' Makefile >/dev/null
 grep -nF 'yvex_gguf_artifact_abi_report_build' src/gguf/yvex_gguf_report.c >/dev/null
 grep -nF 'yvex_gguf_metadata_abi_from_gguf' src/gguf/yvex_gguf_metadata.c >/dev/null
@@ -392,6 +394,31 @@ fi
 
 grep -nF 'yvex_materialization_plan_build' src/artifact/yvex_artifact_materialize.c >/dev/null
 grep -nF 'yvex_runtime_descriptor_build_deepseek' src/model/yvex_runtime_descriptor.c >/dev/null
+grep -nF 'yvex_deepseek_attention_plan_build' src/graph/yvex_deepseek_attention_plan.c >/dev/null
+grep -nF 'yvex_deepseek_attention_execute_supported' src/graph/yvex_deepseek_attention.c >/dev/null
+grep -nF 'yvex_deepseek_attention_cpu_probe_execute' src/graph/yvex_deepseek_attention_execute.c >/dev/null
+grep -nF 'yvex_deepseek_attention_cpu_first_token_execute' src/graph/yvex_deepseek_attention_execute.c >/dev/null
+grep -nF 'yvex_deepseek_attention_cpu_chunk_execute' src/graph/yvex_deepseek_attention_execute.c >/dev/null
+grep -nF 'yvex_quant_cpu_dot' src/graph/yvex_deepseek_attention_execute.c >/dev/null
+grep -nF 'yvex_deepseek_attention_state_transaction_begin' src/graph/yvex_deepseek_attention_sink.c >/dev/null
+grep -nF 'yvex_deepseek_attention_rolling_state_step_cpu' src/graph/yvex_deepseek_attention_compressor.c >/dev/null
+grep -nF 'yvex_deepseek_attention_hadamard_cpu' src/graph/yvex_deepseek_attention_numeric.c >/dev/null
+grep -nF 'yvex_deepseek_attention_fp8_fake_quant_block' src/graph/yvex_deepseek_attention_numeric.c >/dev/null
+grep -nF 'yvex_deepseek_attention_fp4_fake_quant_block' src/graph/yvex_deepseek_attention_numeric.c >/dev/null
+grep -nF 'yvex_deepseek_attention_topk_select' src/graph/yvex_deepseek_attention_numeric.c >/dev/null
+grep -nF 'yvex_deepseek_attention_cuda_token_execute' src/graph/yvex_deepseek_attention_cuda.c >/dev/null
+grep -nF 'yvex_cuda_deepseek_attention_execute' src/backend/cuda/cuda_deepseek_attention.c >/dev/null
+grep -nF 'yvex_test_attention_reference_execute' tests/reference/deepseek_attention_reference.c >/dev/null
+grep -nF 'plan->summary.full_execution_ready = 1' src/graph/yvex_deepseek_attention_plan.c >/dev/null
+grep -nF 'attention_cpu_first_token_payload_bytes_read=' tests/live/attention_deepseek.c >/dev/null
+grep -nF 'attention_cpu_first_token.layer.%llu.output_identity' tests/live/attention_deepseek.c >/dev/null
+grep -nF 'attention_cpu_chunk_payload_bytes_read=' tests/live/attention_deepseek.c >/dev/null
+grep -nF 'attention_cpu_chunk.layer.%llu.output_identity' tests/live/attention_deepseek.c >/dev/null
+grep -nF 'attention_cpu_chunk_repeat.layer.%llu.identity_match=1' tests/live/attention_deepseek.c >/dev/null
+grep -nF 'attention_cpu_history_chunk.layer.0.output_identity' tests/live/attention_deepseek.c >/dev/null
+grep -nF 'attention_cpu_history_chunk_payload_bytes_read=' tests/live/attention_deepseek.c >/dev/null
+grep -nF 'test-attention-live-plan' Makefile >/dev/null
+grep -nF 'test-attention-live' Makefile >/dev/null
 
 if git grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fwrite)\s*\(|stdout|stderr|yvex_cli' -- \
     src/artifact/yvex_artifact_materialize.c \
@@ -399,6 +426,26 @@ if git grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fwrite)\s*\(|stdo
     src/model/yvex_runtime_descriptor.c \
     src/model/yvex_runtime_descriptor.h; then
   echo "materialization/runtime descriptor domain owners must not write operator output or include CLI"
+  exit 1
+fi
+
+if git grep -nE 'generation_ready[[:space:]]*=[[:space:]]*1|runtime_generation_ready=1|runtime generation ready|generation support|inference ready|attention_cpu_probe_full_attention=1' -- \
+    src/graph/yvex_deepseek_attention.c \
+    src/graph/yvex_deepseek_attention_plan.c \
+    src/graph/yvex_deepseek_attention_sink.c \
+    src/graph/yvex_deepseek_attention_compressor.c \
+    src/graph/yvex_deepseek_attention_numeric.c \
+    src/graph/yvex_deepseek_attention_execute.c \
+    src/graph/yvex_deepseek_attention.h \
+    tests/live/attention_deepseek.c; then
+  echo "DeepSeek attention execution must not claim generation or inference readiness"
+  exit 1
+fi
+
+
+if grep -nE 'yvex_deepseek_attention_(hadamard_cpu|fp8_fake_quant_block|fp4_fake_quant_block|topk_select)|attention_apply_' \
+    tests/reference/deepseek_attention_reference.c; then
+  echo "independent attention reference must not call production numeric algorithms"
   exit 1
 fi
 

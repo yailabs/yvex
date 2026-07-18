@@ -45,6 +45,15 @@ static void cuda_bundle_clear_handles(yvex_cuda_backend_state *state)
     state->rope_function = NULL;
     state->matmul_function = NULL;
     state->qtype_row_dot_function = NULL;
+    state->deepseek_qtype_matvec_function = NULL;
+    state->deepseek_decode_function = NULL;
+    state->deepseek_weighted_norm_function = NULL;
+    state->deepseek_unit_norm_function = NULL;
+    state->deepseek_rope_function = NULL;
+    state->deepseek_activation_function = NULL;
+    state->deepseek_rolling_function = NULL;
+    state->deepseek_topk_function = NULL;
+    state->deepseek_reduce_function = NULL;
     state->mlp_function = NULL;
     state->attention_function = NULL;
     state->module_loaded = 0;
@@ -77,6 +86,8 @@ static CUfunction cuda_variant_function(const yvex_cuda_backend_state *state,
     case YVEX_BACKEND_VARIANT_MATMUL_F32: return state->matmul_function;
     case YVEX_BACKEND_VARIANT_QTYPE_ROW_DOT:
         return state->qtype_row_dot_function;
+    case YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION:
+        return state->deepseek_qtype_matvec_function;
     case YVEX_BACKEND_VARIANT_MLP_DENSE_F32:
     case YVEX_BACKEND_VARIANT_MLP_ROUTED_F32: return state->mlp_function;
     case YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32:
@@ -183,6 +194,15 @@ int yvex_cuda_kernel_bundle_admit(yvex_backend *backend, yvex_error *err)
         CUfunction rope = NULL;
         CUfunction matmul = NULL;
         CUfunction qtype_row_dot = NULL;
+        CUfunction deepseek_qtype_matvec = NULL;
+        CUfunction deepseek_decode = NULL;
+        CUfunction deepseek_weighted_norm = NULL;
+        CUfunction deepseek_unit_norm = NULL;
+        CUfunction deepseek_rope = NULL;
+        CUfunction deepseek_activation = NULL;
+        CUfunction deepseek_rolling = NULL;
+        CUfunction deepseek_topk = NULL;
+        CUfunction deepseek_reduce = NULL;
         CUfunction mlp = NULL;
         CUfunction attention = NULL;
         const char *injected = getenv("YVEX_TEST_CUDA_BUNDLE_FAILURE");
@@ -236,6 +256,33 @@ int yvex_cuda_kernel_bundle_admit(yvex_backend *backend, yvex_error *err)
         YVEX_RESOLVE_REQUIRED("yvex_qtype_row_dot",
                               YVEX_BACKEND_VARIANT_QTYPE_ROW_DOT,
                               qtype_row_dot);
+        YVEX_RESOLVE_REQUIRED("yvex_deepseek_qtype_matvec",
+                              YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION,
+                              deepseek_qtype_matvec);
+        YVEX_RESOLVE_REQUIRED("yvex_deepseek_decode",
+                              YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION,
+                              deepseek_decode);
+        YVEX_RESOLVE_REQUIRED("yvex_deepseek_weighted_norm",
+                              YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION,
+                              deepseek_weighted_norm);
+        YVEX_RESOLVE_REQUIRED("yvex_deepseek_unit_norm",
+                              YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION,
+                              deepseek_unit_norm);
+        YVEX_RESOLVE_REQUIRED("yvex_deepseek_rope",
+                              YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION,
+                              deepseek_rope);
+        YVEX_RESOLVE_REQUIRED("yvex_deepseek_activation",
+                              YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION,
+                              deepseek_activation);
+        YVEX_RESOLVE_REQUIRED("yvex_deepseek_rolling",
+                              YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION,
+                              deepseek_rolling);
+        YVEX_RESOLVE_REQUIRED("yvex_deepseek_topk",
+                              YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION,
+                              deepseek_topk);
+        YVEX_RESOLVE_REQUIRED("yvex_deepseek_reduce",
+                              YVEX_BACKEND_VARIANT_DEEPSEEK_ATTENTION,
+                              deepseek_reduce);
         YVEX_RESOLVE_REQUIRED("yvex_mlp_f32", YVEX_BACKEND_VARIANT_MLP_DENSE_F32, mlp);
         YVEX_RESOLVE_REQUIRED("yvex_attention_f32",
                               YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32, attention);
@@ -249,6 +296,15 @@ int yvex_cuda_kernel_bundle_admit(yvex_backend *backend, yvex_error *err)
         state->rope_function = rope;
         state->matmul_function = matmul;
         state->qtype_row_dot_function = qtype_row_dot;
+        state->deepseek_qtype_matvec_function = deepseek_qtype_matvec;
+        state->deepseek_decode_function = deepseek_decode;
+        state->deepseek_weighted_norm_function = deepseek_weighted_norm;
+        state->deepseek_unit_norm_function = deepseek_unit_norm;
+        state->deepseek_rope_function = deepseek_rope;
+        state->deepseek_activation_function = deepseek_activation;
+        state->deepseek_rolling_function = deepseek_rolling;
+        state->deepseek_topk_function = deepseek_topk;
+        state->deepseek_reduce_function = deepseek_reduce;
         state->mlp_function = mlp;
         state->attention_function = attention;
         state->module_loaded = 1;

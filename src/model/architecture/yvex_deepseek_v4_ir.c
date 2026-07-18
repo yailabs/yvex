@@ -39,12 +39,19 @@
 #define DEEPSEEK_V4_FLASH_AUX_LAYERS 1ull
 #define DEEPSEEK_V4_MHC_SCALE_WIDTH 3ull
 #define DEEPSEEK_V4_MHC_POST_MULTIPLIER 2.0
+#define DEEPSEEK_V4_RUNTIME_NUMERIC_SCHEMA_VERSION 1u
+#define DEEPSEEK_V4_RUNTIME_FP8_ACT_BLOCK 64ull
+#define DEEPSEEK_V4_RUNTIME_FP4_ACT_BLOCK 32ull
+#define DEEPSEEK_V4_RUNTIME_TOPK_POLICY_VERSION 1u
 
 static const char deepseek_v4_paper_revision[] = "arXiv:2606.19348v1";
 static const char deepseek_v4_sglang_revision[] =
     "96a04cb13f9c3ed86028e090784a9eb059cf5318";
 static const char deepseek_v4_vllm_revision[] =
     "8df14cfc8c8a09b4e57f082e59593a3abce4ffb3";
+static const char deepseek_v4_hadamard_revision[] =
+    "Dao-AILab/fast-hadamard-transform:v1.1.0.post2:"
+    "e7706faf8d1c3b9f241e36860640ad1dac644ede";
 
 struct yvex_deepseek_v4_ir {
     yvex_deepseek_v4_ir_allocator allocator;
@@ -527,6 +534,205 @@ static void deepseek_v4_fill_moe(
     }
 }
 
+static void deepseek_v4_fill_runtime_activation_none(
+    yvex_deepseek_v4_runtime_activation_policy *policy)
+{
+    memset(policy, 0, sizeof(*policy));
+    policy->stage = YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_NONE;
+    policy->quantization = YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_NONE;
+    policy->block_axis = YVEX_DEEPSEEK_V4_RUNTIME_AXIS_NONE;
+    policy->scale_format = YVEX_DEEPSEEK_V4_RUNTIME_SCALE_NONE;
+    policy->scale_dtype = YVEX_NATIVE_DTYPE_UNKNOWN;
+    policy->pre_transform = YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE;
+    policy->tail_policy = YVEX_DEEPSEEK_V4_RUNTIME_TAIL_NONE;
+    policy->nonfinite_policy = YVEX_DEEPSEEK_V4_RUNTIME_NONFINITE_REFUSE;
+}
+
+static void deepseek_v4_fill_runtime_activation_fp8(
+    yvex_deepseek_v4_runtime_activation_policy *policy,
+    yvex_deepseek_v4_runtime_activation_stage stage)
+{
+    memset(policy, 0, sizeof(*policy));
+    policy->required = 1;
+    policy->stage = stage;
+    policy->quantization =
+        YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT;
+    policy->block_axis = YVEX_DEEPSEEK_V4_RUNTIME_AXIS_FINAL_DIMENSION;
+    policy->block_width = DEEPSEEK_V4_RUNTIME_FP8_ACT_BLOCK;
+    policy->scale_format = YVEX_DEEPSEEK_V4_RUNTIME_SCALE_UE8M0;
+    policy->scale_dtype = YVEX_NATIVE_DTYPE_F8_E8M0;
+    policy->pre_transform = YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE;
+    policy->tail_policy =
+        YVEX_DEEPSEEK_V4_RUNTIME_TAIL_EXACT_OR_SHORT_FINAL_BLOCK;
+    policy->nonfinite_policy = YVEX_DEEPSEEK_V4_RUNTIME_NONFINITE_REFUSE;
+    policy->fake_quant_inplace = 1;
+}
+
+static void deepseek_v4_fill_runtime_activation_fp4_hadamard(
+    yvex_deepseek_v4_runtime_activation_policy *policy,
+    yvex_deepseek_v4_runtime_activation_stage stage)
+{
+    memset(policy, 0, sizeof(*policy));
+    policy->required = 1;
+    policy->stage = stage;
+    policy->quantization =
+        YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT;
+    policy->block_axis = YVEX_DEEPSEEK_V4_RUNTIME_AXIS_FINAL_DIMENSION;
+    policy->block_width = DEEPSEEK_V4_RUNTIME_FP4_ACT_BLOCK;
+    policy->scale_format = YVEX_DEEPSEEK_V4_RUNTIME_SCALE_UE8M0;
+    policy->scale_dtype = YVEX_NATIVE_DTYPE_F8_E8M0;
+    policy->pre_transform =
+        YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_DAO_FHT_V1_1_0_POST2;
+    policy->tail_policy =
+        YVEX_DEEPSEEK_V4_RUNTIME_TAIL_EXACT_OR_SHORT_FINAL_BLOCK;
+    policy->nonfinite_policy = YVEX_DEEPSEEK_V4_RUNTIME_NONFINITE_REFUSE;
+    policy->fake_quant_inplace = 1;
+    policy->zero_pad_hadamard_to_power_of_two = 1;
+}
+
+static void deepseek_v4_fill_sparse_topk(
+    yvex_deepseek_v4_runtime_sparse_topk_policy *policy,
+    unsigned long long k)
+{
+    memset(policy, 0, sizeof(*policy));
+    policy->required = k != 0ull;
+    policy->version = DEEPSEEK_V4_RUNTIME_TOPK_POLICY_VERSION;
+    policy->policy =
+        policy->required
+            ? YVEX_DEEPSEEK_V4_RUNTIME_TOPK_YVEX_SCORE_DESC_ORDINAL_ASC_V1
+            : YVEX_DEEPSEEK_V4_RUNTIME_TOPK_NONE;
+    policy->k = k;
+    policy->reject_nonfinite = 1;
+    policy->score_descending = 1;
+    policy->equal_score_ordinal_ascending = 1;
+    policy->plus_zero_equals_minus_zero = 1;
+    policy->duplicate_ordinal_refused = 1;
+    policy->output_ranked_order = 1;
+}
+
+static int deepseek_v4_validate_runtime_activation_policy(
+    const yvex_deepseek_v4_runtime_activation_policy *policy,
+    yvex_deepseek_v4_ir_failure *failure,
+    unsigned long long layer_index,
+    const char *field,
+    yvex_error *err)
+{
+    if (!policy) {
+        return deepseek_v4_reject(
+            failure,
+            YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_RUNTIME_NUMERIC,
+            YVEX_DEEPSEEK_V4_IR_COMPONENT_RUNTIME_NUMERIC,
+            field, layer_index, 1u, 0u, err);
+    }
+    if (!policy->required) {
+        if (policy->quantization !=
+                YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_NONE ||
+            policy->block_width != 0ull ||
+            policy->pre_transform !=
+                YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE) {
+            return deepseek_v4_reject(
+                failure,
+                YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_RUNTIME_NUMERIC,
+                YVEX_DEEPSEEK_V4_IR_COMPONENT_RUNTIME_NUMERIC,
+                field, layer_index, 0u, 1u, err);
+        }
+        return YVEX_OK;
+    }
+    if (policy->block_axis !=
+            YVEX_DEEPSEEK_V4_RUNTIME_AXIS_FINAL_DIMENSION ||
+        policy->scale_format != YVEX_DEEPSEEK_V4_RUNTIME_SCALE_UE8M0 ||
+        policy->scale_dtype != YVEX_NATIVE_DTYPE_F8_E8M0 ||
+        policy->tail_policy !=
+            YVEX_DEEPSEEK_V4_RUNTIME_TAIL_EXACT_OR_SHORT_FINAL_BLOCK ||
+        policy->nonfinite_policy !=
+            YVEX_DEEPSEEK_V4_RUNTIME_NONFINITE_REFUSE ||
+        !policy->fake_quant_inplace) {
+        return deepseek_v4_reject(
+            failure,
+            YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_RUNTIME_NUMERIC,
+            YVEX_DEEPSEEK_V4_IR_COMPONENT_RUNTIME_NUMERIC,
+            field, layer_index, 1u, 0u, err);
+    }
+    if (policy->quantization ==
+            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT) {
+        if (policy->block_width != DEEPSEEK_V4_RUNTIME_FP8_ACT_BLOCK ||
+            policy->pre_transform !=
+                YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE) {
+            return deepseek_v4_reject(
+                failure,
+                YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_RUNTIME_NUMERIC,
+                YVEX_DEEPSEEK_V4_IR_COMPONENT_RUNTIME_NUMERIC,
+                field, layer_index, DEEPSEEK_V4_RUNTIME_FP8_ACT_BLOCK,
+                policy->block_width, err);
+        }
+    } else if (policy->quantization ==
+               YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT) {
+        if (policy->block_width != DEEPSEEK_V4_RUNTIME_FP4_ACT_BLOCK ||
+            policy->pre_transform !=
+                YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_DAO_FHT_V1_1_0_POST2 ||
+            !policy->zero_pad_hadamard_to_power_of_two) {
+            return deepseek_v4_reject(
+                failure,
+                YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_RUNTIME_NUMERIC,
+                YVEX_DEEPSEEK_V4_IR_COMPONENT_RUNTIME_NUMERIC,
+                field, layer_index, DEEPSEEK_V4_RUNTIME_FP4_ACT_BLOCK,
+                policy->block_width, err);
+        }
+    } else {
+        return deepseek_v4_reject(
+            failure,
+            YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_RUNTIME_NUMERIC,
+            YVEX_DEEPSEEK_V4_IR_COMPONENT_RUNTIME_NUMERIC,
+            field, layer_index, 1u, 0u, err);
+    }
+    return YVEX_OK;
+}
+
+static int deepseek_v4_validate_runtime_numeric_layer(
+    const yvex_deepseek_v4_layer_spec *layer,
+    yvex_deepseek_v4_ir_failure *failure,
+    yvex_error *err)
+{
+    int rc;
+
+    rc = deepseek_v4_validate_runtime_activation_policy(
+        &layer->attention_kv_activation, failure, layer->layer_index,
+        "attention-kv-activation", err);
+    if (rc != YVEX_OK) return rc;
+    rc = deepseek_v4_validate_runtime_activation_policy(
+        &layer->compressor_activation, failure, layer->layer_index,
+        "compressor-activation", err);
+    if (rc != YVEX_OK) return rc;
+    rc = deepseek_v4_validate_runtime_activation_policy(
+        &layer->compressor_rotated_activation, failure, layer->layer_index,
+        "compressor-rotated-activation", err);
+    if (rc != YVEX_OK) return rc;
+    rc = deepseek_v4_validate_runtime_activation_policy(
+        &layer->indexer_query_activation, failure, layer->layer_index,
+        "indexer-query-activation", err);
+    if (rc != YVEX_OK) return rc;
+    if (layer->sparse_topk.required) {
+        if (layer->sparse_topk.version !=
+                DEEPSEEK_V4_RUNTIME_TOPK_POLICY_VERSION ||
+            layer->sparse_topk.policy !=
+                YVEX_DEEPSEEK_V4_RUNTIME_TOPK_YVEX_SCORE_DESC_ORDINAL_ASC_V1 ||
+            layer->sparse_topk.k == 0ull ||
+            !layer->sparse_topk.reject_nonfinite ||
+            !layer->sparse_topk.score_descending ||
+            !layer->sparse_topk.equal_score_ordinal_ascending ||
+            !layer->sparse_topk.plus_zero_equals_minus_zero ||
+            !layer->sparse_topk.duplicate_ordinal_refused ||
+            !layer->sparse_topk.output_ranked_order) {
+            return deepseek_v4_reject(
+                failure,
+                YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_RUNTIME_NUMERIC,
+                YVEX_DEEPSEEK_V4_IR_COMPONENT_RUNTIME_NUMERIC,
+                "sparse-topk-policy", layer->layer_index, 1u, 0u, err);
+        }
+    }
+    return YVEX_OK;
+}
+
 /* Derives one explicit layer descriptor from one validated schedule entry. */
 static void deepseek_v4_fill_layer(
     yvex_deepseek_v4_layer_spec *layer,
@@ -583,6 +789,14 @@ static void deepseek_v4_fill_layer(
     layer->kv.compression_ratio = ratio;
     layer->kv.sliding_window = source->sliding_window;
     layer->kv.requires_state_cache = 1;
+    deepseek_v4_fill_runtime_activation_fp8(
+        &layer->attention_kv_activation,
+        YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_ATTENTION_KV_NON_ROPE);
+    deepseek_v4_fill_runtime_activation_none(&layer->compressor_activation);
+    deepseek_v4_fill_runtime_activation_none(
+        &layer->compressor_rotated_activation);
+    deepseek_v4_fill_runtime_activation_none(&layer->indexer_query_activation);
+    deepseek_v4_fill_sparse_topk(&layer->sparse_topk, 0ull);
     if (ratio == 0u) {
         layer->attention_class = YVEX_DEEPSEEK_V4_ATTENTION_SWA;
         layer->kv.class_id = YVEX_DEEPSEEK_V4_KV_SWA;
@@ -597,6 +811,17 @@ static void deepseek_v4_fill_layer(
         layer->kv.requires_uncompressed_tail = 1;
         layer->kv.requires_compressed_core = 1;
         layer->kv.requires_indexer_cache = 1;
+        deepseek_v4_fill_runtime_activation_fp8(
+            &layer->compressor_activation,
+            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_COMPRESSOR_NON_ROTATED);
+        deepseek_v4_fill_runtime_activation_fp4_hadamard(
+            &layer->compressor_rotated_activation,
+            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_COMPRESSOR_ROTATED);
+        deepseek_v4_fill_runtime_activation_fp4_hadamard(
+            &layer->indexer_query_activation,
+            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_INDEXER_QUERY_ROTATED);
+        deepseek_v4_fill_sparse_topk(&layer->sparse_topk,
+                                     source->index_topk);
         layer->tensors.compressor_ape_rows = ratio;
         layer->tensors.compressor_ape_columns = source->q_lora_rank;
         layer->tensors.compressor_norm_width = source->head_dim;
@@ -619,6 +844,9 @@ static void deepseek_v4_fill_layer(
         layer->compressor_required = 1;
         layer->kv.requires_uncompressed_tail = 1;
         layer->kv.requires_compressed_core = 1;
+        deepseek_v4_fill_runtime_activation_fp8(
+            &layer->compressor_activation,
+            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_COMPRESSOR_NON_ROTATED);
         layer->tensors.compressor_ape_rows = ratio;
         layer->tensors.compressor_ape_columns = source->head_dim;
         layer->tensors.compressor_norm_width = source->head_dim;
@@ -662,6 +890,13 @@ static void deepseek_v4_fill_model(
                      deepseek_v4_sglang_revision);
     deepseek_v4_copy(model->vllm_revision, sizeof(model->vllm_revision),
                      deepseek_v4_vllm_revision);
+    deepseek_v4_copy(model->hadamard_revision,
+                     sizeof(model->hadamard_revision),
+                     deepseek_v4_hadamard_revision);
+    model->runtime_numeric_schema_version =
+        DEEPSEEK_V4_RUNTIME_NUMERIC_SCHEMA_VERSION;
+    model->runtime_activation_policy_count = 3u;
+    model->runtime_sparse_topk_policy_count = 1u;
     model->hidden_size = source->hidden_size;
     model->vocabulary_size = source->vocab_size;
     model->maximum_context = source->max_position_embeddings;
@@ -787,6 +1022,11 @@ static int deepseek_v4_construct(
     deepseek_v4_fill_model(ir, source, geometry);
     for (i = 0u; i < source->num_hidden_layers; ++i) {
         deepseek_v4_fill_layer(&ir->layers[i], source, geometry, i, 0);
+        if (deepseek_v4_validate_runtime_numeric_layer(
+                &ir->layers[i], failure, err) != YVEX_OK) {
+            yvex_deepseek_v4_ir_close(ir);
+            return yvex_error_code(err);
+        }
         if (ir->layers[i].attention_class ==
             YVEX_DEEPSEEK_V4_ATTENTION_SWA) ir->model.swa_layer_count++;
         if (ir->layers[i].attention_class ==
@@ -805,6 +1045,11 @@ static int deepseek_v4_construct(
         unsigned long long layer_index = source->num_hidden_layers + i;
 
         deepseek_v4_fill_layer(&aux->layer, source, geometry, layer_index, 1);
+        if (deepseek_v4_validate_runtime_numeric_layer(
+                &aux->layer, failure, err) != YVEX_OK) {
+            yvex_deepseek_v4_ir_close(ir);
+            return yvex_error_code(err);
+        }
         aux->predictor_index = i;
         aux->previous_hidden_width = geometry->expanded_width;
         aux->embedding_projection_input = source->hidden_size;
@@ -941,6 +1186,7 @@ const char *yvex_deepseek_v4_ir_failure_name(
     case YVEX_DEEPSEEK_V4_IR_FAILURE_INVALID_EXPERT_TOPK: return "invalid-expert-topk";
     case YVEX_DEEPSEEK_V4_IR_FAILURE_TOKENIZER_OUTPUT_MISMATCH: return "tokenizer-output-mismatch";
     case YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_SOURCE_CONSTRAINT: return "unsupported-source-constraint";
+    case YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_RUNTIME_NUMERIC: return "unsupported-runtime-numeric";
     case YVEX_DEEPSEEK_V4_IR_FAILURE_NUMERIC_VALUE: return "invalid-numeric-value";
     case YVEX_DEEPSEEK_V4_IR_FAILURE_ARITHMETIC_OVERFLOW: return "arithmetic-overflow";
     case YVEX_DEEPSEEK_V4_IR_FAILURE_ALLOCATION: return "allocation-failure";
@@ -964,6 +1210,7 @@ const char *yvex_deepseek_v4_ir_component_name(
     case YVEX_DEEPSEEK_V4_IR_COMPONENT_TOKENIZER: return "tokenizer";
     case YVEX_DEEPSEEK_V4_IR_COMPONENT_AUXILIARY: return "auxiliary";
     case YVEX_DEEPSEEK_V4_IR_COMPONENT_SOURCE_CONSTRAINT: return "source-constraint";
+    case YVEX_DEEPSEEK_V4_IR_COMPONENT_RUNTIME_NUMERIC: return "runtime-numeric";
     case YVEX_DEEPSEEK_V4_IR_COMPONENT_ALLOCATION: return "allocation";
     default: return "unknown";
     }
@@ -1022,4 +1269,57 @@ const char *yvex_deepseek_v4_source_quantization_name(
                    YVEX_DEEPSEEK_V4_SOURCE_QUANT_FP8_E4M3_UE8M0_DYNAMIC
                ? "fp8-e4m3-ue8m0-dynamic"
                : "unknown";
+}
+
+const char *yvex_deepseek_v4_runtime_activation_stage_name(
+    yvex_deepseek_v4_runtime_activation_stage stage)
+{
+    switch (stage) {
+    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_NONE: return "none";
+    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_ATTENTION_KV_NON_ROPE:
+        return "attention-kv-non-rope";
+    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_COMPRESSOR_NON_ROTATED:
+        return "compressor-non-rotated";
+    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_COMPRESSOR_ROTATED:
+        return "compressor-rotated";
+    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_INDEXER_QUERY_ROTATED:
+        return "indexer-query-rotated";
+    }
+    return "unknown";
+}
+
+const char *yvex_deepseek_v4_runtime_activation_quantization_name(
+    yvex_deepseek_v4_runtime_activation_quantization quantization)
+{
+    switch (quantization) {
+    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_NONE:
+        return "none";
+    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT:
+        return "fp8-e4m3-ue8m0-fake-dequant";
+    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT:
+        return "fp4-e2m1-ue8m0-fake-dequant";
+    }
+    return "unknown";
+}
+
+const char *yvex_deepseek_v4_runtime_transform_name(
+    yvex_deepseek_v4_runtime_transform transform)
+{
+    switch (transform) {
+    case YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE: return "none";
+    case YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_DAO_FHT_V1_1_0_POST2:
+        return "dao-fast-hadamard-transform-v1.1.0.post2";
+    }
+    return "unknown";
+}
+
+const char *yvex_deepseek_v4_runtime_sparse_topk_policy_name(
+    yvex_deepseek_v4_runtime_sparse_topk_policy_id policy)
+{
+    switch (policy) {
+    case YVEX_DEEPSEEK_V4_RUNTIME_TOPK_NONE: return "none";
+    case YVEX_DEEPSEEK_V4_RUNTIME_TOPK_YVEX_SCORE_DESC_ORDINAL_ASC_V1:
+        return "yvex-score-desc-ordinal-asc-v1";
+    }
+    return "unknown";
 }
