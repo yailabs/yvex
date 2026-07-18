@@ -621,7 +621,7 @@ another supported model.
 
 | Family/scope | Source/profile truth | Tensor/map truth | Artifact/materialization truth | Runtime truth | Project role |
 | --- | --- | --- | --- | --- | --- |
-| DeepSeek-V4-Flash | Exact source metadata/header verification, upstream payload trust, bounded streaming handoff, and typed architecture IR complete | Exact 69,187-entry coverage, artifact-neutral Transformation IR, 1,360-descriptor GGUF lowering, and selected quantization plan complete | Source-faithful and selected complete GGUF artifacts emitted, roundtrip-verified, admitted, fully walked through bounded materialization access, and projected into a DeepSeek runtime descriptor | SWA/CSA/HCA attention complete on CPU and GB10 CUDA; persistent KV, transformer composition, and generation unsupported | sole v0.1.0 release target |
+| DeepSeek-V4-Flash | Exact source metadata/header verification, upstream payload trust, bounded streaming handoff, and typed architecture IR complete | Exact 69,187-entry coverage, artifact-neutral Transformation IR, 1,360-descriptor GGUF lowering, and selected quantization plan complete | Source-faithful and selected complete GGUF artifacts emitted, roundtrip-verified, admitted, fully walked through bounded materialization access, and projected into a DeepSeek runtime descriptor | Attention planning and runtime numeric authority are complete; full SWA/CSA/HCA execution is active and unadmitted, while persistent KV, transformer composition, and generation remain unsupported | sole v0.1.0 release target |
 | Qwen | Source target/profile, header inventory, naming-map, and role-coverage work exists | Implemented at bounded source/header/report stages | No complete supported artifact or full materialization claim | generation unsupported | active multi-family/common architecture evidence |
 | Gemma | Source target/profile and header tensor-collection work exists | Dense/common mapping can be reused; exact complete family gate not claimed | No complete supported artifact or full materialization claim | generation unsupported | active dense/common architecture evidence |
 | Dense/common | Common naming, collections, proof artifacts, validators, and primitive evidence exist | Partial reusable capability | Family-neutral admitted-artifact materialization and runtime descriptor projection are implemented; backend residency and graph execution remain future rows | no supported full-model runtime | common engine architecture and regression surface |
@@ -2037,13 +2037,12 @@ correctness, or benchmark evidence.
 YVEX does not currently claim:
 
 - a supported DeepSeek-V4-Flash target;
-- a complete or supported DeepSeek-V4-Flash model artifact;
-- complete GGUF writer, complete-model emission, writer-reader roundtrip, or artifact support admission;
+- a supported DeepSeek-V4-Flash model artifact; the two admitted complete artifacts remain pre-runtime evidence;
 - quantization beyond the fixed DeepSeek profile and four currently admitted Transformation IR operations;
 - automatic optimization, incremental compilation, multi-variant generation, or Pareto selection;
 - an artifact materialization cache or inference-time SSD expert streaming;
-- full family-neutral materialization or full DeepSeek DGX Spark residency;
-- an execution-complete common or DeepSeek runtime descriptor;
+- backend/device residency or full DeepSeek DGX Spark residency;
+- an execution-complete DeepSeek runtime; the admitted descriptor remains graph-input evidence rather than execution evidence;
 - complete CPU or CUDA DeepSeek attention execution;
 - complete transformer execution;
 - persistent attention-backed KV, prefill, or decode;

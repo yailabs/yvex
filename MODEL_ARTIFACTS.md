@@ -50,9 +50,12 @@ Required artifact outcome:
 a complete GGUF for DeepSeek-V4-Flash produced by YVEX
 ```
 
-No such complete model artifact currently exists. The target, artifact,
-materialization, runtime, generation, evaluation, benchmark, and release states
-remain unsupported or blocked as recorded in `PROJECT.md`.
+Two complete DeepSeek-V4-Flash model artifacts currently exist outside the
+repository: the source-faithful profile and the selected Q8_0 + Q2_K profile.
+Both passed complete writer/reader admission. The selected artifact also passed
+bounded materialization and runtime-descriptor construction, but neither is a
+supported model artifact: graph execution, generation, evaluation, benchmark,
+and release gates remain incomplete as recorded in `PROJECT.md`.
 
 ## Source Payload Handoff
 

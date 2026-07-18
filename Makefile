@@ -575,7 +575,9 @@ check-docs:
 	@grep -F "## 7. Track Registry And Dashboard" PROJECT.md >/dev/null
 	@grep -F "## 8. First-Class Milestone Roadmap" PROJECT.md >/dev/null
 	@grep -F "## 9. Complete Track/Wave Ledger" PROJECT.md >/dev/null
-	@grep -F "native C model-compilation and execution system" README.md >/dev/null
+	@grep -E '^# YVEX$$' README.md >/dev/null
+	@grep -F "Transformation IR" README.md >/dev/null
+	@grep -F "PROJECT.md" README.md >/dev/null
 	@sh tests/test_project_ledger.sh >/dev/null
 	@grep -F "YVEX System Target" docs/system-target.md >/dev/null
 	@grep -F "YVEX Reference Architecture Map" docs/reference-architecture.md >/dev/null

@@ -17,6 +17,13 @@ require_text() {
     fail "$file missing required text: $value"
 }
 
+require_pattern() {
+  file=$1
+  pattern=$2
+  grep -nE "$pattern" "$file" >/dev/null ||
+    fail "$file missing required pattern: $pattern"
+}
+
 reject_text() {
   file=$1
   value=$2
@@ -121,74 +128,78 @@ require_text AGENTS.md 'tensor proof artifact'
 require_text AGENTS.md 'complete model artifact'
 require_text AGENTS.md 'supported model artifact'
 
-require_text README.md 'native C model-compilation and execution system'
-require_text README.md 'not release-ready or'
-require_text README.md 'currently supported**.'
-require_text README.md '[`PROJECT.md`](PROJECT.md) is the sole authority for current state'
-require_text README.md '## What YVEX Builds'
-require_text README.md '## Model Identity Is Not Artifact Identity'
-require_text README.md '## Compilation Architecture'
-require_text README.md '## End-to-End Target and Current State'
-require_text README.md '## Engineering Method'
-require_text README.md '## Repository Orientation'
+require_pattern README.md '^# YVEX$'
+require_text README.md '[Project status](PROJECT.md)'
+require_text README.md '[`PROJECT.md`](PROJECT.md) is the sole live'
 
+# Guard the public architecture and evidence, not its editorial section names.
 for boundary in \
   'Verified source' \
-  'Logical model' \
+  'logical model' \
   'Transformation IR' \
-  'Physical variant' \
-  'Physical lowering' \
-  'Artifact' \
-  'Runtime binding' \
-  'Execution evidence'
+  'physical profile' \
+  'artifact' \
+  'materialization' \
+  'runtime descriptor' \
+  'execution evidence'
 do
   require_text README.md "$boundary"
 done
 
-require_text README.md 'logical_model_id != physical_variant_id != artifact_id'
-require_text README.md 'M --> T['
-require_text README.md 'T --> V['
-require_text README.md 'V --> L['
-require_text README.md 'L --> A['
-require_text README.md 'A --> R['
-require_text README.md 'R --> E['
-require_text README.md 'Planning plane — immutable facts'
-require_text README.md 'Byte-execution plane — owned mutable resources'
-require_text README.md 'Only trusted source payload streaming is implemented'
-require_text README.md 'P   &= \Pi(M; C_p, C_h, C_w)'
-require_text README.md 'V   &= \mathcal{T}(S, P)'
-require_text README.md 'A_F &= \mathcal{E}_F(V)'
-require_text README.md 'B_H &= \mathcal{B}_H(A_F)'
-require_text README.md 'E   &= \mathcal{O}\left(\mathcal{R}(B_H, X)\right)'
-require_text README.md 'V^{*} \in \mathcal{F}\left(\varepsilon(V), m(V), \ell(V), e(V)\right)'
-reject_text README.md '\operatorname'
-require_text README.md 'Constraint solving, measurement feedback, hardware/workload-aware selection,'
-require_text README.md 'future compilation lanes.'
-
-require_text README.md '| Transformation IR | active — not implemented |'
-require_text README.md '| Quantization and reference dequantization | blocked |'
-require_text README.md '| GGUF writer and complete artifact | blocked |'
-require_text README.md '| Autoregressive text generation | unsupported |'
-require_text README.md '| Benchmark | not-measured; benchmark results are not measured |'
-require_text README.md '[DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash)'
-require_text README.md 'sole v0.1.0 release target, not a currently supported generation target'
-require_text README.md 'Qwen and Gemma'
-require_text README.md 'GLM remains'
-
 for evidence in \
-  '| Source shards admitted | 46 / 46 |' \
-  '| Source tensors indexed | 69,187 |' \
-  '| Upstream-verified shard bytes | 159,617,149,040 |' \
-  '| Mapped source contributions | 69,187 |' \
-  '| Logical GGUF descriptors | 1,360 |' \
-  '| Pinned-standard descriptors | 1,328 |' \
-  '| YVEX MTP extension descriptors | 32 |' \
-  '| Complete payload passes | 1 |' \
-  '| Short reads | 0 |' \
-  '| Digest mismatches | 0 |' \
-  '| Identity drift | 0 |'
+  '46 / 46 shards and 159,617,149,040 payload bytes' \
+  '69,187 exact source values become 1,360 terminal tensors' \
+  'Complete GGUF v3 file, 102,408,545,440 bytes' \
+  '102,396,843,592 encoded tensor bytes walked with 16 MiB' \
+  '`deepseek-v4-flash-q8_0-q2_k-v1`' \
+  '177,680,573,600 bytes' \
+  '102,408,545,440 bytes' \
+  '33,792 expert subviews' \
+  '68 metadata entries, 129,280 tokenizer tokens, 127,741' \
+  '60d8d70770c6776ff598c94bb586a859a38244f1' \
+  'af97976c7810cdabb1863172f31c432dab767de7' \
+  'f16e800c0d7383ee76cb2e2fa8bdd674bab29c017cba64eaba85c39016e257ca' \
+  '01b2bed4f070d0a3fdb02e546764b3a49cb69886eebe17b4877d20294725682c'
 do
   require_text README.md "$evidence"
+done
+
+require_pattern README.md 'source identity.*payload trust.*complete'
+require_pattern README.md 'architecture.*Transformation IR.*complete'
+require_pattern README.md 'Physical profile.*CPU/CUDA compute.*complete'
+require_pattern README.md 'GGUF writer.*artifact admission.*complete'
+require_pattern README.md 'materialization.*runtime descriptor.*complete'
+require_pattern README.md 'DeepSeek SWA/CSA/HCA attention.*active.*not admitted'
+require_pattern README.md 'Persistent KV.*transformer composition.*blocked'
+require_pattern README.md 'Autoregressive text generation.*unsupported'
+require_pattern README.md 'Evaluation.*unavailable'
+require_pattern README.md 'Benchmark.*not measured'
+require_pattern README.md 'Release.*blocked'
+
+require_text README.md '[DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash)'
+require_text README.md 'sole v0.1.0 release target.'
+require_text README.md 'NVIDIA DGX Spark /'
+require_text README.md 'GB10 CUDA.'
+require_text README.md 'does not establish device residency, complete attention'
+require_text README.md 'declared 1,048,576-token context geometry.'
+require_text README.md 'it is not yet a supported generation target.'
+require_text README.md 'Qwen and Gemma'
+require_text README.md 'GLM remains'
+require_text README.md 'complete model artifact'
+require_text README.md 'supported model artifact'
+
+for stale in \
+  '## Engineering Method' \
+  'reasoning LLM' \
+  'coding agent' \
+  'candidate patch' \
+  'Pareto' \
+  'Only trusted source payload streaming is implemented' \
+  '| Transformation IR | active — not implemented |' \
+  '| Quantization and reference dequantization | blocked |' \
+  '| GGUF writer and complete artifact | blocked |'
+do
+  reject_text README.md "$stale"
 done
 
 reject_text README.md '**YVEX is a native C inference engine'
@@ -197,10 +208,11 @@ reject_text README.md 'YVEX currently generates DeepSeek text'
 reject_text README.md 'YVEX supports DeepSeek-V4-Flash'
 reject_text README.md 'YVEX compiles arbitrary models'
 reject_text README.md 'YVEX selects Pareto-optimal variants'
-reject_text README.md 'YVEX performs complete full-model quantization'
-reject_text README.md 'YVEX produces complete DeepSeek GGUF artifacts'
 reject_text README.md 'YVEX executes the complete transformer'
 reject_text README.md 'YVEX is release-ready'
+reject_text README.md 'DeepSeek device residency is complete'
+reject_text README.md 'DeepSeek model runtime is complete'
+reject_text README.md 'DeepSeek CUDA attention is complete'
 reject_text README.md 'production-ready'
 reject_text README.md 'blazing fast'
 reject_text README.md 'state of the art'
@@ -216,8 +228,8 @@ if grep -nF 'flowchart LR' README.md; then
 fi
 
 mermaid_count=$(grep -c '^```mermaid$' README.md)
-test "$mermaid_count" -ge 2 ||
-  fail "README must contain at least two Mermaid diagrams: $mermaid_count"
+test "$mermaid_count" -ge 1 ||
+  fail "README must contain a top-down architecture diagram: $mermaid_count"
 flowchart_td_count=$(grep -c '^flowchart TD$' README.md)
 test "$flowchart_td_count" -eq "$mermaid_count" ||
   fail "README Mermaid diagrams must be top-down: $flowchart_td_count/$mermaid_count"
@@ -236,25 +248,6 @@ END {
   if (in_mermaid || opened != closed) exit 1
 }
 ' README.md || fail "README Mermaid fences are unbalanced"
-
-math_count=$(grep -c '^```math$' README.md)
-test "$math_count" -eq 2 ||
-  fail "README must contain the pipeline and Pareto formulations: $math_count"
-awk '
-/^```math$/ {
-  if (in_math) exit 1
-  in_math = 1
-  opened++
-  next
-}
-in_math && /^```$/ {
-  in_math = 0
-  closed++
-}
-END {
-  if (in_math || opened != closed) exit 1
-}
-' README.md || fail "README math fences are unbalanced"
 
 for target in $(grep -oE '\]\([^)]+\)' README.md |
   sed 's/^](//; s/)$//' |
@@ -304,6 +297,12 @@ require_text "$project" 'Production C contains no fallback PTX.'
 require_text "$project" 'A no-`nvcc` build refuses every kernel before dispatch'
 require_text "$project" 'complete DeepSeek attention CUDA execution is not admitted'
 require_text "$project" '`attention_execution_supported=0`, `attention_cuda_execution_ready=0`, and'
+require_text "$project" 'full SWA/CSA/HCA execution is active and unadmitted'
+require_text "$project" 'a supported DeepSeek-V4-Flash model artifact; the two admitted complete artifacts remain pre-runtime evidence;'
+require_text "$project" 'backend/device residency or full DeepSeek DGX Spark residency;'
+require_text "$project" 'the admitted descriptor remains graph-input evidence rather than execution evidence;'
+reject_text "$project" 'SWA/CSA/HCA attention complete on CPU and GB10 CUDA'
+reject_text "$project" 'complete GGUF writer, complete-model emission, writer-reader roundtrip, or artifact support admission;'
 require_text "$project" '| Recovered IDs | 631 |'
 require_text "$project" '| Explicit new IDs | 49 |'
 require_text "$project" '| Canonical IDs | 680 |'
@@ -396,7 +395,10 @@ reject_text "$doctrine" '## Current State'
 require_text MODEL_ARTIFACTS.md 'Tensor proof artifact'
 require_text MODEL_ARTIFACTS.md 'Complete model artifact'
 require_text MODEL_ARTIFACTS.md 'Supported model artifact'
-require_text MODEL_ARTIFACTS.md 'No such complete model artifact currently exists.'
+require_text MODEL_ARTIFACTS.md 'Two complete DeepSeek-V4-Flash model artifacts currently exist outside the'
+require_text MODEL_ARTIFACTS.md 'neither is a'
+require_text MODEL_ARTIFACTS.md 'supported model artifact:'
+reject_text MODEL_ARTIFACTS.md 'No such complete model artifact currently exists.'
 require_text MODEL_ARTIFACTS.md 'decommission obligations and consuming milestones are recorded in'
 require_text MODEL_ARTIFACTS.md 'GGUF is the'
 require_text MODEL_ARTIFACTS.md 'v0.1.0 release lowering, not the identity of the logical model.'
@@ -414,12 +416,17 @@ fi
 require_text docs/system-target.md 'Authority: filesystem and module topology; current project state belongs only'
 require_text docs/system-target.md '## GGUF Structural Reader Boundary'
 require_text docs/system-target.md '## GGUF Qtype ABI Boundary'
-require_text docs/system-target.md '| Transformation plan | no artifact-neutral transformation IR exists |'
+require_text docs/system-target.md '| Transformation plan | sealed artifact-neutral IR binds all 69,187 source values to 1,360 terminal tensors'
+require_text docs/system-target.md '| GGUF writer | deterministic v3 plan and transactional file writer complete |'
+require_text docs/system-target.md '| Runtime descriptor | immutable DeepSeek descriptor binds all 1,360 admitted tensors and topology facts |'
+reject_text docs/system-target.md '| Transformation plan | no artifact-neutral transformation IR exists |'
 require_text docs/topology-closure-audit.md 'point-in-time inventory'
 require_text docs/topology-closure-audit.md '`PROJECT.md` owns when each finding is removed or'
 require_text docs/cli-output-architecture.md '## Project State Ownership'
 require_text docs/model-families.md 'exact v0.1.0 target'
-require_text docs/model-families.md 'typed architecture, exact 69,187-entry source coverage, and a concrete GGUF lowering map exist; no artifact-neutral transformation plan, payload conversion, complete model artifact, or runtime path'
+require_text docs/model-families.md 'sealed Transformation IR, complete quantization, two admitted complete artifacts'
+require_text docs/model-families.md 'full attention, transformer execution, and generation remain unsupported'
+reject_text docs/model-families.md 'no artifact-neutral transformation plan, payload conversion, complete model artifact, or runtime path'
 require_text docs/contract.md 'These are implementation facts, not a runtime progress ladder.'
 require_text docs/contract.md 'defined only by `PROJECT.md`.'
 require_text docs/contract.md '### Model Compilation Contract'

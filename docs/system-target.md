@@ -55,14 +55,14 @@ domain algorithms. No writer owns command output.
 | Tensor coverage | the IR-derived 69,187-slot DeepSeek requirement set reconciles exactly against one retained verified header snapshot | preserve one-to-one source coverage as the admission input to GGUF mapping | see `PROJECT.md` |
 | GGUF names/layout | immutable 69,187-contribution to 1,360-descriptor concrete DeepSeek GGUF lowering plan | preserve the format projection while moving artifact-neutral transformation semantics to the compilation owner | see `PROJECT.md` |
 | Source payload | verified snapshot-bound shard/range indexes, payload trust, and bounded transactional streaming | preserve as artifact-neutral byte input to transformation execution without decoding or reinterpretation | see `PROJECT.md` |
-| Transformation plan | no artifact-neutral transformation IR exists | bind every logical output to exact source contributions and payload-range identity before physical lowering | see `PROJECT.md` |
-| Quantization | policy and geometry facts | consume the canonical transformation plan for role-correct quantization or explicit refusal | see `PROJECT.md` |
-| GGUF writer | explicit refusal | complete deterministic emitted bytes | V010.GGUF.WRITER.1 |
-| Artifact emission | tensor proof files only | complete YVEX-produced DeepSeek GGUF | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
-| GGUF roundtrip | explicit refusal/bounded fixtures | complete artifact writer-reader equivalence | V010.GGUF.ROUNDTRIP.1 |
-| Materialization | tensor proof only | every required tensor resident with cleanup | main path after repair closure |
-| Runtime descriptor | target owner seed and reports | executable DeepSeek runtime descriptor | main path after materialization |
-| Graph/backend | primitive and bounded proof residue | backend-bound complete transformer path | main path after descriptor |
+| Transformation plan | sealed artifact-neutral IR binds all 69,187 source values to 1,360 terminal tensors and exact payload identity | preserve immutable transformation truth as the input to physical-profile decisions and execution | see `PROJECT.md` |
+| Quantization | selected profile encodes all 1,360 terminals with canonical codecs, reference decoding, numeric evidence, and direct selected-qtype CPU/CUDA compute | preserve the profile and execution identities independently from artifact serialization | see `PROJECT.md` |
+| GGUF writer | deterministic v3 plan and transactional file writer complete | preserve checked layout and atomic publication for admitted profiles | see `PROJECT.md` |
+| Artifact emission | source-faithful and selected complete DeepSeek artifacts emitted outside the repository | preserve exact physical identities and complete metadata/tokenizer evidence | see `PROJECT.md` |
+| GGUF roundtrip | both complete artifacts pass native full-byte and pinned official-reader admission; the selected artifact has deterministic second-serialization proof | preserve reader/writer equivalence and corruption refusal | see `PROJECT.md` |
+| Materialization | family-neutral materialization and a full bounded selected-artifact walk are complete; device residency is not admitted | consume the selected artifact through explicit placement and backend-residency plans | see `PROJECT.md` |
+| Runtime descriptor | immutable DeepSeek descriptor binds all 1,360 admitted tensors and topology facts | remain graph input until complete execution evidence exists | see `PROJECT.md` |
+| Graph/backend | reusable numeric primitives and selected-qtype CPU/CUDA compute are admitted; complete SWA/CSA/HCA attention is active and unadmitted | backend-bound complete transformer path | see `PROJECT.md` |
 
 ## Owner Rules
 
