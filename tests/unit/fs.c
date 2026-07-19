@@ -33,7 +33,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <yvex/fs.h>
+#include <yvex/core.h>
 
 #include "tests/test.h"
 

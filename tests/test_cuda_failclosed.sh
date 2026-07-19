@@ -57,10 +57,10 @@ set +e
 rc=$?
 set -e
 [ "$rc" -eq 5 ] || fail "bundle-less CUDA graph returned $rc"
-contains "$OUT_DIR/graph.out" "backend_status: context-ready"
-contains "$OUT_DIR/graph.out" "backend_op_status: unsupported"
-contains "$OUT_DIR/graph.out" "dispatch_attempted: false"
-contains "$OUT_DIR/graph.out" "reason: backend-op-rope-unsupported"
-contains "$OUT_DIR/graph.out" "status: graph-op-fail"
+contains "$OUT_DIR/graph.out" "graph_integrity_guard: refused"
+contains "$OUT_DIR/graph.out" "graph_execution_phase: admission"
+contains "$OUT_DIR/graph.out" "execution_ready: false"
+contains "$OUT_DIR/graph.out" "reason: production-fixtures-are-test-owned"
+contains "$OUT_DIR/graph.out" "status: graph-proof-retired"
 
 echo "cuda no-nvcc fail-closed: ok"

@@ -1,25 +1,21 @@
-/*
- * ir.c - Transformation IR construction and immutable access.
- *
- * Owner:
- *   src/model/compilation
- *
- * Owns:
- *   builder lifecycle, budgeted storage, typed registration, immutable
- *   accessors, source/terminal indexes, failure vocabulary, and release.
- *
- * Does not own:
- *   family-specific plan construction, graph sealing algorithms, canonical
- *   digest encoding, source IO, physical lowering, quantization, or rendering.
- *
- * Invariants:
- *   builders publish no partial IR; sealed arrays are read-only to consumers;
- *   all allocator transitions are checked and released by their owning object.
- *
- * Boundary:
- *   registration records metadata only and never reads tensor payload bytes.
- */
-#include "private.h"
+/* Owner: src/model/compilation
+ * Owns: builder lifecycle, budgeted storage, typed registration, immutable accessors, source/terminal indexes,
+ *   family recipe composition, failure vocabulary, and release.
+ * Does not own: family architecture facts, exact source coverage, graph sealing algorithms, canonical digest
+ *   encoding, source IO, physical lowering, quantization, or rendering.
+ * Invariants: builders publish no partial IR; sealed arrays are read-only to consumers; all allocator transitions
+ *   are checked and released by their owning object.
+ * Boundary: family composition registers artifact-neutral metadata only and never reads tensor payload bytes or
+ *   selects a physical encoding.
+ * Purpose: construct, seal, index, and expose deterministic transformation plans.
+ * Inputs: admitted architecture facts, exact source coverage, and immutable builder options.
+ * Effects: owns all builder and sealed-plan allocations; source owners remain borrowed for the duration of
+ *   construction only.
+ * Failure: typed refusals release every partial allocation and publish no partial IR. */
+#include <yvex/internal/compilation.h>
+
+#include <yvex/internal/core.h>
+#include <yvex/internal/families/deepseek_v4.h>
 
 #include <limits.h>
 #include <stdint.h>
@@ -34,18 +30,77 @@
 #define TRANSFORM_DEFAULT_MAX_TERMINALS 10000ull
 #define TRANSFORM_DEFAULT_MAX_BYTES (512u * 1024u * 1024u)
 
+static const char *const transform_failure_names[] = {
+    "none", "invalid-argument", "invalid-lifecycle-state",
+    "architecture-ir-not-admitted", "source-coverage-incomplete",
+    "source-snapshot-identity-mismatch", "required-payload-identity-mismatch",
+    "unsupported-ir-schema", "invalid-logical-tensor-key",
+    "duplicate-logical-tensor-key", "duplicate-source-input",
+    "missing-source-input", "unexpected-source-input", "duplicate-value-id",
+    "duplicate-node-id", "missing-producer", "multiple-producers",
+    "unresolved-edge", "cycle-detected", "unsupported-operation",
+    "invalid-operation-arity", "invalid-dtype-combination",
+    "unsupported-source-dtype", "invalid-rank", "invalid-shape",
+    "dimensional-overflow", "invalid-axis", "invalid-permutation",
+    "element-count-mismatch", "invalid-aggregation-cardinality",
+    "duplicate-expert-index", "missing-expert-index",
+    "unconsumed-required-source", "duplicate-terminal-output",
+    "missing-terminal-output", "resource-budget-exceeded",
+    "allocation-failure", "identity-encoding-failure", "seal-failure",
+    "gguf-lowering-divergence", "mapping-identity-mismatch", "cleanup-failure"
+};
+
+static const char *const transform_operation_names[] = {
+    "identity", "decode-scale-pair", "checked-cast", "reshape",
+    "transpose", "concatenate", "stack", "aggregate",
+    "expert-axis-aggregate"
+};
+
+static const yvex_transform_subsystem deepseek_subsystems[] = {
+    YVEX_TRANSFORM_SUBSYSTEM_GLOBAL,
+    YVEX_TRANSFORM_SUBSYSTEM_ATTENTION,
+    YVEX_TRANSFORM_SUBSYSTEM_COMPRESSOR,
+    YVEX_TRANSFORM_SUBSYSTEM_INDEXER,
+    YVEX_TRANSFORM_SUBSYSTEM_NORMALIZATION,
+    YVEX_TRANSFORM_SUBSYSTEM_RESIDUAL,
+    YVEX_TRANSFORM_SUBSYSTEM_ROUTER,
+    YVEX_TRANSFORM_SUBSYSTEM_ROUTED_EXPERT,
+    YVEX_TRANSFORM_SUBSYSTEM_SHARED_EXPERT,
+    YVEX_TRANSFORM_SUBSYSTEM_AUXILIARY
+};
+
+typedef struct {
+    yvex_tensor_role role;
+    const char *projection;
+} deepseek_expert_projection;
+
+static const deepseek_expert_projection deepseek_expert_projections[] = {
+    {YVEX_TENSOR_ROLE_MOE_EXPERT_GATE, "w1"},
+    {YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN, "w2"},
+    {YVEX_TENSOR_ROLE_MOE_EXPERT_UP, "w3"}
+};
+
+/* Purpose: apply the canonical transform default allocate transformation and invariants.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 static void *transform_default_allocate(size_t size, void *context)
 {
     (void)context;
     return malloc(size);
 }
-
+/* Purpose: release owned transform default release resources in dependency order.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 static void transform_default_release(void *allocation, void *context)
 {
     (void)context;
     free(allocation);
 }
-
+/* Purpose: enforce typed transform identity text valid invariants before publication. */
 static int transform_identity_text_valid(const char *text)
 {
     size_t index;
@@ -57,7 +112,11 @@ static int transform_identity_text_valid(const char *text)
     }
     return 1;
 }
-
+/* Purpose: apply the canonical allocate zero transformation and invariants.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 void *yvex_transform_allocate_zero(yvex_transform_allocator *allocator,
                                    size_t size)
 {
@@ -68,54 +127,41 @@ void *yvex_transform_allocate_zero(yvex_transform_allocator *allocator,
     if (allocation) memset(allocation, 0, size);
     return allocation;
 }
-
-unsigned long long yvex_transform_hash_bytes(unsigned long long hash,
-                                             const void *data,
-                                             size_t length)
-{
-    const unsigned char *bytes = (const unsigned char *)data;
-    size_t index;
-
-    for (index = 0u; index < length; ++index) {
-        hash ^= (unsigned long long)bytes[index];
-        hash *= 1099511628211ull;
-    }
-    return hash;
-}
-
+/* Purpose: encode hash string fields in canonical identity order.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 unsigned long long yvex_transform_hash_string(const char *text)
 {
     return text
-        ? yvex_transform_hash_bytes(1469598103934665603ull, text,
+        ? yvex_core_hash_mix_bytes(1469598103934665603ull, text,
                                     strlen(text) + 1u)
         : 0u;
 }
-
-static unsigned long long transform_hash_u64(unsigned long long hash,
-                                             unsigned long long value)
-{
-    unsigned char bytes[8];
-    unsigned int index;
-
-    for (index = 0u; index < 8u; ++index)
-        bytes[index] = (unsigned char)((value >> (index * 8u)) & 0xffu);
-    return yvex_transform_hash_bytes(hash, bytes, sizeof(bytes));
-}
-
+/* Purpose: encode hash logical key fields in canonical identity order.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 unsigned long long yvex_transform_hash_logical_key(
     const yvex_transform_logical_key *key)
 {
     unsigned long long hash = 1469598103934665603ull;
 
     if (!key) return 0u;
-    hash = transform_hash_u64(hash, (unsigned long long)key->scope);
-    hash = transform_hash_u64(hash, (unsigned long long)key->subsystem);
-    hash = transform_hash_u64(hash, (unsigned long long)key->role);
-    hash = transform_hash_u64(hash, key->layer_index);
-    hash = transform_hash_u64(hash, key->auxiliary_index);
-    return transform_hash_u64(hash, key->group_index);
+    hash = yvex_core_hash_mix_u64(hash, (unsigned long long)key->scope);
+    hash = yvex_core_hash_mix_u64(hash, (unsigned long long)key->subsystem);
+    hash = yvex_core_hash_mix_u64(hash, (unsigned long long)key->role);
+    hash = yvex_core_hash_mix_u64(hash, key->layer_index);
+    hash = yvex_core_hash_mix_u64(hash, key->auxiliary_index);
+    return yvex_core_hash_mix_u64(hash, key->group_index);
 }
-
+/* Purpose: maintain deterministic bounded index capacity lookup state.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 unsigned long long yvex_transform_index_capacity(unsigned long long count)
 {
     unsigned long long capacity = 8u;
@@ -128,7 +174,11 @@ unsigned long long yvex_transform_index_capacity(unsigned long long count)
     }
     return capacity;
 }
-
+/* Purpose: register one index insert while preserving order and bounds.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 int yvex_transform_index_insert(yvex_transform_index_slot *slots,
                                 unsigned long long capacity,
                                 unsigned long long hash,
@@ -150,7 +200,7 @@ int yvex_transform_index_insert(yvex_transform_index_slot *slots,
     }
     return 0;
 }
-
+/* Purpose: project typed transform status vocabulary without lost semantics. */
 static yvex_status transform_status(yvex_transform_failure_code code)
 {
     switch (code) {
@@ -170,8 +220,12 @@ static yvex_status transform_status(yvex_transform_failure_code code)
         return YVEX_ERR_FORMAT;
     }
 }
+/* Purpose: apply the canonical fail transformation and invariants.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 
-/* Records one typed refusal while leaving every output unpublished. */
 int yvex_transform_fail(yvex_transform_failure *failure,
                         yvex_transform_failure_code code,
                         unsigned long long value_id,
@@ -206,7 +260,11 @@ int yvex_transform_fail(yvex_transform_failure *failure,
                     expected, actual, axis);
     return status;
 }
-
+/* Purpose: apply the canonical budget default transformation and invariants.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 void yvex_transform_budget_default(yvex_transform_budget *budget)
 {
     if (!budget) return;
@@ -218,8 +276,12 @@ void yvex_transform_budget_default(yvex_transform_budget *budget)
     budget->maximum_terminals = TRANSFORM_DEFAULT_MAX_TERMINALS;
     budget->maximum_owned_bytes = TRANSFORM_DEFAULT_MAX_BYTES;
 }
+/* Purpose: construct bounded transform grow state from admitted inputs.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 
-/* Grows one builder array with checked byte accounting and no realloc seam. */
 static int transform_grow(yvex_transform_builder *builder,
                           void **allocation,
                           unsigned long long *capacity,
@@ -293,7 +355,7 @@ static int transform_grow(yvex_transform_builder *builder,
         builder->peak_bytes = builder->owned_bytes;
     return YVEX_OK;
 }
-
+/* Purpose: enforce typed transform shape valid invariants before publication. */
 static int transform_shape_valid(const yvex_transform_shape *shape)
 {
     unsigned int index;
@@ -304,8 +366,12 @@ static int transform_shape_valid(const yvex_transform_shape *shape)
         if (shape->dims[index] == 0u) return 0;
     return 1;
 }
+/* Purpose: compare or copy transform source dtype matches under exact ownership.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 
-/* Admits only source storage classes represented exactly by the typed value. */
 static int transform_source_dtype_matches(yvex_native_dtype source,
                                           yvex_transform_dtype value)
 {
@@ -331,7 +397,7 @@ static int transform_source_dtype_matches(yvex_native_dtype source,
         return 0;
     }
 }
-
+/* Purpose: enforce typed transform logical key valid invariants before publication. */
 static int transform_logical_key_valid(const yvex_transform_logical_key *key)
 {
     if (!key || key->scope > YVEX_TRANSFORM_SCOPE_AUXILIARY ||
@@ -347,8 +413,8 @@ static int transform_logical_key_valid(const yvex_transform_logical_key *key)
     return key->layer_index != YVEX_TRANSFORM_IR_NO_ID &&
            key->auxiliary_index != YVEX_TRANSFORM_IR_NO_ID;
 }
+/* Purpose: enforce typed transform source scope valid invariants before publication. */
 
-/* Admits one artifact-neutral source scope only when all typed sentinels agree. */
 static int transform_source_scope_valid(
     const yvex_transform_source_spec *source)
 {
@@ -365,7 +431,11 @@ static int transform_source_scope_valid(
     return source->layer_index != YVEX_TRANSFORM_IR_NO_ID &&
            source->auxiliary_index != YVEX_TRANSFORM_IR_NO_ID;
 }
-
+/* Purpose: construct bounded builder create state from admitted inputs.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 int yvex_transform_builder_create(
     yvex_transform_builder **out,
     const yvex_transform_header *header,
@@ -459,7 +529,11 @@ int yvex_transform_builder_create(
     *out = builder;
     return YVEX_OK;
 }
-
+/* Purpose: register one builder add source while preserving order and bounds.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 int yvex_transform_builder_add_source(
     yvex_transform_builder *builder,
     const yvex_transform_source_spec *spec,
@@ -573,7 +647,11 @@ int yvex_transform_builder_add_source(
     *value_id = id;
     return YVEX_OK;
 }
-
+/* Purpose: register one builder declare value while preserving order and bounds.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 int yvex_transform_builder_declare_value(
     yvex_transform_builder *builder,
     const yvex_transform_value_spec *spec,
@@ -651,7 +729,11 @@ int yvex_transform_builder_declare_value(
     *value_id = id;
     return YVEX_OK;
 }
-
+/* Purpose: register one builder add node while preserving order and bounds.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 int yvex_transform_builder_add_node(
     yvex_transform_builder *builder,
     const yvex_transform_node_spec *spec,
@@ -735,7 +817,11 @@ int yvex_transform_builder_add_node(
     *node_id = id;
     return YVEX_OK;
 }
-
+/* Purpose: apply the canonical builder seal transformation and invariants.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 int yvex_transform_builder_seal(
     yvex_transform_builder *builder,
     yvex_transform_ir **out,
@@ -760,7 +846,11 @@ int yvex_transform_builder_seal(
                                    : YVEX_TRANSFORM_IR_STATE_FAILED;
     return rc;
 }
-
+/* Purpose: release owned builder release resources in dependency order.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 void yvex_transform_builder_release(yvex_transform_builder **builder_ptr)
 {
     yvex_transform_builder *builder;
@@ -777,7 +867,11 @@ void yvex_transform_builder_release(yvex_transform_builder **builder_ptr)
     allocator.release(builder, allocator.context);
     *builder_ptr = NULL;
 }
-
+/* Purpose: release owned ir release resources in dependency order.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 void yvex_transform_ir_release(yvex_transform_ir **ir_ptr)
 {
     yvex_transform_ir *ir;
@@ -801,20 +895,32 @@ void yvex_transform_ir_release(yvex_transform_ir **ir_ptr)
     allocator.release(ir, allocator.context);
     *ir_ptr = NULL;
 }
-
+/* Purpose: project the immutable bounded ir summary view.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 const yvex_transform_ir_summary *yvex_transform_ir_summary_get(
     const yvex_transform_ir *ir)
 {
     return ir ? &ir->summary : NULL;
 }
-
+/* Purpose: project the immutable bounded ir source at view.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 const yvex_transform_source_value *yvex_transform_ir_source_at(
     const yvex_transform_ir *ir, unsigned long long index)
 {
     return ir && index < ir->summary.source_value_count
         ? &ir->sources[index] : NULL;
 }
-
+/* Purpose: resolve one ir source find through the canonical index.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 const yvex_transform_source_value *yvex_transform_ir_source_find(
     const yvex_transform_ir *ir, const char *source_name)
 {
@@ -837,27 +943,39 @@ const yvex_transform_source_value *yvex_transform_ir_source_find(
     }
     return NULL;
 }
-
-const yvex_transform_value *yvex_transform_ir_value_at(
+/* Purpose: project the immutable bounded ir value at view. */
+static const yvex_transform_value *transform_ir_value_at(
     const yvex_transform_ir *ir, unsigned long long value_id)
 {
     return ir && value_id < ir->summary.value_count
         ? &ir->values[value_id] : NULL;
 }
-
+/* Purpose: project the immutable bounded ir node at view.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 const yvex_transform_node *yvex_transform_ir_node_at(
     const yvex_transform_ir *ir, unsigned long long node_id)
 {
     return ir && node_id < ir->summary.node_count ? &ir->nodes[node_id] : NULL;
 }
-
+/* Purpose: project the immutable bounded ir node topological at view.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 const yvex_transform_node *yvex_transform_ir_node_topological_at(
     const yvex_transform_ir *ir, unsigned long long ordinal)
 {
     if (!ir || ordinal >= ir->summary.node_count) return NULL;
     return &ir->nodes[ir->topological_order[ordinal]];
 }
-
+/* Purpose: project the immutable bounded ir terminal at view.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 const yvex_transform_value *yvex_transform_ir_terminal_at(
     const yvex_transform_ir *ir, unsigned long long ordinal)
 {
@@ -865,29 +983,11 @@ const yvex_transform_value *yvex_transform_ir_terminal_at(
     return &ir->values[ir->terminal_values[ordinal]];
 }
 
-const yvex_transform_value *yvex_transform_ir_terminal_find(
-    const yvex_transform_ir *ir, const yvex_transform_logical_key *key)
-{
-    unsigned long long hash;
-    unsigned long long slot;
-    unsigned long long probe;
-
-    if (!ir || !key || ir->terminal_index_capacity == 0u) return NULL;
-    hash = yvex_transform_hash_logical_key(key);
-    slot = hash & (ir->terminal_index_capacity - 1u);
-    for (probe = 0u; probe < ir->terminal_index_capacity &&
-         ir->terminal_index[slot].value_plus_one; ++probe) {
-        if (ir->terminal_index[slot].hash == hash) {
-            const yvex_transform_value *value =
-                &ir->values[ir->terminal_index[slot].value_plus_one - 1u];
-            if (yvex_transform_logical_key_equal(&value->logical_key, key))
-                return value;
-        }
-        slot = (slot + 1u) & (ir->terminal_index_capacity - 1u);
-    }
-    return NULL;
-}
-
+/* Purpose: project the immutable bounded ir node input at view.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 const yvex_transform_value *yvex_transform_ir_node_input_at(
     const yvex_transform_ir *ir, const yvex_transform_node *node,
     unsigned long long ordinal)
@@ -901,9 +1001,13 @@ const yvex_transform_value *yvex_transform_ir_node_input_at(
         node->input_offset > ir->summary.edge_count - node->input_count)
         return NULL;
     value_id = ir->edges[node->input_offset + ordinal];
-    return yvex_transform_ir_value_at(ir, value_id);
+    return transform_ir_value_at(ir, value_id);
 }
-
+/* Purpose: compare or copy logical key equal under exact ownership.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 int yvex_transform_logical_key_equal(
     const yvex_transform_logical_key *left,
     const yvex_transform_logical_key *right)
@@ -915,24 +1019,11 @@ int yvex_transform_logical_key_equal(
         left->group_index == right->group_index;
 }
 
-int yvex_transform_logical_key_compare(
-    const yvex_transform_logical_key *left,
-    const yvex_transform_logical_key *right)
-{
-#define TRANSFORM_KEY_COMPARE(field) \
-    do { if (left->field < right->field) return -1; \
-         if (left->field > right->field) return 1; } while (0)
-    if (!left || !right) return left ? 1 : (right ? -1 : 0);
-    TRANSFORM_KEY_COMPARE(scope);
-    TRANSFORM_KEY_COMPARE(layer_index);
-    TRANSFORM_KEY_COMPARE(auxiliary_index);
-    TRANSFORM_KEY_COMPARE(subsystem);
-    TRANSFORM_KEY_COMPARE(role);
-    TRANSFORM_KEY_COMPARE(group_index);
-#undef TRANSFORM_KEY_COMPARE
-    return 0;
-}
-
+/* Purpose: project the immutable bounded shape element count view.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 int yvex_transform_shape_element_count(
     const yvex_transform_shape *shape,
     unsigned long long *out,
@@ -965,71 +1056,871 @@ int yvex_transform_shape_element_count(
     *out = product;
     return YVEX_OK;
 }
-
+/* Purpose: project typed failure name vocabulary without lost semantics.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 const char *yvex_transform_failure_name(yvex_transform_failure_code code)
 {
-    static const char *const names[] = {
-        "none", "invalid-argument", "invalid-lifecycle-state",
-        "architecture-ir-not-admitted", "source-coverage-incomplete",
-        "source-snapshot-identity-mismatch", "required-payload-identity-mismatch",
-        "unsupported-ir-schema", "invalid-logical-tensor-key",
-        "duplicate-logical-tensor-key", "duplicate-source-input",
-        "missing-source-input", "unexpected-source-input", "duplicate-value-id",
-        "duplicate-node-id", "missing-producer", "multiple-producers",
-        "unresolved-edge", "cycle-detected", "unsupported-operation",
-        "invalid-operation-arity", "invalid-dtype-combination",
-        "unsupported-source-dtype", "invalid-rank", "invalid-shape",
-        "dimensional-overflow", "invalid-axis", "invalid-permutation",
-        "element-count-mismatch", "invalid-aggregation-cardinality",
-        "duplicate-expert-index", "missing-expert-index",
-        "unconsumed-required-source", "duplicate-terminal-output",
-        "missing-terminal-output", "resource-budget-exceeded",
-        "allocation-failure", "identity-encoding-failure", "seal-failure",
-        "gguf-lowering-divergence", "mapping-identity-mismatch",
-        "cleanup-failure"
-    };
-    size_t count = sizeof(names) / sizeof(names[0]);
+    size_t count = sizeof(transform_failure_names) /
+                   sizeof(transform_failure_names[0]);
 
-    return code >= 0 && (size_t)code < count ? names[code]
-                                              : "unknown-transform-failure";
+    return code >= 0 && (size_t)code < count
+               ? transform_failure_names[code]
+               : "unknown-transform-failure";
 }
-
+/* Purpose: project typed operation name vocabulary without lost semantics.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
 const char *yvex_transform_operation_name(yvex_transform_operation_kind kind)
 {
-    static const char *const names[] = {
-        "identity", "decode-scale-pair", "checked-cast", "reshape",
-        "transpose", "concatenate", "stack", "aggregate",
-        "expert-axis-aggregate"
-    };
-    return kind >= 0 && kind < YVEX_TRANSFORM_OP_COUNT ? names[kind]
-                                                       : "unknown-operation";
+    return kind >= 0 && kind < YVEX_TRANSFORM_OP_COUNT
+               ? transform_operation_names[kind]
+               : "unknown-operation";
 }
 
-const char *yvex_transform_dtype_name(yvex_transform_dtype dtype)
+/* The family transform recipe registers semantics in the generic sealed IR. */
+typedef struct {
+    yvex_transform_builder *builder;
+    const yvex_model_family_api *family;
+    const yvex_source_verification *verification;
+    const yvex_deepseek_v4_ir *architecture;
+    const yvex_deepseek_v4_model_spec *model;
+    const yvex_deepseek_tensor_coverage *coverage;
+    const yvex_deepseek_tensor_coverage_summary *coverage_summary;
+    yvex_transform_allocator temporary_allocator;
+    yvex_transform_failure *failure;
+    yvex_error *err;
+    unsigned long long terminal_ordinal;
+} deepseek_transform_builder;
+
+/* Purpose: apply the canonical deepseek default allocate transformation and invariants.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+static void *deepseek_default_allocate(size_t size, void *context)
 {
-    static const char *const names[] = {
-        "unknown", "f32", "f16", "bf16", "i32", "i64", "fp8-e4m3",
-        "e8m0-scale", "packed-fp4", "real"
+    (void)context;
+    return malloc(size);
+}
+/* Purpose: release owned deepseek default release resources in dependency order.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+static void deepseek_default_release(void *allocation, void *context)
+{
+    (void)context;
+    free(allocation);
+}
+/* Purpose: encode deepseek hash text fields in canonical identity order.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+static unsigned long long deepseek_hash_text(unsigned long long hash,
+                                             const char *text)
+{
+    return yvex_core_hash_mix_bytes(hash, text, strlen(text) + 1u);
+}
+/* Purpose: map deepseek scope through canonical typed vocabulary. */
+static yvex_transform_scope deepseek_scope(
+    yvex_tensor_scope scope)
+{
+    if (scope == YVEX_TENSOR_SCOPE_MAIN_LAYER)
+        return YVEX_TRANSFORM_SCOPE_MAIN_LAYER;
+    if (scope == YVEX_TENSOR_SCOPE_MTP)
+        return YVEX_TRANSFORM_SCOPE_AUXILIARY;
+    return YVEX_TRANSFORM_SCOPE_GLOBAL;
+}
+/* Purpose: apply the canonical deepseek subsystem transformation and invariants. */
+static yvex_transform_subsystem deepseek_subsystem(
+    yvex_tensor_collection collection)
+{
+    return collection < YVEX_TENSOR_COLLECTION_COUNT
+        ? deepseek_subsystems[collection] : YVEX_TRANSFORM_SUBSYSTEM_COUNT;
+}
+/* Purpose: map deepseek dtype through canonical typed vocabulary. */
+static yvex_transform_dtype deepseek_dtype(yvex_native_dtype dtype,
+                                           int packed_fp4)
+{
+    if (packed_fp4) return YVEX_TRANSFORM_DTYPE_PACKED_FP4;
+    switch (dtype) {
+    case YVEX_NATIVE_DTYPE_F32: return YVEX_TRANSFORM_DTYPE_F32;
+    case YVEX_NATIVE_DTYPE_F16: return YVEX_TRANSFORM_DTYPE_F16;
+    case YVEX_NATIVE_DTYPE_BF16: return YVEX_TRANSFORM_DTYPE_BF16;
+    case YVEX_NATIVE_DTYPE_I32: return YVEX_TRANSFORM_DTYPE_I32;
+    case YVEX_NATIVE_DTYPE_I64: return YVEX_TRANSFORM_DTYPE_I64;
+    case YVEX_NATIVE_DTYPE_F8_E4M3: return YVEX_TRANSFORM_DTYPE_FP8_E4M3;
+    case YVEX_NATIVE_DTYPE_F8_E8M0: return YVEX_TRANSFORM_DTYPE_E8M0_SCALE;
+    default: return YVEX_TRANSFORM_DTYPE_UNKNOWN;
+    }
+}
+/* Purpose: apply the canonical deepseek physical classes transformation and invariants. */
+static unsigned int deepseek_physical_classes(yvex_transform_dtype dtype)
+{
+    switch (dtype) {
+    case YVEX_TRANSFORM_DTYPE_F32: return YVEX_TRANSFORM_PHYSICAL_F32;
+    case YVEX_TRANSFORM_DTYPE_F16: return YVEX_TRANSFORM_PHYSICAL_F16 |
+                                           YVEX_TRANSFORM_PHYSICAL_F32;
+    case YVEX_TRANSFORM_DTYPE_BF16: return YVEX_TRANSFORM_PHYSICAL_BF16 |
+                                            YVEX_TRANSFORM_PHYSICAL_F32;
+    case YVEX_TRANSFORM_DTYPE_I32: return YVEX_TRANSFORM_PHYSICAL_I32;
+    default: return YVEX_TRANSFORM_PHYSICAL_F32 |
+                    YVEX_TRANSFORM_PHYSICAL_F16 |
+                    YVEX_TRANSFORM_PHYSICAL_BF16 |
+                    YVEX_TRANSFORM_PHYSICAL_QUANTIZED;
+    }
+}
+/* Purpose: enforce typed deepseek refuse invariants before publication. */
+static int deepseek_refuse(deepseek_transform_builder *builder,
+                           yvex_transform_failure_code code,
+                           unsigned long long expected,
+                           unsigned long long actual,
+                           const char *where)
+{
+    return yvex_transform_fail(
+        builder ? builder->failure : NULL, code,
+        YVEX_TRANSFORM_IR_NO_ID, YVEX_TRANSFORM_IR_NO_ID,
+        YVEX_TRANSFORM_IR_NO_ID, YVEX_TRANSFORM_IR_NO_ID,
+        YVEX_TRANSFORM_IR_NO_ID, expected, actual, 0u,
+        builder ? builder->err : NULL, where);
+}
+/* Purpose: register one deepseek add source while preserving order and bounds.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+
+static int deepseek_add_source(deepseek_transform_builder *builder,
+                               const char *name,
+                               yvex_tensor_role role,
+                               yvex_tensor_collection collection,
+                               yvex_tensor_scope scope,
+                               unsigned long long layer,
+                               unsigned long long auxiliary,
+                               unsigned long long expert,
+                               yvex_native_dtype expected_dtype,
+                               int packed_fp4,
+                               unsigned long long *value_id)
+{
+    const yvex_deepseek_tensor_coverage_row *row;
+    yvex_transform_source_spec spec;
+    unsigned long long requirement_index;
+    unsigned long long source_index;
+    unsigned long long identity;
+    unsigned int dimension;
+
+    row = builder->family->coverage.find(builder->coverage, name);
+    if (!row || !row->source ||
+        !builder->family->coverage.find_index(
+            builder->coverage, name, &requirement_index) ||
+        !builder->family->coverage.find_source_index(
+            builder->coverage, name, &source_index)) {
+        return deepseek_refuse(builder, YVEX_TRANSFORM_FAILURE_MISSING_SOURCE,
+                               1u, 0u, "deepseek_transform_source");
+    }
+    if (row->collection != collection || row->scope != scope ||
+        row->layer_index != layer || row->source->dtype != expected_dtype ||
+        (expert != YVEX_DEEPSEEK_TENSOR_NO_INDEX &&
+         row->expert_index != expert)) {
+        return deepseek_refuse(
+            builder,
+            row->source->dtype != expected_dtype
+                ? YVEX_TRANSFORM_FAILURE_UNSUPPORTED_SOURCE_DTYPE
+                : YVEX_TRANSFORM_FAILURE_UNEXPECTED_SOURCE,
+            (unsigned long long)expected_dtype,
+            (unsigned long long)row->source->dtype,
+            "deepseek_transform_source");
+    }
+    memset(&spec, 0, sizeof(spec));
+    spec.source_name = row->source->name;
+    spec.shard_name = row->source->shard_path;
+    spec.source_tensor_index = source_index;
+    spec.requirement_index = requirement_index;
+    spec.source_snapshot_identity = builder->coverage_summary->source_identity;
+    spec.source_dtype = row->source->dtype;
+    spec.value_dtype = deepseek_dtype(row->source->dtype, packed_fp4);
+    spec.shape.rank = row->source->rank;
+    for (dimension = 0u; dimension < row->source->rank; ++dimension)
+        spec.shape.dims[dimension] = row->source->dims[dimension];
+    spec.relative_begin = row->source->data_start;
+    spec.relative_end = row->source->data_end;
+    identity = deepseek_hash_text(1469598103934665603ull, name);
+    identity = yvex_core_hash_mix_u64(identity,
+                                 builder->coverage_summary->coverage_identity);
+    identity = yvex_core_hash_mix_u64(identity, requirement_index);
+    spec.requirement_identity = identity;
+    spec.scope = deepseek_scope(scope);
+    spec.subsystem = deepseek_subsystem(collection);
+    spec.role_hint = role;
+    spec.layer_index = layer;
+    spec.auxiliary_index = auxiliary;
+    spec.expert_index = expert;
+    spec.required_uses = 1u;
+    return yvex_transform_builder_add_source(
+        builder->builder, &spec, value_id, builder->failure, builder->err);
+}
+/* Purpose: register one deepseek add terminal while preserving order and bounds.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+
+static int deepseek_add_terminal(deepseek_transform_builder *builder,
+                                 yvex_tensor_role role,
+                                 yvex_tensor_collection collection,
+                                 yvex_tensor_scope scope,
+                                 unsigned long long layer,
+                                 unsigned long long auxiliary,
+                                 const yvex_transform_shape *shape,
+                                 yvex_transform_dtype dtype,
+                                 const yvex_transform_precision_constraint *precision,
+                                 const yvex_transform_node_spec *operation)
+{
+    yvex_transform_value_spec value;
+    yvex_transform_node_spec node = *operation;
+    unsigned long long value_id;
+    unsigned long long node_id;
+    unsigned long long semantic = 1469598103934665603ull;
+    int rc;
+
+    memset(&value, 0, sizeof(value));
+    value.kind = YVEX_TRANSFORM_VALUE_TERMINAL;
+    semantic = yvex_core_hash_mix_u64(semantic, (unsigned long long)scope);
+    semantic = yvex_core_hash_mix_u64(semantic, (unsigned long long)collection);
+    semantic = yvex_core_hash_mix_u64(semantic, (unsigned long long)role);
+    semantic = yvex_core_hash_mix_u64(semantic, layer);
+    semantic = yvex_core_hash_mix_u64(semantic, auxiliary);
+    value.semantic_id = semantic;
+    value.canonical_ordinal = builder->terminal_ordinal;
+    value.shape = *shape;
+    value.dtype = dtype;
+    value.precision = *precision;
+    value.logical_key.scope = deepseek_scope(scope);
+    value.logical_key.subsystem = deepseek_subsystem(collection);
+    value.logical_key.role = role;
+    value.logical_key.layer_index = scope == YVEX_TENSOR_SCOPE_GLOBAL
+        ? YVEX_TRANSFORM_IR_NO_ID : layer;
+    value.logical_key.auxiliary_index =
+        scope == YVEX_TENSOR_SCOPE_MTP
+            ? auxiliary : YVEX_TRANSFORM_IR_NO_ID;
+    value.logical_key.group_index = 0u;
+    rc = yvex_transform_builder_declare_value(
+        builder->builder, &value, &value_id, builder->failure, builder->err);
+    if (rc != YVEX_OK) return rc;
+    node.output_value_id = value_id;
+    rc = yvex_transform_builder_add_node(
+        builder->builder, &node, &node_id, builder->failure, builder->err);
+    if (rc == YVEX_OK) builder->terminal_ordinal++;
+    return rc;
+}
+/* Purpose: register one deepseek add direct while preserving order and bounds.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+
+static int deepseek_add_direct(deepseek_transform_builder *builder,
+                               yvex_tensor_role role,
+                               yvex_tensor_collection collection,
+                               yvex_tensor_scope scope,
+                               unsigned long long layer,
+                               unsigned long long auxiliary,
+                               const char *source_name,
+                               yvex_native_dtype source_dtype,
+                               int checked_cast)
+{
+    const yvex_deepseek_tensor_coverage_row *row =
+        builder->family->coverage.find(builder->coverage, source_name);
+    yvex_transform_precision_constraint precision;
+    yvex_transform_node_spec node;
+    yvex_transform_shape shape;
+    unsigned long long input;
+    yvex_transform_dtype output_dtype;
+    unsigned int dimension;
+    int rc;
+
+    if (!row || !row->source)
+        return deepseek_refuse(builder, YVEX_TRANSFORM_FAILURE_MISSING_SOURCE,
+                               1u, 0u, "deepseek_transform_direct");
+    rc = deepseek_add_source(
+        builder, source_name, role, collection, scope, layer, auxiliary,
+        YVEX_DEEPSEEK_TENSOR_NO_INDEX, source_dtype, 0, &input);
+    if (rc != YVEX_OK) return rc;
+    memset(&shape, 0, sizeof(shape));
+    shape.rank = row->source->rank;
+    for (dimension = 0u; dimension < shape.rank; ++dimension)
+        shape.dims[dimension] = row->source->dims[dimension];
+    output_dtype = checked_cast ? YVEX_TRANSFORM_DTYPE_I32
+                                : deepseek_dtype(source_dtype, 0);
+    memset(&precision, 0, sizeof(precision));
+    precision.allowed_physical_classes = deepseek_physical_classes(output_dtype);
+    if (checked_cast) {
+        precision.flags = YVEX_TRANSFORM_PRECISION_LOSSLESS |
+                          YVEX_TRANSFORM_PRECISION_RANGE_PROOF |
+                          YVEX_TRANSFORM_PRECISION_INTEGER_ONLY;
+        precision.range_proof_required = 1;
+    } else {
+        precision.flags = YVEX_TRANSFORM_PRECISION_EXACT;
+    }
+    memset(&node, 0, sizeof(node));
+    node.kind = checked_cast ? YVEX_TRANSFORM_OP_CHECKED_CAST
+                             : YVEX_TRANSFORM_OP_IDENTITY;
+    node.input_value_ids = &input;
+    node.input_count = 1u;
+    node.numeric = checked_cast ? YVEX_TRANSFORM_NUMERIC_RANGE_PROOF
+                                : YVEX_TRANSFORM_NUMERIC_EXACT;
+    node.ordering = YVEX_TRANSFORM_ORDER_INPUT;
+    node.payload_execution_required = 1;
+    return deepseek_add_terminal(builder, role, collection, scope, layer,
+                                 auxiliary, &shape, output_dtype, &precision,
+                                 &node);
+}
+/* Purpose: register one deepseek add fp8 while preserving order and bounds.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+
+static int deepseek_add_fp8(deepseek_transform_builder *builder,
+                            yvex_tensor_role role,
+                            yvex_tensor_collection collection,
+                            yvex_tensor_scope scope,
+                            unsigned long long layer,
+                            unsigned long long auxiliary,
+                            const char *base)
+{
+    char weight[256];
+    char scale[256];
+    const yvex_deepseek_tensor_coverage_row *row;
+    yvex_transform_precision_constraint precision;
+    yvex_transform_node_spec node;
+    yvex_transform_shape shape;
+    unsigned long long inputs[2];
+    unsigned int dimension;
+    int rc;
+
+    (void)snprintf(weight, sizeof(weight), "%s.weight", base);
+    (void)snprintf(scale, sizeof(scale), "%s.scale", base);
+    row = builder->family->coverage.find(builder->coverage, weight);
+    if (!row || !row->source)
+        return deepseek_refuse(builder, YVEX_TRANSFORM_FAILURE_MISSING_SOURCE,
+                               1u, 0u, "deepseek_transform_fp8");
+    rc = deepseek_add_source(
+        builder, weight, role, collection, scope, layer, auxiliary,
+        YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_NATIVE_DTYPE_F8_E4M3, 0,
+        &inputs[0]);
+    if (rc == YVEX_OK)
+        rc = deepseek_add_source(
+            builder, scale, role, collection, scope, layer, auxiliary,
+            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_NATIVE_DTYPE_F8_E8M0, 0,
+            &inputs[1]);
+    if (rc != YVEX_OK) return rc;
+    memset(&shape, 0, sizeof(shape));
+    shape.rank = row->source->rank;
+    for (dimension = 0u; dimension < shape.rank; ++dimension)
+        shape.dims[dimension] = row->source->dims[dimension];
+    memset(&precision, 0, sizeof(precision));
+    precision.flags = YVEX_TRANSFORM_PRECISION_SCALE_PAIRED |
+                      YVEX_TRANSFORM_PRECISION_QUANTIZABLE_WEIGHT |
+                      YVEX_TRANSFORM_PRECISION_REFERENCE_COMPUTE;
+    precision.allowed_physical_classes =
+        YVEX_TRANSFORM_PHYSICAL_F32 | YVEX_TRANSFORM_PHYSICAL_F16 |
+        YVEX_TRANSFORM_PHYSICAL_BF16 | YVEX_TRANSFORM_PHYSICAL_QUANTIZED;
+    precision.approximation_allowed = 1;
+    precision.reference_compute_required = 1;
+    memset(&node, 0, sizeof(node));
+    node.kind = YVEX_TRANSFORM_OP_DECODE_SCALE_PAIR;
+    node.input_value_ids = inputs;
+    node.input_count = 2u;
+    node.scale_block_rows = builder->model->source_constraint.quant_block_rows;
+    node.scale_block_columns =
+        builder->model->source_constraint.quant_block_columns;
+    node.numeric = YVEX_TRANSFORM_NUMERIC_LOSSLESS;
+    node.ordering = YVEX_TRANSFORM_ORDER_INPUT;
+    node.payload_execution_required = 1;
+    return deepseek_add_terminal(
+        builder, role, collection, scope, layer, auxiliary, &shape,
+        YVEX_TRANSFORM_DTYPE_REAL, &precision, &node);
+}
+/* Purpose: register one deepseek add experts while preserving order and bounds.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+
+static int deepseek_add_experts(deepseek_transform_builder *builder,
+                                yvex_tensor_role role,
+                                yvex_tensor_scope scope,
+                                unsigned long long layer,
+                                unsigned long long auxiliary,
+                                const char *prefix,
+                                const char *projection,
+                                unsigned long long expert_count)
+{
+    char weight[256];
+    char scale[256];
+    const yvex_deepseek_tensor_coverage_row *first;
+    yvex_transform_precision_constraint precision;
+    yvex_transform_node_spec node;
+    yvex_transform_shape shape;
+    unsigned long long *inputs = NULL;
+    unsigned long long input_count;
+    unsigned long long logical_width;
+    unsigned long long expert;
+    size_t bytes;
+    int rc = YVEX_OK;
+
+    if (!expert_count || expert_count > ULLONG_MAX / 2u)
+        return deepseek_refuse(
+            builder, YVEX_TRANSFORM_FAILURE_INVALID_AGGREGATION,
+            1u, expert_count, "deepseek_transform_experts");
+    input_count = expert_count * 2u;
+    if (input_count > (unsigned long long)(SIZE_MAX / sizeof(inputs[0])))
+        return deepseek_refuse(
+            builder, YVEX_TRANSFORM_FAILURE_RESOURCE_BUDGET,
+            SIZE_MAX, input_count, "deepseek_transform_experts");
+    bytes = (size_t)input_count * sizeof(inputs[0]);
+    inputs = (unsigned long long *)builder->temporary_allocator.allocate(
+        bytes, builder->temporary_allocator.context);
+    if (!inputs)
+        return deepseek_refuse(builder, YVEX_TRANSFORM_FAILURE_ALLOCATION,
+                               bytes, 0u, "deepseek_transform_experts");
+    (void)snprintf(weight, sizeof(weight), "%s.ffn.experts.0.%s.weight",
+                   prefix, projection);
+    first = builder->family->coverage.find(builder->coverage, weight);
+    if (!first || !first->source || first->source->rank != 2u ||
+        first->source->dims[1] > ULLONG_MAX /
+            builder->model->source_constraint.fp4_packing_factor) {
+        rc = deepseek_refuse(
+            builder, first ? YVEX_TRANSFORM_FAILURE_DIMENSION_OVERFLOW
+                           : YVEX_TRANSFORM_FAILURE_MISSING_SOURCE,
+            1u, 0u, "deepseek_transform_experts");
+        goto cleanup;
+    }
+    for (expert = 0u; expert < expert_count; ++expert) {
+        (void)snprintf(weight, sizeof(weight),
+                       "%s.ffn.experts.%llu.%s.weight", prefix, expert,
+                       projection);
+        (void)snprintf(scale, sizeof(scale),
+                       "%s.ffn.experts.%llu.%s.scale", prefix, expert,
+                       projection);
+        rc = deepseek_add_source(
+            builder, weight, role,
+            YVEX_TENSOR_COLLECTION_ROUTED_EXPERT, scope, layer,
+            auxiliary, expert, YVEX_NATIVE_DTYPE_I8, 1,
+            &inputs[expert * 2u]);
+        if (rc == YVEX_OK)
+            rc = deepseek_add_source(
+                builder, scale, role,
+                YVEX_TENSOR_COLLECTION_ROUTED_EXPERT, scope, layer,
+                auxiliary, expert, YVEX_NATIVE_DTYPE_F8_E8M0, 0,
+                &inputs[expert * 2u + 1u]);
+        if (rc != YVEX_OK) goto cleanup;
+    }
+    logical_width = first->source->dims[1] *
+                    builder->model->source_constraint.fp4_packing_factor;
+    memset(&shape, 0, sizeof(shape));
+    shape.rank = 3u;
+    shape.dims[0] = expert_count;
+    shape.dims[1] = first->source->dims[0];
+    shape.dims[2] = logical_width;
+    memset(&precision, 0, sizeof(precision));
+    precision.flags = YVEX_TRANSFORM_PRECISION_SCALE_PAIRED |
+                      YVEX_TRANSFORM_PRECISION_QUANTIZABLE_WEIGHT |
+                      YVEX_TRANSFORM_PRECISION_REFERENCE_COMPUTE;
+    precision.allowed_physical_classes =
+        YVEX_TRANSFORM_PHYSICAL_F32 | YVEX_TRANSFORM_PHYSICAL_F16 |
+        YVEX_TRANSFORM_PHYSICAL_BF16 | YVEX_TRANSFORM_PHYSICAL_QUANTIZED;
+    precision.approximation_allowed = 1;
+    precision.reference_compute_required = 1;
+    memset(&node, 0, sizeof(node));
+    node.kind = YVEX_TRANSFORM_OP_EXPERT_AGGREGATE;
+    node.input_value_ids = inputs;
+    node.input_count = input_count;
+    node.axis = 0u;
+    node.expert_count = expert_count;
+    node.packing_factor =
+        builder->model->source_constraint.fp4_packing_factor;
+    node.scale_group_width =
+        builder->model->source_constraint.fp4_scale_group_width;
+    node.numeric = YVEX_TRANSFORM_NUMERIC_LOSSLESS;
+    node.ordering = YVEX_TRANSFORM_ORDER_EXPERT_INDEX;
+    node.payload_execution_required = 1;
+    rc = deepseek_add_terminal(
+        builder, role, YVEX_TENSOR_COLLECTION_ROUTED_EXPERT,
+        scope, layer, auxiliary, &shape, YVEX_TRANSFORM_DTYPE_REAL,
+        &precision, &node);
+
+cleanup:
+    builder->temporary_allocator.release(
+        inputs, builder->temporary_allocator.context);
+    return rc;
+}
+/* Purpose: register one deepseek add recipe phase while preserving order and bounds.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+
+static int deepseek_add_recipe_phase(deepseek_transform_builder *builder,
+                                     const char *prefix,
+                                     const yvex_deepseek_v4_layer_spec *layer,
+                                     yvex_tensor_scope scope,
+                                     unsigned long long auxiliary,
+                                     unsigned int phase)
+{
+    const yvex_model_family_ir_api *family_ir = &builder->family->ir;
+    unsigned long long index;
+
+    for (index = 0u; index < family_ir->recipe_count(); ++index) {
+        const yvex_deepseek_tensor_recipe *recipe =
+            family_ir->recipe_at(index);
+        char name[256];
+        int rc;
+
+        if (!recipe || recipe->phase != phase ||
+            !family_ir->recipe_enabled(recipe, layer))
+            continue;
+        (void)snprintf(name, sizeof(name), "%s.%s", prefix, recipe->suffix);
+        if (recipe->kind == YVEX_DEEPSEEK_RECIPE_FP8_PAIR) {
+            rc = deepseek_add_fp8(builder, recipe->role, recipe->collection, scope,
+                                  layer->layer_index, auxiliary, name);
+        } else {
+            rc = deepseek_add_direct(builder, recipe->role, recipe->collection, scope,
+                                     layer->layer_index, auxiliary, name, recipe->dtype,
+                                     recipe->kind == YVEX_DEEPSEEK_RECIPE_CHECKED_CAST);
+        }
+        if (rc != YVEX_OK) return rc;
+    }
+    return YVEX_OK;
+}
+/* Purpose: register one deepseek add layer while preserving order and bounds.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+
+static int deepseek_add_layer(deepseek_transform_builder *builder,
+                              const char *prefix,
+                              const yvex_deepseek_v4_layer_spec *layer,
+                              yvex_tensor_scope scope,
+                              unsigned long long auxiliary)
+{
+    size_t index;
+    int rc;
+
+    rc = deepseek_add_recipe_phase(builder, prefix, layer, scope, auxiliary, 0u);
+    for (index = 0u;
+         rc == YVEX_OK &&
+         index < sizeof(deepseek_expert_projections) /
+                     sizeof(deepseek_expert_projections[0]);
+         ++index) {
+        rc = deepseek_add_experts(builder, deepseek_expert_projections[index].role,
+                                  scope, layer->layer_index, auxiliary, prefix,
+                                  deepseek_expert_projections[index].projection,
+                                  layer->moe.routed_experts);
+    }
+    if (rc == YVEX_OK)
+        rc = deepseek_add_recipe_phase(builder, prefix, layer, scope, auxiliary, 1u);
+    return rc;
+}
+/* Purpose: construct bounded deepseek build graph state from admitted inputs.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+
+static int deepseek_build_graph(deepseek_transform_builder *builder)
+{
+    const yvex_tensor_role head_roles[3] = {
+        YVEX_TENSOR_ROLE_HC_HEAD_FUNCTION,
+        YVEX_TENSOR_ROLE_HC_HEAD_BASE,
+        YVEX_TENSOR_ROLE_HC_HEAD_SCALE
     };
-    size_t count = sizeof(names) / sizeof(names[0]);
-    return dtype >= 0 && (size_t)dtype < count ? names[dtype]
-                                               : "unknown";
+    const char *head_names[3] = {
+        "hc_head_fn", "hc_head_base", "hc_head_scale"
+    };
+    unsigned long long layer;
+    unsigned int index;
+    int rc;
+
+    rc = deepseek_add_direct(
+        builder, YVEX_TENSOR_ROLE_TOKEN_EMBEDDING,
+        YVEX_TENSOR_COLLECTION_GLOBAL,
+        YVEX_TENSOR_SCOPE_GLOBAL, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
+        YVEX_DEEPSEEK_TENSOR_NO_INDEX, "embed.weight",
+        YVEX_NATIVE_DTYPE_BF16, 0);
+    if (rc != YVEX_OK) return rc;
+    rc = deepseek_add_direct(
+        builder, YVEX_TENSOR_ROLE_OUTPUT_NORM,
+        YVEX_TENSOR_COLLECTION_GLOBAL,
+        YVEX_TENSOR_SCOPE_GLOBAL, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
+        YVEX_DEEPSEEK_TENSOR_NO_INDEX, "norm.weight",
+        YVEX_NATIVE_DTYPE_BF16, 0);
+    if (rc != YVEX_OK) return rc;
+    rc = deepseek_add_direct(
+        builder, YVEX_TENSOR_ROLE_OUTPUT_HEAD,
+        YVEX_TENSOR_COLLECTION_GLOBAL,
+        YVEX_TENSOR_SCOPE_GLOBAL, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
+        YVEX_DEEPSEEK_TENSOR_NO_INDEX, "head.weight",
+        YVEX_NATIVE_DTYPE_BF16, 0);
+    if (rc != YVEX_OK) return rc;
+    for (index = 0u; index < 3u; ++index) {
+        rc = deepseek_add_direct(
+            builder, head_roles[index],
+            YVEX_TENSOR_COLLECTION_GLOBAL,
+            YVEX_TENSOR_SCOPE_GLOBAL,
+            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
+            head_names[index], YVEX_NATIVE_DTYPE_F32, 0);
+        if (rc != YVEX_OK) return rc;
+    }
+    for (layer = 0u; layer < builder->model->main_layer_count; ++layer) {
+        char prefix[64];
+        (void)snprintf(prefix, sizeof(prefix), "layers.%llu", layer);
+        rc = deepseek_add_layer(
+            builder, prefix,
+            builder->family->ir.layer_at(builder->architecture, layer),
+            YVEX_TENSOR_SCOPE_MAIN_LAYER,
+            YVEX_DEEPSEEK_TENSOR_NO_INDEX);
+        if (rc != YVEX_OK) return rc;
+    }
+    for (layer = 0u; layer < builder->model->auxiliary_layer_count; ++layer) {
+        const yvex_deepseek_v4_auxiliary_spec *aux =
+            builder->family->ir.auxiliary_at(builder->architecture, layer);
+        char prefix[64];
+        char name[128];
+        char base[128];
+
+        if (!aux)
+            return deepseek_refuse(
+                builder, YVEX_TRANSFORM_FAILURE_ARCHITECTURE_NOT_ADMITTED,
+                1u, 0u, "deepseek_transform_auxiliary");
+        (void)snprintf(prefix, sizeof(prefix), "mtp.%llu", layer);
+        rc = deepseek_add_layer(builder, prefix, &aux->layer,
+                                YVEX_TENSOR_SCOPE_MTP, layer);
+        if (rc != YVEX_OK) return rc;
+        (void)snprintf(base, sizeof(base), "%s.e_proj", prefix);
+        rc = deepseek_add_fp8(
+            builder, YVEX_TENSOR_ROLE_MTP_EMBEDDING_PROJECTION,
+            YVEX_TENSOR_COLLECTION_AUXILIARY,
+            YVEX_TENSOR_SCOPE_MTP, aux->layer.layer_index, layer,
+            base);
+        if (rc != YVEX_OK) return rc;
+        (void)snprintf(base, sizeof(base), "%s.h_proj", prefix);
+        rc = deepseek_add_fp8(
+            builder, YVEX_TENSOR_ROLE_MTP_HIDDEN_PROJECTION,
+            YVEX_TENSOR_COLLECTION_AUXILIARY,
+            YVEX_TENSOR_SCOPE_MTP, aux->layer.layer_index, layer,
+            base);
+        if (rc != YVEX_OK) return rc;
+#define MTP_DIRECT(role_id, suffix) do {                                       \
+    (void)snprintf(name, sizeof(name), "%s.%s", prefix, suffix);             \
+    rc = deepseek_add_direct(                                                   \
+        builder, role_id, YVEX_TENSOR_COLLECTION_AUXILIARY,          \
+        YVEX_TENSOR_SCOPE_MTP, aux->layer.layer_index, layer, name,   \
+        YVEX_NATIVE_DTYPE_BF16, 0);                                             \
+    if (rc != YVEX_OK) return rc;                                               \
+} while (0)
+        MTP_DIRECT(YVEX_TENSOR_ROLE_MTP_EMBEDDING_NORM, "enorm.weight");
+        MTP_DIRECT(YVEX_TENSOR_ROLE_MTP_HIDDEN_NORM, "hnorm.weight");
+        MTP_DIRECT(YVEX_TENSOR_ROLE_MTP_OUTPUT_NORM, "norm.weight");
+#undef MTP_DIRECT
+        for (index = 0u; index < 3u; ++index) {
+            (void)snprintf(name, sizeof(name), "%s.hc_head_%s", prefix,
+                           index == 0u ? "fn" :
+                           (index == 1u ? "base" : "scale"));
+            rc = deepseek_add_direct(
+                builder, head_roles[index],
+                YVEX_TENSOR_COLLECTION_AUXILIARY,
+                YVEX_TENSOR_SCOPE_MTP, aux->layer.layer_index,
+                layer, name, YVEX_NATIVE_DTYPE_F32, 0);
+            if (rc != YVEX_OK) return rc;
+        }
+    }
+    return YVEX_OK;
+}
+/* Purpose: enforce typed deepseek validate inputs invariants before publication.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+
+static int deepseek_validate_inputs(
+    deepseek_transform_builder *builder,
+    const yvex_source_verification *verification,
+    const yvex_deepseek_v4_ir *architecture,
+    const yvex_deepseek_tensor_coverage *coverage,
+    yvex_transform_failure *failure,
+    yvex_error *err)
+{
+    const yvex_model_family_api *family = yvex_model_register_deepseek_v4();
+    const yvex_deepseek_v4_model_spec *model =
+        family->ir.model(architecture);
+    const yvex_deepseek_tensor_coverage_summary *summary =
+        family->coverage.summary(coverage);
+
+    memset(builder, 0, sizeof(*builder));
+    builder->failure = failure;
+    builder->err = err;
+    if (!verification || !architecture || !coverage || !model || !summary)
+        return deepseek_refuse(
+            builder, YVEX_TRANSFORM_FAILURE_INVALID_ARGUMENT,
+            1u, 0u, "deepseek_transform_build");
+    if (!verification->verified || verification->blocker_count != 0u ||
+        model->main_layer_count != 43u ||
+        model->auxiliary_layer_count != 1u) {
+        return deepseek_refuse(
+            builder, YVEX_TRANSFORM_FAILURE_ARCHITECTURE_NOT_ADMITTED,
+            44u, model->main_layer_count + model->auxiliary_layer_count,
+            "deepseek_transform_build");
+    }
+    if (!summary->complete ||
+        summary->source_tensor_count != YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT ||
+        summary->matched_tensor_count != YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT ||
+        summary->missing_count || summary->ambiguous_count ||
+        summary->unexpected_count || summary->header_scan_count != 1u ||
+        summary->payload_bytes_read != 0u) {
+        return deepseek_refuse(
+            builder, YVEX_TRANSFORM_FAILURE_COVERAGE_INCOMPLETE,
+            YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT,
+            summary->matched_tensor_count, "deepseek_transform_build");
+    }
+    if (verification->source_snapshot_identity != summary->source_identity)
+        return deepseek_refuse(
+            builder, YVEX_TRANSFORM_FAILURE_SOURCE_IDENTITY_MISMATCH,
+            verification->source_snapshot_identity, summary->source_identity,
+            "deepseek_transform_build");
+    if (!verification->manifest_payload_trusted ||
+        !yvex_sha256_hex_valid(verification->manifest_payload_identity) ||
+        verification->manifest_payload_source_snapshot_identity !=
+            summary->source_identity ||
+        (strcmp(verification->manifest_payload_trust_class,
+                "upstream_payload_verified") != 0 &&
+         strcmp(verification->manifest_payload_trust_class,
+                "local_payload_snapshot_sealed") != 0)) {
+        return deepseek_refuse(
+            builder, YVEX_TRANSFORM_FAILURE_PAYLOAD_IDENTITY_MISMATCH,
+            summary->source_identity,
+            verification->manifest_payload_source_snapshot_identity,
+            "deepseek_transform_build");
+    }
+    builder->verification = verification;
+    builder->family = family;
+    builder->architecture = architecture;
+    builder->model = model;
+    builder->coverage = coverage;
+    builder->coverage_summary = summary;
+    return YVEX_OK;
+}
+/* Purpose: construct bounded deepseek transform build state from admitted inputs.
+ * Inputs: typed plan facts are borrowed.
+ * Effects: mutates only owned builder or IR state.
+ * Failure: publishes no partial plan on refusal.
+ * Boundary: performs no payload or artifact execution. */
+static int deepseek_transform_build(
+    yvex_transform_ir **out,
+    const yvex_source_verification *verification,
+    const yvex_deepseek_v4_ir *architecture,
+    const yvex_deepseek_tensor_coverage *coverage,
+    const yvex_transform_builder_options *options,
+    yvex_transform_failure *failure,
+    yvex_error *err)
+{
+    deepseek_transform_builder deepseek;
+    yvex_transform_header header;
+    char logical_identity[YVEX_TRANSFORM_IR_IDENTITY_CAP];
+    int rc;
+
+    if (out) *out = NULL;
+    if (failure) memset(failure, 0, sizeof(*failure));
+    yvex_error_clear(err);
+    if (!out)
+        return yvex_transform_fail(
+            failure, YVEX_TRANSFORM_FAILURE_INVALID_ARGUMENT,
+            YVEX_TRANSFORM_IR_NO_ID, YVEX_TRANSFORM_IR_NO_ID,
+            YVEX_TRANSFORM_IR_NO_ID, YVEX_TRANSFORM_IR_NO_ID,
+            YVEX_TRANSFORM_IR_NO_ID, 1u, 0u, 0u, err,
+            "deepseek_transform_build");
+    rc = deepseek_validate_inputs(&deepseek, verification, architecture,
+                                  coverage, failure, err);
+    if (rc != YVEX_OK) return rc;
+    if (!yvex_transform_deepseek_architecture_identity(
+            architecture, logical_identity))
+        return deepseek_refuse(
+            &deepseek, YVEX_TRANSFORM_FAILURE_IDENTITY_ENCODING,
+            1u, 0u, "deepseek_transform_architecture_identity");
+    deepseek.temporary_allocator.allocate = deepseek_default_allocate;
+    deepseek.temporary_allocator.release = deepseek_default_release;
+    deepseek.temporary_allocator.context = NULL;
+    if (options && options->allocator.allocate)
+        deepseek.temporary_allocator = options->allocator;
+    memset(&header, 0, sizeof(header));
+    header.schema_version = YVEX_TRANSFORM_IR_SCHEMA_VERSION;
+    header.logical_model_identity = logical_identity;
+    header.source_snapshot_identity =
+        deepseek.coverage_summary->source_identity;
+    header.coverage_identity = deepseek.coverage_summary->coverage_identity;
+    header.required_payload_identity =
+        verification->manifest_payload_identity;
+    header.payload_trust_class = verification->manifest_payload_trust_class;
+    header.expected_source_count = YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT;
+    header.expected_terminal_count = YVEX_DEEPSEEK_TRANSFORM_TERMINAL_COUNT;
+    header.header_scan_count = deepseek.coverage_summary->header_scan_count;
+    rc = yvex_transform_builder_create(
+        &deepseek.builder, &header, options, failure, err);
+    if (rc == YVEX_OK) rc = deepseek_build_graph(&deepseek);
+    if (rc == YVEX_OK &&
+        deepseek.terminal_ordinal != YVEX_DEEPSEEK_TRANSFORM_TERMINAL_COUNT)
+        rc = deepseek_refuse(
+            &deepseek, YVEX_TRANSFORM_FAILURE_MISSING_TERMINAL,
+            YVEX_DEEPSEEK_TRANSFORM_TERMINAL_COUNT,
+            deepseek.terminal_ordinal, "deepseek_transform_build");
+    if (rc == YVEX_OK)
+        rc = yvex_transform_builder_seal(
+            deepseek.builder, out, failure, err);
+    yvex_transform_builder_release(&deepseek.builder);
+    if (rc == YVEX_OK) {
+        const yvex_transform_ir_summary *summary =
+            yvex_transform_ir_summary_get(*out);
+        if (!summary || !summary->complete ||
+            summary->source_value_count !=
+                YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT ||
+            summary->node_count != YVEX_DEEPSEEK_TRANSFORM_TERMINAL_COUNT ||
+            summary->edge_count != YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT ||
+            summary->terminal_count !=
+                YVEX_DEEPSEEK_TRANSFORM_TERMINAL_COUNT ||
+            summary->maximum_fan_in != 512u ||
+            summary->payload_bytes_read != 0u) {
+            yvex_transform_ir_release(out);
+            return deepseek_refuse(
+                &deepseek, YVEX_TRANSFORM_FAILURE_SEAL,
+                YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT,
+                summary ? summary->edge_count : 0u,
+                "deepseek_transform_build");
+        }
+    }
+    return rc;
 }
 
-const char *yvex_transform_scope_name(yvex_transform_scope scope)
+/* Purpose: publish the immutable family transform operations used by the
+ * registration table and compilation consumers.
+ * Inputs: none.
+ * Effects: returns process-lifetime immutable storage; no allocation or I/O.
+ * Failure: cannot fail.
+ * Boundary: the API constructs semantic plans but does not execute payload
+ * transformations or select artifact encodings. */
+const yvex_model_family_transform_api *yvex_model_deepseek_transform_api(void)
 {
-    static const char *const names[] = {"global", "main-layer", "auxiliary"};
-    return scope >= 0 && scope <= YVEX_TRANSFORM_SCOPE_AUXILIARY
-        ? names[scope] : "unknown";
-}
-
-const char *yvex_transform_subsystem_name(yvex_transform_subsystem subsystem)
-{
-    static const char *const names[] = {
-        "global", "attention", "compressor", "indexer", "normalization",
-        "residual", "router", "routed-expert", "shared-expert", "output",
-        "auxiliary"
+    static const yvex_model_family_transform_api api = {
+        yvex_transform_deepseek_architecture_identity,
+        deepseek_transform_build
     };
-    return subsystem >= 0 && subsystem < YVEX_TRANSFORM_SUBSYSTEM_COUNT
-        ? names[subsystem] : "unknown";
+
+    return &api;
 }

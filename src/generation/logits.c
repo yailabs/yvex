@@ -1,18 +1,16 @@
-/*
- * Owner: generation.logits (generation).
- * Owns: the reusable-algorithm boundary consumed by runtime,cli.
- * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
- * Invariants: scope=generic and visibility=private match config/source_owners.tsv.
- * Boundary: reusable-algorithm; moving this contract requires an ownership-manifest change.
- *
- * logits.c - Logits runtime boundary.
- *
- * This file owns the session logits skeleton and a bounded diagnostic logits
- * buffer over decode state. It does not run the real model output head, sample,
- * generate, or benchmark.
- */
+/* Owner: generation.logits (generation).
+ * Owns: the typed diagnostic state transition consumed by runtime and reports.
+ * Does not own: model policy, graph admission, generation readiness, or higher-stage claims.
+ * Invariants: diagnostic state never promotes model-backed generation capability.
+ * Boundary: this owner exposes typed facts only at its admitted subsystem stage.
+ * Purpose: Own the bounded diagnostic logits buffer and its decode-state projection.
+ * Inputs: A vocabulary bound, diagnostic decode state, and caller-owned logits object.
+ * Effects: Allocates or updates only logits-owned storage.
+ * Failure: Invalid dimensions and allocation failures publish no usable logits state. */
 
-#include <yvex/logits.h>
+#include <yvex/internal/core.h>
+#include <yvex/internal/generation.h>
+#include <yvex/generation.h>
 
 #include <limits.h>
 #include <stdint.h>
@@ -24,38 +22,56 @@ struct yvex_logits {
     yvex_logits_summary summary;
 };
 
-static int logits_test_env_enabled(const char *name)
-{
-    const char *value = getenv(name);
-
-    return value && value[0] != '\0' && strcmp(value, "0") != 0;
-}
-
-static unsigned long long logits_mix_u64(unsigned long long hash,
-                                         unsigned long long value)
-{
-    unsigned int i;
-
-    for (i = 0; i < 8u; ++i) {
-        hash ^= (value >> (i * 8u)) & 0xffull;
-        hash *= 1099511628211ull;
-    }
-    return hash;
-}
-
-static unsigned long long logits_mix_float(unsigned long long hash, float value)
-{
-    uint32_t bits = 0u;
-
-    memcpy(&bits, &value, sizeof(bits));
-    return logits_mix_u64(hash, (unsigned long long)bits);
-}
-
+/* Purpose: Enforce the typed ownership, geometry, and lifecycle invariants for logits count valid.
+ * Inputs: Immutable typed facts whose ownership, shape, or lifecycle state must be admitted.
+ * Effects: Does not mutate caller-visible or owner state.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 int yvex_logits_count_valid(unsigned long long count)
 {
     return count >= 1ull && count <= 256ull;
 }
 
+static const yvex_logits_buffer_summary logits_summary_default = {
+    .logits_buffer_kind = "bounded-diagnostic",
+    .logits_phase = "preflight",
+    .logits_source = "decode-state",
+    .backend_name = "cpu",
+    .decode_step_kind = "none",
+    .decode_phase = "not-started",
+    .cleanup_status = "not-needed",
+    .generation_status = "unsupported"
+};
+
+static const char *const logits_status_names[] = {
+    "empty", "unavailable", "allocated",
+};
+
+#define LOGITS_FIELD(destination_, source_)                                             \
+    {                                                                                   \
+        offsetof(yvex_logits_buffer_summary, destination_),                             \
+        offsetof(yvex_decode_step_summary, source_),                                    \
+        sizeof(((yvex_decode_step_summary *)0)->source_) +                              \
+            0u * sizeof(char[sizeof(((yvex_logits_buffer_summary *)0)->destination_) ==  \
+                                    sizeof(((yvex_decode_step_summary *)0)->source_)     \
+                                ? 1                                                     \
+                                : -1])                                                  \
+    }
+
+static const yvex_generation_field_projection logits_decode_fields[] = {
+    LOGITS_FIELD(decode_state_created, decode_state_created),
+    LOGITS_FIELD(decode_step_executed, decode_step_executed),
+    LOGITS_FIELD(decode_position, decode_position),
+    LOGITS_FIELD(decode_state_checksum, decode_state_checksum),
+};
+
+#undef LOGITS_FIELD
+
+/* Purpose: Construct the admitted logits buffer summary init state only after its identities and resources are valid.
+ * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 void yvex_logits_buffer_summary_init(yvex_logits_buffer_summary *out,
                                      const yvex_logits_buffer_options *options)
 {
@@ -64,36 +80,38 @@ void yvex_logits_buffer_summary_init(yvex_logits_buffer_summary *out,
     if (!out) {
         return;
     }
-    memset(out, 0, sizeof(*out));
+    *out = logits_summary_default;
     decode_options = options ? options->decode_options : NULL;
-    out->logits_buffer_kind = "bounded-diagnostic";
-    out->logits_phase = "preflight";
-    out->logits_source = "decode-state";
     out->backend_name = decode_options && decode_options->backend_name
                             ? decode_options->backend_name
                             : "cpu";
-    out->decode_step_kind = "none";
-    out->decode_phase = "not-started";
-    out->cleanup_status = "not-needed";
-    out->generation_status = "unsupported";
 }
 
+/* Purpose: Copy logits copy decode summary between compatible admitted ranges without changing semantic identity.
+ * Inputs: Typed admitted handles, immutable source ranges, checked dimensions, and an explicit destination.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static void logits_copy_decode_summary(yvex_logits_buffer_summary *out,
                                        const yvex_decode_step_summary *decode)
 {
     if (!out || !decode) {
         return;
     }
+    yvex_generation_project_fields(
+        out, decode, logits_decode_fields,
+        sizeof(logits_decode_fields) / sizeof(logits_decode_fields[0]));
     out->backend_name = decode->backend_name ? decode->backend_name : out->backend_name;
-    out->decode_state_created = decode->decode_state_created;
-    out->decode_step_executed = decode->decode_step_executed;
     out->decode_step_kind = decode->decode_step_kind ? decode->decode_step_kind
                                                      : "bounded-diagnostic";
     out->decode_phase = decode->decode_phase ? decode->decode_phase : "unknown";
-    out->decode_position = decode->decode_position;
-    out->decode_state_checksum = decode->decode_state_checksum;
 }
 
+/* Purpose: Decode logits value from decode according to its pinned numeric representation.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static float logits_value_from_decode(const yvex_decode_step_summary *decode,
                                       unsigned long long index,
                                       unsigned long long seed)
@@ -104,8 +122,8 @@ static float logits_value_from_decode(const yvex_decode_step_summary *decode,
     double signed_offset;
     double value;
 
-    local = logits_mix_u64(seed, index);
-    local = logits_mix_u64(local, decode->decode_position);
+    local = yvex_core_hash_mix_u64(seed, index);
+    local = yvex_core_hash_mix_u64(local, decode->decode_position);
     if (decode->decode_state_value_count > 0ull) {
         basis = (double)decode->decode_state_values[index % decode->decode_state_value_count];
     }
@@ -115,6 +133,11 @@ static float logits_value_from_decode(const yvex_decode_step_summary *decode,
     return (float)value;
 }
 
+/* Purpose: Implement the canonical logits accumulate summary mechanism owned by the generation boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static void logits_accumulate_summary(yvex_logits_buffer_summary *out,
                                       const float *values,
                                       unsigned long long count)
@@ -130,8 +153,8 @@ static void logits_accumulate_summary(yvex_logits_buffer_summary *out,
     out->logits_sum = 0.0;
     for (i = 0; i < count; ++i) {
         double value = (double)values[i];
-        checksum = logits_mix_float(checksum, values[i]);
-        checksum = logits_mix_u64(checksum, i);
+        checksum = yvex_generation_hash_float(checksum, values[i]);
+        checksum = yvex_core_hash_mix_u64(checksum, i);
         if (value < out->logits_min) {
             out->logits_min = value;
         }
@@ -147,6 +170,11 @@ static void logits_accumulate_summary(yvex_logits_buffer_summary *out,
     out->logits_checksum = checksum;
 }
 
+/* Purpose: Construct the admitted engine create logits buffer state only after its identities and resources are valid.
+ * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 int yvex_engine_create_logits_buffer(yvex_engine *engine,
                                      const yvex_logits_buffer_options *options,
                                      yvex_logits_buffer_summary *out,
@@ -160,16 +188,16 @@ int yvex_engine_create_logits_buffer(yvex_engine *engine,
     int rc;
 
     if (!engine || !options || !options->decode_options || !out) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_create_logits_buffer",
-                       "engine, options, decode options, and out are required");
-        return YVEX_ERR_INVALID_ARG;
+        return yvex_generation_refuse(
+            err, YVEX_ERR_INVALID_ARG, "yvex_engine_create_logits_buffer",
+            "engine, options, decode options, and out are required");
     }
     yvex_logits_buffer_summary_init(out, options);
     count = options->logits_count;
     if (!yvex_logits_count_valid(count)) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_create_logits_buffer",
-                       "logits count must be between 1 and 256");
-        return YVEX_ERR_INVALID_ARG;
+        return yvex_generation_refuse(err, YVEX_ERR_INVALID_ARG,
+                                      "yvex_engine_create_logits_buffer",
+                                      "logits count must be between 1 and 256");
     }
 
     memset(&decode_summary, 0, sizeof(decode_summary));
@@ -181,34 +209,36 @@ int yvex_engine_create_logits_buffer(yvex_engine *engine,
         return rc;
     }
     if (!decode_summary.decode_state_created) {
-        yvex_error_set(err, YVEX_ERR_STATE, "yvex_engine_create_logits_buffer",
-                       "decode state was not created");
-        return YVEX_ERR_STATE;
+        return yvex_generation_refuse(err, YVEX_ERR_STATE,
+                                      "yvex_engine_create_logits_buffer",
+                                      "decode state was not created");
     }
 
-    if (logits_test_env_enabled("YVEX_TEST_FAIL_LOGITS_AFTER_DECODE")) {
+    rc = yvex_generation_test_refuse(
+        "YVEX_TEST_FAIL_LOGITS_AFTER_DECODE", err, YVEX_ERR_BACKEND,
+        "yvex_engine_create_logits_buffer", "test logits failure after decode");
+    if (rc != YVEX_OK) {
         out->logits_phase = "after-decode";
-        yvex_error_set(err, YVEX_ERR_BACKEND, "yvex_engine_create_logits_buffer",
-                       "test logits failure after decode");
-        return YVEX_ERR_BACKEND;
+        return rc;
     }
 
     out->logits_phase = "allocation";
-    if (logits_test_env_enabled("YVEX_TEST_FAIL_LOGITS_AFTER_ALLOC")) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_engine_create_logits_buffer",
-                       "test logits allocation failure");
-        return YVEX_ERR_NOMEM;
+    rc = yvex_generation_test_refuse(
+        "YVEX_TEST_FAIL_LOGITS_AFTER_ALLOC", err, YVEX_ERR_NOMEM,
+        "yvex_engine_create_logits_buffer", "test logits allocation failure");
+    if (rc != YVEX_OK) {
+        return rc;
     }
     if (count > ULLONG_MAX / (unsigned long long)sizeof(*values)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_create_logits_buffer",
-                       "logits byte count overflow");
-        return YVEX_ERR_BOUNDS;
+        return yvex_generation_refuse(err, YVEX_ERR_BOUNDS,
+                                      "yvex_engine_create_logits_buffer",
+                                      "logits byte count overflow");
     }
     values = (float *)calloc((size_t)count, sizeof(*values));
     if (!values) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_engine_create_logits_buffer",
-                       "failed to allocate bounded logits buffer");
-        return YVEX_ERR_NOMEM;
+        return yvex_generation_refuse(err, YVEX_ERR_NOMEM,
+                                      "yvex_engine_create_logits_buffer",
+                                      "failed to allocate bounded logits buffer");
     }
 
     out->logits_phase = "fill";
@@ -216,13 +246,14 @@ int yvex_engine_create_logits_buffer(yvex_engine *engine,
     for (i = 0; i < count; ++i) {
         values[i] = logits_value_from_decode(&decode_summary, i, seed);
     }
-    if (logits_test_env_enabled("YVEX_TEST_FAIL_LOGITS_AFTER_FILL")) {
+    rc = yvex_generation_test_refuse(
+        "YVEX_TEST_FAIL_LOGITS_AFTER_FILL", err, YVEX_ERR_BACKEND,
+        "yvex_engine_create_logits_buffer", "test logits failure after fill");
+    if (rc != YVEX_OK) {
         free(values);
         out->cleanup_attempted = 1;
         out->cleanup_status = "pass";
-        yvex_error_set(err, YVEX_ERR_BACKEND, "yvex_engine_create_logits_buffer",
-                       "test logits failure after fill");
-        return YVEX_ERR_BACKEND;
+        return rc;
     }
 
     out->logits_count = count;
@@ -238,6 +269,11 @@ int yvex_engine_create_logits_buffer(yvex_engine *engine,
     return YVEX_OK;
 }
 
+/* Purpose: Construct the admitted logits create state only after its identities and resources are valid.
+ * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 int yvex_logits_create(yvex_logits **out,
                        const yvex_model_descriptor *model,
                        yvex_error *err)
@@ -245,20 +281,21 @@ int yvex_logits_create(yvex_logits **out,
     yvex_logits *logits;
 
     if (!out) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_logits_create", "out is required");
-        return YVEX_ERR_INVALID_ARG;
+        return yvex_generation_refuse(err, YVEX_ERR_INVALID_ARG,
+                                      "yvex_logits_create", "out is required");
     }
     *out = NULL;
 
     if (!model) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_logits_create", "model is required");
-        return YVEX_ERR_INVALID_ARG;
+        return yvex_generation_refuse(err, YVEX_ERR_INVALID_ARG,
+                                      "yvex_logits_create", "model is required");
     }
 
     logits = (yvex_logits *)calloc(1, sizeof(*logits));
     if (!logits) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_logits_create", "failed to allocate logits summary");
-        return YVEX_ERR_NOMEM;
+        return yvex_generation_refuse(err, YVEX_ERR_NOMEM,
+                                      "yvex_logits_create",
+                                      "failed to allocate logits summary");
     }
 
     logits->summary.status = YVEX_LOGITS_STATUS_UNAVAILABLE;
@@ -270,33 +307,53 @@ int yvex_logits_create(yvex_logits **out,
     return YVEX_OK;
 }
 
+/* Purpose: Release the resources owned by logits close without changing borrowed inputs.
+ * Inputs: An owned object that may be null or already released where its lifecycle permits.
+ * Effects: Releases only resources owned by the supplied object and leaves it reset or unusable.
+ * Failure: Null and already-released inputs follow the idempotent lifecycle contract.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 void yvex_logits_close(yvex_logits *logits)
 {
     free(logits);
 }
 
+/* Purpose: Implement the canonical logits status of mechanism owned by the generation boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Does not mutate caller-visible or owner state.
+ * Failure: Returns the canonical unknown or zero sentinel for an invalid typed value.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 yvex_logits_status yvex_logits_status_of(const yvex_logits *logits)
 {
     return logits ? logits->summary.status : YVEX_LOGITS_STATUS_EMPTY;
 }
 
+/* Purpose: Return the canonical diagnostic label for logits status name.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Does not mutate caller-visible or owner state.
+ * Failure: Returns the canonical unknown or zero sentinel for an invalid typed value.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 const char *yvex_logits_status_name(yvex_logits_status status)
 {
-    switch (status) {
-    case YVEX_LOGITS_STATUS_EMPTY: return "empty";
-    case YVEX_LOGITS_STATUS_UNAVAILABLE: return "unavailable";
-    case YVEX_LOGITS_STATUS_ALLOCATED: return "allocated";
-    }
-    return "unknown";
+    return status >= YVEX_LOGITS_STATUS_EMPTY &&
+                   (size_t)status < sizeof(logits_status_names) /
+                                        sizeof(logits_status_names[0])
+               ? logits_status_names[status]
+               : "unknown";
 }
 
+/* Purpose: Retrieve logits get summary from admitted immutable or owned state.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 int yvex_logits_get_summary(const yvex_logits *logits,
                             yvex_logits_summary *out,
                             yvex_error *err)
 {
     if (!logits || !out) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_logits_get_summary", "logits and out are required");
-        return YVEX_ERR_INVALID_ARG;
+        return yvex_generation_refuse(err, YVEX_ERR_INVALID_ARG,
+                                      "yvex_logits_get_summary",
+                                      "logits and out are required");
     }
     memcpy(out, &logits->summary, sizeof(*out));
     yvex_error_clear(err);

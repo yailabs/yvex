@@ -30,12 +30,25 @@ test "$family_files" -eq 3 || {
   exit 1
 }
 
+grep -A8 'int yvex_attention_execute_supported' src/graph/attention.c |
+  grep -F 'return 0;' >/dev/null || {
+  echo "topology closure: attention execution refusal was promoted" >&2
+  exit 1
+}
+grep -F 'plan->summary.cuda_execution_ready = 0;' src/graph/plan.c >/dev/null || {
+  echo "topology closure: attention CUDA readiness was promoted" >&2
+  exit 1
+}
+grep -F 'descriptor->summary.generation_ready = 0;' src/runtime/descriptor.c >/dev/null || {
+  echo "topology closure: runtime generation readiness was promoted" >&2
+  exit 1
+}
 for fact in \
-  'attention_execution_supported=0' \
-  'attention_cuda_execution_ready=0' \
-  'runtime_generation_ready=0'; do
+  'attention_execution_supported=%d' \
+  'attention_cuda_execution_ready=%d' \
+  'runtime_generation_ready=%d'; do
   grep -F "$fact" tests/live/attention_deepseek.c >/dev/null || {
-    echo "topology closure: missing preserved refusal fact: $fact" >&2
+    echo "topology closure: missing live refusal projection: $fact" >&2
     exit 1
   }
 done

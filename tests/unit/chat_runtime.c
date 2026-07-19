@@ -21,7 +21,7 @@
  */
 #include <string.h>
 
-#include "src/core/operator.h"
+#include <yvex/internal/runtime.h>
 #include "tests/test.h"
 
 static int test_runtime_accept_and_reset(void)

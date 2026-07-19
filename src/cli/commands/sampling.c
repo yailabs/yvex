@@ -1,63 +1,26 @@
-/*
- * sampling.c - sampling command adapter.
- *
- * Owner:
- *   src/cli/commands
- *
- * Owns:
- *   sampling command dispatch from typed input to report builder and renderer.
- *
- * Does not own:
- *   sampling internals, model resolution, token input validation, graph guard
- *   preflight, engine open, report fact construction, rendering internals,
- *   generation, eval, benchmark, or release decisions.
- *
- * Invariants:
- *   adapter stays thin: parse input, call one report API, render typed report,
- *   and return a mapped exit code.
- *
- * Boundary:
- *   command dispatch is not real vocabulary sampling support.
- *
- * Purpose:
- *   bind sample CLI input to the typed sampling report API.
- *
- * Inputs:
- *   argc/argv are borrowed command input from the top-level CLI.
- *
- * Effects:
- *   writes help, parser errors, runtime errors, or typed sampling reports.
- *
- * Failure:
- *   parser failures return 2; report failures return mapped YVEX exit codes.
- */
-#include "src/cli/input/sampling.h"
-#include "src/cli/render/sampling.h"
-#include "src/cli/io/out.h"
+/* Owner: src/cli/commands
+ * Owns: sampling command dispatch from typed input to report builder and renderer.
+ * Does not own: sampling internals, model resolution, token input validation, graph guard preflight, engine open,
+ *   report fact construction, rendering internals, generation, eval, benchmark, or release decisions.
+ * Invariants: adapter stays thin: parse input, call one report API, render typed report, and return a mapped exit
+ *   code.
+ * Boundary: command dispatch is not real vocabulary sampling support.
+ * Purpose: bind sample CLI input to the typed sampling report API.
+ * Inputs: argc/argv are borrowed command input from the top-level CLI.
+ * Effects: writes help, parser errors, runtime errors, or typed sampling reports.
+ * Failure: parser failures return 2; report failures return mapped YVEX exit codes. */
+#include "src/cli/input/private.h"
+#include "src/cli/render/private.h"
+#include "src/cli/io/private.h"
 
 #include <stdio.h>
 #include <string.h>
 
-static int sampling_cli_exit_for_status(int status)
-{
-    switch (status) {
-    case YVEX_OK:
-        return 0;
-    case YVEX_ERR_INVALID_ARG:
-        return 2;
-    case YVEX_ERR_IO:
-    case YVEX_ERR_NOMEM:
-        return 3;
-    case YVEX_ERR_FORMAT:
-    case YVEX_ERR_BOUNDS:
-        return 4;
-    case YVEX_ERR_UNSUPPORTED:
-        return 5;
-    default:
-        return 1;
-    }
-}
-
+/* Purpose: Parse sampling print parse error into typed CLI state (`sampling_cli_print_parse_error`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int sampling_cli_print_parse_error(const yvex_error *err)
 {
     yvex_cli_out_writef(yvex_cli_out_stderr(), "%s\n",
@@ -65,14 +28,20 @@ static int sampling_cli_print_parse_error(const yvex_error *err)
     return 2;
 }
 
+/* Purpose: Render sampling print runtime error from typed facts (`sampling_cli_print_runtime_error`). */
 static int sampling_cli_print_runtime_error(const yvex_error *err, int status)
 {
     yvex_cli_out_writef(yvex_cli_out_stderr(), "yvex: %s: %s\n",
                         yvex_error_where(err),
                         yvex_error_message(err));
-    return sampling_cli_exit_for_status(status);
+    return exit_for_status(status);
 }
 
+/* Purpose: Orchestrate the typed sample command request (`yvex_sample_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_sample_command(int argc, char **argv)
 {
     yvex_sampling_args args;
@@ -109,6 +78,11 @@ int yvex_sample_command(int argc, char **argv)
     return report.exit_code;
 }
 
+/* Purpose: Render sample help from typed facts (`yvex_sample_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_sample_help(FILE *fp)
 {
     (void)yvex_sampling_render_help(fp);

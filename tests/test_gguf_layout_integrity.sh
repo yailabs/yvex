@@ -11,15 +11,14 @@ grep -nF 'test: gguf_layout_integrity' "$out" >/dev/null
 
 # One domain owner validates ordered padded layout. Reports and consumers must
 # project it instead of reconstructing range policy or hashing by default.
-test -f include/yvex/gguf_layout.h
+test -f include/yvex/gguf.h
 test -f src/gguf/layout_integrity.c
-test -f include/yvex/gguf_layout.h
-grep -nF 'int yvex_gguf_layout_validate(' include/yvex/gguf_layout.h >/dev/null
+grep -nF 'int yvex_gguf_layout_validate(' include/yvex/gguf.h >/dev/null
 grep -nF 'yvex_gguf_layout_validate(artifact, gguf' \
   src/artifact/integrity.c >/dev/null
 grep -nF 'yvex_gguf_layout_validate(artifact, gguf' \
   src/gguf/report.c >/dev/null
-grep -nF 'yvex_gguf_range_fact_from_layout' src/gguf/range_map.c >/dev/null
+grep -nF 'yvex_gguf_range_fact_from_layout' src/gguf/descriptor.c >/dev/null
 grep -nF 'yvex_artifact_integrity_validate' src/graph/guard.c >/dev/null
 grep -nF 'yvex_artifact_integrity_validate' src/runtime/core.c >/dev/null
 grep -nF 'yvex_artifact_integrity_validate' \

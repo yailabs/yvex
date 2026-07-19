@@ -11,8 +11,9 @@
  *   facts bound to the opened fixture snapshot.
  * Boundary: fixture materialization is not full runtime support.
  */
-#include "src/artifact/materialize.h"
-#include "src/model/runtime_descriptor.h"
+#include <yvex/internal/artifact.h>
+#include <yvex/internal/families/deepseek_v4.h>
+#include <yvex/internal/runtime.h>
 
 #include <stdio.h>
 #include <string.h>

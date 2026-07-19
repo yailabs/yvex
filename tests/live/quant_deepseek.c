@@ -9,8 +9,9 @@
  * Boundary: execution mode is added only through the canonical discard sink.
  */
 #define _POSIX_C_SOURCE 200809L
-#include "src/gguf/quant_sink.h"
-#include "src/model/families.h"
+#include <yvex/internal/compilation.h>
+#include <yvex/internal/quant_numeric.h>
+#include <yvex/internal/families/deepseek_v4.h>
 
 #include <limits.h>
 #include <stdio.h>

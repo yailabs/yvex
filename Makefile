@@ -35,12 +35,14 @@ CUDA_LDFLAGS ?=
 YVEX_CUDA_ARCH ?= auto
 NVCC_AVAILABLE := $(shell command -v $(NVCC) >/dev/null 2>&1 && echo yes || echo no)
 
-CPPFLAGS ?= -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L -Iinclude -I. -Isrc/core -Isrc/cli -Isrc/cli/input -Isrc/cli/io -Isrc/cli/model_artifacts -Isrc/cli/render -Isrc/source -Isrc/io -Isrc/backend -Isrc/backend/cuda -Isrc/runtime -Isrc/server -Isrc/gguf -Isrc/generation -Isrc/graph -Isrc/model/artifacts -Isrc/model/compilation -Isrc/model/target
-CFLAGS ?= -std=c11 -Wall -Wextra -pedantic -pthread
+CPPFLAGS ?= -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L -Iinclude -I.
+CFLAGS ?= -std=c11 -Wall -Wextra -pedantic -Wstrict-prototypes \
+	-Wmissing-prototypes -Wmissing-declarations -Wshadow -Wformat=2 \
+	-Wundef -Wvla -pthread
 DEPFLAGS ?= -MMD -MP
 LDFLAGS ?=
 LDLIBS ?= -ldl -pthread -lm
-TEST_CPPFLAGS := $(CPPFLAGS) -Itests
+TEST_CPPFLAGS := $(CPPFLAGS)
 
 BUILD_DIR ?= build
 OBJ_DIR ?= $(BUILD_DIR)/obj
@@ -94,6 +96,7 @@ CORE_SRCS := \
 	src/artifact/materialize.c \
 	src/artifact/roundtrip_gate.c \
 	src/backend/core.c \
+	src/backend/cpu.c \
 	src/backend/report.c \
 	src/generation/decode.c \
 	src/generation/core.c \
@@ -103,25 +106,21 @@ CORE_SRCS := \
 	src/generation/kv_report.c \
 	src/generation/logits.c \
 	src/generation/sampling.c \
+	src/runtime/graph.c \
 	src/generation/sampling_report.c \
-	src/gguf/naming.c \
 	src/gguf/core.c \
 	src/gguf/conversion.c \
-	src/gguf/quant.c \
+	src/gguf/imatrix.c \
+	src/gguf/quant_job.c \
+	src/gguf/quant_policy.c \
 	src/gguf/tools.c \
 	src/gguf/container.c \
 	src/gguf/descriptor.c \
 	src/gguf/file_sink.c \
 	src/gguf/layout_integrity.c \
-	src/gguf/layout_map.c \
-	src/gguf/metadata.c \
-	src/gguf/name_map.c \
 	src/gguf/qtype.c \
-	src/gguf/range_map.c \
 	src/gguf/reader.c \
 	src/gguf/report.c \
-	src/gguf/roundtrip.c \
-	src/gguf/tensor_info.c \
 	src/gguf/tokenizer_metadata.c \
 	src/gguf/writer.c \
 	src/gguf/quant_registry.c \
@@ -137,19 +136,17 @@ CORE_SRCS := \
 	src/graph/core.c \
 	src/graph/guard.c \
 	src/graph/plan.c \
-	src/graph/primitive.c \
 	src/graph/report.c \
 	src/graph/memory_plan.c \
 	src/io/writer.c \
 	src/metrics/core.c \
-	src/metrics/profile.c \
 	src/model/core.c \
 	src/model/families/deepseek_v4.c \
 	src/model/compilation/ir.c \
 	src/model/compilation/ir_identity.c \
 	src/model/compilation/ir_validate.c \
 	src/model/compilation/binding.c \
-	src/model/runtime_descriptor.c \
+	src/runtime/descriptor.c \
 	src/model/artifacts/gate.c \
 	src/model/artifacts/ref.c \
 	src/model/artifacts/registry.c \
@@ -174,7 +171,7 @@ CORE_SRCS := \
 	src/source/native_weights.c \
 	src/source/safetensors_header.c \
 	src/source/inventory.c \
-	src/source/json.c \
+	src/core/json.c \
 	src/source/manifest.c \
 	src/source/payload.c \
 	src/source/payload_identity.c \
@@ -198,6 +195,9 @@ CLI_SRCS := \
 	$(CLI_RENDER_SRCS) \
 	$(CLI_IO_SRCS)
 
+CLI_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CLI_SRCS))
+DAEMON_OBJ := $(OBJ_DIR)/src/daemon/yvexd.o
+
 CUDA_SRCS := \
 	src/backend/cuda/backend.c \
 	src/backend/cuda/capability.c \
@@ -213,8 +213,7 @@ CUDA_CU_SRCS := \
 
 CUDA_ARCH_FLAG := $(if $(filter auto,$(YVEX_CUDA_ARCH)),,-arch=$(YVEX_CUDA_ARCH))
 CUDA_PTX := $(patsubst %.cu,$(OBJ_DIR)/%.ptx,$(CUDA_CU_SRCS))
-CUDA_PTX_C := $(OBJ_DIR)/src/backend/cuda/kernels_ptx.c
-CUDA_PTX_OBJ := $(OBJ_DIR)/src/backend/cuda/kernels_ptx.o
+CUDA_PTX_INC := $(OBJ_DIR)/generated/cuda_kernels_ptx.inc
 
 CORE_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 CUDA_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CUDA_SRCS))
@@ -222,7 +221,8 @@ CORE_OBJS += $(CUDA_OBJS)
 
 ifeq ($(NVCC_AVAILABLE),yes)
 CPPFLAGS += -DYVEX_HAVE_CUDA_KERNEL_PTX=1
-CORE_OBJS += $(CUDA_PTX_OBJ)
+$(OBJ_DIR)/src/backend/cuda/capability.o: CPPFLAGS += -I$(OBJ_DIR)/generated
+$(OBJ_DIR)/src/backend/cuda/capability.o: $(CUDA_PTX_INC)
 endif
 
 TEST_RUNNER := $(TEST_DIR)/test
@@ -240,6 +240,7 @@ TEST_UNIT_SRCS := $(sort $(filter-out tests/unit/quant_runner.c tests/unit/artif
 TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(TEST_UNIT_SRCS))
 TEST_REFERENCE_SRCS := $(sort $(wildcard tests/reference/*.c))
 TEST_REFERENCE_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(TEST_REFERENCE_SRCS))
+TEST_MAIN_OBJ := $(OBJ_DIR)/tests/test.o
 
 QUANT_TEST_UNIT_SRCS := \
 	tests/unit/gguf_qtype_abi.c \
@@ -251,11 +252,27 @@ QUANT_TEST_UNIT_SRCS := \
 	tests/unit/qtype_support.c \
 	tests/unit/quant_policy.c
 QUANT_TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(QUANT_TEST_UNIT_SRCS))
+QUANT_TEST_RUNNER_OBJ := $(OBJ_DIR)/tests/unit/quant_runner.o
+ARTIFACT_TEST_RUNNER_OBJ := $(OBJ_DIR)/tests/unit/artifact_writer_runner.o
 
 CUDA_TEST_UNIT_SRCS := $(sort $(wildcard tests/unit/cuda/*.c))
 CUDA_TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CUDA_TEST_UNIT_SRCS))
-DEPENDENCY_FILES := $(CORE_OBJS:.o=.d) $(TEST_UNIT_OBJS:.o=.d) \
-	$(CUDA_TEST_UNIT_OBJS:.o=.d)
+CUDA_TEST_MAIN_OBJ := $(OBJ_DIR)/tests/test_cuda.o
+
+SOURCE_PAYLOAD_LIVE_OBJ := $(OBJ_DIR)/tests/live/source_payload_deepseek.o
+QUANT_LIVE_OBJ := $(OBJ_DIR)/tests/live/quant_deepseek.o
+ARTIFACT_LIVE_OBJ := $(OBJ_DIR)/tests/live/artifact_deepseek.o
+MATERIALIZE_LIVE_OBJ := $(OBJ_DIR)/tests/live/materialize_deepseek.o
+ATTENTION_LIVE_OBJ := $(OBJ_DIR)/tests/live/attention_deepseek.o
+
+RUNNER_OBJS := $(TEST_MAIN_OBJ) $(QUANT_TEST_RUNNER_OBJ) \
+	$(ARTIFACT_TEST_RUNNER_OBJ) $(CUDA_TEST_MAIN_OBJ) \
+	$(SOURCE_PAYLOAD_LIVE_OBJ) $(QUANT_LIVE_OBJ) $(ARTIFACT_LIVE_OBJ) \
+	$(MATERIALIZE_LIVE_OBJ) $(ATTENTION_LIVE_OBJ)
+DEPENDENCY_FILES := $(CORE_OBJS:.o=.d) $(CLI_OBJS:.o=.d) \
+	$(DAEMON_OBJ:.o=.d) $(TEST_UNIT_OBJS:.o=.d) \
+	$(TEST_REFERENCE_OBJS:.o=.d) $(QUANT_TEST_UNIT_OBJS:.o=.d) \
+	$(CUDA_TEST_UNIT_OBJS:.o=.d) $(RUNNER_OBJS:.o=.d)
 
 CLI_TEST := tests/cli.sh
 
@@ -329,7 +346,7 @@ cuda-info: $(YVEX_BIN)
 	@echo "YVEX_CUDA_ARCH: $(YVEX_CUDA_ARCH)"
 	$(YVEX_BIN) cuda-info
 
-cuda-kernels: $(CUDA_PTX_OBJ)
+cuda-kernels: $(CUDA_PTX_INC)
 	@echo "yvex cuda kernels: built from $(CUDA_CU_SRCS)"
 
 cuda: cuda-kernels lib cli server $(CUDA_TEST_RUNNER)
@@ -456,7 +473,7 @@ check: check-docs check-guardrails lib cli server test test-cuda-no-nvcc test-gg
 $(LIBYVEX): $(CORE_OBJS)
 	@mkdir -p $(@D)
 	rm -f $@
-	$(AR) rcs $@ $^
+	$(AR) rcsP $@ $^
 
 $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
@@ -470,62 +487,57 @@ $(OBJ_DIR)/tests/unit/cuda/%.o: tests/unit/cuda/%.c tests/test.h
 	@mkdir -p $(@D)
 	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/%.ptx: %.cu include/yvex/gguf_qtype.h
+$(OBJ_DIR)/%.ptx: %.cu include/yvex/qtype.h
 	@mkdir -p $(@D)
 	$(NVCC) $(CPPFLAGS) $(NVCCFLAGS) $(CUDA_ARCH_FLAG) -ptx $< -o $@
 
-$(CUDA_PTX_C): $(CUDA_PTX) src/backend/cuda/kernels.h
+$(CUDA_PTX_INC): $(CUDA_PTX)
 	@mkdir -p $(@D)
 	@{ \
-		printf '#include "kernels.h"\n'; \
-		printf 'const char yvex_cuda_kernels_ptx[] =\n'; \
-		sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/' $(CUDA_PTX); \
-		printf ';\n'; \
+		printf 'static const unsigned char cuda_kernels_ptx[] = {\n'; \
+		{ cat $(CUDA_PTX); printf '\0'; } | xxd -i; \
+		printf '};\n'; \
 	} > $@
 
-$(CUDA_PTX_OBJ): $(CUDA_PTX_C)
+$(YVEX_BIN): $(CLI_OBJS) $(LIBYVEX)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(CLI_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(YVEX_BIN): $(CLI_SRCS) $(LIBYVEX)
+$(YVEXD_BIN): $(DAEMON_OBJ) $(LIBYVEX)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(CLI_SRCS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(DAEMON_OBJ) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(YVEXD_BIN): src/daemon/yvexd.c $(LIBYVEX)
+$(TEST_RUNNER): $(TEST_MAIN_OBJ) $(TEST_UNIT_OBJS) $(TEST_REFERENCE_OBJS) $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(TEST_MAIN_OBJ) $(TEST_UNIT_OBJS) $(TEST_REFERENCE_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(TEST_RUNNER): tests/test.c $(TEST_UNIT_OBJS) $(TEST_REFERENCE_OBJS) $(LIBYVEX) tests/test.h
+$(QUANT_TEST_RUNNER): $(QUANT_TEST_RUNNER_OBJ) $(QUANT_TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)
-	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/test.c $(TEST_UNIT_OBJS) $(TEST_REFERENCE_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(QUANT_TEST_RUNNER_OBJ) $(QUANT_TEST_UNIT_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(QUANT_TEST_RUNNER): tests/unit/quant_runner.c $(QUANT_TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
+$(ARTIFACT_TEST_RUNNER): $(ARTIFACT_TEST_RUNNER_OBJ) $(OBJ_DIR)/tests/unit/quant_execute.o $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)
-	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/unit/quant_runner.c $(QUANT_TEST_UNIT_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(ARTIFACT_TEST_RUNNER_OBJ) $(OBJ_DIR)/tests/unit/quant_execute.o $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(ARTIFACT_TEST_RUNNER): tests/unit/artifact_writer_runner.c $(OBJ_DIR)/tests/unit/quant_execute.o $(LIBYVEX) tests/test.h
+$(SOURCE_PAYLOAD_LIVE_RUNNER): $(SOURCE_PAYLOAD_LIVE_OBJ) $(LIBYVEX)
 	@mkdir -p $(@D)
-	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/unit/artifact_writer_runner.c $(OBJ_DIR)/tests/unit/quant_execute.o $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(SOURCE_PAYLOAD_LIVE_OBJ) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(SOURCE_PAYLOAD_LIVE_RUNNER): tests/live/source_payload_deepseek.c $(LIBYVEX)
+$(QUANT_LIVE_RUNNER): $(QUANT_LIVE_OBJ) $(LIBYVEX)
 	@mkdir -p $(@D)
-	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(QUANT_LIVE_OBJ) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(QUANT_LIVE_RUNNER): tests/live/quant_deepseek.c $(LIBYVEX)
+$(ARTIFACT_LIVE_RUNNER): $(ARTIFACT_LIVE_OBJ) $(LIBYVEX)
 	@mkdir -p $(@D)
-	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(ARTIFACT_LIVE_OBJ) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(ARTIFACT_LIVE_RUNNER): tests/live/artifact_deepseek.c $(LIBYVEX)
+$(MATERIALIZE_LIVE_RUNNER): $(MATERIALIZE_LIVE_OBJ) $(LIBYVEX)
 	@mkdir -p $(@D)
-	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(MATERIALIZE_LIVE_OBJ) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(MATERIALIZE_LIVE_RUNNER): tests/live/materialize_deepseek.c $(LIBYVEX)
+$(ATTENTION_LIVE_RUNNER): $(ATTENTION_LIVE_OBJ) $(TEST_REFERENCE_OBJS) $(LIBYVEX)
 	@mkdir -p $(@D)
-	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
-
-$(ATTENTION_LIVE_RUNNER): tests/live/attention_deepseek.c $(TEST_REFERENCE_OBJS) $(LIBYVEX)
-	@mkdir -p $(@D)
-	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(TEST_REFERENCE_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(ATTENTION_LIVE_OBJ) $(TEST_REFERENCE_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
 $(OFFICIAL_GGUF_CHECKER): tests/external/ggml_gguf_check.cpp
 	@test "$$(git -C "$(PINNED_GGML_ROOT)" rev-parse HEAD)" = af97976c7810cdabb1863172f31c432dab767de7
@@ -540,9 +552,9 @@ $(OFFICIAL_GGUF_CHECKER): tests/external/ggml_gguf_check.cpp
 		"$(PINNED_GGML_BUILD)/src/libggml-base.a" \
 		-fopenmp -ldl -pthread -lm -o $@
 
-$(CUDA_TEST_RUNNER): tests/test_cuda.c $(CUDA_TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
+$(CUDA_TEST_RUNNER): $(CUDA_TEST_MAIN_OBJ) $(CUDA_TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)
-	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/test_cuda.c $(CUDA_TEST_UNIT_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CFLAGS) $(CUDA_TEST_MAIN_OBJ) $(CUDA_TEST_UNIT_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
 check-docs:
 	@test -f README.md

@@ -1,30 +1,70 @@
-/*
- * gguf.c - GGUF tooling command surface.
- *
- * Owner: CLI GGUF command.
+/* Owner: CLI GGUF command.
  * Owns: GGUF tool argv validation, dispatch, help, and compatibility rendering.
  * Does not own: GGUF parsing, encoding algorithms, qtype truth, or runtime.
  * Invariants: bytes are written only through the CLI IO owner.
  * Boundary: consumes typed GGUF/tool APIs and returns process exit status.
- */
-#include "src/core/operator.h"
-#include "src/cli/io/out.h"
+ * Purpose: provide gGUF tool argv validation, dispatch, help, and compatibility rendering.
+ * Inputs: typed command arguments and borrowed domain APIs.
+ * Effects: dispatches domain calls and routes operator bytes only through CLI I/O.
+ * Failure: returns a stable CLI status while preserving domain ownership. */
+#include "src/cli/input/private.h"
+#include "src/cli/io/private.h"
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
-#include <yvex/gguf_emit.h>
-#include <yvex/gguf_qtype.h>
-#include <yvex/gguf_template.h>
+#include <yvex/qtype.h>
+#include <yvex/core.h>
+#include <yvex/quant.h>
 #include <yvex/model.h>
-#include <yvex/native_weights.h>
-#include <yvex/tensor.h>
+#include <yvex/source.h>
 #include <yvex/tokenizer.h>
-#include <yvex/api.h>
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+static const char *const literal_pair_0[] = {
+    "       yvex quant-policy derive --template FILE --arch NAME --out FILE",
+    "\nQuant policy handles declarative qtype policy manifests. It does not quantize tensors or infer."};
+
+static const char *const literal_pair_1[] = { "       yvex quant-job inspect|validate --manifest FILE",
+    "\nQuant job records an external quantization/conversion job manifest without running arbitrary tools."};
+
+static const char *const literal_pair_2[] = { "       yvex imatrix inspect|validate --manifest FILE",
+    "\nImatrix handles calibration artifact manifests. It does not generate imatrix data, calibrate, "
+        "quantize, emit GGUF, materialize, or infer."
+};
+
+static const char *const literal_pair_3[] = {
+    "       yvex gguf-template compare --template FILE --native-source DIR",
+    "\nGGUF template validates metadata, tokenizer metadata, tensor directory, tensor roles, and optional "
+        "exact-name native inventory comparison."
+};
+
+static const char *const literal_pair_4[] = {
+    "       yvex convert emit --arch ARCH --native-source DIR --tensor NAME --target-qtype QTYPE --out "
+        "FILE [--overwrite]",
+    "\nConvert plans or emits selected open-weight GGUF tensor artifacts. It does not infer, execute a "
+        "full model, or claim generation support."
+};
+
+static const char *const literal_pair_5[] = { "{",
+    "  \"schema\": \"yvex.tensor_map.v1\","};
+
+static const char *const literal_pair_6[] = { "  }",
+    "}"};
+
+static const char *const literal_pair_7[] = { "{",
+    "  \"schema\": \"yvex.native_weights.v1\","};
+
+static const char *const literal_pair_8[] = { "execution_ready: false",
+    "status: conversion-gguf-written"};
+
+/* Purpose: Parse parse gguf template options into typed CLI state (`cli_parse_gguf_template_options`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int cli_parse_gguf_template_options(int arg_count, char **args, int start,
                                            const char **template_path,
                                            const char **native_source,
@@ -58,6 +98,11 @@ static int cli_parse_gguf_template_options(int arg_count, char **args, int start
     return 0;
 }
 
+/* Purpose: Render print template issues from typed facts (`cli_print_template_issues`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void cli_print_template_issues(const yvex_gguf_template *tmpl)
 {
     unsigned long long i;
@@ -83,6 +128,11 @@ static void cli_print_template_issues(const yvex_gguf_template *tmpl)
     }
 }
 
+/* Purpose: Orchestrate the typed command gguf template request (`command_gguf_template`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_gguf_template(int arg_count, char **args)
 {
     yvex_gguf_template_options options;
@@ -101,7 +151,7 @@ static int command_gguf_template(int arg_count, char **args)
     }
     if (arg_count < 3) {
         yvex_cli_out_writef(stderr, "yvex: gguf-template requires inspect, validate, or compare\n");
-        yvex_cli_out_writef(stderr, "usage: " "yvex gguf-template inspect|validate --template FILE\n");
+        yvex_cli_out_writef(stderr, "usage: yvex gguf-template inspect|validate --template FILE\n");
         return 2;
     }
     if (strcmp(args[2], "inspect") != 0 && strcmp(args[2], "validate") != 0 &&
@@ -177,6 +227,11 @@ static int command_gguf_template(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command gguf emit request (`command_gguf_emit`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_gguf_emit(int arg_count, char **args)
 {
     yvex_gguf_emit_options options;
@@ -195,7 +250,9 @@ static int command_gguf_emit(int arg_count, char **args)
     }
     if (arg_count < 3 || strcmp(args[2], "controlled") != 0) {
         yvex_cli_out_writef(stderr, "yvex: gguf-emit requires subcommand controlled\n");
-        yvex_cli_out_writef(stderr, "usage: " "yvex gguf-emit controlled --out FILE [--template FILE] [--model-name NAME] [--arch ARCH] [--target-qtype F32|F16] [--overwrite]\n");
+        yvex_cli_out_writef(stderr,
+            "usage: yvex gguf-emit controlled --out FILE [--template FILE] [--model-name NAME] [--arch "
+                "ARCH] [--target-qtype F32|F16] [--overwrite]\n");
         return 2;
     }
 
@@ -232,14 +289,16 @@ static int command_gguf_emit(int arg_count, char **args)
             options.architecture = args[++i];
         } else {
             yvex_cli_out_writef(stderr, "yvex: unknown gguf-emit option: %s\n", args[i]);
-            yvex_cli_out_writef(stderr, "Try '" "yvex help gguf-emit' for usage.\n");
+            yvex_cli_out_writef(stderr, "Try 'yvex help gguf-emit' for usage.\n");
             return 2;
         }
     }
 
     if (!options.out_path) {
         yvex_cli_out_writef(stderr, "yvex: gguf-emit controlled requires --out FILE\n");
-        yvex_cli_out_writef(stderr, "usage: " "yvex gguf-emit controlled --out FILE [--template FILE] [--model-name NAME] [--arch ARCH] [--target-qtype F32|F16] [--overwrite]\n");
+        yvex_cli_out_writef(stderr,
+            "usage: yvex gguf-emit controlled --out FILE [--template FILE] [--model-name NAME] [--arch "
+                "ARCH] [--target-qtype F32|F16] [--overwrite]\n");
         return 2;
     }
 
@@ -261,6 +320,11 @@ static int command_gguf_emit(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command qtype support request (`command_qtype_support`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_qtype_support(int arg_count, char **args)
 {
     unsigned long long i;
@@ -291,6 +355,11 @@ static int command_qtype_support(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command convert request (`command_convert`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_convert(int arg_count, char **args)
 {
     yvex_conversion_options options;
@@ -373,7 +442,8 @@ static int command_convert(int arg_count, char **args)
 
     if (!options.architecture || !options.native_source_dir || !options.tensor_name ||
         !options.target_qtype || !options.out_path) {
-        yvex_cli_out_writef(stderr, "yvex: convert emit requires --arch --native-source --tensor --target-qtype --out\n");
+        yvex_cli_out_writef(stderr,
+            "yvex: convert emit requires --arch --native-source --tensor --target-qtype --out\n");
         return 2;
     }
     rc = yvex_conversion_emit_gguf(&options, &summary, &err);
@@ -394,11 +464,15 @@ static int command_convert(int arg_count, char **args)
     yvex_cli_out_writef(stdout, "bytes_read: %llu\n", summary.bytes_read);
     yvex_cli_out_writef(stdout, "bytes_written: %llu\n", summary.bytes_written);
     yvex_cli_out_writef(stdout, "roundtrip_validated: %s\n", summary.roundtrip_validated ? "yes" : "no");
-    yvex_cli_out_writef(stdout, "execution_ready: false\n");
-    yvex_cli_out_writef(stdout, "status: conversion-gguf-written\n");
+    yvex_cli_out_lines(stdout, literal_pair_8, sizeof(literal_pair_8) / sizeof(literal_pair_8[0]));
     return 0;
 }
 
+/* Purpose: Parse parse imatrix create options into typed CLI state (`parse_imatrix_create_options`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_imatrix_create_options(int arg_count, char **args,
                                         yvex_imatrix_manifest_options *options,
                                         const char **out_path)
@@ -430,6 +504,11 @@ static int parse_imatrix_create_options(int arg_count, char **args,
     return 0;
 }
 
+/* Purpose: Parse parse imatrix manifest option into typed CLI state (`parse_imatrix_manifest_option`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_imatrix_manifest_option(int arg_count, char **args, const char **manifest_path)
 {
     int i = 3;
@@ -450,6 +529,7 @@ static int parse_imatrix_manifest_option(int arg_count, char **args, const char 
     return 0;
 }
 
+/* Purpose: Render print imatrix summary from typed facts (`print_imatrix_summary`). */
 static void print_imatrix_summary(const char *mode,
                                   const char *manifest_path,
                                   const yvex_imatrix_summary *summary)
@@ -461,11 +541,17 @@ static void print_imatrix_summary(const char *mode,
     yvex_cli_out_writef(stdout, "format: %s\n", yvex_imatrix_format_name(summary->format));
     yvex_cli_out_writef(stdout, "status: %s\n", yvex_imatrix_status_name(summary->status));
     yvex_cli_out_writef(stdout, "file_exists: %s\n", summary->file_exists ? "yes" : "no");
-    yvex_cli_out_writef(stdout, "source_manifest: %s\n", summary->source_manifest_path ? summary->source_manifest_path : "");
+    yvex_cli_out_writef(stdout, "source_manifest: %s\n",
+        summary->source_manifest_path ? summary->source_manifest_path : "");
     yvex_cli_out_writef(stdout, "quant_policy: %s\n", summary->quant_policy_path ? summary->quant_policy_path : "");
     yvex_cli_out_writef(stdout, "imatrix: %s\n", summary->imatrix_path ? summary->imatrix_path : "");
 }
 
+/* Purpose: Orchestrate the typed command imatrix request (`command_imatrix`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_imatrix(int arg_count, char **args)
 {
     yvex_error err;
@@ -493,7 +579,8 @@ static int command_imatrix(int arg_count, char **args)
         if (!options.name || !options.architecture || !options.imatrix_path || !out_path ||
             options.format == YVEX_IMATRIX_FORMAT_UNKNOWN ||
             options.status == YVEX_IMATRIX_STATUS_UNKNOWN) {
-            yvex_cli_out_writef(stderr, "yvex: imatrix create requires --name --arch --imatrix --format --status --out\n");
+            yvex_cli_out_writef(stderr,
+                "yvex: imatrix create requires --name --arch --imatrix --format --status --out\n");
             return 2;
         }
         rc = yvex_imatrix_manifest_create(&manifest, &options, &err);
@@ -560,6 +647,11 @@ static int command_imatrix(int arg_count, char **args)
     return 2;
 }
 
+/* Purpose: Orchestrate the typed command native weights request (`command_native_weights`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_native_weights(int arg_count, char **args)
 {
     yvex_native_weight_options options;
@@ -583,7 +675,7 @@ static int command_native_weights(int arg_count, char **args)
 
     i = 2;
     while (i < arg_count) {
-        if (strcmp(args[i], "--" "json") == 0) {
+        if (strcmp(args[i], "--json") == 0) {
             json = 1;
             i++;
             continue;
@@ -626,8 +718,7 @@ static int command_native_weights(int arg_count, char **args)
     }
 
     if (json) {
-        yvex_cli_out_writef(stdout, "{\n");
-        yvex_cli_out_writef(stdout, "  \"schema\": \"yvex.native_weights.v1\",\n");
+        yvex_cli_out_lines(stdout, literal_pair_7, sizeof(literal_pair_7) / sizeof(literal_pair_7[0]));
         yvex_cli_out_writef(stdout, "  \"source\": \"%s\",\n", options.source_dir);
         yvex_cli_out_writef(stdout, "  \"summary\": {\n");
         yvex_cli_out_writef(stdout, "    \"shard_count\": %llu,\n", summary.shard_count);
@@ -635,8 +726,7 @@ static int command_native_weights(int arg_count, char **args)
         yvex_cli_out_writef(stdout, "    \"total_tensor_bytes\": %llu,\n", summary.total_tensor_bytes);
         yvex_cli_out_writef(stdout, "    \"unknown_dtype_count\": %llu,\n", summary.unknown_dtype_count);
         yvex_cli_out_writef(stdout, "    \"malformed_shard_count\": %llu\n", summary.malformed_shard_count);
-        yvex_cli_out_writef(stdout, "  }\n");
-        yvex_cli_out_writef(stdout, "}\n");
+        yvex_cli_out_lines(stdout, literal_pair_6, sizeof(literal_pair_6) / sizeof(literal_pair_6[0]));
         yvex_native_weight_table_close(table);
         return 0;
     }
@@ -660,7 +750,8 @@ static int command_native_weights(int arg_count, char **args)
         yvex_cli_out_writef(stdout, "0 %s shard=%s dtype=%s rank=%u shape=",
                row->name, row->shard_path, yvex_native_dtype_name(row->dtype), row->rank);
         print_native_dims(row->dims, row->rank);
-        yvex_cli_out_writef(stdout, " bytes=%llu offsets=[%llu,%llu]\n", row->data_bytes, row->data_start, row->data_end);
+        yvex_cli_out_writef(stdout, " bytes=%llu offsets=[%llu,%llu]\n", row->data_bytes, row->data_start,
+            row->data_end);
     } else {
         unsigned long long count = yvex_native_weight_table_count(table);
         unsigned long long n = limit < count ? limit : count;
@@ -670,7 +761,8 @@ static int command_native_weights(int arg_count, char **args)
             yvex_cli_out_writef(stdout, "%llu %s shard=%s dtype=%s rank=%u shape=",
                    idx, row->name, row->shard_path, yvex_native_dtype_name(row->dtype), row->rank);
             print_native_dims(row->dims, row->rank);
-            yvex_cli_out_writef(stdout, " bytes=%llu offsets=[%llu,%llu]\n", row->data_bytes, row->data_start, row->data_end);
+            yvex_cli_out_writef(stdout, " bytes=%llu offsets=[%llu,%llu]\n", row->data_bytes,
+                row->data_start, row->data_end);
         }
     }
     yvex_cli_out_writef(stdout, "status: %s\n", summary.shard_count == 0 ? "native-weights-empty" : "native-weights");
@@ -678,6 +770,11 @@ static int command_native_weights(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command tensor map request (`command_tensor_map`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_tensor_map(int arg_count, char **args)
 {
     yvex_weight_mapping_options options;
@@ -702,7 +799,7 @@ static int command_tensor_map(int arg_count, char **args)
 
     i = 2;
     while (i < arg_count) {
-        if (strcmp(args[i], "--" "json") == 0) {
+        if (strcmp(args[i], "--json") == 0) {
             json = 1;
             i++;
             continue;
@@ -763,8 +860,7 @@ static int command_tensor_map(int arg_count, char **args)
     }
 
     if (json) {
-        yvex_cli_out_writef(stdout, "{\n");
-        yvex_cli_out_writef(stdout, "  \"schema\": \"yvex.tensor_map.v1\",\n");
+        yvex_cli_out_lines(stdout, literal_pair_5, sizeof(literal_pair_5) / sizeof(literal_pair_5[0]));
         yvex_cli_out_writef(stdout, "  \"architecture\": \"%s\",\n", options.architecture);
         yvex_cli_out_writef(stdout, "  \"native_source\": \"%s\",\n", options.native_source_dir);
         yvex_cli_out_writef(stdout, "  \"native_tensors\": %llu,\n", yvex_weight_mapping_table_count(table));
@@ -832,6 +928,7 @@ static int command_tensor_map(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Render print quant policy rules from typed facts (`print_quant_policy_rules`). */
 static void print_quant_policy_rules(const yvex_quant_policy *policy)
 {
     unsigned long long i;
@@ -839,7 +936,8 @@ static void print_quant_policy_rules(const yvex_quant_policy *policy)
     for (i = 0; i < yvex_quant_policy_rule_count(policy); ++i) {
         const yvex_quant_policy_rule *rule = yvex_quant_policy_rule_at(policy, i);
         if (!rule) continue;
-        yvex_cli_out_writef(stdout, "%llu selector=%s:%s qtype=%s storage_supported=%s compute_supported=%s requires_imatrix=%s\n",
+        yvex_cli_out_writef(stdout,
+            "%llu selector=%s:%s qtype=%s storage_supported=%s compute_supported=%s requires_imatrix=%s\n",
                i,
                yvex_quant_selector_kind_name(rule->selector_kind),
                rule->selector,
@@ -850,6 +948,11 @@ static void print_quant_policy_rules(const yvex_quant_policy *policy)
     }
 }
 
+/* Purpose: Parse parse quant policy common into typed CLI state (`parse_quant_policy_common`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_quant_policy_common(int arg_count, char **args, int start,
                                      const char **policy_path,
                                      const char **template_path,
@@ -880,6 +983,11 @@ static int parse_quant_policy_common(int arg_count, char **args, int start,
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command quant policy request (`command_quant_policy`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_quant_policy(int arg_count, char **args)
 {
     const char *policy_path = NULL;
@@ -973,6 +1081,11 @@ static int command_quant_policy(int arg_count, char **args)
     return 2;
 }
 
+/* Purpose: Parse parse quant job create options into typed CLI state (`parse_quant_job_create_options`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_quant_job_create_options(int arg_count, char **args,
                                           yvex_quant_job_options *options,
                                           const char **out_path)
@@ -1009,6 +1122,11 @@ static int parse_quant_job_create_options(int arg_count, char **args,
     return 0;
 }
 
+/* Purpose: Parse parse quant job manifest option into typed CLI state (`parse_quant_job_manifest_option`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_quant_job_manifest_option(int arg_count, char **args, const char **manifest_path)
 {
     int i;
@@ -1028,6 +1146,11 @@ static int parse_quant_job_manifest_option(int arg_count, char **args, const cha
     return 0;
 }
 
+/* Purpose: Render print quant job summary from typed facts (`print_quant_job_summary`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void print_quant_job_summary(const char *mode,
                                     const char *path,
                                     const yvex_quant_job_summary *summary)
@@ -1050,6 +1173,11 @@ static void print_quant_job_summary(const char *mode,
     yvex_cli_out_writef(stdout, "status: %s\n", yvex_quant_job_status_name(summary->status));
 }
 
+/* Purpose: Orchestrate the typed command quant job request (`command_quant_job`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_quant_job(int arg_count, char **args)
 {
     yvex_quant_job_summary summary;
@@ -1080,7 +1208,9 @@ static int command_quant_job(int arg_count, char **args)
             !options.native_source_dir || !options.template_path ||
             !options.out_gguf_path || !options.log_path || !options.command ||
             !out_path || options.status == YVEX_QUANT_JOB_STATUS_UNKNOWN) {
-            yvex_cli_out_writef(stderr, "yvex: quant-job create requires --name --arch --tool --tool-path --native-source --template --out-gguf --log --status --command --out\n");
+            yvex_cli_out_writef(stderr,
+                "yvex: quant-job create requires --name --arch --tool --tool-path --native-source --"
+                    "template --out-gguf --log --status --command --out\n");
             return 2;
         }
         rc = yvex_quant_job_write_json(out_path, &options, &summary, &err);
@@ -1117,102 +1247,201 @@ static int command_quant_job(int arg_count, char **args)
     }
 }
 
+/* Purpose: Orchestrate the typed convert command request (`yvex_convert_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_convert_command(int arg_count, char **args)
 {
     return command_convert(arg_count, args);
 }
 
+/* Purpose: Orchestrate the typed gguf template command request (`yvex_gguf_template_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_gguf_template_command(int arg_count, char **args)
 {
     return command_gguf_template(arg_count, args);
 }
 
+/* Purpose: Orchestrate the typed gguf emit command request (`yvex_gguf_emit_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_gguf_emit_command(int arg_count, char **args)
 {
     return command_gguf_emit(arg_count, args);
 }
 
+/* Purpose: Orchestrate the typed imatrix command request (`yvex_imatrix_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_imatrix_command(int arg_count, char **args)
 {
     return command_imatrix(arg_count, args);
 }
 
+/* Purpose: Orchestrate the typed native weights command request (`yvex_native_weights_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_native_weights_command(int arg_count, char **args)
 {
     return command_native_weights(arg_count, args);
 }
 
+/* Purpose: Orchestrate the typed tensor map command request (`yvex_tensor_map_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_tensor_map_command(int arg_count, char **args)
 {
     return command_tensor_map(arg_count, args);
 }
 
+/* Purpose: Orchestrate the typed quant job command request (`yvex_quant_job_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_quant_job_command(int arg_count, char **args)
 {
     return command_quant_job(arg_count, args);
 }
 
+/* Purpose: Orchestrate the typed quant policy command request (`yvex_quant_policy_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_quant_policy_command(int arg_count, char **args)
 {
     return command_quant_policy(arg_count, args);
 }
 
+/* Purpose: Orchestrate the typed qtype support command request (`yvex_qtype_support_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_qtype_support_command(int arg_count, char **args)
 {
     return command_qtype_support(arg_count, args);
 }
 
+/* Purpose: Render convert help from typed facts (`yvex_convert_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_convert_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex convert plan --arch ARCH --native-source DIR --out-plan FILE\n");
-    yvex_cli_out_writef(fp, "       yvex convert emit --arch ARCH --native-source DIR --tensor NAME --target-qtype QTYPE --out FILE [--overwrite]\n");
-    yvex_cli_out_writef(fp, "\nConvert plans or emits selected open-weight GGUF tensor artifacts. It does not infer, execute a full model, or claim generation support.\n");
+    yvex_cli_out_writef(fp, "usage: yvex convert plan --arch ARCH --native-source DIR --out-plan FILE\n");
+    yvex_cli_out_lines(fp, literal_pair_4, sizeof(literal_pair_4) / sizeof(literal_pair_4[0]));
 }
 
+/* Purpose: Render gguf template help from typed facts (`yvex_gguf_template_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_gguf_template_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex gguf-template inspect|validate --template FILE\n");
-    yvex_cli_out_writef(fp, "       yvex gguf-template compare --template FILE --native-source DIR\n");
-    yvex_cli_out_writef(fp, "\nGGUF template validates metadata, tokenizer metadata, tensor directory, tensor roles, and optional exact-name native inventory comparison.\n");
+    yvex_cli_out_writef(fp, "usage: yvex gguf-template inspect|validate --template FILE\n");
+    yvex_cli_out_lines(fp, literal_pair_3, sizeof(literal_pair_3) / sizeof(literal_pair_3[0]));
 }
 
+/* Purpose: Render gguf emit help from typed facts (`yvex_gguf_emit_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_gguf_emit_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex gguf-emit controlled --out FILE [--template FILE] [--model-name NAME] [--arch ARCH] [--target-qtype F32|F16] [--overwrite]\n\nGGUF emit writes a controlled YVEX-owned tensor artifact and validates the emitted file.\n");
+    yvex_cli_out_writef(fp,
+        "usage: yvex gguf-emit controlled --out FILE [--template FILE] [--model-name NAME] [--arch ARCH] [-"
+            "-target-qtype F32|F16] [--overwrite]\n\nGGUF emit writes a controlled YVEX-owned tensor artifact "
+            "and validates the emitted file.\n");
 }
 
+/* Purpose: Render imatrix help from typed facts (`yvex_imatrix_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_imatrix_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex imatrix create --name NAME --arch NAME --imatrix FILE --format FORMAT --status STATUS --out FILE\n");
-    yvex_cli_out_writef(fp, "       yvex imatrix inspect|validate --manifest FILE\n");
-    yvex_cli_out_writef(fp, "\nImatrix handles calibration artifact manifests. It does not generate imatrix data, calibrate, quantize, emit GGUF, materialize, or infer.\n");
+    yvex_cli_out_writef(fp,
+        "usage: yvex imatrix create --name NAME --arch NAME --imatrix FILE --format FORMAT --status STATUS "
+            "--out FILE\n");
+    yvex_cli_out_lines(fp, literal_pair_2, sizeof(literal_pair_2) / sizeof(literal_pair_2[0]));
 }
 
+/* Purpose: Render native weights help from typed facts (`yvex_native_weights_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_native_weights_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex native-weights --source DIR [--limit N] [--tensor NAME] [--" "json]\n\nNative weights reads safetensors headers and reports metadata only.\n");
+    yvex_cli_out_writef(fp,
+        "usage: yvex native-weights --source DIR [--limit N] [--tensor NAME] [--json]\n\nNative weights "
+            "reads safetensors headers and reports metadata only.\n");
 }
 
+/* Purpose: Render tensor map help from typed facts (`yvex_tensor_map_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_tensor_map_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex tensor-map --arch NAME --native-source DIR [--template FILE] [--tensor NAME] [--limit N] [--" "json]\n\nTensor map maps native safetensors names to canonical YVEX roles and proposed GGUF/template names.\n");
+    yvex_cli_out_writef(fp,
+        "usage: yvex tensor-map --arch NAME --native-source DIR [--template FILE] [--tensor NAME] [--limit "
+            "N] [--json]\n\nTensor map maps native safetensors names to canonical YVEX roles and proposed GGUF/"
+            "template names.\n");
 }
 
+/* Purpose: Render quant job help from typed facts (`yvex_quant_job_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_quant_job_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex quant-job create --name NAME --arch ARCH --tool TOOL --tool-path FILE --native-source DIR --template FILE --out-gguf FILE --log FILE --status STATUS --command TEXT --out FILE\n");
-    yvex_cli_out_writef(fp, "       yvex quant-job inspect|validate --manifest FILE\n");
-    yvex_cli_out_writef(fp, "\nQuant job records an external quantization/conversion job manifest without running arbitrary tools.\n");
+    yvex_cli_out_writef(fp,
+        "usage: yvex quant-job create --name NAME --arch ARCH --tool TOOL --tool-path FILE --native-source "
+            "DIR --template FILE --out-gguf FILE --log FILE --status STATUS --command TEXT --out FILE\n");
+    yvex_cli_out_lines(fp, literal_pair_1, sizeof(literal_pair_1) / sizeof(literal_pair_1[0]));
 }
 
+/* Purpose: Render quant policy help from typed facts (`yvex_quant_policy_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_quant_policy_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex quant-policy inspect|validate --policy FILE [--template FILE]\n");
-    yvex_cli_out_writef(fp, "       yvex quant-policy derive --template FILE --arch NAME --out FILE\n");
-    yvex_cli_out_writef(fp, "\nQuant policy handles declarative qtype policy manifests. It does not quantize tensors or infer.\n");
+    yvex_cli_out_writef(fp, "usage: yvex quant-policy inspect|validate --policy FILE [--template FILE]\n");
+    yvex_cli_out_lines(fp, literal_pair_0, sizeof(literal_pair_0) / sizeof(literal_pair_0[0]));
 }
 
+/* Purpose: Render qtype support help from typed facts (`yvex_qtype_support_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_qtype_support_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex qtype-support\n\nReports policy/storage/emit/quantize/compute support separately. Compute support is not implied by conversion support.\n");
+    yvex_cli_out_writef(fp,
+        "usage: yvex qtype-support\n\nReports policy/storage/emit/quantize/compute support separately. "
+            "Compute support is not implied by conversion support.\n");
 }

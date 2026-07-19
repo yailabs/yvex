@@ -1,37 +1,28 @@
-/*
- * cuda/cuda_ops.c - CUDA host launch bindings for admitted primitives.
- *
- * Owner: src/backend/cuda.
- * Owns: exact dtype/shape/parameter validation, Driver API launch parameters,
- * bounded grid arithmetic, synchronization, and output-written transitions.
- * Does not own: bundle admission, device kernel source, CPU references, graph
- * semantics, model-family behavior, CLI output, qtype compute, or generation.
- * Invariants: every op requires an exact admitted variant; launch and final
- * synchronization must succeed before any output is marked written.
+/* Owner: src/backend/cuda.
+ * Owns: exact dtype/shape/parameter validation, Driver API launch parameters, bounded grid arithmetic,
+ *   synchronization, and output-written transitions.
+ * Does not own: bundle admission, device kernel source, CPU references, graph semantics, model-family behavior, CLI
+ *   output, qtype compute, or generation.
+ * Invariants: every op requires an exact admitted variant; launch and final synchronization must succeed before any
+ *   output is marked written.
  * Boundary: bounded primitive execution is not transformer or model runtime.
- */
+ * Purpose: Validate and launch CUDA graph primitives through admitted generated-kernel variants.
+ * Inputs: Owned CUDA tensors, checked operation geometry, and immutable numeric parameters.
+ * Effects: Launches work and marks output written only after successful synchronization.
+ * Failure: Any admission, launch, or sync failure leaves output uncommitted. */
 
-#include "driver.h"
+#include "src/backend/cuda/private.h"
 #include <limits.h>
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
 
-static int tensor_is_f32_bytes(const yvex_device_tensor *tensor,
-                               unsigned long long elements)
-{
-    return elements <= (unsigned long long)(UINT64_MAX / sizeof(float)) &&
-           tensor->bytes == elements * (unsigned long long)sizeof(float);
-}
-
-static int tensor_is_f16_bytes(const yvex_device_tensor *tensor,
-                               unsigned long long elements)
-{
-    return elements <= (unsigned long long)(UINT64_MAX / 2ull) &&
-           tensor->bytes == elements * 2ull;
-}
-
 /* Contract: converts a non-zero one-dimensional launch extent without truncation. */
+/* Purpose: Implement the canonical grid 1d mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static int cuda_grid_1d(unsigned long long elements,
                         unsigned int block_size,
                         unsigned int *out,
@@ -55,392 +46,11 @@ static int cuda_grid_1d(unsigned long long elements,
     return YVEX_OK;
 }
 
-static double cuda_nth_root_double(double x, unsigned long long n)
-{
-    double lo = 1.0;
-    double hi = x > 1.0 ? x : 1.0;
-    unsigned int iter;
-
-    if (x <= 0.0 || n == 0) {
-        return 0.0;
-    }
-    if (n == 1) {
-        return x;
-    }
-    for (iter = 0; iter < 96u; ++iter) {
-        double mid = 0.5 * (lo + hi);
-        double acc = 1.0;
-        unsigned long long i;
-
-        for (i = 0; i < n; ++i) {
-            acc *= mid;
-            if (acc > x) {
-                break;
-            }
-        }
-        if (acc > x) {
-            hi = mid;
-        } else {
-            lo = mid;
-        }
-    }
-    return 0.5 * (lo + hi);
-}
-
-static int cuda_rope_head_dim(const yvex_device_tensor *tensor,
-                              unsigned long long *out,
-                              yvex_error *err)
-{
-    unsigned long long head_dim;
-
-    if (!tensor || !out) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rope",
-                       "tensor and out are required");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    if (tensor->rank == 1) {
-        head_dim = tensor->dims[0];
-    } else if (tensor->rank == 2 && tensor->dims[0] == 1) {
-        head_dim = tensor->dims[1];
-    } else {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rope",
-                       "RoPE input must be rank 1 or dims [1, head_dim]");
-        return YVEX_ERR_FORMAT;
-    }
-    if (head_dim == 0) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rope",
-                       "rope-head-dim-zero");
-        return YVEX_ERR_FORMAT;
-    }
-    if ((head_dim & 1ull) != 0ull) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rope",
-                       "rope-head-dim-odd");
-        return YVEX_ERR_FORMAT;
-    }
-    *out = head_dim;
-    return YVEX_OK;
-}
-
-static int cuda_attention_validate(const yvex_backend *backend,
-                                   const yvex_device_tensor *query,
-                                   const yvex_device_tensor *keys,
-                                   const yvex_device_tensor *values,
-                                   unsigned long long seq_len,
-                                   unsigned long long position,
-                                   yvex_device_tensor *score_scratch,
-                                   yvex_device_tensor *probability_scratch,
-                                   yvex_device_tensor *out,
-                                   unsigned long long *head_dim_out,
-                                   unsigned long long *kv_elements_out,
-                                   const char *where,
-                                   yvex_error *err)
-{
-    unsigned long long head_dim;
-    unsigned long long kv_elements;
-
-    if (!yvex_backend_tensor_owner_is(backend, query) ||
-        !yvex_backend_tensor_owner_is(backend, keys) ||
-        !yvex_backend_tensor_owner_is(backend, values) ||
-        !yvex_backend_tensor_owner_is(backend, score_scratch) ||
-        !yvex_backend_tensor_owner_is(backend, probability_scratch) ||
-        !yvex_backend_tensor_owner_is(backend, out)) {
-        yvex_error_set(err, YVEX_ERR_STATE, where,
-                       "Q/K/V, scratches, and output tensors must belong to this backend");
-        return YVEX_ERR_STATE;
-    }
-    if (query->dtype != YVEX_DTYPE_F32 || keys->dtype != YVEX_DTYPE_F32 ||
-        values->dtype != YVEX_DTYPE_F32 || score_scratch->dtype != YVEX_DTYPE_F32 ||
-        probability_scratch->dtype != YVEX_DTYPE_F32 || out->dtype != YVEX_DTYPE_F32) {
-        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, where,
-                       "attention primitive supports F32 Q/K/V, scratches, and output");
-        return YVEX_ERR_UNSUPPORTED;
-    }
-    if (seq_len == 0) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, where, "attention-seq-len-zero");
-        return YVEX_ERR_FORMAT;
-    }
-    if (position >= seq_len) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "position-out-of-range");
-        return YVEX_ERR_BOUNDS;
-    }
-    if (query->rank != 1 || query->dims[0] == 0) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, where,
-                       "attention query must be rank 1 with non-zero head_dim");
-        return YVEX_ERR_FORMAT;
-    }
-    head_dim = query->dims[0];
-    if (seq_len > ULLONG_MAX / head_dim) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "attention-element-count-overflow");
-        return YVEX_ERR_BOUNDS;
-    }
-    kv_elements = seq_len * head_dim;
-    if (keys->rank != 2 || keys->dims[0] != seq_len || keys->dims[1] != head_dim ||
-        values->rank != 2 || values->dims[0] != seq_len || values->dims[1] != head_dim) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, where,
-                       "attention keys and values must have dims [seq_len, head_dim]");
-        return YVEX_ERR_FORMAT;
-    }
-    if (score_scratch->rank != 1 || score_scratch->dims[0] != seq_len ||
-        probability_scratch->rank != 1 || probability_scratch->dims[0] != seq_len) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, where,
-                       "attention score/probability scratches must have dims [seq_len]");
-        return YVEX_ERR_FORMAT;
-    }
-    if (out->rank != 1 || out->dims[0] != head_dim) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, where,
-                       "attention output must have dims [head_dim]");
-        return YVEX_ERR_FORMAT;
-    }
-    if (!tensor_is_f32_bytes(query, head_dim) ||
-        !tensor_is_f32_bytes(keys, kv_elements) ||
-        !tensor_is_f32_bytes(values, kv_elements) ||
-        !tensor_is_f32_bytes(score_scratch, seq_len) ||
-        !tensor_is_f32_bytes(probability_scratch, seq_len) ||
-        !tensor_is_f32_bytes(out, head_dim)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, where,
-                       "attention tensor bytes must match F32 shape accounting");
-        return YVEX_ERR_BOUNDS;
-    }
-    *head_dim_out = head_dim;
-    *kv_elements_out = kv_elements;
-    return YVEX_OK;
-}
-
-static int cuda_matmul_validate(const yvex_backend *backend,
-                                const yvex_device_tensor *input,
-                                const yvex_device_tensor *weight,
-                                const yvex_device_tensor *out,
-                                unsigned long long *m_out,
-                                unsigned long long *k_out,
-                                unsigned long long *n_out,
-                                const char *where,
-                                yvex_error *err)
-{
-    unsigned long long m;
-    unsigned long long k;
-    unsigned long long n;
-    unsigned long long input_elements;
-    unsigned long long weight_elements;
-    unsigned long long output_elements;
-
-    if (!yvex_backend_tensor_owner_is(backend, input) ||
-        !yvex_backend_tensor_owner_is(backend, weight) ||
-        !yvex_backend_tensor_owner_is(backend, out)) {
-        yvex_error_set(err, YVEX_ERR_STATE, where,
-                       "input, weight, and output tensors must belong to this backend");
-        return YVEX_ERR_STATE;
-    }
-    if (input->dtype != YVEX_DTYPE_F32 ||
-        weight->dtype != YVEX_DTYPE_F32 ||
-        out->dtype != YVEX_DTYPE_F32) {
-        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, where,
-                       "matmul primitive supports F32 input, weight, and output");
-        return YVEX_ERR_UNSUPPORTED;
-    }
-    if (input->rank != 2 || weight->rank != 2 || out->rank != 2) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, where,
-                       "matmul tensors must be rank 2");
-        return YVEX_ERR_FORMAT;
-    }
-    m = input->dims[0];
-    k = input->dims[1];
-    n = weight->dims[1];
-    if (m == 0 || k == 0 || n == 0 || weight->dims[0] == 0) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, where, "matmul-zero-dimension");
-        return YVEX_ERR_FORMAT;
-    }
-    if (weight->dims[0] != k) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, where,
-                       "matmul input/weight inner dimensions must match");
-        return YVEX_ERR_FORMAT;
-    }
-    if (out->dims[0] != m || out->dims[1] != n) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, where,
-                       "matmul output must have dims [m, n]");
-        return YVEX_ERR_FORMAT;
-    }
-    if (m > ULLONG_MAX / k ||
-        k > ULLONG_MAX / n ||
-        m > ULLONG_MAX / n) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "matmul-element-count-overflow");
-        return YVEX_ERR_BOUNDS;
-    }
-    input_elements = m * k;
-    weight_elements = k * n;
-    output_elements = m * n;
-    if (!tensor_is_f32_bytes(input, input_elements) ||
-        !tensor_is_f32_bytes(weight, weight_elements) ||
-        !tensor_is_f32_bytes(out, output_elements)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, where,
-                       "matmul tensor bytes must match F32 shape accounting");
-        return YVEX_ERR_BOUNDS;
-    }
-    *m_out = m;
-    *k_out = k;
-    *n_out = n;
-    return YVEX_OK;
-}
-
-static int cuda_mlp_mul3(unsigned long long a,
-                         unsigned long long b,
-                         unsigned long long c,
-                         unsigned long long *out)
-{
-    unsigned long long ab;
-
-    if (a > ULLONG_MAX / b) {
-        return 0;
-    }
-    ab = a * b;
-    if (ab > ULLONG_MAX / c) {
-        return 0;
-    }
-    *out = ab * c;
-    return 1;
-}
-
-static int cuda_mlp_validate(const yvex_backend *backend,
-                             const yvex_device_tensor *input,
-                             const yvex_device_tensor *gate_weight,
-                             const yvex_device_tensor *up_weight,
-                             const yvex_device_tensor *down_weight,
-                             const yvex_mlp_options *options,
-                             const yvex_device_tensor *intermediate,
-                             const yvex_device_tensor *out,
-                             unsigned long long *batch_out,
-                             unsigned long long *hidden_dim_out,
-                             unsigned long long *ffn_dim_out,
-                             const char *where,
-                             yvex_error *err)
-{
-    unsigned long long batch;
-    unsigned long long hidden_dim;
-    unsigned long long ffn_dim;
-    unsigned long long input_elements;
-    unsigned long long intermediate_elements;
-    unsigned long long output_elements;
-    unsigned long long up_elements;
-    unsigned long long down_elements;
-    unsigned long long routed_up_elements;
-    unsigned long long routed_down_elements;
-
-    if (!yvex_backend_tensor_owner_is(backend, input) ||
-        !yvex_backend_tensor_owner_is(backend, gate_weight) ||
-        !yvex_backend_tensor_owner_is(backend, up_weight) ||
-        !yvex_backend_tensor_owner_is(backend, down_weight) ||
-        !yvex_backend_tensor_owner_is(backend, intermediate) ||
-        !yvex_backend_tensor_owner_is(backend, out)) {
-        yvex_error_set(err, YVEX_ERR_STATE, where,
-                       "input, weights, intermediate, and output tensors must belong to this backend");
-        return YVEX_ERR_STATE;
-    }
-    if (input->dtype != YVEX_DTYPE_F32 ||
-        gate_weight->dtype != YVEX_DTYPE_F32 ||
-        up_weight->dtype != YVEX_DTYPE_F32 ||
-        down_weight->dtype != YVEX_DTYPE_F32 ||
-        intermediate->dtype != YVEX_DTYPE_F32 ||
-        out->dtype != YVEX_DTYPE_F32) {
-        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, where,
-                       "MLP primitive supports F32 input, weights, intermediate, and output");
-        return YVEX_ERR_UNSUPPORTED;
-    }
-    if (!options || options->batch == 0 || options->hidden_dim == 0 ||
-        options->ffn_dim == 0) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, where, "mlp-zero-dimension");
-        return YVEX_ERR_FORMAT;
-    }
-    if (!options->gated || !options->activation ||
-        strcmp(options->activation, "silu") != 0) {
-        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, where,
-                       "mlp-unsupported-activation");
-        return YVEX_ERR_UNSUPPORTED;
-    }
-    if (options->routed_expert_mode &&
-        (options->expert_count == 0 || options->expert_id >= options->expert_count)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "mlp-expert-id-out-of-range");
-        return YVEX_ERR_BOUNDS;
-    }
-
-    batch = options->batch;
-    hidden_dim = options->hidden_dim;
-    ffn_dim = options->ffn_dim;
-    if (batch > ULLONG_MAX / hidden_dim ||
-        batch > ULLONG_MAX / ffn_dim ||
-        hidden_dim > ULLONG_MAX / ffn_dim ||
-        ffn_dim > ULLONG_MAX / hidden_dim) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "mlp-element-count-overflow");
-        return YVEX_ERR_BOUNDS;
-    }
-    input_elements = batch * hidden_dim;
-    intermediate_elements = batch * ffn_dim;
-    output_elements = input_elements;
-    up_elements = hidden_dim * ffn_dim;
-    down_elements = ffn_dim * hidden_dim;
-
-    if (input->rank != 2 || input->dims[0] != batch || input->dims[1] != hidden_dim ||
-        intermediate->rank != 2 || intermediate->dims[0] != batch ||
-        intermediate->dims[1] != ffn_dim ||
-        out->rank != 2 || out->dims[0] != batch || out->dims[1] != hidden_dim) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, where,
-                       "mlp input/intermediate/output shape mismatch");
-        return YVEX_ERR_FORMAT;
-    }
-    if (options->routed_expert_mode) {
-        if (!cuda_mlp_mul3(options->expert_count, hidden_dim, ffn_dim,
-                           &routed_up_elements) ||
-            !cuda_mlp_mul3(options->expert_count, ffn_dim, hidden_dim,
-                           &routed_down_elements)) {
-            yvex_error_set(err, YVEX_ERR_BOUNDS, where, "mlp-element-count-overflow");
-            return YVEX_ERR_BOUNDS;
-        }
-        if (gate_weight->rank != 3 || up_weight->rank != 3 || down_weight->rank != 3 ||
-            gate_weight->dims[0] != options->expert_count ||
-            gate_weight->dims[1] != hidden_dim || gate_weight->dims[2] != ffn_dim ||
-            up_weight->dims[0] != options->expert_count ||
-            up_weight->dims[1] != hidden_dim || up_weight->dims[2] != ffn_dim ||
-            down_weight->dims[0] != options->expert_count ||
-            down_weight->dims[1] != ffn_dim || down_weight->dims[2] != hidden_dim) {
-            yvex_error_set(err, YVEX_ERR_FORMAT, where,
-                           "mlp routed weights must have dims [experts, hidden_dim, ffn_dim] and [experts, ffn_dim, hidden_dim]");
-            return YVEX_ERR_FORMAT;
-        }
-        if (!tensor_is_f32_bytes(gate_weight, routed_up_elements) ||
-            !tensor_is_f32_bytes(up_weight, routed_up_elements) ||
-            !tensor_is_f32_bytes(down_weight, routed_down_elements)) {
-            yvex_error_set(err, YVEX_ERR_BOUNDS, where,
-                           "mlp routed weight bytes must match F32 shape accounting");
-            return YVEX_ERR_BOUNDS;
-        }
-    } else {
-        if (gate_weight->rank != 2 || up_weight->rank != 2 || down_weight->rank != 2 ||
-            gate_weight->dims[0] != hidden_dim || gate_weight->dims[1] != ffn_dim ||
-            up_weight->dims[0] != hidden_dim || up_weight->dims[1] != ffn_dim ||
-            down_weight->dims[0] != ffn_dim || down_weight->dims[1] != hidden_dim) {
-            yvex_error_set(err, YVEX_ERR_FORMAT, where,
-                           "mlp dense weights must have dims [hidden_dim, ffn_dim] and [ffn_dim, hidden_dim]");
-            return YVEX_ERR_FORMAT;
-        }
-        if (!tensor_is_f32_bytes(gate_weight, up_elements) ||
-            !tensor_is_f32_bytes(up_weight, up_elements) ||
-            !tensor_is_f32_bytes(down_weight, down_elements)) {
-            yvex_error_set(err, YVEX_ERR_BOUNDS, where,
-                           "mlp dense weight bytes must match F32 shape accounting");
-            return YVEX_ERR_BOUNDS;
-        }
-    }
-    if (!tensor_is_f32_bytes(input, input_elements) ||
-        !tensor_is_f32_bytes(intermediate, intermediate_elements) ||
-        !tensor_is_f32_bytes(out, output_elements)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, where,
-                       "mlp tensor bytes must match F32 shape accounting");
-        return YVEX_ERR_BOUNDS;
-    }
-    *batch_out = batch;
-    *hidden_dim_out = hidden_dim;
-    *ffn_dim_out = ffn_dim;
-    return YVEX_OK;
-}
-
+/* Purpose: Execute the typed op embed operation over already admitted buffers.
+ * Inputs: Typed admitted handles, immutable source ranges, checked dimensions, and an explicit destination.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_cuda_op_embed(yvex_backend *backend,
                        const yvex_device_tensor *embedding,
                        const unsigned int *token_ids,
@@ -463,7 +73,6 @@ int yvex_cuda_op_embed(yvex_backend *backend,
     yvex_error cleanup_error;
     int cleanup_rc;
     int rc;
-    unsigned long long i;
 
     if (!state) {
         yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_op_embed",
@@ -491,53 +100,14 @@ int yvex_cuda_op_embed(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
-    if (embedding->rank != 2) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_embed",
-                       "embedding tensor must have rank 2");
-        return YVEX_ERR_FORMAT;
-    }
-
-    hidden_size = embedding->dims[0];
-    vocab_size = embedding->dims[1];
-    if (hidden_size == 0 || vocab_size == 0 || hidden_size > ULLONG_MAX / vocab_size) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_embed",
-                       "embedding dimensions overflow");
-        return YVEX_ERR_BOUNDS;
-    }
-    if (embedding->dtype == YVEX_DTYPE_F32 && !tensor_is_f32_bytes(embedding, hidden_size * vocab_size)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_embed",
-                       "embedding tensor byte size does not match F32 dims");
-        return YVEX_ERR_BOUNDS;
-    }
-    if (embedding->dtype == YVEX_DTYPE_F16 && !tensor_is_f16_bytes(embedding, hidden_size * vocab_size)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_embed",
-                       "embedding tensor byte size does not match F16 dims");
-        return YVEX_ERR_BOUNDS;
-    }
-    if (token_count > ULLONG_MAX / hidden_size) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_embed",
-                       "output dimensions overflow");
-        return YVEX_ERR_BOUNDS;
-    }
-    if (out->rank != 2 || out->dims[0] != token_count || out->dims[1] != hidden_size) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_embed",
-                       "output tensor must have dims [token_count, hidden_size]");
-        return YVEX_ERR_BOUNDS;
+    rc = yvex_backend_validate_embed(
+        backend, embedding, token_ids, token_count, out, &hidden_size, &vocab_size,
+        "CUDA backend embed supports F32 and F16 embeddings with F32 output",
+        "yvex_backend_op_embed", err);
+    if (rc != YVEX_OK) {
+        return rc;
     }
     total_elements = token_count * hidden_size;
-    if (!tensor_is_f32_bytes(out, total_elements)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_embed",
-                       "output tensor byte size does not match F32 dims");
-        return YVEX_ERR_BOUNDS;
-    }
-    for (i = 0; i < token_count; ++i) {
-        if ((unsigned long long)token_ids[i] >= vocab_size) {
-            yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_backend_op_embed",
-                            "token id %u exceeds embedding vocab size %llu",
-                            token_ids[i], vocab_size);
-            return YVEX_ERR_BOUNDS;
-        }
-    }
     if (token_count > (unsigned long long)(SIZE_MAX / sizeof(unsigned int))) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_embed",
                        "token id buffer is too large");
@@ -623,6 +193,11 @@ int yvex_cuda_op_embed(yvex_backend *backend,
     return YVEX_OK;
 }
 
+/* Purpose: Execute the typed op rms norm operation over already admitted buffers.
+ * Inputs: Typed admitted handles, immutable source ranges, checked dimensions, and an explicit destination.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_cuda_op_rms_norm(yvex_backend *backend,
                           const yvex_device_tensor *input,
                           const yvex_device_tensor *weight,
@@ -668,51 +243,12 @@ int yvex_cuda_op_rms_norm(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
-    if (!isfinite(epsilon) || epsilon <= 0.0f) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rms_norm",
-                       "epsilon must be finite and positive");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    if (input->rank == 2 && input->dims[0] == 1) {
-        hidden_size = input->dims[1];
-    } else if (input->rank == 1) {
-        hidden_size = input->dims[0];
-    } else {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rms_norm",
-                       "RMSNorm input must be rank 1 or dims [1, hidden]");
-        return YVEX_ERR_FORMAT;
-    }
-    if (hidden_size == 0) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rms_norm",
-                       "RMSNorm hidden size must be non-zero");
-        return YVEX_ERR_FORMAT;
-    }
-    if (weight->rank != 1 || weight->dims[0] != hidden_size) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rms_norm",
-                       "RMSNorm weight must be rank 1 and match hidden size");
-        return YVEX_ERR_FORMAT;
-    }
-    if (out->rank != input->rank ||
-        out->dims[0] != input->dims[0] ||
-        (input->rank == 2 && out->dims[1] != input->dims[1])) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rms_norm",
-                       "RMSNorm output shape must match input shape");
-        return YVEX_ERR_FORMAT;
-    }
-    if (!tensor_is_f32_bytes(input, hidden_size) || !tensor_is_f32_bytes(out, hidden_size)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rms_norm",
-                       "RMSNorm input/output bytes must match F32 hidden size");
-        return YVEX_ERR_BOUNDS;
-    }
-    if (weight->dtype == YVEX_DTYPE_F32 && !tensor_is_f32_bytes(weight, hidden_size)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rms_norm",
-                       "RMSNorm F32 weight bytes must match hidden size");
-        return YVEX_ERR_BOUNDS;
-    }
-    if (weight->dtype == YVEX_DTYPE_F16 && !tensor_is_f16_bytes(weight, hidden_size)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rms_norm",
-                       "RMSNorm F16 weight bytes must match hidden size");
-        return YVEX_ERR_BOUNDS;
+    rc = yvex_backend_validate_rms_norm(
+        backend, input, weight, epsilon, out, &hidden_size,
+        "CUDA RMSNorm supports F32 input/output with F16 or F32 weight",
+        "yvex_backend_op_rms_norm", err);
+    if (rc != YVEX_OK) {
+        return rc;
     }
 
     rc = yvex_cuda_set_current(backend, "yvex_backend_op_rms_norm", err);
@@ -745,6 +281,11 @@ int yvex_cuda_op_rms_norm(yvex_backend *backend,
     return YVEX_OK;
 }
 
+/* Purpose: Execute the typed op rope operation over already admitted buffers.
+ * Inputs: Typed admitted handles, immutable source ranges, checked dimensions, and an explicit destination.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_cuda_op_rope(yvex_backend *backend,
                       const yvex_device_tensor *input,
                       unsigned long long position,
@@ -795,11 +336,12 @@ int yvex_cuda_op_rope(yvex_backend *backend,
                        "rope_base must be finite and greater than 1");
         return YVEX_ERR_INVALID_ARG;
     }
-    rc = cuda_rope_head_dim(input, &head_dim, err);
+    rc = yvex_backend_validate_rope(input, &head_dim, "yvex_backend_op_rope", err);
     if (rc != YVEX_OK) {
         return rc;
     }
-    if (!tensor_is_f32_bytes(input, head_dim) || !tensor_is_f32_bytes(out, head_dim)) {
+    if (!yvex_backend_tensor_f32_elements(input, head_dim) ||
+        !yvex_backend_tensor_f32_elements(out, head_dim)) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rope",
                        "RoPE input/output bytes must match F32 head_dim");
         return YVEX_ERR_BOUNDS;
@@ -810,7 +352,7 @@ int yvex_cuda_op_rope(yvex_backend *backend,
         return rc;
     }
     pair_count = head_dim / 2ull;
-    inverse_root = (float)(1.0 / cuda_nth_root_double((double)rope_base, pair_count));
+    inverse_root = (float)(1.0 / yvex_backend_nth_root((double)rope_base, pair_count));
     rc = cuda_grid_1d(pair_count, block_size, &grid_size, "cuda.rope.grid", err);
     if (rc != YVEX_OK) {
         return rc;
@@ -838,6 +380,11 @@ int yvex_cuda_op_rope(yvex_backend *backend,
     return YVEX_OK;
 }
 
+/* Purpose: Execute the typed op matmul operation over already admitted buffers.
+ * Inputs: Typed admitted handles, immutable source ranges, checked dimensions, and an explicit destination.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_cuda_op_matmul(yvex_backend *backend,
                         const yvex_device_tensor *input,
                         const yvex_device_tensor *weight,
@@ -862,8 +409,8 @@ int yvex_cuda_op_matmul(yvex_backend *backend,
                        "CUDA backend state is missing");
         return YVEX_ERR_STATE;
     }
-    rc = cuda_matmul_validate(backend, input, weight, out,
-                              &m, &k, &n, "yvex_backend_op_matmul", err);
+    rc = yvex_backend_validate_matmul(backend, input, weight, out, &m, &k, &n,
+                                      "yvex_backend_op_matmul", err);
     if (rc != YVEX_OK) {
         return rc;
     }
@@ -909,6 +456,11 @@ int yvex_cuda_op_matmul(yvex_backend *backend,
     return YVEX_OK;
 }
 
+/* Purpose: Execute the typed op mlp operation over already admitted buffers.
+ * Inputs: Typed admitted handles, immutable source ranges, checked dimensions, and an explicit destination.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_cuda_op_mlp(yvex_backend *backend,
                      const yvex_device_tensor *input,
                      const yvex_device_tensor *gate_weight,
@@ -942,9 +494,10 @@ int yvex_cuda_op_mlp(yvex_backend *backend,
                        "CUDA backend state is missing");
         return YVEX_ERR_STATE;
     }
-    rc = cuda_mlp_validate(backend, input, gate_weight, up_weight, down_weight,
-                           options, intermediate, out, &batch, &hidden_dim,
-                           &ffn_dim, "yvex_backend_op_mlp", err);
+    rc = yvex_backend_validate_mlp(
+        backend, input, gate_weight, up_weight, down_weight, options,
+        intermediate, out, &batch, &hidden_dim, &ffn_dim, NULL, NULL, NULL,
+        "yvex_backend_op_mlp", err);
     if (rc != YVEX_OK) {
         return rc;
     }
@@ -999,6 +552,11 @@ int yvex_cuda_op_mlp(yvex_backend *backend,
     return YVEX_OK;
 }
 
+/* Purpose: Execute the typed op attention operation over already admitted buffers.
+ * Inputs: Typed admitted handles, immutable source ranges, checked dimensions, and an explicit destination.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_cuda_op_attention(yvex_backend *backend,
                            const yvex_device_tensor *query,
                            const yvex_device_tensor *keys,
@@ -1037,10 +595,10 @@ int yvex_cuda_op_attention(yvex_backend *backend,
                        "scale must be finite and positive");
         return YVEX_ERR_INVALID_ARG;
     }
-    rc = cuda_attention_validate(backend, query, keys, values, seq_len, position,
-                                 score_scratch, probability_scratch, out,
-                                 &head_dim, &kv_elements,
-                                 "yvex_backend_op_attention", err);
+    rc = yvex_backend_validate_attention(
+        backend, query, keys, values, seq_len, position, score_scratch,
+        probability_scratch, out, &head_dim, &kv_elements,
+        "yvex_backend_op_attention", err);
     if (rc != YVEX_OK) {
         return rc;
     }

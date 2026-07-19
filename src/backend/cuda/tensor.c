@@ -1,44 +1,27 @@
-/*
- * cuda/cuda_tensor.c - CUDA backend tensor storage.
- *
- * Owner: src/backend/cuda.
- * Owns: CUDA tensor allocation, zeroing, host/device transfer, device copy,
- * output-written state, checked device release, and allocation accounting.
- * Does not own: kernel bundles, primitive kernels, graph/model semantics, CLI
- * output, materialization policy, qtype compute, or runtime generation.
- * Invariants: writes become visible only after synchronization; failed release
- * preserves tensor ownership and counters; unpublished allocations are cleaned.
+/* Owner: src/backend/cuda.
+ * Owns: CUDA tensor allocation, zeroing, host/device transfer, device copy, output-written state, checked device
+ *   release, and allocation accounting.
+ * Does not own: kernel bundles, primitive kernels, graph/model semantics, CLI output, materialization policy, qtype
+ *   compute, or runtime generation.
+ * Invariants: writes become visible only after synchronization; failed release preserves tensor ownership and
+ *   counters; unpublished allocations are cleaned.
  * Boundary: tensor movement is not CUDA graph or generation support.
- */
+ * Purpose: Own CUDA tensor allocation, transfer, copy, accounting, and release.
+ * Inputs: A ready backend, typed tensor descriptors, checked byte ranges, and host buffers.
+ * Effects: Mutates only owned device allocation state and admitted transfer destinations.
+ * Failure: Allocation, transfer, synchronization, and cleanup failures preserve coherent accounting. */
 
-#include "driver.h"
+#include "src/backend/cuda/private.h"
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-
-static int cuda_memory_can_add(const yvex_backend *backend,
-                               unsigned long long bytes,
-                               yvex_error *err)
-{
-    unsigned long long next;
-
-    if (backend->stats.allocated_bytes > ULLONG_MAX - bytes) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "cuda.tensor_alloc",
-                       "allocated byte counter overflow");
-        return YVEX_ERR_NOMEM;
-    }
-    next = backend->stats.allocated_bytes + bytes;
-    if (backend->stats.memory_limit_bytes != 0 && next > backend->stats.memory_limit_bytes) {
-        yvex_error_setf(err, YVEX_ERR_NOMEM, "cuda.tensor_alloc",
-                        "allocation exceeds CUDA backend memory limit %llu",
-                        backend->stats.memory_limit_bytes);
-        return YVEX_ERR_NOMEM;
-    }
-    return YVEX_OK;
-}
-
 /* Contract: releases an unpublished allocation and gives cleanup failure precedence. */
+/* Purpose: Reserve budgeted storage for failed allocation cleanup with checked size accounting.
+ * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static int cuda_failed_allocation_cleanup(yvex_backend *backend,
                                           CUdeviceptr ptr,
                                           int primary_rc,
@@ -60,6 +43,11 @@ static int cuda_failed_allocation_cleanup(yvex_backend *backend,
     return primary_rc;
 }
 
+/* Purpose: Reserve budgeted storage for tensor alloc with checked size accounting.
+ * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_cuda_tensor_alloc(yvex_backend *backend,
                            const yvex_backend_tensor_desc *desc,
                            yvex_device_tensor **out,
@@ -87,7 +75,7 @@ int yvex_cuda_tensor_alloc(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
-    rc = cuda_memory_can_add(backend, desc->bytes, err);
+    rc = yvex_backend_memory_can_add(backend, desc->bytes, "CUDA", "cuda.tensor_alloc", err);
     if (rc != YVEX_OK) {
         return rc;
     }
@@ -119,7 +107,7 @@ int yvex_cuda_tensor_alloc(yvex_backend *backend,
                        "failed to allocate CUDA tensor object");
         return cuda_failed_allocation_cleanup(backend, ptr, YVEX_ERR_NOMEM, err);
     }
-    tensor->name = yvex_backend_strdup(desc->name);
+    tensor->name = yvex_core_strdup(desc->name);
     if (!tensor->name) {
         free(tensor);
         yvex_error_set(err, YVEX_ERR_NOMEM, "cuda.tensor_alloc",
@@ -137,11 +125,7 @@ int yvex_cuda_tensor_alloc(yvex_backend *backend,
     tensor->bytes = desc->bytes;
     tensor->data = (unsigned char *)(uintptr_t)ptr;
 
-    backend->stats.allocated_bytes += desc->bytes;
-    backend->stats.allocation_count += 1;
-    if (backend->stats.allocated_bytes > backend->stats.peak_allocated_bytes) {
-        backend->stats.peak_allocated_bytes = backend->stats.allocated_bytes;
-    }
+    yvex_backend_memory_acquire(backend, desc->bytes);
     (void)yvex_cuda_refresh_memory_info(backend, err);
 
     *out = tensor;
@@ -149,6 +133,11 @@ int yvex_cuda_tensor_alloc(yvex_backend *backend,
     return YVEX_OK;
 }
 
+/* Purpose: Release the resources owned by tensor free without changing borrowed inputs.
+ * Inputs: An owned object that may be null or already released where its lifecycle permits.
+ * Effects: Releases only resources owned by the supplied object and leaves it reset or unusable.
+ * Failure: Null and already-released inputs follow the idempotent lifecycle contract.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_cuda_tensor_free(yvex_backend *backend,
                           yvex_device_tensor *tensor,
                           yvex_error *err)
@@ -171,14 +160,7 @@ int yvex_cuda_tensor_free(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
-    if (backend->stats.allocated_bytes >= tensor->bytes) {
-        backend->stats.allocated_bytes -= tensor->bytes;
-    } else {
-        backend->stats.allocated_bytes = 0;
-    }
-    if (backend->stats.allocation_count > 0) {
-        backend->stats.allocation_count -= 1;
-    }
+    yvex_backend_memory_release(backend, tensor->bytes);
     tensor->owner = NULL;
     tensor->owner_id = 0;
     free(tensor->name);
@@ -187,24 +169,11 @@ int yvex_cuda_tensor_free(yvex_backend *backend,
     return YVEX_OK;
 }
 
-static int cuda_check_rw(const char *where,
-                         const yvex_backend *backend,
-                         const yvex_device_tensor *tensor,
-                         unsigned long long len,
-                         yvex_error *err)
-{
-    if (!yvex_backend_tensor_owner_is(backend, tensor)) {
-        yvex_error_set(err, YVEX_ERR_STATE, where, "tensor does not belong to this backend");
-        return YVEX_ERR_STATE;
-    }
-    if (len != tensor->bytes) {
-        yvex_error_setf(err, YVEX_ERR_BOUNDS, where,
-                        "length %llu does not match tensor bytes %llu", len, tensor->bytes);
-        return YVEX_ERR_BOUNDS;
-    }
-    return YVEX_OK;
-}
-
+/* Purpose: Publish tensor write only within its admitted destination range.
+ * Inputs: Typed admitted handles, immutable source ranges, checked dimensions, and an explicit destination.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_cuda_tensor_write(yvex_backend *backend,
                            yvex_device_tensor *tensor,
                            const void *src,
@@ -212,7 +181,8 @@ int yvex_cuda_tensor_write(yvex_backend *backend,
                            yvex_error *err)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
-    int rc = cuda_check_rw("yvex_backend_tensor_write", backend, tensor, len, err);
+    int rc = yvex_backend_tensor_rw_validate(
+        "yvex_backend_tensor_write", backend, tensor, len, err);
 
     if (rc != YVEX_OK) {
         return rc;
@@ -243,6 +213,11 @@ int yvex_cuda_tensor_write(yvex_backend *backend,
     return YVEX_OK;
 }
 
+/* Purpose: Retrieve tensor read from admitted immutable or owned state.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_cuda_tensor_read(yvex_backend *backend,
                           const yvex_device_tensor *tensor,
                           void *dst,
@@ -250,7 +225,8 @@ int yvex_cuda_tensor_read(yvex_backend *backend,
                           yvex_error *err)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
-    int rc = cuda_check_rw("yvex_backend_tensor_read", backend, tensor, len, err);
+    int rc = yvex_backend_tensor_rw_validate(
+        "yvex_backend_tensor_read", backend, tensor, len, err);
 
     if (rc != YVEX_OK) {
         return rc;
@@ -275,6 +251,11 @@ int yvex_cuda_tensor_read(yvex_backend *backend,
                                  "yvex_backend_tensor_read", err);
 }
 
+/* Purpose: Copy tensor copy between compatible admitted ranges without changing semantic identity.
+ * Inputs: Typed admitted handles, immutable source ranges, checked dimensions, and an explicit destination.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_cuda_tensor_copy(yvex_backend *backend,
                           yvex_device_tensor *dst,
                           const yvex_device_tensor *src,
@@ -283,16 +264,10 @@ int yvex_cuda_tensor_copy(yvex_backend *backend,
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
     int rc;
 
-    if (!yvex_backend_tensor_owner_is(backend, dst) ||
-        !yvex_backend_tensor_owner_is(backend, src)) {
-        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_tensor_copy",
-                       "source and destination must belong to this backend");
-        return YVEX_ERR_STATE;
-    }
-    if (!yvex_backend_tensor_same_shape(dst, src)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_tensor_copy",
-                       "source and destination tensor descriptors differ");
-        return YVEX_ERR_BOUNDS;
+    rc = yvex_backend_tensor_copy_validate(
+        backend, dst, src, "yvex_backend_tensor_copy", err);
+    if (rc != YVEX_OK) {
+        return rc;
     }
     rc = yvex_cuda_require_capability(backend, YVEX_BACKEND_VARIANT_TENSOR_COPY,
                                       "yvex_backend_tensor_copy", err);

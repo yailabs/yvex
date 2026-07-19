@@ -10,7 +10,7 @@
  */
 #include "tests/test.h"
 
-#include "src/model/compilation/ir.h"
+#include <yvex/internal/compilation.h>
 
 #include <stdlib.h>
 #include <string.h>

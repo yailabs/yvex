@@ -2,7 +2,7 @@
 set -eu
 
 test -x build/tests/test
-test -f include/yvex/gguf_qtype.h
+test -f include/yvex/qtype.h
 
 out="${TMPDIR:-/tmp}/yvex-gguf-qtype-abi.$$"
 trap 'rm -f "$out"' EXIT
@@ -11,14 +11,18 @@ build/tests/test >"$out" 2>&1
 grep -nF 'test: gguf_qtype_abi' "$out" >/dev/null
 
 grep -nF 'af97976c7810cdabb1863172f31c432dab767de7' \
-  include/yvex/gguf_qtype.h docs/reference-architecture.md >/dev/null
+  include/yvex/qtype.h docs/reference-architecture.md >/dev/null
 grep -nF 'yvex_gguf_qtype_tensor_storage' src/gguf/qtype.c >/dev/null
 grep -nF 'yvex_gguf_qtype_tensor_storage' src/gguf/core.c >/dev/null
 grep -nF 'yvex_gguf_qtype_tensor_storage' \
   src/gguf/layout_integrity.c >/dev/null
-grep -nF 'layout->raw_tensor_bytes' src/gguf/range_map.c >/dev/null
-if grep -nF 'yvex_gguf_qtype_tensor_storage' src/gguf/range_map.c >/dev/null; then
-  echo 'range projection must consume canonical reader storage facts once' >&2
+projection="$(sed -n \
+  '/^int yvex_gguf_range_fact_from_layout(/,/^\/\* Purpose: recognize/p' \
+  src/gguf/descriptor.c)"
+printf '%s\n' "$projection" | grep -nF 'layout->raw_tensor_bytes' >/dev/null
+if printf '%s\n' "$projection" | grep -nF \
+    'yvex_gguf_qtype_tensor_storage' >/dev/null; then
+  echo 'descriptor projection must consume canonical reader storage facts once' >&2
   exit 1
 fi
 grep -nF 'yvex_dtype_tensor_storage_bytes' \
@@ -28,10 +32,10 @@ grep -nF 'yvex_dtype_tensor_storage_bytes' \
 grep -nF 'yvex_gguf_qtype_geometry_find' src/gguf/conversion.c >/dev/null
 grep -nF 'yvex_gguf_qtype_geometry_find_by_name' src/gguf/tools.c >/dev/null
 grep -nF '#define YVEX_GGUF_QTYPE_ABI_NEXT_ROW "V010.GGUF.ARTIFACT.ABI.1"' \
-  src/gguf/private.h >/dev/null
+  include/yvex/internal/gguf.h >/dev/null
 
 if grep -nE 'block_elems|block_bytes|scalar_bytes|is_supported_for_storage_accounting' \
-    include/yvex/dtype.h src/model/core.c; then
+    include/yvex/model.h src/model/core.c; then
   echo 'dtype owner must project canonical GGUF storage geometry' >&2
   exit 1
 fi

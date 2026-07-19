@@ -1,25 +1,15 @@
-/*
- * ref.c - model artifact references.
- *
- * Owner:
- *   src/model/artifacts
- *
- * Owns:
- *   alias/path model reference resolution and model ref copy/free helpers.
- *
- * Does not own:
- *   CLI parsing, command dispatch, rendering, stdout/stderr, registry storage,
- *   explicit file writing, artifact emission, runtime generation, eval,
- *   benchmark, or release decisions.
- *
- * Invariants:
- *   references preserve public model_ref API behavior and do not imply support.
- *
- * Boundary:
- *   resolving a model reference is not artifact verification, runtime support,
- *   generation readiness, benchmark evidence, or release readiness.
- */
-#include <yvex/model_ref.h>
+/* Owner: src/model/artifacts
+ * Owns: alias/path model reference resolution and model ref copy/free helpers.
+ * Does not own: CLI parsing, command dispatch, rendering, stdout/stderr, registry storage, explicit file writing,
+ *   artifact emission, runtime generation, eval, benchmark, or release decisions.
+ * Invariants: references preserve public model_ref API behavior and do not imply support.
+ * Boundary: resolving a model reference is not artifact verification, runtime support, generation readiness,
+ *   benchmark evidence, or release readiness.
+ * Purpose: resolve model references and immutable artifact metadata snapshots.
+ * Inputs: registry entries, paths, and artifact views.
+ * Effects: owns resolved strings and bounded snapshot state.
+ * Failure: typed identity or lookup failures release all partial ownership. */
+#include <yvex/registry.h>
 
 #include <stdio.h>
 #include <limits.h>
@@ -27,12 +17,15 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <yvex/model_registry.h>
-#include <yvex/artifact_identity.h>
-#include <yvex/artifact_integrity.h>
+#include <yvex/artifact.h>
+#include <yvex/internal/core.h>
 #include <yvex/model.h>
-#include <yvex/api.h>
 
+/* Purpose: apply the canonical metadata dims text transformation and invariants.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 static void metadata_dims_text(const unsigned long long *dims,
                                unsigned int rank,
                                char *out,
@@ -57,6 +50,7 @@ static void metadata_dims_text(const unsigned long long *dims,
     out[used] = '\0';
 }
 
+/* Purpose: apply the canonical metadata support transformation and invariants. */
 static const char *metadata_support(const yvex_model_registry_entry *entry)
 {
     if (entry && entry->primary_tensor_name && entry->primary_tensor_name[0]) {
@@ -66,10 +60,12 @@ static const char *metadata_support(const yvex_model_registry_entry *entry)
     return "";
 }
 
-/*
- * Projects one resolved reference into the registry comparison ABI.  The
- * view borrows strings from ref, allocates nothing, and does not perform IO.
- */
+/* Purpose: apply the canonical ref registry entry view transformation and invariants.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
+
 void yvex_model_ref_registry_entry_view(const yvex_model_ref *ref,
                                         yvex_model_registry_entry *entry)
 {
@@ -99,11 +95,12 @@ void yvex_model_ref_registry_entry_view(const yvex_model_ref *ref,
     entry->execution_ready = ref->execution_ready;
 }
 
-/*
- * Builds current typed metadata facts from one admitted model context.  The
- * function owns and releases the temporary context, reads no tensor payload,
- * prints nothing, and never promotes runtime or generation capability.
- */
+/* Purpose: decode bounded metadata snapshot read evidence without retained input.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
+
 int yvex_model_metadata_snapshot_read(yvex_model_metadata_snapshot *snapshot,
                                       const char *path_or_alias,
                                       yvex_error *err)
@@ -194,11 +191,12 @@ int yvex_model_metadata_snapshot_read(yvex_model_metadata_snapshot *snapshot,
     return YVEX_OK;
 }
 
-/*
- * Validates the exact file and registered metadata bound to an alias.  Path
- * references require no registry admission.  The typed result is defined on
- * every return path; no output is printed and no capability is promoted.
- */
+/* Purpose: enforce typed ref identity validate invariants before publication.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
+
 int yvex_model_ref_identity_validate(const yvex_model_ref *ref,
                                      yvex_model_ref_identity_result *out,
                                      yvex_error *err)
@@ -295,19 +293,11 @@ int yvex_model_ref_identity_validate(const yvex_model_ref *ref,
     return YVEX_OK;
 }
 
-static char *ref_strdup(const char *s)
-{
-    size_t len;
-    char *out;
-
-    if (!s) s = "";
-    len = strlen(s);
-    out = (char *)malloc(len + 1u);
-    if (!out) return NULL;
-    memcpy(out, s, len + 1u);
-    return out;
-}
-
+/* Purpose: release owned ref clear resources in dependency order.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 void yvex_model_ref_clear(yvex_model_ref *ref)
 {
     if (!ref) return;
@@ -326,21 +316,26 @@ void yvex_model_ref_clear(yvex_model_ref *ref)
     memset(ref, 0, sizeof(*ref));
 }
 
+/* Purpose: form the bounded canonical path ref without path drift.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 static int set_path_ref(yvex_model_ref *out, const char *input, yvex_error *err)
 {
     memset(out, 0, sizeof(*out));
-    out->input = ref_strdup(input);
-    out->path = ref_strdup(input);
-    out->alias = ref_strdup("");
-    out->family = ref_strdup("");
-    out->sha256 = ref_strdup("");
-    out->support_level = ref_strdup("");
-    out->format = ref_strdup("");
-    out->architecture = ref_strdup("");
-    out->primary_tensor_name = ref_strdup("");
-    out->primary_tensor_role = ref_strdup("");
-    out->primary_tensor_dtype = ref_strdup("");
-    out->primary_tensor_dims = ref_strdup("");
+    out->input = yvex_core_strdup(input);
+    out->path = yvex_core_strdup(input);
+    out->alias = yvex_core_strdup("");
+    out->family = yvex_core_strdup("");
+    out->sha256 = yvex_core_strdup("");
+    out->support_level = yvex_core_strdup("");
+    out->format = yvex_core_strdup("");
+    out->architecture = yvex_core_strdup("");
+    out->primary_tensor_name = yvex_core_strdup("");
+    out->primary_tensor_role = yvex_core_strdup("");
+    out->primary_tensor_dtype = yvex_core_strdup("");
+    out->primary_tensor_dims = yvex_core_strdup("");
     out->status = YVEX_MODEL_REF_STATUS_RESOLVED;
     out->kind = YVEX_MODEL_REF_PATH;
     out->execution_ready = 0;
@@ -357,6 +352,7 @@ static int set_path_ref(yvex_model_ref *out, const char *input, yvex_error *err)
     return YVEX_OK;
 }
 
+/* Purpose: form the bounded canonical path like reference without path drift. */
 static int is_path_like_reference(const char *input)
 {
     size_t len;
@@ -368,6 +364,11 @@ static int is_path_like_reference(const char *input)
     return 0;
 }
 
+/* Purpose: compare or copy ref copy entry under exact ownership.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 static int ref_copy_entry(yvex_model_ref *out,
                                    const char *input,
                                    const yvex_model_registry_entry *entry,
@@ -378,22 +379,22 @@ static int ref_copy_entry(yvex_model_ref *out,
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_ref", "input and registry entry are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    out->input = ref_strdup(input);
-    out->path = ref_strdup(entry->path);
-    out->alias = ref_strdup(entry->alias);
-    out->family = ref_strdup(entry->family);
-    out->sha256 = ref_strdup(entry->sha256);
+    out->input = yvex_core_strdup(input);
+    out->path = yvex_core_strdup(entry->path);
+    out->alias = yvex_core_strdup(entry->alias);
+    out->family = yvex_core_strdup(entry->family);
+    out->sha256 = yvex_core_strdup(entry->sha256);
     out->registered_file_size = entry->file_size;
-    out->support_level = ref_strdup(entry->support_level);
-    out->format = ref_strdup(entry->format);
-    out->architecture = ref_strdup(entry->architecture);
+    out->support_level = yvex_core_strdup(entry->support_level);
+    out->format = yvex_core_strdup(entry->format);
+    out->architecture = yvex_core_strdup(entry->architecture);
     out->tensor_count = entry->tensor_count;
     out->known_tensor_bytes = entry->known_tensor_bytes;
-    out->primary_tensor_name = ref_strdup(entry->primary_tensor_name);
-    out->primary_tensor_role = ref_strdup(entry->primary_tensor_role);
-    out->primary_tensor_dtype = ref_strdup(entry->primary_tensor_dtype);
+    out->primary_tensor_name = yvex_core_strdup(entry->primary_tensor_name);
+    out->primary_tensor_role = yvex_core_strdup(entry->primary_tensor_role);
+    out->primary_tensor_dtype = yvex_core_strdup(entry->primary_tensor_dtype);
     out->primary_tensor_rank = entry->primary_tensor_rank;
-    out->primary_tensor_dims = ref_strdup(entry->primary_tensor_dims);
+    out->primary_tensor_dims = yvex_core_strdup(entry->primary_tensor_dims);
     out->primary_tensor_bytes = entry->primary_tensor_bytes;
     out->selected_embedding_ready = entry->selected_embedding_ready;
     out->selected_embedding_hidden_size = entry->selected_embedding_hidden_size;
@@ -416,6 +417,11 @@ static int ref_copy_entry(yvex_model_ref *out,
     return YVEX_OK;
 }
 
+/* Purpose: register one append available aliases while preserving order and bounds.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 static void append_available_aliases(char *buf,
                                      size_t cap,
                                      const yvex_model_registry *registry)
@@ -439,6 +445,11 @@ static void append_available_aliases(char *buf,
     }
 }
 
+/* Purpose: resolve one ref resolve through the canonical index.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 int yvex_model_ref_resolve(yvex_model_ref *out,
                            const char *input,
                            const yvex_model_ref_options *options,
@@ -487,11 +498,14 @@ int yvex_model_ref_resolve(yvex_model_ref *out,
         out->kind = YVEX_MODEL_REF_UNKNOWN;
         if (env_registry && env_registry[0]) {
             yvex_error_setf(err, YVEX_ERR_IO, "model_ref",
-                            "model registry unavailable for reference: %s; YVEX_MODELS_REGISTRY=%s; hint: register the alias in that registry, unset YVEX_MODELS_REGISTRY, or pass an existing path",
+                            "model registry unavailable for reference: %s; "
+                            "YVEX_MODELS_REGISTRY=%s; hint: register the alias in that "
+                            "registry, unset YVEX_MODELS_REGISTRY, or pass an existing path",
                             input, env_registry);
         } else {
             yvex_error_setf(err, YVEX_ERR_IO, "model_ref",
-                            "model registry unavailable for reference: %s; hint: run './yvex models list' or pass an existing path",
+                            "model registry unavailable for reference: %s; hint: run "
+                            "'./yvex models list' or pass an existing path",
                             input);
         }
         return YVEX_ERR_IO;
@@ -513,10 +527,12 @@ int yvex_model_ref_resolve(yvex_model_ref *out,
     if (access(entry->path, F_OK) != 0) {
         out->status = YVEX_MODEL_REF_STATUS_ALIAS_PATH_MISSING;
         out->kind = YVEX_MODEL_REF_ALIAS;
-        out->alias = ref_strdup(entry->alias);
-        out->path = ref_strdup(entry->path);
+        out->alias = yvex_core_strdup(entry->alias);
+        out->path = yvex_core_strdup(entry->path);
         yvex_error_setf(err, YVEX_ERR_IO, "model_ref",
-                        "model alias exists but path is missing: alias=%s path=%s; hint: update or remove the registry entry with './yvex models remove %s'",
+                        "model alias exists but path is missing: alias=%s path=%s; hint: "
+                        "update or remove the registry entry with "
+                        "'./yvex models remove %s'",
                         entry->alias, entry->path, entry->alias);
         yvex_model_registry_close(registry);
         return YVEX_ERR_IO;
@@ -527,7 +543,11 @@ int yvex_model_ref_resolve(yvex_model_ref *out,
     return rc;
 }
 
-
+/* Purpose: project typed ref kind name vocabulary without lost semantics.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 const char *yvex_model_ref_kind_name(yvex_model_ref_kind kind)
 {
     switch (kind) {
@@ -541,6 +561,11 @@ const char *yvex_model_ref_kind_name(yvex_model_ref_kind kind)
     }
 }
 
+/* Purpose: project typed ref status name vocabulary without lost semantics.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 const char *yvex_model_ref_status_name(yvex_model_ref_status status)
 {
     switch (status) {

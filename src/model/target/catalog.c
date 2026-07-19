@@ -1,85 +1,65 @@
-/*
- * catalog.c - model-target catalog facts.
- *
- * Owner:
- *   src/model/target
- *
- * Owns:
- *   canonical release-target identity, static model-target and target-class
- *   catalog facts, source-path projection, and catalog reports.
- *
- * Does not own:
- *   CLI parsing, command dispatch, rendering, sidecar writing, runtime
- *   execution, generation, eval, benchmark, or release decisions.
- *
- * Invariants:
- *   the exact v0.1.0 identity is defined once and remains distinct from model
- *   support; catalog facts do not claim runtime or generation support.
- *
- * Boundary:
- *   target catalog entries are not capability claims.
- */
-#include "catalog.h"
-
-#include "private.h"
+/* Owner: src/model/target
+ * Owns: static model-target and target-class catalog facts, target-specific operator path selection, and catalog
+ *   reports.
+ * Does not own: CLI parsing, command dispatch, rendering, sidecar writing, runtime execution, generation, eval,
+ *   benchmark, or release decisions.
+ * Invariants: the exact v0.1.0 identity is borrowed from the source owner and remains distinct from support;
+ *   catalog facts do not claim runtime or generation.
+ * Boundary: target catalog entries are not capability claims.
+ * Purpose: project source-owned release identity into model-target catalog reports.
+ * Inputs: immutable catalog rows, typed target requests, and source identity facts.
+ * Effects: writes caller-owned reports and resolves request-specific operator paths.
+ * Failure: invalid targets and path overflow produce typed refusal without capability promotion. */
+#include <yvex/internal/model_target.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-static const yvex_model_target_identity release_target_identity = {
-    YVEX_MODEL_RELEASE_TARGET_ID,
-    YVEX_MODEL_RELEASE_FAMILY_KEY,
-    YVEX_MODEL_RELEASE_FAMILY_DISPLAY,
-    YVEX_MODEL_RELEASE_NAME,
-    YVEX_MODEL_RELEASE_REPOSITORY,
-    YVEX_MODEL_RELEASE_SOURCE_LEAF,
-    YVEX_MODEL_RELEASE_REVISION,
-    YVEX_MODEL_RELEASE_INDEX_PATH,
-    YVEX_MODEL_RELEASE_INDEX_OID,
-    YVEX_MODEL_RELEASE_INDEX_SIZE,
-    YVEX_MODEL_RELEASE_INVENTORY_AUTHORITY,
-    YVEX_MODEL_RELEASE_CONFIG_TYPE,
-    YVEX_MODEL_RELEASE_CONFIG_ARCHITECTURE,
-};
-
 static const yvex_model_target_class_record catalog_model_target_classes[] = {
     {"release-source-target", "false", "unsupported", "unsupported",
      "exact selected v0.1.0 source target; selection and source verification do not imply artifact or runtime support"},
     {"selected-runtime-slice", "false", "partial-boundary-only", "unsupported",
-     "selected real artifact slice used to prove parser, materialization, backend, graph, reference, and cleanup boundaries"},
+     "selected real artifact slice used to prove parser, materialization, backend, "
+     "graph, reference, and cleanup boundaries"},
     {"official-source-huge-model", "false", "unsupported", "unsupported",
-     "official upstream source tensors used to force source manifest, native tensor inventory, model-class profiling, tensor mapping, quantization policy, and future YVEX-produced artifacts"},
+     "official upstream source tensors used to force source manifest, native tensor "
+     "inventory, model-class profiling, tensor mapping, quantization policy, and "
+     "future YVEX-produced artifacts"},
     {"source-model-candidate", "false", "unsupported", "unsupported",
-     "backend-neutral model/source target candidate; backend pressure and runtime compatibility are reported separately"},
+     "backend-neutral model/source target candidate; backend pressure and runtime "
+     "compatibility are reported separately"},
     {"full-runtime-model", "false", "planned", "planned",
-     "complete tensor set required for transformer prefill, decode, logits, sampling, and generation after runtime support exists"},
+     "complete tensor set required for transformer prefill, decode, logits, sampling, "
+     "and generation after runtime support exists"},
     {"huge-model-storage-stream", "false", "planned", "unsupported",
-     "huge artifact target used to force shard inventory, storage layout, page or chunk planning, staged residency, and cleanup boundaries"},
+     "huge artifact target used to force shard inventory, storage layout, page or "
+     "chunk planning, staged residency, and cleanup boundaries"},
     {"external-GGUF-reference", "false", "external-reference-only", "external-reference-only",
-     "external GGUF evidence used only to compare artifact layout, qtype choices, deployment constraints, or external behavior"},
+     "external GGUF evidence used only to compare artifact layout, qtype choices, "
+     "deployment constraints, or external behavior"},
     {"external-runtime-reference", "false", "external-reference-only", "external-reference-only",
      "external runtime evidence used only to compare deployment constraints or external behavior"},
 };
 
 static const yvex_model_target_record catalog_model_targets[] = {
-    {YVEX_MODEL_RELEASE_TARGET_ID, YVEX_MODEL_RELEASE_FAMILY_DISPLAY,
-     YVEX_MODEL_RELEASE_NAME, "release-source-target",
+    {YVEX_SOURCE_RELEASE_TARGET_ID, YVEX_SOURCE_RELEASE_FAMILY_DISPLAY,
+     YVEX_SOURCE_RELEASE_NAME, "release-source-target",
      "official-safetensors", "complete-YVEX-GGUF-not-produced",
      "exact-v0.1.0-release-source", "complete-model-tensor-set-required",
      "canonical-release-source", "verification-required",
      "source verification only; artifact/runtime/generation unsupported",
      "unsupported", "unsupported", "false"},
-    {"deepseek4-v4-flash-selected-embed", YVEX_MODEL_RELEASE_FAMILY_DISPLAY,
-     YVEX_MODEL_RELEASE_NAME,
+    {"deepseek4-v4-flash-selected-embed", YVEX_SOURCE_RELEASE_FAMILY_DISPLAY,
+     YVEX_SOURCE_RELEASE_NAME,
      "selected-runtime-slice", "official-safetensors",
      "YVEX-produced-selected-GGUF", "selected-token-embedding-materialization",
      "token_embd.weight", "none", "none",
      "selected materialization and selected graph slice only", "unsupported",
      "unsupported", "false"},
     {"deepseek4-v4-flash-selected-embed-rmsnorm",
-     YVEX_MODEL_RELEASE_FAMILY_DISPLAY, YVEX_MODEL_RELEASE_NAME,
+     YVEX_SOURCE_RELEASE_FAMILY_DISPLAY, YVEX_SOURCE_RELEASE_NAME,
      "selected-runtime-slice", "official-safetensors",
      "YVEX-produced-selected-GGUF", "selected-embedding-plus-rmsnorm-segment",
      "token_embd.weight,blk.0.attn_norm.weight", "none", "none",
@@ -105,32 +85,11 @@ static const yvex_model_target_record catalog_model_targets[] = {
      "unsupported", "false"},
 };
 
-const yvex_model_target_identity *yvex_model_target_release_identity(void)
-{
-    return &release_target_identity;
-}
-
-int yvex_model_target_is_release_target(const char *target_id)
-{
-    return target_id && strcmp(target_id, release_target_identity.target_id) == 0;
-}
-
-int yvex_model_target_source_path(char *out,
-                                  size_t cap,
-                                  const char *models_root,
-                                  const yvex_model_target_identity *identity)
-{
-    int n;
-
-    if (!out || cap == 0u || !models_root || !models_root[0] || !identity ||
-        !identity->family_key || !identity->source_dir_leaf) {
-        return 0;
-    }
-    n = snprintf(out, cap, "%s/hf/%s/%s", models_root,
-                 identity->family_key, identity->source_dir_leaf);
-    return n >= 0 && (size_t)n < cap;
-}
-
+/* Purpose: apply the canonical release source paths transformation and invariants.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 int yvex_model_target_release_source_paths(
     const yvex_model_target_request *request,
     char *models_root,
@@ -154,17 +113,22 @@ int yvex_model_target_release_source_paths(
         n = snprintf(source_path, source_path_cap, "%s", request->source_path);
         return n >= 0 && (size_t)n < source_path_cap;
     }
-    return yvex_model_target_source_path(
+    return yvex_source_target_path(
         source_path, source_path_cap, models_root,
-        yvex_model_target_release_identity());
+        yvex_source_release_identity());
 }
 
+/* Purpose: resolve one find through the canonical index.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 const yvex_model_target_record *yvex_model_target_find(const char *target_id)
 {
     unsigned long i;
 
     if (!target_id) return NULL;
-    for (i = 0; i < yvex_model_target_count(); ++i) {
+    for (i = 0; i < sizeof(catalog_model_targets) / sizeof(catalog_model_targets[0]); ++i) {
         if (strcmp(catalog_model_targets[i].target_id, target_id) == 0) {
             return &catalog_model_targets[i];
         }
@@ -172,41 +136,37 @@ const yvex_model_target_record *yvex_model_target_find(const char *target_id)
     return NULL;
 }
 
-const yvex_model_target_class_record *yvex_model_target_class_find(const char *class_id)
-{
-    unsigned long i;
-
-    if (!class_id) return NULL;
-    for (i = 0; i < yvex_model_target_class_count(); ++i) {
-        if (strcmp(catalog_model_target_classes[i].class_id, class_id) == 0) {
-            return &catalog_model_target_classes[i];
-        }
-    }
-    return NULL;
-}
-
-unsigned long yvex_model_target_count(void)
+/* Purpose: expose the immutable target-table cardinality to catalog rendering. */
+static unsigned long target_count(void)
 {
     return sizeof(catalog_model_targets) / sizeof(catalog_model_targets[0]);
 }
 
-const yvex_model_target_record *yvex_model_target_at(unsigned long index)
+/* Purpose: resolve one bounds-checked target record for catalog rendering. */
+static const yvex_model_target_record *target_at(unsigned long index)
 {
-    return index < yvex_model_target_count() ? &catalog_model_targets[index] : NULL;
+    return index < target_count() ? &catalog_model_targets[index] : NULL;
 }
 
-unsigned long yvex_model_target_class_count(void)
+/* Purpose: expose the immutable target-class cardinality to catalog rendering. */
+static unsigned long target_class_count(void)
 {
     return sizeof(catalog_model_target_classes) / sizeof(catalog_model_target_classes[0]);
 }
 
-const yvex_model_target_class_record *yvex_model_target_class_at(unsigned long index)
+/* Purpose: resolve one bounds-checked class record for catalog rendering. */
+static const yvex_model_target_class_record *target_class_at(unsigned long index)
 {
-    return index < yvex_model_target_class_count()
+    return index < target_class_count()
                ? &catalog_model_target_classes[index]
                : NULL;
 }
 
+/* Purpose: map family key through canonical typed vocabulary.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 const char *yvex_model_target_family_key(const char *target_id)
 {
     const yvex_model_target_record *record = yvex_model_target_find(target_id);
@@ -222,27 +182,26 @@ const char *yvex_model_target_family_key(const char *target_id)
     return "unknown";
 }
 
-const char *yvex_model_target_family_display(const char *target_id)
-{
-    const char *family = yvex_model_target_family_key(target_id);
-
-    if (strcmp(family, "qwen") == 0) return "Qwen";
-    if (strcmp(family, "gemma") == 0) return "Gemma";
-    if (strcmp(family, "deepseek") == 0) return "DeepSeek";
-    if (strcmp(family, "glm") == 0) return "GLM";
-    return "unknown";
-}
-
+/* Purpose: apply the canonical supported source target transformation and invariants.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 int yvex_model_target_supported_source_target(const char *target_id)
 {
     return target_id && !strstr(target_id, "portability") &&
-           (yvex_model_target_is_release_target(target_id) ||
+           (yvex_source_is_release_target(target_id) ||
             strcmp(target_id, "qwen3-8b") == 0 ||
             strcmp(target_id, "gemma-4-12b-it") == 0 ||
             strncmp(target_id, "qwen", 4) == 0 ||
             strncmp(target_id, "gemma", 5) == 0);
 }
 
+/* Purpose: project report common tail from typed facts without capability drift.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 void yvex_model_target_report_common_tail(yvex_model_target_report *report)
 {
     yvex_model_target_report_add_row(report, "runtime_claim: unsupported");
@@ -251,6 +210,7 @@ void yvex_model_target_report_common_tail(yvex_model_target_report *report)
     yvex_model_target_report_add_row(report, "release_ready: false");
 }
 
+/* Purpose: form the bounded canonical catalog models root without path drift. */
 static const char *catalog_models_root(const yvex_model_target_request *request,
                                        const char **source)
 {
@@ -269,12 +229,14 @@ static const char *catalog_models_root(const yvex_model_target_request *request,
     return "models";
 }
 
+/* Purpose: compare or copy catalog copy path under exact ownership. */
 static void catalog_copy_path(char *out, size_t cap, const char *path)
 {
     if (!out || cap == 0u) return;
     (void)snprintf(out, cap, "%s", path ? path : "");
 }
 
+/* Purpose: form the bounded canonical catalog absolute path without path drift. */
 static void catalog_absolute_path(char *out, size_t cap, const char *path)
 {
     char cwd[512];
@@ -293,13 +255,14 @@ static void catalog_absolute_path(char *out, size_t cap, const char *path)
     (void)snprintf(out, cap, "%s/%s", cwd, path);
 }
 
+/* Purpose: form the bounded canonical catalog source leaf without path drift. */
 static const char *catalog_source_leaf(const yvex_model_target_record *record)
 {
     const char *slash;
 
     if (!record) return "unknown";
-    if (yvex_model_target_is_release_target(record->target_id)) {
-        return yvex_model_target_release_identity()->source_dir_leaf;
+    if (yvex_source_is_release_target(record->target_id)) {
+        return yvex_source_release_identity()->source_dir_leaf;
     }
     if (record->local_path_class && strcmp(record->local_path_class, "none") != 0) {
         slash = strrchr(record->local_path_class, '/');
@@ -308,6 +271,7 @@ static const char *catalog_source_leaf(const yvex_model_target_record *record)
     return record->model ? record->model : record->target_id;
 }
 
+/* Purpose: apply the canonical catalog registry alias transformation and invariants. */
 static const char *catalog_registry_alias(const yvex_model_target_record *record)
 {
     if (!record) return "none";
@@ -316,6 +280,7 @@ static const char *catalog_registry_alias(const yvex_model_target_record *record
                : "none";
 }
 
+/* Purpose: project typed catalog exists name vocabulary without lost semantics. */
 static const char *catalog_exists_name(const char *path)
 {
     return path && access(path, F_OK) == 0 ? "true" : "false";
@@ -325,6 +290,11 @@ static const char *catalog_source_status(const yvex_model_target_record *rec);
 static const char *catalog_artifact_status(const yvex_model_target_record *rec);
 static const char *catalog_runtime_status(const yvex_model_target_record *rec);
 
+/* Purpose: project catalog path report from typed facts without capability drift.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static void catalog_path_report(const yvex_model_target_request *request,
                                 yvex_model_target_report *report,
                                 const yvex_model_target_record *record)
@@ -340,13 +310,13 @@ static void catalog_path_report(const yvex_model_target_request *request,
     char registry_dir[1024];
     int artifact_planned_only =
         strcmp(record->target_class, "official-source-huge-model") == 0;
-    int artifact_unselected = yvex_model_target_is_release_target(record->target_id);
+    int artifact_unselected = yvex_source_is_release_target(record->target_id);
 
     catalog_absolute_path(root_abs, sizeof(root_abs), root);
     if (artifact_unselected) {
-        if (!yvex_model_target_source_path(
+        if (!yvex_source_target_path(
                 source_path, sizeof(source_path), root_abs,
-                yvex_model_target_release_identity())) {
+                yvex_source_release_identity())) {
             (void)snprintf(source_path, sizeof(source_path), "%s",
                            "path-overflow");
         }
@@ -426,6 +396,7 @@ static void catalog_path_report(const yvex_model_target_request *request,
     }
 }
 
+/* Purpose: apply the canonical catalog unknown subcommand transformation and invariants. */
 static int catalog_unknown_subcommand(const yvex_model_target_request *request,
                                       yvex_model_target_report *report)
 {
@@ -435,9 +406,10 @@ static int catalog_unknown_subcommand(const yvex_model_target_request *request,
     return YVEX_OK;
 }
 
+/* Purpose: project typed catalog source status vocabulary without lost semantics. */
 static const char *catalog_source_status(const yvex_model_target_record *rec)
 {
-    if (yvex_model_target_is_release_target(rec->target_id)) {
+    if (yvex_source_is_release_target(rec->target_id)) {
         return "verification-required";
     }
     if (strcmp(rec->target_class, "selected-runtime-slice") == 0) {
@@ -449,9 +421,10 @@ static const char *catalog_source_status(const yvex_model_target_record *rec)
     return "missing";
 }
 
+/* Purpose: project typed catalog artifact status vocabulary without lost semantics. */
 static const char *catalog_artifact_status(const yvex_model_target_record *rec)
 {
-    if (yvex_model_target_is_release_target(rec->target_id)) {
+    if (yvex_source_is_release_target(rec->target_id)) {
         return "not-produced";
     }
     return strcmp(rec->target_class, "selected-runtime-slice") == 0
@@ -459,6 +432,7 @@ static const char *catalog_artifact_status(const yvex_model_target_record *rec)
                : "planned";
 }
 
+/* Purpose: project typed catalog runtime status vocabulary without lost semantics. */
 static const char *catalog_runtime_status(const yvex_model_target_record *rec)
 {
     if (strcmp(rec->target_id, "deepseek4-v4-flash-selected-embed") == 0) {
@@ -470,9 +444,10 @@ static const char *catalog_runtime_status(const yvex_model_target_record *rec)
     return "unsupported";
 }
 
+/* Purpose: project catalog next row from typed facts without capability drift. */
 static const char *catalog_next_row(const yvex_model_target_record *rec)
 {
-    if (yvex_model_target_is_release_target(rec->target_id)) {
+    if (yvex_source_is_release_target(rec->target_id)) {
         return "V010.SOURCE.PAYLOAD.STREAM.0";
     }
     if (strcmp(rec->target_class, "official-source-huge-model") == 0) {
@@ -484,9 +459,10 @@ static const char *catalog_next_row(const yvex_model_target_record *rec)
     return "";
 }
 
+/* Purpose: project catalog boundary from typed facts without capability drift. */
 static const char *catalog_boundary(const yvex_model_target_record *rec)
 {
-    if (yvex_model_target_is_release_target(rec->target_id)) {
+    if (yvex_source_is_release_target(rec->target_id)) {
         return "selected release source only; artifact, runtime, and generation unsupported";
     }
     if (strcmp(rec->target_class, "selected-runtime-slice") == 0) {
@@ -498,9 +474,10 @@ static const char *catalog_boundary(const yvex_model_target_record *rec)
     return "target/source profile only; no source download/runtime/generation";
 }
 
+/* Purpose: apply the canonical catalog runtime shape transformation and invariants. */
 static const char *catalog_runtime_shape(const yvex_model_target_record *rec)
 {
-    if (yvex_model_target_is_release_target(rec->target_id)) {
+    if (yvex_source_is_release_target(rec->target_id)) {
         return "typed-deepseek-v4-architecture-ir";
     }
     if (strcmp(yvex_model_target_family_key(rec->target_id), "gemma") == 0) {
@@ -512,20 +489,180 @@ static const char *catalog_runtime_shape(const yvex_model_target_record *rec)
     return "selected-slice-only";
 }
 
+typedef struct {
+    const char *target_id;
+    const char *family;
+    const char *model;
+    const char *target_class;
+    const char *source_class;
+    const char *source_status;
+    const char *identity_status;
+    const char *profile_status;
+    const char *runtime_shape;
+    const char *evidence;
+    const char *pattern;
+    const char *role_mapping;
+    const char *output_status;
+    const char *output_next;
+    const char *tokenizer_status;
+    const char *tokenizer_next;
+    const char *missing_next;
+    const char *gate_status;
+    const char *gate_next;
+    const char *artifact_class;
+    const char *artifact_status;
+} catalog_audit_facts;
+
+#define CATALOG_STRING_ROW(format_, member_) \
+    {YVEX_MODEL_TARGET_ROW_STRING, format_, offsetof(catalog_audit_facts, member_)}
+#define CATALOG_LITERAL_ROW(text_) \
+    {YVEX_MODEL_TARGET_ROW_LITERAL, text_, 0u}
+
+static const yvex_model_target_row_spec catalog_inspect_prefix_rows[] = {
+    CATALOG_STRING_ROW("target_id: %s", target_id),
+    CATALOG_STRING_ROW("family: %s", family),
+    CATALOG_STRING_ROW("model: %s", model),
+    CATALOG_STRING_ROW("target_class: %s", target_class)
+};
+
+static const yvex_model_target_row_spec catalog_inspect_rows[] = {
+    CATALOG_STRING_ROW("source_artifact_class: %s", source_class),
+    CATALOG_STRING_ROW("source_artifact_status: %s", source_status),
+    CATALOG_STRING_ROW("source_provenance_status: %s", source_status),
+    CATALOG_LITERAL_ROW("source_origin: planned-official"),
+    CATALOG_LITERAL_ROW("source_authority: upstream-official-planned"),
+    CATALOG_LITERAL_ROW("source_revision_status: unknown"),
+    CATALOG_STRING_ROW("source_identity_status: %s", identity_status),
+    CATALOG_LITERAL_ROW("source_hash_status: not-computed"),
+    CATALOG_LITERAL_ROW("source_verification_status: not-verified"),
+    CATALOG_STRING_ROW("native_inventory_status: %s", source_status),
+    CATALOG_LITERAL_ROW("native_tensor_count: 0"),
+    CATALOG_LITERAL_ROW("native_safetensors_payload_loaded: false"),
+    CATALOG_STRING_ROW("source_tensor_metadata_status: %s", source_status),
+    CATALOG_LITERAL_ROW("source_tensor_count: 0"),
+    CATALOG_LITERAL_ROW("source_tensor_metadata_payload_loaded: false"),
+    CATALOG_STRING_ROW("model_class_profile_status: %s", profile_status),
+    CATALOG_STRING_ROW("model_class_target_id: %s", target_id),
+    CATALOG_STRING_ROW("model_class_runtime_shape: %s", runtime_shape),
+    CATALOG_STRING_ROW("model_class_evidence_basis: %s", evidence),
+    CATALOG_STRING_ROW("model_class_pattern_status: %s", pattern),
+    CATALOG_STRING_ROW("model_class_role_mapping_status: %s", role_mapping),
+    CATALOG_LITERAL_ROW("model_class_runtime_status: unsupported"),
+    CATALOG_LITERAL_ROW("tensor_collection_status: command-visible"),
+    CATALOG_STRING_ROW("tensor_collection_family: %s", family),
+    CATALOG_STRING_ROW("tensor_collection_target_id: %s", target_id),
+    CATALOG_LITERAL_ROW("tensor_collection_stage: header-collection-inventory"),
+    CATALOG_LITERAL_ROW("tensor_collection_evidence_basis: header-metadata-only"),
+    CATALOG_LITERAL_ROW("tensor_collection_validation_status: lexical-and-header-only"),
+    CATALOG_STRING_ROW("tensor_collection_role_mapping_status: %s", role_mapping),
+    CATALOG_LITERAL_ROW("tensor_collection_runtime_descriptor_status: not-implemented"),
+    CATALOG_LITERAL_ROW("tensor_collection_graph_consumer_status: not-implemented"),
+    CATALOG_STRING_ROW("output_head_map_status: %s", output_status),
+    CATALOG_STRING_ROW("output_head_map_family: %s", family),
+    CATALOG_STRING_ROW("output_head_map_target_id: %s", target_id),
+    CATALOG_LITERAL_ROW("output_head_map_stage: header-output-head-map"),
+    CATALOG_STRING_ROW("output_head_map_next: %s", output_next),
+    CATALOG_STRING_ROW("tokenizer_map_status: %s", tokenizer_status),
+    CATALOG_STRING_ROW("tokenizer_map_family: %s", family),
+    CATALOG_STRING_ROW("tokenizer_map_target_id: %s", target_id),
+    CATALOG_LITERAL_ROW("tokenizer_map_stage: metadata-tokenizer-map"),
+    CATALOG_LITERAL_ROW("tokenizer_runtime_status: not-implemented"),
+    CATALOG_STRING_ROW("tokenizer_map_next: %s", tokenizer_next),
+    CATALOG_LITERAL_ROW("missing_role_report_status: not-run"),
+    CATALOG_LITERAL_ROW("missing_role_report_stage: missing-role-blocker-report"),
+    CATALOG_STRING_ROW("missing_role_next_required_row: %s", missing_next),
+    CATALOG_STRING_ROW("tensor_mapping_gate_status: %s", gate_status),
+    CATALOG_LITERAL_ROW("tensor_mapping_gate: v0.1.0-tensor-mapping"),
+    CATALOG_STRING_ROW("tensor_mapping_gate_next_required_row: %s", gate_next),
+    CATALOG_STRING_ROW("target_artifact_class: %s", artifact_class),
+    CATALOG_STRING_ROW("target_artifact_status: %s", artifact_status),
+    CATALOG_LITERAL_ROW("benchmark_status: not-measured"),
+    CATALOG_LITERAL_ROW("runtime_execution: unsupported"),
+    CATALOG_LITERAL_ROW("generation: unsupported")
+};
+
+static const yvex_model_target_row_spec catalog_list_audit_rows[] = {
+    CATALOG_STRING_ROW("target: %s", target_id),
+    CATALOG_STRING_ROW("target_class: %s", target_class),
+    CATALOG_STRING_ROW("model_class_profile_status: %s", profile_status),
+    CATALOG_STRING_ROW("model_class_target_id: %s", target_id),
+    CATALOG_STRING_ROW("model_class_evidence_basis: %s", evidence),
+    CATALOG_STRING_ROW("model_class_pattern_status: %s", pattern),
+    CATALOG_STRING_ROW("model_class_role_mapping_status: %s", role_mapping),
+    CATALOG_LITERAL_ROW("tensor_collection_status: command-visible"),
+    CATALOG_STRING_ROW("tensor_collection_family: %s", family),
+    CATALOG_STRING_ROW("tensor_collection_target_id: %s", target_id),
+    CATALOG_LITERAL_ROW("tensor_collection_stage: header-collection-inventory"),
+    CATALOG_LITERAL_ROW("tensor_collection_validation_status: lexical-and-header-only"),
+    CATALOG_STRING_ROW("tensor_collection_role_mapping_status: %s", role_mapping),
+    CATALOG_STRING_ROW("output_head_map_status: %s", output_status),
+    CATALOG_STRING_ROW("output_head_map_family: %s", family),
+    CATALOG_STRING_ROW("output_head_map_target_id: %s", target_id),
+    CATALOG_STRING_ROW("output_head_map_next: %s", output_next),
+    CATALOG_STRING_ROW("tokenizer_map_status: %s", tokenizer_status),
+    CATALOG_STRING_ROW("tokenizer_map_family: %s", family),
+    CATALOG_STRING_ROW("tokenizer_map_target_id: %s", target_id),
+    CATALOG_LITERAL_ROW("tokenizer_runtime_status: not-implemented"),
+    CATALOG_STRING_ROW("tokenizer_map_next: %s", tokenizer_next),
+    CATALOG_LITERAL_ROW("missing_role_report_status: not-run"),
+    CATALOG_STRING_ROW("missing_role_report_target_id: %s", target_id),
+    CATALOG_STRING_ROW("missing_role_next_required_row: %s", missing_next),
+    CATALOG_STRING_ROW("tensor_mapping_gate_status: %s", gate_status),
+    CATALOG_STRING_ROW("tensor_mapping_gate_target_id: %s", target_id),
+    CATALOG_STRING_ROW("tensor_mapping_gate_next_required_row: %s", gate_next)
+};
+
+/* Purpose: project catalog audit project from typed facts without capability drift.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
+static catalog_audit_facts catalog_audit_project(const yvex_model_target_record *rec)
+{
+    int release = yvex_source_is_release_target(rec->target_id);
+    catalog_audit_facts facts = {
+        rec->target_id, yvex_model_target_family_key(rec->target_id), rec->model,
+        rec->target_class, rec->source_artifact_class, catalog_source_status(rec),
+        NULL, release ? "typed-architecture-ir" : "command-visible",
+        catalog_runtime_shape(rec),
+        release ? "strict-source-verification-to-typed-ir" : "header-metadata-only",
+        release ? "not-used-for-release-architecture" : "lexical-only",
+        release ? "canonical-logical-map-complete" : "not-implemented",
+        release ? "mapped-logical-plan" : "not-run",
+        release ? "V010.SOURCE.PAYLOAD.STREAM.0" : "V010.MAP.8",
+        release ? "mapped-logical-plan" : "not-run",
+        release ? "V010.SOURCE.PAYLOAD.STREAM.0" : "V010.MAP.7",
+        release ? "V010.SOURCE.PAYLOAD.STREAM.0" : "V010.MAP.9",
+        release ? "complete-logical-plan" : "not-run",
+        release ? "V010.SOURCE.PAYLOAD.STREAM.0" : "V010.QUANT.0",
+        rec->target_artifact_class, catalog_artifact_status(rec)
+    };
+
+    facts.identity_status = strcmp(facts.source_status, "missing") == 0
+                                ? "not-present" : "not-verified";
+    return facts;
+}
+
+/* Purpose: publish catalog emit inspect audit through the bounded output boundary.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
                                        yvex_model_target_report *report)
 {
-    const char *source_status = catalog_source_status(rec);
-    const char *identity_status =
-        strcmp(source_status, "missing") == 0 ? "not-present" : "not-verified";
+    catalog_audit_facts facts = catalog_audit_project(rec);
+    const char *family_key = facts.family;
 
-    yvex_model_target_report_add_row(report, "target_id: %s", rec->target_id);
-    yvex_model_target_report_add_row(report, "family: %s", rec->family);
-    yvex_model_target_report_add_row(report, "model: %s", rec->model);
-    yvex_model_target_report_add_row(report, "target_class: %s", rec->target_class);
-    if (yvex_model_target_is_release_target(rec->target_id)) {
-        const yvex_model_target_identity *identity =
-            yvex_model_target_release_identity();
+    facts.family = rec->family;
+    yvex_model_target_report_project_rows(
+        report, catalog_inspect_prefix_rows,
+        sizeof(catalog_inspect_prefix_rows) /
+            sizeof(catalog_inspect_prefix_rows[0]), &facts);
+    facts.family = family_key;
+    if (yvex_source_is_release_target(rec->target_id)) {
+        const yvex_source_target_identity *identity =
+            yvex_source_release_identity();
         yvex_model_target_report_add_row(report, "release_selected: true");
         yvex_model_target_report_add_row(report, "upstream_repository: %s",
                                          identity->upstream_repo_id);
@@ -542,122 +679,32 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
         yvex_model_target_report_add_row(report,
                                          "release_target_next: V010.SOURCE.PAYLOAD.STREAM.0");
     }
-    yvex_model_target_report_add_row(report, "source_artifact_class: %s",
-                                     rec->source_artifact_class);
-    yvex_model_target_report_add_row(report, "source_artifact_status: %s",
-                                     source_status);
-    yvex_model_target_report_add_row(report, "source_provenance_status: %s",
-                                     source_status);
-    yvex_model_target_report_add_row(report, "source_origin: planned-official");
-    yvex_model_target_report_add_row(report, "source_authority: upstream-official-planned");
-    yvex_model_target_report_add_row(report, "source_revision_status: unknown");
-    yvex_model_target_report_add_row(report, "source_identity_status: %s",
-                                     identity_status);
-    yvex_model_target_report_add_row(report, "source_hash_status: not-computed");
-    yvex_model_target_report_add_row(report, "source_verification_status: not-verified");
-    yvex_model_target_report_add_row(report, "native_inventory_status: %s",
-                                     source_status);
-    yvex_model_target_report_add_row(report, "native_tensor_count: 0");
-    yvex_model_target_report_add_row(report, "native_safetensors_payload_loaded: false");
-    yvex_model_target_report_add_row(report, "source_tensor_metadata_status: %s",
-                                     source_status);
-    yvex_model_target_report_add_row(report, "source_tensor_count: 0");
-    yvex_model_target_report_add_row(report, "source_tensor_metadata_payload_loaded: false");
-    yvex_model_target_report_add_row(
-        report, "model_class_profile_status: %s",
-        yvex_model_target_is_release_target(rec->target_id)
-            ? "typed-architecture-ir"
-            : "command-visible");
-    yvex_model_target_report_add_row(report, "model_class_target_id: %s", rec->target_id);
-    yvex_model_target_report_add_row(report, "model_class_runtime_shape: %s",
-                                     catalog_runtime_shape(rec));
-    yvex_model_target_report_add_row(
-        report, "model_class_evidence_basis: %s",
-        yvex_model_target_is_release_target(rec->target_id)
-            ? "strict-source-verification-to-typed-ir"
-            : "header-metadata-only");
-    yvex_model_target_report_add_row(
-        report, "model_class_pattern_status: %s",
-        yvex_model_target_is_release_target(rec->target_id)
-            ? "not-used-for-release-architecture"
-            : "lexical-only");
-    yvex_model_target_report_add_row(
-        report, "model_class_role_mapping_status: %s",
-        yvex_model_target_is_release_target(rec->target_id)
-            ? "canonical-logical-map-complete"
-            : "not-implemented");
-    yvex_model_target_report_add_row(report, "model_class_runtime_status: unsupported");
-    yvex_model_target_report_add_row(report, "tensor_collection_status: command-visible");
-    yvex_model_target_report_add_row(report, "tensor_collection_family: %s",
-                                     yvex_model_target_family_key(rec->target_id));
-    yvex_model_target_report_add_row(report, "tensor_collection_target_id: %s",
-                                     rec->target_id);
-    yvex_model_target_report_add_row(report, "tensor_collection_stage: header-collection-inventory");
-    yvex_model_target_report_add_row(report, "tensor_collection_evidence_basis: header-metadata-only");
-    yvex_model_target_report_add_row(report, "tensor_collection_validation_status: lexical-and-header-only");
-    yvex_model_target_report_add_row(
-        report, "tensor_collection_role_mapping_status: %s",
-        yvex_model_target_is_release_target(rec->target_id)
-            ? "canonical-logical-map-complete"
-            : "not-implemented");
-    yvex_model_target_report_add_row(report, "tensor_collection_runtime_descriptor_status: not-implemented");
-    yvex_model_target_report_add_row(report, "tensor_collection_graph_consumer_status: not-implemented");
-    yvex_model_target_report_add_row(
-        report, "output_head_map_status: %s",
-        yvex_model_target_is_release_target(rec->target_id)
-            ? "mapped-logical-plan"
-            : "not-run");
-    yvex_model_target_report_add_row(report, "output_head_map_family: %s",
-                                     yvex_model_target_family_key(rec->target_id));
-    yvex_model_target_report_add_row(report, "output_head_map_target_id: %s",
-                                     rec->target_id);
-    yvex_model_target_report_add_row(report, "output_head_map_stage: header-output-head-map");
-    yvex_model_target_report_add_row(report, "output_head_map_next: %s",
-                                     yvex_model_target_is_release_target(rec->target_id)
-                                         ? "V010.SOURCE.PAYLOAD.STREAM.0"
-                                         : "V010.MAP.8");
-    yvex_model_target_report_add_row(
-        report, "tokenizer_map_status: %s",
-        yvex_model_target_is_release_target(rec->target_id)
-            ? "mapped-logical-plan"
-            : "not-run");
-    yvex_model_target_report_add_row(report, "tokenizer_map_family: %s",
-                                     yvex_model_target_family_key(rec->target_id));
-    yvex_model_target_report_add_row(report, "tokenizer_map_target_id: %s",
-                                     rec->target_id);
-    yvex_model_target_report_add_row(report, "tokenizer_map_stage: metadata-tokenizer-map");
-    yvex_model_target_report_add_row(report, "tokenizer_runtime_status: not-implemented");
-    yvex_model_target_report_add_row(report, "tokenizer_map_next: %s",
-                                     yvex_model_target_is_release_target(rec->target_id)
-                                         ? "V010.SOURCE.PAYLOAD.STREAM.0"
-                                         : "V010.MAP.7");
-    yvex_model_target_report_add_row(report, "missing_role_report_status: not-run");
-    yvex_model_target_report_add_row(report, "missing_role_report_stage: missing-role-blocker-report");
-    yvex_model_target_report_add_row(
-        report, "missing_role_next_required_row: %s",
-        yvex_model_target_is_release_target(rec->target_id)
-            ? "V010.SOURCE.PAYLOAD.STREAM.0"
-            : "V010.MAP.9");
-    yvex_model_target_report_add_row(
-        report, "tensor_mapping_gate_status: %s",
-        yvex_model_target_is_release_target(rec->target_id)
-            ? "complete-logical-plan"
-            : "not-run");
-    yvex_model_target_report_add_row(report, "tensor_mapping_gate: v0.1.0-tensor-mapping");
-    yvex_model_target_report_add_row(
-        report, "tensor_mapping_gate_next_required_row: %s",
-        yvex_model_target_is_release_target(rec->target_id)
-            ? "V010.SOURCE.PAYLOAD.STREAM.0"
-            : "V010.QUANT.0");
-    yvex_model_target_report_add_row(report, "target_artifact_class: %s",
-                                     rec->target_artifact_class);
-    yvex_model_target_report_add_row(report, "target_artifact_status: %s",
-                                     catalog_artifact_status(rec));
-    yvex_model_target_report_add_row(report, "benchmark_status: not-measured");
-    yvex_model_target_report_add_row(report, "runtime_execution: unsupported");
-    yvex_model_target_report_add_row(report, "generation: unsupported");
+    yvex_model_target_report_project_rows(
+        report, catalog_inspect_rows,
+        sizeof(catalog_inspect_rows) / sizeof(catalog_inspect_rows[0]), &facts);
 }
 
+/* Purpose: publish catalog emit list audit target through the bounded output boundary. */
+
+static void catalog_emit_list_audit_target(
+    const yvex_model_target_record *rec,
+    yvex_model_target_report *report)
+{
+    catalog_audit_facts facts = catalog_audit_project(rec);
+
+    yvex_model_target_report_project_rows(
+        report, catalog_list_audit_rows,
+        sizeof(catalog_list_audit_rows) / sizeof(catalog_list_audit_rows[0]), &facts);
+}
+
+#undef CATALOG_LITERAL_ROW
+#undef CATALOG_STRING_ROW
+
+/* Purpose: construct bounded catalog report build state from admitted inputs.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 int yvex_model_target_catalog_report_build(
     const yvex_model_target_request *request,
     yvex_model_target_report *report,
@@ -677,8 +724,8 @@ int yvex_model_target_catalog_report_build(
     if (request->kind == YVEX_MODEL_TARGET_COMMAND_CLASSES) {
         report->status = "model-target-classes";
         yvex_model_target_report_add_row(report, "status: model-target-classes");
-        for (i = 0; i < yvex_model_target_class_count(); ++i) {
-            const yvex_model_target_class_record *cls = yvex_model_target_class_at(i);
+        for (i = 0; i < target_class_count(); ++i) {
+            const yvex_model_target_class_record *cls = target_class_at(i);
             yvex_model_target_report_add_row(report, "class: %s", cls->class_id);
             yvex_model_target_report_add_row(report, "capability_claim: %s", cls->capability_claim);
             yvex_model_target_report_add_row(report, "runtime_execution: %s", cls->runtime_execution);
@@ -691,14 +738,16 @@ int yvex_model_target_catalog_report_build(
         if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
             yvex_model_target_report_add_row(report,
                                              "{\"status\":\"model-target-list\",\"targets\":[");
-            for (i = 0; i < yvex_model_target_count(); ++i) {
-                const yvex_model_target_record *rec = yvex_model_target_at(i);
+            for (i = 0; i < target_count(); ++i) {
+                const yvex_model_target_record *rec = target_at(i);
                 yvex_model_target_report_add_row(
                     report,
-                    "%s{\"target_id\":\"%s\",\"family\":\"%s\",\"class\":\"%s\",\"release_selected\":%s,\"runtime\":\"%s\",\"generation\":\"%s\"}",
+                    "%s{\"target_id\":\"%s\",\"family\":\"%s\","
+                    "\"class\":\"%s\",\"release_selected\":%s,"
+                    "\"runtime\":\"%s\",\"generation\":\"%s\"}",
                     i ? "," : "", rec->target_id, rec->family,
                     rec->target_class,
-                    yvex_model_target_is_release_target(rec->target_id)
+                    yvex_source_is_release_target(rec->target_id)
                         ? "true"
                         : "false",
                     rec->runtime_execution, rec->generation);
@@ -707,10 +756,10 @@ int yvex_model_target_catalog_report_build(
             return YVEX_OK;
         }
         yvex_model_target_report_add_row(report, "MODEL TARGETS  count=%lu",
-                                         yvex_model_target_count());
+                                         target_count());
         yvex_model_target_report_add_row(report, "TARGET  FAMILY  CLASS  RUNTIME  GENERATION");
-        for (i = 0; i < yvex_model_target_count(); ++i) {
-            const yvex_model_target_record *rec = yvex_model_target_at(i);
+        for (i = 0; i < target_count(); ++i) {
+            const yvex_model_target_record *rec = target_at(i);
             yvex_model_target_report_add_row(report, "%s  %s  %s  %s  %s",
                                              rec->target_id, rec->family,
                                              rec->target_class,
@@ -719,84 +768,9 @@ int yvex_model_target_catalog_report_build(
         }
         yvex_model_target_report_add_row(report, "status: model-target-list");
         if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
-            for (i = 0; i < yvex_model_target_count(); ++i) {
-                const yvex_model_target_record *rec = yvex_model_target_at(i);
-                yvex_model_target_report_add_row(report, "target: %s", rec->target_id);
-                yvex_model_target_report_add_row(report, "target_class: %s", rec->target_class);
-                yvex_model_target_report_add_row(
-                    report, "model_class_profile_status: %s",
-                    yvex_model_target_is_release_target(rec->target_id)
-                        ? "typed-architecture-ir"
-                        : "command-visible");
-                yvex_model_target_report_add_row(report, "model_class_target_id: %s", rec->target_id);
-                yvex_model_target_report_add_row(
-                    report, "model_class_evidence_basis: %s",
-                    yvex_model_target_is_release_target(rec->target_id)
-                        ? "strict-source-verification-to-typed-ir"
-                        : "header-metadata-only");
-                yvex_model_target_report_add_row(
-                    report, "model_class_pattern_status: %s",
-                    yvex_model_target_is_release_target(rec->target_id)
-                        ? "not-used-for-release-architecture"
-                        : "lexical-only");
-                yvex_model_target_report_add_row(
-                    report, "model_class_role_mapping_status: %s",
-                    yvex_model_target_is_release_target(rec->target_id)
-                        ? "canonical-logical-map-complete"
-                        : "not-implemented");
-                yvex_model_target_report_add_row(report, "tensor_collection_status: command-visible");
-                yvex_model_target_report_add_row(report, "tensor_collection_family: %s", yvex_model_target_family_key(rec->target_id));
-                yvex_model_target_report_add_row(report, "tensor_collection_target_id: %s", rec->target_id);
-                yvex_model_target_report_add_row(report, "tensor_collection_stage: header-collection-inventory");
-                yvex_model_target_report_add_row(report, "tensor_collection_validation_status: lexical-and-header-only");
-                yvex_model_target_report_add_row(
-                    report, "tensor_collection_role_mapping_status: %s",
-                    yvex_model_target_is_release_target(rec->target_id)
-                        ? "canonical-logical-map-complete"
-                        : "not-implemented");
-                yvex_model_target_report_add_row(
-                    report, "output_head_map_status: %s",
-                    yvex_model_target_is_release_target(rec->target_id)
-                        ? "mapped-logical-plan"
-                        : "not-run");
-                yvex_model_target_report_add_row(report, "output_head_map_family: %s", yvex_model_target_family_key(rec->target_id));
-                yvex_model_target_report_add_row(report, "output_head_map_target_id: %s", rec->target_id);
-                yvex_model_target_report_add_row(
-                    report, "output_head_map_next: %s",
-                    yvex_model_target_is_release_target(rec->target_id)
-                        ? "V010.SOURCE.PAYLOAD.STREAM.0"
-                        : "V010.MAP.8");
-                yvex_model_target_report_add_row(
-                    report, "tokenizer_map_status: %s",
-                    yvex_model_target_is_release_target(rec->target_id)
-                        ? "mapped-logical-plan"
-                        : "not-run");
-                yvex_model_target_report_add_row(report, "tokenizer_map_family: %s", yvex_model_target_family_key(rec->target_id));
-                yvex_model_target_report_add_row(report, "tokenizer_map_target_id: %s", rec->target_id);
-                yvex_model_target_report_add_row(report, "tokenizer_runtime_status: not-implemented");
-                yvex_model_target_report_add_row(
-                    report, "tokenizer_map_next: %s",
-                    yvex_model_target_is_release_target(rec->target_id)
-                        ? "V010.SOURCE.PAYLOAD.STREAM.0"
-                        : "V010.MAP.7");
-                yvex_model_target_report_add_row(report, "missing_role_report_status: not-run");
-                yvex_model_target_report_add_row(report, "missing_role_report_target_id: %s", rec->target_id);
-                yvex_model_target_report_add_row(
-                    report, "missing_role_next_required_row: %s",
-                    yvex_model_target_is_release_target(rec->target_id)
-                        ? "V010.SOURCE.PAYLOAD.STREAM.0"
-                        : "V010.MAP.9");
-                yvex_model_target_report_add_row(
-                    report, "tensor_mapping_gate_status: %s",
-                    yvex_model_target_is_release_target(rec->target_id)
-                        ? "complete-logical-plan"
-                        : "not-run");
-                yvex_model_target_report_add_row(report, "tensor_mapping_gate_target_id: %s", rec->target_id);
-                yvex_model_target_report_add_row(
-                    report, "tensor_mapping_gate_next_required_row: %s",
-                    yvex_model_target_is_release_target(rec->target_id)
-                        ? "V010.SOURCE.PAYLOAD.STREAM.0"
-                        : "V010.QUANT.0");
+            for (i = 0; i < target_count(); ++i) {
+                const yvex_model_target_record *rec = target_at(i);
+                catalog_emit_list_audit_target(rec, report);
             }
             yvex_model_target_report_add_row(report, "source_provenance_status:");
             yvex_model_target_report_add_row(report, "source_origin:");
@@ -830,13 +804,17 @@ int yvex_model_target_catalog_report_build(
             return YVEX_OK;
         }
         if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
-            const yvex_model_target_identity *identity =
-                yvex_model_target_is_release_target(rec->target_id)
-                    ? yvex_model_target_release_identity()
+            const yvex_source_target_identity *identity =
+                yvex_source_is_release_target(rec->target_id)
+                    ? yvex_source_release_identity()
                     : NULL;
             yvex_model_target_report_add_row(
                 report,
-                "{\"status\":\"model-target\",\"target_id\":\"%s\",\"family\":\"%s\",\"class\":\"%s\",\"release_selected\":%s,\"upstream_repository\":%s%s%s,\"source_status\":\"%s\",\"artifact_status\":\"%s\",\"runtime\":\"%s\",\"generation\":\"%s\",\"next\":\"%s\"}",
+                "{\"status\":\"model-target\",\"target_id\":\"%s\","
+                "\"family\":\"%s\",\"class\":\"%s\","
+                "\"release_selected\":%s,\"upstream_repository\":%s%s%s,"
+                "\"source_status\":\"%s\",\"artifact_status\":\"%s\","
+                "\"runtime\":\"%s\",\"generation\":\"%s\",\"next\":\"%s\"}",
                 rec->target_id, rec->family, rec->target_class,
                 identity ? "true" : "false",
                 identity ? "\"" : "", identity ? identity->upstream_repo_id : "null",
@@ -879,6 +857,11 @@ int yvex_model_target_catalog_report_build(
     return catalog_unknown_subcommand(request, report);
 }
 
+/* Purpose: construct bounded catalog help report build state from admitted inputs.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 int yvex_model_target_catalog_help_report_build(
     yvex_model_target_report *report,
     yvex_error *err)
@@ -893,17 +876,33 @@ int yvex_model_target_catalog_help_report_build(
     report->mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
     report->help_requested = 1;
     report->status = "model-target-help";
-    yvex_model_target_report_add_row(report, "The candidate report shows the selected DeepSeek release source and subordinate non-release engineering evidence.");
-    yvex_model_target_report_add_row(report, "The dense-candidate report preserves Qwen and Gemma engineering evidence without offering an alternate v0.1.0 release target.");
-    yvex_model_target_report_add_row(report, "The Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / Metal lane for future full-runtime work.");
-    yvex_model_target_report_add_row(report, "This command records the v0.1.0 target decision without promoting runtime support.");
+    yvex_model_target_report_add_row(
+        report, "The candidate report shows the selected DeepSeek release source and "
+                "subordinate non-release engineering evidence.");
+    yvex_model_target_report_add_row(
+        report, "The dense-candidate report preserves Qwen and Gemma engineering evidence "
+                "without offering an alternate v0.1.0 release target.");
+    yvex_model_target_report_add_row(
+        report, "The Qwen/Metal pressure report records a planned reduced-scale Apple "
+                "Silicon / Metal lane for future full-runtime work.");
+    yvex_model_target_report_add_row(
+        report, "This command records the v0.1.0 target decision without promoting "
+                "runtime support.");
     yvex_model_target_report_add_row(report, "The tensor naming map reads safetensors headers only");
-    yvex_model_target_report_add_row(report, "The tensor mapping gate aggregates model-class, tensor-collection, tensor naming, output-head, tokenizer metadata, and missing-role reports.");
-    yvex_model_target_report_add_row(report, "Release-target selection and engineering target evidence are not model-support claims.");
+    yvex_model_target_report_add_row(
+        report, "The tensor mapping gate aggregates model-class, tensor-collection, tensor "
+                "naming, output-head, tokenizer metadata, and missing-role reports.");
+    yvex_model_target_report_add_row(
+        report, "Release-target selection and engineering target evidence are not "
+                "model-support claims.");
     yvex_model_target_report_add_row(report,
                                      "External GGUFs and external %s%s are reference evidence only.",
                                      "run", "ners");
-    yvex_model_target_report_add_row(report, "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support.");
-    yvex_model_target_report_add_row(report, "boundary: report-only; no runtime execution, generation, eval, benchmark, or release readiness");
+    yvex_model_target_report_add_row(
+        report, "Model-target path reporting does not read model payloads, create "
+                "artifacts, register aliases, or claim runtime support.");
+    yvex_model_target_report_add_row(
+        report, "boundary: report-only; no runtime execution, generation, eval, "
+                "benchmark, or release readiness");
     return YVEX_OK;
 }

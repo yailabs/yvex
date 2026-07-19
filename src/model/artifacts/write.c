@@ -1,28 +1,16 @@
-/*
- * write.c - model artifact registry file writer.
- *
- * Owner:
- *   src/model/artifacts
- *
- * Owns:
- *   explicit local registry JSON file writing.
- *
- * Does not own:
- *   operator streams, CLI parsing, command dispatch, rendering, registry mutation,
- *   artifact emission, runtime generation, eval, benchmark, or release
- *   decisions.
- *
- * Invariants:
- *   writer output targets caller-provided local file paths only and never
- *   operator streams.
- *
- * Boundary:
- *   registry JSON writing is not artifact emission, model verification,
- *   runtime support, generation readiness, benchmark evidence, or release
- *   readiness.
- */
-#include "write.h"
-#include "private.h"
+/* Owner: src/model/artifacts
+ * Owns: explicit local registry JSON file writing.
+ * Does not own: operator streams, CLI parsing, command dispatch, rendering, registry mutation, artifact emission,
+ *   runtime generation, eval, benchmark, or release decisions.
+ * Invariants: writer output targets caller-provided local file paths only and never operator streams.
+ * Boundary: registry JSON writing is not artifact emission, model verification, runtime support, generation
+ *   readiness, benchmark evidence, or release readiness.
+ * Purpose: serialize canonical model registry state through atomic file publication.
+ * Inputs: immutable registry facts and an explicit destination path.
+ * Effects: writes and atomically publishes one owned registry file.
+ * Failure: I/O failure preserves the prior destination and releases temporary state. */
+#include <yvex/internal/model_artifact.h>
+#include <yvex/internal/core.h>
 
 #include <errno.h>
 #include <stdio.h>
@@ -30,8 +18,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <yvex/api.h>
-
+/* Purpose: publish write escaped through the bounded output boundary.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 static void write_escaped(FILE *fp, const char *s)
 {
     if (!s) s = "";
@@ -54,6 +45,11 @@ static void write_escaped(FILE *fp, const char *s)
     fputc('"', fp);
 }
 
+/* Purpose: publish write field through the bounded output boundary.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 static void write_field(FILE *fp, const char *indent, const char *key, const char *value, int comma)
 {
     fputs(indent, fp);
@@ -62,6 +58,11 @@ static void write_field(FILE *fp, const char *indent, const char *key, const cha
     fprintf(fp, "%s\n", comma ? "," : "");
 }
 
+/* Purpose: publish write u64 field through the bounded output boundary.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 static void write_u64_field(FILE *fp,
                             const char *indent,
                             const char *key,
@@ -72,38 +73,11 @@ static void write_u64_field(FILE *fp,
     fprintf(fp, "\"%s\": %llu%s\n", key, value, comma ? "," : "");
 }
 
-static int registry_mkdir_parent(const char *path, yvex_error *err)
-{
-    char buf[4096];
-    char *slash;
-    char *p;
-
-    if (!path || strlen(path) >= sizeof(buf)) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_registry_json", "invalid registry path");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    strcpy(buf, path);
-    slash = strrchr(buf, '/');
-    if (!slash) return YVEX_OK;
-    *slash = '\0';
-    if (!buf[0]) return YVEX_OK;
-    for (p = buf + 1; *p; ++p) {
-        if (*p == '/') {
-            *p = '\0';
-            if (mkdir(buf, 0775) != 0 && errno != EEXIST) {
-                yvex_error_setf(err, YVEX_ERR_IO, "model_registry_json", "cannot create directory: %s", buf);
-                return YVEX_ERR_IO;
-            }
-            *p = '/';
-        }
-    }
-    if (mkdir(buf, 0775) != 0 && errno != EEXIST) {
-        yvex_error_setf(err, YVEX_ERR_IO, "model_registry_json", "cannot create directory: %s", buf);
-        return YVEX_ERR_IO;
-    }
-    return YVEX_OK;
-}
-
+/* Purpose: publish registry write json file through the bounded output boundary.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 int yvex_model_registry_write_json_file(const yvex_model_registry *registry,
                                         const char *path,
                                         yvex_error *err)
@@ -118,7 +92,7 @@ int yvex_model_registry_write_json_file(const yvex_model_registry *registry,
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_registry_json", "registry and path are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    rc = registry_mkdir_parent(path, err);
+    rc = yvex_core_mkdir_parent(path, "model_registry_json", err);
     if (rc != YVEX_OK) return rc;
     n = snprintf(tmp, sizeof(tmp), "%s.tmp", path);
     if (n < 0 || (size_t)n >= sizeof(tmp)) {

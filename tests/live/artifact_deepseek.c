@@ -11,12 +11,11 @@
  * Boundary: this runner proves complete artifacts but never materializes them.
  */
 #define _POSIX_C_SOURCE 200809L
-#include "src/artifact/roundtrip_gate.h"
-#include "src/gguf/file_sink.h"
-#include "src/gguf/quant_sink.h"
-#include "src/model/artifacts/gate.h"
-#include "src/model/artifacts/report.h"
-#include "src/model/families.h"
+#include <yvex/internal/artifact.h>
+#include <yvex/internal/gguf_writer.h>
+#include <yvex/internal/quant_numeric.h>
+#include <yvex/internal/model_artifact.h>
+#include <yvex/internal/families/deepseek_v4.h>
 
 #include <errno.h>
 #include <fcntl.h>

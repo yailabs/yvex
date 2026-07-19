@@ -10,10 +10,10 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <yvex/gguf_qtype.h>
+#include <yvex/qtype.h>
 
 #include "tests/test.h"
-#include "src/gguf/private.h"
+#include <yvex/internal/gguf.h>
 
 typedef struct {
     const char *name;

@@ -23,10 +23,10 @@
  */
 #define _POSIX_C_SOURCE 200809L
 
-#include "src/artifact/materialize.h"
+#include <yvex/internal/artifact.h>
 #include "src/graph/private.h"
-#include "src/model/families.h"
-#include "src/model/runtime_descriptor.h"
+#include <yvex/internal/families/deepseek_v4.h>
+#include <yvex/internal/runtime.h>
 #include "tests/reference/deepseek_attention.h"
 
 #include <stdio.h>
@@ -280,7 +280,7 @@ static int live_rolling_init(
         kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER
             ? layer->indexer_head_dimension : layer->head_dimension;
     int overlap = kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER ||
-                  layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA;
+                  layer->attention_class == YVEX_ATTENTION_CLASS_CSA;
     unsigned long long width = head_dimension * (overlap ? 2ull : 1ull);
     unsigned long long slots = layer->compression_ratio *
                                (overlap ? 2ull : 1ull);
@@ -368,7 +368,7 @@ static int live_history_init(
     history->view.local_tail_count = local_count;
     history->view.compressed_entry_count = compressed_count;
     history->view.indexer_entry_count =
-        layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA
+        layer->attention_class == YVEX_ATTENTION_CLASS_CSA
             ? compressed_count : 0ull;
     if (local_count) {
         history->local_kv = (float *)calloc(
@@ -405,7 +405,7 @@ static int live_history_init(
         history->view.compressed_positions = history->compressed_positions;
         history->view.compressed_kv_stride = layer->head_dimension;
     }
-    if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA &&
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
         compressed_count) {
         history->indexer_kv = (float *)calloc(
             (size_t)(compressed_count * layer->indexer_head_dimension),
@@ -424,13 +424,13 @@ static int live_history_init(
         history->view.indexer_positions = history->indexer_positions;
         history->view.indexer_kv_stride = layer->indexer_head_dimension;
     }
-    if (layer->attention_class != YVEX_DEEPSEEK_V4_ATTENTION_SWA &&
+    if (layer->attention_class != YVEX_ATTENTION_CLASS_SWA &&
         !live_rolling_init(&history->view.main_rolling_state,
                            &history->main_kv, &history->main_score, layer,
                            YVEX_DEEPSEEK_ATTENTION_ROLLING_MAIN,
                            token_position, summary->attention_plan_identity))
         goto fail;
-    if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA &&
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
         !live_rolling_init(&history->view.indexer_rolling_state,
                            &history->index_kv, &history->index_score, layer,
                            YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER,
@@ -1065,13 +1065,13 @@ identity_mutation_done:
             const yvex_attention_layer_plan *layer =
                 yvex_graph_lower_deepseek_v4()->plan_layer_at(attention_plan, i);
             if (!layer) continue;
-            if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_SWA &&
+            if (layer->attention_class == YVEX_ATTENTION_CLASS_SWA &&
                 first_swa == ~0ull)
                 first_swa = i;
-            if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA &&
+            if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
                 first_csa == ~0ull)
                 first_csa = i;
-            if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_HCA &&
+            if (layer->attention_class == YVEX_ATTENTION_CLASS_HCA &&
                 first_hca == ~0ull)
                 first_hca = i;
         }

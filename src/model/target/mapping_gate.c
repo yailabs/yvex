@@ -1,31 +1,21 @@
-/*
- * mapping_gate.c - tensor mapping gate report builder.
- *
- * Owner:
- *   src/model/target
- *
- * Owns:
- *   typed projection of canonical DeepSeek mapping-plan facts plus legacy
- *   bounded Qwen/Gemma mapping-gate facts, blockers, and handoff rows.
- *
- * Does not own:
- *   CLI parsing, rendering, artifact emission, quantization execution,
- *   runtime execution, generation, eval, benchmark, or release decisions.
- *
- * Invariants:
- *   the DeepSeek release path consumes the canonical immutable map; legacy
- *   family gates remain header/sidecar evidence. Neither path marks payload,
- *   artifact, runtime, or generation behavior ready.
- *
- * Boundary:
- *   mapping gate status is not quantization, artifact emission, runtime
- *   readiness, generation readiness, benchmark evidence, or release readiness.
- */
-#include "mapping_gate.h"
+/* Owner: src/model/target
+ * Owns: typed projection of canonical DeepSeek mapping-plan facts plus legacy bounded Qwen/Gemma mapping-gate
+ *   facts, blockers, and handoff rows.
+ * Does not own: CLI parsing, rendering, artifact emission, quantization execution, runtime execution, generation,
+ *   eval, benchmark, or release decisions.
+ * Invariants: the DeepSeek release path consumes the canonical immutable map; legacy family gates remain
+ *   header/sidecar evidence. Neither path marks payload, artifact, runtime, or generation behavior ready.
+ * Boundary: mapping gate status is not quantization, artifact emission, runtime readiness, generation readiness,
+ *   benchmark evidence, or release readiness.
+ * Purpose: evaluate typed mapping-gate evidence from bounded source facts.
+ * Inputs: typed target requests and retained report facts.
+ * Effects: reads bounded metadata evidence and updates report state.
+ * Failure: missing or ambiguous evidence remains an explicit blocker. */
+#include <yvex/internal/model_target.h>
 
-#include "private.h"
-#include "src/model/families.h"
-#include "src/source/verify.h"
+#include <yvex/internal/compilation.h>
+#include <yvex/internal/families/deepseek_v4.h>
+#include <yvex/internal/source.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,6 +41,57 @@ typedef struct {
     const char *result;
 } mapping_gate_state;
 
+typedef struct {
+    const char *status;
+    const char *result;
+    const char *target;
+    const char *family;
+    const char *metadata;
+    const char *missing;
+    const char *ambiguous;
+    const char *next;
+    int source_observed;
+    int metadata_observed;
+} mapping_gate_audit_facts;
+
+#define MAPPING_LITERAL(text) \
+    { YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u }
+#define MAPPING_STRING(field, format) \
+    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(mapping_gate_audit_facts, field) }
+#define MAPPING_INT(field, format) \
+    { YVEX_MODEL_TARGET_ROW_INT, (format), offsetof(mapping_gate_audit_facts, field) }
+
+static const yvex_model_target_row_spec mapping_gate_audit_rows[] = {
+    MAPPING_STRING(status, "tensor_mapping_gate_status: %s"),
+    MAPPING_STRING(result, "tensor_mapping_gate_result: %s"),
+    MAPPING_STRING(target, "tensor_mapping_gate_target_id: %s"),
+    MAPPING_STRING(family, "tensor_mapping_gate_family: %s"),
+    MAPPING_LITERAL("tensor_naming_map_status: naming-map-profiled"),
+    MAPPING_LITERAL("output_head_map_status: output-head-profiled"),
+    MAPPING_STRING(metadata, "tokenizer_metadata_map_status: %s"),
+    MAPPING_LITERAL("missing_role_report_status: missing-role-report-blocked"),
+    MAPPING_LITERAL("expected_source_role_count: 12"),
+    MAPPING_INT(source_observed, "observed_source_role_count: %d"),
+    MAPPING_LITERAL("expected_metadata_role_count: 4"),
+    MAPPING_INT(metadata_observed, "observed_metadata_role_count: %d"),
+    MAPPING_STRING(missing, "missing_roles: %s"),
+    MAPPING_STRING(ambiguous, "ambiguous_roles: %s"),
+    MAPPING_LITERAL(
+        "downstream_blockers: artifact_contract=missing qtype_policy=missing "
+        "runtime_descriptor=missing graph_consumer=missing backend_residency=missing "
+        "logits_runtime=missing tokenizer_runtime=missing generation_runtime=missing "
+        "eval_benchmark=missing"),
+    MAPPING_STRING(next, "next_required_rows: %s"),
+    MAPPING_LITERAL("payload_bytes_read: false"),
+    MAPPING_LITERAL("artifact_emitted: false"),
+    MAPPING_LITERAL("runtime_descriptor_constructed: false"),
+    MAPPING_LITERAL("graph_consumer_fed: false")
+};
+
+#undef MAPPING_LITERAL
+#undef MAPPING_STRING
+#undef MAPPING_INT
+
 /*
  * yvex_model_mapping_report_deepseek()
  *
@@ -74,8 +115,7 @@ typedef struct {
  *
  * Boundary:
  *   a complete logical plan is not payload conversion, physical GGUF
- *   emission, artifact support, materialization, or runtime execution.
- */
+ *   emission, artifact support, materialization, or runtime execution. */
 int yvex_model_mapping_report_deepseek(
     const yvex_model_target_request *request,
     yvex_model_target_report *report,
@@ -113,7 +153,7 @@ int yvex_model_mapping_report_deepseek(
     memset(&coverage_failure, 0, sizeof(coverage_failure));
     memset(&transform_failure, 0, sizeof(transform_failure));
     memset(&map_failure, 0, sizeof(map_failure));
-    source_options.identity = yvex_model_target_release_identity();
+    source_options.identity = yvex_source_release_identity();
     source_options.source_path = source_path;
     source_options.models_root = models_root;
     source_options.promote_manifest = 0;
@@ -184,163 +224,21 @@ cleanup:
         yvex_error_clear(err);
         return YVEX_OK;
     }
-    report->deepseek_tensor_coverage = coverage;
-    report->deepseek_gguf_map = map;
-    report->status = "deepseek-gguf-mapping-complete";
-    (void)snprintf(report->target_id, sizeof(report->target_id), "%s",
-                   request->target_id);
-    (void)snprintf(report->family, sizeof(report->family), "%s", "deepseek");
-    (void)snprintf(report->stage, sizeof(report->stage), "%s", "header-only");
-    (void)snprintf(report->tensor_map_status,
-                   sizeof(report->tensor_map_status), "%s", "complete");
-    (void)snprintf(report->runtime_status, sizeof(report->runtime_status),
-                   "%s", "unsupported");
-    (void)snprintf(report->generation_status,
-                   sizeof(report->generation_status), "%s", "unsupported");
-    (void)snprintf(report->next_row, sizeof(report->next_row), "%s",
-                   "V010.SOURCE.PAYLOAD.STREAM.0");
-    (void)snprintf(report->boundary, sizeof(report->boundary), "%s",
-                   "logical GGUF names, shapes, source contributions, transforms, and metadata are complete; no payload, writer, artifact, or runtime claim");
+    report->family_coverage = coverage;
+    report->family_lowering = map;
+    {
+        const yvex_model_target_report_profile profile = {
+            .status = "deepseek-gguf-mapping-complete",
+            .target_id = request->target_id, .family = "deepseek", .stage = "header-only",
+            .tensor_map_status = "complete", .runtime_status = "unsupported",
+            .generation_status = "unsupported", .next_row = "V010.SOURCE.PAYLOAD.STREAM.0",
+            .boundary = "logical GGUF names, shapes, source contributions, transforms, "
+                        "and metadata are complete; no payload, writer, artifact, or runtime claim"
+        };
+
+        yvex_model_target_report_prepare(report, request, &profile);
+    }
     return YVEX_OK;
-}
-
-/*
- * mapping_gate_file_exists()
- *
- * Purpose:
- *   test whether an explicit local metadata/header path exists.
- *
- * Inputs:
- *   path is borrowed.
- *
- * Effects:
- *   opens and closes the named file only; it never writes output.
- *
- * Failure:
- *   missing/unreadable files return false.
- *
- * Boundary:
- *   file presence is report evidence only.
- */
-static int mapping_gate_file_exists(const char *path)
-{
-    FILE *fp;
-
-    if (!path || !path[0]) {
-        return 0;
-    }
-    fp = fopen(path, "rb");
-    if (!fp) {
-        return 0;
-    }
-    fclose(fp);
-    return 1;
-}
-
-static unsigned long long mapping_gate_le64(const unsigned char bytes[8])
-{
-    return ((unsigned long long)bytes[0]) |
-           ((unsigned long long)bytes[1] << 8) |
-           ((unsigned long long)bytes[2] << 16) |
-           ((unsigned long long)bytes[3] << 24) |
-           ((unsigned long long)bytes[4] << 32) |
-           ((unsigned long long)bytes[5] << 40) |
-           ((unsigned long long)bytes[6] << 48) |
-           ((unsigned long long)bytes[7] << 56);
-}
-
-/*
- * mapping_gate_read_header()
- *
- * Purpose:
- *   read a bounded safetensors header JSON string for role presence checks.
- *
- * Inputs:
- *   path is borrowed; out receives an owned NUL-terminated header string.
- *
- * Effects:
- *   reads only the safetensors header length and header bytes; payload bytes
- *   are not loaded.
- *
- * Failure:
- *   returns false for missing, malformed, oversized, or allocation failures.
- *
- * Boundary:
- *   header text is used only for report-only lexical coverage facts.
- */
-static int mapping_gate_read_header(const char *path, char **out)
-{
-    FILE *fp;
-    unsigned char len_bytes[8];
-    unsigned long long header_len;
-    char *json;
-
-    if (!path || !out) {
-        return 0;
-    }
-    *out = NULL;
-    fp = fopen(path, "rb");
-    if (!fp) {
-        return 0;
-    }
-    if (fread(len_bytes, 1u, sizeof(len_bytes), fp) != sizeof(len_bytes)) {
-        fclose(fp);
-        return 0;
-    }
-    header_len = mapping_gate_le64(len_bytes);
-    if (header_len == 0ull || header_len > 1024ull * 1024ull) {
-        fclose(fp);
-        return 0;
-    }
-    json = (char *)malloc((size_t)header_len + 1u);
-    if (!json) {
-        fclose(fp);
-        return 0;
-    }
-    if (fread(json, 1u, (size_t)header_len, fp) != (size_t)header_len) {
-        free(json);
-        fclose(fp);
-        return 0;
-    }
-    fclose(fp);
-    json[header_len] = '\0';
-    *out = json;
-    return 1;
-}
-
-/*
- * mapping_gate_source_dir()
- *
- * Purpose:
- *   resolve the source directory described by the typed request.
- *
- * Inputs:
- *   request/family are borrowed; out receives a bounded path.
- *
- * Effects:
- *   mutates out only; no filesystem access occurs.
- *
- * Failure:
- *   out remains empty when no source location was requested.
- *
- * Boundary:
- *   path resolution is local report plumbing, not source verification.
- */
-static void mapping_gate_source_dir(const yvex_model_target_request *request,
-                                    const char *family,
-                                    char *out,
-                                    size_t cap)
-{
-    if (!out || cap == 0u) {
-        return;
-    }
-    out[0] = '\0';
-    if (request->source_path[0]) {
-        (void)snprintf(out, cap, "%s", request->source_path);
-    } else if (request->models_root[0]) {
-        (void)snprintf(out, cap, "%s/hf/%s/%s",
-                       request->models_root, family, request->target_id);
-    }
 }
 
 /*
@@ -361,8 +259,7 @@ static void mapping_gate_source_dir(const yvex_model_target_request *request,
  *
  * Boundary:
  *   coverage facts do not prove role materialization, artifact emission, or
- *   runtime readiness.
- */
+ *   runtime readiness. */
 static void mapping_gate_build_state(const yvex_model_target_request *request,
                                      const char *family,
                                      mapping_gate_state *state)
@@ -381,14 +278,15 @@ static void mapping_gate_build_state(const yvex_model_target_request *request,
     state->status = "passed-for-artifact-planning";
     state->result = "pass";
 
-    mapping_gate_source_dir(request, family, dir, sizeof(dir));
+    (void)yvex_model_target_probe_source_path(
+        request, family, NULL, dir, sizeof(dir));
     state->source_requested = dir[0] != '\0';
     if (!state->source_requested) {
         return;
     }
 
     (void)snprintf(path, sizeof(path), "%s/model.safetensors", dir);
-    state->source_exists = mapping_gate_read_header(path, &header);
+    state->source_exists = yvex_model_target_probe_header(path, &header);
     if (!state->source_exists) {
         state->source_observed = 0;
         state->source_missing = 12;
@@ -412,16 +310,16 @@ static void mapping_gate_build_state(const yvex_model_target_request *request,
     free(header);
 
     (void)snprintf(path, sizeof(path), "%s/tokenizer.json", dir);
-    state->metadata_present = mapping_gate_file_exists(path);
+    state->metadata_present = yvex_model_target_probe_file(path);
     (void)snprintf(path, sizeof(path), "%s/config.json", dir);
     state->metadata_present = state->metadata_present &&
-                              mapping_gate_file_exists(path);
+                              yvex_model_target_probe_file(path);
     (void)snprintf(path, sizeof(path), "%s/generation_config.json", dir);
     state->metadata_present = state->metadata_present &&
-                              mapping_gate_file_exists(path);
+                              yvex_model_target_probe_file(path);
     (void)snprintf(path, sizeof(path), "%s/special_tokens_map.json", dir);
     state->metadata_present = state->metadata_present &&
-                              mapping_gate_file_exists(path);
+                              yvex_model_target_probe_file(path);
 
     if (!state->attention_k_present) {
         state->source_observed = 11;
@@ -475,38 +373,26 @@ static void mapping_gate_build_state(const yvex_model_target_request *request,
  *   none.
  *
  * Boundary:
- *   common fields remain report-only and do not imply quantization readiness.
- */
+ *   common fields remain report-only and do not imply quantization readiness. */
 static void mapping_gate_prepare(const yvex_model_target_request *request,
                                  const mapping_gate_state *state,
                                  yvex_model_target_report *report)
 {
     const char *target = request->target_id[0] ? request->target_id : "qwen3-8b";
     const char *family = yvex_model_target_family_key(target);
+    const yvex_model_target_report_profile profile = {
+        .status = state->status, .target_id = target, .family = family,
+        .stage = "report-only",
+        .eligibility = strcmp(state->result, "pass") == 0 ? "report-pass" : "blocked",
+        .artifact_status = "missing", .tensor_map_status = "naming-map-profiled",
+        .qtype_policy_status = strcmp(state->result, "pass") == 0 ? "missing" : "blocked",
+        .runtime_status = "unsupported", .generation_status = "unsupported-full-model",
+        .benchmark_status = "not-measured", .next_row = state->next_row,
+        .boundary = "report-only; no artifact/runtime/generation",
+        .reason = state->top_blocker
+    };
 
-    report->kind = request->kind;
-    report->mode = request->mode;
-    report->status = state->status;
-    report->exit_code = 0;
-    snprintf(report->target_id, sizeof(report->target_id), "%s", target);
-    snprintf(report->family, sizeof(report->family), "%s", family);
-    snprintf(report->stage, sizeof(report->stage), "report-only");
-    snprintf(report->eligibility, sizeof(report->eligibility), "%s",
-             strcmp(state->result, "pass") == 0 ? "report-pass" : "blocked");
-    snprintf(report->tensor_map_status, sizeof(report->tensor_map_status),
-             "naming-map-profiled");
-    snprintf(report->qtype_policy_status, sizeof(report->qtype_policy_status),
-             strcmp(state->result, "pass") == 0 ? "missing" : "blocked");
-    snprintf(report->artifact_status, sizeof(report->artifact_status), "missing");
-    snprintf(report->runtime_status, sizeof(report->runtime_status), "unsupported");
-    snprintf(report->generation_status, sizeof(report->generation_status),
-             "unsupported-full-model");
-    snprintf(report->benchmark_status, sizeof(report->benchmark_status),
-             "not-measured");
-    snprintf(report->next_row, sizeof(report->next_row), "%s", state->next_row);
-    snprintf(report->reason, sizeof(report->reason), "%s", state->top_blocker);
-    snprintf(report->boundary, sizeof(report->boundary),
-             "report-only; no artifact/runtime/generation");
+    yvex_model_target_report_prepare(report, request, &profile);
 }
 
 /*
@@ -525,8 +411,7 @@ static void mapping_gate_prepare(const yvex_model_target_request *request,
  *   returns 1 when a typed refusal has been populated.
  *
  * Boundary:
- *   refusal rows do not inspect payloads or perform mapping.
- */
+ *   refusal rows do not inspect payloads or perform mapping. */
 static int mapping_gate_validate(const yvex_model_target_request *request,
                                  yvex_model_target_report *report)
 {
@@ -575,8 +460,7 @@ static int mapping_gate_validate(const yvex_model_target_request *request,
  *   row-cap exhaustion truncates through the shared row helper.
  *
  * Boundary:
- *   table rows report blockers only.
- */
+ *   table rows report blockers only. */
 static void mapping_gate_add_table(const mapping_gate_state *state,
                                    yvex_model_target_report *report)
 {
@@ -609,49 +493,21 @@ static void mapping_gate_add_table(const mapping_gate_state *state,
  *   row-cap exhaustion truncates through the shared row helper.
  *
  * Boundary:
- *   audit rows do not prove quantization, artifacts, or runtime paths.
- */
+ *   audit rows do not prove quantization, artifacts, or runtime paths. */
 static void mapping_gate_add_audit(const mapping_gate_state *state,
                                    yvex_model_target_report *report)
 {
-    yvex_model_target_report_add_row(report, "tensor_mapping_gate_status: %s",
-                                     state->status);
-    yvex_model_target_report_add_row(report, "tensor_mapping_gate_result: %s",
-                                     state->result);
-    yvex_model_target_report_add_row(report, "tensor_mapping_gate_target_id: %s",
-                                     report->target_id);
-    yvex_model_target_report_add_row(report, "tensor_mapping_gate_family: %s",
-                                     report->family);
-    yvex_model_target_report_add_row(report,
-                                     "tensor_naming_map_status: naming-map-profiled");
-    yvex_model_target_report_add_row(report,
-                                     "output_head_map_status: output-head-profiled");
-    yvex_model_target_report_add_row(
-        report,
-        "tokenizer_metadata_map_status: %s",
-        state->metadata_present ? "present-report-only" : "missing");
-    yvex_model_target_report_add_row(report,
-                                     "missing_role_report_status: missing-role-report-blocked");
-    yvex_model_target_report_add_row(report, "expected_source_role_count: 12");
-    yvex_model_target_report_add_row(report, "observed_source_role_count: %d",
-                                     state->source_observed);
-    yvex_model_target_report_add_row(report, "expected_metadata_role_count: 4");
-    yvex_model_target_report_add_row(report, "observed_metadata_role_count: %d",
-                                     state->metadata_observed);
-    yvex_model_target_report_add_row(report, "missing_roles: %s",
-                                     state->missing_roles);
-    yvex_model_target_report_add_row(report, "ambiguous_roles: %s",
-                                     state->ambiguous_roles);
-    yvex_model_target_report_add_row(
-        report,
-        "downstream_blockers: artifact_contract=missing qtype_policy=missing runtime_descriptor=missing graph_consumer=missing backend_residency=missing logits_runtime=missing tokenizer_runtime=missing generation_runtime=missing eval_benchmark=missing");
-    yvex_model_target_report_add_row(report, "next_required_rows: %s",
-                                     state->next_row);
-    yvex_model_target_report_add_row(report, "payload_bytes_read: false");
-    yvex_model_target_report_add_row(report, "artifact_emitted: false");
-    yvex_model_target_report_add_row(report,
-                                     "runtime_descriptor_constructed: false");
-    yvex_model_target_report_add_row(report, "graph_consumer_fed: false");
+    mapping_gate_audit_facts facts = {
+        state->status, state->result, report->target_id, report->family,
+        state->metadata_present ? "present-report-only" : "missing",
+        state->missing_roles, state->ambiguous_roles, state->next_row,
+        state->source_observed, state->metadata_observed
+    };
+
+    yvex_model_target_report_project_rows(
+        report, mapping_gate_audit_rows,
+        sizeof(mapping_gate_audit_rows) / sizeof(mapping_gate_audit_rows[0]),
+        &facts);
     yvex_model_target_report_common_tail(report);
 }
 
@@ -674,8 +530,7 @@ static void mapping_gate_add_audit(const mapping_gate_state *state,
  *   target/release refusals are returned through report exit_code.
  *
  * Boundary:
- *   mapping gate reporting is not quantization or runtime readiness.
- */
+ *   mapping gate reporting is not quantization or runtime readiness. */
 int yvex_mapping_gate_report_build(const yvex_model_target_request *request,
                                    yvex_model_target_report *report,
                                    yvex_error *err)
@@ -688,7 +543,7 @@ int yvex_mapping_gate_report_build(const yvex_model_target_request *request,
                        "request and report are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (yvex_model_target_is_release_target(request->target_id)) {
+    if (yvex_source_is_release_target(request->target_id)) {
         memset(&state, 0, sizeof(state));
         state.status = "mapping-plan-check";
         state.result = "block";

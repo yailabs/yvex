@@ -21,6 +21,26 @@ contains() {
     grep -F "$text" "$file" >/dev/null || fail "$file missing: $text"
 }
 
+assert_graph_proof_retired() {
+    name=$1
+    shift
+    out="$OUT_DIR/$name.out"
+    err="$OUT_DIR/$name.err"
+
+    "$YVEX_BIN" graph "$@" >"$out" 2>"$err"
+    rc=$?
+    if [ "$rc" -ne 5 ]; then
+        fail "$name retired graph proof exit code was $rc"
+    fi
+    contains "$out" "graph_integrity_guard: refused"
+    contains "$out" "graph_execution_phase: admission"
+    contains "$out" "execution_ready: false"
+    contains "$out" "attention_execution_supported: false"
+    contains "$out" "generation_ready: false"
+    contains "$out" "reason: production-fixtures-are-test-owned"
+    contains "$out" "status: graph-proof-retired"
+}
+
 "$YVEX_BIN" cuda-info >"$OUT_DIR/cuda_info.out" 2>"$OUT_DIR/cuda_info.err"
 rc=$?
 if [ "$rc" -eq 5 ]; then
@@ -75,153 +95,22 @@ contains "$OUT_DIR/plan_cuda_ready.out" "op_mlp: yes"
 contains "$OUT_DIR/plan_cuda_ready.out" "execution_ready: false"
 contains "$OUT_DIR/plan_cuda_ready.out" "status: plan-only"
 
-"$YVEX_BIN" graph --backend cuda --execute-op --op rope --position 7 --head-dim 8 \
-  >"$OUT_DIR/rope_graph_cuda.out" 2>"$OUT_DIR/rope_graph_cuda.err"
-rc=$?
-if [ "$rc" -ne 0 ]; then
-    fail "rope graph cuda exit code was $rc"
-fi
-contains "$OUT_DIR/rope_graph_cuda.out" "graph_integrity_guard: pass"
-contains "$OUT_DIR/rope_graph_cuda.out" "graph_execution_phase: complete"
-contains "$OUT_DIR/rope_graph_cuda.out" "graph_kind: rope-position-op"
-contains "$OUT_DIR/rope_graph_cuda.out" "op: rope"
-contains "$OUT_DIR/rope_graph_cuda.out" "backend: cuda"
-contains "$OUT_DIR/rope_graph_cuda.out" "position: 7"
-contains "$OUT_DIR/rope_graph_cuda.out" "head_dim: 8"
-contains "$OUT_DIR/rope_graph_cuda.out" "backend_op_status: supported"
-contains "$OUT_DIR/rope_graph_cuda.out" "dispatch_attempted: true"
-contains "$OUT_DIR/rope_graph_cuda.out" "reference_attempted: true"
-contains "$OUT_DIR/rope_graph_cuda.out" "rope_cuda_parity: pass"
-contains "$OUT_DIR/rope_graph_cuda.out" "attention_ready: false"
-contains "$OUT_DIR/rope_graph_cuda.out" "decode_ready: false"
-contains "$OUT_DIR/rope_graph_cuda.out" "generation_ready: false"
-contains "$OUT_DIR/rope_graph_cuda.out" "status: graph-op-executed"
-
-"$YVEX_BIN" graph --backend cuda --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal \
-  >"$OUT_DIR/attention_graph_cuda.out" 2>"$OUT_DIR/attention_graph_cuda.err"
-rc=$?
-if [ "$rc" -ne 0 ]; then
-    fail "attention graph cuda exit code was $rc"
-fi
-contains "$OUT_DIR/attention_graph_cuda.out" "graph_integrity_guard: pass"
-contains "$OUT_DIR/attention_graph_cuda.out" "graph_execution_phase: complete"
-contains "$OUT_DIR/attention_graph_cuda.out" "graph_kind: attention-primitive"
-contains "$OUT_DIR/attention_graph_cuda.out" "op: attention"
-contains "$OUT_DIR/attention_graph_cuda.out" "backend: cuda"
-contains "$OUT_DIR/attention_graph_cuda.out" "seq_len: 4"
-contains "$OUT_DIR/attention_graph_cuda.out" "position: 3"
-contains "$OUT_DIR/attention_graph_cuda.out" "head_dim: 8"
-contains "$OUT_DIR/attention_graph_cuda.out" "mask: causal"
-contains "$OUT_DIR/attention_graph_cuda.out" "backend_op_status: supported"
-contains "$OUT_DIR/attention_graph_cuda.out" "dispatch_attempted: true"
-contains "$OUT_DIR/attention_graph_cuda.out" "reference_attempted: true"
-contains "$OUT_DIR/attention_graph_cuda.out" "attention_cuda_parity: pass"
-contains "$OUT_DIR/attention_graph_cuda.out" "transformer_block_ready: false"
-contains "$OUT_DIR/attention_graph_cuda.out" "decode_ready: false"
-contains "$OUT_DIR/attention_graph_cuda.out" "generation_ready: false"
-contains "$OUT_DIR/attention_graph_cuda.out" "status: graph-op-executed"
-
-"$YVEX_BIN" graph --backend cuda --execute-op --op matmul --m 1 --k 8 --n 8 \
-  >"$OUT_DIR/matmul_projection_cuda.out" 2>"$OUT_DIR/matmul_projection_cuda.err"
-rc=$?
-if [ "$rc" -ne 0 ]; then
-    fail "matmul projection cuda exit code was $rc"
-fi
-contains "$OUT_DIR/matmul_projection_cuda.out" "graph_integrity_guard: pass"
-contains "$OUT_DIR/matmul_projection_cuda.out" "graph_execution_phase: complete"
-contains "$OUT_DIR/matmul_projection_cuda.out" "graph_kind: matmul-projection"
-contains "$OUT_DIR/matmul_projection_cuda.out" "op: matmul"
-contains "$OUT_DIR/matmul_projection_cuda.out" "backend: cuda"
-contains "$OUT_DIR/matmul_projection_cuda.out" "m: 1"
-contains "$OUT_DIR/matmul_projection_cuda.out" "k: 8"
-contains "$OUT_DIR/matmul_projection_cuda.out" "n: 8"
-contains "$OUT_DIR/matmul_projection_cuda.out" "projection_shape: true"
-contains "$OUT_DIR/matmul_projection_cuda.out" "backend_op_status: supported"
-contains "$OUT_DIR/matmul_projection_cuda.out" "dispatch_attempted: true"
-contains "$OUT_DIR/matmul_projection_cuda.out" "reference_attempted: true"
-contains "$OUT_DIR/matmul_projection_cuda.out" "matmul_cuda_parity: pass"
-contains "$OUT_DIR/matmul_projection_cuda.out" "qkv_projection_ready: false"
-contains "$OUT_DIR/matmul_projection_cuda.out" "transformer_block_ready: false"
-contains "$OUT_DIR/matmul_projection_cuda.out" "decode_ready: false"
-contains "$OUT_DIR/matmul_projection_cuda.out" "generation_ready: false"
-contains "$OUT_DIR/matmul_projection_cuda.out" "status: graph-op-executed"
-
-"$YVEX_BIN" graph --backend cuda --execute-op --op matmul --m 2 --k 4 --n 3 \
-  >"$OUT_DIR/matmul_matrix_cuda.out" 2>"$OUT_DIR/matmul_matrix_cuda.err"
-rc=$?
-if [ "$rc" -ne 0 ]; then
-    fail "matmul matrix cuda exit code was $rc"
-fi
-contains "$OUT_DIR/matmul_matrix_cuda.out" "graph_integrity_guard: pass"
-contains "$OUT_DIR/matmul_matrix_cuda.out" "graph_kind: matmul-matrix"
-contains "$OUT_DIR/matmul_matrix_cuda.out" "projection_shape: false"
-contains "$OUT_DIR/matmul_matrix_cuda.out" "non_projection_shape: true"
-contains "$OUT_DIR/matmul_matrix_cuda.out" "matmul_cuda_parity: pass"
-contains "$OUT_DIR/matmul_matrix_cuda.out" "status: graph-op-executed"
-
-"$YVEX_BIN" graph --backend cuda --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated \
-  >"$OUT_DIR/mlp_dense_cuda.out" 2>"$OUT_DIR/mlp_dense_cuda.err"
-rc=$?
-if [ "$rc" -ne 0 ]; then
-    fail "mlp dense cuda exit code was $rc"
-fi
-contains "$OUT_DIR/mlp_dense_cuda.out" "graph_integrity_guard: pass"
-contains "$OUT_DIR/mlp_dense_cuda.out" "graph_execution_phase: complete"
-contains "$OUT_DIR/mlp_dense_cuda.out" "graph_kind: mlp-feed-forward"
-contains "$OUT_DIR/mlp_dense_cuda.out" "op: mlp"
-contains "$OUT_DIR/mlp_dense_cuda.out" "backend: cuda"
-contains "$OUT_DIR/mlp_dense_cuda.out" "hidden_dim: 8"
-contains "$OUT_DIR/mlp_dense_cuda.out" "ffn_dim: 16"
-contains "$OUT_DIR/mlp_dense_cuda.out" "routed_expert_mode: false"
-contains "$OUT_DIR/mlp_dense_cuda.out" "backend_op_status: supported"
-contains "$OUT_DIR/mlp_dense_cuda.out" "dispatch_attempted: true"
-contains "$OUT_DIR/mlp_dense_cuda.out" "reference_attempted: true"
-contains "$OUT_DIR/mlp_dense_cuda.out" "mlp_cuda_parity: pass"
-contains "$OUT_DIR/mlp_dense_cuda.out" "transformer_block_ready: false"
-contains "$OUT_DIR/mlp_dense_cuda.out" "decode_ready: false"
-contains "$OUT_DIR/mlp_dense_cuda.out" "generation_ready: false"
-contains "$OUT_DIR/mlp_dense_cuda.out" "status: graph-op-executed"
-
-"$YVEX_BIN" graph --backend cuda --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated --experts 2 --expert-id 1 \
-  >"$OUT_DIR/mlp_routed_cuda.out" 2>"$OUT_DIR/mlp_routed_cuda.err"
-rc=$?
-if [ "$rc" -ne 0 ]; then
-    fail "mlp routed cuda exit code was $rc"
-fi
-contains "$OUT_DIR/mlp_routed_cuda.out" "graph_integrity_guard: pass"
-contains "$OUT_DIR/mlp_routed_cuda.out" "graph_kind: mlp-routed-expert"
-contains "$OUT_DIR/mlp_routed_cuda.out" "routed_expert_mode: true"
-contains "$OUT_DIR/mlp_routed_cuda.out" "expert_count: 2"
-contains "$OUT_DIR/mlp_routed_cuda.out" "expert_id: 1"
-contains "$OUT_DIR/mlp_routed_cuda.out" "mlp_cuda_parity: pass"
-contains "$OUT_DIR/mlp_routed_cuda.out" "status: graph-op-executed"
-
-"$YVEX_BIN" graph --backend cuda --execute-block --block fixture \
-  --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16 \
-  >"$OUT_DIR/block_fixture_cuda.out" 2>"$OUT_DIR/block_fixture_cuda.err"
-rc=$?
-if [ "$rc" -ne 0 ]; then
-    fail "block fixture cuda exit code was $rc"
-fi
-contains "$OUT_DIR/block_fixture_cuda.out" "status: graph-block"
-contains "$OUT_DIR/block_fixture_cuda.out" "block: fixture"
-contains "$OUT_DIR/block_fixture_cuda.out" "backend: cuda"
-contains "$OUT_DIR/block_fixture_cuda.out" "seq_len: 4"
-contains "$OUT_DIR/block_fixture_cuda.out" "position: 3"
-contains "$OUT_DIR/block_fixture_cuda.out" "hidden_dim: 8"
-contains "$OUT_DIR/block_fixture_cuda.out" "head_dim: 8"
-contains "$OUT_DIR/block_fixture_cuda.out" "ffn_dim: 16"
-contains "$OUT_DIR/block_fixture_cuda.out" "phase: attn_norm"
-contains "$OUT_DIR/block_fixture_cuda.out" "phase: attention"
-contains "$OUT_DIR/block_fixture_cuda.out" "phase: residual_mlp"
-contains "$OUT_DIR/block_fixture_cuda.out" "phase: cleanup"
-contains "$OUT_DIR/block_fixture_cuda.out" "checksum:"
-contains "$OUT_DIR/block_fixture_cuda.out" "reference_checksum:"
-contains "$OUT_DIR/block_fixture_cuda.out" "max_abs_diff:"
-contains "$OUT_DIR/block_fixture_cuda.out" "cleanup: pass"
-contains "$OUT_DIR/block_fixture_cuda.out" "block_cuda_parity: pass"
-contains "$OUT_DIR/block_fixture_cuda.out" "execution_ready: false"
-contains "$OUT_DIR/block_fixture_cuda.out" "generation_ready: false"
+assert_graph_proof_retired rope_graph_cuda \
+  --backend cuda --execute-op --op rope --position 7 --head-dim 8
+assert_graph_proof_retired attention_graph_cuda \
+  --backend cuda --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal
+assert_graph_proof_retired matmul_projection_cuda \
+  --backend cuda --execute-op --op matmul --m 1 --k 8 --n 8
+assert_graph_proof_retired matmul_matrix_cuda \
+  --backend cuda --execute-op --op matmul --m 2 --k 4 --n 3
+assert_graph_proof_retired mlp_dense_cuda \
+  --backend cuda --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated
+assert_graph_proof_retired mlp_routed_cuda \
+  --backend cuda --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu \
+  --gated --experts 2 --expert-id 1
+assert_graph_proof_retired block_fixture_cuda \
+  --backend cuda --execute-block --block fixture --seq-len 4 --position 3 \
+  --hidden-dim 8 --head-dim 8 --ffn-dim 16
 
 "$YVEX_BIN" materialize --model "$FIXTURE" --backend cuda >"$OUT_DIR/materialize_cuda_ready.out" 2>"$OUT_DIR/materialize_cuda_ready.err"
 rc=$?
@@ -264,18 +153,8 @@ contains "$OUT_DIR/session_cuda_ready.out" "execution_ready: false"
   --arch deepseek \
   --overwrite >"$OUT_DIR/emit_controlled.out" 2>"$OUT_DIR/emit_controlled.err"
 
-"$YVEX_BIN" graph --model "$CONTROLLED" --backend cuda --execute-fixture --fixture-token 0 \
-  >"$OUT_DIR/fixture_graph_cuda.out" 2>"$OUT_DIR/fixture_graph_cuda.err"
-rc=$?
-if [ "$rc" -ne 0 ]; then
-    fail "fixture graph cuda exit code was $rc"
-fi
-contains "$OUT_DIR/fixture_graph_cuda.out" "fixture_graph_executed: true"
-contains "$OUT_DIR/fixture_graph_cuda.out" "fixture_backend: cuda"
-contains "$OUT_DIR/fixture_graph_cuda.out" "fixture_output_values: 0,4,8,12"
-contains "$OUT_DIR/fixture_graph_cuda.out" "execution_ready: false"
-contains "$OUT_DIR/fixture_graph_cuda.out" "graph_execution_ready: false"
-contains "$OUT_DIR/fixture_graph_cuda.out" "status: fixture-graph-executed"
+assert_graph_proof_retired fixture_graph_cuda \
+  --model "$CONTROLLED" --backend cuda --execute-fixture --fixture-token 0
 
 "$YVEX_BIN" gguf-emit controlled \
   --out "$PARTIAL" \

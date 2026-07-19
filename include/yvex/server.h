@@ -1,42 +1,25 @@
-/*
- * Owner: abi.server (abi).
- * Owns: the public-abi boundary consumed by repository.
- * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
- * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
- * Boundary: public-abi; moving this contract requires an ownership-manifest change.
- *
- * YVEX - Server shell
- *
- * File: include/yvex/server.h
- * Layer: public server API
- *
- * Purpose:
- *   Defines the server shell yvexd server shell API. The server exposes local
- *   health, metrics, and model-catalog status endpoints. It does not implement
- *   generation, streamed output, sampler behavior, or compatibility claims.
- *
- * Owns:
- *   - yvex_server
- *   - yvex_server_options
- *   - yvex_server_summary
- *
- * Validation:
- *   - make test-core
- *   - build/tests/test_server
- */
+/* Owner: public server ABI.
+ * Owns: HTTP parsing, server lifecycle, routing, and bounded responses.
+ * Does not own: engine capability, model policy, or transport-independent runtime truth.
+ * Invariants: declarations are format-stable, externally consumable, and independently includable.
+ * Boundary: server orchestration over admitted backend and runtime contracts.
+ * Purpose: Expose server orchestration over admitted backend and runtime contracts.
+ * Inputs: Typed caller-owned values and immutable borrowed views as declared below.
+ * Effects: Only functions with explicit lifecycle or I/O contracts mutate external state.
+ * Failure: Typed status and error outputs remain authoritative; declarations add no capability. */
 #ifndef YVEX_SERVER_H
 #define YVEX_SERVER_H
 
 #include <stddef.h>
-
 #include <yvex/backend.h>
-#include <yvex/engine.h>
-#include <yvex/fs.h>
+#include <yvex/core.h>
+#include <yvex/runtime.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/* Server lifecycle and HTTP boundary. */
 typedef struct yvex_server yvex_server;
 
 #define YVEX_HTTP_METHOD_CAP 8

@@ -1,17 +1,14 @@
-/*
- * provider.c - local provider account lifecycle.
- *
- * Owner: accounts provider domain.
- * Owns: provider discovery, non-secret observation, bounded provider execution,
- *   and atomic local account-state persistence.
- * Does not own: argv parsing, operator rendering, model IO, or inference.
- * Invariants: raw credentials are never persisted; child processes are waited.
- * Boundary: typed account facts and provider-process results only.
- */
+/* Owner: accounts provider.
+ * Owns: provider discovery, bounded execution, observation, and atomic non-secret state.
+ * Does not own: source admission, model I/O, rendering, or inference.
+ * Invariants: credentials are never persisted and every child is waited.
+ * Boundary: account facts do not admit source bytes or runtime capability.
+ * Purpose: observe configured provider accounts without exposing credentials.
+ * Inputs: provider names, environment facts, local paths, and caller-owned outputs.
+ * Effects: runs admitted provider tools and atomically replaces owned account state.
+ * Failure: invalid provider, process, path, allocation, or I/O leaves no trusted account state. */
 
 #define _POSIX_C_SOURCE 200809L
-
-#include <yvex/accounts.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -23,15 +20,22 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include <yvex/internal/core.h>
+#include <yvex/internal/io.h>
+#include <yvex/source.h>
 
+/* Purpose: publish one typed account refusal without duplicating error-state transitions. */
+static int account_refuse(yvex_error *err,
+                          yvex_status status,
+                          const char *where,
+                          const char *message) {
+    yvex_error_set(err, status, where, message);
+    return status;
+}
 
-static int accounts_path_format(char *dst,
-                                size_t cap,
-                                yvex_error *err,
-                                const char *where,
-                                const char *a,
-                                const char *b)
-{
+/* Purpose: project path format facts while preserving the canonical provider account lifecycle invariants. */
+static int accounts_path_format(
+    char *dst, size_t cap, yvex_error *err, const char *where, const char *a, const char *b) {
     int n;
 
     if (!dst || cap == 0u || !a) {
@@ -49,75 +53,13 @@ static int accounts_path_format(char *dst,
     }
     return YVEX_OK;
 }
-static int accounts_mkdir_one(const char *path, yvex_error *err)
-{
-    struct stat st;
-
-    if (mkdir(path, 0777) == 0) return YVEX_OK;
-    if (errno != EEXIST) {
-        yvex_error_setf(err, YVEX_ERR_IO, "accounts", "mkdir failed for %s: %s", path, strerror(errno));
-        return YVEX_ERR_IO;
-    }
-    if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        yvex_error_setf(err, YVEX_ERR_IO, "accounts", "path exists and is not a directory: %s", path);
-        return YVEX_ERR_IO;
-    }
-    return YVEX_OK;
-}
-
-static int accounts_mkdir_p(const char *path, yvex_error *err)
-{
-    char tmp[YVEX_PATH_CAP];
-    char *p;
-    size_t len;
-    int rc;
-
-    if (!path || !path[0]) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "accounts", "directory path is required");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    rc = accounts_path_format(tmp, sizeof(tmp), err, "accounts", path, NULL);
-    if (rc != YVEX_OK) return rc;
-    len = strlen(tmp);
-    while (len > 1u && tmp[len - 1u] == '/') {
-        tmp[--len] = '\0';
-    }
-    for (p = tmp + 1; *p; ++p) {
-        if (*p == '/') {
-            *p = '\0';
-            rc = accounts_mkdir_one(tmp, err);
-            if (rc != YVEX_OK) return rc;
-            *p = '/';
-        }
-    }
-    return accounts_mkdir_one(tmp, err);
-}
-
-static int accounts_mkdir_parent(const char *path, yvex_error *err)
-{
-    char tmp[YVEX_PATH_CAP];
-    char *slash;
-    int rc;
-
-    if (!path || !path[0]) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "accounts", "file path is required");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    rc = accounts_path_format(tmp, sizeof(tmp), err, "accounts", path, NULL);
-    if (rc != YVEX_OK) return rc;
-    slash = strrchr(tmp, '/');
-    if (!slash) return YVEX_OK;
-    if (slash == tmp) slash[1] = '\0';
-    else *slash = '\0';
-    return accounts_mkdir_p(tmp, err);
-}
-
-static void accounts_timestamp(char *out, size_t cap)
-{
+/* Purpose: project timestamp facts while preserving the canonical provider account lifecycle invariants. */
+static void accounts_timestamp(char *out, size_t cap) {
     time_t now;
     struct tm tm_utc;
 
-    if (!out || cap == 0u) return;
+    if (!out || cap == 0u)
+        return;
     out[0] = '\0';
     now = time(NULL);
     if (now == (time_t)-1 || !gmtime_r(&now, &tm_utc)) {
@@ -129,122 +71,159 @@ static void accounts_timestamp(char *out, size_t cap)
     }
 }
 
-static void accounts_json_string(FILE *fp, const char *value)
-{
-    if (!value) value = "";
-    fputc('"', fp);
-    while (*value) {
-        unsigned char ch = (unsigned char)*value++;
-        if (ch == '"' || ch == '\\') {
-            fputc('\\', fp);
-            fputc((int)ch, fp);
-        } else if (ch == '\n') {
-            fputs("\\n", fp);
-        } else if (ch == '\r') {
-            fputs("\\r", fp);
-        } else if (ch == '\t') {
-            fputs("\\t", fp);
-        } else {
-            fputc((int)ch, fp);
-        }
-    }
-    fputc('"', fp);
-}
-
-static void accounts_json_field(FILE *fp,
-                                const char *indent,
-                                const char *key,
-                                const char *value,
-                                int comma)
-{
+/* Purpose: project json field facts while preserving the canonical provider account lifecycle invariants. */
+static void
+accounts_json_field(FILE *fp, const char *indent, const char *key, const char *value, int comma) {
     fputs(indent, fp);
     fprintf(fp, "\"%s\": ", key);
-    accounts_json_string(fp, value);
+    yvex_file_json_write_string(fp, value);
     fprintf(fp, "%s\n", comma ? "," : "");
 }
 
-static void accounts_json_bool(FILE *fp,
-                               const char *indent,
-                               const char *key,
-                               int value,
-                               int comma)
-{
+/* Purpose: project json bool facts while preserving the canonical provider account lifecycle invariants. */
+static void
+accounts_json_bool(FILE *fp, const char *indent, const char *key, int value, int comma) {
     fputs(indent, fp);
     fprintf(fp, "\"%s\": %s%s\n", key, value ? "true" : "false", comma ? "," : "");
 }
 
-static int accounts_state_path(char *out, size_t cap, yvex_error *err)
-{
+/* Purpose: project state path facts while preserving the canonical provider account lifecycle invariants. */
+static int accounts_state_path(char *out, size_t cap, yvex_error *err) {
     yvex_paths paths;
     int rc;
 
     memset(&paths, 0, sizeof(paths));
     rc = yvex_paths_default(&paths, err);
-    if (rc != YVEX_OK) return rc;
+    if (rc != YVEX_OK)
+        return rc;
     return accounts_path_format(out, cap, err, "accounts", paths.config_dir, "accounts.local.json");
 }
 
-int yvex_account_provider_from_name(const char *name, yvex_account_provider *out)
-{
-    if (!name || !out) return 0;
-    if (strcmp(name, "huggingface") == 0 || strcmp(name, "hf") == 0) {
-        *out = YVEX_ACCOUNT_PROVIDER_HUGGINGFACE;
-        return 1;
+typedef struct {
+    yvex_account_provider provider;
+    const char *name;
+    const char *alias;
+    const char *token_env;
+    const char *cli_env;
+    const char *binary;
+    const char *legacy_binary;
+    const char *missing_cli;
+    const char *install_next;
+    const char *auth_action;
+} account_provider_definition;
+
+static const account_provider_definition account_providers[] = {
+    {YVEX_ACCOUNT_PROVIDER_HUGGINGFACE,
+     "huggingface",
+     "hf",
+     "HF_TOKEN",
+     "YVEX_HF_CLI",
+     "hf",
+     "huggingface-cli",
+     "missing-huggingface-cli",
+     "install Hugging Face CLI and retry",
+     "whoami"},
+    {YVEX_ACCOUNT_PROVIDER_GITHUB,
+     "github",
+     "gh",
+     "GH_TOKEN",
+     "YVEX_GH_CLI",
+     "gh",
+     "",
+     "missing-github-cli",
+     "install GitHub CLI and retry",
+     "status"},
+};
+
+/* Purpose: resolve one admitted provider enum through the immutable provider registry.
+ * Inputs: provider enum supplied by a typed account request.
+ * Effects: returns a borrowed immutable registry row without mutation.
+ * Failure: unknown enum values return null.
+ * Boundary: registry lookup does not inspect credentials or execute provider tools. */
+static const account_provider_definition *provider_definition(yvex_account_provider provider) {
+    size_t i;
+
+    for (i = 0u; i < sizeof(account_providers) / sizeof(account_providers[0]); ++i) {
+        if (account_providers[i].provider == provider)
+            return &account_providers[i];
     }
-    if (strcmp(name, "github") == 0 || strcmp(name, "gh") == 0) {
-        *out = YVEX_ACCOUNT_PROVIDER_GITHUB;
-        return 1;
+    return NULL;
+}
+
+/* Purpose: parse a provider name into the canonical provider identity enum.
+ * Inputs: typed accounts provider arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned accounts provider state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: account facts do not admit source bytes or runtime capability. */
+int yvex_account_provider_from_name(const char *name, yvex_account_provider *out) {
+    size_t i;
+
+    if (!name || !out)
+        return 0;
+    for (i = 0u; i < sizeof(account_providers) / sizeof(account_providers[0]); ++i) {
+        if (strcmp(name, account_providers[i].name) == 0 ||
+            strcmp(name, account_providers[i].alias) == 0) {
+            *out = account_providers[i].provider;
+            return 1;
+        }
     }
     return 0;
 }
 
-const char *yvex_account_provider_name(yvex_account_provider provider)
-{
-    switch (provider) {
-    case YVEX_ACCOUNT_PROVIDER_HUGGINGFACE: return "huggingface";
-    case YVEX_ACCOUNT_PROVIDER_GITHUB: return "github";
-    default: return "unknown";
-    }
+/* Purpose: render one canonical provider identity as its stable lowercase name.
+ * Inputs: typed accounts provider arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned accounts provider state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: account facts do not admit source bytes or runtime capability. */
+const char *yvex_account_provider_name(yvex_account_provider provider) {
+    const account_provider_definition *definition = provider_definition(provider);
+
+    return definition ? definition->name : "unknown";
 }
 
-const char *yvex_account_default_token_env(yvex_account_provider provider)
-{
-    switch (provider) {
-    case YVEX_ACCOUNT_PROVIDER_HUGGINGFACE: return "HF_TOKEN";
-    case YVEX_ACCOUNT_PROVIDER_GITHUB: return "GH_TOKEN";
-    default: return "";
-    }
+/* Purpose: return the provider's canonical credential environment variable.
+ * Inputs: typed accounts provider arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned accounts provider state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: account facts do not admit source bytes or runtime capability. */
+const char *yvex_account_default_token_env(yvex_account_provider provider) {
+    const account_provider_definition *definition = provider_definition(provider);
+
+    return definition ? definition->token_env : "";
 }
 
-static const char *accounts_provider_env_override(yvex_account_provider provider)
-{
-    switch (provider) {
-    case YVEX_ACCOUNT_PROVIDER_HUGGINGFACE: return "YVEX_HF_CLI";
-    case YVEX_ACCOUNT_PROVIDER_GITHUB: return "YVEX_GH_CLI";
-    default: return "";
-    }
+/* Purpose: project provider env override facts while preserving the canonical provider account lifecycle invariants. */
+static const char *accounts_provider_env_override(yvex_account_provider provider) {
+    const account_provider_definition *definition = provider_definition(provider);
+
+    return definition ? definition->cli_env : "";
 }
 
-static const char *accounts_provider_binary(yvex_account_provider provider)
-{
-    switch (provider) {
-    case YVEX_ACCOUNT_PROVIDER_HUGGINGFACE: return "hf";
-    case YVEX_ACCOUNT_PROVIDER_GITHUB: return "gh";
-    default: return "";
-    }
+/* Purpose: project provider binary facts while preserving the canonical provider account lifecycle invariants. */
+static const char *accounts_provider_binary(yvex_account_provider provider) {
+    const account_provider_definition *definition = provider_definition(provider);
+
+    return definition ? definition->binary : "";
 }
 
-static const char *accounts_provider_legacy_binary(yvex_account_provider provider)
-{
-    return provider == YVEX_ACCOUNT_PROVIDER_HUGGINGFACE ? "huggingface-cli" : "";
+/* Purpose: return the admitted legacy CLI binary for provider discovery. */
+static const char *accounts_provider_legacy_binary(yvex_account_provider provider) {
+    const account_provider_definition *definition = provider_definition(provider);
+
+    return definition ? definition->legacy_binary : "";
 }
 
-static int accounts_find_in_path(const char *binary, char *out, size_t cap)
-{
+/* Purpose: project find in path facts while preserving the canonical provider account lifecycle invariants.
+ * Inputs: typed accounts provider arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned accounts provider state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: account facts do not admit source bytes or runtime capability. */
+static int accounts_find_in_path(const char *binary, char *out, size_t cap) {
     const char *path_env;
     const char *start;
 
-    if (!binary || !binary[0] || !out || cap == 0u) return 0;
+    if (!binary || !binary[0] || !out || cap == 0u)
+        return 0;
     if (strchr(binary, '/')) {
         if (access(binary, X_OK) == 0) {
             snprintf(out, cap, "%s", binary);
@@ -271,19 +250,24 @@ static int accounts_find_in_path(const char *binary, char *out, size_t cap)
     return 0;
 }
 
+/* Purpose: project find cli facts while preserving the canonical provider account lifecycle invariants.
+ * Inputs: typed accounts provider arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned accounts provider state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: account facts do not admit source bytes or runtime capability. */
 static int accounts_find_cli(yvex_account_provider provider,
                              const char *explicit_cli,
                              char *out,
                              size_t cap,
                              char *source,
-                             size_t source_cap)
-{
+                             size_t source_cap) {
     const char *env_name = accounts_provider_env_override(provider);
     const char *env_value = env_name && env_name[0] ? getenv(env_name) : NULL;
     const char *binary = accounts_provider_binary(provider);
     const char *legacy = accounts_provider_legacy_binary(provider);
 
-    if (!out || cap == 0u || !source || source_cap == 0u) return 0;
+    if (!out || cap == 0u || !source || source_cap == 0u)
+        return 0;
     out[0] = '\0';
     source[0] = '\0';
     if (explicit_cli && explicit_cli[0]) {
@@ -311,11 +295,12 @@ static int accounts_find_cli(yvex_account_provider provider,
     return 0;
 }
 
-static void accounts_first_line(char *value)
-{
+/* Purpose: project first line facts while preserving the canonical provider account lifecycle invariants. */
+static void accounts_first_line(char *value) {
     char *p;
 
-    if (!value) return;
+    if (!value)
+        return;
     for (p = value; *p; ++p) {
         if (*p == '\n' || *p == '\r') {
             *p = '\0';
@@ -330,12 +315,13 @@ static void accounts_first_line(char *value)
     }
 }
 
-static int accounts_run_capture(const char *const *args,
-                                char *out,
-                                size_t out_cap,
-                                int *exit_code,
-                                yvex_error *err)
-{
+/* Purpose: run one admitted provider CLI invocation and capture its bounded combined output.
+ * Inputs: typed accounts provider arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned accounts provider state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: account facts do not admit source bytes or runtime capability. */
+static int accounts_run_capture(
+    const char *const *args, char *out, size_t out_cap, int *exit_code, yvex_error *err) {
     int pipefd[2];
     int devnull = -1;
     pid_t pid;
@@ -343,7 +329,8 @@ static int accounts_run_capture(const char *const *args,
     size_t used = 0u;
 
     if (!args || !args[0] || !out || out_cap == 0u || !exit_code) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "accounts_exec", "arguments and outputs are required");
+        yvex_error_set(
+            err, YVEX_ERR_INVALID_ARG, "accounts_exec", "arguments and outputs are required");
         return YVEX_ERR_INVALID_ARG;
     }
     out[0] = '\0';
@@ -357,34 +344,41 @@ static int accounts_run_capture(const char *const *args,
     if (pid < 0) {
         close(pipefd[0]);
         close(pipefd[1]);
-        if (devnull >= 0) close(devnull);
+        if (devnull >= 0)
+            close(devnull);
         yvex_error_setf(err, YVEX_ERR_IO, "accounts_exec", "fork failed: %s", strerror(errno));
         return YVEX_ERR_IO;
     }
     if (pid == 0) {
         close(pipefd[0]);
         dup2(pipefd[1], STDOUT_FILENO);
-        if (devnull >= 0) dup2(devnull, STDERR_FILENO);
+        if (devnull >= 0)
+            dup2(devnull, STDERR_FILENO);
         close(pipefd[1]);
-        if (devnull >= 0) close(devnull);
+        if (devnull >= 0)
+            close(devnull);
         execv(args[0], (char *const *)args);
         _exit(127);
     }
     close(pipefd[1]);
-    if (devnull >= 0) close(devnull);
+    if (devnull >= 0)
+        close(devnull);
     for (;;) {
         char buf[512];
         ssize_t n = read(pipefd[0], buf, sizeof(buf));
         if (n < 0) {
-            if (errno == EINTR) continue;
+            if (errno == EINTR)
+                continue;
             close(pipefd[0]);
             yvex_error_setf(err, YVEX_ERR_IO, "accounts_exec", "read failed: %s", strerror(errno));
             return YVEX_ERR_IO;
         }
-        if (n == 0) break;
+        if (n == 0)
+            break;
         if (used + 1u < out_cap) {
             size_t take = (size_t)n;
-            if (take > out_cap - used - 1u) take = out_cap - used - 1u;
+            if (take > out_cap - used - 1u)
+                take = out_cap - used - 1u;
             memcpy(out + used, buf, take);
             used += take;
             out[used] = '\0';
@@ -395,69 +389,101 @@ static int accounts_run_capture(const char *const *args,
         yvex_error_setf(err, YVEX_ERR_IO, "accounts_exec", "waitpid failed: %s", strerror(errno));
         return YVEX_ERR_IO;
     }
-    if (WIFEXITED(status)) *exit_code = WEXITSTATUS(status);
-    else if (WIFSIGNALED(status)) *exit_code = 128 + WTERMSIG(status);
-    else *exit_code = 1;
+    if (WIFEXITED(status))
+        *exit_code = WEXITSTATUS(status);
+    else if (WIFSIGNALED(status))
+        *exit_code = 128 + WTERMSIG(status);
+    else
+        *exit_code = 1;
     return YVEX_OK;
 }
 
+/* Purpose: execute an explicitly selected provider command without persisting credentials.
+ * Inputs: typed accounts provider arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned accounts provider state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: account facts do not admit source bytes or runtime capability. */
 int yvex_accounts_run_provider_command(const yvex_account_command_options *options,
-                                       yvex_error *err)
-{
+                                       yvex_error *err) {
     int stdout_fd = -1;
     int stderr_fd = -1;
     int status;
     pid_t pid;
 
     if (!options || !options->args[0]) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "accounts_exec", "provider command arguments are required");
+        yvex_error_set(
+            err, YVEX_ERR_INVALID_ARG, "accounts_exec", "provider command arguments are required");
         return -1;
     }
     if (options->stdout_path && options->stdout_path[0]) {
         stdout_fd = open(options->stdout_path, O_WRONLY | O_CREAT | O_TRUNC, 0664);
         if (stdout_fd < 0) {
-            yvex_error_setf(err, YVEX_ERR_IO, "accounts_exec", "cannot open stdout log: %s", options->stdout_path);
+            yvex_error_setf(err,
+                            YVEX_ERR_IO,
+                            "accounts_exec",
+                            "cannot open stdout log: %s",
+                            options->stdout_path);
             return -1;
         }
     }
     if (options->stderr_path && options->stderr_path[0]) {
         stderr_fd = open(options->stderr_path, O_WRONLY | O_CREAT | O_TRUNC, 0664);
         if (stderr_fd < 0) {
-            if (stdout_fd >= 0) close(stdout_fd);
-            yvex_error_setf(err, YVEX_ERR_IO, "accounts_exec", "cannot open stderr log: %s", options->stderr_path);
+            if (stdout_fd >= 0)
+                close(stdout_fd);
+            yvex_error_setf(err,
+                            YVEX_ERR_IO,
+                            "accounts_exec",
+                            "cannot open stderr log: %s",
+                            options->stderr_path);
             return -1;
         }
     }
     pid = fork();
     if (pid < 0) {
-        if (stdout_fd >= 0) close(stdout_fd);
-        if (stderr_fd >= 0) close(stderr_fd);
+        if (stdout_fd >= 0)
+            close(stdout_fd);
+        if (stderr_fd >= 0)
+            close(stderr_fd);
         yvex_error_setf(err, YVEX_ERR_IO, "accounts_exec", "fork failed: %s", strerror(errno));
         return -1;
     }
     if (pid == 0) {
-        if (stdout_fd >= 0) dup2(stdout_fd, STDOUT_FILENO);
-        if (stderr_fd >= 0) dup2(stderr_fd, STDERR_FILENO);
-        if (stdout_fd >= 0) close(stdout_fd);
-        if (stderr_fd >= 0) close(stderr_fd);
+        if (stdout_fd >= 0)
+            dup2(stdout_fd, STDOUT_FILENO);
+        if (stderr_fd >= 0)
+            dup2(stderr_fd, STDERR_FILENO);
+        if (stdout_fd >= 0)
+            close(stdout_fd);
+        if (stderr_fd >= 0)
+            close(stderr_fd);
         execv(options->args[0], (char *const *)options->args);
         _exit(127);
     }
-    if (stdout_fd >= 0) close(stdout_fd);
-    if (stderr_fd >= 0) close(stderr_fd);
+    if (stdout_fd >= 0)
+        close(stdout_fd);
+    if (stderr_fd >= 0)
+        close(stderr_fd);
     if (waitpid(pid, &status, 0) < 0) {
         yvex_error_setf(err, YVEX_ERR_IO, "accounts_exec", "waitpid failed: %s", strerror(errno));
         return -1;
     }
-    if (WIFEXITED(status)) return WEXITSTATUS(status);
-    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+    if (WIFEXITED(status))
+        return WEXITSTATUS(status);
+    if (WIFSIGNALED(status))
+        return 128 + WTERMSIG(status);
     return 1;
 }
 
+/* Purpose: derive non-secret account availability and identity facts from the provider environment.
+ * Inputs: typed accounts provider arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned accounts provider state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: account facts do not admit source bytes or runtime capability. */
 int yvex_account_observe(const yvex_account_observe_options *options,
                          yvex_account_observation *out,
-                         yvex_error *err)
-{
+                         yvex_error *err) {
+    const account_provider_definition *definition;
     const char *token_env;
     const char *token_value;
     const char *provider_args[5];
@@ -466,16 +492,20 @@ int yvex_account_observe(const yvex_account_observe_options *options,
     int rc;
 
     if (!options || !out || options->provider == YVEX_ACCOUNT_PROVIDER_UNKNOWN) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "accounts", "provider and observation output are required");
+        yvex_error_set(
+            err, YVEX_ERR_INVALID_ARG, "accounts", "provider and observation output are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    definition = provider_definition(options->provider);
     memset(out, 0, sizeof(*out));
     out->provider = options->provider;
-    snprintf(out->provider_name, sizeof(out->provider_name), "%s",
+    snprintf(out->provider_name,
+             sizeof(out->provider_name),
+             "%s",
              yvex_account_provider_name(options->provider));
     token_env = options->token_env_name && options->token_env_name[0]
-        ? options->token_env_name
-        : yvex_account_default_token_env(options->provider);
+                    ? options->token_env_name
+                    : yvex_account_default_token_env(options->provider);
     snprintf(out->token_env_name, sizeof(out->token_env_name), "%s", token_env);
     token_value = token_env && token_env[0] ? getenv(token_env) : NULL;
     out->token_env_present = token_value && token_value[0];
@@ -486,24 +516,30 @@ int yvex_account_observe(const yvex_account_observe_options *options,
         return yvex_error_code(err);
     }
 
-    if (!accounts_find_cli(options->provider, options->cli_override,
-                           out->cli_path, sizeof(out->cli_path),
-                           out->cli_source, sizeof(out->cli_source))) {
+    if (!accounts_find_cli(options->provider,
+                           options->cli_override,
+                           out->cli_path,
+                           sizeof(out->cli_path),
+                           out->cli_source,
+                           sizeof(out->cli_source))) {
         snprintf(out->cli_status, sizeof(out->cli_status), "missing");
         snprintf(out->auth_state, sizeof(out->auth_state), "blocked");
-        snprintf(out->credential_source, sizeof(out->credential_source),
+        snprintf(out->credential_source,
+                 sizeof(out->credential_source),
                  out->token_env_present ? "environment" : "none");
-        snprintf(out->account_hint, sizeof(out->account_hint),
+        snprintf(out->account_hint,
+                 sizeof(out->account_hint),
                  out->token_env_present ? "env-token" : "unknown");
         snprintf(out->status, sizeof(out->status), "account-provider-blocked");
         snprintf(out->top_blocker, sizeof(out->top_blocker), "missing-%s-cli", out->provider_name);
-        if (options->provider == YVEX_ACCOUNT_PROVIDER_HUGGINGFACE) {
-            snprintf(out->top_blocker, sizeof(out->top_blocker), "missing-huggingface-cli");
-            snprintf(out->next, sizeof(out->next), "install Hugging Face CLI and retry");
-        } else {
-            snprintf(out->top_blocker, sizeof(out->top_blocker), "missing-github-cli");
-            snprintf(out->next, sizeof(out->next), "install GitHub CLI and retry");
-        }
+        snprintf(out->top_blocker,
+                 sizeof(out->top_blocker),
+                 "%s",
+                 definition ? definition->missing_cli : "missing-github-cli");
+        snprintf(out->next,
+                 sizeof(out->next),
+                 "%s",
+                 definition ? definition->install_next : "install GitHub CLI and retry");
         return YVEX_OK;
     }
 
@@ -518,23 +554,20 @@ int yvex_account_observe(const yvex_account_observe_options *options,
     }
 
     provider_args[0] = out->cli_path;
-    if (options->provider == YVEX_ACCOUNT_PROVIDER_HUGGINGFACE) {
-        provider_args[1] = "auth";
-        provider_args[2] = "whoami";
-        provider_args[3] = NULL;
-    } else {
-        provider_args[1] = "auth";
-        provider_args[2] = "status";
-        provider_args[3] = NULL;
-    }
+    provider_args[1] = "auth";
+    provider_args[2] = definition ? definition->auth_action : "status";
+    provider_args[3] = NULL;
     rc = accounts_run_capture(provider_args, capture, sizeof(capture), &exit_code, err);
-    if (rc != YVEX_OK) return rc;
+    if (rc != YVEX_OK)
+        return rc;
     out->command_exit_code = exit_code;
     if (exit_code == 0) {
         accounts_first_line(capture);
         snprintf(out->auth_state, sizeof(out->auth_state), "logged-in");
         snprintf(out->credential_source, sizeof(out->credential_source), "provider-store");
-        snprintf(out->account_hint, sizeof(out->account_hint), "%.*s",
+        snprintf(out->account_hint,
+                 sizeof(out->account_hint),
+                 "%.*s",
                  (int)sizeof(out->account_hint) - 1,
                  capture[0] ? capture : "provider-store");
         snprintf(out->status, sizeof(out->status), "account-provider-pass");
@@ -549,23 +582,28 @@ int yvex_account_observe(const yvex_account_observe_options *options,
     return YVEX_OK;
 }
 
+/* Purpose: atomically persist the observed non-secret account state.
+ * Inputs: typed accounts provider arguments; borrowed inputs outlive the call.
+ * Effects: writes only the explicit accounts provider destination through its transaction.
+ * Failure: serialization or I/O failure publishes no partial accounts provider result.
+ * Boundary: account facts do not admit source bytes or runtime capability. */
 int yvex_account_write_state(const yvex_account_observation *observations,
                              unsigned long count,
-                             yvex_error *err)
-{
+                             yvex_error *err) {
     char path[YVEX_PATH_CAP];
     FILE *fp;
     unsigned long i;
     int rc;
 
     if (!observations || count == 0u) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "accounts", "observations are required");
-        return YVEX_ERR_INVALID_ARG;
+        return account_refuse(err, YVEX_ERR_INVALID_ARG, "accounts", "observations are required");
     }
     rc = accounts_state_path(path, sizeof(path), err);
-    if (rc != YVEX_OK) return rc;
-    rc = accounts_mkdir_parent(path, err);
-    if (rc != YVEX_OK) return rc;
+    if (rc != YVEX_OK)
+        return rc;
+    rc = yvex_core_mkdir_parent(path, "accounts", err);
+    if (rc != YVEX_OK)
+        return rc;
     fp = fopen(path, "wb");
     if (!fp) {
         yvex_error_setf(err, YVEX_ERR_IO, "accounts", "cannot open account state: %s", path);
@@ -598,15 +636,20 @@ int yvex_account_write_state(const yvex_account_observation *observations,
     return YVEX_OK;
 }
 
+/* Purpose: observe the selected provider and optionally refresh its local account state.
+ * Inputs: typed accounts provider arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned accounts provider state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: account facts do not admit source bytes or runtime capability. */
 int yvex_account_ensure(const yvex_account_ensure_options *options,
                         yvex_account_observation *out,
-                        yvex_error *err)
-{
+                        yvex_error *err) {
     yvex_account_observe_options observe;
     int rc;
 
     if (!options || !out) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "accounts", "ensure options and output are required");
+        yvex_error_set(
+            err, YVEX_ERR_INVALID_ARG, "accounts", "ensure options and output are required");
         return YVEX_ERR_INVALID_ARG;
     }
     memset(&observe, 0, sizeof(observe));
@@ -614,8 +657,10 @@ int yvex_account_ensure(const yvex_account_ensure_options *options,
     observe.cli_override = options->cli_override;
     observe.token_env_name = options->token_env_name;
     rc = yvex_account_observe(&observe, out, err);
-    if (rc != YVEX_OK) return rc;
-    if (!out->cli_present) return YVEX_OK;
+    if (rc != YVEX_OK)
+        return rc;
+    if (!out->cli_present)
+        return YVEX_OK;
     if (strcmp(out->auth_state, "logged-in") == 0 ||
         strcmp(out->auth_state, "env-token-present") == 0) {
         return yvex_account_write_state(out, 1u, err);

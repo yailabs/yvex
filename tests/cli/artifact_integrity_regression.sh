@@ -326,10 +326,11 @@ contains "$OUT_DIR/bad-magic.graph-partial.out" "graph_integrity_guard: fail"
 contains "$OUT_DIR/bad-magic.graph-partial.out" "graph_execution_phase: preflight"
 contains "$OUT_DIR/bad-magic.graph-partial.out" "dispatch_attempted: false"
 
-run_expect_fail bad-magic graph-fixture "status: graph-integrity-fail" preflight false false not-needed \
+run_expect_fail bad-magic graph-fixture "status: graph-proof-retired" admission false false not-needed \
     "$YVEX_BIN" graph --model "$BAD_MAGIC" --backend cpu --execute-fixture --fixture-token 0
-contains "$OUT_DIR/bad-magic.graph-fixture.out" "graph_integrity_guard: fail"
-contains "$OUT_DIR/bad-magic.graph-fixture.out" "dispatch_attempted: false"
+contains "$OUT_DIR/bad-magic.graph-fixture.out" "graph_integrity_guard: refused"
+contains "$OUT_DIR/bad-magic.graph-fixture.out" "execution_ready: false"
+contains "$OUT_DIR/bad-magic.graph-fixture.out" "reason: production-fixtures-are-test-owned"
 
 "$YVEX_BIN" models add \
   --path "$F16_MODEL" \
@@ -445,10 +446,11 @@ contains "$OUT_DIR/valid.materialize-gate.report" "cleanup_status: pass"
 contains "$OUT_DIR/valid.materialize-gate.report" "status: materialize-gate-pass"
 append_matrix_row valid-f16 materialize-gate "status: materialize-gate-pass" complete true false pass
 
-run_expect_pass valid-f32 graph-fixture "status: fixture-graph-executed" complete false true not-needed \
+run_expect_fail valid-f32 graph-fixture "status: graph-proof-retired" admission false false not-needed \
     "$YVEX_BIN" graph --model "$F32_MODEL" --backend cpu --execute-fixture --fixture-token 0
-contains "$OUT_DIR/valid-f32.graph-fixture.out" "graph_integrity_guard: pass"
-contains "$OUT_DIR/valid-f32.graph-fixture.out" "dispatch_attempted: true"
+contains "$OUT_DIR/valid-f32.graph-fixture.out" "graph_integrity_guard: refused"
+contains "$OUT_DIR/valid-f32.graph-fixture.out" "execution_ready: false"
+contains "$OUT_DIR/valid-f32.graph-fixture.out" "reason: production-fixtures-are-test-owned"
 
 run_expect_pass valid-f16 graph-partial "status: real-partial-graph-executed" complete false true not-needed \
     "$YVEX_BIN" graph --model "$F16_MODEL" --backend cpu --execute-partial --partial-token 0

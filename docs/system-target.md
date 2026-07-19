@@ -149,22 +149,20 @@ domain algorithms. No writer owns command output.
 
 | Owner | Boundary |
 | --- | --- |
-| `include/yvex/gguf_qtype.h` | public qtype identity, admission, and typed storage result |
+| `include/yvex/qtype.h` | public qtype identity, admission, and typed storage result |
 | `include/yvex/artifact.h` | read-only file handle, optional explicit mapping, and exact positioned reads |
 | `include/yvex/gguf.h` | public reader budgets, typed parse result, immutable view, metrics, and accessors |
-| `include/yvex/gguf_layout.h` | public typed global layout result, failure categories, byte totals, and IO metrics |
+| `include/yvex/gguf.h` | public typed global layout result, failure categories, byte totals, and IO metrics |
 | `src/gguf/core.c` | file-backed GGUF v3 decoding and owned metadata/tensor view |
 | `src/gguf/container.c` | magic/version/container ABI |
-| `src/gguf/metadata.c` | metadata key/value ABI |
-| `src/gguf/tensor_info.c` | tensor_info name/rank/type/shape ABI |
+| `src/gguf/core.c` | metadata key/value and tensor_info name/rank/type/shape ABI |
 | `src/gguf/qtype.c` | pinned qtype registry and row-aware tensor storage |
 | `src/gguf/layout_integrity.c` | canonical ordered layout, padding, aggregate span, tail, and drift admission |
-| `src/gguf/range_map.c` | bounded local range arithmetic and canonical layout projection |
+| `src/gguf/layout_integrity.c` | bounded local range arithmetic and canonical layout projection |
 | `src/gguf/reader.c` | reader policy, resource defaults, typed failure ABI, and report projection |
 | `src/gguf/writer.c` | writer refusal until writer row |
-| `src/gguf/roundtrip.c` | writer-reader equivalence boundary |
-| `src/gguf/name_map.c` | emitted GGUF tensor names |
-| `src/gguf/layout_map.c` | emitted tensor layout/range plan |
+| `src/artifact/roundtrip_gate.c` | writer-reader equivalence boundary |
+| `src/model/target/tensor_naming.c` | emitted GGUF tensor names and layout projection |
 | `src/gguf/descriptor.c` | GGUF descriptor facts |
 | `src/gguf/report.c` | typed GGUF report facts |
 
@@ -180,14 +178,14 @@ domain algorithms. No writer owns command output.
 
 | Owner | Boundary |
 | --- | --- |
-| `src/model/runtime_descriptor.c` | artifact descriptor to runtime descriptor projection |
+| `src/runtime/descriptor.c` | artifact descriptor to runtime descriptor projection |
 
 ## Model Architecture Target Map
 
 | Owner | Boundary |
 | --- | --- |
 | `src/model/families/deepseek_v4.c` | immutable architecture, exact source coverage, family Transformation IR construction, GGUF lowering and payload handoff for the admitted identity |
-| `src/model/families.h` | single private family ABI shared by the family recipe's production consumers |
+| `include/yvex/internal/families/deepseek_v4.h` | private typed DeepSeek recipe ABI shared by production consumers |
 | `src/source/inventory.[ch]` | retained immutable source tensor snapshot, deterministic identity, indexed lookup, one-header-pass and zero-payload-read accounting |
 | `src/model/target/tensor_collection.c` | release-target collection projection from canonical coverage; Qwen/Gemma evidence remains separate |
 | `src/model/target/missing_role.c` | release-target missing-role projection from canonical coverage |

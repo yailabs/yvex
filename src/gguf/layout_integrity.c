@@ -1,88 +1,100 @@
-/*
- * layout_integrity.c - canonical parsed GGUF layout admission.
- *
- * Owner:
- *   src/gguf global layout integrity
- *
- * Owns:
- *   power-of-two alignment, directory-order tensor packing, padded interval
- *   continuation, aggregate span arithmetic, zero padding, tail policy, and
- *   opened-file drift checks.
- *
- * Does not own:
- *   emitted runtime-role layout mapping, payload interpretation, model-family
- *   completeness, digest policy, materialization, backend work, or generation.
- *
- * Invariants:
- *   validation is one linear tensor pass; it reads only directory and tensor
- *   padding and reports zero tensor payload bytes read.
- *
- * Boundary:
- *   accepted layout is structural container admission only.
- */
-#include <yvex/gguf_layout.h>
-#include <yvex/gguf_qtype.h>
-
-
+/* Owner: src/gguf global layout integrity
+ * Owns: power-of-two alignment, directory-order tensor packing, padded interval continuation, aggregate span
+ *   arithmetic, zero padding, tail policy, and opened-file drift checks.
+ * Does not own: emitted runtime-role layout mapping, payload interpretation, model-family completeness, digest
+ *   policy, materialization, backend work, or generation.
+ * Invariants: validation is one linear tensor pass; it reads only directory and tensor padding and reports zero
+ *   tensor payload bytes read.
+ * Boundary: accepted layout is structural container admission only.
+ * Purpose: admit one canonical GGUF byte layout through checked interval and padding validation.
+ * Inputs: an opened immutable artifact snapshot and its parsed GGUF directory view.
+ * Effects: reads only required padding ranges and replaces the caller-owned layout result.
+ * Failure: malformed geometry, overflow, nonzero padding, truncation, or drift refuse deterministically. */
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
+#include <yvex/artifact.h>
+#include <yvex/gguf.h>
+#include <yvex/qtype.h>
 
 #define YVEX_GGUF_LAYOUT_PADDING_CHUNK 4096u
 
-/* Contract: copies owned result text without allocation or IO. */
-static void layout_copy(char *dst, size_t cap, const char *text)
-{
-    if (!dst || cap == 0u) return;
+static const char *const layout_code_names[] = {
+    "ok", "invalid-argument", "invalid-alignment-type", "invalid-alignment-value",
+    "alignment-not-power-of-two", "alignment-overflow", "tensor-storage-refused",
+    "first-offset-not-zero", "tensor-offset-reversed", "unexpected-layout-gap",
+    "duplicate-tensor-start", "complete-tensor-overlap", "partial-tensor-overlap",
+    "padded-tensor-overlap", "tensor-raw-end-overflow", "tensor-padded-end-overflow",
+    "layout-aggregate-overflow", "tensor-payload-truncated", "layout-padding-truncated",
+    "directory-padding-nonzero", "tensor-padding-nonzero", "noncanonical-trailing-bytes",
+    "file-identity-drift", "layout-io-failure", "parsed-view-file-mismatch",
+    "tensor-info-missing", "tensor-range-mismatch",
+};
+
+/* Purpose: copy a bounded layout reason while normalizing null text. */
+static void layout_copy(char *dst, size_t cap, const char *text) {
+    if (!dst || cap == 0u)
+        return;
     (void)snprintf(dst, cap, "%s", text ? text : "");
     dst[cap - 1u] = '\0';
 }
 
-/* Contract: initializes a self-contained rejected result without IO. */
-static void layout_result_init(yvex_gguf_layout_result *result)
-{
+/* Purpose: initialize one self-contained fail-closed layout result.
+ * Inputs: writable result storage.
+ * Effects: clears all counters and installs invalid-argument/not-evaluated state.
+ * Failure: none; callers provide non-null storage.
+ * Boundary: initialization performs no artifact I/O. */
+static void layout_result_init(yvex_gguf_layout_result *result) {
     memset(result, 0, sizeof(*result));
     result->code = YVEX_GGUF_LAYOUT_INVALID_ARGUMENT;
     result->tensor_index = ULLONG_MAX;
     layout_copy(result->reason, sizeof(result->reason), "layout not evaluated");
 }
 
-/* Contract: exposes pure checked aggregate arithmetic for validator and tests. */
-yvex_gguf_layout_code yvex_gguf_layout_sum_checked(
-    unsigned long long current,
-    unsigned long long addition,
-    unsigned long long *out)
-{
-    if (!out) return YVEX_GGUF_LAYOUT_INVALID_ARGUMENT;
-    if (addition > ULLONG_MAX - current) return YVEX_GGUF_LAYOUT_AGGREGATE_OVERFLOW;
+/* Purpose: add one layout counter without unsigned overflow.
+ * Inputs: current value, addition, and writable result.
+ * Effects: writes the sum only when representable.
+ * Failure: null output or overflow returns a typed layout code.
+ * Boundary: this arithmetic helper owns no file or layout state. */
+yvex_gguf_layout_code yvex_gguf_layout_sum_checked(unsigned long long current,
+                                                   unsigned long long addition,
+                                                   unsigned long long *out) {
+    if (!out)
+        return YVEX_GGUF_LAYOUT_INVALID_ARGUMENT;
+    if (addition > ULLONG_MAX - current)
+        return YVEX_GGUF_LAYOUT_AGGREGATE_OVERFLOW;
     *out = current + addition;
     return YVEX_GGUF_LAYOUT_OK;
 }
 
-/* Contract: aligns through the pinned power-of-two mask with checked addition. */
-static int align_up_power_of_two(unsigned long long value,
-                                 unsigned int alignment,
-                                 unsigned long long *out)
-{
+/* Purpose: align one offset upward through checked power-of-two mask arithmetic. */
+static int align_up_power_of_two(unsigned long long value, unsigned int alignment,
+                                 unsigned long long *out) {
     unsigned long long mask;
     unsigned long long sum;
-    if (!out || alignment == 0u || (alignment & (alignment - 1u)) != 0u) return 0;
+    if (!out || alignment == 0u || (alignment & (alignment - 1u)) != 0u)
+        return 0;
     mask = (unsigned long long)alignment - 1ull;
-    if (yvex_gguf_layout_sum_checked(value, mask, &sum) != YVEX_GGUF_LAYOUT_OK) return 0;
+    if (yvex_gguf_layout_sum_checked(value, mask, &sum) != YVEX_GGUF_LAYOUT_OK)
+        return 0;
     *out = sum & ~mask;
     return 1;
 }
 
-/* Contract: computes one raw and padded relative interval without IO. */
-yvex_gguf_layout_code yvex_gguf_layout_interval_measure(
-    unsigned long long relative_offset,
-    unsigned long long raw_size,
-    unsigned int alignment,
-    unsigned long long *raw_end,
-    unsigned long long *padded_end)
-{
-    if (!raw_end || !padded_end) return YVEX_GGUF_LAYOUT_INVALID_ARGUMENT;
-    if (alignment == 0u) return YVEX_GGUF_LAYOUT_INVALID_ALIGNMENT_VALUE;
+/* Purpose: derive exact raw and padded ends for one relative tensor interval.
+ * Inputs: relative start, raw bytes, power-of-two alignment, and writable end values.
+ * Effects: publishes both ends only through checked arithmetic.
+ * Failure: invalid alignment, null outputs, or overflow return distinct layout codes.
+ * Boundary: interval measurement reads no directory or payload bytes. */
+yvex_gguf_layout_code yvex_gguf_layout_interval_measure(unsigned long long relative_offset,
+                                                        unsigned long long raw_size,
+                                                        unsigned int alignment,
+                                                        unsigned long long *raw_end,
+                                                        unsigned long long *padded_end) {
+    if (!raw_end || !padded_end)
+        return YVEX_GGUF_LAYOUT_INVALID_ARGUMENT;
+    if (alignment == 0u)
+        return YVEX_GGUF_LAYOUT_INVALID_ALIGNMENT_VALUE;
     if ((alignment & (alignment - 1u)) != 0u) {
         return YVEX_GGUF_LAYOUT_ALIGNMENT_NOT_POWER_OF_TWO;
     }
@@ -96,39 +108,32 @@ yvex_gguf_layout_code yvex_gguf_layout_interval_measure(
     return YVEX_GGUF_LAYOUT_OK;
 }
 
-/* Contract: records one stable refusal and performs no cleanup or additional IO. */
-static int layout_fail(yvex_gguf_layout_result *result,
-                       yvex_gguf_layout_code code,
-                       const char *reason,
-                       yvex_error *err)
-{
+/* Purpose: publish a stable layout refusal in both typed result and error vocabulary. */
+static int layout_fail(yvex_gguf_layout_result *result, yvex_gguf_layout_code code,
+                       const char *reason, yvex_error *err) {
     result->accepted = 0;
     result->code = code;
     layout_copy(result->reason, sizeof(result->reason), reason);
-    yvex_error_setf(err, YVEX_ERR_FORMAT, "yvex_gguf_layout_validate",
-                    "%s: %s", yvex_gguf_layout_code_name(code), reason);
+    yvex_error_setf(err, YVEX_ERR_FORMAT, "yvex_gguf_layout_validate", "%s: %s",
+                    yvex_gguf_layout_code_name(code), reason);
     return YVEX_ERR_FORMAT;
 }
 
-/*
- * Contract: reads exactly one required padding interval in bounded chunks,
- * records bytes and calls, and refuses the first nonzero byte without reading
- * adjacent tensor payload.
- */
-static int read_zero_padding(const yvex_artifact *artifact,
-                             unsigned long long offset,
-                             unsigned long long length,
-                             yvex_gguf_layout_code nonzero_code,
-                             yvex_gguf_layout_result *result,
-                             yvex_error *err)
-{
+/* Purpose: prove that one exact required padding interval contains only zero bytes.
+ * Inputs: admitted artifact, absolute offset, length, refusal code, and writable diagnostics.
+ * Effects: performs bounded positioned reads and advances padding-byte/call counters.
+ * Failure: I/O or first nonzero byte records its absolute location and typed refusal.
+ * Boundary: the reader never crosses the requested interval into tensor payload. */
+static int read_zero_padding(const yvex_artifact *artifact, unsigned long long offset,
+                             unsigned long long length, yvex_gguf_layout_code nonzero_code,
+                             yvex_gguf_layout_result *result, yvex_error *err) {
     unsigned char bytes[YVEX_GGUF_LAYOUT_PADDING_CHUNK];
     unsigned long long done = 0ull;
 
     while (done < length) {
         unsigned long long remaining = length - done;
-        size_t take = remaining > (unsigned long long)sizeof(bytes)
-                          ? sizeof(bytes) : (size_t)remaining;
+        size_t take =
+            remaining > (unsigned long long)sizeof(bytes) ? sizeof(bytes) : (size_t)remaining;
         size_t i;
         int rc = yvex_artifact_read_at(artifact, offset + done, bytes, take, err);
         if (rc != YVEX_OK) {
@@ -153,56 +158,152 @@ static int read_zero_padding(const yvex_artifact *artifact,
     return YVEX_OK;
 }
 
-const char *yvex_gguf_layout_code_name(yvex_gguf_layout_code code)
-{
-    switch (code) {
-    case YVEX_GGUF_LAYOUT_OK: return "ok";
-    case YVEX_GGUF_LAYOUT_INVALID_ARGUMENT: return "invalid-argument";
-    case YVEX_GGUF_LAYOUT_INVALID_ALIGNMENT_TYPE: return "invalid-alignment-type";
-    case YVEX_GGUF_LAYOUT_INVALID_ALIGNMENT_VALUE: return "invalid-alignment-value";
-    case YVEX_GGUF_LAYOUT_ALIGNMENT_NOT_POWER_OF_TWO: return "alignment-not-power-of-two";
-    case YVEX_GGUF_LAYOUT_ALIGNMENT_OVERFLOW: return "alignment-overflow";
-    case YVEX_GGUF_LAYOUT_STORAGE_REFUSED: return "tensor-storage-refused";
-    case YVEX_GGUF_LAYOUT_FIRST_OFFSET_NOT_ZERO: return "first-offset-not-zero";
-    case YVEX_GGUF_LAYOUT_OFFSET_REVERSED: return "tensor-offset-reversed";
-    case YVEX_GGUF_LAYOUT_UNEXPECTED_GAP: return "unexpected-layout-gap";
-    case YVEX_GGUF_LAYOUT_DUPLICATE_START: return "duplicate-tensor-start";
-    case YVEX_GGUF_LAYOUT_COMPLETE_OVERLAP: return "complete-tensor-overlap";
-    case YVEX_GGUF_LAYOUT_PARTIAL_OVERLAP: return "partial-tensor-overlap";
-    case YVEX_GGUF_LAYOUT_PADDED_OVERLAP: return "padded-tensor-overlap";
-    case YVEX_GGUF_LAYOUT_RAW_END_OVERFLOW: return "tensor-raw-end-overflow";
-    case YVEX_GGUF_LAYOUT_PADDED_END_OVERFLOW: return "tensor-padded-end-overflow";
-    case YVEX_GGUF_LAYOUT_AGGREGATE_OVERFLOW: return "layout-aggregate-overflow";
-    case YVEX_GGUF_LAYOUT_TENSOR_PAYLOAD_TRUNCATED: return "tensor-payload-truncated";
-    case YVEX_GGUF_LAYOUT_PADDING_TRUNCATED: return "layout-padding-truncated";
-    case YVEX_GGUF_LAYOUT_DIRECTORY_PADDING_NONZERO: return "directory-padding-nonzero";
-    case YVEX_GGUF_LAYOUT_TENSOR_PADDING_NONZERO: return "tensor-padding-nonzero";
-    case YVEX_GGUF_LAYOUT_NONCANONICAL_TAIL: return "noncanonical-trailing-bytes";
-    case YVEX_GGUF_LAYOUT_FILE_IDENTITY_DRIFT: return "file-identity-drift";
-    case YVEX_GGUF_LAYOUT_IO_FAILURE: return "layout-io-failure";
-    case YVEX_GGUF_LAYOUT_VIEW_FILE_MISMATCH: return "parsed-view-file-mismatch";
-    case YVEX_GGUF_LAYOUT_TENSOR_INFO_MISSING: return "tensor-info-missing";
-    case YVEX_GGUF_LAYOUT_TENSOR_RANGE_MISMATCH: return "tensor-range-mismatch";
-    }
-    return "unknown-layout-failure";
+/* Purpose: render one canonical layout result code as stable diagnostic text.
+ * Inputs: layout code value.
+ * Effects: none.
+ * Failure: out-of-range values yield unknown-layout-failure.
+ * Boundary: text does not become layout admission truth. */
+const char *yvex_gguf_layout_code_name(yvex_gguf_layout_code code) {
+    return code >= YVEX_GGUF_LAYOUT_OK &&
+                   (size_t)code < sizeof(layout_code_names) / sizeof(layout_code_names[0])
+               ? layout_code_names[code]
+               : "unknown-layout-failure";
 }
 
-/*
- * Contract: borrows one artifact and immutable parsed view for a linear
- * padding-only validation pass, owns no allocation, and leaves a complete
- * typed result on success or refusal.
- */
-int yvex_gguf_layout_validate(const yvex_artifact *artifact,
-                              const yvex_gguf *gguf,
-                              yvex_gguf_layout_result *out,
-                              yvex_error *err)
-{
+typedef struct {
+    unsigned long long expected;
+    unsigned long long previous_start;
+    unsigned long long previous_raw_end;
+} layout_cursor;
+
+/* Purpose: validate one directory tensor and advance the canonical physical cursor.
+ * Inputs: artifact/view, directory index, mutable cursor/result, and diagnostics.
+ * Effects: checks geometry/ranges, reads only its padding, and advances counters on success.
+ * Failure: overlap, gap, overflow, truncation, nonzero padding, or mismatch leaves typed refusal.
+ * Boundary: tensor payload bytes are never read or interpreted. */
+static int layout_validate_tensor(const yvex_artifact *artifact, const yvex_gguf *gguf,
+                                  unsigned long long index, layout_cursor *cursor,
+                                  yvex_gguf_layout_result *out, yvex_error *err) {
+    const yvex_gguf_tensor_info *tensor = yvex_gguf_tensor_at(gguf, index);
+    yvex_gguf_qtype_storage_result storage;
+    unsigned long long raw_end;
+    unsigned long long padded_end;
+    unsigned long long raw_absolute;
+    unsigned long long raw_absolute_end;
+    unsigned long long padded_absolute;
+    unsigned long long padding_bytes;
+    yvex_gguf_layout_code interval_code;
+    int status;
+
+    out->tensor_index = index;
+    if (!tensor)
+        return layout_fail(out, YVEX_GGUF_LAYOUT_TENSOR_INFO_MISSING,
+                           "parsed tensor directory row is unavailable", err);
+    layout_copy(out->tensor_name, sizeof(out->tensor_name), tensor->name);
+    out->expected_relative_offset = cursor->expected;
+    out->declared_relative_offset = tensor->relative_offset;
+    if (yvex_gguf_qtype_tensor_storage(tensor->ggml_type, tensor->dims, tensor->rank, &storage) !=
+        YVEX_GGUF_QTYPE_STORAGE_OK)
+        return layout_fail(out, YVEX_GGUF_LAYOUT_STORAGE_REFUSED,
+                           storage.reason ? storage.reason : "tensor qtype storage is refused",
+                           err);
+    out->tensor_raw_size = storage.total_bytes;
+    if (tensor->storage_bytes != storage.total_bytes)
+        return layout_fail(out, YVEX_GGUF_LAYOUT_STORAGE_REFUSED,
+                           "parsed tensor storage differs from canonical qtype geometry", err);
+    interval_code = yvex_gguf_layout_interval_measure(tensor->relative_offset, storage.total_bytes,
+                                                      out->alignment, &raw_end, &padded_end);
+    if (interval_code != YVEX_GGUF_LAYOUT_OK)
+        return layout_fail(out, interval_code,
+                           interval_code == YVEX_GGUF_LAYOUT_RAW_END_OVERFLOW
+                               ? "tensor relative raw end overflows"
+                               : "tensor padded end overflows",
+                           err);
+    out->tensor_raw_end = raw_end;
+    out->tensor_padded_end = padded_end;
+    out->tensor_padded_size = padded_end - tensor->relative_offset;
+    if (index == 0ull && tensor->relative_offset != 0ull)
+        return layout_fail(out, YVEX_GGUF_LAYOUT_FIRST_OFFSET_NOT_ZERO,
+                           "the first tensor must begin at relative offset zero", err);
+    if (index > 0ull && tensor->relative_offset != cursor->expected) {
+        if (tensor->relative_offset > cursor->expected)
+            return layout_fail(out, YVEX_GGUF_LAYOUT_UNEXPECTED_GAP,
+                               "tensor offset leaves a gap after the previous padded interval",
+                               err);
+        if (tensor->relative_offset == cursor->previous_start)
+            return layout_fail(out, YVEX_GGUF_LAYOUT_DUPLICATE_START,
+                               "two directory entries declare the same tensor start", err);
+        if (tensor->relative_offset < cursor->previous_start)
+            return layout_fail(out, YVEX_GGUF_LAYOUT_OFFSET_REVERSED,
+                               "tensor offset reverses directory order", err);
+        if (tensor->relative_offset < cursor->previous_raw_end)
+            return layout_fail(
+                out,
+                raw_end <= cursor->previous_raw_end ? YVEX_GGUF_LAYOUT_COMPLETE_OVERLAP
+                                                    : YVEX_GGUF_LAYOUT_PARTIAL_OVERLAP,
+                raw_end <= cursor->previous_raw_end
+                    ? "tensor interval is contained in the previous tensor payload"
+                    : "tensor interval partially overlaps the previous tensor payload",
+                err);
+        return layout_fail(out, YVEX_GGUF_LAYOUT_PADDED_OVERLAP,
+                           "tensor starts inside required padding", err);
+    }
+    if (yvex_gguf_layout_sum_checked(out->tensor_data_offset, tensor->relative_offset,
+                                     &raw_absolute) != YVEX_GGUF_LAYOUT_OK ||
+        yvex_gguf_layout_sum_checked(raw_absolute, storage.total_bytes, &raw_absolute_end) !=
+            YVEX_GGUF_LAYOUT_OK ||
+        yvex_gguf_layout_sum_checked(out->tensor_data_offset, padded_end, &padded_absolute) !=
+            YVEX_GGUF_LAYOUT_OK)
+        return layout_fail(out, YVEX_GGUF_LAYOUT_AGGREGATE_OVERFLOW,
+                           "absolute tensor layout arithmetic overflows", err);
+    if (tensor->absolute_offset != raw_absolute || tensor->absolute_end_offset != raw_absolute_end)
+        return layout_fail(out, YVEX_GGUF_LAYOUT_TENSOR_RANGE_MISMATCH,
+                           "parsed tensor absolute range differs from canonical layout", err);
+    if (tensor->absolute_end_offset > out->actual_file_size) {
+        out->failure_absolute_offset = tensor->absolute_end_offset;
+        return layout_fail(out, YVEX_GGUF_LAYOUT_TENSOR_PAYLOAD_TRUNCATED,
+                           "tensor payload interval exceeds the opened file", err);
+    }
+    if (padded_absolute > out->actual_file_size) {
+        out->failure_absolute_offset = tensor->absolute_end_offset;
+        return layout_fail(out, YVEX_GGUF_LAYOUT_PADDING_TRUNCATED,
+                           "required tensor padding exceeds the opened file", err);
+    }
+    if (yvex_gguf_layout_sum_checked(out->raw_tensor_bytes, storage.total_bytes,
+                                     &out->raw_tensor_bytes) != YVEX_GGUF_LAYOUT_OK)
+        return layout_fail(out, YVEX_GGUF_LAYOUT_AGGREGATE_OVERFLOW,
+                           "aggregate raw tensor bytes overflow", err);
+    padding_bytes = padded_end - raw_end;
+    if (index + 1ull < out->tensor_count) {
+        if (yvex_gguf_layout_sum_checked(out->inter_tensor_padding_bytes, padding_bytes,
+                                         &out->inter_tensor_padding_bytes) != YVEX_GGUF_LAYOUT_OK)
+            return layout_fail(out, YVEX_GGUF_LAYOUT_AGGREGATE_OVERFLOW,
+                               "aggregate inter-tensor padding overflows", err);
+    } else {
+        out->final_tensor_padding_bytes = padding_bytes;
+    }
+    status = read_zero_padding(artifact, tensor->absolute_end_offset, padding_bytes,
+                               YVEX_GGUF_LAYOUT_TENSOR_PADDING_NONZERO, out, err);
+    if (status != YVEX_OK)
+        return status;
+    cursor->previous_start = tensor->relative_offset;
+    cursor->previous_raw_end = raw_end;
+    cursor->expected = padded_end;
+    out->tensors_validated++;
+    return YVEX_OK;
+}
+
+/* Purpose: validate the complete canonical directory order and padded file span.
+ * Inputs: matching immutable artifact/view plus writable result and diagnostics.
+ * Effects: performs one linear padding-only pass and two snapshot-drift validations.
+ * Failure: any geometry, range, padding, tail, I/O, or drift violation refuses the whole layout.
+ * Boundary: successful structure admission is not complete-artifact or runtime support. */
+int yvex_gguf_layout_validate(const yvex_artifact *artifact, const yvex_gguf *gguf,
+                              yvex_gguf_layout_result *out, yvex_error *err) {
     const yvex_gguf_reader_stats *stats;
     const yvex_gguf_value *alignment_value;
     unsigned long long alignment_metadata = 0ull;
-    unsigned long long expected = 0ull;
-    unsigned long long previous_start = 0ull;
-    unsigned long long previous_raw_end = 0ull;
+    layout_cursor cursor;
     unsigned long long i;
     int rc;
 
@@ -212,6 +313,7 @@ int yvex_gguf_layout_validate(const yvex_artifact *artifact,
         return YVEX_ERR_INVALID_ARG;
     }
     layout_result_init(out);
+    memset(&cursor, 0, sizeof(cursor));
     if (!artifact || !gguf) {
         return layout_fail(out, YVEX_GGUF_LAYOUT_INVALID_ARGUMENT,
                            "artifact and parsed GGUF view are required", err);
@@ -256,14 +358,14 @@ int yvex_gguf_layout_validate(const yvex_artifact *artifact,
         return layout_fail(out, YVEX_GGUF_LAYOUT_ALIGNMENT_NOT_POWER_OF_TWO,
                            "general.alignment must be a power of two", err);
     }
-    if (!align_up_power_of_two(out->directory_end, out->alignment,
-                               &out->tensor_data_offset)) {
+    if (!align_up_power_of_two(out->directory_end, out->alignment, &out->tensor_data_offset)) {
         return layout_fail(out, YVEX_GGUF_LAYOUT_ALIGNMENT_OVERFLOW,
                            "directory-to-data alignment overflows", err);
     }
     if (out->tensor_data_offset != yvex_gguf_tensor_data_offset(gguf)) {
         return layout_fail(out, YVEX_GGUF_LAYOUT_VIEW_FILE_MISMATCH,
-                           "parsed tensor-data offset is not the canonical aligned directory end", err);
+                           "parsed tensor-data offset is not the canonical aligned directory end",
+                           err);
     }
     out->directory_padding_bytes = out->tensor_data_offset - out->directory_end;
     if (out->tensor_data_offset > out->actual_file_size) {
@@ -271,157 +373,23 @@ int yvex_gguf_layout_validate(const yvex_artifact *artifact,
         return layout_fail(out, YVEX_GGUF_LAYOUT_PADDING_TRUNCATED,
                            "directory-to-data padding is truncated", err);
     }
-    rc = read_zero_padding(artifact, out->directory_end,
-                           out->directory_padding_bytes,
+    rc = read_zero_padding(artifact, out->directory_end, out->directory_padding_bytes,
                            YVEX_GGUF_LAYOUT_DIRECTORY_PADDING_NONZERO, out, err);
-    if (rc != YVEX_OK) return rc;
+    if (rc != YVEX_OK)
+        return rc;
 
     for (i = 0ull; i < out->tensor_count; ++i) {
-        const yvex_gguf_tensor_info *tensor = yvex_gguf_tensor_at(gguf, i);
-        yvex_gguf_qtype_storage_result storage;
-        yvex_gguf_qtype_storage_status storage_status;
-        unsigned long long raw_end;
-        unsigned long long padded_end;
-        unsigned long long raw_absolute;
-        unsigned long long raw_absolute_end;
-        unsigned long long padded_absolute;
-        unsigned long long padding_bytes;
-
-        out->tensor_index = i;
-        if (!tensor) {
-            return layout_fail(out, YVEX_GGUF_LAYOUT_TENSOR_INFO_MISSING,
-                               "parsed tensor directory row is unavailable", err);
-        }
-        layout_copy(out->tensor_name, sizeof(out->tensor_name), tensor->name);
-        out->expected_relative_offset = expected;
-        out->declared_relative_offset = tensor->relative_offset;
-        storage_status = yvex_gguf_qtype_tensor_storage(tensor->ggml_type,
-                                                        tensor->dims,
-                                                        tensor->rank,
-                                                        &storage);
-        if (storage_status != YVEX_GGUF_QTYPE_STORAGE_OK) {
-            return layout_fail(out, YVEX_GGUF_LAYOUT_STORAGE_REFUSED,
-                               storage.reason ? storage.reason : "tensor qtype storage is refused", err);
-        }
-        out->tensor_raw_size = storage.total_bytes;
-        if (tensor->storage_bytes != storage.total_bytes) {
-            return layout_fail(out, YVEX_GGUF_LAYOUT_STORAGE_REFUSED,
-                               "parsed tensor storage differs from canonical qtype geometry", err);
-        }
-        {
-            yvex_gguf_layout_code interval_code =
-                yvex_gguf_layout_interval_measure(tensor->relative_offset,
-                                                  storage.total_bytes,
-                                                  out->alignment,
-                                                  &raw_end,
-                                                  &padded_end);
-            if (interval_code != YVEX_GGUF_LAYOUT_OK) {
-                return layout_fail(out, interval_code,
-                                   interval_code == YVEX_GGUF_LAYOUT_RAW_END_OVERFLOW
-                                       ? "tensor relative raw end overflows"
-                                       : "tensor padded end overflows",
-                                   err);
-            }
-        }
-        out->tensor_raw_end = raw_end;
-        out->tensor_padded_end = padded_end;
-        out->tensor_padded_size = padded_end - tensor->relative_offset;
-
-        if (i == 0ull && tensor->relative_offset != 0ull) {
-            return layout_fail(out, YVEX_GGUF_LAYOUT_FIRST_OFFSET_NOT_ZERO,
-                               "the first tensor must begin at relative offset zero", err);
-        }
-        if (i > 0ull && tensor->relative_offset != expected) {
-            if (tensor->relative_offset > expected) {
-                return layout_fail(out, YVEX_GGUF_LAYOUT_UNEXPECTED_GAP,
-                                   "tensor offset leaves a gap after the previous padded interval", err);
-            }
-            if (tensor->relative_offset == previous_start) {
-                return layout_fail(out, YVEX_GGUF_LAYOUT_DUPLICATE_START,
-                                   "two directory entries declare the same tensor start", err);
-            }
-            if (tensor->relative_offset < previous_start) {
-                return layout_fail(out, YVEX_GGUF_LAYOUT_OFFSET_REVERSED,
-                                   "tensor offset reverses directory order", err);
-            }
-            if (tensor->relative_offset < previous_raw_end) {
-                return layout_fail(out,
-                                   raw_end <= previous_raw_end
-                                       ? YVEX_GGUF_LAYOUT_COMPLETE_OVERLAP
-                                       : YVEX_GGUF_LAYOUT_PARTIAL_OVERLAP,
-                                   raw_end <= previous_raw_end
-                                       ? "tensor interval is contained in the previous tensor payload"
-                                       : "tensor interval partially overlaps the previous tensor payload",
-                                   err);
-            }
-            return layout_fail(out, YVEX_GGUF_LAYOUT_PADDED_OVERLAP,
-                               "tensor starts inside required padding", err);
-        }
-
-        if (yvex_gguf_layout_sum_checked(out->tensor_data_offset,
-                                         tensor->relative_offset,
-                                         &raw_absolute) != YVEX_GGUF_LAYOUT_OK ||
-            yvex_gguf_layout_sum_checked(raw_absolute,
-                                         storage.total_bytes,
-                                         &raw_absolute_end) != YVEX_GGUF_LAYOUT_OK ||
-            yvex_gguf_layout_sum_checked(out->tensor_data_offset,
-                                         padded_end,
-                                         &padded_absolute) != YVEX_GGUF_LAYOUT_OK) {
-            return layout_fail(out, YVEX_GGUF_LAYOUT_AGGREGATE_OVERFLOW,
-                               "absolute tensor layout arithmetic overflows", err);
-        }
-        if (tensor->absolute_offset != raw_absolute ||
-            tensor->absolute_end_offset != raw_absolute_end) {
-            return layout_fail(out, YVEX_GGUF_LAYOUT_TENSOR_RANGE_MISMATCH,
-                               "parsed tensor absolute range differs from canonical layout", err);
-        }
-        if (tensor->absolute_end_offset > out->actual_file_size) {
-            out->failure_absolute_offset = tensor->absolute_end_offset;
-            return layout_fail(out, YVEX_GGUF_LAYOUT_TENSOR_PAYLOAD_TRUNCATED,
-                               "tensor payload interval exceeds the opened file", err);
-        }
-        if (padded_absolute > out->actual_file_size) {
-            out->failure_absolute_offset = tensor->absolute_end_offset;
-            return layout_fail(out, YVEX_GGUF_LAYOUT_PADDING_TRUNCATED,
-                               "required tensor padding exceeds the opened file", err);
-        }
-        if (yvex_gguf_layout_sum_checked(out->raw_tensor_bytes,
-                                         storage.total_bytes,
-                                         &out->raw_tensor_bytes) != YVEX_GGUF_LAYOUT_OK) {
-            return layout_fail(out, YVEX_GGUF_LAYOUT_AGGREGATE_OVERFLOW,
-                               "aggregate raw tensor bytes overflow", err);
-        }
-        padding_bytes = padded_end - raw_end;
-        if (i + 1ull < out->tensor_count) {
-            if (yvex_gguf_layout_sum_checked(out->inter_tensor_padding_bytes,
-                                             padding_bytes,
-                                             &out->inter_tensor_padding_bytes) !=
-                YVEX_GGUF_LAYOUT_OK) {
-                return layout_fail(out, YVEX_GGUF_LAYOUT_AGGREGATE_OVERFLOW,
-                                   "aggregate inter-tensor padding overflows", err);
-            }
-        } else {
-            out->final_tensor_padding_bytes = padding_bytes;
-        }
-        rc = read_zero_padding(artifact, tensor->absolute_end_offset, padding_bytes,
-                               YVEX_GGUF_LAYOUT_TENSOR_PADDING_NONZERO, out, err);
-        if (rc != YVEX_OK) return rc;
-
-        previous_start = tensor->relative_offset;
-        previous_raw_end = raw_end;
-        expected = padded_end;
-        out->tensors_validated += 1ull;
+        rc = layout_validate_tensor(artifact, gguf, i, &cursor, out, err);
+        if (rc != YVEX_OK)
+            return rc;
     }
 
-    out->data_section_span = expected;
-    if (yvex_gguf_layout_sum_checked(out->directory_padding_bytes,
-                                     out->inter_tensor_padding_bytes,
+    out->data_section_span = cursor.expected;
+    if (yvex_gguf_layout_sum_checked(out->directory_padding_bytes, out->inter_tensor_padding_bytes,
                                      &out->total_padding_bytes) != YVEX_GGUF_LAYOUT_OK ||
-        yvex_gguf_layout_sum_checked(out->total_padding_bytes,
-                                     out->final_tensor_padding_bytes,
+        yvex_gguf_layout_sum_checked(out->total_padding_bytes, out->final_tensor_padding_bytes,
                                      &out->total_padding_bytes) != YVEX_GGUF_LAYOUT_OK ||
-        yvex_gguf_layout_sum_checked(out->tensor_data_offset,
-                                     out->data_section_span,
+        yvex_gguf_layout_sum_checked(out->tensor_data_offset, out->data_section_span,
                                      &out->required_file_end) != YVEX_GGUF_LAYOUT_OK) {
         return layout_fail(out, YVEX_GGUF_LAYOUT_AGGREGATE_OVERFLOW,
                            "aggregate GGUF layout span overflows", err);

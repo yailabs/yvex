@@ -1,17 +1,74 @@
-/*
- * models.c - models namespace CLI surface.
- *
- * Owner: src/cli/model_artifacts
+/* Owner: src/cli/model_artifacts
  * Owns: models namespace routing and registry-backed models commands.
  * Does not own: download lifecycle, prepare/check gates, artifact reports, runtime generation, or release claims.
  * Invariants: preserves existing models command syntax; CLI-only and excluded from libyvex.a.
  * Boundary: registry command output is operator CLI surface, not domain ownership.
- */
-#include "models.h"
-#include "src/cli/model_artifacts/artifacts.h"
-#include "src/cli/model_artifacts/download.h"
-#include "src/cli/model_artifacts/prepare.h"
+ * Purpose: provide models namespace routing and registry-backed models commands.
+ * Inputs: typed domain facts, requested output mode, and caller-owned render state.
+ * Effects: formats admitted facts through CLI I/O without changing domain state.
+ * Failure: formatting or I/O refusal cannot alter capability facts. */
+#include "src/cli/model_artifacts/private.h"
 
+#include <yvex/artifact.h>
+
+#include <string.h>
+
+typedef struct {
+    const char *registry_path;
+    const char *path;
+    const char *alias;
+    const char *family;
+    const char *model;
+    const char *scope;
+    const char *artifact_class;
+    const char *qprofile;
+    const char *calibration;
+    const char *sha256;
+    const char *support_level;
+} models_add_options;
+
+static const char *const literal_pair_0[] = {
+    "       yvex models download --repo OWNER/NAME --family deepseek|glm|qwen|gemma [--name LOCAL_NAME] [--"
+        "models-root DIR] [--auth auto|required|never] [--progress auto|live|plain|log|off]",
+    "       yvex models download --provider github --repo OWNER/NAME [--release TAG] --asset GLOB [--"
+        "models-root DIR] [--auth auto|required|never] [--progress auto|live|plain|log|off]"
+};
+
+static const char *const literal_pair_1[] = { "gguf:",
+    "  status: unavailable"};
+
+static const char *const literal_pair_2[] = { "boundary: selected-slice only, full-runtime generation unsupported",
+    "status: models-inspect"};
+
+static const char *const literal_pair_3[] = { "selected: none",
+    "status: models-none"};
+
+static const char *const literal_pair_4[] = { "identity_status: recorded",
+    "status: models-added"};
+
+static const char *const literal_lines_0[] = { "       yvex models use|remove ALIAS [--registry FILE]",
+    "\nExamples:",
+    "  yvex models check deepseek4-v4-flash-selected-embed"};
+
+static const char *const literal_lines_1[] = {
+    "  yvex models check deepseek4-v4-flash-selected-embed --backend cpu --level runtime",
+    "  yvex models check deepseek4-v4-flash-selected-embed --backend cuda --level runtime --no-graph",
+    "  yvex models check deepseek4-v4-flash-selected-embed --level full --report-dir build/reports",
+    "\nModels manages the local alias registry, source tensor download sidecars, GGUF artifact discovery, "
+        "selected artifact preparation, selected artifact checks, digest identity, and metadata drift facts "
+        "for registered artifacts. Download uses the local accounts/provider preflight for Hugging Face and "
+        "GitHub provider CLIs, writes source intake reports only, and does not register runtime artifacts. "
+        "Artifacts list/status reads operator paths, GGUF filenames, and source sidecars only; it does not "
+        "hash files, load tensor payloads, emit GGUF, materialize, execute runtime paths, generate, evaluate, "
+        "or benchmark. Prepare currently supports deepseek4-v4-flash-selected-embed only and does not "
+        "materialize, run graph execution, decode, logits, sampling, generation, evaluation, or benchmarks."
+};
+
+/* Purpose: Parse parse models registry option into typed CLI state (`parse_models_registry_option`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_models_registry_option(int arg_count, char **args, int start, const char **registry_path)
 {
     int i;
@@ -23,7 +80,7 @@ static int parse_models_registry_option(int arg_count, char **args, int start, c
                 return 2;
             }
             *registry_path = args[++i];
-        } else if (strcmp(args[i], "--" "json") == 0) {
+        } else if (strcmp(args[i], "--json") == 0) {
             /* Reserved for future machine-readable output; text output remains canonical. */
         } else {
             yvex_cli_out_writef(stderr, "yvex: unknown models option: %s\n", args[i]);
@@ -33,6 +90,11 @@ static int parse_models_registry_option(int arg_count, char **args, int start, c
     return 0;
 }
 
+/* Purpose: Parse parse models registry output options into typed CLI state (`parse_models_registry_output_options`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_models_registry_output_options(int arg_count,
                                                 char **args,
                                                 int start,
@@ -51,19 +113,20 @@ static int parse_models_registry_output_options(int arg_count,
                 return 2;
             }
             *registry_path = args[++i];
-        } else if (strcmp(args[i], "--" "audit") == 0) {
+        } else if (strcmp(args[i], "--audit") == 0) {
             if (output_mode) *output_mode = YVEX_MODELS_OUTPUT_AUDIT;
-        } else if (strcmp(args[i], "--" "output") == 0) {
+        } else if (strcmp(args[i], "--output") == 0) {
             if (i + 1 >= arg_count) {
-                yvex_cli_out_writef(stderr, "yvex: models --" "output requires normal|table|audit\n");
+                yvex_cli_out_writef(stderr, "yvex: models --output requires normal|table|audit\n");
                 return 2;
             }
             if (!output_mode || !parse_models_output_mode(args[++i], output_mode)) {
                 yvex_cli_out_writef(stderr, "yvex: models unsupported output mode: %s\n", args[i]);
                 return 2;
             }
-        } else if (strcmp(args[i], "--" "json") == 0) {
-            yvex_cli_out_writef(stderr, "yvex: models JSON output is unsupported; use --" "output normal|table|audit\n");
+        } else if (strcmp(args[i], "--json") == 0) {
+            yvex_cli_out_writef(stderr,
+                "yvex: models JSON output is unsupported; use --output normal|table|audit\n");
             return 2;
         } else {
             yvex_cli_out_writef(stderr, "yvex: unknown models option: %s\n", args[i]);
@@ -73,8 +136,13 @@ static int parse_models_registry_output_options(int arg_count,
     return 0;
 }
 
+/* Purpose: Parse parse models add options into typed CLI state (`parse_models_add_options`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_models_add_options(int arg_count, char **args,
-                                    yvex_cli_models_add_options *options)
+                                    models_add_options *options)
 {
     int i;
 
@@ -105,6 +173,11 @@ static int parse_models_add_options(int arg_count, char **args,
 
 /* Registry-backed models subcommands. */
 
+/* Purpose: Orchestrate the typed command models scan request (`command_models_scan`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_models_scan(int arg_count, char **args)
 {
     yvex_model_registry_entry *entries = NULL;
@@ -129,7 +202,7 @@ static int command_models_scan(int arg_count, char **args)
                 return 2;
             }
             registry_path = args[++i];
-        } else if (strcmp(args[i], "--" "json") == 0) {
+        } else if (strcmp(args[i], "--json") == 0) {
             /* Reserved for model selection work compatibility; text output remains canonical. */
         } else {
             yvex_cli_out_writef(stderr, "yvex: unknown models scan option: %s\n", args[i]);
@@ -155,9 +228,14 @@ static int command_models_scan(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command models add request (`command_models_add`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_models_add(int arg_count, char **args)
 {
-    yvex_cli_models_add_options cli_options;
+    models_add_options cli_options;
     yvex_model_registry *registry = NULL;
     yvex_model_registry_entry derived;
     yvex_model_registry_entry entry;
@@ -201,7 +279,9 @@ static int command_models_add(int arg_count, char **args)
     entry.family = cli_options.family ? cli_options.family : (have_derived ? derived.family : "");
     entry.model = cli_options.model ? cli_options.model : (have_derived ? derived.model : "");
     entry.scope = cli_options.scope ? cli_options.scope : (have_derived ? derived.scope : "");
-    entry.artifact_class = cli_options.artifact_class ? cli_options.artifact_class : (have_derived ? derived.artifact_class : "");
+    entry.artifact_class = cli_options.artifact_class
+        ? cli_options.artifact_class
+        : (have_derived ? derived.artifact_class : "");
     entry.qprofile = cli_options.qprofile ? cli_options.qprofile : (have_derived ? derived.qprofile : "");
     entry.calibration = cli_options.calibration ? cli_options.calibration : (have_derived ? derived.calibration : "");
     entry.producer = have_derived ? derived.producer : "yvex";
@@ -279,12 +359,16 @@ static int command_models_add(int arg_count, char **args)
            entry.selected_embedding_output_count);
     yvex_cli_out_writef(stdout, "registered_selected_embedding_slice_bytes: %llu\n",
            entry.selected_embedding_slice_bytes);
-    yvex_cli_out_writef(stdout, "identity_status: recorded\n");
-    yvex_cli_out_writef(stdout, "status: models-added\n");
+    yvex_cli_out_lines(stdout, literal_pair_4, sizeof(literal_pair_4) / sizeof(literal_pair_4[0]));
     yvex_model_registry_close(registry);
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command models list request (`command_models_list`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_models_list(int arg_count, char **args)
 {
     yvex_model_registry *registry = NULL;
@@ -339,6 +423,11 @@ static int command_models_list(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command models use request (`command_models_use`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_models_use(int arg_count, char **args)
 {
     yvex_model_registry *registry = NULL;
@@ -369,6 +458,11 @@ static int command_models_use(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command models current request (`command_models_current`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_models_current(int arg_count, char **args)
 {
     yvex_model_registry *registry = NULL;
@@ -391,30 +485,35 @@ static int command_models_current(int arg_count, char **args)
             yvex_cli_out_writef(stdout, "path: %s\n", selected->path);
             yvex_cli_out_writef(stdout, "execution_ready: %s\n", selected->execution_ready ? "true" : "false");
             yvex_cli_out_writef(stdout, "status: models-current\n");
-            yvex_cli_out_writef(stdout, "hint: use --" "audit for registered digest and tensor fields\n");
+            yvex_cli_out_writef(stdout, "hint: use --audit for registered digest and tensor fields\n");
             yvex_model_registry_close(registry);
             return 0;
         }
         yvex_cli_out_writef(stdout, "selected: %s\n", selected->alias);
         yvex_cli_out_writef(stdout, "path: %s\n", selected->path);
         yvex_cli_out_writef(stdout, "registered_file_size: %llu\n", selected->file_size);
-        yvex_cli_out_writef(stdout, "registered_sha256: %s\n", selected->sha256 && selected->sha256[0] ? selected->sha256 : "absent");
+        yvex_cli_out_writef(stdout, "registered_sha256: %s\n",
+            selected->sha256 && selected->sha256[0] ? selected->sha256 : "absent");
         yvex_cli_out_writef(stdout, "registered_format: %s\n", selected->format ? selected->format : "");
-        yvex_cli_out_writef(stdout, "registered_architecture: %s\n", selected->architecture ? selected->architecture : "");
+        yvex_cli_out_writef(stdout, "registered_architecture: %s\n",
+            selected->architecture ? selected->architecture : "");
         yvex_cli_out_writef(stdout, "registered_tensor_count: %llu\n", selected->tensor_count);
         yvex_cli_out_writef(stdout, "registered_known_tensor_bytes: %llu\n", selected->known_tensor_bytes);
-        yvex_cli_out_writef(stdout, "registered_primary_tensor: %s\n", selected->primary_tensor_name ? selected->primary_tensor_name : "");
-        yvex_cli_out_writef(stdout, "registered_primary_role: %s\n", selected->primary_tensor_role ? selected->primary_tensor_role : "");
-        yvex_cli_out_writef(stdout, "registered_primary_dtype: %s\n", selected->primary_tensor_dtype ? selected->primary_tensor_dtype : "");
+        yvex_cli_out_writef(stdout, "registered_primary_tensor: %s\n",
+            selected->primary_tensor_name ? selected->primary_tensor_name : "");
+        yvex_cli_out_writef(stdout, "registered_primary_role: %s\n",
+            selected->primary_tensor_role ? selected->primary_tensor_role : "");
+        yvex_cli_out_writef(stdout, "registered_primary_dtype: %s\n",
+            selected->primary_tensor_dtype ? selected->primary_tensor_dtype : "");
         yvex_cli_out_writef(stdout, "registered_primary_rank: %u\n", selected->primary_tensor_rank);
-        yvex_cli_out_writef(stdout, "registered_primary_dims: %s\n", selected->primary_tensor_dims ? selected->primary_tensor_dims : "");
+        yvex_cli_out_writef(stdout, "registered_primary_dims: %s\n",
+            selected->primary_tensor_dims ? selected->primary_tensor_dims : "");
         yvex_cli_out_writef(stdout, "metadata_status: %s\n",
                selected->primary_tensor_name && selected->primary_tensor_name[0] ? "recorded" : "missing");
         yvex_cli_out_writef(stdout, "execution_ready: %s\n", selected->execution_ready ? "true" : "false");
         yvex_cli_out_writef(stdout, "status: models-current\n");
     } else {
-        yvex_cli_out_writef(stdout, "selected: none\n");
-        yvex_cli_out_writef(stdout, "status: models-none\n");
+        yvex_cli_out_lines(stdout, literal_pair_3, sizeof(literal_pair_3) / sizeof(literal_pair_3[0]));
         if (output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
             yvex_cli_out_writef(stdout, "hint: use 'yvex models use ALIAS' to select a model\n");
         }
@@ -423,6 +522,11 @@ static int command_models_current(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Validate command models verify before downstream use (`command_models_verify`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_models_verify(int arg_count, char **args)
 {
     yvex_model_registry *registry = NULL;
@@ -543,7 +647,8 @@ static int command_models_verify(int arg_count, char **args)
         yvex_cli_out_writef(stdout, "models: verify\n");
         yvex_cli_out_writef(stdout, "alias: %s\n", entry->alias);
         yvex_cli_out_writef(stdout, "path: %s\n", entry->path);
-        yvex_cli_out_writef(stdout, "registered_sha256: %s\n", entry->sha256 && entry->sha256[0] ? entry->sha256 : "absent");
+        yvex_cli_out_writef(stdout, "registered_sha256: %s\n",
+            entry->sha256 && entry->sha256[0] ? entry->sha256 : "absent");
         yvex_cli_out_writef(stdout, "current_sha256: %s\n", identity.sha256[0] ? identity.sha256 : "unavailable");
         yvex_cli_out_writef(stdout, "registered_file_size: %llu\n", entry->file_size);
         yvex_cli_out_writef(stdout, "current_file_size: %llu\n", identity.file_size);
@@ -561,19 +666,23 @@ static int command_models_verify(int arg_count, char **args)
         yvex_cli_out_writef(stdout, "registered_known_tensor_bytes: %llu\n", entry->known_tensor_bytes);
         yvex_cli_out_writef(stdout, "current_known_tensor_bytes: %llu\n",
                metadata_checked ? current_metadata.entry.known_tensor_bytes : 0ull);
-        yvex_cli_out_writef(stdout, "registered_primary_tensor: %s\n", entry->primary_tensor_name ? entry->primary_tensor_name : "");
+        yvex_cli_out_writef(stdout, "registered_primary_tensor: %s\n",
+            entry->primary_tensor_name ? entry->primary_tensor_name : "");
         yvex_cli_out_writef(stdout, "current_primary_tensor: %s\n",
                metadata_checked ? current_metadata.entry.primary_tensor_name : "not-checked");
-        yvex_cli_out_writef(stdout, "registered_primary_role: %s\n", entry->primary_tensor_role ? entry->primary_tensor_role : "");
+        yvex_cli_out_writef(stdout, "registered_primary_role: %s\n",
+            entry->primary_tensor_role ? entry->primary_tensor_role : "");
         yvex_cli_out_writef(stdout, "current_primary_role: %s\n",
                metadata_checked ? current_metadata.entry.primary_tensor_role : "not-checked");
-        yvex_cli_out_writef(stdout, "registered_primary_dtype: %s\n", entry->primary_tensor_dtype ? entry->primary_tensor_dtype : "");
+        yvex_cli_out_writef(stdout, "registered_primary_dtype: %s\n",
+            entry->primary_tensor_dtype ? entry->primary_tensor_dtype : "");
         yvex_cli_out_writef(stdout, "current_primary_dtype: %s\n",
                metadata_checked ? current_metadata.entry.primary_tensor_dtype : "not-checked");
         yvex_cli_out_writef(stdout, "registered_primary_rank: %u\n", entry->primary_tensor_rank);
         yvex_cli_out_writef(stdout, "current_primary_rank: %u\n",
                metadata_checked ? current_metadata.entry.primary_tensor_rank : 0u);
-        yvex_cli_out_writef(stdout, "registered_primary_dims: %s\n", entry->primary_tensor_dims ? entry->primary_tensor_dims : "");
+        yvex_cli_out_writef(stdout, "registered_primary_dims: %s\n",
+            entry->primary_tensor_dims ? entry->primary_tensor_dims : "");
         yvex_cli_out_writef(stdout, "current_primary_dims: %s\n",
                metadata_checked ? current_metadata.entry.primary_tensor_dims : "not-checked");
         yvex_cli_out_writef(stdout, "registered_primary_bytes: %llu\n", entry->primary_tensor_bytes);
@@ -612,6 +721,11 @@ static int command_models_verify(int arg_count, char **args)
     return pass ? 0 : exit_for_status(YVEX_ERR_STATE);
 }
 
+/* Purpose: Orchestrate the typed command models remove request (`command_models_remove`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_models_remove(int arg_count, char **args)
 {
     yvex_model_registry *registry = NULL;
@@ -642,6 +756,11 @@ static int command_models_remove(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command models inspect request (`command_models_inspect`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_models_inspect(int arg_count, char **args)
 {
     yvex_model_registry *registry = NULL;
@@ -675,7 +794,9 @@ static int command_models_inspect(int arg_count, char **args)
             strcmp(entry->alias, "deepseek4-v4-flash-selected-embed") == 0 ||
             strcmp(entry->alias, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0;
         const char *display_family = selected_slice ? "deepseek" : (entry->family ? entry->family : "");
-        const char *display_class = selected_slice ? "selected-slice" : (entry->artifact_class ? entry->artifact_class : "");
+        const char *display_class = selected_slice
+            ? "selected-slice"
+            : (entry->artifact_class ? entry->artifact_class : "");
         yvex_cli_out_writef(stdout, "model: %s\n", entry->alias);
         yvex_cli_out_writef(stdout, "family: %s class=%s tensors=%llu size=%llu\n",
                display_family,
@@ -689,8 +810,7 @@ static int command_models_inspect(int arg_count, char **args)
         yvex_cli_out_writef(stdout, "state: %s execution_ready=%s\n",
                entry->support_level ? entry->support_level : "",
                entry->execution_ready ? "true" : "false");
-        yvex_cli_out_writef(stdout, "boundary: selected-slice only, full-runtime generation unsupported\n");
-        yvex_cli_out_writef(stdout, "status: models-inspect\n");
+        yvex_cli_out_lines(stdout, literal_pair_2, sizeof(literal_pair_2) / sizeof(literal_pair_2[0]));
         yvex_model_registry_close(registry);
         return 0;
     }
@@ -705,16 +825,21 @@ static int command_models_inspect(int arg_count, char **args)
     yvex_cli_out_writef(stdout, "calibration: %s\n", entry->calibration);
     yvex_cli_out_writef(stdout, "support_level: %s\n", entry->support_level);
     yvex_cli_out_writef(stdout, "registered_file_size: %llu\n", entry->file_size);
-    yvex_cli_out_writef(stdout, "registered_sha256: %s\n", entry->sha256 && entry->sha256[0] ? entry->sha256 : "absent");
+    yvex_cli_out_writef(stdout, "registered_sha256: %s\n",
+        entry->sha256 && entry->sha256[0] ? entry->sha256 : "absent");
     yvex_cli_out_writef(stdout, "registered_format: %s\n", entry->format ? entry->format : "");
     yvex_cli_out_writef(stdout, "registered_architecture: %s\n", entry->architecture ? entry->architecture : "");
     yvex_cli_out_writef(stdout, "registered_tensor_count: %llu\n", entry->tensor_count);
     yvex_cli_out_writef(stdout, "registered_known_tensor_bytes: %llu\n", entry->known_tensor_bytes);
-    yvex_cli_out_writef(stdout, "primary_tensor_name: %s\n", entry->primary_tensor_name ? entry->primary_tensor_name : "");
-    yvex_cli_out_writef(stdout, "primary_tensor_role: %s\n", entry->primary_tensor_role ? entry->primary_tensor_role : "");
-    yvex_cli_out_writef(stdout, "primary_tensor_dtype: %s\n", entry->primary_tensor_dtype ? entry->primary_tensor_dtype : "");
+    yvex_cli_out_writef(stdout, "primary_tensor_name: %s\n",
+        entry->primary_tensor_name ? entry->primary_tensor_name : "");
+    yvex_cli_out_writef(stdout, "primary_tensor_role: %s\n",
+        entry->primary_tensor_role ? entry->primary_tensor_role : "");
+    yvex_cli_out_writef(stdout, "primary_tensor_dtype: %s\n",
+        entry->primary_tensor_dtype ? entry->primary_tensor_dtype : "");
     yvex_cli_out_writef(stdout, "primary_tensor_rank: %u\n", entry->primary_tensor_rank);
-    yvex_cli_out_writef(stdout, "primary_tensor_dims: %s\n", entry->primary_tensor_dims ? entry->primary_tensor_dims : "");
+    yvex_cli_out_writef(stdout, "primary_tensor_dims: %s\n",
+        entry->primary_tensor_dims ? entry->primary_tensor_dims : "");
     yvex_cli_out_writef(stdout, "primary_tensor_bytes: %llu\n", entry->primary_tensor_bytes);
     yvex_cli_out_writef(stdout, "selected_embedding_ready: %s\n", entry->selected_embedding_ready ? "true" : "false");
     yvex_cli_out_writef(stdout, "selected_embedding_hidden_size: %llu\n", entry->selected_embedding_hidden_size);
@@ -730,8 +855,7 @@ static int command_models_inspect(int arg_count, char **args)
         yvex_cli_out_writef(stdout, "  tensor_count: %llu\n", header->tensor_count);
         yvex_model_context_close(&ctx);
     } else {
-        yvex_cli_out_writef(stdout, "gguf:\n");
-        yvex_cli_out_writef(stdout, "  status: unavailable\n");
+        yvex_cli_out_lines(stdout, literal_pair_1, sizeof(literal_pair_1) / sizeof(literal_pair_1[0]));
         yvex_cli_out_writef(stdout, "  reason: %s\n", yvex_error_message(&err));
         yvex_error_clear(&err);
     }
@@ -764,6 +888,11 @@ static const yvex_models_subcommand model_subcommands[] = {
     { "remove", command_models_remove }
 };
 
+/* Purpose: Dispatch one models subcommand without owning registry or artifact policy.
+ * Inputs: Borrowed argv words after top-level CLI selection.
+ * Effects: Invokes one typed command adapter and writes only through CLI I/O.
+ * Failure: Returns usage or selected-command status; caller-owned argv is unchanged.
+ * Boundary: Dispatch cannot promote model, artifact, or runtime capability. */
 static int command_models(int arg_count, char **args)
 {
     unsigned long i;
@@ -773,7 +902,9 @@ static int command_models(int arg_count, char **args)
         return 0;
     }
     if (arg_count < 3) {
-        yvex_cli_out_writef(stderr, "yvex: models requires scan, add, download, artifacts, prepare, check, list, use, current, verify, inspect, or remove\n");
+        yvex_cli_out_writef(stderr,
+            "yvex: models requires scan, add, download, artifacts, prepare, check, list, use, current, "
+                "verify, inspect, or remove\n");
         return 2;
     }
     for (i = 0; i < sizeof(model_subcommands) / sizeof(model_subcommands[0]); ++i) {
@@ -785,46 +916,84 @@ static int command_models(int arg_count, char **args)
     return 2;
 }
 
+/* Purpose: Orchestrate the typed model artifacts surface models command request
+ * (`yvex_model_artifacts_surface_models_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_model_artifacts_surface_models_command(int arg_count, char **args)
 {
     return command_models(arg_count, args);
 }
 
+/* Purpose: Render model artifacts surface models help from typed facts (`yvex_model_artifacts_surface_models_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_model_artifacts_surface_models_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex models scan --root DIR [--registry FILE]\n");
-    yvex_cli_out_writef(fp, "       yvex models add --path FILE [--alias ALIAS] [--support-level LEVEL] [--registry FILE]\n");
-    yvex_cli_out_writef(fp, "       yvex models download TARGET [--models-root DIR] [--auth auto|required|never] [--dry-run] [--progress auto|live|plain|log|off] [--tick-seconds N] [--no-progress] [--" "audit | --" "output normal|table|audit]\n");
-    yvex_cli_out_writef(fp, "       yvex models download status TARGET [--models-root DIR] [--" "audit | --" "output normal|table|audit]\n");
-    yvex_cli_out_writef(fp, "       yvex models download stop TARGET [--models-root DIR] [--force] [--timeout-seconds N] [--match-provider-process] [--dry-run] [--" "audit]\n");
-    yvex_cli_out_writef(fp, "       yvex models download resume TARGET [--models-root DIR] [--auth auto|required|never] [--progress auto|live|plain|log|off] [--tick-seconds N] [--clear-stale-locks] [--" "audit]\n");
-    yvex_cli_out_writef(fp, "       yvex models download cleanup TARGET [--models-root DIR] [--stale-locks] [--logs] [--receipts] [--failed-partials] [--all-provider-cache] [--dry-run] [--yes] [--" "audit]\n");
-    yvex_cli_out_writef(fp, "       yvex models download --repo OWNER/NAME --family deepseek|glm|qwen|gemma [--name LOCAL_NAME] [--models-root DIR] [--auth auto|required|never] [--progress auto|live|plain|log|off]\n");
-    yvex_cli_out_writef(fp, "       yvex models download --provider github --repo OWNER/NAME [--release TAG] --asset GLOB [--models-root DIR] [--auth auto|required|never] [--progress auto|live|plain|log|off]\n");
-    yvex_cli_out_writef(fp, "       yvex models artifacts list [--models-root DIR] [--family deepseek|glm|qwen|gemma] [--" "output normal|table|audit|json]\n");
-    yvex_cli_out_writef(fp, "       yvex models artifacts status TARGET [--models-root DIR] [--" "audit | --" "output normal|table|audit|json]\n");
-    yvex_cli_out_writef(fp, "       yvex models prepare TARGET [--overwrite] [--source DIR] [--out FILE | --out-dir DIR] [--models-root DIR] [--registry FILE] [--dry-run] [--no-register] [--no-use] [--" "audit | --" "output normal|table|audit]\n");
-    yvex_cli_out_writef(fp, "       yvex models check TARGET [--backend cpu|cuda] [--level quick|runtime|full] [--models-root DIR] [--registry FILE] [--report-dir DIR] [--no-materialize] [--no-graph] [--" "audit | --" "output normal|table|audit]\n");
-    yvex_cli_out_writef(fp, "       yvex models list|current [--registry FILE] [--" "audit | --" "output normal|table|audit]\n");
-    yvex_cli_out_writef(fp, "       yvex models verify|inspect ALIAS [--registry FILE] [--" "audit | --" "output normal|table|audit]\n");
-    yvex_cli_out_writef(fp, "       yvex models use|remove ALIAS [--registry FILE]\n");
-    yvex_cli_out_writef(fp, "\nExamples:\n");
-    yvex_cli_out_writef(fp, "  yvex models check deepseek4-v4-flash-selected-embed\n");
-    yvex_cli_out_writef(fp, "  yvex models download gemma-4-12b-it --models-root ~/lab/models --dry-run --" "audit\n");
-    yvex_cli_out_writef(fp, "  yvex models download status gemma-4-12b-it --models-root ~/lab/models --" "audit\n");
-    yvex_cli_out_writef(fp, "  yvex models download stop gemma-4-12b-it --models-root ~/lab/models --" "audit\n");
-    yvex_cli_out_writef(fp, "  yvex models download resume gemma-4-12b-it --models-root ~/lab/models --auth required --progress live --tick-seconds 2 --" "audit\n");
-    yvex_cli_out_writef(fp, "  yvex models download cleanup gemma-4-12b-it --models-root ~/lab/models --stale-locks --dry-run --" "audit\n");
-    yvex_cli_out_writef(fp, "  yvex models download gemma-4-12b-it --models-root ~/lab/models --auth required --progress live --tick-seconds 2 --" "audit\n");
-    yvex_cli_out_writef(fp, "  yvex models download qwen3-8b --models-root ~/lab/models --auth auto --" "audit\n");
+    yvex_cli_out_writef(fp, "usage: yvex models scan --root DIR [--registry FILE]\n");
+    yvex_cli_out_writef(fp,
+        "       yvex models add --path FILE [--alias ALIAS] [--support-level LEVEL] [--registry FILE]\n");
+    yvex_cli_out_writef(fp,
+        "       yvex models download TARGET [--models-root DIR] [--auth auto|required|never] [--dry-run] [-"
+            "-progress auto|live|plain|log|off] [--tick-seconds N] [--no-progress] [--audit | --output normal|"
+            "table|audit]\n");
+    yvex_cli_out_writef(fp,
+        "       yvex models download status TARGET [--models-root DIR] [--audit | --output normal|table|audit]\n");
+    yvex_cli_out_writef(fp,
+        "       yvex models download stop TARGET [--models-root DIR] [--force] [--timeout-seconds N] [--"
+            "match-provider-process] [--dry-run] [--audit]\n");
+    yvex_cli_out_writef(fp,
+        "       yvex models download resume TARGET [--models-root DIR] [--auth auto|required|never] [--"
+            "progress auto|live|plain|log|off] [--tick-seconds N] [--clear-stale-locks] [--audit]\n");
+    yvex_cli_out_writef(fp,
+        "       yvex models download cleanup TARGET [--models-root DIR] [--stale-locks] [--logs] [--"
+            "receipts] [--failed-partials] [--all-provider-cache] [--dry-run] [--yes] [--audit]\n");
+    yvex_cli_out_lines(fp, literal_pair_0, sizeof(literal_pair_0) / sizeof(literal_pair_0[0]));
+    yvex_cli_out_writef(fp,
+        "       yvex models artifacts list [--models-root DIR] [--family deepseek|glm|qwen|gemma] [--"
+            "output normal|table|audit|json]\n");
+    yvex_cli_out_writef(fp,
+        "       yvex models artifacts status TARGET [--models-root DIR] [--audit | --output normal|table|"
+            "audit|json]\n");
+    yvex_cli_out_writef(fp,
+        "       yvex models prepare TARGET [--overwrite] [--source DIR] [--out FILE | --out-dir DIR] [--"
+            "models-root DIR] [--registry FILE] [--dry-run] [--no-register] [--no-use] [--audit | --output "
+            "normal|table|audit]\n");
+    yvex_cli_out_writef(fp,
+        "       yvex models check TARGET [--backend cpu|cuda] [--level quick|runtime|full] [--models-root "
+            "DIR] [--registry FILE] [--report-dir DIR] [--no-materialize] [--no-graph] [--audit | --output "
+            "normal|table|audit]\n");
+    yvex_cli_out_writef(fp,
+        "       yvex models list|current [--registry FILE] [--audit | --output normal|table|audit]\n");
+    yvex_cli_out_writef(fp,
+        "       yvex models verify|inspect ALIAS [--registry FILE] [--audit | --output normal|table|audit]\n");
+    yvex_cli_out_lines(fp, literal_lines_0, sizeof(literal_lines_0) / sizeof(literal_lines_0[0]));
+    yvex_cli_out_writef(fp, "  yvex models download gemma-4-12b-it --models-root ~/lab/models --dry-run --audit\n");
+    yvex_cli_out_writef(fp, "  yvex models download status gemma-4-12b-it --models-root ~/lab/models --audit\n");
+    yvex_cli_out_writef(fp, "  yvex models download stop gemma-4-12b-it --models-root ~/lab/models --audit\n");
+    yvex_cli_out_writef(fp,
+        "  yvex models download resume gemma-4-12b-it --models-root ~/lab/models --auth required --"
+            "progress live --tick-seconds 2 --audit\n");
+    yvex_cli_out_writef(fp,
+        "  yvex models download cleanup gemma-4-12b-it --models-root ~/lab/models --stale-locks --dry-run --audit\n");
+    yvex_cli_out_writef(fp,
+        "  yvex models download gemma-4-12b-it --models-root ~/lab/models --auth required --progress live -"
+            "-tick-seconds 2 --audit\n");
+    yvex_cli_out_writef(fp, "  yvex models download qwen3-8b --models-root ~/lab/models --auth auto --audit\n");
     yvex_cli_out_writef(fp, "  yvex models download status qwen3-32b --models-root ~/lab/models\n");
-    yvex_cli_out_writef(fp, "  yvex models artifacts list --models-root ~/lab/models --" "output table\n");
-    yvex_cli_out_writef(fp, "  yvex models artifacts status qwen3-6-35b-a3b --models-root ~/lab/models --" "audit\n");
-    yvex_cli_out_writef(fp, "  yvex models download --provider github --repo OWNER/REPO --release TAG --asset \"*.gguf\" --models-root ~/lab/models --auth auto --" "audit\n");
-    yvex_cli_out_writef(fp, "  yvex models check deepseek4-v4-flash-selected-embed --backend cpu --level runtime\n");
-    yvex_cli_out_writef(fp, "  yvex models check deepseek4-v4-flash-selected-embed --backend cuda --level runtime --no-graph\n");
-    yvex_cli_out_writef(fp, "  yvex models check deepseek4-v4-flash-selected-embed --level full --report-dir build/reports\n");
-    yvex_cli_out_writef(fp, "\nModels manages the local alias registry, source tensor download sidecars, GGUF artifact discovery, selected artifact preparation, selected artifact checks, digest identity, and metadata drift facts for registered artifacts. Download uses the local accounts/provider preflight for Hugging Face and GitHub provider CLIs, writes source intake reports only, and does not register runtime artifacts. Artifacts list/status reads operator paths, GGUF filenames, and source sidecars only; it does not hash files, load tensor payloads, emit GGUF, materialize, execute runtime paths, generate, evaluate, or benchmark. Prepare currently supports deepseek4-v4-flash-selected-embed only and does not materialize, run graph execution, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
-    yvex_cli_out_writef(fp, "Default report output is compact. Use --" "audit for full diagnostic fields.\n");
-    yvex_cli_out_writef(fp, "Check composes implemented artifact, identity, integrity, selected materialization, engine/session, plan, selected graph, and selected gates only; it does not create artifacts, run source conversion, run prefill, decode, produce logits, sample, generate, evaluate, or benchmark.\n");
+    yvex_cli_out_writef(fp, "  yvex models artifacts list --models-root ~/lab/models --output table\n");
+    yvex_cli_out_writef(fp, "  yvex models artifacts status qwen3-6-35b-a3b --models-root ~/lab/models --audit\n");
+    yvex_cli_out_writef(fp,
+        "  yvex models download --provider github --repo OWNER/REPO --release TAG --asset \"*.gguf\" --"
+            "models-root ~/lab/models --auth auto --audit\n");
+    yvex_cli_out_lines(fp, literal_lines_1, sizeof(literal_lines_1) / sizeof(literal_lines_1[0]));
+    yvex_cli_out_writef(fp, "Default report output is compact. Use --audit for full diagnostic fields.\n");
+    yvex_cli_out_writef(fp,
+        "Check composes implemented artifact, identity, integrity, selected materialization, engine/"
+            "session, plan, selected graph, and selected gates only; it does not create artifacts, run source "
+            "conversion, run prefill, decode, produce logits, sample, generate, evaluate, or benchmark.\n");
 }

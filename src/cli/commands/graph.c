@@ -1,52 +1,26 @@
-/*
- * graph.c - graph command adapter.
- *
- * Owner:
- *   src/cli/commands
- *
- * Owns:
- *   graph command dispatch from typed input parser to report builder and
- *   renderer.
- *
- * Does not own:
- *   graph construction, memory planning, backend probing, primitive execution,
- *   guard facts, report construction, rendering internals, generation, eval,
- *   benchmark, or release decisions.
- *
- * Invariants:
- *   adapter stays thin: parse input, call one graph report API, render a typed
- *   report, and return an exit code.
- *
- * Boundary:
- *   command dispatch is not graph runtime support.
- */
-#include "src/cli/input/graph.h"
-#include "src/cli/render/graph.h"
-#include "src/cli/io/out.h"
+/* Owner: src/cli/commands
+ * Owns: graph command dispatch from typed input parser to report builder and renderer.
+ * Does not own: graph construction, memory planning, backend probing, primitive execution, guard facts, report
+ *   construction, rendering internals, generation, eval, benchmark, or release decisions.
+ * Invariants: adapter stays thin: parse input, call one graph report API, render a typed report, and return an exit
+ *   code.
+ * Boundary: command dispatch is not graph runtime support.
+ * Purpose: provide graph command dispatch from typed input parser to report builder and renderer.
+ * Inputs: typed command arguments and borrowed domain APIs.
+ * Effects: dispatches domain calls and routes operator bytes only through CLI I/O.
+ * Failure: returns a stable CLI status while preserving domain ownership. */
+#include "src/cli/input/private.h"
+#include "src/cli/render/private.h"
+#include "src/cli/io/private.h"
 
 #include <stdio.h>
 #include <string.h>
 
-static int graph_cli_exit_for_status(int status)
-{
-    switch (status) {
-    case YVEX_OK:
-        return 0;
-    case YVEX_ERR_INVALID_ARG:
-        return 2;
-    case YVEX_ERR_IO:
-    case YVEX_ERR_NOMEM:
-        return 3;
-    case YVEX_ERR_FORMAT:
-    case YVEX_ERR_BOUNDS:
-        return 4;
-    case YVEX_ERR_UNSUPPORTED:
-        return 5;
-    default:
-        return 1;
-    }
-}
-
+/* Purpose: Parse graph print parse error into typed CLI state (`graph_cli_print_parse_error`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int graph_cli_print_parse_error(const yvex_error *err)
 {
     yvex_cli_out_writef(yvex_cli_out_stderr(), "%s\n",
@@ -54,6 +28,7 @@ static int graph_cli_print_parse_error(const yvex_error *err)
     return 2;
 }
 
+/* Purpose: Render graph print runtime error from typed facts (`graph_cli_print_runtime_error`). */
 static int graph_cli_print_runtime_error(const yvex_error *err, int exit_code)
 {
     yvex_cli_out_writef(yvex_cli_out_stderr(), "yvex: %s: %s\n",
@@ -62,6 +37,11 @@ static int graph_cli_print_runtime_error(const yvex_error *err, int exit_code)
     return exit_code;
 }
 
+/* Purpose: Construct the owned graph build report state (`graph_cli_build_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int graph_cli_build_report(const yvex_graph_report_request *request,
                                   yvex_graph_report *report,
                                   yvex_error *err)
@@ -81,6 +61,11 @@ static int graph_cli_build_report(const yvex_graph_report_request *request,
     return yvex_graph_report_build(request, report, err);
 }
 
+/* Purpose: Orchestrate the typed graph command request (`yvex_graph_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_graph_command(int argc, char **argv)
 {
     yvex_graph_args args;
@@ -105,7 +90,7 @@ int yvex_graph_command(int argc, char **argv)
     if (rc != YVEX_OK) {
         int exit_code = report.exit_code
                             ? report.exit_code
-                            : graph_cli_exit_for_status(rc);
+                            : exit_for_status(rc);
         if (report.body) {
             (void)yvex_graph_render(yvex_cli_out_stdout(),
                                     args.render_mode,
@@ -123,6 +108,11 @@ int yvex_graph_command(int argc, char **argv)
     return rc;
 }
 
+/* Purpose: Render graph help from typed facts (`yvex_graph_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_graph_help(FILE *fp)
 {
     (void)yvex_graph_render_help(fp);

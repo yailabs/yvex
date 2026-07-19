@@ -12,18 +12,14 @@
  */
 #include "tests/test.h"
 
-#include "src/artifact/roundtrip_gate.h"
-#include "src/gguf/file_sink.h"
-#include "src/gguf/roundtrip.h"
-#include "src/gguf/writer.h"
-#include "src/gguf/quant_sink.h"
-#include "src/gguf/quant_plan.h"
-#include "src/model/compilation/binding.h"
-#include "src/model/compilation/ir.h"
-#include "src/model/artifacts/gate.h"
-#include "src/model/artifacts/report.h"
-#include "src/model/target/catalog.h"
-#include "src/source/private.h"
+#include <yvex/internal/artifact.h>
+#include <yvex/internal/gguf_writer.h>
+#include <yvex/internal/gguf.h>
+#include <yvex/internal/quant_numeric.h>
+#include <yvex/internal/compilation.h>
+#include <yvex/internal/model_artifact.h>
+#include <yvex/internal/source.h>
+#include <yvex/internal/source_payload.h>
 
 #include <errno.h>
 #include <limits.h>
@@ -359,7 +355,7 @@ static int quant_fixture_open_session(
                    sizeof(verification.manifest_path), "%s",
                    fixture->manifest_path);
     memset(&verify_options, 0, sizeof(verify_options));
-    verify_options.identity = yvex_model_target_release_identity();
+    verify_options.identity = yvex_source_release_identity();
     verify_options.source_path = fixture->root;
     verify_options.models_root = "build/tests";
     verify_options.manifest_path = fixture->manifest_path;

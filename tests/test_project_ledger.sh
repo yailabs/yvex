@@ -80,7 +80,7 @@ function uncode(value) {
 ' "$project" > "$rows"
 
 row_count=$(wc -l < "$rows" | tr -d ' ')
-test "$row_count" -eq 680 || fail "expected 680 canonical IDs, found $row_count"
+test "$row_count" -eq 681 || fail "expected 681 canonical IDs, found $row_count"
 
 cut -f 2 "$rows" | LC_ALL=C sort > "$all_ids"
 unique_count=$(uniq "$all_ids" | wc -l | tr -d ' ')
@@ -91,7 +91,7 @@ duplicate=$(uniq -d "$all_ids" | head -n 1 || true)
 test -z "$duplicate" || fail "duplicate canonical ID: $duplicate"
 
 id_hash=$(sha256sum "$all_ids" | awk '{ print $1 }')
-expected_id_hash=f8a5f56fb933f007bf18b944d87227b9915618ab74bceac5bc9c878e62ef9425
+expected_id_hash=d11967228789599029f1c428c0e8f8a2b94b58ce65d84c61850a827101739af7
 test "$id_hash" = "$expected_id_hash" ||
   fail "canonical ID set changed without an explicit migration: $id_hash"
 
@@ -103,6 +103,7 @@ V010.DOCS.ARCHITECTURE.0
 V010.PROJECT.COMPILATION.0
 V010.DOCS.README.COMPILATION.0
 V010.REPO.SEMANTIC.COMPRESSION.0
+V010.REPO.C.CANONICALIZATION.0
 V010.REBASE.DEEPSEEK.0
 V010.SOURCE.PAYLOAD.STREAM.0
 V010.MAP.GGUF.DEEPSEEK.0
@@ -149,7 +150,7 @@ EOF
 
 LC_ALL=C sort -u "$new_ids" -o "$new_ids"
 new_count=$(wc -l < "$new_ids" | tr -d ' ')
-test "$new_count" -eq 49 || fail "expected 49 explicit new IDs, found $new_count"
+test "$new_count" -eq 50 || fail "expected 50 explicit new IDs, found $new_count"
 
 missing_new=$(comm -23 "$new_ids" "$all_ids" | head -n 1 || true)
 test -z "$missing_new" || fail "explicit new ID is absent: $missing_new"
@@ -351,6 +352,8 @@ grep -F '| `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0` | DeepSeek | `complete` |' "$pro
   fail "DeepSeek runtime descriptor is not complete"
 grep -F '| `V010.REPO.SEMANTIC.COMPRESSION.0` | project | `complete` |' "$project" >/dev/null ||
   fail "repository semantic compression is not complete"
+grep -F '| `V010.REPO.C.CANONICALIZATION.0` | project | `complete` |' "$project" >/dev/null ||
+  fail "repository C canonicalization is not complete"
 grep -F '| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `active` |' "$project" >/dev/null ||
   fail "DeepSeek attention checkpoint is not active"
 grep -F '| `V010.RUNTIME.DEEPSEEK.KV.0` | DeepSeek | `blocked` |' "$project" >/dev/null ||
@@ -364,7 +367,10 @@ in_block && /^```$/ {
   if (block ~ /V010\.DOCS\.README\.COMPILATION\.0/ &&
       block ~ /V010\.MODEL\.TRANSFORM\.IR\.0/ &&
       block ~ /V010\.QUANT\.2/ &&
-      block ~ /V010\.GGUF\.WRITER\.1/) {
+      block ~ /V010\.GGUF\.WRITER\.1/ &&
+      block ~ /V010\.REPO\.SEMANTIC\.COMPRESSION\.0/ &&
+      block ~ /V010\.REPO\.C\.CANONICALIZATION\.0/ &&
+      block ~ /V010\.GRAPH\.DEEPSEEK\.ATTENTION\.0/) {
     print block
     exit
   }
@@ -380,7 +386,10 @@ BEGIN { expected = 1 }
 /V010\.MODEL\.TRANSFORM\.IR\.0/ { if (expected != 2) exit 1; expected = 3 }
 /V010\.QUANT\.2/ { if (expected != 3) exit 1; expected = 4 }
 /V010\.GGUF\.WRITER\.1/ { if (expected != 4) exit 1; expected = 5 }
-END { exit expected == 5 ? 0 : 1 }
-' || fail "compilation/transform/quant critical-path order is invalid"
+/V010\.REPO\.SEMANTIC\.COMPRESSION\.0/ { if (expected != 5) exit 1; expected = 6 }
+/V010\.REPO\.C\.CANONICALIZATION\.0/ { if (expected != 6) exit 1; expected = 7 }
+/V010\.GRAPH\.DEEPSEEK\.ATTENTION\.0/ { if (expected != 7) exit 1; expected = 8 }
+END { exit expected == 8 ? 0 : 1 }
+' || fail "compilation/repository/attention critical-path order is invalid"
 
 echo "project ledger: ok (tracks=25 recovered=$recovered_count ids=$row_count milestones=$milestone_count active=$active_id)"

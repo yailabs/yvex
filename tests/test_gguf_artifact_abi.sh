@@ -14,13 +14,13 @@ grep -nF 'test: gguf_artifact_abi' "$out" >/dev/null
 # Reports and consumers may not restore whole-file parsing or string-derived
 # failure policy.
 grep -nF '#define YVEX_GGUF_ABI_NEXT_ROW "V010.CUDA.FAILCLOSED.0"' \
-  src/gguf/private.h >/dev/null
+  include/yvex/internal/gguf.h >/dev/null
 grep -nF 'int yvex_artifact_read_at(' include/yvex/artifact.h >/dev/null
 grep -nF 'int yvex_gguf_open_ex(' include/yvex/gguf.h >/dev/null
 grep -nF 'yvex_gguf_parse_result parse_result;' \
-  src/gguf/private.h >/dev/null
+  include/yvex/internal/gguf.h >/dev/null
 grep -nF 'yvex_gguf_reader_stats reader_stats;' \
-  src/gguf/private.h >/dev/null
+  include/yvex/internal/gguf.h >/dev/null
 
 if grep -nE '\b(fseek|ftell|fread)\b' src/artifact/core.c >/dev/null; then
   echo 'artifact ABI guard: whole-file stdio path returned' >&2

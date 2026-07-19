@@ -12,7 +12,7 @@
 #include <yvex/api.h>
 
 #include "tests/test.h"
-#include "include/yvex/gguf_layout.h"
+#include <yvex/gguf.h>
 
 #define LAYOUT_TEST_DIR "build/tests/gguf-layout"
 

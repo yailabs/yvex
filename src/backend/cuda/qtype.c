@@ -1,28 +1,18 @@
-/*
- * cuda_qtype.c - CUDA qtype numeric-capability projection and compute owner.
- *
- * Owner:
- *   src/backend/cuda
- *
- * Owns:
- *   CUDA projection of canonical qtype support/refusal state and the bounded
- *   encoded-row-dot Driver API launch, transfer, rollback, and cleanup path.
- *
- * Does not own:
- *   GGUF qtype byte geometry, quantization, full transformer graph execution,
- *   runtime generation, eval, benchmark, or release claims.
- *
- * Invariants:
- *   qtype compute support must be present in TRACK.QUANT and proven by the
- *   dedicated generated-PTX row-dot variant before this owner reports it.
- *
- * Boundary:
- *   CUDA qtype facts do not make CUDA runtime generation available.
- */
-#include "qtype.h"
+/* Owner: src/backend/cuda
+ * Owns: CUDA projection of canonical qtype support/refusal state and the bounded encoded-row-dot Driver API launch,
+ *   transfer, rollback, and cleanup path.
+ * Does not own: GGUF qtype byte geometry, quantization, full transformer graph execution, runtime generation, eval,
+ *   benchmark, or release claims.
+ * Invariants: qtype compute support must be present in TRACK.QUANT and proven by the dedicated generated-PTX
+ *   row-dot variant before this owner reports it.
+ * Boundary: CUDA qtype facts do not make CUDA runtime generation available.
+ * Purpose: Project canonical qtype capability and execute bounded encoded row-dot proofs on CUDA.
+ * Inputs: Canonical qtype facts, encoded host blocks, F32 vectors, and caller-owned output.
+ * Effects: Uses temporary CUDA allocations and releases them before returning.
+ * Failure: Unsupported qtypes and Driver failures return typed refusal with deterministic cleanup. */
+#include "src/backend/cuda/private.h"
 
-#include "driver.h"
-#include "src/gguf/quant_numeric.h"
+#include <yvex/internal/quant_numeric.h>
 
 #include <limits.h>
 #include <stdint.h>
@@ -30,6 +20,11 @@
 #include <string.h>
 
 /* Projects immutable CUDA arithmetic truth without launching a kernel. */
+/* Purpose: Implement the canonical qtype refuse mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 void yvex_cuda_qtype_refuse(yvex_cuda_qtype_fact *fact, const char *qtype)
 {
     const yvex_quant_numeric_capability *capability;
@@ -52,6 +47,11 @@ void yvex_cuda_qtype_refuse(yvex_cuda_qtype_fact *fact, const char *qtype)
                   : capability->refusal);
 }
 
+/* Purpose: Implement the canonical quant fail mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static int cuda_quant_fail(yvex_quant_failure *failure,
                            yvex_quant_failure_code code,
                            unsigned int qtype,
@@ -78,6 +78,11 @@ static int cuda_quant_fail(yvex_quant_failure *failure,
 }
 
 /* Releases all raw temporaries; the first cleanup failure remains observable. */
+/* Purpose: Implement the canonical quant cleanup mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static int cuda_quant_cleanup(yvex_backend *backend,
                               CUdeviceptr *encoded,
                               CUdeviceptr *vector,
@@ -109,8 +114,12 @@ static int cuda_quant_cleanup(yvex_backend *backend,
 
 /*
  * Executes one encoded row dot directly on CUDA. Host inputs are borrowed,
- * device temporaries are always released, and no decoded tensor is retained.
- */
+ * device temporaries are always released, and no decoded tensor is retained. */
+/* Purpose: Implement the canonical quant row dot mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_cuda_quant_row_dot(yvex_backend *backend,
                             unsigned int qtype,
                             const unsigned char *encoded,

@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 test -f include/yvex/api.h
 test -f src/cli/main.c
-test -f src/core/operator.h
+test -f src/cli/input/private.h
 test -f src/cli/render/private.h
 
 for surface in backend generate graph kv model_artifacts model_target sampling source; do

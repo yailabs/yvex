@@ -1,12 +1,39 @@
-/*
- * tensors.c - tensor-collection command-family CLI surface.
- * Owner: src/cli/model_artifacts
+/* Owner: src/cli/model_artifacts
  * Owns: existing tensor-collection command-family parsing and output behavior.
- * Does not own: runtime implementation, graph execution, backend algorithms, artifact emission, eval, benchmark, or release claims.
+ * Does not own: runtime implementation, graph execution, backend algorithms, artifact emission, eval, benchmark, or
+ *   release claims.
  * Invariants: CLI-only and excluded from libyvex.a; preserves existing command behavior.
  * Boundary: tensor-collection reports are report-only diagnostics.
- */
-#include "tensors.h"
+ * Purpose: provide existing tensor-collection command-family parsing and output behavior.
+ * Inputs: typed domain facts, requested output mode, and caller-owned render state.
+ * Effects: formats admitted facts through CLI I/O without changing domain state.
+ * Failure: formatting or I/O refusal cannot alter capability facts. */
+#include "src/cli/model_artifacts/private.h"
+
+#include <string.h>
+
+static const char *const literal_pair_0[] = { "\ntensor-collection report:",
+    "  reports tensor collection requirements and coverage for the requested collection. The current "
+        "implemented collection is moe."
+};
+
+static const char *const literal_pair_1[] = { "cleanup_attempted: false",
+    "cleanup_status: not-needed"};
+
+static const char *const literal_lines_0[] = {
+    "  MoE collection reports classify router, expert gate/up/down, shared expert, dispatch metadata, "
+        "indexing, storage pressure, residency pressure, blockers, and next rows.",
+    "  report-only boundary: it does not materialize tensors, does not execute router logits, does not "
+        "select experts, does not dispatch experts, does not accumulate expert outputs, does not run MoE "
+        "blocks, does not run prefill, does not run decode, does not produce logits, does not sample, does not "
+        "generate, does not evaluate, and does not benchmark.",
+    "  selected-runtime-slice targets may return ok-partial when the family is MoE but router or expert "
+        "tensors are not present in the selected artifact.",
+    "  source-only targets are reported without opening huge source shards or downloading artifacts.",
+    "Boundary: no MoE runtime execution, no router logits, no top-k routing, no expert activation, no "
+        "expert dispatch, no expert accumulation, no full transformer block, no full transformer prefill, no "
+        "decode, no logits, no vocabulary sampling, no generation, no eval, no benchmark, no throughput."
+};
 
 typedef struct {
     const char *model;
@@ -97,24 +124,133 @@ typedef struct {
     int include_blockers;
 } yvex_tensor_collection_report;
 
-static int tensor_collection_parse_value_option(const char *flag,
-                                                int arg_count,
-                                                char **args,
-                                                int *index,
-                                                const char **value)
-{
-    if (*index + 1 >= arg_count) {
-        yvex_cli_out_writef(stderr, "yvex: tensor-collection %s requires a value\n", flag);
-        return 2;
-    }
-    *value = args[++(*index)];
-    if (fullmodel_string_is_empty(*value)) {
-        yvex_cli_out_writef(stderr, "yvex: tensor-collection %s value is empty\n", flag);
-        return 2;
-    }
-    return 0;
-}
+#define TENSOR_TEXT(member, default_text) \
+    {#member, YVEX_CLI_FIELD_TEXT, offsetof(yvex_tensor_collection_report, member), default_text}
+#define TENSOR_U64(member) \
+    {#member, YVEX_CLI_FIELD_U64, offsetof(yvex_tensor_collection_report, member), NULL}
+#define TENSOR_BOOL(key_name, member) \
+    {key_name, YVEX_CLI_FIELD_BOOL, offsetof(yvex_tensor_collection_report, member), NULL}
 
+static const yvex_cli_field_spec tensor_collection_audit_fields[] = {
+    TENSOR_TEXT(tensor_collection, "unknown"), TENSOR_TEXT(status, "internal-error"),
+    TENSOR_TEXT(target_id, "unknown"), TENSOR_TEXT(target_class, "unknown"),
+    TENSOR_TEXT(model, ""), TENSOR_TEXT(model_resolved_path, "unknown"),
+    TENSOR_TEXT(family, "unknown"), TENSOR_TEXT(family_detected, "unknown"),
+    TENSOR_TEXT(family_requested, "auto"), TENSOR_TEXT(backend, "cpu"),
+    TENSOR_TEXT(source_class, "unknown"), TENSOR_TEXT(artifact_class, "unknown"),
+    TENSOR_TEXT(implementation_stage, "report-only"),
+    TENSOR_TEXT(collection_stage, "report-only"), TENSOR_TEXT(model_is_moe, "unknown"),
+    TENSOR_TEXT(moe_class_status, "unknown"),
+    TENSOR_TEXT(router_collection_status, "unknown"),
+    TENSOR_TEXT(router_role_status, "unknown"), TENSOR_TEXT(router_tensor_name, "none"),
+    TENSOR_TEXT(router_tensor_present, "false"),
+    TENSOR_TEXT(router_tensor_status, "unknown"), TENSOR_TEXT(router_dtype, "unknown"),
+    TENSOR_TEXT(router_qtype, "unknown"), TENSOR_TEXT(router_shape, "unknown"),
+    TENSOR_TEXT(router_source, "unknown"),
+    TENSOR_TEXT(router_logits_status, "unsupported"),
+    TENSOR_TEXT(top_k_policy_status, "unknown"), TENSOR_U64(top_k),
+    TENSOR_TEXT(expert_collection_status, "unknown"),
+    TENSOR_TEXT(expert_role_status, "unknown"), TENSOR_TEXT(expert_tensor_roles, "unknown"),
+    TENSOR_TEXT(expert_gate_role_status, "unknown"),
+    TENSOR_TEXT(expert_up_role_status, "unknown"),
+    TENSOR_TEXT(expert_down_role_status, "unknown"),
+    TENSOR_TEXT(expert_tensor_name_pattern, "unknown"),
+    TENSOR_TEXT(expert_tensor_count_status, "unknown"), TENSOR_U64(expert_tensor_count),
+    TENSOR_TEXT(expert_count_status, "unknown"), TENSOR_U64(expert_count),
+    TENSOR_TEXT(active_expert_count_status, "unknown"), TENSOR_U64(active_expert_count),
+    TENSOR_TEXT(shared_expert_collection_status, "unknown"),
+    TENSOR_TEXT(shared_expert_status, "unknown"),
+    TENSOR_TEXT(shared_expert_roles, "unknown"),
+    TENSOR_TEXT(shared_expert_count_status, "unknown"), TENSOR_U64(shared_expert_count),
+    TENSOR_TEXT(dispatch_metadata_status, "unknown"),
+    TENSOR_TEXT(dispatch_metadata_roles, "unknown"),
+    TENSOR_TEXT(expert_indexing_policy_status, "unknown"),
+    TENSOR_TEXT(expert_storage_pressure_status, "unknown"),
+    TENSOR_TEXT(expert_storage_pressure, "unknown"),
+    TENSOR_TEXT(expert_residency_pressure_status, "unknown"),
+    TENSOR_TEXT(expert_residency_pressure, "unknown"),
+    TENSOR_TEXT(present_roles, "none"), TENSOR_TEXT(missing_roles, "unknown"),
+    TENSOR_TEXT(unknown_roles, "unknown"), TENSOR_TEXT(not_applicable_roles, "none"),
+    TENSOR_TEXT(blocked_rows, "unknown"), TENSOR_TEXT(next_required_rows, "unknown"),
+    TENSOR_TEXT(runtime_claim, "unsupported"),
+    TENSOR_TEXT(generation, "unsupported-full-model"),
+    TENSOR_TEXT(benchmark_status, "not-measured"),
+    TENSOR_BOOL("report_options.include_router", include_router),
+    TENSOR_BOOL("report_options.include_experts", include_experts),
+    TENSOR_BOOL("report_options.include_shared", include_shared),
+    TENSOR_BOOL("report_options.include_dispatch", include_dispatch),
+    TENSOR_BOOL("report_options.include_storage", include_storage),
+    TENSOR_BOOL("report_options.include_residency", include_residency),
+    TENSOR_BOOL("report_options.include_blockers", include_blockers),
+};
+
+static const yvex_tensor_collection_report tensor_collection_defaults = {
+    .tensor_collection = "unknown", .status = "internal-error", .target_id = "unknown",
+    .target_class = "unknown", .model = "", .model_resolved_path = "unknown",
+    .family = "auto", .family_detected = "unknown", .family_requested = "auto",
+    .backend = "cpu", .source_class = "unknown", .artifact_class = "unknown",
+    .implementation_stage = "report-only", .collection_stage = "report-only",
+    .model_is_moe = "unknown", .moe_class_status = "unknown",
+    .router_collection_status = "unknown", .router_role_status = "unknown",
+    .router_tensor_name = "none", .router_tensor_present = "false",
+    .router_tensor_status = "unknown", .router_dtype = "unknown",
+    .router_qtype = "unknown", .router_shape = "unknown", .router_source = "unknown",
+    .router_logits_status = "unsupported", .top_k_policy_status = "unknown",
+    .expert_collection_status = "unknown", .expert_role_status = "unknown",
+    .expert_tensor_roles = "unknown", .expert_gate_role_status = "unknown",
+    .expert_up_role_status = "unknown", .expert_down_role_status = "unknown",
+    .expert_tensor_name_pattern = "unknown", .expert_tensor_count_status = "unknown",
+    .expert_count_status = "unknown", .active_expert_count_status = "unknown",
+    .shared_expert_collection_status = "unknown", .shared_expert_status = "unknown",
+    .shared_expert_roles = "unknown", .shared_expert_count_status = "unknown",
+    .dispatch_metadata_status = "unknown", .dispatch_metadata_roles = "unknown",
+    .expert_indexing_policy_status = "unknown", .expert_storage_pressure_status = "unknown",
+    .expert_storage_pressure = "unknown", .expert_residency_pressure_status = "unknown",
+    .expert_residency_pressure = "unknown", .present_roles = "none",
+    .missing_roles = "unknown", .unknown_roles = "unknown", .not_applicable_roles = "none",
+    .blocked_rows = "V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17",
+    .next_required_rows = "V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17",
+    .runtime_claim = "unsupported", .generation = "unsupported-full-model",
+    .benchmark_status = "not-measured", .output_mode = YVEX_MODELS_OUTPUT_AUDIT,
+};
+
+#undef TENSOR_BOOL
+#undef TENSOR_U64
+#undef TENSOR_TEXT
+
+static const yvex_models_option_spec tensor_option_specs[] = {
+    {"--model", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_tensor_collection_options, model)},
+    {"--backend", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_tensor_collection_options, backend)},
+    {"--family", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_tensor_collection_options, family)},
+    {"--collection", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_tensor_collection_options, collection)},
+    {"--registry", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_tensor_collection_options, registry_path)},
+    {"--include-router", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_tensor_collection_options, include_router)},
+    {"--include-experts", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_tensor_collection_options, include_experts)},
+    {"--include-shared", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_tensor_collection_options, include_shared)},
+    {"--include-dispatch", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_tensor_collection_options, include_dispatch)},
+    {"--include-storage", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_tensor_collection_options, include_storage)},
+    {"--include-residency", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_tensor_collection_options, include_residency)},
+    {"--include-blockers", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_tensor_collection_options, include_blockers)},
+    {"--output", YVEX_MODELS_OPTION_OUTPUT,
+     offsetof(yvex_cli_tensor_collection_options, output_mode)},
+};
+
+/* Purpose: Parse parse tensor collection options into typed CLI state (`parse_tensor_collection_options`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_tensor_collection_options(int arg_count,
                                            char **args,
                                            yvex_cli_tensor_collection_options *options)
@@ -133,60 +269,30 @@ static int parse_tensor_collection_options(int arg_count,
     }
     if (arg_count < 3 || strcmp(args[2], "report") != 0) {
         yvex_cli_out_writef(stderr, "yvex: tensor-collection requires report\n");
-        yvex_cli_out_writef(stderr, "usage: " "yvex tensor-collection report --model FILE_OR_ALIAS --collection moe [--family auto|deepseek|glm|qwen] [--backend cpu|cuda]\n");
+        yvex_cli_out_writef(stderr,
+            "usage: yvex tensor-collection report --model FILE_OR_ALIAS --collection moe [--family auto|"
+                "deepseek|glm|qwen] [--backend cpu|cuda]\n");
         return 2;
     }
 
     for (i = 3; i < arg_count; ++i) {
-        const char *value = NULL;
-        if (strcmp(args[i], "--model") == 0) {
-            int rc = tensor_collection_parse_value_option("--model", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->model = value;
-        } else if (strcmp(args[i], "--backend") == 0) {
-            int rc = tensor_collection_parse_value_option("--backend", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->backend = value;
-        } else if (strcmp(args[i], "--family") == 0) {
-            int rc = tensor_collection_parse_value_option("--family", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->family = value;
-        } else if (strcmp(args[i], "--collection") == 0) {
-            int rc = tensor_collection_parse_value_option("--collection", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->collection = value;
-        } else if (strcmp(args[i], "--registry") == 0) {
-            int rc = tensor_collection_parse_value_option("--registry", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->registry_path = value;
-        } else if (strcmp(args[i], "--" "include-router") == 0) {
-            options->include_router = 1;
-        } else if (strcmp(args[i], "--" "include-experts") == 0) {
-            options->include_experts = 1;
-        } else if (strcmp(args[i], "--" "include-shared") == 0) {
-            options->include_shared = 1;
-        } else if (strcmp(args[i], "--" "include-dispatch") == 0) {
-            options->include_dispatch = 1;
-        } else if (strcmp(args[i], "--" "include-storage") == 0) {
-            options->include_storage = 1;
-        } else if (strcmp(args[i], "--" "include-residency") == 0) {
-            options->include_residency = 1;
-        } else if (strcmp(args[i], "--" "include-blockers") == 0) {
-            options->include_blockers = 1;
-        } else if (strcmp(args[i], "--" "audit") == 0) {
+        const char *flag = args[i];
+        int handled = 0;
+        int rc = parse_models_bound_option("tensor-collection", arg_count,
+                                           args, &i, options,
+                                           tensor_option_specs,
+                                           sizeof(tensor_option_specs) /
+                                               sizeof(tensor_option_specs[0]),
+                                           &handled);
+        if (rc != 0) return rc;
+        if (handled) continue;
+        if (strcmp(flag, "--audit") == 0) {
             options->output_mode = YVEX_MODELS_OUTPUT_AUDIT;
-        } else if (strcmp(args[i], "--" "output") == 0) {
-            int rc = tensor_collection_parse_value_option("--" "output", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            if (!parse_models_output_mode(value, &options->output_mode)) {
-                yvex_cli_out_writef(stderr, "yvex: tensor-collection unsupported output mode: %s\n", value);
-                return 2;
-            }
-        } else if (strcmp(args[i], "--help") == 0 || strcmp(args[i], "-h") == 0) {
+        } else if (strcmp(flag, "--help") == 0 || strcmp(flag, "-h") == 0) {
             yvex_model_artifacts_surface_tensor_collection_help(stdout);
             return 1;
         } else {
-            yvex_cli_out_writef(stderr, "yvex: unknown tensor-collection option: %s\n", args[i]);
+            yvex_cli_out_writef(stderr, "yvex: unknown tensor-collection option: %s\n", flag);
             return 2;
         }
     }
@@ -198,78 +304,28 @@ static int parse_tensor_collection_options(int arg_count,
     return 0;
 }
 
-static const char *tensor_collection_requested_family(const yvex_cli_tensor_collection_options *options)
-{
-    return options && options->family && options->family[0] ? options->family : "auto";
-}
-
+/* Purpose: Compute tensor collection requested collection for its CLI invariant
+ *   (`tensor_collection_requested_collection`). */
 static const char *tensor_collection_requested_collection(const yvex_cli_tensor_collection_options *options)
 {
     return options && options->collection && options->collection[0] ? options->collection : "unknown";
 }
 
+/* Purpose: Construct the owned tensor collection init report state (`tensor_collection_init_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void tensor_collection_init_report(yvex_tensor_collection_report *report,
-                                          const yvex_cli_tensor_collection_options *options)
+    const yvex_cli_tensor_collection_options *options)
 {
     if (!report) return;
-    memset(report, 0, sizeof(*report));
+    *report = tensor_collection_defaults;
     report->tensor_collection = tensor_collection_requested_collection(options);
-    report->status = "internal-error";
-    report->target_id = "unknown";
-    report->target_class = "unknown";
     report->model = options && options->model ? options->model : "";
-    report->model_resolved_path = "unknown";
-    report->family = tensor_collection_requested_family(options);
-    report->family_detected = "unknown";
-    report->family_requested = tensor_collection_requested_family(options);
+    report->family = model_requested_family(options ? options->family : NULL);
+    report->family_requested = model_requested_family(options ? options->family : NULL);
     report->backend = options && options->backend ? options->backend : "cpu";
-    report->source_class = "unknown";
-    report->artifact_class = "unknown";
-    report->implementation_stage = "report-only";
-    report->collection_stage = "report-only";
-    report->model_is_moe = "unknown";
-    report->moe_class_status = "unknown";
-    report->router_collection_status = "unknown";
-    report->router_role_status = "unknown";
-    report->router_tensor_name = "none";
-    report->router_tensor_present = "false";
-    report->router_tensor_status = "unknown";
-    report->router_dtype = "unknown";
-    report->router_qtype = "unknown";
-    report->router_shape = "unknown";
-    report->router_source = "unknown";
-    report->router_logits_status = "unsupported";
-    report->top_k_policy_status = "unknown";
-    report->expert_collection_status = "unknown";
-    report->expert_role_status = "unknown";
-    report->expert_tensor_roles = "unknown";
-    report->expert_gate_role_status = "unknown";
-    report->expert_up_role_status = "unknown";
-    report->expert_down_role_status = "unknown";
-    report->expert_tensor_name_pattern = "unknown";
-    report->expert_tensor_count_status = "unknown";
-    report->expert_count_status = "unknown";
-    report->active_expert_count_status = "unknown";
-    report->shared_expert_collection_status = "unknown";
-    report->shared_expert_status = "unknown";
-    report->shared_expert_roles = "unknown";
-    report->shared_expert_count_status = "unknown";
-    report->dispatch_metadata_status = "unknown";
-    report->dispatch_metadata_roles = "unknown";
-    report->expert_indexing_policy_status = "unknown";
-    report->expert_storage_pressure_status = "unknown";
-    report->expert_storage_pressure = "unknown";
-    report->expert_residency_pressure_status = "unknown";
-    report->expert_residency_pressure = "unknown";
-    report->present_roles = "none";
-    report->missing_roles = "unknown";
-    report->unknown_roles = "unknown";
-    report->not_applicable_roles = "none";
-    report->blocked_rows = "V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17";
-    report->next_required_rows = "V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17";
-    report->runtime_claim = "unsupported";
-    report->generation = "unsupported-full-model";
-    report->benchmark_status = "not-measured";
     report->output_mode = options ? options->output_mode : YVEX_MODELS_OUTPUT_AUDIT;
     report->include_router = options ? options->include_router : 0;
     report->include_experts = options ? options->include_experts : 0;
@@ -280,6 +336,11 @@ static void tensor_collection_init_report(yvex_tensor_collection_report *report,
     report->include_blockers = options ? options->include_blockers : 0;
 }
 
+/* Purpose: Render tensor collection print report from typed facts (`tensor_collection_print_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void tensor_collection_print_report(const yvex_tensor_collection_report *report)
 {
     if (report && report->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
@@ -289,86 +350,25 @@ static void tensor_collection_print_report(const yvex_tensor_collection_report *
                report->family ? report->family : "unknown",
                report->tensor_collection ? report->tensor_collection : "unknown");
         yvex_cli_out_writef(stdout, "status: %s\n", report->status ? report->status : "report-only");
-        yvex_cli_out_writef(stdout, "top_blocker: %s\n", report->blocked_rows ? report->blocked_rows : "tensor roles incomplete");
-        yvex_cli_out_writef(stdout, "next: %s\n", report->next_required_rows ? report->next_required_rows : "V010.TENSOR.*");
+        yvex_cli_out_writef(stdout, "top_blocker: %s\n",
+            report->blocked_rows ? report->blocked_rows : "tensor roles incomplete");
+        yvex_cli_out_writef(stdout, "next: %s\n",
+            report->next_required_rows ? report->next_required_rows : "V010.TENSOR.*");
         yvex_cli_out_writef(stdout, "boundary: report-only, no runtime execution\n");
         return;
     }
-
-    yvex_cli_out_writef(stdout, "tensor_collection: %s\n", report && report->tensor_collection ? report->tensor_collection : "unknown");
-    yvex_cli_out_writef(stdout, "status: %s\n", report && report->status ? report->status : "internal-error");
-    yvex_cli_out_writef(stdout, "target_id: %s\n", report && report->target_id ? report->target_id : "unknown");
-    yvex_cli_out_writef(stdout, "target_class: %s\n", report && report->target_class ? report->target_class : "unknown");
-    yvex_cli_out_writef(stdout, "model: %s\n", report && report->model ? report->model : "");
-    yvex_cli_out_writef(stdout, "model_resolved_path: %s\n", report && report->model_resolved_path ? report->model_resolved_path : "unknown");
-    yvex_cli_out_writef(stdout, "family: %s\n", report && report->family ? report->family : "unknown");
-    yvex_cli_out_writef(stdout, "family_detected: %s\n", report && report->family_detected ? report->family_detected : "unknown");
-    yvex_cli_out_writef(stdout, "family_requested: %s\n", report && report->family_requested ? report->family_requested : "auto");
-    yvex_cli_out_writef(stdout, "backend: %s\n", report && report->backend ? report->backend : "cpu");
-    yvex_cli_out_writef(stdout, "source_class: %s\n", report && report->source_class ? report->source_class : "unknown");
-    yvex_cli_out_writef(stdout, "artifact_class: %s\n", report && report->artifact_class ? report->artifact_class : "unknown");
-    yvex_cli_out_writef(stdout, "implementation_stage: %s\n", report && report->implementation_stage ? report->implementation_stage : "report-only");
-    yvex_cli_out_writef(stdout, "collection_stage: %s\n", report && report->collection_stage ? report->collection_stage : "report-only");
-    yvex_cli_out_writef(stdout, "model_is_moe: %s\n", report && report->model_is_moe ? report->model_is_moe : "unknown");
-    yvex_cli_out_writef(stdout, "moe_class_status: %s\n", report && report->moe_class_status ? report->moe_class_status : "unknown");
-    yvex_cli_out_writef(stdout, "router_collection_status: %s\n", report && report->router_collection_status ? report->router_collection_status : "unknown");
-    yvex_cli_out_writef(stdout, "router_role_status: %s\n", report && report->router_role_status ? report->router_role_status : "unknown");
-    yvex_cli_out_writef(stdout, "router_tensor_name: %s\n", report && report->router_tensor_name ? report->router_tensor_name : "none");
-    yvex_cli_out_writef(stdout, "router_tensor_present: %s\n", report && report->router_tensor_present ? report->router_tensor_present : "false");
-    yvex_cli_out_writef(stdout, "router_tensor_status: %s\n", report && report->router_tensor_status ? report->router_tensor_status : "unknown");
-    yvex_cli_out_writef(stdout, "router_dtype: %s\n", report && report->router_dtype ? report->router_dtype : "unknown");
-    yvex_cli_out_writef(stdout, "router_qtype: %s\n", report && report->router_qtype ? report->router_qtype : "unknown");
-    yvex_cli_out_writef(stdout, "router_shape: %s\n", report && report->router_shape ? report->router_shape : "unknown");
-    yvex_cli_out_writef(stdout, "router_source: %s\n", report && report->router_source ? report->router_source : "unknown");
-    yvex_cli_out_writef(stdout, "router_logits_status: %s\n", report && report->router_logits_status ? report->router_logits_status : "unsupported");
-    yvex_cli_out_writef(stdout, "top_k_policy_status: %s\n", report && report->top_k_policy_status ? report->top_k_policy_status : "unknown");
-    yvex_cli_out_writef(stdout, "top_k: %llu\n", report ? report->top_k : 0ull);
-    yvex_cli_out_writef(stdout, "expert_collection_status: %s\n", report && report->expert_collection_status ? report->expert_collection_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_role_status: %s\n", report && report->expert_role_status ? report->expert_role_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_tensor_roles: %s\n", report && report->expert_tensor_roles ? report->expert_tensor_roles : "unknown");
-    yvex_cli_out_writef(stdout, "expert_gate_role_status: %s\n", report && report->expert_gate_role_status ? report->expert_gate_role_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_up_role_status: %s\n", report && report->expert_up_role_status ? report->expert_up_role_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_down_role_status: %s\n", report && report->expert_down_role_status ? report->expert_down_role_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_tensor_name_pattern: %s\n", report && report->expert_tensor_name_pattern ? report->expert_tensor_name_pattern : "unknown");
-    yvex_cli_out_writef(stdout, "expert_tensor_count_status: %s\n", report && report->expert_tensor_count_status ? report->expert_tensor_count_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_tensor_count: %llu\n", report ? report->expert_tensor_count : 0ull);
-    yvex_cli_out_writef(stdout, "expert_count_status: %s\n", report && report->expert_count_status ? report->expert_count_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_count: %llu\n", report ? report->expert_count : 0ull);
-    yvex_cli_out_writef(stdout, "active_expert_count_status: %s\n", report && report->active_expert_count_status ? report->active_expert_count_status : "unknown");
-    yvex_cli_out_writef(stdout, "active_expert_count: %llu\n", report ? report->active_expert_count : 0ull);
-    yvex_cli_out_writef(stdout, "shared_expert_collection_status: %s\n", report && report->shared_expert_collection_status ? report->shared_expert_collection_status : "unknown");
-    yvex_cli_out_writef(stdout, "shared_expert_status: %s\n", report && report->shared_expert_status ? report->shared_expert_status : "unknown");
-    yvex_cli_out_writef(stdout, "shared_expert_roles: %s\n", report && report->shared_expert_roles ? report->shared_expert_roles : "unknown");
-    yvex_cli_out_writef(stdout, "shared_expert_count_status: %s\n", report && report->shared_expert_count_status ? report->shared_expert_count_status : "unknown");
-    yvex_cli_out_writef(stdout, "shared_expert_count: %llu\n", report ? report->shared_expert_count : 0ull);
-    yvex_cli_out_writef(stdout, "dispatch_metadata_status: %s\n", report && report->dispatch_metadata_status ? report->dispatch_metadata_status : "unknown");
-    yvex_cli_out_writef(stdout, "dispatch_metadata_roles: %s\n", report && report->dispatch_metadata_roles ? report->dispatch_metadata_roles : "unknown");
-    yvex_cli_out_writef(stdout, "expert_indexing_policy_status: %s\n", report && report->expert_indexing_policy_status ? report->expert_indexing_policy_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_storage_pressure_status: %s\n", report && report->expert_storage_pressure_status ? report->expert_storage_pressure_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_storage_pressure: %s\n", report && report->expert_storage_pressure ? report->expert_storage_pressure : "unknown");
-    yvex_cli_out_writef(stdout, "expert_residency_pressure_status: %s\n", report && report->expert_residency_pressure_status ? report->expert_residency_pressure_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_residency_pressure: %s\n", report && report->expert_residency_pressure ? report->expert_residency_pressure : "unknown");
-    yvex_cli_out_writef(stdout, "present_roles: %s\n", report && report->present_roles ? report->present_roles : "none");
-    yvex_cli_out_writef(stdout, "missing_roles: %s\n", report && report->missing_roles ? report->missing_roles : "unknown");
-    yvex_cli_out_writef(stdout, "unknown_roles: %s\n", report && report->unknown_roles ? report->unknown_roles : "unknown");
-    yvex_cli_out_writef(stdout, "not_applicable_roles: %s\n", report && report->not_applicable_roles ? report->not_applicable_roles : "none");
-    yvex_cli_out_writef(stdout, "blocked_rows: %s\n", report && report->blocked_rows ? report->blocked_rows : "unknown");
-    yvex_cli_out_writef(stdout, "next_required_rows: %s\n", report && report->next_required_rows ? report->next_required_rows : "unknown");
-    yvex_cli_out_writef(stdout, "runtime_claim: %s\n", report && report->runtime_claim ? report->runtime_claim : "unsupported");
-    yvex_cli_out_writef(stdout, "generation: %s\n", report && report->generation ? report->generation : "unsupported-full-model");
-    yvex_cli_out_writef(stdout, "benchmark_status: %s\n", report && report->benchmark_status ? report->benchmark_status : "not-measured");
-    yvex_cli_out_writef(stdout, "generation_ready: false\n");
-    yvex_cli_out_writef(stdout, "report_options.include_router: %s\n", report && report->include_router ? "true" : "false");
-    yvex_cli_out_writef(stdout, "report_options.include_experts: %s\n", report && report->include_experts ? "true" : "false");
-    yvex_cli_out_writef(stdout, "report_options.include_shared: %s\n", report && report->include_shared ? "true" : "false");
-    yvex_cli_out_writef(stdout, "report_options.include_dispatch: %s\n", report && report->include_dispatch ? "true" : "false");
-    yvex_cli_out_writef(stdout, "report_options.include_storage: %s\n", report && report->include_storage ? "true" : "false");
-    yvex_cli_out_writef(stdout, "report_options.include_residency: %s\n", report && report->include_residency ? "true" : "false");
-    yvex_cli_out_writef(stdout, "report_options.include_blockers: %s\n", report && report->include_blockers ? "true" : "false");
-    yvex_cli_out_writef(stdout, "cleanup_attempted: false\n");
-    yvex_cli_out_writef(stdout, "cleanup_status: not-needed\n");
+    if (!report) {
+        return;
+    }
+    (void)yvex_cli_out_fields(stdout, report, tensor_collection_audit_fields,
+                              sizeof(tensor_collection_audit_fields) /
+                                  sizeof(tensor_collection_audit_fields[0]));
+    yvex_cli_out_line(stdout, "generation_ready: false");
+    yvex_cli_out_lines(stdout, literal_pair_1, sizeof(literal_pair_1) / sizeof(literal_pair_1[0]));
 }
 
+/* Purpose: Render tensor collection print invalid argument report from typed facts
+ *   (`tensor_collection_print_invalid_argument_report`). */
 static int tensor_collection_print_invalid_argument_report(const yvex_cli_tensor_collection_options *options,
                                                            const char *status,
                                                            const char *reason)
@@ -387,6 +387,12 @@ static int tensor_collection_print_invalid_argument_report(const yvex_cli_tensor
     return 2;
 }
 
+/* Purpose: Render tensor collection print source only report from typed facts
+ * (`tensor_collection_print_source_only_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int tensor_collection_print_source_only_report(const yvex_cli_tensor_collection_options *options,
                                                       const char *target)
 {
@@ -425,13 +431,18 @@ static int tensor_collection_print_source_only_report(const yvex_cli_tensor_coll
     report.expert_residency_pressure = "requires-storage-stream-plan";
     report.present_roles = "none";
     report.missing_roles = "source-only-not-inspected";
-    report.unknown_roles = "moe_router,moe_expert_gate,moe_expert_up,moe_expert_down,moe_shared_expert,moe_dispatch_metadata,expert_indexing_policy";
-    report.blocked_rows = "OWI.HUGE.0,V010.MAP.4,V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17,V010.STORAGE.18,V010.RESIDENCY.14";
-    report.next_required_rows = "OWI.HUGE.0,V010.MAP.4,V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17,V010.STORAGE.18,V010.RESIDENCY.14,GLM-YVEX-produced-GGUF";
+    report.unknown_roles = "moe_router,moe_expert_gate,moe_expert_up,moe_expert_down,moe_shared_expert,"
+        "moe_dispatch_metadata,expert_indexing_policy";
+    report.blocked_rows = "OWI.HUGE.0,V010.MAP.4,V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,"
+        "V010.TENSOR.17,V010.STORAGE.18,V010.RESIDENCY.14";
+    report.next_required_rows = "OWI.HUGE.0,V010.MAP.4,V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,"
+        "V010.TENSOR.17,V010.STORAGE.18,V010.RESIDENCY.14,GLM-YVEX-produced-GGUF";
     tensor_collection_print_report(&report);
     return 5;
 }
 
+/* Purpose: Render tensor collection print missing model report from typed facts
+ *   (`tensor_collection_print_missing_model_report`). */
 static int tensor_collection_print_missing_model_report(const yvex_cli_tensor_collection_options *options,
                                                         const char *reason)
 {
@@ -453,6 +464,12 @@ static int tensor_collection_print_missing_model_report(const yvex_cli_tensor_co
     return 5;
 }
 
+/* Purpose: Render tensor collection print unsupported family report from typed facts
+ * (`tensor_collection_print_unsupported_family_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int tensor_collection_print_unsupported_family_report(const yvex_cli_tensor_collection_options *options,
                                                             yvex_model_ref *ref,
                                                             const char *target_id,
@@ -467,7 +484,7 @@ static int tensor_collection_print_unsupported_family_report(const yvex_cli_tens
     report.target_id = target_id ? target_id : "path";
     report.target_class = target_class ? target_class : "candidate-GGUF-path";
     report.model_resolved_path = ref && ref->path ? ref->path : "unknown";
-    report.family = tensor_collection_requested_family(options);
+    report.family = model_requested_family(options ? options->family : NULL);
     report.family_detected = detected ? detected : "unknown";
     report.source_class = "GGUF artifact";
     report.artifact_class = "GGUF artifact";
@@ -479,11 +496,13 @@ static int tensor_collection_print_unsupported_family_report(const yvex_cli_tens
     report.expert_collection_status = "unknown";
     report.expert_role_status = "unknown";
     report.blocked_rows = "requested family is not supported by MoE tensor collection report";
-    report.next_required_rows = "V010.CLASS.0,V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17,family-specific-tensor-adapter";
+    report.next_required_rows = "V010.CLASS.0,V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17,"
+        "family-specific-tensor-adapter";
     tensor_collection_print_report(&report);
     return 5;
 }
 
+/* Purpose: Compute tensor collection append role for its CLI invariant (`tensor_collection_append_role`). */
 static void tensor_collection_append_role(char *out, size_t out_cap, const char *role)
 {
     size_t used;
@@ -498,11 +517,17 @@ static void tensor_collection_append_role(char *out, size_t out_cap, const char 
     snprintf(out + used, used < out_cap ? out_cap - used : 0u, "%s", role);
 }
 
+/* Purpose: Compute tensor collection role status for its CLI invariant (`tensor_collection_role_status`). */
 static const char *tensor_collection_role_status(const yvex_tensor_info *tensor)
 {
     return tensor ? "present" : "missing";
 }
 
+/* Purpose: Render tensor collection print model report from typed facts (`tensor_collection_print_model_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int tensor_collection_print_model_report(const yvex_cli_tensor_collection_options *options,
                                                 yvex_model_ref *ref,
                                                 yvex_model_context *ctx,
@@ -527,7 +552,7 @@ static int tensor_collection_print_model_report(const yvex_cli_tensor_collection
     memset(&family_probe, 0, sizeof(family_probe));
     family_probe.model = options ? options->model : NULL;
     family_probe.family = options ? options->family : NULL;
-    requested = tensor_collection_requested_family(options);
+    requested = model_requested_family(options ? options->family : NULL);
     detected = fullmodel_detect_family(&family_probe, arch, target_id);
     if (!fullmodel_family_request_matches(requested, detected) || strcmp(detected, "deepseek") != 0) {
         return tensor_collection_print_unsupported_family_report(options, ref, target_id, target_class, detected);
@@ -633,14 +658,22 @@ static int tensor_collection_print_model_report(const yvex_cli_tensor_collection
     report.missing_roles = missing_roles;
     report.unknown_roles = "moe_shared_expert,moe_dispatch_metadata,expert_indexing_policy";
     report.not_applicable_roles = "none";
-    report.blocked_rows = "V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17,V010.MOE.5,V010.MOE.6,V010.MOE.7,V010.PREFILL.7,V010.DECODE.6";
+    report.blocked_rows = "V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17,V010.MOE.5,"
+        "V010.MOE.6,V010.MOE.7,V010.PREFILL.7,V010.DECODE.6";
     report.next_required_rows = router || present_expert_roles > 0u
                                     ? "V010.STORAGE.18,V010.RESIDENCY.14,V010.MOE.5,V010.MOE.6,V010.MOE.7"
-                                    : "V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17,V010.TARGET.9,V010.MAP.2,V010.FULLMODEL.6";
+                                    : "V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17,"
+                                        "V010.TARGET.9,V010.MAP.2,V010.FULLMODEL.6";
     tensor_collection_print_report(&report);
     return 0;
 }
 
+/* Purpose: Orchestrate the typed model artifacts surface tensor collection command request
+ * (`yvex_model_artifacts_surface_tensor_collection_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_model_artifacts_surface_tensor_collection_command(int arg_count, char **args)
 {
     yvex_cli_tensor_collection_options options;
@@ -695,7 +728,8 @@ int yvex_model_artifacts_surface_tensor_collection_command(int arg_count, char *
     rc = yvex_model_context_open(ref.path, &ctx, &err);
     if (rc != YVEX_OK) {
         const char *reason = yvex_error_message(&err);
-        rc = tensor_collection_print_missing_model_report(&options, reason && reason[0] ? reason : "GGUF metadata or tensor directory parse failed");
+        rc = tensor_collection_print_missing_model_report(&options,
+            reason && reason[0] ? reason : "GGUF metadata or tensor directory parse failed");
         yvex_error_clear(&err);
         yvex_model_ref_clear(&ref);
         return rc;
@@ -712,18 +746,27 @@ int yvex_model_artifacts_surface_tensor_collection_command(int arg_count, char *
     return rc;
 }
 
+/* Purpose: Render model artifacts surface tensor collection help from typed facts
+ * (`yvex_model_artifacts_surface_tensor_collection_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_model_artifacts_surface_tensor_collection_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex tensor-collection report --model FILE_OR_ALIAS --collection moe [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--" "audit | --" "output normal|table|audit] [--" "include-router] [--" "include-experts] [--" "include-shared] [--" "include-dispatch] [--" "include-storage] [--" "include-residency] [--" "include-blockers]\n");
+    yvex_cli_out_writef(fp,
+        "usage: yvex tensor-collection report --model FILE_OR_ALIAS --collection moe [--family auto|"
+            "deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--audit | --output normal|table|audit] "
+            "[--include-router] [--include-experts] [--include-shared] [--include-dispatch] [--include-"
+            "storage] [--include-residency] [--include-blockers]\n");
     yvex_cli_out_writef(fp, "\nExamples:\n");
-    yvex_cli_out_writef(fp, "  yvex tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cpu --" "include-router --" "include-experts --" "include-blockers\n");
-    yvex_cli_out_writef(fp, "  yvex tensor-collection report --model glm-5.2-official-safetensors --family glm --collection moe --backend cpu --" "include-blockers\n");
-    yvex_cli_out_writef(fp, "\ntensor-collection report:\n");
-    yvex_cli_out_writef(fp, "  reports tensor collection requirements and coverage for the requested collection. The current implemented collection is moe.\n");
-    yvex_cli_out_writef(fp, "  Default output is compact. Use --" "audit for full diagnostic fields.\n");
-    yvex_cli_out_writef(fp, "  MoE collection reports classify router, expert gate/up/down, shared expert, dispatch metadata, indexing, storage pressure, residency pressure, blockers, and next rows.\n");
-    yvex_cli_out_writef(fp, "  report-only boundary: it does not materialize tensors, does not execute router logits, does not select experts, does not dispatch experts, does not accumulate expert outputs, does not run MoE blocks, does not run prefill, does not run decode, does not produce logits, does not sample, does not generate, does not evaluate, and does not benchmark.\n");
-    yvex_cli_out_writef(fp, "  selected-runtime-slice targets may return ok-partial when the family is MoE but router or expert tensors are not present in the selected artifact.\n");
-    yvex_cli_out_writef(fp, "  source-only targets are reported without opening huge source shards or downloading artifacts.\n");
-    yvex_cli_out_writef(fp, "Boundary: no MoE runtime execution, no router logits, no top-k routing, no expert activation, no expert dispatch, no expert accumulation, no full transformer block, no full transformer prefill, no decode, no logits, no vocabulary sampling, no generation, no eval, no benchmark, no throughput.\n");
+    yvex_cli_out_writef(fp,
+        "  yvex tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family "
+            "deepseek --collection moe --backend cpu --include-router --include-experts --include-blockers\n");
+    yvex_cli_out_writef(fp,
+        "  yvex tensor-collection report --model glm-5.2-official-safetensors --family glm --collection "
+            "moe --backend cpu --include-blockers\n");
+    yvex_cli_out_lines(fp, literal_pair_0, sizeof(literal_pair_0) / sizeof(literal_pair_0[0]));
+    yvex_cli_out_writef(fp, "  Default output is compact. Use --audit for full diagnostic fields.\n");
+    yvex_cli_out_lines(fp, literal_lines_0, sizeof(literal_lines_0) / sizeof(literal_lines_0[0]));
 }

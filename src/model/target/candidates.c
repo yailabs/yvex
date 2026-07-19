@@ -1,30 +1,15 @@
-/*
- * candidates.c - model-target candidate report builder.
- *
- * Owner:
- *   src/model/target
- *
- * Owns:
- *   full-runtime candidate, dense candidate, and Qwen/Metal pressure report
- *   facts and builders.
- *
- * Does not own:
- *   CLI parsing, command dispatch, rendering, target catalog storage,
- *   sidecar writing, runtime execution, generation, eval, benchmark, or
- *   release decisions.
- *
- * Invariants:
- *   candidate reports remain blocked/report-only until promoted by separate
- *   implementation proof rows.
- *
- * Boundary:
- *   candidate reporting does not create runtime capability, quantization,
- *   artifact emission, generation, benchmark, or release readiness.
- */
-#include "candidates.h"
-
-#include "catalog.h"
-#include "private.h"
+/* Owner: src/model/target
+ * Owns: full-runtime candidate, dense candidate, and Qwen/Metal pressure report facts and builders.
+ * Does not own: CLI parsing, command dispatch, rendering, target catalog storage, sidecar writing, runtime
+ *   execution, generation, eval, benchmark, or release decisions.
+ * Invariants: candidate reports remain blocked/report-only until promoted by separate implementation proof rows.
+ * Boundary: candidate reporting does not create runtime capability, quantization, artifact emission, generation,
+ *   benchmark, or release readiness.
+ * Purpose: project immutable release-candidate facts into bounded reports.
+ * Inputs: typed target requests and static candidate facts.
+ * Effects: mutates only bounded report state.
+ * Failure: unsupported requests preserve explicit refusal rows. */
+#include <yvex/internal/model_target.h>
 
 #include <string.h>
 
@@ -63,11 +48,127 @@ static const candidate_fact candidate_facts[] = {
      "V010.GGUF.ARTIFACT.ABI.1"},
 };
 
+static const char *const dense_help_rows[] = {
+    "The dense-candidate report preserves Qwen and Gemma engineering evidence "
+    "without offering an alternate v0.1.0 release target.",
+    "does not download weights, emit artifacts, materialize tensors, execute "
+    "graph/runtime paths, generate, evaluate, benchmark, or mark a release ready"
+};
+
+static const char *const qwen_help_rows[] = {
+    "The Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / "
+    "Metal lane for future full-runtime work.",
+    "does not download weights, implement Metal, emit Qwen artifacts, materialize "
+    "tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark "
+    "a release ready"
+};
+
+static const char *const candidate_help_rows[] = {
+    "The candidate report shows the selected DeepSeek release source and keeps other "
+    "families or selected slices as non-release engineering evidence.",
+    "target selection does not select a ready model"
+};
+
+static const char *const candidate_common_middle[] = {
+    "release: v0.1.0",
+    "selected: none"
+};
+
+static const char *const candidate_common_suffix[] = {
+    "next: V010.MODEL.ARCH.IR.0",
+    "boundary: report-only; generation unsupported; benchmark not measured"
+};
+
+static const char *const release_candidate_prefix[] = {
+    "report: model-target candidate",
+    "status: selected-mapping-specified",
+    "release: v0.1.0"
+};
+
+static const char *const release_candidate_suffix[] = {
+    "top_blocker: source payload trust",
+    "next: V010.SOURCE.PAYLOAD.STREAM.0",
+    "boundary: target selected; artifact/runtime/generation unsupported; "
+    "benchmark not measured"
+};
+
+static const char *const qwen_report_prefix_rows[] = {
+    "report: model-target qwen-metal",
+    "status: pressure-target-only",
+    "release: v0.1.0",
+    "lane: qwen-metal / apple-silicon-metal"
+};
+
+static const char *const qwen_report_suffix_rows[] = {
+    "candidate: source-target-profiled pressure-target-only",
+    "source_target: profiled",
+    "source: missing",
+    "backend: metal unsupported",
+    "next: POST010.QWEN.METAL.0",
+    "boundary: report-only; generation unsupported; benchmark not measured"
+};
+
+static const char *const qwen_single_candidate_rows[] = {
+    "qwen_candidate_0_class: backend-compatibility-pressure",
+    "qwen_candidate_0_stage: report-only",
+    "qwen_candidate_0_eligibility: pressure-target-only",
+    "qwen_candidate_0_source_target_status: pending",
+    "qwen_candidate_0_backend_status: unsupported",
+    "qwen_candidate_0_runtime_status: unsupported",
+    "qwen_candidate_0_generation_status: unsupported-full-model",
+    "qwen_candidate_0_blocker_0: missing-qwen-source-path",
+    "qwen_candidate_0_blocker_6: missing-metal-backend-feasibility",
+    "qwen_candidate_0_blocker_7: missing-real-prefill"
+};
+
+static const char *const qwen_candidate_set_rows[] = {
+    "qwen_candidate_count: 3",
+    "qwen_candidate_0_id: qwen-small",
+    "qwen_candidate_0_class: backend-compatibility-pressure",
+    "qwen_candidate_0_stage: report-only",
+    "qwen_candidate_0_eligibility: pressure-target-only",
+    "qwen_candidate_0_source_target_status: pending",
+    "qwen_candidate_0_backend_status: unsupported",
+    "qwen_candidate_0_runtime_status: unsupported",
+    "qwen_candidate_0_generation_status: unsupported-full-model",
+    "qwen_candidate_1_id: qwen-medium",
+    "qwen_candidate_2_id: qwen3-8b",
+    "qwen_candidate_2_stage: source-target-profiled",
+    "qwen_candidate_2_source_target_status: profiled"
+};
+
+static const char *const qwen_audit_rows[] = {
+    "candidate_stage: source-target-profiled",
+    "source_target_status: profiled",
+    "hardware_profile_status: planned",
+    "machine_profile_required: true",
+    "unified_memory_report_required: true",
+    "metal_device_report_required: true",
+    "metal_feasibility_status: missing",
+    "metal_allocation_status: unsupported",
+    "metal_graph_primitive_status: unsupported",
+    "cuda_lane_independent: true",
+    "source_family: qwen",
+    "source_manifest_status: missing",
+    "native_tensor_inventory_status: missing",
+    "source_config_status: missing",
+    "model_class_profile_status: command-visible",
+    "blocker_0: missing-qwen-source-path",
+    "blocker_1: missing-qwen-source-manifest",
+    "blocker_9: missing-metal-backend-feasibility",
+    "blocker_16: missing-real-prefill",
+    "blocker_19: missing-real-output-head-logits",
+    "blocker_20: missing-real-vocabulary-sampling",
+    "next_required_rows: POST010.QWEN.METAL.0"
+};
+
+/* Purpose: project the immutable bounded candidate fact count view. */
 static unsigned long candidate_fact_count(void)
 {
     return sizeof(candidate_facts) / sizeof(candidate_facts[0]);
 }
 
+/* Purpose: resolve one candidate find through the canonical index. */
 static const candidate_fact *candidate_find(const char *id)
 {
     unsigned long i;
@@ -81,6 +182,11 @@ static const candidate_fact *candidate_find(const char *id)
     return NULL;
 }
 
+/* Purpose: apply the canonical candidate blocker0 transformation and invariants.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static const char *candidate_blocker0(const candidate_fact *fact,
                                       const char *prefix)
 {
@@ -104,6 +210,7 @@ static const char *candidate_blocker0(const candidate_fact *fact,
     return fact->eligibility;
 }
 
+/* Purpose: apply the canonical candidate eligibility for prefix transformation and invariants. */
 static const char *candidate_eligibility_for_prefix(const candidate_fact *fact,
                                                    const char *prefix)
 {
@@ -123,6 +230,7 @@ static const char *candidate_eligibility_for_prefix(const candidate_fact *fact,
     return fact->eligibility;
 }
 
+/* Purpose: apply the canonical candidate blocker1 transformation and invariants. */
 static const char *candidate_blocker1(const candidate_fact *fact,
                                       const char *prefix)
 {
@@ -144,6 +252,7 @@ static const char *candidate_blocker1(const candidate_fact *fact,
     return NULL;
 }
 
+/* Purpose: apply the canonical candidate next for prefix transformation and invariants. */
 static const char *candidate_next_for_prefix(const candidate_fact *fact,
                                              const char *prefix)
 {
@@ -160,6 +269,11 @@ static const char *candidate_next_for_prefix(const candidate_fact *fact,
     return fact->next;
 }
 
+/* Purpose: enforce typed candidate bad release invariants before publication.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static int candidate_bad_release(const yvex_model_target_request *request,
                                  yvex_model_target_report *report,
                                  const char *label)
@@ -174,22 +288,25 @@ static int candidate_bad_release(const yvex_model_target_request *request,
     return YVEX_OK;
 }
 
+/* Purpose: publish candidate emit help through the bounded output boundary. */
 static int candidate_emit_help(const yvex_model_target_request *request,
                                yvex_model_target_report *report)
 {
+    const char *const *rows = candidate_help_rows;
+    size_t count = sizeof(candidate_help_rows) / sizeof(candidate_help_rows[0]);
+
     if (request->kind == YVEX_MODEL_TARGET_COMMAND_DENSE_CANDIDATE) {
-        yvex_model_target_report_add_row(report, "The dense-candidate report preserves Qwen and Gemma engineering evidence without offering an alternate v0.1.0 release target.");
-        yvex_model_target_report_add_row(report, "does not download weights, emit artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready");
+        rows = dense_help_rows;
+        count = sizeof(dense_help_rows) / sizeof(dense_help_rows[0]);
     } else if (request->kind == YVEX_MODEL_TARGET_COMMAND_QWEN_METAL) {
-        yvex_model_target_report_add_row(report, "The Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / Metal lane for future full-runtime work.");
-        yvex_model_target_report_add_row(report, "does not download weights, implement Metal, emit Qwen artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready");
-    } else {
-        yvex_model_target_report_add_row(report, "The candidate report shows the selected DeepSeek release source and keeps other families or selected slices as non-release engineering evidence.");
-        yvex_model_target_report_add_row(report, "target selection does not select a ready model");
+        rows = qwen_help_rows;
+        count = sizeof(qwen_help_rows) / sizeof(qwen_help_rows[0]);
     }
+    yvex_model_target_report_add_rows(report, rows, count);
     return YVEX_OK;
 }
 
+/* Purpose: publish candidate emit table through the bounded output boundary. */
 static void candidate_emit_table(yvex_model_target_report *report,
                                  const char *report_name,
                                  const char *status,
@@ -200,6 +317,7 @@ static void candidate_emit_table(yvex_model_target_report *report,
                                      report_name, status, next);
 }
 
+/* Purpose: publish candidate emit common normal through the bounded output boundary. */
 static void candidate_emit_common_normal(yvex_model_target_report *report,
                                          const char *name,
                                          const char *status,
@@ -207,13 +325,16 @@ static void candidate_emit_common_normal(yvex_model_target_report *report,
 {
     yvex_model_target_report_add_row(report, "report: model-target %s", name);
     yvex_model_target_report_add_row(report, "status: %s", status);
-    yvex_model_target_report_add_row(report, "release: v0.1.0");
-    yvex_model_target_report_add_row(report, "selected: none");
+    yvex_model_target_report_add_rows(
+        report, candidate_common_middle,
+        sizeof(candidate_common_middle) / sizeof(candidate_common_middle[0]));
     yvex_model_target_report_add_row(report, "top_blocker: %s", blocker);
-    yvex_model_target_report_add_row(report, "next: V010.MODEL.ARCH.IR.0");
-    yvex_model_target_report_add_row(report, "boundary: report-only; generation unsupported; benchmark not measured");
+    yvex_model_target_report_add_rows(
+        report, candidate_common_suffix,
+        sizeof(candidate_common_suffix) / sizeof(candidate_common_suffix[0]));
 }
 
+/* Purpose: publish candidate emit unknown target through the bounded output boundary. */
 static int candidate_emit_unknown_target(yvex_model_target_report *report,
                                          const char *status,
                                          const char *target)
@@ -225,6 +346,11 @@ static int candidate_emit_unknown_target(yvex_model_target_report *report,
     return YVEX_OK;
 }
 
+/* Purpose: publish candidate emit full audit through the bounded output boundary.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static void candidate_emit_full_audit(yvex_model_target_report *report,
                                       const char *prefix,
                                       const char *target)
@@ -284,6 +410,11 @@ static void candidate_emit_full_audit(yvex_model_target_report *report,
     }
 }
 
+/* Purpose: construct one bounded full-runtime candidate report from admitted inputs.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static int candidate_report_build(const yvex_model_target_request *request,
                                   yvex_model_target_report *report)
 {
@@ -300,14 +431,15 @@ static int candidate_report_build(const yvex_model_target_request *request,
         yvex_model_target_report_add_row(report,
                                          "REPORT  STATUS  SELECTED  ELIGIBLE  NEXT");
         yvex_model_target_report_add_row(report,
-                                         "full-runtime-candidate  mapping-specified  %s  0  V010.SOURCE.PAYLOAD.STREAM.0",
-                                         yvex_model_target_release_identity()->target_id);
+                                         "full-runtime-candidate  mapping-specified  %s  0  "
+                                         "V010.SOURCE.PAYLOAD.STREAM.0",
+                                         yvex_source_release_identity()->target_id);
         return YVEX_OK;
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
         yvex_model_target_report_add_row(report,
                                          "selected_release_target: %s",
-                                         yvex_model_target_release_identity()->target_id);
+                                         yvex_source_release_identity()->target_id);
         yvex_model_target_report_add_row(report, "other_candidate_scope: non-release-engineering-evidence");
         yvex_model_target_report_add_row(
             report, "next_required_rows: V010.SOURCE.PAYLOAD.STREAM.0");
@@ -315,18 +447,22 @@ static int candidate_report_build(const yvex_model_target_request *request,
         yvex_model_target_report_common_tail(report);
         return YVEX_OK;
     }
-    yvex_model_target_report_add_row(report, "report: model-target candidate");
-    yvex_model_target_report_add_row(report, "status: selected-mapping-specified");
-    yvex_model_target_report_add_row(report, "release: v0.1.0");
+    yvex_model_target_report_add_rows(
+        report, release_candidate_prefix,
+        sizeof(release_candidate_prefix) / sizeof(release_candidate_prefix[0]));
     yvex_model_target_report_add_row(report, "selected: %s",
-                                     yvex_model_target_release_identity()->target_id);
-    yvex_model_target_report_add_row(report, "top_blocker: source payload trust");
-    yvex_model_target_report_add_row(
-        report, "next: V010.SOURCE.PAYLOAD.STREAM.0");
-    yvex_model_target_report_add_row(report, "boundary: target selected; artifact/runtime/generation unsupported; benchmark not measured");
+                                     yvex_source_release_identity()->target_id);
+    yvex_model_target_report_add_rows(
+        report, release_candidate_suffix,
+        sizeof(release_candidate_suffix) / sizeof(release_candidate_suffix[0]));
     return YVEX_OK;
 }
 
+/* Purpose: construct bounded dense candidate report build state from admitted inputs.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static int dense_candidate_report_build(const yvex_model_target_request *request,
                                         yvex_model_target_report *report)
 {
@@ -357,6 +493,11 @@ static int dense_candidate_report_build(const yvex_model_target_request *request
     return YVEX_OK;
 }
 
+/* Purpose: construct bounded qwen metal report build state from admitted inputs.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static int qwen_metal_report_build(const yvex_model_target_request *request,
                                    yvex_model_target_report *report)
 {
@@ -379,76 +520,42 @@ static int qwen_metal_report_build(const yvex_model_target_request *request,
                              "POST010.QWEN.METAL.0");
         return YVEX_OK;
     }
-    yvex_model_target_report_add_row(report, "report: model-target qwen-metal");
-    yvex_model_target_report_add_row(report, "status: pressure-target-only");
-    yvex_model_target_report_add_row(report, "release: v0.1.0");
-    yvex_model_target_report_add_row(report, "lane: qwen-metal / apple-silicon-metal");
+    yvex_model_target_report_add_rows(
+        report, qwen_report_prefix_rows,
+        sizeof(qwen_report_prefix_rows) / sizeof(qwen_report_prefix_rows[0]));
     target = request->target_id[0] ? request->target_id : "qwen3-8b";
     yvex_model_target_report_add_row(report, "target: %s", target);
-    yvex_model_target_report_add_row(report, "candidate: source-target-profiled pressure-target-only");
-    yvex_model_target_report_add_row(report, "source_target: profiled");
-    yvex_model_target_report_add_row(report, "source: missing");
-    yvex_model_target_report_add_row(report, "backend: metal unsupported");
-    yvex_model_target_report_add_row(report, "next: POST010.QWEN.METAL.0");
-    yvex_model_target_report_add_row(report, "boundary: report-only; generation unsupported; benchmark not measured");
+    yvex_model_target_report_add_rows(
+        report, qwen_report_suffix_rows,
+        sizeof(qwen_report_suffix_rows) / sizeof(qwen_report_suffix_rows[0]));
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
         if (strcmp(target, "qwen-small") == 0 ||
             strcmp(target, "qwen-medium") == 0) {
             yvex_model_target_report_add_row(report, "qwen_candidate_count: 1");
             yvex_model_target_report_add_row(report, "qwen_candidate_0_id: %s", target);
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_class: backend-compatibility-pressure");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_stage: report-only");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_eligibility: pressure-target-only");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_source_target_status: pending");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_backend_status: unsupported");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_runtime_status: unsupported");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_generation_status: unsupported-full-model");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_blocker_0: missing-qwen-source-path");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_blocker_6: missing-metal-backend-feasibility");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_blocker_7: missing-real-prefill");
+            yvex_model_target_report_add_rows(
+                report, qwen_single_candidate_rows,
+                sizeof(qwen_single_candidate_rows) /
+                    sizeof(qwen_single_candidate_rows[0]));
         } else {
-            yvex_model_target_report_add_row(report, "qwen_candidate_count: 3");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_id: qwen-small");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_class: backend-compatibility-pressure");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_stage: report-only");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_eligibility: pressure-target-only");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_source_target_status: pending");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_backend_status: unsupported");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_runtime_status: unsupported");
-            yvex_model_target_report_add_row(report, "qwen_candidate_0_generation_status: unsupported-full-model");
-            yvex_model_target_report_add_row(report, "qwen_candidate_1_id: qwen-medium");
-            yvex_model_target_report_add_row(report, "qwen_candidate_2_id: qwen3-8b");
-            yvex_model_target_report_add_row(report, "qwen_candidate_2_stage: source-target-profiled");
-            yvex_model_target_report_add_row(report, "qwen_candidate_2_source_target_status: profiled");
+            yvex_model_target_report_add_rows(
+                report, qwen_candidate_set_rows,
+                sizeof(qwen_candidate_set_rows) /
+                    sizeof(qwen_candidate_set_rows[0]));
         }
         yvex_model_target_report_add_row(report, "candidate_id: %s", target);
-        yvex_model_target_report_add_row(report, "candidate_stage: source-target-profiled");
-        yvex_model_target_report_add_row(report, "source_target_status: profiled");
-        yvex_model_target_report_add_row(report, "hardware_profile_status: planned");
-        yvex_model_target_report_add_row(report, "machine_profile_required: true");
-        yvex_model_target_report_add_row(report, "unified_memory_report_required: true");
-        yvex_model_target_report_add_row(report, "metal_device_report_required: true");
-        yvex_model_target_report_add_row(report, "metal_feasibility_status: missing");
-        yvex_model_target_report_add_row(report, "metal_allocation_status: unsupported");
-        yvex_model_target_report_add_row(report, "metal_graph_primitive_status: unsupported");
-        yvex_model_target_report_add_row(report, "cuda_lane_independent: true");
-        yvex_model_target_report_add_row(report, "source_family: qwen");
-        yvex_model_target_report_add_row(report, "source_manifest_status: missing");
-        yvex_model_target_report_add_row(report, "native_tensor_inventory_status: missing");
-        yvex_model_target_report_add_row(report, "source_config_status: missing");
-        yvex_model_target_report_add_row(report, "model_class_profile_status: command-visible");
-        yvex_model_target_report_add_row(report, "blocker_0: missing-qwen-source-path");
-        yvex_model_target_report_add_row(report, "blocker_1: missing-qwen-source-manifest");
-        yvex_model_target_report_add_row(report, "blocker_9: missing-metal-backend-feasibility");
-        yvex_model_target_report_add_row(report, "blocker_16: missing-real-prefill");
-        yvex_model_target_report_add_row(report, "blocker_19: missing-real-output-head-logits");
-        yvex_model_target_report_add_row(report, "blocker_20: missing-real-vocabulary-sampling");
-        yvex_model_target_report_add_row(report,
-                                         "next_required_rows: POST010.QWEN.METAL.0");
+        yvex_model_target_report_add_rows(
+            report, qwen_audit_rows,
+            sizeof(qwen_audit_rows) / sizeof(qwen_audit_rows[0]));
     }
     return YVEX_OK;
 }
 
+/* Purpose: dispatch one typed candidate request to its canonical report builder.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 int yvex_model_target_candidate_report_build(
     const yvex_model_target_request *request,
     yvex_model_target_report *report,

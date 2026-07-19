@@ -3,7 +3,7 @@
  */
 #include <string.h>
 
-#include <yvex/weight_mapping.h>
+#include <yvex/gguf.h>
 
 #include "tests/test.h"
 

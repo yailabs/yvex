@@ -1,30 +1,17 @@
-/*
- * qtype_role_support.c - qtype role-support report builder.
- *
- * Owner:
- *   src/model/target
- *
- * Owns:
- *   dtype/qtype support matrix facts, role-support blockers, and qtype gate
- *   handoff facts.
- *
- * Does not own:
- *   CLI parsing, rendering, quantization execution, artifact emission, runtime
- *   execution, generation, eval, benchmark, or release decisions.
- *
- * Invariants:
- *   role-support matrices are report-only facts and hand off incomplete
- *   quantization work to later rows.
- *
- * Boundary:
- *   qtype role-support reporting is not qtype support completion,
- *   quantization, artifact emission, runtime readiness, generation readiness,
- *   benchmark evidence, or release readiness.
- */
-#include "qtype_role_support.h"
+/* Owner: src/model/target
+ * Owns: dtype/qtype support matrix facts, role-support blockers, and qtype gate handoff facts.
+ * Does not own: CLI parsing, rendering, quantization execution, artifact emission, runtime execution, generation,
+ *   eval, benchmark, or release decisions.
+ * Invariants: role-support matrices are report-only facts and hand off incomplete quantization work to later rows.
+ * Boundary: qtype role-support reporting is not qtype support completion, quantization, artifact emission, runtime
+ *   readiness, generation readiness, benchmark evidence, or release readiness.
+ * Purpose: project canonical qtype capability facts by tensor role.
+ * Inputs: typed requests and immutable numeric capability rows.
+ * Effects: updates only bounded support reports.
+ * Failure: unsupported releases and modes remain typed refusals. */
+#include <yvex/internal/model_target.h>
 
-#include "private.h"
-#include "src/gguf/quant_numeric.h"
+#include <yvex/internal/quant_numeric.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -71,12 +58,14 @@ static const qtype_role_fact gemma_role_facts[] = {
 };
 
 static const qtype_gate_family_fact qtype_gate_rows[] = {
-    {"deepseek", "deepseek4-v4-flash", "blocked", "artifact-materialization-unimplemented", "V010.ARTIFACT.MATERIALIZE.0"},
+    {"deepseek", "deepseek4-v4-flash", "blocked",
+     "artifact-materialization-unimplemented", "V010.ARTIFACT.MATERIALIZE.0"},
     {"qwen", "qwen3-6-35b-a3b", "blocked", "family-quantization-plan-unimplemented", "not-scheduled"},
     {"gemma", "gemma-4-31b-it", "blocked", "family-quantization-plan-unimplemented", "not-scheduled"},
 };
 
-/* Projects current arithmetic truth exclusively from TRACK.QUANT registry. */
+/* Purpose: project typed qtype role compute status vocabulary without lost semantics. */
+
 static const char *qtype_role_compute_status(const char *source_dtype)
 {
     const yvex_quant_numeric_capability *capability;
@@ -114,8 +103,7 @@ static const char *qtype_role_compute_status(const char *source_dtype)
  *   none.
  *
  * Boundary:
- *   selected rows are support facts, not quantization execution.
- */
+ *   selected rows are support facts, not quantization execution. */
 static const qtype_role_fact *qtype_role_rows(const char *family,
                                              unsigned long *count)
 {
@@ -147,39 +135,27 @@ static const qtype_role_fact *qtype_role_rows(const char *family,
  *   none.
  *
  * Boundary:
- *   fields remain report-only and do not imply qtype completion.
- */
+ *   fields remain report-only and do not imply qtype completion. */
 static void qtype_role_prepare(const yvex_model_target_request *request,
                                yvex_model_target_report *report)
 {
     const char *target = request->target_id[0] ? request->target_id : "qwen3-8b";
     const char *family = yvex_model_target_family_key(target);
+    int deepseek = strcmp(family, "deepseek") == 0;
+    const yvex_model_target_report_profile profile = {
+        .status = request->gate[0] ? "qtype-role-support-gate-blocked"
+                                   : "qtype-role-support-blocked",
+        .target_id = target, .family = family, .stage = "report-only",
+        .qtype_policy_status = "blocked", .artifact_status = "missing",
+        .runtime_status = "unsupported", .generation_status = "unsupported-full-model",
+        .benchmark_status = "not-measured",
+        .next_row = deepseek ? "V010.ARTIFACT.MATERIALIZE.0" : "not-scheduled",
+        .reason = deepseek ? "complete-artifact-admission-required"
+                           : "family-quantization-plan-unimplemented",
+        .boundary = "qtype role-support report only; no quantization or artifact emission"
+    };
 
-    report->kind = request->kind;
-    report->mode = request->mode;
-    report->status = request->gate[0] ? "qtype-role-support-gate-blocked" :
-                     "qtype-role-support-blocked";
-    report->exit_code = 0;
-    snprintf(report->target_id, sizeof(report->target_id), "%s", target);
-    snprintf(report->family, sizeof(report->family), "%s", family);
-    snprintf(report->stage, sizeof(report->stage), "report-only");
-    snprintf(report->qtype_policy_status, sizeof(report->qtype_policy_status),
-             "blocked");
-    snprintf(report->artifact_status, sizeof(report->artifact_status), "missing");
-    snprintf(report->runtime_status, sizeof(report->runtime_status), "unsupported");
-    snprintf(report->generation_status, sizeof(report->generation_status),
-             "unsupported-full-model");
-    snprintf(report->benchmark_status, sizeof(report->benchmark_status),
-             "not-measured");
-    snprintf(report->next_row, sizeof(report->next_row), "%s",
-             strcmp(family, "deepseek") == 0
-                 ? "V010.ARTIFACT.MATERIALIZE.0" : "not-scheduled");
-    snprintf(report->reason, sizeof(report->reason), "%s",
-             strcmp(family, "deepseek") == 0
-                 ? "complete-artifact-admission-required"
-                 : "family-quantization-plan-unimplemented");
-    snprintf(report->boundary, sizeof(report->boundary),
-             "qtype role-support report only; no quantization or artifact emission");
+    yvex_model_target_report_prepare(report, request, &profile);
 }
 
 /*
@@ -198,8 +174,7 @@ static void qtype_role_prepare(const yvex_model_target_request *request,
  *   returns 1 when a typed refusal has been populated.
  *
  * Boundary:
- *   refusal rows do not run quantization or inspect payload bytes.
- */
+ *   refusal rows do not run quantization or inspect payload bytes. */
 static int qtype_role_validate(const yvex_model_target_request *request,
                                yvex_model_target_report *report)
 {
@@ -244,8 +219,7 @@ static int qtype_role_validate(const yvex_model_target_request *request,
  *   row-cap exhaustion truncates through the shared row helper.
  *
  * Boundary:
- *   gate rows do not imply qtype completion.
- */
+ *   gate rows do not imply qtype completion. */
 static void qtype_gate_add_table(yvex_model_target_report *report)
 {
     unsigned long i;
@@ -282,8 +256,7 @@ static void qtype_gate_add_table(yvex_model_target_report *report)
  *   row-cap exhaustion truncates through the shared row helper.
  *
  * Boundary:
- *   gate audit facts do not implement quantization.
- */
+ *   gate audit facts do not implement quantization. */
 static void qtype_gate_add_audit(yvex_model_target_report *report)
 {
     unsigned long i;
@@ -322,8 +295,7 @@ static void qtype_gate_add_audit(yvex_model_target_report *report)
  *   row-cap exhaustion truncates through the shared row helper.
  *
  * Boundary:
- *   role rows are support facts only.
- */
+ *   role rows are support facts only. */
 static void qtype_role_add_table(const char *family,
                                  yvex_model_target_report *report)
 {
@@ -361,8 +333,7 @@ static void qtype_role_add_table(const char *family,
  *   row-cap exhaustion truncates through the shared row helper.
  *
  * Boundary:
- *   audit rows are not quantization or artifact evidence.
- */
+ *   audit rows are not quantization or artifact evidence. */
 static void qtype_role_add_audit(const char *family,
                                  yvex_model_target_report *report)
 {
@@ -432,8 +403,7 @@ static void qtype_role_add_audit(const char *family,
  *   output/release refusals are returned through report exit_code.
  *
  * Boundary:
- *   qtype role-support reporting is not qtype support completion.
- */
+ *   qtype role-support reporting is not qtype support completion. */
 int yvex_qtype_role_support_report_build(const yvex_model_target_request *request,
                                          yvex_model_target_report *report,
                                          yvex_error *err)

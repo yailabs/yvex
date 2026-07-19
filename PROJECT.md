@@ -1,11 +1,11 @@
 # YVEX Project Control
 
-Date: 2026-07-18
+Date: 2026-07-19
 Status: living engineering control
 Authority: product target, architecture tracks, complete wave ledger, milestone
 state, dependencies, evidence rank, family scope, release gates, and Active Next
 Recovery baseline: pre-refoundation `docs/spine.md` at commit `10ad6c3`
-Current proof stage: repository-wide semantic-owner compression is complete; the preserved DeepSeek attention implementation checkpoint is active again with execution and CUDA admission still refused
+Current proof stage: repository-wide C canonicalization is complete; the preserved DeepSeek attention implementation checkpoint is active again with execution and CUDA admission still refused
 
 ## 1. Authority And Update Contract
 
@@ -346,7 +346,7 @@ in a conversation or closure report is not part of the architecture.
 
 | Boundary | Current truth |
 | --- | --- |
-| Project control | The 25-track, 631-ID historical ledger is recovered and ranked here; project recovery, compilation-architecture rebasing, the public README cutover, and repository semantic compression are complete. `config/source_owners.tsv` registers every production source/header exactly once, source-relative build objects avoid basename collisions, and repository layout, ownership, and dependency gates are hard failures. |
+| Project control | The 25-track, 631-ID historical ledger is recovered and ranked here; project recovery, compilation-architecture rebasing, the public README cutover, repository semantic compression, and C canonicalization are complete. `config/source_owners.tsv` registers every production source/header exactly once; explicit header tiers, source-relative object/archive identities, semantic contracts, and repository layout, ownership, dependency, complexity, and ABI gates are hard failures. |
 | Source | The canonical DeepSeek target is verified against `deepseek-ai/DeepSeek-V4-Flash` at commit `60d8d70770c6776ff598c94bb586a859a38244f1`. The pinned upstream index, structured configs, tokenizer assets, 46/46 safetensors headers, 69,187 unique tensor records, and verifier-owned manifest agree. Manifest v3 binds every shard to its authoritative Hugging Face Git LFS SHA-256 and atomically publishes aggregate payload identity `e22b3678d131d334f154a93214bdddfafc172c9869f4c52db28fea198eaa9165` only after all 159,617,149,040 shard-file bytes pass digest and drift checks. |
 | Family profiles | The exact DeepSeek-V4-Flash source now projects to one immutable typed IR with 43 main layers, one MTP layer, explicit SWA/CSA/HCA, mHC, MoE, position/KV, output, tokenizer, and source constraints. Runtime numeric schema v1 binds activation fake-quantization, UE8M0 scaling, deterministic top-k, and the full Hadamard authority at commit `e7706faf8d1c3b9f241e36860640ad1dac644ede`. Qwen, Gemma, and dense/MoE evidence remains at its prior rank. |
 | Tensor coverage | One immutable IR-derived requirement set reconciles exactly against all 69,187 tensors in the verified DeepSeek snapshot: every entry is assigned once, with zero missing, duplicate, ambiguous, unsupported, or unexpected tensors and zero payload reads. Qwen/Gemma evidence remains at its prior rank. |
@@ -394,38 +394,42 @@ V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0: complete (selected DeepSeek full-payload b
 V010.RUNTIME.DESCRIPTOR.GGUF.0: complete (common runtime descriptor from admitted materialization)
 V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0: complete (DeepSeek descriptor binding all 1,360 tensors)
 V010.REPO.SEMANTIC.COMPRESSION.0: complete (repository-wide semantic ownership, compact paths, dependency boundaries, and permanent gates)
+V010.REPO.C.CANONICALIZATION.0: complete (canonical C interfaces, ownership, contracts, archive identity, and complexity gates)
 V010.GRAPH.DEEPSEEK.ATTENTION.0: active (implementation checkpoint preserved; complete CPU/reference/CUDA execution remains unadmitted)
 V010.RUNTIME.DEEPSEEK.KV.0: blocked (depends on complete attention execution)
 Active Next: V010.GRAPH.DEEPSEEK.ATTENTION.0
 ```
 
-Repository compression preserved every admitted source, payload,
-Transformation IR, GGUF mapping, quantization profile, artifact,
-materialization, runtime-descriptor, and attention-plan identity. The owned
-production surface changed from 406 to 306 C/CUDA/header files (213 to 164
-translation units and 193 to 142 headers), while production lines changed
-from 133,607 to 131,559 through semantic merges, dead-owner removal, and the
-two immutable model/graph family registries.
-Governed files changed from 604 to 507. Production basename average/maximum
-fell from 20.724/37 to 10.297/21 characters; `yvex_`-prefixed production
-filenames fell from 336 to zero; basenames over 32 characters fell from 21 to
-zero; family-specific production files fell from 15 to three; and globally
-exported `yvex_` symbols fell from 1,242 to 969, with exactly one model,
-graph, and CUDA entrypoint emitted by each DeepSeek family object and zero
-non-namespaced global symbols. Test/tool/script sources
-changed from 138 to 140 only because three permanent repository gates replace
-one superseded topology surface. The former 42 declared owner labels with 88
-unowned production files were replaced by
-230 registered semantic owners covering all 306 files exactly once (1.33
-files per owner). Non-admitted one-consumer private headers fell from 39 to
-zero. The baseline and final trees have zero cross-subsystem include cycles;
-the old tree had no machine-readable dependency or exception authority, while
-the final gates report zero forbidden edges and zero layout/ownership
-exceptions. `tests/test_source_ownership.sh`, `tests/test_repository_layout.sh`, and
-`tests/test_architecture_boundaries.sh` enforce zero unregistered files,
-duplicate-owner partitions, family-budget violations, forbidden dependency
-edges, cross-subsystem include cycles, flattened-object collisions, stale
-paths, and new topology advisory debt.
+Repository compression and C canonicalization preserved every admitted source,
+payload, Transformation IR, GGUF mapping, quantization profile, artifact,
+materialization, runtime-descriptor, runtime-numeric, attention-plan, and
+attention-semantic identity. The canonicalization baseline contained 306 owned
+C/CUDA/header files, 164 translation units, and 142 headers; the final surface
+contains 198 files, 159 translation units, and 39 headers. Installed public
+headers fell from 50 to 16 and source-local headers from 92 to six; 17 explicit
+non-installed internal headers now own cross-subsystem contracts. Mechanical
+same-stem pairs fell from 76 to zero, production umbrella imports from 24 to
+zero, and ambiguous bare internal includes from 224 to zero.
+
+Physical production lines changed from 131,559 to 131,074, code lines from
+115,138 to 107,080, and executable lines from 77,367 to 65,761, a 15.00%
+reduction. Documented functions increased from 601 of 3,134 to all 3,128;
+2,478 non-trivial functions carry full semantic contracts. Functions above
+200 lines fell from 62 to zero, functions above 500 from six to zero, and the
+maximum function fell from 1,119 to 200 lines. The largest translation unit is
+1,995 lines and the hard line-width violation count is zero.
+
+The static archive changed from 116 members with only 95 unique identities to
+110 source-relative members with 110 unique identities. Library-global symbols
+fell from 969 to 911 and non-public globals from 668 to 488; all 423 installed
+function declarations have exactly one definition. Semantic owners fell from
+230 to 196 while retaining at most two admitted interface/implementation files
+per owner. The final tree has zero one-consumer private headers, duplicate
+definitions, include cycles, forbidden dependency edges, unregistered files,
+family-budget violations, and layout/ownership exceptions. The canonical
+ownership, layout, architecture, and code-naturalness gates enforce these
+facts without promoting attention, persistent KV, runtime generation, or any
+higher inference capability.
 
 Strict source proof consumes the pinned upstream index with Git OID
 `84692cbe7af556a01e2e5353341100079c387aee`, validates the exact model,
@@ -597,6 +601,7 @@ V010.DOCS.README.COMPILATION.0
 -> V010.RUNTIME.DESCRIPTOR.GGUF.0
 -> V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0
 -> V010.REPO.SEMANTIC.COMPRESSION.0
+-> V010.REPO.C.CANONICALIZATION.0
 -> V010.GRAPH.DEEPSEEK.ATTENTION.0
 -> V010.RUNTIME.DEEPSEEK.KV.0
 -> V010.RUNTIME.DEEPSEEK.PREFILL.0
@@ -632,8 +637,8 @@ another supported model.
 
 The recovery baseline contained 629 table entries across 24 tracks. Two source
 rows held paired IDs; those are expanded into 631 unique recovered IDs. The
-canonical architecture now contains 25 tracks. Forty-seven new milestone/future
-IDs and two explicit migration markers produce 680 unique canonical IDs.
+canonical architecture now contains 25 tracks. Forty-eight new milestone/future
+IDs and two explicit migration markers produce 681 unique canonical IDs.
 
 ### 7.1 Global Counts
 
@@ -643,10 +648,10 @@ calculated from rows rather than protected by a summary hash.
 | Metric | Count |
 | --- | ---: |
 | Recovered IDs | 631 |
-| Explicit new IDs | 49 |
-| Canonical IDs | 680 |
-| First-class milestones | 41 |
-| State: complete | 233 |
+| Explicit new IDs | 50 |
+| Canonical IDs | 681 |
+| First-class milestones | 42 |
+| State: complete | 234 |
 | State: active | 1 |
 | State: partial | 1 |
 | State: blocked | 12 |
@@ -658,7 +663,7 @@ calculated from rows rather than protected by a summary hash.
 
 | Track | Owns | Current truth | Conclusive handoff |
 | --- | --- | --- | --- |
-| `TRACK.SCOPE` | Project control, release scope, family/release distinction, claim boundary, version policy, repository semantic ownership, and documentation-control transitions. | repository semantic compression is complete with one machine-readable ownership manifest and three hard global gates | One truthful project map, one explicit release contract, and one enforced source-owner topology. |
+| `TRACK.SCOPE` | Project control, release scope, family/release distinction, claim boundary, version policy, repository semantic ownership, C interface/build boundaries, and documentation-control transitions. | repository semantic compression and C canonicalization are complete with one machine-readable ownership manifest and four correlated hard gates | One truthful project map, one explicit release contract, and one enforced source-owner topology. |
 | `TRACK.SOURCE` | Source identity, revision, provider intake, manifests, shards, sidecars, header inventory, payload trust, and bounded payload access. | exact metadata/header verification and trusted bounded payload access are complete | Verified source facts and readable payload ranges. |
 | `TRACK.MAP` | Family source names, canonical runtime roles, GGUF names, physical-lowering projections, layouts, ambiguity refusal, and complete mapping coverage. | canonical DeepSeek GGUF lowering evidence is complete | Every required source tensor maps exactly once to a runtime role and emitted layout. |
 | `TRACK.COMPILATION` | Artifact-neutral transformation IR, derivation identity/DAGs, physical variant identity, constraint profiles, requirement composition, variant selection, and evaluation/benchmark feedback intake. | the immutable artifact-neutral Transformation IR and exact GGUF/quantizer handoffs are complete; automatic and multi-variant planning remain deferred | One immutable transformation plan binds logical outputs to verified source contributions before physical lowering. |
@@ -669,7 +674,7 @@ calculated from rows rather than protected by a summary hash.
 | `TRACK.TENSOR` | Canonical tensor collections, role requirements, global/layer/attention/MoE/norm/output/tokenizer coverage, and missing-role truth. | exact DeepSeek source coverage is complete; multi-family evidence remains at its prior rank | No unresolved required tensor collection or runtime role. |
 | `TRACK.RESIDENCY` | Payload streaming, materialization, placement, memory planning, CUDA residency, movement, ownership, cleanup, and release. | bounded source streaming and selected-artifact materialization are complete; the selected DeepSeek artifact is runtime-addressable through file-backed/staged bindings with no CUDA residency claim | Any admitted tensor map can materialize; the complete DeepSeek artifact has an accepted bounded residency/access plan. |
 | `TRACK.BACKEND` | Hardware/build profiles, CPU/CUDA capability, qtype operations, reference parity, scratch, fallback, synchronization, refusal, and cleanup. | CUDA context/bundle/variant truth is fail-closed and selected-qtype compute remains admitted; complete attention CUDA execution remains active and unadmitted | Every required DGX Spark CUDA operation is real, reference-compared, and fail-closed. |
-| `TRACK.GRAPH` | Primitive contracts, graph construction/planning, attention, position handling, MoE routing/experts, residuals, layers, scratch, and transformer execution. | semantic owners are reclosed; the preserved DeepSeek attention checkpoint is active with complete CPU/reference/CUDA execution still unsupported | The complete transformer stack consumes the full runtime descriptor. |
+| `TRACK.GRAPH` | Primitive contracts, graph construction/planning, attention, position handling, MoE routing/experts, residuals, layers, scratch, and transformer execution. | C ownership and interface boundaries are reclosed; the preserved DeepSeek attention checkpoint is active with complete CPU/reference/CUDA execution still unsupported | The complete transformer stack consumes the full runtime descriptor. |
 | `TRACK.PREFILL` | Prompt token execution, chunking, transformer prefill, state ownership, position progression, KV write integration, and cleanup. | planner and diagnostic evidence only | Full prefill executes every required layer and writes model-derived state. |
 | `TRACK.KV` | Family-correct KV geometry, allocation, indexing, append/read, capacity, reuse, lifecycle, and cleanup. | bounded diagnostic and attention-owned rolling state exist; persistent model KV is blocked by incomplete attention execution | Prefill writes and decode reads the same owned model KV state. |
 | `TRACK.DECODE` | One-step and repeated model-backed decode over descriptor, positions, KV, transformer state, cancellation, and cleanup. | diagnostic lifecycle evidence only | Repeated decode produces real hidden states while consuming prior KV. |
@@ -692,7 +697,7 @@ closure.
 
 | Track | Recovered IDs | Canonical IDs | First-class C/A/Pa/P/B/NM | Complete support | Open support | Superseded/deferred |
 | --- | ---: | ---: | --- | ---: | ---: | ---: |
-| `TRACK.SCOPE` | 25 | 32 | 6/0/1/0/0/0 | 9 | 9 | 7 |
+| `TRACK.SCOPE` | 25 | 33 | 7/0/1/0/0/0 | 9 | 9 | 7 |
 | `TRACK.SOURCE` | 24 | 26 | 2/0/0/0/0/0 | 23 | 1 | 0 |
 | `TRACK.MAP` | 12 | 13 | 1/0/0/0/0/0 | 11 | 1 | 0 |
 | `TRACK.COMPILATION` | 0 | 12 | 1/0/0/0/0/0 | 0 | 0 | 11 |
@@ -769,22 +774,23 @@ written after inspection of owner code, consumers, tests, and current contracts.
 | 23 | `V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0` | `TRACK.RESIDENCY` | DeepSeek / DGX Spark | `complete` | Walked every required selected DeepSeek tensor byte through an explicit bounded placement/access plan: 1,360 tensors, 102,396,843,592 payload bytes, 33,792 expert subviews, and 16 MiB peak executor-owned staging. | V010.ARTIFACT.MATERIALIZE.0 |
 | 24 | `V010.RUNTIME.DESCRIPTOR.GGUF.0` | `TRACK.MODEL` | common | `complete` | Projected admitted artifact and committed materialization facts into one canonical family-neutral runtime descriptor. | V010.ARTIFACT.MATERIALIZE.0 |
 | 25 | `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0` | `TRACK.MODEL` | DeepSeek | `complete` | Specialized the canonical descriptor into one execution-complete DeepSeek graph-input descriptor with all 1,360 terminal tensors bound and zero missing, duplicate, or unexpected bindings. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 + V010.RUNTIME.DESCRIPTOR.GGUF.0 |
-| 26 | `V010.REPO.SEMANTIC.COMPRESSION.0` | `TRACK.SCOPE` | project | `complete` | Reconstructed repository-wide semantic ownership, compacted paths and symbols, enforced family budgets and dependency boundaries, and preserved all admitted identities without promoting inference. | V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0; reactivates V010.GRAPH.DEEPSEEK.ATTENTION.0 |
-| 27 | `V010.GRAPH.DEEPSEEK.ATTENTION.0` | `TRACK.GRAPH` | DeepSeek | `active` | Complete the preserved DeepSeek attention checkpoint through independent full-equation reference, production SWA/CSA/HCA execution, and direct CUDA parity without CPU fallback. | V010.REPO.SEMANTIC.COMPRESSION.0 |
-| 28 | `V010.RUNTIME.DEEPSEEK.KV.0` | `TRACK.KV` | DeepSeek | `blocked` | Allocate, index, write, read, advance, bound, clear, and release the exact DeepSeek KV state used by attention and decode. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
-| 29 | `V010.RUNTIME.DEEPSEEK.PREFILL.0` | `TRACK.PREFILL` | DeepSeek | `blocked` | Execute full prompt prefill through every required layer and write real attention-derived KV state. | V010.RUNTIME.DEEPSEEK.KV.0 |
-| 30 | `V010.RUNTIME.DEEPSEEK.MOE.0` | `TRACK.GRAPH` | DeepSeek | `blocked` | Compute router logits, select experts, execute real expert weights, combine outputs, integrate shared experts, and clean up failures. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
-| 31 | `V010.GRAPH.DEEPSEEK.TRANSFORMER.0` | `TRACK.GRAPH` | DeepSeek | `blocked` | Execute embedding through repeated attention/MoE layers, residual paths, and final norm over the complete descriptor. | V010.RUNTIME.DEEPSEEK.MOE.0 |
-| 32 | `V010.RUNTIME.DEEPSEEK.DECODE.0` | `TRACK.DECODE` | DeepSeek | `blocked` | Run repeated model-backed decode steps that consume prior KV, advance positions, preserve cancellation, and produce real hidden state. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
-| 33 | `V010.RUNTIME.DEEPSEEK.LOGITS.0` | `TRACK.LOGITS` | DeepSeek | `blocked` | Apply final norm and the complete output head to real transformer state and produce vocabulary logits with numeric proof. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
-| 34 | `V010.RUNTIME.SAMPLING.0` | `TRACK.SAMPLING` | common | `blocked` | Select token IDs from real vocabulary logits with deterministic greedy behavior, seeded stochastic policies, validation, and refusal. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
-| 35 | `V010.RUNTIME.DEEPSEEK.TOKENIZER.0` | `TRACK.TOKENIZER` | DeepSeek | `blocked` | Load the exact tokenizer, encode prompts, apply template/special/EOS/stop rules, and detokenize generated IDs. | V010.RUNTIME.SAMPLING.0 |
-| 36 | `V010.RUNTIME.DEEPSEEK.GENERATION.0` | `TRACK.GENERATION` | DeepSeek | `blocked` | Compose tokenizer, prefill, KV, decode, logits, sampling, append, stop, cancellation, partial-output, and cleanup for multiple real tokens. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
-| 37 | `V010.CLI.DEEPSEEK.GENERATE.0` | `TRACK.OPERATOR` | DeepSeek | `blocked` | Expose one operator command that invokes the accepted generation path and reports precise refusal, cancellation, partial output, and cleanup. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
-| 38 | `V010.EVAL.DEEPSEEK.0` | `TRACK.EVAL` | DeepSeek | `blocked` | Run repeatable correctness, tokenizer, regression, long-context, refusal, and release-path generation evaluations. | V010.CLI.DEEPSEEK.GENERATE.0 |
-| 39 | `V010.BENCH.DEEPSEEK.0` | `TRACK.BENCH` | DeepSeek / DGX Spark | `not-measured` | Record reproducible artifact, qtype, prompt/context, prefill, decode, generation, timing, throughput, and memory evidence. | V010.EVAL.DEEPSEEK.0 |
-| 40 | `V010.RELEASE.0` | `TRACK.RELEASE` | DeepSeek v0.1.0 | `blocked` | Close every source, architecture, mapping, artifact, materialization, backend, transformer, generation, evaluation, benchmark, validation, claim, operator, packaging, and version gate. | V010.BENCH.DEEPSEEK.0 |
-| 41 | `TOPOLOGY.CELL.CLOSURE.0` | `TRACK.OPERATOR` | common | `planned` | Close residual mixed ownership only where concrete behavior still crosses domain/report/input/command/render/write boundaries. | V010.DOCS.ARCHITECTURE.0; supporting, not a product-stage promotion |
+| 26 | `V010.REPO.SEMANTIC.COMPRESSION.0` | `TRACK.SCOPE` | project | `complete` | Reconstructed repository-wide semantic ownership, compacted paths and symbols, enforced family budgets and dependency boundaries, and preserved all admitted identities without promoting inference. | V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0 |
+| 27 | `V010.REPO.C.CANONICALIZATION.0` | `TRACK.SCOPE` | project | `complete` | Canonicalized public/internal/private C interfaces, explicit includes, source-relative archive identities, symbol visibility, semantic contracts, large owners, and hard ABI/complexity gates without promoting inference. | V010.REPO.SEMANTIC.COMPRESSION.0 |
+| 28 | `V010.GRAPH.DEEPSEEK.ATTENTION.0` | `TRACK.GRAPH` | DeepSeek | `active` | Complete the preserved DeepSeek attention checkpoint through independent full-equation reference, production SWA/CSA/HCA execution, and direct CUDA parity without CPU fallback. | V010.REPO.C.CANONICALIZATION.0 |
+| 29 | `V010.RUNTIME.DEEPSEEK.KV.0` | `TRACK.KV` | DeepSeek | `blocked` | Allocate, index, write, read, advance, bound, clear, and release the exact DeepSeek KV state used by attention and decode. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| 30 | `V010.RUNTIME.DEEPSEEK.PREFILL.0` | `TRACK.PREFILL` | DeepSeek | `blocked` | Execute full prompt prefill through every required layer and write real attention-derived KV state. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| 31 | `V010.RUNTIME.DEEPSEEK.MOE.0` | `TRACK.GRAPH` | DeepSeek | `blocked` | Compute router logits, select experts, execute real expert weights, combine outputs, integrate shared experts, and clean up failures. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| 32 | `V010.GRAPH.DEEPSEEK.TRANSFORMER.0` | `TRACK.GRAPH` | DeepSeek | `blocked` | Execute embedding through repeated attention/MoE layers, residual paths, and final norm over the complete descriptor. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| 33 | `V010.RUNTIME.DEEPSEEK.DECODE.0` | `TRACK.DECODE` | DeepSeek | `blocked` | Run repeated model-backed decode steps that consume prior KV, advance positions, preserve cancellation, and produce real hidden state. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| 34 | `V010.RUNTIME.DEEPSEEK.LOGITS.0` | `TRACK.LOGITS` | DeepSeek | `blocked` | Apply final norm and the complete output head to real transformer state and produce vocabulary logits with numeric proof. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| 35 | `V010.RUNTIME.SAMPLING.0` | `TRACK.SAMPLING` | common | `blocked` | Select token IDs from real vocabulary logits with deterministic greedy behavior, seeded stochastic policies, validation, and refusal. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| 36 | `V010.RUNTIME.DEEPSEEK.TOKENIZER.0` | `TRACK.TOKENIZER` | DeepSeek | `blocked` | Load the exact tokenizer, encode prompts, apply template/special/EOS/stop rules, and detokenize generated IDs. | V010.RUNTIME.SAMPLING.0 |
+| 37 | `V010.RUNTIME.DEEPSEEK.GENERATION.0` | `TRACK.GENERATION` | DeepSeek | `blocked` | Compose tokenizer, prefill, KV, decode, logits, sampling, append, stop, cancellation, partial-output, and cleanup for multiple real tokens. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| 38 | `V010.CLI.DEEPSEEK.GENERATE.0` | `TRACK.OPERATOR` | DeepSeek | `blocked` | Expose one operator command that invokes the accepted generation path and reports precise refusal, cancellation, partial output, and cleanup. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| 39 | `V010.EVAL.DEEPSEEK.0` | `TRACK.EVAL` | DeepSeek | `blocked` | Run repeatable correctness, tokenizer, regression, long-context, refusal, and release-path generation evaluations. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| 40 | `V010.BENCH.DEEPSEEK.0` | `TRACK.BENCH` | DeepSeek / DGX Spark | `not-measured` | Record reproducible artifact, qtype, prompt/context, prefill, decode, generation, timing, throughput, and memory evidence. | V010.EVAL.DEEPSEEK.0 |
+| 41 | `V010.RELEASE.0` | `TRACK.RELEASE` | DeepSeek v0.1.0 | `blocked` | Close every source, architecture, mapping, artifact, materialization, backend, transformer, generation, evaluation, benchmark, validation, claim, operator, packaging, and version gate. | V010.BENCH.DEEPSEEK.0 |
+| 42 | `TOPOLOGY.CELL.CLOSURE.0` | `TRACK.OPERATOR` | common | `planned` | Close residual mixed ownership only where concrete behavior still crosses domain/report/input/command/render/write boundaries. | V010.DOCS.ARCHITECTURE.0; supporting, not a product-stage promotion |
 
 ## 9. Complete Track/Wave Ledger
 
@@ -795,11 +801,11 @@ the row's use.
 
 ### 9.1 TRACK.SCOPE
 
-**Owner:** Project control, release scope, family/release distinction, claim boundary, version policy, repository semantic ownership, architecture-control transitions, and public-document transitions.
+**Owner:** Project control, release scope, family/release distinction, claim boundary, version policy, repository semantic ownership, C interface/build boundaries, architecture-control transitions, and public-document transitions.
 
-**Current truth:** repository-wide semantic compression is complete; attention implementation and identities are preserved and its incomplete execution milestone is active again
+**Current truth:** repository-wide semantic compression and C canonicalization are complete; attention implementation and identities are preserved and its incomplete execution milestone is active again
 
-**Ledger summary:** 25 recovered IDs; 7 first-class milestones; 7 complete support rows; 12 open support rows; 6 superseded/deferred rows.
+**Ledger summary:** 25 recovered IDs; 8 first-class milestones; 7 complete support rows; 12 open support rows; 6 superseded/deferred rows.
 
 #### First-Class Milestones
 
@@ -811,7 +817,8 @@ the row's use.
 | `V010.DOCS.ARCHITECTURE.0` | project | `complete` | Established non-overlapping documentation owners, absorbed repair obligations, removed duplicate project state, and installed dynamic ledger guards. | V010.PROJECT.RECOVERY.1 | current |
 | `V010.PROJECT.COMPILATION.0` | project | `complete` | Established payload/transformation separation, model-compilation ownership, planning constraints, future obligations, and the Transformation IR dependency without changing executable capability. | V010.SOURCE.PAYLOAD.STREAM.0 | current |
 | `V010.DOCS.README.COMPILATION.0` | project | `complete` | Rebuilt README.md around the owned compilation/execution architecture while preserving project-state ownership, exact implemented truth, and unsupported boundaries. | V010.PROJECT.COMPILATION.0 | current |
-| `V010.REPO.SEMANTIC.COMPRESSION.0` | project | `complete` | Reconstructed every owned source boundary around compact semantic owners, enforced the dependency DAG and family budget, preserved executable identities, and installed permanent repository-wide gates. | V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0; reactivates V010.GRAPH.DEEPSEEK.ATTENTION.0 | current |
+| `V010.REPO.SEMANTIC.COMPRESSION.0` | project | `complete` | Reconstructed every owned source boundary around compact semantic owners, enforced the dependency DAG and family budget, preserved executable identities, and installed permanent repository-wide gates. | V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0 | current |
+| `V010.REPO.C.CANONICALIZATION.0` | project | `complete` | Canonicalized the three C header tiers, explicit include and archive identities, symbol visibility, semantic contracts, large owners, and hard ABI/complexity gates while preserving all capability refusals. | V010.REPO.SEMANTIC.COMPRESSION.0 | current |
 
 #### Recovered And Subordinate Rows
 
@@ -1258,7 +1265,7 @@ target or payload snapshot exists.
 
 **Owner:** Primitive contracts, graph construction/planning, attention, position handling, MoE routing/experts, residuals, layers, scratch, and transformer execution.
 
-**Current truth:** repository ownership and dependency boundaries are reclosed; the runtime-numeric-bound attention implementation checkpoint is preserved, active, and explicitly unadmitted for complete CPU or CUDA execution
+**Current truth:** repository C ownership, interfaces, and dependency boundaries are reclosed; the runtime-numeric-bound attention implementation checkpoint is preserved, active, and explicitly unadmitted for complete CPU or CUDA execution
 
 **Ledger summary:** 71 recovered IDs; 3 first-class milestones; 1 active milestone; 1 complete support row; 70 open support rows; 1 superseded/deferred row.
 
@@ -1266,7 +1273,7 @@ target or payload snapshot exists.
 
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
-| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `active` | Complete the preserved SWA/CSA/HCA checkpoint through an independent full-equation reference, production history/top-k participation, ratio-128 HCA behavior, and direct GB10 CUDA parity. | V010.REPO.SEMANTIC.COMPRESSION.0 | current |
+| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `active` | Complete the preserved SWA/CSA/HCA checkpoint through an independent full-equation reference, production history/top-k participation, ratio-128 HCA behavior, and direct GB10 CUDA parity. | V010.REPO.C.CANONICALIZATION.0 | current |
 | `V010.RUNTIME.DEEPSEEK.MOE.0` | DeepSeek | `blocked` | Compute router logits, select experts, execute real expert weights, combine outputs, integrate shared experts, and clean up failures. | V010.RUNTIME.DEEPSEEK.PREFILL.0 | current |
 | `V010.GRAPH.DEEPSEEK.TRANSFORMER.0` | DeepSeek | `blocked` | Execute embedding through repeated attention/MoE layers, residual paths, and final norm over the complete descriptor. | V010.RUNTIME.DEEPSEEK.MOE.0 | current |
 
@@ -1985,12 +1992,12 @@ acceptance boundary.
 
 | Surface | Code-grounded locations | Required disposition | Consuming milestone and acceptance boundary |
 | --- | --- | --- | --- |
-| Selected embedding and segment commands | `src/cli/input/graph.c`, `src/cli/render/graph.c`, selected modes in `src/graph/primitive.c`, `tests/cli/partial_graph.sh`, `tests/cli/segment_graph.sh` | Absorb valid backend/reference comparisons into internal proofs; remove selected product commands and aliases. | `V010.GRAPH.DEEPSEEK.TRANSFORMER.0`: full transformer tests own public graph proof and selected command discovery is gone. |
+| Selected embedding and segment commands | `src/cli/input/graph.c`, `src/cli/render/graph.c`, selected modes in `src/runtime/graph.c`, `tests/cli/partial_graph.sh`, `tests/cli/segment_graph.sh` | Absorb valid backend/reference comparisons into internal proofs; remove selected product commands and aliases. | `V010.GRAPH.DEEPSEEK.TRANSFORMER.0`: full transformer tests own public graph proof and selected command discovery is gone. |
 | Bounded diagnostic prefill and KV | `src/generation/prefill.c`, `src/generation/kv.c`, `src/generation/kv_report.c`, KV/prefill CLI adapters and tests | Replace with family-correct prefill and attention-backed KV; retain only valid low-level storage math. | `V010.GRAPH.DEEPSEEK.ATTENTION.0`, `V010.RUNTIME.DEEPSEEK.KV.0`, `V010.RUNTIME.DEEPSEEK.PREFILL.0`: prefill writes model K/V and decode reads the same owned state. |
 | Diagnostic decode | Command/help and summary advancement in `src/generation/decode.c`, plus CLI tests | Replace with model-backed decode, then remove summary-only command behavior. | `V010.RUNTIME.DEEPSEEK.DECODE.0`: decode consumes the executable descriptor and attention-backed KV. |
 | Fixture logits and sampling | `src/generation/logits.c`, `src/generation/sampling.c`, `src/generation/sampling_report.c`, logits/sampling CLI surfaces and tests | Retain numeric cases only as internal fixtures; replace public behavior with final-norm/output-head logits and real sampling. | `V010.RUNTIME.DEEPSEEK.LOGITS.0`, `V010.RUNTIME.SAMPLING.0`: sampled IDs derive from full-vocabulary model logits. |
 | Bounded diagnostic generation | `src/generation/core.c`, `src/cli/commands/generate.c`, generation input/render/catalog owners, `tests/cli/generation.sh` | Replace with the tokenizer/prefill/KV/decode/logits/sample/append/stop chain; remove diagnostic token printing. | `V010.RUNTIME.DEEPSEEK.GENERATION.0`: multiple detokenized autoregressive tokens pass release-path tests. |
-| Selected-artifact support levels | `include/yvex/model_gate.h`, `src/model/artifacts/gate.c`, registry/report owners, prepare renderers, model gate/registry tests | Complete-artifact admission now consumes one canonical typed result; retained bounded subsets remain tensor proof artifacts and cannot enter that path. | `V010.ARTIFACT.SUPPORT.CUTOVER.0`: complete; runtime support still requires materialization and every higher gate. |
+| Selected-artifact support levels | `include/yvex/model.h`, `src/model/artifacts/gate.c`, registry/report owners, prepare renderers, model gate/registry tests | Complete-artifact admission now consumes one canonical typed result; retained bounded subsets remain tensor proof artifacts and cannot enter that path. | `V010.ARTIFACT.SUPPORT.CUTOVER.0`: complete; runtime support still requires materialization and every higher gate. |
 | Report-only fullmodel surfaces | `src/cli/model_artifacts/fullmodel.c`, `src/cli/model_artifacts/fullmodel.c`, `tests/cli/fullmodel.sh` | Replace useful descriptor/materialization facts with typed full-target APIs; remove reports that only restate missing runtime behavior. | `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0`: one typed executable descriptor boundary remains and obsolete report commands are gone. |
 | Stale target, help, and claim tests | `src/model/target/{catalog,decision,candidates}.c`, `src/cli/main.c`, generation examples/help, `tests/cli/core.sh`, `tests/cli/models.sh`, `tests/cli/generation.sh` | Remove multi-family/selected release choices and stale examples; first expose exact full-target refusal, then the real generation command. | `V010.REBASE.DEEPSEEK.0` owns target truth; `V010.CLI.DEEPSEEK.GENERATE.0` owns final command/help proof. |
 

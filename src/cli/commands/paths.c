@@ -1,22 +1,32 @@
-/*
- * paths.c - filesystem command surface.
- *
- * Owner: CLI paths command.
+/* Owner: CLI paths command.
  * Owns: path argv validation, dispatch, help, and compatibility rendering.
  * Does not own: filesystem policy, path resolution, or directory lifecycle.
  * Invariants: bytes are written only through the CLI IO owner.
  * Boundary: consumes typed filesystem APIs and returns process exit status.
- */
-#include "src/core/operator.h"
-#include "src/model/target/catalog.h"
-#include "src/cli/io/out.h"
-#include <yvex/fs.h>
+ * Purpose: provide path argv validation, dispatch, help, and compatibility rendering.
+ * Inputs: typed command arguments and borrowed domain APIs.
+ * Effects: dispatches domain calls and routes operator bytes only through CLI I/O.
+ * Failure: returns a stable CLI status while preserving domain ownership. */
+#include "src/cli/input/private.h"
+#include <yvex/internal/source.h>
+#include "src/cli/io/private.h"
+#include <yvex/core.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+static const char *const literal_lines_0[] = { "       yvex paths [--project DIR] --run [--create]",
+    "       yvex paths [--project DIR] configure --models-root DIR [--create]",
+    "       yvex paths [--project DIR] configure --reset",
+    "       yvex paths [--project DIR] resolve --family deepseek|glm|qwen|gemma --kind source|gguf|reports|"
+        "reference|registry\n",
+    "Path configuration records operator-local storage only; it does not download models, create artifacts,"
+        " register aliases, or claim runtime support."
+};
 
 /* Domain-owned command surface moved out of core.c. */
 
@@ -25,6 +35,105 @@ typedef enum {
     YVEX_PATHS_OUTPUT_AUDIT
 } yvex_paths_output_mode;
 
+/* Format one CLI-owned target path with the historical typed bounds refusal. */
+/* Purpose: Compute target path format for its CLI invariant (`target_path_format`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
+static int target_path_format(char *out,
+                              size_t cap,
+                              yvex_error *err,
+                              const char *format,
+                              ...)
+{
+    va_list args;
+    int length;
+
+    if (!out || cap == 0u || !format) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "operator_paths",
+                       "invalid path format argument");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    va_start(args, format);
+    length = vsnprintf(out, cap, format, args);
+    va_end(args);
+    if (length < 0 || (size_t)length >= cap) {
+        out[cap - 1u] = '\0';
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "operator_paths",
+                        "path exceeds capacity %lu", (unsigned long)cap);
+        return YVEX_ERR_BOUNDS;
+    }
+    return YVEX_OK;
+}
+
+/* Resolve a CLI family/kind target without mutating or admitting the path. */
+/* Purpose: Construct the owned operator paths resolve target state (`yvex_operator_paths_resolve_target`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
+int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths,
+                                       const char *family,
+                                       const char *kind,
+                                       char *out,
+                                       size_t cap,
+                                       int *out_exists,
+                                       yvex_error *err)
+{
+    struct stat status;
+    int rc;
+
+    if (!operator_paths || !family || !kind || !out || !out_exists) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "operator_paths",
+                       "family, kind and outputs are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (strcmp(family, "deepseek") != 0 && strcmp(family, "glm") != 0 &&
+        strcmp(family, "qwen") != 0 && strcmp(family, "gemma") != 0) {
+        yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "operator_paths",
+                        "unknown family: %s", family);
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (strcmp(kind, "source") == 0 && strcmp(family, "deepseek") == 0) {
+        if (!yvex_source_target_path(out, cap, operator_paths->models_root,
+                                     yvex_source_release_identity())) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "operator_paths",
+                           "DeepSeek source path exceeds output capacity");
+            return YVEX_ERR_BOUNDS;
+        }
+        rc = YVEX_OK;
+    } else if (strcmp(kind, "source") == 0) {
+        const char *name = strcmp(family, "glm") == 0 ? "GLM-5.2" :
+                           strcmp(family, "qwen") == 0 ? "qwen3-8b" : "gemma-4-12b-it";
+        rc = target_path_format(out, cap, err, "%s/hf/%s/%s",
+                                operator_paths->models_root, family, name);
+    } else if (strcmp(kind, "gguf") == 0) {
+        rc = target_path_format(out, cap, err, "%s/gguf/%s",
+                                operator_paths->models_root, family);
+    } else if (strcmp(kind, "reports") == 0) {
+        rc = target_path_format(out, cap, err, "%s/reports/%s",
+                                operator_paths->models_root, family);
+    } else if (strcmp(kind, "reference") == 0) {
+        rc = target_path_format(out, cap, err, "%s/reference/%s",
+                                operator_paths->models_root, family);
+    } else if (strcmp(kind, "registry") == 0) {
+        rc = target_path_format(out, cap, err, "%s", operator_paths->registry_root);
+    } else {
+        yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "operator_paths",
+                        "unknown kind: %s", kind);
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (rc != YVEX_OK) return rc;
+    *out_exists = stat(out, &status) == 0 ? 1 : 0;
+    return YVEX_OK;
+}
+
+/* Purpose: Parse parse paths output mode into typed CLI state (`parse_paths_output_mode`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_paths_output_mode(const char *value, yvex_paths_output_mode *mode)
 {
     if (!value || !mode) {
@@ -41,6 +150,11 @@ static int parse_paths_output_mode(const char *value, yvex_paths_output_mode *mo
     return 0;
 }
 
+/* Purpose: Render print operator paths normal from typed facts (`print_operator_paths_normal`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int print_operator_paths_normal(const yvex_operator_paths *operator_paths,
                                        const char *status,
                                        yvex_error *err)
@@ -58,11 +172,12 @@ static int print_operator_paths_normal(const yvex_operator_paths *operator_paths
     yvex_cli_out_writef(stdout, "gguf_root: %s\n", operator_paths->gguf_root);
     yvex_cli_out_writef(stdout, "reports_root: %s\n", operator_paths->reports_root);
     yvex_cli_out_writef(stdout, "registry_root: %s\n", operator_paths->registry_root);
-    yvex_cli_out_writef(stdout, "hint: use --" "audit for project/cache/state paths\n");
+    yvex_cli_out_writef(stdout, "hint: use --audit for project/cache/state paths\n");
     yvex_error_clear(err);
     return YVEX_OK;
 }
 
+/* Purpose: Render print paths audit from typed facts (`print_paths_audit`). */
 static int print_paths_audit(const yvex_paths *paths, yvex_error *err)
 {
     if (!paths) {
@@ -79,6 +194,11 @@ static int print_paths_audit(const yvex_paths *paths, yvex_error *err)
     return YVEX_OK;
 }
 
+/* Purpose: Render print operator paths audit from typed facts (`print_operator_paths_audit`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int print_operator_paths_audit(const yvex_operator_paths *paths,
                                       const char *status,
                                       int created,
@@ -106,6 +226,7 @@ static int print_operator_paths_audit(const yvex_operator_paths *paths,
     return YVEX_OK;
 }
 
+/* Purpose: Render print run dir from typed facts (`print_run_dir`). */
 static int print_run_dir(const yvex_run_dir *run, yvex_error *err)
 {
     if (!run) {
@@ -125,6 +246,86 @@ static int print_run_dir(const yvex_run_dir *run, yvex_error *err)
     return YVEX_OK;
 }
 
+/* Purpose: Orchestrate the typed command paths default request (`command_paths_default`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
+static int command_paths_default(const yvex_paths *paths,
+                                 int want_create,
+                                 yvex_paths_output_mode output_mode)
+{
+    yvex_operator_paths operator_paths;
+    yvex_error err;
+    int rc;
+
+    yvex_error_clear(&err);
+    rc = yvex_operator_paths_resolve(paths, NULL, &operator_paths, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+    }
+    if (want_create) {
+        rc = yvex_operator_paths_create(&operator_paths, &err);
+        if (rc != YVEX_OK) {
+            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+        }
+        if (output_mode == YVEX_PATHS_OUTPUT_AUDIT) {
+            rc = print_paths_audit(paths, &err);
+            if (rc != YVEX_OK) {
+                return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+            }
+            return print_operator_paths_audit(&operator_paths, "paths-created", 1, 1, &err);
+        }
+        return print_operator_paths_normal(&operator_paths, "created", &err);
+    }
+    if (output_mode == YVEX_PATHS_OUTPUT_AUDIT) {
+        rc = print_paths_audit(paths, &err);
+        if (rc == YVEX_OK) {
+            rc = print_operator_paths_audit(&operator_paths, "paths", 0, 0, &err);
+        }
+    } else {
+        rc = print_operator_paths_normal(&operator_paths, "normal", &err);
+    }
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+    }
+    return 0;
+}
+
+/* Execute the optional run-directory phase after path configuration. */
+/* Purpose: Orchestrate the typed command paths run request (`command_paths_run`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
+static int command_paths_run(const yvex_paths *paths, int want_create)
+{
+    yvex_run_dir run;
+    yvex_error err;
+    int rc;
+
+    yvex_error_clear(&err);
+    rc = yvex_run_dir_prepare(&run, paths, NULL, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+    }
+    if (want_create) {
+        rc = yvex_run_dir_create(&run, &err);
+        if (rc != YVEX_OK) {
+            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+        }
+    }
+    rc = print_run_dir(&run, &err);
+    return rc == YVEX_OK
+               ? 0
+               : print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+}
+
+/* Purpose: Orchestrate the typed command paths request (`command_paths`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_paths(int arg_count, char **args)
 {
     const char *project_root = NULL;
@@ -142,7 +343,6 @@ static int command_paths(int arg_count, char **args)
     char resolved_path[YVEX_PATH_CAP];
     yvex_paths paths;
     yvex_operator_paths operator_paths;
-    yvex_run_dir run;
     yvex_error err;
 
     yvex_error_clear(&err);
@@ -184,7 +384,7 @@ static int command_paths(int arg_count, char **args)
                 return 0;
             } else {
                 yvex_cli_out_writef(stderr, "yvex: unknown paths configure option: %s\n", args[i]);
-                yvex_cli_out_writef(stderr, "Try '" "yvex help paths' for usage.\n");
+                yvex_cli_out_writef(stderr, "Try 'yvex help paths' for usage.\n");
                 return 2;
             }
             ++i;
@@ -248,7 +448,7 @@ static int command_paths(int arg_count, char **args)
                 return 0;
             } else {
                 yvex_cli_out_writef(stderr, "yvex: unknown paths resolve option: %s\n", args[i]);
-                yvex_cli_out_writef(stderr, "Try '" "yvex help paths' for usage.\n");
+                yvex_cli_out_writef(stderr, "Try 'yvex help paths' for usage.\n");
                 return 2;
             }
             ++i;
@@ -284,11 +484,11 @@ static int command_paths(int arg_count, char **args)
             want_run = 1;
         } else if (strcmp(args[i], "--create") == 0) {
             want_create = 1;
-        } else if (strcmp(args[i], "--" "audit") == 0) {
+        } else if (strcmp(args[i], "--audit") == 0) {
             output_mode = YVEX_PATHS_OUTPUT_AUDIT;
-        } else if (strcmp(args[i], "--" "output") == 0) {
+        } else if (strcmp(args[i], "--output") == 0) {
             if (i + 1 >= arg_count) {
-                yvex_cli_out_writef(stderr, "yvex paths: --" "output requires normal|audit\n");
+                yvex_cli_out_writef(stderr, "yvex paths: --output requires normal|audit\n");
                 return 2;
             }
             if (!parse_paths_output_mode(args[++i], &output_mode)) {
@@ -300,75 +500,36 @@ static int command_paths(int arg_count, char **args)
             return 0;
         } else {
             yvex_cli_out_writef(stderr, "yvex: unknown paths option: %s\n", args[i]);
-            yvex_cli_out_writef(stderr, "Try '" "yvex help paths' for usage.\n");
+            yvex_cli_out_writef(stderr, "Try 'yvex help paths' for usage.\n");
             return 2;
         }
     }
 
     if (!want_run) {
-        rc = yvex_operator_paths_resolve(&paths, NULL, &operator_paths, &err);
-        if (rc != YVEX_OK) {
-            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
-        }
-        if (want_create) {
-            rc = yvex_operator_paths_create(&operator_paths, &err);
-            if (rc != YVEX_OK) {
-                return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
-            }
-            if (output_mode == YVEX_PATHS_OUTPUT_AUDIT) {
-                rc = print_paths_audit(&paths, &err);
-                if (rc != YVEX_OK) {
-                    return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
-                }
-                return print_operator_paths_audit(&operator_paths, "paths-created", 1, 1, &err);
-            }
-            return print_operator_paths_normal(&operator_paths, "created", &err);
-        }
-        if (output_mode == YVEX_PATHS_OUTPUT_AUDIT) {
-            rc = print_paths_audit(&paths, &err);
-            if (rc != YVEX_OK) {
-                return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
-            }
-            rc = print_operator_paths_audit(&operator_paths, "paths", 0, 0, &err);
-        } else {
-            rc = print_operator_paths_normal(&operator_paths, "normal", &err);
-        }
-        if (rc != YVEX_OK) {
-            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
-        }
-        return 0;
+        return command_paths_default(&paths, want_create, output_mode);
     }
 
-    rc = yvex_run_dir_prepare(&run, &paths, NULL, &err);
-    if (rc != YVEX_OK) {
-        return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
-    }
-
-    if (want_create) {
-        rc = yvex_run_dir_create(&run, &err);
-        if (rc != YVEX_OK) {
-            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
-        }
-    }
-
-    rc = print_run_dir(&run, &err);
-    if (rc != YVEX_OK) {
-        return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
-    }
-    return 0;
+    return command_paths_run(&paths, want_create);
 }
 
+/* Purpose: Orchestrate the typed paths command request (`yvex_paths_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_paths_command(int arg_count, char **args)
 {
     return command_paths(arg_count, args);
 }
 
+/* Purpose: Render paths help from typed facts (`yvex_paths_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_paths_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex paths [--project DIR] [--create] [--" "audit | --" "output normal|audit]\n");
-    yvex_cli_out_writef(fp, "       yvex paths [--project DIR] --run [--create]\n");
-    yvex_cli_out_writef(fp, "       yvex paths [--project DIR] configure --models-root DIR [--create]\n");
-    yvex_cli_out_writef(fp, "       yvex paths [--project DIR] configure --reset\n");
-    yvex_cli_out_writef(fp, "       yvex paths [--project DIR] resolve --family deepseek|glm|qwen|gemma --kind source|gguf|reports|reference|registry\n\n");
-    yvex_cli_out_writef(fp, "Path configuration records operator-local storage only; it does not download models, create artifacts, register aliases, or claim runtime support.\n");
+    yvex_cli_out_writef(fp,
+        "usage: yvex paths [--project DIR] [--create] [--audit | --output normal|audit]\n");
+    yvex_cli_out_lines(fp, literal_lines_0, sizeof(literal_lines_0) / sizeof(literal_lines_0[0]));
 }

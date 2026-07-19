@@ -1,31 +1,20 @@
-/*
- * kv_report.c - typed KV report construction.
- *
- * Owner:
- *   src/generation
- *
- * Owns:
- *   KV report request evaluation, model-family fact scanning, source-only and
- *   unsupported-family report facts, minimal diagnostic ownership report facts,
- *   phase facts, blocker facts, and next-row facts.
- *
- * Does not own:
- *   adapter dispatch, input grammar, text rendering, stdout/stderr output,
- *   attention execution, decode, logits, sampling, generation, eval,
- *   benchmark, or release decisions.
- *
- * Invariants:
- *   report builders populate typed facts only and use the lowest true stage.
- *
- * Boundary:
- *   KV reports are report-only unless explicitly describing a minimal
- *   session-owned diagnostic allocation.
- */
-#include "kv_report.h"
+/* Owner: src/generation
+ * Owns: KV report request evaluation, model-family fact scanning, source-only and unsupported-family report facts,
+ *   minimal diagnostic ownership report facts, phase facts, blocker facts, and next-row facts.
+ * Does not own: adapter dispatch, input grammar, text rendering, stdout/stderr output, attention execution, decode,
+ *   logits, sampling, generation, eval, benchmark, or release decisions.
+ * Invariants: report builders populate typed facts only and use the lowest true stage.
+ * Boundary: KV reports are report-only unless explicitly describing a minimal session-owned diagnostic allocation.
+ * Purpose: Construct typed KV capability and ownership reports from canonical model facts.
+ * Inputs: A report request, immutable model/source facts, and caller-owned report storage.
+ * Effects: Allocates only temporary requirement coverage and releases it before return.
+ * Failure: Missing identity, coverage, or allocation returns a typed lowest-stage refusal. */
+#include <yvex/internal/generation.h>
 
-#include "private.h"
+#include <yvex/artifact.h>
 
 #include <ctype.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,11 +38,68 @@ typedef struct {
     int has_output_head;
 } yvex_kv_role_scan;
 
+typedef struct {
+    const char *name;
+    yvex_tensor_role role;
+    size_t scan_offset;
+    size_t report_offset;
+    const char *missing_blocker;
+} kv_family_role;
+
+#define KV_ROLE(name_, role_, scan_, report_, blocker_)                                    \
+    {                                                                                      \
+        name_, role_, offsetof(yvex_kv_role_scan, scan_),                                  \
+            offsetof(yvex_kv_report, report_), blocker_                                    \
+    }
+
+static const kv_family_role kv_family_roles[] = {
+    KV_ROLE("token embedding", YVEX_TENSOR_ROLE_TOKEN_EMBEDDING,
+            has_token_embedding, role_token_embedding_status, NULL),
+    KV_ROLE("attention norm", YVEX_TENSOR_ROLE_ATTENTION_NORM,
+            has_attention_norm, role_attention_norm_status, NULL),
+    KV_ROLE("q projection tensor", YVEX_TENSOR_ROLE_ATTENTION_Q, has_q,
+            role_q_projection_status, "missing-attention-q"),
+    KV_ROLE("k projection tensor", YVEX_TENSOR_ROLE_ATTENTION_K, has_k,
+            role_k_projection_status, "missing-attention-k"),
+    KV_ROLE("v projection tensor", YVEX_TENSOR_ROLE_ATTENTION_V, has_v,
+            role_v_projection_status, "missing-attention-v"),
+    KV_ROLE("o projection", YVEX_TENSOR_ROLE_ATTENTION_OUT, has_o,
+            role_o_projection_status, NULL),
+    KV_ROLE("output head", YVEX_TENSOR_ROLE_OUTPUT_HEAD, has_output_head,
+            role_output_head_status, NULL),
+};
+
+#undef KV_ROLE
+
+static const char *const kv_family_names[] = {"deepseek", "glm", "qwen", "llama"};
+
+static const char *const kv_context_keys[] = {
+    "llama.context_length",
+    "deepseek.context_length",
+    "qwen.context_length",
+    "glm.context_length",
+    "general.context_length",
+};
+
+static const char *const kv_phase_names[] = {
+    "preflight",       "resolve-model", "resolve-family", "load-family-runtime",
+    "load-attention-class", "kv-profile",    "kv-layout",      "kv-shape",
+    "kv-indexing",     "kv-capacity",   "kv-residency",   "kv-context",
+    "kv-readiness",    "blocker-report", "complete",        "failed",
+    "cleanup",
+};
+
+/* Purpose: Implement the canonical kv streq mechanism owned by the generation boundary. */
 static int kv_streq(const char *a, const char *b)
 {
     return a && b && strcmp(a, b) == 0;
 }
 
+/* Purpose: Implement the canonical kv contains ci mechanism owned by the generation boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static int kv_contains_ci(const char *text, const char *needle)
 {
     size_t needle_len;
@@ -82,42 +128,48 @@ static int kv_contains_ci(const char *text, const char *needle)
     return 0;
 }
 
+/* Purpose: Implement the canonical kv known family mechanism owned by the generation boundary. */
 static int kv_known_family(const char *family)
 {
-    return kv_streq(family, "auto") ||
-           kv_streq(family, "deepseek") ||
-           kv_streq(family, "glm") ||
-           kv_streq(family, "qwen") ||
-           kv_streq(family, "llama");
+    size_t index;
+
+    if (kv_streq(family, "auto")) {
+        return 1;
+    }
+    for (index = 0; index < sizeof(kv_family_names) / sizeof(kv_family_names[0]); ++index) {
+        if (kv_streq(family, kv_family_names[index])) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
+/* Purpose: Implement the canonical kv family from text mechanism owned by the generation boundary. */
 static const char *kv_family_from_text(const char *text)
 {
-    if (kv_contains_ci(text, "deepseek")) {
-        return "deepseek";
-    }
-    if (kv_contains_ci(text, "glm")) {
-        return "glm";
-    }
-    if (kv_contains_ci(text, "qwen")) {
-        return "qwen";
-    }
-    if (kv_contains_ci(text, "llama")) {
-        return "llama";
+    size_t index;
+
+    for (index = 0; index < sizeof(kv_family_names) / sizeof(kv_family_names[0]); ++index) {
+        if (kv_contains_ci(text, kv_family_names[index])) {
+            return kv_family_names[index];
+        }
     }
     return "unknown";
 }
 
+/* Purpose: Implement the canonical kv source only target mechanism owned by the generation boundary. */
 static int kv_source_only_target(const char *model)
 {
     return kv_contains_ci(model, "glm-5.2-official-safetensors");
 }
 
+/* Purpose: Implement the canonical kv role status mechanism owned by the generation boundary. */
 static const char *kv_role_status(int present)
 {
     return present ? "present" : "missing";
 }
 
+/* Purpose: Compute the bounded kv attention dependency status primitive under the declared dtype and shape contract. */
 static const char *kv_attention_dependency_status(const yvex_kv_role_scan *scan)
 {
     if (!scan || !scan->has_q || !scan->has_k || !scan->has_v) {
@@ -126,6 +178,7 @@ static const char *kv_attention_dependency_status(const yvex_kv_role_scan *scan)
     return "blocked-runtime-integration";
 }
 
+/* Purpose: Implement the canonical kv class status for scan mechanism owned by the generation boundary. */
 static const char *kv_class_status_for_scan(const yvex_kv_role_scan *scan)
 {
     if (scan && scan->has_q && scan->has_k && scan->has_v && scan->has_o) {
@@ -134,6 +187,7 @@ static const char *kv_class_status_for_scan(const yvex_kv_role_scan *scan)
     return "partial";
 }
 
+/* Purpose: Copy kv report copy between compatible admitted ranges without changing semantic identity. */
 static void kv_report_copy(char *dst,
                            size_t dst_size,
                            const char **field,
@@ -146,23 +200,7 @@ static void kv_report_copy(char *dst,
     *field = dst;
 }
 
-static int kv_exit_for_status(int status)
-{
-    switch (status) {
-    case YVEX_ERR_INVALID_ARG:
-        return 2;
-    case YVEX_ERR_IO:
-        return 3;
-    case YVEX_ERR_FORMAT:
-    case YVEX_ERR_BOUNDS:
-        return 4;
-    case YVEX_ERR_UNSUPPORTED:
-        return 5;
-    default:
-        return 1;
-    }
-}
-
+/* Purpose: Implement the canonical kv target class for model mechanism owned by the generation boundary. */
 static const char *kv_target_class_for_model(const char *model,
                                              const yvex_model_ref *ref)
 {
@@ -178,6 +216,7 @@ static const char *kv_target_class_for_model(const char *model,
     return "candidate-GGUF-path";
 }
 
+/* Purpose: Implement the canonical kv target id for model mechanism owned by the generation boundary. */
 static const char *kv_target_id_for_model(const yvex_kv_report_request *request,
                                           const yvex_model_ref *ref)
 {
@@ -198,6 +237,11 @@ static const char *kv_target_id_for_model(const yvex_kv_report_request *request,
     return "candidate-GGUF-path";
 }
 
+/* Purpose: Release the resources owned by kv model context close without changing borrowed inputs.
+ * Inputs: An owned object that may be null or already released where its lifecycle permits.
+ * Effects: Releases only resources owned by the supplied object and leaves it reset or unusable.
+ * Failure: Null and already-released inputs follow the idempotent lifecycle contract.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static void kv_model_context_close(yvex_kv_model_context *ctx)
 {
     if (!ctx) {
@@ -210,6 +254,11 @@ static void kv_model_context_close(yvex_kv_model_context *ctx)
     memset(ctx, 0, sizeof(*ctx));
 }
 
+/* Purpose: Construct the admitted kv model context open state only after its identities and resources are valid.
+ * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static int kv_model_context_open(const char *path,
                                  yvex_kv_model_context *ctx,
                                  yvex_error *err)
@@ -220,9 +269,8 @@ static int kv_model_context_open(const char *path,
     int rc;
 
     if (!path || !ctx) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "kv-report",
-                       "model path is required");
-        return YVEX_ERR_INVALID_ARG;
+        return yvex_generation_refuse(err, YVEX_ERR_INVALID_ARG,
+                                      "kv-report", "model path is required");
     }
     memset(ctx, 0, sizeof(*ctx));
     memset(&integrity_options, 0, sizeof(integrity_options));
@@ -259,6 +307,11 @@ static int kv_model_context_open(const char *path,
     return rc;
 }
 
+/* Purpose: Implement the canonical kv detect family mechanism owned by the generation boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static const char *kv_detect_family(const yvex_model_ref *ref,
                                     const yvex_kv_model_context *ctx,
                                     const char *input)
@@ -294,6 +347,11 @@ static const char *kv_detect_family(const yvex_model_ref *ref,
     return kv_family_from_text(input);
 }
 
+/* Purpose: Implement the canonical kv scan roles mechanism owned by the generation boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static void kv_scan_roles(const yvex_tensor_table *table, yvex_kv_role_scan *scan)
 {
     unsigned long long i;
@@ -309,43 +367,26 @@ static void kv_scan_roles(const yvex_tensor_table *table, yvex_kv_role_scan *sca
             continue;
         }
         scan->total_tensor_bytes += tensor->storage_bytes;
-        switch (tensor->role) {
-        case YVEX_TENSOR_ROLE_TOKEN_EMBEDDING:
-            scan->has_token_embedding = 1;
-            break;
-        case YVEX_TENSOR_ROLE_ATTENTION_NORM:
-            scan->has_attention_norm = 1;
-            break;
-        case YVEX_TENSOR_ROLE_ATTENTION_Q:
-            scan->has_q = 1;
-            break;
-        case YVEX_TENSOR_ROLE_ATTENTION_K:
-            scan->has_k = 1;
-            break;
-        case YVEX_TENSOR_ROLE_ATTENTION_V:
-            scan->has_v = 1;
-            break;
-        case YVEX_TENSOR_ROLE_ATTENTION_OUT:
-            scan->has_o = 1;
-            break;
-        case YVEX_TENSOR_ROLE_OUTPUT_HEAD:
-            scan->has_output_head = 1;
-            break;
-        default:
-            break;
+        for (size_t role = 0; role < sizeof(kv_family_roles) / sizeof(kv_family_roles[0]);
+             ++role) {
+            if (tensor->role == kv_family_roles[role].role) {
+                int *present = (int *)((unsigned char *)scan +
+                                       kv_family_roles[role].scan_offset);
+
+                *present = 1;
+                break;
+            }
         }
     }
 }
 
+/* Purpose: Project immutable kv report context length facts into the typed reporting surface.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static unsigned long long kv_report_context_length(const yvex_kv_model_context *ctx)
 {
-    static const char *keys[] = {
-        "llama.context_length",
-        "deepseek.context_length",
-        "qwen.context_length",
-        "glm.context_length",
-        "general.context_length"
-    };
     unsigned long i;
     unsigned long long value_u64 = 0ull;
 
@@ -358,8 +399,9 @@ static unsigned long long kv_report_context_length(const yvex_kv_model_context *
             return value_u64;
         }
     }
-    for (i = 0u; i < sizeof(keys) / sizeof(keys[0]); ++i) {
-        const yvex_gguf_value *value = yvex_gguf_metadata_find(ctx->gguf, keys[i]);
+    for (i = 0u; i < sizeof(kv_context_keys) / sizeof(kv_context_keys[0]); ++i) {
+        const yvex_gguf_value *value =
+            yvex_gguf_metadata_find(ctx->gguf, kv_context_keys[i]);
         if (value && yvex_gguf_value_as_u64(value, &value_u64) == YVEX_OK) {
             return value_u64;
         }
@@ -367,6 +409,7 @@ static unsigned long long kv_report_context_length(const yvex_kv_model_context *
     return 0ull;
 }
 
+/* Purpose: Project immutable kv report add phase facts into the typed reporting surface. */
 static void kv_report_add_phase(yvex_kv_report *report,
                                 const char *name,
                                 const char *status)
@@ -379,63 +422,50 @@ static void kv_report_add_phase(yvex_kv_report *report,
     report->phase_count += 1u;
 }
 
+/* Purpose: Publish kv report set phases only within its admitted destination range.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static void kv_report_set_phases(yvex_kv_report *report,
                                  const char *default_status,
                                  const char *failed_phase)
 {
-    static const char *names[] = {
-        "preflight",
-        "resolve-model",
-        "resolve-family",
-        "load-family-runtime",
-        "load-attention-class",
-        "kv-profile",
-        "kv-layout",
-        "kv-shape",
-        "kv-indexing",
-        "kv-capacity",
-        "kv-residency",
-        "kv-context",
-        "kv-readiness",
-        "blocker-report",
-        "complete",
-        "failed",
-        "cleanup"
-    };
     unsigned long i;
-    unsigned long failed_index = sizeof(names) / sizeof(names[0]);
+    unsigned long failed_index = sizeof(kv_phase_names) / sizeof(kv_phase_names[0]);
 
     if (!report) {
         return;
     }
     report->phase_count = 0u;
     if (failed_phase) {
-        for (i = 0u; i < sizeof(names) / sizeof(names[0]); ++i) {
-            if (strcmp(names[i], failed_phase) == 0) {
+        for (i = 0u; i < sizeof(kv_phase_names) / sizeof(kv_phase_names[0]); ++i) {
+            if (strcmp(kv_phase_names[i], failed_phase) == 0) {
                 failed_index = i;
                 break;
             }
         }
     }
-    for (i = 0u; i < sizeof(names) / sizeof(names[0]); ++i) {
+    for (i = 0u; i < sizeof(kv_phase_names) / sizeof(kv_phase_names[0]); ++i) {
         const char *phase_status = default_status;
-        if (!failed_phase && strcmp(names[i], "failed") == 0) {
+        if (!failed_phase && strcmp(kv_phase_names[i], "failed") == 0) {
             phase_status = "unknown";
         } else if (failed_phase) {
             if (i < failed_index) {
                 phase_status = "pass";
-            } else if (i == failed_index || strcmp(names[i], "failed") == 0) {
+            } else if (i == failed_index || strcmp(kv_phase_names[i], "failed") == 0) {
                 phase_status = "failed";
-            } else if (strcmp(names[i], "cleanup") == 0) {
+            } else if (strcmp(kv_phase_names[i], "cleanup") == 0) {
                 phase_status = "pass";
             } else {
                 phase_status = "blocked";
             }
         }
-        kv_report_add_phase(report, names[i], phase_status);
+        kv_report_add_phase(report, kv_phase_names[i], phase_status);
     }
 }
 
+/* Purpose: Project immutable kv report add blocker facts into the typed reporting surface. */
 static void kv_report_add_blocker(yvex_kv_report *report,
                                   const char *name,
                                   const char *status,
@@ -450,115 +480,192 @@ static void kv_report_add_blocker(yvex_kv_report *report,
     report->blocker_count += 1u;
 }
 
-static void kv_report_defaults(const yvex_kv_report_request *request,
-                               yvex_kv_report *report)
-{
-    memset(report, 0, sizeof(*report));
-    report->kind = request ? request->kind : YVEX_KV_REQUEST_REPORT;
-    report->report_name = "kv";
-    report->status = "kv-report";
-    report->model = request && request->model ? request->model : "";
-    report->model_resolved_path = "not-resolved";
-    report->target_id = "candidate-GGUF-path";
-    report->target_class = "unknown";
-    report->backend = request && request->backend ? request->backend : "cpu";
-    report->family = request && request->family ? request->family : "auto";
-    report->family_detected = "unknown";
-    report->family_requested = request && request->family ? request->family : "auto";
-    report->family_runtime_status = "unknown";
-    report->attention_class_status = "unknown";
-    report->kv_class_status = "report-only";
-    report->kv_stage = "report-only";
-    report->kv_support_status = "report-only";
-    report->runtime_claim = "unsupported";
-    report->generation = "unsupported-full-model";
-    report->benchmark_status = "not-measured";
-    report->diagnostic_kv_available = 1;
-    report->diagnostic_kv_boundary = "segment-summary/minimal diagnostic KV";
-    report->real_attention_kv = 0;
-    report->real_attention_kv_write_ready = 0;
-    report->real_attention_kv_read_ready = 0;
-    report->decode_kv_consumer_ready = 0;
-    report->kv_required = 1;
-    report->kv_source = "attention-qkv-requirements";
-    report->kv_layout = "planned";
-    report->kv_layout_status = "planned";
-    report->kv_dtype = "planned";
-    report->kv_dtype_status = "planned";
-    report->kv_layers = "unknown";
-    report->kv_layers_status = "planned";
-    report->kv_heads = "unknown";
-    report->kv_heads_status = "planned";
-    report->kv_head_dim = "unknown";
-    report->kv_head_dim_status = "planned";
-    report->kv_positions = "context-dependent";
-    report->kv_capacity = "planned";
-    report->kv_capacity_status = "planned";
-    report->kv_indexing = "layer-head-position-token-order";
-    report->context_length_source = "planned";
-    report->attention_dependency_status = "blocked-missing-qkv";
-    report->attention_q_required = 1;
-    report->attention_k_required = 1;
-    report->attention_v_required = 1;
-    report->attention_q_status = "missing";
-    report->attention_k_status = "missing";
-    report->attention_v_status = "missing";
-    report->attention_o_status = "missing";
-    report->tensor_inventory_status = "not-performed";
-    report->role_token_embedding_status = "missing";
-    report->role_attention_norm_status = "missing";
-    report->role_q_projection_status = "missing";
-    report->role_k_projection_status = "missing";
-    report->role_v_projection_status = "missing";
-    report->role_o_projection_status = "missing";
-    report->role_output_head_status = "missing";
-    report->cleanup_attempted = 1;
-    report->cleanup_status = "pass";
-    report->next_required_rows =
+/* Declarative refusal state keeps the KV capability boundary in one immutable fact table. */
+static const yvex_kv_report kv_report_default = {
+    .kind = YVEX_KV_REQUEST_REPORT,
+    .report_name = "kv",
+    .status = "kv-report",
+    .model = "",
+    .model_resolved_path = "not-resolved",
+    .target_id = "candidate-GGUF-path",
+    .target_class = "unknown",
+    .backend = "cpu",
+    .family = "auto",
+    .family_detected = "unknown",
+    .family_requested = "auto",
+    .family_runtime_status = "unknown",
+    .attention_class_status = "unknown",
+    .kv_class_status = "report-only",
+    .kv_stage = "report-only",
+    .kv_support_status = "report-only",
+    .runtime_claim = "unsupported",
+    .generation = "unsupported-full-model",
+    .benchmark_status = "not-measured",
+    .diagnostic_kv_available = 1,
+    .diagnostic_kv_boundary = "segment-summary/minimal diagnostic KV",
+    .kv_required = 1,
+    .kv_source = "attention-qkv-requirements",
+    .kv_layout = "planned",
+    .kv_layout_status = "planned",
+    .kv_dtype = "planned",
+    .kv_dtype_status = "planned",
+    .kv_layers = "unknown",
+    .kv_layers_status = "planned",
+    .kv_heads = "unknown",
+    .kv_heads_status = "planned",
+    .kv_head_dim = "unknown",
+    .kv_head_dim_status = "planned",
+    .kv_positions = "context-dependent",
+    .kv_capacity = "planned",
+    .kv_capacity_status = "planned",
+    .kv_indexing = "layer-head-position-token-order",
+    .context_length_source = "planned",
+    .attention_dependency_status = "blocked-missing-qkv",
+    .attention_q_required = 1,
+    .attention_k_required = 1,
+    .attention_v_required = 1,
+    .attention_q_status = "missing",
+    .attention_k_status = "missing",
+    .attention_v_status = "missing",
+    .attention_o_status = "missing",
+    .tensor_inventory_status = "not-performed",
+    .role_token_embedding_status = "missing",
+    .role_attention_norm_status = "missing",
+    .role_q_projection_status = "missing",
+    .role_k_projection_status = "missing",
+    .role_v_projection_status = "missing",
+    .role_o_projection_status = "missing",
+    .role_output_head_status = "missing",
+    .cleanup_attempted = 1,
+    .cleanup_status = "pass",
+    .next_required_rows =
         "ATTENTION.CLASS.0 complete,CONTEXT.CLASS.0,RUNTIME.KV.1,"
         "RUNTIME.KV.2,RUNTIME.KV.3,real-transformer-prefill,real-decode,"
-        "real-output-head-logits,GEN.DEEPSEEK.0";
-    report->exit_code = 0;
-    report->include_attention = request ? request->include_attention : 0;
-    report->include_context = request ? request->include_context : 0;
-    report->include_residency = request ? request->include_residency : 0;
-    report->include_blockers = request ? request->include_blockers : 0;
-    report->top_blocker = "real attention-backed KV unsupported";
-    report->source_artifact_class = "";
-    report->target_artifact_class = "";
-    report->reason = "";
-    report->kv_layer_indexing = "planned";
-    report->kv_head_indexing = "planned";
-    report->kv_position_indexing = "planned";
-    report->kv_token_order_policy = "prompt-order-then-append-order";
-    report->kv_residency_class = "planned";
-    report->kv_residency_status = "planned";
-    report->kv_cpu_bytes_estimate = "unknown";
-    report->kv_cuda_bytes_estimate = "unknown";
-    report->kv_host_staged_bytes_estimate = "unknown";
-    report->kv_ssd_staged_status = "planned";
-    report->kv_ssd_streamed_status = "planned";
-    report->kv_paged_status = "planned";
-    report->kv_chunked_status = "planned";
-    report->kv_quantized_status = "planned";
-    report->kv_managed_memory_status = "planned";
-    report->context_required = "true";
-    report->requested_context = "not-requested";
-    report->context_capacity_status = "planned";
-    report->context_overflow_policy = "planned-refusal-before-mutation";
-    report->attention_runtime_ready = "false";
-    report->full_transformer_attention_ready = "false";
-    report->prefill_kv_write_required = "true";
-    report->prefill_kv_write_ready = "false";
-    report->decode_kv_read_required = "true";
-    report->decode_kv_read_ready = "false";
-    report->qkv_role_coverage = "missing";
+        "real-output-head-logits,GEN.DEEPSEEK.0",
+    .top_blocker = "real attention-backed KV unsupported",
+    .source_artifact_class = "",
+    .target_artifact_class = "",
+    .reason = "",
+    .kv_layer_indexing = "planned",
+    .kv_head_indexing = "planned",
+    .kv_position_indexing = "planned",
+    .kv_token_order_policy = "prompt-order-then-append-order",
+    .kv_residency_class = "planned",
+    .kv_residency_status = "planned",
+    .kv_cpu_bytes_estimate = "unknown",
+    .kv_cuda_bytes_estimate = "unknown",
+    .kv_host_staged_bytes_estimate = "unknown",
+    .kv_ssd_staged_status = "planned",
+    .kv_ssd_streamed_status = "planned",
+    .kv_paged_status = "planned",
+    .kv_chunked_status = "planned",
+    .kv_quantized_status = "planned",
+    .kv_managed_memory_status = "planned",
+    .context_required = "true",
+    .requested_context = "not-requested",
+    .context_capacity_status = "planned",
+    .context_overflow_policy = "planned-refusal-before-mutation",
+    .attention_runtime_ready = "false",
+    .full_transformer_attention_ready = "false",
+    .prefill_kv_write_required = "true",
+    .prefill_kv_write_ready = "false",
+    .decode_kv_read_required = "true",
+    .decode_kv_read_ready = "false",
+    .qkv_role_coverage = "missing"
+};
+
+typedef struct {
+    size_t offset;
+    const char *value;
+} kv_string_patch;
+
+#define KV_STRING(field, text) {offsetof(yvex_kv_report, field), text}
+
+static const kv_string_patch kv_unsupported_strings[] = {
+    KV_STRING(status, "kv-report-unsupported"),
+    KV_STRING(family_runtime_status, "unsupported"),
+    KV_STRING(attention_class_status, "unsupported"),
+    KV_STRING(kv_class_status, "unsupported"),
+    KV_STRING(kv_source, "unsupported-family"),
+    KV_STRING(kv_layout, "unsupported"),
+    KV_STRING(kv_layout_status, "unsupported"),
+    KV_STRING(kv_dtype, "unsupported"),
+    KV_STRING(kv_dtype_status, "unsupported"),
+    KV_STRING(kv_layers_status, "unsupported"),
+    KV_STRING(kv_heads_status, "unsupported"),
+    KV_STRING(kv_head_dim_status, "unsupported"),
+    KV_STRING(kv_positions, "unknown"),
+    KV_STRING(kv_capacity, "unsupported"),
+    KV_STRING(kv_capacity_status, "unsupported"),
+    KV_STRING(kv_indexing, "unsupported"),
+    KV_STRING(context_length_source, "unsupported-family"),
+    KV_STRING(attention_dependency_status, "unsupported-family"),
+    KV_STRING(prefill_kv_write_required, "unknown"),
+    KV_STRING(decode_kv_read_required, "unknown"),
+};
+
+static const kv_string_patch kv_source_only_strings[] = {
+    KV_STRING(status, "kv-report-unsupported"),
+    KV_STRING(model_resolved_path, "not-resolved-source-only-target"),
+    KV_STRING(target_id, "glm-5.2-official-safetensors"),
+    KV_STRING(target_class, "official-source-huge-model"),
+    KV_STRING(family_detected, "glm"),
+    KV_STRING(family_runtime_status, "unsupported"),
+    KV_STRING(attention_class_status, "unsupported"),
+    KV_STRING(kv_class_status, "unsupported"),
+    KV_STRING(tensor_inventory_status, "not-performed-source-only-target"),
+    KV_STRING(source_artifact_class, "official safetensors"),
+    KV_STRING(target_artifact_class, "future YVEX-produced GGUF"),
+    KV_STRING(kv_source, "planned-family-mapping"),
+    KV_STRING(kv_positions, "planned"),
+    KV_STRING(kv_indexing, "planned"),
+    KV_STRING(kv_token_order_policy, "planned"),
+    KV_STRING(context_length_source, "planned-source-manifest"),
+    KV_STRING(attention_dependency_status, "unsupported-source-only"),
+};
+
+#undef KV_STRING
+
+/* Purpose: apply one immutable refusal projection without duplicating report policy. */
+static void kv_report_apply_strings(yvex_kv_report *report,
+                                    const kv_string_patch *patches,
+                                    size_t count)
+{
+    size_t index;
+
+    for (index = 0; report && patches && index < count; ++index) {
+        const char **field = (const char **)((unsigned char *)report + patches[index].offset);
+
+        *field = patches[index].value;
+    }
 }
 
+/* Purpose: Project immutable kv report defaults facts into the typed reporting surface. */
+static void kv_report_defaults(const yvex_kv_report_request *request, yvex_kv_report *report)
+{
+    *report = kv_report_default;
+    if (!request) return;
+    report->kind = request->kind;
+    report->model = request->model ? request->model : "";
+    report->backend = request->backend ? request->backend : "cpu";
+    report->family = request->family ? request->family : "auto";
+    report->family_requested = report->family;
+    report->include_attention = request->include_attention;
+    report->include_context = request->include_context;
+    report->include_residency = request->include_residency;
+    report->include_blockers = request->include_blockers;
+}
+
+/* Purpose: Project immutable kv report apply scan facts into the typed reporting surface.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static void kv_report_apply_scan(yvex_kv_report *report,
                                  const yvex_kv_role_scan *scan,
                                  unsigned long long max_context)
 {
+    size_t role;
     int has_qkv;
 
     if (!report || !scan) {
@@ -579,27 +686,20 @@ static void kv_report_apply_scan(yvex_kv_report *report,
     report->tensor_inventory_status = "loaded-gguf-directory";
     report->tensor_count = scan->tensor_count;
     report->tensor_bytes = scan->total_tensor_bytes;
-    report->role_token_embedding_status = kv_role_status(scan->has_token_embedding);
-    report->role_attention_norm_status = kv_role_status(scan->has_attention_norm);
-    report->role_q_projection_status = kv_role_status(scan->has_q);
-    report->role_k_projection_status = kv_role_status(scan->has_k);
-    report->role_v_projection_status = kv_role_status(scan->has_v);
-    report->role_o_projection_status = kv_role_status(scan->has_o);
-    report->role_output_head_status = kv_role_status(scan->has_output_head);
-    report->qkv_role_coverage = has_qkv ? "present" : "missing";
     report->blocker_count = 0u;
-    if (!scan->has_q) {
-        kv_report_add_blocker(report, "q projection tensor", "missing",
-                              "missing-attention-q");
+    for (role = 0; role < sizeof(kv_family_roles) / sizeof(kv_family_roles[0]); ++role) {
+        const int *present = (const int *)((const unsigned char *)scan +
+                                          kv_family_roles[role].scan_offset);
+        const char **status = (const char **)((unsigned char *)report +
+                                             kv_family_roles[role].report_offset);
+
+        *status = kv_role_status(*present);
+        if (!*present && kv_family_roles[role].missing_blocker) {
+            kv_report_add_blocker(report, kv_family_roles[role].name, "missing",
+                                  kv_family_roles[role].missing_blocker);
+        }
     }
-    if (!scan->has_k) {
-        kv_report_add_blocker(report, "k projection tensor", "missing",
-                              "missing-attention-k");
-    }
-    if (!scan->has_v) {
-        kv_report_add_blocker(report, "v projection tensor", "missing",
-                              "missing-attention-v");
-    }
+    report->qkv_role_coverage = has_qkv ? "present" : "missing";
     kv_report_add_blocker(report, "real attention-backed KV writes",
                           "unsupported", "missing-real-kv-path");
     kv_report_add_blocker(report, "decode KV consumer",
@@ -608,38 +708,25 @@ static void kv_report_apply_scan(yvex_kv_report *report,
                           "planned", "capacity-estimator-pending");
 }
 
+/* Purpose: Publish kv report set unsupported family only within its admitted destination range.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static void kv_report_set_unsupported_family(yvex_kv_report *report,
                                              const yvex_kv_report_request *request,
                                              const char *detected,
                                              const char *reason)
 {
     kv_report_defaults(request, report);
-    report->status = "kv-report-unsupported";
+    kv_report_apply_strings(report, kv_unsupported_strings,
+                            sizeof(kv_unsupported_strings) / sizeof(kv_unsupported_strings[0]));
     report->family = request && request->family ? request->family : "unknown";
     report->family_detected = detected ? detected : "unknown";
-    report->family_runtime_status = "unsupported";
-    report->attention_class_status = "unsupported";
-    report->kv_class_status = "unsupported";
     report->kv_required = 0;
-    report->kv_source = "unsupported-family";
-    report->kv_layout = "unsupported";
-    report->kv_layout_status = "unsupported";
-    report->kv_dtype = "unsupported";
-    report->kv_dtype_status = "unsupported";
-    report->kv_layers_status = "unsupported";
-    report->kv_heads_status = "unsupported";
-    report->kv_head_dim_status = "unsupported";
-    report->kv_positions = "unknown";
-    report->kv_capacity = "unsupported";
-    report->kv_capacity_status = "unsupported";
-    report->kv_indexing = "unsupported";
-    report->context_length_source = "unsupported-family";
-    report->attention_dependency_status = "unsupported-family";
     report->attention_q_required = 0;
     report->attention_k_required = 0;
     report->attention_v_required = 0;
-    report->prefill_kv_write_required = "unknown";
-    report->decode_kv_read_required = "unknown";
     report->top_blocker = reason ? reason : "unsupported family";
     kv_report_copy(report->reason_storage, sizeof(report->reason_storage),
                    &report->reason, report->top_blocker);
@@ -650,6 +737,11 @@ static void kv_report_set_unsupported_family(yvex_kv_report *report,
     kv_report_set_phases(report, "unsupported", "resolve-family");
 }
 
+/* Purpose: Publish kv report set source only only within its admitted destination range.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed generation refusal and publishes no partial success state.
+ * Boundary: Generation protocol; does not bypass graph admission, persistent state, or runtime readiness. */
 static void kv_report_set_source_only(yvex_kv_report *report,
                                       const yvex_kv_report_request *request)
 {
@@ -658,24 +750,9 @@ static void kv_report_set_source_only(yvex_kv_report *report,
                              : request ? request->family : "glm";
 
     kv_report_defaults(request, report);
-    report->status = "kv-report-unsupported";
-    report->model_resolved_path = "not-resolved-source-only-target";
-    report->target_id = "glm-5.2-official-safetensors";
-    report->target_class = "official-source-huge-model";
+    kv_report_apply_strings(report, kv_source_only_strings,
+                            sizeof(kv_source_only_strings) / sizeof(kv_source_only_strings[0]));
     report->family = family ? family : "glm";
-    report->family_detected = "glm";
-    report->family_runtime_status = "unsupported";
-    report->attention_class_status = "unsupported";
-    report->kv_class_status = "unsupported";
-    report->tensor_inventory_status = "not-performed-source-only-target";
-    report->source_artifact_class = "official safetensors";
-    report->target_artifact_class = "future YVEX-produced GGUF";
-    report->kv_source = "planned-family-mapping";
-    report->kv_positions = "planned";
-    report->kv_indexing = "planned";
-    report->kv_token_order_policy = "planned";
-    report->context_length_source = "planned-source-manifest";
-    report->attention_dependency_status = "unsupported-source-only";
     report->top_blocker =
         "source-only target has no YVEX-produced GGUF tensor inventory";
     report->exit_code = 5;
@@ -689,27 +766,12 @@ static void kv_report_set_source_only(yvex_kv_report *report,
     kv_report_set_phases(report, "planned", "load-family-runtime");
 }
 
-/*
- * yvex_kv_report_build()
- *
- * Purpose:
- *   build a typed KV class report from model, family, backend, and registry
- *   request facts.
- *
- * Inputs:
- *   request and report are caller-owned; err is optional diagnostic storage.
- *
- * Effects:
- *   may open and close a local model artifact context to inspect metadata and
- *   tensor roles; writes no operator output and allocates no persistent state.
- *
- * Failure:
- *   returns precise YVEX status and leaves report populated when a reportable
- *   boundary exists.
- *
- * Boundary:
- *   this is report construction only, not runtime KV execution.
- */
+/* Purpose: build a typed KV class report from model, family, backend, and registry request facts.
+ * Inputs: request and report are caller-owned; err is optional diagnostic storage.
+ * Effects: may open and close a local model artifact context to inspect metadata and tensor
+ * roles; writes no operator output and allocates no persistent state.
+ * Failure: returns precise YVEX status and leaves report populated when a reportable boundary exists.
+ * Boundary: this is report construction only, not runtime KV execution. */
 int yvex_kv_report_build(const yvex_kv_report_request *request,
                          yvex_kv_report *report,
                          yvex_error *err)
@@ -724,22 +786,20 @@ int yvex_kv_report_build(const yvex_kv_report_request *request,
     int rc;
 
     if (!request || !report) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "kv-report",
-                       "request and report are required");
-        return YVEX_ERR_INVALID_ARG;
+        return yvex_generation_refuse(err, YVEX_ERR_INVALID_ARG,
+                                      "kv-report", "request and report are required");
     }
     kv_report_defaults(request, report);
     if (!request->model) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "kv-report",
-                       "yvex: kv report requires model");
-        return YVEX_ERR_INVALID_ARG;
+        return yvex_generation_refuse(err, YVEX_ERR_INVALID_ARG,
+                                      "kv-report", "yvex: kv report requires model");
     }
     if (!request->backend ||
         (!kv_streq(request->backend, "cpu") &&
          !kv_streq(request->backend, "cuda"))) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "kv-report",
-                       "yvex: kv report backend must be cpu or cuda");
-        return YVEX_ERR_INVALID_ARG;
+        return yvex_generation_refuse(
+            err, YVEX_ERR_INVALID_ARG, "kv-report",
+            "yvex: kv report backend must be cpu or cuda");
     }
     if (!kv_known_family(request->family)) {
         kv_report_set_unsupported_family(
@@ -768,10 +828,9 @@ int yvex_kv_report_build(const yvex_kv_report_request *request,
         report->family = kv_streq(request->family, "auto") ?
             "unknown" : request->family;
         report->top_blocker = yvex_error_message(err);
-        report->exit_code = kv_exit_for_status(rc);
+        report->exit_code = yvex_generation_exit_code(rc, YVEX_GENERATION_EXIT_KV);
         kv_report_set_phases(report, "failed", "resolve-model");
-        yvex_model_ref_clear(&ref);
-        return rc;
+        goto done;
     }
     report->model_resolved_path = ref.path ? ref.path : "not-resolved";
     kv_report_copy(report->model_resolved_path_storage,
@@ -792,36 +851,31 @@ int yvex_kv_report_build(const yvex_kv_report_request *request,
         kv_report_copy(report->reason_storage, sizeof(report->reason_storage),
                        &report->reason, report->top_blocker);
         report->tensor_inventory_status = "failed";
-        report->exit_code = kv_exit_for_status(rc);
+        report->exit_code = yvex_generation_exit_code(rc, YVEX_GENERATION_EXIT_KV);
         kv_report_set_phases(report, "failed", "kv-profile");
-        yvex_model_ref_clear(&ref);
-        return rc;
+        goto done;
     }
 
     detected_family = kv_detect_family(&ref, &ctx, request->model);
     family = kv_streq(request->family, "auto") ? detected_family : request->family;
     if (!kv_streq(request->family, "auto") &&
         !kv_streq(request->family, detected_family)) {
-        kv_model_context_close(&ctx);
-        yvex_model_ref_clear(&ref);
         kv_report_set_unsupported_family(
             report,
             request,
             detected_family,
             "requested family does not match resolved model family");
-        yvex_error_clear(err);
-        return YVEX_OK;
+        rc = YVEX_OK;
+        goto done;
     }
     if (!kv_streq(family, "deepseek")) {
-        kv_model_context_close(&ctx);
-        yvex_model_ref_clear(&ref);
         kv_report_set_unsupported_family(
             report,
             request,
             detected_family,
             "KV class report is currently implemented for DeepSeek-family GGUF artifacts only");
-        yvex_error_clear(err);
-        return YVEX_OK;
+        rc = YVEX_OK;
+        goto done;
     }
 
     kv_scan_roles(ctx.table, &scan);
@@ -838,35 +892,22 @@ int yvex_kv_report_build(const yvex_kv_report_request *request,
     kv_report_apply_scan(report, &scan, max_context);
     kv_report_set_phases(report, "pass", NULL);
 
+done:
     kv_model_context_close(&ctx);
     yvex_model_ref_clear(&ref);
-    yvex_error_clear(err);
-    return YVEX_OK;
+    if (rc == YVEX_OK) {
+        yvex_error_clear(err);
+    }
+    return rc;
 }
 
-/*
- * yvex_kv_ownership_report_build()
- *
- * Purpose:
- *   build a typed report for the minimal session-owned diagnostic KV
- *   allocation path.
- *
- * Inputs:
- *   request carries shape and optional append/read demo settings; report is
- *   caller-owned output; err is optional diagnostic storage.
- *
- * Effects:
- *   allocates a bounded temporary KV cache, may append/read synthetic values,
- *   captures summary facts, and always closes temporary KV state before
- *   returning.
- *
- * Failure:
- *   returns precise YVEX status for invalid shape, allocation failure, bounds
- *   refusal, or read failure.
- *
- * Boundary:
- *   the allocation is minimal diagnostic KV only, not attention-backed KV.
- */
+/* Purpose: build a typed report for the minimal session-owned diagnostic KV allocation path.
+ * Inputs: request carries shape and optional append/read demo settings; report is
+ * caller-owned output; err is optional diagnostic storage.
+ * Effects: allocates a bounded temporary KV cache, may append/read synthetic values,
+ * captures summary facts, and always closes temporary KV state before returning.
+ * Failure: returns precise YVEX status for invalid shape, allocation failure, bounds refusal, or read failure.
+ * Boundary: the allocation is minimal diagnostic KV only, not attention-backed KV. */
 int yvex_kv_ownership_report_build(const yvex_kv_report_request *request,
                                    yvex_kv_report *report,
                                    yvex_error *err)
@@ -882,9 +923,8 @@ int yvex_kv_ownership_report_build(const yvex_kv_report_request *request,
     int rc;
 
     if (!request || !report) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "kv-ownership",
-                       "request and report are required");
-        return YVEX_ERR_INVALID_ARG;
+        return yvex_generation_refuse(err, YVEX_ERR_INVALID_ARG,
+                                      "kv-ownership", "request and report are required");
     }
     kv_report_defaults(request, report);
     report->kind = YVEX_KV_REQUEST_OWNERSHIP;
@@ -895,7 +935,7 @@ int yvex_kv_ownership_report_build(const yvex_kv_report_request *request,
     rc = yvex_kv_cache_create_shape(&kv, &request->shape, err);
     if (rc != YVEX_OK) {
         report->status = "kv-fail";
-        report->exit_code = kv_exit_for_status(rc);
+        report->exit_code = yvex_generation_exit_code(rc, YVEX_GENERATION_EXIT_KV);
         return rc;
     }
 
@@ -903,12 +943,10 @@ int yvex_kv_ownership_report_build(const yvex_kv_report_request *request,
     if (request->append_demo) {
         append_values = (float *)calloc((size_t)value_count, sizeof(float));
         if (!append_values) {
-            yvex_kv_cache_close(kv);
-            yvex_error_set(err, YVEX_ERR_NOMEM, "kv-ownership",
-                           "failed to allocate KV append demo buffer");
-            report->status = "kv-fail";
-            report->exit_code = 4;
-            return YVEX_ERR_NOMEM;
+            rc = yvex_generation_refuse(
+                err, YVEX_ERR_NOMEM, "kv-ownership",
+                "failed to allocate KV append demo buffer");
+            goto fail;
         }
         append_target = request->shape.capacity > 1ull ? 2ull : 1ull;
         for (i = 0ull; i < append_target; ++i) {
@@ -919,11 +957,7 @@ int yvex_kv_ownership_report_build(const yvex_kv_report_request *request,
                                                    &appended_position,
                                                    err);
             if (rc != YVEX_OK) {
-                free(append_values);
-                yvex_kv_cache_close(kv);
-                report->status = "kv-fail";
-                report->exit_code = kv_exit_for_status(rc);
-                return rc;
+                goto fail;
             }
         }
     }
@@ -931,13 +965,10 @@ int yvex_kv_ownership_report_build(const yvex_kv_report_request *request,
     if (request->read_requested) {
         read_values = (float *)calloc((size_t)value_count, sizeof(float));
         if (!read_values) {
-            free(append_values);
-            yvex_kv_cache_close(kv);
-            yvex_error_set(err, YVEX_ERR_NOMEM, "kv-ownership",
-                           "failed to allocate KV read buffer");
-            report->status = "kv-fail";
-            report->exit_code = 4;
-            return YVEX_ERR_NOMEM;
+            rc = yvex_generation_refuse(err, YVEX_ERR_NOMEM,
+                                        "kv-ownership",
+                                        "failed to allocate KV read buffer");
+            goto fail;
         }
         rc = yvex_kv_cache_read_position_f32(kv,
                                              request->read_position,
@@ -945,24 +976,14 @@ int yvex_kv_ownership_report_build(const yvex_kv_report_request *request,
                                              value_count,
                                              err);
         if (rc != YVEX_OK) {
-            free(read_values);
-            free(append_values);
-            yvex_kv_cache_close(kv);
-            report->status = "kv-fail";
-            report->exit_code = kv_exit_for_status(rc);
-            return rc;
+            goto fail;
         }
         report->read_checksum = yvex_kv_checksum_values(read_values, value_count);
     }
 
     rc = yvex_kv_cache_get_summary(kv, &report->ownership_summary, err);
     if (rc != YVEX_OK) {
-        free(read_values);
-        free(append_values);
-        yvex_kv_cache_close(kv);
-        report->status = "kv-fail";
-        report->exit_code = kv_exit_for_status(rc);
-        return rc;
+        goto fail;
     }
 
     report->kv_created = 1;
@@ -974,17 +995,24 @@ int yvex_kv_ownership_report_build(const yvex_kv_report_request *request,
         sample_count = value_count < 8ull ? value_count : 8ull;
         report->read_value_count = value_count;
         report->read_sample_count = sample_count;
-        for (i = 0ull; i < sample_count; ++i) {
-            report->read_sample_values[i] = read_values[i];
-        }
+        memcpy(report->read_sample_values, read_values,
+               (size_t)sample_count * sizeof(read_values[0]));
     }
 
-    yvex_kv_cache_close(kv);
     report->cleanup_attempted = 1;
     report->cleanup_status = "pass";
+    yvex_error_clear(err);
+    goto done;
 
+fail:
+    report->status = "kv-fail";
+    report->exit_code = yvex_generation_exit_code(
+        rc, rc == YVEX_ERR_NOMEM ? YVEX_GENERATION_EXIT_KV_OWNERSHIP
+                                 : YVEX_GENERATION_EXIT_KV);
+
+done:
     free(read_values);
     free(append_values);
-    yvex_error_clear(err);
-    return YVEX_OK;
+    yvex_kv_cache_close(kv);
+    return rc;
 }

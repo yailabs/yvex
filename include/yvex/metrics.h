@@ -1,43 +1,22 @@
-/*
- * Owner: abi.metrics (abi).
- * Owns: the public-abi boundary consumed by repository.
- * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
- * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
- * Boundary: public-abi; moving this contract requires an ownership-manifest change.
- *
- * YVEX - Runtime metrics
- *
- * File: include/yvex/metrics.h
- * Layer: public runtime observability API
- *
- * Purpose:
- *   Defines the observability layer metrics collector for implemented runtime shell phases and
- *   accepted-token counters. Metrics describe what exists today; they do not
- *   report decode, sampling, inference, or backend kernel throughput.
- *
- * Owns:
- *   - yvex_metrics
- *   - phase timing summaries
- *   - accepted-token/runtime counters
- *
- * Does not own:
- *   - trace files
- *   - generated-token benchmarks
- *   - server/provider observability
- *
- * Validation:
- *   - make test-core
- *   - build/tests/test_metrics
- */
+/* Owner: public metrics ABI.
+ * Owns: metrics counters, profiles, and trace events.
+ * Does not own: capability admission, benchmark claims, or operator rendering.
+ * Invariants: declarations are format-stable, externally consumable, and independently includable.
+ * Boundary: measurement and trace data contracts.
+ * Purpose: Expose measurement and trace data contracts.
+ * Inputs: Typed caller-owned values and immutable borrowed views as declared below.
+ * Effects: Only functions with explicit lifecycle or I/O contracts mutate external state.
+ * Failure: Typed status and error outputs remain authoritative; declarations add no capability. */
 #ifndef YVEX_METRICS_H
 #define YVEX_METRICS_H
 
-#include <yvex/error.h>
+#include <yvex/core.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/* Metric counters. */
 typedef struct yvex_metrics yvex_metrics;
 
 typedef enum {
@@ -116,6 +95,63 @@ int yvex_metrics_get_phase(const yvex_metrics *metrics,
                            yvex_error *err);
 
 const char *yvex_metric_phase_name(yvex_metric_phase phase);
+
+/* Profile serialization. */
+typedef struct {
+    const char *run_id;
+    const char *command;
+    const char *model_name;
+    const char *backend_name;
+    const char *status;
+    int execution_ready;
+    yvex_metric_counters counters;
+} yvex_profile_summary;
+
+int yvex_profile_write_json(const char *path,
+                            const yvex_profile_summary *summary,
+                            const yvex_metrics *metrics,
+                            yvex_error *err);
+int yvex_metrics_write_json(const char *path,
+                            const yvex_metrics *metrics,
+                            yvex_error *err);
+
+/* Trace events. */
+typedef struct yvex_trace yvex_trace;
+
+typedef enum {
+    YVEX_TRACE_EVENT_RUN_START = 0,
+    YVEX_TRACE_EVENT_RUN_END,
+    YVEX_TRACE_EVENT_PHASE_START,
+    YVEX_TRACE_EVENT_PHASE_END,
+    YVEX_TRACE_EVENT_ENGINE,
+    YVEX_TRACE_EVENT_BACKEND,
+    YVEX_TRACE_EVENT_SESSION,
+    YVEX_TRACE_EVENT_PROMPT,
+    YVEX_TRACE_EVENT_TOKENIZE,
+    YVEX_TRACE_EVENT_ACCEPT_TOKENS,
+    YVEX_TRACE_EVENT_CHAT_TURN,
+    YVEX_TRACE_EVENT_ERROR
+} yvex_trace_event_kind;
+
+typedef struct {
+    const char *path;
+    const char *run_id;
+    int enabled;
+} yvex_trace_options;
+
+int yvex_trace_open(yvex_trace **out,
+                    const yvex_trace_options *options,
+                    yvex_error *err);
+void yvex_trace_close(yvex_trace *trace);
+
+int yvex_trace_emit(yvex_trace *trace,
+                    yvex_trace_event_kind kind,
+                    const char *name,
+                    const char *status,
+                    const char *message,
+                    yvex_error *err);
+
+const char *yvex_trace_event_kind_name(yvex_trace_event_kind kind);
 
 #ifdef __cplusplus
 }

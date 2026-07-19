@@ -10,17 +10,13 @@
  */
 #include "tests/test.h"
 
-#include "src/core/sha256.h"
-#include "src/core/shard_index.h"
-#include "src/source/private.h"
-#include "src/source/provenance.h"
-#include "src/model/compilation/binding.h"
-#include "src/model/compilation/ir.h"
-#include "src/model/target/catalog.h"
-#include "src/gguf/quant_sink.h"
-#include "src/gguf/quant_plan.h"
+#include <yvex/internal/core.h>
+#include <yvex/internal/source_payload.h>
+#include <yvex/internal/source.h>
+#include <yvex/internal/compilation.h>
+#include <yvex/internal/quant_numeric.h>
 
-#include <yvex/artifact_identity.h>
+#include <yvex/artifact.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -428,7 +424,7 @@ static int payload_fixture_create(payload_fixture *fixture,
              sizeof(fixture->verification.manifest_path), "%s",
              fixture->manifest);
     memset(&fixture->verify_options, 0, sizeof(fixture->verify_options));
-    fixture->verify_options.identity = yvex_model_target_release_identity();
+    fixture->verify_options.identity = yvex_source_release_identity();
     fixture->verify_options.source_path = fixture->root;
     fixture->verify_options.models_root = "build/tests";
     fixture->verify_options.manifest_path = fixture->manifest;

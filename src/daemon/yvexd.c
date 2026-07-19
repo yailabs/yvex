@@ -1,31 +1,37 @@
-/*
- * Owner: daemon.yvexd (daemon).
- * Owns: the entrypoint boundary consumed by operator.
- * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
- * Invariants: scope=entrypoint and visibility=private match config/source_owners.tsv.
- * Boundary: entrypoint; moving this contract requires an ownership-manifest change.
- *
- * yvexd.c - Server/provider daemon entrypoint.
- *
- * This file owns argument parsing and process entry for the local provider
- * shell. Server behavior lives in core.c.
- */
+/* Owner: daemon.yvexd (daemon).
+ * Owns: daemon argument admission and the process-level server lifecycle.
+ * Does not own: HTTP routing, model admission, backend policy, or generation.
+ * Invariants: one invocation creates at most one server and closes it before exit.
+ * Boundary: entrypoint orchestration; server APIs retain domain authority.
+ * Purpose: parse daemon options and run the admitted local server shell.
+ * Inputs: process arguments and operating-system resources used by the server.
+ * Effects: writes operator output and may bind one listening socket.
+ * Failure: rejects malformed options and returns nonzero after typed server failures. */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <yvex/api.h>
+#include <yvex/core.h>
+#include <yvex/registry.h>
+#include <yvex/server.h>
 
-
+/* Purpose: render the bounded daemon command-line contract to the selected stream. */
 static void print_help(FILE *fp)
 {
-    fprintf(fp, "usage: " "yvexd [--host HOST] [--port PORT] [--model FILE_OR_ALIAS] [--backend cpu|cuda] [--one-request]\n");
+    fprintf(fp,
+            "usage: yvexd [--host HOST] [--port PORT] [--model FILE_OR_ALIAS] "
+            "[--backend cpu|cuda] [--one-request]\n");
     fprintf(fp, "\n");
     fprintf(fp, "Starts the local server shell. Endpoints: /health, /metrics, /v1/models.\n");
     fprintf(fp, "--model accepts an existing GGUF path or a registered local alias.\n");
     fprintf(fp, "Generation endpoints are not implemented in server shell.\n");
 }
 
+/* Purpose: parse one decimal TCP port without truncation.
+ * Inputs: immutable text and required output storage.
+ * Effects: writes the validated port only on success.
+ * Failure: returns false for syntax, range, or trailing-byte errors.
+ * Boundary: entrypoint parsing; it does not open a socket. */
 static int parse_port(const char *text, unsigned int *out)
 {
     char *end = NULL;
@@ -42,12 +48,18 @@ static int parse_port(const char *text, unsigned int *out)
     return 1;
 }
 
+/* Purpose: render one typed daemon failure and preserve the requested process status. */
 static int print_error(const yvex_error *err, int exit_code)
 {
     fprintf(stderr, "yvexd: %s: %s\n", yvex_error_where(err), yvex_error_message(err));
     return exit_code;
 }
 
+/* Purpose: own daemon execution from argument parsing through deterministic shutdown.
+ * Inputs: conventional process argument count and vector.
+ * Effects: may print diagnostics and create, serve, stop, and close one server.
+ * Failure: returns nonzero for argument, allocation, bind, load, or serve failures.
+ * Boundary: process owner; it never promotes server or generation capability. */
 int main(int arg_count, char **args)
 {
     yvex_server *server = NULL;

@@ -1,12 +1,195 @@
-/*
- * attention.c - attention command-family CLI surface.
- * Owner: src/cli/model_artifacts
+/* Owner: src/cli/model_artifacts
  * Owns: existing attention command-family parsing and output behavior.
- * Does not own: runtime implementation, graph execution, backend algorithms, artifact emission, eval, benchmark, or release claims.
+ * Does not own: runtime implementation, graph execution, backend algorithms, artifact emission, eval, benchmark, or
+ *   release claims.
  * Invariants: CLI-only and excluded from libyvex.a; preserves existing command behavior.
  * Boundary: attention reports are report-only diagnostics.
- */
-#include "attention.h"
+ * Purpose: provide existing attention command-family parsing and output behavior.
+ * Inputs: typed domain facts, requested output mode, and caller-owned render state.
+ * Effects: formats admitted facts through CLI I/O without changing domain state.
+ * Failure: formatting or I/O refusal cannot alter capability facts. */
+#include "src/cli/model_artifacts/private.h"
+
+#include <string.h>
+
+static const char *const literal_pair_0[] = { "\nattention report:",
+    "  classifies attention requirements, head layout, Q/K/V/O roles, RoPE/position rules, mask rules, KV "
+        "requirements, context blockers, graph requirements, backend requirements, and runtime blockers."
+};
+
+static const char *const literal_pair_1[] = { "\nExamples:",
+    "  yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu"};
+
+static const char *const literal_pair_2[] = { "attention: report",
+    "status: attention-report"};
+
+static const char *const literal_pair_3[] = { "next: V010.ATTN.9",
+    "boundary: report-only, no runtime execution"};
+
+static const char *const literal_lines_0[] = { "family_runtime_status: unsupported",
+    "attention_class_status: unsupported",
+    "attention_stage: report-only",
+    "runtime_claim: unsupported",
+    "generation: unsupported-full-model",
+    "benchmark_status: not-measured",
+    "attention_family: unsupported",
+    "attention_type: unknown",
+    "attention_support_status: report-only",
+    "full_transformer_attention: unsupported",
+    "attention_runtime_ready: false",
+    "attention_backend_ready: false",
+    "full_model_execution: unsupported",
+    "generation_ready: false",
+    "q_projection_required: true",
+    "k_projection_required: true",
+    "v_projection_required: true",
+    "o_projection_required: true",
+    "q_projection_status: unknown",
+    "k_projection_status: unknown",
+    "v_projection_status: unknown",
+    "o_projection_status: unknown",
+    "attention_heads: unknown",
+    "kv_heads: unknown",
+    "head_dim: unknown",
+    "hidden_size: unknown",
+    "head_layout_status: unknown",
+    "head_layout_source: unknown",
+    "head_layout_blockers: attention class unavailable",
+    "position_policy: planned",
+    "rope_required: true",
+    "rope_status: planned",
+    "rope_base: unknown",
+    "rope_scaling: unknown",
+    "rope_dimension: unknown",
+    "rope_runtime_ready: false",
+    "mask_policy: planned",
+    "causal_mask_required: true",
+    "mask_status: planned",
+    "mask_runtime_ready: false",
+    "kv_required: true",
+    "kv_layout: planned",
+    "kv_dtype: planned",
+    "kv_layers: unknown",
+    "kv_heads: unknown",
+    "kv_head_dim: unknown",
+    "kv_capacity_status: unsupported-full-transformer-kv",
+    "kv_write_ready: false",
+    "kv_read_ready: false",
+    "attention_kv_runtime_ready: false",
+    "kv_boundary: diagnostic-kv-exists-real-attention-kv-unsupported",
+    "context_policy: planned",
+    "max_context: unknown",
+    "requested_context: not-requested",
+    "context_status: planned",
+    "context_blockers: attention class unavailable",
+    "graph_rope_primitive: implemented",
+    "graph_attention_primitive: implemented-fixture",
+    "graph_qkv_projection: unsupported",
+    "graph_o_projection: unsupported",
+    "graph_full_transformer_attention: unsupported",
+    "graph_backend_status: report-only",
+    "unsupported_graph_ops: full-transformer-attention,real-attention-backed-kv,real-transformer-prefill",
+    "backend_attention_status: implemented-fixture-full-transformer-unsupported",
+    "backend_rope_status: implemented-primitive",
+    "backend_softmax_status: implemented-inside-attention-fixture",
+    "backend_matmul_status: implemented-primitive",
+    "backend_kv_status: unsupported-real-attention-kv"};
+
+static const char *const literal_lines_1[] = { "next_required_rows: ATTENTION.CLASS.0,KV.CACHE.0,CONTEXT.CLASS.0",
+    "cleanup_attempted: false",
+    "cleanup_status: not-needed"};
+
+static const char *const literal_lines_2[] = { "tensor_inventory_status: not-performed-source-only-target",
+    "source_artifact_class: official safetensors",
+    "target_artifact_class: future YVEX-produced GGUF"};
+
+static const char *const literal_lines_3[] = { "attention_stage: report-only",
+    "runtime_claim: unsupported",
+    "generation: unsupported-full-model",
+    "benchmark_status: not-measured"};
+
+static const char *const literal_lines_4[] = { "attention_family: model-family-specific",
+    "attention_type: unknown",
+    "attention_support_status: report-only",
+    "full_transformer_attention: unsupported",
+    "attention_runtime_ready: false",
+    "attention_backend_ready: false",
+    "full_model_execution: unsupported",
+    "generation_ready: false",
+    "attention_metadata_status: incomplete",
+    "attention_blocker: attention metadata incomplete"};
+
+static const char *const literal_lines_5[] = { "attention_heads: unknown",
+    "kv_heads: unknown",
+    "head_dim: unknown",
+    "hidden_size: unknown",
+    "head_layout_status: unknown",
+    "head_layout_source: unknown",
+    "head_layout_blockers: attention metadata incomplete; head count, KV head count, and head dimension unavailable",
+    "position_policy: rope-or-family-specific-planned",
+    "rope_required: true",
+    "rope_status: planned",
+    "rope_base: unknown",
+    "rope_scaling: unknown",
+    "rope_dimension: unknown",
+    "graph_rope_primitive: implemented",
+    "rope_runtime_ready: false",
+    "mask_policy: causal-or-family-specific-planned",
+    "causal_mask_required: true",
+    "mask_status: planned",
+    "mask_runtime_ready: false",
+    "kv_required: true",
+    "kv_layout: planned",
+    "kv_dtype: planned",
+    "kv_layers: unknown",
+    "kv_heads: unknown",
+    "kv_head_dim: unknown",
+    "kv_capacity_status: unsupported-full-transformer-kv",
+    "kv_write_ready: false",
+    "kv_read_ready: false",
+    "attention_kv_runtime_ready: false",
+    "kv_boundary: diagnostic-kv-exists-real-attention-kv-unsupported",
+    "context_policy: planned",
+    "max_context: metadata-or-unknown",
+    "requested_context: not-requested",
+    "context_status: planned",
+    "context_blockers: context class report pending; attention head layout incomplete",
+    "graph_attention_primitive: implemented-fixture",
+    "graph_matmul_primitive: implemented"};
+
+static const char *const literal_lines_6[] = { "graph_model_qkv_projection: unsupported",
+    "graph_attention_kv_write: unsupported",
+    "graph_layer_integrated_attention: unsupported",
+    "graph_full_transformer_attention: unsupported",
+    "graph_backend_status: report-only",
+    "unsupported_graph_ops: full-transformer-attention,real-qkv-projection,attention-backed-kv-write,layer-"
+        "integrated-attention,real-transformer-prefill",
+    "backend_attention_status: implemented-fixture-full-transformer-unsupported",
+    "backend_rope_status: implemented-primitive",
+    "backend_softmax_status: implemented-inside-attention-fixture",
+    "backend_matmul_status: implemented-primitive",
+    "backend_kv_status: unsupported-real-attention-kv"};
+
+static const char *const literal_lines_7[] = { "prefill_ready: false",
+    "decode_ready: false",
+    "logits_ready: false",
+    "sampling_ready: false",
+    "runtime_execution_ready: false",
+    "next_required_rows: KV.CACHE.0,CONTEXT.CLASS.0,real-transformer-prefill,real-attention-backed-KV,real-"
+        "decode,GEN.DEEPSEEK.0",
+    "cleanup_attempted: false",
+    "cleanup_status: not-needed"};
+
+static const char *const literal_lines_8[] = {
+    "  report-only boundary: it does not run full attention, does not run transformer prefill, does not "
+        "project Q/K/V from model tensors, does not write real attention-backed KV, does not generate, and "
+        "does not benchmark.",
+    "  standalone RoPE and attention primitives may be implemented, but those primitive proofs are not "
+        "full transformer attention and are not model inference support.",
+    "Boundary: no full transformer attention execution, no real QKV projection, no real attention-backed "
+        "KV writes, no full model execution, no DeepSeek generation, no provider generation, no eval, no "
+        "benchmark, no throughput."
+};
 
 typedef struct {
     const char *model;
@@ -20,24 +203,28 @@ typedef struct {
     yvex_models_output_mode output_mode;
 } yvex_cli_attention_options;
 
-static int attention_parse_value_option(const char *flag,
-                                        int arg_count,
-                                        char **args,
-                                        int *index,
-                                        const char **value)
-{
-    if (*index + 1 >= arg_count) {
-        yvex_cli_out_writef(stderr, "yvex: attention %s requires a value\n", flag);
-        return 2;
-    }
-    *value = args[++(*index)];
-    if (fullmodel_string_is_empty(*value)) {
-        yvex_cli_out_writef(stderr, "yvex: attention %s value is empty\n", flag);
-        return 2;
-    }
-    return 0;
-}
+static const yvex_models_option_spec attention_option_specs[] = {
+    {"--model", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_attention_options, model)},
+    {"--backend", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_attention_options, backend)},
+    {"--family", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_attention_options, family)},
+    {"--registry", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_attention_options, registry_path)},
+    {"--include-kv", YVEX_MODELS_OPTION_FLAG, offsetof(yvex_cli_attention_options, include_kv)},
+    {"--include-context", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_attention_options, include_context)},
+    {"--include-graph", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_attention_options, include_graph)},
+    {"--include-blockers", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_attention_options, include_blockers)},
+    {"--output", YVEX_MODELS_OPTION_OUTPUT,
+     offsetof(yvex_cli_attention_options, output_mode)},
+};
 
+/* Purpose: Parse parse attention options into typed CLI state (`parse_attention_options`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_attention_options(int arg_count,
                                    char **args,
                                    yvex_cli_attention_options *options)
@@ -56,54 +243,38 @@ static int parse_attention_options(int arg_count,
     }
     if (arg_count < 3 || strcmp(args[2], "report") != 0) {
         yvex_cli_out_writef(stderr, "yvex: attention requires report\n");
-        yvex_cli_out_writef(stderr, "usage: " "yvex attention report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--" "include-kv] [--" "include-context] [--" "include-graph] [--" "include-blockers]\n");
+        yvex_cli_out_writef(stderr,
+            "usage: yvex attention report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--"
+                "backend cpu|cuda] [--registry FILE] [--include-kv] [--include-context] [--include-graph] [--"
+                "include-blockers]\n");
         return 2;
     }
 
     for (i = 3; i < arg_count; ++i) {
-        const char *value = NULL;
-        if (strcmp(args[i], "--model") == 0) {
-            int rc = attention_parse_value_option("--model", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->model = value;
-        } else if (strcmp(args[i], "--backend") == 0) {
-            int rc = attention_parse_value_option("--backend", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            if (strcmp(value, "cpu") != 0 && strcmp(value, "cuda") != 0) {
+        const char *flag = args[i];
+        int handled = 0;
+        int rc = parse_models_bound_option("attention", arg_count, args, &i,
+                                           options, attention_option_specs,
+                                           sizeof(attention_option_specs) /
+                                               sizeof(attention_option_specs[0]),
+                                           &handled);
+        if (rc != 0) return rc;
+        if (handled) {
+            if (strcmp(flag, "--backend") == 0 &&
+                strcmp(options->backend, "cpu") != 0 &&
+                strcmp(options->backend, "cuda") != 0) {
                 yvex_cli_out_writef(stderr, "yvex: attention --backend must be cpu or cuda\n");
                 return 2;
             }
-            options->backend = value;
-        } else if (strcmp(args[i], "--family") == 0) {
-            int rc = attention_parse_value_option("--family", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->family = value;
-        } else if (strcmp(args[i], "--registry") == 0) {
-            int rc = attention_parse_value_option("--registry", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->registry_path = value;
-        } else if (strcmp(args[i], "--" "include-kv") == 0) {
-            options->include_kv = 1;
-        } else if (strcmp(args[i], "--" "include-context") == 0) {
-            options->include_context = 1;
-        } else if (strcmp(args[i], "--" "include-graph") == 0) {
-            options->include_graph = 1;
-        } else if (strcmp(args[i], "--" "include-blockers") == 0) {
-            options->include_blockers = 1;
-        } else if (strcmp(args[i], "--" "audit") == 0) {
+            continue;
+        }
+        if (strcmp(flag, "--audit") == 0) {
             options->output_mode = YVEX_MODELS_OUTPUT_AUDIT;
-        } else if (strcmp(args[i], "--" "output") == 0) {
-            int rc = attention_parse_value_option("--" "output", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            if (!parse_models_output_mode(value, &options->output_mode)) {
-                yvex_cli_out_writef(stderr, "yvex: attention unsupported output mode: %s\n", value);
-                return 2;
-            }
-        } else if (strcmp(args[i], "--help") == 0 || strcmp(args[i], "-h") == 0) {
+        } else if (strcmp(flag, "--help") == 0 || strcmp(flag, "-h") == 0) {
             yvex_model_artifacts_surface_attention_help(stdout);
             return 1;
         } else {
-            yvex_cli_out_writef(stderr, "yvex: unknown attention option: %s\n", args[i]);
+            yvex_cli_out_writef(stderr, "yvex: unknown attention option: %s\n", flag);
             return 2;
         }
     }
@@ -115,19 +286,11 @@ static int parse_attention_options(int arg_count,
     return 0;
 }
 
-static const char *attention_requested_family(const yvex_cli_attention_options *options)
-{
-    return options && options->family && options->family[0] ? options->family : "auto";
-}
-
-static void attention_print_phase(unsigned int index,
-                                  const char *name,
-                                  const char *status)
-{
-    yvex_cli_out_writef(stdout, "attention_phase.%u.name: %s\n", index, name ? name : "");
-    yvex_cli_out_writef(stdout, "attention_phase.%u.status: %s\n", index, status ? status : "planned");
-}
-
+/* Purpose: Render attention print phases from typed facts (`attention_print_phases`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void attention_print_phases(const char *attention_status,
                                    const char *head_layout_status,
                                    const char *qkv_status,
@@ -179,10 +342,11 @@ static void attention_print_phases(const char *attention_status,
         } else if (strcmp(phases[i], "failed") == 0 && !failure_phase) {
             status = "unsupported";
         }
-        attention_print_phase(i, phases[i], status);
+        model_phase_print("attention_phase", i, phases[i], status, "planned");
     }
 }
 
+/* Purpose: Compute attention role status for its CLI invariant (`attention_role_status`). */
 static const char *attention_role_status(yvex_model_context *ctx,
                                          const yvex_fullmodel_collections *collections,
                                          const char *role)
@@ -190,6 +354,11 @@ static const char *attention_role_status(yvex_model_context *ctx,
     return fullmodel_role_status_from_tensor(ctx, collections, role);
 }
 
+/* Purpose: Render attention print projection role from typed facts (`attention_print_projection_role`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void attention_print_projection_role(yvex_model_context *ctx,
                                             const yvex_fullmodel_collections *collections,
                                             const char *role,
@@ -212,6 +381,11 @@ static void attention_print_projection_role(yvex_model_context *ctx,
            tensor ? "planned-full-transformer-attention" : "blocked-missing-role");
 }
 
+/* Purpose: Render attention print unsupported common from typed facts (`attention_print_unsupported_common`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void attention_print_unsupported_common(const char *model,
                                                const char *resolved_path,
                                                const char *target_id,
@@ -234,82 +408,14 @@ static void attention_print_unsupported_common(const char *model,
     yvex_cli_out_writef(stdout, "family: %s\n", family ? family : "unknown");
     yvex_cli_out_writef(stdout, "family_detected: %s\n", detected ? detected : "unknown");
     yvex_cli_out_writef(stdout, "family_requested: %s\n", requested ? requested : "auto");
-    yvex_cli_out_writef(stdout, "family_runtime_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "attention_class_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "attention_stage: report-only\n");
-    yvex_cli_out_writef(stdout, "runtime_claim: unsupported\n");
-    yvex_cli_out_writef(stdout, "generation: unsupported-full-model\n");
-    yvex_cli_out_writef(stdout, "benchmark_status: not-measured\n");
-    yvex_cli_out_writef(stdout, "attention_family: unsupported\n");
-    yvex_cli_out_writef(stdout, "attention_type: unknown\n");
-    yvex_cli_out_writef(stdout, "attention_support_status: report-only\n");
-    yvex_cli_out_writef(stdout, "full_transformer_attention: unsupported\n");
-    yvex_cli_out_writef(stdout, "attention_runtime_ready: false\n");
-    yvex_cli_out_writef(stdout, "attention_backend_ready: false\n");
-    yvex_cli_out_writef(stdout, "full_model_execution: unsupported\n");
-    yvex_cli_out_writef(stdout, "generation_ready: false\n");
-    yvex_cli_out_writef(stdout, "q_projection_required: true\n");
-    yvex_cli_out_writef(stdout, "k_projection_required: true\n");
-    yvex_cli_out_writef(stdout, "v_projection_required: true\n");
-    yvex_cli_out_writef(stdout, "o_projection_required: true\n");
-    yvex_cli_out_writef(stdout, "q_projection_status: unknown\n");
-    yvex_cli_out_writef(stdout, "k_projection_status: unknown\n");
-    yvex_cli_out_writef(stdout, "v_projection_status: unknown\n");
-    yvex_cli_out_writef(stdout, "o_projection_status: unknown\n");
-    yvex_cli_out_writef(stdout, "attention_heads: unknown\n");
-    yvex_cli_out_writef(stdout, "kv_heads: unknown\n");
-    yvex_cli_out_writef(stdout, "head_dim: unknown\n");
-    yvex_cli_out_writef(stdout, "hidden_size: unknown\n");
-    yvex_cli_out_writef(stdout, "head_layout_status: unknown\n");
-    yvex_cli_out_writef(stdout, "head_layout_source: unknown\n");
-    yvex_cli_out_writef(stdout, "head_layout_blockers: attention class unavailable\n");
-    yvex_cli_out_writef(stdout, "position_policy: planned\n");
-    yvex_cli_out_writef(stdout, "rope_required: true\n");
-    yvex_cli_out_writef(stdout, "rope_status: planned\n");
-    yvex_cli_out_writef(stdout, "rope_base: unknown\n");
-    yvex_cli_out_writef(stdout, "rope_scaling: unknown\n");
-    yvex_cli_out_writef(stdout, "rope_dimension: unknown\n");
-    yvex_cli_out_writef(stdout, "rope_runtime_ready: false\n");
-    yvex_cli_out_writef(stdout, "mask_policy: planned\n");
-    yvex_cli_out_writef(stdout, "causal_mask_required: true\n");
-    yvex_cli_out_writef(stdout, "mask_status: planned\n");
-    yvex_cli_out_writef(stdout, "mask_runtime_ready: false\n");
-    yvex_cli_out_writef(stdout, "kv_required: true\n");
-    yvex_cli_out_writef(stdout, "kv_layout: planned\n");
-    yvex_cli_out_writef(stdout, "kv_dtype: planned\n");
-    yvex_cli_out_writef(stdout, "kv_layers: unknown\n");
-    yvex_cli_out_writef(stdout, "kv_heads: unknown\n");
-    yvex_cli_out_writef(stdout, "kv_head_dim: unknown\n");
-    yvex_cli_out_writef(stdout, "kv_capacity_status: unsupported-full-transformer-kv\n");
-    yvex_cli_out_writef(stdout, "kv_write_ready: false\n");
-    yvex_cli_out_writef(stdout, "kv_read_ready: false\n");
-    yvex_cli_out_writef(stdout, "attention_kv_runtime_ready: false\n");
-    yvex_cli_out_writef(stdout, "kv_boundary: diagnostic-kv-exists-real-attention-kv-unsupported\n");
-    yvex_cli_out_writef(stdout, "context_policy: planned\n");
-    yvex_cli_out_writef(stdout, "max_context: unknown\n");
-    yvex_cli_out_writef(stdout, "requested_context: not-requested\n");
-    yvex_cli_out_writef(stdout, "context_status: planned\n");
-    yvex_cli_out_writef(stdout, "context_blockers: attention class unavailable\n");
-    yvex_cli_out_writef(stdout, "graph_rope_primitive: implemented\n");
-    yvex_cli_out_writef(stdout, "graph_attention_primitive: implemented-fixture\n");
-    yvex_cli_out_writef(stdout, "graph_qkv_projection: unsupported\n");
-    yvex_cli_out_writef(stdout, "graph_o_projection: unsupported\n");
-    yvex_cli_out_writef(stdout, "graph_full_transformer_attention: unsupported\n");
-    yvex_cli_out_writef(stdout, "graph_backend_status: report-only\n");
-    yvex_cli_out_writef(stdout, "unsupported_graph_ops: full-transformer-attention,real-attention-backed-kv,real-transformer-prefill\n");
-    yvex_cli_out_writef(stdout, "backend_attention_status: implemented-fixture-full-transformer-unsupported\n");
-    yvex_cli_out_writef(stdout, "backend_rope_status: implemented-primitive\n");
-    yvex_cli_out_writef(stdout, "backend_softmax_status: implemented-inside-attention-fixture\n");
-    yvex_cli_out_writef(stdout, "backend_matmul_status: implemented-primitive\n");
-    yvex_cli_out_writef(stdout, "backend_kv_status: unsupported-real-attention-kv\n");
+    yvex_cli_out_lines(stdout, literal_lines_0, sizeof(literal_lines_0) / sizeof(literal_lines_0[0]));
     yvex_cli_out_writef(stdout, "attention_blockers: %s\n", reason ? reason : "attention class unavailable");
-    yvex_cli_out_writef(stdout, "next_required_rows: ATTENTION.CLASS.0,KV.CACHE.0,CONTEXT.CLASS.0\n");
-    yvex_cli_out_writef(stdout, "cleanup_attempted: false\n");
-    yvex_cli_out_writef(stdout, "cleanup_status: not-needed\n");
+    yvex_cli_out_lines(stdout, literal_lines_1, sizeof(literal_lines_1) / sizeof(literal_lines_1[0]));
     attention_print_phases("unsupported", "unknown", "unknown", phase);
     yvex_cli_out_writef(stdout, "reason: %s\n", reason ? reason : "unsupported attention class report");
 }
 
+/* Purpose: Render attention print source only report from typed facts (`attention_print_source_only_report`). */
 static int attention_print_source_only_report(const yvex_cli_attention_options *options,
                                               const char *target)
 {
@@ -320,16 +426,20 @@ static int attention_print_source_only_report(const yvex_cli_attention_options *
                                        options && options->backend ? options->backend : "cpu",
                                        "glm",
                                        "glm",
-                                       attention_requested_family(options),
+                                       model_requested_family(options ? options->family : NULL),
                                        "attention-report-unsupported",
-                                       "source-only target has no YVEX-produced GGUF tensor inventory; GLM attention class mapping planned",
+                                       "source-only target has no YVEX-produced GGUF tensor inventory; GLM "
+                                           "attention class mapping planned",
                                        "resolve-model");
-    yvex_cli_out_writef(stdout, "tensor_inventory_status: not-performed-source-only-target\n");
-    yvex_cli_out_writef(stdout, "source_artifact_class: official safetensors\n");
-    yvex_cli_out_writef(stdout, "target_artifact_class: future YVEX-produced GGUF\n");
+    yvex_cli_out_lines(stdout, literal_lines_2, sizeof(literal_lines_2) / sizeof(literal_lines_2[0]));
     return 5;
 }
 
+/* Purpose: Render attention print report from typed facts (`attention_print_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int attention_print_report(const yvex_cli_attention_options *options,
                                   yvex_model_ref *ref,
                                   yvex_model_context *ctx,
@@ -344,7 +454,7 @@ static int attention_print_report(const yvex_cli_attention_options *options,
 {
     yvex_fullmodel_backend_fit fit;
     const char *backend = options && options->backend ? options->backend : "cpu";
-    const char *requested = attention_requested_family(options);
+    const char *requested = model_requested_family(options ? options->family : NULL);
     yvex_cli_fullmodel_options family_probe;
     const char *detected;
     int request_matches;
@@ -392,8 +502,13 @@ static int attention_print_report(const yvex_cli_attention_options *options,
     qkv_status = has_all_qkvo ? "pass" : "partial";
     graph_projection_status = has_all_qkvo ? "planned" : "missing-tensor";
     blockers = has_all_qkvo
-                   ? "real QKV projection over model tensors unsupported; attention-backed KV write unsupported; full transformer attention integration unsupported; real transformer prefill unsupported"
-                   : "q projection tensor missing; k projection tensor missing; v projection tensor missing; o projection tensor missing; attention head layout incomplete; real QKV projection unsupported; real attention-backed KV writes unsupported; full transformer attention unsupported; real transformer prefill unsupported";
+                   ? "real QKV projection over model tensors unsupported; attention-backed KV write "
+                       "unsupported; full transformer attention integration unsupported; real transformer "
+                       "prefill unsupported"
+                   : "q projection tensor missing; k projection tensor missing; v projection tensor "
+                       "missing; o projection tensor missing; attention head layout incomplete; real QKV "
+                       "projection unsupported; real attention-backed KV writes unsupported; full "
+                       "transformer attention unsupported; real transformer prefill unsupported";
 
     fullmodel_probe_backend_fit(backend, total_tensor_bytes, &fit);
 
@@ -402,14 +517,13 @@ static int attention_print_report(const yvex_cli_attention_options *options,
         yvex_cli_out_writef(stdout, "model: %s\n", options->model ? options->model : "");
         yvex_cli_out_writef(stdout, "family: deepseek backend=%s\n", backend);
         yvex_cli_out_writef(stdout, "status: %s\n", attention_class_status);
-        yvex_cli_out_writef(stdout, "top_blocker: %s\n", has_all_qkvo ? "runtime attention integration missing" : "missing Q/K/V/O projection tensors");
-        yvex_cli_out_writef(stdout, "next: V010.ATTN.9\n");
-        yvex_cli_out_writef(stdout, "boundary: report-only, no runtime execution\n");
+        yvex_cli_out_writef(stdout, "top_blocker: %s\n",
+            has_all_qkvo ? "runtime attention integration missing" : "missing Q/K/V/O projection tensors");
+        yvex_cli_out_lines(stdout, literal_pair_3, sizeof(literal_pair_3) / sizeof(literal_pair_3[0]));
         return 0;
     }
 
-    yvex_cli_out_writef(stdout, "attention: report\n");
-    yvex_cli_out_writef(stdout, "status: attention-report\n");
+    yvex_cli_out_lines(stdout, literal_pair_2, sizeof(literal_pair_2) / sizeof(literal_pair_2[0]));
     yvex_cli_out_writef(stdout, "model: %s\n", options && options->model ? options->model : "");
     yvex_cli_out_writef(stdout, "model_resolved_path: %s\n", ref && ref->path ? ref->path : "");
     yvex_cli_out_writef(stdout, "target_id: %s\n", target_id ? target_id : "path");
@@ -420,96 +534,37 @@ static int attention_print_report(const yvex_cli_attention_options *options,
     yvex_cli_out_writef(stdout, "family_requested: %s\n", requested);
     yvex_cli_out_writef(stdout, "family_runtime_status: %s\n", attention_class_status);
     yvex_cli_out_writef(stdout, "attention_class_status: %s\n", attention_class_status);
-    yvex_cli_out_writef(stdout, "attention_stage: report-only\n");
-    yvex_cli_out_writef(stdout, "runtime_claim: unsupported\n");
-    yvex_cli_out_writef(stdout, "generation: unsupported-full-model\n");
-    yvex_cli_out_writef(stdout, "benchmark_status: not-measured\n");
+    yvex_cli_out_lines(stdout, literal_lines_3, sizeof(literal_lines_3) / sizeof(literal_lines_3[0]));
     yvex_cli_out_writef(stdout, "artifact_identity_status: %s\n", fullmodel_identity_status(ref, artifact_bytes));
     yvex_cli_out_writef(stdout, "tensor_inventory_status: pass\n");
     yvex_cli_out_writef(stdout, "tensor_count: %llu\n", tensor_count);
     yvex_cli_out_writef(stdout, "total_tensor_bytes: %llu\n", total_tensor_bytes);
-    yvex_cli_out_writef(stdout, "attention_family: model-family-specific\n");
-    yvex_cli_out_writef(stdout, "attention_type: unknown\n");
-    yvex_cli_out_writef(stdout, "attention_support_status: report-only\n");
-    yvex_cli_out_writef(stdout, "full_transformer_attention: unsupported\n");
-    yvex_cli_out_writef(stdout, "attention_runtime_ready: false\n");
-    yvex_cli_out_writef(stdout, "attention_backend_ready: false\n");
-    yvex_cli_out_writef(stdout, "full_model_execution: unsupported\n");
-    yvex_cli_out_writef(stdout, "generation_ready: false\n");
-    yvex_cli_out_writef(stdout, "attention_metadata_status: incomplete\n");
-    yvex_cli_out_writef(stdout, "attention_blocker: attention metadata incomplete\n");
+    yvex_cli_out_lines(stdout, literal_lines_4, sizeof(literal_lines_4) / sizeof(literal_lines_4[0]));
     yvex_cli_out_writef(stdout, "attention_norm_role: %s\n", attention_role_status(ctx, collections, "attention_norm"));
     attention_print_projection_role(ctx, collections, "q_projection", "q_projection");
     attention_print_projection_role(ctx, collections, "k_projection", "k_projection");
     attention_print_projection_role(ctx, collections, "v_projection", "v_projection");
     attention_print_projection_role(ctx, collections, "o_projection", "o_projection");
-    yvex_cli_out_writef(stdout, "attention_heads: unknown\n");
-    yvex_cli_out_writef(stdout, "kv_heads: unknown\n");
-    yvex_cli_out_writef(stdout, "head_dim: unknown\n");
-    yvex_cli_out_writef(stdout, "hidden_size: unknown\n");
-    yvex_cli_out_writef(stdout, "head_layout_status: unknown\n");
-    yvex_cli_out_writef(stdout, "head_layout_source: unknown\n");
-    yvex_cli_out_writef(stdout, "head_layout_blockers: attention metadata incomplete; head count, KV head count, and head dimension unavailable\n");
-    yvex_cli_out_writef(stdout, "position_policy: rope-or-family-specific-planned\n");
-    yvex_cli_out_writef(stdout, "rope_required: true\n");
-    yvex_cli_out_writef(stdout, "rope_status: planned\n");
-    yvex_cli_out_writef(stdout, "rope_base: unknown\n");
-    yvex_cli_out_writef(stdout, "rope_scaling: unknown\n");
-    yvex_cli_out_writef(stdout, "rope_dimension: unknown\n");
-    yvex_cli_out_writef(stdout, "graph_rope_primitive: implemented\n");
-    yvex_cli_out_writef(stdout, "rope_runtime_ready: false\n");
-    yvex_cli_out_writef(stdout, "mask_policy: causal-or-family-specific-planned\n");
-    yvex_cli_out_writef(stdout, "causal_mask_required: true\n");
-    yvex_cli_out_writef(stdout, "mask_status: planned\n");
-    yvex_cli_out_writef(stdout, "mask_runtime_ready: false\n");
-    yvex_cli_out_writef(stdout, "kv_required: true\n");
-    yvex_cli_out_writef(stdout, "kv_layout: planned\n");
-    yvex_cli_out_writef(stdout, "kv_dtype: planned\n");
-    yvex_cli_out_writef(stdout, "kv_layers: unknown\n");
-    yvex_cli_out_writef(stdout, "kv_heads: unknown\n");
-    yvex_cli_out_writef(stdout, "kv_head_dim: unknown\n");
-    yvex_cli_out_writef(stdout, "kv_capacity_status: unsupported-full-transformer-kv\n");
-    yvex_cli_out_writef(stdout, "kv_write_ready: false\n");
-    yvex_cli_out_writef(stdout, "kv_read_ready: false\n");
-    yvex_cli_out_writef(stdout, "attention_kv_runtime_ready: false\n");
-    yvex_cli_out_writef(stdout, "kv_boundary: diagnostic-kv-exists-real-attention-kv-unsupported\n");
-    yvex_cli_out_writef(stdout, "context_policy: planned\n");
-    yvex_cli_out_writef(stdout, "max_context: metadata-or-unknown\n");
-    yvex_cli_out_writef(stdout, "requested_context: not-requested\n");
-    yvex_cli_out_writef(stdout, "context_status: planned\n");
-    yvex_cli_out_writef(stdout, "context_blockers: context class report pending; attention head layout incomplete\n");
-    yvex_cli_out_writef(stdout, "graph_attention_primitive: implemented-fixture\n");
-    yvex_cli_out_writef(stdout, "graph_matmul_primitive: implemented\n");
+    yvex_cli_out_lines(stdout, literal_lines_5, sizeof(literal_lines_5) / sizeof(literal_lines_5[0]));
     yvex_cli_out_writef(stdout, "graph_qkv_projection: %s\n", graph_projection_status);
     yvex_cli_out_writef(stdout, "graph_o_projection: %s\n", has_o ? "planned" : "missing-tensor");
-    yvex_cli_out_writef(stdout, "graph_model_qkv_projection: unsupported\n");
-    yvex_cli_out_writef(stdout, "graph_attention_kv_write: unsupported\n");
-    yvex_cli_out_writef(stdout, "graph_layer_integrated_attention: unsupported\n");
-    yvex_cli_out_writef(stdout, "graph_full_transformer_attention: unsupported\n");
-    yvex_cli_out_writef(stdout, "graph_backend_status: report-only\n");
-    yvex_cli_out_writef(stdout, "unsupported_graph_ops: full-transformer-attention,real-qkv-projection,attention-backed-kv-write,layer-integrated-attention,real-transformer-prefill\n");
-    yvex_cli_out_writef(stdout, "backend_attention_status: implemented-fixture-full-transformer-unsupported\n");
-    yvex_cli_out_writef(stdout, "backend_rope_status: implemented-primitive\n");
-    yvex_cli_out_writef(stdout, "backend_softmax_status: implemented-inside-attention-fixture\n");
-    yvex_cli_out_writef(stdout, "backend_matmul_status: implemented-primitive\n");
-    yvex_cli_out_writef(stdout, "backend_kv_status: unsupported-real-attention-kv\n");
+    yvex_cli_out_lines(stdout, literal_lines_6, sizeof(literal_lines_6) / sizeof(literal_lines_6[0]));
     yvex_cli_out_writef(stdout, "backend_available: %s\n", fit.available ? "true" : "false");
     yvex_cli_out_writef(stdout, "backend_required_bytes: %llu\n", fit.required_bytes);
     yvex_cli_out_writef(stdout, "backend_fit_status: %s\n", fit.fit_status);
     yvex_cli_out_writef(stdout, "backend_allocation_attempted: false\n");
     yvex_cli_out_writef(stdout, "attention_blockers: %s\n", blockers);
-    yvex_cli_out_writef(stdout, "prefill_ready: false\n");
-    yvex_cli_out_writef(stdout, "decode_ready: false\n");
-    yvex_cli_out_writef(stdout, "logits_ready: false\n");
-    yvex_cli_out_writef(stdout, "sampling_ready: false\n");
-    yvex_cli_out_writef(stdout, "runtime_execution_ready: false\n");
-    yvex_cli_out_writef(stdout, "next_required_rows: KV.CACHE.0,CONTEXT.CLASS.0,real-transformer-prefill,real-attention-backed-KV,real-decode,GEN.DEEPSEEK.0\n");
-    yvex_cli_out_writef(stdout, "cleanup_attempted: false\n");
-    yvex_cli_out_writef(stdout, "cleanup_status: not-needed\n");
+    yvex_cli_out_lines(stdout, literal_lines_7, sizeof(literal_lines_7) / sizeof(literal_lines_7[0]));
     attention_print_phases(attention_class_status, "unknown", qkv_status, NULL);
     return 0;
 }
 
+/* Purpose: Orchestrate the typed model artifacts surface attention command request
+ * (`yvex_model_artifacts_surface_attention_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_model_artifacts_surface_attention_command(int arg_count, char **args)
 {
     yvex_cli_attention_options options;
@@ -557,7 +612,7 @@ int yvex_model_artifacts_surface_attention_command(int arg_count, char **args)
                                            options.backend,
                                            "unknown",
                                            "unknown",
-                                           attention_requested_family(&options),
+                                           model_requested_family(options.family),
                                            "attention-report-fail",
                                            "artifact path does not exist",
                                            "resolve-model");
@@ -574,7 +629,7 @@ int yvex_model_artifacts_surface_attention_command(int arg_count, char **args)
                                            options.backend,
                                            "unknown",
                                            "unknown",
-                                           attention_requested_family(&options),
+                                           model_requested_family(options.family),
                                            "attention-report-fail",
                                            yvex_error_message(&err),
                                            "load-family-runtime");
@@ -617,16 +672,23 @@ int yvex_model_artifacts_surface_attention_command(int arg_count, char **args)
     return rc;
 }
 
+/* Purpose: Render model artifacts surface attention help from typed facts
+ * (`yvex_model_artifacts_surface_attention_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_model_artifacts_surface_attention_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex attention report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--" "audit | --" "output normal|table|audit] [--" "include-kv] [--" "include-context] [--" "include-graph] [--" "include-blockers]\n");
-    yvex_cli_out_writef(fp, "\nExamples:\n");
-    yvex_cli_out_writef(fp, "  yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu\n");
-    yvex_cli_out_writef(fp, "  yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --" "include-kv --" "include-graph\n");
-    yvex_cli_out_writef(fp, "\nattention report:\n");
-    yvex_cli_out_writef(fp, "  classifies attention requirements, head layout, Q/K/V/O roles, RoPE/position rules, mask rules, KV requirements, context blockers, graph requirements, backend requirements, and runtime blockers.\n");
-    yvex_cli_out_writef(fp, "  Default output is compact. Use --" "audit for full diagnostic fields.\n");
-    yvex_cli_out_writef(fp, "  report-only boundary: it does not run full attention, does not run transformer prefill, does not project Q/K/V from model tensors, does not write real attention-backed KV, does not generate, and does not benchmark.\n");
-    yvex_cli_out_writef(fp, "  standalone RoPE and attention primitives may be implemented, but those primitive proofs are not full transformer attention and are not model inference support.\n");
-    yvex_cli_out_writef(fp, "Boundary: no full transformer attention execution, no real QKV projection, no real attention-backed KV writes, no full model execution, no DeepSeek generation, no provider generation, no eval, no benchmark, no throughput.\n");
+    yvex_cli_out_writef(fp,
+        "usage: yvex attention report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend "
+            "cpu|cuda] [--registry FILE] [--audit | --output normal|table|audit] [--include-kv] [--include-"
+            "context] [--include-graph] [--include-blockers]\n");
+    yvex_cli_out_lines(fp, literal_pair_1, sizeof(literal_pair_1) / sizeof(literal_pair_1[0]));
+    yvex_cli_out_writef(fp,
+        "  yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend "
+            "cpu --include-kv --include-graph\n");
+    yvex_cli_out_lines(fp, literal_pair_0, sizeof(literal_pair_0) / sizeof(literal_pair_0[0]));
+    yvex_cli_out_writef(fp, "  Default output is compact. Use --audit for full diagnostic fields.\n");
+    yvex_cli_out_lines(fp, literal_lines_8, sizeof(literal_lines_8) / sizeof(literal_lines_8[0]));
 }

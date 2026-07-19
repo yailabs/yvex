@@ -10,12 +10,13 @@ sh tests/test_architecture_boundaries.sh
 required_paths='
 src/cli/main.c
 src/core/status.c
-src/source/private.h
-src/model/families.h
+include/yvex/internal/source.h
+include/yvex/internal/source_payload.h
+include/yvex/internal/families/deepseek_v4.h
 src/model/families/deepseek_v4.c
 src/model/compilation/ir.c
 src/model/compilation/binding.c
-src/model/runtime_descriptor.c
+src/runtime/descriptor.c
 src/graph/private.h
 src/graph/attention.c
 src/graph/numeric.c

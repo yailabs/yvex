@@ -1,23 +1,25 @@
-/*
- * backend.c - backend capability CLI renderer.
- *
- * Owner: src/cli/render.
+/* Owner: src/cli/render.
  * Owns: compact backend/cuda-info formatting from typed report facts.
- * Does not own: backend admission, capability decisions, IO discovery,
- * kernel execution, graph execution, or runtime claims.
+ * Does not own: backend admission, capability decisions, IO discovery, kernel execution, graph execution, or
+ *   runtime claims.
  * Invariants: semantic status is already decided by the report owner.
  * Boundary: a rendered primitive capability is not model runtime support.
- */
-#include "backend.h"
+ * Purpose: provide compact backend/cuda-info formatting from typed report facts.
+ * Inputs: typed domain facts, requested output mode, and caller-owned render state.
+ * Effects: formats admitted facts through CLI I/O without changing domain state.
+ * Failure: formatting or I/O refusal cannot alter capability facts. */
+#include "src/cli/render/private.h"
 
-#include "src/cli/io/out.h"
+#include "src/cli/io/private.h"
 
+/* Purpose: Compute yes no for its CLI invariant (`yes_no`). */
 static const char *yes_no(int value)
 {
     return value ? "yes" : "no";
 }
 
 /* Contract: renders typed CUDA context and bundle admission without inference. */
+/* Purpose: Render render cuda admission from typed facts (`render_cuda_admission`). */
 static void render_cuda_admission(FILE *fp, const yvex_backend_report *report)
 {
     yvex_cli_out_writef(fp, "context_available: %s\n",
@@ -31,6 +33,7 @@ static void render_cuda_admission(FILE *fp, const yvex_backend_report *report)
 }
 
 /* Contract: renders the exact variant matrix already decided by the backend. */
+/* Purpose: Render render variants from typed facts (`render_variants`). */
 static void render_variants(FILE *fp, const yvex_backend_report *report)
 {
     unsigned int i;
@@ -46,6 +49,11 @@ static void render_variants(FILE *fp, const yvex_backend_report *report)
 }
 
 /* Contract: renders backend capability output without probing or mutation. */
+/* Purpose: Render render capabilities from typed facts (`render_capabilities`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int render_capabilities(FILE *fp, const yvex_backend_report *report)
 {
     unsigned int i;
@@ -74,8 +82,8 @@ static int render_capabilities(FILE *fp, const yvex_backend_report *report)
         yvex_cli_out_writef(fp, "memory:\n");
     }
     yvex_cli_out_writef(fp,
-                        "  allocated_bytes: %llu\n  allocation_count: %llu\n"
-                        "  peak_allocated_bytes: %llu\ncapabilities:\n",
+                        "  allocated_bytes: %llu\n  allocation_count: %llu\n  peak_allocated_bytes: %llu\n"
+                            "capabilities:\n",
                         report->memory.allocated_bytes,
                         report->memory.allocation_count,
                         report->memory.peak_allocated_bytes);
@@ -94,6 +102,11 @@ static int render_capabilities(FILE *fp, const yvex_backend_report *report)
 }
 
 /* Contract: renders CUDA device facts and typed bundle admission only. */
+/* Purpose: Render render cuda info from typed facts (`render_cuda_info`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int render_cuda_info(FILE *fp, const yvex_backend_report *report)
 {
     if (!report->available) {
@@ -104,10 +117,9 @@ static int render_cuda_info(FILE *fp, const yvex_backend_report *report)
     }
     yvex_cli_out_writef(fp, "cuda: available\ndevice_count: >=1\n\n");
     yvex_cli_out_writef(fp,
-                        "device %d:\n  name: %s\n  compute_capability: %d.%d\n"
-                        "  global_memory_bytes: %llu\n  free_memory_bytes: %llu\n"
-                        "  total_memory_bytes: %llu\n  unified_addressing: %s\n"
-                        "  managed_memory: %s\n",
+                        "device %d:\n  name: %s\n  compute_capability: %d.%d\n  global_memory_bytes: %llu\n"
+                            "  free_memory_bytes: %llu\n  total_memory_bytes: %llu\n  unified_addressing: %s\n "
+                            " managed_memory: %s\n",
                         report->device_info.device_index,
                         report->device_info.name,
                         report->device_info.compute_capability_major,
@@ -122,6 +134,11 @@ static int render_cuda_info(FILE *fp, const yvex_backend_report *report)
     return YVEX_OK;
 }
 
+/* Purpose: Render backend render from typed facts (`yvex_backend_render`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_backend_render(FILE *fp, const yvex_backend_report *report)
 {
     if (!fp || !report) return YVEX_ERR_INVALID_ARG;
@@ -130,18 +147,26 @@ int yvex_backend_render(FILE *fp, const yvex_backend_report *report)
                : render_capabilities(fp, report);
 }
 
+/* Purpose: Render backend render help from typed facts (`yvex_backend_render_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_backend_render_help(FILE *fp)
 {
     yvex_cli_out_writef(fp,
-                        "usage: yvex backend cpu|cuda\n\n"
-                        "Reports context, bundle, and exact primitive capabilities.\n");
+                        "usage: yvex backend cpu|cuda\n\nReports context, bundle, and exact primitive capabilities.\n");
     return YVEX_OK;
 }
 
+/* Purpose: Render cuda info render help from typed facts (`yvex_cuda_info_render_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_cuda_info_render_help(FILE *fp)
 {
     yvex_cli_out_writef(fp,
-                        "usage: yvex cuda-info\n\n"
-                        "Reports CUDA driver, device, context, and bundle facts.\n");
+                        "usage: yvex cuda-info\n\nReports CUDA driver, device, context, and bundle facts.\n");
     return YVEX_OK;
 }

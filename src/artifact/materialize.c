@@ -1,43 +1,50 @@
-/*
- * materialize.c - canonical artifact materialization.
- *
- * Owner:
- *   src/artifact
- *
- * Owns:
- *   complete-artifact admission handoff, immutable materialization plans,
- *   file-backed/staged tensor bindings, bounded positioned tensor access,
- *   materialization lifecycle, expert subview facts, cleanup accounting, and
- *   materialization identities.
- *
- * Does not own:
- *   backend arithmetic, graph execution, attention, KV, prefill, decode,
- *   logits, sampling, generation, eval, benchmark, release claims, or GGUF
- *   writer/roundtrip production.
- *
- * Invariants:
- *   all plans bind one admitted immutable artifact snapshot; every tensor
- *   range is checked before payload access; target-scale access uses one
- *   bounded reusable buffer and no full-tensor staging allocation.
- *
- * Boundary:
- *   materialization makes admitted tensor bytes runtime-addressable through
- *   owned bindings. It is not runtime execution.
- */
-#include "materialize.h"
-
-#include "src/core/sha256.h"
-
+/* Owner: artifact materialization.
+ * Owns: immutable placement plans, sessions, bindings, and bounded reads.
+ * Does not own: backend arithmetic, graph execution, generation, or writer publication.
+ * Invariants: every binding remains tied to one admitted immutable artifact snapshot.
+ * Boundary: materialization exposes bytes but performs no model arithmetic.
+ * Purpose: bind admitted tensor ranges into bounded materialization sessions.
+ * Inputs: complete admission, placement policy, budgets, and caller outputs.
+ * Effects: allocates plan indexes, owns an artifact session, and reads positions.
+ * Failure: identity, bounds, budget, allocation, or I/O publishes no binding. */
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <yvex/gguf_layout.h>
+#include <yvex/gguf.h>
+#include <yvex/internal/artifact.h>
+#include <yvex/internal/core.h>
+#include <yvex/internal/families/deepseek_v4.h>
 
 #define MATERIALIZE_DEFAULT_CHUNK (8ull * 1024ull * 1024ull)
 #define MATERIALIZE_NAME_INDEX_LOAD_NUM 2ull
 #define MATERIALIZE_NAME_INDEX_LOAD_DEN 3ull
+
+static const char *const materialization_status_names[] = {
+    [YVEX_MATERIALIZATION_STATUS_REFUSED] = "refused",
+    [YVEX_MATERIALIZATION_STATUS_PLANNED] = "planned",
+    [YVEX_MATERIALIZATION_STATUS_COMMITTED] = "committed",
+    [YVEX_MATERIALIZATION_STATUS_ABORTED] = "aborted",
+};
+
+static const char *const materialization_failure_names[] = {
+    [YVEX_MATERIALIZATION_FAILURE_NONE] = "none",
+    [YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT] = "invalid-argument",
+    [YVEX_MATERIALIZATION_FAILURE_ADMISSION] = "admission",
+    [YVEX_MATERIALIZATION_FAILURE_SNAPSHOT_DRIFT] = "snapshot-drift",
+    [YVEX_MATERIALIZATION_FAILURE_LAYOUT] = "layout",
+    [YVEX_MATERIALIZATION_FAILURE_TENSOR_COUNT] = "tensor-count",
+    [YVEX_MATERIALIZATION_FAILURE_TENSOR_RECORD] = "tensor-record",
+    [YVEX_MATERIALIZATION_FAILURE_DUPLICATE_TENSOR] = "duplicate-tensor",
+    [YVEX_MATERIALIZATION_FAILURE_QTYPE] = "qtype",
+    [YVEX_MATERIALIZATION_FAILURE_RANGE] = "range",
+    [YVEX_MATERIALIZATION_FAILURE_BUDGET] = "budget",
+    [YVEX_MATERIALIZATION_FAILURE_ALLOCATION] = "allocation",
+    [YVEX_MATERIALIZATION_FAILURE_READ] = "read",
+    [YVEX_MATERIALIZATION_FAILURE_CANCELLED] = "cancelled",
+    [YVEX_MATERIALIZATION_FAILURE_LIFECYCLE] = "lifecycle",
+    [YVEX_MATERIALIZATION_FAILURE_EXPERT_SUBVIEW] = "expert-subview",
+};
 
 typedef struct {
     unsigned long long hash;
@@ -64,26 +71,7 @@ struct yvex_materialization_session {
     int aborted;
 };
 
-static unsigned long long materialize_hash_string(const char *text)
-{
-    unsigned long long hash = 1469598103934665603ull;
-    const unsigned char *cursor = (const unsigned char *)(text ? text : "");
-    while (*cursor) {
-        hash ^= (unsigned long long)*cursor++;
-        hash *= 1099511628211ull;
-    }
-    return hash ? hash : 1ull;
-}
-
-static int materialize_checked_add(unsigned long long a,
-                                   unsigned long long b,
-                                   unsigned long long *out)
-{
-    if (!out || a > ULLONG_MAX - b) return 0;
-    *out = a + b;
-    return 1;
-}
-
+/* Purpose: project failure set facts while preserving the canonical materialization invariants. */
 static void materialize_failure_set(yvex_materialization_failure *failure,
                                     yvex_materialization_failure_code code,
                                     const char *name,
@@ -91,9 +79,9 @@ static void materialize_failure_set(yvex_materialization_failure *failure,
                                     unsigned long long expected,
                                     unsigned long long actual,
                                     unsigned long long offset,
-                                    const char *reason)
-{
-    if (!failure) return;
+                                    const char *reason) {
+    if (!failure)
+        return;
     memset(failure, 0, sizeof(*failure));
     failure->code = code;
     failure->tensor_index = tensor_index;
@@ -102,10 +90,10 @@ static void materialize_failure_set(yvex_materialization_failure *failure,
     failure->offset = offset;
     failure->reason = reason;
     if (name)
-        (void)snprintf(failure->tensor_name,
-                       sizeof(failure->tensor_name), "%s", name);
+        (void)snprintf(failure->tensor_name, sizeof(failure->tensor_name), "%s", name);
 }
 
+/* Purpose: project reject facts while preserving the canonical materialization invariants. */
 static int materialize_reject(yvex_materialization_failure *failure,
                               yvex_materialization_failure_code code,
                               const char *name,
@@ -115,52 +103,41 @@ static int materialize_reject(yvex_materialization_failure *failure,
                               unsigned long long offset,
                               yvex_error *err,
                               yvex_status status,
-                              const char *message)
-{
-    materialize_failure_set(failure, code, name, tensor_index, expected,
-                            actual, offset, message);
+                              const char *message) {
+    materialize_failure_set(failure, code, name, tensor_index, expected, actual, offset, message);
     yvex_error_set(err, status, "artifact.materialize", message);
     return status;
 }
 
-static int materialize_snapshot_equal(const yvex_artifact_snapshot *left,
-                                      const yvex_artifact_snapshot *right)
-{
-    return left && right &&
-           left->device == right->device &&
-           left->inode == right->inode &&
-           left->size == right->size &&
-           left->mtime_seconds == right->mtime_seconds &&
-           left->mtime_nanoseconds == right->mtime_nanoseconds &&
-           left->ctime_seconds == right->ctime_seconds &&
-           left->ctime_nanoseconds == right->ctime_nanoseconds;
-}
-
-static int materialize_index_capacity(unsigned long long count,
-                                      unsigned long long *out)
-{
+/* Purpose: project index capacity facts while preserving the canonical materialization invariants. */
+static int materialize_index_capacity(unsigned long long count, unsigned long long *out) {
     unsigned long long capacity = 16ull;
-    if (!out) return 0;
-    while (capacity * MATERIALIZE_NAME_INDEX_LOAD_NUM <
-           count * MATERIALIZE_NAME_INDEX_LOAD_DEN) {
-        if (capacity > ULLONG_MAX / 2ull) return 0;
+    if (!out)
+        return 0;
+    while (capacity * MATERIALIZE_NAME_INDEX_LOAD_NUM < count * MATERIALIZE_NAME_INDEX_LOAD_DEN) {
+        if (capacity > ULLONG_MAX / 2ull)
+            return 0;
         capacity *= 2ull;
     }
     *out = capacity;
     return 1;
 }
 
+/* Purpose: admit one materialization entry while preserving uniqueness and checked capacity.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
 static int materialize_index_insert(yvex_materialization_plan *plan,
                                     const char *name,
-                                    unsigned long long index)
-{
+                                    unsigned long long index) {
     unsigned long long hash;
     unsigned long long slot;
     unsigned long long step = 0ull;
 
     if (!plan || !plan->name_index || !plan->name_index_capacity || !name)
         return 0;
-    hash = materialize_hash_string(name);
+    hash = yvex_core_index_hash(name);
     slot = hash & (plan->name_index_capacity - 1ull);
     while (step < plan->name_index_capacity) {
         materialize_name_slot *candidate = &plan->name_index[slot];
@@ -170,8 +147,7 @@ static int materialize_index_insert(yvex_materialization_plan *plan,
             return 1;
         }
         if (candidate->hash == hash &&
-            strcmp(plan->bindings[candidate->index_plus_one - 1ull].name,
-                   name) == 0)
+            strcmp(plan->bindings[candidate->index_plus_one - 1ull].name, name) == 0)
             return 0;
         slot = (slot + 1ull) & (plan->name_index_capacity - 1ull);
         step++;
@@ -179,25 +155,30 @@ static int materialize_index_insert(yvex_materialization_plan *plan,
     return 0;
 }
 
-static const yvex_materialized_tensor_binding *materialize_index_find(
-    const yvex_materialization_plan *plan,
-    const char *name)
-{
+/* Purpose: locate the materialization entry associated with a canonical key.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+static const yvex_materialized_tensor_binding *
+materialize_index_find(const yvex_materialization_plan *plan, const char *name) {
     unsigned long long hash;
     unsigned long long slot;
     unsigned long long step = 0ull;
 
     if (!plan || !plan->name_index || !plan->name_index_capacity || !name)
         return NULL;
-    hash = materialize_hash_string(name);
+    hash = yvex_core_index_hash(name);
     slot = hash & (plan->name_index_capacity - 1ull);
     while (step < plan->name_index_capacity) {
         const materialize_name_slot *candidate = &plan->name_index[slot];
-        if (!candidate->index_plus_one) return NULL;
+        if (!candidate->index_plus_one)
+            return NULL;
         if (candidate->hash == hash) {
             const yvex_materialized_tensor_binding *binding =
                 &plan->bindings[candidate->index_plus_one - 1ull];
-            if (strcmp(binding->name, name) == 0) return binding;
+            if (strcmp(binding->name, name) == 0)
+                return binding;
         }
         slot = (slot + 1ull) & (plan->name_index_capacity - 1ull);
         step++;
@@ -205,68 +186,54 @@ static const yvex_materialized_tensor_binding *materialize_index_find(
     return NULL;
 }
 
-static void materialize_summary_hash_u64(yvex_sha256 *hash,
-                                         unsigned long long value)
-{
-    unsigned char bytes[8];
-    unsigned int i;
-    for (i = 0u; i < 8u; ++i)
-        bytes[i] = (unsigned char)((value >> (8u * i)) & 0xffu);
-    (void)yvex_sha256_update(hash, bytes, sizeof(bytes));
-}
-
-static void materialize_summary_hash_text(yvex_sha256 *hash,
-                                          const char *text)
-{
-    unsigned long long len = text ? (unsigned long long)strlen(text) : 0ull;
-    materialize_summary_hash_u64(hash, len);
-    if (len) (void)yvex_sha256_update(hash, text, (size_t)len);
-}
-
-static void materialize_compute_plan_identity(yvex_materialization_plan *plan)
-{
+/* Purpose: append canonical materialization fields to a deterministic identity stream.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+static void materialize_compute_plan_identity(yvex_materialization_plan *plan) {
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     unsigned long long i;
 
     yvex_sha256_init(&hash);
-    materialize_summary_hash_text(&hash, plan->admission.artifact_identity);
-    materialize_summary_hash_text(&hash, plan->admission.profile_identity);
-    materialize_summary_hash_text(&hash, plan->admission.writer_plan_identity);
-    materialize_summary_hash_u64(&hash, plan->count);
-    materialize_summary_hash_u64(&hash, plan->summary.payload_bytes);
+    yvex_sha256_update_text(&hash, plan->admission.artifact_identity);
+    yvex_sha256_update_text(&hash, plan->admission.profile_identity);
+    yvex_sha256_update_text(&hash, plan->admission.writer_plan_identity);
+    yvex_sha256_update_u64(&hash, plan->count);
+    yvex_sha256_update_u64(&hash, plan->summary.payload_bytes);
     for (i = 0ull; i < plan->count; ++i) {
         const yvex_materialized_tensor_binding *binding = &plan->bindings[i];
-        materialize_summary_hash_text(&hash, binding->name);
-        materialize_summary_hash_u64(&hash, binding->tensor_id);
-        materialize_summary_hash_u64(&hash, binding->descriptor_index);
-        materialize_summary_hash_u64(&hash, binding->qtype);
-        materialize_summary_hash_u64(&hash, binding->encoded_bytes);
-        materialize_summary_hash_u64(&hash, binding->absolute_offset);
-        materialize_summary_hash_u64(&hash, (unsigned long long)binding->placement);
+        yvex_sha256_update_text(&hash, binding->name);
+        yvex_sha256_update_u64(&hash, binding->tensor_id);
+        yvex_sha256_update_u64(&hash, binding->descriptor_index);
+        yvex_sha256_update_u64(&hash, binding->qtype);
+        yvex_sha256_update_u64(&hash, binding->encoded_bytes);
+        yvex_sha256_update_u64(&hash, binding->absolute_offset);
+        yvex_sha256_update_u64(&hash, (unsigned long long)binding->placement);
     }
     (void)yvex_sha256_final(&hash, digest);
     yvex_sha256_hex(digest, plan->summary.plan_identity);
 }
 
-static yvex_materialization_placement materialize_select_placement(
-    const yvex_tensor_info *tensor,
-    const yvex_materialization_options *options,
-    const yvex_deepseek_gguf_descriptor *descriptor)
-{
+/* Purpose: project select placement facts while preserving the canonical materialization invariants. */
+static yvex_materialization_placement
+materialize_select_placement(const yvex_tensor_info *tensor,
+                             const yvex_materialization_options *options,
+                             const yvex_deepseek_gguf_descriptor *descriptor) {
     if (tensor && tensor->ggml_type == YVEX_GGUF_QTYPE_Q2_K)
         return YVEX_MATERIALIZATION_PLACEMENT_STAGED_CACHE;
     if (descriptor && descriptor->expert_count > 1ull)
         return YVEX_MATERIALIZATION_PLACEMENT_STAGED_CACHE;
-    if (options && options->backend_resident_budget_bytes &&
-        tensor && tensor->storage_bytes <= options->backend_resident_budget_bytes)
+    if (options && options->backend_resident_budget_bytes && tensor &&
+        tensor->storage_bytes <= options->backend_resident_budget_bytes)
         return YVEX_MATERIALIZATION_PLACEMENT_BACKEND_RESIDENT_CANDIDATE;
     return YVEX_MATERIALIZATION_PLACEMENT_FILE_BACKED;
 }
 
-static yvex_materialization_access_mode materialize_access_for_placement(
-    yvex_materialization_placement placement)
-{
+/* Purpose: project access for placement facts while preserving the canonical materialization invariants. */
+static yvex_materialization_access_mode
+materialize_access_for_placement(yvex_materialization_placement placement) {
     switch (placement) {
     case YVEX_MATERIALIZATION_PLACEMENT_STAGED_CACHE:
         return YVEX_MATERIALIZATION_ACCESS_STAGED_SUBVIEW;
@@ -278,11 +245,15 @@ static yvex_materialization_access_mode materialize_access_for_placement(
     }
 }
 
-static void materialize_summary_add_binding(
-    yvex_materialization_summary *summary,
-    const yvex_materialized_tensor_binding *binding)
-{
-    if (!summary || !binding) return;
+/* Purpose: project summary add binding facts while preserving the canonical materialization invariants.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+static void materialize_summary_add_binding(yvex_materialization_summary *summary,
+                                            const yvex_materialized_tensor_binding *binding) {
+    if (!summary || !binding)
+        return;
     summary->tensor_count++;
     summary->payload_bytes += binding->encoded_bytes;
     if (binding->qtype < YVEX_MATERIALIZATION_QTYPE_CAP) {
@@ -305,26 +276,18 @@ static void materialize_summary_add_binding(
         break;
     }
     summary->file_backed_bytes_owned += binding->encoded_bytes;
-    if (binding->expert_count > 1ull) summary->expert_subview_count += binding->expert_count;
+    if (binding->expert_count > 1ull)
+        summary->expert_subview_count += binding->expert_count;
 }
 
-void yvex_artifact_materialize_refuse(yvex_artifact_materialize_fact *fact)
-{
-    if (!fact) return;
-    fact->status = "unsupported";
-    fact->reason = "artifact materialization requires complete-artifact admission";
-    fact->next_row = "V010.ARTIFACT.MATERIALIZE.0";
-}
-
-int yvex_artifact_materialize_supported(const char **reason)
-{
-    if (reason) *reason = "artifact materialization is implemented through admitted file-backed materialization plans";
-    return 1;
-}
-
-void yvex_materialization_options_default(yvex_materialization_options *options)
-{
-    if (!options) return;
+/* Purpose: initialize materialization state to its canonical empty or default value.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+void yvex_materialization_options_default(yvex_materialization_options *options) {
+    if (!options)
+        return;
     memset(options, 0, sizeof(*options));
     options->max_chunk_bytes = MATERIALIZE_DEFAULT_CHUNK;
     options->cache_budget_bytes = MATERIALIZE_DEFAULT_CHUNK * 2ull;
@@ -333,73 +296,176 @@ void yvex_materialization_options_default(yvex_materialization_options *options)
     options->require_complete_admission = 1;
 }
 
-const char *yvex_materialization_status_name(yvex_materialization_status status)
-{
-    switch (status) {
-    case YVEX_MATERIALIZATION_STATUS_REFUSED: return "refused";
-    case YVEX_MATERIALIZATION_STATUS_PLANNED: return "planned";
-    case YVEX_MATERIALIZATION_STATUS_COMMITTED: return "committed";
-    case YVEX_MATERIALIZATION_STATUS_ABORTED: return "aborted";
-    }
-    return "refused";
+/* Purpose: map materialization lifecycle status to a stable diagnostic name.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+const char *yvex_materialization_status_name(yvex_materialization_status status) {
+    return (unsigned int)status <
+                   sizeof(materialization_status_names) / sizeof(materialization_status_names[0])
+               ? materialization_status_names[status]
+               : "refused";
 }
 
-const char *yvex_materialization_placement_name(yvex_materialization_placement placement)
-{
-    switch (placement) {
-    case YVEX_MATERIALIZATION_PLACEMENT_FILE_BACKED: return "file-backed";
-    case YVEX_MATERIALIZATION_PLACEMENT_STAGED_CACHE: return "staged-cache";
-    case YVEX_MATERIALIZATION_PLACEMENT_BACKEND_RESIDENT_CANDIDATE:
-        return "backend-resident-candidate";
-    }
-    return "file-backed";
+/* Purpose: map materialization refusal codes to stable diagnostic names.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+const char *yvex_materialization_failure_name(yvex_materialization_failure_code code) {
+    return (unsigned int)code <
+                   sizeof(materialization_failure_names) / sizeof(materialization_failure_names[0])
+               ? materialization_failure_names[code]
+               : "unknown";
 }
 
-const char *yvex_materialization_access_mode_name(yvex_materialization_access_mode mode)
-{
-    switch (mode) {
-    case YVEX_MATERIALIZATION_ACCESS_FILE_RANGE: return "file-range";
-    case YVEX_MATERIALIZATION_ACCESS_STAGED_SUBVIEW: return "staged-subview";
-    case YVEX_MATERIALIZATION_ACCESS_BACKEND_CANDIDATE_FILE_RANGE:
-        return "backend-candidate-file-range";
-    }
-    return "file-range";
+/* Purpose: project one admitted GGUF tensor into an immutable materialization binding.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+static int materialize_plan_add_tensor(yvex_materialization_plan *plan,
+                                       const yvex_artifact *artifact,
+                                       const yvex_gguf *gguf,
+                                       const yvex_tensor_table *tensors,
+                                       const yvex_deepseek_gguf_map *deepseek_map,
+                                       const yvex_materialization_options *options,
+                                       unsigned long long index,
+                                       yvex_materialization_failure *failure,
+                                       yvex_error *err) {
+    const yvex_tensor_info *tensor = yvex_tensor_table_at(tensors, index);
+    const yvex_deepseek_gguf_descriptor *descriptor = NULL;
+    const yvex_gguf_qtype_geometry *geometry;
+    yvex_gguf_qtype_storage_result storage;
+    yvex_materialized_tensor_binding *binding = &plan->bindings[index];
+    unsigned int dimension;
+
+    if (!tensor || !tensor->name || !tensor->name[0])
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_TENSOR_RECORD,
+                                  tensor && tensor->name ? tensor->name : NULL,
+                                  index,
+                                  1ull,
+                                  0ull,
+                                  tensor ? tensor->absolute_offset : 0ull,
+                                  err,
+                                  YVEX_ERR_FORMAT,
+                                  "materialization tensor record is missing canonical facts");
+    descriptor =
+        deepseek_map
+            ? yvex_model_register_deepseek_v4()->lowering.find_emitted(deepseek_map, tensor->name)
+            : NULL;
+    if (options->require_deepseek_map && !descriptor)
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_TENSOR_RECORD,
+                                  tensor->name,
+                                  index,
+                                  1ull,
+                                  0ull,
+                                  tensor->absolute_offset,
+                                  err,
+                                  YVEX_ERR_FORMAT,
+                                  "materialization tensor record is missing canonical facts");
+    if (yvex_gguf_qtype_validate_tensor_storage(
+            tensor->ggml_type, tensor->dims, tensor->rank, tensor->storage_bytes, &storage) !=
+        YVEX_GGUF_QTYPE_STORAGE_OK)
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_QTYPE,
+                                  tensor->name,
+                                  index,
+                                  tensor->storage_bytes,
+                                  storage.total_bytes,
+                                  tensor->absolute_offset,
+                                  err,
+                                  YVEX_ERR_FORMAT,
+                                  storage.reason ? storage.reason : "qtype geometry refused");
+    if (tensor->absolute_offset > ULLONG_MAX - tensor->storage_bytes ||
+        tensor->absolute_offset + tensor->storage_bytes > yvex_artifact_size(artifact))
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_RANGE,
+                                  tensor->name,
+                                  index,
+                                  yvex_artifact_size(artifact),
+                                  tensor->absolute_offset + tensor->storage_bytes,
+                                  tensor->absolute_offset,
+                                  err,
+                                  YVEX_ERR_BOUNDS,
+                                  "tensor range exceeds admitted artifact file");
+    geometry = yvex_gguf_qtype_geometry_find(tensor->ggml_type);
+    binding->tensor_id = index;
+    binding->descriptor_index =
+        descriptor
+            ? (unsigned long long)(descriptor - yvex_model_register_deepseek_v4()->lowering.at(
+                                                    deepseek_map, 0ull))
+            : YVEX_MATERIALIZATION_NO_INDEX;
+    (void)snprintf(binding->name, sizeof(binding->name), "%s", tensor->name);
+    binding->role = descriptor ? descriptor->role : tensor->role;
+    binding->collection = descriptor ? descriptor->collection : YVEX_TENSOR_COLLECTION_COUNT;
+    binding->scope = descriptor ? descriptor->scope : YVEX_TENSOR_SCOPE_GLOBAL;
+    binding->layer_index = descriptor ? descriptor->layer_index : YVEX_MATERIALIZATION_NO_INDEX;
+    binding->predictor_index =
+        descriptor ? descriptor->predictor_index : YVEX_MATERIALIZATION_NO_INDEX;
+    binding->expert_count = descriptor ? descriptor->expert_count : 0ull;
+    binding->rank = tensor->rank;
+    for (dimension = 0u; dimension < YVEX_TENSOR_MAX_DIMS; ++dimension)
+        binding->dims[dimension] = dimension < tensor->rank ? tensor->dims[dimension] : 0ull;
+    binding->qtype = tensor->ggml_type;
+    binding->storage_class = geometry ? geometry->storage_class : YVEX_GGUF_QTYPE_STORAGE_UNKNOWN;
+    binding->row_width = storage.row_width;
+    binding->row_count = storage.row_count;
+    binding->block_size = geometry ? geometry->block_size : 0ull;
+    binding->bytes_per_block = geometry ? geometry->bytes_per_block : 0ull;
+    binding->encoded_bytes = tensor->storage_bytes;
+    binding->absolute_offset = tensor->absolute_offset;
+    if (!yvex_core_u64_add(
+            tensor->absolute_offset, tensor->storage_bytes, &binding->absolute_end_offset))
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_RANGE,
+                                  tensor->name,
+                                  index,
+                                  ULLONG_MAX,
+                                  tensor->storage_bytes,
+                                  tensor->absolute_offset,
+                                  err,
+                                  YVEX_ERR_BOUNDS,
+                                  "tensor range end overflowed");
+    binding->alignment = yvex_gguf_alignment(gguf);
+    binding->placement = materialize_select_placement(tensor, options, descriptor);
+    binding->access_mode = materialize_access_for_placement(binding->placement);
+    binding->backend_compatible =
+        binding->qtype == YVEX_GGUF_QTYPE_F32 || binding->qtype == YVEX_GGUF_QTYPE_F16 ||
+        binding->qtype == YVEX_GGUF_QTYPE_BF16 || binding->qtype == YVEX_GGUF_QTYPE_I32 ||
+        binding->qtype == YVEX_GGUF_QTYPE_Q8_0 || binding->qtype == YVEX_GGUF_QTYPE_Q2_K;
+    if (!materialize_index_insert(plan, binding->name, index))
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_DUPLICATE_TENSOR,
+                                  tensor->name,
+                                  index,
+                                  1ull,
+                                  2ull,
+                                  tensor->absolute_offset,
+                                  err,
+                                  YVEX_ERR_FORMAT,
+                                  "duplicate tensor name in materialization plan");
+    materialize_summary_add_binding(&plan->summary, binding);
+    return YVEX_OK;
 }
 
-const char *yvex_materialization_failure_name(yvex_materialization_failure_code code)
-{
-    switch (code) {
-    case YVEX_MATERIALIZATION_FAILURE_NONE: return "none";
-    case YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT: return "invalid-argument";
-    case YVEX_MATERIALIZATION_FAILURE_ADMISSION: return "admission";
-    case YVEX_MATERIALIZATION_FAILURE_SNAPSHOT_DRIFT: return "snapshot-drift";
-    case YVEX_MATERIALIZATION_FAILURE_LAYOUT: return "layout";
-    case YVEX_MATERIALIZATION_FAILURE_TENSOR_COUNT: return "tensor-count";
-    case YVEX_MATERIALIZATION_FAILURE_TENSOR_RECORD: return "tensor-record";
-    case YVEX_MATERIALIZATION_FAILURE_DUPLICATE_TENSOR: return "duplicate-tensor";
-    case YVEX_MATERIALIZATION_FAILURE_QTYPE: return "qtype";
-    case YVEX_MATERIALIZATION_FAILURE_RANGE: return "range";
-    case YVEX_MATERIALIZATION_FAILURE_BUDGET: return "budget";
-    case YVEX_MATERIALIZATION_FAILURE_ALLOCATION: return "allocation";
-    case YVEX_MATERIALIZATION_FAILURE_READ: return "read";
-    case YVEX_MATERIALIZATION_FAILURE_CANCELLED: return "cancelled";
-    case YVEX_MATERIALIZATION_FAILURE_LIFECYCLE: return "lifecycle";
-    case YVEX_MATERIALIZATION_FAILURE_EXPERT_SUBVIEW: return "expert-subview";
-    }
-    return "unknown";
-}
-
-int yvex_materialization_plan_build(
-    yvex_materialization_plan **out,
-    const yvex_complete_artifact_admission *admission,
-    const yvex_artifact *artifact,
-    const yvex_gguf *gguf,
-    const yvex_tensor_table *tensors,
-    const yvex_deepseek_gguf_map *deepseek_map,
-    const yvex_materialization_options *options,
-    yvex_materialization_failure *failure,
-    yvex_error *err)
-{
+/* Purpose: derive an immutable placement and byte-range plan from complete artifact admission.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+int yvex_materialization_plan_build(yvex_materialization_plan **out,
+                                    const yvex_complete_artifact_admission *admission,
+                                    const yvex_artifact *artifact,
+                                    const yvex_gguf *gguf,
+                                    const yvex_tensor_table *tensors,
+                                    const yvex_deepseek_gguf_map *deepseek_map,
+                                    const yvex_materialization_options *options,
+                                    yvex_materialization_failure *failure,
+                                    yvex_error *err) {
     yvex_materialization_options local;
     yvex_materialization_plan *plan = NULL;
     yvex_artifact_snapshot snapshot;
@@ -409,90 +475,139 @@ int yvex_materialization_plan_build(
     unsigned long long i;
     int rc;
 
-    if (out) *out = NULL;
+    if (out)
+        *out = NULL;
     if (!out || !admission || !artifact || !gguf || !tensors)
         return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, 0ull, err,
+            failure,
+            YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT,
+            NULL,
+            YVEX_MATERIALIZATION_NO_INDEX,
+            1ull,
+            0ull,
+            0ull,
+            err,
             YVEX_ERR_INVALID_ARG,
             "materialization plan requires admission, artifact, GGUF, and tensor table");
     yvex_materialization_options_default(&local);
-    if (options) local = *options;
+    if (options)
+        local = *options;
     if (!local.max_chunk_bytes || local.max_chunk_bytes > (unsigned long long)SIZE_MAX)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_BUDGET, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, local.max_chunk_bytes, 0ull,
-            err, YVEX_ERR_INVALID_ARG,
-            "materialization chunk budget is invalid");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_BUDGET,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  1ull,
+                                  local.max_chunk_bytes,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_INVALID_ARG,
+                                  "materialization chunk budget is invalid");
     if (local.require_complete_admission &&
-        (!admission->complete ||
-         admission->artifact_class != YVEX_ARTIFACT_CLASS_COMPLETE_YVEX ||
-         !admission->materialization_input_ready ||
-         admission->runtime_supported))
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_ADMISSION, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, 0ull, err,
-            YVEX_ERR_STATE,
-            "complete YVEX artifact admission is required");
+        (!admission->complete || admission->artifact_class != YVEX_ARTIFACT_CLASS_COMPLETE_YVEX ||
+         !admission->materialization_input_ready || admission->runtime_supported))
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_ADMISSION,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  1ull,
+                                  0ull,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_STATE,
+                                  "complete YVEX artifact admission is required");
     if (yvex_artifact_snapshot_get(artifact, &snapshot, err) != YVEX_OK ||
-        !materialize_snapshot_equal(&snapshot, &admission->file_snapshot))
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_SNAPSHOT_DRIFT, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, admission->file_snapshot.size,
-            snapshot.size, 0ull, err, YVEX_ERR_STATE,
-            "opened artifact snapshot does not match admission");
+        !yvex_artifact_snapshot_equal(&snapshot, &admission->file_snapshot))
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_SNAPSHOT_DRIFT,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  admission->file_snapshot.size,
+                                  snapshot.size,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_STATE,
+                                  "opened artifact snapshot does not match admission");
     memset(&layout, 0, sizeof(layout));
     rc = yvex_gguf_layout_validate(artifact, gguf, &layout, err);
     if (rc != YVEX_OK || !layout.accepted)
         return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_LAYOUT,
-            layout.tensor_name, layout.tensor_index,
-            YVEX_GGUF_LAYOUT_OK, layout.code,
-            layout.failure_absolute_offset, err, YVEX_ERR_FORMAT,
+            failure,
+            YVEX_MATERIALIZATION_FAILURE_LAYOUT,
+            layout.tensor_name,
+            layout.tensor_index,
+            YVEX_GGUF_LAYOUT_OK,
+            layout.code,
+            layout.failure_absolute_offset,
+            err,
+            YVEX_ERR_FORMAT,
             "GGUF global layout admission is required before materialization");
     count = yvex_tensor_table_count(tensors);
     if (count != admission->tensor_count)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_TENSOR_COUNT, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, admission->tensor_count, count,
-            0ull, err, YVEX_ERR_FORMAT,
-            "tensor table count differs from complete-artifact admission");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_TENSOR_COUNT,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  admission->tensor_count,
+                                  count,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_FORMAT,
+                                  "tensor table count differs from complete-artifact admission");
     if (local.require_deepseek_map) {
         const yvex_deepseek_gguf_map_summary *summary =
             yvex_model_register_deepseek_v4()->lowering.summary(deepseek_map);
-        if (!summary || !summary->complete ||
-            summary->descriptor_count != count)
-            return materialize_reject(
-                failure, YVEX_MATERIALIZATION_FAILURE_TENSOR_COUNT, NULL,
-                YVEX_MATERIALIZATION_NO_INDEX, count,
-                summary ? summary->descriptor_count : 0ull, 0ull, err,
-                YVEX_ERR_FORMAT,
-                "DeepSeek materialization requires the canonical GGUF map");
+        if (!summary || !summary->complete || summary->descriptor_count != count)
+            return materialize_reject(failure,
+                                      YVEX_MATERIALIZATION_FAILURE_TENSOR_COUNT,
+                                      NULL,
+                                      YVEX_MATERIALIZATION_NO_INDEX,
+                                      count,
+                                      summary ? summary->descriptor_count : 0ull,
+                                      0ull,
+                                      err,
+                                      YVEX_ERR_FORMAT,
+                                      "DeepSeek materialization requires the canonical GGUF map");
     }
     if (!materialize_index_capacity(count, &index_capacity))
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_ALLOCATION, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, count, 0ull, 0ull, err,
-            YVEX_ERR_NOMEM,
-            "materialization name index capacity overflow");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_ALLOCATION,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  count,
+                                  0ull,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_NOMEM,
+                                  "materialization name index capacity overflow");
     plan = (yvex_materialization_plan *)calloc(1u, sizeof(*plan));
     if (!plan)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_ALLOCATION, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, 0ull, err,
-            YVEX_ERR_NOMEM,
-            "materialization plan allocation failed");
-    plan->bindings = (yvex_materialized_tensor_binding *)calloc(
-        (size_t)(count ? count : 1ull), sizeof(*plan->bindings));
-    plan->name_index = (materialize_name_slot *)calloc(
-        (size_t)index_capacity, sizeof(*plan->name_index));
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_ALLOCATION,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  1ull,
+                                  0ull,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_NOMEM,
+                                  "materialization plan allocation failed");
+    plan->bindings = (yvex_materialized_tensor_binding *)calloc((size_t)(count ? count : 1ull),
+                                                                sizeof(*plan->bindings));
+    plan->name_index =
+        (materialize_name_slot *)calloc((size_t)index_capacity, sizeof(*plan->name_index));
     if (!plan->bindings || !plan->name_index) {
         yvex_materialization_plan_close(plan);
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_ALLOCATION, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, count, 0ull, 0ull, err,
-            YVEX_ERR_NOMEM,
-            "materialization binding allocation failed");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_ALLOCATION,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  count,
+                                  0ull,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_NOMEM,
+                                  "materialization binding allocation failed");
     }
     plan->admission = *admission;
     plan->snapshot = snapshot;
@@ -500,118 +615,20 @@ int yvex_materialization_plan_build(
     plan->count = count;
     plan->summary.status = YVEX_MATERIALIZATION_STATUS_PLANNED;
     plan->summary.file_bytes = admission->file_bytes;
-    plan->summary.graph_scratch_reserved_bytes =
-        local.future_graph_scratch_reserve_bytes;
+    plan->summary.graph_scratch_reserved_bytes = local.future_graph_scratch_reserve_bytes;
     plan->summary.kv_reserved_bytes = local.future_kv_reserve_bytes;
     (void)snprintf(plan->summary.artifact_identity,
-                   sizeof(plan->summary.artifact_identity), "%s",
+                   sizeof(plan->summary.artifact_identity),
+                   "%s",
                    admission->artifact_identity);
 
     for (i = 0ull; i < count; ++i) {
-        const yvex_tensor_info *tensor = yvex_tensor_table_at(tensors, i);
-        const yvex_deepseek_gguf_descriptor *descriptor = NULL;
-        const yvex_gguf_qtype_geometry *geometry;
-        yvex_gguf_qtype_storage_result storage;
-        yvex_materialized_tensor_binding *binding = &plan->bindings[i];
-        unsigned int d;
-
-        if (!tensor || !tensor->name || !tensor->name[0])
-            goto tensor_record_refused;
-        descriptor = deepseek_map
-            ? yvex_model_register_deepseek_v4()->lowering.find_emitted(deepseek_map, tensor->name)
-            : NULL;
-        if (local.require_deepseek_map && !descriptor)
-            goto tensor_record_refused;
-        if (yvex_gguf_qtype_validate_tensor_storage(
-                tensor->ggml_type, tensor->dims, tensor->rank,
-                tensor->storage_bytes, &storage) != YVEX_GGUF_QTYPE_STORAGE_OK) {
+        rc = materialize_plan_add_tensor(
+            plan, artifact, gguf, tensors, deepseek_map, &local, i, failure, err);
+        if (rc != YVEX_OK) {
             yvex_materialization_plan_close(plan);
-            return materialize_reject(
-                failure, YVEX_MATERIALIZATION_FAILURE_QTYPE, tensor->name, i,
-                tensor->storage_bytes, storage.total_bytes,
-                tensor->absolute_offset, err, YVEX_ERR_FORMAT,
-                storage.reason ? storage.reason : "qtype geometry refused");
+            return rc;
         }
-        if (tensor->absolute_offset > ULLONG_MAX - tensor->storage_bytes ||
-            tensor->absolute_offset + tensor->storage_bytes >
-                yvex_artifact_size(artifact)) {
-            yvex_materialization_plan_close(plan);
-            return materialize_reject(
-                failure, YVEX_MATERIALIZATION_FAILURE_RANGE, tensor->name, i,
-                yvex_artifact_size(artifact), tensor->absolute_offset +
-                    tensor->storage_bytes, tensor->absolute_offset, err,
-                YVEX_ERR_BOUNDS,
-                "tensor range exceeds admitted artifact file");
-        }
-        geometry = yvex_gguf_qtype_geometry_find(tensor->ggml_type);
-        binding->tensor_id = i;
-        binding->descriptor_index = descriptor
-            ? (unsigned long long)(descriptor - yvex_model_register_deepseek_v4()->lowering.at(deepseek_map, 0ull))
-            : YVEX_MATERIALIZATION_NO_INDEX;
-        (void)snprintf(binding->name, sizeof(binding->name), "%s",
-                       tensor->name);
-        binding->role = descriptor ? descriptor->role : tensor->role;
-        binding->collection = descriptor ? descriptor->collection
-            : YVEX_DEEPSEEK_TENSOR_COLLECTION_COUNT;
-        binding->scope = descriptor ? descriptor->scope
-            : YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL;
-        binding->layer_index = descriptor ? descriptor->layer_index
-            : YVEX_MATERIALIZATION_NO_INDEX;
-        binding->predictor_index = descriptor ? descriptor->predictor_index
-            : YVEX_MATERIALIZATION_NO_INDEX;
-        binding->expert_count = descriptor ? descriptor->expert_count : 0ull;
-        binding->rank = tensor->rank;
-        for (d = 0u; d < YVEX_TENSOR_MAX_DIMS; ++d)
-            binding->dims[d] = d < tensor->rank ? tensor->dims[d] : 0ull;
-        binding->qtype = tensor->ggml_type;
-        binding->storage_class = geometry ? geometry->storage_class
-            : YVEX_GGUF_QTYPE_STORAGE_UNKNOWN;
-        binding->row_width = storage.row_width;
-        binding->row_count = storage.row_count;
-        binding->block_size = geometry ? geometry->block_size : 0ull;
-        binding->bytes_per_block = geometry ? geometry->bytes_per_block : 0ull;
-        binding->encoded_bytes = tensor->storage_bytes;
-        binding->absolute_offset = tensor->absolute_offset;
-        if (!materialize_checked_add(tensor->absolute_offset,
-                                     tensor->storage_bytes,
-                                     &binding->absolute_end_offset)) {
-            yvex_materialization_plan_close(plan);
-            return materialize_reject(
-                failure, YVEX_MATERIALIZATION_FAILURE_RANGE, tensor->name, i,
-                ULLONG_MAX, tensor->storage_bytes, tensor->absolute_offset,
-                err, YVEX_ERR_BOUNDS,
-                "tensor range end overflowed");
-        }
-        binding->alignment = yvex_gguf_alignment(gguf);
-        binding->placement = materialize_select_placement(
-            tensor, &local, descriptor);
-        binding->access_mode = materialize_access_for_placement(
-            binding->placement);
-        binding->backend_compatible =
-            binding->qtype == YVEX_GGUF_QTYPE_F32 ||
-            binding->qtype == YVEX_GGUF_QTYPE_F16 ||
-            binding->qtype == YVEX_GGUF_QTYPE_BF16 ||
-            binding->qtype == YVEX_GGUF_QTYPE_I32 ||
-            binding->qtype == YVEX_GGUF_QTYPE_Q8_0 ||
-            binding->qtype == YVEX_GGUF_QTYPE_Q2_K;
-        if (!materialize_index_insert(plan, binding->name, i)) {
-            yvex_materialization_plan_close(plan);
-            return materialize_reject(
-                failure, YVEX_MATERIALIZATION_FAILURE_DUPLICATE_TENSOR,
-                tensor->name, i, 1ull, 2ull, tensor->absolute_offset, err,
-                YVEX_ERR_FORMAT,
-                "duplicate tensor name in materialization plan");
-        }
-        materialize_summary_add_binding(&plan->summary, binding);
-        continue;
-
-tensor_record_refused:
-        yvex_materialization_plan_close(plan);
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_TENSOR_RECORD,
-            tensor && tensor->name ? tensor->name : NULL, i, 1ull, 0ull,
-            tensor ? tensor->absolute_offset : 0ull, err, YVEX_ERR_FORMAT,
-            "materialization tensor record is missing canonical facts");
     }
     materialize_compute_plan_identity(plan);
     *out = plan;
@@ -619,82 +636,113 @@ tensor_record_refused:
     return YVEX_OK;
 }
 
-void yvex_materialization_plan_close(yvex_materialization_plan *plan)
-{
-    if (!plan) return;
+/* Purpose: release an immutable materialization plan and its lookup index.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: releases only resources owned by artifact materialization; cleanup remains deterministic.
+ * Failure: null or released artifact materialization handles remain harmless.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+void yvex_materialization_plan_close(yvex_materialization_plan *plan) {
+    if (!plan)
+        return;
     free(plan->bindings);
     free(plan->name_index);
     free(plan);
 }
 
-const yvex_materialization_summary *yvex_materialization_plan_summary(
-    const yvex_materialization_plan *plan)
-{
+/* Purpose: project materialization plan summary facts while preserving the canonical materialization invariants.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+const yvex_materialization_summary *
+yvex_materialization_plan_summary(const yvex_materialization_plan *plan) {
     return plan ? &plan->summary : NULL;
 }
 
-unsigned long long yvex_materialization_plan_tensor_count(
-    const yvex_materialization_plan *plan)
-{
-    return plan ? plan->count : 0ull;
-}
-
-const yvex_materialized_tensor_binding *yvex_materialization_plan_tensor_at(
-    const yvex_materialization_plan *plan,
-    unsigned long long index)
-{
-    if (!plan || index >= plan->count) return NULL;
+/* Purpose: return the immutable materialization entry at a checked ordinal. */
+static const yvex_materialized_tensor_binding *plan_tensor_at(const yvex_materialization_plan *plan,
+                                                              unsigned long long index) {
+    if (!plan || index >= plan->count)
+        return NULL;
     return &plan->bindings[index];
 }
 
-const yvex_materialized_tensor_binding *yvex_materialization_plan_find_name(
-    const yvex_materialization_plan *plan,
-    const char *name)
-{
+/* Purpose: resolve one materialization binding by canonical tensor name.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+const yvex_materialized_tensor_binding *
+yvex_materialization_plan_find_name(const yvex_materialization_plan *plan, const char *name) {
     return materialize_index_find(plan, name);
 }
 
-int yvex_materialization_session_open(
-    yvex_materialization_session **out,
-    const yvex_materialization_plan *plan,
-    const yvex_artifact *artifact,
-    const yvex_materialization_options *options,
-    yvex_materialization_failure *failure,
-    yvex_error *err)
-{
+/* Purpose: bind an immutable plan to the exact admitted artifact snapshot.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+int yvex_materialization_session_open(yvex_materialization_session **out,
+                                      const yvex_materialization_plan *plan,
+                                      const yvex_artifact *artifact,
+                                      const yvex_materialization_options *options,
+                                      yvex_materialization_failure *failure,
+                                      yvex_error *err) {
     yvex_materialization_options local;
     yvex_materialization_session *session;
     yvex_artifact_snapshot snapshot;
 
-    if (out) *out = NULL;
+    if (out)
+        *out = NULL;
     if (!out || !plan || !artifact)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, 0ull, err,
-            YVEX_ERR_INVALID_ARG,
-            "materialization session requires plan and artifact");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  1ull,
+                                  0ull,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_INVALID_ARG,
+                                  "materialization session requires plan and artifact");
     yvex_materialization_options_default(&local);
-    if (options) local = *options;
+    if (options)
+        local = *options;
     if (!local.max_chunk_bytes || local.max_chunk_bytes > (unsigned long long)SIZE_MAX)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_BUDGET, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, local.max_chunk_bytes, 0ull,
-            err, YVEX_ERR_INVALID_ARG,
-            "materialization session chunk budget is invalid");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_BUDGET,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  1ull,
+                                  local.max_chunk_bytes,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_INVALID_ARG,
+                                  "materialization session chunk budget is invalid");
     if (yvex_artifact_snapshot_get(artifact, &snapshot, err) != YVEX_OK ||
-        !materialize_snapshot_equal(&snapshot, &plan->snapshot))
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_SNAPSHOT_DRIFT, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, plan->snapshot.size,
-            snapshot.size, 0ull, err, YVEX_ERR_STATE,
-            "materialization session artifact snapshot drifted");
+        !yvex_artifact_snapshot_equal(&snapshot, &plan->snapshot))
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_SNAPSHOT_DRIFT,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  plan->snapshot.size,
+                                  snapshot.size,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_STATE,
+                                  "materialization session artifact snapshot drifted");
     session = (yvex_materialization_session *)calloc(1u, sizeof(*session));
     if (!session)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_ALLOCATION, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, 0ull, err,
-            YVEX_ERR_NOMEM,
-            "materialization session allocation failed");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_ALLOCATION,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  1ull,
+                                  0ull,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_NOMEM,
+                                  "materialization session allocation failed");
     session->plan = plan;
     session->artifact = artifact;
     session->opened_snapshot = snapshot;
@@ -706,27 +754,40 @@ int yvex_materialization_session_open(
     return YVEX_OK;
 }
 
-int yvex_materialization_session_commit(
-    yvex_materialization_session *session,
-    yvex_materialization_failure *failure,
-    yvex_error *err)
-{
+/* Purpose: seal a fully validated materialization session for concurrent reads.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+int yvex_materialization_session_commit(yvex_materialization_session *session,
+                                        yvex_materialization_failure *failure,
+                                        yvex_error *err) {
     yvex_artifact_snapshot current;
 
     if (!session || session->aborted)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_LIFECYCLE, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, 0ull, err,
-            YVEX_ERR_STATE,
-            "cannot commit missing or aborted materialization session");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_LIFECYCLE,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  1ull,
+                                  0ull,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_STATE,
+                                  "cannot commit missing or aborted materialization session");
     if (yvex_artifact_snapshot_validate(session->artifact, &current, err) != YVEX_OK ||
-        !materialize_snapshot_equal(&current, &session->opened_snapshot)) {
+        !yvex_artifact_snapshot_equal(&current, &session->opened_snapshot)) {
         session->summary.snapshot_drift_count++;
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_SNAPSHOT_DRIFT, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, session->opened_snapshot.size,
-            current.size, 0ull, err, YVEX_ERR_STATE,
-            "artifact snapshot drifted before materialization commit");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_SNAPSHOT_DRIFT,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  session->opened_snapshot.size,
+                                  current.size,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_STATE,
+                                  "artifact snapshot drifted before materialization commit");
     }
     session->committed = 1;
     session->summary.status = YVEX_MATERIALIZATION_STATUS_COMMITTED;
@@ -737,104 +798,114 @@ int yvex_materialization_session_commit(
     return YVEX_OK;
 }
 
-int yvex_materialization_session_abort(
-    yvex_materialization_session *session,
-    yvex_materialization_failure *failure,
-    yvex_error *err)
-{
+/* Purpose: close one materialization session and its admitted artifact handle.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: releases only resources owned by artifact materialization; cleanup remains deterministic.
+ * Failure: null or released artifact materialization handles remain harmless.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+void yvex_materialization_session_close(yvex_materialization_session *session) {
     if (!session)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, 0ull, err,
-            YVEX_ERR_INVALID_ARG,
-            "cannot abort missing materialization session");
-    session->aborted = 1;
-    session->committed = 0;
-    session->summary.status = YVEX_MATERIALIZATION_STATUS_ABORTED;
-    session->summary.aborted_bindings = session->plan ? session->plan->count : 0ull;
-    session->summary.cleanup_complete = 1;
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-void yvex_materialization_session_close(yvex_materialization_session *session)
-{
-    if (!session) return;
+        return;
     session->summary.cleanup_complete = 1;
     free(session);
 }
 
-const yvex_materialization_summary *yvex_materialization_session_summary(
-    const yvex_materialization_session *session)
-{
+/* Purpose: project materialization session summary facts while preserving the canonical materialization invariants.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+const yvex_materialization_summary *
+yvex_materialization_session_summary(const yvex_materialization_session *session) {
     return session ? &session->summary : NULL;
 }
 
-const yvex_materialized_tensor_binding *yvex_materialization_session_tensor_at(
-    const yvex_materialization_session *session,
-    unsigned long long index)
-{
-    return session && session->plan
-        ? yvex_materialization_plan_tensor_at(session->plan, index) : NULL;
+/* Purpose: return the immutable materialization entry at a checked ordinal.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+const yvex_materialized_tensor_binding *
+yvex_materialization_session_tensor_at(const yvex_materialization_session *session,
+                                       unsigned long long index) {
+    return session && session->plan ? plan_tensor_at(session->plan, index) : NULL;
 }
 
-const yvex_materialized_tensor_binding *yvex_materialization_session_find_name(
-    const yvex_materialization_session *session,
-    const char *name)
-{
-    return session && session->plan
-        ? yvex_materialization_plan_find_name(session->plan, name) : NULL;
-}
-
-int yvex_materialization_session_read(
-    yvex_materialization_session *session,
-    const yvex_materialized_tensor_binding *binding,
-    unsigned long long binding_offset,
-    void *dst,
-    size_t len,
-    yvex_materialization_failure *failure,
-    yvex_error *err)
-{
+/* Purpose: perform one checked positioned read from a committed tensor binding.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: reads bounded evidence and updates only caller-owned artifact materialization state.
+ * Failure: invalid, short, inconsistent, or I/O input yields typed refusal.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+int yvex_materialization_session_read(yvex_materialization_session *session,
+                                      const yvex_materialized_tensor_binding *binding,
+                                      unsigned long long binding_offset,
+                                      void *dst,
+                                      size_t len,
+                                      yvex_materialization_failure *failure,
+                                      yvex_error *err) {
     yvex_artifact_snapshot current;
     unsigned long long absolute;
 
     if (!session || !binding || !dst || !len)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT,
-            binding ? binding->name : NULL, binding ? binding->tensor_id :
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, 0ull, err,
-            YVEX_ERR_INVALID_ARG,
-            "materialization read requires session, binding, and buffer");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT,
+                                  binding ? binding->name : NULL,
+                                  binding ? binding->tensor_id : YVEX_MATERIALIZATION_NO_INDEX,
+                                  1ull,
+                                  0ull,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_INVALID_ARG,
+                                  "materialization read requires session, binding, and buffer");
     if (!session->committed || session->aborted)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_LIFECYCLE,
-            binding->name, binding->tensor_id, 1ull, 0ull,
-            binding->absolute_offset, err, YVEX_ERR_STATE,
-            "materialization read requires a committed session");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_LIFECYCLE,
+                                  binding->name,
+                                  binding->tensor_id,
+                                  1ull,
+                                  0ull,
+                                  binding->absolute_offset,
+                                  err,
+                                  YVEX_ERR_STATE,
+                                  "materialization read requires a committed session");
     if ((unsigned long long)len > binding->encoded_bytes ||
         binding_offset > binding->encoded_bytes - (unsigned long long)len)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_RANGE,
-            binding->name, binding->tensor_id, binding->encoded_bytes,
-            binding_offset + (unsigned long long)len,
-            binding->absolute_offset, err, YVEX_ERR_BOUNDS,
-            "materialization read exceeds binding range");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_RANGE,
+                                  binding->name,
+                                  binding->tensor_id,
+                                  binding->encoded_bytes,
+                                  binding_offset + (unsigned long long)len,
+                                  binding->absolute_offset,
+                                  err,
+                                  YVEX_ERR_BOUNDS,
+                                  "materialization read exceeds binding range");
     if (yvex_artifact_snapshot_validate(session->artifact, &current, err) != YVEX_OK ||
-        !materialize_snapshot_equal(&current, &session->opened_snapshot)) {
+        !yvex_artifact_snapshot_equal(&current, &session->opened_snapshot)) {
         session->summary.snapshot_drift_count++;
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_SNAPSHOT_DRIFT,
-            binding->name, binding->tensor_id, session->opened_snapshot.size,
-            current.size, binding->absolute_offset, err, YVEX_ERR_STATE,
-            "artifact snapshot drifted during materialization read");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_SNAPSHOT_DRIFT,
+                                  binding->name,
+                                  binding->tensor_id,
+                                  session->opened_snapshot.size,
+                                  current.size,
+                                  binding->absolute_offset,
+                                  err,
+                                  YVEX_ERR_STATE,
+                                  "artifact snapshot drifted during materialization read");
     }
     absolute = binding->absolute_offset + binding_offset;
     if (yvex_artifact_read_at(session->artifact, absolute, dst, len, err) != YVEX_OK)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_READ,
-            binding->name, binding->tensor_id, len, 0ull, absolute, err,
-            YVEX_ERR_IO,
-            "materialization positioned read failed");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_READ,
+                                  binding->name,
+                                  binding->tensor_id,
+                                  len,
+                                  0ull,
+                                  absolute,
+                                  err,
+                                  YVEX_ERR_IO,
+                                  "materialization positioned read failed");
     session->summary.access_calls++;
     session->summary.payload_bytes_accessed += (unsigned long long)len;
     if ((unsigned long long)len > session->summary.staging_bytes)
@@ -844,55 +915,74 @@ int yvex_materialization_session_read(
     return YVEX_OK;
 }
 
-int yvex_materialization_session_walk_payload(
-    yvex_materialization_session *session,
-    yvex_materialization_progress_fn progress,
-    void *progress_context,
-    yvex_materialization_failure *failure,
-    yvex_error *err)
-{
+/* Purpose: stream all admitted tensor payload ranges through a bounded visitor.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+int yvex_materialization_session_walk_payload(yvex_materialization_session *session,
+                                              yvex_materialization_progress_fn progress,
+                                              void *progress_context,
+                                              yvex_materialization_failure *failure,
+                                              yvex_error *err) {
     unsigned char *buffer;
     unsigned long long i;
     size_t chunk;
 
     if (!session || !session->plan)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, 0ull, err,
-            YVEX_ERR_INVALID_ARG,
-            "payload walk requires a materialization session");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  1ull,
+                                  0ull,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_INVALID_ARG,
+                                  "payload walk requires a materialization session");
     if (!session->committed)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_LIFECYCLE, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, 0ull, err,
-            YVEX_ERR_STATE,
-            "payload walk requires a committed materialization session");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_LIFECYCLE,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  1ull,
+                                  0ull,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_STATE,
+                                  "payload walk requires a committed materialization session");
     chunk = (size_t)session->options.max_chunk_bytes;
     buffer = (unsigned char *)malloc(chunk);
     if (!buffer)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_ALLOCATION, NULL,
-            YVEX_MATERIALIZATION_NO_INDEX, chunk, 0ull, 0ull, err,
-            YVEX_ERR_NOMEM,
-            "payload walk buffer allocation failed");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_ALLOCATION,
+                                  NULL,
+                                  YVEX_MATERIALIZATION_NO_INDEX,
+                                  chunk,
+                                  0ull,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_NOMEM,
+                                  "payload walk buffer allocation failed");
     for (i = 0ull; i < session->plan->count; ++i) {
-        const yvex_materialized_tensor_binding *binding =
-            &session->plan->bindings[i];
+        const yvex_materialized_tensor_binding *binding = &session->plan->bindings[i];
         unsigned long long delivered = 0ull;
         while (delivered < binding->encoded_bytes) {
             unsigned long long remaining = binding->encoded_bytes - delivered;
-            size_t request = remaining < (unsigned long long)chunk
-                ? (size_t)remaining : chunk;
+            size_t request = remaining < (unsigned long long)chunk ? (size_t)remaining : chunk;
             int rc;
-            if (session->options.cancel_after_first_chunk &&
-                session->summary.access_calls > 0ull) {
+            if (session->options.cancel_after_first_chunk && session->summary.access_calls > 0ull) {
                 free(buffer);
-                return materialize_reject(
-                    failure, YVEX_MATERIALIZATION_FAILURE_CANCELLED,
-                    binding->name, binding->tensor_id, binding->encoded_bytes,
-                    delivered, binding->absolute_offset + delivered, err,
-                    YVEX_ERR_CANCELLED,
-                    "materialization walk cancelled by options");
+                return materialize_reject(failure,
+                                          YVEX_MATERIALIZATION_FAILURE_CANCELLED,
+                                          binding->name,
+                                          binding->tensor_id,
+                                          binding->encoded_bytes,
+                                          delivered,
+                                          binding->absolute_offset + delivered,
+                                          err,
+                                          YVEX_ERR_CANCELLED,
+                                          "materialization walk cancelled by options");
             }
             rc = yvex_materialization_session_read(
                 session, binding, delivered, buffer, request, failure, err);
@@ -902,7 +992,8 @@ int yvex_materialization_session_walk_payload(
             }
             delivered += request;
         }
-        if (progress) progress(progress_context, &session->summary, binding);
+        if (progress)
+            progress(progress_context, &session->summary, binding);
     }
     free(buffer);
     session->summary.full_walks++;
@@ -910,52 +1001,70 @@ int yvex_materialization_session_walk_payload(
     return YVEX_OK;
 }
 
-int yvex_materialization_session_expert_subview(
-    const yvex_materialization_session *session,
-    const yvex_materialized_tensor_binding *binding,
-    unsigned long long expert_index,
-    yvex_materialized_expert_subview *out,
-    yvex_materialization_failure *failure,
-    yvex_error *err)
-{
+/* Purpose: project one routed-expert slice without copying its underlying bytes.
+ * Inputs: typed artifact materialization arguments; borrowed inputs outlive the call.
+ * Effects: mutates only explicit caller-owned artifact materialization state.
+ * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
+ * Boundary: materialization exposes bytes but performs no model arithmetic. */
+int yvex_materialization_session_expert_subview(const yvex_materialization_session *session,
+                                                const yvex_materialized_tensor_binding *binding,
+                                                unsigned long long expert_index,
+                                                yvex_materialized_expert_subview *out,
+                                                yvex_materialization_failure *failure,
+                                                yvex_error *err) {
     unsigned long long bytes_per_expert;
 
     if (!session || !binding || !out)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT,
-            binding ? binding->name : NULL, binding ? binding->tensor_id :
-            YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, 0ull, err,
-            YVEX_ERR_INVALID_ARG,
-            "expert subview requires session, binding, and output");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_INVALID_ARGUMENT,
+                                  binding ? binding->name : NULL,
+                                  binding ? binding->tensor_id : YVEX_MATERIALIZATION_NO_INDEX,
+                                  1ull,
+                                  0ull,
+                                  0ull,
+                                  err,
+                                  YVEX_ERR_INVALID_ARG,
+                                  "expert subview requires session, binding, and output");
     memset(out, 0, sizeof(*out));
     if (binding->expert_count <= 1ull || expert_index >= binding->expert_count)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_EXPERT_SUBVIEW,
-            binding->name, binding->tensor_id, binding->expert_count,
-            expert_index, binding->absolute_offset, err, YVEX_ERR_BOUNDS,
-            "expert subview index is outside aggregate tensor geometry");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_EXPERT_SUBVIEW,
+                                  binding->name,
+                                  binding->tensor_id,
+                                  binding->expert_count,
+                                  expert_index,
+                                  binding->absolute_offset,
+                                  err,
+                                  YVEX_ERR_BOUNDS,
+                                  "expert subview index is outside aggregate tensor geometry");
     if (binding->encoded_bytes % binding->expert_count != 0ull)
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_EXPERT_SUBVIEW,
-            binding->name, binding->tensor_id, binding->expert_count,
-            binding->encoded_bytes, binding->absolute_offset, err,
-            YVEX_ERR_FORMAT,
-            "aggregate expert tensor bytes are not evenly divisible");
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_EXPERT_SUBVIEW,
+                                  binding->name,
+                                  binding->tensor_id,
+                                  binding->expert_count,
+                                  binding->encoded_bytes,
+                                  binding->absolute_offset,
+                                  err,
+                                  YVEX_ERR_FORMAT,
+                                  "aggregate expert tensor bytes are not evenly divisible");
     bytes_per_expert = binding->encoded_bytes / binding->expert_count;
     if (bytes_per_expert == 0ull ||
-        (binding->bytes_per_block &&
-         bytes_per_expert % binding->bytes_per_block != 0ull))
-        return materialize_reject(
-            failure, YVEX_MATERIALIZATION_FAILURE_EXPERT_SUBVIEW,
-            binding->name, binding->tensor_id, binding->bytes_per_block,
-            bytes_per_expert, binding->absolute_offset, err,
-            YVEX_ERR_FORMAT,
-            "expert subview does not align to qtype block bytes");
+        (binding->bytes_per_block && bytes_per_expert % binding->bytes_per_block != 0ull))
+        return materialize_reject(failure,
+                                  YVEX_MATERIALIZATION_FAILURE_EXPERT_SUBVIEW,
+                                  binding->name,
+                                  binding->tensor_id,
+                                  binding->bytes_per_block,
+                                  bytes_per_expert,
+                                  binding->absolute_offset,
+                                  err,
+                                  YVEX_ERR_FORMAT,
+                                  "expert subview does not align to qtype block bytes");
     out->expert_index = expert_index;
     out->expert_count = binding->expert_count;
     out->encoded_bytes = bytes_per_expert;
-    out->absolute_offset = binding->absolute_offset +
-        expert_index * bytes_per_expert;
+    out->absolute_offset = binding->absolute_offset + expert_index * bytes_per_expert;
     out->block_size = binding->block_size;
     out->block_aligned = 1;
     yvex_error_clear(err);

@@ -1,38 +1,20 @@
-/*
- * Owner: runtime.chat (runtime).
- * Owns: the reusable-algorithm boundary consumed by server,generation,cli.
- * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
- * Invariants: scope=generic and visibility=private match config/source_owners.tsv.
- * Boundary: reusable-algorithm; moving this contract requires an ownership-manifest change.
- *
- * chat.c - Diagnostic chat runtime and console commands.
- *
- * This file owns accepted-only prompt handling, slash commands, status output,
- * and diagnostic console behavior. It does not implement generation.
- */
+/* Owner: runtime.chat (runtime).
+ * Owns: accepted prompt state and diagnostic slash-command handling.
+ * Does not own: model policy, graph admission, generation readiness, or higher-stage claims.
+ * Invariants: diagnostic state never promotes model-backed generation capability.
+ * Boundary: this owner exposes typed facts only at its admitted subsystem stage.
+ * Purpose: Own accepted-prompt and slash-command behavior for the diagnostic chat runtime.
+ * Inputs: A chat runtime, prompt text or slash command, and caller-owned response storage.
+ * Effects: Mutates only chat-owned prompt counters and response buffers.
+ * Failure: Invalid commands and allocation failures preserve the previous admitted chat state. */
 
-#include "src/core/operator.h"
+#include <yvex/internal/runtime.h>
+#include <yvex/internal/core.h>
 
 #include <stdlib.h>
 #include <string.h>
 
-static char *chat_strdup(const char *text)
-{
-    char *copy;
-    size_t len;
-
-    if (!text) {
-        text = "";
-    }
-    len = strlen(text);
-    copy = (char *)malloc(len + 1u);
-    if (!copy) {
-        return NULL;
-    }
-    memcpy(copy, text, len + 1u);
-    return copy;
-}
-
+/* Purpose: Copy copy text between compatible admitted ranges without changing semantic identity. */
 static void copy_text(char *dst, unsigned long cap, const char *src)
 {
     if (!dst || cap == 0) {
@@ -41,6 +23,11 @@ static void copy_text(char *dst, unsigned long cap, const char *src)
     snprintf(dst, (size_t)cap, "%s", src ? src : "");
 }
 
+/* Purpose: Construct the admitted open state only after its identities and resources are valid.
+ * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed runtime refusal and publishes no partial success state.
+ * Boundary: Runtime ownership and dispatch; does not bypass artifact admission or materialization identity. */
 static int open_backend(yvex_backend **out, const char *backend_name, yvex_error *err)
 {
     yvex_backend_options options;
@@ -60,6 +47,7 @@ static int open_backend(yvex_backend **out, const char *backend_name, yvex_error
     return YVEX_ERR_INVALID_ARG;
 }
 
+/* Purpose: Implement the canonical phase begin mechanism owned by the runtime boundary. */
 static int runtime_phase_begin(yvex_chat_runtime *runtime,
                                yvex_metric_phase phase,
                                unsigned long long *token,
@@ -81,6 +69,11 @@ static int runtime_phase_begin(yvex_chat_runtime *runtime,
     return YVEX_OK;
 }
 
+/* Purpose: Implement the canonical phase end mechanism owned by the runtime boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed runtime refusal and publishes no partial success state.
+ * Boundary: Runtime ownership and dispatch; does not bypass artifact admission or materialization identity. */
 static int runtime_phase_end(yvex_chat_runtime *runtime,
                              yvex_metric_phase phase,
                              unsigned long long token,
@@ -103,6 +96,11 @@ static int runtime_phase_end(yvex_chat_runtime *runtime,
     return rc;
 }
 
+/* Purpose: Construct the admitted chat open state only after its identities and resources are valid.
+ * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed runtime refusal and publishes no partial success state.
+ * Boundary: Runtime ownership and dispatch; does not bypass artifact admission or materialization identity. */
 int yvex_chat_runtime_open(yvex_chat_runtime *runtime,
                            const char *model_path,
                            const char *backend_name,
@@ -119,8 +117,8 @@ int yvex_chat_runtime_open(yvex_chat_runtime *runtime,
     }
 
     memset(runtime, 0, sizeof(*runtime));
-    runtime->model_path = chat_strdup(model_path);
-    runtime->backend_name = chat_strdup(backend_name);
+    runtime->model_path = yvex_core_strdup(model_path);
+    runtime->backend_name = yvex_core_strdup(backend_name);
     if (!runtime->model_path || !runtime->backend_name) {
         yvex_chat_runtime_close(runtime);
         yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_chat_runtime_open",
@@ -148,6 +146,11 @@ int yvex_chat_runtime_open(yvex_chat_runtime *runtime,
     return YVEX_OK;
 }
 
+/* Purpose: Release the resources owned by chat close without changing borrowed inputs.
+ * Inputs: An owned object that may be null or already released where its lifecycle permits.
+ * Effects: Releases only resources owned by the supplied object and leaves it reset or unusable.
+ * Failure: Null and already-released inputs follow the idempotent lifecycle contract.
+ * Boundary: Runtime ownership and dispatch; does not bypass artifact admission or materialization identity. */
 void yvex_chat_runtime_close(yvex_chat_runtime *runtime)
 {
     if (!runtime) {
@@ -161,6 +164,11 @@ void yvex_chat_runtime_close(yvex_chat_runtime *runtime)
     memset(runtime, 0, sizeof(*runtime));
 }
 
+/* Purpose: Publish chat set observers only within its admitted destination range.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed runtime refusal and publishes no partial success state.
+ * Boundary: Runtime ownership and dispatch; does not bypass artifact admission or materialization identity. */
 void yvex_chat_runtime_set_observers(yvex_chat_runtime *runtime,
                                      yvex_metrics *metrics,
                                      yvex_trace *trace)
@@ -172,6 +180,11 @@ void yvex_chat_runtime_set_observers(yvex_chat_runtime *runtime,
     runtime->trace = trace;
 }
 
+/* Purpose: Implement the canonical chat accept user text mechanism owned by the runtime boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed runtime refusal and publishes no partial success state.
+ * Boundary: Runtime ownership and dispatch; does not bypass artifact admission or materialization identity. */
 int yvex_chat_runtime_accept_user_text(yvex_chat_runtime *runtime,
                                        const char *system_text,
                                        const char *user_text,
@@ -257,6 +270,11 @@ int yvex_chat_runtime_accept_user_text(yvex_chat_runtime *runtime,
     return YVEX_OK;
 }
 
+/* Purpose: Implement the canonical chat reset mechanism owned by the runtime boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed runtime refusal and publishes no partial success state.
+ * Boundary: Runtime ownership and dispatch; does not bypass artifact admission or materialization identity. */
 int yvex_chat_runtime_reset(yvex_chat_runtime *runtime, yvex_error *err)
 {
     if (!runtime || !runtime->session) {
@@ -268,6 +286,11 @@ int yvex_chat_runtime_reset(yvex_chat_runtime *runtime, yvex_error *err)
     return yvex_session_reset(runtime->session, err);
 }
 
+/* Purpose: Retrieve chat get summary from admitted immutable or owned state.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed runtime refusal and publishes no partial success state.
+ * Boundary: Runtime ownership and dispatch; does not bypass artifact admission or materialization identity. */
 int yvex_chat_runtime_get_summary(const yvex_chat_runtime *runtime,
                                   yvex_session_summary *out,
                                   yvex_error *err)
@@ -280,7 +303,7 @@ int yvex_chat_runtime_get_summary(const yvex_chat_runtime *runtime,
     return yvex_session_get_summary(runtime->session, out, err);
 }
 
-
+/* Purpose: Implement the canonical slash eq mechanism owned by the runtime boundary. */
 static int slash_eq(const char *line, const char *command)
 {
     size_t len = strlen(command);
@@ -290,6 +313,11 @@ static int slash_eq(const char *line, const char *command)
             line[len] == ' ' || line[len] == '\t');
 }
 
+/* Purpose: Translate operator input into the canonical typed slash parse value without ambiguous aliases.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed runtime refusal and publishes no partial success state.
+ * Boundary: Runtime ownership and dispatch; does not bypass artifact admission or materialization identity. */
 yvex_slash_command yvex_slash_parse(const char *line)
 {
     if (!line || line[0] != '/') {
@@ -305,6 +333,11 @@ yvex_slash_command yvex_slash_parse(const char *line)
     return YVEX_SLASH_UNKNOWN;
 }
 
+/* Purpose: Return the canonical diagnostic label for slash command name.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Does not mutate caller-visible or owner state.
+ * Failure: Returns the canonical unknown or zero sentinel for an invalid typed value.
+ * Boundary: Runtime ownership and dispatch; does not bypass artifact admission or materialization identity. */
 const char *yvex_slash_command_name(yvex_slash_command command)
 {
     switch (command) {

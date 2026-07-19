@@ -79,15 +79,13 @@ mkdir -p "$OUT_DIR"
   --overwrite >"$OUT_DIR/emit-f16.out" 2>"$OUT_DIR/emit-f16.err"
 
 "$YVEX_BIN" graph --model "$F32_MODEL" --backend cpu --execute-fixture --fixture-token 0 \
-  >"$OUT_DIR/fixture-pass.out" 2>"$OUT_DIR/fixture-pass.err"
-contains "$OUT_DIR/fixture-pass.out" "graph_integrity_guard: pass"
-contains "$OUT_DIR/fixture-pass.out" "graph_execution_phase: complete"
-contains "$OUT_DIR/fixture-pass.out" "graph_kind: fixture-embedding"
-contains "$OUT_DIR/fixture-pass.out" "backend_op_status: supported"
-contains "$OUT_DIR/fixture-pass.out" "dispatch_attempted: true"
-contains "$OUT_DIR/fixture-pass.out" "output_allocation_attempted: true"
-contains "$OUT_DIR/fixture-pass.out" "fixture_graph_executed: true"
-contains "$OUT_DIR/fixture-pass.out" "status: fixture-graph-executed"
+  >"$OUT_DIR/fixture-retired.out" 2>"$OUT_DIR/fixture-retired.err" && \
+  fail "retired production fixture graph unexpectedly passed" || true
+contains "$OUT_DIR/fixture-retired.out" "graph_integrity_guard: refused"
+contains "$OUT_DIR/fixture-retired.out" "graph_execution_phase: admission"
+contains "$OUT_DIR/fixture-retired.out" "execution_ready: false"
+contains "$OUT_DIR/fixture-retired.out" "reason: production-fixtures-are-test-owned"
+contains "$OUT_DIR/fixture-retired.out" "status: graph-proof-retired"
 
 "$YVEX_BIN" graph --model "$F16_MODEL" --backend cpu --execute-partial --partial-token 0 \
   >"$OUT_DIR/partial-pass.out" 2>"$OUT_DIR/partial-pass.err"
@@ -187,13 +185,13 @@ YVEX_TEST_FAIL_GRAPH_AFTER_OUTPUT_ALLOC=1 "$YVEX_BIN" graph \
   --backend cpu \
   --execute-fixture \
   --fixture-token 0 \
-  >"$OUT_DIR/output-alloc-fail.out" 2>"$OUT_DIR/output-alloc-fail.err" && \
-  fail "output allocation injected graph unexpectedly passed" || true
-contains "$OUT_DIR/output-alloc-fail.out" "graph_execution_phase: output"
-contains "$OUT_DIR/output-alloc-fail.out" "output_allocation_attempted: true"
-contains "$OUT_DIR/output-alloc-fail.out" "cleanup_attempted: true"
-contains "$OUT_DIR/output-alloc-fail.out" "cleanup_status: pass"
-contains "$OUT_DIR/output-alloc-fail.out" "status: graph-failed-cleaned"
+  >"$OUT_DIR/output-alloc-retired.out" 2>"$OUT_DIR/output-alloc-retired.err" && \
+  fail "retired fixture graph fault path unexpectedly passed" || true
+contains "$OUT_DIR/output-alloc-retired.out" "graph_integrity_guard: refused"
+contains "$OUT_DIR/output-alloc-retired.out" "graph_execution_phase: admission"
+contains "$OUT_DIR/output-alloc-retired.out" "execution_ready: false"
+contains "$OUT_DIR/output-alloc-retired.out" "reason: production-fixtures-are-test-owned"
+contains "$OUT_DIR/output-alloc-retired.out" "status: graph-proof-retired"
 
 YVEX_TEST_FAIL_GRAPH_AFTER_DISPATCH=1 "$YVEX_BIN" graph \
   --model "$F16_MODEL" \

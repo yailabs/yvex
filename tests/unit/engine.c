@@ -25,6 +25,7 @@
 #include <sys/stat.h>
 
 #include <yvex/api.h>
+#include <yvex/internal/runtime.h>
 
 #include "tests/test.h"
 

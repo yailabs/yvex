@@ -13,9 +13,9 @@
  */
 #define _POSIX_C_SOURCE 200809L
 
-#include "src/artifact/materialize.h"
-#include "src/model/runtime_descriptor.h"
-#include "src/model/families.h"
+#include <yvex/internal/artifact.h>
+#include <yvex/internal/runtime.h>
+#include <yvex/internal/families/deepseek_v4.h>
 
 #include <stdio.h>
 #include <stdlib.h>

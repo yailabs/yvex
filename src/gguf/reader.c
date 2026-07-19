@@ -1,48 +1,43 @@
-/*
- * reader.c - GGUF reader policy, budgets, and typed failures.
- *
- * Owner:
- *   src/gguf reader ABI
- *
- * Owns:
- *   default structural-read budgets, stable parse sections/codes, error
- *   projection, and operational reader boundary facts.
- *
- * Does not own:
- *   byte decoding, metadata/tensor storage, reports, writer emission, global
- *   layout admission, payload reads, materialization, or runtime support.
- *
- * Invariants:
- *   parse classification is carried by typed facts and never reconstructed
- *   from human-readable error strings.
- *
- * Boundary:
- *   structural reader acceptance is not complete artifact integrity, writer
- *   roundtrip, materialization, or runtime support.
- */
-#include "private.h"
-
+/* Owner: src/gguf reader ABI
+ * Owns: default structural-read budgets, stable parse sections/codes, error projection, and operational reader
+ *   boundary facts.
+ * Does not own: byte decoding, metadata/tensor storage, reports, writer emission, global layout admission, payload
+ *   reads, materialization, or runtime support.
+ * Invariants: parse classification is carried by typed facts and never reconstructed from human-readable error
+ *   strings.
+ * Boundary: structural reader acceptance is not complete artifact integrity, writer roundtrip, materialization, or
+ *   runtime support.
+ * Purpose: define bounded reader policy and typed projection of structural parse failures.
+ * Inputs: caller-owned options, parse results, error records, and structural reports.
+ * Effects: initializes or updates only the supplied policy and diagnostic records.
+ * Failure: invalid, unsupported, bounded, allocation, and format cases retain distinct codes. */
 #include <limits.h>
 #include <stdio.h>
+#include <yvex/internal/gguf.h>
 
-static const yvex_gguf_boundary_fact reader_boundary = {
-    "src/gguf/reader.c",
-    "scalable native GGUF structural reader",
-    YVEX_GGUF_BOUNDARY_OPERATIONAL,
-    "file-backed GGUF v3 directory parsing with typed refusal and zero payload reads",
-    YVEX_GGUF_ABI_NEXT_ROW
+static const char *const parse_code_names[] = {
+    "ok", "invalid-argument", "file-unreadable", "short-read", "invalid-magic",
+    "unsupported-version", "invalid-count", "resource-limit", "malformed-metadata-key",
+    "duplicate-metadata-key", "unsupported-metadata-type", "malformed-metadata-value",
+    "malformed-string", "malformed-array", "invalid-alignment", "malformed-tensor-name",
+    "duplicate-tensor-name", "invalid-rank", "invalid-dimension", "refused-qtype",
+    "offset-overflow", "incomplete-directory", "allocation-failure", "empty-metadata-key",
+    "empty-tensor-name", "element-count-overflow", "row-count-overflow", "row-byte-overflow",
+    "total-byte-overflow",
 };
 
-/* Contract: returns the operational structural-reader boundary without IO. */
-const yvex_gguf_boundary_fact *yvex_gguf_reader_boundary(void)
-{
-    return &reader_boundary;
-}
+static const char *const parse_section_names[] = {
+    "none", "file", "container", "metadata", "tensor-info", "qtype", "range", "resource",
+};
 
-/* Contract: initializes target-capable bounded defaults without allocation. */
-void yvex_gguf_reader_options_default(yvex_gguf_reader_options *options)
-{
-    if (!options) return;
+/* Purpose: initialize target-capable structural reader budgets without allocation.
+ * Inputs: an optional writable options record.
+ * Effects: replaces every budget field when the record is present.
+ * Failure: none; a null record is a no-op.
+ * Boundary: defaults constrain structural reads and never read tensor payload. */
+void yvex_gguf_reader_options_default(yvex_gguf_reader_options *options) {
+    if (!options)
+        return;
     options->max_metadata_entries = 1048576ull;
     options->max_tensor_entries = 1048576ull;
     options->max_array_entries = 16777216ull;
@@ -54,10 +49,14 @@ void yvex_gguf_reader_options_default(yvex_gguf_reader_options *options)
     options->max_array_depth = 16u;
 }
 
-/* Contract: resets one parse result to a stable successful empty state. */
-void yvex_gguf_parse_result_reset(yvex_gguf_parse_result *result)
-{
-    if (!result) return;
+/* Purpose: reset one parse result to the canonical successful empty state.
+ * Inputs: an optional writable result record.
+ * Effects: clears location facts and installs the stable acceptance reason.
+ * Failure: none; a null result is a no-op.
+ * Boundary: reset state is not evidence that a file was parsed. */
+void yvex_gguf_parse_result_reset(yvex_gguf_parse_result *result) {
+    if (!result)
+        return;
     result->code = YVEX_GGUF_PARSE_OK;
     result->section = YVEX_GGUF_PARSE_SECTION_NONE;
     result->byte_offset = 0ull;
@@ -65,9 +64,12 @@ void yvex_gguf_parse_result_reset(yvex_gguf_parse_result *result)
     result->reason = "GGUF structural reader accepted input";
 }
 
-/* Contract: maps a typed parser code to the existing public error vocabulary. */
-static int parse_code_error(yvex_gguf_parse_code code)
-{
+/* Purpose: map one typed parser code to the stable public status vocabulary.
+ * Inputs: parser failure code.
+ * Effects: none.
+ * Failure: unknown parse codes map to format refusal.
+ * Boundary: mapping preserves parser detail in the separate parse result. */
+static int parse_code_error(yvex_gguf_parse_code code) {
     switch (code) {
     case YVEX_GGUF_PARSE_OK:
         return YVEX_OK;
@@ -96,19 +98,15 @@ static int parse_code_error(yvex_gguf_parse_code code)
     }
 }
 
-/*
- * Contract: records one stable parser refusal, mirrors it into yvex_error, and
- * returns the mapped public status without allocation or cleanup ownership.
- */
-int yvex_gguf_reader_fail(yvex_gguf_parse_result *result,
-                          yvex_gguf_parse_code code,
-                          yvex_gguf_parse_section section,
-                          unsigned long long byte_offset,
-                          unsigned long long record_index,
-                          yvex_error *err,
-                          const char *where,
-                          const char *reason)
-{
+/* Purpose: publish one typed structural-reader refusal and its precise location.
+ * Inputs: optional result/error records, parse code, section, offsets, and diagnostic text.
+ * Effects: replaces supplied diagnostics and returns the mapped public status.
+ * Failure: this function represents the supplied failure and performs no allocation.
+ * Boundary: refusal publication owns neither artifact cleanup nor capability classification. */
+int yvex_gguf_reader_fail(yvex_gguf_parse_result *result, yvex_gguf_parse_code code,
+                          yvex_gguf_parse_section section, unsigned long long byte_offset,
+                          unsigned long long record_index, yvex_error *err, const char *where,
+                          const char *reason) {
     int rc = parse_code_error(code);
     if (result) {
         result->code = code;
@@ -122,97 +120,64 @@ int yvex_gguf_reader_fail(yvex_gguf_parse_result *result,
     return rc;
 }
 
-/* Contract: returns a stable parser-code name without allocation. */
-const char *yvex_gguf_parse_code_name(yvex_gguf_parse_code code)
-{
-    switch (code) {
-    case YVEX_GGUF_PARSE_OK: return "ok";
-    case YVEX_GGUF_PARSE_INVALID_ARGUMENT: return "invalid-argument";
-    case YVEX_GGUF_PARSE_FILE_UNREADABLE: return "file-unreadable";
-    case YVEX_GGUF_PARSE_SHORT_READ: return "short-read";
-    case YVEX_GGUF_PARSE_INVALID_MAGIC: return "invalid-magic";
-    case YVEX_GGUF_PARSE_UNSUPPORTED_VERSION: return "unsupported-version";
-    case YVEX_GGUF_PARSE_INVALID_COUNT: return "invalid-count";
-    case YVEX_GGUF_PARSE_RESOURCE_LIMIT: return "resource-limit";
-    case YVEX_GGUF_PARSE_MALFORMED_KEY: return "malformed-metadata-key";
-    case YVEX_GGUF_PARSE_DUPLICATE_METADATA_KEY: return "duplicate-metadata-key";
-    case YVEX_GGUF_PARSE_UNSUPPORTED_METADATA_TYPE: return "unsupported-metadata-type";
-    case YVEX_GGUF_PARSE_MALFORMED_VALUE: return "malformed-metadata-value";
-    case YVEX_GGUF_PARSE_MALFORMED_STRING: return "malformed-string";
-    case YVEX_GGUF_PARSE_MALFORMED_ARRAY: return "malformed-array";
-    case YVEX_GGUF_PARSE_INVALID_ALIGNMENT: return "invalid-alignment";
-    case YVEX_GGUF_PARSE_MALFORMED_TENSOR_NAME: return "malformed-tensor-name";
-    case YVEX_GGUF_PARSE_DUPLICATE_TENSOR_NAME: return "duplicate-tensor-name";
-    case YVEX_GGUF_PARSE_INVALID_RANK: return "invalid-rank";
-    case YVEX_GGUF_PARSE_INVALID_DIMENSION: return "invalid-dimension";
-    case YVEX_GGUF_PARSE_REFUSED_QTYPE: return "refused-qtype";
-    case YVEX_GGUF_PARSE_OFFSET_OVERFLOW: return "offset-overflow";
-    case YVEX_GGUF_PARSE_INCOMPLETE_DIRECTORY: return "incomplete-directory";
-    case YVEX_GGUF_PARSE_ALLOCATION_FAILURE: return "allocation-failure";
-    case YVEX_GGUF_PARSE_EMPTY_METADATA_KEY: return "empty-metadata-key";
-    case YVEX_GGUF_PARSE_EMPTY_TENSOR_NAME: return "empty-tensor-name";
-    case YVEX_GGUF_PARSE_ELEMENT_COUNT_OVERFLOW: return "element-count-overflow";
-    case YVEX_GGUF_PARSE_ROW_COUNT_OVERFLOW: return "row-count-overflow";
-    case YVEX_GGUF_PARSE_ROW_BYTE_OVERFLOW: return "row-byte-overflow";
-    case YVEX_GGUF_PARSE_TOTAL_BYTE_OVERFLOW: return "total-byte-overflow";
-    }
-    return "unknown-parse-code";
+/* Purpose: project one parse code as a stable diagnostic name.
+ * Inputs: parser code value.
+ * Effects: none.
+ * Failure: out-of-range values yield unknown-parse-code.
+ * Boundary: text never becomes the source of failure classification. */
+const char *yvex_gguf_parse_code_name(yvex_gguf_parse_code code) {
+    return code >= YVEX_GGUF_PARSE_OK &&
+                   (size_t)code < sizeof(parse_code_names) / sizeof(parse_code_names[0])
+               ? parse_code_names[code]
+               : "unknown-parse-code";
 }
 
-/* Contract: returns a stable parser-section name without allocation. */
-const char *yvex_gguf_parse_section_name(yvex_gguf_parse_section section)
-{
-    switch (section) {
-    case YVEX_GGUF_PARSE_SECTION_NONE: return "none";
-    case YVEX_GGUF_PARSE_SECTION_FILE: return "file";
-    case YVEX_GGUF_PARSE_SECTION_CONTAINER: return "container";
-    case YVEX_GGUF_PARSE_SECTION_METADATA: return "metadata";
-    case YVEX_GGUF_PARSE_SECTION_TENSOR_INFO: return "tensor-info";
-    case YVEX_GGUF_PARSE_SECTION_QTYPE: return "qtype";
-    case YVEX_GGUF_PARSE_SECTION_RANGE: return "range";
-    case YVEX_GGUF_PARSE_SECTION_RESOURCE: return "resource";
-    }
-    return "unknown-section";
+/* Purpose: project one structural parser section as a stable diagnostic name.
+ * Inputs: parser section value.
+ * Effects: none.
+ * Failure: out-of-range values yield unknown-section.
+ * Boundary: section text does not infer parser state. */
+const char *yvex_gguf_parse_section_name(yvex_gguf_parse_section section) {
+    return section >= YVEX_GGUF_PARSE_SECTION_NONE &&
+                   (size_t)section < sizeof(parse_section_names) / sizeof(parse_section_names[0])
+               ? parse_section_names[section]
+               : "unknown-section";
 }
 
-/* Contract: reports whether an existing parser status is a refusal. */
-int yvex_gguf_reader_parse_refusal(int parse_rc, const char **reason)
-{
-    if (parse_rc == YVEX_OK) {
-        if (reason) *reason = "GGUF structural reader accepted input";
-        return 0;
-    }
-    if (reason) *reason = "GGUF structural reader refused input";
-    return 1;
-}
-
-static void copy_error_text(char *dst, size_t cap, const char *text)
-{
-    if (!dst || cap == 0u) return;
+/* Purpose: copy bounded diagnostic text with deterministic null handling. */
+static void copy_error_text(char *dst, size_t cap, const char *text) {
+    if (!dst || cap == 0u)
+        return;
     (void)snprintf(dst, cap, "%s", text ? text : "");
 }
 
-/* Contract: maps a typed parse result into report section state without policy reconstruction. */
-void yvex_gguf_reader_classify_error(int parse_rc,
-                                     const yvex_gguf_parse_result *result,
-                                     const yvex_error *err,
-                                     yvex_gguf_abi_report *report)
-{
+/* Purpose: project one typed parse failure into the affected ABI report section.
+ * Inputs: public parse status, optional typed result/error, and writable report.
+ * Effects: updates report status, location, reason, and the single affected section.
+ * Failure: missing reports are ignored; no failure is inferred from diagnostic text.
+ * Boundary: report projection cannot promote structural acceptance or artifact support. */
+void yvex_gguf_reader_classify_error(int parse_rc, const yvex_gguf_parse_result *result,
+                                     const yvex_error *err, yvex_gguf_abi_report *report) {
     yvex_gguf_abi_section_status status;
     const char *reason;
 
-    if (!report) return;
+    if (!report)
+        return;
     report->parser_status = parse_rc;
-    if (result) report->parse_result = *result;
+    if (result)
+        report->parse_result = *result;
     reason = result && result->reason ? result->reason : yvex_error_message(err);
     copy_error_text(report->failure_where, sizeof(report->failure_where),
                     result ? yvex_gguf_parse_section_name(result->section) : yvex_error_where(err));
     copy_error_text(report->failure_reason, sizeof(report->failure_reason), reason);
 
     status = YVEX_GGUF_ABI_SECTION_MALFORMED;
-    if (parse_rc == YVEX_ERR_IO) status = YVEX_GGUF_ABI_SECTION_NOT_PRESENT;
-    else if (parse_rc == YVEX_ERR_UNSUPPORTED) status = YVEX_GGUF_ABI_SECTION_UNSUPPORTED;
-    else if (parse_rc == YVEX_ERR_BOUNDS || parse_rc == YVEX_ERR_NOMEM) status = YVEX_GGUF_ABI_SECTION_REFUSED;
+    if (parse_rc == YVEX_ERR_IO)
+        status = YVEX_GGUF_ABI_SECTION_NOT_PRESENT;
+    else if (parse_rc == YVEX_ERR_UNSUPPORTED)
+        status = YVEX_GGUF_ABI_SECTION_UNSUPPORTED;
+    else if (parse_rc == YVEX_ERR_BOUNDS || parse_rc == YVEX_ERR_NOMEM)
+        status = YVEX_GGUF_ABI_SECTION_REFUSED;
     if (result && result->section == YVEX_GGUF_PARSE_SECTION_QTYPE) {
         status = YVEX_GGUF_ABI_SECTION_REFUSED;
     }

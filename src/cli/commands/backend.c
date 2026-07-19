@@ -1,18 +1,19 @@
-/*
- * backend.c - backend capability command adapter.
- *
- * Owner: src/cli/commands.
+/* Owner: src/cli/commands.
  * Owns: typed backend/cuda-info parse, report, render, and exit-code dispatch.
- * Does not own: backend probing, capability policy, CUDA admission, rendering,
- * kernel execution, graph execution, or runtime support.
+ * Does not own: backend probing, capability policy, CUDA admission, rendering, kernel execution, graph execution,
+ *   or runtime support.
  * Invariants: command dispatch never derives capability from context status.
  * Boundary: capability inspection is bounded backend evidence, not runtime.
- */
-#include "src/cli/input/backend.h"
-#include "src/cli/render/backend.h"
-#include "src/cli/io/out.h"
+ * Purpose: provide typed backend/cuda-info parse, report, render, and exit-code dispatch.
+ * Inputs: typed command arguments and borrowed domain APIs.
+ * Effects: dispatches domain calls and routes operator bytes only through CLI I/O.
+ * Failure: returns a stable CLI status while preserving domain ownership. */
+#include "src/cli/input/private.h"
+#include "src/cli/render/private.h"
+#include "src/cli/io/private.h"
 
 /* Contract: maps domain failures to stable operator exit classes. */
+/* Purpose: Compute backend exit for status for its CLI invariant (`backend_cli_exit_for_status`). */
 static int backend_cli_exit_for_status(int status)
 {
     if (status == YVEX_ERR_INVALID_ARG) return 2;
@@ -23,6 +24,7 @@ static int backend_cli_exit_for_status(int status)
 }
 
 /* Contract: renders one parser/domain error through CLI-owned IO only. */
+/* Purpose: Compute backend error for its CLI invariant (`backend_cli_error`). */
 static int backend_cli_error(const yvex_error *err, int status)
 {
     yvex_cli_out_writef(yvex_cli_out_stderr(), "yvex: %s: %s\n",
@@ -31,6 +33,7 @@ static int backend_cli_error(const yvex_error *err, int status)
 }
 
 /* Contract: performs the shared backend report dispatch without domain logic. */
+/* Purpose: Compute backend run for its CLI invariant (`backend_cli_run`). */
 static int backend_cli_run(const yvex_backend_args *args)
 {
     yvex_backend_report report;
@@ -46,6 +49,11 @@ static int backend_cli_run(const yvex_backend_args *args)
     return report.exit_code;
 }
 
+/* Purpose: Orchestrate the typed backend command request (`yvex_backend_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_backend_command(int argc, char **argv)
 {
     yvex_backend_args args;
@@ -60,6 +68,11 @@ int yvex_backend_command(int argc, char **argv)
     return backend_cli_run(&args);
 }
 
+/* Purpose: Orchestrate the typed cuda info command request (`yvex_cuda_info_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_cuda_info_command(int argc, char **argv)
 {
     yvex_backend_args args;
@@ -74,11 +87,21 @@ int yvex_cuda_info_command(int argc, char **argv)
     return backend_cli_run(&args);
 }
 
+/* Purpose: Render backend help from typed facts (`yvex_backend_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_backend_help(FILE *fp)
 {
     (void)yvex_backend_render_help(fp);
 }
 
+/* Purpose: Render cuda info help from typed facts (`yvex_cuda_info_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_cuda_info_help(FILE *fp)
 {
     (void)yvex_cuda_info_render_help(fp);

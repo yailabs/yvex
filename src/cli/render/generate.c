@@ -1,28 +1,240 @@
-/*
- * generate.c - diagnostic generate report renderer.
- *
- * Owner:
- *   src/cli/render
- *
- * Owns:
- *   normal, audit, and help text serialization for typed generation reports.
- *
- * Does not own:
- *   generation report construction, argv parsing, command dispatch, runtime
- *   execution, eval, benchmark, or release decisions.
- *
- * Invariants:
- *   renderers serialize facts only, use src/cli/io writers, and do not mutate
- *   trace counters or generation state.
- *
- * Boundary:
- *   rendering diagnostic generation facts is not generation support.
- */
-#include "generate.h"
+/* Owner: src/cli/render
+ * Owns: normal, audit, and help text serialization for typed generation reports.
+ * Does not own: generation report construction, argv parsing, command dispatch, runtime execution, eval, benchmark,
+ *   or release decisions.
+ * Invariants: renderers serialize facts only, use src/cli/io writers, and do not mutate trace counters or
+ *   generation state.
+ * Boundary: rendering diagnostic generation facts is not generation support.
+ * Purpose: provide normal, audit, and help text serialization for typed generation reports.
+ * Inputs: typed domain facts, requested output mode, and caller-owned render state.
+ * Effects: formats admitted facts through CLI I/O without changing domain state.
+ * Failure: formatting or I/O refusal cannot alter capability facts. */
+#include "src/cli/render/private.h"
 
-#include "src/cli/io/out.h"
-#include "generate_trace.h"
+#include "src/cli/io/private.h"
 
+static const yvex_render_field_spec generation_identity_fields[] = {
+    {"status", YVEX_RENDER_FIELD_TEXT, offsetof(yvex_generation_report, status),
+     "generation-loop-fail"},
+    {"model", YVEX_RENDER_FIELD_TEXT, offsetof(yvex_generation_report, model_arg), ""},
+    {"backend", YVEX_RENDER_FIELD_TEXT, offsetof(yvex_generation_report, backend_name), "cpu"},
+    {"segment", YVEX_RENDER_FIELD_TEXT, offsetof(yvex_generation_report, segment_name),
+     "embedding-rmsnorm"},
+    {"state_id", YVEX_RENDER_FIELD_U64, offsetof(yvex_generation_report, state.state_id), NULL},
+    {"lifecycle_status", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, state.lifecycle_status), "unknown"},
+    {"generation_state", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, state.generation_state), "unknown"},
+    {"state_dirty", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, state.state_dirty), NULL},
+};
+
+static const yvex_render_field_spec generation_cancel_fields[] = {
+    {"cancel_supported", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, state.cancel_supported), NULL},
+    {"cancel_requested", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, state.cancel_requested), NULL},
+    {"cancel_reason", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, state.cancel_reason), "none"},
+};
+
+static const yvex_render_field_spec generation_input_fields[] = {
+    {"cancel_timing", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, state.cancel_timing), "none"},
+    {"cancel_safe_point", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, state.cancel_safe_point), "none"},
+    {"partial_output_available", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, state.partial_output_available), NULL},
+    {"token_input_status", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, token_input_status), "fail"},
+    {"prompt_token_count", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, prompt_token_count), NULL},
+    {"prefill_token_count", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, prefill_token_count), NULL},
+    {"max_new_tokens", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, max_new_tokens), NULL},
+    {"context_length", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, context_length), NULL},
+    {"generated_token_count", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, generated_token_count), NULL},
+    {"accepted_token_count", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, accepted_token_count), NULL},
+    {"partial_generated_token_count", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, partial_generated_token_count), NULL},
+    {"total_token_count", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, total_token_count), NULL},
+    {"position_start", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, position_start), NULL},
+    {"prefill_position_end", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, prefill_position_end), NULL},
+    {"current_decode_position", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, current_decode_position), NULL},
+    {"last_successful_position", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, last_successful_position), NULL},
+};
+
+static const char *const generation_mode_lines[] = { "generation_loop_kind: bounded-diagnostic",
+    "generation_mode: diagnostic-runtime",
+    "decode_mode: bounded-diagnostic",
+    "logits_mode: bounded-diagnostic",
+    "sampling_strategy: greedy"};
+
+static const char *const generation_boundary_lines[] = { "full_model_generation: false",
+    "real_deepseek_generation: false"};
+
+static const yvex_render_field_spec generation_execution_fields[] = {
+    {"prefill_invoked", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, prefill_invoked), NULL},
+    {"decode_steps", YVEX_RENDER_FIELD_U64, offsetof(yvex_generation_report, decode_steps), NULL},
+    {"logits_steps", YVEX_RENDER_FIELD_U64, offsetof(yvex_generation_report, logits_steps), NULL},
+    {"sample_steps", YVEX_RENDER_FIELD_U64, offsetof(yvex_generation_report, sample_steps), NULL},
+    {"append_steps", YVEX_RENDER_FIELD_U64, offsetof(yvex_generation_report, append_steps), NULL},
+};
+
+static const yvex_render_field_spec generation_selection_fields[] = {
+    {"last_selected_token_id", YVEX_RENDER_FIELD_U32,
+     offsetof(yvex_generation_report, last_selected_token_id), NULL},
+    {"last_selected_logit", YVEX_RENDER_FIELD_DOUBLE,
+     offsetof(yvex_generation_report, last_selected_logit), NULL},
+};
+
+static const yvex_render_field_spec generation_result_fields[] = {
+    {"append_status", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, append_status), "not-started"},
+    {"append_failure", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, append_failure), "none"},
+    {"stop_policy", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, stop_policy), "bounded-diagnostic"},
+    {"stop_requested", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, stop_requested), NULL},
+    {"stop_reason", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, stop_reason), "internal-error"},
+    {"stop_phase", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, stop_phase), "preflight"},
+    {"stop_step", YVEX_RENDER_FIELD_U64, offsetof(yvex_generation_report, stop_step), NULL},
+    {"stop_timing", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, stop_timing), "preflight"},
+    {"stop_after_append", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, stop_after_append), NULL},
+    {"stop_before_append", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, stop_before_append), NULL},
+    {"failure_stop", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, failure_stop), NULL},
+    {"unsupported_stop_feature", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, unsupported_stop_feature), NULL},
+    {"eos_policy", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, eos_policy), "unsupported"},
+    {"stop_token_policy", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, stop_token_policy), "unsupported"},
+    {"trace_level", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, trace_level_name), "none"},
+    {"trace_enabled", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, trace_enabled), NULL},
+    {"trace_records", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, trace_records), NULL},
+    {"trace_tokens", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, trace_tokens), NULL},
+    {"trace_steps", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, trace_steps), NULL},
+    {"trace_kv", YVEX_RENDER_FIELD_U64, offsetof(yvex_generation_report, trace_kv), NULL},
+    {"trace_logits", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, trace_logits), NULL},
+    {"trace_sampling", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, trace_sampling), NULL},
+    {"trace_append", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, trace_append), NULL},
+    {"trace_stop", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, trace_stop), NULL},
+    {"trace_cancel", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, trace_cancel), NULL},
+    {"trace_cleanup", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, trace_cleanup), NULL},
+    {"trace_failures", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, trace_failures), NULL},
+    {"trace_status", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, trace_status), "disabled"},
+    {"generation_checksum", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, generation_checksum), NULL},
+    {"sequence_checksum", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, sequence_checksum), NULL},
+};
+
+static const yvex_render_field_spec generation_cleanup_fields[] = {
+    {"cleanup_attempted", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, cleanup_attempted), NULL},
+    {"cleanup_status", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, cleanup_status), "not-needed"},
+    {"cleanup_idempotent", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, state.cleanup_idempotent), NULL},
+    {"cleanup_repeated", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, state.cleanup_repeated), NULL},
+    {"cleanup_owned_state_released", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, state.cleanup_owned_state_released), NULL},
+    {"failure_preserved", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, state.failure_preserved), NULL},
+    {"partial_output_preserved", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_generation_report, state.partial_output_preserved), NULL},
+};
+
+static const char *const generation_cleanup_boundary_lines[] = { "generation_ready: false",
+    "generation: unsupported-full-model",
+    "benchmark_status: not-measured"};
+
+static const yvex_render_field_spec generation_failure_fields[] = {
+    {"failed_phase", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_generation_report, failed_phase), "none"},
+    {"failed_step", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_generation_report, failed_step), NULL},
+};
+
+static const char *const literal_lines_0[] = {
+    "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens "
+        "IDS --max-new-tokens N [options]\n",
+    "Bounded diagnostic generation loop over the existing prefill, decode, bounded logits, greedy sample, "
+        "token append, stop, trace, cancel, and cleanup path.\n",
+    "Model-backed DeepSeek generation is unsupported. This command has no product-generation example until "
+        "the full runtime path exists.\n",
+    "Required arguments:",
+    "  --model FILE_OR_ALIAS      selected segment artifact path or registry alias",
+    "  --backend cpu|cuda         backend used by the bounded diagnostic path",
+    "  --segment embedding-rmsnorm",
+    "  --tokens IDS               comma-separated diagnostic token IDs",
+    "  --max-new-tokens N         positive bounded diagnostic token budget\n",
+    "Diagnostic options:",
+    "  --strategy greedy          only greedy is accepted",
+    "  --context-length N         stop before append when the bounded context is full",
+    "  --logits-count N           bounded diagnostic logits count, 1 <= N <= 256",
+    "  --layers N                 optional controlled layer fixture scheduling",
+    "  --chunk-size N             optional bounded prefill chunking",
+    "  --attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N\n",
+    "Trace options:",
+    "  --trace-level none|tokens|steps|kv|logits|sampling|full",
+    "  Trace records are diagnostic text records only; they do not dump raw tensors.\n",
+    "Cancellation options:",
+    "  --cancel-after-steps N     N=0 cancels before first decode; N>0 cancels after N appended diagnostic tokens\n",
+    "Stop behavior:",
+    "  max-new-tokens stops after append; context-length stops before append; decode/logits/sample/append "
+        "failures preserve partial diagnostic output.",
+    "  Partial diagnostic output is preserved on failure, cancellation, and context stops.",
+    "  EOS and stop-token text matching are unsupported for this bounded path.\n",
+    "Output policy:",
+    "  --output normal|audit     normal is compact; audit preserves full diagnostic state fields",
+    "  --audit                   shortcut for --output audit",
+    "  Text output is the stable operator contract. Normal output is compact by default; audit/trace "
+        "output carries diagnostic state, counters, trace, cancel, cleanup, and boundary records.",
+    "  The command emits no ANSI color by default.\n",
+    "Boundaries:",
+    "  full model generation: unsupported",
+    "  real DeepSeek generation: unsupported",
+    "  real output-head logits: unsupported",
+    "  real vocabulary sampling: unsupported",
+    "  tokenizer-quality text generation: unsupported",
+    "  provider/server/streaming generation: unsupported",
+    "  evaluation: unsupported",
+    "  benchmark_status: not-measured",
+    "  throughput: not-measured"};
+
+/* Purpose: Render generate print optional ull from typed facts (`generate_print_optional_ull`). */
 static void generate_print_optional_ull(FILE *fp,
                                         const char *label,
                                         int seen,
@@ -37,6 +249,7 @@ static void generate_print_optional_ull(FILE *fp,
     yvex_cli_out_char(fp, '\n');
 }
 
+/* Purpose: Render generate print token list from typed facts (`generate_print_token_list`). */
 static void generate_print_token_list(FILE *fp,
                                       const char *label,
                                       const unsigned int *tokens,
@@ -54,6 +267,11 @@ static void generate_print_token_list(FILE *fp,
     yvex_cli_out_char(fp, '\n');
 }
 
+/* Purpose: Render generate print runtime sequence from typed facts (`generate_print_runtime_sequence`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void generate_print_runtime_sequence(
     FILE *fp,
     const yvex_generation_report *report)
@@ -84,213 +302,84 @@ static void generate_print_runtime_sequence(
     yvex_cli_out_char(fp, '\n');
 }
 
+/* Purpose: Render generate print cleanup from typed facts (`generate_print_cleanup`). */
+static void generate_print_cleanup(FILE *fp,
+                                   const yvex_generation_report *report)
+{
+    yvex_generation_report empty = {0};
+    const yvex_generation_report *facts = report ? report : &empty;
+
+    render_object_fields(fp, facts, generation_cleanup_fields,
+                         sizeof(generation_cleanup_fields) /
+                             sizeof(generation_cleanup_fields[0]));
+    render_lines(fp, generation_cleanup_boundary_lines,
+                 sizeof(generation_cleanup_boundary_lines) /
+                     sizeof(generation_cleanup_boundary_lines[0]));
+    render_object_fields(fp, facts, generation_failure_fields,
+                         sizeof(generation_failure_fields) /
+                             sizeof(generation_failure_fields[0]));
+}
+
+/* Purpose: Render generate print summary from typed facts (`generate_print_summary`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void generate_print_summary(FILE *fp,
                                    const yvex_generation_report *report)
 {
+    yvex_generation_report empty = {0};
+    const yvex_generation_report *facts = report ? report : &empty;
+
     yvex_cli_out_line(fp, "generate: loop");
-    yvex_cli_out_kv_str(fp, "status",
-                        report && report->status ?
-                            report->status : "generation-loop-fail");
-    yvex_cli_out_kv_str(fp, "model",
-                        report && report->model_arg ? report->model_arg : "");
-    yvex_cli_out_kv_str(fp, "backend",
-                        report && report->backend_name ?
-                            report->backend_name : "cpu");
-    yvex_cli_out_kv_str(fp, "segment",
-                        report && report->segment_name ?
-                            report->segment_name : "embedding-rmsnorm");
-    yvex_cli_out_kv_u64(fp, "state_id",
-                        report ? report->state.state_id : 0ull);
-    yvex_cli_out_kv_str(fp, "lifecycle_status",
-                        report && report->state.lifecycle_status ?
-                            report->state.lifecycle_status : "unknown");
-    yvex_cli_out_kv_str(fp, "generation_state",
-                        report && report->state.generation_state ?
-                            report->state.generation_state : "unknown");
-    yvex_cli_out_kv_bool(fp, "state_dirty",
-                         report && report->state.state_dirty);
+    render_object_fields(fp, facts, generation_identity_fields,
+                         sizeof(generation_identity_fields) /
+                             sizeof(generation_identity_fields[0]));
     generate_print_optional_ull(fp, "active_step",
-                                report ? report->state.active_step_seen : 0,
-                                report ? report->state.active_step : 0ull);
+                                facts->state.active_step_seen,
+                                facts->state.active_step);
     generate_print_optional_ull(fp, "last_completed_step",
-                                report ? report->state.last_completed_step_seen : 0,
-                                report ? report->state.last_completed_step : 0ull);
-    yvex_cli_out_kv_bool(fp, "cancel_supported",
-                         report && report->state.cancel_supported);
-    yvex_cli_out_kv_bool(fp, "cancel_requested",
-                         report && report->state.cancel_requested);
-    yvex_cli_out_kv_str(fp, "cancel_reason",
-                        report && report->state.cancel_reason ?
-                            report->state.cancel_reason : "none");
+                                facts->state.last_completed_step_seen,
+                                facts->state.last_completed_step);
+    render_object_fields(fp, facts, generation_cancel_fields,
+                         sizeof(generation_cancel_fields) /
+                             sizeof(generation_cancel_fields[0]));
     generate_print_optional_ull(fp, "cancel_step",
-                                report ? report->state.cancel_step_seen : 0,
-                                report ? report->state.cancel_step : 0ull);
-    yvex_cli_out_kv_str(fp, "cancel_timing",
-                        report && report->state.cancel_timing ?
-                            report->state.cancel_timing : "none");
-    yvex_cli_out_kv_str(fp, "cancel_safe_point",
-                        report && report->state.cancel_safe_point ?
-                            report->state.cancel_safe_point : "none");
-    yvex_cli_out_kv_bool(fp, "partial_output_available",
-                         report && report->state.partial_output_available);
-    yvex_cli_out_kv_str(fp, "token_input_status",
-                        report && report->token_input_status ?
-                            report->token_input_status : "fail");
-    yvex_cli_out_kv_u64(fp, "prompt_token_count",
-                        report ? report->prompt_token_count : 0ull);
-    yvex_cli_out_kv_u64(fp, "prefill_token_count",
-                        report ? report->prefill_token_count : 0ull);
-    yvex_cli_out_kv_u64(fp, "max_new_tokens",
-                        report ? report->max_new_tokens : 0ull);
-    yvex_cli_out_kv_u64(fp, "context_length",
-                        report ? report->context_length : 0ull);
-    yvex_cli_out_kv_u64(fp, "generated_token_count",
-                        report ? report->generated_token_count : 0ull);
-    yvex_cli_out_kv_u64(fp, "accepted_token_count",
-                        report ? report->accepted_token_count : 0ull);
-    yvex_cli_out_kv_u64(fp, "partial_generated_token_count",
-                        report ? report->partial_generated_token_count : 0ull);
-    yvex_cli_out_kv_u64(fp, "total_token_count",
-                        report ? report->total_token_count : 0ull);
-    yvex_cli_out_kv_u64(fp, "position_start",
-                        report ? report->position_start : 0ull);
-    yvex_cli_out_kv_u64(fp, "prefill_position_end",
-                        report ? report->prefill_position_end : 0ull);
-    yvex_cli_out_kv_u64(fp, "current_decode_position",
-                        report ? report->current_decode_position : 0ull);
-    yvex_cli_out_kv_u64(fp, "last_successful_position",
-                        report ? report->last_successful_position : 0ull);
-    yvex_cli_out_kv_str(fp, "generation_loop_kind", "bounded-diagnostic");
-    yvex_cli_out_kv_str(fp, "generation_mode", "diagnostic-runtime");
-    yvex_cli_out_kv_str(fp, "decode_mode", "bounded-diagnostic");
-    yvex_cli_out_kv_str(fp, "logits_mode", "bounded-diagnostic");
-    yvex_cli_out_kv_str(fp, "sampling_strategy", "greedy");
-    yvex_cli_out_kv_bool(fp, "bounded_generation",
-                         report && report->loop_executed);
-    yvex_cli_out_kv_str(fp, "full_model_generation", "false");
-    yvex_cli_out_kv_str(fp, "real_deepseek_generation", "false");
-    yvex_cli_out_kv_bool(fp, "prefill_invoked",
-                         report && report->prefill_invoked);
-    yvex_cli_out_kv_u64(fp, "decode_steps",
-                        report ? report->decode_steps : 0ull);
-    yvex_cli_out_kv_u64(fp, "logits_steps",
-                        report ? report->logits_steps : 0ull);
-    yvex_cli_out_kv_u64(fp, "sample_steps",
-                        report ? report->sample_steps : 0ull);
-    yvex_cli_out_kv_u64(fp, "append_steps",
-                        report ? report->append_steps : 0ull);
+                                facts->state.cancel_step_seen,
+                                facts->state.cancel_step);
+    render_object_fields(fp, facts, generation_input_fields,
+                         sizeof(generation_input_fields) /
+                             sizeof(generation_input_fields[0]));
+    render_lines(fp, generation_mode_lines,
+                 sizeof(generation_mode_lines) / sizeof(generation_mode_lines[0]));
+    yvex_cli_out_kv_bool(fp, "bounded_generation", facts->loop_executed);
+    render_lines(fp, generation_boundary_lines,
+                 sizeof(generation_boundary_lines) /
+                     sizeof(generation_boundary_lines[0]));
+    render_object_fields(fp, facts, generation_execution_fields,
+                         sizeof(generation_execution_fields) /
+                             sizeof(generation_execution_fields[0]));
     yvex_cli_out_kv_u32(fp, "candidate_token_id",
-                        report && report->candidate_token_seen ?
-                            report->candidate_token_id : 0u);
+                        facts->candidate_token_seen ? facts->candidate_token_id : 0u);
     yvex_cli_out_kv_double(fp, "candidate_logit",
-                           report && report->candidate_token_seen ?
-                               report->candidate_logit : 0.0);
-    yvex_cli_out_kv_u32(fp, "last_selected_token_id",
-                        report ? report->last_selected_token_id : 0u);
-    yvex_cli_out_kv_double(fp, "last_selected_logit",
-                           report ? report->last_selected_logit : 0.0);
+                           facts->candidate_token_seen ? facts->candidate_logit : 0.0);
+    render_object_fields(fp, facts, generation_selection_fields,
+                         sizeof(generation_selection_fields) /
+                             sizeof(generation_selection_fields[0]));
     yvex_cli_out_kv_u32(fp, "last_appended_token_id",
-                        report && report->last_appended_token_seen ?
-                            report->last_appended_token_id : 0u);
-    yvex_cli_out_kv_str(fp, "append_status",
-                        report && report->append_status ?
-                            report->append_status : "not-started");
-    yvex_cli_out_kv_str(fp, "append_failure",
-                        report && report->append_failure ?
-                            report->append_failure : "none");
-    yvex_cli_out_kv_str(fp, "stop_policy",
-                        report && report->stop_policy ?
-                            report->stop_policy : "bounded-diagnostic");
-    yvex_cli_out_kv_bool(fp, "stop_requested",
-                         report && report->stop_requested);
-    yvex_cli_out_kv_str(fp, "stop_reason",
-                        report && report->stop_reason ?
-                            report->stop_reason : "internal-error");
-    yvex_cli_out_kv_str(fp, "stop_phase",
-                        report && report->stop_phase ?
-                            report->stop_phase : "preflight");
-    yvex_cli_out_kv_u64(fp, "stop_step",
-                        report ? report->stop_step : 0ull);
-    yvex_cli_out_kv_str(fp, "stop_timing",
-                        report && report->stop_timing ?
-                            report->stop_timing : "preflight");
-    yvex_cli_out_kv_bool(fp, "stop_after_append",
-                         report && report->stop_after_append);
-    yvex_cli_out_kv_bool(fp, "stop_before_append",
-                         report && report->stop_before_append);
-    yvex_cli_out_kv_bool(fp, "failure_stop",
-                         report && report->failure_stop);
-    yvex_cli_out_kv_bool(fp, "unsupported_stop_feature",
-                         report && report->unsupported_stop_feature);
-    yvex_cli_out_kv_str(fp, "eos_policy",
-                        report && report->eos_policy ?
-                            report->eos_policy : "unsupported");
-    yvex_cli_out_kv_str(fp, "stop_token_policy",
-                        report && report->stop_token_policy ?
-                            report->stop_token_policy : "unsupported");
-    yvex_cli_out_kv_str(fp, "trace_level",
-                        report && report->trace_level_name ?
-                            report->trace_level_name : "none");
-    yvex_cli_out_kv_bool(fp, "trace_enabled",
-                         report && report->trace_enabled);
-    yvex_cli_out_kv_u64(fp, "trace_records",
-                        report ? report->trace_records : 0ull);
-    yvex_cli_out_kv_u64(fp, "trace_tokens",
-                        report ? report->trace_tokens : 0ull);
-    yvex_cli_out_kv_u64(fp, "trace_steps",
-                        report ? report->trace_steps : 0ull);
-    yvex_cli_out_kv_u64(fp, "trace_kv",
-                        report ? report->trace_kv : 0ull);
-    yvex_cli_out_kv_u64(fp, "trace_logits",
-                        report ? report->trace_logits : 0ull);
-    yvex_cli_out_kv_u64(fp, "trace_sampling",
-                        report ? report->trace_sampling : 0ull);
-    yvex_cli_out_kv_u64(fp, "trace_append",
-                        report ? report->trace_append : 0ull);
-    yvex_cli_out_kv_u64(fp, "trace_stop",
-                        report ? report->trace_stop : 0ull);
-    yvex_cli_out_kv_u64(fp, "trace_cancel",
-                        report ? report->trace_cancel : 0ull);
-    yvex_cli_out_kv_u64(fp, "trace_cleanup",
-                        report ? report->trace_cleanup : 0ull);
-    yvex_cli_out_kv_u64(fp, "trace_failures",
-                        report ? report->trace_failures : 0ull);
-    yvex_cli_out_kv_str(fp, "trace_status",
-                        report && report->trace_status ?
-                            report->trace_status : "disabled");
-    yvex_cli_out_kv_u64(fp, "generation_checksum",
-                        report ? report->generation_checksum : 0ull);
-    yvex_cli_out_kv_u64(fp, "sequence_checksum",
-                        report ? report->sequence_checksum : 0ull);
+                        facts->last_appended_token_seen
+                            ? facts->last_appended_token_id : 0u);
+    render_object_fields(fp, facts, generation_result_fields,
+                         sizeof(generation_result_fields) /
+                             sizeof(generation_result_fields[0]));
     generate_print_token_list(fp, "generated_token_ids",
-                              report ? report->generated_tokens : 0,
-                              report ? report->generated_token_count : 0ull);
-    generate_print_runtime_sequence(fp, report);
-    yvex_cli_out_kv_bool(fp, "cleanup_attempted",
-                         report && report->cleanup_attempted);
-    yvex_cli_out_kv_str(fp, "cleanup_status",
-                        report && report->cleanup_status ?
-                            report->cleanup_status : "not-needed");
-    yvex_cli_out_kv_bool(fp, "cleanup_idempotent",
-                         report && report->state.cleanup_idempotent);
-    yvex_cli_out_kv_bool(fp, "cleanup_repeated",
-                         report && report->state.cleanup_repeated);
-    yvex_cli_out_kv_bool(fp, "cleanup_owned_state_released",
-                         report && report->state.cleanup_owned_state_released);
-    yvex_cli_out_kv_bool(fp, "failure_preserved",
-                         report && report->state.failure_preserved);
-    yvex_cli_out_kv_bool(fp, "partial_output_preserved",
-                         report && report->state.partial_output_preserved);
-    yvex_cli_out_kv_str(fp, "generation_ready", "false");
-    yvex_cli_out_kv_str(fp, "generation", "unsupported-full-model");
-    yvex_cli_out_kv_str(fp, "benchmark_status", "not-measured");
-    yvex_cli_out_kv_str(fp, "failed_phase",
-                        report && report->failed_phase ?
-                            report->failed_phase : "none");
-    yvex_cli_out_kv_u64(fp, "failed_step",
-                        report ? report->failed_step : 0ull);
+                              facts->generated_tokens,
+                              facts->generated_token_count);
+    generate_print_runtime_sequence(fp, facts);
+    generate_print_cleanup(fp, facts);
 }
 
+/* Purpose: Render generate print trace and summary from typed facts (`generate_print_trace_and_summary`). */
 static void generate_print_trace_and_summary(
     FILE *fp,
     const yvex_generation_report *report)
@@ -299,6 +388,7 @@ static void generate_print_trace_and_summary(
     generate_print_summary(fp, report);
 }
 
+/* Purpose: Render generate print normal summary from typed facts (`generate_print_normal_summary`). */
 static void generate_print_normal_summary(
     FILE *fp,
     const yvex_generation_report *report)
@@ -320,6 +410,7 @@ static void generate_print_normal_summary(
     yvex_cli_out_line(fp, "hint: use --audit or --trace-level full for diagnostic internals");
 }
 
+/* Purpose: Render generate print output from typed facts (`generate_print_output`). */
 static void generate_print_output(FILE *fp,
                                   yvex_generate_render_mode mode,
                                   const yvex_generation_report *report)
@@ -332,6 +423,11 @@ static void generate_print_output(FILE *fp,
     generate_print_normal_summary(fp, report);
 }
 
+/* Purpose: Render generate render from typed facts (`yvex_generate_render`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_generate_render(FILE *fp,
                          yvex_generate_render_mode mode,
                          const yvex_generation_report *report)
@@ -340,6 +436,11 @@ int yvex_generate_render(FILE *fp,
     return 0;
 }
 
+/* Purpose: Render generate render normal from typed facts (`yvex_generate_render_normal`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_generate_render_normal(FILE *fp,
                                 const yvex_generation_report *report)
 {
@@ -347,6 +448,11 @@ int yvex_generate_render_normal(FILE *fp,
     return 0;
 }
 
+/* Purpose: Render generate render audit from typed facts (`yvex_generate_render_audit`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_generate_render_audit(FILE *fp,
                                const yvex_generation_report *report)
 {
@@ -354,47 +460,13 @@ int yvex_generate_render_audit(FILE *fp,
     return 0;
 }
 
+/* Purpose: Render generate render help from typed facts (`yvex_generate_render_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_generate_render_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [options]\n\n");
-    yvex_cli_out_writef(fp, "Bounded diagnostic generation loop over the existing prefill, decode, bounded logits, greedy sample, token append, stop, trace, cancel, and cleanup path.\n\n");
-    yvex_cli_out_writef(fp, "Model-backed DeepSeek generation is unsupported. This command has no product-generation example until the full runtime path exists.\n\n");
-    yvex_cli_out_writef(fp, "Required arguments:\n");
-    yvex_cli_out_writef(fp, "  --model FILE_OR_ALIAS      selected segment artifact path or registry alias\n");
-    yvex_cli_out_writef(fp, "  --backend cpu|cuda         backend used by the bounded diagnostic path\n");
-    yvex_cli_out_writef(fp, "  --segment embedding-rmsnorm\n");
-    yvex_cli_out_writef(fp, "  --tokens IDS               comma-separated diagnostic token IDs\n");
-    yvex_cli_out_writef(fp, "  --max-new-tokens N         positive bounded diagnostic token budget\n\n");
-    yvex_cli_out_writef(fp, "Diagnostic options:\n");
-    yvex_cli_out_writef(fp, "  --strategy greedy          only greedy is accepted\n");
-    yvex_cli_out_writef(fp, "  --context-length N         stop before append when the bounded context is full\n");
-    yvex_cli_out_writef(fp, "  --logits-count N           bounded diagnostic logits count, 1 <= N <= 256\n");
-    yvex_cli_out_writef(fp, "  --layers N                 optional controlled layer fixture scheduling\n");
-    yvex_cli_out_writef(fp, "  --chunk-size N             optional bounded prefill chunking\n");
-    yvex_cli_out_writef(fp, "  --attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N\n\n");
-    yvex_cli_out_writef(fp, "Trace options:\n");
-    yvex_cli_out_writef(fp, "  --trace-level none|tokens|steps|kv|logits|sampling|full\n");
-    yvex_cli_out_writef(fp, "  Trace records are diagnostic text records only; they do not dump raw tensors.\n\n");
-    yvex_cli_out_writef(fp, "Cancellation options:\n");
-    yvex_cli_out_writef(fp, "  --cancel-after-steps N     N=0 cancels before first decode; N>0 cancels after N appended diagnostic tokens\n\n");
-    yvex_cli_out_writef(fp, "Stop behavior:\n");
-    yvex_cli_out_writef(fp, "  max-new-tokens stops after append; context-length stops before append; decode/logits/sample/append failures preserve partial diagnostic output.\n");
-    yvex_cli_out_writef(fp, "  Partial diagnostic output is preserved on failure, cancellation, and context stops.\n");
-    yvex_cli_out_writef(fp, "  EOS and stop-token text matching are unsupported for this bounded path.\n\n");
-    yvex_cli_out_writef(fp, "Output policy:\n");
-    yvex_cli_out_writef(fp, "  --output normal|audit     normal is compact; audit preserves full diagnostic state fields\n");
-    yvex_cli_out_writef(fp, "  --audit                   shortcut for --output audit\n");
-    yvex_cli_out_writef(fp, "  Text output is the stable operator contract. Normal output is compact by default; audit/trace output carries diagnostic state, counters, trace, cancel, cleanup, and boundary records.\n");
-    yvex_cli_out_writef(fp, "  The command emits no ANSI color by default.\n\n");
-    yvex_cli_out_writef(fp, "Boundaries:\n");
-    yvex_cli_out_writef(fp, "  full model generation: unsupported\n");
-    yvex_cli_out_writef(fp, "  real DeepSeek generation: unsupported\n");
-    yvex_cli_out_writef(fp, "  real output-head logits: unsupported\n");
-    yvex_cli_out_writef(fp, "  real vocabulary sampling: unsupported\n");
-    yvex_cli_out_writef(fp, "  tokenizer-quality text generation: unsupported\n");
-    yvex_cli_out_writef(fp, "  provider/server/streaming generation: unsupported\n");
-    yvex_cli_out_writef(fp, "  evaluation: unsupported\n");
-    yvex_cli_out_writef(fp, "  benchmark_status: not-measured\n");
-    yvex_cli_out_writef(fp, "  throughput: not-measured\n");
+    yvex_cli_out_lines(fp, literal_lines_0, sizeof(literal_lines_0) / sizeof(literal_lines_0[0]));
     return 0;
 }

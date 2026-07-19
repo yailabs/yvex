@@ -1,38 +1,33 @@
-/*
- * guard.c - graph guard facts.
- *
- * Owner:
- *   src/graph
- *
- * Owns:
- *   graph preflight guard facts over selected graph fixture/partial/segment
- *   execution inputs.
- *
- * Does not own:
- *   CLI input parsing, command dispatch, rendering, stdout/stderr output,
- *   primitive execution, generation, eval, benchmark, or release decisions.
- *
- * Invariants:
- *   guard code validates metadata, ranges, slices, and backend capability facts
- *   and never emits operator output.
- *
- * Boundary:
- *   graph guard success is not graph execution or generation readiness.
- */
-#include "report.h"
-#include "private.h"
+/* Owner: graph execution-admission guard.
+ * Owns: pre-execution artifact, tensor-range, metadata, and backend admission facts.
+ * Does not own: CLI parsing, rendering, graph execution, materialization, or runtime support.
+ * Invariants: executable diagnostic requests cross one fail-closed typed admission path.
+ * Boundary: guard admission does not prove graph execution or generation readiness.
+ * Purpose: validate immutable graph inputs before any backend allocation or dispatch.
+ * Inputs: model references, artifact facts, tensor tables, and requested backend facts.
+ * Effects: writes only caller-owned guard/error results and closes temporary model context.
+ * Failure: identity, metadata, range, backend, or injected refusals publish no dispatch success. */
+#include "src/graph/private.h"
 
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
-static int cli_test_env_enabled(const char *name)
+#include <yvex/artifact.h>
+
+// Purpose: Validate guard fault enabled against the admitted graph invariants.
+static int guard_fault_enabled(const char *name)
 {
     const char *value = getenv(name);
 
     return value && value[0] != '\0' && strcmp(value, "0") != 0;
 }
 
+// Purpose: Initialize init graph guard report to its canonical fail-closed state.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 static void init_graph_guard_report(yvex_cli_graph_guard_report *report,
                                     const char *graph_kind,
                                     int needs_slice_range,
@@ -53,15 +48,12 @@ static void init_graph_guard_report(yvex_cli_graph_guard_report *report,
     report->cleanup_status = "not-needed";
 }
 
-void yvex_graph_guard_report_init(yvex_cli_graph_guard_report *report)
-{
-    if (!report) {
-        return;
-    }
-    init_graph_guard_report(report, "unknown", 0, NULL);
-}
-
-static const yvex_tensor_info *cli_find_first_rmsnorm_tensor(const yvex_tensor_table *tensors)
+// Purpose: Validate guard first rmsnorm tensor against the admitted graph invariants.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+static const yvex_tensor_info *guard_first_rmsnorm_tensor(const yvex_tensor_table *tensors)
 {
     static const char *preferred[] = {
         "blk.0.attn_norm.weight",
@@ -92,7 +84,8 @@ static const yvex_tensor_info *cli_find_first_rmsnorm_tensor(const yvex_tensor_t
     return NULL;
 }
 
-static int cli_has_rmsnorm_epsilon(const yvex_gguf *gguf)
+// Purpose: Validate guard has rmsnorm epsilon against the admitted graph invariants.
+static int guard_has_rmsnorm_epsilon(const yvex_gguf *gguf)
 {
     static const char *keys[] = {
         "llama.attention.layer_norm_rms_epsilon",
@@ -111,6 +104,53 @@ static int cli_has_rmsnorm_epsilon(const yvex_gguf *gguf)
     return 0;
 }
 
+// Purpose: Validate guard backend admit against the admitted graph invariants.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
+static int graph_guard_backend_admit(const char *backend_name,
+                                     int execute_segment,
+                                     yvex_cli_graph_guard_report *report,
+                                     yvex_error *err)
+{
+    yvex_backend_options options;
+    yvex_backend *backend = NULL;
+    int rc;
+
+    memset(&options, 0, sizeof(options));
+    options.kind = yvex_graph_backend_kind_from_name(backend_name);
+    rc = yvex_backend_open(&backend, &options, err);
+    if (rc != YVEX_OK) {
+        report->backend_status =
+            rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
+        report->backend_op_status = "unsupported";
+        return rc;
+    }
+    report->backend_status =
+        yvex_backend_status_name(yvex_backend_status_of(backend));
+    if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_EMBED) ||
+        (execute_segment &&
+         !yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM)) ||
+        guard_fault_enabled("YVEX_TEST_GRAPH_BACKEND_OP_UNSUPPORTED")) {
+        report->backend_op_status = "unsupported";
+        yvex_backend_close(backend);
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "graph_integrity_preflight",
+                       "backend-op-unsupported");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    report->backend_op_status = "supported";
+    report->guard_status = "pass";
+    yvex_backend_close(backend);
+    return YVEX_OK;
+}
+
+// Purpose: Validate preflight against the admitted graph invariants.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 int yvex_graph_preflight(const yvex_model_ref *model_ref,
                                  const char *backend_name,
                                  int execute_fixture,
@@ -124,8 +164,6 @@ int yvex_graph_preflight(const yvex_model_ref *model_ref,
     yvex_tensor_range tensor_range;
     yvex_tensor_slice_range slice_range;
     yvex_selected_embedding_shape embedding_shape;
-    yvex_backend_options backend_options;
-    yvex_backend *backend = NULL;
     const yvex_tensor_info *tensor;
     const yvex_tensor_info *rmsnorm_tensor = NULL;
     unsigned long long hidden_size;
@@ -144,7 +182,6 @@ int yvex_graph_preflight(const yvex_model_ref *model_ref,
     memset(&tensor_range, 0, sizeof(tensor_range));
     memset(&slice_range, 0, sizeof(slice_range));
     memset(&embedding_shape, 0, sizeof(embedding_shape));
-    memset(&backend_options, 0, sizeof(backend_options));
 
     rc = yvex_model_context_open(model_ref->path, &ctx, err);
     if (rc != YVEX_OK) {
@@ -260,7 +297,7 @@ int yvex_graph_preflight(const yvex_model_ref *model_ref,
         report->reference_bytes_planned = slice_range.slice_bytes;
 
         if (execute_segment) {
-            rmsnorm_tensor = cli_find_first_rmsnorm_tensor(ctx.table);
+            rmsnorm_tensor = guard_first_rmsnorm_tensor(ctx.table);
             if (!rmsnorm_tensor) {
                 report->shape_status = "fail";
                 yvex_model_context_close(&ctx);
@@ -289,7 +326,7 @@ int yvex_graph_preflight(const yvex_model_ref *model_ref,
                 yvex_model_context_close(&ctx);
                 return rc;
             }
-            if (!cli_has_rmsnorm_epsilon(ctx.gguf)) {
+            if (!guard_has_rmsnorm_epsilon(ctx.gguf)) {
                 yvex_model_context_close(&ctx);
                 yvex_error_set(err, YVEX_ERR_FORMAT, "graph_integrity_preflight",
                                "rmsnorm-epsilon-missing");
@@ -309,38 +346,7 @@ int yvex_graph_preflight(const yvex_model_ref *model_ref,
         }
     }
 
-    backend_options.kind = yvex_graph_backend_kind_from_name(backend_name);
-    rc = yvex_backend_open(&backend, &backend_options, err);
-    if (rc != YVEX_OK) {
-        report->backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
-        report->backend_op_status = "unsupported";
-        yvex_model_context_close(&ctx);
-        return rc;
-    }
-    report->backend_status = yvex_backend_status_name(yvex_backend_status_of(backend));
-    if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_EMBED) ||
-        (execute_segment && !yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM)) ||
-        cli_test_env_enabled("YVEX_TEST_GRAPH_BACKEND_OP_UNSUPPORTED")) {
-        report->backend_op_status = "unsupported";
-        yvex_backend_close(backend);
-        yvex_model_context_close(&ctx);
-        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "graph_integrity_preflight",
-                       "backend-op-unsupported");
-        return YVEX_ERR_UNSUPPORTED;
-    }
-    report->backend_op_status = "supported";
-    report->guard_status = "pass";
-    yvex_backend_close(backend);
+    rc = graph_guard_backend_admit(backend_name, execute_segment, report, err);
     yvex_model_context_close(&ctx);
-    return YVEX_OK;
-}
-
-int yvex_graph_guard_report_build(const yvex_graph_report_request *request,
-                                  yvex_graph_report *report,
-                                  yvex_error *err)
-{
-    (void)request;
-    (void)report;
-    yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "graph_guard_report", "graph guard report command is not exposed directly");
-    return YVEX_ERR_UNSUPPORTED;
+    return rc;
 }

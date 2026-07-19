@@ -1,12 +1,36 @@
-/*
- * moe.c - moe command-family CLI surface.
- * Owner: src/cli/model_artifacts
+/* Owner: src/cli/model_artifacts
  * Owns: existing moe command-family parsing and output behavior.
- * Does not own: runtime implementation, graph execution, backend algorithms, artifact emission, eval, benchmark, or release claims.
+ * Does not own: runtime implementation, graph execution, backend algorithms, artifact emission, eval, benchmark, or
+ *   release claims.
  * Invariants: CLI-only and excluded from libyvex.a; preserves existing command behavior.
  * Boundary: moe reports are report-only diagnostics.
- */
-#include "moe.h"
+ * Purpose: provide existing moe command-family parsing and output behavior.
+ * Inputs: typed domain facts, requested output mode, and caller-owned render state.
+ * Effects: formats admitted facts through CLI I/O without changing domain state.
+ * Failure: formatting or I/O refusal cannot alter capability facts. */
+#include "src/cli/model_artifacts/private.h"
+
+#include <string.h>
+
+static const char *const literal_pair_0[] = { "\nmoe report:",
+    "  classifies the model as MoE/source-only/unsupported-family and reports router facts, expert tensor-"
+        "role facts, shared-expert facts, storage and residency pressure, blockers, and next rows."
+};
+
+static const char *const literal_pair_1[] = { "cleanup_attempted: false",
+    "cleanup_status: not-needed"};
+
+static const char *const literal_lines_0[] = {
+    "  report-only boundary: it does not execute router logits, does not perform top-k routing, does not "
+        "activate experts, does not dispatch experts, does not accumulate expert outputs, does not integrate "
+        "MoE into graph/prefill/decode, does not generate, and does not benchmark.",
+    "  selected-runtime-slice targets may return ok-partial when the family is MoE but router or expert "
+        "tensors are not present in the selected artifact.",
+    "  source-only targets are reported without opening huge source shards or downloading artifacts.",
+    "Boundary: no MoE runtime execution, no full transformer block, no full transformer prefill, no "
+        "attention-backed KV writes, no decode, no logits, no vocabulary sampling, no generation, no serving, "
+        "no eval, no benchmark, no throughput."
+};
 
 typedef struct {
     const char *model;
@@ -70,24 +94,90 @@ typedef struct {
     int include_blockers;
 } yvex_moe_class_report;
 
-static int moe_parse_value_option(const char *flag,
-                                  int arg_count,
-                                  char **args,
-                                  int *index,
-                                  const char **value)
-{
-    if (*index + 1 >= arg_count) {
-        yvex_cli_out_writef(stderr, "yvex: moe %s requires a value\n", flag);
-        return 2;
-    }
-    *value = args[++(*index)];
-    if (fullmodel_string_is_empty(*value)) {
-        yvex_cli_out_writef(stderr, "yvex: moe %s value is empty\n", flag);
-        return 2;
-    }
-    return 0;
-}
+#define MOE_TEXT(member, default_text) \
+    {#member, YVEX_CLI_FIELD_TEXT, offsetof(yvex_moe_class_report, member), default_text}
+#define MOE_U64(member) \
+    {#member, YVEX_CLI_FIELD_U64, offsetof(yvex_moe_class_report, member), NULL}
+#define MOE_BOOL(key_name, member) \
+    {key_name, YVEX_CLI_FIELD_BOOL, offsetof(yvex_moe_class_report, member), NULL}
+static const yvex_cli_field_spec moe_audit_fields[] = {
+    MOE_TEXT(status, "internal-error"), MOE_TEXT(target_id, "unknown"),
+    MOE_TEXT(target_class, "unknown"), MOE_TEXT(model, ""),
+    MOE_TEXT(model_resolved_path, "unknown"), MOE_TEXT(family, "unknown"),
+    MOE_TEXT(family_detected, "unknown"), MOE_TEXT(family_requested, "auto"),
+    MOE_TEXT(backend, "cpu"), MOE_TEXT(source_class, "unknown"),
+    MOE_TEXT(artifact_class, "unknown"), MOE_TEXT(implementation_stage, "report-only"),
+    MOE_TEXT(model_is_moe, "unknown"), MOE_TEXT(moe_class_status, "unknown"),
+    MOE_TEXT(expert_count_status, "unknown"), MOE_U64(expert_count),
+    MOE_TEXT(active_expert_count_status, "unknown"), MOE_U64(active_expert_count),
+    MOE_TEXT(router_status, "unknown"), MOE_TEXT(router_tensor_status, "unknown"),
+    MOE_TEXT(router_tensor_name, "none"), MOE_TEXT(router_dtype, "unknown"),
+    MOE_TEXT(router_logits_status, "unsupported"),
+    MOE_TEXT(top_k_policy_status, "unknown"), MOE_U64(top_k),
+    MOE_TEXT(shared_expert_status, "unknown"), MOE_U64(shared_expert_count),
+    MOE_TEXT(expert_tensor_collection_status, "unknown"),
+    MOE_TEXT(expert_tensor_roles, "unknown"), MOE_U64(expert_tensor_count),
+    MOE_TEXT(expert_qtype_summary, "unknown"),
+    MOE_TEXT(expert_storage_pressure, "unknown"),
+    MOE_TEXT(expert_residency_pressure, "unknown"),
+    MOE_TEXT(expert_dispatch_status, "unsupported"),
+    MOE_TEXT(expert_activation_status, "unsupported"),
+    MOE_TEXT(expert_accumulation_status, "unsupported"),
+    MOE_TEXT(prefill_integration_status, "unsupported"),
+    MOE_TEXT(decode_integration_status, "unsupported"),
+    MOE_TEXT(graph_integration_status, "unsupported"),
+    MOE_TEXT(runtime_claim, "unsupported"),
+    MOE_TEXT(generation, "unsupported-full-model"),
+    MOE_TEXT(benchmark_status, "not-measured"), MOE_TEXT(blockers, "unknown"),
+    MOE_TEXT(next_required_rows, "V010.CLASS.3"),
+    MOE_BOOL("report_options.include_tensors", include_tensors),
+    MOE_BOOL("report_options.include_residency", include_residency),
+    MOE_BOOL("report_options.include_blockers", include_blockers),
+};
+static const yvex_moe_class_report moe_report_defaults = {
+    .status = "internal-error", .target_id = "unknown", .target_class = "unknown",
+    .model = "", .model_resolved_path = "unknown", .family = "auto",
+    .family_detected = "unknown", .family_requested = "auto", .backend = "cpu",
+    .source_class = "unknown", .artifact_class = "unknown",
+    .implementation_stage = "report-only", .model_is_moe = "unknown",
+    .moe_class_status = "unknown", .expert_count_status = "unknown",
+    .active_expert_count_status = "unknown", .router_status = "unknown",
+    .router_tensor_status = "unknown", .router_tensor_name = "none",
+    .router_dtype = "unknown", .router_logits_status = "unsupported",
+    .top_k_policy_status = "unknown", .shared_expert_status = "unknown",
+    .expert_tensor_collection_status = "unknown", .expert_tensor_roles = "unknown",
+    .expert_qtype_summary = "unknown", .expert_storage_pressure = "unknown",
+    .expert_residency_pressure = "unknown", .expert_dispatch_status = "unsupported",
+    .expert_activation_status = "unsupported", .expert_accumulation_status = "unsupported",
+    .prefill_integration_status = "unsupported", .decode_integration_status = "unsupported",
+    .graph_integration_status = "unsupported", .runtime_claim = "unsupported",
+    .generation = "unsupported-full-model", .benchmark_status = "not-measured",
+    .blockers = "MoE model-class report failed before blocker classification",
+    .next_required_rows = "V010.CLASS.3", .output_mode = YVEX_MODELS_OUTPUT_AUDIT,
+};
+#undef MOE_BOOL
+#undef MOE_U64
+#undef MOE_TEXT
 
+static const yvex_models_option_spec moe_option_specs[] = {
+    {"--model", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_moe_options, model)},
+    {"--backend", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_moe_options, backend)},
+    {"--family", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_moe_options, family)},
+    {"--registry", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_moe_options, registry_path)},
+    {"--include-tensors", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_moe_options, include_tensors)},
+    {"--include-residency", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_moe_options, include_residency)},
+    {"--include-blockers", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_moe_options, include_blockers)},
+    {"--output", YVEX_MODELS_OPTION_OUTPUT, offsetof(yvex_cli_moe_options, output_mode)},
+};
+
+/* Purpose: Parse parse moe options into typed CLI state (`parse_moe_options`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_moe_options(int arg_count,
                              char **args,
                              yvex_cli_moe_options *options)
@@ -106,52 +196,37 @@ static int parse_moe_options(int arg_count,
     }
     if (arg_count < 3 || strcmp(args[2], "report") != 0) {
         yvex_cli_out_writef(stderr, "yvex: moe requires report\n");
-        yvex_cli_out_writef(stderr, "usage: " "yvex moe report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--" "include-tensors] [--" "include-residency] [--" "include-blockers]\n");
+        yvex_cli_out_writef(stderr,
+            "usage: yvex moe report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|"
+                "cuda] [--registry FILE] [--include-tensors] [--include-residency] [--include-blockers]\n");
         return 2;
     }
 
     for (i = 3; i < arg_count; ++i) {
-        const char *value = NULL;
-        if (strcmp(args[i], "--model") == 0) {
-            int rc = moe_parse_value_option("--model", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->model = value;
-        } else if (strcmp(args[i], "--backend") == 0) {
-            int rc = moe_parse_value_option("--backend", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            if (strcmp(value, "cpu") != 0 && strcmp(value, "cuda") != 0) {
+        const char *flag = args[i];
+        int handled = 0;
+        int rc = parse_models_bound_option("moe", arg_count, args, &i,
+                                           options, moe_option_specs,
+                                           sizeof(moe_option_specs) /
+                                               sizeof(moe_option_specs[0]),
+                                           &handled);
+        if (rc != 0) return rc;
+        if (handled) {
+            if (strcmp(flag, "--backend") == 0 &&
+                strcmp(options->backend, "cpu") != 0 &&
+                strcmp(options->backend, "cuda") != 0) {
                 yvex_cli_out_writef(stderr, "yvex: moe --backend must be cpu or cuda\n");
                 return 2;
             }
-            options->backend = value;
-        } else if (strcmp(args[i], "--family") == 0) {
-            int rc = moe_parse_value_option("--family", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->family = value;
-        } else if (strcmp(args[i], "--registry") == 0) {
-            int rc = moe_parse_value_option("--registry", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->registry_path = value;
-        } else if (strcmp(args[i], "--" "include-tensors") == 0) {
-            options->include_tensors = 1;
-        } else if (strcmp(args[i], "--" "include-residency") == 0) {
-            options->include_residency = 1;
-        } else if (strcmp(args[i], "--" "include-blockers") == 0) {
-            options->include_blockers = 1;
-        } else if (strcmp(args[i], "--" "audit") == 0) {
+            continue;
+        }
+        if (strcmp(flag, "--audit") == 0) {
             options->output_mode = YVEX_MODELS_OUTPUT_AUDIT;
-        } else if (strcmp(args[i], "--" "output") == 0) {
-            int rc = moe_parse_value_option("--" "output", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            if (!parse_models_output_mode(value, &options->output_mode)) {
-                yvex_cli_out_writef(stderr, "yvex: moe unsupported output mode: %s\n", value);
-                return 2;
-            }
-        } else if (strcmp(args[i], "--help") == 0 || strcmp(args[i], "-h") == 0) {
+        } else if (strcmp(flag, "--help") == 0 || strcmp(flag, "-h") == 0) {
             yvex_model_artifacts_surface_moe_help(stdout);
             return 1;
         } else {
-            yvex_cli_out_writef(stderr, "yvex: unknown moe option: %s\n", args[i]);
+            yvex_cli_out_writef(stderr, "yvex: unknown moe option: %s\n", flag);
             return 2;
         }
     }
@@ -163,61 +238,31 @@ static int parse_moe_options(int arg_count,
     return 0;
 }
 
-static const char *moe_requested_family(const yvex_cli_moe_options *options)
-{
-    return options && options->family && options->family[0] ? options->family : "auto";
-}
-
+/* Purpose: Construct the owned moe init report state (`moe_init_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void moe_init_report(yvex_moe_class_report *report,
                             const yvex_cli_moe_options *options)
 {
     if (!report) return;
-    memset(report, 0, sizeof(*report));
-    report->status = "internal-error";
-    report->target_id = "unknown";
-    report->target_class = "unknown";
+    *report = moe_report_defaults;
     report->model = options && options->model ? options->model : "";
-    report->model_resolved_path = "unknown";
-    report->family = moe_requested_family(options);
-    report->family_detected = "unknown";
-    report->family_requested = moe_requested_family(options);
+    report->family = model_requested_family(options ? options->family : NULL);
+    report->family_requested = model_requested_family(options ? options->family : NULL);
     report->backend = options && options->backend ? options->backend : "cpu";
-    report->source_class = "unknown";
-    report->artifact_class = "unknown";
-    report->implementation_stage = "report-only";
-    report->model_is_moe = "unknown";
-    report->moe_class_status = "unknown";
-    report->expert_count_status = "unknown";
-    report->active_expert_count_status = "unknown";
-    report->router_status = "unknown";
-    report->router_tensor_status = "unknown";
-    report->router_tensor_name = "none";
-    report->router_dtype = "unknown";
-    report->router_logits_status = "unsupported";
-    report->top_k_policy_status = "unknown";
-    report->shared_expert_status = "unknown";
-    report->expert_tensor_collection_status = "unknown";
-    report->expert_tensor_roles = "unknown";
-    report->expert_qtype_summary = "unknown";
-    report->expert_storage_pressure = "unknown";
-    report->expert_residency_pressure = "unknown";
-    report->expert_dispatch_status = "unsupported";
-    report->expert_activation_status = "unsupported";
-    report->expert_accumulation_status = "unsupported";
-    report->prefill_integration_status = "unsupported";
-    report->decode_integration_status = "unsupported";
-    report->graph_integration_status = "unsupported";
-    report->runtime_claim = "unsupported";
-    report->generation = "unsupported-full-model";
-    report->benchmark_status = "not-measured";
-    report->blockers = "MoE model-class report failed before blocker classification";
-    report->next_required_rows = "V010.CLASS.3";
     report->output_mode = options ? options->output_mode : YVEX_MODELS_OUTPUT_AUDIT;
     report->include_tensors = options ? options->include_tensors : 0;
     report->include_residency = options ? options->include_residency : 0;
     report->include_blockers = options ? options->include_blockers : 0;
 }
 
+/* Purpose: Render moe print report from typed facts (`moe_print_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void moe_print_report(const yvex_moe_class_report *report)
 {
     if (report && report->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
@@ -225,64 +270,28 @@ static void moe_print_report(const yvex_moe_class_report *report)
         yvex_cli_out_writef(stdout, "model: %s\n", report->model ? report->model : "");
         yvex_cli_out_writef(stdout, "family: %s\n", report->family ? report->family : "unknown");
         yvex_cli_out_writef(stdout, "status: %s\n", report->status ? report->status : "report-only");
-        yvex_cli_out_writef(stdout, "top_blocker: %s\n", report->blockers ? report->blockers : "router/expert runtime unsupported");
-        yvex_cli_out_writef(stdout, "next: %s\n", report->next_required_rows ? report->next_required_rows : "V010.MOE.*");
+        yvex_cli_out_writef(stdout, "top_blocker: %s\n",
+            report->blockers ? report->blockers : "router/expert runtime unsupported");
+        yvex_cli_out_writef(stdout, "next: %s\n",
+            report->next_required_rows ? report->next_required_rows : "V010.MOE.*");
         yvex_cli_out_writef(stdout, "boundary: report-only, no runtime execution\n");
         return;
     }
 
-    yvex_cli_out_writef(stdout, "moe: report\n");
-    yvex_cli_out_writef(stdout, "status: %s\n", report && report->status ? report->status : "internal-error");
-    yvex_cli_out_writef(stdout, "target_id: %s\n", report && report->target_id ? report->target_id : "unknown");
-    yvex_cli_out_writef(stdout, "target_class: %s\n", report && report->target_class ? report->target_class : "unknown");
-    yvex_cli_out_writef(stdout, "model: %s\n", report && report->model ? report->model : "");
-    yvex_cli_out_writef(stdout, "model_resolved_path: %s\n", report && report->model_resolved_path ? report->model_resolved_path : "unknown");
-    yvex_cli_out_writef(stdout, "family: %s\n", report && report->family ? report->family : "unknown");
-    yvex_cli_out_writef(stdout, "family_detected: %s\n", report && report->family_detected ? report->family_detected : "unknown");
-    yvex_cli_out_writef(stdout, "family_requested: %s\n", report && report->family_requested ? report->family_requested : "auto");
-    yvex_cli_out_writef(stdout, "backend: %s\n", report && report->backend ? report->backend : "cpu");
-    yvex_cli_out_writef(stdout, "source_class: %s\n", report && report->source_class ? report->source_class : "unknown");
-    yvex_cli_out_writef(stdout, "artifact_class: %s\n", report && report->artifact_class ? report->artifact_class : "unknown");
-    yvex_cli_out_writef(stdout, "implementation_stage: %s\n", report && report->implementation_stage ? report->implementation_stage : "report-only");
-    yvex_cli_out_writef(stdout, "model_is_moe: %s\n", report && report->model_is_moe ? report->model_is_moe : "unknown");
-    yvex_cli_out_writef(stdout, "moe_class_status: %s\n", report && report->moe_class_status ? report->moe_class_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_count_status: %s\n", report && report->expert_count_status ? report->expert_count_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_count: %llu\n", report ? report->expert_count : 0ull);
-    yvex_cli_out_writef(stdout, "active_expert_count_status: %s\n", report && report->active_expert_count_status ? report->active_expert_count_status : "unknown");
-    yvex_cli_out_writef(stdout, "active_expert_count: %llu\n", report ? report->active_expert_count : 0ull);
-    yvex_cli_out_writef(stdout, "router_status: %s\n", report && report->router_status ? report->router_status : "unknown");
-    yvex_cli_out_writef(stdout, "router_tensor_status: %s\n", report && report->router_tensor_status ? report->router_tensor_status : "unknown");
-    yvex_cli_out_writef(stdout, "router_tensor_name: %s\n", report && report->router_tensor_name ? report->router_tensor_name : "none");
-    yvex_cli_out_writef(stdout, "router_dtype: %s\n", report && report->router_dtype ? report->router_dtype : "unknown");
-    yvex_cli_out_writef(stdout, "router_logits_status: %s\n", report && report->router_logits_status ? report->router_logits_status : "unsupported");
-    yvex_cli_out_writef(stdout, "top_k_policy_status: %s\n", report && report->top_k_policy_status ? report->top_k_policy_status : "unknown");
-    yvex_cli_out_writef(stdout, "top_k: %llu\n", report ? report->top_k : 0ull);
-    yvex_cli_out_writef(stdout, "shared_expert_status: %s\n", report && report->shared_expert_status ? report->shared_expert_status : "unknown");
-    yvex_cli_out_writef(stdout, "shared_expert_count: %llu\n", report ? report->shared_expert_count : 0ull);
-    yvex_cli_out_writef(stdout, "expert_tensor_collection_status: %s\n", report && report->expert_tensor_collection_status ? report->expert_tensor_collection_status : "unknown");
-    yvex_cli_out_writef(stdout, "expert_tensor_roles: %s\n", report && report->expert_tensor_roles ? report->expert_tensor_roles : "unknown");
-    yvex_cli_out_writef(stdout, "expert_tensor_count: %llu\n", report ? report->expert_tensor_count : 0ull);
-    yvex_cli_out_writef(stdout, "expert_qtype_summary: %s\n", report && report->expert_qtype_summary ? report->expert_qtype_summary : "unknown");
-    yvex_cli_out_writef(stdout, "expert_storage_pressure: %s\n", report && report->expert_storage_pressure ? report->expert_storage_pressure : "unknown");
-    yvex_cli_out_writef(stdout, "expert_residency_pressure: %s\n", report && report->expert_residency_pressure ? report->expert_residency_pressure : "unknown");
-    yvex_cli_out_writef(stdout, "expert_dispatch_status: %s\n", report && report->expert_dispatch_status ? report->expert_dispatch_status : "unsupported");
-    yvex_cli_out_writef(stdout, "expert_activation_status: %s\n", report && report->expert_activation_status ? report->expert_activation_status : "unsupported");
-    yvex_cli_out_writef(stdout, "expert_accumulation_status: %s\n", report && report->expert_accumulation_status ? report->expert_accumulation_status : "unsupported");
-    yvex_cli_out_writef(stdout, "prefill_integration_status: %s\n", report && report->prefill_integration_status ? report->prefill_integration_status : "unsupported");
-    yvex_cli_out_writef(stdout, "decode_integration_status: %s\n", report && report->decode_integration_status ? report->decode_integration_status : "unsupported");
-    yvex_cli_out_writef(stdout, "graph_integration_status: %s\n", report && report->graph_integration_status ? report->graph_integration_status : "unsupported");
-    yvex_cli_out_writef(stdout, "runtime_claim: %s\n", report && report->runtime_claim ? report->runtime_claim : "unsupported");
-    yvex_cli_out_writef(stdout, "generation: %s\n", report && report->generation ? report->generation : "unsupported-full-model");
-    yvex_cli_out_writef(stdout, "benchmark_status: %s\n", report && report->benchmark_status ? report->benchmark_status : "not-measured");
-    yvex_cli_out_writef(stdout, "blockers: %s\n", report && report->blockers ? report->blockers : "unknown");
-    yvex_cli_out_writef(stdout, "next_required_rows: %s\n", report && report->next_required_rows ? report->next_required_rows : "V010.CLASS.3");
-    yvex_cli_out_writef(stdout, "report_options.include_tensors: %s\n", report && report->include_tensors ? "true" : "false");
-    yvex_cli_out_writef(stdout, "report_options.include_residency: %s\n", report && report->include_residency ? "true" : "false");
-    yvex_cli_out_writef(stdout, "report_options.include_blockers: %s\n", report && report->include_blockers ? "true" : "false");
-    yvex_cli_out_writef(stdout, "cleanup_attempted: false\n");
-    yvex_cli_out_writef(stdout, "cleanup_status: not-needed\n");
+    yvex_cli_out_line(stdout, "moe: report");
+    if (!report) {
+        return;
+    }
+    (void)yvex_cli_out_fields(stdout, report, moe_audit_fields,
+                              sizeof(moe_audit_fields) / sizeof(moe_audit_fields[0]));
+    yvex_cli_out_lines(stdout, literal_pair_1, sizeof(literal_pair_1) / sizeof(literal_pair_1[0]));
 }
 
+/* Purpose: Render moe print source only report from typed facts (`moe_print_source_only_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int moe_print_source_only_report(const yvex_cli_moe_options *options,
                                         const char *target)
 {
@@ -312,11 +321,18 @@ static int moe_print_source_only_report(const yvex_cli_moe_options *options,
     report.expert_storage_pressure = "source-only-huge-pressure";
     report.expert_residency_pressure = "source-only-huge-pressure";
     report.blockers = "source-only target has no YVEX-produced GGUF tensor inventory; GLM runtime unsupported";
-    report.next_required_rows = "OWI.HUGE.0,MODEL.CLASS.3,TENSOR.COLLECTION.2,V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17,V010.STORAGE.18,V010.RESIDENCY.14,GLM-YVEX-produced-GGUF";
+    report.next_required_rows = "OWI.HUGE.0,MODEL.CLASS.3,TENSOR.COLLECTION.2,V010.TENSOR.14,"
+        "V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17,V010.STORAGE.18,"
+        "V010.RESIDENCY.14,GLM-YVEX-produced-GGUF";
     moe_print_report(&report);
     return 5;
 }
 
+/* Purpose: Render moe print missing model report from typed facts (`moe_print_missing_model_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int moe_print_missing_model_report(const yvex_cli_moe_options *options,
                                           const char *reason)
 {
@@ -342,6 +358,11 @@ static int moe_print_missing_model_report(const yvex_cli_moe_options *options,
     return 5;
 }
 
+/* Purpose: Render moe print unsupported family report from typed facts (`moe_print_unsupported_family_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int moe_print_unsupported_family_report(const yvex_cli_moe_options *options,
                                                yvex_model_ref *ref,
                                                const char *target_id,
@@ -355,7 +376,7 @@ static int moe_print_unsupported_family_report(const yvex_cli_moe_options *optio
     report.target_id = target_id ? target_id : "path";
     report.target_class = target_class ? target_class : "candidate-GGUF-path";
     report.model_resolved_path = ref && ref->path ? ref->path : "unknown";
-    report.family = moe_requested_family(options);
+    report.family = model_requested_family(options ? options->family : NULL);
     report.family_detected = detected ? detected : "unknown";
     report.source_class = "GGUF artifact";
     report.artifact_class = "GGUF artifact";
@@ -371,6 +392,7 @@ static int moe_print_unsupported_family_report(const yvex_cli_moe_options *optio
     return 5;
 }
 
+/* Purpose: Compute moe append role for its CLI invariant (`moe_append_role`). */
 static void moe_append_role(char *out, size_t out_cap, const char *role)
 {
     size_t used;
@@ -385,6 +407,11 @@ static void moe_append_role(char *out, size_t out_cap, const char *role)
     snprintf(out + used, used < out_cap ? out_cap - used : 0u, "%s", role);
 }
 
+/* Purpose: Render moe print model report from typed facts (`moe_print_model_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int moe_print_model_report(const yvex_cli_moe_options *options,
                                   yvex_model_ref *ref,
                                   yvex_model_context *ctx,
@@ -408,7 +435,7 @@ static int moe_print_model_report(const yvex_cli_moe_options *options,
     memset(&family_probe, 0, sizeof(family_probe));
     family_probe.model = options ? options->model : NULL;
     family_probe.family = options ? options->family : NULL;
-    requested = moe_requested_family(options);
+    requested = model_requested_family(options ? options->family : NULL);
     detected = fullmodel_detect_family(&family_probe, arch, target_id);
     if (!fullmodel_family_request_matches(requested, detected) || strcmp(detected, "deepseek") != 0) {
         return moe_print_unsupported_family_report(options, ref, target_id, target_class, detected);
@@ -484,11 +511,16 @@ static int moe_print_model_report(const yvex_cli_moe_options *options,
     report.expert_storage_pressure = present_roles > 0u ? "planned" : "missing";
     report.expert_residency_pressure = present_roles > 0u ? "planned" : "missing";
     report.blockers = router
-                          ? "router tensor is classified but router logits, top-k routing, expert activation, dispatch, accumulation, graph integration, prefill integration, and decode integration are unsupported"
-                          : "router tensor missing; expert tensor collection missing; router logits unsupported; top-k routing unsupported; expert activation unsupported; expert dispatch unsupported; expert accumulation unsupported";
+                          ? "router tensor is classified but router logits, top-k routing, expert "
+                              "activation, dispatch, accumulation, graph integration, prefill integration, "
+                              "and decode integration are unsupported"
+                          : "router tensor missing; expert tensor collection missing; router logits "
+                              "unsupported; top-k routing unsupported; expert activation unsupported; expert "
+                              "dispatch unsupported; expert accumulation unsupported";
     report.next_required_rows = router || present_roles > 0u
                                     ? "V010.MOE.4,V010.MOE.5,V010.MOE.6,V010.MOE.7,V010.STORAGE.18,V010.RESIDENCY.14"
-                                    : "V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17,V010.STORAGE.18,V010.RESIDENCY.14,V010.MOE.4";
+                                    : "V010.TENSOR.14,V010.TENSOR.15,V010.TENSOR.16,V010.TENSOR.17,"
+                                        "V010.STORAGE.18,V010.RESIDENCY.14,V010.MOE.4";
     if (collections && collections->has_moe_expert && present_roles == 0u) {
         report.expert_tensor_collection_status = "partial";
         report.expert_tensor_count = collections->moe;
@@ -500,6 +532,12 @@ static int moe_print_model_report(const yvex_cli_moe_options *options,
     return 0;
 }
 
+/* Purpose: Orchestrate the typed model artifacts surface moe command request
+ * (`yvex_model_artifacts_surface_moe_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_model_artifacts_surface_moe_command(int arg_count, char **args)
 {
     yvex_cli_moe_options options;
@@ -548,7 +586,8 @@ int yvex_model_artifacts_surface_moe_command(int arg_count, char **args)
     rc = yvex_model_context_open(ref.path, &ctx, &err);
     if (rc != YVEX_OK) {
         const char *reason = yvex_error_message(&err);
-        rc = moe_print_missing_model_report(&options, reason && reason[0] ? reason : "GGUF metadata or tensor directory parse failed");
+        rc = moe_print_missing_model_report(&options,
+            reason && reason[0] ? reason : "GGUF metadata or tensor directory parse failed");
         yvex_error_clear(&err);
         yvex_model_ref_clear(&ref);
         return rc;
@@ -577,18 +616,27 @@ int yvex_model_artifacts_surface_moe_command(int arg_count, char **args)
     return rc;
 }
 
+/* Purpose: Render model artifacts surface moe help from typed facts (`yvex_model_artifacts_surface_moe_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_model_artifacts_surface_moe_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex moe report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--" "audit | --" "output normal|table|audit] [--" "include-tensors] [--" "include-residency] [--" "include-blockers]\n");
+    yvex_cli_out_writef(fp,
+        "usage: yvex moe report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|"
+            "cuda] [--registry FILE] [--audit | --output normal|table|audit] [--include-tensors] [--include-"
+            "residency] [--include-blockers]\n");
     yvex_cli_out_writef(fp, "\nExamples:\n");
-    yvex_cli_out_writef(fp, "  yvex moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --" "include-tensors --" "include-blockers\n");
-    yvex_cli_out_writef(fp, "  yvex moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda --" "include-residency\n");
-    yvex_cli_out_writef(fp, "  yvex moe report --model glm-5.2-official-safetensors --family glm --backend cpu --" "include-blockers\n");
-    yvex_cli_out_writef(fp, "\nmoe report:\n");
-    yvex_cli_out_writef(fp, "  classifies the model as MoE/source-only/unsupported-family and reports router facts, expert tensor-role facts, shared-expert facts, storage and residency pressure, blockers, and next rows.\n");
-    yvex_cli_out_writef(fp, "  Default output is compact. Use --" "audit for full diagnostic fields.\n");
-    yvex_cli_out_writef(fp, "  report-only boundary: it does not execute router logits, does not perform top-k routing, does not activate experts, does not dispatch experts, does not accumulate expert outputs, does not integrate MoE into graph/prefill/decode, does not generate, and does not benchmark.\n");
-    yvex_cli_out_writef(fp, "  selected-runtime-slice targets may return ok-partial when the family is MoE but router or expert tensors are not present in the selected artifact.\n");
-    yvex_cli_out_writef(fp, "  source-only targets are reported without opening huge source shards or downloading artifacts.\n");
-    yvex_cli_out_writef(fp, "Boundary: no MoE runtime execution, no full transformer block, no full transformer prefill, no attention-backed KV writes, no decode, no logits, no vocabulary sampling, no generation, no serving, no eval, no benchmark, no throughput.\n");
+    yvex_cli_out_writef(fp,
+        "  yvex moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend "
+            "cpu --include-tensors --include-blockers\n");
+    yvex_cli_out_writef(fp,
+        "  yvex moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend "
+            "cuda --include-residency\n");
+    yvex_cli_out_writef(fp,
+        "  yvex moe report --model glm-5.2-official-safetensors --family glm --backend cpu --include-blockers\n");
+    yvex_cli_out_lines(fp, literal_pair_0, sizeof(literal_pair_0) / sizeof(literal_pair_0[0]));
+    yvex_cli_out_writef(fp, "  Default output is compact. Use --audit for full diagnostic fields.\n");
+    yvex_cli_out_lines(fp, literal_lines_0, sizeof(literal_lines_0) / sizeof(literal_lines_0[0]));
 }

@@ -1,52 +1,23 @@
-/*
- * Owner: abi.graph (abi).
- * Owns: the public-abi boundary consumed by repository.
- * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
- * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
- * Boundary: public-abi; moving this contract requires an ownership-manifest change.
- *
- * YVEX - Graph planning
- *
- * File: include/yvex/graph.h
- * Layer: public graph API
- *
- * Purpose:
- *   Defines the opaque graph object and graph inspection APIs for graph planner. Graphs
- *   are deterministic planning artifacts; they do not execute computation.
- *
- * Owns:
- *   - yvex_graph
- *   - graph build options
- *   - graph status and diagnostics
- *   - graph dump surface
- *
- * Does not own:
- *   - backend execution
- *   - device allocation
- *   - sessions
- *   - inference
- *
- * Used by:
- *   - planner
- *   - memory plan
- *   - CLI graph/plan commands
- *
- * Validation:
- *   - make test-core
- *   - build/tests/test_graph
- */
+/* Owner: public graph ABI.
+ * Owns: graph descriptors, memory plans, and immutable execution plans.
+ * Does not own: backend kernels, family-private policy, or generation loops.
+ * Invariants: declarations are format-stable, externally consumable, and independently includable.
+ * Boundary: model-to-graph planning and memory accounting contracts.
+ * Purpose: Expose model-to-graph planning and memory accounting contracts.
+ * Inputs: Typed caller-owned values and immutable borrowed views as declared below.
+ * Effects: Only functions with explicit lifecycle or I/O contracts mutate external state.
+ * Failure: Typed status and error outputs remain authoritative; declarations add no capability. */
 #ifndef YVEX_GRAPH_H
 #define YVEX_GRAPH_H
 
 #include <stdio.h>
-
 #include <yvex/model.h>
-#include <yvex/op.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/* Graph descriptors. */
 typedef struct yvex_graph yvex_graph;
 
 typedef enum {
@@ -107,6 +78,65 @@ int yvex_shape_copy(unsigned long long *dst,
                     const unsigned long long *src,
                     unsigned int src_rank,
                     yvex_error *err);
+
+/* Memory planning. */
+typedef struct yvex_memory_plan yvex_memory_plan;
+
+typedef enum {
+    YVEX_MEMORY_PLAN_EMPTY = 0,
+    YVEX_MEMORY_PLAN_ESTIMATED,
+    YVEX_MEMORY_PLAN_PARTIAL,
+    YVEX_MEMORY_PLAN_UNSUPPORTED
+} yvex_memory_plan_status;
+
+typedef struct {
+    unsigned long long model_tensor_bytes_known;
+    unsigned long long model_tensor_bytes_unknown_count;
+    unsigned long long activation_peak_bytes;
+    unsigned long long kv_cache_bytes;
+    unsigned long long scratch_peak_bytes;
+    unsigned long long total_known_bytes;
+} yvex_memory_plan_summary;
+
+int yvex_memory_plan_from_graph(yvex_memory_plan **out,
+                                const yvex_graph *graph,
+                                const yvex_tensor_table *tensors,
+                                yvex_error *err);
+
+void yvex_memory_plan_close(yvex_memory_plan *plan);
+
+yvex_memory_plan_status yvex_memory_plan_status_of(const yvex_memory_plan *plan);
+const char *yvex_memory_plan_status_name(yvex_memory_plan_status status);
+
+int yvex_memory_plan_get_summary(const yvex_memory_plan *plan,
+                                 yvex_memory_plan_summary *out,
+                                 yvex_error *err);
+
+int yvex_memory_plan_dump(const yvex_memory_plan *plan,
+                          FILE *fp,
+                          yvex_error *err);
+
+/* Execution planning. */
+typedef struct yvex_plan yvex_plan;
+
+typedef struct {
+    unsigned long long sequence_length;
+    unsigned long long context_length;
+    const char *backend_name;
+} yvex_plan_options;
+
+int yvex_plan_create(yvex_plan **out,
+                     const yvex_model_descriptor *model,
+                     const yvex_tensor_table *tensors,
+                     const yvex_plan_options *options,
+                     yvex_error *err);
+
+void yvex_plan_close(yvex_plan *plan);
+
+const yvex_graph *yvex_plan_graph(const yvex_plan *plan);
+const yvex_memory_plan *yvex_plan_memory(const yvex_plan *plan);
+
+int yvex_plan_dump(const yvex_plan *plan, FILE *fp, yvex_error *err);
 
 #ifdef __cplusplus
 }

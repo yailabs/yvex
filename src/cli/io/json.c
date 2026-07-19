@@ -1,26 +1,20 @@
-/*
- * json.c - CLI JSON writer foundation implementation.
- *
- * Owner:
- *   src/cli/io
- *
- * Owns:
- *   approved direct JSON text output for CLI plumbing surfaces.
- *
- * Does not own:
- *   command schemas, domain report semantics, runtime behavior, generation,
- *   eval, benchmark, or release decisions.
- *
- * Invariants:
- *   helpers serialize only caller-provided fields and do not claim uniform JSON.
- *
- * Boundary:
- *   JSON writer primitives are not command-level JSON support by themselves.
- */
-#include "json.h"
+/* Owner: src/cli/io
+ * Owns: approved direct JSON text output for CLI plumbing surfaces.
+ * Does not own: command schemas, domain report semantics, runtime behavior, generation, eval, benchmark, or release
+ *   decisions.
+ * Invariants: helpers serialize only caller-provided fields and do not claim uniform JSON.
+ * Boundary: JSON writer primitives are not command-level JSON support by themselves.
+ * Purpose: provide approved direct JSON text output for CLI plumbing surfaces.
+ * Inputs: typed scalar, table, or JSON fields and the selected operator stream.
+ * Effects: writes only explicitly requested operator output bytes.
+ * Failure: propagates stream or encoding failure without changing domain state. */
+#include "src/cli/io/private.h"
 
-#include "out.h"
-
+/* Purpose: Compute json string for its CLI invariant (`json_string`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void json_string(FILE *fp, const char *text)
 {
     const unsigned char *p = (const unsigned char *)(text ? text : "");
@@ -44,16 +38,31 @@ static void json_string(FILE *fp, const char *text)
     (void)yvex_cli_out_char(fp, '"');
 }
 
+/* Purpose: Compute json begin for its CLI invariant (`yvex_cli_json_begin`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_cli_json_begin(FILE *fp)
 {
     yvex_cli_out_line(fp, "{");
 }
 
+/* Purpose: Compute json end for its CLI invariant (`yvex_cli_json_end`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_cli_json_end(FILE *fp)
 {
     yvex_cli_out_line(fp, "}");
 }
 
+/* Purpose: Compute json field str for its CLI invariant (`yvex_cli_json_field_str`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_cli_json_field_str(FILE *fp, const char *key, const char *value, int comma)
 {
     (void)yvex_cli_out_puts(fp, "  ");
@@ -63,6 +72,11 @@ void yvex_cli_json_field_str(FILE *fp, const char *key, const char *value, int c
     (void)yvex_cli_out_writef(fp, "%s\n", comma ? "," : "");
 }
 
+/* Purpose: Compute json field u64 for its CLI invariant (`yvex_cli_json_field_u64`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_cli_json_field_u64(FILE *fp, const char *key, unsigned long long value, int comma)
 {
     (void)yvex_cli_out_puts(fp, "  ");
@@ -70,6 +84,11 @@ void yvex_cli_json_field_u64(FILE *fp, const char *key, unsigned long long value
     (void)yvex_cli_out_writef(fp, ": %llu%s\n", value, comma ? "," : "");
 }
 
+/* Purpose: Compute json field bool for its CLI invariant (`yvex_cli_json_field_bool`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_cli_json_field_bool(FILE *fp, const char *key, int value, int comma)
 {
     (void)yvex_cli_out_puts(fp, "  ");

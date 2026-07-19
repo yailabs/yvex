@@ -9,8 +9,6 @@
  */
 #include "tests/test.h"
 
-int yvex_test_gguf_writer_artifact(void);
-
 int main(void)
 {
     int rc;

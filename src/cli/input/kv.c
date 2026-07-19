@@ -1,35 +1,25 @@
-/*
- * kv.c - KV command argument parser.
- *
- * Owner:
- *   src/cli/input
- *
- * Owns:
- *   CLI grammar and option validation for KV report and ownership commands.
- *
- * Does not own:
- *   KV cache allocation, report construction, command dispatch, rendering,
- *   stdout/stderr output, attention execution, decode, logits, sampling,
- *   generation, eval, benchmark, or release decisions.
- *
- * Invariants:
- *   parser output is typed and domain-free; invalid values fail before report
- *   construction or KV allocation.
- *
- * Boundary:
- *   parsing arguments is not runtime KV support.
- */
-#include "kv.h"
+/* Owner: src/cli/input
+ * Owns: CLI grammar and option validation for KV report and ownership commands.
+ * Does not own: KV cache allocation, report construction, command dispatch, rendering, stdout/stderr output,
+ *   attention execution, decode, logits, sampling, generation, eval, benchmark, or release decisions.
+ * Invariants: parser output is typed and domain-free; invalid values fail before report construction or KV
+ *   allocation.
+ * Boundary: parsing arguments is not runtime KV support.
+ * Purpose: provide cLI grammar and option validation for KV report and ownership commands.
+ * Inputs: bounded command arguments and caller-owned typed request storage.
+ * Effects: publishes request fields only after complete grammar validation.
+ * Failure: invalid or ambiguous grammar leaves the request uncommitted. */
+#include "src/cli/input/private.h"
 
-#include <errno.h>
-#include <stdlib.h>
 #include <string.h>
 
+/* Purpose: Compute kv arg error for its CLI invariant (`kv_arg_error`). */
 static void kv_arg_error(yvex_error *err, const char *message)
 {
     yvex_error_set(err, YVEX_ERR_INVALID_ARG, "kv", message);
 }
 
+/* Purpose: Compute kv arg errorf for its CLI invariant (`kv_arg_errorf`). */
 static void kv_arg_errorf(yvex_error *err,
                           const char *fmt,
                           const char *value)
@@ -37,38 +27,11 @@ static void kv_arg_errorf(yvex_error *err,
     yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "kv", fmt, value ? value : "");
 }
 
-static int kv_parse_ull_raw(const char *text,
-                            unsigned long long *out,
-                            int allow_zero)
-{
-    char *end = NULL;
-    unsigned long long value;
-
-    if (!text || !out || text[0] == '\0' || text[0] == '-') {
-        return 0;
-    }
-    errno = 0;
-    value = strtoull(text, &end, 10);
-    if (errno != 0 || !end || *end != '\0') {
-        return 0;
-    }
-    if (!allow_zero && value == 0ull) {
-        return 0;
-    }
-    *out = value;
-    return 1;
-}
-
-static int kv_parse_positive_ull(const char *text, unsigned long long *out)
-{
-    return kv_parse_ull_raw(text, out, 0);
-}
-
-static int kv_parse_ull_allow_zero(const char *text, unsigned long long *out)
-{
-    return kv_parse_ull_raw(text, out, 1);
-}
-
+/* Purpose: Parse kv parse report mode into typed CLI state (`kv_parse_report_mode`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int kv_parse_report_mode(const char *text, yvex_kv_report_mode *out)
 {
     if (!text || !out) {
@@ -89,6 +52,7 @@ static int kv_parse_report_mode(const char *text, yvex_kv_report_mode *out)
     return 0;
 }
 
+/* Purpose: Compute kv request defaults for its CLI invariant (`kv_request_defaults`). */
 static void kv_request_defaults(yvex_kv_report_request *request)
 {
     memset(request, 0, sizeof(*request));
@@ -98,6 +62,11 @@ static void kv_request_defaults(yvex_kv_report_request *request)
     request->report_mode = YVEX_KV_REPORT_MODE_NORMAL;
 }
 
+/* Purpose: Parse kv parse report args into typed CLI state (`kv_parse_report_args`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int kv_parse_report_args(int argc,
                                 char **argv,
                                 yvex_kv_args *out,
@@ -165,14 +134,19 @@ static int kv_parse_report_args(int argc,
     }
     if (!request->model) {
         kv_arg_error(err,
-                     "usage: yvex kv report --model FILE_OR_ALIAS "
-                     "[--family auto|deepseek|glm|qwen|llama] [--backend cpu|cuda]");
+                     "usage: yvex kv report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen|llama] "
+                         "[--backend cpu|cuda]");
         return YVEX_ERR_INVALID_ARG;
     }
     yvex_error_clear(err);
     return YVEX_OK;
 }
 
+/* Purpose: Parse kv parse ownership args into typed CLI state (`kv_parse_ownership_args`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int kv_parse_ownership_args(int argc,
                                    char **argv,
                                    yvex_kv_args *out,
@@ -185,7 +159,7 @@ static int kv_parse_ownership_args(int argc,
     for (i = 2; i < argc; ++i) {
         if (strcmp(argv[i], "--layers") == 0) {
             if (i + 1 >= argc ||
-                !kv_parse_positive_ull(argv[i + 1], &request->shape.layer_count)) {
+                !parse_positive_ull(argv[i + 1], &request->shape.layer_count)) {
                 kv_arg_error(err, "yvex: --layers requires a positive integer");
                 return YVEX_ERR_INVALID_ARG;
             }
@@ -193,21 +167,21 @@ static int kv_parse_ownership_args(int argc,
         } else if (strcmp(argv[i], "--heads") == 0 ||
                    strcmp(argv[i], "--lanes") == 0) {
             if (i + 1 >= argc ||
-                !kv_parse_positive_ull(argv[i + 1], &request->shape.kv_head_count)) {
+                !parse_positive_ull(argv[i + 1], &request->shape.kv_head_count)) {
                 kv_arg_error(err, "yvex: --heads requires a positive integer");
                 return YVEX_ERR_INVALID_ARG;
             }
             i += 1;
         } else if (strcmp(argv[i], "--head-dim") == 0) {
             if (i + 1 >= argc ||
-                !kv_parse_positive_ull(argv[i + 1], &request->shape.head_dim)) {
+                !parse_positive_ull(argv[i + 1], &request->shape.head_dim)) {
                 kv_arg_error(err, "yvex: --head-dim requires a positive integer");
                 return YVEX_ERR_INVALID_ARG;
             }
             i += 1;
         } else if (strcmp(argv[i], "--capacity") == 0) {
             if (i + 1 >= argc ||
-                !kv_parse_positive_ull(argv[i + 1], &request->shape.capacity)) {
+                !parse_positive_ull(argv[i + 1], &request->shape.capacity)) {
                 kv_arg_error(err, "yvex: --capacity requires a positive integer");
                 return YVEX_ERR_INVALID_ARG;
             }
@@ -216,7 +190,7 @@ static int kv_parse_ownership_args(int argc,
             request->append_demo = 1;
         } else if (strcmp(argv[i], "--read-position") == 0) {
             if (i + 1 >= argc ||
-                !kv_parse_ull_allow_zero(argv[i + 1], &request->read_position)) {
+                !parse_ull_allow_zero(argv[i + 1], &request->read_position)) {
                 kv_arg_error(err,
                              "yvex: --read-position requires a non-negative integer");
                 return YVEX_ERR_INVALID_ARG;
@@ -248,34 +222,19 @@ static int kv_parse_ownership_args(int argc,
         request->shape.head_dim == 0ull ||
         request->shape.capacity == 0ull) {
         kv_arg_error(err,
-                     "usage: yvex kv --layers N --heads N --head-dim N "
-                     "--capacity N [--append-demo] [--read-position N]");
+                     "usage: yvex kv --layers N --heads N --head-dim N --capacity N [--append-demo] [--"
+                         "read-position N]");
         return YVEX_ERR_INVALID_ARG;
     }
     yvex_error_clear(err);
     return YVEX_OK;
 }
 
-/*
- * yvex_kv_args_parse()
- *
- * Purpose:
- *   parse KV command input into a typed KV report request.
- *
- * Inputs:
- *   argc and argv are borrowed command arguments from yvex kv.
- *
- * Effects:
- *   fills out with parsed values only; it does not resolve models, allocate KV,
- *   append/read KV values, render output, or write streams.
- *
- * Failure:
- *   returns invalid-arg with parser text for missing values, malformed numbers,
- *   unsupported modes, and unknown options.
- *
- * Boundary:
- *   parsing is not KV report construction or runtime support.
- */
+/* Purpose: parse KV command input into a typed KV report request.
+ * Inputs: Borrowed typed facts.
+ * Effects: CLI-local effects only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_kv_args_parse(int argc,
                        char **argv,
                        yvex_kv_args *out,
@@ -296,8 +255,8 @@ int yvex_kv_args_parse(int argc,
     }
     if (argc < 3) {
         kv_arg_error(err,
-                     "usage: yvex kv report --model FILE_OR_ALIAS or "
-                     "yvex kv --layers N --heads N --head-dim N --capacity N");
+                     "usage: yvex kv report --model FILE_OR_ALIAS or yvex kv --layers N --heads N --head-"
+                         "dim N --capacity N");
         return YVEX_ERR_INVALID_ARG;
     }
     if (strcmp(argv[2], "report") == 0) {

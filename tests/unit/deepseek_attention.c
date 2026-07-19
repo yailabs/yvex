@@ -31,7 +31,7 @@
 
 static yvex_attention_layer_plan layer_fixture(
     unsigned long long layer_index,
-    yvex_deepseek_v4_attention_class attention_class,
+    yvex_attention_class attention_class,
     unsigned long long compression_ratio)
 {
     yvex_attention_layer_plan layer;
@@ -49,7 +49,7 @@ static yvex_attention_layer_plan layer_fixture(
     layer.output_lora_rank = 1024ull;
     layer.output_groups = 8ull;
     layer.hidden_dimension = 4096ull;
-    if (attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA) {
+    if (attention_class == YVEX_ATTENTION_CLASS_CSA) {
         layer.indexer_heads = 64ull;
         layer.indexer_head_dimension = 128ull;
         layer.indexer_topk = 512ull;
@@ -95,7 +95,7 @@ static void init_rolling_view(
 {
     unsigned long long ratio = layer->compression_ratio;
     int overlap = kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER ||
-                  layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA;
+                  layer->attention_class == YVEX_ATTENTION_CLASS_CSA;
     unsigned long long head_dim =
         kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER
             ? layer->indexer_head_dimension
@@ -250,11 +250,11 @@ static int test_plan_requires_committed_inputs(void)
 static int test_history_contracts(void)
 {
     yvex_attention_layer_plan swa =
-        layer_fixture(0ull, YVEX_DEEPSEEK_V4_ATTENTION_SWA, 0ull);
+        layer_fixture(0ull, YVEX_ATTENTION_CLASS_SWA, 0ull);
     yvex_attention_layer_plan csa =
-        layer_fixture(2ull, YVEX_DEEPSEEK_V4_ATTENTION_CSA, 4ull);
+        layer_fixture(2ull, YVEX_ATTENTION_CLASS_CSA, 4ull);
     yvex_attention_layer_plan hca =
-        layer_fixture(3ull, YVEX_DEEPSEEK_V4_ATTENTION_HCA, 128ull);
+        layer_fixture(3ull, YVEX_ATTENTION_CLASS_HCA, 128ull);
     yvex_attention_history_view history;
     yvex_attention_failure failure;
     yvex_error err;
@@ -352,9 +352,9 @@ static int test_history_contracts(void)
 static int test_state_delta_lifecycle(void)
 {
     yvex_attention_layer_plan csa =
-        layer_fixture(2ull, YVEX_DEEPSEEK_V4_ATTENTION_CSA, 4ull);
+        layer_fixture(2ull, YVEX_ATTENTION_CLASS_CSA, 4ull);
     yvex_attention_layer_plan hca =
-        layer_fixture(3ull, YVEX_DEEPSEEK_V4_ATTENTION_HCA, 128ull);
+        layer_fixture(3ull, YVEX_ATTENTION_CLASS_HCA, 128ull);
     yvex_attention_state_delta delta;
     yvex_attention_failure failure;
     yvex_error err;
@@ -390,7 +390,7 @@ static int test_state_delta_lifecycle(void)
 static int test_transactional_memory_sink(void)
 {
     yvex_attention_layer_plan swa =
-        layer_fixture(0ull, YVEX_DEEPSEEK_V4_ATTENTION_SWA, 0ull);
+        layer_fixture(0ull, YVEX_ATTENTION_CLASS_SWA, 0ull);
     yvex_attention_history_view history;
     yvex_attention_memory_sink sink;
     yvex_attention_memory_sink sink2;
@@ -662,13 +662,13 @@ static int run_rolling_sequence(
             : layer->head_dimension;
     unsigned long long width =
         head_dim * ((kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER ||
-                     layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA)
+                     layer->attention_class == YVEX_ATTENTION_CLASS_CSA)
                         ? 2ull
                         : 1ull);
     unsigned long long slots =
         layer->compression_ratio *
         ((kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER ||
-          layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA)
+          layer->attention_class == YVEX_ATTENTION_CLASS_CSA)
              ? 2ull
              : 1ull);
     unsigned long long token = 0ull;
@@ -681,7 +681,7 @@ static int run_rolling_sequence(
     memset(emissions, 0, sizeof(float) * token_count * head_dim);
     memset(&transaction, 0, sizeof(transaction));
     init_rolling_view(&before, kind, layer, 0ull, state_a_kv, state_a_score);
-    if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA)
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA)
         init_rolling_view(&index_before,
                           YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER, layer,
                           0ull, index_a_kv, index_a_score);
@@ -711,7 +711,7 @@ static int run_rolling_sequence(
             history.immutable = 1;
             history.token_count = token;
             history.main_rolling_state = before;
-            if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA)
+            if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA)
                 history.indexer_rolling_state = index_before;
             yvex_error_clear(&err);
             if (yvex_attention_state_transaction_begin(
@@ -771,7 +771,7 @@ static int run_rolling_sequence(
                     main_score_span.expected_elements, &failure, &err) !=
                     YVEX_OK)
                 goto cleanup;
-            if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA) {
+            if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
                 fill_vector(index_token_kv, index_before.state_width, token,
                             71ull);
                 fill_scores(index_token_score, index_before.state_width, token,
@@ -847,7 +847,7 @@ static int run_rolling_sequence(
             }
             output_to_committed_view(&before, &after, committed_kv,
                                      committed_score);
-            if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA) {
+            if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
                 const yvex_attention_component_span *ikv =
                     yvex_attention_memory_sink_committed_component(
                         &sink,
@@ -882,9 +882,9 @@ cleanup:
 static int test_rolling_state_chunk_invariance(void)
 {
     yvex_attention_layer_plan csa =
-        layer_fixture(2ull, YVEX_DEEPSEEK_V4_ATTENTION_CSA, 4ull);
+        layer_fixture(2ull, YVEX_ATTENTION_CLASS_CSA, 4ull);
     yvex_attention_layer_plan hca =
-        layer_fixture(3ull, YVEX_DEEPSEEK_V4_ATTENTION_HCA, 128ull);
+        layer_fixture(3ull, YVEX_ATTENTION_CLASS_HCA, 128ull);
     unsigned long long one_chunk[] = {10ull};
     unsigned long long irregular[] = {1ull, 3ull, 2ull, 4ull};
     unsigned long long hca_one[] = {130ull};
@@ -1200,7 +1200,7 @@ static int test_independent_reference_detects_stage_mutations(void)
     production.owned = 1;
     production.complete = 1;
     production.layer_index = 2ull;
-    production.attention_class = YVEX_DEEPSEEK_V4_ATTENTION_CSA;
+    production.attention_class = YVEX_ATTENTION_CLASS_CSA;
     production.token_position = 8ull;
     production.token_count = 1ull;
     production.hidden_width = 2ull;
@@ -1234,7 +1234,7 @@ static int test_independent_reference_detects_stage_mutations(void)
     production.next_main_rolling_state.kind =
         YVEX_DEEPSEEK_ATTENTION_ROLLING_MAIN;
     production.next_main_rolling_state.attention_class =
-        YVEX_DEEPSEEK_V4_ATTENTION_CSA;
+        YVEX_ATTENTION_CLASS_CSA;
     production.next_main_rolling_state.layer_index = 2ull;
     production.next_main_rolling_state.next_token_position = 9ull;
     production.next_main_rolling_state.ratio = 4ull;

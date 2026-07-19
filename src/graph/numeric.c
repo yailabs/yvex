@@ -1,29 +1,165 @@
-/*
- * attention_numeric.c - DeepSeek attention numeric policy primitives.
- *
- * Owner:
- *   src/graph
- *
- * Owns:
- *   runtime-attention numeric primitives consumed by the DeepSeek attention
- *   executor: pinned Hadamard semantics, deterministic sparse top-k ordering,
- *   and bounded activation-codec helpers.
- *
- * Does not own:
- *   source tensor quantization, GGUF qtype storage geometry, materialization,
- *   persistent KV, CUDA kernels, transformer execution, generation, CLI
- *   output, or release claims.
- *
- * Invariants:
- *   numeric policy values arrive from the immutable attention plan; no source
- *   quantization field is reused as runtime activation policy. Independent
- *   reference algorithms live only under tests/reference.
- *
- * Boundary:
- *   these primitives make the attention executor reproducible; they do not by
- *   themselves establish attention execution support.
- */
+/* Owner: generic graph numeric primitives and bounded primitive proofs.
+ * Owns: normalization, RoPE/YaRN, Hadamard, top-k, activation codecs, and fixture numeric runners.
+ * Does not own: source quantization, qtype geometry, family policy, materialization, CUDA, or generation.
+ * Invariants: runtime policy comes from immutable plans and reference algorithms remain test-owned.
+ * Boundary: reproducible primitives and fixture proofs do not establish complete attention support.
+ * Purpose: provide deterministic scalar mechanisms shared by graph construction and family execution.
+ * Inputs: finite bounded arrays, explicit geometry, numeric policies, and typed report sinks.
+ * Effects: mutates caller-owned numeric outputs and proof facts only.
+ * Failure: invalid geometry, non-finite policy violations, or backend refusal publish no capability. */
 #include "src/graph/private.h"
+
+static const double attention_pi =
+    3.14159265358979323846264338327950288;
+
+// Purpose: Return the admitted rms norm fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+int yvex_attention_rms_norm(float *values,
+                                    unsigned long long count,
+                                    const float *weights,
+                                    double epsilon)
+{
+    unsigned long long i;
+    double mean = 0.0;
+    double inv;
+
+    if (!values || !weights || count == 0ull || !isfinite(epsilon) ||
+        epsilon <= 0.0)
+        return 0;
+    for (i = 0ull; i < count; ++i) {
+        double v = values[i];
+        if (!isfinite(v) || !isfinite(weights[i])) return 0;
+        mean += v * v;
+    }
+    mean /= (double)count;
+    inv = 1.0 / sqrt(mean + epsilon);
+    if (!isfinite(inv)) return 0;
+    for (i = 0ull; i < count; ++i) {
+        double v = (double)values[i] * inv * (double)weights[i];
+        if (!isfinite(v)) return 0;
+        values[i] = (float)v;
+    }
+    return 1;
+}
+
+// Purpose: Return the admitted unit rms norm fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
+int yvex_attention_unit_rms_norm(float *values,
+                                         unsigned long long count,
+                                         double epsilon)
+{
+    unsigned long long i;
+    double mean = 0.0;
+    double inverse;
+
+    if (!values || count == 0ull || !isfinite(epsilon) || epsilon <= 0.0)
+        return 0;
+    for (i = 0ull; i < count; ++i) {
+        double value = values[i];
+        if (!isfinite(value)) return 0;
+        mean += value * value;
+    }
+    inverse = 1.0 / sqrt(mean / (double)count + epsilon);
+    if (!isfinite(inverse)) return 0;
+    for (i = 0ull; i < count; ++i) {
+        double value = (double)values[i] * inverse;
+        if (!isfinite(value)) return 0;
+        values[i] = (float)value;
+    }
+    return 1;
+}
+
+// Purpose: Implement the graph-local yarn frequency semantic operation.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+static double attention_yarn_frequency(
+    const yvex_attention_position_policy *position,
+    unsigned long long pair,
+    unsigned long long rope_dims)
+{
+    double exponent;
+    double frequency;
+
+    if (!position || rope_dims < 2ull || position->theta <= 1ull) return 0.0;
+    exponent = (double)(pair * 2ull) / (double)rope_dims;
+    frequency = 1.0 / pow((double)position->theta, exponent);
+    if (position->original_context && position->scaling_factor) {
+        double denominator = 2.0 * log((double)position->theta);
+        double low_dim = (double)rope_dims *
+            log((double)position->original_context /
+                ((double)position->beta_fast * 2.0 * attention_pi)) /
+            denominator;
+        double high_dim = (double)rope_dims *
+            log((double)position->original_context /
+                ((double)position->beta_slow * 2.0 * attention_pi)) /
+            denominator;
+        double low = floor(low_dim);
+        double high = ceil(high_dim);
+        double lane = (double)pair;
+        double ramp;
+        double smooth;
+
+        if (low < 0.0) low = 0.0;
+        if (high > (double)rope_dims - 1.0)
+            high = (double)rope_dims - 1.0;
+        if (low == high) high += 0.001;
+        ramp = (lane - low) / (high - low);
+        if (ramp < 0.0) ramp = 0.0;
+        if (ramp > 1.0) ramp = 1.0;
+        smooth = 1.0 - ramp;
+        frequency = frequency / (double)position->scaling_factor *
+                        (1.0 - smooth) +
+                    frequency * smooth;
+    }
+    return frequency;
+}
+
+// Purpose: Return the admitted rope apply fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
+int yvex_attention_rope_apply(
+    float *values,
+    unsigned long long count,
+    unsigned long long rope_dims,
+    unsigned long long token_position,
+    const yvex_attention_position_policy *position,
+    int inverse)
+{
+    unsigned long long start;
+    unsigned long long i;
+
+    if (!values || count == 0ull || rope_dims < 2ull || rope_dims > count ||
+        !position || position->theta <= 1ull)
+        return 0;
+    if (rope_dims & 1ull) rope_dims--;
+    start = count - rope_dims;
+    for (i = 0ull; i < rope_dims; i += 2ull) {
+        double frequency = attention_yarn_frequency(position, i / 2ull,
+                                                    rope_dims);
+        double angle = (double)token_position * frequency;
+        double c = cos(angle);
+        double s = inverse ? -sin(angle) : sin(angle);
+        double x = values[start + i];
+        double y = values[start + i + 1ull];
+        if (!isfinite(x) || !isfinite(y) || !isfinite(c) || !isfinite(s))
+            return 0;
+        values[start + i] = (float)(x * c - y * s);
+        values[start + i + 1ull] = (float)(x * s + y * c);
+    }
+    return 1;
+}
 
 typedef struct {
     float score;
@@ -31,6 +167,7 @@ typedef struct {
     unsigned long long index;
 } attention_topk_candidate;
 
+// Purpose: Return the admitted next power of two fact without transferring ownership.
 static int attention_next_power_of_two(unsigned long long value,
                                        unsigned long long *out)
 {
@@ -45,12 +182,14 @@ static int attention_next_power_of_two(unsigned long long value,
     return 1;
 }
 
+// Purpose: Apply the checked graph-local score equal invariant.
 static int attention_score_equal(float left, float right)
 {
     if (left == 0.0f && right == 0.0f) return 1;
     return left == right;
 }
 
+// Purpose: Implement the graph-local candidate before semantic operation.
 static int attention_candidate_before(const attention_topk_candidate *left,
                                       const attention_topk_candidate *right)
 {
@@ -59,6 +198,7 @@ static int attention_candidate_before(const attention_topk_candidate *left,
     return left->ordinal < right->ordinal;
 }
 
+// Purpose: Implement the graph-local candidate ordinal compare semantic operation.
 static int attention_candidate_ordinal_compare(const void *left,
                                                const void *right)
 {
@@ -72,6 +212,7 @@ static int attention_candidate_ordinal_compare(const void *left,
     return 0;
 }
 
+// Purpose: Implement the graph-local candidate rank compare semantic operation.
 static int attention_candidate_rank_compare(const void *left,
                                             const void *right)
 {
@@ -85,6 +226,7 @@ static int attention_candidate_rank_compare(const void *left,
     return 0;
 }
 
+// Purpose: Return the admitted power of two ceil fact without transferring ownership.
 static float attention_power_of_two_ceil(float value)
 {
     int exponent;
@@ -96,8 +238,12 @@ static float attention_power_of_two_ceil(float value)
     return ldexpf(1.0f, exponent - 1);
 }
 
-/* Contract: production CPU FHT over the final logical row; scratch is bounded
- * to the padded power-of-two row and no result is published on failure. */
+// Purpose: Return the admitted hadamard cpu fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
 int yvex_attention_hadamard_cpu(
     const float *input,
     unsigned long long length,
@@ -116,7 +262,7 @@ int yvex_attention_hadamard_cpu(
         !attention_next_power_of_two(length, &padded_length)) {
         return yvex_attention_reject(
             failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
-            YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
+            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
             0ull, err, YVEX_ERR_INVALID_ARG,
             "Hadamard CPU requires non-empty input and output");
     }
@@ -124,7 +270,7 @@ int yvex_attention_hadamard_cpu(
     if (!scratch)
         return yvex_attention_reject(
             failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
-            YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
+            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
             padded_length, 0ull, err, YVEX_ERR_NOMEM,
             "Hadamard CPU scratch allocation failed");
     for (i = 0ull; i < length; ++i) {
@@ -132,7 +278,7 @@ int yvex_attention_hadamard_cpu(
             free(scratch);
             return yvex_attention_reject(
                 failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
-                YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
+                YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
                 0ull, err, YVEX_ERR_FORMAT,
                 "Hadamard CPU refuses non-finite input");
         }
@@ -157,8 +303,17 @@ int yvex_attention_hadamard_cpu(
     return YVEX_OK;
 }
 
-/* Contract: deterministic YVEX sparse top-k order; refuses non-finite scores
- * and duplicate ordinals before publishing selection. */
+/* Purpose: select the canonical sparse candidates by score and ordinal.
+ * Inputs: finite scores, unique ordinals, bounded k, and writable result facts.
+ * Effects: allocates bounded sorting scratch and publishes only a complete selection.
+ * Failure: invalid input, non-finite score, duplicate ordinal, or allocation refusal.
+ * Boundary: selection is a reusable numeric mechanism, not attention execution. */
+// Purpose: Return the admitted topk select fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
 int yvex_attention_topk_select(
     const float *scores,
     const unsigned long long *ordinals,
@@ -177,7 +332,7 @@ int yvex_attention_topk_select(
     if (!scores || !ordinals || !selected_indices || !selected_count) {
         return yvex_attention_reject(
             failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
-            YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
+            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
             0ull, err, YVEX_ERR_INVALID_ARG,
             "top-k selection requires scores, ordinals, and output");
     }
@@ -190,7 +345,7 @@ int yvex_attention_topk_select(
     if (!candidates)
         return yvex_attention_reject(
             failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
-            YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
+            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
             candidate_count, 0ull, err, YVEX_ERR_NOMEM,
             "top-k candidate allocation failed");
     for (i = 0ull; i < candidate_count; ++i) {
@@ -198,7 +353,7 @@ int yvex_attention_topk_select(
             free(candidates);
             return yvex_attention_reject(
                 failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
-                YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
+                YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
                 candidate_count, i, err, YVEX_ERR_FORMAT,
                 "top-k refuses non-finite score");
         }
@@ -213,7 +368,7 @@ int yvex_attention_topk_select(
             free(candidates);
             return yvex_attention_reject(
                 failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
-                YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
+                YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
                 candidate_count, i, err, YVEX_ERR_FORMAT,
                 "top-k refuses duplicate candidate ordinal");
         }
@@ -229,7 +384,12 @@ int yvex_attention_topk_select(
     return YVEX_OK;
 }
 
-unsigned char yvex_attention_ue8m0_encode_scale(float value)
+// Purpose: Return the admitted ue8m0 encode scale fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+static unsigned char attention_ue8m0_encode_scale(float value)
 {
     int exponent;
     float mantissa;
@@ -243,12 +403,22 @@ unsigned char yvex_attention_ue8m0_encode_scale(float value)
     return (unsigned char)exponent;
 }
 
-float yvex_attention_ue8m0_decode_scale(unsigned char code)
+// Purpose: Return the admitted ue8m0 decode scale fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+static float attention_ue8m0_decode_scale(unsigned char code)
 {
     if (code == 0u) return 0.0f;
     return ldexpf(1.0f, (int)code - 127);
 }
 
+// Purpose: Return the admitted fp8 e4m3fn encode fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 unsigned char yvex_attention_fp8_e4m3fn_encode(float value)
 {
     static const float finite_max = 448.0f;
@@ -271,6 +441,11 @@ unsigned char yvex_attention_fp8_e4m3fn_encode(float value)
     return best;
 }
 
+// Purpose: Return the admitted fp8 e4m3fn decode fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 float yvex_attention_fp8_e4m3fn_decode(unsigned char code)
 {
     unsigned char sign = (unsigned char)(code & 0x80u);
@@ -289,9 +464,12 @@ float yvex_attention_fp8_e4m3fn_decode(unsigned char code)
     return sign ? -value : value;
 }
 
-/* Contract: applies the pinned FP8 fake-quant policy used by act_quant(...,
- * scale_fmt, scale_dtype, inplace=True). The scale follows the local kernel:
- * max(abs(x), 1e-4) / 448 rounded up to a power-of-two when scale_fmt is set. */
+// Purpose: Return the admitted fp8 fake quant block fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
 int yvex_attention_fp8_fake_quant_block(
     const float *input,
     unsigned long long count,
@@ -308,7 +486,7 @@ int yvex_attention_fp8_fake_quant_block(
     if (!input || !dequantized || !codes || !scale_code || count == 0ull) {
         return yvex_attention_reject(
             failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
-            YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
+            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
             0ull, err, YVEX_ERR_INVALID_ARG,
             "FP8 fake quant requires input, output, code, and scale buffers");
     }
@@ -317,7 +495,7 @@ int yvex_attention_fp8_fake_quant_block(
         if (!isfinite(input[i])) {
             return yvex_attention_reject(
                 failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
-                YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
+                YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
                 count, i, err, YVEX_ERR_FORMAT,
                 "FP8 fake quant refuses non-finite activation");
         }
@@ -325,12 +503,12 @@ int yvex_attention_fp8_fake_quant_block(
         if (magnitude > amax) amax = magnitude;
     }
     scale = attention_power_of_two_ceil(amax / 448.0f);
-    *scale_code = yvex_attention_ue8m0_encode_scale(scale);
-    scale = yvex_attention_ue8m0_decode_scale(*scale_code);
+    *scale_code = attention_ue8m0_encode_scale(scale);
+    scale = attention_ue8m0_decode_scale(*scale_code);
     if (!isfinite(scale) || scale <= 0.0f) {
         return yvex_attention_reject(
             failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
-            YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
+            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
             count, 0ull, err, YVEX_ERR_FORMAT,
             "FP8 fake quant produced invalid UE8M0 scale");
     }
@@ -346,6 +524,11 @@ int yvex_attention_fp8_fake_quant_block(
     return YVEX_OK;
 }
 
+// Purpose: Return the admitted fp4 e2m1 encode fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 unsigned char yvex_attention_fp4_e2m1_encode(float value)
 {
     static const float thresholds[] = {
@@ -362,6 +545,11 @@ unsigned char yvex_attention_fp4_e2m1_encode(float value)
     return code;
 }
 
+// Purpose: Return the admitted fp4 e2m1 decode fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 float yvex_attention_fp4_e2m1_decode(unsigned char code)
 {
     static const float values[] = {
@@ -373,8 +561,12 @@ float yvex_attention_fp4_e2m1_decode(unsigned char code)
     return (code & 0x8u) ? -value : value;
 }
 
-/* Contract: applies the pinned runtime FP4 fake-quant block policy and
- * publishes dequantized activations only after every input is admitted. */
+// Purpose: Return the admitted fp4 fake quant block fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
 int yvex_attention_fp4_fake_quant_block(
     const float *input,
     unsigned long long count,
@@ -391,7 +583,7 @@ int yvex_attention_fp4_fake_quant_block(
     if (!input || !dequantized || !codes || !scale_code || count == 0ull) {
         return yvex_attention_reject(
             failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
-            YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
+            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
             0ull, err, YVEX_ERR_INVALID_ARG,
             "FP4 fake quant requires input, output, code, and scale buffers");
     }
@@ -401,7 +593,7 @@ int yvex_attention_fp4_fake_quant_block(
         if (!isfinite(input[i])) {
             return yvex_attention_reject(
                 failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
-                YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
+                YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
                 count, i, err, YVEX_ERR_FORMAT,
                 "FP4 fake quant refuses non-finite activation");
         }
@@ -411,13 +603,13 @@ int yvex_attention_fp4_fake_quant_block(
     if (amax < 6.0f * ldexpf(1.0f, -126)) {
         amax = 6.0f * ldexpf(1.0f, -126);
     }
-    *scale_code = yvex_attention_ue8m0_encode_scale(
+    *scale_code = attention_ue8m0_encode_scale(
         attention_power_of_two_ceil(amax / 6.0f));
-    scale = yvex_attention_ue8m0_decode_scale(*scale_code);
+    scale = attention_ue8m0_decode_scale(*scale_code);
     if (!isfinite(scale) || scale <= 0.0f) {
         return yvex_attention_reject(
             failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
-            YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
+            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
             count, 0ull, err, YVEX_ERR_FORMAT,
             "FP4 fake quant produced invalid UE8M0 scale");
     }

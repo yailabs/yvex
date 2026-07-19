@@ -16,8 +16,8 @@
 
 #include <yvex/api.h>
 
-#include "src/backend/cuda/qtype.h"
-#include "src/gguf/quant_numeric.h"
+#include "src/backend/cuda/private.h"
+#include <yvex/internal/quant_numeric.h>
 
 #include "tests/test.h"
 

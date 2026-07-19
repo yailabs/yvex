@@ -1,27 +1,898 @@
-/*
- * attention.c - generic attention protocol and state transaction owner.
- *
- * Owner:
- *   src/graph
- *
- * Owns:
- *   public status/failure names, identity-chain validation, checked helper
- *   primitives, state transactions, and the hard execution-support gate.
- *
- * Does not own:
- *   family scheduling, numerical execution, CUDA kernels, persistent KV,
- *   generation, CLI output, or release claims.
- *
- * Invariants:
- *   the execution gate covers only the complete attention equation; it never
- *   promotes persistent KV, transformer, prefill, decode, or generation.
- *
- * Boundary:
- *   scoped attention execution support is not persistent KV, transformer, or
- *   runtime-generation capability.
- */
+/* Owner: graph.attention protocol.
+ * Owns: history validation, rolling recurrence, segment selection, sparse top-k, and status names.
+ * Does not own: family scheduling, encoded reads, output projection, transactions, CUDA, or KV.
+ * Invariants: history is immutable and causal selection is deterministic.
+ * Boundary: protocol truth does not promote complete attention, persistent KV, or generation.
+ * Purpose: provide reusable state and selection mechanisms to graph-family recipes.
+ * Inputs: admitted layer plans, immutable history, positions, and bounded numeric views.
+ * Effects: mutates only caller-owned outputs and explicitly owned rolling state.
+ * Failure: typed validation or numeric refusal leaves capability flags unchanged. */
 #include "src/graph/private.h"
+// Purpose: Return the admitted segment row fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+const float *yvex_attention_segment_row(
+    const float *history,
+    unsigned long long history_count,
+    unsigned long long history_stride,
+    const float *current,
+    unsigned long long current_count,
+    unsigned long long current_stride,
+    unsigned long long index)
+{
+    if (index < history_count)
+        return history + index * history_stride;
+    index -= history_count;
+    if (index >= current_count) return NULL;
+    return current + index * current_stride;
+}
 
+// Purpose: Return the admitted segment position fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+unsigned long long yvex_attention_segment_position(
+    const unsigned long long *history,
+    unsigned long long history_count,
+    const unsigned long long *current,
+    unsigned long long current_count,
+    unsigned long long index)
+{
+    if (index < history_count) return history[index];
+    index -= history_count;
+    if (index >= current_count) return ULLONG_MAX;
+    return current[index];
+}
+
+// Purpose: Return the admitted csa select fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
+int yvex_attention_csa_select(
+    const yvex_attention_layer_plan *layer,
+    const yvex_attention_history_view *history,
+    const float *current_indexer,
+    unsigned long long current_indexer_count,
+    unsigned long long current_indexer_stride,
+    const unsigned long long *current_indexer_positions,
+    const float *index_query,
+    const float *index_weights,
+    unsigned long long query_position,
+    unsigned long long *selected,
+    unsigned long long *selected_count,
+    unsigned long long *valid_count,
+    yvex_attention_failure *failure,
+    yvex_error *err)
+{
+    unsigned long long total;
+    float *scores = NULL;
+    unsigned long long *ordinals = NULL;
+    unsigned long long *valid_indexes = NULL;
+    unsigned long long candidate;
+    unsigned long long valid = 0ull;
+    int rc;
+
+    if (selected_count) *selected_count = 0ull;
+    if (valid_count) *valid_count = 0ull;
+    if (!layer || !history || !index_query || !index_weights || !selected ||
+        !selected_count || !valid_count)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
+            layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER,
+            YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err, YVEX_ERR_INVALID_ARG,
+            "CSA selection requires history, query, weights, and outputs");
+    if (history->indexer_entry_count >
+        ULLONG_MAX - current_indexer_count)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, ULLONG_MAX,
+            history->indexer_entry_count, err, YVEX_ERR_BOUNDS,
+            "CSA candidate count overflowed");
+    total = history->indexer_entry_count + current_indexer_count;
+    if (!total) return YVEX_OK;
+    scores = (float *)yvex_attention_calloc_array(total, sizeof(*scores));
+    ordinals = (unsigned long long *)yvex_attention_calloc_array(
+        total, sizeof(*ordinals));
+    valid_indexes = (unsigned long long *)yvex_attention_calloc_array(
+        total, sizeof(*valid_indexes));
+    if (!scores || !ordinals || !valid_indexes) {
+        free(scores);
+        free(ordinals);
+        free(valid_indexes);
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, total, 0ull, err,
+            YVEX_ERR_NOMEM, "CSA selection scratch allocation failed");
+    }
+    for (candidate = 0ull; candidate < total; ++candidate) {
+        const float *key = yvex_attention_segment_row(
+            history->indexer_kv, history->indexer_entry_count,
+            history->indexer_kv_stride, current_indexer,
+            current_indexer_count, current_indexer_stride, candidate);
+        unsigned long long position = yvex_attention_segment_position(
+            history->indexer_positions, history->indexer_entry_count,
+            current_indexer_positions, current_indexer_count, candidate);
+        unsigned long long head;
+        double score = 0.0;
+
+        if (!key || position == ULLONG_MAX || position > query_position ||
+            position > ULLONG_MAX - layer->compression_ratio + 1ull ||
+            position + layer->compression_ratio - 1ull > query_position)
+            continue;
+        for (head = 0ull; head < layer->indexer_heads; ++head) {
+            const float *q = index_query +
+                             head * layer->indexer_head_dimension;
+            unsigned long long lane;
+            double dot = 0.0;
+            for (lane = 0ull; lane < layer->indexer_head_dimension; ++lane) {
+                if (!isfinite(q[lane]) || !isfinite(key[lane])) goto numeric;
+                dot += (double)q[lane] * (double)key[lane];
+            }
+            if (dot < 0.0) dot = 0.0;
+            if (!isfinite(index_weights[head])) goto numeric;
+            score += dot * (double)index_weights[head];
+        }
+        score *= 1.0 / sqrt((double)layer->indexer_head_dimension);
+        score *= 1.0 / sqrt((double)layer->indexer_heads);
+        if (!isfinite(score)) goto numeric;
+        scores[valid] = (float)score;
+        ordinals[valid] = position;
+        valid_indexes[valid] = candidate;
+        valid++;
+    }
+    if (valid) {
+        unsigned long long ranked_count = 0ull;
+        unsigned long long *ranked = (unsigned long long *)yvex_attention_calloc_array(
+            yvex_attention_min_u64(valid, layer->sparse_topk.k), sizeof(*ranked));
+        unsigned long long i;
+        if (!ranked) {
+            free(scores);
+            free(ordinals);
+            free(valid_indexes);
+            return yvex_attention_reject(
+                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
+                layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, valid, 0ull,
+                err, YVEX_ERR_NOMEM,
+                "CSA ranked-selection scratch allocation failed");
+        }
+        rc = yvex_attention_topk_select(
+            scores, ordinals, valid, layer->sparse_topk.k, ranked,
+            &ranked_count, failure, err);
+        if (rc != YVEX_OK) {
+            free(ranked);
+            free(scores);
+            free(ordinals);
+            free(valid_indexes);
+            return rc;
+        }
+        for (i = 0ull; i < ranked_count; ++i)
+            selected[i] = valid_indexes[ranked[i]];
+        *selected_count = ranked_count;
+        free(ranked);
+    }
+    *valid_count = valid;
+    free(scores);
+    free(ordinals);
+    free(valid_indexes);
+    return YVEX_OK;
+
+numeric:
+    free(scores);
+    free(ordinals);
+    free(valid_indexes);
+    return yvex_attention_reject(
+        failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
+        layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, candidate, err,
+        YVEX_ERR_FORMAT, "CSA index scoring produced non-finite values");
+}
+
+// Purpose: Return the admitted softmax probe fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
+int yvex_attention_softmax_probe(const float *query,
+                                   unsigned long long query_count,
+                                   const float *kv,
+                                   unsigned long long kv_count,
+                                   unsigned long long local_entries,
+                                   unsigned long long compressed_entries,
+                                   yvex_attention_class class_id,
+                                   unsigned long long topk_limit,
+                                   yvex_attention_cpu_result *result,
+                                   yvex_attention_failure *failure,
+                                   yvex_error *err)
+{
+    unsigned long long dim = yvex_attention_min_u64(query_count, kv_count);
+    unsigned long long candidates = compressed_entries;
+    unsigned long long selected = compressed_entries;
+    float *candidate_scores = NULL;
+    unsigned long long *candidate_ordinals = NULL;
+    unsigned long long *selected_indices = NULL;
+    unsigned long long entries;
+    unsigned long long i;
+    unsigned long long d;
+    double max_score = -HUGE_VAL;
+    double sum = 0.0;
+    double output = 0.0;
+    double scale;
+
+    if (!query || !kv || !result || dim == 0ull || local_entries == 0ull)
+        return 0;
+    if (class_id == YVEX_ATTENTION_CLASS_CSA) {
+        if (topk_limit == 0ull) topk_limit = 1ull;
+        if (candidates <= topk_limit) candidates = topk_limit + 8ull;
+        candidate_scores = (float *)yvex_attention_calloc_array(
+            candidates, sizeof(*candidate_scores));
+        candidate_ordinals = (unsigned long long *)yvex_attention_calloc_array(
+            candidates, sizeof(*candidate_ordinals));
+        selected_indices = (unsigned long long *)yvex_attention_calloc_array(
+            topk_limit, sizeof(*selected_indices));
+        if (!candidate_scores || !candidate_ordinals || !selected_indices)
+            goto cleanup_fail;
+        scale = 1.0 / sqrt((double)dim);
+        for (i = 0ull; i < candidates; ++i) {
+            double score = 0.0;
+            double history_scale = 1.0 + (double)(i % 11ull) / 32.0;
+            for (d = 0ull; d < dim; ++d)
+                score += (double)query[d] * (double)kv[d] * history_scale;
+            score *= scale;
+            if (!isfinite(score)) goto cleanup_fail;
+            candidate_scores[i] = (float)score;
+            candidate_ordinals[i] = i;
+        }
+        if (yvex_attention_topk_select(
+                candidate_scores, candidate_ordinals, candidates, topk_limit,
+                selected_indices, &selected, failure, err) != YVEX_OK)
+            goto cleanup_fail;
+    } else if (class_id == YVEX_ATTENTION_CLASS_SWA) {
+        candidates = 0ull;
+        selected = 0ull;
+    }
+    entries = local_entries + selected;
+    if (entries == 0ull) return 0;
+    scale = 1.0 / sqrt((double)dim);
+    for (i = 0ull; i < entries; ++i) {
+        double score = 0.0;
+        double history_scale = 1.0 + (double)(i % 11ull) / 32.0;
+        for (d = 0ull; d < dim; ++d)
+            score += (double)query[d] * (double)kv[d] * history_scale;
+        score *= scale;
+        if (!isfinite(score)) return 0;
+        if (score > max_score) max_score = score;
+    }
+    for (i = 0ull; i < entries; ++i) {
+        double score = 0.0;
+        double history_scale = 1.0 + (double)(i % 11ull) / 32.0;
+        double probability;
+        for (d = 0ull; d < dim; ++d)
+            score += (double)query[d] * (double)kv[d] * history_scale;
+        probability = exp((score * scale) - max_score);
+        if (!isfinite(probability)) return 0;
+        sum += probability;
+        output += probability * history_scale;
+    }
+    if (!isfinite(sum) || sum <= 0.0 || !isfinite(output)) return 0;
+    result->topk_candidates = candidates;
+    result->topk_selected = selected;
+    result->local_entries = local_entries;
+    result->compressed_entries = compressed_entries;
+    result->deduplicated_entries = entries;
+    result->attention_checksum = output / sum;
+    result->output_checksum = result->attention_checksum;
+    free(candidate_scores);
+    free(candidate_ordinals);
+    free(selected_indices);
+    return 1;
+
+cleanup_fail:
+    free(candidate_scores);
+    free(candidate_ordinals);
+    free(selected_indices);
+    return 0;
+}
+
+// Purpose: Return the admitted rolling geometry fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+int yvex_attention_rolling_geometry(
+    const yvex_attention_layer_plan *layer,
+    yvex_attention_rolling_kind kind,
+    unsigned long long *ratio,
+    unsigned long long *head_dim,
+    unsigned long long *state_width,
+    unsigned long long *state_slots,
+    int *overlap,
+    int *rotated)
+{
+    unsigned long long coeff;
+
+    if (!layer || !ratio || !head_dim || !state_width || !state_slots ||
+        !overlap || !rotated || layer->compression_ratio == 0ull)
+        return 0;
+    if (kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_MAIN) {
+        *ratio = layer->compression_ratio;
+        *head_dim = layer->head_dimension;
+        *overlap =
+            layer->attention_class == YVEX_ATTENTION_CLASS_CSA ? 1 : 0;
+        *rotated = 0;
+    } else if (kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER) {
+        if (layer->attention_class != YVEX_ATTENTION_CLASS_CSA)
+            return 0;
+        *ratio = layer->compression_ratio;
+        *head_dim = layer->indexer_head_dimension;
+        *overlap = 1;
+        *rotated = 1;
+    } else {
+        return 0;
+    }
+    coeff = *overlap ? 2ull : 1ull;
+    if (!yvex_core_u64_mul(*head_dim, coeff, state_width) ||
+        !yvex_core_u64_mul(*ratio, coeff, state_slots))
+        return 0;
+    return *ratio != 0ull && *head_dim != 0ull;
+}
+
+// Purpose: Initialize rolling active values are finite to its canonical fail-closed state.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
+static int attention_rolling_active_values_are_finite(
+    const float *kv_state,
+    const float *score_state,
+    unsigned long long kv_stride,
+    unsigned long long score_stride,
+    unsigned long long head_dim,
+    unsigned long long ratio,
+    unsigned long long previous_fill,
+    unsigned long long current_fill,
+    int overlap)
+{
+    unsigned long long slot;
+    unsigned long long lane;
+
+    if (!kv_state || !score_state) return 0;
+    for (slot = 0ull; overlap && slot < previous_fill; ++slot) {
+        for (lane = 0ull; lane < head_dim; ++lane) {
+            if (!isfinite(kv_state[slot * kv_stride + lane]) ||
+                !isfinite(score_state[slot * score_stride + lane]))
+                return 0;
+        }
+    }
+    for (slot = 0ull; slot < current_fill; ++slot) {
+        unsigned long long base = overlap ? ratio + slot : slot;
+        unsigned long long lane_offset = overlap ? head_dim : 0ull;
+        for (lane = 0ull; lane < head_dim; ++lane) {
+            if (!isfinite(kv_state[base * kv_stride + lane + lane_offset]) ||
+                !isfinite(score_state[base * score_stride + lane + lane_offset]))
+                return 0;
+        }
+    }
+    return 1;
+}
+
+// Purpose: Return the admitted rolling state validate fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
+int yvex_attention_rolling_state_validate(
+    const yvex_attention_layer_plan *layer,
+    const yvex_attention_rolling_state_view *state,
+    yvex_attention_rolling_kind kind,
+    yvex_attention_failure *failure,
+    yvex_error *err)
+{
+    unsigned long long ratio;
+    unsigned long long head_dim;
+    unsigned long long state_width;
+    unsigned long long state_slots;
+    unsigned long long required_extent;
+    int overlap;
+    int rotated;
+
+    if (!layer || !state || !state->present)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER,
+            YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
+            YVEX_ERR_INVALID_ARG,
+            "DeepSeek attention rolling state is missing");
+    if (!yvex_attention_rolling_geometry(layer, kind, &ratio, &head_dim,
+                                    &state_width, &state_slots, &overlap,
+                                    &rotated))
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
+            YVEX_ERR_UNSUPPORTED,
+            "DeepSeek attention rolling state is not used by this class");
+    if (state->schema_version !=
+            YVEX_DEEPSEEK_ATTENTION_ROLLING_STATE_SCHEMA_V1 ||
+        state->kind != kind || state->attention_class != layer->attention_class ||
+        state->layer_index != layer->layer_index || state->ratio != ratio ||
+        state->head_dimension != head_dim || state->state_width != state_width ||
+        state->state_slots != state_slots || state->overlap != overlap ||
+        state->rotated != rotated)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, state_width,
+            state->state_width, err, YVEX_ERR_FORMAT,
+            "DeepSeek attention rolling state identity or geometry mismatch");
+    if (state->cursor >= ratio || state->previous_fill > ratio ||
+        state->current_fill > ratio || (!overlap && state->previous_fill))
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, ratio,
+            state->cursor, err, YVEX_ERR_BOUNDS,
+            "DeepSeek attention rolling state cursor or fill is invalid");
+    if (state->kv_state_stride < state_width ||
+        state->score_state_stride < state_width || !state->kv_state ||
+        !state->score_state)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, state_width,
+            state->kv_state_stride, err, YVEX_ERR_FORMAT,
+            "DeepSeek attention rolling state storage is incomplete");
+    if (!yvex_core_u64_mul(state_slots, state->kv_state_stride,
+                                   &required_extent) ||
+        state->kv_state_extent < required_extent ||
+        !yvex_core_u64_mul(state_slots, state->score_state_stride,
+                                   &required_extent) ||
+        state->score_state_extent < required_extent)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, state_slots,
+            state->kv_state_extent, err, YVEX_ERR_BOUNDS,
+            "DeepSeek attention rolling state extent is too small");
+    if (!attention_rolling_active_values_are_finite(
+            state->kv_state, state->score_state, state->kv_state_stride,
+            state->score_state_stride, head_dim, ratio, state->previous_fill,
+            state->current_fill, overlap))
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
+            YVEX_ERR_FORMAT,
+            "DeepSeek attention rolling state contains non-finite active values");
+    yvex_error_clear(err);
+    if (failure) memset(failure, 0, sizeof(*failure));
+    return YVEX_OK;
+}
+
+// Purpose: Apply the checked graph-local rolling copy state invariant.
+
+static void attention_rolling_copy_state(
+    const yvex_attention_rolling_state_view *before,
+    yvex_attention_rolling_state_output *after)
+{
+    unsigned long long slot;
+
+    for (slot = 0ull; slot < before->state_slots; ++slot) {
+        memcpy(after->kv_state + slot * after->kv_state_stride,
+               before->kv_state + slot * before->kv_state_stride,
+               (size_t)(before->state_width * sizeof(float)));
+        memcpy(after->score_state + slot * after->score_state_stride,
+               before->score_state + slot * before->score_state_stride,
+               (size_t)(before->state_width * sizeof(float)));
+    }
+}
+
+// Purpose: Implement the graph-local rolling emit semantic operation.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
+static int attention_rolling_emit(
+    const yvex_attention_rolling_state_output *state,
+    unsigned long long head_dim,
+    unsigned long long ratio,
+    int overlap,
+    float *compressed_out,
+    unsigned long long compressed_out_count)
+{
+    unsigned long long lane;
+    unsigned long long slot;
+
+    if (!state || !compressed_out || compressed_out_count < head_dim)
+        return 0;
+    for (lane = 0ull; lane < head_dim; ++lane) {
+        double max_score = -HUGE_VAL;
+        double denom = 0.0;
+        double value = 0.0;
+        for (slot = 0ull; slot < ratio; ++slot) {
+            double score = state->score_state[slot * state->score_state_stride +
+                                              lane];
+            if (overlap) {
+                double score2 =
+                    state->score_state[(ratio + slot) *
+                                           state->score_state_stride +
+                                       lane + head_dim];
+                if (score2 > max_score) max_score = score2;
+            }
+            if (score > max_score) max_score = score;
+        }
+        for (slot = 0ull; slot < ratio; ++slot) {
+            double score = state->score_state[slot * state->score_state_stride +
+                                              lane];
+            double weight = exp(score - max_score);
+            denom += weight;
+            value += weight *
+                     (double)state->kv_state[slot * state->kv_state_stride +
+                                             lane];
+            if (overlap) {
+                double score2 =
+                    state->score_state[(ratio + slot) *
+                                           state->score_state_stride +
+                                       lane + head_dim];
+                double weight2 = exp(score2 - max_score);
+                denom += weight2;
+                value +=
+                    weight2 *
+                    (double)state->kv_state[(ratio + slot) *
+                                                state->kv_state_stride +
+                                            lane + head_dim];
+            }
+        }
+        if (!isfinite(denom) || denom <= 0.0 || !isfinite(value)) return 0;
+        compressed_out[lane] = (float)(value / denom);
+    }
+    return 1;
+}
+
+// Purpose: Return the admitted rolling state step cpu fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+
+int yvex_attention_rolling_state_step_cpu(
+    const yvex_attention_layer_plan *layer,
+    const yvex_attention_rolling_state_view *before,
+    const float *token_kv,
+    const float *token_score,
+    const float *ape_row,
+    yvex_attention_rolling_state_output *after,
+    float *compressed_out,
+    unsigned long long compressed_out_count,
+    int *emitted,
+    yvex_attention_failure *failure,
+    yvex_error *err)
+{
+    unsigned long long ratio;
+    unsigned long long head_dim;
+    unsigned long long state_width;
+    unsigned long long state_slots;
+    unsigned long long required_extent;
+    unsigned long long slot;
+    unsigned long long lane;
+    float *after_kv_state;
+    float *after_score_state;
+    unsigned long long after_kv_stride;
+    unsigned long long after_score_stride;
+    unsigned long long after_kv_extent;
+    unsigned long long after_score_extent;
+    int overlap;
+    int rotated;
+    int should_emit;
+    int rc;
+
+    if (emitted) *emitted = 0;
+    rc = yvex_attention_rolling_state_validate(
+        layer, before, before ? before->kind : YVEX_DEEPSEEK_ATTENTION_ROLLING_NONE,
+        failure, err);
+    if (rc != YVEX_OK) return rc;
+    if (!token_kv || !token_score || !ape_row || !after)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
+            YVEX_ERR_INVALID_ARG,
+            "DeepSeek attention rolling transition requires token vectors and output state");
+    if (before->next_token_position == ULLONG_MAX)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, ULLONG_MAX,
+            before->next_token_position, err, YVEX_ERR_BOUNDS,
+            "DeepSeek attention rolling token position would overflow");
+    if (!yvex_attention_rolling_geometry(
+            layer, before->kind, &ratio, &head_dim,
+                                    &state_width, &state_slots, &overlap,
+                                    &rotated))
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
+            YVEX_ERR_UNSUPPORTED,
+            "DeepSeek attention rolling transition lacks geometry");
+    if (!after->kv_state || !after->score_state ||
+        after->kv_state_stride < state_width ||
+        after->score_state_stride < state_width ||
+        !yvex_core_u64_mul(state_slots, after->kv_state_stride,
+                                   &required_extent) ||
+        after->kv_state_extent < required_extent ||
+        !yvex_core_u64_mul(state_slots, after->score_state_stride,
+                                   &required_extent) ||
+        after->score_state_extent < required_extent)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, state_width,
+            after ? after->kv_state_stride : 0ull, err, YVEX_ERR_FORMAT,
+            "DeepSeek attention rolling output storage is incomplete");
+    if (before->cursor != (before->next_token_position % ratio))
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+            before->next_token_position % ratio, before->cursor, err,
+            YVEX_ERR_STATE,
+            "DeepSeek attention rolling cursor is stale for token position");
+    after_kv_state = after->kv_state;
+    after_score_state = after->score_state;
+    after_kv_stride = after->kv_state_stride;
+    after_score_stride = after->score_state_stride;
+    after_kv_extent = after->kv_state_extent;
+    after_score_extent = after->score_state_extent;
+    for (lane = 0ull; lane < state_width; ++lane) {
+        if (!isfinite(token_kv[lane]) || !isfinite(token_score[lane]) ||
+            !isfinite(ape_row[lane]))
+            return yvex_attention_reject(
+                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
+                layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, lane, err,
+                YVEX_ERR_FORMAT,
+                "DeepSeek attention rolling transition input is non-finite");
+    }
+    *after = (yvex_attention_rolling_state_output){
+        .present = 1,
+        .schema_version = YVEX_DEEPSEEK_ATTENTION_ROLLING_STATE_SCHEMA_V1,
+        .kind = before->kind,
+        .attention_class = before->attention_class,
+        .layer_index = before->layer_index,
+        .next_token_position = before->next_token_position + 1ull,
+        .ratio = ratio,
+        .head_dimension = head_dim,
+        .state_width = state_width,
+        .state_slots = state_slots,
+        .previous_fill = before->previous_fill,
+        .current_fill = before->current_fill,
+        .cursor = (before->cursor + 1ull) % ratio,
+        .kv_state_stride = after_kv_stride,
+        .score_state_stride = after_score_stride,
+        .kv_state_extent = after_kv_extent,
+        .score_state_extent = after_score_extent,
+        .kv_state = after_kv_state,
+        .score_state = after_score_state,
+        .overlap = overlap,
+        .rotated = rotated,
+    };
+    memcpy(after->attention_plan_identity, before->attention_plan_identity,
+           sizeof(after->attention_plan_identity));
+    attention_rolling_copy_state(before, after);
+    slot = overlap ? ratio + before->cursor : before->cursor;
+    for (lane = 0ull; lane < state_width; ++lane) {
+        after->kv_state[slot * after->kv_state_stride + lane] = token_kv[lane];
+        after->score_state[slot * after->score_state_stride + lane] =
+            token_score[lane] + ape_row[lane];
+    }
+    if (after->current_fill < before->cursor + 1ull)
+        after->current_fill = before->cursor + 1ull;
+    should_emit = ((before->next_token_position + 1ull) % ratio) == 0ull;
+    if (should_emit) {
+        if (!attention_rolling_emit(after, head_dim, ratio, overlap,
+                                    compressed_out, compressed_out_count))
+            return yvex_attention_reject(
+                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
+                layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, head_dim,
+                compressed_out_count, err, YVEX_ERR_FORMAT,
+                "DeepSeek attention rolling compression emitted invalid values");
+        if (overlap) {
+            for (slot = 0ull; slot < ratio; ++slot) {
+                memcpy(after->kv_state + slot * after->kv_state_stride,
+                       after->kv_state + (ratio + slot) * after->kv_state_stride,
+                       (size_t)(state_width * sizeof(float)));
+                memcpy(after->score_state + slot * after->score_state_stride,
+                       after->score_state +
+                           (ratio + slot) * after->score_state_stride,
+                       (size_t)(state_width * sizeof(float)));
+            }
+            after->previous_fill = ratio;
+        } else {
+            after->previous_fill = 0ull;
+        }
+        after->current_fill = 0ull;
+        after->cursor = 0ull;
+        if (emitted) *emitted = 1;
+    }
+    yvex_error_clear(err);
+    if (failure) memset(failure, 0, sizeof(*failure));
+    return YVEX_OK;
+}
+
+// Purpose: Return the admitted history validate fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
+int yvex_attention_history_validate(
+    const yvex_attention_layer_plan *layer,
+    const yvex_attention_history_view *history,
+    yvex_attention_failure *failure,
+    yvex_error *err)
+{
+    if (!layer || !history)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
+            layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER,
+            YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
+            YVEX_ERR_INVALID_ARG,
+            "DeepSeek attention history validation requires layer and history");
+    if (!history->immutable)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
+            YVEX_ERR_STATE,
+            "DeepSeek attention history view must be immutable");
+    if (history->local_tail_count > layer->sliding_window)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+            layer->sliding_window, history->local_tail_count, err,
+            YVEX_ERR_BOUNDS,
+            "DeepSeek attention history exceeds sliding-window boundary");
+    if (history->local_tail_count &&
+        (!history->local_kv || !history->local_positions ||
+         history->local_kv_stride < layer->head_dimension))
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+            layer->head_dimension, history->local_kv_stride, err,
+            YVEX_ERR_FORMAT,
+            "DeepSeek attention local history lacks raw KV storage");
+    if (history->compressed_entry_count &&
+        (!history->compressed_kv || !history->compressed_positions ||
+         history->compressed_kv_stride < layer->head_dimension))
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+            layer->head_dimension, history->compressed_kv_stride, err,
+            YVEX_ERR_FORMAT,
+            "DeepSeek attention compressed history lacks KV storage");
+    if (history->indexer_entry_count &&
+        (!history->indexer_kv || !history->indexer_positions ||
+         history->indexer_kv_stride < layer->indexer_head_dimension))
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+            layer->indexer_head_dimension, history->indexer_kv_stride, err,
+            YVEX_ERR_FORMAT,
+            "DeepSeek attention indexer history lacks KV storage");
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
+        history->compressed_entry_count != history->indexer_entry_count)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+            history->compressed_entry_count, history->indexer_entry_count,
+            err, YVEX_ERR_FORMAT,
+            "CSA compressed and indexer history cardinalities differ");
+    {
+        unsigned long long i;
+        for (i = 0ull; i < history->local_tail_count; ++i) {
+            if (history->local_positions[i] >= history->token_count ||
+                (i && history->local_positions[i - 1ull] >=
+                          history->local_positions[i]))
+                return yvex_attention_reject(
+                    failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+                    layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+                    history->token_count, history->local_positions[i], err,
+                    YVEX_ERR_FORMAT,
+                    "local history positions are stale or not strictly ordered");
+        }
+        for (i = 0ull; i < history->compressed_entry_count; ++i) {
+            if (history->compressed_positions[i] >= history->token_count ||
+                (i && history->compressed_positions[i - 1ull] >=
+                          history->compressed_positions[i]))
+                return yvex_attention_reject(
+                    failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+                    layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+                    history->token_count,
+                    history->compressed_positions[i], err, YVEX_ERR_FORMAT,
+                    "compressed history positions are stale or not strictly ordered");
+        }
+        for (i = 0ull; i < history->indexer_entry_count; ++i) {
+            if (history->indexer_positions[i] >= history->token_count ||
+                (i && history->indexer_positions[i - 1ull] >=
+                          history->indexer_positions[i]) ||
+                (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
+                 history->indexer_positions[i] !=
+                     history->compressed_positions[i]))
+                return yvex_attention_reject(
+                    failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+                    layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+                    history->token_count, history->indexer_positions[i], err,
+                    YVEX_ERR_FORMAT,
+                    "indexer history positions do not bind compressed history");
+        }
+    }
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_SWA &&
+        (history->compressed_entry_count || history->indexer_entry_count))
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 0ull,
+            history->compressed_entry_count + history->indexer_entry_count,
+            err, YVEX_ERR_FORMAT,
+            "SWA history may not carry compressed or indexer entries");
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_HCA &&
+        history->indexer_entry_count)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 0ull,
+            history->indexer_entry_count, err, YVEX_ERR_FORMAT,
+            "HCA history may not carry CSA indexer entries");
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_SWA) {
+        if (history->main_rolling_state.present ||
+            history->indexer_rolling_state.present)
+            return yvex_attention_reject(
+                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+                layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 0ull, 1ull,
+                err, YVEX_ERR_FORMAT,
+                "SWA history may not carry compressor rolling state");
+    } else {
+        int rc = yvex_attention_rolling_state_validate(
+            layer, &history->main_rolling_state,
+            YVEX_DEEPSEEK_ATTENTION_ROLLING_MAIN, failure, err);
+        if (rc != YVEX_OK) return rc;
+        if (history->main_rolling_state.next_token_position !=
+            history->token_count)
+            return yvex_attention_reject(
+                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+                layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+                history->token_count,
+                history->main_rolling_state.next_token_position, err,
+                YVEX_ERR_STATE,
+                "main rolling state token position is stale");
+        if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
+            rc = yvex_attention_rolling_state_validate(
+                layer, &history->indexer_rolling_state,
+                YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER, failure, err);
+            if (rc != YVEX_OK) return rc;
+            if (history->indexer_rolling_state.next_token_position !=
+                history->token_count)
+                return yvex_attention_reject(
+                    failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+                    layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+                    history->token_count,
+                    history->indexer_rolling_state.next_token_position, err,
+                    YVEX_ERR_STATE,
+                    "indexer rolling state token position is stale");
+        } else if (history->indexer_rolling_state.present) {
+            return yvex_attention_reject(
+                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
+                layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 0ull, 1ull,
+                err, YVEX_ERR_FORMAT,
+                "HCA history may not carry indexer rolling state");
+        }
+    }
+    yvex_error_clear(err);
+    if (failure) memset(failure, 0, sizeof(*failure));
+    return YVEX_OK;
+}
+
+/* Execution composes admitted generic operations without owning their math. */
+
+#define YVEX_ATTENTION_PI 3.14159265358979323846264338327950288
+
+// Purpose: Project the stable textual ABI label for an attention lifecycle status.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 const char *yvex_attention_status_name(
     yvex_attention_status status)
 {
@@ -35,7 +906,11 @@ const char *yvex_attention_status_name(
     default: return "unknown";
     }
 }
-
+// Purpose: Project the stable textual ABI label for failure name.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 const char *yvex_attention_failure_name(
     yvex_attention_failure_code code)
 {
@@ -63,8 +938,12 @@ const char *yvex_attention_failure_name(
     default: return "unknown";
     }
 }
+// Purpose: Return the admitted execute supported fact without transferring ownership.
+// Inputs: typed caller-owned values accepted by the graph private ABI.
+// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
+// Failure: returns a typed refusal or neutral result without partial capability publication.
+// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 
-/* Contract: exposes the reopened execution gate without allocating or executing. */
 int yvex_attention_execute_supported(const char **reason)
 {
     if (reason)
@@ -72,864 +951,27 @@ int yvex_attention_execute_supported(const char **reason)
     return 0;
 }
 
-/* Identity and validation primitives remain private to the graph owner. */
-
-#include "src/model/families.h"
-
-static void attention_failure_set(
-    yvex_attention_failure *failure,
-    yvex_attention_failure_code code,
-    const yvex_runtime_tensor_binding *binding,
-    unsigned long long layer_index,
-    yvex_tensor_role role,
-    unsigned long long expected,
-    unsigned long long actual,
-    const char *reason)
-{
-    if (!failure) return;
-    memset(failure, 0, sizeof(*failure));
-    failure->code = code;
-    failure->layer_index = layer_index;
-    failure->role = role;
-    failure->expected = expected;
-    failure->actual = actual;
-    failure->reason = reason;
-    if (binding && binding->binding)
-        (void)snprintf(failure->tensor_name, sizeof(failure->tensor_name),
-                       "%s", binding->binding->name);
-}
-
-/* Contract: records one typed refusal and leaves caller-owned outputs unset. */
-int yvex_attention_reject(yvex_attention_failure *failure,
-                            yvex_attention_failure_code code,
-                            const yvex_runtime_tensor_binding *binding,
-                            unsigned long long layer_index,
-                            yvex_tensor_role role,
-                            unsigned long long expected,
-                            unsigned long long actual,
-                            yvex_error *err,
-                            yvex_status err_code,
-                            const char *reason)
-{
-    attention_failure_set(failure, code, binding, layer_index, role, expected,
-                          actual, reason);
-    yvex_error_set(err, err_code, "yvex_deepseek_attention", reason);
-    return err_code;
-}
-
-int yvex_attention_hash_u64(yvex_sha256 *hash, unsigned long long value)
-{
-    unsigned char bytes[8];
-    unsigned int i;
-
-    for (i = 0u; i < 8u; ++i)
-        bytes[7u - i] = (unsigned char)((value >> (i * 8u)) & 0xffu);
-    return yvex_sha256_update(hash, bytes, sizeof(bytes));
-}
-
-int yvex_attention_hash_text(yvex_sha256 *hash, const char *text)
-{
-    return yvex_sha256_update(hash, text ? text : "", text ? strlen(text) : 0u);
-}
-
-
-int yvex_attention_checked_mul_u64(unsigned long long left,
-                              unsigned long long right,
-                              unsigned long long *out)
-{
-    if (!out || (left != 0ull && right > ULLONG_MAX / left)) return 0;
-    *out = left * right;
-    return 1;
-}
-
-/* Contract: adds two unsigned geometry values and refuses overflow. */
-int yvex_attention_checked_add_u64(unsigned long long left,
-                              unsigned long long right,
-                              unsigned long long *out)
-{
-    if (!out || left > ULLONG_MAX - right) return 0;
-    *out = left + right;
-    return 1;
-}
-
-int yvex_attention_checked_size(unsigned long long count,
-                                  unsigned long long width,
-                                  size_t *out)
-{
-    unsigned long long bytes;
-
-    if (!out || !yvex_attention_checked_mul_u64(count, width, &bytes) ||
-        bytes > (unsigned long long)SIZE_MAX)
-        return 0;
-    *out = (size_t)bytes;
-    return 1;
-}
-
-unsigned long long yvex_attention_min_u64(unsigned long long a,
-                                            unsigned long long b)
-{
-    return a < b ? a : b;
-}
-
-void *yvex_attention_calloc_array(unsigned long long count,
-                                    unsigned long long width)
-{
-    size_t bytes;
-
-    if (!yvex_attention_checked_size(count, width, &bytes)) return NULL;
-    return calloc(1u, bytes);
-}
-
-/* Contract: binds one execution call to the exact sealed logical, runtime,
- * materialization, and attention-plan identities before any payload read. */
-int yvex_attention_context_validate(
-    const yvex_attention_plan *plan,
-    const yvex_deepseek_v4_ir *ir,
-    const yvex_materialization_session *session,
-    const yvex_runtime_descriptor *descriptor,
-    yvex_attention_failure *failure,
+/* Purpose: refuse the retired controlled-layer fixture at the graph boundary.
+ * Inputs: optional fixture options and writable result/error facts.
+ * Effects: clears the result and publishes an explicit unsupported status.
+ * Failure: always returns the stable unsupported exit status.
+ * Boundary: historical fixtures are test-owned and never runtime evidence. */
+int yvex_graph_execute_layer_fixture(
+    const yvex_graph_layer_fixture_options *options,
+    yvex_graph_layer_fixture_result *out,
     yvex_error *err)
 {
-    const yvex_attention_summary *attention;
-    const yvex_runtime_descriptor_summary *runtime;
-    const yvex_materialization_summary *materialization;
-    char logical_identity[YVEX_TRANSFORM_IR_IDENTITY_CAP];
-
-    if (!plan || !ir || !session || !descriptor)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
-            YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
-            0ull, err, YVEX_ERR_INVALID_ARG,
-            "attention execution identity validation requires all owners");
-    attention = yvex_graph_lower_deepseek_v4()->plan_summary(plan);
-    runtime = yvex_runtime_descriptor_summary_get(descriptor);
-    materialization = yvex_materialization_session_summary(session);
-    if (!attention || !runtime || !materialization ||
-        !materialization->committed ||
-        !yvex_model_register_deepseek_v4()->transform.architecture_identity(ir, logical_identity))
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_DESCRIPTOR, NULL,
-            YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
-            0ull, err, YVEX_ERR_STATE,
-            "attention execution requires sealed identity-bearing owners");
-    if (strcmp(logical_identity, runtime->logical_model_identity) != 0 ||
-        strcmp(logical_identity, attention->logical_model_identity) != 0 ||
-        strcmp(runtime->runtime_numeric_identity,
-               attention->runtime_numeric_identity) != 0 ||
-        strcmp(runtime->runtime_descriptor_identity,
-               attention->runtime_descriptor_identity) != 0 ||
-        strcmp(materialization->plan_identity,
-               runtime->materialization_plan_identity) != 0 ||
-        strcmp(materialization->plan_identity,
-               attention->materialization_plan_identity) != 0)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_DESCRIPTOR, NULL,
-            YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
-            0ull, err, YVEX_ERR_STATE,
-            "attention execution refused a stale or mismatched identity chain");
-    return YVEX_OK;
-}
-
-/* The in-memory sink stages all components before an atomic commit. */
-
-static void attention_component_release(
-    yvex_attention_component_span *span)
-{
-    if (!span) return;
-    free(span->data);
-    memset(span, 0, sizeof(*span));
-}
-
-/* Contract: releases every staged component in one in-flight transaction. */
-static void attention_transaction_release_staging(
-    yvex_attention_state_transaction *transaction)
-{
-    unsigned int i;
-
-    if (!transaction) return;
-    for (i = 0u; i < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++i)
-        attention_component_release(&transaction->components[i]);
-}
-
-/* Contract: initializes one required F32 component with checked extents. */
-static int attention_component_prepare_f32(
-    yvex_attention_component_span *span,
-    yvex_attention_component_kind kind,
-    unsigned int rank,
-    unsigned long long dim0,
-    unsigned long long dim1,
-    unsigned long long stride,
-    unsigned long long position_start,
-    unsigned long long position_count)
-{
-    unsigned long long elements;
-    unsigned long long bytes;
-
-    if (!span || rank == 0u || rank > 4u || dim0 == 0ull ||
-        (rank > 1u && dim1 == 0ull) || stride < (rank > 1u ? dim1 : dim0))
-        return 0;
-    if (rank > 1u) {
-        if (!yvex_attention_checked_mul_u64(dim0, stride, &elements))
-            return 0;
-    } else {
-        elements = dim0;
+    (void)options;
+    if (out) {
+        memset(out, 0, sizeof(*out));
+        out->status = "fixture-retired";
+        out->graph_integrity_guard = "refused";
+        out->graph_execution_phase = "admission";
+        out->backend_status = "not-opened";
+        out->backend_op_status = "unsupported";
+        out->cleanup_status = "not-needed";
     }
-    if (!yvex_attention_checked_mul_u64(elements, sizeof(float), &bytes) ||
-        bytes > (unsigned long long)SIZE_MAX)
-        return 0;
-    memset(span, 0, sizeof(*span));
-    span->kind = kind;
-    span->storage = YVEX_DEEPSEEK_ATTENTION_COMPONENT_STORAGE_F32;
-    span->rank = rank;
-    span->dims[0] = dim0;
-    span->dims[1] = rank > 1u ? dim1 : 0ull;
-    span->stride = stride;
-    span->expected_elements = elements;
-    span->byte_extent = bytes;
-    span->position_start = position_start;
-    span->position_count = position_count;
-    span->required = 1;
-    return 1;
-}
-
-/* Contract: counts compressor emissions in one absolute token interval. */
-static int attention_emission_count(
-    unsigned long long token_position,
-    unsigned long long token_count,
-    unsigned long long ratio,
-    unsigned long long *out)
-{
-    unsigned long long i;
-    unsigned long long count = 0ull;
-
-    if (!out || ratio == 0ull) return 0;
-    for (i = 0ull; i < token_count; ++i) {
-        if (token_position > ULLONG_MAX - i - 1ull) return 0;
-        if (((token_position + i + 1ull) % ratio) == 0ull) {
-            if (count == ULLONG_MAX) return 0;
-            count++;
-        }
-    }
-    *out = count;
-    return 1;
-}
-
-/* Contract: allocates staging for each required component after preflight. */
-static int attention_transaction_allocate_staging(
-    yvex_attention_state_transaction *transaction,
-    yvex_attention_failure *failure,
-    yvex_error *err)
-{
-    unsigned int i;
-
-    for (i = 0u; i < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++i) {
-        yvex_attention_component_span *span =
-            &transaction->components[i];
-        if (!span->required) continue;
-        span->data = calloc(1u, (size_t)span->byte_extent);
-        if (!span->data) {
-            attention_transaction_release_staging(transaction);
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
-                transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-                span->byte_extent, 0ull, err, YVEX_ERR_NOMEM,
-                "DeepSeek attention state transaction staging allocation failed");
-        }
-    }
-    return YVEX_OK;
-}
-
-/* Contract: creates one semantic content identity for a committed delta. */
-static int attention_transaction_identity(
-    const yvex_attention_state_transaction *transaction,
-    char out[YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP])
-{
-    yvex_sha256 hash;
-    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
-    unsigned int i;
-
-    if (!transaction || !out) return 0;
-    yvex_sha256_init(&hash);
-    if (!yvex_attention_hash_text(&hash, "yvex.deepseek.attention.delta.v1") ||
-        !yvex_attention_hash_u64(&hash, transaction->layer_index) ||
-        !yvex_attention_hash_u64(&hash, transaction->attention_class) ||
-        !yvex_attention_hash_u64(&hash, transaction->token_position) ||
-        !yvex_attention_hash_u64(&hash, transaction->token_count) ||
-        !yvex_attention_hash_text(&hash, transaction->previous_state_identity))
-        return 0;
-    for (i = 0u; i < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++i) {
-        const yvex_attention_component_span *span =
-            &transaction->components[i];
-        if (!span->required) continue;
-        if (!yvex_attention_hash_u64(&hash, span->kind) ||
-            !yvex_attention_hash_u64(&hash, span->rank) ||
-            !yvex_attention_hash_u64(&hash, span->dims[0]) ||
-            !yvex_attention_hash_u64(&hash, span->dims[1]) ||
-            !yvex_attention_hash_u64(&hash, span->stride) ||
-            !yvex_attention_hash_u64(&hash, span->produced_elements) ||
-            !yvex_attention_hash_u64(&hash, span->byte_extent) ||
-            !yvex_sha256_update(&hash, span->data, (size_t)span->byte_extent))
-            return 0;
-    }
-    if (!yvex_sha256_final(&hash, digest)) return 0;
-    yvex_sha256_hex(digest, out);
-    return 1;
-}
-
-/* Contract: checks F32 component contents before publication. */
-static int attention_component_values_are_finite(
-    const yvex_attention_component_span *span)
-{
-    const float *values;
-    unsigned long long i;
-
-    if (!span || span->storage != YVEX_DEEPSEEK_ATTENTION_COMPONENT_STORAGE_F32 ||
-        !span->data)
-        return 0;
-    if (span->kind == YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_SCORE_STATE ||
-        span->kind == YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_SCORE_STATE)
-        return 1;
-    values = (const float *)span->data;
-    for (i = 0ull; i < span->expected_elements; ++i) {
-        if (!isfinite(values[i])) return 0;
-    }
-    return 1;
-}
-
-void yvex_attention_memory_sink_options_default(
-    yvex_attention_memory_sink_options *options)
-{
-    if (!options) return;
-    memset(options, 0, sizeof(*options));
-    options->fail_acquire_kind = YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT;
-    options->fail_seal_kind = YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT;
-}
-
-/* Contract: initializes one caller-owned memory sink with no publication. */
-int yvex_attention_memory_sink_init(
-    yvex_attention_memory_sink *sink,
-    const yvex_attention_memory_sink_options *options,
-    yvex_attention_failure *failure,
-    yvex_error *err)
-{
-    yvex_attention_memory_sink_options defaults;
-
-    if (!sink)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
-            YVEX_DEEPSEEK_V4_IR_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
-            0ull, err, YVEX_ERR_INVALID_ARG,
-            "DeepSeek attention memory sink requires caller storage");
-    yvex_attention_memory_sink_options_default(&defaults);
-    memset(sink, 0, sizeof(*sink));
-    sink->initialized = 1;
-    sink->options = options ? *options : defaults;
-    if (!options) sink->options = defaults;
-    yvex_error_clear(err);
-    if (failure) memset(failure, 0, sizeof(*failure));
-    return YVEX_OK;
-}
-
-void yvex_attention_memory_sink_release(
-    yvex_attention_memory_sink *sink)
-{
-    unsigned int i;
-
-    if (!sink) return;
-    for (i = 0u; i < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++i)
-        attention_component_release(&sink->committed[i]);
-    memset(sink, 0, sizeof(*sink));
-}
-
-/* Contract: preflights and begins one complete output/state transaction. */
-int yvex_attention_state_transaction_begin(
-    yvex_attention_memory_sink *sink,
-    const yvex_attention_layer_plan *layer,
-    const yvex_attention_history_view *history,
-    unsigned long long token_position,
-    unsigned long long token_count,
-    yvex_attention_state_transaction *transaction,
-    yvex_attention_failure *failure,
-    yvex_error *err)
-{
-    unsigned long long compressed_count = 0ull;
-    int rc;
-
-    if (transaction) memset(transaction, 0, sizeof(*transaction));
-    if (!sink || !sink->initialized || !layer || !history || !transaction ||
-        token_count == 0ull)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
-            layer ? layer->layer_index : YVEX_DEEPSEEK_V4_IR_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN, 1ull, token_count, err,
-            YVEX_ERR_INVALID_ARG,
-            "DeepSeek attention state transaction requires sink, layer, history, and tokens");
-    if (sink->options.fail_begin)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
-            YVEX_ERR_STATE,
-            "DeepSeek attention memory sink injected begin failure");
-    rc = yvex_graph_lower_deepseek_v4()->history_validate(layer, history, failure, err);
-    if (rc != YVEX_OK) return rc;
-    if (history->token_count != token_position)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
-            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, history->token_count,
-            token_position, err, YVEX_ERR_STATE,
-            "DeepSeek attention state transaction token position is not contiguous");
-    if (token_position > ULLONG_MAX - token_count)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, ULLONG_MAX,
-            token_position, err, YVEX_ERR_BOUNDS,
-            "DeepSeek attention state transaction token range overflows");
-    memset(transaction, 0, sizeof(*transaction));
-    transaction->status = YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN;
-    transaction->sink = sink;
-    transaction->layer_index = layer->layer_index;
-    transaction->attention_class = layer->attention_class;
-    transaction->token_position = token_position;
-    transaction->token_count = token_count;
-    (void)snprintf(transaction->previous_state_identity,
-                   sizeof(transaction->previous_state_identity), "%s",
-                   sink->has_committed ? sink->committed_identity : "initial");
-    if (!attention_component_prepare_f32(
-            &transaction->components[
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT],
-            YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT, 2u,
-            token_count, layer->hidden_dimension,
-            layer->hidden_dimension, token_position,
-            token_count) ||
-        !attention_component_prepare_f32(
-            &transaction->components[
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV],
-            YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV, 2u,
-            token_count, layer->head_dimension, layer->head_dimension,
-            token_position, token_count))
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, token_count, 0ull,
-            err, YVEX_ERR_BOUNDS,
-            "DeepSeek attention state transaction output extent overflowed");
-    if (layer->attention_class != YVEX_DEEPSEEK_V4_ATTENTION_SWA) {
-        const yvex_attention_rolling_state_view *main_state =
-            &history->main_rolling_state;
-        if (!attention_component_prepare_f32(
-                &transaction->components[
-                    YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_KV_STATE],
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_KV_STATE, 2u,
-                main_state->state_slots, main_state->state_width,
-                main_state->kv_state_stride, token_position, token_count) ||
-            !attention_component_prepare_f32(
-                &transaction->components[
-                    YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_SCORE_STATE],
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_SCORE_STATE, 2u,
-                main_state->state_slots, main_state->state_width,
-                main_state->score_state_stride, token_position, token_count))
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-                main_state->state_slots, 0ull, err, YVEX_ERR_BOUNDS,
-                "DeepSeek attention main rolling-state extent overflowed");
-        if (!attention_emission_count(token_position, token_count,
-                                      layer->compression_ratio,
-                                      &compressed_count))
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-                layer->compression_ratio, 0ull, err, YVEX_ERR_BOUNDS,
-                "DeepSeek attention compression emission count overflowed");
-        if (compressed_count &&
-            !attention_component_prepare_f32(
-                &transaction->components[
-                    YVEX_DEEPSEEK_ATTENTION_COMPONENT_COMPRESSED_MAIN_KV],
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_COMPRESSED_MAIN_KV, 2u,
-                compressed_count, layer->head_dimension, layer->head_dimension,
-                token_position, compressed_count))
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-                compressed_count, 0ull, err, YVEX_ERR_BOUNDS,
-                "DeepSeek attention compressed KV extent overflowed");
-    }
-    if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA) {
-        const yvex_attention_rolling_state_view *index_state =
-            &history->indexer_rolling_state;
-        if (!attention_component_prepare_f32(
-                &transaction->components[
-                    YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV_STATE],
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV_STATE, 2u,
-                index_state->state_slots, index_state->state_width,
-                index_state->kv_state_stride, token_position, token_count) ||
-            !attention_component_prepare_f32(
-                &transaction->components[
-                    YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_SCORE_STATE],
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_SCORE_STATE, 2u,
-                index_state->state_slots, index_state->state_width,
-                index_state->score_state_stride, token_position, token_count))
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-                index_state->state_slots, 0ull, err, YVEX_ERR_BOUNDS,
-                "DeepSeek attention indexer rolling-state extent overflowed");
-        if (compressed_count &&
-            !attention_component_prepare_f32(
-                &transaction->components[
-                    YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV],
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV, 2u,
-                compressed_count, layer->indexer_head_dimension,
-                layer->indexer_head_dimension, token_position,
-                compressed_count))
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-                compressed_count, 0ull, err, YVEX_ERR_BOUNDS,
-                "DeepSeek attention indexer KV extent overflowed");
-    }
-    rc = attention_transaction_allocate_staging(transaction, failure, err);
-    if (rc != YVEX_OK) return rc;
-    yvex_error_clear(err);
-    if (failure) memset(failure, 0, sizeof(*failure));
-    return YVEX_OK;
-}
-
-/* Contract: grants one writable staging span exactly once per transaction. */
-int yvex_attention_state_transaction_acquire(
-    yvex_attention_state_transaction *transaction,
-    yvex_attention_component_kind kind,
-    yvex_attention_component_span *out,
-    yvex_attention_failure *failure,
-    yvex_error *err)
-{
-    yvex_attention_component_span *span;
-
-    if (out) memset(out, 0, sizeof(*out));
-    if (!transaction ||
-        transaction->status != YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN ||
-        kind >= YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction ? transaction->layer_index
-                        : YVEX_DEEPSEEK_V4_IR_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
-            transaction ? transaction->status
-                        : YVEX_DEEPSEEK_ATTENTION_TRANSACTION_EMPTY,
-            err, YVEX_ERR_STATE,
-            "DeepSeek attention state transaction acquire requires begun state");
-    span = &transaction->components[kind];
-    if (!span->required || !span->data || span->acquired)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
-            span->acquired, err, YVEX_ERR_STATE,
-            "DeepSeek attention state component is absent or already acquired");
-    if (transaction->sink &&
-        transaction->sink->options.fail_acquire_kind == kind)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
-            err, YVEX_ERR_STATE,
-            "DeepSeek attention memory sink injected acquire failure");
-    span->acquired = 1;
-    if (out) *out = *span;
-    yvex_error_clear(err);
-    if (failure) memset(failure, 0, sizeof(*failure));
-    return YVEX_OK;
-}
-
-/* Contract: copies one complete component into transaction staging storage. */
-int yvex_attention_state_transaction_write(
-    yvex_attention_state_transaction *transaction,
-    yvex_attention_component_kind kind,
-    const void *bytes,
-    size_t byte_count,
-    yvex_attention_failure *failure,
-    yvex_error *err)
-{
-    yvex_attention_component_span *span;
-
-    if (!transaction ||
-        transaction->status != YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN ||
-        kind >= YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction ? transaction->layer_index
-                        : YVEX_DEEPSEEK_V4_IR_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
-            transaction ? transaction->status
-                        : YVEX_DEEPSEEK_ATTENTION_TRANSACTION_EMPTY,
-            err, YVEX_ERR_STATE,
-            "DeepSeek attention state transaction write requires begun state");
-    span = &transaction->components[kind];
-    if (!span->required || !span->acquired || span->sealed || !span->data ||
-        !bytes || byte_count != (size_t)span->byte_extent)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-            span->byte_extent, byte_count, err, YVEX_ERR_BOUNDS,
-            "DeepSeek attention state component write has wrong extent");
-    memcpy(span->data, bytes, byte_count);
-    span->written = 1;
-    yvex_error_clear(err);
-    if (failure) memset(failure, 0, sizeof(*failure));
-    return YVEX_OK;
-}
-
-/* Contract: seals one staged component after exact production. */
-int yvex_attention_state_transaction_seal(
-    yvex_attention_state_transaction *transaction,
-    yvex_attention_component_kind kind,
-    unsigned long long produced_elements,
-    yvex_attention_failure *failure,
-    yvex_error *err)
-{
-    yvex_attention_component_span *span;
-
-    if (!transaction ||
-        transaction->status != YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN ||
-        kind >= YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction ? transaction->layer_index
-                        : YVEX_DEEPSEEK_V4_IR_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
-            transaction ? transaction->status
-                        : YVEX_DEEPSEEK_ATTENTION_TRANSACTION_EMPTY,
-            err, YVEX_ERR_STATE,
-            "DeepSeek attention state transaction seal requires begun state");
-    span = &transaction->components[kind];
-    if (!span->required || !span->acquired || span->sealed ||
-        produced_elements != span->expected_elements)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-            span->expected_elements, produced_elements, err, YVEX_ERR_BOUNDS,
-            "DeepSeek attention state component seal has wrong element count");
-    if (transaction->sink && transaction->sink->options.fail_seal_kind == kind)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
-            err, YVEX_ERR_STATE,
-            "DeepSeek attention memory sink injected seal failure");
-    if (!attention_component_values_are_finite(span))
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
-            transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
-            err, YVEX_ERR_FORMAT,
-            "DeepSeek attention state component contains non-finite values");
-    span->produced_elements = produced_elements;
-    span->written = 1;
-    span->sealed = 1;
-    yvex_error_clear(err);
-    if (failure) memset(failure, 0, sizeof(*failure));
-    return YVEX_OK;
-}
-
-/* Contract: atomically publishes every sealed component to caller-owned sink. */
-int yvex_attention_state_transaction_commit(
-    yvex_attention_state_transaction *transaction,
-    yvex_attention_failure *failure,
-    yvex_error *err)
-{
-    yvex_attention_component_span next[
-        YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT];
-    unsigned int i;
-
-    memset(next, 0, sizeof(next));
-    if (!transaction ||
-        transaction->status != YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN ||
-        !transaction->sink || !transaction->sink->initialized)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction ? transaction->layer_index
-                        : YVEX_DEEPSEEK_V4_IR_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
-            transaction ? transaction->status
-                        : YVEX_DEEPSEEK_ATTENTION_TRANSACTION_EMPTY,
-            err, YVEX_ERR_STATE,
-            "DeepSeek attention state transaction commit requires begun state");
-    if (transaction->sink->options.fail_commit)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
-            err, YVEX_ERR_STATE,
-            "DeepSeek attention memory sink injected commit failure");
-    for (i = 0u; i < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++i) {
-        const yvex_attention_component_span *span =
-            &transaction->components[i];
-        if (!span->required) continue;
-        if (!span->acquired || !span->written || !span->sealed ||
-            span->produced_elements != span->expected_elements)
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-                span->expected_elements, span->produced_elements, err,
-                YVEX_ERR_STATE,
-                "DeepSeek attention state transaction cannot commit incomplete component");
-    }
-    for (i = 0u; i < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++i) {
-        const yvex_attention_component_span *span =
-            &transaction->components[i];
-        if (!span->required) continue;
-        next[i] = *span;
-        next[i].data = malloc((size_t)span->byte_extent);
-        if (!next[i].data) {
-            unsigned int j;
-            for (j = 0u; j < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++j)
-                attention_component_release(&next[j]);
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
-                transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-                span->byte_extent, 0ull, err, YVEX_ERR_NOMEM,
-                "DeepSeek attention state commit allocation failed");
-        }
-        memcpy(next[i].data, span->data, (size_t)span->byte_extent);
-    }
-    if (!attention_transaction_identity(transaction,
-                                        transaction->transaction_identity)) {
-        for (i = 0u; i < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++i)
-            attention_component_release(&next[i]);
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
-            err, YVEX_ERR_FORMAT,
-            "DeepSeek attention state transaction identity failed");
-    }
-    for (i = 0u; i < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++i) {
-        attention_component_release(&transaction->sink->committed[i]);
-        transaction->sink->committed[i] = next[i];
-        memset(&next[i], 0, sizeof(next[i]));
-    }
-    (void)snprintf(transaction->sink->committed_identity,
-                   sizeof(transaction->sink->committed_identity), "%s",
-                   transaction->transaction_identity);
-    transaction->sink->has_committed = 1;
-    attention_transaction_release_staging(transaction);
-    transaction->status = YVEX_DEEPSEEK_ATTENTION_TRANSACTION_COMMITTED;
-    yvex_error_clear(err);
-    if (failure) memset(failure, 0, sizeof(*failure));
-    return YVEX_OK;
-}
-
-/* Contract: discards all staged state without modifying committed output. */
-int yvex_attention_state_transaction_abort(
-    yvex_attention_state_transaction *transaction,
-    yvex_attention_failure *failure,
-    yvex_error *err)
-{
-    if (!transaction ||
-        transaction->status != YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction ? transaction->layer_index
-                        : YVEX_DEEPSEEK_V4_IR_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
-            transaction ? transaction->status
-                        : YVEX_DEEPSEEK_ATTENTION_TRANSACTION_EMPTY,
-            err, YVEX_ERR_STATE,
-            "DeepSeek attention state transaction abort requires begun state");
-    attention_transaction_release_staging(transaction);
-    transaction->status = YVEX_DEEPSEEK_ATTENTION_TRANSACTION_ABORTED;
-    if (transaction->sink && transaction->sink->options.fail_abort)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-            transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
-            err, YVEX_ERR_STATE,
-            "DeepSeek attention memory sink injected abort failure");
-    yvex_error_clear(err);
-    if (failure) memset(failure, 0, sizeof(*failure));
-    return YVEX_OK;
-}
-
-const yvex_attention_component_span *
-yvex_attention_memory_sink_committed_component(
-    const yvex_attention_memory_sink *sink,
-    yvex_attention_component_kind kind)
-{
-    if (!sink || !sink->initialized || !sink->has_committed ||
-        kind >= YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT ||
-        !sink->committed[kind].required)
-        return NULL;
-    return &sink->committed[kind];
-}
-
-const char *yvex_attention_memory_sink_identity(
-    const yvex_attention_memory_sink *sink)
-{
-    if (!sink || !sink->initialized || !sink->has_committed) return NULL;
-    return sink->committed_identity;
-}
-
-int yvex_attention_state_delta_begin(
-    const yvex_attention_layer_plan *layer,
-    unsigned long long token_position,
-    yvex_attention_state_delta *delta,
-    yvex_attention_failure *failure,
-    yvex_error *err)
-{
-    if (!layer || !delta)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
-            layer ? layer->layer_index : YVEX_DEEPSEEK_V4_IR_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
-            YVEX_ERR_INVALID_ARG,
-            "DeepSeek attention state delta requires layer and destination");
-    memset(delta, 0, sizeof(*delta));
-    delta->status = YVEX_DEEPSEEK_ATTENTION_DELTA_PENDING;
-    delta->layer_index = layer->layer_index;
-    delta->attention_class = layer->attention_class;
-    delta->token_position = token_position;
-    delta->raw_kv_entries = 1ull;
-    if (layer->compression_ratio &&
-        ((token_position + 1ull) % layer->compression_ratio) == 0ull)
-        delta->compressed_kv_entries = 1ull;
-    if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA &&
-        delta->compressed_kv_entries)
-        delta->indexer_entries = 1ull;
-    yvex_error_clear(err);
-    if (failure) memset(failure, 0, sizeof(*failure));
-    return YVEX_OK;
-}
-
-int yvex_attention_state_delta_commit(
-    yvex_attention_state_delta *delta,
-    yvex_attention_failure *failure,
-    yvex_error *err)
-{
-    if (!delta || delta->status != YVEX_DEEPSEEK_ATTENTION_DELTA_PENDING)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
-            delta ? delta->layer_index : YVEX_DEEPSEEK_V4_IR_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN,
-            YVEX_DEEPSEEK_ATTENTION_DELTA_PENDING,
-            delta ? delta->status : YVEX_DEEPSEEK_ATTENTION_DELTA_EMPTY,
-            err, YVEX_ERR_STATE,
-            "DeepSeek attention state delta must be pending before commit");
-    delta->status = YVEX_DEEPSEEK_ATTENTION_DELTA_COMMITTED;
-    delta->published = 1;
-    yvex_error_clear(err);
-    if (failure) memset(failure, 0, sizeof(*failure));
-    return YVEX_OK;
-}
-
-int yvex_attention_state_delta_abort(
-    yvex_attention_state_delta *delta,
-    yvex_attention_failure *failure,
-    yvex_error *err)
-{
-    if (!delta || delta->status != YVEX_DEEPSEEK_ATTENTION_DELTA_PENDING)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
-            delta ? delta->layer_index : YVEX_DEEPSEEK_V4_IR_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN,
-            YVEX_DEEPSEEK_ATTENTION_DELTA_PENDING,
-            delta ? delta->status : YVEX_DEEPSEEK_ATTENTION_DELTA_EMPTY,
-            err, YVEX_ERR_STATE,
-            "DeepSeek attention state delta must be pending before abort");
-    delta->status = YVEX_DEEPSEEK_ATTENTION_DELTA_ABORTED;
-    delta->published = 0;
-    yvex_error_clear(err);
-    if (failure) memset(failure, 0, sizeof(*failure));
-    return YVEX_OK;
+    yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "graph_layer_fixture",
+                   "controlled layer fixtures are test-owned");
+    return yvex_graph_exit_for_status(YVEX_ERR_UNSUPPORTED);
 }

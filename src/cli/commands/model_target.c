@@ -1,56 +1,29 @@
-/*
- * model_target.c - model-target command adapter.
- *
- * Owner:
- *   src/cli/commands
- *
- * Owns:
- *   model-target command dispatch only.
- *
- * Does not own:
- *   target catalogs, candidate facts, profile specs, tensor/qtype/source
- *   scanning, report construction, sidecar writing, rendering fields, runtime
- *   execution, generation, eval, benchmark, or release decisions.
- *
- * Invariants:
- *   adapter flow is parse argv, build typed report, render typed report, return
- *   exit code; usage/help text is rendered through the model-target renderer.
- *
- * Boundary:
- *   command dispatch does not create capability, quantization, artifact
- *   emission, runtime support, generation support, benchmark evidence, or
- *   release readiness.
- */
-#include "src/cli/input/model_target.h"
-#include "src/cli/render/model_target.h"
+/* Owner: src/cli/commands
+ * Owns: model-target command dispatch only.
+ * Does not own: target catalogs, candidate facts, profile specs, tensor/qtype/source scanning, report construction,
+ *   sidecar writing, rendering fields, runtime execution, generation, eval, benchmark, or release
+ *   decisions.
+ * Invariants: adapter flow is parse argv, build typed report, render typed report, return exit code; usage/help
+ *   text is rendered through the model-target renderer.
+ * Boundary: command dispatch does not create capability, quantization, artifact emission, runtime support,
+ *   generation support, benchmark evidence, or release readiness.
+ * Purpose: provide model-target command dispatch only.
+ * Inputs: typed command arguments and borrowed domain APIs.
+ * Effects: dispatches domain calls and routes operator bytes only through CLI I/O.
+ * Failure: returns a stable CLI status while preserving domain ownership. */
+#include "src/cli/input/private.h"
+#include "src/cli/render/private.h"
 
-#include "src/cli/io/out.h"
+#include "src/cli/io/private.h"
 
 #include <stdio.h>
 #include <string.h>
 
-/*
- * yvex_model_target_command()
- *
- * Purpose:
- *   dispatch model-target CLI requests through typed input, report, and render
- *   APIs.
- *
- * Inputs:
- *   argc/argv are borrowed CLI arguments.
- *
- * Effects:
- *   parses model-target args, builds one typed model-target report, renders
- *   report rows through CLI renderers, and returns the report exit code.
- *
- * Failure:
- *   returns parser/report failure codes while preserving existing report output.
- *
- * Boundary:
- *   the adapter performs no target fact construction, source/native scanning,
- *   sidecar writing, runtime execution, generation, eval, benchmark, or release
- *   readiness work.
- */
+/* Purpose: dispatch model-target CLI requests through typed input, report, and render APIs.
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_model_target_command(int argc, char **argv)
 {
     yvex_model_target_args args;
@@ -87,25 +60,11 @@ int yvex_model_target_command(int argc, char **argv)
     return rc;
 }
 
-/*
- * yvex_model_target_help()
- *
- * Purpose:
- *   render model-target domain help through the typed renderer.
- *
- * Inputs:
- *   fp is an explicit output stream.
- *
- * Effects:
- *   writes model-target help using CLI IO from the renderer.
- *
- * Failure:
- *   none surfaced to callers because top-level help callbacks are void.
- *
- * Boundary:
- *   help rendering describes report-only commands and does not create runtime,
- *   generation, benchmark, or release capability.
- */
+/* Purpose: render model-target domain help through the typed renderer.
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_model_target_help(FILE *fp)
 {
     (void)yvex_model_target_render_help(fp);

@@ -1,20 +1,36 @@
-/*
- * accounts.c - provider account command surface.
- *
- * Owner: CLI accounts command.
+/* Owner: CLI accounts command.
  * Owns: accounts argv validation, command dispatch, and compatibility rendering.
  * Does not own: provider discovery, credential persistence, or model behavior.
  * Invariants: bytes are written only through the CLI IO owner.
  * Boundary: consumes the public account API and returns process exit status.
- */
+ * Purpose: provide accounts argv validation, command dispatch, and compatibility rendering.
+ * Inputs: typed command arguments and borrowed domain APIs.
+ * Effects: dispatches domain calls and routes operator bytes only through CLI I/O.
+ * Failure: returns a stable CLI status while preserving domain ownership. */
 #define _POSIX_C_SOURCE 200809L
-#include <yvex/accounts.h>
-#include "src/core/operator.h"
-#include "src/cli/io/out.h"
+#include <yvex/source.h>
+#include "src/cli/input/private.h"
+#include "src/cli/io/private.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+static const char *const literal_pair_0[] = { "       yvex accounts login PROVIDER [options]",
+    "       yvex accounts logout PROVIDER [options]"};
+
+static const char *const literal_pair_1[] = { "raw_token_stored_by_yvex: false",
+    "boundary: local provider account state only, no tokens stored by YVEX"};
+
+static const char *const literal_lines_0[] = {
+    "       yvex accounts ensure PROVIDER [--interactive auto|always|never] [--required]",
+    "\nProviders: huggingface|hf, github|gh.",
+    "Hugging Face CLI discovery uses YVEX_HF_CLI, then hf, then legacy huggingface-cli.",
+    "GitHub CLI discovery uses YVEX_GH_CLI, then gh.",
+    "Boundary: local provider account state only; YVEX stores no raw tokens, does not install tools, does "
+        "not implement OAuth, does not use MCP/YAI, and does not download, materialize, run, generate, "
+        "evaluate, or benchmark models from this command."
+};
 
 typedef enum {
     YVEX_ACCOUNTS_OUTPUT_NORMAL = 0,
@@ -36,6 +52,7 @@ typedef struct {
     int token_stdin;
     int skip_ssh_key;
 } yvex_accounts_cli_options;
+/* Purpose: Compute accounts run foreground for its CLI invariant (`accounts_run_foreground`). */
 static int accounts_run_foreground(const char *const *args, yvex_error *err)
 {
     yvex_account_command_options command;
@@ -49,6 +66,11 @@ static int accounts_run_foreground(const char *const *args, yvex_error *err)
     return yvex_accounts_run_provider_command(&command, err);
 }
 
+/* Purpose: Parse accounts parse output mode into typed CLI state (`accounts_parse_output_mode`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int accounts_parse_output_mode(const char *value, yvex_accounts_output_mode *mode)
 {
     if (!value || !mode) return 0;
@@ -67,6 +89,11 @@ static int accounts_parse_output_mode(const char *value, yvex_accounts_output_mo
     return 0;
 }
 
+/* Purpose: Parse accounts parse value into typed CLI state (`accounts_parse_value`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int accounts_parse_value(const char *command,
                                 const char *flag,
                                 int arg_count,
@@ -86,6 +113,11 @@ static int accounts_parse_value(const char *command,
     return 0;
 }
 
+/* Purpose: Parse accounts parse common into typed CLI state (`accounts_parse_common`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int accounts_parse_common(const char *command,
                                  int arg_count,
                                  char **args,
@@ -98,10 +130,10 @@ static int accounts_parse_common(const char *command,
     options->output_mode = YVEX_ACCOUNTS_OUTPUT_NORMAL;
     for (i = start; i < arg_count; ++i) {
         const char *value = NULL;
-        if (strcmp(args[i], "--" "audit") == 0) {
+        if (strcmp(args[i], "--audit") == 0) {
             options->output_mode = YVEX_ACCOUNTS_OUTPUT_AUDIT;
-        } else if (strcmp(args[i], "--" "output") == 0) {
-            int rc = accounts_parse_value(command, "--" "output", arg_count, args, &i, &value);
+        } else if (strcmp(args[i], "--output") == 0) {
+            int rc = accounts_parse_value(command, "--output", arg_count, args, &i, &value);
             if (rc != 0) return rc;
             if (!accounts_parse_output_mode(value, &options->output_mode)) {
                 yvex_cli_out_writef(stderr, "accounts %s: unsupported output mode: %s\n", command, value);
@@ -115,8 +147,9 @@ static int accounts_parse_common(const char *command,
             int rc = accounts_parse_value(command, "--cli", arg_count, args, &i, &value);
             if (rc != 0) return rc;
             options->cli_override = value;
-        } else if (strcmp(args[i], "--" "json") == 0) {
-            yvex_cli_out_writef(stderr, "accounts %s: JSON output is unsupported; use --" "output normal|table|audit\n", command);
+        } else if (strcmp(args[i], "--json") == 0) {
+            yvex_cli_out_writef(stderr,
+                "accounts %s: JSON output is unsupported; use --output normal|table|audit\n", command);
             return 2;
         } else {
             yvex_cli_out_writef(stderr, "accounts %s: unknown option: %s\n", command, args[i]);
@@ -126,6 +159,7 @@ static int accounts_parse_common(const char *command,
     return 0;
 }
 
+/* Purpose: Render accounts print observation audit from typed facts (`accounts_print_observation_audit`). */
 static void accounts_print_observation_audit(const char *prefix,
                                              const yvex_account_observation *obs)
 {
@@ -143,6 +177,11 @@ static void accounts_print_observation_audit(const char *prefix,
     if (obs->next[0]) yvex_cli_out_writef(stdout, "%snext: %s\n", prefix, obs->next);
 }
 
+/* Purpose: Render accounts print single from typed facts (`accounts_print_single`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void accounts_print_single(const char *surface,
                                   const yvex_account_observation *obs,
                                   yvex_accounts_output_mode mode)
@@ -172,6 +211,11 @@ static void accounts_print_single(const char *surface,
     yvex_cli_out_writef(stdout, "status: %s\n", obs->status);
 }
 
+/* Purpose: Orchestrate the typed command accounts providers request (`command_accounts_providers`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_accounts_providers(int arg_count, char **args)
 {
     yvex_accounts_cli_options options;
@@ -193,8 +237,10 @@ static int command_accounts_providers(int arg_count, char **args)
 
     if (options.output_mode == YVEX_ACCOUNTS_OUTPUT_TABLE) {
         yvex_cli_out_writef(stdout, "PROVIDER      ALIAS  CLI      AUTH\n");
-        yvex_cli_out_writef(stdout, "%-13s %-6s %-8s %s\n", "huggingface", "hf", observations[0].cli_status, observations[0].auth_state);
-        yvex_cli_out_writef(stdout, "%-13s %-6s %-8s %s\n", "github", "gh", observations[1].cli_status, observations[1].auth_state);
+        yvex_cli_out_writef(stdout, "%-13s %-6s %-8s %s\n", "huggingface", "hf", observations[0].cli_status,
+            observations[0].auth_state);
+        yvex_cli_out_writef(stdout, "%-13s %-6s %-8s %s\n", "github", "gh", observations[1].cli_status,
+            observations[1].auth_state);
     } else if (options.output_mode == YVEX_ACCOUNTS_OUTPUT_AUDIT) {
         yvex_cli_out_writef(stdout, "accounts: providers\n");
         accounts_print_observation_audit("provider_0_", &observations[0]);
@@ -210,6 +256,11 @@ static int command_accounts_providers(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command accounts status request (`command_accounts_status`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_accounts_status(int arg_count, char **args)
 {
     yvex_accounts_cli_options options;
@@ -241,8 +292,7 @@ static int command_accounts_status(int arg_count, char **args)
         accounts_print_observation_audit("provider_0_", &observations[0]);
         accounts_print_observation_audit("provider_1_", &observations[1]);
         yvex_cli_out_writef(stdout, "state_path: %s\n", observations[0].state_path);
-        yvex_cli_out_writef(stdout, "raw_token_stored_by_yvex: false\n");
-        yvex_cli_out_writef(stdout, "boundary: local provider account state only, no tokens stored by YVEX\n");
+        yvex_cli_out_lines(stdout, literal_pair_1, sizeof(literal_pair_1) / sizeof(literal_pair_1[0]));
     } else {
         yvex_cli_out_writef(stdout, "accounts: provider status\n");
         yvex_cli_out_writef(stdout, "huggingface: %s cli=%s account=%s\n",
@@ -255,6 +305,11 @@ static int command_accounts_status(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command accounts whoami request (`command_accounts_whoami`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_accounts_whoami(int arg_count, char **args)
 {
     yvex_accounts_cli_options options;
@@ -293,6 +348,11 @@ static int command_accounts_whoami(int arg_count, char **args)
     return exit_for_status(YVEX_ERR_UNSUPPORTED);
 }
 
+/* Purpose: Parse accounts parse login options into typed CLI state (`accounts_parse_login_options`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int accounts_parse_login_options(const char *command,
                                         int arg_count,
                                         char **args,
@@ -305,9 +365,9 @@ static int accounts_parse_login_options(const char *command,
     options->output_mode = YVEX_ACCOUNTS_OUTPUT_NORMAL;
     for (i = start; i < arg_count; ++i) {
         const char *value = NULL;
-        if (strcmp(args[i], "--" "audit") == 0) {
+        if (strcmp(args[i], "--audit") == 0) {
             options->output_mode = YVEX_ACCOUNTS_OUTPUT_AUDIT;
-        } else if (strcmp(args[i], "--" "output") == 0 ||
+        } else if (strcmp(args[i], "--output") == 0 ||
                    strcmp(args[i], "--token-env") == 0 ||
                    strcmp(args[i], "--cli") == 0 ||
                    strcmp(args[i], "--hostname") == 0 ||
@@ -316,7 +376,7 @@ static int accounts_parse_login_options(const char *command,
             const char *flag = args[i];
             int rc = accounts_parse_value(command, flag, arg_count, args, &i, &value);
             if (rc != 0) return rc;
-            if (strcmp(flag, "--" "output") == 0) {
+            if (strcmp(flag, "--output") == 0) {
                 if (!accounts_parse_output_mode(value, &options->output_mode)) {
                     yvex_cli_out_writef(stderr, "accounts %s: unsupported output mode: %s\n", command, value);
                     return 2;
@@ -348,8 +408,9 @@ static int accounts_parse_login_options(const char *command,
             options->token_stdin = 1;
         } else if (strcmp(args[i], "--skip-ssh-key") == 0) {
             options->skip_ssh_key = 1;
-        } else if (strcmp(args[i], "--" "json") == 0) {
-            yvex_cli_out_writef(stderr, "accounts %s: JSON output is unsupported; use --" "output normal|table|audit\n", command);
+        } else if (strcmp(args[i], "--json") == 0) {
+            yvex_cli_out_writef(stderr,
+                "accounts %s: JSON output is unsupported; use --output normal|table|audit\n", command);
             return 2;
         } else {
             yvex_cli_out_writef(stderr, "accounts %s: unknown option: %s\n", command, args[i]);
@@ -359,6 +420,11 @@ static int accounts_parse_login_options(const char *command,
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command accounts login request (`command_accounts_login`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_accounts_login(int arg_count, char **args)
 {
     yvex_accounts_cli_options options;
@@ -466,6 +532,11 @@ static int command_accounts_login(int arg_count, char **args)
     return 0;
 }
 
+/* Purpose: Orchestrate the typed command accounts ensure request (`command_accounts_ensure`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_accounts_ensure(int arg_count, char **args)
 {
     yvex_accounts_cli_options options;
@@ -491,18 +562,18 @@ static int command_accounts_ensure(int arg_count, char **args)
     ensure.interactive = YVEX_ACCOUNT_INTERACTIVE_AUTO;
     for (i = 4; i < arg_count; ++i) {
         const char *value = NULL;
-        if (strcmp(args[i], "--" "audit") == 0) {
+        if (strcmp(args[i], "--audit") == 0) {
             options.output_mode = YVEX_ACCOUNTS_OUTPUT_AUDIT;
         } else if (strcmp(args[i], "--required") == 0) {
             ensure.required = 1;
-        } else if (strcmp(args[i], "--" "output") == 0 ||
+        } else if (strcmp(args[i], "--output") == 0 ||
                    strcmp(args[i], "--token-env") == 0 ||
                    strcmp(args[i], "--interactive") == 0 ||
                    strcmp(args[i], "--cli") == 0) {
             const char *flag = args[i];
             rc = accounts_parse_value("ensure", flag, arg_count, args, &i, &value);
             if (rc != 0) return rc;
-            if (strcmp(flag, "--" "output") == 0) {
+            if (strcmp(flag, "--output") == 0) {
                 if (!accounts_parse_output_mode(value, &options.output_mode)) {
                     yvex_cli_out_writef(stderr, "accounts ensure: unsupported output mode: %s\n", value);
                     return 2;
@@ -542,6 +613,11 @@ static int command_accounts_ensure(int arg_count, char **args)
     return exit_for_status(YVEX_ERR_UNSUPPORTED);
 }
 
+/* Purpose: Orchestrate the typed command accounts logout request (`command_accounts_logout`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int command_accounts_logout(int arg_count, char **args)
 {
     yvex_accounts_cli_options options;
@@ -586,20 +662,21 @@ static int command_accounts_logout(int arg_count, char **args)
     return exit_code == 0 ? 0 : 1;
 }
 
+/* Purpose: Render accounts help command from typed facts (`accounts_help_command`). */
 static void accounts_help_command(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex accounts providers [--" "output normal|table|audit]\n");
-    yvex_cli_out_writef(fp, "       yvex accounts status [--" "audit | --" "output normal|table|audit]\n");
-    yvex_cli_out_writef(fp, "       yvex accounts login PROVIDER [options]\n");
-    yvex_cli_out_writef(fp, "       yvex accounts logout PROVIDER [options]\n");
-    yvex_cli_out_writef(fp, "       yvex accounts whoami PROVIDER [--" "audit]\n");
-    yvex_cli_out_writef(fp, "       yvex accounts ensure PROVIDER [--interactive auto|always|never] [--required]\n");
-    yvex_cli_out_writef(fp, "\nProviders: huggingface|hf, github|gh.\n");
-    yvex_cli_out_writef(fp, "Hugging Face CLI discovery uses YVEX_HF_CLI, then hf, then legacy huggingface-cli.\n");
-    yvex_cli_out_writef(fp, "GitHub CLI discovery uses YVEX_GH_CLI, then gh.\n");
-    yvex_cli_out_writef(fp, "Boundary: local provider account state only; YVEX stores no raw tokens, does not install tools, does not implement OAuth, does not use MCP/YAI, and does not download, materialize, run, generate, evaluate, or benchmark models from this command.\n");
+    yvex_cli_out_writef(fp, "usage: yvex accounts providers [--output normal|table|audit]\n");
+    yvex_cli_out_writef(fp, "       yvex accounts status [--audit | --output normal|table|audit]\n");
+    yvex_cli_out_lines(fp, literal_pair_0, sizeof(literal_pair_0) / sizeof(literal_pair_0[0]));
+    yvex_cli_out_writef(fp, "       yvex accounts whoami PROVIDER [--audit]\n");
+    yvex_cli_out_lines(fp, literal_lines_0, sizeof(literal_lines_0) / sizeof(literal_lines_0[0]));
 }
 
+/* Purpose: Orchestrate the typed accounts command request (`yvex_accounts_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_accounts_command(int arg_count, char **args)
 {
     const char *sub;
@@ -623,6 +700,11 @@ int yvex_accounts_command(int arg_count, char **args)
     return 2;
 }
 
+/* Purpose: Render accounts help from typed facts (`yvex_accounts_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_accounts_help(FILE *fp)
 {
     accounts_help_command(fp);

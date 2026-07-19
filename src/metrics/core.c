@@ -1,21 +1,17 @@
-/*
- * Owner: metrics.core (metrics).
- * Owns: the file-serialization boundary consumed by runtime,cli.
- * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
- * Invariants: scope=generic and visibility=private match config/source_owners.tsv.
- * Boundary: file-serialization; moving this contract requires an ownership-manifest change.
- *
- * core.c - Metrics, traces, profiles, and run artifacts.
- *
- * This file owns runtime measurements and local run artifact helpers used by
- * diagnostic CLI commands.
- */
+/* Owner: metrics.core.
+ * Owns: metric accumulation, trace records, profiles, and diagnostic run files.
+ * Does not own: execution policy, capability admission, CLI rendering, or benchmarks.
+ * Invariants: counters are checked, phase tokens pair exactly, and serializers emit typed facts.
+ * Boundary: observability and file serialization; measurements never promote capability.
+ * Purpose: collect bounded execution evidence and serialize operator-requested run records.
+ * Inputs: admitted metric events, trace facts, run paths, and immutable profile summaries.
+ * Effects: mutates owned counters and may create explicitly requested diagnostic files.
+ * Failure: rejects invalid lifecycle transitions, overflow, allocation, and file I/O errors. */
 
 #include <yvex/metrics.h>
-#include <yvex/profile.h>
-#include <yvex/trace.h>
 
-#include "src/runtime/private.h"
+#include <yvex/internal/io.h>
+#include <yvex/internal/runtime.h>
 
 #include <errno.h>
 #include <limits.h>
@@ -27,39 +23,7 @@
 #include <sys/types.h>
 #include <time.h>
 
-int yvex_json_write_string(FILE *fp, const char *text)
-{
-    const unsigned char *p;
-
-    if (!fp) {
-        return YVEX_ERR_INVALID_ARG;
-    }
-
-    p = (const unsigned char *)(text ? text : "");
-    fputc('"', fp);
-    while (*p) {
-        if (*p == '"' || *p == '\\') {
-            fputc('\\', fp);
-            fputc((int)*p, fp);
-        } else if (*p == '\n') {
-            fputs("\\n", fp);
-        } else if (*p == '\r') {
-            fputs("\\r", fp);
-        } else if (*p == '\t') {
-            fputs("\\t", fp);
-        } else if (*p < 32u) {
-            fprintf(fp, "\\u%04x", (unsigned int)*p);
-        } else {
-            fputc((int)*p, fp);
-        }
-        ++p;
-    }
-    fputc('"', fp);
-    return YVEX_OK;
-}
-
-
-
+static unsigned long long time_monotonic_ns(void);
 
 #define YVEX_METRIC_PHASE_COUNT ((unsigned long)YVEX_METRIC_PHASE_TOTAL + 1ul)
 
@@ -79,11 +43,17 @@ struct yvex_metrics {
     unsigned long long next_token;
 };
 
+/* Purpose: recognize the closed metric-phase enumeration. */
 static int phase_valid(yvex_metric_phase phase)
 {
     return phase >= YVEX_METRIC_PHASE_ENGINE_OPEN && phase <= YVEX_METRIC_PHASE_TOTAL;
 }
 
+/* Purpose: add to one metric counter with overflow refusal.
+ * Inputs: owned counter storage, increment, error output, and diagnostic owner.
+ * Effects: updates the counter only when the sum is representable.
+ * Failure: returns invalid-argument or bounds failure without partial mutation.
+ * Boundary: checked metric arithmetic only. */
 static int add_ull(unsigned long long *dst, unsigned long long n, yvex_error *err, const char *where)
 {
     if (!dst) {
@@ -99,6 +69,11 @@ static int add_ull(unsigned long long *dst, unsigned long long n, yvex_error *er
     return YVEX_OK;
 }
 
+/* Purpose: map a typed metric phase to its stable diagnostic spelling.
+ * Inputs: one phase enumeration value.
+ * Effects: none; the returned storage is static.
+ * Failure: unknown values produce the literal "unknown".
+ * Boundary: rendering label, not phase admission. */
 const char *yvex_metric_phase_name(yvex_metric_phase phase)
 {
     switch (phase) {
@@ -121,6 +96,11 @@ const char *yvex_metric_phase_name(yvex_metric_phase phase)
     }
 }
 
+/* Purpose: allocate an empty owned metric accumulator.
+ * Inputs: required result slot and typed error output.
+ * Effects: publishes one zeroed accumulator on success.
+ * Failure: invalid arguments or allocation failure leave no owned result.
+ * Boundary: metric lifecycle construction. */
 int yvex_metrics_create(yvex_metrics **out, yvex_error *err)
 {
     yvex_metrics *metrics;
@@ -142,11 +122,21 @@ int yvex_metrics_create(yvex_metrics **out, yvex_error *err)
     return YVEX_OK;
 }
 
+/* Purpose: release one metric accumulator.
+ * Inputs: nullable owned accumulator.
+ * Effects: frees its storage and no external state.
+ * Failure: none; NULL is accepted.
+ * Boundary: terminal metric lifecycle operation. */
 void yvex_metrics_close(yvex_metrics *metrics)
 {
     free(metrics);
 }
 
+/* Purpose: restore an accumulator to its initial empty state.
+ * Inputs: nullable mutable metric storage.
+ * Effects: clears counters, phase summaries, and active tokens.
+ * Failure: none; NULL is ignored.
+ * Boundary: local observability state only. */
 void yvex_metrics_reset(yvex_metrics *metrics)
 {
     if (metrics) {
@@ -154,6 +144,11 @@ void yvex_metrics_reset(yvex_metrics *metrics)
     }
 }
 
+/* Purpose: begin one uniquely tokenized timing interval.
+ * Inputs: mutable accumulator, admitted phase, token output, and error output.
+ * Effects: records the monotonic start and publishes a matching token.
+ * Failure: rejects invalid input, an active phase, or token exhaustion.
+ * Boundary: timing evidence; it does not begin domain execution. */
 int yvex_metrics_phase_begin(yvex_metrics *metrics,
                              yvex_metric_phase phase,
                              unsigned long long *token,
@@ -180,13 +175,18 @@ int yvex_metrics_phase_begin(yvex_metrics *metrics,
 
     metrics->next_token += 1u;
     slot->active_token = metrics->next_token;
-    slot->active_start_ns = yvex_time_monotonic_ns();
+    slot->active_start_ns = time_monotonic_ns();
     *token = slot->active_token;
 
     yvex_error_clear(err);
     return YVEX_OK;
 }
 
+/* Purpose: close a timing interval and accumulate its duration.
+ * Inputs: mutable accumulator, phase, exact begin token, and error output.
+ * Effects: updates count and timing aggregates then clears the active token.
+ * Failure: lifecycle mismatch or arithmetic overflow preserves an observable refusal.
+ * Boundary: metric transaction completion only. */
 int yvex_metrics_phase_end(yvex_metrics *metrics,
                            yvex_metric_phase phase,
                            unsigned long long token,
@@ -210,7 +210,7 @@ int yvex_metrics_phase_end(yvex_metrics *metrics,
         return YVEX_ERR_STATE;
     }
 
-    now = yvex_time_monotonic_ns();
+    now = time_monotonic_ns();
     elapsed = now >= slot->active_start_ns ? now - slot->active_start_ns : 0;
     if (ULLONG_MAX - slot->total_ns < elapsed) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_metrics_phase_end", "phase timing overflow");
@@ -233,6 +233,11 @@ int yvex_metrics_phase_end(yvex_metrics *metrics,
     return YVEX_OK;
 }
 
+/* Purpose: account admitted prompt tokens with checked arithmetic.
+ * Inputs: mutable metrics, token increment, and error output.
+ * Effects: increases only the prompt-token counter.
+ * Failure: invalid storage or overflow leaves the counter unchanged.
+ * Boundary: accounting fact, not tokenizer execution evidence. */
 int yvex_metrics_add_prompt_tokens(yvex_metrics *metrics,
                                    unsigned long long n,
                                    yvex_error *err)
@@ -244,6 +249,11 @@ int yvex_metrics_add_prompt_tokens(yvex_metrics *metrics,
     return add_ull(&metrics->counters.prompt_tokens, n, err, "yvex_metrics_add_prompt_tokens");
 }
 
+/* Purpose: account tokens accepted by an execution boundary.
+ * Inputs: mutable metrics, accepted count, and error output.
+ * Effects: increases only the accepted-token counter.
+ * Failure: invalid storage or overflow returns typed failure.
+ * Boundary: evidence collection, not generation admission. */
 int yvex_metrics_add_accepted_tokens(yvex_metrics *metrics,
                                      unsigned long long n,
                                      yvex_error *err)
@@ -255,6 +265,11 @@ int yvex_metrics_add_accepted_tokens(yvex_metrics *metrics,
     return add_ull(&metrics->counters.accepted_tokens, n, err, "yvex_metrics_add_accepted_tokens");
 }
 
+/* Purpose: account tokens refused by an execution boundary.
+ * Inputs: mutable metrics, rejected count, and error output.
+ * Effects: increases only the rejected-token counter.
+ * Failure: invalid storage or overflow prevents mutation.
+ * Boundary: refusal accounting, not failure classification. */
 int yvex_metrics_add_rejected_tokens(yvex_metrics *metrics,
                                      unsigned long long n,
                                      yvex_error *err)
@@ -266,6 +281,11 @@ int yvex_metrics_add_rejected_tokens(yvex_metrics *metrics,
     return add_ull(&metrics->counters.rejected_tokens, n, err, "yvex_metrics_add_rejected_tokens");
 }
 
+/* Purpose: record one completed chat turn.
+ * Inputs: mutable metrics and error output.
+ * Effects: increments the chat-turn counter exactly once.
+ * Failure: invalid storage or overflow leaves prior evidence intact.
+ * Boundary: session observation, not chat execution. */
 int yvex_metrics_add_chat_turn(yvex_metrics *metrics,
                                yvex_error *err)
 {
@@ -276,6 +296,11 @@ int yvex_metrics_add_chat_turn(yvex_metrics *metrics,
     return add_ull(&metrics->counters.chat_turns, 1u, err, "yvex_metrics_add_chat_turn");
 }
 
+/* Purpose: publish model-byte accounting from an admitted owner.
+ * Inputs: mutable metrics, known bytes, unsupported bytes, and error output.
+ * Effects: replaces the two model accounting counters atomically at C-statement scope.
+ * Failure: invalid metric storage is refused before mutation.
+ * Boundary: copies supplied facts; it does not inspect an artifact. */
 int yvex_metrics_set_model_bytes(yvex_metrics *metrics,
                                  unsigned long long known_tensor_bytes,
                                  unsigned long long unsupported_tensor_accounting,
@@ -291,6 +316,11 @@ int yvex_metrics_set_model_bytes(yvex_metrics *metrics,
     return YVEX_OK;
 }
 
+/* Purpose: snapshot accumulated counters into caller-owned storage.
+ * Inputs: immutable metrics, required output, and error output.
+ * Effects: copies counter values without retaining caller pointers.
+ * Failure: invalid arguments produce no output snapshot.
+ * Boundary: immutable observability projection. */
 int yvex_metrics_get_counters(const yvex_metrics *metrics,
                               yvex_metric_counters *out,
                               yvex_error *err)
@@ -305,6 +335,11 @@ int yvex_metrics_get_counters(const yvex_metrics *metrics,
     return YVEX_OK;
 }
 
+/* Purpose: snapshot one phase's timing summary.
+ * Inputs: immutable metrics, admitted phase, result storage, and error output.
+ * Effects: copies stable counters and a static phase-name pointer.
+ * Failure: invalid phase or output is refused without mutation.
+ * Boundary: phase evidence projection. */
 int yvex_metrics_get_phase(const yvex_metrics *metrics,
                            yvex_metric_phase phase,
                            yvex_metric_phase_summary *out,
@@ -330,9 +365,11 @@ int yvex_metrics_get_phase(const yvex_metrics *metrics,
     return YVEX_OK;
 }
 
-
-
-
+/* Purpose: open one requested diagnostic output for replacement.
+ * Inputs: result slot, non-empty path, error output, and operation label.
+ * Effects: creates or truncates the requested file and transfers its stream to the caller.
+ * Failure: invalid path or fopen failure leaves no published stream.
+ * Boundary: metrics-owned file creation only. */
 static int open_output(FILE **out, const char *path, yvex_error *err, const char *where)
 {
     if (!out || !path || path[0] == '\0') {
@@ -348,6 +385,11 @@ static int open_output(FILE **out, const char *path, yvex_error *err, const char
     return YVEX_OK;
 }
 
+/* Purpose: serialize the canonical metric-counter object into an open JSON stream.
+ * Inputs: caller-owned writable stream and immutable counter snapshot.
+ * Effects: appends one complete counters object.
+ * Failure: stdio retains write failure for the enclosing serializer.
+ * Boundary: shared metric encoding; it does not own stream lifecycle. */
 static void write_counters(FILE *fp, const yvex_metric_counters *counters)
 {
     fprintf(fp, "  \"counters\": {\n");
@@ -361,6 +403,11 @@ static void write_counters(FILE *fp, const yvex_metric_counters *counters)
     fprintf(fp, "  }");
 }
 
+/* Purpose: persist a deterministic snapshot of counters and completed phases.
+ * Inputs: destination path, immutable metrics, and error output.
+ * Effects: creates a JSON metrics file and closes it before success.
+ * Failure: invalid state, snapshot failure, or file I/O aborts publication as failure.
+ * Boundary: diagnostic serialization; the file is not capability evidence by itself. */
 int yvex_metrics_write_json(const char *path,
                             const yvex_metrics *metrics,
                             yvex_error *err)
@@ -407,7 +454,7 @@ int yvex_metrics_write_json(const char *path,
         }
         first_phase = 0;
         fprintf(fp, "    {\"name\": ");
-        yvex_json_write_string(fp, phase.name);
+        yvex_file_json_write_string(fp, phase.name);
         fprintf(fp, ", \"count\": %llu, \"total_ns\": %llu, \"last_ns\": %llu, \"min_ns\": %llu, \"max_ns\": %llu}",
                 phase.count, phase.total_ns, phase.last_ns, phase.min_ns, phase.max_ns);
     }
@@ -419,10 +466,63 @@ int yvex_metrics_write_json(const char *path,
     return YVEX_OK;
 }
 
+/* Purpose: persist one profile summary bound to its metric counters.
+ * Inputs: output path, immutable profile facts, metrics, and error output.
+ * Effects: writes and closes one JSON profile file.
+ * Failure: invalid input, metric snapshot, open, or close errors return typed failure.
+ * Boundary: profile reporting only; execution readiness is copied, never inferred. */
+int yvex_profile_write_json(const char *path,
+                            const yvex_profile_summary *summary,
+                            const yvex_metrics *metrics,
+                            yvex_error *err)
+{
+    FILE *fp;
+    yvex_metric_counters counters;
+    int rc;
+
+    if (!summary || !metrics) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_profile_write_json",
+                       "summary and metrics are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = open_output(&fp, path, err, "yvex_profile_write_json");
+    if (rc != YVEX_OK)
+        return rc;
+    rc = yvex_metrics_get_counters(metrics, &counters, err);
+    if (rc != YVEX_OK) {
+        fclose(fp);
+        return rc;
+    }
+
+    fprintf(fp, "{\n  \"schema\": \"yvex.profile.v1\",\n  \"run_id\": ");
+    yvex_file_json_write_string(fp, summary->run_id);
+    fprintf(fp, ",\n  \"command\": ");
+    yvex_file_json_write_string(fp, summary->command);
+    fprintf(fp, ",\n  \"model\": ");
+    yvex_file_json_write_string(fp, summary->model_name);
+    fprintf(fp, ",\n  \"backend\": ");
+    yvex_file_json_write_string(fp, summary->backend_name);
+    fprintf(fp, ",\n  \"status\": ");
+    yvex_file_json_write_string(fp, summary->status);
+    fprintf(fp, ",\n  \"execution_ready\": %s,\n  \"generation\": \"unsupported\",\n",
+            summary->execution_ready ? "true" : "false");
+    write_counters(fp, &counters);
+    fprintf(fp, "\n}\n");
+    if (fclose(fp) != 0) {
+        yvex_error_set(err, YVEX_ERR_IO, "yvex_profile_write_json", "profile close failed");
+        return YVEX_ERR_IO;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 #define _POSIX_C_SOURCE 200809L
 
-
-
+/* Purpose: format a bounded run-artifact path without silent truncation.
+ * Inputs: destination, capacity, error context, format, and values.
+ * Effects: writes a terminated path only within the supplied storage.
+ * Failure: invalid input or excess length returns typed bounds failure.
+ * Boundary: local path construction, not path admission. */
 static int path_format(char *dst, size_t cap, yvex_error *err, const char *where, const char *fmt, ...)
 {
     va_list ap;
@@ -443,6 +543,11 @@ static int path_format(char *dst, size_t cap, yvex_error *err, const char *where
     return YVEX_OK;
 }
 
+/* Purpose: ensure one path component exists as a directory.
+ * Inputs: non-empty path and error output.
+ * Effects: may create one directory with process umask policy.
+ * Failure: system or non-directory collision returns typed I/O failure.
+ * Boundary: diagnostic run-directory lifecycle. */
 static int mkdir_one(const char *path, yvex_error *err)
 {
     struct stat st;
@@ -463,6 +568,11 @@ static int mkdir_one(const char *path, yvex_error *err)
     return YVEX_OK;
 }
 
+/* Purpose: create every missing component of a bounded run directory.
+ * Inputs: immutable path and error output.
+ * Effects: creates directory components in lexical order.
+ * Failure: invalid, oversized, or uncreatable paths stop at the first failure.
+ * Boundary: operator-requested diagnostic storage only. */
 static int mkdir_p(const char *path, yvex_error *err)
 {
     char tmp[YVEX_PATH_CAP];
@@ -497,6 +607,7 @@ static int mkdir_p(const char *path, yvex_error *err)
     return mkdir_one(tmp, err);
 }
 
+/* Purpose: copy an optional path into fixed run-artifact storage with bounds checking. */
 static int copy_optional_path(char *dst, const char *src, yvex_error *err, const char *where)
 {
     if (!src || src[0] == '\0') {
@@ -506,6 +617,11 @@ static int copy_optional_path(char *dst, const char *src, yvex_error *err, const
     return path_format(dst, YVEX_PATH_CAP, err, where, "%s", src);
 }
 
+/* Purpose: derive and create the explicitly requested diagnostic run destinations.
+ * Inputs: output storage, save policy, optional path overrides, and error output.
+ * Effects: may create a run directory and publishes bounded artifact paths.
+ * Failure: identity, path, or directory failures leave no successful result.
+ * Boundary: diagnostic file planning; no model artifact is created. */
 int yvex_run_artifacts_prepare(yvex_run_artifacts *out,
                                int save_run,
                                const char *run_dir,
@@ -607,6 +723,11 @@ int yvex_run_artifacts_prepare(yvex_run_artifacts *out,
     return YVEX_OK;
 }
 
+/* Purpose: persist the accepted command vector for an enabled run directory.
+ * Inputs: immutable run paths, argument count/vector, and error output.
+ * Effects: creates and closes command.txt when run persistence is enabled.
+ * Failure: open failure returns typed I/O error; disabled persistence is a no-op success.
+ * Boundary: diagnostic provenance, not command execution. */
 int yvex_run_artifacts_write_command(const yvex_run_artifacts *artifacts,
                                      int arg_count,
                                      char **args,
@@ -641,9 +762,8 @@ int yvex_run_artifacts_write_command(const yvex_run_artifacts *artifacts,
 
 #define _POSIX_C_SOURCE 200809L
 
-
-
-unsigned long long yvex_time_monotonic_ns(void)
+/* Purpose: read monotonic time as checked-width nanoseconds for local timing evidence. */
+static unsigned long long time_monotonic_ns(void)
 {
     struct timespec ts;
 
@@ -654,9 +774,6 @@ unsigned long long yvex_time_monotonic_ns(void)
     return ((unsigned long long)ts.tv_sec * 1000000000ull) + (unsigned long long)ts.tv_nsec;
 }
 
-
-
-
 struct yvex_trace {
     FILE *fp;
     char run_id[YVEX_RUN_ID_CAP];
@@ -664,6 +781,11 @@ struct yvex_trace {
     unsigned long long seq;
 };
 
+/* Purpose: map one trace event kind to its stable serialized label.
+ * Inputs: typed trace-event enumeration.
+ * Effects: none; returns static storage.
+ * Failure: unrecognized values map to "unknown".
+ * Boundary: trace label projection only. */
 const char *yvex_trace_event_kind_name(yvex_trace_event_kind kind)
 {
     switch (kind) {
@@ -683,6 +805,11 @@ const char *yvex_trace_event_kind_name(yvex_trace_event_kind kind)
     }
 }
 
+/* Purpose: create an optional JSON-lines trace session.
+ * Inputs: result slot, nullable trace options, and error output.
+ * Effects: allocates trace state and may open the requested trace file.
+ * Failure: invalid options, allocation, or open failure publishes no session.
+ * Boundary: trace lifecycle; disabled tracing remains an owned no-op session. */
 int yvex_trace_open(yvex_trace **out,
                     const yvex_trace_options *options,
                     yvex_error *err)
@@ -730,6 +857,11 @@ int yvex_trace_open(yvex_trace **out,
     return YVEX_OK;
 }
 
+/* Purpose: flush, close, and release one trace session.
+ * Inputs: nullable owned trace state.
+ * Effects: closes its file if enabled and frees all owned memory.
+ * Failure: close errors are not promoted by this void terminal operation.
+ * Boundary: deterministic trace cleanup. */
 void yvex_trace_close(yvex_trace *trace)
 {
     if (!trace) {
@@ -742,6 +874,11 @@ void yvex_trace_close(yvex_trace *trace)
     free(trace);
 }
 
+/* Purpose: append one ordered typed event to an enabled trace.
+ * Inputs: trace state, event facts, counters, and error output.
+ * Effects: increments sequence and writes one complete JSON line.
+ * Failure: invalid state or stream failure returns typed refusal.
+ * Boundary: records supplied evidence and never classifies capability. */
 int yvex_trace_emit(yvex_trace *trace,
                     yvex_trace_event_kind kind,
                     const char *name,
@@ -762,17 +899,17 @@ int yvex_trace_emit(yvex_trace *trace,
     fprintf(trace->fp, "{");
     fprintf(trace->fp, "\"schema\": \"yvex.trace.v1\", ");
     fprintf(trace->fp, "\"run_id\": ");
-    yvex_json_write_string(trace->fp, trace->run_id);
+    yvex_file_json_write_string(trace->fp, trace->run_id);
     fprintf(trace->fp, ", \"seq\": %llu, ", trace->seq);
     fprintf(trace->fp, "\"event\": ");
-    yvex_json_write_string(trace->fp, yvex_trace_event_kind_name(kind));
+    yvex_file_json_write_string(trace->fp, yvex_trace_event_kind_name(kind));
     fprintf(trace->fp, ", \"name\": ");
-    yvex_json_write_string(trace->fp, name ? name : "");
+    yvex_file_json_write_string(trace->fp, name ? name : "");
     fprintf(trace->fp, ", \"status\": ");
-    yvex_json_write_string(trace->fp, status ? status : "");
+    yvex_file_json_write_string(trace->fp, status ? status : "");
     fprintf(trace->fp, ", \"message\": ");
-    yvex_json_write_string(trace->fp, message ? message : "");
-    fprintf(trace->fp, ", \"ts_ns\": %llu", yvex_time_monotonic_ns());
+    yvex_file_json_write_string(trace->fp, message ? message : "");
+    fprintf(trace->fp, ", \"ts_ns\": %llu", time_monotonic_ns());
     fprintf(trace->fp, "}\n");
     fflush(trace->fp);
 

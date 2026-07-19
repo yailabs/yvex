@@ -14,16 +14,6 @@
 
 #include "tests/test.h"
 
-int yvex_test_gguf_qtype_abi(void);
-int yvex_test_source_payload(void);
-int yvex_test_transform_ir(void);
-int yvex_test_deepseek_tensor_coverage(void);
-int yvex_test_quant_numeric(void);
-int yvex_test_quant_execute(void);
-int yvex_test_gguf_writer_artifact(void);
-int yvex_test_qtype_support(void);
-int yvex_test_quant_policy(void);
-
 /*
  * run_test executes one owned suite without retaining suite state.  It
  * allocates no memory, mutates no production state, performs no payload IO on

@@ -1,29 +1,21 @@
-/*
- * generate_trace.c - diagnostic generate trace renderer.
- *
- * Owner:
- *   src/cli/render
- *
- * Owns:
- *   trace text serialization for typed generation reports.
- *
- * Does not own:
- *   trace accounting, generation loop execution, argv parsing, command
- *   dispatch, eval, benchmark, or release decisions.
- *
- * Invariants:
- *   trace rendering is read-only over reports and uses src/cli/io writers.
- *
- * Boundary:
- *   trace rendering is diagnostic evidence only and not generation support.
- */
-#include "generate_trace.h"
+/* Owner: src/cli/render
+ * Owns: trace text serialization for typed generation reports.
+ * Does not own: trace accounting, generation loop execution, argv parsing, command dispatch, eval, benchmark, or
+ *   release decisions.
+ * Invariants: trace rendering is read-only over reports and uses src/cli/io writers.
+ * Boundary: trace rendering is diagnostic evidence only and not generation support.
+ * Purpose: provide trace text serialization for typed generation reports.
+ * Inputs: typed domain facts, requested output mode, and caller-owned render state.
+ * Effects: formats admitted facts through CLI I/O without changing domain state.
+ * Failure: formatting or I/O refusal cannot alter capability facts. */
+#include "src/cli/render/private.h"
 
-#include "src/cli/io/out.h"
-#include "src/generation/trace.h"
+#include "src/cli/io/private.h"
+#include <yvex/internal/generation.h>
 
 #include <string.h>
 
+/* Purpose: Compute generate trace token list for its CLI invariant (`generate_trace_token_list`). */
 static void generate_trace_token_list(FILE *fp,
                                       const char *label,
                                       const unsigned int *tokens,
@@ -32,6 +24,11 @@ static void generate_trace_token_list(FILE *fp,
     yvex_cli_out_token_list(fp, label, tokens, count);
 }
 
+/* Purpose: Compute generate trace runtime sequence for its CLI invariant (`generate_trace_runtime_sequence`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void generate_trace_runtime_sequence(
     FILE *fp,
     const yvex_generation_report *report)
@@ -62,6 +59,11 @@ static void generate_trace_runtime_sequence(
     yvex_cli_out_char(fp, '\n');
 }
 
+/* Purpose: Compute generate emit token trace for its CLI invariant (`generate_emit_token_trace`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void generate_emit_token_trace(FILE *fp,
                                       const yvex_generation_report *report)
 {
@@ -85,6 +87,11 @@ static void generate_emit_token_trace(FILE *fp,
                         report->stop_reason ? report->stop_reason : "none");
 }
 
+/* Purpose: Compute generate emit step trace for its CLI invariant (`generate_emit_step_trace`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void generate_emit_step_trace(FILE *fp,
                                      const yvex_generation_report *report)
 {
@@ -123,6 +130,11 @@ static void generate_emit_step_trace(FILE *fp,
     }
 }
 
+/* Purpose: Compute generate emit kv trace for its CLI invariant (`generate_emit_kv_trace`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void generate_emit_kv_trace(FILE *fp,
                                    const yvex_generation_report *report)
 {
@@ -148,6 +160,11 @@ static void generate_emit_kv_trace(FILE *fp,
     }
 }
 
+/* Purpose: Compute generate emit logits trace for its CLI invariant (`generate_emit_logits_trace`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void generate_emit_logits_trace(FILE *fp,
                                        const yvex_generation_report *report)
 {
@@ -172,6 +189,11 @@ static void generate_emit_logits_trace(FILE *fp,
     }
 }
 
+/* Purpose: Compute generate emit sampling trace for its CLI invariant (`generate_emit_sampling_trace`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void generate_emit_sampling_trace(FILE *fp,
                                          const yvex_generation_report *report)
 {
@@ -197,6 +219,11 @@ static void generate_emit_sampling_trace(FILE *fp,
     }
 }
 
+/* Purpose: Compute generate emit append trace for its CLI invariant (`generate_emit_append_trace`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void generate_emit_append_trace(FILE *fp,
                                        const yvex_generation_report *report)
 {
@@ -227,6 +254,11 @@ static void generate_emit_append_trace(FILE *fp,
     }
 }
 
+/* Purpose: Compute generate emit stop trace for its CLI invariant (`generate_emit_stop_trace`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void generate_emit_stop_trace(FILE *fp,
                                      const yvex_generation_report *report)
 {
@@ -257,6 +289,11 @@ static void generate_emit_stop_trace(FILE *fp,
                         report->stop_token_policy ? report->stop_token_policy : "unsupported");
 }
 
+/* Purpose: Compute generate emit cancel trace for its CLI invariant (`generate_emit_cancel_trace`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void generate_emit_cancel_trace(FILE *fp,
                                        const yvex_generation_report *report)
 {
@@ -283,6 +320,7 @@ static void generate_emit_cancel_trace(FILE *fp,
                         report->partial_generated_token_count);
 }
 
+/* Purpose: Compute generate emit failure trace for its CLI invariant (`generate_emit_failure_trace`). */
 static void generate_emit_failure_trace(FILE *fp,
                                         const yvex_generation_report *report)
 {
@@ -302,6 +340,7 @@ static void generate_emit_failure_trace(FILE *fp,
                          report->cleanup_attempted);
 }
 
+/* Purpose: Release or reset owned generate emit cleanup trace state (`generate_emit_cleanup_trace`). */
 static void generate_emit_cleanup_trace(FILE *fp,
                                         const yvex_generation_report *report)
 {
@@ -314,25 +353,11 @@ static void generate_emit_cleanup_trace(FILE *fp,
                         report->cleanup_status ? report->cleanup_status : "not-needed");
 }
 
-/*
- * generate_emit_trace()
- *
- * Purpose:
- *   render requested trace sections from a finished diagnostic generation
- *   report.
- *
- * Inputs:
- *   fp is borrowed output; report is borrowed read-only trace state.
- *
- * Effects:
- *   writes trace records through CLI writer helpers only.
- *
- * Failure:
- *   no parser failure path; missing reports or disabled trace suppress output.
- *
- * Boundary:
- *   trace records are diagnostic evidence only and not generation support.
- */
+/* Purpose: render requested trace sections from a finished diagnostic generation report.
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void generate_emit_trace(FILE *fp,
                                 const yvex_generation_report *report)
 {
@@ -372,6 +397,11 @@ static void generate_emit_trace(FILE *fp,
     }
 }
 
+/* Purpose: Render generate render trace from typed facts (`yvex_generate_render_trace`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_generate_render_trace(FILE *fp,
                                const yvex_generation_report *report)
 {

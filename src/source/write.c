@@ -1,47 +1,65 @@
-/*
- * write.c - source manifest JSON file writer.
- *
- * Owner: src/source.
- * Owns: explicit source sidecar file writing.
- * Does not own: CLI/operator output, report rendering, runtime, generation, eval, or benchmark.
- * Invariants: writes only caller-selected local files and never chooses standard streams.
- * Boundary: writing source sidecars is not source verification, artifact emission, or release readiness.
- */
-#include "write.h"
-#include "private.h"
-#include "src/io/writer.h"
-
-#include <stdio.h>
+/* Owner: source publication.
+ * Owns: canonical manifest and derived-inventory serialization.
+ * Does not own: trust decisions, CLI output, rendering, artifacts, or runtime.
+ * Invariants: publication uses owned temporary files and atomic replacement.
+ * Boundary: serialization records validated trust but never creates it.
+ * Purpose: atomically publish source manifests and derived inventory.
+ * Inputs: validated source facts, explicit destinations, and caller outputs.
+ * Effects: writes, syncs, and renames only owner-created temporary files.
+ * Failure: serialize, short write, sync, rename, or cleanup preserves prior state. */
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <yvex/internal/io.h>
+#include <yvex/internal/source.h>
+#include <yvex/internal/source_payload.h>
 
-/* Writes only an unverified/in-progress source inventory manifest. */
+static int source_manifest_write_json_file(const char *out_path,
+                                           const yvex_source_manifest_options *options,
+                                           const yvex_source_manifest_file_list *files,
+                                           yvex_error *err);
+
+/* Purpose: publish one typed publication refusal without duplicating error transitions.
+ * Inputs: caller-owned error state and immutable status, owner, and message facts.
+ * Effects: replaces only the supplied error state.
+ * Failure: returns the supplied refusal status unchanged.
+ * Boundary: refusal publication does not create or mutate a source manifest. */
+static int publish_refuse(yvex_error *err,
+                          yvex_status status,
+                          const char *where,
+                          const char *message) {
+    yvex_error_set(err, status, where, message);
+    return status;
+}
+
+/* Purpose: writes only an unverified/in-progress source inventory manifest.
+ * Inputs: typed source publication arguments; borrowed inputs outlive the call.
+ * Effects: writes only the explicit source publication destination through its transaction.
+ * Failure: serialization or I/O failure publishes no partial source publication result.
+ * Boundary: serialization records validated trust but never creates it. */
 int yvex_source_manifest_write_json(const char *out_path,
                                     const yvex_source_manifest_options *options,
                                     yvex_source_manifest_summary *summary_out,
-                                    yvex_error *err)
-{
+                                    yvex_error *err) {
     yvex_source_manifest_file_list files;
     int rc;
 
-    if (!out_path || !options || !options->repo || !options->revision ||
-        !options->local_path) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_manifest_write", "out_path, repo, revision, and local_path are required");
-        return YVEX_ERR_INVALID_ARG;
+    if (!out_path || !options || !options->repo || !options->revision || !options->local_path) {
+        return publish_refuse(err, YVEX_ERR_INVALID_ARG, "source_manifest_write",
+            "out_path, repo, revision, and local_path are required");
     }
     if (options->status == YVEX_SOURCE_STATUS_COMPLETE) {
-        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "source_manifest_write",
-                       "complete manifests are published only by exact source verification");
-        return YVEX_ERR_UNSUPPORTED;
+        return publish_refuse(err, YVEX_ERR_UNSUPPORTED, "source_manifest_write",
+            "complete manifests are published only by exact source verification");
     }
 
     yvex_source_manifest_file_list_init(&files);
     rc = yvex_source_manifest_scan_files(options->local_path, options->include_files, &files, err);
     if (rc == YVEX_OK) {
-        rc = yvex_source_manifest_write_json_file(out_path, options, &files, err);
+        rc = source_manifest_write_json_file(out_path, options, &files, err);
     }
     if (rc == YVEX_OK && summary_out) {
         *summary_out = files.summary;
@@ -50,48 +68,32 @@ int yvex_source_manifest_write_json(const char *out_path,
     return rc;
 }
 
-static void json_field(FILE *fp, const char *name, const char *value, int comma)
-{
+/* Purpose: project json field facts while preserving the canonical source publication invariants. */
+static void json_field(FILE *fp, const char *name, const char *value, int comma) {
     yvex_file_json_write_field(fp, "    ", name, value, comma);
 }
 
-/*
- * yvex_source_manifest_write_json_file()
- *
- * Purpose:
- *   write source manifest summary and file-list facts to JSON.
- *
- * Inputs:
- *   output path, manifest options, and file list are borrowed.
- *
- * Effects:
- *   opens a local JSON file, writes escaped metadata and footprint fields, and
- *   closes the file; it does not create artifacts or hash tensor payloads.
- *
- * Failure:
- *   returns invalid-arg or IO errors for missing inputs, open/write/close
- *   failures, and path issues.
- *
- * Boundary:
- *   writing a source manifest is not source verification, artifact emission,
- *   runtime support, generation, eval, benchmark, or release readiness.
- */
-int yvex_source_manifest_write_json_file(const char *out_path,
-                                         const yvex_source_manifest_options *options,
-                                         const yvex_source_manifest_file_list *files,
-                                         yvex_error *err)
-{
+/* Purpose: write source manifest summary and file-list facts to JSON.
+ * Inputs: typed source publication arguments; borrowed inputs outlive the call.
+ * Effects: writes only the explicit source publication destination through its transaction.
+ * Failure: serialization or I/O failure publishes no partial source publication result.
+ * Boundary: serialization records validated trust but never creates it. */
+static int source_manifest_write_json_file(const char *out_path,
+                                           const yvex_source_manifest_options *options,
+                                           const yvex_source_manifest_file_list *files,
+                                           yvex_error *err) {
     FILE *fp;
     size_t i;
 
     if (!out_path || !options || !files) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_manifest_json", "out_path, options, and files are required");
-        return YVEX_ERR_INVALID_ARG;
+        return publish_refuse(err, YVEX_ERR_INVALID_ARG, "source_manifest_json",
+            "out_path, options, and files are required");
     }
 
     fp = fopen(out_path, "wb");
     if (!fp) {
-        yvex_error_setf(err, YVEX_ERR_IO, "source_manifest_json", "cannot open output manifest: %s", out_path);
+        yvex_error_setf(
+            err, YVEX_ERR_IO, "source_manifest_json", "cannot open output manifest: %s", out_path);
         return YVEX_ERR_IO;
     }
 
@@ -141,7 +143,11 @@ int yvex_source_manifest_write_json_file(const char *out_path,
     fprintf(fp, "}\n");
 
     if (fclose(fp) != 0) {
-        yvex_error_setf(err, YVEX_ERR_IO, "source_manifest_json", "failed closing output manifest: %s", out_path);
+        yvex_error_setf(err,
+                        YVEX_ERR_IO,
+                        "source_manifest_json",
+                        "failed closing output manifest: %s",
+                        out_path);
         return YVEX_ERR_IO;
     }
     return YVEX_OK;
@@ -149,12 +155,15 @@ int yvex_source_manifest_write_json_file(const char *out_path,
 
 typedef int (*source_atomic_writer)(FILE *fp, const void *context);
 
-/* Publishes one same-directory temporary file through fsync and atomic rename. */
+/* Purpose: publishes one same-directory temporary file through fsync and atomic rename.
+ * Inputs: typed source publication arguments; borrowed inputs outlive the call.
+ * Effects: writes only the explicit source publication destination through its transaction.
+ * Failure: serialization or I/O failure publishes no partial source publication result.
+ * Boundary: serialization records validated trust but never creates it. */
 static int source_publish_atomic(const char *out_path,
                                  source_atomic_writer writer,
                                  const void *context,
-                                 yvex_error *err)
-{
+                                 yvex_error *err) {
     char temporary[YVEX_PATH_CAP];
     int fd = -1;
     FILE *fp = NULL;
@@ -162,59 +171,65 @@ static int source_publish_atomic(const char *out_path,
     int rc = YVEX_ERR_IO;
 
     if (!out_path || !writer) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_publish_atomic",
-                       "output path and writer are required");
-        return YVEX_ERR_INVALID_ARG;
+        return publish_refuse(err, YVEX_ERR_INVALID_ARG, "source_publish_atomic",
+            "output path and writer are required");
     }
-    n = snprintf(temporary, sizeof(temporary), "%s.tmp.%ld", out_path,
-                 (long)getpid());
+    n = snprintf(temporary, sizeof(temporary), "%s.tmp.%ld", out_path, (long)getpid());
     if (n < 0 || (size_t)n >= sizeof(temporary)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "source_publish_atomic",
-                       "temporary manifest path is too long");
+        yvex_error_set(
+            err, YVEX_ERR_BOUNDS, "source_publish_atomic", "temporary manifest path is too long");
         return YVEX_ERR_BOUNDS;
     }
     fd = open(temporary, O_WRONLY | O_CREAT | O_EXCL, 0666);
     if (fd < 0) {
-        yvex_error_setf(err, YVEX_ERR_IO, "source_publish_atomic",
-                        "cannot create temporary output: %s", temporary);
+        yvex_error_setf(err,
+                        YVEX_ERR_IO,
+                        "source_publish_atomic",
+                        "cannot create temporary output: %s",
+                        temporary);
         return YVEX_ERR_IO;
     }
     fp = fdopen(fd, "wb");
     if (!fp) {
         close(fd);
         unlink(temporary);
-        yvex_error_setf(err, YVEX_ERR_IO, "source_publish_atomic",
-                        "cannot open temporary output stream: %s", temporary);
+        yvex_error_setf(err,
+                        YVEX_ERR_IO,
+                        "source_publish_atomic",
+                        "cannot open temporary output stream: %s",
+                        temporary);
         return YVEX_ERR_IO;
     }
     fd = -1;
     if (!writer(fp, context) || fflush(fp) != 0 ||
         getenv("YVEX_TEST_FAIL_SOURCE_PUBLISH_AFTER_WRITE")) {
-        yvex_error_set(err, YVEX_ERR_IO, "source_publish_atomic",
-                       "temporary output write failed");
+        yvex_error_set(err, YVEX_ERR_IO, "source_publish_atomic", "temporary output write failed");
         goto cleanup;
     }
     if (fsync(fileno(fp)) != 0) {
-        yvex_error_set(err, YVEX_ERR_IO, "source_publish_atomic",
-                       "temporary output fsync failed");
+        yvex_error_set(err, YVEX_ERR_IO, "source_publish_atomic", "temporary output fsync failed");
         goto cleanup;
     }
     if (fclose(fp) != 0) {
         fp = NULL;
-        yvex_error_set(err, YVEX_ERR_IO, "source_publish_atomic",
-                       "temporary output close failed");
+        yvex_error_set(err, YVEX_ERR_IO, "source_publish_atomic", "temporary output close failed");
         goto cleanup;
     }
     fp = NULL;
     if (rename(temporary, out_path) != 0) {
-        yvex_error_setf(err, YVEX_ERR_IO, "source_publish_atomic",
-                        "atomic output rename failed: %s", strerror(errno));
+        yvex_error_setf(err,
+                        YVEX_ERR_IO,
+                        "source_publish_atomic",
+                        "atomic output rename failed: %s",
+                        strerror(errno));
         goto cleanup;
     }
     rc = YVEX_OK;
 cleanup:
-    if (fp) fclose(fp);
-    if (rc != YVEX_OK) unlink(temporary);
+    if (fp)
+        fclose(fp);
+    if (rc != YVEX_OK)
+        unlink(temporary);
     return rc;
 }
 
@@ -223,37 +238,48 @@ typedef struct {
     const yvex_source_verification *verification;
 } source_verified_manifest_context;
 
-/* Serializes already-approved exact verification facts to a temporary stream. */
-static int source_write_verified_manifest(FILE *fp, const void *opaque)
-{
+/* Purpose: serializes already-approved exact verification facts to a temporary stream.
+ * Inputs: typed source publication arguments; borrowed inputs outlive the call.
+ * Effects: writes only the explicit source publication destination through its transaction.
+ * Failure: serialization or I/O failure publishes no partial source publication result.
+ * Boundary: serialization records validated trust but never creates it. */
+static int source_write_verified_manifest(FILE *fp, const void *opaque) {
     const source_verified_manifest_context *context =
         (const source_verified_manifest_context *)opaque;
     const yvex_source_verify_options *options = context->options;
     const yvex_source_verification *verification = context->verification;
 
-    if (fprintf(fp, "{\n  \"schema\": \"yvex.source_manifest.v2\",\n"
-                    "  \"status\": \"complete\",\n"
-                    "  \"target\": {\"id\": ") < 0) return 0;
+    if (fprintf(fp,
+                "{\n  \"schema\": \"yvex.source_manifest.v2\",\n"
+                "  \"status\": \"complete\",\n"
+                "  \"target\": {\"id\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, options->identity->target_id);
-    if (fprintf(fp, ", \"family\": ") < 0) return 0;
+    if (fprintf(fp, ", \"family\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, options->identity->family_key);
-    if (fprintf(fp, "},\n  \"source\": {\"kind\": \"huggingface\", "
-                    "\"repo\": ") < 0) return 0;
+    if (fprintf(fp,
+                "},\n  \"source\": {\"kind\": \"huggingface\", "
+                "\"repo\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, options->identity->upstream_repo_id);
-    if (fprintf(fp, ", \"revision\": ") < 0) return 0;
+    if (fprintf(fp, ", \"revision\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, verification->revision);
-    if (fprintf(fp, "},\n  \"local\": {\"path\": ") < 0) return 0;
+    if (fprintf(fp, "},\n  \"local\": {\"path\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, verification->resolved_source_path);
     if (fprintf(fp,
                 "},\n  \"verification\": {\n"
                 "    \"stage\": \"exact-source-metadata-header-verified\",\n"
-                "    \"inventory_authority\": ") < 0) return 0;
+                "    \"inventory_authority\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, verification->inventory_authority);
-    if (fprintf(fp,
-                ",\n    \"upstream_index_oid\": ") < 0) return 0;
+    if (fprintf(fp, ",\n    \"upstream_index_oid\": ") < 0)
+        return 0;
     yvex_file_json_write_string(
-        fp, verification->upstream_index_oid[0]
-                ? verification->upstream_index_oid : "not-applicable");
+        fp,
+        verification->upstream_index_oid[0] ? verification->upstream_index_oid : "not-applicable");
     return fprintf(fp,
                    ",\n    \"source_file_count\": %llu,\n"
                    "    \"source_total_bytes\": %llu,\n"
@@ -271,37 +297,34 @@ static int source_write_verified_manifest(FILE *fp, const void *opaque)
                    verification->header_tensor_count) >= 0;
 }
 
-/* Admits only blocker-free exact facts to atomic complete-manifest publication. */
-int yvex_source_manifest_publish_verified(
-    const char *out_path,
-    const yvex_source_verify_options *options,
-    const yvex_source_verification *verification,
-    yvex_error *err)
-{
+/* Purpose: admits only blocker-free exact facts to atomic complete-manifest publication.
+ * Inputs: typed source publication arguments; borrowed inputs outlive the call.
+ * Effects: writes only the explicit source publication destination through its transaction.
+ * Failure: serialization or I/O failure publishes no partial source publication result.
+ * Boundary: serialization records validated trust but never creates it. */
+int yvex_source_manifest_publish_verified(const char *out_path,
+                                          const yvex_source_verify_options *options,
+                                          const yvex_source_verification *verification,
+                                          yvex_error *err) {
     source_verified_manifest_context context;
 
     if (!out_path || !options || !options->identity || !verification ||
         !verification->path_verified || !verification->repository_verified ||
         !verification->revision_verified || !verification->config_valid ||
-        !verification->tokenizer_json_valid ||
-        !verification->tokenizer_config_valid ||
-        !verification->generation_config_valid ||
-        !verification->shard_index_headers_match ||
+        !verification->tokenizer_json_valid || !verification->tokenizer_config_valid ||
+        !verification->generation_config_valid || !verification->shard_index_headers_match ||
         verification->header_scan_count != 1u ||
         (strcmp(verification->inventory_authority, "upstream-index") == 0 &&
          !verification->upstream_index_identity_verified) ||
         (strcmp(verification->inventory_authority, "upstream-index") != 0 &&
          strcmp(verification->inventory_authority, "header-derived") != 0) ||
         verification->blocker_count != 0u) {
-        yvex_error_set(err, YVEX_ERR_UNSUPPORTED,
-                       "source_manifest_publish_verified",
-                       "only blocker-free exact verifier facts may publish a complete manifest");
-        return YVEX_ERR_UNSUPPORTED;
+        return publish_refuse(err, YVEX_ERR_UNSUPPORTED, "source_manifest_publish_verified",
+            "only blocker-free exact verifier facts may publish a complete manifest");
     }
     context.options = options;
     context.verification = verification;
-    return source_publish_atomic(out_path, source_write_verified_manifest,
-                                 &context, err);
+    return source_publish_atomic(out_path, source_write_verified_manifest, &context, err);
 }
 
 typedef struct {
@@ -309,37 +332,47 @@ typedef struct {
     const yvex_source_payload_session *session;
 } source_payload_manifest_context;
 
-/* Serializes a fully trusted payload set; raw payload bytes never enter output. */
-static int source_write_payload_manifest(FILE *fp, const void *opaque)
-{
+/* Purpose: serializes a fully trusted payload set; raw payload bytes never enter output.
+ * Inputs: typed source publication arguments; borrowed inputs outlive the call.
+ * Effects: writes only the explicit source publication destination through its transaction.
+ * Failure: serialization or I/O failure publishes no partial source publication result.
+ * Boundary: serialization records validated trust but never creates it. */
+static int source_write_payload_manifest(FILE *fp, const void *opaque) {
     const source_payload_manifest_context *context =
         (const source_payload_manifest_context *)opaque;
     const yvex_source_verification *verification = context->verification;
     const yvex_source_payload_session *session = context->session;
     unsigned long long index;
 
-    if (fprintf(fp, "{\n  \"schema\": \"yvex.source_manifest.v3\",\n"
-                    "  \"status\": \"complete\",\n"
-                    "  \"target\": {\"id\": ") < 0) return 0;
+    if (fprintf(fp,
+                "{\n  \"schema\": \"yvex.source_manifest.v3\",\n"
+                "  \"status\": \"complete\",\n"
+                "  \"target\": {\"id\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, session->target_id);
-    if (fprintf(fp, ", \"family\": ") < 0) return 0;
+    if (fprintf(fp, ", \"family\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, session->family_key);
     if (fprintf(fp, "},\n  \"source\": {\"kind\": \"huggingface\", \"repo\": ") < 0)
         return 0;
     yvex_file_json_write_string(fp, session->repository_id);
-    if (fprintf(fp, ", \"revision\": ") < 0) return 0;
+    if (fprintf(fp, ", \"revision\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, verification->revision);
-    if (fprintf(fp, "},\n  \"local\": {\"path\": ") < 0) return 0;
+    if (fprintf(fp, "},\n  \"local\": {\"path\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, verification->resolved_source_path);
     if (fprintf(fp,
                 "},\n  \"verification\": {\n"
                 "    \"stage\": \"exact-source-payload-verified\",\n"
-                "    \"inventory_authority\": ") < 0) return 0;
+                "    \"inventory_authority\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, verification->inventory_authority);
-    if (fprintf(fp, ",\n    \"upstream_index_oid\": ") < 0) return 0;
+    if (fprintf(fp, ",\n    \"upstream_index_oid\": ") < 0)
+        return 0;
     yvex_file_json_write_string(
-        fp, verification->upstream_index_oid[0]
-                ? verification->upstream_index_oid : "not-applicable");
+        fp,
+        verification->upstream_index_oid[0] ? verification->upstream_index_oid : "not-applicable");
     if (fprintf(fp,
                 ",\n    \"source_file_count\": %llu,\n"
                 "    \"source_total_bytes\": %llu,\n"
@@ -353,16 +386,19 @@ static int source_write_payload_manifest(FILE *fp, const void *opaque)
                 verification->source_total_bytes,
                 verification->shard_count,
                 verification->shard_bytes,
-                verification->header_tensor_count) < 0) return 0;
-    yvex_file_json_write_string(
-        fp, yvex_source_payload_trust_class_name(session->facts.trust_class));
+                verification->header_tensor_count) < 0)
+        return 0;
+    yvex_file_json_write_string(fp,
+                                yvex_source_payload_trust_class_name(session->facts.trust_class));
     if (fprintf(fp,
                 "\n  },\n  \"payload\": {\n"
-                "    \"identity\": ") < 0) return 0;
+                "    \"identity\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, session->facts.payload_identity);
-    if (fprintf(fp, ",\n    \"trust_class\": ") < 0) return 0;
-    yvex_file_json_write_string(
-        fp, yvex_source_payload_trust_class_name(session->facts.trust_class));
+    if (fprintf(fp, ",\n    \"trust_class\": ") < 0)
+        return 0;
+    yvex_file_json_write_string(fp,
+                                yvex_source_payload_trust_class_name(session->facts.trust_class));
     if (fprintf(fp,
                 ",\n    \"digest_algorithm\": \"sha256\",\n"
                 "    \"source_snapshot_identity\": %llu,\n"
@@ -375,7 +411,8 @@ static int source_write_payload_manifest(FILE *fp, const void *opaque)
                 session->facts.shard_count,
                 verification->shard_bytes,
                 session->facts.tensor_count,
-                session->facts.logical_tensor_bytes) < 0) return 0;
+                session->facts.logical_tensor_bytes) < 0)
+        return 0;
     for (index = 0u; index < session->shard_count; ++index) {
         const yvex_source_payload_owned_shard *shard = &session->shards[index];
 
@@ -387,52 +424,53 @@ static int source_write_payload_manifest(FILE *fp, const void *opaque)
                     "\"payload_bytes\": %llu, \"digest_algorithm\": ",
                     shard->public_fact.file_bytes,
                     shard->public_fact.data_region_offset,
-                    shard->public_fact.payload_bytes) < 0) return 0;
+                    shard->public_fact.payload_bytes) < 0)
+            return 0;
         yvex_file_json_write_string(fp, shard->digest_algorithm);
-        if (fprintf(fp, ", \"digest_authority\": ") < 0) return 0;
+        if (fprintf(fp, ", \"digest_authority\": ") < 0)
+            return 0;
         yvex_file_json_write_string(fp, shard->digest_authority);
-        if (fprintf(fp, ", \"expected_digest\": ") < 0) return 0;
+        if (fprintf(fp, ", \"expected_digest\": ") < 0)
+            return 0;
         if (shard->expected_digest[0])
             yvex_file_json_write_string(fp, shard->expected_digest);
         else if (fprintf(fp, "null") < 0)
             return 0;
-        if (fprintf(fp, ", \"observed_digest\": ") < 0) return 0;
+        if (fprintf(fp, ", \"observed_digest\": ") < 0)
+            return 0;
         yvex_file_json_write_string(fp, shard->observed_digest);
-        if (fprintf(fp, ", \"trust_class\": ") < 0) return 0;
+        if (fprintf(fp, ", \"trust_class\": ") < 0)
+            return 0;
         yvex_file_json_write_string(
-            fp, yvex_source_payload_trust_class_name(
-                    shard->public_fact.trust_class));
-        if (fprintf(fp, "}%s\n",
-                    index + 1u == session->shard_count ? "" : ",") < 0)
+            fp, yvex_source_payload_trust_class_name(shard->public_fact.trust_class));
+        if (fprintf(fp, "}%s\n", index + 1u == session->shard_count ? "" : ",") < 0)
             return 0;
     }
     return fprintf(fp, "    ]\n  }\n}\n") >= 0;
 }
 
-/* Publishes v3 only after all digests and aggregate identity have completed. */
-int yvex_source_manifest_publish_payload(
-    const char *out_path,
-    const yvex_source_verification *verification,
-    const yvex_source_payload_session *session,
-    yvex_error *err)
-{
+/* Purpose: publishes v3 only after all digests and aggregate identity have completed.
+ * Inputs: typed source publication arguments; borrowed inputs outlive the call.
+ * Effects: writes only the explicit source publication destination through its transaction.
+ * Failure: serialization or I/O failure publishes no partial source publication result.
+ * Boundary: serialization records validated trust but never creates it. */
+int yvex_source_manifest_publish_payload(const char *out_path,
+                                         const yvex_source_verification *verification,
+                                         const yvex_source_payload_session *session,
+                                         yvex_error *err) {
     source_payload_manifest_context context;
 
-    if (!out_path || !verification ||
-        !verification->verified || !session ||
+    if (!out_path || !verification || !verification->verified || !session ||
         session->state != YVEX_SOURCE_PAYLOAD_STATE_VERIFYING ||
         session->facts.trust_class == YVEX_SOURCE_PAYLOAD_TRUST_NONE ||
         session->facts.trusted_shard_count != session->shard_count ||
         !session->facts.payload_identity[0]) {
-        yvex_error_set(err, YVEX_ERR_STATE,
-                       "source_manifest_publish_payload",
-                       "only complete trusted payload facts may publish a v3 manifest");
-        return YVEX_ERR_STATE;
+        return publish_refuse(err, YVEX_ERR_STATE, "source_manifest_publish_payload",
+            "only complete trusted payload facts may publish a v3 manifest");
     }
     context.verification = verification;
     context.session = session;
-    return source_publish_atomic(out_path, source_write_payload_manifest,
-                                 &context, err);
+    return source_publish_atomic(out_path, source_write_payload_manifest, &context, err);
 }
 
 typedef struct {
@@ -440,9 +478,12 @@ typedef struct {
     const yvex_source_derived_inventory *inventory;
 } source_derived_inventory_context;
 
-/* Serializes deterministic header-derived rows with explicit YVEX authority. */
-static int source_write_derived_inventory(FILE *fp, const void *opaque)
-{
+/* Purpose: serializes deterministic header-derived rows with explicit YVEX authority.
+ * Inputs: typed source publication arguments; borrowed inputs outlive the call.
+ * Effects: writes only the explicit source publication destination through its transaction.
+ * Failure: serialization or I/O failure publishes no partial source publication result.
+ * Boundary: serialization records validated trust but never creates it. */
+static int source_write_derived_inventory(FILE *fp, const void *opaque) {
     const source_derived_inventory_context *context =
         (const source_derived_inventory_context *)opaque;
     size_t i;
@@ -450,44 +491,45 @@ static int source_write_derived_inventory(FILE *fp, const void *opaque)
     if (fprintf(fp,
                 "{\n  \"schema\": \"yvex.source_header_inventory.v1\",\n"
                 "  \"authority\": \"yvex-header-derived\",\n"
-                "  \"repository\": ") < 0) return 0;
+                "  \"repository\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, context->options->identity->upstream_repo_id);
-    if (fprintf(fp, ",\n  \"revision\": ") < 0) return 0;
+    if (fprintf(fp, ",\n  \"revision\": ") < 0)
+        return 0;
     yvex_file_json_write_string(fp, context->options->identity->upstream_revision);
-    if (fprintf(fp, ",\n  \"weight_map\": {\n") < 0) return 0;
+    if (fprintf(fp, ",\n  \"weight_map\": {\n") < 0)
+        return 0;
     for (i = 0u; i < context->inventory->count; ++i) {
-        if (fprintf(fp, "    ") < 0) return 0;
+        if (fprintf(fp, "    ") < 0)
+            return 0;
         yvex_file_json_write_string(fp, context->inventory->rows[i].tensor);
-        if (fprintf(fp, ": ") < 0) return 0;
+        if (fprintf(fp, ": ") < 0)
+            return 0;
         yvex_file_json_write_string(fp, context->inventory->rows[i].shard);
-        if (fprintf(fp, "%s\n",
-                    i + 1u == context->inventory->count ? "" : ",") < 0) {
+        if (fprintf(fp, "%s\n", i + 1u == context->inventory->count ? "" : ",") < 0) {
             return 0;
         }
     }
     return fprintf(fp, "  }\n}\n") >= 0;
 }
 
-/* Atomically publishes a nonempty derived inventory outside the source tree. */
-int yvex_source_derived_inventory_publish(
-    const char *out_path,
-    const yvex_source_verify_options *options,
-    const yvex_source_derived_inventory *inventory,
-    yvex_error *err)
-{
+/* Purpose: atomically publishes a nonempty derived inventory outside the source tree.
+ * Inputs: typed source publication arguments; borrowed inputs outlive the call.
+ * Effects: writes only the explicit source publication destination through its transaction.
+ * Failure: serialization or I/O failure publishes no partial source publication result.
+ * Boundary: serialization records validated trust but never creates it. */
+int yvex_source_derived_inventory_publish(const char *out_path,
+                                          const yvex_source_verify_options *options,
+                                          const yvex_source_derived_inventory *inventory,
+                                          yvex_error *err) {
     source_derived_inventory_context context;
 
-    if (!out_path || !options || !inventory || !inventory->rows ||
-        inventory->count == 0u ||
-        strcmp(options->identity->upstream_inventory_authority,
-               "header-derived") != 0) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG,
-                       "source_derived_inventory_publish",
-                       "header-derived inventory output and rows are required");
-        return YVEX_ERR_INVALID_ARG;
+    if (!out_path || !options || !inventory || !inventory->rows || inventory->count == 0u ||
+        strcmp(options->identity->upstream_inventory_authority, "header-derived") != 0) {
+        return publish_refuse(err, YVEX_ERR_INVALID_ARG, "source_derived_inventory_publish",
+            "header-derived inventory output and rows are required");
     }
     context.options = options;
     context.inventory = inventory;
-    return source_publish_atomic(out_path, source_write_derived_inventory,
-                                 &context, err);
+    return source_publish_atomic(out_path, source_write_derived_inventory, &context, err);
 }

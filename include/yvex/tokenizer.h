@@ -1,54 +1,25 @@
-/*
- * Owner: abi.tokenizer (abi).
- * Owns: the public-abi boundary consumed by repository.
- * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
- * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
- * Boundary: public-abi; moving this contract requires an ownership-manifest change.
- *
- * YVEX - Tokenizer metadata and fixture tokenizer
- *
- * File: include/yvex/tokenizer.h
- * Layer: public tokenizer API
- *
- * Purpose:
- *   Defines tokenizer metadata, vocabulary, special-token, and controlled
- *   fixture encode/decode APIs built from GGUF metadata. This header does not
- *   claim generic SentencePiece, GPT-2 BPE, HuggingFace tokenizer execution,
- *   model execution, or backend support.
- *
- * Owns:
- *   - yvex_tokenizer
- *   - yvex_token_info
- *   - yvex_tokens
- *   - tokenizer metadata and special-token accessors
- *   - fixture tokenizer encode/decode helpers
- *
- * Does not own:
- *   - arbitrary real-world tokenizer algorithms
- *   - prompt rendering
- *   - model execution
- *   - backend/session state
- *
- * Used by:
- *   - prompt renderer
- *   - yvex CLI
- *   - tokenizer tests
- *
- * Validation:
- *   - make test-core
- *   - build/tests/test_tokenizer
- */
+/* Owner: public tokenizer ABI.
+ * Owns: tokenizer views, tokenization, detokenization, and prompt rendering.
+ * Does not own: model admission, runtime sessions, or sampling.
+ * Invariants: declarations are format-stable, externally consumable, and independently includable.
+ * Boundary: tokenizer and prompt contracts derived from admitted metadata.
+ * Purpose: Expose tokenizer and prompt contracts derived from admitted metadata.
+ * Inputs: Typed caller-owned values and immutable borrowed views as declared below.
+ * Effects: Only functions with explicit lifecycle or I/O contracts mutate external state.
+ * Failure: Typed status and error outputs remain authoritative; declarations add no capability. */
 #ifndef YVEX_TOKENIZER_H
 #define YVEX_TOKENIZER_H
 
-#include <yvex/error.h>
-#include <yvex/gguf.h>
+#include <yvex/core.h>
 #include <yvex/model.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+typedef struct yvex_gguf yvex_gguf;
+
+/* Tokenizer. */
 typedef struct yvex_tokenizer yvex_tokenizer;
 
 typedef enum {
@@ -132,6 +103,41 @@ int yvex_detokenize_ids(const yvex_tokenizer *tokenizer,
 
 void yvex_tokens_clear(yvex_tokens *tokens);
 void yvex_tokens_free(yvex_tokens *tokens);
+
+/* Prompt rendering. */
+typedef enum {
+    YVEX_PROMPT_ROLE_SYSTEM = 0,
+    YVEX_PROMPT_ROLE_USER,
+    YVEX_PROMPT_ROLE_ASSISTANT,
+    YVEX_PROMPT_ROLE_TOOL
+} yvex_prompt_role;
+
+typedef struct {
+    yvex_prompt_role role;
+    const char *content;
+} yvex_prompt_message;
+
+typedef struct {
+    int add_bos;
+    int add_eos;
+    int add_generation_prompt;
+} yvex_prompt_options;
+
+typedef struct {
+    char *text;
+    unsigned long long len;
+} yvex_rendered_prompt;
+
+const char *yvex_prompt_role_name(yvex_prompt_role role);
+
+int yvex_prompt_render(yvex_rendered_prompt *out,
+                       const yvex_tokenizer *tokenizer,
+                       const yvex_prompt_message *messages,
+                       unsigned long long message_count,
+                       const yvex_prompt_options *options,
+                       yvex_error *err);
+
+void yvex_rendered_prompt_free(yvex_rendered_prompt *prompt);
 
 #ifdef __cplusplus
 }

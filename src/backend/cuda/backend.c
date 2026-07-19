@@ -1,22 +1,26 @@
-/*
- * cuda/cuda_backend.c - CUDA backend object lifecycle.
- *
- * Owner: src/backend/cuda.
- * Owns: Driver API discovery, device/context lifetime, backend status, vtable
- * attachment, and coordinated context/module close.
- * Does not own: generated bundle contents, symbol policy, op geometry, CLI
- * output, graph semantics, qtype compute, or runtime generation.
- * Invariants: context creation yields context-ready only; ready requires atomic
- * canonical bundle admission; close clears every owned Driver API handle.
+/* Owner: src/backend/cuda.
+ * Owns: Driver API discovery, device/context lifetime, backend status, vtable attachment, and coordinated
+ *   context/module close.
+ * Does not own: generated bundle contents, symbol policy, op geometry, CLI output, graph semantics, qtype compute,
+ *   or runtime generation.
+ * Invariants: context creation yields context-ready only; ready requires atomic canonical bundle admission; close
+ *   clears every owned Driver API handle.
  * Boundary: an open CUDA context is not primitive or model runtime support.
- */
+ * Purpose: Construct and release the dynamically admitted CUDA backend context.
+ * Inputs: Driver discovery results, device selection, and caller-owned backend result storage.
+ * Effects: Creates or tears down only CUDA Driver resources owned by the backend.
+ * Failure: Returns typed CUDA admission or cleanup failures without publishing partial readiness. */
 
-#include "driver.h"
+#include "src/backend/cuda/private.h"
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
-
+/* Purpose: Translate operator input into the canonical typed parse device index value without ambiguous aliases.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static int parse_device_index(const char *text, int *out, yvex_error *err)
 {
     long value = 0;
@@ -47,6 +51,11 @@ static int parse_device_index(const char *text, int *out, yvex_error *err)
     return YVEX_OK;
 }
 
+/* Purpose: Release the resources owned by close without changing borrowed inputs.
+ * Inputs: An owned object that may be null or already released where its lifecycle permits.
+ * Effects: Releases only resources owned by the supplied object and leaves it reset or unusable.
+ * Failure: Null and already-released inputs follow the idempotent lifecycle contract.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static int cuda_close(yvex_backend *backend, yvex_error *err)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
@@ -89,6 +98,7 @@ static int cuda_close(yvex_backend *backend, yvex_error *err)
     return first_rc;
 }
 
+/* Purpose: Implement the canonical memory stats mechanism owned by the CUDA backend boundary. */
 static int cuda_memory_stats(const yvex_backend *backend,
                              yvex_backend_memory_stats *out,
                              yvex_error *err)
@@ -103,6 +113,7 @@ static int cuda_memory_stats(const yvex_backend *backend,
     return YVEX_OK;
 }
 
+/* Purpose: Implement the canonical device info mechanism owned by the CUDA backend boundary. */
 static int cuda_device_info(const yvex_backend *backend,
                             yvex_backend_device_info *out,
                             yvex_error *err)
@@ -123,6 +134,7 @@ static int cuda_device_info(const yvex_backend *backend,
     return YVEX_OK;
 }
 
+/* Purpose: Implement the canonical sync mechanism owned by the CUDA backend boundary. */
 static int cuda_sync(yvex_backend *backend, yvex_error *err)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
@@ -158,6 +170,11 @@ static const yvex_backend_vtable cuda_vtable = {
     yvex_cuda_op_attention,
 };
 
+/* Purpose: Construct the admitted open impl state only after its identities and resources are valid.
+ * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 int yvex_backend_open_cuda_impl(yvex_backend **out,
                                 const char *device,
                                 unsigned long long memory_limit_bytes,

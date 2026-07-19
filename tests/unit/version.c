@@ -22,7 +22,7 @@
  *   - exits 0 on success
  *   - prints concise failure to stderr
  */
-#include <yvex/version.h>
+#include <yvex/core.h>
 
 #include "tests/test.h"
 

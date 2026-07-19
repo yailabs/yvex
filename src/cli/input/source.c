@@ -1,19 +1,22 @@
-/*
- * source.c - source command argument parser.
- *
- * Owner: src/cli/input.
+/* Owner: src/cli/input.
  * Owns: argv parsing and option validation for source-manifest report.
  * Does not own: source report building, rendering, local scanning, runtime, generation, eval, or benchmark.
  * Invariants: parsing produces a typed request and performs no domain IO.
  * Boundary: CLI parsing is not source verification or runtime readiness.
- */
-#include "source.h"
+ * Purpose: provide argv parsing and option validation for source-manifest report.
+ * Inputs: bounded command arguments and caller-owned typed request storage.
+ * Effects: publishes request fields only after complete grammar validation.
+ * Failure: invalid or ambiguous grammar leaves the request uncommitted. */
+#include "src/cli/input/private.h"
 
-#include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
+/* Purpose: Parse source output mode parse into typed CLI state (`source_output_mode_parse`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int source_output_mode_parse(const char *value,
                                     yvex_source_render_mode *mode)
 {
@@ -39,23 +42,7 @@ static int source_output_mode_parse(const char *value,
     return 0;
 }
 
-static int source_parse_positive_ull(const char *text, unsigned long long *out)
-{
-    char *end = NULL;
-    unsigned long long value;
-
-    if (!text || !out || text[0] == '\0' || text[0] == '-') {
-        return 0;
-    }
-    errno = 0;
-    value = strtoull(text, &end, 10);
-    if (errno != 0 || !end || *end != '\0' || value == 0) {
-        return 0;
-    }
-    *out = value;
-    return 1;
-}
-
+/* Purpose: Compute source path basename for its CLI invariant (`source_path_basename`). */
 static const char *source_path_basename(const char *path)
 {
     const char *slash;
@@ -65,6 +52,7 @@ static const char *source_path_basename(const char *path)
     return slash && slash[1] ? slash + 1 : path;
 }
 
+/* Purpose: Compute source target matches family name for its CLI invariant (`source_target_matches_family_name`). */
 static int source_target_matches_family_name(const char *family,
                                              const char *target)
 {
@@ -78,6 +66,11 @@ static int source_target_matches_family_name(const char *family,
     return 0;
 }
 
+/* Purpose: Parse source args parse into typed CLI state (`yvex_source_args_parse`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_source_args_parse(int argc,
                            char **argv,
                            yvex_source_args *out,
@@ -86,7 +79,8 @@ int yvex_source_args_parse(int argc,
     int i;
 
     if (!out) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: output args are required");
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+            "source-manifest report: output args are required");
         return YVEX_ERR_INVALID_ARG;
     }
     memset(out, 0, sizeof(*out));
@@ -103,31 +97,36 @@ int yvex_source_args_parse(int argc,
             return YVEX_OK;
         } else if (strcmp(argv[i], "--family") == 0) {
             if (i + 1 >= argc) {
-                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --family requires deepseek|qwen|gemma");
+                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+                    "source-manifest report: --family requires deepseek|qwen|gemma");
                 return YVEX_ERR_INVALID_ARG;
             }
             out->family = argv[++i];
         } else if (strcmp(argv[i], "--release") == 0) {
             if (i + 1 >= argc) {
-                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --release requires VERSION");
+                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+                    "source-manifest report: --release requires VERSION");
                 return YVEX_ERR_INVALID_ARG;
             }
             out->release = argv[++i];
         } else if (strcmp(argv[i], "--models-root") == 0) {
             if (i + 1 >= argc) {
-                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --models-root requires DIR");
+                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+                    "source-manifest report: --models-root requires DIR");
                 return YVEX_ERR_INVALID_ARG;
             }
             out->models_root = argv[++i];
         } else if (strcmp(argv[i], "--source") == 0) {
             if (i + 1 >= argc) {
-                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --source requires DIR");
+                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+                    "source-manifest report: --source requires DIR");
                 return YVEX_ERR_INVALID_ARG;
             }
             out->source = argv[++i];
         } else if (strcmp(argv[i], "--target") == 0) {
             if (i + 1 >= argc) {
-                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --target requires TARGET");
+                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+                    "source-manifest report: --target requires TARGET");
                 return YVEX_ERR_INVALID_ARG;
             }
             out->target = argv[++i];
@@ -145,28 +144,33 @@ int yvex_source_args_parse(int argc,
             out->strict = 1;
         } else if (strcmp(argv[i], "--tensor-limit") == 0) {
             if (i + 1 >= argc) {
-                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --tensor-limit requires N");
+                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+                    "source-manifest report: --tensor-limit requires N");
                 return YVEX_ERR_INVALID_ARG;
             }
-            if (!source_parse_positive_ull(argv[++i], &out->tensor_limit)) {
-                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --tensor-limit requires a positive integer");
+            if (!parse_positive_ull(argv[++i], &out->tensor_limit)) {
+                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+                    "source-manifest report: --tensor-limit requires a positive integer");
                 return YVEX_ERR_INVALID_ARG;
             }
         } else if (strcmp(argv[i], "--audit") == 0) {
             out->render_mode = YVEX_SOURCE_RENDER_AUDIT;
         } else if (strcmp(argv[i], "--output") == 0) {
             if (i + 1 >= argc) {
-                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --output requires normal|table|audit|json");
+                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+                    "source-manifest report: --output requires normal|table|audit|json");
                 return YVEX_ERR_INVALID_ARG;
             }
             if (!source_output_mode_parse(argv[++i], &out->render_mode)) {
-                yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: unsupported output mode: %s", argv[i]);
+                yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+                    "source-manifest report: unsupported output mode: %s", argv[i]);
                 return YVEX_ERR_INVALID_ARG;
             }
         } else if (strcmp(argv[i], "--json") == 0) {
             out->render_mode = YVEX_SOURCE_RENDER_JSON;
         } else {
-            yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: unknown option: %s", argv[i]);
+            yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+                "source-manifest report: unknown option: %s", argv[i]);
             return YVEX_ERR_INVALID_ARG;
         }
     }
@@ -176,7 +180,8 @@ int yvex_source_args_parse(int argc,
         return YVEX_ERR_INVALID_ARG;
     }
     if (!yvex_source_report_find_profile(out->family)) {
-        yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: unsupported family: %s", out->family);
+        yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+            "source-manifest report: unsupported family: %s", out->family);
         return YVEX_ERR_INVALID_ARG;
     }
     if (!out->release || out->release[0] == '\0') {
@@ -184,7 +189,8 @@ int yvex_source_args_parse(int argc,
         return YVEX_ERR_INVALID_ARG;
     }
     if (strcmp(out->release, "v0.1.0") != 0) {
-        yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: unsupported release: %s", out->release);
+        yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+            "source-manifest report: unsupported release: %s", out->release);
         return YVEX_ERR_INVALID_ARG;
     }
     if (out->strict && strcmp(out->family, "deepseek") != 0) {
@@ -195,6 +201,11 @@ int yvex_source_args_parse(int argc,
     return YVEX_OK;
 }
 
+/* Purpose: Parse source report request from parsed into typed CLI state (`yvex_source_report_request_from_parsed`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_source_report_request_from_parsed(yvex_source_report_request *request,
                                             const yvex_source_args *args)
 {

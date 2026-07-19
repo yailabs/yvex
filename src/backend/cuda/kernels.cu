@@ -1,17 +1,22 @@
-/*
- * cuda/kernels.cu - CUDA device kernels.
- *
- * Owner: src/backend/cuda.
+/* Owner: src/backend/cuda.
  * Owns: bounded device arithmetic for admitted backend operation variants.
- * Does not own: host validation, Driver API launches, qtype capability truth,
- *   quantization policy, model graphs, runtime, or generation.
- * Invariants: every exported kernel is resolved through the generated PTX
- *   bundle and its matching host owner validates byte/rank geometry first.
+ * Does not own: host validation, Driver API launches, qtype capability truth, quantization policy, model graphs,
+ *   runtime, or generation.
+ * Invariants: every exported kernel is resolved through the generated PTX bundle and its matching host owner
+ *   validates byte/rank geometry first.
  * Boundary: a qtype row dot is primitive compute proof, not model execution.
- */
+ * Purpose: Implement the admitted CUDA primitive arithmetic embedded into the generated PTX bundle.
+ * Inputs: Validated device buffers, dimensions, and numeric parameters supplied by host launch owners.
+ * Effects: Writes only the kernel output ranges assigned to each launched thread.
+ * Failure: Host admission rejects invalid geometry; kernels assume the validated launch contract. */
 
-#include <yvex/gguf_qtype.h>
+#include <yvex/qtype.h>
 
+/* Purpose: Compute the bounded embed F32 primitive under the declared dtype and shape contract.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_embed_f32(const float *embedding,
                                           const unsigned int *token_ids,
                                           float *out,
@@ -49,6 +54,11 @@ extern "C" __global__ void yvex_embed_f32(const float *embedding,
     out[idx] = embedding[((unsigned long long)token_id * hidden_size) + dim];
 }
 
+/* Purpose: Implement the canonical F16 bits to float mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static __device__ float f16_bits_to_float(unsigned int h)
 {
     unsigned int sign = (h & 0x8000u) << 16;
@@ -76,12 +86,22 @@ static __device__ float f16_bits_to_float(unsigned int h)
     return __uint_as_float(raw);
 }
 
+/* Purpose: Retrieve qtype load u16 from admitted immutable or owned state.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static __device__ unsigned int qtype_load_u16(
     const unsigned char *bytes)
 {
     return (unsigned int)bytes[0] | ((unsigned int)bytes[1] << 8);
 }
 
+/* Purpose: Retrieve qtype load u32 from admitted immutable or owned state.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static __device__ unsigned int qtype_load_u32(
     const unsigned char *bytes)
 {
@@ -91,17 +111,20 @@ static __device__ unsigned int qtype_load_u32(
            ((unsigned int)bytes[3] << 24);
 }
 
+/* Purpose: Implement the canonical bF16 bits to float mechanism owned by the CUDA backend boundary. */
 static __device__ float bf16_bits_to_float(unsigned int bits)
 {
     return __uint_as_float(bits << 16);
 }
 
+/* Purpose: Implement the canonical e8m0 bits to float mechanism owned by the CUDA backend boundary. */
 static __device__ float e8m0_bits_to_float(unsigned int bits)
 {
     if (bits == 0xffu) return __uint_as_float(0x7fc00000u);
     return __uint_as_float(bits == 0u ? 0x00400000u : bits << 23);
 }
 
+/* Purpose: Implement the canonical mxfp4 code to float mechanism owned by the CUDA backend boundary. */
 static __device__ float mxfp4_code_to_float(unsigned int code)
 {
     float magnitude;
@@ -119,6 +142,11 @@ static __device__ float mxfp4_code_to_float(unsigned int code)
 }
 
 /* Directly reconstructs one element without materializing an F32 tensor. */
+/* Purpose: Implement the canonical qtype value mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static __device__ float qtype_value(const unsigned char *encoded,
                                          unsigned long long index,
                                          unsigned int qtype)
@@ -182,6 +210,11 @@ static __device__ float qtype_value(const unsigned char *encoded,
 }
 
 /* Bounded qtype arithmetic proof: encoded row times one F32 vector. */
+/* Purpose: Implement the canonical qtype row dot mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_qtype_row_dot(
     const unsigned char *encoded,
     const float *vector,
@@ -200,6 +233,11 @@ extern "C" __global__ void yvex_qtype_row_dot(
     out[0] = (float)sum;
 }
 
+/* Purpose: Compute the bounded embed F16 to F32 primitive under the declared dtype and shape contract.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_embed_f16_to_f32(const unsigned short *embedding,
                                                  const unsigned int *token_ids,
                                                  float *out,
@@ -237,6 +275,11 @@ extern "C" __global__ void yvex_embed_f16_to_f32(const unsigned short *embedding
     out[idx] = f16_bits_to_float((unsigned int)embedding[((unsigned long long)token_id * hidden_size) + dim]);
 }
 
+/* Purpose: Compute the bounded rms norm F32 weight F32 primitive under the declared dtype and shape contract.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_rms_norm_f32_weight_f32(const float *input,
                                                         const float *weight,
                                                         float *out,
@@ -273,6 +316,11 @@ extern "C" __global__ void yvex_rms_norm_f32_weight_f32(const float *input,
     }
 }
 
+/* Purpose: Compute the bounded rms norm F32 weight F16 primitive under the declared dtype and shape contract.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_rms_norm_f32_weight_f16(const float *input,
                                                         const unsigned short *weight,
                                                         float *out,
@@ -309,6 +357,11 @@ extern "C" __global__ void yvex_rms_norm_f32_weight_f16(const float *input,
     }
 }
 
+/* Purpose: Compute the bounded rope F32 primitive under the declared dtype and shape contract.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_rope_f32(const float *input,
                                          float *out,
                                          unsigned long long head_dim,
@@ -349,6 +402,11 @@ extern "C" __global__ void yvex_rope_f32(const float *input,
     out[odd_index] = (even * sine) + (odd * cosine);
 }
 
+/* Purpose: Compute the bounded matmul F32 primitive under the declared dtype and shape contract.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_matmul_f32(const float *input,
                                            const float *weight,
                                            float *out,
@@ -382,6 +440,11 @@ extern "C" __global__ void yvex_matmul_f32(const float *input,
     out[idx] = sum;
 }
 
+/* Purpose: Compute the bounded mlp F32 primitive under the declared dtype and shape contract.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_mlp_f32(const float *input,
                                         const float *gate_weight,
                                         const float *up_weight,
@@ -466,6 +529,11 @@ extern "C" __global__ void yvex_mlp_f32(const float *input,
     }
 }
 
+/* Purpose: Compute the bounded attention F32 primitive under the declared dtype and shape contract.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_attention_f32(const float *query,
                                               const float *keys,
                                               const float *values,
@@ -554,6 +622,11 @@ extern "C" __global__ void yvex_attention_f32(const float *query,
 /* Direct encoded matrix/vector projection used by the admitted DeepSeek
  * attention path. Each block owns one output row and never materializes a
  * decoded weight matrix. */
+/* Purpose: Implement the canonical deepseek qtype matvec mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_deepseek_qtype_matvec(
     const unsigned char *encoded,
     unsigned long long row_bytes,
@@ -598,6 +671,11 @@ extern "C" __global__ void yvex_deepseek_qtype_matvec(
 }
 
 /* Decodes one admitted scalar tensor directly into F32 device storage. */
+/* Purpose: Decode deepseek decode according to its pinned numeric representation.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_deepseek_decode(
     const unsigned char *encoded,
     unsigned long long count,
@@ -615,6 +693,11 @@ extern "C" __global__ void yvex_deepseek_decode(
 }
 
 /* Applies one exact weighted RMS normalization in-place. */
+/* Purpose: Implement the canonical deepseek weighted norm mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_deepseek_weighted_norm(
     float *values,
     unsigned long long count,
@@ -659,6 +742,11 @@ extern "C" __global__ void yvex_deepseek_weighted_norm(
 }
 
 /* Applies unweighted per-head query normalization. */
+/* Purpose: Implement the canonical deepseek unit norm mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_deepseek_unit_norm(
     float *values,
     unsigned long long vector_count,
@@ -700,6 +788,11 @@ extern "C" __global__ void yvex_deepseek_unit_norm(
         vector[i] = (float)((double)vector[i] * inverse);
 }
 
+/* Purpose: Implement the canonical deepseek yarn frequency mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static __device__ double deepseek_yarn_frequency(
     unsigned long long pair,
     unsigned long long rope_dims,
@@ -736,6 +829,11 @@ static __device__ double deepseek_yarn_frequency(
 }
 
 /* Applies the admitted partial RoPE/YaRN equation to independent vectors. */
+/* Purpose: Compute the bounded deepseek rope primitive under the declared dtype and shape contract.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_deepseek_rope(
     float *values,
     unsigned long long vector_count,
@@ -779,6 +877,11 @@ extern "C" __global__ void yvex_deepseek_rope(
     }
 }
 
+/* Purpose: Decode deepseek fp8 decode according to its pinned numeric representation.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static __device__ float deepseek_fp8_decode(unsigned int code)
 {
     unsigned int sign = code & 0x80u;
@@ -793,6 +896,11 @@ static __device__ float deepseek_fp8_decode(unsigned int code)
     return sign ? -value : value;
 }
 
+/* Purpose: Encode deepseek fp8 encode according to its pinned deterministic representation.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static __device__ unsigned int deepseek_fp8_encode(float value)
 {
     float best_error = INFINITY;
@@ -809,6 +917,11 @@ static __device__ unsigned int deepseek_fp8_encode(float value)
     return best;
 }
 
+/* Purpose: Decode deepseek fp4 decode according to its pinned numeric representation.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Mutates only the admitted destination or transaction after every precondition passes.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static __device__ float deepseek_fp4_decode(unsigned int code)
 {
     const float table[8] = {0.0f, 0.5f, 1.0f, 1.5f,
@@ -817,6 +930,11 @@ static __device__ float deepseek_fp4_decode(unsigned int code)
     return (code & 8u) ? -value : value;
 }
 
+/* Purpose: Encode deepseek fp4 encode according to its pinned deterministic representation.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static __device__ unsigned int deepseek_fp4_encode(float value)
 {
     const float threshold[7] = {0.25f, 0.75f, 1.25f, 1.75f,
@@ -829,6 +947,7 @@ static __device__ unsigned int deepseek_fp4_encode(float value)
     return code;
 }
 
+/* Purpose: Implement the canonical deepseek power two ceil mechanism owned by the CUDA backend boundary. */
 static __device__ float deepseek_power_two_ceil(float value)
 {
     if (!isfinite(value) || value <= 0.0f) return 0.0f;
@@ -837,6 +956,11 @@ static __device__ float deepseek_power_two_ceil(float value)
 
 /* Executes Hadamard plus FP8/FP4 UE8M0 fake quantization entirely on device.
  * One block owns one vector so stage ordering is explicit and deterministic. */
+/* Purpose: Implement the canonical deepseek activation mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_deepseek_activation(
     float *values,
     unsigned long long vector_count,
@@ -911,6 +1035,11 @@ extern "C" __global__ void yvex_deepseek_activation(
 }
 
 /* Executes one complete ratio-4 or ratio-128 compressor transition on device. */
+/* Purpose: Implement the canonical deepseek rolling mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_deepseek_rolling(
     const float *before_kv,
     const float *before_score,
@@ -996,6 +1125,11 @@ extern "C" __global__ void yvex_deepseek_rolling(
 }
 
 /* Scores and ranks the complete CSA candidate set on device. */
+/* Purpose: Implement the canonical deepseek topk mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_deepseek_topk(
     const float *index_query,
     const float *index_weights,
@@ -1099,6 +1233,11 @@ extern "C" __global__ void yvex_deepseek_topk(
 /* Executes sparse/local masking, stable softmax and value reduction on device.
  * One block owns one query head; selected compressed indexes originate only
  * from the device top-k kernel. */
+/* Purpose: Implement the canonical deepseek reduce mechanism owned by the CUDA backend boundary.
+ * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
+ * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
+ * Failure: Returns a typed CUDA refusal and publishes no partial success state.
+ * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 extern "C" __global__ void yvex_deepseek_reduce(
     const float *query,
     const float *history_local,

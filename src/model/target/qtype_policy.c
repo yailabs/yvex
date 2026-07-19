@@ -1,33 +1,22 @@
-/*
- * qtype_policy.c - qtype policy report builder.
- *
- * Owner:
- *   src/model/target
- *
- * Owns:
- *   qtype policy facts, qtype refusal facts, and policy report construction.
- *
- * Does not own:
- *   CLI parsing, rendering, quantization execution, artifact emission, runtime
- *   execution, generation, eval, benchmark, or release decisions.
- *
- * Invariants:
- *   qtype policy facts are planning/report-only and do not perform
- *   quantization, write GGUF artifacts, or mark runtime paths ready.
- *
- * Boundary:
- *   qtype policy reporting is not quantization, artifact emission, runtime
- *   support, generation readiness, benchmark evidence, or release readiness.
- */
-#include "qtype_policy.h"
+/* Owner: src/model/target
+ * Owns: qtype policy facts, qtype refusal facts, and policy report construction.
+ * Does not own: CLI parsing, rendering, quantization execution, artifact emission, runtime execution, generation,
+ *   eval, benchmark, or release decisions.
+ * Invariants: qtype policy facts are planning/report-only and do not perform quantization, write GGUF artifacts, or
+ *   mark runtime paths ready.
+ * Boundary: qtype policy reporting is not quantization, artifact emission, runtime support, generation readiness,
+ *   benchmark evidence, or release readiness.
+ * Purpose: project source dtype and canonical numeric capability policy facts.
+ * Inputs: typed target requests and bounded header metadata.
+ * Effects: updates bounded policy report state only.
+ * Failure: unsupported family, release, or mode remains explicitly refused. */
+#include <yvex/internal/model_target.h>
 
-#include "private.h"
-#include "src/gguf/quant_numeric.h"
+#include <yvex/internal/quant_numeric.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 
 typedef struct {
     int source_requested;
@@ -49,119 +38,36 @@ typedef struct {
     const char *bracket;
 } qtype_policy_state;
 
-/*
- * qtype_policy_dir_exists()
- *
- * Purpose:
- *   classify whether the resolved source directory exists locally.
- *
- * Inputs:
- *   path is borrowed.
- *
- * Effects:
- *   performs a local stat only; no output is written.
- *
- * Failure:
- *   missing/unstatable paths return false.
- *
- * Boundary:
- *   directory presence is not source verification.
- */
-static int qtype_policy_dir_exists(const char *path)
-{
-    struct stat st;
+static const unsigned int policy_qtypes[] = {
+    YVEX_GGUF_QTYPE_F16, YVEX_GGUF_QTYPE_BF16,
+    YVEX_GGUF_QTYPE_F32, YVEX_GGUF_QTYPE_Q8_0,
+    YVEX_GGUF_QTYPE_Q2_K, YVEX_GGUF_QTYPE_Q4_K,
+    YVEX_GGUF_QTYPE_IQ2_XXS
+};
 
-    if (!path || !path[0]) {
-        return 0;
-    }
-    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
-}
+static const char *const policy_prefix_rows[] = {
+    "tensor_map_status: naming-map-profiled",
+    "output_head_map_status: output-head-profiled"
+};
 
-static int qtype_policy_file_exists(const char *path)
-{
-    FILE *fp;
+static const char *const policy_suffix_rows[] = {
+    "missing_role_report_status: missing-role-report-blocked",
+    "qtype_policy_basis: header-only-source-metadata+canonical-numeric-registry",
+    "qtype_policy_status: reported"
+};
 
-    if (!path || !path[0]) {
-        return 0;
-    }
-    fp = fopen(path, "rb");
-    if (!fp) {
-        return 0;
-    }
-    fclose(fp);
-    return 1;
-}
+static const char *const policy_downstream_rows[] = {
+    "refusal_reasons: Q4_K:encoder-unavailable IQ2_XXS:encoder-unavailable",
+    "artifact_identity_status: missing",
+    "runtime_descriptor_status: missing",
+    "graph_consumer_status: missing",
+    "backend_residency_status: missing",
+    "downstream_blockers: family_quantization_plan=missing artifact_emit=missing "
+    "artifact_identity=missing runtime_descriptor=missing graph_consumer=missing "
+    "backend_residency=missing generation_runtime=missing eval_benchmark=missing"
+};
 
-static unsigned long long qtype_policy_le64(const unsigned char bytes[8])
-{
-    return ((unsigned long long)bytes[0]) |
-           ((unsigned long long)bytes[1] << 8) |
-           ((unsigned long long)bytes[2] << 16) |
-           ((unsigned long long)bytes[3] << 24) |
-           ((unsigned long long)bytes[4] << 32) |
-           ((unsigned long long)bytes[5] << 40) |
-           ((unsigned long long)bytes[6] << 48) |
-           ((unsigned long long)bytes[7] << 56);
-}
-
-/*
- * qtype_policy_read_header()
- *
- * Purpose:
- *   read bounded safetensors header JSON for dtype and role evidence.
- *
- * Inputs:
- *   path is borrowed; out receives an owned string.
- *
- * Effects:
- *   reads only header bytes and never tensor payload bytes.
- *
- * Failure:
- *   returns false for missing, malformed, oversized, or allocation failures.
- *
- * Boundary:
- *   header evidence is report-only and not tensor materialization.
- */
-static int qtype_policy_read_header(const char *path, char **out)
-{
-    FILE *fp;
-    unsigned char len_bytes[8];
-    unsigned long long header_len;
-    char *json;
-
-    if (!path || !out) {
-        return 0;
-    }
-    *out = NULL;
-    fp = fopen(path, "rb");
-    if (!fp) {
-        return 0;
-    }
-    if (fread(len_bytes, 1u, sizeof(len_bytes), fp) != sizeof(len_bytes)) {
-        fclose(fp);
-        return 0;
-    }
-    header_len = qtype_policy_le64(len_bytes);
-    if (header_len == 0ull || header_len > 1024ull * 1024ull) {
-        fclose(fp);
-        return 0;
-    }
-    json = (char *)malloc((size_t)header_len + 1u);
-    if (!json) {
-        fclose(fp);
-        return 0;
-    }
-    if (fread(json, 1u, (size_t)header_len, fp) != (size_t)header_len) {
-        free(json);
-        fclose(fp);
-        return 0;
-    }
-    fclose(fp);
-    json[header_len] = '\0';
-    *out = json;
-    return 1;
-}
-
+/* Purpose: project the immutable bounded qtype policy count substr view. */
 static unsigned long qtype_policy_count_substr(const char *text, const char *needle)
 {
     unsigned long count = 0;
@@ -175,23 +81,6 @@ static unsigned long qtype_policy_count_substr(const char *text, const char *nee
         p += strlen(needle);
     }
     return count;
-}
-
-static void qtype_policy_source_dir(const yvex_model_target_request *request,
-                                    const char *family,
-                                    char *out,
-                                    size_t cap)
-{
-    if (!out || cap == 0u) {
-        return;
-    }
-    out[0] = '\0';
-    if (request->source_path[0]) {
-        (void)snprintf(out, cap, "%s", request->source_path);
-    } else if (request->models_root[0]) {
-        (void)snprintf(out, cap, "%s/hf/%s/%s",
-                       request->models_root, family, request->target_id);
-    }
 }
 
 /*
@@ -211,8 +100,7 @@ static void qtype_policy_source_dir(const yvex_model_target_request *request,
  *   missing source/header facts become typed blockers.
  *
  * Boundary:
- *   qtype planning facts do not execute quantization or emit artifacts.
- */
+ *   qtype planning facts do not execute quantization or emit artifacts. */
 static void qtype_policy_build_state(const yvex_model_target_request *request,
                                      const char *family,
                                      qtype_policy_state *state)
@@ -228,12 +116,13 @@ static void qtype_policy_build_state(const yvex_model_target_request *request,
     state->status = "policy-reported";
     state->bracket = "reported";
 
-    qtype_policy_source_dir(request, family, dir, sizeof(dir));
+    (void)yvex_model_target_probe_source_path(
+        request, family, NULL, dir, sizeof(dir));
     state->source_requested = dir[0] != '\0';
     if (!state->source_requested) {
         return;
     }
-    state->source_dir_exists = qtype_policy_dir_exists(dir);
+    state->source_dir_exists = yvex_model_target_probe_directory(dir);
     if (!state->source_dir_exists) {
         state->mapping_gate_status = "blocked-missing-source";
         state->top_blocker = strcmp(family, "gemma") == 0
@@ -246,7 +135,7 @@ static void qtype_policy_build_state(const yvex_model_target_request *request,
     }
 
     (void)snprintf(path, sizeof(path), "%s/model.safetensors", dir);
-    state->header_exists = qtype_policy_read_header(path, &header);
+    state->header_exists = yvex_model_target_probe_header(path, &header);
     if (!state->header_exists) {
         state->mapping_gate_status = "blocked-missing-dtype";
         state->top_blocker = "missing-source-dtype-profile";
@@ -289,16 +178,16 @@ static void qtype_policy_build_state(const yvex_model_target_request *request,
     }
 
     (void)snprintf(path, sizeof(path), "%s/tokenizer.json", dir);
-    state->metadata_present = qtype_policy_file_exists(path);
+    state->metadata_present = yvex_model_target_probe_file(path);
     (void)snprintf(path, sizeof(path), "%s/config.json", dir);
     state->metadata_present = state->metadata_present &&
-                              qtype_policy_file_exists(path);
+                              yvex_model_target_probe_file(path);
     (void)snprintf(path, sizeof(path), "%s/generation_config.json", dir);
     state->metadata_present = state->metadata_present &&
-                              qtype_policy_file_exists(path);
+                              yvex_model_target_probe_file(path);
     (void)snprintf(path, sizeof(path), "%s/special_tokens_map.json", dir);
     state->metadata_present = state->metadata_present &&
-                              qtype_policy_file_exists(path);
+                              yvex_model_target_probe_file(path);
     if (state->header_exists && !state->metadata_present &&
         strcmp(state->status, "policy-reported") == 0) {
         state->mapping_gate_status = "blocked-missing-runtime-roles";
@@ -325,34 +214,23 @@ static void qtype_policy_build_state(const yvex_model_target_request *request,
  *   none.
  *
  * Boundary:
- *   policy fields remain report-only facts.
- */
+ *   policy fields remain report-only facts. */
 static void qtype_policy_prepare(const yvex_model_target_request *request,
                                  const qtype_policy_state *state,
                                  yvex_model_target_report *report)
 {
     const char *target = request->target_id[0] ? request->target_id : "";
     const char *family = yvex_model_target_family_key(target);
+    const yvex_model_target_report_profile profile = {
+        .status = state->status, .target_id = target, .family = family,
+        .stage = "report-only", .qtype_policy_status = state->status,
+        .artifact_status = "missing", .runtime_status = "unsupported",
+        .generation_status = "unsupported-full-model", .benchmark_status = "not-measured",
+        .next_row = state->next_row, .reason = state->top_blocker,
+        .boundary = "report-only; no quantization/artifact/runtime"
+    };
 
-    report->kind = request->kind;
-    report->mode = request->mode;
-    report->status = state->status;
-    report->exit_code = 0;
-    snprintf(report->target_id, sizeof(report->target_id), "%s", target);
-    snprintf(report->family, sizeof(report->family), "%s", family);
-    snprintf(report->stage, sizeof(report->stage), "report-only");
-    snprintf(report->qtype_policy_status, sizeof(report->qtype_policy_status),
-             "%s", state->status);
-    snprintf(report->artifact_status, sizeof(report->artifact_status), "missing");
-    snprintf(report->runtime_status, sizeof(report->runtime_status), "unsupported");
-    snprintf(report->generation_status, sizeof(report->generation_status),
-             "unsupported-full-model");
-    snprintf(report->benchmark_status, sizeof(report->benchmark_status),
-             "not-measured");
-    snprintf(report->next_row, sizeof(report->next_row), "%s", state->next_row);
-    snprintf(report->reason, sizeof(report->reason), "%s", state->top_blocker);
-    snprintf(report->boundary, sizeof(report->boundary),
-             "report-only; no quantization/artifact/runtime");
+    yvex_model_target_report_prepare(report, request, &profile);
 }
 
 /*
@@ -371,8 +249,7 @@ static void qtype_policy_prepare(const yvex_model_target_request *request,
  *   returns 1 when a typed refusal has been populated.
  *
  * Boundary:
- *   refusal rows do not run quantization or inspect payload bytes.
- */
+ *   refusal rows do not run quantization or inspect payload bytes. */
 static int qtype_policy_validate(const yvex_model_target_request *request,
                                  yvex_model_target_report *report)
 {
@@ -444,6 +321,11 @@ static int qtype_policy_validate(const yvex_model_target_request *request,
     return 0;
 }
 
+/* Purpose: register one qtype policy add contract while preserving order and bounds.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static void qtype_policy_add_contract(const yvex_model_target_request *request,
                                       yvex_model_target_report *report)
 {
@@ -468,16 +350,15 @@ static void qtype_policy_add_contract(const yvex_model_target_request *request,
         report, "qtype-policy", request->output_contract);
 }
 
-/* Projects policy candidates through the canonical numeric registry. */
+/* Purpose: apply the canonical qtype policy numeric lists transformation and invariants.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
+
 static void qtype_policy_numeric_lists(char candidates[96],
                                        char refused[96])
 {
-    static const unsigned int policy_qtypes[] = {
-        YVEX_GGUF_QTYPE_F16, YVEX_GGUF_QTYPE_BF16,
-        YVEX_GGUF_QTYPE_F32, YVEX_GGUF_QTYPE_Q8_0,
-        YVEX_GGUF_QTYPE_Q2_K, YVEX_GGUF_QTYPE_Q4_K,
-        YVEX_GGUF_QTYPE_IQ2_XXS
-    };
     unsigned int index;
 
     candidates[0] = '\0';
@@ -501,6 +382,7 @@ static void qtype_policy_numeric_lists(char candidates[96],
     }
 }
 
+/* Purpose: register one qtype policy add table while preserving order and bounds. */
 static void qtype_policy_add_table(const qtype_policy_state *state,
                                    yvex_model_target_report *report)
 {
@@ -520,6 +402,11 @@ static void qtype_policy_add_table(const qtype_policy_state *state,
         state->status, state->next_row);
 }
 
+/* Purpose: register one qtype policy add audit while preserving order and bounds.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static void qtype_policy_add_audit(const qtype_policy_state *state,
                                    yvex_model_target_report *report)
 {
@@ -536,17 +423,15 @@ static void qtype_policy_add_audit(const qtype_policy_state *state,
                                      state->tensor_count);
     yvex_model_target_report_add_row(report, "mapping_gate_status: %s",
                                      state->mapping_gate_status);
-    yvex_model_target_report_add_row(report, "tensor_map_status: naming-map-profiled");
-    yvex_model_target_report_add_row(report, "output_head_map_status: output-head-profiled");
+    yvex_model_target_report_add_rows(
+        report, policy_prefix_rows,
+        sizeof(policy_prefix_rows) / sizeof(policy_prefix_rows[0]));
     yvex_model_target_report_add_row(
         report, "tokenizer_metadata_map_status: %s",
         state->metadata_present ? "present-report-only" : "missing");
-    yvex_model_target_report_add_row(report,
-                                     "missing_role_report_status: missing-role-report-blocked");
-    yvex_model_target_report_add_row(
-        report,
-        "qtype_policy_basis: header-only-source-metadata+canonical-numeric-registry");
-    yvex_model_target_report_add_row(report, "qtype_policy_status: reported");
+    yvex_model_target_report_add_rows(
+        report, policy_suffix_rows,
+        sizeof(policy_suffix_rows) / sizeof(policy_suffix_rows[0]));
     yvex_model_target_report_add_row(
         report,
         "numeric_capability.Q8_0: encoder=%s decoder=%s cpu=%s cuda=%s calibration=%s",
@@ -563,16 +448,9 @@ static void qtype_policy_add_audit(const qtype_policy_state *state,
         q2 && q2->dedicated_cpu_compute_available ? "available" : "unavailable",
         q2 && q2->dedicated_cuda_compute_available ? "available" : "unavailable",
         q2 ? yvex_quant_calibration_name(q2->calibration) : "unknown");
-    yvex_model_target_report_add_row(
-        report,
-        "refusal_reasons: Q4_K:encoder-unavailable IQ2_XXS:encoder-unavailable");
-    yvex_model_target_report_add_row(report, "artifact_identity_status: missing");
-    yvex_model_target_report_add_row(report, "runtime_descriptor_status: missing");
-    yvex_model_target_report_add_row(report, "graph_consumer_status: missing");
-    yvex_model_target_report_add_row(report, "backend_residency_status: missing");
-    yvex_model_target_report_add_row(
-        report,
-        "downstream_blockers: family_quantization_plan=missing artifact_emit=missing artifact_identity=missing runtime_descriptor=missing graph_consumer=missing backend_residency=missing generation_runtime=missing eval_benchmark=missing");
+    yvex_model_target_report_add_rows(
+        report, policy_downstream_rows,
+        sizeof(policy_downstream_rows) / sizeof(policy_downstream_rows[0]));
     yvex_model_target_report_add_row(report, "next_required_rows: %s",
                                      state->next_row);
     yvex_model_target_report_common_tail(report);
@@ -597,8 +475,7 @@ static void qtype_policy_add_audit(const qtype_policy_state *state,
  *   releases are returned through report exit_code.
  *
  * Boundary:
- *   qtype policy reporting is not quantization.
- */
+ *   qtype policy reporting is not quantization. */
 int yvex_qtype_policy_report_build(const yvex_model_target_request *request,
                                    yvex_model_target_report *report,
                                    yvex_error *err)

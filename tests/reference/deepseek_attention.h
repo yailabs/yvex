@@ -22,6 +22,8 @@
 #ifndef YVEX_TEST_DEEPSEEK_ATTENTION_REFERENCE_H
 #define YVEX_TEST_DEEPSEEK_ATTENTION_REFERENCE_H
 
+#include <yvex/internal/families/deepseek_v4.h>
+
 #include "src/graph/private.h"
 
 #define YVEX_TEST_ATTENTION_REFERENCE_REASON_CAP 192u

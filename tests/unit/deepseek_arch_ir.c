@@ -7,10 +7,10 @@
  */
 #include "tests/test.h"
 
-#include "src/model/families.h"
-#include "src/model/target/model_class_profile.h"
-#include "src/model/target/catalog.h"
-#include "src/source/verify.h"
+#include <yvex/internal/compilation.h>
+#include <yvex/internal/families/deepseek_v4.h>
+#include <yvex/internal/model_target.h>
+#include <yvex/internal/source.h>
 
 #include <limits.h>
 #include <stdlib.h>
@@ -55,7 +55,7 @@ static void arch_ir_verification_fixture(yvex_source_verification *source)
                  "/verified/DeepSeek-V4-Flash");
     arch_ir_copy(source->manifest_target_id,
                  sizeof(source->manifest_target_id),
-                 yvex_model_target_release_identity()->target_id);
+                 yvex_source_release_identity()->target_id);
     arch_ir_copy(source->verification_stage,
                  sizeof(source->verification_stage),
                  "exact-source-metadata-header-verified");
@@ -63,20 +63,20 @@ static void arch_ir_verification_fixture(yvex_source_verification *source)
                  sizeof(source->inventory_authority), "upstream-index");
     arch_ir_copy(source->upstream_index_oid,
                  sizeof(source->upstream_index_oid),
-                 yvex_model_target_release_identity()->upstream_index_oid);
+                 yvex_source_release_identity()->upstream_index_oid);
     arch_ir_copy(source->local_index_oid,
                  sizeof(source->local_index_oid),
-                 yvex_model_target_release_identity()->upstream_index_oid);
+                 yvex_source_release_identity()->upstream_index_oid);
     arch_ir_copy(source->source_kind, sizeof(source->source_kind),
                  "huggingface");
     arch_ir_copy(source->repository_id, sizeof(source->repository_id),
-                 yvex_model_target_release_identity()->upstream_repo_id);
+                 yvex_source_release_identity()->upstream_repo_id);
     arch_ir_copy(source->revision, sizeof(source->revision),
-                 yvex_model_target_release_identity()->upstream_revision);
+                 yvex_source_release_identity()->upstream_revision);
     arch_ir_copy(source->model_type, sizeof(source->model_type),
-                 yvex_model_target_release_identity()->config_model_type);
+                 yvex_source_release_identity()->config_model_type);
     arch_ir_copy(source->architecture, sizeof(source->architecture),
-                 yvex_model_target_release_identity()->config_architecture);
+                 yvex_source_release_identity()->config_architecture);
     arch_ir_copy(source->torch_dtype, sizeof(source->torch_dtype),
                  "bfloat16");
     arch_ir_copy(source->expert_dtype, sizeof(source->expert_dtype), "fp4");
@@ -269,9 +269,9 @@ static int test_arch_ir_golden_topology(void)
     csa = yvex_model_register_deepseek_v4()->ir.layer_at(ir, 2);
     hca = yvex_model_register_deepseek_v4()->ir.layer_at(ir, 3);
     YVEX_TEST_ASSERT(swa && csa && hca &&
-                     swa->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_SWA &&
-                     csa->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA &&
-                     hca->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_HCA,
+                     swa->attention_class == YVEX_ATTENTION_CLASS_SWA &&
+                     csa->attention_class == YVEX_ATTENTION_CLASS_CSA &&
+                     hca->attention_class == YVEX_ATTENTION_CLASS_HCA,
                      "every attention class has an explicit layer descriptor");
     YVEX_TEST_ASSERT(swa->head_dimension == 512 &&
                      swa->rope_head_dimension == 64 &&
@@ -288,10 +288,10 @@ static int test_arch_ir_golden_topology(void)
     YVEX_TEST_ASSERT(
         swa->attention_kv_activation.required &&
         swa->attention_kv_activation.quantization ==
-            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT &&
+            YVEX_ATTENTION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT &&
         swa->attention_kv_activation.block_width == 64 &&
         swa->attention_kv_activation.pre_transform ==
-            YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE &&
+            YVEX_ATTENTION_TRANSFORM_NONE &&
         !swa->compressor_activation.required,
         "SWA owns only runtime KV fake quantization");
     YVEX_TEST_ASSERT(
@@ -299,10 +299,10 @@ static int test_arch_ir_golden_topology(void)
         csa->compressor_activation.block_width == 64 &&
         csa->compressor_rotated_activation.required &&
         csa->compressor_rotated_activation.quantization ==
-            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT &&
+            YVEX_ATTENTION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT &&
         csa->compressor_rotated_activation.block_width == 32 &&
         csa->compressor_rotated_activation.pre_transform ==
-            YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_DAO_FHT_V1_1_0_POST2 &&
+            YVEX_ATTENTION_TRANSFORM_DAO_FHT_V1_1_0_POST2 &&
         csa->compressor_rotated_activation.zero_pad_hadamard_to_power_of_two,
         "CSA separates source 128x128 quantization from runtime activation quantization");
     YVEX_TEST_ASSERT(
@@ -310,7 +310,7 @@ static int test_arch_ir_golden_topology(void)
         csa->indexer_query_activation.block_width == 32 &&
         csa->sparse_topk.required &&
         csa->sparse_topk.policy ==
-            YVEX_DEEPSEEK_V4_RUNTIME_TOPK_YVEX_SCORE_DESC_ORDINAL_ASC_V1 &&
+            YVEX_ATTENTION_TOPK_SCORE_DESC_ORDINAL_ASC_V1 &&
         csa->sparse_topk.k == 512 &&
         csa->sparse_topk.equal_score_ordinal_ascending &&
         csa->sparse_topk.duplicate_ordinal_refused,
@@ -351,7 +351,7 @@ static int test_arch_ir_golden_topology(void)
     mtp = yvex_model_register_deepseek_v4()->ir.auxiliary_at(ir, 0);
     YVEX_TEST_ASSERT(mtp && mtp->layer.layer_index == 43 &&
                      mtp->layer.attention_class ==
-                         YVEX_DEEPSEEK_V4_ATTENTION_SWA &&
+                         YVEX_ATTENTION_CLASS_SWA &&
                      mtp->layer.moe.router_class ==
                          YVEX_DEEPSEEK_V4_ROUTER_LEARNED_HIDDEN_STATE &&
                      mtp->previous_hidden_width == 16384 &&
@@ -558,7 +558,7 @@ static int test_arch_ir_lifetime_and_allocation(void)
     memset(source, 0, sizeof(*source));
     free(source);
     YVEX_TEST_ASSERT_STREQ(yvex_model_register_deepseek_v4()->ir.model(ir)->repository,
-                           yvex_model_target_release_identity()->upstream_repo_id,
+                           yvex_source_release_identity()->upstream_repo_id,
                            "IR remains valid after source evidence release");
     YVEX_TEST_ASSERT(yvex_model_register_deepseek_v4()->ir.layer_at(ir, 42)->layer_index == 42,
                      "owned layer collection survives source release");
@@ -614,12 +614,12 @@ static int test_arch_ir_report_consumer_and_family_preservation(void)
     request.kind = YVEX_MODEL_TARGET_COMMAND_CLASS_PROFILE;
     request.mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
     arch_ir_copy(request.target_id, sizeof(request.target_id),
-                 yvex_model_target_release_identity()->target_id);
+                 yvex_source_release_identity()->target_id);
     yvex_error_clear(&err);
     YVEX_TEST_ASSERT(
         yvex_model_class_profile_deepseek_from_verification(
             &request, &source, &report, &err) == YVEX_OK &&
-            report.deepseek_architecture_ir != NULL &&
+            report.family_architecture != NULL &&
             strcmp(report.status, "typed-architecture-specified") == 0 &&
             strcmp(report.next_row,
                    "V010.SOURCE.PAYLOAD.STREAM.0") == 0,
@@ -664,8 +664,8 @@ static int test_runtime_numeric_identity_field_coverage(void)
     yvex_deepseek_v4_ir *ir = NULL;
     yvex_deepseek_v4_ir_failure failure;
     yvex_deepseek_v4_layer_spec *layer;
-    yvex_deepseek_v4_runtime_activation_policy activation;
-    yvex_deepseek_v4_runtime_sparse_topk_policy topk;
+    yvex_attention_activation_policy activation;
+    yvex_attention_topk_policy topk;
     char baseline[YVEX_TRANSFORM_IR_IDENTITY_CAP];
     char changed[YVEX_TRANSFORM_IR_IDENTITY_CAP];
     yvex_error err;
@@ -692,22 +692,22 @@ static int test_runtime_numeric_identity_field_coverage(void)
                        layer->compressor_rotated_activation = activation,
                        "activation required changes identity");
     ASSERT_ID_MUTATION(layer->compressor_rotated_activation.stage =
-                           YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_ATTENTION_KV_NON_ROPE,
+                           YVEX_ATTENTION_ACTIVATION_KV_NON_ROPE,
                        layer->compressor_rotated_activation = activation,
                        "activation stage changes identity");
     ASSERT_ID_MUTATION(layer->compressor_rotated_activation.quantization =
-                           YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT,
+                           YVEX_ATTENTION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT,
                        layer->compressor_rotated_activation = activation,
                        "activation qtype changes identity");
     ASSERT_ID_MUTATION(layer->compressor_rotated_activation.block_axis =
-                           YVEX_DEEPSEEK_V4_RUNTIME_AXIS_NONE,
+                           YVEX_ATTENTION_AXIS_NONE,
                        layer->compressor_rotated_activation = activation,
                        "activation axis changes identity");
     ASSERT_ID_MUTATION(layer->compressor_rotated_activation.block_width += 1ull,
                        layer->compressor_rotated_activation = activation,
                        "activation block width changes identity");
     ASSERT_ID_MUTATION(layer->compressor_rotated_activation.scale_format =
-                           YVEX_DEEPSEEK_V4_RUNTIME_SCALE_NONE,
+                           YVEX_ATTENTION_SCALE_NONE,
                        layer->compressor_rotated_activation = activation,
                        "activation scale format changes identity");
     ASSERT_ID_MUTATION(layer->compressor_rotated_activation.scale_dtype =
@@ -715,15 +715,15 @@ static int test_runtime_numeric_identity_field_coverage(void)
                        layer->compressor_rotated_activation = activation,
                        "activation scale dtype changes identity");
     ASSERT_ID_MUTATION(layer->compressor_rotated_activation.pre_transform =
-                           YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE,
+                           YVEX_ATTENTION_TRANSFORM_NONE,
                        layer->compressor_rotated_activation = activation,
                        "Hadamard policy changes identity");
     ASSERT_ID_MUTATION(layer->compressor_rotated_activation.tail_policy =
-                           YVEX_DEEPSEEK_V4_RUNTIME_TAIL_NONE,
+                           YVEX_ATTENTION_TAIL_NONE,
                        layer->compressor_rotated_activation = activation,
                        "activation tail changes identity");
     ASSERT_ID_MUTATION(layer->compressor_rotated_activation.nonfinite_policy =
-                           (yvex_deepseek_v4_runtime_nonfinite_policy)1,
+                           (yvex_attention_nonfinite_policy)1,
                        layer->compressor_rotated_activation = activation,
                        "activation finite policy changes identity");
     ASSERT_ID_MUTATION(layer->compressor_rotated_activation.fake_quant_inplace ^= 1,
@@ -740,7 +740,7 @@ static int test_runtime_numeric_identity_field_coverage(void)
                        layer->sparse_topk = topk,
                        "top-k version changes identity");
     ASSERT_ID_MUTATION(layer->sparse_topk.policy =
-                           YVEX_DEEPSEEK_V4_RUNTIME_TOPK_NONE,
+                           YVEX_ATTENTION_TOPK_NONE,
                        layer->sparse_topk = topk,
                        "top-k policy changes identity");
     ASSERT_ID_MUTATION(layer->sparse_topk.k -= 1ull,

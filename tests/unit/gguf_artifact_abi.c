@@ -35,7 +35,7 @@
 #include <unistd.h>
 
 #include "tests/test.h"
-#include "src/gguf/private.h"
+#include <yvex/internal/gguf.h>
 
 #define READER_TEST_DIR "build/tests/gguf-reader"
 

@@ -5,7 +5,8 @@
  * Layer: test
  */
 #include "tests/test.h"
-#include "src/source/private.h"
+#include <yvex/internal/source.h>
+#include <yvex/internal/source_payload.h>
 
 #include <errno.h>
 #include <limits.h>
@@ -14,7 +15,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <yvex/native_weights.h>
+#include <yvex/source.h>
 
 static int make_dir(const char *path)
 {

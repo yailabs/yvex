@@ -1,57 +1,32 @@
-/*
- * Owner: abi.gguf (abi).
- * Owns: the public-abi boundary consumed by repository.
- * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
- * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
- * Boundary: public-abi; moving this contract requires an ownership-manifest change.
- *
- * YVEX - GGUF parser
- *
- * File: include/yvex/gguf.h
- * Layer: public format API
- *
- * Purpose:
- *   Defines the file-backed GGUF v3 structural reader, immutable parsed view,
- *   typed refusal result, resource budgets, and metadata/tensor accessors.
- *
- * Owns:
- *   - YVEX_GGUF_MAGIC
- *   - yvex_gguf_header
- *   - yvex_gguf_probe
- *   - yvex_gguf
- *   - yvex_gguf_value
- *   - yvex_gguf_tensor_info
- *   - yvex_gguf_probe_file
- *   - yvex_gguf_read_header
- *   - yvex_gguf_open
- *   - yvex_gguf_close
- *   - metadata and tensor directory accessors
- *
- * Does not own:
- *   - qtype storage geometry
- *   - YVEX tensor table
- *   - model descriptor
- *   - model execution
- *
- * Used by:
- *   - yvex inspect
- *   - yvex metadata
- *   - yvex tensors
- *   - tests
- *
- * Validation:
- *   - make test-core
- *   - build/tests/test_gguf
- */
+/* Owner: public gguf ABI.
+ * Owns: GGUF container parsing, layout, templates, conversion plans, and name mapping.
+ * Does not own: qtype numeric capability, artifact support, or transformation execution.
+ * Invariants: declarations are format-stable, externally consumable, and independently includable.
+ * Boundary: GGUF format and lowering contracts over admitted model facts.
+ * Purpose: Expose GGUF format and lowering contracts over admitted model facts.
+ * Inputs: Typed caller-owned values and immutable borrowed views as declared below.
+ * Effects: Only functions with explicit lifecycle or I/O contracts mutate external state.
+ * Failure: Typed status and error outputs remain authoritative; declarations add no capability. */
 #ifndef YVEX_GGUF_H
 #define YVEX_GGUF_H
 
-#include <yvex/artifact.h>
+#include <stddef.h>
+#include <yvex/core.h>
+#include <yvex/model.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+typedef struct yvex_artifact yvex_artifact;
+
+typedef enum {
+    YVEX_GGUF_NAME_PINNED_STANDARD = 0,
+    YVEX_GGUF_NAME_SEMANTIC_STANDARD,
+    YVEX_GGUF_NAME_YVEX_EXTENSION
+} yvex_gguf_name_provenance;
+
+/* Container reader. */
 #define YVEX_GGUF_MAGIC 0x46554747u
 #define YVEX_GGUF_MAX_DIMS 4u
 
@@ -191,8 +166,7 @@ void yvex_gguf_reader_options_default(yvex_gguf_reader_options *options);
 /*
  * Opens one immutable structural view. The view owns decoded metadata, names,
  * tensors, and indexes; it does not borrow artifact storage after return.
- * Every accessor result remains valid until yvex_gguf_close.
- */
+ * Every accessor result remains valid until yvex_gguf_close. */
 int yvex_gguf_open_ex(yvex_gguf **out,
                       const yvex_artifact *artifact,
                       const yvex_gguf_reader_options *options,
@@ -231,6 +205,366 @@ unsigned long long yvex_gguf_tensor_data_offset(const yvex_gguf *gguf);
 unsigned int yvex_gguf_alignment(const yvex_gguf *gguf);
 unsigned long long yvex_gguf_file_size(const yvex_gguf *gguf);
 const yvex_gguf_reader_stats *yvex_gguf_reader_stats_view(const yvex_gguf *gguf);
+
+/* Controlled emission. */
+typedef struct yvex_gguf_emit_plan yvex_gguf_emit_plan;
+
+typedef enum {
+    YVEX_GGUF_EMIT_STATUS_UNKNOWN = 0,
+    YVEX_GGUF_EMIT_STATUS_PLANNED,
+    YVEX_GGUF_EMIT_STATUS_WRITTEN,
+    YVEX_GGUF_EMIT_STATUS_FAILED
+} yvex_gguf_emit_status;
+
+typedef struct {
+    const char *out_path;
+    const char *template_path;
+    const char *native_source_dir;
+    const char *tensor_name;
+    const char *target_name;
+    const char *target_qtype;
+    const char *model_name;
+    const char *architecture;
+    int transpose_2d;
+    int overwrite;
+} yvex_gguf_emit_options;
+
+typedef struct {
+    yvex_gguf_emit_status status;
+    const char *out_path;
+    const char *template_path;
+    const char *model_name;
+    const char *architecture;
+    unsigned long long metadata_count;
+    unsigned long long tensor_count;
+    unsigned long long bytes_written;
+    unsigned long long tensor_payload_bytes;
+    unsigned long long alignment;
+    int roundtrip_validated;
+} yvex_gguf_emit_summary;
+
+int yvex_gguf_emit_controlled(const yvex_gguf_emit_options *options,
+                              yvex_gguf_emit_summary *summary_out,
+                              yvex_error *err);
+
+const char *yvex_gguf_emit_status_name(yvex_gguf_emit_status status);
+
+/* Layout admission. */
+#define YVEX_GGUF_LAYOUT_TENSOR_NAME_CAP 128u
+#define YVEX_GGUF_LAYOUT_REASON_CAP 256u
+
+typedef enum {
+    YVEX_GGUF_LAYOUT_OK = 0,
+    YVEX_GGUF_LAYOUT_INVALID_ARGUMENT = 1,
+    YVEX_GGUF_LAYOUT_INVALID_ALIGNMENT_TYPE = 2,
+    YVEX_GGUF_LAYOUT_INVALID_ALIGNMENT_VALUE = 3,
+    YVEX_GGUF_LAYOUT_ALIGNMENT_NOT_POWER_OF_TWO = 4,
+    YVEX_GGUF_LAYOUT_ALIGNMENT_OVERFLOW = 5,
+    YVEX_GGUF_LAYOUT_STORAGE_REFUSED = 6,
+    YVEX_GGUF_LAYOUT_FIRST_OFFSET_NOT_ZERO = 7,
+    YVEX_GGUF_LAYOUT_OFFSET_REVERSED = 8,
+    YVEX_GGUF_LAYOUT_UNEXPECTED_GAP = 9,
+    YVEX_GGUF_LAYOUT_DUPLICATE_START = 10,
+    YVEX_GGUF_LAYOUT_COMPLETE_OVERLAP = 11,
+    YVEX_GGUF_LAYOUT_PARTIAL_OVERLAP = 12,
+    YVEX_GGUF_LAYOUT_PADDED_OVERLAP = 13,
+    YVEX_GGUF_LAYOUT_RAW_END_OVERFLOW = 14,
+    YVEX_GGUF_LAYOUT_PADDED_END_OVERFLOW = 15,
+    YVEX_GGUF_LAYOUT_AGGREGATE_OVERFLOW = 16,
+    YVEX_GGUF_LAYOUT_TENSOR_PAYLOAD_TRUNCATED = 17,
+    YVEX_GGUF_LAYOUT_PADDING_TRUNCATED = 18,
+    YVEX_GGUF_LAYOUT_DIRECTORY_PADDING_NONZERO = 19,
+    YVEX_GGUF_LAYOUT_TENSOR_PADDING_NONZERO = 20,
+    YVEX_GGUF_LAYOUT_NONCANONICAL_TAIL = 21,
+    YVEX_GGUF_LAYOUT_FILE_IDENTITY_DRIFT = 22,
+    YVEX_GGUF_LAYOUT_IO_FAILURE = 23,
+    YVEX_GGUF_LAYOUT_VIEW_FILE_MISMATCH = 24,
+    YVEX_GGUF_LAYOUT_TENSOR_INFO_MISSING = 25,
+    YVEX_GGUF_LAYOUT_TENSOR_RANGE_MISMATCH = 26
+} yvex_gguf_layout_code;
+
+typedef struct {
+    yvex_gguf_layout_code code;
+    int accepted;
+    char reason[YVEX_GGUF_LAYOUT_REASON_CAP];
+    unsigned int alignment;
+    unsigned long long tensor_count;
+    unsigned long long tensors_validated;
+    unsigned long long tensor_index;
+    char tensor_name[YVEX_GGUF_LAYOUT_TENSOR_NAME_CAP];
+    unsigned long long expected_relative_offset;
+    unsigned long long declared_relative_offset;
+    unsigned long long tensor_raw_size;
+    unsigned long long tensor_padded_size;
+    unsigned long long tensor_raw_end;
+    unsigned long long tensor_padded_end;
+    unsigned long long failure_absolute_offset;
+    unsigned long long directory_end;
+    unsigned long long directory_padding_bytes;
+    unsigned long long tensor_data_offset;
+    unsigned long long raw_tensor_bytes;
+    unsigned long long inter_tensor_padding_bytes;
+    unsigned long long final_tensor_padding_bytes;
+    unsigned long long total_padding_bytes;
+    unsigned long long data_section_span;
+    unsigned long long required_file_end;
+    unsigned long long actual_file_size;
+    unsigned long long trailing_bytes;
+    unsigned long long structural_bytes_read;
+    unsigned long long padding_bytes_read;
+    unsigned long long tensor_payload_bytes_read;
+    unsigned long long padding_read_calls;
+} yvex_gguf_layout_result;
+
+const char *yvex_gguf_layout_code_name(yvex_gguf_layout_code code);
+
+yvex_gguf_layout_code yvex_gguf_layout_interval_measure(
+    unsigned long long relative_offset,
+    unsigned long long raw_size,
+    unsigned int alignment,
+    unsigned long long *raw_end,
+    unsigned long long *padded_end);
+yvex_gguf_layout_code yvex_gguf_layout_sum_checked(
+    unsigned long long current,
+    unsigned long long addition,
+    unsigned long long *out);
+
+/*
+ * Validates one parsed view against the exact opened artifact snapshot. The
+ * result owns all diagnostic text and remains valid independently of both
+ * borrowed inputs. Tensor payload bytes are never read. */
+int yvex_gguf_layout_validate(const yvex_artifact *artifact,
+                              const yvex_gguf *gguf,
+                              yvex_gguf_layout_result *out,
+                              yvex_error *err);
+
+/* Template inspection. */
+typedef struct yvex_gguf_template yvex_gguf_template;
+
+typedef enum {
+    YVEX_GGUF_TEMPLATE_STATUS_UNKNOWN = 0,
+    YVEX_GGUF_TEMPLATE_STATUS_VALID,
+    YVEX_GGUF_TEMPLATE_STATUS_PARTIAL,
+    YVEX_GGUF_TEMPLATE_STATUS_INVALID
+} yvex_gguf_template_status;
+
+typedef enum {
+    YVEX_GGUF_TEMPLATE_ISSUE_NONE = 0,
+    YVEX_GGUF_TEMPLATE_ISSUE_MISSING_ARCHITECTURE,
+    YVEX_GGUF_TEMPLATE_ISSUE_MISSING_MODEL_NAME,
+    YVEX_GGUF_TEMPLATE_ISSUE_MISSING_TOKENIZER,
+    YVEX_GGUF_TEMPLATE_ISSUE_EMPTY_TENSOR_DIRECTORY,
+    YVEX_GGUF_TEMPLATE_ISSUE_UNKNOWN_TENSOR_ROLE,
+    YVEX_GGUF_TEMPLATE_ISSUE_NATIVE_MISSING_TENSOR,
+    YVEX_GGUF_TEMPLATE_ISSUE_NATIVE_SHAPE_MISMATCH,
+    YVEX_GGUF_TEMPLATE_ISSUE_UNSUPPORTED_DTYPE,
+    YVEX_GGUF_TEMPLATE_ISSUE_FORMAT
+} yvex_gguf_template_issue_kind;
+
+typedef struct {
+    yvex_gguf_template_issue_kind kind;
+    const char *tensor_name;
+    const char *message;
+} yvex_gguf_template_issue;
+
+typedef struct {
+    yvex_gguf_template_status status;
+    const char *architecture;
+    const char *model_name;
+    unsigned long long metadata_count;
+    unsigned long long tensor_count;
+    unsigned long long known_role_count;
+    unsigned long long unknown_role_count;
+    unsigned long long tokenizer_metadata_count;
+    unsigned long long issue_count;
+    unsigned long long native_tensor_count;
+    unsigned long long matched_exact;
+    unsigned long long missing_in_native;
+    unsigned long long shape_mismatch;
+    int has_architecture;
+    int has_tokenizer;
+    int has_tensor_directory;
+} yvex_gguf_template_summary;
+
+typedef struct {
+    const char *template_path;
+    const char *native_source_dir;
+    int compare_native;
+    int require_tokenizer;
+    int require_all_template_tensors_in_native;
+} yvex_gguf_template_options;
+
+int yvex_gguf_template_open(yvex_gguf_template **out,
+                            const yvex_gguf_template_options *options,
+                            yvex_error *err);
+
+void yvex_gguf_template_close(yvex_gguf_template *tmpl);
+
+int yvex_gguf_template_get_summary(const yvex_gguf_template *tmpl,
+                                   yvex_gguf_template_summary *out,
+                                   yvex_error *err);
+
+unsigned long long yvex_gguf_template_issue_count(const yvex_gguf_template *tmpl);
+
+const yvex_gguf_template_issue *yvex_gguf_template_issue_at(const yvex_gguf_template *tmpl,
+                                                            unsigned long long index);
+
+const char *yvex_gguf_template_status_name(yvex_gguf_template_status status);
+const char *yvex_gguf_template_issue_kind_name(yvex_gguf_template_issue_kind kind);
+
+/* Conversion planning. */
+typedef enum {
+    YVEX_CONVERSION_STATUS_UNKNOWN = 0,
+    YVEX_CONVERSION_STATUS_PLANNED,
+    YVEX_CONVERSION_STATUS_EMITTED,
+    YVEX_CONVERSION_STATUS_PARTIAL,
+    YVEX_CONVERSION_STATUS_FAILED
+} yvex_conversion_status;
+
+typedef enum {
+    YVEX_CONVERT_TENSOR_STATUS_UNKNOWN = 0,
+    YVEX_CONVERT_TENSOR_STATUS_READY,
+    YVEX_CONVERT_TENSOR_STATUS_EMITTED,
+    YVEX_CONVERT_TENSOR_STATUS_SKIPPED,
+    YVEX_CONVERT_TENSOR_STATUS_UNSUPPORTED_QTYPE,
+    YVEX_CONVERT_TENSOR_STATUS_UNMAPPED,
+    YVEX_CONVERT_TENSOR_STATUS_FAILED
+} yvex_convert_tensor_status;
+
+typedef enum {
+    YVEX_CONVERT_TRANSFORM_NONE = 0,
+    YVEX_CONVERT_TRANSFORM_TRANSPOSE_2D,
+    YVEX_CONVERT_TRANSFORM_DTYPE_CAST,
+    YVEX_CONVERT_TRANSFORM_QUANTIZE,
+    YVEX_CONVERT_TRANSFORM_UNSUPPORTED
+} yvex_convert_transform_kind;
+
+typedef struct {
+    const char *architecture;
+    const char *source_manifest_path;
+    const char *native_source_dir;
+    const char *template_path;
+    const char *quant_policy_path;
+    const char *imatrix_manifest_path;
+    const char *out_path;
+    const char *tensor_name;
+    const char *target_qtype;
+    unsigned long long limit_tensors;
+    int plan_only;
+    int overwrite;
+    int allow_unsupported_qtype;
+    int require_all;
+} yvex_conversion_options;
+
+typedef struct {
+    yvex_conversion_status status;
+    const char *architecture;
+    const char *out_path;
+    unsigned long long native_tensor_count;
+    unsigned long long planned_tensor_count;
+    unsigned long long emitted_tensor_count;
+    unsigned long long skipped_tensor_count;
+    unsigned long long unsupported_qtype_count;
+    unsigned long long unmapped_tensor_count;
+    unsigned long long bytes_read;
+    unsigned long long bytes_written;
+    int roundtrip_validated;
+    int execution_ready;
+} yvex_conversion_summary;
+
+int yvex_conversion_plan_write_json(const yvex_conversion_options *options,
+                                    const char *plan_out_path,
+                                    yvex_conversion_summary *summary_out,
+                                    yvex_error *err);
+
+int yvex_conversion_emit_gguf(const yvex_conversion_options *options,
+                              yvex_conversion_summary *summary_out,
+                              yvex_error *err);
+
+int yvex_conversion_suggest_artifact_name(char *out,
+                                          unsigned long long out_size,
+                                          const char *family,
+                                          const char *model,
+                                          const char *scope,
+                                          const char *artifact_class,
+                                          const char *qprofile,
+                                          const char *calibration,
+                                          const char *producer,
+                                          const char *schema,
+                                          yvex_error *err);
+
+const char *yvex_conversion_status_name(yvex_conversion_status status);
+const char *yvex_convert_tensor_status_name(yvex_convert_tensor_status status);
+const char *yvex_convert_transform_kind_name(yvex_convert_transform_kind transform);
+
+/* Tensor name mapping. */
+#define YVEX_WEIGHT_MAPPING_MAX_DIMS 8u
+
+typedef enum {
+    YVEX_WEIGHT_MAPPING_STATUS_UNKNOWN = 0,
+    YVEX_WEIGHT_MAPPING_STATUS_MAPPED,
+    YVEX_WEIGHT_MAPPING_STATUS_UNMAPPED,
+    YVEX_WEIGHT_MAPPING_STATUS_AMBIGUOUS,
+    YVEX_WEIGHT_MAPPING_STATUS_SHAPE_MISMATCH,
+    YVEX_WEIGHT_MAPPING_STATUS_UNSUPPORTED_ARCH
+} yvex_weight_mapping_status;
+
+typedef enum {
+    YVEX_WEIGHT_MAPPING_ISSUE_NONE = 0,
+    YVEX_WEIGHT_MAPPING_ISSUE_UNKNOWN_NATIVE_NAME,
+    YVEX_WEIGHT_MAPPING_ISSUE_UNKNOWN_TEMPLATE_NAME,
+    YVEX_WEIGHT_MAPPING_ISSUE_ROLE_UNSUPPORTED,
+    YVEX_WEIGHT_MAPPING_ISSUE_SHAPE_MISMATCH,
+    YVEX_WEIGHT_MAPPING_ISSUE_ARCH_UNSUPPORTED,
+    YVEX_WEIGHT_MAPPING_ISSUE_MOE_EXPERT_UNPARSED
+} yvex_weight_mapping_issue_kind;
+
+typedef struct {
+    const char *native_name;
+    const char *target_name;
+    const char *architecture;
+    yvex_tensor_role role;
+    yvex_weight_mapping_status status;
+    yvex_weight_mapping_issue_kind issue;
+    unsigned int native_rank;
+    unsigned long long native_dims[YVEX_WEIGHT_MAPPING_MAX_DIMS];
+    unsigned int target_rank;
+    unsigned long long target_dims[YVEX_WEIGHT_MAPPING_MAX_DIMS];
+    int requires_transpose;
+} yvex_weight_mapping_info;
+
+typedef struct yvex_weight_mapping_table yvex_weight_mapping_table;
+
+typedef struct {
+    const char *architecture;
+    const char *native_source_dir;
+    const char *template_path;
+    int compare_template;
+    int require_all_native_mapped;
+    int require_all_template_matched;
+} yvex_weight_mapping_options;
+
+int yvex_weight_mapping_table_build(yvex_weight_mapping_table **out,
+                                    const yvex_weight_mapping_options *options,
+                                    yvex_error *err);
+
+void yvex_weight_mapping_table_close(yvex_weight_mapping_table *table);
+
+unsigned long long yvex_weight_mapping_table_count(const yvex_weight_mapping_table *table);
+
+const yvex_weight_mapping_info *yvex_weight_mapping_table_at(const yvex_weight_mapping_table *table,
+                                                             unsigned long long index);
+
+const yvex_weight_mapping_info *yvex_weight_mapping_table_find_native(const yvex_weight_mapping_table *table,
+                                                                      const char *native_name);
+
+const char *yvex_weight_mapping_status_name(yvex_weight_mapping_status status);
+const char *yvex_weight_mapping_issue_kind_name(yvex_weight_mapping_issue_kind issue);
+int yvex_qwen_adapter_map_name(const char *native_name,
+                               char *target,
+                               size_t target_cap,
+                               yvex_tensor_role *role,
+                               yvex_weight_mapping_issue_kind *issue);
 
 #ifdef __cplusplus
 }

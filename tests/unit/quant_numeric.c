@@ -10,7 +10,7 @@
  */
 #include "tests/test.h"
 
-#include "src/gguf/quant_numeric.h"
+#include <yvex/internal/quant_numeric.h>
 
 #include <float.h>
 #include <math.h>

@@ -1,41 +1,135 @@
-/*
- * gate.c - model artifact gates.
- *
- * Owner:
- *   src/model/artifacts
- *
- * Owns:
- *   model gate checks, materialization preflight gate facts, expected tensor
- *   matching, backend status facts, selected-slice gate facts, and refusal state
- *   facts.
- *
- * Does not own:
- *   CLI parsing, command dispatch, rendering, stdout/stderr, registry storage,
- *   explicit file writing, artifact emission, runtime generation, eval,
- *   benchmark, or release decisions.
- *
- * Invariants:
- *   gate checks return facts only and preserve public model/materialization gate
- *   API behavior.
- *
- * Boundary:
- *   gate evidence is not artifact emission, full materialization proof, runtime
- *   descriptors, generation readiness, benchmark evidence, or release readiness.
- */
-#include "gate.h"
+/* Owner: src/model/artifacts
+ * Owns: model gate checks, materialization preflight gate facts, expected tensor matching, backend status facts,
+ *   selected-slice gate facts, and refusal state facts.
+ * Does not own: CLI parsing, command dispatch, rendering, stdout/stderr, registry storage, explicit file writing,
+ *   artifact emission, runtime generation, eval, benchmark, or release decisions.
+ * Invariants: gate checks return facts only and preserve public model/materialization gate API behavior.
+ * Boundary: gate evidence is not artifact emission, full materialization proof, runtime descriptors, generation
+ *   readiness, benchmark evidence, or release readiness.
+ * Purpose: admit immutable artifact and materialization evidence through typed gates.
+ * Inputs: explicit gate options, artifact snapshots, and backend requirements.
+ * Effects: opens bounded read-only views and temporary backend materializations.
+ * Failure: typed refusals close every acquired view and leave output summaries defined. */
+#include <yvex/internal/model_artifact.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include <yvex/artifact_integrity.h>
-#include <yvex/api.h>
+#include <yvex/artifact.h>
+#include <yvex/backend.h>
+#include <yvex/model.h>
 
-/*
- * Projects the canonical complete-artifact admission into the model gate.
- * It borrows admission strings, allocates nothing, performs no IO, and never
- * promotes materialization, execution, runtime, or generation support.
- */
+typedef struct {
+    int value;
+    const char *name;
+} gate_name;
+
+static const gate_name model_gate_names[] = {
+    {YVEX_MODEL_GATE_UNKNOWN, "model-gate-unknown"},
+    {YVEX_MODEL_GATE_PASS, "model-gate-pass"},
+    {YVEX_MODEL_GATE_PARTIAL, "model-gate-partial"},
+    {YVEX_MODEL_GATE_FAIL, "model-gate-fail"},
+    {YVEX_MODEL_GATE_BLOCKED, "model-gate-blocked"}
+};
+
+static const gate_name model_support_names[] = {
+    {YVEX_MODEL_SUPPORT_NONE, "none"},
+    {YVEX_MODEL_SUPPORT_DESCRIPTOR_ONLY, "descriptor-only"},
+    {YVEX_MODEL_SUPPORT_SELECTED_TENSOR_MATERIALIZED,
+     "selected-tensor-materialized"},
+    {YVEX_MODEL_SUPPORT_FULL_WEIGHTS_MATERIALIZED,
+     "full-weights-materialized"},
+    {YVEX_MODEL_SUPPORT_PARTIAL_GRAPH_EXECUTABLE,
+     "partial-graph-executable"},
+    {YVEX_MODEL_SUPPORT_PREFILL_READY, "prefill-ready"},
+    {YVEX_MODEL_SUPPORT_DECODE_READY, "decode-ready"},
+    {YVEX_MODEL_SUPPORT_GENERATION_READY, "generation-ready"}
+};
+
+static const gate_name model_backend_names[] = {
+    {YVEX_MODEL_GATE_BACKEND_NOT_TESTED, "not-tested"},
+    {YVEX_MODEL_GATE_BACKEND_PASS, "pass"},
+    {YVEX_MODEL_GATE_BACKEND_FAIL, "fail"},
+    {YVEX_MODEL_GATE_BACKEND_UNAVAILABLE, "unavailable"}
+};
+
+static const gate_name materialize_gate_names[] = {
+    {YVEX_MATERIALIZE_GATE_UNKNOWN, "materialize-gate-unknown"},
+    {YVEX_MATERIALIZE_GATE_PASS, "materialize-gate-pass"},
+    {YVEX_MATERIALIZE_GATE_PARTIAL, "materialize-gate-partial"},
+    {YVEX_MATERIALIZE_GATE_FAIL, "materialize-gate-fail"},
+    {YVEX_MATERIALIZE_GATE_BLOCKED, "materialize-gate-blocked"}
+};
+
+static const gate_name materialize_scope_names[] = {
+    {YVEX_MATERIALIZE_SCOPE_UNKNOWN, "unknown"},
+    {YVEX_MATERIALIZE_SCOPE_SELECTED_TENSOR, "selected-tensor"},
+    {YVEX_MATERIALIZE_SCOPE_PARTIAL_MODEL, "partial-model"},
+    {YVEX_MATERIALIZE_SCOPE_FULL_MODEL, "full-model"}
+};
+
+static const gate_name materialize_backend_names[] = {
+    {YVEX_MATERIALIZE_BACKEND_NOT_TESTED, "not-tested"},
+    {YVEX_MATERIALIZE_BACKEND_PASS, "pass"},
+    {YVEX_MATERIALIZE_BACKEND_FAIL, "fail"},
+    {YVEX_MATERIALIZE_BACKEND_UNAVAILABLE, "unavailable"}
+};
+
+static const gate_name materialize_failure_names[] = {
+    {YVEX_MATERIALIZE_FAILURE_NONE, "none"},
+    {YVEX_MATERIALIZE_FAILURE_MISSING_FILE, "missing_file"},
+    {YVEX_MATERIALIZE_FAILURE_HASH_MISMATCH, "hash_mismatch"},
+    {YVEX_MATERIALIZE_FAILURE_GGUF_PARSE, "gguf_parse"},
+    {YVEX_MATERIALIZE_FAILURE_TENSOR_SPEC_MISMATCH, "tensor_spec_mismatch"},
+    {YVEX_MATERIALIZE_FAILURE_UNSUPPORTED_DTYPE, "unsupported_dtype"},
+    {YVEX_MATERIALIZE_FAILURE_UNSUPPORTED_QTYPE, "unsupported_qtype"},
+    {YVEX_MATERIALIZE_FAILURE_BACKEND_UNAVAILABLE, "backend_unavailable"},
+    {YVEX_MATERIALIZE_FAILURE_BACKEND_ALLOC, "backend_alloc"},
+    {YVEX_MATERIALIZE_FAILURE_BACKEND_COPY, "backend_copy"},
+    {YVEX_MATERIALIZE_FAILURE_OOM, "oom"},
+    {YVEX_MATERIALIZE_FAILURE_UNKNOWN, "unknown"}
+};
+
+/* Purpose: resolve one typed gate enum through an immutable name table. */
+static const char *gate_name_find(const gate_name *names,
+                                  size_t count,
+                                  int value,
+                                  const char *fallback)
+{
+    size_t index;
+
+    for (index = 0; index < count; ++index) {
+        if (names[index].value == value)
+            return names[index].name;
+    }
+    return fallback;
+}
+
+/* Purpose:
+ *   close the borrowed artifact view in reverse ownership order.
+ * Inputs:
+ *   tensors, GGUF view, and artifact may each be NULL.
+ * Effects:
+ *   releases every supplied view; no persistent artifact state changes.
+ * Failure:
+ *   close operations have no reported failure in the canonical ABI.
+ * Boundary:
+ *   cleanup does not classify admission or materialization capability. */
+static void gate_inputs_close(yvex_tensor_table *tensors,
+                              yvex_gguf *gguf,
+                              yvex_artifact *artifact)
+{
+    yvex_tensor_table_close(tensors);
+    yvex_gguf_close(gguf);
+    yvex_artifact_close(artifact);
+}
+
+/* Purpose: project canonical complete-artifact admission into model-gate facts.
+ * Inputs: admission is borrowed; fact and error receive caller-owned results.
+ * Effects: writes only the supplied outputs and allocates nothing.
+ * Failure: invalid or incomplete admission produces one typed blocked result.
+ * Boundary: descriptor admission never promotes execution or generation support. */
 int yvex_model_artifact_gate_from_admission(
     const yvex_complete_artifact_admission *admission,
     yvex_model_complete_artifact_gate_fact *fact,
@@ -75,27 +169,48 @@ int yvex_model_artifact_gate_from_admission(
     return YVEX_OK;
 }
 
-static int gate_dtype_matches(const char *expected, yvex_dtype actual)
-{
-    const char *actual_name = yvex_dtype_name(actual);
-    return expected && actual_name && strcmp(expected, actual_name) == 0;
-}
+/* Purpose: compare or copy tensor spec matches under exact ownership.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 
-static int expected_tensor_matches(const yvex_model_gate_expected_tensor *expected,
-                                   const yvex_tensor_info *actual)
+static int tensor_spec_matches(const char *name,
+                               const char *dtype,
+                               unsigned int rank,
+                               const unsigned long long dims[4],
+                               unsigned long long bytes,
+                               const yvex_tensor_info *actual)
 {
+    const char *actual_dtype;
     unsigned int i;
-    if (!expected || !actual || !expected->name || !expected->dtype) return 0;
-    if (strcmp(expected->name, actual->name) != 0) return 0;
-    if (expected->rank != actual->rank) return 0;
-    if (!gate_dtype_matches(expected->dtype, actual->dtype)) return 0;
-    if (expected->bytes != actual->storage_bytes) return 0;
-    for (i = 0; i < expected->rank && i < 4u; ++i) {
-        if (expected->dims[i] != actual->dims[i]) return 0;
+
+    if (!name || !dtype || !actual || strcmp(name, actual->name) != 0 ||
+        rank != actual->rank || bytes != actual->storage_bytes) {
+        return 0;
+    }
+    actual_dtype = yvex_dtype_name(actual->dtype);
+    if (!actual_dtype || strcmp(dtype, actual_dtype) != 0) return 0;
+    for (i = 0; i < rank && i < 4u; ++i) {
+        if (dims[i] != actual->dims[i]) return 0;
     }
     return 1;
 }
 
+/* Purpose: adapt the model-gate tensor contract to the common exact matcher. */
+static int expected_tensor_matches(const yvex_model_gate_expected_tensor *expected,
+                                   const yvex_tensor_info *actual)
+{
+    return expected && tensor_spec_matches(expected->name, expected->dtype,
+                                            expected->rank, expected->dims,
+                                            expected->bytes, actual);
+}
+
+/* Purpose: execute one temporary all-tensor materialization backend probe.
+ * Inputs: artifact views and backend identity are borrowed; status is caller-owned.
+ * Effects: opens a backend and weight table, then closes both before returning.
+ * Failure: unavailable backends are facts; other typed failures preserve cleanup.
+ * Boundary: a backend probe does not promote runtime or generation readiness. */
 static int materialize_backend(const yvex_artifact *artifact,
                                const yvex_gguf *gguf,
                                const yvex_tensor_table *tensors,
@@ -159,11 +274,17 @@ static int materialize_backend(const yvex_artifact *artifact,
     return rc;
 }
 
+/* Purpose: classify any non-passing required backend as a gate failure. */
 static int required_backend_failed(yvex_model_gate_backend_status status)
 {
     return status != YVEX_MODEL_GATE_BACKEND_PASS;
 }
 
+/* Purpose: verify one artifact, tensor contract, and requested backend set.
+ * Inputs: options are borrowed; summary and error are caller-owned outputs.
+ * Effects: opens read-only artifact views and requested temporary backend probes.
+ * Failure: digest, parse, tensor, or backend refusal closes all acquired resources.
+ * Boundary: passing this gate proves only its selected descriptor/materialization scope. */
 int yvex_model_gate_check(const yvex_model_gate_options *options,
                           yvex_model_gate_summary *summary_out,
                           yvex_error *err)
@@ -258,9 +379,7 @@ int yvex_model_gate_check(const yvex_model_gate_options *options,
     if (rc != YVEX_OK) {
         summary.status = YVEX_MODEL_GATE_FAIL;
         *summary_out = summary;
-        yvex_tensor_table_close(tensors);
-        yvex_gguf_close(gguf);
-        yvex_artifact_close(artifact);
+        gate_inputs_close(tensors, gguf, artifact);
         return rc;
     }
     summary.tensor_count = yvex_tensor_table_count(tensors);
@@ -279,9 +398,7 @@ int yvex_model_gate_check(const yvex_model_gate_options *options,
     if (summary.expected_tensor_mismatches != 0) {
         summary.status = YVEX_MODEL_GATE_FAIL;
         *summary_out = summary;
-        yvex_tensor_table_close(tensors);
-        yvex_gguf_close(gguf);
-        yvex_artifact_close(artifact);
+        gate_inputs_close(tensors, gguf, artifact);
         yvex_error_set(err, YVEX_ERR_STATE, "yvex_model_gate_check",
                        "expected tensor specification mismatch");
         return YVEX_ERR_STATE;
@@ -295,9 +412,7 @@ int yvex_model_gate_check(const yvex_model_gate_options *options,
             summary.status = summary.cpu_status == YVEX_MODEL_GATE_BACKEND_UNAVAILABLE ?
                 YVEX_MODEL_GATE_BLOCKED : YVEX_MODEL_GATE_FAIL;
             *summary_out = summary;
-            yvex_tensor_table_close(tensors);
-            yvex_gguf_close(gguf);
-            yvex_artifact_close(artifact);
+            gate_inputs_close(tensors, gguf, artifact);
             return rc;
         }
     }
@@ -309,9 +424,7 @@ int yvex_model_gate_check(const yvex_model_gate_options *options,
             summary.status = summary.cuda_status == YVEX_MODEL_GATE_BACKEND_UNAVAILABLE ?
                 YVEX_MODEL_GATE_BLOCKED : YVEX_MODEL_GATE_FAIL;
             *summary_out = summary;
-            yvex_tensor_table_close(tensors);
-            yvex_gguf_close(gguf);
-            yvex_artifact_close(artifact);
+            gate_inputs_close(tensors, gguf, artifact);
             return rc;
         }
     }
@@ -339,52 +452,55 @@ int yvex_model_gate_check(const yvex_model_gate_options *options,
 
     summary.execution_ready = 0;
     *summary_out = summary;
-    yvex_tensor_table_close(tensors);
-    yvex_gguf_close(gguf);
-    yvex_artifact_close(artifact);
+    gate_inputs_close(tensors, gguf, artifact);
     return summary.status == YVEX_MODEL_GATE_PASS ? YVEX_OK : YVEX_ERR_STATE;
 }
 
+/* Purpose: project typed model-admission gate status vocabulary without lost semantics.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
+
 const char *yvex_model_gate_status_name(yvex_model_gate_status status)
 {
-    switch (status) {
-    case YVEX_MODEL_GATE_UNKNOWN: return "model-gate-unknown";
-    case YVEX_MODEL_GATE_PASS: return "model-gate-pass";
-    case YVEX_MODEL_GATE_PARTIAL: return "model-gate-partial";
-    case YVEX_MODEL_GATE_FAIL: return "model-gate-fail";
-    case YVEX_MODEL_GATE_BLOCKED: return "model-gate-blocked";
-    default: return "model-gate-unknown";
-    }
+    return gate_name_find(model_gate_names,
+                          sizeof(model_gate_names) / sizeof(model_gate_names[0]), status,
+                          "model-gate-unknown");
 }
+
+/* Purpose: project typed support level name vocabulary without lost semantics.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 
 const char *yvex_model_support_level_name(yvex_model_support_level level)
 {
-    switch (level) {
-    case YVEX_MODEL_SUPPORT_NONE: return "none";
-    case YVEX_MODEL_SUPPORT_DESCRIPTOR_ONLY: return "descriptor-only";
-    case YVEX_MODEL_SUPPORT_SELECTED_TENSOR_MATERIALIZED: return "selected-tensor-materialized";
-    case YVEX_MODEL_SUPPORT_FULL_WEIGHTS_MATERIALIZED: return "full-weights-materialized";
-    case YVEX_MODEL_SUPPORT_PARTIAL_GRAPH_EXECUTABLE: return "partial-graph-executable";
-    case YVEX_MODEL_SUPPORT_PREFILL_READY: return "prefill-ready";
-    case YVEX_MODEL_SUPPORT_DECODE_READY: return "decode-ready";
-    case YVEX_MODEL_SUPPORT_GENERATION_READY: return "generation-ready";
-    default: return "none";
-    }
+    return gate_name_find(model_support_names,
+                          sizeof(model_support_names) / sizeof(model_support_names[0]), level,
+                          "none");
 }
+
+/* Purpose: project typed gate backend status name vocabulary without lost semantics.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 
 const char *yvex_model_gate_backend_status_name(yvex_model_gate_backend_status status)
 {
-    switch (status) {
-    case YVEX_MODEL_GATE_BACKEND_NOT_TESTED: return "not-tested";
-    case YVEX_MODEL_GATE_BACKEND_PASS: return "pass";
-    case YVEX_MODEL_GATE_BACKEND_FAIL: return "fail";
-    case YVEX_MODEL_GATE_BACKEND_UNAVAILABLE: return "unavailable";
-    default: return "not-tested";
-    }
+    return gate_name_find(model_backend_names,
+                          sizeof(model_backend_names) / sizeof(model_backend_names[0]), status,
+                          "not-tested");
 }
 /* Materialization gate helpers and summaries. */
 
-
+/* Purpose: probe whether one artifact path can be opened read-only.
+ * Inputs: path is borrowed.
+ * Effects: opens and immediately closes one standard I/O stream.
+ * Failure: null or unopenable paths return false without retaining resources.
+ * Boundary: existence does not admit artifact identity or structure. */
 static int path_exists(const char *path)
 {
     FILE *fp;
@@ -395,27 +511,16 @@ static int path_exists(const char *path)
     return 1;
 }
 
-static int materialize_dtype_matches(const char *expected, yvex_dtype actual)
-{
-    const char *actual_name = yvex_dtype_name(actual);
-    return expected && actual_name && strcmp(expected, actual_name) == 0;
-}
-
+/* Purpose: adapt a materialization tensor contract to the common exact matcher. */
 static int tensor_matches(const yvex_materialize_expected_tensor *expected,
                           const yvex_tensor_info *actual)
 {
-    unsigned int i;
-    if (!expected || !actual || !expected->name || !expected->dtype) return 0;
-    if (strcmp(expected->name, actual->name) != 0) return 0;
-    if (expected->rank != actual->rank) return 0;
-    if (!materialize_dtype_matches(expected->dtype, actual->dtype)) return 0;
-    if (expected->bytes != actual->storage_bytes) return 0;
-    for (i = 0; i < expected->rank && i < 4u; ++i) {
-        if (expected->dims[i] != actual->dims[i]) return 0;
-    }
-    return 1;
+    return expected && tensor_spec_matches(expected->name, expected->dtype,
+                                            expected->rank, expected->dims,
+                                            expected->bytes, actual);
 }
 
+/* Purpose: preserve typed materialization failure distinctions from status and context. */
 static yvex_materialize_failure_class classify_materialize_failure(int rc,
                                                                    const yvex_error *err)
 {
@@ -435,6 +540,11 @@ static yvex_materialize_failure_class classify_materialize_failure(int rc,
     return YVEX_MATERIALIZE_FAILURE_UNKNOWN;
 }
 
+/* Purpose: repeat one backend materialization while checking release-to-baseline.
+ * Inputs: artifact views, backend policy, and repeat count are borrowed.
+ * Effects: opens one backend and transient weight tables; updates typed counters.
+ * Failure: every failing iteration closes active weights and backend ownership.
+ * Boundary: repetition proves lifecycle behavior, not graph execution support. */
 static int materialize_repeated(const yvex_artifact *artifact,
                                 const yvex_gguf *gguf,
                                 const yvex_tensor_table *tensors,
@@ -603,6 +713,96 @@ static int materialize_repeated(const yvex_artifact *artifact,
     return YVEX_OK;
 }
 
+/* Purpose: compare every explicit tensor contract against the parsed table.
+ * Inputs: options and tensors are borrowed; summary and error are caller-owned.
+ * Effects: updates only aggregate match/refusal facts.
+ * Failure: any mismatch returns a typed state refusal without changing artifacts.
+ * Boundary: matching tensor descriptors does not prove payload execution. */
+static int materialize_gate_expected_tensors(
+    const yvex_materialize_gate_options *options,
+    const yvex_tensor_table *tensors,
+    yvex_materialize_gate_summary *summary,
+    yvex_error *err)
+{
+    unsigned long long index;
+
+    for (index = 0; index < options->expected_tensor_count; ++index) {
+        const yvex_materialize_expected_tensor *expected =
+            &options->expected_tensors[index];
+        const yvex_tensor_info *actual =
+            yvex_tensor_table_find(tensors, expected->name);
+        if (tensor_matches(expected, actual))
+            summary->expected_tensor_matches++;
+        else
+            summary->expected_tensor_mismatches++;
+    }
+    if (summary->expected_tensor_mismatches == 0)
+        return YVEX_OK;
+    summary->status = YVEX_MATERIALIZE_GATE_FAIL;
+    summary->failure_class = YVEX_MATERIALIZE_FAILURE_TENSOR_SPEC_MISMATCH;
+    summary->shape_status = "fail";
+    yvex_error_set(err, YVEX_ERR_STATE, "yvex_materialize_gate_check",
+                   "expected tensor specification mismatch");
+    return YVEX_ERR_STATE;
+}
+
+/* Purpose: execute and project one requested backend materialization pass.
+ * Inputs: artifact views, options, and backend policy are borrowed.
+ * Effects: delegates temporary materialization and updates common summary facts.
+ * Failure: required backend failure remains typed; optional failure is retained.
+ * Boundary: projection does not reinterpret backend capability or runtime support. */
+static int materialize_gate_backend(
+    const yvex_artifact *artifact,
+    const yvex_gguf *gguf,
+    const yvex_tensor_table *tensors,
+    const yvex_materialize_gate_options *options,
+    yvex_backend_kind kind,
+    const char *name,
+    int enabled,
+    int required,
+    yvex_materialize_gate_summary *summary,
+    yvex_materialize_backend_status *backend_status,
+    unsigned long long *bytes,
+    int *cleanup,
+    yvex_error *err)
+{
+    int status;
+
+    if (!enabled)
+        return YVEX_OK;
+    status = materialize_repeated(
+        artifact, gguf, tensors, kind, name, summary->repeat_count,
+        options->check_cleanup, summary, backend_status, bytes, cleanup,
+        &summary->failure_class, err);
+    if (status == YVEX_OK || !required)
+        return YVEX_OK;
+    summary->status = *backend_status == YVEX_MATERIALIZE_BACKEND_UNAVAILABLE
+        ? YVEX_MATERIALIZE_GATE_BLOCKED : YVEX_MATERIALIZE_GATE_FAIL;
+    if (*backend_status == YVEX_MATERIALIZE_BACKEND_UNAVAILABLE)
+        summary->failure_class = YVEX_MATERIALIZE_FAILURE_BACKEND_UNAVAILABLE;
+    return status;
+}
+
+/* Purpose: combine requested backend cleanup facts without changing their meaning. */
+static int materialize_gate_cleanup_status(
+    const yvex_materialize_gate_options *options, int cpu, int cuda)
+{
+    if (!options->check_cleanup)
+        return 1;
+    if (options->check_cpu && options->check_cuda)
+        return cpu && cuda;
+    if (options->check_cpu)
+        return cpu;
+    if (options->check_cuda)
+        return cuda;
+    return 0;
+}
+
+/* Purpose: verify artifact integrity, expected tensors, backends, and cleanup.
+ * Inputs: options are borrowed; summary and error receive caller-owned results.
+ * Effects: opens read-only artifact views and bounded temporary materializations.
+ * Failure: every refusal closes all views and preserves a defined partial summary.
+ * Boundary: gate success remains materialization evidence, not graph execution. */
 int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
                                 yvex_materialize_gate_summary *summary_out,
                                 yvex_error *err)
@@ -614,7 +814,6 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
     yvex_tensor_table *tensors = NULL;
     yvex_artifact_integrity_report integrity_report;
     char actual_sha[65];
-    unsigned long long i;
     int cleanup_cpu = 0;
     int cleanup_cuda = 0;
     int rc;
@@ -714,9 +913,7 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
         summary.failure_class = YVEX_MATERIALIZE_FAILURE_GGUF_PARSE;
         summary.integrity_status = "fail";
         *summary_out = summary;
-        yvex_tensor_table_close(tensors);
-        yvex_gguf_close(gguf);
-        yvex_artifact_close(artifact);
+        gate_inputs_close(tensors, gguf, artifact);
         return rc;
     }
     summary.tensor_count = yvex_tensor_table_count(tensors);
@@ -734,9 +931,7 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
         summary.status = YVEX_MATERIALIZE_GATE_FAIL;
         summary.failure_class = YVEX_MATERIALIZE_FAILURE_GGUF_PARSE;
         *summary_out = summary;
-        yvex_tensor_table_close(tensors);
-        yvex_gguf_close(gguf);
-        yvex_artifact_close(artifact);
+        gate_inputs_close(tensors, gguf, artifact);
         if (rc == YVEX_OK) {
             yvex_error_set(err, YVEX_ERR_STATE, "yvex_materialize_gate_check",
                            "artifact integrity preflight failed");
@@ -744,75 +939,28 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
         return rc == YVEX_OK ? YVEX_ERR_STATE : rc;
     }
 
-    for (i = 0; i < options->expected_tensor_count; ++i) {
-        const yvex_materialize_expected_tensor *expected = &options->expected_tensors[i];
-        const yvex_tensor_info *actual = yvex_tensor_table_find(tensors, expected->name);
-        if (tensor_matches(expected, actual)) {
-            summary.expected_tensor_matches++;
-        } else {
-            summary.expected_tensor_mismatches++;
-        }
-    }
-    if (summary.expected_tensor_mismatches != 0) {
-        summary.status = YVEX_MATERIALIZE_GATE_FAIL;
-        summary.failure_class = YVEX_MATERIALIZE_FAILURE_TENSOR_SPEC_MISMATCH;
-        summary.shape_status = "fail";
+    rc = materialize_gate_expected_tensors(options, tensors, &summary, err);
+    if (rc != YVEX_OK) {
         *summary_out = summary;
-        yvex_tensor_table_close(tensors);
-        yvex_gguf_close(gguf);
-        yvex_artifact_close(artifact);
-        yvex_error_set(err, YVEX_ERR_STATE, "yvex_materialize_gate_check",
-                       "expected tensor specification mismatch");
-        return YVEX_ERR_STATE;
+        gate_inputs_close(tensors, gguf, artifact);
+        return rc;
     }
 
-    if (options->check_cpu) {
-        rc = materialize_repeated(artifact, gguf, tensors,
-                                  YVEX_BACKEND_KIND_CPU, "cpu",
-                                  summary.repeat_count,
-                                  options->check_cleanup,
-                                  &summary,
-                                  &summary.cpu_status,
-                                  &summary.bytes_materialized_cpu,
-                                  &cleanup_cpu,
-                                  &summary.failure_class,
-                                  err);
-        if (rc != YVEX_OK && options->require_cpu) {
-            summary.status = summary.cpu_status == YVEX_MATERIALIZE_BACKEND_UNAVAILABLE ?
-                YVEX_MATERIALIZE_GATE_BLOCKED : YVEX_MATERIALIZE_GATE_FAIL;
-            if (summary.cpu_status == YVEX_MATERIALIZE_BACKEND_UNAVAILABLE) {
-                summary.failure_class = YVEX_MATERIALIZE_FAILURE_BACKEND_UNAVAILABLE;
-            }
-            *summary_out = summary;
-            yvex_tensor_table_close(tensors);
-            yvex_gguf_close(gguf);
-            yvex_artifact_close(artifact);
-            return rc;
-        }
-    }
-    if (options->check_cuda) {
-        rc = materialize_repeated(artifact, gguf, tensors,
-                                  YVEX_BACKEND_KIND_CUDA, "cuda",
-                                  summary.repeat_count,
-                                  options->check_cleanup,
-                                  &summary,
-                                  &summary.cuda_status,
-                                  &summary.bytes_materialized_cuda,
-                                  &cleanup_cuda,
-                                  &summary.failure_class,
-                                  err);
-        if (rc != YVEX_OK && options->require_cuda) {
-            summary.status = summary.cuda_status == YVEX_MATERIALIZE_BACKEND_UNAVAILABLE ?
-                YVEX_MATERIALIZE_GATE_BLOCKED : YVEX_MATERIALIZE_GATE_FAIL;
-            if (summary.cuda_status == YVEX_MATERIALIZE_BACKEND_UNAVAILABLE) {
-                summary.failure_class = YVEX_MATERIALIZE_FAILURE_BACKEND_UNAVAILABLE;
-            }
-            *summary_out = summary;
-            yvex_tensor_table_close(tensors);
-            yvex_gguf_close(gguf);
-            yvex_artifact_close(artifact);
-            return rc;
-        }
+    rc = materialize_gate_backend(
+        artifact, gguf, tensors, options, YVEX_BACKEND_KIND_CPU, "cpu",
+        options->check_cpu, options->require_cpu, &summary,
+        &summary.cpu_status, &summary.bytes_materialized_cpu,
+        &cleanup_cpu, err);
+    if (rc == YVEX_OK)
+        rc = materialize_gate_backend(
+            artifact, gguf, tensors, options, YVEX_BACKEND_KIND_CUDA, "cuda",
+            options->check_cuda, options->require_cuda, &summary,
+            &summary.cuda_status, &summary.bytes_materialized_cuda,
+            &cleanup_cuda, err);
+    if (rc != YVEX_OK) {
+        *summary_out = summary;
+        gate_inputs_close(tensors, gguf, artifact);
+        return rc;
     }
 
     if ((options->require_cpu && summary.cpu_status != YVEX_MATERIALIZE_BACKEND_PASS) ||
@@ -832,77 +980,64 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
         summary.failure_class = YVEX_MATERIALIZE_FAILURE_NONE;
     }
 
-    if (options->check_cleanup) {
-        if (options->check_cpu && options->check_cuda) {
-            summary.cleanup_verified = cleanup_cpu && cleanup_cuda;
-        } else if (options->check_cpu) {
-            summary.cleanup_verified = cleanup_cpu;
-        } else if (options->check_cuda) {
-            summary.cleanup_verified = cleanup_cuda;
-        } else {
-            summary.cleanup_verified = 0;
-        }
-    } else {
-        summary.cleanup_verified = 1;
-    }
+    summary.cleanup_verified = materialize_gate_cleanup_status(options, cleanup_cpu, cleanup_cuda);
     summary.execution_ready = 0;
     *summary_out = summary;
 
-    yvex_tensor_table_close(tensors);
-    yvex_gguf_close(gguf);
-    yvex_artifact_close(artifact);
+    gate_inputs_close(tensors, gguf, artifact);
     return summary.status == YVEX_MATERIALIZE_GATE_PASS ? YVEX_OK : YVEX_ERR_STATE;
 }
 
+/* Purpose: project typed materialization gate status vocabulary without lost semantics.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
+
 const char *yvex_materialize_gate_status_name(yvex_materialize_gate_status status)
 {
-    switch (status) {
-    case YVEX_MATERIALIZE_GATE_UNKNOWN: return "materialize-gate-unknown";
-    case YVEX_MATERIALIZE_GATE_PASS: return "materialize-gate-pass";
-    case YVEX_MATERIALIZE_GATE_PARTIAL: return "materialize-gate-partial";
-    case YVEX_MATERIALIZE_GATE_FAIL: return "materialize-gate-fail";
-    case YVEX_MATERIALIZE_GATE_BLOCKED: return "materialize-gate-blocked";
-    default: return "materialize-gate-unknown";
-    }
+    return gate_name_find(materialize_gate_names,
+                          sizeof(materialize_gate_names) / sizeof(materialize_gate_names[0]), status,
+                          "materialize-gate-unknown");
 }
+
+/* Purpose: project typed scope name vocabulary without lost semantics.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 
 const char *yvex_materialize_scope_name(yvex_materialize_scope scope)
 {
-    switch (scope) {
-    case YVEX_MATERIALIZE_SCOPE_UNKNOWN: return "unknown";
-    case YVEX_MATERIALIZE_SCOPE_SELECTED_TENSOR: return "selected-tensor";
-    case YVEX_MATERIALIZE_SCOPE_PARTIAL_MODEL: return "partial-model";
-    case YVEX_MATERIALIZE_SCOPE_FULL_MODEL: return "full-model";
-    default: return "unknown";
-    }
+    return gate_name_find(materialize_scope_names,
+                          sizeof(materialize_scope_names) / sizeof(materialize_scope_names[0]), scope,
+                          "unknown");
 }
+
+/* Purpose: project typed backend status name vocabulary without lost semantics.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 
 const char *yvex_materialize_backend_status_name(yvex_materialize_backend_status status)
 {
-    switch (status) {
-    case YVEX_MATERIALIZE_BACKEND_NOT_TESTED: return "not-tested";
-    case YVEX_MATERIALIZE_BACKEND_PASS: return "pass";
-    case YVEX_MATERIALIZE_BACKEND_FAIL: return "fail";
-    case YVEX_MATERIALIZE_BACKEND_UNAVAILABLE: return "unavailable";
-    default: return "not-tested";
-    }
+    return gate_name_find(materialize_backend_names,
+                          sizeof(materialize_backend_names) /
+                              sizeof(materialize_backend_names[0]), status,
+                          "not-tested");
 }
+
+/* Purpose: project typed failure class name vocabulary without lost semantics.
+ * Inputs: artifact facts and outputs are explicit.
+ * Effects: mutates only declared artifact ownership.
+ * Failure: releases partial ownership on refusal.
+ * Boundary: does not promote runtime execution support. */
 
 const char *yvex_materialize_failure_class_name(yvex_materialize_failure_class failure)
 {
-    switch (failure) {
-    case YVEX_MATERIALIZE_FAILURE_NONE: return "none";
-    case YVEX_MATERIALIZE_FAILURE_MISSING_FILE: return "missing_file";
-    case YVEX_MATERIALIZE_FAILURE_HASH_MISMATCH: return "hash_mismatch";
-    case YVEX_MATERIALIZE_FAILURE_GGUF_PARSE: return "gguf_parse";
-    case YVEX_MATERIALIZE_FAILURE_TENSOR_SPEC_MISMATCH: return "tensor_spec_mismatch";
-    case YVEX_MATERIALIZE_FAILURE_UNSUPPORTED_DTYPE: return "unsupported_dtype";
-    case YVEX_MATERIALIZE_FAILURE_UNSUPPORTED_QTYPE: return "unsupported_qtype";
-    case YVEX_MATERIALIZE_FAILURE_BACKEND_UNAVAILABLE: return "backend_unavailable";
-    case YVEX_MATERIALIZE_FAILURE_BACKEND_ALLOC: return "backend_alloc";
-    case YVEX_MATERIALIZE_FAILURE_BACKEND_COPY: return "backend_copy";
-    case YVEX_MATERIALIZE_FAILURE_OOM: return "oom";
-    case YVEX_MATERIALIZE_FAILURE_UNKNOWN: return "unknown";
-    default: return "unknown";
-    }
+    return gate_name_find(materialize_failure_names,
+                          sizeof(materialize_failure_names) /
+                              sizeof(materialize_failure_names[0]), failure,
+                          "unknown");
 }

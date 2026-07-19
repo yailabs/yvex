@@ -4,14 +4,7 @@
  * This runner groups CUDA probe, tensor, kernel parity, and materialization coverage.
  */
 
-#include "test.h"
-
-int yvex_cuda_test_info(void);
-int yvex_cuda_test_tensor(void);
-int yvex_cuda_test_ops(void);
-int yvex_cuda_test_parity(void);
-int yvex_cuda_test_quant_qtype(void);
-int yvex_cuda_test_materialize_cuda(void);
+#include "tests/test.h"
 
 static int run_cuda_test(const char *name, int (*fn)(void))
 {

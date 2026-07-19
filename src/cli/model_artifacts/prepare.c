@@ -1,14 +1,39 @@
-/*
- * prepare.c - models prepare/check CLI surface.
- *
- * Owner: src/cli/model_artifacts
+/* Owner: src/cli/model_artifacts
  * Owns: models prepare/check command-family surface behavior.
- * Does not own: registry storage, model gate algorithms, materialization algorithms, runtime generation, or artifact emission.
+ * Does not own: registry storage, model gate algorithms, materialization algorithms, runtime generation, or
+ *   artifact emission.
  * Invariants: preserves existing prepare/check command syntax and output behavior; CLI-only.
  * Boundary: prepare/check reports do not promote generation or release readiness.
- */
-#include "src/cli/model_artifacts/prepare.h"
-#include "src/model/target/catalog.h"
+ * Purpose: provide models prepare/check command-family surface behavior.
+ * Inputs: typed domain facts, requested output mode, and caller-owned render state.
+ * Effects: formats admitted facts through CLI I/O without changing domain state.
+ * Failure: formatting or I/O refusal cannot alter capability facts. */
+#include "src/cli/model_artifacts/private.h"
+
+#include <string.h>
+#include <yvex/internal/source.h>
+
+#include <yvex/artifact.h>
+#include <yvex/graph.h>
+#include <yvex/runtime.h>
+
+static const char *const literal_pair_0[] = { "boundary: report-only refusal, generation unsupported",
+    "status: model-check-unsupported"};
+
+static const char *const literal_pair_1[] = { "reason: artifact exists; pass --overwrite to replace it",
+    "status: model-prepare-refused"};
+
+static const char *const literal_pair_2[] = { "reason: source path does not exist",
+    "status: model-prepare-fail"};
+
+static const char *const literal_pair_3[] = { "reason: unknown model prepare target",
+    "status: model-prepare-unknown-target"};
+
+static const char *const literal_lines_0[] = { "execution_ready: false",
+    "graph_execution_ready: false",
+    "prefill_ready: false",
+    "logits_ready: false",
+    "generation: unsupported"};
 
 typedef struct {
     const char *target;
@@ -24,8 +49,31 @@ typedef struct {
     int use_alias;
 } yvex_cli_models_prepare_options;
 
+static const yvex_models_option_spec prepare_options[] = {
+    {"--source", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_models_prepare_options, source)},
+    {"--out", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_models_prepare_options, out)},
+    {"--out-dir", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_models_prepare_options, out_dir)},
+    {"--models-root", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_models_prepare_options, models_root)},
+    {"--registry", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_models_prepare_options, registry_path)},
+    {"--overwrite", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_models_prepare_options, overwrite)},
+    {"--dry-run", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_models_prepare_options, dry_run)},
+    {"--output", YVEX_MODELS_OPTION_OUTPUT,
+     offsetof(yvex_cli_models_prepare_options, output_mode)},
+};
+
 /* Selected artifact prepare preset. */
 
+/* Purpose: Parse parse models prepare options into typed CLI state (`parse_models_prepare_options`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_models_prepare_options(int arg_count,
                                         char **args,
                                         yvex_cli_models_prepare_options *options)
@@ -46,39 +94,24 @@ static int parse_models_prepare_options(int arg_count,
         return 2;
     }
     for (i = 4; i < arg_count; ++i) {
-        if (strcmp(args[i], "--overwrite") == 0) {
-            options->overwrite = 1;
-        } else if (strcmp(args[i], "--dry-run") == 0) {
-            options->dry_run = 1;
-        } else if (strcmp(args[i], "--" "audit") == 0) {
+        int handled = 0;
+        int rc = parse_models_bound_option("models prepare", arg_count, args, &i,
+                                           options, prepare_options,
+                                           sizeof(prepare_options) /
+                                               sizeof(prepare_options[0]),
+                                           &handled);
+        if (rc != 0) return rc;
+        if (handled) continue;
+        if (strcmp(args[i], "--audit") == 0) {
             options->output_mode = YVEX_MODELS_OUTPUT_AUDIT;
         } else if (strcmp(args[i], "--no-register") == 0) {
             options->register_alias = 0;
             options->use_alias = 0;
         } else if (strcmp(args[i], "--no-use") == 0) {
             options->use_alias = 0;
-        } else if (strcmp(args[i], "--source") == 0 ||
-                   strcmp(args[i], "--out") == 0 ||
-                   strcmp(args[i], "--out-dir") == 0 ||
-                   strcmp(args[i], "--models-root") == 0 ||
-                   strcmp(args[i], "--registry") == 0 ||
-                   strcmp(args[i], "--" "output") == 0) {
-            const char *flag = args[i];
-            const char *value = NULL;
-            int rc = parse_models_value_option("models prepare", flag,
-                                               arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            if (strcmp(flag, "--source") == 0) options->source = value;
-            else if (strcmp(flag, "--out") == 0) options->out = value;
-            else if (strcmp(flag, "--out-dir") == 0) options->out_dir = value;
-            else if (strcmp(flag, "--models-root") == 0) options->models_root = value;
-            else if (strcmp(flag, "--registry") == 0) options->registry_path = value;
-            else if (!parse_models_output_mode(value, &options->output_mode)) {
-                yvex_cli_out_writef(stderr, "yvex: models prepare unsupported output mode: %s\n", value);
-                return 2;
-            }
-        } else if (strcmp(args[i], "--" "json") == 0) {
-            yvex_cli_out_writef(stderr, "yvex: models prepare JSON output is unsupported; use --" "output normal|table|audit\n");
+        } else if (strcmp(args[i], "--json") == 0) {
+            yvex_cli_out_writef(stderr,
+                "yvex: models prepare JSON output is unsupported; use --output normal|table|audit\n");
             return 2;
         } else {
             yvex_cli_out_writef(stderr, "yvex: unknown models prepare option: %s\n", args[i]);
@@ -95,6 +128,11 @@ static int parse_models_prepare_options(int arg_count,
     return 0;
 }
 
+/* Purpose: Render print prepare common from typed facts (`print_prepare_common`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void print_prepare_common(const yvex_cli_models_prepare_options *options,
                                  const yvex_operator_paths *operator_paths,
                                  const char *source_path,
@@ -111,7 +149,8 @@ static void print_prepare_common(const yvex_cli_models_prepare_options *options,
     yvex_cli_out_writef(stdout, "artifact_path: %s\n", artifact_path);
     yvex_cli_out_writef(stdout, "source_manifest_path: %s\n", manifest_path);
     yvex_cli_out_writef(stdout, "conversion_plan_path: %s\n", plan_path);
-    yvex_cli_out_writef(stdout, "registry_path: %s\n", registry_path && registry_path[0] ? registry_path : ".yvex/models.local.json");
+    yvex_cli_out_writef(stdout, "registry_path: %s\n",
+        registry_path && registry_path[0] ? registry_path : ".yvex/models.local.json");
     yvex_cli_out_writef(stdout, "alias: deepseek4-v4-flash-selected-embed\n");
     yvex_cli_out_writef(stdout, "overwrite: %s\n", options->overwrite ? "true" : "false");
     yvex_cli_out_writef(stdout, "dry_run: %s\n", options->dry_run ? "true" : "false");
@@ -119,6 +158,11 @@ static void print_prepare_common(const yvex_cli_models_prepare_options *options,
     yvex_cli_out_writef(stdout, "use_alias: %s\n", options->use_alias ? "true" : "false");
 }
 
+/* Purpose: Render print prepare dry run stages from typed facts (`print_prepare_dry_run_stages`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void print_prepare_dry_run_stages(int register_alias, int use_alias)
 {
     static const char *planned[] = {
@@ -143,6 +187,7 @@ static void print_prepare_dry_run_stages(int register_alias, int use_alias)
     model_stage_print("registry-verify", register_alias ? "planned" : "skipped");
 }
 
+/* Purpose: Construct the owned prepare unsupported reason state (`prepare_unsupported_reason`). */
 static const char *prepare_unsupported_reason(const char *target)
 {
     if (strcmp(target, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0) {
@@ -154,6 +199,7 @@ static const char *prepare_unsupported_reason(const char *target)
     return NULL;
 }
 
+/* Purpose: Render print prepare unsupported from typed facts (`print_prepare_unsupported`). */
 static int print_prepare_unsupported(const char *target)
 {
     const char *reason = prepare_unsupported_reason(target);
@@ -163,8 +209,7 @@ static int print_prepare_unsupported(const char *target)
     model_stage_print("target", "unsupported");
     model_print_runtime_generation("not-performed");
     if (!reason) {
-        yvex_cli_out_writef(stdout, "reason: unknown model prepare target\n");
-        yvex_cli_out_writef(stdout, "status: model-prepare-unknown-target\n");
+        yvex_cli_out_lines(stdout, literal_pair_3, sizeof(literal_pair_3) / sizeof(literal_pair_3[0]));
         return 2;
     }
     yvex_cli_out_writef(stdout, "reason: %s\n", reason);
@@ -172,6 +217,11 @@ static int print_prepare_unsupported(const char *target)
     return exit_for_status(YVEX_ERR_UNSUPPORTED);
 }
 
+/* Purpose: Construct the owned prepare probe map sidecar status state (`prepare_probe_map_sidecar_status`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void prepare_probe_map_sidecar_status(const char *tensor_map_path,
                                              const char *output_head_map_path,
                                              int *tensor_map_incomplete,
@@ -212,39 +262,11 @@ void prepare_probe_map_sidecar_status(const char *tensor_map_path,
     }
 }
 
-typedef struct {
-    char target_id[128];
-    char family[32];
-    char provider[32];
-    char repo_id[256];
-    char revision[128];
-    char models_root[YVEX_PATH_CAP];
-    char source_path[YVEX_PATH_CAP];
-    char source_manifest_path[YVEX_PATH_CAP];
-    char native_inventory_path[YVEX_PATH_CAP];
-    char tensor_map_path[YVEX_PATH_CAP];
-    char output_head_map_path[YVEX_PATH_CAP];
-    char tokenizer_map_path[YVEX_PATH_CAP];
-    char expected_artifact_path[YVEX_PATH_CAP];
-    char download_registry_path[YVEX_PATH_CAP];
-    char download_report_path[YVEX_PATH_CAP];
-    const char *source_status;
-    const char *model_class_status;
-    const char *tensor_map_status;
-    const char *output_head_map_status;
-    const char *tokenizer_map_status;
-    const char *artifact_status;
-    const char *artifact_plan_status;
-    const char *artifact_emission_status;
-    const char *artifact_identity_status;
-    unsigned int blocker_count;
-    const char *top_blocker;
-    const char *reason;
-    const char *next;
-    const char *final_status;
-    int downloaded_target_resolved;
-} yvex_models_prepare_source_report;
-
+/* Purpose: Construct the owned prepare source report build state (`prepare_source_report_build`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void prepare_source_report_build(
     const yvex_cli_models_prepare_options *options,
     const yvex_operator_paths *operator_paths,
@@ -411,7 +433,8 @@ static void prepare_source_report_build(
                                : "missing output head map / artifact path missing")
                         : output_head_map_missing
                               ? (!tokenizer_map_present
-                                     ? "output head mapping missing / tokenizer metadata mapping / artifact path missing"
+                                     ? "output head mapping missing / tokenizer metadata mapping / "
+                                         "artifact path missing"
                                      : "output head mapping missing / artifact path missing")
                               : !tokenizer_map_present
                                     ? "tokenizer metadata mapping / artifact path missing"
@@ -422,69 +445,12 @@ static void prepare_source_report_build(
                                           : "family quantization plan unimplemented";
 }
 
-static void prepare_source_report_render_porcelain(
-    const yvex_models_prepare_source_report *report)
-{
-    yvex_render_out out;
-
-    render_out_init(&out, stdout, YVEX_RENDER_MODE_PORCELAIN);
-    render_report_title(&out, "models prepare", report->target_id, "blocked");
-    render_fields3(&out,
-                        "family", report->family,
-                        "source", report->source_status,
-                        "artifact", report->artifact_status);
-    render_fields2(&out,
-                        "plan", "full-gguf planned",
-                        "emission", report->artifact_emission_status);
-    render_top_blocker(&out, report->top_blocker);
-    render_next(&out, report->next);
-    render_kv(&out,
-                   "boundary",
-                   "prepare dry-run only; no artifact emission/runtime/generation");
-}
-
-static void prepare_source_report_render_audit(
-    const yvex_models_prepare_source_report *report)
-{
-    yvex_render_out out;
-
-    render_out_init(&out, stdout, YVEX_RENDER_MODE_AUDIT);
-    render_section(&out, "models: prepare");
-    render_kv(&out, "target_id", report->target_id);
-    render_kv(&out, "family", report->family);
-    render_kv(&out, "provider", report->provider);
-    render_kv(&out, "repo_id", report->repo_id);
-    render_kv(&out, "revision", report->revision);
-    render_kv(&out, "models_root", report->models_root);
-    render_kv(&out, "source_path", report->source_path);
-    render_kv(&out, "source_status", report->source_status);
-    render_kv(&out, "source_manifest_path", report->source_manifest_path);
-    render_kv(&out, "native_inventory_path", report->native_inventory_path);
-    render_kv(&out, "model_class_status", report->model_class_status);
-    render_kv(&out, "tensor_map_path", report->tensor_map_path);
-    render_kv(&out, "tensor_map_status", report->tensor_map_status);
-    render_kv(&out, "output_head_map_path", report->output_head_map_path);
-    render_kv(&out, "output_head_map_status", report->output_head_map_status);
-    render_kv(&out, "tokenizer_map_path", report->tokenizer_map_path);
-    render_kv(&out, "tokenizer_map_status", report->tokenizer_map_status);
-    render_kv(&out, "artifact_status", report->artifact_status);
-    render_kv(&out, "expected_artifact_path", report->expected_artifact_path);
-    render_kv(&out, "artifact_plan_status", report->artifact_plan_status);
-    render_kv(&out, "artifact_emission_status", report->artifact_emission_status);
-    render_kv(&out, "artifact_identity_status", report->artifact_identity_status);
-    render_kv_u(&out, "prepare_blocker_count", report->blocker_count);
-    render_top_blocker(&out, report->top_blocker);
-    render_kv(&out, "download_registry_path", report->download_registry_path);
-    render_kv(&out, "download_report_path", report->download_report_path);
-    render_kv(&out, "downloaded_target_resolved",
-                   report->downloaded_target_resolved ? "true" : "false");
-    model_stage_print("target", "unsupported");
-    model_print_runtime_generation("not-performed");
-    render_kv(&out, "reason", report->reason);
-    render_next(&out, report->next);
-    render_status(&out, report->final_status);
-}
-
+/* Purpose: Render print prepare downloaded source unsupported from typed facts
+ * (`print_prepare_downloaded_source_unsupported`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int print_prepare_downloaded_source_unsupported(
     const yvex_cli_models_prepare_options *options,
     const yvex_operator_paths *operator_paths,
@@ -493,14 +459,17 @@ static int print_prepare_downloaded_source_unsupported(
     yvex_models_prepare_source_report report;
 
     prepare_source_report_build(options, operator_paths, target, &report);
-    if (!options || options->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
-        prepare_source_report_render_porcelain(&report);
-        return exit_for_status(YVEX_ERR_UNSUPPORTED);
-    }
-    prepare_source_report_render_audit(&report);
+    model_prepare_source_report_render(
+        &report,
+        options ? options->output_mode : YVEX_MODELS_OUTPUT_NORMAL);
     return exit_for_status(YVEX_ERR_UNSUPPORTED);
 }
 
+/* Purpose: Validate prepare registry verify before downstream use (`prepare_registry_verify`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int prepare_registry_verify(const yvex_model_registry_entry *entry,
                                    yvex_error *err)
 {
@@ -510,7 +479,8 @@ static int prepare_registry_verify(const yvex_model_registry_entry *entry,
     int rc;
 
     if (!entry) {
-        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry", "prepared alias was not found after registration");
+        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry",
+            "prepared alias was not found after registration");
         return YVEX_ERR_STATE;
     }
     memset(&identity, 0, sizeof(identity));
@@ -518,7 +488,8 @@ static int prepare_registry_verify(const yvex_model_registry_entry *entry,
     if (rc != YVEX_OK) return rc;
     if (!entry->sha256 || strcmp(entry->sha256, identity.sha256) != 0 ||
         entry->file_size != identity.file_size) {
-        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry", "registered identity does not match emitted artifact");
+        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry",
+            "registered identity does not match emitted artifact");
         return YVEX_ERR_STATE;
     }
     memset(&current_metadata, 0, sizeof(current_metadata));
@@ -529,12 +500,115 @@ static int prepare_registry_verify(const yvex_model_registry_entry *entry,
     if (rc != YVEX_OK) return rc;
     if (strcmp(metadata_report.metadata_status, "pass") != 0 ||
         strcmp(metadata_report.readiness_status, "pass") != 0) {
-        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry", "registered metadata drifted immediately after prepare");
+        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry",
+            "registered metadata drifted immediately after prepare");
         return YVEX_ERR_STATE;
     }
     return YVEX_OK;
 }
 
+typedef struct {
+    yvex_model_registry *registry;
+    yvex_model_registry_entry derived;
+    yvex_model_registry_entry entry;
+    char sha256[YVEX_SHA256_HEX_CAP];
+    char format[16];
+    char architecture[64];
+    char tensor_name[128];
+    char tensor_role[64];
+    char tensor_dtype[32];
+    char tensor_dims[128];
+} prepare_registry_state;
+
+/* Publish and immediately re-admit the selected proof artifact alias. */
+/* Purpose: Construct the owned prepare register artifact state (`prepare_register_artifact`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
+static int prepare_register_artifact(const yvex_cli_models_prepare_options *options,
+                                     const char *artifact_path,
+                                     const char *registry_path,
+                                     const char *target_alias,
+                                     yvex_error *err)
+{
+    prepare_registry_state state;
+    const yvex_model_registry_entry *registered;
+    int rc;
+
+    memset(&state, 0, sizeof(state));
+    rc = yvex_model_registry_entry_derive_from_path(&state.derived, artifact_path, err);
+    if (rc != YVEX_OK) return rc;
+    state.entry = state.derived;
+    state.entry.support_level = "selected-tensor-materialized";
+    rc = populate_registry_identity(&state.entry, state.sha256, state.format,
+                                    state.architecture, state.tensor_name,
+                                    state.tensor_role, state.tensor_dtype,
+                                    state.tensor_dims, err);
+    if (rc != YVEX_OK) return rc;
+    rc = models_registry_open(&state.registry, registry_path, 1, err);
+    if (rc != YVEX_OK) return rc;
+    if (yvex_model_registry_find(state.registry, target_alias)) {
+        rc = yvex_model_registry_remove(state.registry, target_alias, err);
+        model_stage_print("registry-remove-existing", rc == YVEX_OK ? "pass" : "fail");
+    } else {
+        model_stage_print("registry-remove-existing", "not-found");
+    }
+    if (rc == YVEX_OK) rc = yvex_model_registry_add(state.registry, &state.entry, err);
+    if (rc == YVEX_OK) model_stage_print("registry-add", "pass");
+    if (rc == YVEX_OK && options->use_alias) {
+        rc = yvex_model_registry_select(state.registry, target_alias, err);
+        if (rc == YVEX_OK) model_stage_print("registry-use", "pass");
+    } else if (rc == YVEX_OK) {
+        model_stage_print("registry-use", "skipped");
+    }
+    if (rc == YVEX_OK) rc = yvex_model_registry_save(state.registry, registry_path, err);
+    if (rc == YVEX_OK) {
+        registered = yvex_model_registry_find(state.registry, target_alias);
+        rc = prepare_registry_verify(registered, err);
+        if (rc == YVEX_OK) model_stage_print("registry-verify", "pass");
+    }
+    yvex_model_registry_close(state.registry);
+    return rc;
+}
+
+/* Close the preparation lane without promoting runtime or generation support. */
+/* Purpose: Construct the owned prepare complete state (`prepare_complete`). */
+static int prepare_complete(void)
+{
+    model_print_runtime_generation("not-performed");
+    yvex_cli_out_writef(stdout, "status: model-prepare\n");
+    return 0;
+}
+
+/* Purpose: create the complete set of parent directories required by one prepare transaction.
+ * Inputs: immutable output paths, registry-selection fact, and caller error state.
+ * Effects: creates only missing parent directories through the canonical core owner.
+ * Failure: returns the first typed filesystem refusal without opening an output file.
+ * Boundary: directory admission does not publish a model artifact or registry entry. */
+static int prepare_create_parents(const char *artifact_path,
+                                  const char *manifest_path,
+                                  const char *plan_path,
+                                  const char *registry_path,
+                                  int register_alias,
+                                  yvex_error *err)
+{
+    const char *paths[] = {artifact_path, manifest_path, plan_path, registry_path};
+    size_t count = register_alias ? 4u : 3u;
+    size_t index;
+
+    for (index = 0u; index < count; ++index) {
+        int rc = yvex_core_mkdir_parent(paths[index], "model_registry_json", err);
+        if (rc != YVEX_OK) return rc;
+    }
+    return YVEX_OK;
+}
+
+/* Purpose: Construct the owned models prepare surface command state (`yvex_models_prepare_surface_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_models_prepare_surface_command(int arg_count, char **args)
 {
     static const char *target_alias = "deepseek4-v4-flash-selected-embed";
@@ -550,9 +624,6 @@ int yvex_models_prepare_surface_command(int arg_count, char **args)
     yvex_conversion_options conversion_options;
     yvex_conversion_summary conversion_summary;
     yvex_model_metadata_snapshot metadata_snapshot;
-    yvex_model_registry *registry = NULL;
-    yvex_model_registry_entry derived;
-    yvex_model_registry_entry entry;
     yvex_error err;
     char source_path[YVEX_PATH_CAP];
     char out_dir[YVEX_PATH_CAP];
@@ -560,13 +631,6 @@ int yvex_models_prepare_surface_command(int arg_count, char **args)
     char manifest_path[YVEX_PATH_CAP];
     char plan_path[YVEX_PATH_CAP];
     char registry_path_buf[YVEX_PATH_CAP];
-    char registered_sha256[YVEX_SHA256_HEX_CAP];
-    char registered_format[16];
-    char registered_architecture[64];
-    char primary_tensor_name[128];
-    char primary_tensor_role[64];
-    char primary_tensor_dtype[32];
-    char primary_tensor_dims[128];
     const char *registry_path = NULL;
     int source_exists;
     int artifact_exists;
@@ -628,13 +692,15 @@ int yvex_models_prepare_surface_command(int arg_count, char **args)
     }
     artifact_exists = path_exists(artifact_path);
 
-    rc = path_join2(manifest_path, sizeof(manifest_path), out_dir, "deepseek-source-manifest.json", &err, "models_prepare");
+    rc = path_join2(manifest_path, sizeof(manifest_path), out_dir, "deepseek-source-manifest.json", &err,
+        "models_prepare");
     if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
     rc = path_join2(plan_path, sizeof(plan_path), out_dir, "deepseek-selected-plan.json", &err, "models_prepare");
     if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
 
     if (options.registry_path) {
-        rc = expand_operator_path(options.registry_path, registry_path_buf, sizeof(registry_path_buf), &err, "models_prepare");
+        rc = expand_operator_path(options.registry_path, registry_path_buf, sizeof(registry_path_buf), &err,
+            "models_prepare");
         if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
         registry_path = registry_path_buf;
     } else {
@@ -656,27 +722,23 @@ int yvex_models_prepare_surface_command(int arg_count, char **args)
     if (!source_exists) {
         model_stage_print("source-path", "fail");
         model_print_runtime_generation("not-performed");
-        yvex_cli_out_writef(stdout, "reason: source path does not exist\n");
-        yvex_cli_out_writef(stdout, "status: model-prepare-fail\n");
+        yvex_cli_out_lines(stdout, literal_pair_2, sizeof(literal_pair_2) / sizeof(literal_pair_2[0]));
         return exit_for_status(YVEX_ERR_IO);
     }
     if (artifact_exists && !options.overwrite) {
         model_stage_print("convert-emit", "refused");
         model_print_runtime_generation("not-performed");
-        yvex_cli_out_writef(stdout, "reason: artifact exists; pass --overwrite to replace it\n");
-        yvex_cli_out_writef(stdout, "status: model-prepare-refused\n");
+        yvex_cli_out_lines(stdout, literal_pair_1, sizeof(literal_pair_1) / sizeof(literal_pair_1[0]));
         return exit_for_status(YVEX_ERR_STATE);
     }
 
-    rc = yvex_model_registry_mkdir_parent(artifact_path, &err);
-    if (rc == YVEX_OK) rc = yvex_model_registry_mkdir_parent(manifest_path, &err);
-    if (rc == YVEX_OK) rc = yvex_model_registry_mkdir_parent(plan_path, &err);
-    if (rc == YVEX_OK && options.register_alias) rc = yvex_model_registry_mkdir_parent(registry_path, &err);
+    rc = prepare_create_parents(artifact_path, manifest_path, plan_path,
+                                registry_path, options.register_alias, &err);
     if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
 
     memset(&manifest_options, 0, sizeof(manifest_options));
     memset(&manifest_summary, 0, sizeof(manifest_summary));
-    manifest_options.repo = yvex_model_target_release_identity()->upstream_repo_id;
+    manifest_options.repo = yvex_source_release_identity()->upstream_repo_id;
     manifest_options.revision = "main";
     manifest_options.local_path = source_path;
     manifest_options.status = YVEX_SOURCE_STATUS_IN_PROGRESS;
@@ -733,62 +795,9 @@ int yvex_models_prepare_surface_command(int arg_count, char **args)
     yvex_cli_out_writef(stdout, "artifact_tensor_count: %llu\n", metadata_snapshot.entry.tensor_count);
 
     if (options.register_alias) {
-        memset(&derived, 0, sizeof(derived));
-        memset(&entry, 0, sizeof(entry));
-        memset(registered_sha256, 0, sizeof(registered_sha256));
-        memset(registered_format, 0, sizeof(registered_format));
-        memset(registered_architecture, 0, sizeof(registered_architecture));
-        memset(primary_tensor_name, 0, sizeof(primary_tensor_name));
-        memset(primary_tensor_role, 0, sizeof(primary_tensor_role));
-        memset(primary_tensor_dtype, 0, sizeof(primary_tensor_dtype));
-        memset(primary_tensor_dims, 0, sizeof(primary_tensor_dims));
-
-        rc = yvex_model_registry_entry_derive_from_path(&derived, artifact_path, &err);
+        rc = prepare_register_artifact(&options, artifact_path, registry_path,
+                                       target_alias, &err);
         if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
-        entry = derived;
-        entry.support_level = "selected-tensor-materialized";
-        rc = populate_registry_identity(&entry,
-                                        registered_sha256,
-                                        registered_format,
-                                        registered_architecture,
-                                        primary_tensor_name,
-                                        primary_tensor_role,
-                                        primary_tensor_dtype,
-                                        primary_tensor_dims,
-                                        &err);
-        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
-        rc = models_registry_open(&registry, registry_path, 1, &err);
-        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
-        if (yvex_model_registry_find(registry, target_alias)) {
-            rc = yvex_model_registry_remove(registry, target_alias, &err);
-            if (rc != YVEX_OK) {
-                yvex_model_registry_close(registry);
-                return print_yvex_error(&err, exit_for_status(rc));
-            }
-            model_stage_print("registry-remove-existing", "pass");
-        } else {
-            model_stage_print("registry-remove-existing", "not-found");
-        }
-        rc = yvex_model_registry_add(registry, &entry, &err);
-        if (rc == YVEX_OK) model_stage_print("registry-add", "pass");
-        if (rc == YVEX_OK && options.use_alias) {
-            rc = yvex_model_registry_select(registry, target_alias, &err);
-            if (rc == YVEX_OK) model_stage_print("registry-use", "pass");
-        } else if (rc == YVEX_OK) {
-            model_stage_print("registry-use", "skipped");
-        }
-        if (rc == YVEX_OK) rc = yvex_model_registry_save(registry, registry_path, &err);
-        if (rc == YVEX_OK) {
-            const yvex_model_registry_entry *registered = yvex_model_registry_find(registry, target_alias);
-            rc = prepare_registry_verify(registered, &err);
-            if (rc == YVEX_OK) model_stage_print("registry-verify", "pass");
-        }
-        if (rc != YVEX_OK) {
-            yvex_model_registry_close(registry);
-            return print_yvex_error(&err, exit_for_status(rc));
-        }
-        yvex_model_registry_close(registry);
-        registry = NULL;
     } else {
         model_stage_print("registry-remove-existing", "skipped");
         model_stage_print("registry-add", "skipped");
@@ -796,9 +805,7 @@ int yvex_models_prepare_surface_command(int arg_count, char **args)
         model_stage_print("registry-verify", "skipped");
     }
 
-    model_print_runtime_generation("not-performed");
-    yvex_cli_out_writef(stdout, "status: model-prepare\n");
-    return 0;
+    return prepare_complete();
 }
 
 /* Native source tensor download lane. */
@@ -825,6 +832,25 @@ typedef struct {
     yvex_cli_model_check_level level;
     yvex_models_output_mode output_mode;
 } yvex_cli_models_check_options;
+
+static const yvex_models_option_spec check_options[] = {
+    {"--backend", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_models_check_options, backend_name)},
+    {"--level", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_models_check_options, level_name)},
+    {"--models-root", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_models_check_options, models_root)},
+    {"--registry", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_models_check_options, registry_path)},
+    {"--report-dir", YVEX_MODELS_OPTION_TEXT,
+     offsetof(yvex_cli_models_check_options, report_dir)},
+    {"--no-materialize", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_models_check_options, no_materialize)},
+    {"--no-graph", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_models_check_options, no_graph)},
+    {"--output", YVEX_MODELS_OPTION_OUTPUT,
+     offsetof(yvex_cli_models_check_options, output_mode)},
+};
 
 typedef struct {
     char target_id[256];
@@ -855,39 +881,80 @@ typedef struct {
     const char *final_status;
 } yvex_cli_model_check_report;
 
+typedef struct model_check_stage_spec {
+    const char *name;
+    size_t status_offset;
+} model_check_stage_spec;
+
+#define CHECK_STAGE(name_, member_) \
+    {name_, offsetof(yvex_cli_model_check_report, member_)}
+
+static const yvex_cli_model_check_report model_check_defaults = {
+    .model_input_kind = "unknown",
+    .stage_resolve_target = "not-run",
+    .stage_resolve_artifact = "not-run",
+    .stage_inspect = "not-run",
+    .stage_tensors = "not-run",
+    .stage_metadata = "not-run",
+    .stage_registry_identity = "skipped",
+    .stage_integrity_check = "not-run",
+    .stage_integrity_report = "skipped",
+    .stage_materialize = "skipped",
+    .stage_engine = "skipped",
+    .stage_session = "skipped",
+    .stage_plan = "skipped",
+    .stage_graph_partial = "skipped",
+    .stage_model_gate = "skipped",
+    .stage_materialize_gate = "skipped",
+    .runtime_execution = "not-performed",
+    .final_status = "model-check-fail",
+};
+
+static const model_check_stage_spec model_check_stages[] = {
+    CHECK_STAGE("resolve-target", stage_resolve_target),
+    CHECK_STAGE("resolve-artifact", stage_resolve_artifact),
+    CHECK_STAGE("inspect", stage_inspect),
+    CHECK_STAGE("tensors", stage_tensors),
+    CHECK_STAGE("metadata", stage_metadata),
+    CHECK_STAGE("registry-identity", stage_registry_identity),
+    CHECK_STAGE("integrity-check", stage_integrity_check),
+    CHECK_STAGE("integrity-report", stage_integrity_report),
+    CHECK_STAGE("materialize", stage_materialize),
+    CHECK_STAGE("engine", stage_engine),
+    CHECK_STAGE("session", stage_session),
+    CHECK_STAGE("plan", stage_plan),
+    CHECK_STAGE("graph-partial", stage_graph_partial),
+};
+
+#undef CHECK_STAGE
+
+/* Purpose: Validate model check report init before downstream use (`model_check_report_init`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void model_check_report_init(yvex_cli_model_check_report *report,
                                     const yvex_cli_models_check_options *options)
 {
-    memset(report, 0, sizeof(*report));
+    *report = model_check_defaults;
     snprintf(report->target_id, sizeof(report->target_id), "%s",
              options->target ? options->target : "");
     snprintf(report->backend_name, sizeof(report->backend_name), "%s",
              options->backend_name ? options->backend_name : "cpu");
     snprintf(report->level_name, sizeof(report->level_name), "%s",
              options->level_name ? options->level_name : "quick");
-    snprintf(report->model_input_kind, sizeof(report->model_input_kind), "unknown");
-    report->stage_resolve_target = "not-run";
-    report->stage_resolve_artifact = "not-run";
-    report->stage_inspect = "not-run";
-    report->stage_tensors = "not-run";
-    report->stage_metadata = "not-run";
-    report->stage_registry_identity = "skipped";
-    report->stage_integrity_check = "not-run";
-    report->stage_integrity_report = "skipped";
-    report->stage_materialize = "skipped";
-    report->stage_engine = "skipped";
-    report->stage_session = "skipped";
-    report->stage_plan = "skipped";
-    report->stage_graph_partial = "skipped";
-    report->stage_model_gate = "skipped";
-    report->stage_materialize_gate = "skipped";
-    report->runtime_execution = "not-performed";
-    report->final_status = "model-check-fail";
 }
 
+/* Purpose: Render model check report print from typed facts (`model_check_report_print`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void model_check_report_print(FILE *fp,
                                      const yvex_cli_model_check_report *report)
 {
+    size_t i;
+
     yvex_cli_out_writef(fp, "status: model-check\n");
     yvex_cli_out_writef(fp, "target_id: %s\n", report->target_id);
     yvex_cli_out_writef(fp, "model_input_kind: %s\n", report->model_input_kind);
@@ -898,19 +965,13 @@ static void model_check_report_print(FILE *fp,
     if (report->report_path[0]) {
         yvex_cli_out_writef(fp, "report_path: %s\n", report->report_path);
     }
-    yvex_cli_out_writef(fp, "stage: resolve-target %s\n", report->stage_resolve_target);
-    yvex_cli_out_writef(fp, "stage: resolve-artifact %s\n", report->stage_resolve_artifact);
-    yvex_cli_out_writef(fp, "stage: inspect %s\n", report->stage_inspect);
-    yvex_cli_out_writef(fp, "stage: tensors %s\n", report->stage_tensors);
-    yvex_cli_out_writef(fp, "stage: metadata %s\n", report->stage_metadata);
-    yvex_cli_out_writef(fp, "stage: registry-identity %s\n", report->stage_registry_identity);
-    yvex_cli_out_writef(fp, "stage: integrity-check %s\n", report->stage_integrity_check);
-    yvex_cli_out_writef(fp, "stage: integrity-report %s\n", report->stage_integrity_report);
-    yvex_cli_out_writef(fp, "stage: materialize %s\n", report->stage_materialize);
-    yvex_cli_out_writef(fp, "stage: engine %s\n", report->stage_engine);
-    yvex_cli_out_writef(fp, "stage: session %s\n", report->stage_session);
-    yvex_cli_out_writef(fp, "stage: plan %s\n", report->stage_plan);
-    yvex_cli_out_writef(fp, "stage: graph-partial %s\n", report->stage_graph_partial);
+    for (i = 0; i < sizeof(model_check_stages) / sizeof(model_check_stages[0]); ++i) {
+        const model_check_stage_spec *stage = &model_check_stages[i];
+        const char *status = *(const char *const *)((const unsigned char *)report +
+                                                   stage->status_offset);
+
+        yvex_cli_out_writef(fp, "stage: %s %s\n", stage->name, status);
+    }
     if (report->graph_skip_reason[0]) {
         yvex_cli_out_writef(fp, "graph_partial_reason: %s\n", report->graph_skip_reason);
     }
@@ -920,14 +981,15 @@ static void model_check_report_print(FILE *fp,
         yvex_cli_out_writef(fp, "error: %s\n", report->error);
     }
     yvex_cli_out_writef(fp, "runtime_execution: %s\n", report->runtime_execution);
-    yvex_cli_out_writef(fp, "execution_ready: false\n");
-    yvex_cli_out_writef(fp, "graph_execution_ready: false\n");
-    yvex_cli_out_writef(fp, "prefill_ready: false\n");
-    yvex_cli_out_writef(fp, "logits_ready: false\n");
-    yvex_cli_out_writef(fp, "generation: unsupported\n");
+    yvex_cli_out_lines(fp, literal_lines_0, sizeof(literal_lines_0) / sizeof(literal_lines_0[0]));
     yvex_cli_out_writef(fp, "status: %s\n", report->final_status);
 }
 
+/* Purpose: Validate model check write report before downstream use (`model_check_write_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_check_write_report(const yvex_cli_models_check_options *options,
                                     yvex_cli_model_check_report *report,
                                     yvex_error *err)
@@ -958,7 +1020,7 @@ static int model_check_write_report(const yvex_cli_models_check_options *options
     if (rc != YVEX_OK) {
         return rc;
     }
-    rc = yvex_model_registry_mkdir_parent(report->report_path, err);
+    rc = yvex_core_mkdir_parent(report->report_path, "model_registry_json", err);
     if (rc != YVEX_OK) {
         return rc;
     }
@@ -977,6 +1039,11 @@ static int model_check_write_report(const yvex_cli_models_check_options *options
     return YVEX_OK;
 }
 
+/* Purpose: Render model check report print normal from typed facts (`model_check_report_print_normal`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void model_check_report_print_normal(FILE *fp,
                                             const yvex_cli_model_check_report *report)
 {
@@ -1005,6 +1072,11 @@ static void model_check_report_print_normal(FILE *fp,
     yvex_cli_out_writef(fp, "status: %s\n", report->final_status ? report->final_status : "model-check-fail");
 }
 
+/* Purpose: Parse parse models check options into typed CLI state (`parse_models_check_options`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_models_check_options(int arg_count,
                                       char **args,
                                       yvex_cli_models_check_options *options)
@@ -1026,42 +1098,15 @@ static int parse_models_check_options(int arg_count,
         return 2;
     }
     for (i = 4; i < arg_count; ++i) {
-        if (strcmp(args[i], "--no-materialize") == 0) {
-            options->no_materialize = 1;
-        } else if (strcmp(args[i], "--no-graph") == 0) {
-            options->no_graph = 1;
-        } else if (strcmp(args[i], "--" "audit") == 0) {
+        int handled = 0;
+        int rc = parse_models_bound_option("models check", arg_count, args, &i,
+                                           options, check_options,
+                                           sizeof(check_options) / sizeof(check_options[0]),
+                                           &handled);
+        if (rc != 0) return rc;
+        if (handled) continue;
+        if (strcmp(args[i], "--audit") == 0) {
             options->output_mode = YVEX_MODELS_OUTPUT_AUDIT;
-        } else if (strcmp(args[i], "--" "output") == 0) {
-            const char *value = NULL;
-            int rc = parse_models_value_option("models check", "--" "output",
-                                               arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            if (!parse_models_output_mode(value, &options->output_mode)) {
-                yvex_cli_out_writef(stderr, "yvex: models check unsupported output mode: %s\n", value);
-                return 2;
-            }
-        } else if (strcmp(args[i], "--backend") == 0 ||
-                   strcmp(args[i], "--level") == 0 ||
-                   strcmp(args[i], "--models-root") == 0 ||
-                   strcmp(args[i], "--registry") == 0 ||
-                   strcmp(args[i], "--report-dir") == 0) {
-            const char *flag = args[i];
-            const char *value = NULL;
-            int rc = parse_models_value_option("models check", flag,
-                                               arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            if (strcmp(flag, "--backend") == 0) {
-                options->backend_name = value;
-            } else if (strcmp(flag, "--level") == 0) {
-                options->level_name = value;
-            } else if (strcmp(flag, "--models-root") == 0) {
-                options->models_root = value;
-            } else if (strcmp(flag, "--registry") == 0) {
-                options->registry_path = value;
-            } else {
-                options->report_dir = value;
-            }
         } else if (args[i][0] == '-') {
             yvex_cli_out_writef(stderr, "yvex: unknown models check option: %s\n", args[i]);
             return 2;
@@ -1088,6 +1133,11 @@ static int parse_models_check_options(int arg_count,
     return 0;
 }
 
+/* Purpose: Render print model check unsupported from typed facts (`print_model_check_unsupported`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int print_model_check_unsupported(const yvex_cli_models_check_options *options)
 {
     const char *target = options && options->target ? options->target : "";
@@ -1100,21 +1150,22 @@ static int print_model_check_unsupported(const yvex_cli_models_check_options *op
                strcmp(target, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0
                    ? "segment check is planned"
                    : "source-only target cannot be checked as a YVEX-produced runtime artifact yet");
-        yvex_cli_out_writef(stdout, "boundary: report-only refusal, generation unsupported\n");
-        yvex_cli_out_writef(stdout, "status: model-check-unsupported\n");
+        yvex_cli_out_lines(stdout, literal_pair_0, sizeof(literal_pair_0) / sizeof(literal_pair_0[0]));
     } else {
         yvex_cli_out_writef(stdout, "status: model-check-unsupported\n");
         yvex_cli_out_writef(stdout, "target_id: %s\n", target);
         if (strcmp(target, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0) {
             yvex_cli_out_writef(stdout, "reason: segment check is planned, not implemented by this preset\n");
         } else {
-            yvex_cli_out_writef(stdout, "reason: source-only target cannot be checked as a YVEX-produced runtime artifact yet\n");
+            yvex_cli_out_writef(stdout,
+                "reason: source-only target cannot be checked as a YVEX-produced runtime artifact yet\n");
         }
         model_print_runtime_generation("unsupported");
     }
     return exit_for_status(YVEX_ERR_UNSUPPORTED);
 }
 
+/* Purpose: Validate model check resolve registry path before downstream use (`model_check_resolve_registry_path`). */
 static int model_check_resolve_registry_path(const yvex_cli_models_check_options *options,
                                              char *registry_path,
                                              size_t registry_path_cap,
@@ -1129,6 +1180,11 @@ static int model_check_resolve_registry_path(const yvex_cli_models_check_options
                                             err);
 }
 
+/* Purpose: Validate model check resolve canonical path before downstream use (`model_check_resolve_canonical_path`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_check_resolve_canonical_path(
     const yvex_cli_models_check_options *options,
     yvex_model_ref *ref,
@@ -1173,6 +1229,11 @@ static int model_check_resolve_canonical_path(
     return rc;
 }
 
+/* Purpose: Validate model check resolve ref before downstream use (`model_check_resolve_ref`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_check_resolve_ref(const yvex_cli_models_check_options *options,
                                    const char *registry_path,
                                    yvex_model_ref *ref,
@@ -1210,6 +1271,12 @@ static int model_check_resolve_ref(const yvex_cli_models_check_options *options,
     return rc;
 }
 
+/* Purpose: Validate model check verify registry identity before downstream use
+ * (`model_check_verify_registry_identity`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_check_verify_registry_identity(const yvex_model_ref *ref,
                                                 yvex_error *err)
 {
@@ -1260,6 +1327,7 @@ static int model_check_verify_registry_identity(const yvex_model_ref *ref,
     return YVEX_OK;
 }
 
+/* Purpose: Validate model check integrity before downstream use (`model_check_integrity`). */
 static int model_check_integrity(const yvex_model_ref *ref,
                                  int require_embedding,
                                  yvex_artifact_integrity_report *report,
@@ -1277,6 +1345,7 @@ static int model_check_integrity(const yvex_model_ref *ref,
                                              report, err);
 }
 
+/* Purpose: Validate model check backend probe before downstream use (`model_check_backend_probe`). */
 static int model_check_backend_probe(const char *backend_name, yvex_error *err)
 {
     yvex_backend *backend = NULL;
@@ -1292,6 +1361,11 @@ static int model_check_backend_probe(const char *backend_name, yvex_error *err)
     return rc;
 }
 
+/* Purpose: Validate model check materialize before downstream use (`model_check_materialize`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_check_materialize(const char *path,
                                    const char *backend_name,
                                    yvex_error *err)
@@ -1341,6 +1415,11 @@ static int model_check_materialize(const char *path,
     return rc;
 }
 
+/* Purpose: Validate model check engine before downstream use (`model_check_engine`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_check_engine(const char *path,
                               const char *backend_name,
                               yvex_error *err)
@@ -1372,6 +1451,11 @@ static int model_check_engine(const char *path,
     return rc;
 }
 
+/* Purpose: Validate model check session before downstream use (`model_check_session`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_check_session(const char *path,
                                const char *backend_name,
                                yvex_error *err)
@@ -1420,6 +1504,11 @@ static int model_check_session(const char *path,
     return rc;
 }
 
+/* Purpose: Validate model check plan before downstream use (`model_check_plan`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_check_plan(const char *path,
                             const char *backend_name,
                             yvex_error *err)
@@ -1443,6 +1532,11 @@ static int model_check_plan(const char *path,
     return rc;
 }
 
+/* Purpose: Validate model check graph partial before downstream use (`model_check_graph_partial`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_check_graph_partial(const char *path,
                                      const char *backend_name,
                                      yvex_error *err)
@@ -1478,6 +1572,8 @@ static int model_check_graph_partial(const char *path,
     return rc;
 }
 
+/* Purpose: Validate model check is real selected embedding before downstream use
+ *   (`model_check_is_real_selected_embedding`). */
 static int model_check_is_real_selected_embedding(
     const yvex_model_metadata_snapshot *metadata)
 {
@@ -1489,6 +1585,11 @@ static int model_check_is_real_selected_embedding(
            metadata->entry.primary_tensor_bytes == 1059061760ull;
 }
 
+/* Purpose: Validate model check run model gate before downstream use (`model_check_run_model_gate`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_check_run_model_gate(const yvex_model_ref *ref,
                                       const char *backend_name,
                                       yvex_error *err)
@@ -1529,6 +1630,11 @@ static int model_check_run_model_gate(const yvex_model_ref *ref,
     return YVEX_OK;
 }
 
+/* Purpose: Validate model check run materialize gate before downstream use (`model_check_run_materialize_gate`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_check_run_materialize_gate(const yvex_model_ref *ref,
                                             const char *backend_name,
                                             yvex_error *err)
@@ -1573,6 +1679,7 @@ static int model_check_run_materialize_gate(const yvex_model_ref *ref,
     return YVEX_OK;
 }
 
+/* Purpose: Validate model check finish before downstream use (`model_check_finish`). */
 static int model_check_finish(yvex_cli_models_check_options *options,
                               yvex_cli_model_check_report *report,
                               int exit_code,
@@ -1594,6 +1701,136 @@ static int model_check_finish(yvex_cli_models_check_options *options,
     return exit_code;
 }
 
+/* Close admitted check resources before rendering the terminal report. */
+/* Purpose: Validate model check close finish before downstream use (`model_check_close_finish`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
+static int model_check_close_finish(yvex_cli_models_check_options *options,
+                                    yvex_cli_model_check_report *report,
+                                    yvex_model_context *ctx,
+                                    yvex_model_ref *ref,
+                                    int exit_code,
+                                    yvex_error *err)
+{
+    yvex_model_context_close(ctx);
+    yvex_model_ref_clear(ref);
+    return model_check_finish(options, report, exit_code, err);
+}
+
+/* Execute the admitted runtime-boundary checks after metadata and integrity pass. */
+/* Purpose: Validate model check runtime pipeline before downstream use (`model_check_runtime_pipeline`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
+static int model_check_runtime_pipeline(yvex_cli_models_check_options *options,
+                                        yvex_cli_model_check_report *report,
+                                        yvex_model_ref *ref,
+                                        yvex_model_context *ctx,
+                                        const yvex_model_metadata_snapshot *metadata,
+                                        yvex_error *err)
+{
+    int rc;
+
+    rc = model_check_backend_probe(options->backend_name, err);
+    if (rc != YVEX_OK) {
+        report->stage_integrity_report = "fail";
+        snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
+        return model_check_close_finish(options, report, ctx, ref,
+                                        rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc), err);
+    }
+    report->stage_integrity_report = "pass";
+    if (options->no_materialize) {
+        report->stage_materialize = "skipped";
+        report->stage_engine = "skipped";
+        report->stage_session = "skipped";
+        report->stage_plan = "skipped";
+        report->stage_graph_partial = "skipped";
+        snprintf(report->graph_skip_reason, sizeof(report->graph_skip_reason),
+                 "disabled by --no-materialize");
+        report->stage_model_gate = "skipped";
+        report->stage_materialize_gate = "skipped";
+        report->runtime_execution = "not-performed";
+        report->final_status = "model-check-pass";
+        return model_check_close_finish(options, report, ctx, ref, 0, err);
+    }
+    rc = model_check_materialize(ref->path, options->backend_name, err);
+    if (rc != YVEX_OK) {
+        report->stage_materialize = "fail";
+        snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
+        return model_check_close_finish(options, report, ctx, ref,
+                                        rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc), err);
+    }
+    report->stage_materialize = "pass";
+    rc = model_check_engine(ref->path, options->backend_name, err);
+    if (rc != YVEX_OK) {
+        report->stage_engine = "fail";
+        snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
+        return model_check_close_finish(options, report, ctx, ref,
+                                        rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc), err);
+    }
+    report->stage_engine = "pass";
+    rc = model_check_session(ref->path, options->backend_name, err);
+    if (rc != YVEX_OK) {
+        report->stage_session = "fail";
+        snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
+        return model_check_close_finish(options, report, ctx, ref,
+                                        rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc), err);
+    }
+    report->stage_session = "pass";
+    rc = model_check_plan(ref->path, options->backend_name, err);
+    if (rc != YVEX_OK) {
+        report->stage_plan = "fail";
+        snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
+        return model_check_close_finish(options, report, ctx, ref, exit_for_status(rc), err);
+    }
+    report->stage_plan = "pass";
+    if (options->no_graph) {
+        report->stage_graph_partial = "skipped";
+        snprintf(report->graph_skip_reason, sizeof(report->graph_skip_reason),
+                 "disabled by --no-graph");
+    } else {
+        rc = model_check_graph_partial(ref->path, options->backend_name, err);
+        if (rc != YVEX_OK) {
+            report->stage_graph_partial = rc == YVEX_ERR_UNSUPPORTED ? "unsupported" : "fail";
+            snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
+            return model_check_close_finish(options, report, ctx, ref,
+                                            rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc), err);
+        }
+        report->stage_graph_partial = "pass";
+    }
+    report->runtime_execution = "selected-boundary-only";
+    if (options->level == YVEX_CLI_MODEL_CHECK_FULL &&
+        model_check_is_real_selected_embedding(metadata)) {
+        rc = model_check_run_model_gate(ref, options->backend_name, err);
+        if (rc != YVEX_OK) {
+            report->stage_model_gate = "fail";
+            snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
+            return model_check_close_finish(options, report, ctx, ref, exit_for_status(rc), err);
+        }
+        report->stage_model_gate = "pass";
+        rc = model_check_run_materialize_gate(ref, options->backend_name, err);
+        if (rc != YVEX_OK) {
+            report->stage_materialize_gate = "fail";
+            snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
+            return model_check_close_finish(options, report, ctx, ref, exit_for_status(rc), err);
+        }
+        report->stage_materialize_gate = "pass";
+    } else if (options->level == YVEX_CLI_MODEL_CHECK_FULL) {
+        report->stage_model_gate = "skipped";
+        report->stage_materialize_gate = "skipped";
+    }
+    report->final_status = "model-check-pass";
+    return model_check_close_finish(options, report, ctx, ref, 0, err);
+}
+
+/* Purpose: Validate models check surface command before downstream use (`yvex_models_check_surface_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_models_check_surface_command(int arg_count, char **args)
 {
     yvex_cli_models_check_options options;
@@ -1605,7 +1842,6 @@ int yvex_models_check_surface_command(int arg_count, char **args)
     yvex_error err;
     char registry_path[YVEX_PATH_CAP];
     int rc;
-    int exit_code = 0;
 
     yvex_error_clear(&err);
     memset(&ref, 0, sizeof(ref));
@@ -1674,9 +1910,8 @@ int yvex_models_check_surface_command(int arg_count, char **args)
     if (rc != YVEX_OK) {
         report.stage_metadata = "fail";
         snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-        yvex_model_context_close(&ctx);
-        yvex_model_ref_clear(&ref);
-        return model_check_finish(&options, &report, exit_for_status(rc), &err);
+        return model_check_close_finish(&options, &report, &ctx, &ref,
+                                        exit_for_status(rc), &err);
     }
     report.stage_metadata = "pass";
 
@@ -1685,10 +1920,8 @@ int yvex_models_check_surface_command(int arg_count, char **args)
         if (rc != YVEX_OK) {
             report.stage_registry_identity = "fail";
             snprintf(report.error, sizeof(report.error), "registry identity drift");
-            yvex_model_context_close(&ctx);
-            yvex_model_ref_clear(&ref);
-            return model_check_finish(&options, &report,
-                                      exit_for_status(YVEX_ERR_STATE), &err);
+            return model_check_close_finish(&options, &report, &ctx, &ref,
+                                            exit_for_status(YVEX_ERR_STATE), &err);
         }
         report.stage_registry_identity = "pass";
     } else {
@@ -1700,11 +1933,9 @@ int yvex_models_check_surface_command(int arg_count, char **args)
         report.stage_integrity_check = "fail";
         snprintf(report.error, sizeof(report.error), "%s",
                  rc != YVEX_OK ? yvex_error_message(&err) : "artifact integrity failed");
-        yvex_model_context_close(&ctx);
-        yvex_model_ref_clear(&ref);
-        return model_check_finish(&options, &report,
-                                  exit_for_status(rc != YVEX_OK ? rc : YVEX_ERR_FORMAT),
-                                  &err);
+        return model_check_close_finish(&options, &report, &ctx, &ref,
+                                        exit_for_status(rc != YVEX_OK ? rc : YVEX_ERR_FORMAT),
+                                        &err);
     }
     report.stage_integrity_check = "pass";
 
@@ -1714,133 +1945,9 @@ int yvex_models_check_surface_command(int arg_count, char **args)
                      "quick level does not run graph");
         }
         report.final_status = "model-check-pass";
-        yvex_model_context_close(&ctx);
-        yvex_model_ref_clear(&ref);
-        return model_check_finish(&options, &report, 0, &err);
+        return model_check_close_finish(&options, &report, &ctx, &ref, 0, &err);
     }
 
-    rc = model_check_backend_probe(options.backend_name, &err);
-    if (rc != YVEX_OK) {
-        report.stage_integrity_report = "fail";
-        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-        yvex_model_context_close(&ctx);
-        yvex_model_ref_clear(&ref);
-        return model_check_finish(&options, &report,
-                                  rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc),
-                                  &err);
-    }
-    report.stage_integrity_report = "pass";
-
-    if (options.no_materialize) {
-        report.stage_materialize = "skipped";
-        report.stage_engine = "skipped";
-        report.stage_session = "skipped";
-        report.stage_plan = "skipped";
-        report.stage_graph_partial = "skipped";
-        snprintf(report.graph_skip_reason, sizeof(report.graph_skip_reason),
-                 "disabled by --no-materialize");
-        report.stage_model_gate = "skipped";
-        report.stage_materialize_gate = "skipped";
-        report.runtime_execution = "not-performed";
-        report.final_status = "model-check-pass";
-        yvex_model_context_close(&ctx);
-        yvex_model_ref_clear(&ref);
-        return model_check_finish(&options, &report, 0, &err);
-    }
-
-    rc = model_check_materialize(ref.path, options.backend_name, &err);
-    if (rc != YVEX_OK) {
-        report.stage_materialize = "fail";
-        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-        yvex_model_context_close(&ctx);
-        yvex_model_ref_clear(&ref);
-        return model_check_finish(&options, &report,
-                                  rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc),
-                                  &err);
-    }
-    report.stage_materialize = "pass";
-
-    rc = model_check_engine(ref.path, options.backend_name, &err);
-    if (rc != YVEX_OK) {
-        report.stage_engine = "fail";
-        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-        yvex_model_context_close(&ctx);
-        yvex_model_ref_clear(&ref);
-        return model_check_finish(&options, &report,
-                                  rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc),
-                                  &err);
-    }
-    report.stage_engine = "pass";
-
-    rc = model_check_session(ref.path, options.backend_name, &err);
-    if (rc != YVEX_OK) {
-        report.stage_session = "fail";
-        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-        yvex_model_context_close(&ctx);
-        yvex_model_ref_clear(&ref);
-        return model_check_finish(&options, &report,
-                                  rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc),
-                                  &err);
-    }
-    report.stage_session = "pass";
-
-    rc = model_check_plan(ref.path, options.backend_name, &err);
-    if (rc != YVEX_OK) {
-        report.stage_plan = "fail";
-        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-        yvex_model_context_close(&ctx);
-        yvex_model_ref_clear(&ref);
-        return model_check_finish(&options, &report, exit_for_status(rc), &err);
-    }
-    report.stage_plan = "pass";
-
-    if (options.no_graph) {
-        report.stage_graph_partial = "skipped";
-        snprintf(report.graph_skip_reason, sizeof(report.graph_skip_reason),
-                 "disabled by --no-graph");
-    } else {
-        rc = model_check_graph_partial(ref.path, options.backend_name, &err);
-        if (rc != YVEX_OK) {
-            report.stage_graph_partial = rc == YVEX_ERR_UNSUPPORTED ? "unsupported" : "fail";
-            snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-            yvex_model_context_close(&ctx);
-            yvex_model_ref_clear(&ref);
-            return model_check_finish(&options, &report,
-                                      rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc),
-                                      &err);
-        }
-        report.stage_graph_partial = "pass";
-    }
-    report.runtime_execution = "selected-boundary-only";
-
-    if (options.level == YVEX_CLI_MODEL_CHECK_FULL &&
-        model_check_is_real_selected_embedding(&metadata_snapshot) &&
-        !options.no_materialize) {
-        rc = model_check_run_model_gate(&ref, options.backend_name, &err);
-        if (rc != YVEX_OK) {
-            report.stage_model_gate = "fail";
-            snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-            yvex_model_context_close(&ctx);
-            yvex_model_ref_clear(&ref);
-            return model_check_finish(&options, &report, exit_for_status(rc), &err);
-        }
-        report.stage_model_gate = "pass";
-        rc = model_check_run_materialize_gate(&ref, options.backend_name, &err);
-        if (rc != YVEX_OK) {
-            report.stage_materialize_gate = "fail";
-            snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-            yvex_model_context_close(&ctx);
-            yvex_model_ref_clear(&ref);
-            return model_check_finish(&options, &report, exit_for_status(rc), &err);
-        }
-        report.stage_materialize_gate = "pass";
-    } else if (options.level == YVEX_CLI_MODEL_CHECK_FULL) {
-        report.stage_model_gate = "skipped";
-        report.stage_materialize_gate = "skipped";
-    }
-
-    report.final_status = "model-check-pass";
-    yvex_model_context_close(&ctx);
-    yvex_model_ref_clear(&ref);
-    return model_check_finish(&options, &report, exit_code, &err);
+    return model_check_runtime_pipeline(&options, &report, &ref, &ctx,
+                                        &metadata_snapshot, &err);
 }

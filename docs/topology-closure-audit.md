@@ -59,7 +59,7 @@ Largest outside-writer files:
 | `src/artifact/core.c` | 365 | major legacy pending |
 | `src/gguf/tools.c` | 286 | major legacy pending |
 | `src/accounts/provider.c` | 100 | legacy pending |
-| `src/gguf/quant.c` | 85 | legacy pending |
+| `src/gguf/quant_plan.c` | 85 | legacy pending |
 | `src/core/fs.c` | 75 | legacy pending |
 | `src/runtime/chat.c` | 70 | legacy pending |
 | `src/generation/decode.c` | 69 | legacy pending |
@@ -168,8 +168,7 @@ Findings:
 | Path | Classification |
 | --- | --- |
 | `src/accounts/provider.c` | provider subprocess capture; legacy pending, not report blob |
-| `include/yvex/log.h` | log sink wording; allowed text description |
-| `include/yvex/status.h` | log sink wording; allowed text description |
+| `include/yvex/core.h` | log/status sink wording; allowed text description |
 | `src/generation/kv_report.c` | comment wording only |
 
 No model-target `primary_text`, `diagnostic_text`, `raw_output`,
@@ -192,7 +191,7 @@ Important findings:
 | `src/cli/render/private.h` | legacy operator render helper; pending cleanup |
 | `src/accounts/provider.c` | legacy provider binary discovery; likely real behavior |
 | `src/runtime/core.c` | direct conversion bridge output; pending cleanup |
-| `include/yvex/conversion.h`, `include/yvex/weights.h` | public bridge terminology; not automatically invalid |
+| `include/yvex/gguf.h`, `include/yvex/model.h` | public bridge terminology; not automatically invalid |
 | `src/model/target/*` | semantic compatibility/status field values only; no runner/backend shell |
 
 ## Monolith Inventory
@@ -207,8 +206,8 @@ Thresholds:
 | --- | ---: | --- | --- |
 | `src/model/artifacts/` | 17223 | critical | yes; next row should split model artifacts/control-plane output |
 | `src/runtime/core.c` | 4698 | strong | yes; runtime CLI/report/output residue remains |
-| `src/graph/primitive.c` | 4538 | strong | likely primitive proof density; needs focused review |
-| `src/gguf/quant.c` | 2513 | strong | likely policy/tooling mix; needs focused review |
+| `src/runtime/graph.c` | 4538 | strong | likely primitive proof density; needs focused review |
+| `src/gguf/quant_plan.c` | 2513 | strong | likely policy/tooling mix; needs focused review |
 | `src/gguf/tools.c` | 2184 | warning | command surface/tooling mix remains |
 | `src/backend/core.c` | 2103 | warning | backend report/output residue remains |
 | `src/artifact/core.c` | 1995 | warning | artifact command/report/output residue remains |
@@ -380,7 +379,7 @@ New render files: `models.c`,
 `common.c`.
 
 Largest remaining surface file:
-`src/cli/model_artifacts/surface_common.h` at 21 lines.
+`src/cli/model_artifacts/private.h` at 21 lines.
 
 Largest new render file:
 `src/cli/model_artifacts/prepare.c` at 1837 lines.

@@ -36,6 +36,8 @@ Hard rules, enforced by `tests/test_repository_layout.sh`:
 - root C sources and root private headers are forbidden;
 - source-relative object paths are mandatory, for example
   `build/obj/src/graph/plan.o`;
+- static-archive members preserve those source-relative identities; duplicate
+  member basenames are not an acceptable approximation;
 - build logic may not flatten objects or rely on long prefixes to avoid
   collisions.
 
@@ -66,6 +68,8 @@ A private header may survive only when at least two production translation
 units consume it or when it is a required backend/platform interface. Each
 subsystem has at most one general `private.h`. One-consumer declaration shells
 belong in the source owner. Public headers require a real installed ABI.
+Mechanical same-stem `.c`/`.h` pairing, forwarding headers, and compatibility
+headers for obsolete in-tree paths are forbidden.
 
 Explicit user authorization is required before:
 
@@ -148,13 +152,31 @@ top-k, masks, softmax, reductions, encoded matrix primitives, and backend
 admission. A family owns only irreducible scheduling, tensor-role lowering,
 recurrence, operation composition, and numeric-policy selection.
 
-## 5. C symbols and file contracts
+## 5. C interfaces, symbols, and contracts
+
+Headers have exactly three tiers:
+
+- `include/yvex/*.h` is installed public ABI grouped by stable domain;
+- `include/yvex/internal/*.h` is non-installed cross-subsystem ABI;
+- a repository-qualified `src/<subsystem>/private.h` is source-local ABI shared
+  by several translation units in that subtree.
+
+`include/yvex/api.h` is an external convenience umbrella. Production code
+never includes it. Public headers include only public headers; they are
+self-contained in both C and C++. Internal headers are absent from the
+umbrella and never include source-local headers. Source code names every
+dependency explicitly with `<yvex/domain.h>`, `<yvex/internal/domain.h>`, or a
+repository-qualified path such as `"src/graph/private.h"`. Bare internal
+includes such as `"private.h"` or `"report.h"` are forbidden; include-path
+ordering is not a dependency mechanism.
 
 Exported symbols retain the `yvex_` namespace and use
 `yvex_<subsystem>_<operation>`. A family exposes one bounded registration or
 lowering entrypoint per applicable subsystem. Private functions are `static`
-and do not use `yvex_`. Do not export helpers merely to connect artificially
-split files.
+and do not use `yvex_`. A non-public global requires a declared internal ABI
+and more than one production translation-unit consumer. Do not export helpers
+merely to connect artificially split files or promote diagnostics, fixtures,
+references, renderers, or family implementation types into installed ABI.
 
 Every source file declares these fields in its leading ownership contract:
 
@@ -164,11 +186,26 @@ Owns
 Does not own
 Invariants
 Boundary
+Purpose
+Inputs
+Effects
+Failure
 ```
 
-Every non-trivial function has a contract that states allocation, mutation,
-I/O, side effects, failure, cleanup, and capability boundary where relevant.
-Comments describe contracts, not syntax or marketing claims.
+Every production function has an adjacent semantic contract. Stateful,
+allocating, I/O, identity, lifecycle, capability, transactional, and other
+non-trivial functions state `Purpose`, `Inputs`, `Effects`, `Failure`, and
+`Boundary`. A tiny pure helper may use one concise `Purpose` statement. The
+comment must name the actual invariant or transformation; generated manifest
+prose, function-name paraphrases, and repeated boilerplate are rejected.
+
+`.clang-format` is the canonical visual style: 100-column target and 120-column
+hard limit. Production translation units stay at or below 2,000 physical
+lines, headers at or below 600, and functions at or below 200. Required warning
+flags are recorded once in `config/c_policy.json` and enabled by the Makefile;
+warnings are fixed at their owner rather than globally suppressed. Code is not
+made shorter through macros, one-line statement compression, hidden generated
+implementation, or opaque callback dispatch.
 
 Use checked allocation and arithmetic, the existing typed failure style, and
 one canonical field for each fact. Do not hash C object memory, pointers,

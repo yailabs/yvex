@@ -4,7 +4,9 @@
  */
 #include <string.h>
 
-#include <yvex/weight_mapping.h>
+#include <yvex/gguf.h>
+#include <yvex/internal/families/deepseek_v4.h>
+#include <yvex/internal/gguf.h>
 
 #include "tests/test.h"
 

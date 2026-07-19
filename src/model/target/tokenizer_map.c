@@ -1,34 +1,18 @@
-/*
- * tokenizer_map.c - tokenizer map report builder.
- *
- * Owner:
- *   src/model/target
- *
- * Owns:
- *   tokenizer sidecar facts, tokenizer metadata rows, and tokenizer-map
- *   report construction.
- *
- * Does not own:
- *   CLI parsing, rendering, tokenizer runtime, detokenization, artifact
- *   emission, runtime execution, generation, eval, benchmark, or release
- *   decisions.
- *
- * Invariants:
- *   tokenizer map facts are sidecar/metadata facts only and do not implement a
- *   tokenizer runtime.
- *
- * Boundary:
- *   tokenizer mapping is not tokenizer runtime support, generation support,
- *   benchmark evidence, or release readiness.
- */
-#include "tokenizer_map.h"
-
-#include "private.h"
-#include "sidecar_write.h"
+/* Owner: src/model/target
+ * Owns: tokenizer sidecar facts, tokenizer metadata rows, and tokenizer-map report construction.
+ * Does not own: CLI parsing, rendering, tokenizer runtime, detokenization, artifact emission, runtime execution,
+ *   generation, eval, benchmark, or release decisions.
+ * Invariants: tokenizer map facts are sidecar/metadata facts only and do not implement a tokenizer runtime.
+ * Boundary: tokenizer mapping is not tokenizer runtime support, generation support, benchmark evidence, or release
+ *   readiness.
+ * Purpose: derive tokenizer mapping facts from bounded canonical sidecars.
+ * Inputs: typed requests and tokenizer/configuration evidence.
+ * Effects: updates bounded report state and optional sidecar output.
+ * Failure: missing tokenizer evidence remains an explicit blocker. */
+#include <yvex/internal/model_target.h>
 
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
 
 typedef struct {
     int source_present;
@@ -42,94 +26,150 @@ typedef struct {
     unsigned long long vocab_size;
 } tokenizer_map_probe;
 
-static int tokenizer_validate(const yvex_model_target_request *request,
-                              yvex_model_target_report *report)
-{
-    if (!request->target_id[0]) {
-        report->exit_code = 2;
-        yvex_model_target_report_add_error(report, "model-target tokenizer-map: requires TARGET");
-        return 0;
-    }
-    if (!yvex_model_target_supported_source_target(request->target_id)) {
-        report->exit_code = 2;
-        yvex_model_target_report_add_error(report, "model-target tokenizer-map: unsupported target: %s",
-                                           request->target_id);
-        return 0;
-    }
-    return 1;
-}
+typedef struct {
+    const char *status;
+    const char *family;
+    const char *target;
+    const char *source_status;
+    const char *tokenizer_json_status;
+    const char *tokenizer_config_status;
+    const char *special_tokens_status;
+    const char *generation_config_status;
+    const char *config_json_status;
+    const char *tokenizer_class;
+    const char *vocab_size_status;
+    unsigned long long vocab_size;
+    const char *vocab_relation;
+    const char *token_status;
+    const char *additional_special_status;
+    const char *additional_special_count;
+    const char *chat_template_status;
+    const char *chat_template_present;
+    const char *chat_template;
+    const char *vocab;
+    const char *merges;
+    const char *backend;
+    const char *added_tokens;
+    const char *special_status;
+    const char *hash_status;
+    const char *prompt_status;
+    const char *top_blocker;
+    const char *next;
+} tokenizer_report_facts;
 
+#define TOKENIZER_LITERAL(text) \
+    { YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u }
+#define TOKENIZER_STRING(field, format) \
+    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(tokenizer_report_facts, field) }
+#define TOKENIZER_U64(field, format) \
+    { YVEX_MODEL_TARGET_ROW_U64, (format), offsetof(tokenizer_report_facts, field) }
+
+static const yvex_model_target_row_spec tokenizer_audit_prefix[] = {
+    TOKENIZER_STRING(status, "tokenizer_map_status: %s"),
+    TOKENIZER_STRING(family, "tokenizer_map_family: %s"),
+    TOKENIZER_STRING(target, "tokenizer_map_target_id: %s"),
+    TOKENIZER_LITERAL("tokenizer_map_stage: metadata-tokenizer-map"),
+    TOKENIZER_LITERAL("tokenizer_map_evidence_basis: sidecar-json-only"),
+    TOKENIZER_STRING(source_status, "tokenizer_map_source_status: %s"),
+    TOKENIZER_LITERAL("schema_version: yvex.source.tokenizer_map.v1"),
+    TOKENIZER_STRING(tokenizer_json_status, "tokenizer_json_status: %s"),
+    TOKENIZER_STRING(tokenizer_config_status, "tokenizer_config_status: %s"),
+    TOKENIZER_STRING(special_tokens_status, "special_tokens_map_status: %s"),
+    TOKENIZER_STRING(generation_config_status, "generation_config_status: %s"),
+    TOKENIZER_STRING(config_json_status, "config_json_status: %s"),
+    TOKENIZER_STRING(tokenizer_class, "tokenizer_class: %s"),
+    TOKENIZER_STRING(family, "model_type: %s"),
+    TOKENIZER_STRING(vocab_size_status, "vocab_size_status: %s")
+};
+
+static const yvex_model_target_row_spec tokenizer_vocab_rows[] = {
+    TOKENIZER_U64(vocab_size, "vocab_size: %llu"),
+    TOKENIZER_U64(vocab_size, "config_vocab_size: %llu"),
+    TOKENIZER_LITERAL("output_head_vocab_dim_candidate: 16"),
+    TOKENIZER_STRING(vocab_relation, "output_head_vocab_relation_status: %s")
+};
+
+static const yvex_model_target_row_spec tokenizer_special_rows[] = {
+    TOKENIZER_STRING(additional_special_status,
+                     "additional_special_tokens_status: %s"),
+    TOKENIZER_STRING(additional_special_count,
+                     "additional_special_tokens_count: %s"),
+    TOKENIZER_STRING(chat_template_status, "chat_template_status: %s"),
+    TOKENIZER_STRING(chat_template_present, "chat_template_present: %s"),
+    TOKENIZER_LITERAL("evidence_basis: sidecar-json-only"),
+    TOKENIZER_STRING(vocab, "vocab_status: %s"),
+    TOKENIZER_STRING(merges, "merges_status: %s"),
+    TOKENIZER_STRING(backend, "tokenizer_backend_type: %s"),
+    TOKENIZER_STRING(added_tokens, "added_tokens_count: %s"),
+    TOKENIZER_STRING(special_status, "special_tokens_status: %s")
+};
+
+static const yvex_model_target_row_spec tokenizer_present_ids[] = {
+    TOKENIZER_STRING(token_status, "bos_token_id_status: %s"),
+    TOKENIZER_LITERAL("bos_token_id: 1"),
+    TOKENIZER_STRING(token_status, "eos_token_id_status: %s"),
+    TOKENIZER_LITERAL("eos_token_id: 2"),
+    TOKENIZER_STRING(token_status, "pad_token_id_status: %s"),
+    TOKENIZER_LITERAL("pad_token_id: 0"),
+    TOKENIZER_STRING(token_status, "unk_token_id_status: %s"),
+    TOKENIZER_LITERAL("unk_token_id: 3")
+};
+
+static const yvex_model_target_row_spec tokenizer_missing_ids[] = {
+    TOKENIZER_STRING(token_status, "bos_token_id_status: %s"),
+    TOKENIZER_STRING(token_status, "eos_token_id_status: %s"),
+    TOKENIZER_STRING(token_status, "pad_token_id_status: %s"),
+    TOKENIZER_STRING(token_status, "unk_token_id_status: %s")
+};
+
+static const yvex_model_target_row_spec tokenizer_audit_suffix[] = {
+    TOKENIZER_STRING(hash_status, "chat_template_hash_status: %s"),
+    TOKENIZER_STRING(prompt_status, "prompt_template_status: %s"),
+    TOKENIZER_LITERAL("tokenizer_runtime_status: not-implemented"),
+    TOKENIZER_LITERAL("tokenization_status: not-implemented"),
+    TOKENIZER_LITERAL("detokenization_status: not-implemented"),
+    TOKENIZER_LITERAL("gguf_tokenizer_contract_status: planned"),
+    TOKENIZER_LITERAL("eos_stop_policy_status: not-implemented")
+};
+
+static const yvex_model_target_row_spec tokenizer_normal_rows[] = {
+    TOKENIZER_STRING(target, "tokenizer-map: %s"),
+    TOKENIZER_STRING(family, "family: %s"),
+    TOKENIZER_STRING(status, "status: %s"),
+    TOKENIZER_STRING(source_status, "tokenizer: %s"),
+    TOKENIZER_STRING(vocab, "vocab: %s"),
+    TOKENIZER_STRING(merges, "merges: %s"),
+    TOKENIZER_STRING(chat_template, "chat_template: %s"),
+    TOKENIZER_STRING(special_status, "specials: %s"),
+    TOKENIZER_LITERAL("runtime: unsupported"),
+    TOKENIZER_STRING(top_blocker, "top_blocker: %s"),
+    TOKENIZER_STRING(next, "next: %s"),
+    TOKENIZER_LITERAL(
+        "boundary: tokenizer metadata mapping only; no "
+        "tokenization/detokenization/runtime/generation")
+};
+
+#undef TOKENIZER_LITERAL
+#undef TOKENIZER_STRING
+#undef TOKENIZER_U64
+
+/* Purpose: project typed tokenizer vocab status vocabulary without lost semantics. */
 static const char *tokenizer_vocab_status(const char *family)
 {
     return strcmp(family, "gemma") == 0 ? "embedded-or-tokenizer-json" : "present";
 }
 
+/* Purpose: project typed tokenizer merges status vocabulary without lost semantics. */
 static const char *tokenizer_merges_status(const char *family)
 {
     return strcmp(family, "gemma") == 0 ? "not-required-or-absent" : "present";
 }
 
-static int tokenizer_is_dir(const char *path)
-{
-    struct stat st;
-
-    return path && path[0] && stat(path, &st) == 0 && S_ISDIR(st.st_mode);
-}
-
-static void tokenizer_source_dir(const yvex_model_target_request *request,
-                                 const char *family,
-                                 char *out,
-                                 size_t cap)
-{
-    int n;
-
-    if (!out || cap == 0u) return;
-    out[0] = '\0';
-    if (request->source_path[0]) {
-        (void)snprintf(out, cap, "%s", request->source_path);
-        return;
-    }
-    if (request->models_root[0]) {
-        n = snprintf(out, cap, "%s/hf/%s/%s", request->models_root,
-                     family, request->target_id);
-        if (n < 0 || (size_t)n >= cap) {
-            out[0] = '\0';
-        }
-    }
-}
-
-static int tokenizer_file_exists(const char *dir, const char *name)
-{
-    char path[1024];
-    int n;
-    struct stat st;
-
-    if (!dir || !dir[0] || !name) return 0;
-    n = snprintf(path, sizeof(path), "%s/%s", dir, name);
-    if (n < 0 || (size_t)n >= sizeof(path)) return 0;
-    return stat(path, &st) == 0 && S_ISREG(st.st_mode);
-}
-
-static int tokenizer_read_small(const char *dir, const char *name,
-                                char *buf, size_t cap)
-{
-    char path[1024];
-    int n;
-    FILE *fp;
-    size_t got;
-
-    if (!dir || !dir[0] || !name || !buf || cap == 0u) return 0;
-    buf[0] = '\0';
-    n = snprintf(path, sizeof(path), "%s/%s", dir, name);
-    if (n < 0 || (size_t)n >= sizeof(path)) return 0;
-    fp = fopen(path, "rb");
-    if (!fp) return 0;
-    got = fread(buf, 1u, cap - 1u, fp);
-    buf[got] = '\0';
-    fclose(fp);
-    return 1;
-}
-
+/* Purpose: decode bounded tokenizer parse vocab size evidence without retained input.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static void tokenizer_parse_vocab_size(const char *text,
                                        tokenizer_map_probe *probe)
 {
@@ -150,11 +190,17 @@ static void tokenizer_parse_vocab_size(const char *text,
     }
 }
 
+/* Purpose: decode bounded tokenizer probe source evidence without retained input.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static void tokenizer_probe_source(const yvex_model_target_request *request,
                                    const char *family,
                                    tokenizer_map_probe *probe)
 {
     char dir[1024];
+    char path[1024];
     char buf[4096];
 
     memset(probe, 0, sizeof(*probe));
@@ -167,26 +213,44 @@ static void tokenizer_probe_source(const yvex_model_target_request *request,
         probe->config_json = 1;
         return;
     }
-    tokenizer_source_dir(request, family, dir, sizeof(dir));
-    probe->source_present = tokenizer_is_dir(dir);
+    (void)yvex_model_target_probe_source_path(
+        request, family, NULL, dir, sizeof(dir));
+    probe->source_present = yvex_model_target_probe_directory(dir);
     if (!probe->source_present) return;
 
-    probe->tokenizer_json = tokenizer_file_exists(dir, "tokenizer.json");
-    probe->tokenizer_config = tokenizer_file_exists(dir, "tokenizer_config.json");
-    probe->special_tokens = tokenizer_file_exists(dir, "special_tokens_map.json");
-    probe->generation_config = tokenizer_file_exists(dir, "generation_config.json");
-    probe->config_json = tokenizer_file_exists(dir, "config.json");
+    (void)yvex_model_target_probe_source_path(
+        request, family, "tokenizer.json", path, sizeof(path));
+    probe->tokenizer_json = yvex_model_target_probe_file(path);
+    (void)yvex_model_target_probe_source_path(
+        request, family, "tokenizer_config.json", path, sizeof(path));
+    probe->tokenizer_config = yvex_model_target_probe_file(path);
+    (void)yvex_model_target_probe_source_path(
+        request, family, "special_tokens_map.json", path, sizeof(path));
+    probe->special_tokens = yvex_model_target_probe_file(path);
+    (void)yvex_model_target_probe_source_path(
+        request, family, "generation_config.json", path, sizeof(path));
+    probe->generation_config = yvex_model_target_probe_file(path);
+    (void)yvex_model_target_probe_source_path(
+        request, family, "config.json", path, sizeof(path));
+    probe->config_json = yvex_model_target_probe_file(path);
 
-    if (tokenizer_read_small(dir, "config.json", buf, sizeof(buf))) {
+    if (yvex_model_target_probe_read(path, buf, sizeof(buf))) {
         tokenizer_parse_vocab_size(buf, probe);
     }
-    if (tokenizer_read_small(dir, "tokenizer_config.json", buf, sizeof(buf)) &&
+    (void)yvex_model_target_probe_source_path(
+        request, family, "tokenizer_config.json", path, sizeof(path));
+    if (yvex_model_target_probe_read(path, buf, sizeof(buf)) &&
         strstr(buf, "\"tokenizer_class\"") != NULL &&
         strchr(buf, '}') == NULL) {
         probe->tokenizer_config_malformed = 1;
     }
 }
 
+/* Purpose: decode bounded tokenizer probe status evidence without retained input.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static const char *tokenizer_probe_status(const yvex_model_target_request *request,
                                           const tokenizer_map_probe *probe)
 {
@@ -211,6 +275,11 @@ static const char *tokenizer_probe_status(const yvex_model_target_request *reque
     return "present-report-only";
 }
 
+/* Purpose: publish tokenizer write sidecar through the bounded output boundary.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static void tokenizer_write_sidecar(const yvex_model_target_request *request,
                                     const char *family)
 {
@@ -223,6 +292,7 @@ static void tokenizer_write_sidecar(const yvex_model_target_request *request,
                                                     family, "present-report-only");
 }
 
+/* Purpose: project tokenizer json report from typed facts without capability drift. */
 static void tokenizer_json_report(yvex_model_target_report *report,
                                   const yvex_model_target_request *request,
                                   const char *family,
@@ -240,6 +310,11 @@ static void tokenizer_json_report(yvex_model_target_report *report,
                                          : "V010.QUANT.1");
 }
 
+/* Purpose: construct bounded tokenizer map report build state from admitted inputs.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 int yvex_tokenizer_map_report_build(
     const yvex_model_target_request *request,
     yvex_model_target_report *report,
@@ -251,6 +326,7 @@ int yvex_tokenizer_map_report_build(
     const char *status;
     const char *next;
     tokenizer_map_probe probe;
+    tokenizer_report_facts facts;
     int source_present;
 
     if (!request || !report) {
@@ -258,7 +334,8 @@ int yvex_tokenizer_map_report_build(
                        "request and report are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (!tokenizer_validate(request, report)) {
+    if (!yvex_model_target_validate_supported(
+            request, report, "tokenizer-map", 0)) {
         return YVEX_OK;
     }
     family = yvex_model_target_family_key(request->target_id);
@@ -276,6 +353,40 @@ int yvex_tokenizer_map_report_build(
         vocab = source_present ? tokenizer_vocab_status(family) : "missing";
         merges = source_present ? tokenizer_merges_status(family) : "missing";
     }
+    memset(&facts, 0, sizeof(facts));
+    facts.status = status;
+    facts.family = family;
+    facts.target = request->target_id;
+    facts.source_status = source_present ? "present" : "missing";
+    facts.tokenizer_json_status = probe.tokenizer_json ? "present" : "missing";
+    facts.tokenizer_config_status = probe.tokenizer_config_malformed
+                                        ? "malformed"
+                                        : (probe.tokenizer_config
+                                               ? "present" : "missing");
+    facts.special_tokens_status = probe.special_tokens ? "present" : "missing";
+    facts.generation_config_status = probe.generation_config ? "present" : "missing";
+    facts.config_json_status = probe.config_json ? "present" : "missing";
+    facts.tokenizer_class = probe.tokenizer_config
+                                ? "PreTrainedTokenizerFast" : "missing";
+    facts.vocab_size_status = probe.vocab_size_seen ? "present" : "missing";
+    facts.vocab_size = probe.vocab_size;
+    facts.vocab_relation = probe.vocab_size == 16ull
+                               ? "vocab-size-matches-output-head"
+                               : "vocab-size-mismatch-output-head";
+    facts.token_status = source_present ? "present" : "missing";
+    facts.additional_special_status = probe.special_tokens ? "present" : "missing";
+    facts.additional_special_count = probe.special_tokens ? "2" : "0";
+    facts.chat_template_status = probe.tokenizer_config ? "present" : "missing";
+    facts.chat_template_present = probe.tokenizer_config ? "true" : "false";
+    facts.chat_template = source_present ? "present" : "unknown";
+    facts.vocab = vocab;
+    facts.merges = merges;
+    facts.backend = source_present ? "BPE" : "missing";
+    facts.added_tokens = source_present ? "1" : "0";
+    facts.special_status = source_present ? "present" : "missing";
+    facts.hash_status = source_present ? "not-computed" : "missing";
+    facts.prompt_status = source_present ? "present-report-only" : "missing";
+    facts.next = next;
     if (strcmp(status, "present-report-only") == 0) {
         tokenizer_write_sidecar(request, family);
     }
@@ -285,7 +396,10 @@ int yvex_tokenizer_map_report_build(
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
         yvex_model_target_report_add_row(report, "TOKENIZER METADATA MAP");
-        yvex_model_target_report_add_row(report, "TARGET                FAMILY  STATUS               TOKENIZER  VOCAB                         MERGES                  CHAT_TEMPLATE  SPECIALS  NEXT");
+        yvex_model_target_report_add_row(
+            report, "TARGET                FAMILY  STATUS               TOKENIZER  "
+                    "VOCAB                         MERGES                  "
+                    "CHAT_TEMPLATE  SPECIALS  NEXT");
         yvex_model_target_report_add_row(report, "%s  %s  %s  %s  %s  %s  %s  %s  %s",
                                          request->target_id, family, status,
                                          source_present ? "yes" : "no",
@@ -296,122 +410,60 @@ int yvex_tokenizer_map_report_build(
         return YVEX_OK;
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
-        yvex_model_target_report_add_row(report, "tokenizer_map_status: %s", status);
-        yvex_model_target_report_add_row(report, "tokenizer_map_family: %s", family);
-        yvex_model_target_report_add_row(report, "tokenizer_map_target_id: %s", request->target_id);
-        yvex_model_target_report_add_row(report, "tokenizer_map_stage: metadata-tokenizer-map");
-        yvex_model_target_report_add_row(report, "tokenizer_map_evidence_basis: sidecar-json-only");
-        yvex_model_target_report_add_row(report, "tokenizer_map_source_status: %s",
-                                         source_present ? "present" : "missing");
-        yvex_model_target_report_add_row(report, "schema_version: yvex.source.tokenizer_map.v1");
-        yvex_model_target_report_add_row(report, "tokenizer_json_status: %s",
-                                         probe.tokenizer_json ? "present" : "missing");
-        yvex_model_target_report_add_row(report, "tokenizer_config_status: %s",
-                                         probe.tokenizer_config_malformed
-                                             ? "malformed"
-                                             : (probe.tokenizer_config ? "present" : "missing"));
-        yvex_model_target_report_add_row(report, "special_tokens_map_status: %s",
-                                         probe.special_tokens ? "present" : "missing");
-        yvex_model_target_report_add_row(report, "generation_config_status: %s",
-                                         probe.generation_config ? "present" : "missing");
-        yvex_model_target_report_add_row(report, "config_json_status: %s",
-                                         probe.config_json ? "present" : "missing");
-        yvex_model_target_report_add_row(report, "tokenizer_class: %s",
-                                         probe.tokenizer_config ? "PreTrainedTokenizerFast" : "missing");
-        yvex_model_target_report_add_row(report, "model_type: %s", family);
-        yvex_model_target_report_add_row(report, "vocab_size_status: %s",
-                                         probe.vocab_size_seen ? "present" : "missing");
+        yvex_model_target_report_project_rows(
+            report, tokenizer_audit_prefix,
+            sizeof(tokenizer_audit_prefix) / sizeof(tokenizer_audit_prefix[0]),
+            &facts);
         if (probe.vocab_size_seen) {
-            yvex_model_target_report_add_row(report, "vocab_size: %llu",
-                                             probe.vocab_size);
-            yvex_model_target_report_add_row(report, "config_vocab_size: %llu",
-                                             probe.vocab_size);
-            yvex_model_target_report_add_row(report, "output_head_vocab_dim_candidate: 16");
-            yvex_model_target_report_add_row(report, "output_head_vocab_relation_status: %s",
-                                             probe.vocab_size == 16ull
-                                                 ? "vocab-size-matches-output-head"
-                                                 : "vocab-size-mismatch-output-head");
+            yvex_model_target_report_project_rows(
+                report, tokenizer_vocab_rows,
+                sizeof(tokenizer_vocab_rows) / sizeof(tokenizer_vocab_rows[0]),
+                &facts);
         }
-        yvex_model_target_report_add_row(report, "bos_token_id_status: %s",
-                                         source_present ? "present" : "missing");
-        if (source_present) yvex_model_target_report_add_row(report, "bos_token_id: 1");
-        yvex_model_target_report_add_row(report, "eos_token_id_status: %s",
-                                         source_present ? "present" : "missing");
-        if (source_present) yvex_model_target_report_add_row(report, "eos_token_id: 2");
-        yvex_model_target_report_add_row(report, "pad_token_id_status: %s",
-                                         source_present ? "present" : "missing");
-        if (source_present) yvex_model_target_report_add_row(report, "pad_token_id: 0");
-        yvex_model_target_report_add_row(report, "unk_token_id_status: %s",
-                                         source_present ? "present" : "missing");
-        if (source_present) yvex_model_target_report_add_row(report, "unk_token_id: 3");
-        yvex_model_target_report_add_row(report, "additional_special_tokens_status: %s",
-                                         probe.special_tokens ? "present" : "missing");
-        yvex_model_target_report_add_row(report, "additional_special_tokens_count: %s",
-                                         probe.special_tokens ? "2" : "0");
-        yvex_model_target_report_add_row(report, "chat_template_status: %s",
-                                         probe.tokenizer_config ? "present" : "missing");
-        yvex_model_target_report_add_row(report, "chat_template_present: %s",
-                                         probe.tokenizer_config ? "true" : "false");
-        yvex_model_target_report_add_row(report, "evidence_basis: sidecar-json-only");
-        yvex_model_target_report_add_row(report, "vocab_status: %s", vocab);
-        yvex_model_target_report_add_row(report, "merges_status: %s", merges);
-        yvex_model_target_report_add_row(report, "tokenizer_backend_type: %s",
-                                         source_present ? "BPE" : "missing");
-        yvex_model_target_report_add_row(report, "added_tokens_count: %s",
-                                         source_present ? "1" : "0");
-        yvex_model_target_report_add_row(report, "special_tokens_status: %s",
-                                         source_present ? "present" : "missing");
+        yvex_model_target_report_project_rows(
+            report, source_present ? tokenizer_present_ids : tokenizer_missing_ids,
+            source_present
+                ? sizeof(tokenizer_present_ids) / sizeof(tokenizer_present_ids[0])
+                : sizeof(tokenizer_missing_ids) / sizeof(tokenizer_missing_ids[0]),
+            &facts);
+        yvex_model_target_report_project_rows(
+            report, tokenizer_special_rows,
+            sizeof(tokenizer_special_rows) / sizeof(tokenizer_special_rows[0]),
+            &facts);
         if (source_present) {
             yvex_model_target_report_add_row(report, "stop_token_candidate.0.id: 1");
         }
-        yvex_model_target_report_add_row(report, "chat_template_hash_status: %s",
-                                         source_present ? "not-computed" : "missing");
-        yvex_model_target_report_add_row(report, "prompt_template_status: %s",
-                                         source_present ? "present-report-only" : "missing");
-        yvex_model_target_report_add_row(report, "tokenizer_runtime_status: not-implemented");
-        yvex_model_target_report_add_row(report, "tokenization_status: not-implemented");
-        yvex_model_target_report_add_row(report, "detokenization_status: not-implemented");
-        yvex_model_target_report_add_row(report, "gguf_tokenizer_contract_status: planned");
-        yvex_model_target_report_add_row(report, "eos_stop_policy_status: not-implemented");
+        yvex_model_target_report_project_rows(
+            report, tokenizer_audit_suffix,
+            sizeof(tokenizer_audit_suffix) / sizeof(tokenizer_audit_suffix[0]),
+            &facts);
         yvex_model_target_report_common_tail(report);
         if (strcmp(status, "present-report-only") != 0) {
-            yvex_model_target_report_add_row(
-                report,
-                "top_blocker: %s",
-                strcmp(status, "source-missing") == 0
-                    ? (strcmp(family, "gemma") == 0
-                           ? "missing-gemma-source-path"
-                           : "missing-qwen-source-path")
-                    : (strcmp(status, "metadata-missing") == 0
-                           ? "missing-tokenizer-sidecars"
-                           : "tokenizer-metadata-incomplete"));
+            facts.top_blocker = strcmp(status, "source-missing") == 0
+                                    ? (strcmp(family, "gemma") == 0
+                                           ? "missing-gemma-source-path"
+                                           : "missing-qwen-source-path")
+                                : strcmp(status, "metadata-missing") == 0
+                                    ? "missing-tokenizer-sidecars"
+                                    : "tokenizer-metadata-incomplete";
+            yvex_model_target_report_add_row(report, "top_blocker: %s",
+                                             facts.top_blocker);
         }
         yvex_model_target_report_add_row(report, "next_required_rows: %s", next);
         return YVEX_OK;
     }
-    yvex_model_target_report_add_row(report, "tokenizer-map: %s", request->target_id);
-    yvex_model_target_report_add_row(report, "family: %s", family);
-    yvex_model_target_report_add_row(report, "status: %s", status);
-    yvex_model_target_report_add_row(report, "tokenizer: %s",
-                                     source_present ? "present" : "missing");
-    yvex_model_target_report_add_row(report, "vocab: %s", vocab);
-    yvex_model_target_report_add_row(report, "merges: %s", merges);
-    yvex_model_target_report_add_row(report, "chat_template: %s",
-                                     source_present ? "present" : "unknown");
-    yvex_model_target_report_add_row(report, "specials: %s",
-                                     source_present ? "present" : "missing");
-    yvex_model_target_report_add_row(report, "runtime: unsupported");
     if (strcmp(status, "present-report-only") != 0) {
-        yvex_model_target_report_add_row(report, "top_blocker: %s",
-                                         strcmp(status, "source-missing") == 0
-                                             ? (strcmp(family, "gemma") == 0
-                                                    ? "missing-gemma-source-path"
-                                                    : "missing-qwen-source-path")
-                                             : "missing-tokenizer-sidecars");
+        facts.top_blocker = strcmp(status, "source-missing") == 0
+                                ? (strcmp(family, "gemma") == 0
+                                       ? "missing-gemma-source-path"
+                                       : "missing-qwen-source-path")
+                                : "missing-tokenizer-sidecars";
     } else {
-        yvex_model_target_report_add_row(report, "top_blocker: quant-policy-or-artifact-emitter");
+        facts.top_blocker = "quant-policy-or-artifact-emitter";
     }
-    yvex_model_target_report_add_row(report, "next: %s", next);
-    yvex_model_target_report_add_row(report, "boundary: tokenizer metadata mapping only; no tokenization/detokenization/runtime/generation");
+    yvex_model_target_report_project_rows(
+        report, tokenizer_normal_rows,
+        sizeof(tokenizer_normal_rows) / sizeof(tokenizer_normal_rows[0]),
+        &facts);
     return YVEX_OK;
 }

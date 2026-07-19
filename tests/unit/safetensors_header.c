@@ -13,7 +13,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <yvex/native_weights.h>
+#include <yvex/source.h>
 
 static int make_dir(const char *path)
 {

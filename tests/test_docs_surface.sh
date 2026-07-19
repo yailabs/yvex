@@ -97,7 +97,7 @@ for heading in \
   "## 2. Semantic owner admission" \
   "## 3. Machine-readable ownership" \
   "## 4. Generic and family boundaries" \
-  "## 5. C symbols and file contracts" \
+  "## 5. C interfaces, symbols, and contracts" \
   "## 6. Dependency DAG" \
   "## 7. Canonical capability ownership" \
   "## 8. CLI, reports, and output" \
@@ -304,9 +304,9 @@ require_text "$project" 'the admitted descriptor remains graph-input evidence ra
 reject_text "$project" 'SWA/CSA/HCA attention complete on CPU and GB10 CUDA'
 reject_text "$project" 'complete GGUF writer, complete-model emission, writer-reader roundtrip, or artifact support admission;'
 require_text "$project" '| Recovered IDs | 631 |'
-require_text "$project" '| Explicit new IDs | 49 |'
-require_text "$project" '| Canonical IDs | 680 |'
-require_text "$project" '| First-class milestones | 41 |'
+require_text "$project" '| Explicit new IDs | 50 |'
+require_text "$project" '| Canonical IDs | 681 |'
+require_text "$project" '| First-class milestones | 42 |'
 require_text "$project" '### 3.5 Model Compilation Boundaries'
 require_text "$project" '| `TRACK.COMPILATION` | Artifact-neutral transformation IR'
 require_text "$project" 'verified source facts'

@@ -1,19 +1,19 @@
-/*
- * Owner: server.core (server).
- * Owns: the resource-lifecycle boundary consumed by daemon.
- * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
- * Invariants: scope=generic and visibility=private match config/source_owners.tsv.
- * Boundary: resource-lifecycle; moving this contract requires an ownership-manifest change.
- *
- */
+/* Owner: server.core.
+ * Owns: HTTP server lifecycle, bounded request parsing, routing, and response framing.
+ * Does not own: engine semantics, backend policy, model support, or generation.
+ * Invariants: one server owns one socket and every advertised generation fact remains false.
+ * Boundary: provider shell over typed engine/backend APIs; it cannot promote capability.
+ * Purpose: expose health, metrics, and admitted model facts through a local HTTP endpoint.
+ * Inputs: server options, accepted socket bytes, and immutable domain summaries.
+ * Effects: owns sockets, request counters, optional engine/backend handles, and HTTP replies.
+ * Failure: rejects invalid requests and unwinds socket, engine, and backend resources. */
 #define _POSIX_C_SOURCE 200809L
 
 /*
  * core.c - Provider daemon HTTP status shell.
  *
  * This file owns server state, HTTP parsing, routing, handlers, and response
- * formatting. Generation endpoints remain unsupported.
- */
+ * formatting. Generation endpoints remain unsupported. */
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -49,6 +49,7 @@ struct yvex_server {
 
 static void record_response(yvex_server *server, int status_code);
 
+/* Purpose: copy a nullable server label into fixed storage with termination. */
 static void copy_label(char *dst, size_t cap, const char *src)
 {
     if (!dst || cap == 0) {
@@ -58,6 +59,11 @@ static void copy_label(char *dst, size_t cap, const char *src)
     dst[cap - 1u] = '\0';
 }
 
+/* Purpose: close and invalidate the server's listening descriptor.
+ * Inputs: nullable mutable server state.
+ * Effects: closes one owned descriptor at most once.
+ * Failure: close errors are ignored during deterministic cleanup.
+ * Boundary: socket lifecycle only. */
 static void close_listen_fd(yvex_server *server)
 {
     if (server && server->listen_fd >= 0) {
@@ -66,6 +72,11 @@ static void close_listen_fd(yvex_server *server)
     }
 }
 
+/* Purpose: attach the explicitly requested admitted engine and CPU backend.
+ * Inputs: mutable created server and typed error output.
+ * Effects: may publish owned engine/backend handles and copied summary labels.
+ * Failure: unsupported backend or open failure leaves cleanup to server close.
+ * Boundary: adapter over canonical runtime admission; no generation is enabled. */
 static int load_server_runtime(yvex_server *server, yvex_error *err)
 {
     yvex_backend_options backend_options;
@@ -108,6 +119,11 @@ static int load_server_runtime(yvex_server *server, yvex_error *err)
     return YVEX_OK;
 }
 
+/* Purpose: map server lifecycle state to a stable diagnostic label.
+ * Inputs: typed server status.
+ * Effects: none; returned storage is static.
+ * Failure: unknown values map to "unknown".
+ * Boundary: status projection, not lifecycle admission. */
 const char *yvex_server_status_name(yvex_server_status status)
 {
     switch (status) {
@@ -119,6 +135,11 @@ const char *yvex_server_status_name(yvex_server_status status)
     }
 }
 
+/* Purpose: construct one server and optionally load its admitted runtime handles.
+ * Inputs: result slot, nullable options, and typed error output.
+ * Effects: allocates server state and may open an engine and CPU backend.
+ * Failure: validation, allocation, or runtime-open errors publish no server.
+ * Boundary: server lifecycle construction; listening starts separately. */
 int yvex_server_create(yvex_server **out,
                        const yvex_server_options *options,
                        yvex_error *err)
@@ -179,6 +200,11 @@ int yvex_server_create(yvex_server **out,
     return YVEX_OK;
 }
 
+/* Purpose: deliver an exact response byte range to one connected socket.
+ * Inputs: valid descriptor, immutable bytes, exact length, and error output.
+ * Effects: advances the socket stream until all bytes are sent.
+ * Failure: the first send error aborts with typed I/O failure.
+ * Boundary: bounded socket delivery; descriptor ownership stays with caller. */
 static int write_all(int fd, const char *buf, size_t len, yvex_error *err)
 {
     size_t off = 0;
@@ -196,6 +222,11 @@ static int write_all(int fd, const char *buf, size_t len, yvex_error *err)
     return YVEX_OK;
 }
 
+/* Purpose: parse, route, frame, and deliver one bounded HTTP request.
+ * Inputs: mutable server, connected descriptor, and error output.
+ * Effects: reads one request, records its status, and writes one response.
+ * Failure: socket, parser, router, or framing failures return typed refusal.
+ * Boundary: single-client transaction; caller closes the descriptor. */
 static int serve_client(yvex_server *server, int client_fd, yvex_error *err)
 {
     char request_buf[4096];
@@ -236,6 +267,11 @@ static int serve_client(yvex_server *server, int client_fd, yvex_error *err)
     return write_all(client_fd, response_buf, strlen(response_buf), err);
 }
 
+/* Purpose: bind and run the admitted blocking server loop.
+ * Inputs: created server state and typed error output.
+ * Effects: owns a listening socket and processes one or more client transactions.
+ * Failure: socket, address, bind, listen, or accept failure poisons server status.
+ * Boundary: provider transport only; request handlers preserve unsupported generation. */
 int yvex_server_serve(yvex_server *server,
                       yvex_error *err)
 {
@@ -303,6 +339,11 @@ int yvex_server_serve(yvex_server *server,
     return YVEX_OK;
 }
 
+/* Purpose: stop accepting requests and transition a server to stopped.
+ * Inputs: mutable server and typed error output.
+ * Effects: closes the listening descriptor and updates lifecycle state.
+ * Failure: NULL state is refused; cleanup itself is idempotent.
+ * Boundary: server lifecycle control. */
 int yvex_server_stop(yvex_server *server,
                      yvex_error *err)
 {
@@ -316,6 +357,11 @@ int yvex_server_stop(yvex_server *server,
     return YVEX_OK;
 }
 
+/* Purpose: release all resources owned by one server.
+ * Inputs: nullable owned server state.
+ * Effects: closes socket, backend, engine, and allocation in dependency order.
+ * Failure: none is reportable through this terminal void operation.
+ * Boundary: deterministic server teardown. */
 void yvex_server_close(yvex_server *server)
 {
     if (!server) {
@@ -327,11 +373,21 @@ void yvex_server_close(yvex_server *server)
     free(server);
 }
 
+/* Purpose: read the current server lifecycle state.
+ * Inputs: nullable immutable server.
+ * Effects: none.
+ * Failure: NULL projects the safe stopped state.
+ * Boundary: read-only status view. */
 yvex_server_status yvex_server_status_of(const yvex_server *server)
 {
     return server ? server->status : YVEX_SERVER_STATUS_STOPPED;
 }
 
+/* Purpose: expose an immutable snapshot of server and attached-runtime facts.
+ * Inputs: server, caller-owned output, and typed error storage.
+ * Effects: writes borrowed string views and scalar counters to the result.
+ * Failure: missing input or output is refused before publication.
+ * Boundary: report projection; generation availability remains explicit false. */
 int yvex_server_get_summary(const yvex_server *server,
                             yvex_server_summary *out,
                             yvex_error *err)
@@ -356,8 +412,11 @@ int yvex_server_get_summary(const yvex_server *server,
     return YVEX_OK;
 }
 
-
-
+/* Purpose: initialize a bounded JSON response body and matching reason phrase.
+ * Inputs: output response, status code, immutable body, and error output.
+ * Effects: replaces the response only when its body fits.
+ * Failure: invalid input or excess body length returns typed refusal.
+ * Boundary: response construction, not route selection. */
 static int response_body(yvex_http_response *response,
                          int status_code,
                          const char *body,
@@ -383,6 +442,11 @@ static int response_body(yvex_http_response *response,
     return YVEX_OK;
 }
 
+/* Purpose: construct the health endpoint from current server facts.
+ * Inputs: immutable server, response output, and error output.
+ * Effects: publishes one bounded HTTP 200 response.
+ * Failure: response framing bounds are propagated.
+ * Boundary: health reporting; generation remains explicitly unavailable. */
 static int handle_health(const yvex_server *server,
                          yvex_http_response *response,
                          yvex_error *err)
@@ -404,6 +468,11 @@ static int handle_health(const yvex_server *server,
     return response_body(response, 200, body, err);
 }
 
+/* Purpose: construct the server metrics endpoint from monotonic counters.
+ * Inputs: immutable server, response output, and error output.
+ * Effects: publishes one JSON counter snapshot.
+ * Failure: response-capacity failure is propagated.
+ * Boundary: observational surface, not benchmark evidence. */
 static int handle_metrics(const yvex_server *server,
                           yvex_http_response *response,
                           yvex_error *err)
@@ -427,6 +496,11 @@ static int handle_metrics(const yvex_server *server,
     return response_body(response, 200, body, err);
 }
 
+/* Purpose: construct the admitted descriptor-only model listing.
+ * Inputs: immutable server, response output, and error output.
+ * Effects: publishes an empty or one-entry model response.
+ * Failure: response-capacity failure prevents success.
+ * Boundary: inventory surface; it does not claim inference support. */
 static int handle_models(const yvex_server *server,
                          yvex_http_response *response,
                          yvex_error *err)
@@ -466,6 +540,11 @@ static int handle_models(const yvex_server *server,
     return response_body(response, 200, body, err);
 }
 
+/* Purpose: produce the canonical refusal for generation endpoints.
+ * Inputs: response output and typed error storage.
+ * Effects: writes an HTTP 501 response with unsupported status.
+ * Failure: body framing errors are propagated.
+ * Boundary: preserves the generation capability gate at false. */
 static int handle_unsupported_generation(yvex_http_response *response,
                                          yvex_error *err)
 {
@@ -481,8 +560,11 @@ static int handle_unsupported_generation(yvex_http_response *response,
                          err);
 }
 
-
-
+/* Purpose: map admitted HTTP status codes to stable reason phrases.
+ * Inputs: integer status code.
+ * Effects: none; returned storage is static.
+ * Failure: unrecognized codes use the internal-error phrase.
+ * Boundary: transport rendering only. */
 const char *yvex_http_status_reason(int status_code)
 {
     switch (status_code) {
@@ -495,6 +577,11 @@ const char *yvex_http_status_reason(int status_code)
     }
 }
 
+/* Purpose: parse one bounded HTTP request line into typed method and path fields.
+ * Inputs: immutable request bytes, output structure, and error output.
+ * Effects: clears and populates the result on successful syntax admission.
+ * Failure: incomplete, malformed, or invalid-version requests are refused.
+ * Boundary: syntax parser; headers and bodies are outside this shell contract. */
 int yvex_http_parse_request(const char *request,
                             yvex_http_request *out,
                             yvex_error *err)
@@ -531,6 +618,11 @@ int yvex_http_parse_request(const char *request,
     return YVEX_OK;
 }
 
+/* Purpose: frame one typed JSON response as complete HTTP/1.1 bytes.
+ * Inputs: bounded destination, immutable response, and error output.
+ * Effects: writes a terminated response only when it fits.
+ * Failure: invalid input or capacity overflow returns typed refusal.
+ * Boundary: transport encoding; response facts are owned by handlers. */
 int yvex_http_response_format(char *out,
                               size_t cap,
                               const yvex_http_response *response,
@@ -570,7 +662,7 @@ int yvex_http_response_format(char *out,
     return YVEX_OK;
 }
 
-
+/* Purpose: update request and error counters after one routed response. */
 static void record_response(yvex_server *server, int status_code)
 {
     if (!server) {
@@ -582,8 +674,11 @@ static void record_response(yvex_server *server, int status_code)
     }
 }
 
-
-
+/* Purpose: route one parsed request to the closed set of server-shell handlers.
+ * Inputs: mutable server, immutable request, response output, and error output.
+ * Effects: constructs exactly one response without performing generation.
+ * Failure: invalid input or handler framing failure returns typed refusal.
+ * Boundary: routing policy for health, metrics, models, and explicit generation refusal. */
 int yvex_server_route(yvex_server *server,
                       const yvex_http_request *request,
                       yvex_http_response *response,

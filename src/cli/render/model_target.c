@@ -1,31 +1,163 @@
-/*
- * model_target.c - model-target typed report rendering.
- *
- * Owner:
- *   src/cli/render
- *
- * Owns:
- *   normal/table/audit/help rendering for typed model-target reports.
- *
- * Does not own:
- *   CLI argument parsing, command dispatch, target catalogs, report
- *   construction, sidecar writing, runtime execution, generation, eval,
- *   benchmark, or release decisions.
- *
- * Invariants:
- *   this typed renderer writes only through src/cli/io helpers and renders
- *   typed report rows supplied by model-target report builders.
- *
- * Boundary:
- *   model-target rendering serializes existing report-only facts and does not
- *   prove quantization, artifact emission, runtime execution, generation,
- *   evaluation, benchmark, throughput, or release readiness.
- */
-#include "model_target.h"
+/* Owner: src/cli/render
+ * Owns: normal/table/audit/help rendering for typed model-target reports.
+ * Does not own: CLI argument parsing, command dispatch, target catalogs, report construction, sidecar writing,
+ *   runtime execution, generation, eval, benchmark, or release decisions.
+ * Invariants: this typed renderer writes only through src/cli/io helpers and renders typed report rows supplied by
+ *   model-target report builders.
+ * Boundary: model-target rendering serializes existing report-only facts and does not prove quantization, artifact
+ *   emission, runtime execution, generation, evaluation, benchmark, throughput, or release readiness.
+ * Purpose: provide normal/table/audit/help rendering for typed model-target reports.
+ * Inputs: typed domain facts, requested output mode, and caller-owned render state.
+ * Effects: formats admitted facts through CLI I/O without changing domain state.
+ * Failure: formatting or I/O refusal cannot alter capability facts. */
+#include "src/cli/render/private.h"
 
-#include "src/cli/io/out.h"
-#include "src/model/families.h"
+#include "src/cli/io/private.h"
+#include <yvex/internal/families/deepseek_v4.h>
 
+#define TARGET_PTR(type_name, key_name, member, default_text) \
+    {key_name, YVEX_CLI_FIELD_TEXT, offsetof(type_name, member), default_text}
+#define TARGET_TEXT(type_name, key_name, member, default_text) \
+    {key_name, YVEX_CLI_FIELD_TEXT_ARRAY, offsetof(type_name, member), default_text}
+#define TARGET_U64(type_name, key_name, member) \
+    {key_name, YVEX_CLI_FIELD_U64, offsetof(type_name, member), NULL}
+#define TARGET_BOOL(type_name, key_name, member) \
+    {key_name, YVEX_CLI_FIELD_BOOL, offsetof(type_name, member), NULL}
+#define TARGET_HEX(type_name, key_name, member) \
+    {key_name, YVEX_CLI_FIELD_HEX64, offsetof(type_name, member), NULL}
+
+static const yvex_cli_field_spec map_report_head[] = {
+    TARGET_PTR(yvex_model_target_report, "mapping_status", status, "unknown"),
+    TARGET_TEXT(yvex_model_target_report, "target_id", target_id, "unknown"),
+};
+static const yvex_cli_field_spec map_summary_head[] = {
+    TARGET_U64(yvex_deepseek_gguf_map_summary, "source_contribution_count",
+               source_contribution_count),
+    TARGET_U64(yvex_deepseek_gguf_map_summary, "descriptor_count", descriptor_count),
+    TARGET_U64(yvex_deepseek_gguf_map_summary, "trunk_descriptor_count",
+               trunk_descriptor_count),
+    TARGET_U64(yvex_deepseek_gguf_map_summary, "mtp_descriptor_count", mtp_descriptor_count),
+    TARGET_U64(yvex_deepseek_gguf_map_summary, "pinned_standard_name_count",
+               pinned_standard_count),
+    TARGET_U64(yvex_deepseek_gguf_map_summary, "semantic_standard_name_count",
+               semantic_standard_count),
+    TARGET_U64(yvex_deepseek_gguf_map_summary, "extension_name_count", extension_count),
+};
+static const yvex_cli_field_spec map_summary_tail[] = {
+    TARGET_U64(yvex_deepseek_gguf_map_summary, "metadata_count", metadata_count),
+    TARGET_U64(yvex_deepseek_gguf_map_summary, "header_scan_count", header_scan_count),
+    TARGET_U64(yvex_deepseek_gguf_map_summary, "payload_bytes_read", payload_bytes_read),
+    TARGET_HEX(yvex_deepseek_gguf_map_summary, "source_identity", source_identity),
+    TARGET_HEX(yvex_deepseek_gguf_map_summary, "coverage_identity", coverage_identity),
+    TARGET_HEX(yvex_deepseek_gguf_map_summary, "mapping_identity", mapping_identity),
+};
+static const yvex_cli_field_spec map_report_tail[] = {
+    TARGET_TEXT(yvex_model_target_report, "runtime_status", runtime_status, "unsupported"),
+    TARGET_TEXT(yvex_model_target_report, "generation_status", generation_status, "unsupported"),
+    TARGET_TEXT(yvex_model_target_report, "next", next_row, "unknown"),
+    TARGET_TEXT(yvex_model_target_report, "boundary", boundary, "unknown"),
+};
+
+static const yvex_cli_field_spec coverage_report_head[] = {
+    TARGET_PTR(yvex_model_target_report, "tensor_coverage_status", status, "unknown"),
+    TARGET_TEXT(yvex_model_target_report, "target_id", target_id, "unknown"),
+};
+static const yvex_cli_field_spec coverage_summary_head[] = {
+    TARGET_U64(yvex_deepseek_tensor_coverage_summary, "source_tensor_count", source_tensor_count),
+    TARGET_U64(yvex_deepseek_tensor_coverage_summary, "required_tensor_count",
+               required_tensor_count),
+    TARGET_U64(yvex_deepseek_tensor_coverage_summary, "matched_tensor_count", matched_tensor_count),
+    TARGET_U64(yvex_deepseek_tensor_coverage_summary, "missing_tensor_count", missing_count),
+    TARGET_U64(yvex_deepseek_tensor_coverage_summary, "ambiguous_tensor_count", ambiguous_count),
+    TARGET_U64(yvex_deepseek_tensor_coverage_summary, "unexpected_tensor_count", unexpected_count),
+};
+static const yvex_cli_field_spec coverage_summary_tail[] = {
+    TARGET_U64(yvex_deepseek_tensor_coverage_summary, "header_scan_count", header_scan_count),
+    TARGET_U64(yvex_deepseek_tensor_coverage_summary, "payload_bytes_read", payload_bytes_read),
+    TARGET_U64(yvex_deepseek_tensor_coverage_summary, "source_lookup_count", source_lookup_count),
+    TARGET_U64(yvex_deepseek_tensor_coverage_summary, "source_collision_count",
+               source_collision_count),
+    TARGET_U64(yvex_deepseek_tensor_coverage_summary, "source_maximum_probe", source_maximum_probe),
+    TARGET_HEX(yvex_deepseek_tensor_coverage_summary, "source_identity", source_identity),
+    TARGET_HEX(yvex_deepseek_tensor_coverage_summary, "coverage_identity", coverage_identity),
+};
+static const yvex_cli_field_spec coverage_report_tail[] = {
+    TARGET_TEXT(yvex_model_target_report, "next_required_row", next_row, "unknown"),
+    TARGET_TEXT(yvex_model_target_report, "boundary", boundary, "unknown"),
+};
+
+#define MODEL_NESTED(key_name, nested_type, outer_member, nested_member, kind_name) \
+    {key_name, kind_name, offsetof(yvex_deepseek_v4_model_spec, outer_member) + \
+                         offsetof(nested_type, nested_member), NULL}
+static const yvex_cli_field_spec architecture_model_fields[] = {
+    TARGET_TEXT(yvex_deepseek_v4_model_spec, "target_id", target_id, "unknown"),
+    TARGET_TEXT(yvex_deepseek_v4_model_spec, "family", family, "unknown"),
+    TARGET_TEXT(yvex_deepseek_v4_model_spec, "architecture", architecture, "unknown"),
+    TARGET_TEXT(yvex_deepseek_v4_model_spec, "repository", repository, "unknown"),
+    TARGET_TEXT(yvex_deepseek_v4_model_spec, "revision", revision, "unknown"),
+    TARGET_TEXT(yvex_deepseek_v4_model_spec, "verification_stage", verification_stage, "unknown"),
+    TARGET_TEXT(yvex_deepseek_v4_model_spec, "paper_revision", paper_revision, "unknown"),
+    TARGET_TEXT(yvex_deepseek_v4_model_spec, "sglang_revision", sglang_revision, "unknown"),
+    TARGET_TEXT(yvex_deepseek_v4_model_spec, "vllm_revision", vllm_revision, "unknown"),
+    TARGET_U64(yvex_deepseek_v4_model_spec, "hidden_size", hidden_size),
+    TARGET_U64(yvex_deepseek_v4_model_spec, "vocabulary_size", vocabulary_size),
+    TARGET_U64(yvex_deepseek_v4_model_spec, "maximum_context", maximum_context),
+    TARGET_U64(yvex_deepseek_v4_model_spec, "main_layer_count", main_layer_count),
+    TARGET_U64(yvex_deepseek_v4_model_spec, "auxiliary_layer_count", auxiliary_layer_count),
+    TARGET_U64(yvex_deepseek_v4_model_spec, "swa_layer_count", swa_layer_count),
+    TARGET_U64(yvex_deepseek_v4_model_spec, "csa_layer_count", csa_layer_count),
+    TARGET_U64(yvex_deepseek_v4_model_spec, "hca_layer_count", hca_layer_count),
+    TARGET_U64(yvex_deepseek_v4_model_spec, "hash_router_layer_count", hash_router_layer_count),
+    TARGET_U64(yvex_deepseek_v4_model_spec, "learned_router_layer_count", learned_router_layer_count),
+    MODEL_NESTED("mhc_residual_streams", yvex_deepseek_v4_mhc_spec, final_mhc,
+                 residual_streams, YVEX_CLI_FIELD_U64),
+    MODEL_NESTED("mhc_expanded_width", yvex_deepseek_v4_mhc_spec, final_mhc,
+                 expanded_width, YVEX_CLI_FIELD_U64),
+    MODEL_NESTED("mhc_mixing_rows", yvex_deepseek_v4_mhc_spec, final_mhc,
+                 mixing_rows, YVEX_CLI_FIELD_U64),
+    MODEL_NESTED("mhc_mixing_columns", yvex_deepseek_v4_mhc_spec, final_mhc,
+                 mixing_columns, YVEX_CLI_FIELD_U64),
+    MODEL_NESTED("mhc_sinkhorn_iterations", yvex_deepseek_v4_mhc_spec, final_mhc,
+                 sinkhorn_iterations, YVEX_CLI_FIELD_U64),
+    TARGET_BOOL(yvex_deepseek_v4_model_spec, "final_mhc_post_required", final_mhc_post_required),
+    TARGET_BOOL(yvex_deepseek_v4_model_spec, "final_mhc_head_required", final_mhc_head_required),
+    TARGET_BOOL(yvex_deepseek_v4_model_spec, "final_norm_after_mhc_head", final_norm_after_mhc_head),
+    MODEL_NESTED("tokenizer_class", yvex_deepseek_v4_tokenizer_spec, tokenizer,
+                 tokenizer_class, YVEX_CLI_FIELD_TEXT_ARRAY),
+    MODEL_NESTED("tokenizer_model_type", yvex_deepseek_v4_tokenizer_spec, tokenizer,
+                 model_type, YVEX_CLI_FIELD_TEXT_ARRAY),
+    MODEL_NESTED("tokenizer_vocabulary_size", yvex_deepseek_v4_tokenizer_spec, tokenizer,
+                 vocabulary_size, YVEX_CLI_FIELD_U64),
+    MODEL_NESTED("tokenizer_base_vocab_entries", yvex_deepseek_v4_tokenizer_spec, tokenizer,
+                 base_vocab_entries, YVEX_CLI_FIELD_U64),
+    MODEL_NESTED("tokenizer_added_token_entries", yvex_deepseek_v4_tokenizer_spec, tokenizer,
+                 added_token_entries, YVEX_CLI_FIELD_U64),
+    MODEL_NESTED("bos_token_id", yvex_deepseek_v4_tokenizer_spec, tokenizer,
+                 bos_token_id, YVEX_CLI_FIELD_U64),
+    MODEL_NESTED("eos_token_id", yvex_deepseek_v4_tokenizer_spec, tokenizer,
+                 eos_token_id, YVEX_CLI_FIELD_U64),
+    MODEL_NESTED("output_head_required", yvex_deepseek_v4_output_spec, output,
+                 required, YVEX_CLI_FIELD_BOOL),
+    MODEL_NESTED("output_head_tied", yvex_deepseek_v4_output_spec, output,
+                 tied_to_embedding, YVEX_CLI_FIELD_BOOL),
+};
+static const yvex_cli_field_spec architecture_source_fields[] = {
+    TARGET_U64(yvex_deepseek_v4_model_spec, "source_header_scan_count", source_header_scan_count),
+    TARGET_U64(yvex_deepseek_v4_model_spec, "source_header_tensor_count", source_header_tensor_count),
+    TARGET_U64(yvex_deepseek_v4_model_spec, "source_payload_bytes_read", source_payload_bytes_read),
+};
+static const yvex_cli_field_spec architecture_report_tail[] = {
+    TARGET_TEXT(yvex_model_target_report, "next_required_row", next_row, "unknown"),
+    TARGET_TEXT(yvex_model_target_report, "boundary", boundary, "unknown"),
+};
+#undef MODEL_NESTED
+#undef TARGET_HEX
+#undef TARGET_BOOL
+#undef TARGET_U64
+#undef TARGET_TEXT
+#undef TARGET_PTR
+
+/* Purpose: Render model target render rows from typed facts (`model_target_render_rows`). */
 static int model_target_render_rows(FILE *fp,
                                     const yvex_model_target_text_value *rows,
                                     unsigned long count)
@@ -42,6 +174,11 @@ static int model_target_render_rows(FILE *fp,
     return rc;
 }
 
+/* Purpose: Render model target render help rows from typed facts (`model_target_render_help_rows`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_target_render_help_rows(FILE *fp,
                                          yvex_model_target_command_kind kind)
 {
@@ -63,23 +200,23 @@ static int model_target_render_help_rows(FILE *fp,
     }
     return yvex_cli_out_writef(
         fp,
-        "usage: yvex model-target <action> [TARGET]\n"
-        "usage: yvex model-target classes\n"
-        "       yvex model-target list\n"
-        "       yvex model-target candidate --release v0.1.0 [options]\n"
-        "       yvex model-target dense-candidate --release v0.1.0 [options]\n"
-        "       yvex model-target qwen-metal --release v0.1.0 [options]\n"
-        "       yvex model-target decision --release v0.1.0 [options]\n"
-        "       yvex model-target class-profile TARGET\n"
-        "       yvex model-target tensor-collection TARGET\n"
-        "       yvex model-target tensor-map TARGET\n"
-        "       yvex model-target missing-roles TARGET --gate v0.1.0\n"
-        "       yvex model-target inspect TARGET [--paths] [--models-root DIR]\n"
-        "--paths           show expected operator-local source, artifact, report, reference, and registry paths\n"
-        "--models-root DIR override configured operator model root for this command only\n"
-        "option_classes: selector, path, diagnostic, transitional-layout\n");
+        "usage: yvex model-target <action> [TARGET]\nusage: yvex model-target classes\n       yvex model-"
+            "target list\n       yvex model-target candidate --release v0.1.0 [options]\n       yvex model-"
+            "target dense-candidate --release v0.1.0 [options]\n       yvex model-target qwen-metal --release "
+            "v0.1.0 [options]\n       yvex model-target decision --release v0.1.0 [options]\n       yvex model-"
+            "target class-profile TARGET\n       yvex model-target tensor-collection TARGET\n       yvex model-"
+            "target tensor-map TARGET\n       yvex model-target missing-roles TARGET --gate v0.1.0\n       "
+            "yvex model-target inspect TARGET [--paths] [--models-root DIR]\n--paths           show expected "
+            "operator-local source, artifact, report, reference, and registry paths\n--models-root DIR "
+            "override configured operator model root for this command only\noption_classes: selector, path, "
+            "diagnostic, transitional-layout\n");
 }
 
+/* Purpose: Render model target render table rows from typed facts (`model_target_render_table_rows`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_target_render_table_rows(FILE *fp,
                                           const yvex_model_target_report *report)
 {
@@ -107,20 +244,31 @@ static int model_target_render_table_rows(FILE *fp,
 }
 
 /* Serializes the immutable logical emission plan without deriving map policy. */
+/* Purpose: Render model target render deepseek map from typed facts (`model_target_render_deepseek_map`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_target_render_deepseek_map(
     FILE *fp,
     yvex_model_target_render_mode mode,
     const yvex_model_target_report *report)
 {
+    const yvex_deepseek_gguf_map *map =
+        (const yvex_deepseek_gguf_map *)report->family_lowering;
     const yvex_deepseek_gguf_map_summary *summary =
-        yvex_model_register_deepseek_v4()->lowering.summary(report->deepseek_gguf_map);
+        yvex_model_register_deepseek_v4()->lowering.summary(map);
     int rc = 0;
 
     if (!summary) return 0;
     if (mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
         return yvex_cli_out_writef(
             fp,
-            "{\"status\":\"%s\",\"target_id\":\"%s\",\"source_contributions\":%llu,\"descriptors\":%llu,\"trunk_descriptors\":%llu,\"mtp_descriptors\":%llu,\"pinned_standard_names\":%llu,\"extension_names\":%llu,\"metadata\":%llu,\"header_scans\":%llu,\"payload_bytes_read\":%llu,\"mapping_identity\":\"%016llx\",\"artifact\":\"not-produced\",\"runtime\":\"unsupported\",\"generation\":\"unsupported\",\"next\":\"%s\"}\n",
+            "{\"status\":\"%s\",\"target_id\":\"%s\",\"source_contributions\":%llu,\"descriptors\":%llu,"
+                "\"trunk_descriptors\":%llu,\"mtp_descriptors\":%llu,\"pinned_standard_names\":%llu,"
+                "\"extension_names\":%llu,\"metadata\":%llu,\"header_scans\":%llu,\"payload_bytes_read\":%llu,"
+                "\"mapping_identity\":\"%016llx\",\"artifact\":\"not-produced\",\"runtime\":\"unsupported\","
+                "\"generation\":\"unsupported\",\"next\":\"%s\"}\n",
             report->status, report->target_id,
             summary->source_contribution_count, summary->descriptor_count,
             summary->trunk_descriptor_count, summary->mtp_descriptor_count,
@@ -143,48 +291,23 @@ static int model_target_render_deepseek_map(
     }
     if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
         unsigned int collection;
-        rc |= yvex_cli_out_writef(fp, "mapping_status: %s\n", report->status);
-        rc |= yvex_cli_out_writef(fp, "target_id: %s\n", report->target_id);
-        rc |= yvex_cli_out_writef(fp, "source_contribution_count: %llu\n",
-                                  summary->source_contribution_count);
-        rc |= yvex_cli_out_writef(fp, "descriptor_count: %llu\n",
-                                  summary->descriptor_count);
-        rc |= yvex_cli_out_writef(fp, "trunk_descriptor_count: %llu\n",
-                                  summary->trunk_descriptor_count);
-        rc |= yvex_cli_out_writef(fp, "mtp_descriptor_count: %llu\n",
-                                  summary->mtp_descriptor_count);
-        rc |= yvex_cli_out_writef(fp, "pinned_standard_name_count: %llu\n",
-                                  summary->pinned_standard_count);
-        rc |= yvex_cli_out_writef(fp, "semantic_standard_name_count: %llu\n",
-                                  summary->semantic_standard_count);
-        rc |= yvex_cli_out_writef(fp, "extension_name_count: %llu\n",
-                                  summary->extension_count);
+
+        rc |= yvex_cli_out_fields(fp, report, map_report_head,
+                                  sizeof(map_report_head) / sizeof(map_report_head[0]));
+        rc |= yvex_cli_out_fields(fp, summary, map_summary_head,
+                                  sizeof(map_summary_head) / sizeof(map_summary_head[0]));
         for (collection = 0u;
-             collection < YVEX_DEEPSEEK_TENSOR_COLLECTION_COUNT;
+             collection < YVEX_TENSOR_COLLECTION_COUNT;
              ++collection) {
             rc |= yvex_cli_out_writef(
                 fp, "collection_%u_count: %llu\n", collection,
                 summary->collection_counts[collection]);
         }
-        rc |= yvex_cli_out_writef(fp, "metadata_count: %llu\n",
-                                  summary->metadata_count);
-        rc |= yvex_cli_out_writef(fp, "header_scan_count: %llu\n",
-                                  summary->header_scan_count);
-        rc |= yvex_cli_out_writef(fp, "payload_bytes_read: %llu\n",
-                                  summary->payload_bytes_read);
-        rc |= yvex_cli_out_writef(fp, "source_identity: %016llx\n",
-                                  summary->source_identity);
-        rc |= yvex_cli_out_writef(fp, "coverage_identity: %016llx\n",
-                                  summary->coverage_identity);
-        rc |= yvex_cli_out_writef(fp, "mapping_identity: %016llx\n",
-                                  summary->mapping_identity);
+        rc |= yvex_cli_out_fields(fp, summary, map_summary_tail,
+                                  sizeof(map_summary_tail) / sizeof(map_summary_tail[0]));
         rc |= yvex_cli_out_writef(fp, "artifact_status: not-produced\n");
-        rc |= yvex_cli_out_writef(fp, "runtime_status: %s\n",
-                                  report->runtime_status);
-        rc |= yvex_cli_out_writef(fp, "generation_status: %s\n",
-                                  report->generation_status);
-        rc |= yvex_cli_out_writef(fp, "next: %s\n", report->next_row);
-        rc |= yvex_cli_out_writef(fp, "boundary: %s\n", report->boundary);
+        rc |= yvex_cli_out_fields(fp, report, map_report_tail,
+                                  sizeof(map_report_tail) / sizeof(map_report_tail[0]));
         return rc < 0 ? rc : 0;
     }
     rc |= yvex_cli_out_writef(fp, "deepseek-gguf-map: %s [%s]\n",
@@ -204,21 +327,31 @@ static int model_target_render_deepseek_map(
 }
 
 /* Serializes an already admitted one-to-one tensor coverage result. */
+/* Purpose: Render model target render deepseek coverage from typed facts (`model_target_render_deepseek_coverage`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_target_render_deepseek_coverage(
     FILE *fp,
     yvex_model_target_render_mode mode,
     const yvex_model_target_report *report)
 {
+    const yvex_deepseek_tensor_coverage *coverage =
+        (const yvex_deepseek_tensor_coverage *)report->family_coverage;
     const yvex_deepseek_tensor_coverage_summary *summary =
-        yvex_model_register_deepseek_v4()->coverage.summary(
-            report->deepseek_tensor_coverage);
+        yvex_model_register_deepseek_v4()->coverage.summary(coverage);
     int rc = 0;
 
     if (!summary) return 0;
     if (mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
         return yvex_cli_out_writef(
             fp,
-            "{\"status\":\"%s\",\"target_id\":\"%s\",\"source_tensors\":%llu,\"required_tensors\":%llu,\"matched_tensors\":%llu,\"missing\":%llu,\"ambiguous\":%llu,\"unexpected\":%llu,\"header_scans\":%llu,\"payload_bytes_read\":%llu,\"coverage_identity\":\"%016llx\",\"mapping\":\"blocked\",\"runtime\":\"unsupported\",\"generation\":\"unsupported\",\"next\":\"%s\"}\n",
+            "{\"status\":\"%s\",\"target_id\":\"%s\",\"source_tensors\":%llu,\"required_tensors\":%llu,"
+                "\"matched_tensors\":%llu,\"missing\":%llu,\"ambiguous\":%llu,\"unexpected\":%llu,"
+                "\"header_scans\":%llu,\"payload_bytes_read\":%llu,\"coverage_identity\":\"%016llx\","
+                "\"mapping\":\"blocked\",\"runtime\":\"unsupported\",\"generation\":\"unsupported\",\"next\":"
+                "\"%s\"}\n",
             report->status, report->target_id, summary->source_tensor_count,
             summary->required_tensor_count, summary->matched_tensor_count,
             summary->missing_count, summary->ambiguous_count,
@@ -239,50 +372,29 @@ static int model_target_render_deepseek_coverage(
     }
     if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
         unsigned int collection;
-        rc |= yvex_cli_out_writef(fp, "tensor_coverage_status: %s\n",
-                                  report->status);
-        rc |= yvex_cli_out_writef(fp, "target_id: %s\n", report->target_id);
-        rc |= yvex_cli_out_writef(fp, "source_tensor_count: %llu\n",
-                                  summary->source_tensor_count);
-        rc |= yvex_cli_out_writef(fp, "required_tensor_count: %llu\n",
-                                  summary->required_tensor_count);
-        rc |= yvex_cli_out_writef(fp, "matched_tensor_count: %llu\n",
-                                  summary->matched_tensor_count);
-        rc |= yvex_cli_out_writef(fp, "missing_tensor_count: %llu\n",
-                                  summary->missing_count);
-        rc |= yvex_cli_out_writef(fp, "ambiguous_tensor_count: %llu\n",
-                                  summary->ambiguous_count);
-        rc |= yvex_cli_out_writef(fp, "unexpected_tensor_count: %llu\n",
-                                  summary->unexpected_count);
+
+        rc |= yvex_cli_out_fields(fp, report, coverage_report_head,
+                                  sizeof(coverage_report_head) / sizeof(coverage_report_head[0]));
+        rc |= yvex_cli_out_fields(fp, summary, coverage_summary_head,
+                                  sizeof(coverage_summary_head) / sizeof(coverage_summary_head[0]));
         for (collection = 0u;
-             collection < YVEX_DEEPSEEK_TENSOR_COLLECTION_COUNT;
+             collection < YVEX_TENSOR_COLLECTION_COUNT;
              ++collection) {
             rc |= yvex_cli_out_writef(
                 fp, "collection_%s_count: %llu\n",
                 yvex_model_register_deepseek_v4()->coverage.collection_name(
-                    (yvex_deepseek_tensor_collection)collection),
+                    (yvex_tensor_collection)collection),
                 summary->collection_counts[collection]);
         }
-        rc |= yvex_cli_out_writef(fp, "header_scan_count: %llu\n",
-                                  summary->header_scan_count);
-        rc |= yvex_cli_out_writef(fp, "payload_bytes_read: %llu\n",
-                                  summary->payload_bytes_read);
-        rc |= yvex_cli_out_writef(fp, "source_lookup_count: %llu\n",
-                                  summary->source_lookup_count);
-        rc |= yvex_cli_out_writef(fp, "source_collision_count: %llu\n",
-                                  summary->source_collision_count);
-        rc |= yvex_cli_out_writef(fp, "source_maximum_probe: %llu\n",
-                                  summary->source_maximum_probe);
-        rc |= yvex_cli_out_writef(fp, "source_identity: %016llx\n",
-                                  summary->source_identity);
-        rc |= yvex_cli_out_writef(fp, "coverage_identity: %016llx\n",
-                                  summary->coverage_identity);
+        rc |= yvex_cli_out_fields(fp, summary, coverage_summary_tail,
+                                  sizeof(coverage_summary_tail) /
+                                      sizeof(coverage_summary_tail[0]));
         rc |= yvex_cli_out_writef(fp, "mapping: blocked\n");
         rc |= yvex_cli_out_writef(fp, "runtime_execution: unsupported\n");
         rc |= yvex_cli_out_writef(fp, "generation: unsupported\n");
-        rc |= yvex_cli_out_writef(fp, "next_required_row: %s\n",
-                                  report->next_row);
-        rc |= yvex_cli_out_writef(fp, "boundary: %s\n", report->boundary);
+        rc |= yvex_cli_out_fields(fp, report, coverage_report_tail,
+                                  sizeof(coverage_report_tail) /
+                                      sizeof(coverage_report_tail[0]));
         return rc < 0 ? rc : 0;
     }
     rc |= yvex_cli_out_writef(fp, "tensor-coverage: deepseek-v4-flash\n");
@@ -301,6 +413,11 @@ static int model_target_render_deepseek_coverage(
 }
 
 /* Formats the compact architecture view from the immutable typed IR. */
+/* Purpose: Render model target render deepseek normal from typed facts (`model_target_render_deepseek_normal`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_target_render_deepseek_normal(
     FILE *fp,
     const yvex_model_target_report *report,
@@ -338,6 +455,7 @@ static int model_target_render_deepseek_normal(
 }
 
 /* Formats one table row without deriving architecture state in the renderer. */
+/* Purpose: Render model target render deepseek table from typed facts (`model_target_render_deepseek_table`). */
 static int model_target_render_deepseek_table(
     FILE *fp,
     const yvex_model_target_report *report,
@@ -358,6 +476,11 @@ static int model_target_render_deepseek_table(
 }
 
 /* Formats complete audit evidence while preserving the IR as semantic owner. */
+/* Purpose: Render model target render deepseek audit from typed facts (`model_target_render_deepseek_audit`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_target_render_deepseek_audit(
     FILE *fp,
     const yvex_model_target_report *report,
@@ -367,75 +490,10 @@ static int model_target_render_deepseek_audit(
     unsigned long long i;
     int rc = 0;
 
-    rc |= yvex_cli_out_writef(fp, "architecture_ir_status: %s\n",
-                              report->status);
-    rc |= yvex_cli_out_writef(fp, "target_id: %s\n", model->target_id);
-    rc |= yvex_cli_out_writef(fp, "family: %s\n", model->family);
-    rc |= yvex_cli_out_writef(fp, "architecture: %s\n",
-                              model->architecture);
-    rc |= yvex_cli_out_writef(fp, "repository: %s\n", model->repository);
-    rc |= yvex_cli_out_writef(fp, "revision: %s\n", model->revision);
-    rc |= yvex_cli_out_writef(fp, "verification_stage: %s\n",
-                              model->verification_stage);
-    rc |= yvex_cli_out_writef(fp, "paper_revision: %s\n",
-                              model->paper_revision);
-    rc |= yvex_cli_out_writef(fp, "sglang_revision: %s\n",
-                              model->sglang_revision);
-    rc |= yvex_cli_out_writef(fp, "vllm_revision: %s\n",
-                              model->vllm_revision);
-    rc |= yvex_cli_out_writef(fp, "hidden_size: %llu\n", model->hidden_size);
-    rc |= yvex_cli_out_writef(fp, "vocabulary_size: %llu\n",
-                              model->vocabulary_size);
-    rc |= yvex_cli_out_writef(fp, "maximum_context: %llu\n",
-                              model->maximum_context);
-    rc |= yvex_cli_out_writef(fp, "main_layer_count: %llu\n",
-                              model->main_layer_count);
-    rc |= yvex_cli_out_writef(fp, "auxiliary_layer_count: %llu\n",
-                              model->auxiliary_layer_count);
-    rc |= yvex_cli_out_writef(fp, "swa_layer_count: %llu\n",
-                              model->swa_layer_count);
-    rc |= yvex_cli_out_writef(fp, "csa_layer_count: %llu\n",
-                              model->csa_layer_count);
-    rc |= yvex_cli_out_writef(fp, "hca_layer_count: %llu\n",
-                              model->hca_layer_count);
-    rc |= yvex_cli_out_writef(fp, "hash_router_layer_count: %llu\n",
-                              model->hash_router_layer_count);
-    rc |= yvex_cli_out_writef(fp, "learned_router_layer_count: %llu\n",
-                              model->learned_router_layer_count);
-    rc |= yvex_cli_out_writef(fp, "mhc_residual_streams: %llu\n",
-                              model->final_mhc.residual_streams);
-    rc |= yvex_cli_out_writef(fp, "mhc_expanded_width: %llu\n",
-                              model->final_mhc.expanded_width);
-    rc |= yvex_cli_out_writef(fp, "mhc_mixing_rows: %llu\n",
-                              model->final_mhc.mixing_rows);
-    rc |= yvex_cli_out_writef(fp, "mhc_mixing_columns: %llu\n",
-                              model->final_mhc.mixing_columns);
-    rc |= yvex_cli_out_writef(fp, "mhc_sinkhorn_iterations: %llu\n",
-                              model->final_mhc.sinkhorn_iterations);
-    rc |= yvex_cli_out_writef(fp, "final_mhc_post_required: %s\n",
-                              model->final_mhc_post_required ? "true" : "false");
-    rc |= yvex_cli_out_writef(fp, "final_mhc_head_required: %s\n",
-                              model->final_mhc_head_required ? "true" : "false");
-    rc |= yvex_cli_out_writef(fp, "final_norm_after_mhc_head: %s\n",
-                              model->final_norm_after_mhc_head ? "true" : "false");
-    rc |= yvex_cli_out_writef(fp, "tokenizer_class: %s\n",
-                              model->tokenizer.tokenizer_class);
-    rc |= yvex_cli_out_writef(fp, "tokenizer_model_type: %s\n",
-                              model->tokenizer.model_type);
-    rc |= yvex_cli_out_writef(fp, "tokenizer_vocabulary_size: %llu\n",
-                              model->tokenizer.vocabulary_size);
-    rc |= yvex_cli_out_writef(fp, "tokenizer_base_vocab_entries: %llu\n",
-                              model->tokenizer.base_vocab_entries);
-    rc |= yvex_cli_out_writef(fp, "tokenizer_added_token_entries: %llu\n",
-                              model->tokenizer.added_token_entries);
-    rc |= yvex_cli_out_writef(fp, "bos_token_id: %llu\n",
-                              model->tokenizer.bos_token_id);
-    rc |= yvex_cli_out_writef(fp, "eos_token_id: %llu\n",
-                              model->tokenizer.eos_token_id);
-    rc |= yvex_cli_out_writef(fp, "output_head_required: %s\n",
-                              model->output.required ? "true" : "false");
-    rc |= yvex_cli_out_writef(fp, "output_head_tied: %s\n",
-                              model->output.tied_to_embedding ? "true" : "false");
+    rc |= yvex_cli_out_writef(fp, "architecture_ir_status: %s\n", report->status);
+    rc |= yvex_cli_out_fields(fp, model, architecture_model_fields,
+                              sizeof(architecture_model_fields) /
+                                  sizeof(architecture_model_fields[0]));
     rc |= yvex_cli_out_writef(
         fp, "source_weight_dtype: %s\n",
         yvex_model_register_deepseek_v4()->ir.source_weight_dtype_name(
@@ -450,12 +508,9 @@ static int model_target_render_deepseek_audit(
             model->source_constraint.quantization),
         model->source_constraint.quant_block_rows,
         model->source_constraint.quant_block_columns);
-    rc |= yvex_cli_out_writef(fp, "source_header_scan_count: %llu\n",
-                              model->source_header_scan_count);
-    rc |= yvex_cli_out_writef(fp, "source_header_tensor_count: %llu\n",
-                              model->source_header_tensor_count);
-    rc |= yvex_cli_out_writef(fp, "source_payload_bytes_read: %llu\n",
-                              model->source_payload_bytes_read);
+    rc |= yvex_cli_out_fields(fp, model, architecture_source_fields,
+                              sizeof(architecture_source_fields) /
+                                  sizeof(architecture_source_fields[0]));
     for (i = 0u; i < yvex_model_register_deepseek_v4()->ir.layer_count(ir); ++i) {
         const yvex_deepseek_v4_layer_spec *layer =
             yvex_model_register_deepseek_v4()->ir.layer_at(ir, i);
@@ -486,13 +541,18 @@ static int model_target_render_deepseek_audit(
     }
     rc |= yvex_cli_out_writef(fp, "runtime_execution: unsupported\n");
     rc |= yvex_cli_out_writef(fp, "generation: unsupported\n");
-    rc |= yvex_cli_out_writef(fp, "next_required_row: %s\n",
-                              report->next_row);
-    rc |= yvex_cli_out_writef(fp, "boundary: %s\n", report->boundary);
+    rc |= yvex_cli_out_fields(fp, report, architecture_report_tail,
+                              sizeof(architecture_report_tail) /
+                                  sizeof(architecture_report_tail[0]));
     return rc < 0 ? rc : 0;
 }
 
 /* Formats the machine-readable summary from already-decided typed fields. */
+/* Purpose: Serialize the admitted DeepSeek target summary as one JSON object.
+ * Inputs: Borrowed typed report and architecture facts.
+ * Effects: Writes escaped JSON through CLI I/O only.
+ * Failure: Returns the first output failure; inputs remain unchanged.
+ * Boundary: JSON projection does not alter target admission or support. */
 static int model_target_render_deepseek_json(
     FILE *fp,
     const yvex_model_target_report *report,
@@ -500,7 +560,11 @@ static int model_target_render_deepseek_json(
 {
     return yvex_cli_out_writef(
         fp,
-        "{\"status\":\"%s\",\"target_id\":\"%s\",\"repository\":\"%s\",\"revision\":\"%s\",\"layers\":%llu,\"mtp_layers\":%llu,\"hidden_size\":%llu,\"vocabulary_size\":%llu,\"context\":%llu,\"attention\":{\"swa\":%llu,\"csa\":%llu,\"hca\":%llu},\"routing\":{\"hash\":%llu,\"learned\":%llu},\"mhc_streams\":%llu,\"payload_bytes_read\":%llu,\"runtime\":\"unsupported\",\"generation\":\"unsupported\",\"next\":\"%s\"}\n",
+        "{\"status\":\"%s\",\"target_id\":\"%s\",\"repository\":\"%s\",\"revision\":\"%s\",\"layers\":%llu,"
+            "\"mtp_layers\":%llu,\"hidden_size\":%llu,\"vocabulary_size\":%llu,\"context\":%llu,\"attention\":"
+            "{\"swa\":%llu,\"csa\":%llu,\"hca\":%llu},\"routing\":{\"hash\":%llu,\"learned\":%llu},"
+            "\"mhc_streams\":%llu,\"payload_bytes_read\":%llu,\"runtime\":\"unsupported\",\"generation\":"
+            "\"unsupported\",\"next\":\"%s\"}\n",
         report->status, model->target_id, model->repository, model->revision,
         model->main_layer_count, model->auxiliary_layer_count,
         model->hidden_size, model->vocabulary_size, model->maximum_context,
@@ -512,13 +576,20 @@ static int model_target_render_deepseek_json(
 }
 
 /* Selects presentation only; the model owner has already decided every fact. */
+/* Purpose: Render model target render deepseek ir from typed facts (`model_target_render_deepseek_ir`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int model_target_render_deepseek_ir(
     FILE *fp,
     yvex_model_target_render_mode mode,
     const yvex_model_target_report *report)
 {
+    const yvex_deepseek_v4_ir *ir =
+        (const yvex_deepseek_v4_ir *)report->family_architecture;
     const yvex_deepseek_v4_model_spec *model =
-        yvex_model_register_deepseek_v4()->ir.model(report->deepseek_architecture_ir);
+        yvex_model_register_deepseek_v4()->ir.model(ir);
 
     if (!model) return 0;
     if (mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
@@ -526,35 +597,20 @@ static int model_target_render_deepseek_ir(
     }
     if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
         return model_target_render_deepseek_audit(
-            fp, report, report->deepseek_architecture_ir, model);
+            fp, report, ir, model);
     }
     if (mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
         return model_target_render_deepseek_json(fp, report, model);
     }
     return model_target_render_deepseek_normal(
-        fp, report, report->deepseek_architecture_ir, model);
+        fp, report, ir, model);
 }
 
-/*
- * yvex_model_target_render()
- *
- * Purpose:
- *   render typed model-target report rows.
- *
- * Inputs:
- *   fp is an explicit output stream; mode selects normal/table/audit handling;
- *   report is borrowed.
- *
- * Effects:
- *   writes report rows through CLI IO helpers.
- *
- * Failure:
- *   returns CLI writer status.
- *
- * Boundary:
- *   rendering does not build reports, write sidecars, execute runtime paths, or
- *   create capability claims.
- */
+/* Purpose: render typed model-target report rows.
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_model_target_render(FILE *fp,
                              yvex_model_target_render_mode mode,
                              const yvex_model_target_report *report)
@@ -569,13 +625,13 @@ int yvex_model_target_render(FILE *fp,
         rc = model_target_render_help_rows(fp, report->kind);
         if (rc < 0) return rc;
     }
-    if (report->deepseek_gguf_map) {
+    if (report->family_lowering) {
         return model_target_render_deepseek_map(fp, mode, report);
     }
-    if (report->deepseek_tensor_coverage) {
+    if (report->family_coverage) {
         return model_target_render_deepseek_coverage(fp, mode, report);
     }
-    if (report->deepseek_architecture_ir) {
+    if (report->family_architecture) {
         return model_target_render_deepseek_ir(fp, mode, report);
     }
     if (mode == YVEX_MODEL_TARGET_OUTPUT_TABLE && report->table_row_count > 0) {
@@ -587,6 +643,11 @@ int yvex_model_target_render(FILE *fp,
     return model_target_render_rows(fp, report->rows, report->row_count);
 }
 
+/* Purpose: Render model target render errors from typed facts (`yvex_model_target_render_errors`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_model_target_render_errors(FILE *fp,
                                     const yvex_model_target_report *report)
 {
@@ -597,25 +658,11 @@ int yvex_model_target_render_errors(FILE *fp,
                                     report->error_row_count);
 }
 
-/*
- * yvex_model_target_render_help()
- *
- * Purpose:
- *   render model-target help as a typed report.
- *
- * Inputs:
- *   fp is an explicit output stream.
- *
- * Effects:
- *   builds the help report and writes it through CLI IO helpers.
- *
- * Failure:
- *   returns non-zero if help report construction fails.
- *
- * Boundary:
- *   help rendering describes report-only surfaces and does not create runtime
- *   or generation capability.
- */
+/* Purpose: render model-target help as a typed report.
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_model_target_render_help(FILE *fp)
 {
     yvex_model_target_report report;

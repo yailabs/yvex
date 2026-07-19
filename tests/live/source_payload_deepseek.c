@@ -8,7 +8,8 @@
  * Boundary: exhaustive source delivery is not conversion, artifact emission, or runtime support.
  */
 #define _POSIX_C_SOURCE 200809L
-#include "src/model/families.h"
+#include <yvex/internal/compilation.h>
+#include <yvex/internal/families/deepseek_v4.h>
 
 #include <stdio.h>
 #include <string.h>

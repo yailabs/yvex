@@ -20,7 +20,7 @@
  *   - exits 0 on success
  *   - prints concise failure to stderr
  */
-#include <yvex/log.h>
+#include <yvex/core.h>
 
 #include "tests/test.h"
 

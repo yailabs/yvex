@@ -1,51 +1,22 @@
-/*
- * Owner: abi.backend (abi).
- * Owns: the public-abi boundary consumed by repository.
- * Does not own: unrelated subsystem policy or unsupported higher-stage claims.
- * Invariants: scope=generic and visibility=public match config/source_owners.tsv.
- * Boundary: public-abi; moving this contract requires an ownership-manifest change.
- *
- * YVEX - Backend ABI
- *
- * File: include/yvex/backend.h
- * Layer: public backend API
- *
- * Purpose:
- *   Defines the first YVEX backend abstraction and CPU reference backend
- *   surface. backend layer proves backend lifecycle, tensor allocation/read/write/copy,
- *   memory stats, capability reporting, and the narrow implemented graph ops.
- *
- * Owns:
- *   - yvex_backend
- *   - yvex_device_tensor
- *   - backend lifecycle and memory stats
- *   - backend tensor allocation/read/write/copy
- *   - backend capability reporting
- *
- * Does not own:
- *   - sessions
- *   - sampler/logits/KV runtime
- *   - inference
- *
- * Used by:
- *   - planner
- *   - CLI backend/plan commands
- *   - backend tests
- *
- * Validation:
- *   - make test-core
- *   - build/tests/test_backend_cpu
- *   - build/tests/test_backend_ops
- */
+/* Owner: public backend ABI.
+ * Owns: backend admission, device tensors, capabilities, and primitive execution.
+ * Does not own: model topology, graph policy, or runtime orchestration.
+ * Invariants: declarations are format-stable, externally consumable, and independently includable.
+ * Boundary: typed CPU/CUDA execution contracts.
+ * Purpose: Expose typed CPU/CUDA execution contracts.
+ * Inputs: Typed caller-owned values and immutable borrowed views as declared below.
+ * Effects: Only functions with explicit lifecycle or I/O contracts mutate external state.
+ * Failure: Typed status and error outputs remain authoritative; declarations add no capability. */
 #ifndef YVEX_BACKEND_H
 #define YVEX_BACKEND_H
 
-#include <yvex/tensor.h>
+#include <yvex/model.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/* Backend execution. */
 typedef struct yvex_backend yvex_backend;
 typedef struct yvex_device_tensor yvex_device_tensor;
 
@@ -186,8 +157,7 @@ typedef struct {
  * This is the backend-facing, family-neutral transport for an admitted
  * attention recipe.  Model and graph owners select the weights, schedule,
  * and activation policy; a backend consumes those immutable facts without
- * reconstructing model topology.  All pointers are borrowed for one call.
- */
+ * reconstructing model topology.  All pointers are borrowed for one call. */
 typedef enum {
     YVEX_BACKEND_ATTENTION_WEIGHT_Q_A = 0,
     YVEX_BACKEND_ATTENTION_WEIGHT_Q_A_NORM,

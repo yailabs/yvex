@@ -1,42 +1,26 @@
-/*
- * core.c - model descriptors, tensor tables, and materialized weights.
- *
- * Owner:
- *   src/model
- *
- * Owns:
- *   dtype lookup, model descriptors, tensor role classification, tensor tables,
- *   and materialized weight tables.
- *
- * Does not own:
- *   CLI grammar, usage text, report rendering, model-target command adapters,
- *   artifact emission, graph execution, generation, eval, benchmark, or release
- *   decisions.
- *
- * Invariants:
- *   model facts are built from parsed GGUF and tensor metadata; tensor payload
- *   bytes are read only through explicit materialization paths; domain code
- *   returns facts and errors, not operator prose.
- *
- * Boundary:
- *   model metadata/materialization facts are not model support, runtime support,
- *   generation support, eval evidence, benchmark evidence, or release readiness.
- */
+/* Owner: src/model
+ * Owns: dtype lookup, model descriptors, tensor role classification, tensor tables, and materialized weight tables.
+ * Does not own: CLI grammar, usage text, report rendering, model-target command adapters, artifact emission, graph
+ *   execution, generation, eval, benchmark, or release decisions.
+ * Invariants: model facts are built from parsed GGUF and tensor metadata; tensor payload bytes are read only
+ *   through explicit materialization paths; domain code returns facts and errors, not operator prose.
+ * Boundary: model metadata/materialization facts are not model support, runtime support, generation support, eval
+ *   evidence, benchmark evidence, or release readiness.
+ * Purpose: own model descriptors, tensor tables, and materialized weight lifecycles.
+ * Inputs: typed GGUF descriptors, artifacts, tensors, and backends.
+ * Effects: allocates and releases model, tensor, and weight owner state.
+ * Failure: typed parse or materialization failure unwinds every acquired resource. */
 
-#include <yvex/dtype.h>
-#include <yvex/artifact.h>
-#include <yvex/artifact_integrity.h>
-#include <yvex/fs.h>
-#include <yvex/gguf_layout.h>
-#include <yvex/gguf_qtype.h>
 #include <yvex/model.h>
-#include <yvex/model_ref.h>
-#include <yvex/model_registry.h>
-#include <yvex/native_weights.h>
-#include <yvex/qtype_support.h>
-#include <yvex/tensor.h>
+#include <yvex/artifact.h>
+#include <yvex/backend.h>
+#include <yvex/core.h>
+#include <yvex/gguf.h>
+#include <yvex/qtype.h>
+#include <yvex/registry.h>
+#include <yvex/source.h>
 #include <yvex/tokenizer.h>
-#include <yvex/weights.h>
+#include <yvex/internal/core.h>
 
 #include <ctype.h>
 #include <errno.h>
@@ -89,6 +73,22 @@ static const yvex_dtype_info dtype_table[] = {
 
 static const unsigned long dtype_table_count = sizeof(dtype_table) / sizeof(dtype_table[0]);
 
+typedef struct {
+    const char *name;
+    yvex_arch value;
+} architecture_name;
+
+static const architecture_name architecture_names[] = {
+    {"llama", YVEX_ARCH_LLAMA}, {"qwen", YVEX_ARCH_QWEN},
+    {"deepseek", YVEX_ARCH_DEEPSEEK}, {"gemma", YVEX_ARCH_GEMMA},
+    {"phi", YVEX_ARCH_PHI}, {"kimi", YVEX_ARCH_KIMI}, {"glm", YVEX_ARCH_GLM}
+};
+
+/* Purpose: map dtype info through canonical typed vocabulary.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const yvex_dtype_info *yvex_dtype_get_info(yvex_dtype dtype)
 {
     unsigned long i;
@@ -102,6 +102,11 @@ const yvex_dtype_info *yvex_dtype_get_info(yvex_dtype dtype)
     return &dtype_table[0];
 }
 
+/* Purpose: map dtype from ggml type through canonical typed vocabulary.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const yvex_dtype_info *yvex_dtype_from_ggml_type(unsigned int ggml_type)
 {
     unsigned long i;
@@ -115,6 +120,11 @@ const yvex_dtype_info *yvex_dtype_from_ggml_type(unsigned int ggml_type)
     return &dtype_table[0];
 }
 
+/* Purpose: project typed dtype name vocabulary without lost semantics.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const char *yvex_dtype_name(yvex_dtype dtype)
 {
     const yvex_dtype_info *info = yvex_dtype_get_info(dtype);
@@ -124,7 +134,12 @@ const char *yvex_dtype_name(yvex_dtype dtype)
         : yvex_gguf_qtype_name(info->ggml_type);
 }
 
-/* Contract: projects quantized identity from the canonical GGUF registry. */
+/* Purpose: map dtype quantized through canonical typed vocabulary.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
+
 int yvex_dtype_is_quantized(yvex_dtype dtype)
 {
     const yvex_dtype_info *info = yvex_dtype_get_info(dtype);
@@ -135,7 +150,12 @@ int yvex_dtype_is_quantized(yvex_dtype dtype)
         geometry->storage_class == YVEX_GGUF_QTYPE_STORAGE_BLOCK_QUANTIZED;
 }
 
-/* Contract: projects on-disk storage admission from the canonical registry. */
+/* Purpose: map dtype storage supported through canonical typed vocabulary.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
+
 int yvex_dtype_storage_supported(yvex_dtype dtype)
 {
     const yvex_dtype_info *info = yvex_dtype_get_info(dtype);
@@ -144,6 +164,11 @@ int yvex_dtype_storage_supported(yvex_dtype dtype)
         yvex_gguf_qtype_supported_for_storage(info->ggml_type, NULL);
 }
 
+/* Purpose: map dtype storage error code through canonical typed vocabulary.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 static int dtype_storage_error_code(yvex_gguf_qtype_storage_status status)
 {
     switch (status) {
@@ -171,10 +196,12 @@ static int dtype_storage_error_code(yvex_gguf_qtype_storage_status status)
     return YVEX_ERR_UNSUPPORTED;
 }
 
-/*
- * Contract: projects a complete borrowed shape to the GGUF owner. It mutates
- * only out and err and performs no allocation, IO, payload access, or compute.
- */
+/* Purpose: map dtype tensor storage bytes through canonical typed vocabulary.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
+
 int yvex_dtype_tensor_storage_bytes(yvex_dtype dtype,
                                     const unsigned long long *dims,
                                     unsigned int rank,
@@ -214,7 +241,12 @@ int yvex_dtype_tensor_storage_bytes(yvex_dtype dtype,
     return YVEX_OK;
 }
 
-/* Contract: compatibility storage query for one logical row only. */
+/* Purpose: map dtype storage bytes through canonical typed vocabulary.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
+
 int yvex_dtype_storage_bytes(yvex_dtype dtype,
                              unsigned long long row_element_count,
                              unsigned long long *out,
@@ -228,8 +260,6 @@ int yvex_dtype_storage_bytes(yvex_dtype dtype,
     return yvex_dtype_tensor_storage_bytes(dtype, &row_element_count, 1u, out, err);
 }
 
-
-
 /* Model descriptors */
 
 struct yvex_model_descriptor {
@@ -242,6 +272,11 @@ struct yvex_model_descriptor {
     unsigned long long role_counts[YVEX_TENSOR_ROLE_COUNT];
 };
 
+/* Purpose: compare or copy copy bytes string under exact ownership.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 static char *copy_bytes_string(const char *data, unsigned long long len)
 {
     char *copy;
@@ -261,18 +296,17 @@ static char *copy_bytes_string(const char *data, unsigned long long len)
     return copy;
 }
 
+/* Purpose: project typed arch from name vocabulary without lost semantics. */
 static yvex_arch arch_from_name(const char *name)
 {
-    if (!name) {
-        return YVEX_ARCH_UNKNOWN;
+    size_t index;
+
+    if (!name) return YVEX_ARCH_UNKNOWN;
+    for (index = 0u; index < sizeof(architecture_names) / sizeof(architecture_names[0]);
+         ++index) {
+        if (strcmp(name, architecture_names[index].name) == 0)
+            return architecture_names[index].value;
     }
-    if (strcmp(name, "llama") == 0) return YVEX_ARCH_LLAMA;
-    if (strcmp(name, "qwen") == 0) return YVEX_ARCH_QWEN;
-    if (strcmp(name, "deepseek") == 0) return YVEX_ARCH_DEEPSEEK;
-    if (strcmp(name, "gemma") == 0) return YVEX_ARCH_GEMMA;
-    if (strcmp(name, "phi") == 0) return YVEX_ARCH_PHI;
-    if (strcmp(name, "kimi") == 0) return YVEX_ARCH_KIMI;
-    if (strcmp(name, "glm") == 0) return YVEX_ARCH_GLM;
     return YVEX_ARCH_UNKNOWN;
 }
 
@@ -296,8 +330,7 @@ static yvex_arch arch_from_name(const char *name)
  *
  * Boundary:
  *   descriptor metadata is not runtime support, generation support, benchmark
- *   evidence, or release readiness.
- */
+ *   evidence, or release readiness. */
 int yvex_model_descriptor_from_gguf(yvex_model_descriptor **out,
                                     const yvex_gguf *gguf,
                                     const yvex_tensor_table *tensors,
@@ -369,6 +402,11 @@ int yvex_model_descriptor_from_gguf(yvex_model_descriptor **out,
     return YVEX_OK;
 }
 
+/* Purpose: release owned descriptor close resources in dependency order.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 void yvex_model_descriptor_close(yvex_model_descriptor *model)
 {
     if (!model) {
@@ -378,26 +416,36 @@ void yvex_model_descriptor_close(yvex_model_descriptor *model)
     free(model);
 }
 
+/* Purpose: map arch through canonical typed vocabulary.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 yvex_arch yvex_model_arch(const yvex_model_descriptor *model)
 {
     return model ? model->arch : YVEX_ARCH_UNKNOWN;
 }
 
+/* Purpose: project typed arch name vocabulary without lost semantics.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const char *yvex_arch_name(yvex_arch arch)
 {
-    switch (arch) {
-    case YVEX_ARCH_UNKNOWN: return "unknown";
-    case YVEX_ARCH_LLAMA: return "llama";
-    case YVEX_ARCH_QWEN: return "qwen";
-    case YVEX_ARCH_DEEPSEEK: return "deepseek";
-    case YVEX_ARCH_GEMMA: return "gemma";
-    case YVEX_ARCH_PHI: return "phi";
-    case YVEX_ARCH_KIMI: return "kimi";
-    case YVEX_ARCH_GLM: return "glm";
-    }
+    size_t index;
+
+    for (index = 0u; index < sizeof(architecture_names) / sizeof(architecture_names[0]);
+         ++index)
+        if (architecture_names[index].value == arch) return architecture_names[index].name;
     return "unknown";
 }
 
+/* Purpose: return the immutable model descriptor name without transferring ownership.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const char *yvex_model_name(const yvex_model_descriptor *model)
 {
     if (!model || !model->name) {
@@ -406,12 +454,12 @@ const char *yvex_model_name(const yvex_model_descriptor *model)
     return model->name;
 }
 
-/*
- * Opens one immutable GGUF/model context from a path or registered alias.
- * The context owns all opened resources and is either complete or zeroed on
- * failure.  It performs structural and integrity admission, reads no tensor
- * payload, emits no operator output, and does not promote runtime support.
- */
+/* Purpose: construct bounded context open state from admitted inputs.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
+
 int yvex_model_context_open(const char *path_or_alias,
                             yvex_model_context *out,
                             yvex_error *err)
@@ -466,10 +514,12 @@ int yvex_model_context_open(const char *path_or_alias,
     return rc;
 }
 
-/*
- * Extends an admitted model context with tokenizer metadata.  Ownership stays
- * with the context; failure closes every partially acquired resource.
- */
+/* Purpose: construct bounded context open tokenizer state from admitted inputs.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
+
 int yvex_model_context_open_tokenizer(const char *path_or_alias,
                                       yvex_model_context *out,
                                       yvex_error *err)
@@ -488,10 +538,12 @@ int yvex_model_context_open_tokenizer(const char *path_or_alias,
     return rc;
 }
 
-/*
- * Releases every model-context resource in reverse acquisition order.  A
- * zero or previously closed context is accepted; no IO or output is emitted.
- */
+/* Purpose: release owned context close resources in dependency order.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
+
 void yvex_model_context_close(yvex_model_context *context)
 {
     if (!context) return;
@@ -503,11 +555,12 @@ void yvex_model_context_close(yvex_model_context *context)
     memset(context, 0, sizeof(*context));
 }
 
-/*
- * Resolves the vocabulary cardinality from the canonical embedding tensor or
- * tokenizer metadata.  The temporary context is always released; this reads
- * structural metadata only and does not infer generation support.
- */
+/* Purpose: apply the canonical context vocab size transformation and invariants.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
+
 int yvex_model_context_vocab_size(const char *path_or_alias,
                                   unsigned long long *out_vocab_size,
                                   yvex_error *err)
@@ -552,26 +605,51 @@ int yvex_model_context_vocab_size(const char *path_or_alias,
     return YVEX_ERR_UNSUPPORTED;
 }
 
+/* Purpose: apply the canonical context length transformation and invariants.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 unsigned long long yvex_model_context_length(const yvex_model_descriptor *model)
 {
     return model ? model->context_length : 0;
 }
 
+/* Purpose: project the immutable bounded tensor count view.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 unsigned long long yvex_model_tensor_count(const yvex_model_descriptor *model)
 {
     return model ? model->tensor_count : 0;
 }
 
+/* Purpose: apply the canonical total storage bytes transformation and invariants.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 unsigned long long yvex_model_total_storage_bytes(const yvex_model_descriptor *model)
 {
     return model ? model->total_storage_bytes : 0;
 }
 
+/* Purpose: project the immutable bounded unsupported tensor accounting count view.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 unsigned long long yvex_model_unsupported_tensor_accounting_count(const yvex_model_descriptor *model)
 {
     return model ? model->unsupported_tensor_accounting_count : 0;
 }
 
+/* Purpose: project the immutable bounded role count view.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 unsigned long long yvex_model_role_count(const yvex_model_descriptor *model, yvex_tensor_role role)
 {
     if (!model || role >= YVEX_TENSOR_ROLE_COUNT) {
@@ -580,72 +658,76 @@ unsigned long long yvex_model_role_count(const yvex_model_descriptor *model, yve
     return model->role_counts[role];
 }
 
-
-
 /* Tensor roles */
 
+static const char *const tensor_role_names[YVEX_TENSOR_ROLE_COUNT] = {
+    [YVEX_TENSOR_ROLE_UNKNOWN] = "unknown",
+    [YVEX_TENSOR_ROLE_TOKEN_EMBEDDING] = "token_embedding",
+    [YVEX_TENSOR_ROLE_OUTPUT_NORM] = "output_norm",
+    [YVEX_TENSOR_ROLE_OUTPUT_HEAD] = "output_head",
+    [YVEX_TENSOR_ROLE_ATTENTION_NORM] = "attention_norm",
+    [YVEX_TENSOR_ROLE_ATTENTION_Q] = "attention_q",
+    [YVEX_TENSOR_ROLE_ATTENTION_K] = "attention_k",
+    [YVEX_TENSOR_ROLE_ATTENTION_V] = "attention_v",
+    [YVEX_TENSOR_ROLE_ATTENTION_OUT] = "attention_out",
+    [YVEX_TENSOR_ROLE_FFN_NORM] = "ffn_norm",
+    [YVEX_TENSOR_ROLE_FFN_GATE] = "ffn_gate",
+    [YVEX_TENSOR_ROLE_FFN_UP] = "ffn_up",
+    [YVEX_TENSOR_ROLE_FFN_DOWN] = "ffn_down",
+    [YVEX_TENSOR_ROLE_MOE_ROUTER] = "moe_router",
+    [YVEX_TENSOR_ROLE_MOE_EXPERT_GATE] = "moe_expert_gate",
+    [YVEX_TENSOR_ROLE_MOE_EXPERT_UP] = "moe_expert_up",
+    [YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN] = "moe_expert_down",
+    [YVEX_TENSOR_ROLE_HC_HEAD_FUNCTION] = "hc_head_function",
+    [YVEX_TENSOR_ROLE_HC_HEAD_BASE] = "hc_head_base",
+    [YVEX_TENSOR_ROLE_HC_HEAD_SCALE] = "hc_head_scale",
+    [YVEX_TENSOR_ROLE_ATTENTION_SINKS] = "attention_sinks",
+    [YVEX_TENSOR_ROLE_ATTENTION_Q_A] = "attention_q_a",
+    [YVEX_TENSOR_ROLE_ATTENTION_Q_B] = "attention_q_b",
+    [YVEX_TENSOR_ROLE_ATTENTION_Q_A_NORM] = "attention_q_a_norm",
+    [YVEX_TENSOR_ROLE_ATTENTION_KV] = "attention_kv",
+    [YVEX_TENSOR_ROLE_ATTENTION_KV_NORM] = "attention_kv_norm",
+    [YVEX_TENSOR_ROLE_ATTENTION_OUT_A] = "attention_out_a",
+    [YVEX_TENSOR_ROLE_ATTENTION_OUT_B] = "attention_out_b",
+    [YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION] = "hc_attention_function",
+    [YVEX_TENSOR_ROLE_HC_ATTENTION_BASE] = "hc_attention_base",
+    [YVEX_TENSOR_ROLE_HC_ATTENTION_SCALE] = "hc_attention_scale",
+    [YVEX_TENSOR_ROLE_HC_FFN_FUNCTION] = "hc_ffn_function",
+    [YVEX_TENSOR_ROLE_HC_FFN_BASE] = "hc_ffn_base",
+    [YVEX_TENSOR_ROLE_HC_FFN_SCALE] = "hc_ffn_scale",
+    [YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_KV] = "attention_compressor_kv",
+    [YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_GATE] = "attention_compressor_gate",
+    [YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_APE] = "attention_compressor_ape",
+    [YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_NORM] = "attention_compressor_norm",
+    [YVEX_TENSOR_ROLE_INDEXER_PROJECTION] = "indexer_projection",
+    [YVEX_TENSOR_ROLE_INDEXER_ATTENTION_Q_B] = "indexer_attention_q_b",
+    [YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_KV] = "indexer_compressor_kv",
+    [YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_GATE] = "indexer_compressor_gate",
+    [YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_APE] = "indexer_compressor_ape",
+    [YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_NORM] = "indexer_compressor_norm",
+    [YVEX_TENSOR_ROLE_MOE_ROUTER_BIAS] = "moe_router_bias",
+    [YVEX_TENSOR_ROLE_MOE_ROUTER_TABLE] = "moe_router_table",
+    [YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_GATE] = "moe_shared_expert_gate",
+    [YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_UP] = "moe_shared_expert_up",
+    [YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_DOWN] = "moe_shared_expert_down",
+    [YVEX_TENSOR_ROLE_MTP_EMBEDDING_PROJECTION] = "mtp_embedding_projection",
+    [YVEX_TENSOR_ROLE_MTP_HIDDEN_PROJECTION] = "mtp_hidden_projection",
+    [YVEX_TENSOR_ROLE_MTP_EMBEDDING_NORM] = "mtp_embedding_norm",
+    [YVEX_TENSOR_ROLE_MTP_HIDDEN_NORM] = "mtp_hidden_norm",
+    [YVEX_TENSOR_ROLE_MTP_OUTPUT_NORM] = "mtp_output_norm"
+};
+
+/* Purpose: project typed role name vocabulary without lost semantics.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const char *yvex_tensor_role_name(yvex_tensor_role role)
 {
-    switch (role) {
-    case YVEX_TENSOR_ROLE_UNKNOWN: return "unknown";
-    case YVEX_TENSOR_ROLE_TOKEN_EMBEDDING: return "token_embedding";
-    case YVEX_TENSOR_ROLE_OUTPUT_NORM: return "output_norm";
-    case YVEX_TENSOR_ROLE_OUTPUT_HEAD: return "output_head";
-    case YVEX_TENSOR_ROLE_ATTENTION_NORM: return "attention_norm";
-    case YVEX_TENSOR_ROLE_ATTENTION_Q: return "attention_q";
-    case YVEX_TENSOR_ROLE_ATTENTION_K: return "attention_k";
-    case YVEX_TENSOR_ROLE_ATTENTION_V: return "attention_v";
-    case YVEX_TENSOR_ROLE_ATTENTION_OUT: return "attention_out";
-    case YVEX_TENSOR_ROLE_FFN_NORM: return "ffn_norm";
-    case YVEX_TENSOR_ROLE_FFN_GATE: return "ffn_gate";
-    case YVEX_TENSOR_ROLE_FFN_UP: return "ffn_up";
-    case YVEX_TENSOR_ROLE_FFN_DOWN: return "ffn_down";
-    case YVEX_TENSOR_ROLE_MOE_ROUTER: return "moe_router";
-    case YVEX_TENSOR_ROLE_MOE_EXPERT_GATE: return "moe_expert_gate";
-    case YVEX_TENSOR_ROLE_MOE_EXPERT_UP: return "moe_expert_up";
-    case YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN: return "moe_expert_down";
-    case YVEX_TENSOR_ROLE_HC_HEAD_FUNCTION: return "hc_head_function";
-    case YVEX_TENSOR_ROLE_HC_HEAD_BASE: return "hc_head_base";
-    case YVEX_TENSOR_ROLE_HC_HEAD_SCALE: return "hc_head_scale";
-    case YVEX_TENSOR_ROLE_ATTENTION_SINKS: return "attention_sinks";
-    case YVEX_TENSOR_ROLE_ATTENTION_Q_A: return "attention_q_a";
-    case YVEX_TENSOR_ROLE_ATTENTION_Q_B: return "attention_q_b";
-    case YVEX_TENSOR_ROLE_ATTENTION_Q_A_NORM: return "attention_q_a_norm";
-    case YVEX_TENSOR_ROLE_ATTENTION_KV: return "attention_kv";
-    case YVEX_TENSOR_ROLE_ATTENTION_KV_NORM: return "attention_kv_norm";
-    case YVEX_TENSOR_ROLE_ATTENTION_OUT_A: return "attention_out_a";
-    case YVEX_TENSOR_ROLE_ATTENTION_OUT_B: return "attention_out_b";
-    case YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION: return "hc_attention_function";
-    case YVEX_TENSOR_ROLE_HC_ATTENTION_BASE: return "hc_attention_base";
-    case YVEX_TENSOR_ROLE_HC_ATTENTION_SCALE: return "hc_attention_scale";
-    case YVEX_TENSOR_ROLE_HC_FFN_FUNCTION: return "hc_ffn_function";
-    case YVEX_TENSOR_ROLE_HC_FFN_BASE: return "hc_ffn_base";
-    case YVEX_TENSOR_ROLE_HC_FFN_SCALE: return "hc_ffn_scale";
-    case YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_KV: return "attention_compressor_kv";
-    case YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_GATE: return "attention_compressor_gate";
-    case YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_APE: return "attention_compressor_ape";
-    case YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_NORM: return "attention_compressor_norm";
-    case YVEX_TENSOR_ROLE_INDEXER_PROJECTION: return "indexer_projection";
-    case YVEX_TENSOR_ROLE_INDEXER_ATTENTION_Q_B: return "indexer_attention_q_b";
-    case YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_KV: return "indexer_compressor_kv";
-    case YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_GATE: return "indexer_compressor_gate";
-    case YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_APE: return "indexer_compressor_ape";
-    case YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_NORM: return "indexer_compressor_norm";
-    case YVEX_TENSOR_ROLE_MOE_ROUTER_BIAS: return "moe_router_bias";
-    case YVEX_TENSOR_ROLE_MOE_ROUTER_TABLE: return "moe_router_table";
-    case YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_GATE: return "moe_shared_expert_gate";
-    case YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_UP: return "moe_shared_expert_up";
-    case YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_DOWN: return "moe_shared_expert_down";
-    case YVEX_TENSOR_ROLE_MTP_EMBEDDING_PROJECTION: return "mtp_embedding_projection";
-    case YVEX_TENSOR_ROLE_MTP_HIDDEN_PROJECTION: return "mtp_hidden_projection";
-    case YVEX_TENSOR_ROLE_MTP_EMBEDDING_NORM: return "mtp_embedding_norm";
-    case YVEX_TENSOR_ROLE_MTP_HIDDEN_NORM: return "mtp_hidden_norm";
-    case YVEX_TENSOR_ROLE_MTP_OUTPUT_NORM: return "mtp_output_norm";
-    case YVEX_TENSOR_ROLE_COUNT: break;
-    }
-    return "unknown";
+    return role >= 0 && role < YVEX_TENSOR_ROLE_COUNT ? tensor_role_names[role] : "unknown";
 }
 
+/* Purpose: apply the canonical ends with transformation and invariants. */
 static int ends_with(const char *text, const char *suffix)
 {
     size_t text_len;
@@ -664,10 +746,61 @@ static int ends_with(const char *text, const char *suffix)
     return strcmp(text + text_len - suffix_len, suffix) == 0;
 }
 
+/* Purpose: apply the canonical contains transformation and invariants. */
 static int contains(const char *text, const char *needle)
 {
     return text && needle && strstr(text, needle) != NULL;
 }
+
+typedef enum {
+    TENSOR_ROLE_EXACT = 0,
+    TENSOR_ROLE_SUFFIX
+} tensor_role_match;
+
+typedef struct {
+    const char *pattern;
+    const char *required_fragment;
+    yvex_tensor_role role;
+    tensor_role_match match;
+} tensor_role_rule;
+
+static const tensor_role_rule tensor_role_rules[] = {
+    {"token_embd.weight", NULL, YVEX_TENSOR_ROLE_TOKEN_EMBEDDING, TENSOR_ROLE_EXACT},
+    {"model.embed_tokens.weight", NULL, YVEX_TENSOR_ROLE_TOKEN_EMBEDDING,
+     TENSOR_ROLE_EXACT},
+    {"tok_embeddings.weight", NULL, YVEX_TENSOR_ROLE_TOKEN_EMBEDDING, TENSOR_ROLE_EXACT},
+    {"output_norm.weight", NULL, YVEX_TENSOR_ROLE_OUTPUT_NORM, TENSOR_ROLE_EXACT},
+    {"model.norm.weight", NULL, YVEX_TENSOR_ROLE_OUTPUT_NORM, TENSOR_ROLE_EXACT},
+    {"norm.weight", NULL, YVEX_TENSOR_ROLE_OUTPUT_NORM, TENSOR_ROLE_EXACT},
+    {"output.weight", NULL, YVEX_TENSOR_ROLE_OUTPUT_HEAD, TENSOR_ROLE_EXACT},
+    {"lm_head.weight", NULL, YVEX_TENSOR_ROLE_OUTPUT_HEAD, TENSOR_ROLE_EXACT},
+    {".attn_norm.weight", NULL, YVEX_TENSOR_ROLE_ATTENTION_NORM, TENSOR_ROLE_SUFFIX},
+    {".input_layernorm.weight", NULL, YVEX_TENSOR_ROLE_ATTENTION_NORM, TENSOR_ROLE_SUFFIX},
+    {".attn_q.weight", NULL, YVEX_TENSOR_ROLE_ATTENTION_Q, TENSOR_ROLE_SUFFIX},
+    {".self_attn.q_proj.weight", NULL, YVEX_TENSOR_ROLE_ATTENTION_Q, TENSOR_ROLE_SUFFIX},
+    {".attn_k.weight", NULL, YVEX_TENSOR_ROLE_ATTENTION_K, TENSOR_ROLE_SUFFIX},
+    {".self_attn.k_proj.weight", NULL, YVEX_TENSOR_ROLE_ATTENTION_K, TENSOR_ROLE_SUFFIX},
+    {".attn_v.weight", NULL, YVEX_TENSOR_ROLE_ATTENTION_V, TENSOR_ROLE_SUFFIX},
+    {".self_attn.v_proj.weight", NULL, YVEX_TENSOR_ROLE_ATTENTION_V, TENSOR_ROLE_SUFFIX},
+    {".attn_output.weight", NULL, YVEX_TENSOR_ROLE_ATTENTION_OUT, TENSOR_ROLE_SUFFIX},
+    {".self_attn.o_proj.weight", NULL, YVEX_TENSOR_ROLE_ATTENTION_OUT, TENSOR_ROLE_SUFFIX},
+    {".ffn_norm.weight", NULL, YVEX_TENSOR_ROLE_FFN_NORM, TENSOR_ROLE_SUFFIX},
+    {".post_attention_layernorm.weight", NULL, YVEX_TENSOR_ROLE_FFN_NORM,
+     TENSOR_ROLE_SUFFIX},
+    {".ffn_gate.weight", NULL, YVEX_TENSOR_ROLE_FFN_GATE, TENSOR_ROLE_SUFFIX},
+    {".mlp.gate_proj.weight", NULL, YVEX_TENSOR_ROLE_FFN_GATE, TENSOR_ROLE_SUFFIX},
+    {".ffn_up.weight", NULL, YVEX_TENSOR_ROLE_FFN_UP, TENSOR_ROLE_SUFFIX},
+    {".mlp.up_proj.weight", NULL, YVEX_TENSOR_ROLE_FFN_UP, TENSOR_ROLE_SUFFIX},
+    {".ffn_down.weight", NULL, YVEX_TENSOR_ROLE_FFN_DOWN, TENSOR_ROLE_SUFFIX},
+    {".mlp.down_proj.weight", NULL, YVEX_TENSOR_ROLE_FFN_DOWN, TENSOR_ROLE_SUFFIX},
+    {".ffn_gate_inp.weight", NULL, YVEX_TENSOR_ROLE_MOE_ROUTER, TENSOR_ROLE_SUFFIX},
+    {".mlp.gate.weight", NULL, YVEX_TENSOR_ROLE_MOE_ROUTER, TENSOR_ROLE_SUFFIX},
+    {".gate.weight", ".ffn.experts.", YVEX_TENSOR_ROLE_MOE_EXPERT_GATE,
+     TENSOR_ROLE_SUFFIX},
+    {".up.weight", ".ffn.experts.", YVEX_TENSOR_ROLE_MOE_EXPERT_UP, TENSOR_ROLE_SUFFIX},
+    {".down.weight", ".ffn.experts.", YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN,
+     TENSOR_ROLE_SUFFIX}
+};
 
 /*
  * yvex_tensor_role_classify()
@@ -688,91 +821,35 @@ static int contains(const char *text, const char *needle)
  *
  * Boundary:
  *   lexical role classification is not full family tensor-map readiness,
- *   runtime descriptor readiness, or generation support.
- */
+ *   runtime descriptor readiness, or generation support. */
 yvex_tensor_role yvex_tensor_role_classify(const char *architecture,
                                            const char *tensor_name,
                                            unsigned int rank,
                                            const unsigned long long *dims,
                                            yvex_dtype dtype)
 {
+    size_t index;
+
     (void)architecture;
     (void)rank;
     (void)dims;
     (void)dtype;
 
-    if (!tensor_name) {
-        return YVEX_TENSOR_ROLE_UNKNOWN;
-    }
+    if (!tensor_name) return YVEX_TENSOR_ROLE_UNKNOWN;
+    for (index = 0u; index < sizeof(tensor_role_rules) / sizeof(tensor_role_rules[0]);
+         ++index) {
+        const tensor_role_rule *rule = &tensor_role_rules[index];
+        int matched = rule->match == TENSOR_ROLE_EXACT
+                          ? strcmp(tensor_name, rule->pattern) == 0
+                          : ends_with(tensor_name, rule->pattern);
 
-    if (strcmp(tensor_name, "token_embd.weight") == 0 ||
-        strcmp(tensor_name, "model.embed_tokens.weight") == 0 ||
-        strcmp(tensor_name, "tok_embeddings.weight") == 0) {
-        return YVEX_TENSOR_ROLE_TOKEN_EMBEDDING;
-    }
-    if (strcmp(tensor_name, "output_norm.weight") == 0 ||
-        strcmp(tensor_name, "model.norm.weight") == 0 ||
-        strcmp(tensor_name, "norm.weight") == 0) {
-        return YVEX_TENSOR_ROLE_OUTPUT_NORM;
-    }
-    if (strcmp(tensor_name, "output.weight") == 0 ||
-        strcmp(tensor_name, "lm_head.weight") == 0) {
-        return YVEX_TENSOR_ROLE_OUTPUT_HEAD;
-    }
-    if (ends_with(tensor_name, ".attn_norm.weight") ||
-        ends_with(tensor_name, ".input_layernorm.weight")) {
-        return YVEX_TENSOR_ROLE_ATTENTION_NORM;
-    }
-    if (ends_with(tensor_name, ".attn_q.weight") ||
-        ends_with(tensor_name, ".self_attn.q_proj.weight")) {
-        return YVEX_TENSOR_ROLE_ATTENTION_Q;
-    }
-    if (ends_with(tensor_name, ".attn_k.weight") ||
-        ends_with(tensor_name, ".self_attn.k_proj.weight")) {
-        return YVEX_TENSOR_ROLE_ATTENTION_K;
-    }
-    if (ends_with(tensor_name, ".attn_v.weight") ||
-        ends_with(tensor_name, ".self_attn.v_proj.weight")) {
-        return YVEX_TENSOR_ROLE_ATTENTION_V;
-    }
-    if (ends_with(tensor_name, ".attn_output.weight") ||
-        ends_with(tensor_name, ".self_attn.o_proj.weight")) {
-        return YVEX_TENSOR_ROLE_ATTENTION_OUT;
-    }
-    if (ends_with(tensor_name, ".ffn_norm.weight") ||
-        ends_with(tensor_name, ".post_attention_layernorm.weight")) {
-        return YVEX_TENSOR_ROLE_FFN_NORM;
-    }
-    if (ends_with(tensor_name, ".ffn_gate.weight") ||
-        ends_with(tensor_name, ".mlp.gate_proj.weight")) {
-        return YVEX_TENSOR_ROLE_FFN_GATE;
-    }
-    if (ends_with(tensor_name, ".ffn_up.weight") ||
-        ends_with(tensor_name, ".mlp.up_proj.weight")) {
-        return YVEX_TENSOR_ROLE_FFN_UP;
-    }
-    if (ends_with(tensor_name, ".ffn_down.weight") ||
-        ends_with(tensor_name, ".mlp.down_proj.weight")) {
-        return YVEX_TENSOR_ROLE_FFN_DOWN;
-    }
-    if (ends_with(tensor_name, ".ffn_gate_inp.weight") ||
-        ends_with(tensor_name, ".mlp.gate.weight")) {
-        return YVEX_TENSOR_ROLE_MOE_ROUTER;
-    }
-    if (contains(tensor_name, ".ffn.experts.") && ends_with(tensor_name, ".gate.weight")) {
-        return YVEX_TENSOR_ROLE_MOE_EXPERT_GATE;
-    }
-    if (contains(tensor_name, ".ffn.experts.") && ends_with(tensor_name, ".up.weight")) {
-        return YVEX_TENSOR_ROLE_MOE_EXPERT_UP;
-    }
-    if (contains(tensor_name, ".ffn.experts.") && ends_with(tensor_name, ".down.weight")) {
-        return YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN;
+        if (matched && (!rule->required_fragment ||
+                        contains(tensor_name, rule->required_fragment)))
+            return rule->role;
     }
 
     return YVEX_TENSOR_ROLE_UNKNOWN;
 }
-
-
 
 /* Tensor table */
 
@@ -781,23 +858,11 @@ struct yvex_tensor_table {
     unsigned long long count;
 };
 
-static char *copy_string(const char *text)
-{
-    size_t len;
-    char *copy;
-
-    if (!text) {
-        text = "";
-    }
-    len = strlen(text);
-    copy = (char *)malloc(len + 1u);
-    if (!copy) {
-        return NULL;
-    }
-    memcpy(copy, text, len + 1u);
-    return copy;
-}
-
+/* Purpose: apply the canonical product dims transformation and invariants.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 static int product_dims(const yvex_gguf_tensor_info *src, unsigned long long *out, yvex_error *err)
 {
     unsigned int i;
@@ -841,8 +906,7 @@ static int product_dims(const yvex_gguf_tensor_info *src, unsigned long long *ou
  *
  * Boundary:
  *   tensor directory metadata is not runtime execution, artifact emission, or
- *   generation-capable artifact proof.
- */
+ *   generation-capable artifact proof. */
 int yvex_tensor_table_from_gguf(yvex_tensor_table **out,
                                 const yvex_gguf *gguf,
                                 yvex_error *err)
@@ -890,7 +954,7 @@ int yvex_tensor_table_from_gguf(yvex_tensor_table **out,
         const yvex_dtype_info *dtype_info;
         int rc;
 
-        dst->name = copy_string(src->name);
+        dst->name = yvex_core_strdup(src->name);
         if (!dst->name) {
             yvex_tensor_table_close(table);
             yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_tensor_table_from_gguf", "failed to copy tensor name");
@@ -932,6 +996,11 @@ int yvex_tensor_table_from_gguf(yvex_tensor_table **out,
     return YVEX_OK;
 }
 
+/* Purpose: release parsed tensor-table names and rows in dependency order.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 void yvex_tensor_table_close(yvex_tensor_table *table)
 {
     unsigned long long i;
@@ -949,11 +1018,21 @@ void yvex_tensor_table_close(yvex_tensor_table *table)
     free(table);
 }
 
+/* Purpose: return the immutable parsed tensor-table row count.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 unsigned long long yvex_tensor_table_count(const yvex_tensor_table *table)
 {
     return table ? table->count : 0;
 }
 
+/* Purpose: return one checked immutable parsed tensor-table row.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const yvex_tensor_info *yvex_tensor_table_at(const yvex_tensor_table *table,
                                              unsigned long long index)
 {
@@ -963,6 +1042,11 @@ const yvex_tensor_info *yvex_tensor_table_at(const yvex_tensor_table *table,
     return &table->items[index];
 }
 
+/* Purpose: resolve a parsed tensor by exact canonical tensor name.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const yvex_tensor_info *yvex_tensor_table_find(const yvex_tensor_table *table,
                                                const char *name)
 {
@@ -980,8 +1064,6 @@ const yvex_tensor_info *yvex_tensor_table_find(const yvex_tensor_table *table,
 
     return NULL;
 }
-
-
 
 /* Materialized weights */
 
@@ -1002,6 +1084,7 @@ struct yvex_weight_table {
     yvex_materialize_summary summary;
 };
 
+/* Purpose: apply the canonical test env enabled transformation and invariants. */
 static int test_env_enabled(const char *name)
 {
     const char *value = getenv(name);
@@ -1009,23 +1092,11 @@ static int test_env_enabled(const char *name)
     return value && value[0] != '\0' && strcmp(value, "0") != 0;
 }
 
-static char *weight_strdup(const char *text)
-{
-    size_t len;
-    char *copy;
-
-    if (!text) {
-        text = "";
-    }
-    len = strlen(text);
-    copy = (char *)malloc(len + 1u);
-    if (!copy) {
-        return NULL;
-    }
-    memcpy(copy, text, len + 1u);
-    return copy;
-}
-
+/* Purpose: release owned materialized weight clear resources in dependency order.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 static void materialized_weight_clear(yvex_weight_table *table,
                                            yvex_materialized_weight *weight)
 {
@@ -1040,6 +1111,11 @@ static void materialized_weight_clear(yvex_weight_table *table,
     weight->name = NULL;
 }
 
+/* Purpose: release backend materialized weights and table ownership in dependency order.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 void yvex_weight_table_close(yvex_weight_table *weights)
 {
     unsigned long long i;
@@ -1055,11 +1131,21 @@ void yvex_weight_table_close(yvex_weight_table *weights)
     free(weights);
 }
 
+/* Purpose: return the immutable materialized-weight table count.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 unsigned long long yvex_weight_table_count(const yvex_weight_table *weights)
 {
     return weights ? weights->count : 0;
 }
 
+/* Purpose: return one checked immutable materialized-weight row.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const yvex_materialized_weight *yvex_weight_table_at(const yvex_weight_table *weights,
                                                      unsigned long long index)
 {
@@ -1069,6 +1155,11 @@ const yvex_materialized_weight *yvex_weight_table_at(const yvex_weight_table *we
     return &weights->items[index];
 }
 
+/* Purpose: resolve one materialized weight by exact canonical tensor name.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const yvex_materialized_weight *yvex_weight_table_find(const yvex_weight_table *weights,
                                                        const char *name)
 {
@@ -1085,6 +1176,11 @@ const yvex_materialized_weight *yvex_weight_table_find(const yvex_weight_table *
     return NULL;
 }
 
+/* Purpose: project typed status name vocabulary without lost semantics.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const char *yvex_weight_status_name(yvex_weight_status status)
 {
     switch (status) {
@@ -1096,6 +1192,11 @@ const char *yvex_weight_status_name(yvex_weight_status status)
     return "unknown";
 }
 
+/* Purpose: project typed residency name vocabulary without lost semantics.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const char *yvex_weight_residency_name(yvex_weight_residency residency)
 {
     switch (residency) {
@@ -1106,38 +1207,67 @@ const char *yvex_weight_residency_name(yvex_weight_residency residency)
     return "unknown";
 }
 
+/* Purpose: return one borrowed materialized-weight name without ownership transfer.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const char *yvex_weight_name(const yvex_materialized_weight *weight)
 {
     return weight && weight->name ? weight->name : "";
 }
 
+/* Purpose: map dtype through canonical typed vocabulary.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 yvex_dtype yvex_weight_dtype(const yvex_materialized_weight *weight)
 {
     return weight ? weight->dtype : YVEX_DTYPE_UNKNOWN;
 }
 
+/* Purpose: map role through canonical typed vocabulary.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 yvex_tensor_role yvex_weight_role(const yvex_materialized_weight *weight)
 {
     return weight ? weight->role : YVEX_TENSOR_ROLE_UNKNOWN;
 }
 
+/* Purpose: apply the canonical bytes transformation and invariants.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 unsigned long long yvex_weight_bytes(const yvex_materialized_weight *weight)
 {
     return weight ? weight->bytes : 0;
 }
 
+/* Purpose: apply the canonical residency transformation and invariants.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 yvex_weight_residency yvex_weight_residency_of(const yvex_materialized_weight *weight)
 {
     return weight ? weight->residency : YVEX_WEIGHT_RESIDENCY_HOST;
 }
 
+/* Purpose: apply the canonical device tensor transformation and invariants.
+ * Inputs: typed model and backend facts are explicit.
+ * Effects: mutates only declared model output.
+ * Failure: preserves typed failure and cleanup.
+ * Boundary: does not imply graph execution. */
 const yvex_device_tensor *yvex_weight_device_tensor(const yvex_materialized_weight *weight)
 {
     return weight ? weight->device_tensor : NULL;
 }
 
-
-
+/* Purpose: apply the canonical residency from backend transformation and invariants. */
 static yvex_weight_residency residency_from_backend(const yvex_backend *backend)
 {
     if (yvex_backend_kind_of(backend) == YVEX_BACKEND_KIND_CUDA) {
@@ -1149,6 +1279,7 @@ static yvex_weight_residency residency_from_backend(const yvex_backend *backend)
     return YVEX_WEIGHT_RESIDENCY_HOST;
 }
 
+/* Purpose: compare or copy copy tensor dims under exact ownership. */
 static int copy_tensor_dims(yvex_backend_tensor_desc *desc, const yvex_tensor_info *tensor)
 {
     unsigned int i;
@@ -1183,8 +1314,7 @@ static int copy_tensor_dims(yvex_backend_tensor_desc *desc, const yvex_tensor_in
  *
  * Boundary:
  *   materialization is storage/residency proof only; it does not execute graph
- *   work, prefill, decode, logits, sampling, generation, eval, or benchmark.
- */
+ *   work, prefill, decode, logits, sampling, generation, eval, or benchmark. */
 static int materialize_one(yvex_weight_table *table,
                            const yvex_artifact *artifact,
                            const yvex_gguf *gguf,
@@ -1300,7 +1430,7 @@ static int materialize_one(yvex_weight_table *table,
     }
 
     weight = &table->items[table->count];
-    weight->name = weight_strdup(tensor->name);
+    weight->name = yvex_core_strdup(tensor->name);
     if (!weight->name) {
         yvex_backend_tensor_free(table->backend, device_tensor);
         table->summary.cleanup_attempted = 1;
@@ -1342,8 +1472,7 @@ static int materialize_one(yvex_weight_table *table,
  * Boundary:
  *   weight materialization is not graph execution, runtime descriptor
  *   readiness, generation support, eval evidence, benchmark evidence, or
- *   release readiness.
- */
+ *   release readiness. */
 int yvex_weight_table_materialize(yvex_weight_table **out,
                                   const yvex_artifact *artifact,
                                   const yvex_gguf *gguf,
@@ -1390,7 +1519,7 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
         return YVEX_ERR_NOMEM;
     }
     table->backend = backend;
-    table->backend_name = weight_strdup(options && options->backend_name
+    table->backend_name = yvex_core_strdup(options && options->backend_name
                                              ? options->backend_name
                                              : yvex_backend_kind_name(yvex_backend_kind_of(backend)));
     table->items = (yvex_materialized_weight *)calloc((size_t)(tensor_count ? tensor_count : 1),
@@ -1512,8 +1641,6 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
     return YVEX_OK;
 }
 
-
-
 /*
  * yvex_weight_table_get_summary()
  *
@@ -1533,8 +1660,7 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
  *
  * Boundary:
  *   summary facts report materialization state only and do not claim model
- *   execution, generation, eval, benchmark, or release readiness.
- */
+ *   execution, generation, eval, benchmark, or release readiness. */
 int yvex_weight_table_get_summary(const yvex_weight_table *weights,
                                   yvex_materialize_summary *out,
                                   yvex_error *err)

@@ -27,7 +27,7 @@
  */
 #include <string.h>
 
-#include <yvex/error.h>
+#include <yvex/core.h>
 
 #include "tests/test.h"
 

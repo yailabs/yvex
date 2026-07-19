@@ -1,49 +1,93 @@
-/*
- * model_class_profile.c - model-class profile report builder.
- *
- * Owner:
- *   src/model/target
- *
- * Owns:
- *   model-class profile facts and report construction.
- *
- * Does not own:
- *   CLI parsing, rendering, tensor payload loading, tensor role mapping,
- *   runtime execution, generation, eval, benchmark, or release decisions.
- *
- * Invariants:
- *   model-class profile reports use source sidecar and safetensors header
- *   facts only.
- *
- * Boundary:
- *   model-class profiling is not tensor role mapping, runtime support,
- *   generation readiness, benchmark evidence, or release readiness.
- */
-#include "model_class_profile.h"
+/* Owner: src/model/target
+ * Owns: model-class profile facts and report construction.
+ * Does not own: CLI parsing, rendering, tensor payload loading, tensor role mapping, runtime execution, generation,
+ *   eval, benchmark, or release decisions.
+ * Invariants: model-class profile reports use source sidecar and safetensors header facts only.
+ * Boundary: model-class profiling is not tensor role mapping, runtime support, generation readiness, benchmark
+ *   evidence, or release readiness.
+ * Purpose: build typed family-class profiles from verified or bounded source facts.
+ * Inputs: typed requests, verification results, and retained inventories.
+ * Effects: owns report-attached architecture IR or bounded lexical counters.
+ * Failure: verification and IR refusals publish no false runtime capability. */
+#include <yvex/internal/model_target.h>
 
-#include "private.h"
-
-#include "src/model/families.h"
-#include "src/source/verify.h"
+#include <yvex/internal/families/deepseek_v4.h>
+#include <yvex/internal/source.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 
-#include <yvex/native_weights.h>
+#include <yvex/source.h>
 
 typedef struct {
-    char source_path[512];
-    int source_present;
+    const char *status;
+    const char *family;
+    const char *target;
+    const char *class_name;
+    const char *runtime_shape;
+    const char *presence;
+    const char *source_metadata;
+    const char *backend_pressure;
     unsigned long long tensors;
-    unsigned long long attn;
-    unsigned long long mlp;
+    unsigned long long embedding;
+    unsigned long long attention_q;
+    unsigned long long attention_k;
+    unsigned long long attention_v;
+    unsigned long long attention_o;
+    unsigned long long mlp_gate;
+    unsigned long long mlp_up;
+    unsigned long long mlp_down;
     unsigned long long norm;
     unsigned long long head;
     unsigned long long moe;
-} model_class_profile_scan;
+} class_audit_facts;
 
+#define CLASS_STRING(field, format) \
+    {YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(class_audit_facts, field)}
+#define CLASS_U64(field, format) \
+    {YVEX_MODEL_TARGET_ROW_U64, (format), offsetof(class_audit_facts, field)}
+#define CLASS_LITERAL(text) {YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u}
+
+static const yvex_model_target_row_spec class_audit_prefix[] = {
+    CLASS_STRING(status, "model_class_profile_status: %s"),
+    CLASS_STRING(family, "model_class_family: %s"),
+    CLASS_STRING(target, "model_class_target_id: %s")
+};
+
+static const yvex_model_target_row_spec class_audit_suffix[] = {
+    CLASS_STRING(class_name, "model_class_name: %s"),
+    CLASS_STRING(runtime_shape, "model_class_runtime_shape: %s"),
+    CLASS_LITERAL("model_class_evidence_basis: header-metadata-only"),
+    CLASS_STRING(presence, "model_class_config_status: %s"),
+    CLASS_STRING(presence, "model_class_tokenizer_status: %s"),
+    CLASS_STRING(source_metadata, "model_class_source_metadata_status: %s"),
+    CLASS_U64(tensors, "model_class_tensor_count: %llu"),
+    CLASS_U64(embedding, "model_class_embedding_pattern_count: %llu"),
+    CLASS_U64(attention_q, "model_class_attention_q_pattern_count: %llu"),
+    CLASS_U64(attention_k, "model_class_attention_k_pattern_count: %llu"),
+    CLASS_U64(attention_v, "model_class_attention_v_pattern_count: %llu"),
+    CLASS_U64(attention_o, "model_class_attention_o_pattern_count: %llu"),
+    CLASS_U64(mlp_gate, "model_class_mlp_gate_pattern_count: %llu"),
+    CLASS_U64(mlp_up, "model_class_mlp_up_pattern_count: %llu"),
+    CLASS_U64(mlp_down, "model_class_mlp_down_pattern_count: %llu"),
+    CLASS_U64(norm, "model_class_norm_pattern_count: %llu"),
+    CLASS_U64(head, "model_class_output_head_pattern_count: %llu"),
+    CLASS_U64(moe, "model_class_moe_router_pattern_count: %llu"),
+    CLASS_U64(moe, "model_class_moe_expert_pattern_count: %llu"),
+    CLASS_LITERAL("model_class_other_pattern_count: 0"),
+    CLASS_LITERAL("model_class_pattern_status: lexical-only"),
+    CLASS_LITERAL("model_class_role_mapping_status: not-implemented"),
+    CLASS_LITERAL("model_class_runtime_status: unsupported"),
+    CLASS_LITERAL("backend_selection: deferred"),
+    CLASS_STRING(backend_pressure, "backend_pressure: %s")
+};
+
+#undef CLASS_STRING
+#undef CLASS_U64
+#undef CLASS_LITERAL
+
+/* Purpose: form the bounded canonical class profile path suffix without path drift. */
 static int class_profile_path_suffix(const char *path, const char *suffix)
 {
     size_t path_length;
@@ -56,7 +100,12 @@ static int class_profile_path_suffix(const char *path, const char *suffix)
            strcmp(path + path_length - suffix_length, suffix) == 0;
 }
 
-/* Resolves the canonical models root without treating target id as a path leaf. */
+/* Purpose: form the bounded canonical class profile deepseek models root without path drift.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
+
 static int class_profile_deepseek_models_root(
     const yvex_model_target_request *request,
     char *out,
@@ -92,7 +141,8 @@ static int class_profile_deepseek_models_root(
     return n >= 0 && (size_t)n < cap;
 }
 
-/* Resolves the exact release source from the canonical identity mapping. */
+/* Purpose: apply the canonical class profile deepseek source transformation and invariants. */
+
 static int class_profile_deepseek_source(
     const yvex_model_target_request *request,
     const char *models_root,
@@ -104,11 +154,12 @@ static int class_profile_deepseek_source(
         int n = snprintf(out, cap, "%s", request->source_path);
         return n >= 0 && (size_t)n < cap;
     }
-    return yvex_model_target_source_path(
-        out, cap, models_root, yvex_model_target_release_identity());
+    return yvex_source_target_path(
+        out, cap, models_root, yvex_source_release_identity());
 }
 
-/* Projects a typed IR construction refusal without converting it to support. */
+/* Purpose: apply the canonical class profile deepseek ir refusal transformation and invariants. */
+
 static void class_profile_deepseek_ir_refusal(
     const yvex_deepseek_v4_ir_failure *failure,
     yvex_model_target_report *report)
@@ -123,7 +174,12 @@ static void class_profile_deepseek_ir_refusal(
         failure->field ? failure->field : "none", failure->layer_index);
 }
 
-/* Builds the report-owned IR from an already verified result for real consumers and tests. */
+/* Purpose: apply the canonical class profile deepseek from verification transformation and invariants.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
+
 int yvex_model_class_profile_deepseek_from_verification(
     const yvex_model_target_request *request,
     const struct yvex_source_verification *verification,
@@ -131,42 +187,47 @@ int yvex_model_class_profile_deepseek_from_verification(
     yvex_error *err)
 {
     yvex_deepseek_v4_ir_failure failure;
+    yvex_deepseek_v4_ir *architecture = NULL;
     int rc;
 
     if (!request || !verification || !report ||
-        !yvex_model_target_is_release_target(request->target_id)) {
+        !yvex_source_is_release_target(request->target_id)) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG,
                        "deepseek_architecture_profile",
                        "canonical target, verification, and report are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    rc = yvex_model_register_deepseek_v4()->ir.build(&report->deepseek_architecture_ir,
-                                   verification, &failure, err);
+    rc = yvex_model_register_deepseek_v4()->ir.build(
+        &architecture, verification, &failure, err);
     if (rc != YVEX_OK) {
         class_profile_deepseek_ir_refusal(&failure, report);
         yvex_error_clear(err);
         return YVEX_OK;
     }
-    report->status = "typed-architecture-specified";
-    (void)snprintf(report->target_id, sizeof(report->target_id), "%s",
-                   request->target_id);
-    (void)snprintf(report->family, sizeof(report->family), "%s", "deepseek");
-    (void)snprintf(report->stage, sizeof(report->stage), "%s",
-                   "typed-architecture-specification");
-    (void)snprintf(report->runtime_status, sizeof(report->runtime_status),
-                   "%s", "unsupported");
-    (void)snprintf(report->generation_status,
-                   sizeof(report->generation_status), "%s", "unsupported");
-    (void)snprintf(report->next_row, sizeof(report->next_row), "%s",
-                   "V010.SOURCE.PAYLOAD.STREAM.0");
-    (void)snprintf(report->boundary, sizeof(report->boundary), "%s",
-                   "typed architecture specification; mapping is owned by the canonical map plan and payload/runtime remain separate");
-    report->exit_code = 0;
+    report->family_architecture = architecture;
+    {
+        const yvex_model_target_report_profile profile = {
+            .status = "typed-architecture-specified",
+            .target_id = request->target_id, .family = "deepseek",
+            .stage = "typed-architecture-specification",
+            .runtime_status = "unsupported", .generation_status = "unsupported",
+            .next_row = "V010.SOURCE.PAYLOAD.STREAM.0",
+            .boundary = "typed architecture specification; mapping is owned by the "
+                        "canonical map plan and payload/runtime remain separate"
+        };
+
+        yvex_model_target_report_prepare(report, request, &profile);
+    }
     yvex_error_clear(err);
     return YVEX_OK;
 }
 
-/* Verifies the exact source once and transfers only typed facts into the IR owner. */
+/* Purpose: construct bounded class profile deepseek report build state from admitted inputs.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
+
 static int class_profile_deepseek_report_build(
     const yvex_model_target_request *request,
     yvex_model_target_report *report,
@@ -191,7 +252,7 @@ static int class_profile_deepseek_report_build(
         return YVEX_ERR_BOUNDS;
     }
     memset(&options, 0, sizeof(options));
-    options.identity = yvex_model_target_release_identity();
+    options.identity = yvex_source_release_identity();
     options.source_path = source_path;
     options.models_root = models_root;
     options.promote_manifest = 0;
@@ -206,7 +267,9 @@ static int class_profile_deepseek_report_build(
         if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
             yvex_model_target_report_add_row(
                 report,
-                "{\"status\":\"architecture-ir-blocked\",\"target_id\":\"%s\",\"source_verification\":\"blocked\",\"reason\":\"%s\",\"runtime\":\"unsupported\",\"generation\":\"unsupported\"}",
+                "{\"status\":\"architecture-ir-blocked\",\"target_id\":\"%s\","
+                "\"source_verification\":\"blocked\",\"reason\":\"%s\","
+                "\"runtime\":\"unsupported\",\"generation\":\"unsupported\"}",
                 request->target_id, blocker);
         } else if (request->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
             yvex_model_target_report_add_table_row(
@@ -246,23 +309,11 @@ static int class_profile_deepseek_report_build(
         request, &verification, report, err);
 }
 
-static int class_profile_validate(const yvex_model_target_request *request,
-                                  yvex_model_target_report *report)
-{
-    if (!request->target_id[0]) {
-        report->exit_code = 2;
-        yvex_model_target_report_add_error(report, "model-target class-profile: requires TARGET");
-        return 0;
-    }
-    if (!yvex_model_target_supported_source_target(request->target_id)) {
-        report->exit_code = 2;
-        yvex_model_target_report_add_error(report, "model-target class-profile: unsupported target: %s",
-                                           request->target_id);
-        return 0;
-    }
-    return 1;
-}
-
+/* Purpose: map class profile family facts through canonical typed vocabulary.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static void class_profile_family_facts(const char *family,
                                        const char **class_name,
                                        const char **runtime_shape,
@@ -285,115 +336,11 @@ static void class_profile_family_facts(const char *family,
     }
 }
 
-static int class_profile_is_dir(const char *path)
-{
-    struct stat st;
-
-    return path && path[0] && stat(path, &st) == 0 && S_ISDIR(st.st_mode);
-}
-
-static void class_profile_resolve_source(const yvex_model_target_request *request,
-                                         const char *family,
-                                         char *out,
-                                         size_t cap)
-{
-    if (!out || cap == 0u) return;
-    out[0] = '\0';
-    if (request->source_path[0]) {
-        (void)snprintf(out, cap, "%s", request->source_path);
-        return;
-    }
-    if (request->models_root[0]) {
-        (void)snprintf(out, cap, "%s/hf/%s/%s", request->models_root,
-                       family, request->target_id);
-    }
-}
-
-static int class_profile_name_has(const char *name, const char *needle)
-{
-    return name && needle && strstr(name, needle) != NULL;
-}
-
-static void class_profile_count_name(model_class_profile_scan *scan,
-                                     const char *family,
-                                     const char *name)
-{
-    int is_attn = class_profile_name_has(name, "self_attn") ||
-                  class_profile_name_has(name, "attention");
-    int is_mlp = class_profile_name_has(name, ".mlp.") ||
-                 class_profile_name_has(name, "feed_forward");
-    int is_norm = class_profile_name_has(name, "norm") ||
-                  class_profile_name_has(name, "layernorm");
-
-    if (is_attn &&
-        (class_profile_name_has(name, "q_proj") ||
-         class_profile_name_has(name, "k_proj") ||
-         class_profile_name_has(name, "v_proj") ||
-         class_profile_name_has(name, "o_proj"))) {
-        scan->attn++;
-    }
-    if (is_mlp &&
-        (class_profile_name_has(name, "gate_proj") ||
-         class_profile_name_has(name, "up_proj") ||
-         class_profile_name_has(name, "down_proj") ||
-         class_profile_name_has(name, "mlp.gate.weight") ||
-         class_profile_name_has(name, "experts.gate_up_proj") ||
-         class_profile_name_has(name, "shared_expert.down_proj"))) {
-        scan->mlp++;
-    }
-    if (is_norm) {
-        scan->norm++;
-    }
-    if (class_profile_name_has(name, "lm_head") ||
-        class_profile_name_has(name, "output_head")) {
-        scan->head++;
-    }
-    if (class_profile_name_has(name, "router") ||
-        class_profile_name_has(name, "expert")) {
-        scan->moe++;
-    }
-    (void)family;
-}
-
-static void class_profile_scan_source(const yvex_model_target_request *request,
-                                      const char *family,
-                                      model_class_profile_scan *scan)
-{
-    yvex_native_weight_options options;
-    yvex_native_weight_table *table = NULL;
-    yvex_error err;
-    unsigned long long i;
-
-    memset(scan, 0, sizeof(*scan));
-    class_profile_resolve_source(request, family, scan->source_path,
-                                 sizeof(scan->source_path));
-    scan->source_present = class_profile_is_dir(scan->source_path);
-    if (!scan->source_present) {
-        return;
-    }
-
-    memset(&options, 0, sizeof(options));
-    options.source_dir = scan->source_path;
-    options.recursive = 1;
-    yvex_error_clear(&err);
-    if (yvex_native_weight_table_open(&table, &options, &err) != YVEX_OK) {
-        return;
-    }
-    scan->tensors = yvex_native_weight_table_count(table);
-    for (i = 0; i < scan->tensors; ++i) {
-        const yvex_native_weight_info *info =
-            yvex_native_weight_table_at(table, i);
-        if (info) {
-            class_profile_count_name(scan, family, info->name);
-        }
-    }
-    yvex_native_weight_table_close(table);
-
-    if (strcmp(family, "qwen") == 0 && scan->norm == 1) {
-        scan->norm = 2;
-    }
-}
-
+/* Purpose: construct bounded class profile report build state from admitted inputs.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 int yvex_model_class_profile_report_build(
     const yvex_model_target_request *request,
     yvex_model_target_report *report,
@@ -405,7 +352,7 @@ int yvex_model_class_profile_report_build(
     const char *backend_pressure;
     const char *top_blocker;
     const char *source_blocker;
-    model_class_profile_scan scan;
+    yvex_model_target_source_scan scan;
     const char *status;
 
     if (!request || !report ||
@@ -414,17 +361,19 @@ int yvex_model_class_profile_report_build(
                        "model class profile requires class-profile command kind");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (!class_profile_validate(request, report)) {
+    if (!yvex_model_target_validate_supported(
+            request, report, "class-profile", 0)) {
         return YVEX_OK;
     }
-    if (yvex_model_target_is_release_target(request->target_id)) {
+    if (yvex_source_is_release_target(request->target_id)) {
         return class_profile_deepseek_report_build(request, report, err);
     }
     family = yvex_model_target_family_key(request->target_id);
     class_profile_family_facts(family, &class_name, &runtime_shape,
                                &backend_pressure, &top_blocker,
                                &source_blocker);
-    class_profile_scan_source(request, family, &scan);
+    yvex_model_target_scan_source(request, family, &scan);
+    if (strcmp(family, "qwen") == 0 && scan.norm == 1) scan.norm = 2;
     status = scan.source_present ? "metadata-profiled" : "source-missing";
 
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
@@ -437,48 +386,30 @@ int yvex_model_class_profile_report_build(
         return YVEX_OK;
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
-        yvex_model_target_report_add_row(report, "model_class_profile_status: %s", status);
-        yvex_model_target_report_add_row(report, "model_class_family: %s", family);
-        yvex_model_target_report_add_row(report, "model_class_target_id: %s", request->target_id);
+        class_audit_facts facts = {
+            status, family, request->target_id, class_name, runtime_shape,
+            scan.source_present ? "present" : "missing",
+            scan.source_present ? "header-only" : "missing",
+            backend_pressure, scan.tensors, scan.source_present ? 1ull : 0ull,
+            scan.source_present && scan.attn >= 1 ? 1ull : 0ull,
+            scan.source_present && scan.attn >= 2 ? 1ull : 0ull,
+            scan.source_present && scan.attn >= 3 ? 1ull : 0ull,
+            scan.source_present && scan.attn >= 4 ? 1ull : 0ull,
+            scan.source_present && scan.mlp >= 1 ? 1ull : 0ull,
+            scan.source_present && scan.mlp >= 2 ? 1ull : 0ull,
+            scan.source_present && scan.mlp >= 3 ? 1ull : 0ull,
+            scan.norm, scan.head, scan.moe
+        };
+
+        yvex_model_target_report_project_rows(
+            report, class_audit_prefix,
+            sizeof(class_audit_prefix) / sizeof(class_audit_prefix[0]), &facts);
         if (scan.source_path[0]) {
             yvex_model_target_report_add_row(report, "source_path: %s", scan.source_path);
         }
-        yvex_model_target_report_add_row(report, "model_class_name: %s", class_name);
-        yvex_model_target_report_add_row(report, "model_class_runtime_shape: %s", runtime_shape);
-        yvex_model_target_report_add_row(report, "model_class_evidence_basis: header-metadata-only");
-        yvex_model_target_report_add_row(report, "model_class_config_status: %s",
-                                         scan.source_present ? "present" : "missing");
-        yvex_model_target_report_add_row(report, "model_class_tokenizer_status: %s",
-                                         scan.source_present ? "present" : "missing");
-        yvex_model_target_report_add_row(report, "model_class_source_metadata_status: %s",
-                                         scan.source_present ? "header-only" : "missing");
-        yvex_model_target_report_add_row(report, "model_class_tensor_count: %llu", scan.tensors);
-        yvex_model_target_report_add_row(report, "model_class_embedding_pattern_count: %llu",
-                                         scan.source_present ? 1ull : 0ull);
-        yvex_model_target_report_add_row(report, "model_class_attention_q_pattern_count: %llu",
-                                         scan.source_present && scan.attn >= 1 ? 1ull : 0ull);
-        yvex_model_target_report_add_row(report, "model_class_attention_k_pattern_count: %llu",
-                                         scan.source_present && scan.attn >= 2 ? 1ull : 0ull);
-        yvex_model_target_report_add_row(report, "model_class_attention_v_pattern_count: %llu",
-                                         scan.source_present && scan.attn >= 3 ? 1ull : 0ull);
-        yvex_model_target_report_add_row(report, "model_class_attention_o_pattern_count: %llu",
-                                         scan.source_present && scan.attn >= 4 ? 1ull : 0ull);
-        yvex_model_target_report_add_row(report, "model_class_mlp_gate_pattern_count: %llu",
-                                         scan.source_present && scan.mlp >= 1 ? 1ull : 0ull);
-        yvex_model_target_report_add_row(report, "model_class_mlp_up_pattern_count: %llu",
-                                         scan.source_present && scan.mlp >= 2 ? 1ull : 0ull);
-        yvex_model_target_report_add_row(report, "model_class_mlp_down_pattern_count: %llu",
-                                         scan.source_present && scan.mlp >= 3 ? 1ull : 0ull);
-        yvex_model_target_report_add_row(report, "model_class_norm_pattern_count: %llu", scan.norm);
-        yvex_model_target_report_add_row(report, "model_class_output_head_pattern_count: %llu", scan.head);
-        yvex_model_target_report_add_row(report, "model_class_moe_router_pattern_count: %llu", scan.moe);
-        yvex_model_target_report_add_row(report, "model_class_moe_expert_pattern_count: %llu", scan.moe);
-        yvex_model_target_report_add_row(report, "model_class_other_pattern_count: 0");
-        yvex_model_target_report_add_row(report, "model_class_pattern_status: lexical-only");
-        yvex_model_target_report_add_row(report, "model_class_role_mapping_status: not-implemented");
-        yvex_model_target_report_add_row(report, "model_class_runtime_status: unsupported");
-        yvex_model_target_report_add_row(report, "backend_selection: deferred");
-        yvex_model_target_report_add_row(report, "backend_pressure: %s", backend_pressure);
+        yvex_model_target_report_project_rows(
+            report, class_audit_suffix,
+            sizeof(class_audit_suffix) / sizeof(class_audit_suffix[0]), &facts);
         yvex_model_target_report_common_tail(report);
         yvex_model_target_report_add_row(report, "next_required_rows: V010.MAP.8");
         return YVEX_OK;

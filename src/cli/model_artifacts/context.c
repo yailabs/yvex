@@ -1,12 +1,204 @@
-/*
- * context.c - context command-family CLI surface.
- * Owner: src/cli/model_artifacts
+/* Owner: src/cli/model_artifacts
  * Owns: existing context command-family parsing and output behavior.
- * Does not own: runtime implementation, graph execution, backend algorithms, artifact emission, eval, benchmark, or release claims.
+ * Does not own: runtime implementation, graph execution, backend algorithms, artifact emission, eval, benchmark, or
+ *   release claims.
  * Invariants: CLI-only and excluded from libyvex.a; preserves existing command behavior.
  * Boundary: context reports are report-only diagnostics.
- */
-#include "context.h"
+ * Purpose: provide existing context command-family parsing and output behavior.
+ * Inputs: typed domain facts, requested output mode, and caller-owned render state.
+ * Effects: formats admitted facts through CLI I/O without changing domain state.
+ * Failure: formatting or I/O refusal cannot alter capability facts. */
+#include "src/cli/model_artifacts/private.h"
+
+#include <string.h>
+
+static const char *const literal_pair_0[] = { "context report:",
+    "  report-only boundary for model/requested/active context, token counts, chunking policy, overflow "
+        "behavior, prefill boundary, decode position policy, attention dependency, KV dependency, and runtime "
+        "blockers."
+};
+
+static const char *const literal_pair_1[] = { "cleanup_attempted: true",
+    "cleanup_status: pass"};
+
+static const char *const literal_pair_2[] = { "cleanup_attempted: true",
+    "cleanup_status: pass"};
+
+static const char *const literal_pair_3[] = { "kv_capacity_required: true",
+    "kv_capacity_status: planned"};
+
+static const char *const literal_pair_4[] = { "cleanup_attempted: true",
+    "cleanup_status: pass"};
+
+static const char *const literal_pair_5[] = { "next: V010.CONTEXT.*",
+    "boundary: report-only, no runtime execution"};
+
+static const char *const literal_lines_0[] = { "context_class_status: report-only",
+    "context_stage: report-only",
+    "runtime_claim: unsupported",
+    "generation: unsupported-full-model",
+    "benchmark_status: not-measured"};
+
+static const char *const literal_lines_1[] = { "model_max_context: unknown",
+    "model_max_context_source: source-manifest-planned",
+    "model_max_context_status: unsupported-source-only"};
+
+static const char *const literal_lines_2[] = { "active_context: unsupported",
+    "active_context_source: source-only-target",
+    "active_context_status: unsupported",
+    "token_input_status: not-performed-source-only-target",
+    "token_count: 0",
+    "prompt_token_count: 0",
+    "prefill_token_count: 0",
+    "generated_token_count: 0",
+    "token_range_start: none",
+    "token_range_end: none",
+    "chunking_required: false",
+    "chunk_size: not-requested",
+    "chunk_count: 0",
+    "last_chunk_size: 0",
+    "chunking_policy: unsupported-source-only",
+    "chunking_status: unsupported",
+    "prefill_boundary_status: unsupported",
+    "prefill_position_start: unknown",
+    "prefill_position_end: unknown",
+    "prefill_context_ready: false",
+    "full_transformer_prefill_ready: false",
+    "decode_position_policy: unsupported-source-only",
+    "decode_start_position: unknown",
+    "decode_position_status: unsupported",
+    "decode_context_ready: false",
+    "decode_ready: false",
+    "overflow_policy: unsupported-source-only",
+    "context_overflow: unsupported",
+    "overflow_check_status: unsupported",
+    "overflow_stop_reason: unsupported",
+    "overflow_mutates_state: false",
+    "attention_dependency_status: unsupported-source-only",
+    "attention_context_ready: false",
+    "attention_position_policy: planned",
+    "rope_context_status: planned",
+    "mask_context_status: planned",
+    "kv_dependency_status: unsupported-source-only",
+    "kv_capacity_required: true",
+    "kv_capacity_status: planned",
+    "kv_context_positions: unknown",
+    "kv_context_ready: false",
+    "real_attention_kv_ready: false",
+    "generation_context_status: unsupported-full-model",
+    "bounded_generation_context_policy: diagnostic-only-not-run",
+    "full_generation_context_ready: false",
+    "generation_ready: false",
+    "context_blockers: source-only target has no YVEX-produced GGUF tensor inventory; GLM context mapping "
+        "planned; real transformer prefill unsupported",
+    "next_required_rows: MOE.CLASS.0,source-manifest-context-profile,YVEX-produced-GGUF,real-transformer-"
+        "prefill,real-decode,GEN.DEEPSEEK.0",
+    "cleanup_attempted: true",
+    "cleanup_status: pass"};
+
+static const char *const literal_lines_3[] = { "model_max_context: unknown",
+    "model_max_context_source: unsupported-family",
+    "model_max_context_status: unsupported",
+    "requested_context: not-requested",
+    "requested_context_source: none",
+    "requested_context_status: not-requested",
+    "active_context: unsupported",
+    "active_context_source: unsupported-family",
+    "active_context_status: unsupported",
+    "token_input_status: not-performed",
+    "token_count: 0",
+    "prompt_token_count: 0",
+    "prefill_token_count: 0",
+    "generated_token_count: 0",
+    "token_range_start: none",
+    "token_range_end: none",
+    "chunking_required: false",
+    "chunk_size: not-requested",
+    "chunk_count: 0",
+    "last_chunk_size: 0",
+    "chunking_policy: unsupported-family",
+    "chunking_status: unsupported",
+    "prefill_boundary_status: unsupported",
+    "prefill_position_start: unknown",
+    "prefill_position_end: unknown",
+    "prefill_context_ready: false",
+    "full_transformer_prefill_ready: false",
+    "decode_position_policy: unsupported-family",
+    "decode_start_position: unknown",
+    "decode_position_status: unsupported",
+    "decode_context_ready: false",
+    "decode_ready: false",
+    "overflow_policy: unsupported-family",
+    "context_overflow: unsupported",
+    "overflow_check_status: unsupported",
+    "overflow_stop_reason: unsupported",
+    "overflow_mutates_state: false",
+    "attention_dependency_status: unsupported-family",
+    "attention_context_ready: false",
+    "attention_position_policy: unsupported",
+    "rope_context_status: unsupported",
+    "mask_context_status: unsupported",
+    "kv_dependency_status: unsupported-family",
+    "kv_capacity_required: unknown",
+    "kv_capacity_status: unsupported",
+    "kv_context_positions: unknown",
+    "kv_context_ready: false",
+    "real_attention_kv_ready: false",
+    "generation_context_status: unsupported-full-model",
+    "bounded_generation_context_policy: diagnostic-only-not-run",
+    "full_generation_context_ready: false",
+    "generation_ready: false"};
+
+static const char *const literal_lines_4[] = {
+    "next_required_rows: CONTEXT.CLASS.0,MOE.CLASS.0,real-transformer-prefill,real-decode,GEN.DEEPSEEK.0",
+    "cleanup_attempted: true",
+    "cleanup_status: pass"};
+
+static const char *const literal_lines_5[] = { "prefill_context_ready: false",
+    "full_transformer_prefill_ready: false",
+    "decode_position_policy: prefill-end-token-count"};
+
+static const char *const literal_lines_6[] = { "decode_position_status: report-only",
+    "decode_context_ready: false",
+    "decode_ready: false",
+    "overflow_policy: bounded-diagnostic-refuse-before-mutation"};
+
+static const char *const literal_lines_7[] = { "attention_context_ready: false",
+    "attention_position_policy: rope-or-family-specific-planned",
+    "rope_context_status: planned",
+    "mask_context_status: planned"};
+
+static const char *const literal_lines_8[] = { "",
+    "kv_context_ready: false",
+    "real_attention_kv_ready: false",
+    "generation_context_status: bounded-diagnostic-only",
+    "bounded_generation_context_policy: context-limit-pre-append",
+    "full_generation_context_ready: false",
+    "generation_ready: false"};
+
+static const char *const literal_lines_9[] = {
+    "next_required_rows: MOE.CLASS.0,RUNTIME.KV.1,real-transformer-prefill,real-decode,real-output-head-"
+        "logits,GEN.DEEPSEEK.0",
+    "cleanup_attempted: true",
+    "cleanup_status: pass"};
+
+static const char *const literal_lines_10[] = { "Examples:",
+    "  yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend "
+        "cpu --tokens 0,1,2,3",
+    "  yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend "
+        "cpu --tokens 0,1,2,3 --chunk-size 2",
+    "  yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend "
+        "cpu --tokens 0,1,2,3 --context-length 2\n"
+};
+
+static const char *const literal_lines_11[] = {
+    "  It reports bounded diagnostic context behavior separately from full model context readiness.",
+    "  It does not run full transformer prefill, does not execute real decode, does not write real "
+        "attention-backed KV, does not generate, does not evaluate, does not benchmark, and does not report "
+        "throughput.",
+    "Boundary: no long-context runtime support, no context extension support, no full model execution, no "
+        "DeepSeek generation, no provider generation, no streaming generation, no eval, no benchmark."
+};
 
 typedef struct {
     const char *model;
@@ -26,24 +218,40 @@ typedef struct {
     yvex_models_output_mode output_mode;
 } yvex_cli_context_options;
 
-static int context_parse_value_option(const char *flag,
-                                      int arg_count,
-                                      char **args,
-                                      int *index,
-                                      const char **value)
-{
-    if (*index + 1 >= arg_count) {
-        yvex_cli_out_writef(stderr, "yvex: context %s requires a value\n", flag);
-        return 2;
-    }
-    *value = args[++(*index)];
-    if (fullmodel_string_is_empty(*value)) {
-        yvex_cli_out_writef(stderr, "yvex: context %s value is empty\n", flag);
-        return 2;
-    }
-    return 0;
-}
+#define CONTEXT_OPTION_BOOL(key_name, member) \
+    {key_name, YVEX_CLI_FIELD_BOOL, offsetof(yvex_cli_context_options, member), NULL}
+static const yvex_cli_field_spec context_audit_option_fields[] = {
+    CONTEXT_OPTION_BOOL("report_options.include_attention", include_attention),
+    CONTEXT_OPTION_BOOL("report_options.include_kv", include_kv),
+    CONTEXT_OPTION_BOOL("report_options.include_prefill", include_prefill),
+    CONTEXT_OPTION_BOOL("report_options.include_decode", include_decode),
+    CONTEXT_OPTION_BOOL("report_options.include_blockers", include_blockers),
+};
+#undef CONTEXT_OPTION_BOOL
 
+static const yvex_models_option_spec context_option_specs[] = {
+    {"--model", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_context_options, model)},
+    {"--backend", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_context_options, backend)},
+    {"--family", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_context_options, family)},
+    {"--registry", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_context_options, registry_path)},
+    {"--tokens", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_context_options, tokens_text)},
+    {"--include-attention", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_context_options, include_attention)},
+    {"--include-kv", YVEX_MODELS_OPTION_FLAG, offsetof(yvex_cli_context_options, include_kv)},
+    {"--include-prefill", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_context_options, include_prefill)},
+    {"--include-decode", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_context_options, include_decode)},
+    {"--include-blockers", YVEX_MODELS_OPTION_FLAG,
+     offsetof(yvex_cli_context_options, include_blockers)},
+    {"--output", YVEX_MODELS_OPTION_OUTPUT, offsetof(yvex_cli_context_options, output_mode)},
+};
+
+/* Purpose: Parse parse context options into typed CLI state (`parse_context_options`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int parse_context_options(int arg_count,
                                  char **args,
                                  yvex_cli_context_options *options)
@@ -62,76 +270,55 @@ static int parse_context_options(int arg_count,
     }
     if (arg_count < 3 || strcmp(args[2], "report") != 0) {
         yvex_cli_out_writef(stderr, "yvex: context requires report\n");
-        yvex_cli_out_writef(stderr, "usage: " "yvex context report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [options]\n");
+        yvex_cli_out_writef(stderr,
+            "usage: yvex context report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend "
+                "cpu|cuda] [options]\n");
         return 2;
     }
 
     for (i = 3; i < arg_count; ++i) {
+        const char *flag = args[i];
         const char *value = NULL;
-        if (strcmp(args[i], "--model") == 0) {
-            int rc = context_parse_value_option("--model", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->model = value;
-        } else if (strcmp(args[i], "--backend") == 0) {
-            int rc = context_parse_value_option("--backend", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            if (strcmp(value, "cpu") != 0 && strcmp(value, "cuda") != 0) {
-                yvex_cli_out_writef(stderr, "yvex: context --backend must be cpu or cuda\n");
+        int handled = 0;
+        int rc = parse_models_bound_option("context", arg_count, args, &i,
+                                           options, context_option_specs,
+                                           sizeof(context_option_specs) /
+                                               sizeof(context_option_specs[0]),
+                                           &handled);
+        if (rc != 0) return rc;
+        if (handled) {
+            if (strcmp(flag, "--backend") == 0 &&
+                strcmp(options->backend, "cpu") != 0 &&
+                strcmp(options->backend, "cuda") != 0) {
+                yvex_cli_out_writef(stderr,
+                                    "yvex: context --backend must be cpu or cuda\n");
                 return 2;
             }
-            options->backend = value;
-        } else if (strcmp(args[i], "--family") == 0) {
-            int rc = context_parse_value_option("--family", arg_count, args, &i, &value);
+            continue;
+        }
+        if (strcmp(flag, "--context-length") == 0 ||
+            strcmp(flag, "--chunk-size") == 0) {
+            unsigned long long *destination = strcmp(flag, "--context-length") == 0
+                                                   ? &options->context_length
+                                                   : &options->chunk_size;
+            rc = parse_models_value_option("context", flag, arg_count,
+                                           args, &i, &value);
             if (rc != 0) return rc;
-            options->family = value;
-        } else if (strcmp(args[i], "--registry") == 0) {
-            int rc = context_parse_value_option("--registry", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->registry_path = value;
-        } else if (strcmp(args[i], "--tokens") == 0) {
-            int rc = context_parse_value_option("--tokens", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            options->tokens_text = value;
-        } else if (strcmp(args[i], "--context-length") == 0) {
-            int rc = context_parse_value_option("--context-length", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            if (!parse_positive_ull(value, &options->context_length)) {
-                yvex_cli_out_writef(stderr, "yvex: context --context-length requires a positive integer\n");
+            if (!parse_positive_ull(value, destination)) {
+                yvex_cli_out_writef(stderr,
+                                    "yvex: context %s requires a positive integer\n",
+                                    flag);
                 return 2;
             }
-            options->context_length_seen = 1;
-        } else if (strcmp(args[i], "--chunk-size") == 0) {
-            int rc = context_parse_value_option("--chunk-size", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            if (!parse_positive_ull(value, &options->chunk_size)) {
-                yvex_cli_out_writef(stderr, "yvex: context --chunk-size requires a positive integer\n");
-                return 2;
-            }
-            options->chunk_size_seen = 1;
-        } else if (strcmp(args[i], "--" "include-attention") == 0) {
-            options->include_attention = 1;
-        } else if (strcmp(args[i], "--" "include-kv") == 0) {
-            options->include_kv = 1;
-        } else if (strcmp(args[i], "--" "include-prefill") == 0) {
-            options->include_prefill = 1;
-        } else if (strcmp(args[i], "--" "include-decode") == 0) {
-            options->include_decode = 1;
-        } else if (strcmp(args[i], "--" "include-blockers") == 0) {
-            options->include_blockers = 1;
-        } else if (strcmp(args[i], "--" "audit") == 0) {
+            if (strcmp(flag, "--context-length") == 0) options->context_length_seen = 1;
+            else options->chunk_size_seen = 1;
+        } else if (strcmp(flag, "--audit") == 0) {
             options->output_mode = YVEX_MODELS_OUTPUT_AUDIT;
-        } else if (strcmp(args[i], "--" "output") == 0) {
-            int rc = context_parse_value_option("--" "output", arg_count, args, &i, &value);
-            if (rc != 0) return rc;
-            if (!parse_models_output_mode(value, &options->output_mode)) {
-                yvex_cli_out_writef(stderr, "yvex: context unsupported output mode: %s\n", value);
-                return 2;
-            }
-        } else if (strcmp(args[i], "--help") == 0 || strcmp(args[i], "-h") == 0) {
+        } else if (strcmp(flag, "--help") == 0 || strcmp(flag, "-h") == 0) {
             yvex_model_artifacts_surface_context_help(stdout);
             return 1;
         } else {
-            yvex_cli_out_writef(stderr, "yvex: unknown context option: %s\n", args[i]);
+            yvex_cli_out_writef(stderr, "yvex: unknown context option: %s\n", flag);
             return 2;
         }
     }
@@ -142,19 +329,11 @@ static int parse_context_options(int arg_count,
     return 0;
 }
 
-static const char *context_requested_family(const yvex_cli_context_options *options)
-{
-    return options && options->family && options->family[0] ? options->family : "auto";
-}
-
-static void context_print_phase(unsigned int index,
-                                const char *name,
-                                const char *status)
-{
-    yvex_cli_out_writef(stdout, "context_phase.%u.name: %s\n", index, name ? name : "");
-    yvex_cli_out_writef(stdout, "context_phase.%u.status: %s\n", index, status ? status : "unknown");
-}
-
+/* Purpose: Render context print phases from typed facts (`context_print_phases`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void context_print_phases(const char *family_status,
                                  const char *attention_status,
                                  const char *kv_status,
@@ -207,10 +386,15 @@ static void context_print_phases(const char *family_status,
         } else if (strcmp(phases[i], "failed") == 0 && !failure_phase) {
             status = "unsupported";
         }
-        context_print_phase(i, phases[i], status);
+        model_phase_print("context_phase", i, phases[i], status, "unknown");
     }
 }
 
+/* Purpose: Compute context metadata max context for its CLI invariant (`context_metadata_max_context`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static unsigned long long context_metadata_max_context(yvex_model_context *ctx,
                                                        const char **source)
 {
@@ -242,6 +426,7 @@ static unsigned long long context_metadata_max_context(yvex_model_context *ctx,
     return 0ull;
 }
 
+/* Purpose: Compute context status from collections for its CLI invariant (`context_status_from_collections`). */
 static const char *context_status_from_collections(const yvex_fullmodel_collections *collections,
                                                    int selected_target)
 {
@@ -257,6 +442,11 @@ static const char *context_status_from_collections(const yvex_fullmodel_collecti
     return "partial";
 }
 
+/* Purpose: Render context print common header from typed facts (`context_print_common_header`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void context_print_common_header(const yvex_cli_context_options *options,
                                         const char *status,
                                         const char *resolved_path,
@@ -277,22 +467,23 @@ static void context_print_common_header(const yvex_cli_context_options *options,
     yvex_cli_out_writef(stdout, "backend: %s\n", options && options->backend ? options->backend : "cpu");
     yvex_cli_out_writef(stdout, "family: %s\n", family ? family : "unknown");
     yvex_cli_out_writef(stdout, "family_detected: %s\n", detected ? detected : "unknown");
-    yvex_cli_out_writef(stdout, "family_requested: %s\n", context_requested_family(options));
+    yvex_cli_out_writef(stdout, "family_requested: %s\n", model_requested_family(options ? options->family : NULL));
     yvex_cli_out_writef(stdout, "family_runtime_status: %s\n", family_status ? family_status : "unknown");
     yvex_cli_out_writef(stdout, "attention_class_status: %s\n", attention_status ? attention_status : "unknown");
     yvex_cli_out_writef(stdout, "kv_class_status: %s\n", kv_status ? kv_status : "unknown");
-    yvex_cli_out_writef(stdout, "context_class_status: report-only\n");
-    yvex_cli_out_writef(stdout, "context_stage: report-only\n");
-    yvex_cli_out_writef(stdout, "runtime_claim: unsupported\n");
-    yvex_cli_out_writef(stdout, "generation: unsupported-full-model\n");
-    yvex_cli_out_writef(stdout, "benchmark_status: not-measured\n");
+    yvex_cli_out_lines(stdout, literal_lines_0, sizeof(literal_lines_0) / sizeof(literal_lines_0[0]));
 }
 
+/* Purpose: Render context print unsupported source only from typed facts (`context_print_unsupported_source_only`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static void context_print_unsupported_source_only(const yvex_cli_context_options *options)
 {
-    const char *family = strcmp(context_requested_family(options), "auto") == 0
+    const char *family = strcmp(model_requested_family(options ? options->family : NULL), "auto") == 0
                              ? "glm"
-                             : context_requested_family(options);
+                             : model_requested_family(options ? options->family : NULL);
     context_print_common_header(options,
                                 "context-report-unsupported",
                                 "source-only-target",
@@ -303,67 +494,24 @@ static void context_print_unsupported_source_only(const yvex_cli_context_options
                                 "unsupported",
                                 "unsupported",
                                 "unsupported");
-    yvex_cli_out_writef(stdout, "model_max_context: unknown\n");
-    yvex_cli_out_writef(stdout, "model_max_context_source: source-manifest-planned\n");
-    yvex_cli_out_writef(stdout, "model_max_context_status: unsupported-source-only\n");
-    yvex_cli_out_writef(stdout, "requested_context: %s", options && options->context_length_seen ? "" : "not-requested");
+    yvex_cli_out_lines(stdout, literal_lines_1, sizeof(literal_lines_1) / sizeof(literal_lines_1[0]));
+    yvex_cli_out_writef(stdout, "requested_context: %s",
+        options && options->context_length_seen ? "" : "not-requested");
     if (options && options->context_length_seen) yvex_cli_out_writef(stdout, "%llu", options->context_length);
     yvex_cli_out_writef(stdout, "\n");
-    yvex_cli_out_writef(stdout, "requested_context_source: %s\n", options && options->context_length_seen ? "operator-request" : "none");
-    yvex_cli_out_writef(stdout, "requested_context_status: %s\n", options && options->context_length_seen ? "reported-only" : "not-requested");
-    yvex_cli_out_writef(stdout, "active_context: unsupported\n");
-    yvex_cli_out_writef(stdout, "active_context_source: source-only-target\n");
-    yvex_cli_out_writef(stdout, "active_context_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "token_input_status: not-performed-source-only-target\n");
-    yvex_cli_out_writef(stdout, "token_count: 0\n");
-    yvex_cli_out_writef(stdout, "prompt_token_count: 0\n");
-    yvex_cli_out_writef(stdout, "prefill_token_count: 0\n");
-    yvex_cli_out_writef(stdout, "generated_token_count: 0\n");
-    yvex_cli_out_writef(stdout, "token_range_start: none\n");
-    yvex_cli_out_writef(stdout, "token_range_end: none\n");
-    yvex_cli_out_writef(stdout, "chunking_required: false\n");
-    yvex_cli_out_writef(stdout, "chunk_size: not-requested\n");
-    yvex_cli_out_writef(stdout, "chunk_count: 0\n");
-    yvex_cli_out_writef(stdout, "last_chunk_size: 0\n");
-    yvex_cli_out_writef(stdout, "chunking_policy: unsupported-source-only\n");
-    yvex_cli_out_writef(stdout, "chunking_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "prefill_boundary_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "prefill_position_start: unknown\n");
-    yvex_cli_out_writef(stdout, "prefill_position_end: unknown\n");
-    yvex_cli_out_writef(stdout, "prefill_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "full_transformer_prefill_ready: false\n");
-    yvex_cli_out_writef(stdout, "decode_position_policy: unsupported-source-only\n");
-    yvex_cli_out_writef(stdout, "decode_start_position: unknown\n");
-    yvex_cli_out_writef(stdout, "decode_position_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "decode_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "decode_ready: false\n");
-    yvex_cli_out_writef(stdout, "overflow_policy: unsupported-source-only\n");
-    yvex_cli_out_writef(stdout, "context_overflow: unsupported\n");
-    yvex_cli_out_writef(stdout, "overflow_check_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "overflow_stop_reason: unsupported\n");
-    yvex_cli_out_writef(stdout, "overflow_mutates_state: false\n");
-    yvex_cli_out_writef(stdout, "attention_dependency_status: unsupported-source-only\n");
-    yvex_cli_out_writef(stdout, "attention_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "attention_position_policy: planned\n");
-    yvex_cli_out_writef(stdout, "rope_context_status: planned\n");
-    yvex_cli_out_writef(stdout, "mask_context_status: planned\n");
-    yvex_cli_out_writef(stdout, "kv_dependency_status: unsupported-source-only\n");
-    yvex_cli_out_writef(stdout, "kv_capacity_required: true\n");
-    yvex_cli_out_writef(stdout, "kv_capacity_status: planned\n");
-    yvex_cli_out_writef(stdout, "kv_context_positions: unknown\n");
-    yvex_cli_out_writef(stdout, "kv_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "real_attention_kv_ready: false\n");
-    yvex_cli_out_writef(stdout, "generation_context_status: unsupported-full-model\n");
-    yvex_cli_out_writef(stdout, "bounded_generation_context_policy: diagnostic-only-not-run\n");
-    yvex_cli_out_writef(stdout, "full_generation_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "generation_ready: false\n");
-    yvex_cli_out_writef(stdout, "context_blockers: source-only target has no YVEX-produced GGUF tensor inventory; GLM context mapping planned; real transformer prefill unsupported\n");
-    yvex_cli_out_writef(stdout, "next_required_rows: MOE.CLASS.0,source-manifest-context-profile,YVEX-produced-GGUF,real-transformer-prefill,real-decode,GEN.DEEPSEEK.0\n");
-    yvex_cli_out_writef(stdout, "cleanup_attempted: true\n");
-    yvex_cli_out_writef(stdout, "cleanup_status: pass\n");
+    yvex_cli_out_writef(stdout, "requested_context_source: %s\n",
+        options && options->context_length_seen ? "operator-request" : "none");
+    yvex_cli_out_writef(stdout, "requested_context_status: %s\n",
+        options && options->context_length_seen ? "reported-only" : "not-requested");
+    yvex_cli_out_lines(stdout, literal_lines_2, sizeof(literal_lines_2) / sizeof(literal_lines_2[0]));
     context_print_phases("unsupported", "unsupported", "unsupported", "unsupported", "context-profile");
 }
 
+/* Purpose: Render context print unsupported family from typed facts (`context_print_unsupported_family`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int context_print_unsupported_family(const yvex_cli_context_options *options,
                                             const char *resolved_path,
                                             const char *target_id,
@@ -376,72 +524,41 @@ static int context_print_unsupported_family(const yvex_cli_context_options *opti
                                 resolved_path,
                                 target_id,
                                 target_class,
-                                context_requested_family(options),
+                                model_requested_family(options ? options->family : NULL),
                                 detected ? detected : "unknown",
                                 "unsupported",
                                 "unsupported",
                                 "unsupported");
-    yvex_cli_out_writef(stdout, "model_max_context: unknown\n");
-    yvex_cli_out_writef(stdout, "model_max_context_source: unsupported-family\n");
-    yvex_cli_out_writef(stdout, "model_max_context_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "requested_context: not-requested\n");
-    yvex_cli_out_writef(stdout, "requested_context_source: none\n");
-    yvex_cli_out_writef(stdout, "requested_context_status: not-requested\n");
-    yvex_cli_out_writef(stdout, "active_context: unsupported\n");
-    yvex_cli_out_writef(stdout, "active_context_source: unsupported-family\n");
-    yvex_cli_out_writef(stdout, "active_context_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "token_input_status: not-performed\n");
-    yvex_cli_out_writef(stdout, "token_count: 0\n");
-    yvex_cli_out_writef(stdout, "prompt_token_count: 0\n");
-    yvex_cli_out_writef(stdout, "prefill_token_count: 0\n");
-    yvex_cli_out_writef(stdout, "generated_token_count: 0\n");
-    yvex_cli_out_writef(stdout, "token_range_start: none\n");
-    yvex_cli_out_writef(stdout, "token_range_end: none\n");
-    yvex_cli_out_writef(stdout, "chunking_required: false\n");
-    yvex_cli_out_writef(stdout, "chunk_size: not-requested\n");
-    yvex_cli_out_writef(stdout, "chunk_count: 0\n");
-    yvex_cli_out_writef(stdout, "last_chunk_size: 0\n");
-    yvex_cli_out_writef(stdout, "chunking_policy: unsupported-family\n");
-    yvex_cli_out_writef(stdout, "chunking_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "prefill_boundary_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "prefill_position_start: unknown\n");
-    yvex_cli_out_writef(stdout, "prefill_position_end: unknown\n");
-    yvex_cli_out_writef(stdout, "prefill_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "full_transformer_prefill_ready: false\n");
-    yvex_cli_out_writef(stdout, "decode_position_policy: unsupported-family\n");
-    yvex_cli_out_writef(stdout, "decode_start_position: unknown\n");
-    yvex_cli_out_writef(stdout, "decode_position_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "decode_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "decode_ready: false\n");
-    yvex_cli_out_writef(stdout, "overflow_policy: unsupported-family\n");
-    yvex_cli_out_writef(stdout, "context_overflow: unsupported\n");
-    yvex_cli_out_writef(stdout, "overflow_check_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "overflow_stop_reason: unsupported\n");
-    yvex_cli_out_writef(stdout, "overflow_mutates_state: false\n");
-    yvex_cli_out_writef(stdout, "attention_dependency_status: unsupported-family\n");
-    yvex_cli_out_writef(stdout, "attention_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "attention_position_policy: unsupported\n");
-    yvex_cli_out_writef(stdout, "rope_context_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "mask_context_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "kv_dependency_status: unsupported-family\n");
-    yvex_cli_out_writef(stdout, "kv_capacity_required: unknown\n");
-    yvex_cli_out_writef(stdout, "kv_capacity_status: unsupported\n");
-    yvex_cli_out_writef(stdout, "kv_context_positions: unknown\n");
-    yvex_cli_out_writef(stdout, "kv_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "real_attention_kv_ready: false\n");
-    yvex_cli_out_writef(stdout, "generation_context_status: unsupported-full-model\n");
-    yvex_cli_out_writef(stdout, "bounded_generation_context_policy: diagnostic-only-not-run\n");
-    yvex_cli_out_writef(stdout, "full_generation_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "generation_ready: false\n");
+    yvex_cli_out_lines(stdout, literal_lines_3, sizeof(literal_lines_3) / sizeof(literal_lines_3[0]));
     yvex_cli_out_writef(stdout, "context_blockers: %s\n", reason ? reason : "unsupported context family");
-    yvex_cli_out_writef(stdout, "next_required_rows: CONTEXT.CLASS.0,MOE.CLASS.0,real-transformer-prefill,real-decode,GEN.DEEPSEEK.0\n");
-    yvex_cli_out_writef(stdout, "cleanup_attempted: true\n");
-    yvex_cli_out_writef(stdout, "cleanup_status: pass\n");
+    yvex_cli_out_lines(stdout, literal_lines_4, sizeof(literal_lines_4) / sizeof(literal_lines_4[0]));
     context_print_phases("unsupported", "unsupported", "unsupported", "unsupported", "resolve-family");
     yvex_cli_out_writef(stdout, "reason: %s\n", reason ? reason : "unsupported context family");
     return 5;
 }
 
+/* Purpose: Render context print normal from typed facts (`context_print_normal`). */
+static void context_print_normal(const yvex_cli_context_options *options,
+                                 const char *coverage_status,
+                                 int selected_target)
+{
+    yvex_cli_out_writef(stdout, "report: context\n");
+    yvex_cli_out_writef(stdout, "model: %s\n", options->model ? options->model : "");
+    yvex_cli_out_writef(stdout, "family: deepseek\n");
+    yvex_cli_out_writef(stdout, "status: %s\n",
+                        coverage_status ? coverage_status : "report-only");
+    yvex_cli_out_writef(stdout, "top_blocker: %s\n",
+                        selected_target
+                            ? "selected-slice context metadata incomplete"
+                            : "full transformer prefill unsupported");
+    yvex_cli_out_lines(stdout, literal_pair_5, sizeof(literal_pair_5) / sizeof(literal_pair_5[0]));
+}
+
+/* Purpose: Render context print report from typed facts (`context_print_report`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 static int context_print_report(const yvex_cli_context_options *options,
                                 yvex_model_ref *ref,
                                 yvex_model_context *ctx,
@@ -454,7 +571,7 @@ static int context_print_report(const yvex_cli_context_options *options,
     yvex_cli_fullmodel_options family_probe;
     yvex_token_input input;
     yvex_error err;
-    const char *requested = context_requested_family(options);
+    const char *requested = model_requested_family(options ? options->family : NULL);
     const char *detected;
     const char *source = "unknown";
     const char *coverage_status;
@@ -508,8 +625,7 @@ static int context_print_report(const yvex_cli_context_options *options,
                                         coverage_status);
             yvex_cli_out_writef(stdout, "token_input_status: failed\n");
             yvex_cli_out_writef(stdout, "reason: %s\n", yvex_error_message(&err));
-            yvex_cli_out_writef(stdout, "cleanup_attempted: true\n");
-            yvex_cli_out_writef(stdout, "cleanup_status: pass\n");
+            yvex_cli_out_lines(stdout, literal_pair_4, sizeof(literal_pair_4) / sizeof(literal_pair_4[0]));
             context_print_phases(coverage_status, coverage_status, coverage_status, "failed", "token-input");
             return exit_for_status(rc);
         }
@@ -536,16 +652,7 @@ static int context_print_report(const yvex_cli_context_options *options,
     decode_start = token_count;
 
     if (options && options->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
-        yvex_cli_out_writef(stdout, "report: context\n");
-        yvex_cli_out_writef(stdout, "model: %s\n", options->model ? options->model : "");
-        yvex_cli_out_writef(stdout, "family: deepseek\n");
-        yvex_cli_out_writef(stdout, "status: %s\n", coverage_status ? coverage_status : "report-only");
-        yvex_cli_out_writef(stdout, "top_blocker: %s\n",
-               selected_target
-                   ? "selected-slice context metadata incomplete"
-                   : "full transformer prefill unsupported");
-        yvex_cli_out_writef(stdout, "next: V010.CONTEXT.*\n");
-        yvex_cli_out_writef(stdout, "boundary: report-only, no runtime execution\n");
+        context_print_normal(options, coverage_status, selected_target);
         return 0;
     }
 
@@ -559,24 +666,27 @@ static int context_print_report(const yvex_cli_context_options *options,
                                 coverage_status,
                                 coverage_status,
                                 coverage_status);
-    yvex_cli_out_writef(stdout, "report_options.include_attention: %s\n", options && options->include_attention ? "true" : "false");
-    yvex_cli_out_writef(stdout, "report_options.include_kv: %s\n", options && options->include_kv ? "true" : "false");
-    yvex_cli_out_writef(stdout, "report_options.include_prefill: %s\n", options && options->include_prefill ? "true" : "false");
-    yvex_cli_out_writef(stdout, "report_options.include_decode: %s\n", options && options->include_decode ? "true" : "false");
-    yvex_cli_out_writef(stdout, "report_options.include_blockers: %s\n", options && options->include_blockers ? "true" : "false");
+    if (options) {
+        (void)yvex_cli_out_fields(stdout, options, context_audit_option_fields,
+                                  sizeof(context_audit_option_fields) /
+                                      sizeof(context_audit_option_fields[0]));
+    }
 
     yvex_cli_out_writef(stdout, "model_max_context: ");
     if (model_max_context > 0ull) yvex_cli_out_writef(stdout, "%llu", model_max_context);
     else yvex_cli_out_writef(stdout, "unknown");
     yvex_cli_out_writef(stdout, "\n");
-    yvex_cli_out_writef(stdout, "model_max_context_source: %s\n", model_max_context > 0ull ? source : "metadata-missing-or-selected-slice");
+    yvex_cli_out_writef(stdout, "model_max_context_source: %s\n",
+        model_max_context > 0ull ? source : "metadata-missing-or-selected-slice");
     yvex_cli_out_writef(stdout, "model_max_context_status: %s\n", model_max_context > 0ull ? "available" : "planned");
     yvex_cli_out_writef(stdout, "requested_context: ");
     if (options && options->context_length_seen) yvex_cli_out_writef(stdout, "%llu", options->context_length);
     else yvex_cli_out_writef(stdout, "not-requested");
     yvex_cli_out_writef(stdout, "\n");
-    yvex_cli_out_writef(stdout, "requested_context_source: %s\n", options && options->context_length_seen ? "operator-request" : "none");
-    yvex_cli_out_writef(stdout, "requested_context_status: %s\n", options && options->context_length_seen ? "reported-only" : "not-requested");
+    yvex_cli_out_writef(stdout, "requested_context_source: %s\n",
+        options && options->context_length_seen ? "operator-request" : "none");
+    yvex_cli_out_writef(stdout, "requested_context_status: %s\n",
+        options && options->context_length_seen ? "reported-only" : "not-requested");
     yvex_cli_out_writef(stdout, "active_context: ");
     if (active_context > 0ull) yvex_cli_out_writef(stdout, "%llu", active_context);
     else yvex_cli_out_writef(stdout, "diagnostic");
@@ -586,7 +696,8 @@ static int context_print_report(const yvex_cli_context_options *options,
            (model_max_context > 0ull && !selected_target ? "model-metadata" : "diagnostic-runtime-boundary"));
     yvex_cli_out_writef(stdout, "active_context_status: %s\n", active_context > 0ull ? "reported-only" : "diagnostic");
 
-    yvex_cli_out_writef(stdout, "token_input_status: %s\n", options && options->tokens_text ? "available" : "not-provided");
+    yvex_cli_out_writef(stdout, "token_input_status: %s\n",
+        options && options->tokens_text ? "available" : "not-provided");
     yvex_cli_out_writef(stdout, "token_count: %llu\n", token_count);
     yvex_cli_out_writef(stdout, "prompt_token_count: %llu\n", token_count);
     yvex_cli_out_writef(stdout, "prefill_token_count: %llu\n", token_count);
@@ -604,54 +715,49 @@ static int context_print_report(const yvex_cli_context_options *options,
     yvex_cli_out_writef(stdout, "\n");
     yvex_cli_out_writef(stdout, "chunk_count: %llu\n", chunk_count);
     yvex_cli_out_writef(stdout, "last_chunk_size: %llu\n", last_chunk);
-    yvex_cli_out_writef(stdout, "chunking_policy: %s\n", options && options->chunk_size_seen ? "explicit-token-chunks-report-only" : "not-requested");
-    yvex_cli_out_writef(stdout, "chunking_status: %s\n", options && options->chunk_size_seen ? "report-only" : "planned");
+    yvex_cli_out_writef(stdout, "chunking_policy: %s\n",
+        options && options->chunk_size_seen ? "explicit-token-chunks-report-only" : "not-requested");
+    yvex_cli_out_writef(stdout, "chunking_status: %s\n",
+        options && options->chunk_size_seen ? "report-only" : "planned");
 
     yvex_cli_out_writef(stdout, "prefill_boundary_status: report-only\n");
     yvex_cli_out_writef(stdout, "prefill_position_start: %s\n", token_count > 0ull ? "0" : "none");
     yvex_cli_out_writef(stdout, "prefill_position_end: %llu\n", token_count);
-    yvex_cli_out_writef(stdout, "prefill_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "full_transformer_prefill_ready: false\n");
-    yvex_cli_out_writef(stdout, "decode_position_policy: prefill-end-token-count\n");
+    yvex_cli_out_lines(stdout, literal_lines_5, sizeof(literal_lines_5) / sizeof(literal_lines_5[0]));
     yvex_cli_out_writef(stdout, "decode_start_position: %llu\n", decode_start);
-    yvex_cli_out_writef(stdout, "decode_position_status: report-only\n");
-    yvex_cli_out_writef(stdout, "decode_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "decode_ready: false\n");
-
-    yvex_cli_out_writef(stdout, "overflow_policy: bounded-diagnostic-refuse-before-mutation\n");
-    yvex_cli_out_writef(stdout, "context_overflow: %s\n", overflow_known ? (overflow ? "overflow" : "none") : "unknown");
+    yvex_cli_out_lines(stdout, literal_lines_6, sizeof(literal_lines_6) / sizeof(literal_lines_6[0]));
+    yvex_cli_out_writef(stdout, "context_overflow: %s\n",
+        overflow_known ? (overflow ? "overflow" : "none") : "unknown");
     yvex_cli_out_writef(stdout, "overflow_check_status: %s\n", overflow_known ? "pass" : "unknown");
     yvex_cli_out_writef(stdout, "overflow_stop_reason: %s\n", overflow ? "context-limit" : "none");
     yvex_cli_out_writef(stdout, "overflow_mutates_state: false\n");
 
-    yvex_cli_out_writef(stdout, "attention_dependency_status: %s\n", has_qkv ? "blocked-runtime-integration" : "blocked-missing-qkv");
-    yvex_cli_out_writef(stdout, "attention_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "attention_position_policy: rope-or-family-specific-planned\n");
-    yvex_cli_out_writef(stdout, "rope_context_status: planned\n");
-    yvex_cli_out_writef(stdout, "mask_context_status: planned\n");
-    yvex_cli_out_writef(stdout, "kv_dependency_status: %s\n", has_qkv ? "blocked-runtime-integration" : "blocked-missing-qkv");
-    yvex_cli_out_writef(stdout, "kv_capacity_required: true\n");
-    yvex_cli_out_writef(stdout, "kv_capacity_status: planned\n");
+    yvex_cli_out_writef(stdout, "attention_dependency_status: %s\n",
+        has_qkv ? "blocked-runtime-integration" : "blocked-missing-qkv");
+    yvex_cli_out_lines(stdout, literal_lines_7, sizeof(literal_lines_7) / sizeof(literal_lines_7[0]));
+    yvex_cli_out_writef(stdout, "kv_dependency_status: %s\n",
+        has_qkv ? "blocked-runtime-integration" : "blocked-missing-qkv");
+    yvex_cli_out_lines(stdout, literal_pair_3, sizeof(literal_pair_3) / sizeof(literal_pair_3[0]));
     yvex_cli_out_writef(stdout, "kv_context_positions: %s", active_context > 0ull ? "" : "unknown");
     if (active_context > 0ull) yvex_cli_out_writef(stdout, "%llu", active_context);
-    yvex_cli_out_writef(stdout, "\n");
-    yvex_cli_out_writef(stdout, "kv_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "real_attention_kv_ready: false\n");
-    yvex_cli_out_writef(stdout, "generation_context_status: bounded-diagnostic-only\n");
-    yvex_cli_out_writef(stdout, "bounded_generation_context_policy: context-limit-pre-append\n");
-    yvex_cli_out_writef(stdout, "full_generation_context_ready: false\n");
-    yvex_cli_out_writef(stdout, "generation_ready: false\n");
+    yvex_cli_out_lines(stdout, literal_lines_8, sizeof(literal_lines_8) / sizeof(literal_lines_8[0]));
     yvex_cli_out_writef(stdout, "context_blockers: %s\n",
            selected_target
-               ? "selected runtime slice has no full context metadata, no real attention KV, no full transformer prefill, no real decode, no full generation"
-               : "full transformer prefill unsupported; real attention-backed KV unsupported; real decode unsupported; full generation unsupported");
-    yvex_cli_out_writef(stdout, "next_required_rows: MOE.CLASS.0,RUNTIME.KV.1,real-transformer-prefill,real-decode,real-output-head-logits,GEN.DEEPSEEK.0\n");
-    yvex_cli_out_writef(stdout, "cleanup_attempted: true\n");
-    yvex_cli_out_writef(stdout, "cleanup_status: pass\n");
+               ? "selected runtime slice has no full context metadata, no real attention KV, no full "
+                   "transformer prefill, no real decode, no full generation"
+               : "full transformer prefill unsupported; real attention-backed KV unsupported; real decode "
+                   "unsupported; full generation unsupported");
+    yvex_cli_out_lines(stdout, literal_lines_9, sizeof(literal_lines_9) / sizeof(literal_lines_9[0]));
     context_print_phases(coverage_status, coverage_status, coverage_status, "report-only", NULL);
     return 0;
 }
 
+/* Purpose: Orchestrate the typed model artifacts surface context command request
+ * (`yvex_model_artifacts_surface_context_command`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Mutates declared CLI state only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 int yvex_model_artifacts_surface_context_command(int arg_count, char **args)
 {
     yvex_cli_context_options options;
@@ -699,8 +805,7 @@ int yvex_model_artifacts_surface_context_command(int arg_count, char **args)
                                     "failed",
                                     "failed");
         yvex_cli_out_writef(stdout, "reason: %s\n", yvex_error_message(&err));
-        yvex_cli_out_writef(stdout, "cleanup_attempted: true\n");
-        yvex_cli_out_writef(stdout, "cleanup_status: pass\n");
+        yvex_cli_out_lines(stdout, literal_pair_2, sizeof(literal_pair_2) / sizeof(literal_pair_2[0]));
         context_print_phases("failed", "failed", "failed", "failed", "resolve-model");
         yvex_error_clear(&err);
         return exit_for_status(rc);
@@ -719,8 +824,7 @@ int yvex_model_artifacts_surface_context_command(int arg_count, char **args)
                                     "failed",
                                     "failed");
         yvex_cli_out_writef(stdout, "reason: %s\n", yvex_error_message(&err));
-        yvex_cli_out_writef(stdout, "cleanup_attempted: true\n");
-        yvex_cli_out_writef(stdout, "cleanup_status: pass\n");
+        yvex_cli_out_lines(stdout, literal_pair_1, sizeof(literal_pair_1) / sizeof(literal_pair_1[0]));
         context_print_phases("failed", "failed", "failed", "failed", "context-profile");
         yvex_error_clear(&err);
         yvex_model_ref_clear(&ref);
@@ -756,18 +860,21 @@ int yvex_model_artifacts_surface_context_command(int arg_count, char **args)
     return rc;
 }
 
+/* Purpose: Render model artifacts surface context help from typed facts (`yvex_model_artifacts_surface_context_help`).
+ * Inputs: Borrowed typed facts.
+ * Effects: Writes through CLI I/O only.
+ * Failure: Typed refusal; outputs remain defined.
+ * Boundary: No capability policy. */
 void yvex_model_artifacts_surface_context_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: " "yvex context report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--" "audit | --" "output normal|table|audit] [options]\n\n");
-    yvex_cli_out_writef(fp, "Examples:\n");
-    yvex_cli_out_writef(fp, "  yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --tokens 0,1,2,3\n");
-    yvex_cli_out_writef(fp, "  yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --tokens 0,1,2,3 --chunk-size 2\n");
-    yvex_cli_out_writef(fp, "  yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --tokens 0,1,2,3 --context-length 2\n\n");
-    yvex_cli_out_writef(fp, "Options: --registry FILE --context-length N --tokens IDS --chunk-size N --" "include-attention --" "include-kv --" "include-prefill --" "include-decode --" "include-blockers\n\n");
-    yvex_cli_out_writef(fp, "context report:\n");
-    yvex_cli_out_writef(fp, "  report-only boundary for model/requested/active context, token counts, chunking policy, overflow behavior, prefill boundary, decode position policy, attention dependency, KV dependency, and runtime blockers.\n");
-    yvex_cli_out_writef(fp, "  Default output is compact. Use --" "audit for full diagnostic fields.\n");
-    yvex_cli_out_writef(fp, "  It reports bounded diagnostic context behavior separately from full model context readiness.\n");
-    yvex_cli_out_writef(fp, "  It does not run full transformer prefill, does not execute real decode, does not write real attention-backed KV, does not generate, does not evaluate, does not benchmark, and does not report throughput.\n");
-    yvex_cli_out_writef(fp, "Boundary: no long-context runtime support, no context extension support, no full model execution, no DeepSeek generation, no provider generation, no streaming generation, no eval, no benchmark.\n");
+    yvex_cli_out_writef(fp,
+        "usage: yvex context report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|"
+            "cuda] [--audit | --output normal|table|audit] [options]\n\n");
+    yvex_cli_out_lines(fp, literal_lines_10, sizeof(literal_lines_10) / sizeof(literal_lines_10[0]));
+    yvex_cli_out_writef(fp,
+        "Options: --registry FILE --context-length N --tokens IDS --chunk-size N --include-attention --"
+            "include-kv --include-prefill --include-decode --include-blockers\n\n");
+    yvex_cli_out_lines(fp, literal_pair_0, sizeof(literal_pair_0) / sizeof(literal_pair_0[0]));
+    yvex_cli_out_writef(fp, "  Default output is compact. Use --audit for full diagnostic fields.\n");
+    yvex_cli_out_lines(fp, literal_lines_11, sizeof(literal_lines_11) / sizeof(literal_lines_11[0]));
 }

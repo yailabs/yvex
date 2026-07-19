@@ -1,35 +1,27 @@
-/*
- * deepseek_v4.c - canonical DeepSeek-V4 model-family recipe.
- *
- * Owner:
- *   src/model/families
- *
- * Owns:
- *   immutable architecture facts, exact source coverage, artifact-neutral
- *   transform construction, GGUF lowering, and trusted payload handoff for
- *   the admitted DeepSeek-V4-Flash identity.
- *
- * Does not own:
- *   source/config IO, payload reads, numeric conversion, qtype policy,
- *   artifact writing, materialization, graph execution, or generation.
- *
- * Invariants:
- *   every layer, source contribution, transform terminal, and lowering
- *   descriptor derives from one admitted identity chain; rejected builds
- *   publish no partial object and read zero payload bytes.
- *
- * Boundary:
- *   one complete family recipe is not numeric execution or runtime support.
- */
-#include "src/model/families.h"
+/* Owner: src/model/families
+ * Owns: immutable DeepSeek architecture facts, topology validation, tensor recipes, runtime numeric policy, and
+ *   composition of the admitted family registration.
+ * Does not own: source/config IO, exact coverage indexes, Transformation IR construction, GGUF lowering mechanics,
+ *   payload binding, numeric conversion, qtype policy, artifact writing, graph execution, or
+ *   generation.
+ * Invariants: every layer and tensor recipe derives from one admitted architecture; rejected builds publish no
+ *   partial object and read zero payload bytes.
+ * Boundary: the family selects typed facts and composition but delegates reusable coverage, transformation,
+ *   lowering, and payload mechanisms.
+ * Purpose: admit the pinned DeepSeek-V4-Flash topology as one immutable family recipe.
+ * Inputs: verified structured source facts supplied by the canonical source owner.
+ * Effects: owns the architecture object and publishes one process-lifetime operation table; it performs no payload
+ *   reads or artifact writes.
+ * Failure: typed architecture refusals release partial allocations and leave the caller output null. */
+#include <yvex/internal/families/deepseek_v4.h>
 
-#include "src/source/verify.h"
-#include "src/model/target/catalog.h"
+#include <yvex/internal/core.h>
+#include <yvex/internal/source.h>
 
 #include <errno.h>
-#include <limits.h>
 #include <math.h>
 #include <stdint.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,15 +50,6 @@ static const char *family_ir_failure_name(
     yvex_deepseek_v4_ir_failure_code code);
 static const char *family_ir_component_name(
     yvex_deepseek_v4_ir_component component);
-static void coverage_close(yvex_deepseek_tensor_coverage *coverage);
-static const char *coverage_collection_name(
-    yvex_deepseek_tensor_collection collection);
-static const char *coverage_failure_name(
-    yvex_deepseek_tensor_coverage_failure_code code);
-static void lowering_close(yvex_deepseek_gguf_map *map);
-static const char *lowering_failure_name(
-    yvex_deepseek_gguf_map_failure_code code);
-static void payload_close(yvex_deepseek_payload_handoff *handoff);
 
 struct yvex_deepseek_v4_ir {
     yvex_deepseek_v4_ir_allocator allocator;
@@ -92,18 +75,33 @@ typedef struct {
     unsigned long long indexer_query_width;
 } deepseek_v4_derived_geometry;
 
+/* Purpose: allocate family-construction storage through the default heap.
+ * Inputs: exact byte count and unused allocator context.
+ * Effects: returns one malloc-owned allocation.
+ * Failure: allocation failure returns NULL.
+ * Boundary: default testable allocator for family construction. */
 static void *deepseek_v4_default_allocate(size_t size, void *context)
 {
     (void)context;
     return malloc(size);
 }
 
+/* Purpose: release storage produced by the default family allocator.
+ * Inputs: nullable allocation and unused context.
+ * Effects: frees one heap allocation.
+ * Failure: none; NULL is accepted.
+ * Boundary: allocator-paired family cleanup. */
 static void deepseek_v4_default_release(void *allocation, void *context)
 {
     (void)context;
     free(allocation);
 }
 
+/* Purpose: construct the default allocation policy for one family IR build.
+ * Inputs: none.
+ * Effects: returns value-owned function pointers and NULL context.
+ * Failure: none.
+ * Boundary: construction policy, not family semantics. */
 static yvex_deepseek_v4_ir_allocator deepseek_v4_default_allocator(void)
 {
     yvex_deepseek_v4_ir_allocator allocator;
@@ -114,6 +112,7 @@ static yvex_deepseek_v4_ir_allocator deepseek_v4_default_allocator(void)
     return allocator;
 }
 
+/* Purpose: reset optional family failure storage to its no-failure sentinel state. */
 static void deepseek_v4_failure_clear(yvex_deepseek_v4_ir_failure *failure)
 {
     if (!failure) return;
@@ -121,7 +120,11 @@ static void deepseek_v4_failure_clear(yvex_deepseek_v4_ir_failure *failure)
     failure->layer_index = YVEX_DEEPSEEK_V4_IR_NO_LAYER;
 }
 
-/* Records one typed construction refusal and the existing generic error view. */
+/* Purpose: record one typed construction refusal and its generic error projection.
+ * Inputs: optional family failure, typed facts, expected/actual values, and error output.
+ * Effects: populates diagnostic storage without publishing an IR.
+ * Failure: always returns the mapped typed status supplied by the refusal code.
+ * Boundary: family admission diagnostics; it does not alter source state. */
 static int deepseek_v4_reject(yvex_deepseek_v4_ir_failure *failure,
                               yvex_deepseek_v4_ir_failure_code code,
                               yvex_deepseek_v4_ir_component component,
@@ -153,24 +156,11 @@ static int deepseek_v4_reject(yvex_deepseek_v4_ir_failure *failure,
     return status;
 }
 
-static int deepseek_v4_checked_add(unsigned long long left,
-                                   unsigned long long right,
-                                   unsigned long long *out)
-{
-    if (!out || ULLONG_MAX - left < right) return 0;
-    *out = left + right;
-    return 1;
-}
-
-static int deepseek_v4_checked_mul(unsigned long long left,
-                                   unsigned long long right,
-                                   unsigned long long *out)
-{
-    if (!out || (left != 0u && right > ULLONG_MAX / left)) return 0;
-    *out = left * right;
-    return 1;
-}
-
+/* Purpose: parse one complete finite decimal source fact.
+ * Inputs: immutable text and required double output.
+ * Effects: writes the finite value only after complete syntax admission.
+ * Failure: missing, overflowing, non-finite, or trailing input returns false.
+ * Boundary: family configuration parsing only. */
 static int deepseek_v4_parse_double(const char *text, double *out)
 {
     char *end = NULL;
@@ -184,20 +174,25 @@ static int deepseek_v4_parse_double(const char *text, double *out)
     return 1;
 }
 
+/* Purpose: copy one nullable family label into fixed terminated storage. */
 static void deepseek_v4_copy(char *out, size_t cap, const char *value)
 {
     if (!out || cap == 0u) return;
     (void)snprintf(out, cap, "%s", value ? value : "");
 }
 
-/* Requires the full strict-source result without reopening any source owner. */
+/* Purpose: require complete strict-source admission without reopening source owners.
+ * Inputs: immutable verification, optional family failure, and generic error output.
+ * Effects: reads retained facts only and publishes no state.
+ * Failure: missing trust, identity, sidecar, or inventory facts return typed refusal.
+ * Boundary: source-to-family binding with zero payload reads. */
 static int deepseek_v4_validate_source(
     const yvex_source_verification *verification,
     yvex_deepseek_v4_ir_failure *failure,
     yvex_error *err)
 {
-    const yvex_model_target_identity *identity =
-        yvex_model_target_release_identity();
+    const yvex_source_target_identity *identity =
+        yvex_source_release_identity();
 
     if (!verification) {
         return deepseek_v4_reject(
@@ -256,6 +251,11 @@ static int deepseek_v4_validate_source(
 }
 
 /* Validates exact cross-field geometry and derives checked reusable widths. */
+/* Purpose: derive and validate all cross-field DeepSeek tensor geometry.
+ * Inputs: source facts, derived-geometry output, failure storage, and error output.
+ * Effects: publishes complete derived dimensions only after every checked relation passes.
+ * Failure: missing, inconsistent, or overflowing dimensions return typed family refusal.
+ * Boundary: architecture semantics; no artifact layout or payload bytes are involved. */
 static int deepseek_v4_validate_geometry(
     const yvex_source_verification *source,
     deepseek_v4_derived_geometry *geometry,
@@ -280,7 +280,7 @@ static int deepseek_v4_validate_geometry(
             YVEX_DEEPSEEK_V4_IR_COMPONENT_MODEL, "global-geometry",
             YVEX_DEEPSEEK_V4_IR_NO_LAYER, 1u, 0u, err);
     }
-    if (!deepseek_v4_checked_add(source->num_hidden_layers,
+    if (!yvex_core_u64_add(source->num_hidden_layers,
                                  source->num_nextn_predict_layers,
                                  &schedule_count)) {
         return deepseek_v4_reject(
@@ -305,7 +305,7 @@ static int deepseek_v4_validate_geometry(
     }
     geometry->output_heads_per_group =
         source->num_attention_heads / source->o_groups;
-    if (!deepseek_v4_checked_mul(geometry->output_heads_per_group,
+    if (!yvex_core_u64_mul(geometry->output_heads_per_group,
                                  source->head_dim,
                                  &geometry->output_group_input_width)) {
         return deepseek_v4_reject(
@@ -314,14 +314,14 @@ static int deepseek_v4_validate_geometry(
             "output-group-input-width", YVEX_DEEPSEEK_V4_IR_NO_LAYER,
             0u, 0u, err);
     }
-    if (!deepseek_v4_checked_mul(source->num_attention_heads,
+    if (!yvex_core_u64_mul(source->num_attention_heads,
                                  source->head_dim,
                                  &geometry->query_width) ||
-        !deepseek_v4_checked_mul(source->o_lora_rank, source->o_groups,
+        !yvex_core_u64_mul(source->o_lora_rank, source->o_groups,
                                  &geometry->grouped_output_width) ||
-        !deepseek_v4_checked_mul(4u, source->index_n_heads,
+        !yvex_core_u64_mul(4u, source->index_n_heads,
                                  &geometry->csa_indexer_rows) ||
-        !deepseek_v4_checked_mul(source->index_n_heads,
+        !yvex_core_u64_mul(source->index_n_heads,
                                  source->index_head_dim,
                                  &geometry->indexer_query_width)) {
         return deepseek_v4_reject(
@@ -370,10 +370,10 @@ static int deepseek_v4_validate_geometry(
             YVEX_DEEPSEEK_V4_IR_COMPONENT_MHC, "mhc-geometry",
             YVEX_DEEPSEEK_V4_IR_NO_LAYER, 1u, 0u, err);
     }
-    if (!deepseek_v4_checked_mul(source->hc_mult, source->hidden_size,
+    if (!yvex_core_u64_mul(source->hc_mult, source->hidden_size,
                                  &geometry->expanded_width) ||
-        !deepseek_v4_checked_add(2u, source->hc_mult, &intermediate) ||
-        !deepseek_v4_checked_mul(intermediate, source->hc_mult,
+        !yvex_core_u64_add(2u, source->hc_mult, &intermediate) ||
+        !yvex_core_u64_mul(intermediate, source->hc_mult,
                                  &geometry->mixing_rows)) {
         return deepseek_v4_reject(
             failure, YVEX_DEEPSEEK_V4_IR_FAILURE_ARITHMETIC_OVERFLOW,
@@ -398,7 +398,7 @@ static int deepseek_v4_validate_geometry(
             YVEX_DEEPSEEK_V4_IR_NO_LAYER, source->n_routed_experts,
             source->num_experts_per_tok, err);
     }
-    if (!deepseek_v4_checked_mul(source->n_shared_experts,
+    if (!yvex_core_u64_mul(source->n_shared_experts,
                                  source->moe_intermediate_size,
                                  &geometry->shared_intermediate_size)) {
         return deepseek_v4_reject(
@@ -458,6 +458,11 @@ static int deepseek_v4_validate_geometry(
 }
 
 /* Validates the source schedule against the pinned SWA/CSA/HCA topology. */
+/* Purpose: validate the exact SWA/CSA/HCA layer schedule encoded by source facts.
+ * Inputs: source verification, failure storage, and error output.
+ * Effects: reads immutable schedule facts without mutation.
+ * Failure: wrong length, class, compressor, or indexer pattern is refused.
+ * Boundary: family topology policy, not attention execution. */
 static int deepseek_v4_validate_schedule(
     const yvex_source_verification *source,
     yvex_deepseek_v4_ir_failure *failure,
@@ -495,6 +500,11 @@ static int deepseek_v4_validate_schedule(
     return YVEX_OK;
 }
 
+/* Purpose: populate one layer's mHC topology from admitted model dimensions.
+ * Inputs: mutable layer and immutable model/derived geometry.
+ * Effects: writes only the layer's mHC recipe fields.
+ * Failure: none after geometry admission.
+ * Boundary: family fact composition, not numeric execution. */
 static void deepseek_v4_fill_mhc(
     yvex_deepseek_v4_mhc_spec *mhc,
     const yvex_source_verification *source,
@@ -517,6 +527,11 @@ static void deepseek_v4_fill_mhc(
     mhc->ffn_pre_and_deferred_post = 1;
 }
 
+/* Purpose: populate one layer's routed/shared expert and router recipe.
+ * Inputs: mutable layer, immutable source/model facts, and layer index.
+ * Effects: writes deterministic MoE topology and routing fields.
+ * Failure: none after source and geometry validation.
+ * Boundary: family MoE policy; aggregation execution stays downstream. */
 static void deepseek_v4_fill_moe(
     yvex_deepseek_v4_moe_spec *moe,
     const yvex_source_verification *source,
@@ -549,64 +564,84 @@ static void deepseek_v4_fill_moe(
     }
 }
 
+/* Purpose: encode the explicit no-activation-quantization policy row.
+ * Inputs: mutable policy and typed activation stage.
+ * Effects: initializes one complete policy value.
+ * Failure: none.
+ * Boundary: numeric planning fact, not conversion execution. */
 static void deepseek_v4_fill_runtime_activation_none(
-    yvex_deepseek_v4_runtime_activation_policy *policy)
+    yvex_attention_activation_policy *policy)
 {
     memset(policy, 0, sizeof(*policy));
-    policy->stage = YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_NONE;
-    policy->quantization = YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_NONE;
-    policy->block_axis = YVEX_DEEPSEEK_V4_RUNTIME_AXIS_NONE;
-    policy->scale_format = YVEX_DEEPSEEK_V4_RUNTIME_SCALE_NONE;
+    policy->stage = YVEX_ATTENTION_ACTIVATION_NONE;
+    policy->quantization = YVEX_ATTENTION_QUANT_NONE;
+    policy->block_axis = YVEX_ATTENTION_AXIS_NONE;
+    policy->scale_format = YVEX_ATTENTION_SCALE_NONE;
     policy->scale_dtype = YVEX_NATIVE_DTYPE_UNKNOWN;
-    policy->pre_transform = YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE;
-    policy->tail_policy = YVEX_DEEPSEEK_V4_RUNTIME_TAIL_NONE;
-    policy->nonfinite_policy = YVEX_DEEPSEEK_V4_RUNTIME_NONFINITE_REFUSE;
+    policy->pre_transform = YVEX_ATTENTION_TRANSFORM_NONE;
+    policy->tail_policy = YVEX_ATTENTION_TAIL_NONE;
+    policy->nonfinite_policy = YVEX_ATTENTION_NONFINITE_REFUSE;
 }
 
+/* Purpose: encode one FP8 fake-quant activation policy row.
+ * Inputs: mutable policy, stage, and Hadamard enable flag.
+ * Effects: writes block, scale, transform, and rounding facts deterministically.
+ * Failure: none; constants are validated later.
+ * Boundary: runtime numeric authority selection only. */
 static void deepseek_v4_fill_runtime_activation_fp8(
-    yvex_deepseek_v4_runtime_activation_policy *policy,
-    yvex_deepseek_v4_runtime_activation_stage stage)
+    yvex_attention_activation_policy *policy,
+    yvex_attention_activation_stage stage)
 {
     memset(policy, 0, sizeof(*policy));
     policy->required = 1;
     policy->stage = stage;
     policy->quantization =
-        YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT;
-    policy->block_axis = YVEX_DEEPSEEK_V4_RUNTIME_AXIS_FINAL_DIMENSION;
+        YVEX_ATTENTION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT;
+    policy->block_axis = YVEX_ATTENTION_AXIS_FINAL_DIMENSION;
     policy->block_width = DEEPSEEK_V4_RUNTIME_FP8_ACT_BLOCK;
-    policy->scale_format = YVEX_DEEPSEEK_V4_RUNTIME_SCALE_UE8M0;
+    policy->scale_format = YVEX_ATTENTION_SCALE_UE8M0;
     policy->scale_dtype = YVEX_NATIVE_DTYPE_F8_E8M0;
-    policy->pre_transform = YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE;
+    policy->pre_transform = YVEX_ATTENTION_TRANSFORM_NONE;
     policy->tail_policy =
-        YVEX_DEEPSEEK_V4_RUNTIME_TAIL_EXACT_OR_SHORT_FINAL_BLOCK;
-    policy->nonfinite_policy = YVEX_DEEPSEEK_V4_RUNTIME_NONFINITE_REFUSE;
+        YVEX_ATTENTION_TAIL_EXACT_OR_SHORT_FINAL_BLOCK;
+    policy->nonfinite_policy = YVEX_ATTENTION_NONFINITE_REFUSE;
     policy->fake_quant_inplace = 1;
 }
 
+/* Purpose: encode the FP4 activation policy paired with pinned Hadamard authority.
+ * Inputs: mutable policy and activation stage.
+ * Effects: writes exact block, transform, scale, and rounding facts.
+ * Failure: none; downstream validation checks the closed contract.
+ * Boundary: family numeric policy, not fake-quant execution. */
 static void deepseek_v4_fill_runtime_activation_fp4_hadamard(
-    yvex_deepseek_v4_runtime_activation_policy *policy,
-    yvex_deepseek_v4_runtime_activation_stage stage)
+    yvex_attention_activation_policy *policy,
+    yvex_attention_activation_stage stage)
 {
     memset(policy, 0, sizeof(*policy));
     policy->required = 1;
     policy->stage = stage;
     policy->quantization =
-        YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT;
-    policy->block_axis = YVEX_DEEPSEEK_V4_RUNTIME_AXIS_FINAL_DIMENSION;
+        YVEX_ATTENTION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT;
+    policy->block_axis = YVEX_ATTENTION_AXIS_FINAL_DIMENSION;
     policy->block_width = DEEPSEEK_V4_RUNTIME_FP4_ACT_BLOCK;
-    policy->scale_format = YVEX_DEEPSEEK_V4_RUNTIME_SCALE_UE8M0;
+    policy->scale_format = YVEX_ATTENTION_SCALE_UE8M0;
     policy->scale_dtype = YVEX_NATIVE_DTYPE_F8_E8M0;
     policy->pre_transform =
-        YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_DAO_FHT_V1_1_0_POST2;
+        YVEX_ATTENTION_TRANSFORM_DAO_FHT_V1_1_0_POST2;
     policy->tail_policy =
-        YVEX_DEEPSEEK_V4_RUNTIME_TAIL_EXACT_OR_SHORT_FINAL_BLOCK;
-    policy->nonfinite_policy = YVEX_DEEPSEEK_V4_RUNTIME_NONFINITE_REFUSE;
+        YVEX_ATTENTION_TAIL_EXACT_OR_SHORT_FINAL_BLOCK;
+    policy->nonfinite_policy = YVEX_ATTENTION_NONFINITE_REFUSE;
     policy->fake_quant_inplace = 1;
     policy->zero_pad_hadamard_to_power_of_two = 1;
 }
 
+/* Purpose: populate deterministic sparse top-k selection policy for one attention class.
+ * Inputs: mutable policy and typed attention class.
+ * Effects: selects the admitted ordering/tie contract or explicit none.
+ * Failure: none; policy validation follows construction.
+ * Boundary: selection semantics, not index scoring execution. */
 static void deepseek_v4_fill_sparse_topk(
-    yvex_deepseek_v4_runtime_sparse_topk_policy *policy,
+    yvex_attention_topk_policy *policy,
     unsigned long long k)
 {
     memset(policy, 0, sizeof(*policy));
@@ -614,8 +649,8 @@ static void deepseek_v4_fill_sparse_topk(
     policy->version = DEEPSEEK_V4_RUNTIME_TOPK_POLICY_VERSION;
     policy->policy =
         policy->required
-            ? YVEX_DEEPSEEK_V4_RUNTIME_TOPK_YVEX_SCORE_DESC_ORDINAL_ASC_V1
-            : YVEX_DEEPSEEK_V4_RUNTIME_TOPK_NONE;
+            ? YVEX_ATTENTION_TOPK_SCORE_DESC_ORDINAL_ASC_V1
+            : YVEX_ATTENTION_TOPK_NONE;
     policy->k = k;
     policy->reject_nonfinite = 1;
     policy->score_descending = 1;
@@ -625,8 +660,13 @@ static void deepseek_v4_fill_sparse_topk(
     policy->output_ranked_order = 1;
 }
 
+/* Purpose: validate one complete activation numeric policy against the pinned authority.
+ * Inputs: immutable policy, expected stage, layer index, failure storage, and error output.
+ * Effects: reads policy facts only.
+ * Failure: schema, block, scale, transform, or revision mismatch returns typed refusal.
+ * Boundary: numeric contract admission; no activation values are processed. */
 static int deepseek_v4_validate_runtime_activation_policy(
-    const yvex_deepseek_v4_runtime_activation_policy *policy,
+    const yvex_attention_activation_policy *policy,
     yvex_deepseek_v4_ir_failure *failure,
     unsigned long long layer_index,
     const char *field,
@@ -641,10 +681,10 @@ static int deepseek_v4_validate_runtime_activation_policy(
     }
     if (!policy->required) {
         if (policy->quantization !=
-                YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_NONE ||
+                YVEX_ATTENTION_QUANT_NONE ||
             policy->block_width != 0ull ||
             policy->pre_transform !=
-                YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE) {
+                YVEX_ATTENTION_TRANSFORM_NONE) {
             return deepseek_v4_reject(
                 failure,
                 YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_RUNTIME_NUMERIC,
@@ -654,13 +694,13 @@ static int deepseek_v4_validate_runtime_activation_policy(
         return YVEX_OK;
     }
     if (policy->block_axis !=
-            YVEX_DEEPSEEK_V4_RUNTIME_AXIS_FINAL_DIMENSION ||
-        policy->scale_format != YVEX_DEEPSEEK_V4_RUNTIME_SCALE_UE8M0 ||
+            YVEX_ATTENTION_AXIS_FINAL_DIMENSION ||
+        policy->scale_format != YVEX_ATTENTION_SCALE_UE8M0 ||
         policy->scale_dtype != YVEX_NATIVE_DTYPE_F8_E8M0 ||
         policy->tail_policy !=
-            YVEX_DEEPSEEK_V4_RUNTIME_TAIL_EXACT_OR_SHORT_FINAL_BLOCK ||
+            YVEX_ATTENTION_TAIL_EXACT_OR_SHORT_FINAL_BLOCK ||
         policy->nonfinite_policy !=
-            YVEX_DEEPSEEK_V4_RUNTIME_NONFINITE_REFUSE ||
+            YVEX_ATTENTION_NONFINITE_REFUSE ||
         !policy->fake_quant_inplace) {
         return deepseek_v4_reject(
             failure,
@@ -669,10 +709,10 @@ static int deepseek_v4_validate_runtime_activation_policy(
             field, layer_index, 1u, 0u, err);
     }
     if (policy->quantization ==
-            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT) {
+            YVEX_ATTENTION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT) {
         if (policy->block_width != DEEPSEEK_V4_RUNTIME_FP8_ACT_BLOCK ||
             policy->pre_transform !=
-                YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE) {
+                YVEX_ATTENTION_TRANSFORM_NONE) {
             return deepseek_v4_reject(
                 failure,
                 YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_RUNTIME_NUMERIC,
@@ -681,10 +721,10 @@ static int deepseek_v4_validate_runtime_activation_policy(
                 policy->block_width, err);
         }
     } else if (policy->quantization ==
-               YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT) {
+               YVEX_ATTENTION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT) {
         if (policy->block_width != DEEPSEEK_V4_RUNTIME_FP4_ACT_BLOCK ||
             policy->pre_transform !=
-                YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_DAO_FHT_V1_1_0_POST2 ||
+                YVEX_ATTENTION_TRANSFORM_DAO_FHT_V1_1_0_POST2 ||
             !policy->zero_pad_hadamard_to_power_of_two) {
             return deepseek_v4_reject(
                 failure,
@@ -703,6 +743,11 @@ static int deepseek_v4_validate_runtime_activation_policy(
     return YVEX_OK;
 }
 
+/* Purpose: validate every activation and sparse-selection policy attached to one layer.
+ * Inputs: immutable layer, failure storage, and error output.
+ * Effects: none beyond diagnostics.
+ * Failure: the first unsupported numeric field returns typed family refusal.
+ * Boundary: per-layer planning validation, not attention execution. */
 static int deepseek_v4_validate_runtime_numeric_layer(
     const yvex_deepseek_v4_layer_spec *layer,
     yvex_deepseek_v4_ir_failure *failure,
@@ -730,7 +775,7 @@ static int deepseek_v4_validate_runtime_numeric_layer(
         if (layer->sparse_topk.version !=
                 DEEPSEEK_V4_RUNTIME_TOPK_POLICY_VERSION ||
             layer->sparse_topk.policy !=
-                YVEX_DEEPSEEK_V4_RUNTIME_TOPK_YVEX_SCORE_DESC_ORDINAL_ASC_V1 ||
+                YVEX_ATTENTION_TOPK_SCORE_DESC_ORDINAL_ASC_V1 ||
             layer->sparse_topk.k == 0ull ||
             !layer->sparse_topk.reject_nonfinite ||
             !layer->sparse_topk.score_descending ||
@@ -749,6 +794,11 @@ static int deepseek_v4_validate_runtime_numeric_layer(
 }
 
 /* Derives one explicit layer descriptor from one validated schedule entry. */
+/* Purpose: compose one immutable DeepSeek layer recipe from admitted global facts.
+ * Inputs: mutable layer, immutable source/model/geometry, and layer index.
+ * Effects: writes attention, norms, mHC, MoE, tensor geometry, and runtime numeric policy.
+ * Failure: none after prerequisite validation; the result is validated before publication.
+ * Boundary: family recipe construction, not Transformation IR or graph execution. */
 static void deepseek_v4_fill_layer(
     yvex_deepseek_v4_layer_spec *layer,
     const yvex_source_verification *source,
@@ -806,17 +856,17 @@ static void deepseek_v4_fill_layer(
     layer->kv.requires_state_cache = 1;
     deepseek_v4_fill_runtime_activation_fp8(
         &layer->attention_kv_activation,
-        YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_ATTENTION_KV_NON_ROPE);
+        YVEX_ATTENTION_ACTIVATION_KV_NON_ROPE);
     deepseek_v4_fill_runtime_activation_none(&layer->compressor_activation);
     deepseek_v4_fill_runtime_activation_none(
         &layer->compressor_rotated_activation);
     deepseek_v4_fill_runtime_activation_none(&layer->indexer_query_activation);
     deepseek_v4_fill_sparse_topk(&layer->sparse_topk, 0ull);
     if (ratio == 0u) {
-        layer->attention_class = YVEX_DEEPSEEK_V4_ATTENTION_SWA;
+        layer->attention_class = YVEX_ATTENTION_CLASS_SWA;
         layer->kv.class_id = YVEX_DEEPSEEK_V4_KV_SWA;
     } else if (ratio == 4u) {
-        layer->attention_class = YVEX_DEEPSEEK_V4_ATTENTION_CSA;
+        layer->attention_class = YVEX_ATTENTION_CLASS_CSA;
         layer->kv.class_id = YVEX_DEEPSEEK_V4_KV_CSA;
         layer->compressor_required = 1;
         layer->indexer_required = 1;
@@ -828,13 +878,13 @@ static void deepseek_v4_fill_layer(
         layer->kv.requires_indexer_cache = 1;
         deepseek_v4_fill_runtime_activation_fp8(
             &layer->compressor_activation,
-            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_COMPRESSOR_NON_ROTATED);
+            YVEX_ATTENTION_ACTIVATION_COMPRESSOR_NON_ROTATED);
         deepseek_v4_fill_runtime_activation_fp4_hadamard(
             &layer->compressor_rotated_activation,
-            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_COMPRESSOR_ROTATED);
+            YVEX_ATTENTION_ACTIVATION_COMPRESSOR_ROTATED);
         deepseek_v4_fill_runtime_activation_fp4_hadamard(
             &layer->indexer_query_activation,
-            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_INDEXER_QUERY_ROTATED);
+            YVEX_ATTENTION_ACTIVATION_INDEXER_QUERY_ROTATED);
         deepseek_v4_fill_sparse_topk(&layer->sparse_topk,
                                      source->index_topk);
         layer->tensors.compressor_ape_rows = ratio;
@@ -854,14 +904,14 @@ static void deepseek_v4_fill_layer(
         layer->tensors.indexer_weight_rows = source->index_n_heads;
         layer->tensors.indexer_weight_columns = source->hidden_size;
     } else {
-        layer->attention_class = YVEX_DEEPSEEK_V4_ATTENTION_HCA;
+        layer->attention_class = YVEX_ATTENTION_CLASS_HCA;
         layer->kv.class_id = YVEX_DEEPSEEK_V4_KV_HCA;
         layer->compressor_required = 1;
         layer->kv.requires_uncompressed_tail = 1;
         layer->kv.requires_compressed_core = 1;
         deepseek_v4_fill_runtime_activation_fp8(
             &layer->compressor_activation,
-            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_COMPRESSOR_NON_ROTATED);
+            YVEX_ATTENTION_ACTIVATION_COMPRESSOR_NON_ROTATED);
         layer->tensors.compressor_ape_rows = ratio;
         layer->tensors.compressor_ape_columns = source->head_dim;
         layer->tensors.compressor_norm_width = source->head_dim;
@@ -877,13 +927,18 @@ static void deepseek_v4_fill_layer(
     layer->rms_norm_epsilon = geometry->rms_norm_epsilon;
 }
 
+/* Purpose: populate immutable model-wide DeepSeek architecture facts.
+ * Inputs: mutable model, immutable verified source, and derived geometry.
+ * Effects: writes topology, position, tokenizer, identity, and source-constraint fields.
+ * Failure: none after source/geometry admission.
+ * Boundary: logical model recipe; artifact-specific facts remain excluded. */
 static void deepseek_v4_fill_model(
     yvex_deepseek_v4_ir *ir,
     const yvex_source_verification *source,
     const deepseek_v4_derived_geometry *geometry)
 {
-    const yvex_model_target_identity *identity =
-        yvex_model_target_release_identity();
+    const yvex_source_target_identity *identity =
+        yvex_source_release_identity();
     yvex_deepseek_v4_model_spec *model = &ir->model;
 
     deepseek_v4_copy(model->target_id, sizeof(model->target_id),
@@ -970,6 +1025,11 @@ static void deepseek_v4_fill_model(
 }
 
 /* Allocates and constructs the immutable object after all source checks pass. */
+/* Purpose: allocate, validate, compose, and publish a complete family architecture object.
+ * Inputs: result slot, source verification, allocator, failure storage, and error output.
+ * Effects: owns model/layer/auxiliary storage only after complete validation.
+ * Failure: any source, geometry, schedule, numeric, or allocation failure unwinds fully.
+ * Boundary: canonical DeepSeek family construction with zero payload reads. */
 static int deepseek_v4_construct(
     yvex_deepseek_v4_ir **out,
     const yvex_source_verification *source,
@@ -1043,11 +1103,11 @@ static int deepseek_v4_construct(
             return yvex_error_code(err);
         }
         if (ir->layers[i].attention_class ==
-            YVEX_DEEPSEEK_V4_ATTENTION_SWA) ir->model.swa_layer_count++;
+            YVEX_ATTENTION_CLASS_SWA) ir->model.swa_layer_count++;
         if (ir->layers[i].attention_class ==
-            YVEX_DEEPSEEK_V4_ATTENTION_CSA) ir->model.csa_layer_count++;
+            YVEX_ATTENTION_CLASS_CSA) ir->model.csa_layer_count++;
         if (ir->layers[i].attention_class ==
-            YVEX_DEEPSEEK_V4_ATTENTION_HCA) ir->model.hca_layer_count++;
+            YVEX_ATTENTION_CLASS_HCA) ir->model.hca_layer_count++;
         if (ir->layers[i].moe.router_class ==
             YVEX_DEEPSEEK_V4_ROUTER_HASH_TOKEN_ID) {
             ir->model.hash_router_layer_count++;
@@ -1090,6 +1150,11 @@ static int deepseek_v4_construct(
 }
 
 /* Validates verified facts and publishes an owned IR through caller allocation policy. */
+/* Purpose: build the family architecture through an explicitly supplied allocator.
+ * Inputs: result slot, verified source, allocator, failure storage, and error output.
+ * Effects: delegates complete construction and publishes one owned IR on success.
+ * Failure: invalid allocator or construction refusal leaves the result null.
+ * Boundary: testable family lifecycle adapter. */
 static int family_ir_build_with_allocator(
     yvex_deepseek_v4_ir **out,
     const struct yvex_source_verification *verification,
@@ -1120,6 +1185,11 @@ static int family_ir_build_with_allocator(
 }
 
 /* Builds the production IR with heap ownership and no source-side effects. */
+/* Purpose: build the family architecture using the canonical heap allocator.
+ * Inputs: result slot, verified source, failure storage, and error output.
+ * Effects: publishes one independently owned immutable IR.
+ * Failure: construction failure returns typed status with no partial result.
+ * Boundary: default family registration entrypoint. */
 static int family_ir_build(
     yvex_deepseek_v4_ir **out,
     const struct yvex_source_verification *verification,
@@ -1133,7 +1203,11 @@ static int family_ir_build(
         out, verification, &allocator, failure, err);
 }
 
-/* Releases a fully or partially owned IR; NULL is a safe no-op. */
+/* Purpose: release a fully or partially owned family IR.
+ * Inputs: nullable owned IR.
+ * Effects: frees auxiliary, layer, and root storage through its paired allocator.
+ * Failure: none; partial and NULL state are accepted.
+ * Boundary: terminal family object lifecycle. */
 static void family_ir_close(yvex_deepseek_v4_ir *ir)
 {
     yvex_deepseek_v4_ir_allocator allocator;
@@ -1146,18 +1220,21 @@ static void family_ir_close(yvex_deepseek_v4_ir *ir)
     allocator.release(ir, allocator.context);
 }
 
+/* Purpose: expose the immutable model-wide spec for the lifetime of its family IR. */
 static const yvex_deepseek_v4_model_spec *family_ir_model(
     const yvex_deepseek_v4_ir *ir)
 {
     return ir ? &ir->model : NULL;
 }
 
+/* Purpose: return the admitted main-layer cardinality or zero for absent IR. */
 static unsigned long long family_ir_layer_count(
     const yvex_deepseek_v4_ir *ir)
 {
     return ir ? ir->model.main_layer_count : 0u;
 }
 
+/* Purpose: retrieve one immutable main-layer spec by checked zero-based index. */
 static const yvex_deepseek_v4_layer_spec *family_ir_layer_at(
     const yvex_deepseek_v4_ir *ir,
     unsigned long long index)
@@ -1166,12 +1243,14 @@ static const yvex_deepseek_v4_layer_spec *family_ir_layer_at(
                                                      : NULL;
 }
 
+/* Purpose: return the admitted auxiliary-layer cardinality or zero for absent IR. */
 static unsigned long long family_ir_auxiliary_count(
     const yvex_deepseek_v4_ir *ir)
 {
     return ir ? ir->model.auxiliary_layer_count : 0u;
 }
 
+/* Purpose: retrieve one immutable auxiliary-layer spec by checked index. */
 static const yvex_deepseek_v4_auxiliary_spec *family_ir_auxiliary_at(
     const yvex_deepseek_v4_ir *ir,
     unsigned long long index)
@@ -1181,6 +1260,11 @@ static const yvex_deepseek_v4_auxiliary_spec *family_ir_auxiliary_at(
                : NULL;
 }
 
+/* Purpose: map family construction failure code to stable diagnostic wording.
+ * Inputs: typed family failure code.
+ * Effects: none; returned storage is static.
+ * Failure: unrecognized codes map to "unknown".
+ * Boundary: diagnostic projection only. */
 static const char *family_ir_failure_name(
     yvex_deepseek_v4_ir_failure_code code)
 {
@@ -1209,6 +1293,11 @@ static const char *family_ir_failure_name(
     }
 }
 
+/* Purpose: map family validation component to its stable diagnostic name.
+ * Inputs: typed family component.
+ * Effects: none; returned storage is static.
+ * Failure: unrecognized components map to "unknown".
+ * Boundary: error-context rendering only. */
 static const char *family_ir_component_name(
     yvex_deepseek_v4_ir_component component)
 {
@@ -1231,17 +1320,19 @@ static const char *family_ir_component_name(
     }
 }
 
+/* Purpose: map a DeepSeek attention class to its canonical architecture label. */
 static const char *family_attention_name(
-    yvex_deepseek_v4_attention_class class_id)
+    yvex_attention_class class_id)
 {
     switch (class_id) {
-    case YVEX_DEEPSEEK_V4_ATTENTION_SWA: return "swa";
-    case YVEX_DEEPSEEK_V4_ATTENTION_CSA: return "csa";
-    case YVEX_DEEPSEEK_V4_ATTENTION_HCA: return "hca";
+    case YVEX_ATTENTION_CLASS_SWA: return "swa";
+    case YVEX_ATTENTION_CLASS_CSA: return "csa";
+    case YVEX_ATTENTION_CLASS_HCA: return "hca";
     default: return "unknown";
     }
 }
 
+/* Purpose: map one DeepSeek KV state class to its canonical architecture label. */
 static const char *family_kv_name(yvex_deepseek_v4_kv_class class_id)
 {
     switch (class_id) {
@@ -1252,6 +1343,7 @@ static const char *family_kv_name(yvex_deepseek_v4_kv_class class_id)
     }
 }
 
+/* Purpose: map one DeepSeek router class to its canonical source-contract label. */
 static const char *family_router_name(
     yvex_deepseek_v4_router_class class_id)
 {
@@ -1263,6 +1355,7 @@ static const char *family_router_name(
     }
 }
 
+/* Purpose: map the admitted source weight dtype to its manifest spelling. */
 static const char *family_source_weight_dtype_name(
     yvex_deepseek_v4_source_weight_dtype dtype)
 {
@@ -1271,12 +1364,14 @@ static const char *family_source_weight_dtype_name(
                : "unknown";
 }
 
+/* Purpose: map the admitted source expert dtype to its manifest spelling. */
 static const char *family_source_expert_dtype_name(
     yvex_deepseek_v4_source_expert_dtype dtype)
 {
     return dtype == YVEX_DEEPSEEK_V4_SOURCE_EXPERT_FP4 ? "fp4" : "unknown";
 }
 
+/* Purpose: map source quantization authority to its canonical constraint label. */
 static const char *family_source_quantization_name(
     yvex_deepseek_v4_source_quantization quantization)
 {
@@ -1286,4249 +1381,262 @@ static const char *family_source_quantization_name(
                : "unknown";
 }
 
+/* Purpose: map runtime activation stage to its identity-bearing label. */
 static const char *family_activation_stage_name(
-    yvex_deepseek_v4_runtime_activation_stage stage)
+    yvex_attention_activation_stage stage)
 {
     switch (stage) {
-    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_NONE: return "none";
-    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_ATTENTION_KV_NON_ROPE:
+    case YVEX_ATTENTION_ACTIVATION_NONE: return "none";
+    case YVEX_ATTENTION_ACTIVATION_KV_NON_ROPE:
         return "attention-kv-non-rope";
-    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_COMPRESSOR_NON_ROTATED:
+    case YVEX_ATTENTION_ACTIVATION_COMPRESSOR_NON_ROTATED:
         return "compressor-non-rotated";
-    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_COMPRESSOR_ROTATED:
+    case YVEX_ATTENTION_ACTIVATION_COMPRESSOR_ROTATED:
         return "compressor-rotated";
-    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_INDEXER_QUERY_ROTATED:
+    case YVEX_ATTENTION_ACTIVATION_INDEXER_QUERY_ROTATED:
         return "indexer-query-rotated";
     }
     return "unknown";
 }
 
+/* Purpose: map activation quantization policy to its identity-bearing label. */
 static const char *family_activation_quantization_name(
-    yvex_deepseek_v4_runtime_activation_quantization quantization)
+    yvex_attention_quantization quantization)
 {
     switch (quantization) {
-    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_NONE:
+    case YVEX_ATTENTION_QUANT_NONE:
         return "none";
-    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT:
+    case YVEX_ATTENTION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT:
         return "fp8-e4m3-ue8m0-fake-dequant";
-    case YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT:
+    case YVEX_ATTENTION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT:
         return "fp4-e2m1-ue8m0-fake-dequant";
     }
     return "unknown";
 }
 
+/* Purpose: map runtime transform authority to its pinned identity label. */
 static const char *family_runtime_transform_name(
-    yvex_deepseek_v4_runtime_transform transform)
+    yvex_attention_transform transform)
 {
     switch (transform) {
-    case YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE: return "none";
-    case YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_DAO_FHT_V1_1_0_POST2:
+    case YVEX_ATTENTION_TRANSFORM_NONE: return "none";
+    case YVEX_ATTENTION_TRANSFORM_DAO_FHT_V1_1_0_POST2:
         return "dao-fast-hadamard-transform-v1.1.0.post2";
     }
     return "unknown";
 }
 
+/* Purpose: map sparse top-k policy to its deterministic ordering label.
+ * Inputs: typed top-k policy ID.
+ * Effects: none; returned storage is static.
+ * Failure: unrecognized policy maps to "unknown".
+ * Boundary: identity-bearing policy projection. */
 static const char *family_sparse_topk_policy_name(
-    yvex_deepseek_v4_runtime_sparse_topk_policy_id policy)
+    yvex_attention_topk_policy_id policy)
 {
     switch (policy) {
-    case YVEX_DEEPSEEK_V4_RUNTIME_TOPK_NONE: return "none";
-    case YVEX_DEEPSEEK_V4_RUNTIME_TOPK_YVEX_SCORE_DESC_ORDINAL_ASC_V1:
+    case YVEX_ATTENTION_TOPK_NONE: return "none";
+    case YVEX_ATTENTION_TOPK_SCORE_DESC_ORDINAL_ASC_V1:
         return "yvex-score-desc-ordinal-asc-v1";
     }
     return "unknown";
 }
 
-/* Exact coverage binds every typed requirement to one retained source row. */
-
-#include "catalog.h"
-
-
-#define DEEPSEEK_COVERAGE_DEFAULT_LIMIT 100000ull
-
-struct yvex_deepseek_tensor_coverage {
-    yvex_deepseek_tensor_coverage_options options;
-    yvex_source_tensor_snapshot *snapshot;
-    yvex_deepseek_tensor_coverage_row *rows;
-    const yvex_deepseek_tensor_coverage_row **row_by_source;
-    yvex_deepseek_tensor_coverage_summary summary;
+/* One table drives both exact source coverage and artifact-neutral terminals. */
+static const yvex_deepseek_tensor_recipe layer_recipes[] = {
+    {YVEX_TENSOR_ROLE_ATTENTION_SINKS, YVEX_TENSOR_COLLECTION_ATTENTION,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "attn.attn_sink", YVEX_NATIVE_DTYPE_F32, 1u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, attention_sink_count), 0}, {0u, 0}}},
+    {YVEX_TENSOR_ROLE_ATTENTION_Q_A_NORM, YVEX_TENSOR_COLLECTION_ATTENTION,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "attn.q_norm.weight", YVEX_NATIVE_DTYPE_BF16, 1u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, query_lora_rank), 0}, {0u, 0}}},
+    {YVEX_TENSOR_ROLE_ATTENTION_KV_NORM, YVEX_TENSOR_COLLECTION_ATTENTION,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "attn.kv_norm.weight", YVEX_NATIVE_DTYPE_BF16, 1u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, head_dimension), 0}, {0u, 0}}},
+    {YVEX_TENSOR_ROLE_ATTENTION_KV, YVEX_TENSOR_COLLECTION_ATTENTION,
+     YVEX_DEEPSEEK_RECIPE_FP8_PAIR, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "attn.wkv", YVEX_NATIVE_DTYPE_UNKNOWN, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.kv_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.kv_columns), 0}}},
+    {YVEX_TENSOR_ROLE_ATTENTION_Q_A, YVEX_TENSOR_COLLECTION_ATTENTION,
+     YVEX_DEEPSEEK_RECIPE_FP8_PAIR, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "attn.wq_a", YVEX_NATIVE_DTYPE_UNKNOWN, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.q_a_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.q_a_columns), 0}}},
+    {YVEX_TENSOR_ROLE_ATTENTION_Q_B, YVEX_TENSOR_COLLECTION_ATTENTION,
+     YVEX_DEEPSEEK_RECIPE_FP8_PAIR, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "attn.wq_b", YVEX_NATIVE_DTYPE_UNKNOWN, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.q_b_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.q_b_columns), 0}}},
+    {YVEX_TENSOR_ROLE_ATTENTION_OUT_A, YVEX_TENSOR_COLLECTION_ATTENTION,
+     YVEX_DEEPSEEK_RECIPE_FP8_PAIR, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "attn.wo_a", YVEX_NATIVE_DTYPE_UNKNOWN, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.o_a_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.o_a_columns), 0}}},
+    {YVEX_TENSOR_ROLE_ATTENTION_OUT_B, YVEX_TENSOR_COLLECTION_ATTENTION,
+     YVEX_DEEPSEEK_RECIPE_FP8_PAIR, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "attn.wo_b", YVEX_NATIVE_DTYPE_UNKNOWN, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.o_b_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.o_b_columns), 0}}},
+    {YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_APE, YVEX_TENSOR_COLLECTION_COMPRESSOR,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_COMPRESSOR, 0u, "attn.compressor.ape", YVEX_NATIVE_DTYPE_F32, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.compressor_ape_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.compressor_ape_columns), 0}}},
+    {YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_NORM, YVEX_TENSOR_COLLECTION_COMPRESSOR,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_COMPRESSOR, 0u,
+     "attn.compressor.norm.weight", YVEX_NATIVE_DTYPE_BF16, 1u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.compressor_norm_width), 0}, {0u, 0}}},
+    {YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_GATE, YVEX_TENSOR_COLLECTION_COMPRESSOR,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_COMPRESSOR, 0u,
+     "attn.compressor.wgate.weight", YVEX_NATIVE_DTYPE_BF16, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.compressor_projection_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.compressor_projection_columns), 0}}},
+    {YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_KV, YVEX_TENSOR_COLLECTION_COMPRESSOR,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_COMPRESSOR, 0u,
+     "attn.compressor.wkv.weight", YVEX_NATIVE_DTYPE_BF16, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.compressor_projection_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.compressor_projection_columns), 0}}},
+    {YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_APE, YVEX_TENSOR_COLLECTION_INDEXER,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_INDEXER, 0u,
+     "attn.indexer.compressor.ape", YVEX_NATIVE_DTYPE_F32, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.indexer_ape_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.indexer_ape_columns), 0}}},
+    {YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_NORM, YVEX_TENSOR_COLLECTION_INDEXER,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_INDEXER, 0u,
+     "attn.indexer.compressor.norm.weight", YVEX_NATIVE_DTYPE_BF16, 1u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.indexer_norm_width), 0}, {0u, 0}}},
+    {YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_GATE, YVEX_TENSOR_COLLECTION_INDEXER,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_INDEXER, 0u,
+     "attn.indexer.compressor.wgate.weight", YVEX_NATIVE_DTYPE_BF16, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.indexer_projection_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.indexer_projection_columns), 0}}},
+    {YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_KV, YVEX_TENSOR_COLLECTION_INDEXER,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_INDEXER, 0u,
+     "attn.indexer.compressor.wkv.weight", YVEX_NATIVE_DTYPE_BF16, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.indexer_projection_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.indexer_projection_columns), 0}}},
+    {YVEX_TENSOR_ROLE_INDEXER_ATTENTION_Q_B, YVEX_TENSOR_COLLECTION_INDEXER,
+     YVEX_DEEPSEEK_RECIPE_FP8_PAIR, YVEX_DEEPSEEK_RECIPE_INDEXER, 0u,
+     "attn.indexer.wq_b", YVEX_NATIVE_DTYPE_UNKNOWN, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.indexer_query_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.indexer_query_columns), 0}}},
+    {YVEX_TENSOR_ROLE_INDEXER_PROJECTION, YVEX_TENSOR_COLLECTION_INDEXER,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_INDEXER, 0u,
+     "attn.indexer.weights_proj.weight", YVEX_NATIVE_DTYPE_BF16, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, tensors.indexer_weight_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, tensors.indexer_weight_columns), 0}}},
+    {YVEX_TENSOR_ROLE_ATTENTION_NORM, YVEX_TENSOR_COLLECTION_NORM,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "attn_norm.weight", YVEX_NATIVE_DTYPE_BF16, 1u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, attention_input_norm.width), 0}, {0u, 0}}},
+    {YVEX_TENSOR_ROLE_FFN_NORM, YVEX_TENSOR_COLLECTION_NORM,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "ffn_norm.weight", YVEX_NATIVE_DTYPE_BF16, 1u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, post_attention_ffn_norm.width), 0}, {0u, 0}}},
+    {YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION, YVEX_TENSOR_COLLECTION_MHC,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "hc_attn_fn", YVEX_NATIVE_DTYPE_F32, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, mhc.mixing_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, mhc.mixing_columns), 0}}},
+    {YVEX_TENSOR_ROLE_HC_ATTENTION_BASE, YVEX_TENSOR_COLLECTION_MHC,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "hc_attn_base", YVEX_NATIVE_DTYPE_F32, 1u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, mhc.base_width), 0}, {0u, 0}}},
+    {YVEX_TENSOR_ROLE_HC_ATTENTION_SCALE, YVEX_TENSOR_COLLECTION_MHC,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "hc_attn_scale", YVEX_NATIVE_DTYPE_F32, 1u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, mhc.scale_width), 0}, {0u, 0}}},
+    {YVEX_TENSOR_ROLE_HC_FFN_FUNCTION, YVEX_TENSOR_COLLECTION_MHC,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "hc_ffn_fn", YVEX_NATIVE_DTYPE_F32, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, mhc.mixing_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, mhc.mixing_columns), 0}}},
+    {YVEX_TENSOR_ROLE_HC_FFN_BASE, YVEX_TENSOR_COLLECTION_MHC,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "hc_ffn_base", YVEX_NATIVE_DTYPE_F32, 1u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, mhc.base_width), 0}, {0u, 0}}},
+    {YVEX_TENSOR_ROLE_HC_FFN_SCALE, YVEX_TENSOR_COLLECTION_MHC,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_ALWAYS, 0u, "hc_ffn_scale", YVEX_NATIVE_DTYPE_F32, 1u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, mhc.scale_width), 0}, {0u, 0}}},
+    {YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_GATE, YVEX_TENSOR_COLLECTION_SHARED_EXPERT,
+     YVEX_DEEPSEEK_RECIPE_FP8_PAIR, YVEX_DEEPSEEK_RECIPE_ALWAYS, 1u,
+     "ffn.shared_experts.w1", YVEX_NATIVE_DTYPE_UNKNOWN, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, moe.shared_intermediate_size), 0},
+      {offsetof(yvex_deepseek_v4_model_spec, hidden_size), 1}}},
+    {YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_DOWN, YVEX_TENSOR_COLLECTION_SHARED_EXPERT,
+     YVEX_DEEPSEEK_RECIPE_FP8_PAIR, YVEX_DEEPSEEK_RECIPE_ALWAYS, 1u,
+     "ffn.shared_experts.w2", YVEX_NATIVE_DTYPE_UNKNOWN, 2u,
+     {{offsetof(yvex_deepseek_v4_model_spec, hidden_size), 1},
+      {offsetof(yvex_deepseek_v4_layer_spec, moe.shared_intermediate_size), 0}}},
+    {YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_UP, YVEX_TENSOR_COLLECTION_SHARED_EXPERT,
+     YVEX_DEEPSEEK_RECIPE_FP8_PAIR, YVEX_DEEPSEEK_RECIPE_ALWAYS, 1u,
+     "ffn.shared_experts.w3", YVEX_NATIVE_DTYPE_UNKNOWN, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, moe.shared_intermediate_size), 0},
+      {offsetof(yvex_deepseek_v4_model_spec, hidden_size), 1}}},
+    {YVEX_TENSOR_ROLE_MOE_ROUTER, YVEX_TENSOR_COLLECTION_ROUTER,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_ALWAYS, 1u, "ffn.gate.weight", YVEX_NATIVE_DTYPE_BF16, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, moe.routed_experts), 0},
+      {offsetof(yvex_deepseek_v4_model_spec, hidden_size), 1}}},
+    {YVEX_TENSOR_ROLE_MOE_ROUTER_TABLE, YVEX_TENSOR_COLLECTION_ROUTER,
+     YVEX_DEEPSEEK_RECIPE_CHECKED_CAST, YVEX_DEEPSEEK_RECIPE_HASH_ROUTER, 1u,
+     "ffn.gate.tid2eid", YVEX_NATIVE_DTYPE_I64, 2u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, moe.hash_table_rows), 0},
+      {offsetof(yvex_deepseek_v4_layer_spec, moe.hash_table_columns), 0}}},
+    {YVEX_TENSOR_ROLE_MOE_ROUTER_BIAS, YVEX_TENSOR_COLLECTION_ROUTER,
+     YVEX_DEEPSEEK_RECIPE_DIRECT, YVEX_DEEPSEEK_RECIPE_LEARNED_ROUTER, 1u, "ffn.gate.bias", YVEX_NATIVE_DTYPE_F32, 1u,
+     {{offsetof(yvex_deepseek_v4_layer_spec, moe.correction_bias_width), 0}, {0u, 0}}}
 };
 
-typedef struct {
-    yvex_deepseek_tensor_coverage *coverage;
-    unsigned char *matched;
-    yvex_deepseek_tensor_coverage_failure *failure;
-    yvex_error *err;
-} coverage_builder;
-
-static void *coverage_allocate(size_t size, void *context)
+/* Purpose: return fixed family tensor-recipe cardinality without mutable state. */
+static unsigned long long family_recipe_count(void)
 {
-    (void)context;
-    return malloc(size);
+    return sizeof(layer_recipes) / sizeof(layer_recipes[0]);
 }
 
-static void coverage_release(void *allocation, void *context)
+/* Purpose: resolve one immutable recipe row in canonical terminal phase order. */
+static const yvex_deepseek_tensor_recipe *family_recipe_at(
+    unsigned long long index)
 {
-    (void)context;
-    free(allocation);
+    return index < family_recipe_count() ? &layer_recipes[index] : NULL;
 }
 
-static void coverage_failure_clear(
-    yvex_deepseek_tensor_coverage_failure *failure)
+/* Purpose: evaluate one recipe's typed architecture condition for a layer.
+ * Inputs: immutable recipe and layer spec.
+ * Effects: none.
+ * Failure: unknown conditions conservatively use the always-enabled rule.
+ * Boundary: family recipe selection, not source-name parsing. */
+static int recipe_enabled(const yvex_deepseek_tensor_recipe *recipe,
+                          const yvex_deepseek_v4_layer_spec *layer)
 {
-    if (!failure) return;
-    memset(failure, 0, sizeof(*failure));
-    failure->layer_index = YVEX_DEEPSEEK_TENSOR_NO_INDEX;
-    failure->expert_index = YVEX_DEEPSEEK_TENSOR_NO_INDEX;
-    failure->dimension_index = YVEX_DEEPSEEK_TENSOR_NO_INDEX;
-}
-
-static int coverage_reject(
-    yvex_deepseek_tensor_coverage_failure *failure,
-    yvex_deepseek_tensor_coverage_failure_code code,
-    yvex_deepseek_tensor_collection collection,
-    yvex_deepseek_tensor_scope scope,
-    const char *name,
-    unsigned long long layer,
-    unsigned long long expert,
-    unsigned long long dimension,
-    unsigned long long expected,
-    unsigned long long actual,
-    yvex_error *err)
-{
-    yvex_status status = code == YVEX_DEEPSEEK_COVERAGE_FAILURE_ALLOCATION
-                             ? YVEX_ERR_NOMEM
-                             : (code == YVEX_DEEPSEEK_COVERAGE_FAILURE_INVALID_ARGUMENT
-                                    ? YVEX_ERR_INVALID_ARG
-                                    : YVEX_ERR_FORMAT);
-
-    if (failure) {
-        coverage_failure_clear(failure);
-        failure->code = code;
-        failure->collection = collection;
-        failure->scope = scope;
-        (void)snprintf(failure->tensor_name, sizeof(failure->tensor_name),
-                       "%s", name ? name : "");
-        failure->layer_index = layer;
-        failure->expert_index = expert;
-        failure->dimension_index = dimension;
-        failure->expected = expected;
-        failure->actual = actual;
-    }
-    yvex_error_setf(err, status, "deepseek_tensor_coverage",
-                    "%s tensor=%s layer=%llu expert=%llu dimension=%llu expected=%llu actual=%llu",
-                    coverage_failure_name(code),
-                    name ? name : "none", layer, expert, dimension,
-                    expected, actual);
-    return status;
-}
-
-static unsigned long long coverage_hash_bytes(unsigned long long hash,
-                                              const void *data,
-                                              size_t length)
-{
-    const unsigned char *bytes = (const unsigned char *)data;
-    size_t i;
-
-    for (i = 0u; i < length; ++i) {
-        hash ^= bytes[i];
-        hash *= 1099511628211ull;
-    }
-    return hash;
-}
-
-static unsigned long long coverage_hash_u64(unsigned long long hash,
-                                            unsigned long long value)
-{
-    unsigned char bytes[8];
-    unsigned int i;
-
-    for (i = 0u; i < sizeof(bytes); ++i)
-        bytes[i] = (unsigned char)((value >> (i * 8u)) & 0xffu);
-    return coverage_hash_bytes(hash, bytes, sizeof(bytes));
-}
-
-static const char *coverage_scope_name(yvex_deepseek_tensor_scope scope)
-{
-    static const char *names[] = {"global", "main-layer", "mtp"};
-
-    return scope <= YVEX_DEEPSEEK_TENSOR_SCOPE_MTP ? names[scope] : "unknown";
-}
-
-/*
- * Reconciles one IR-derived slot against the retained snapshot and publishes
- * one borrowed row. Performs no IO or allocation; refusal mutates only the
- * unpublished summary and typed failure facts.
- */
-static int coverage_require(coverage_builder *builder,
-                            const char *name,
-                            yvex_deepseek_tensor_collection collection,
-                            yvex_deepseek_tensor_scope scope,
-                            unsigned long long layer,
-                            unsigned long long expert,
-                            yvex_native_dtype dtype,
-                            unsigned int rank,
-                            const unsigned long long *dims)
-{
-    yvex_deepseek_tensor_coverage *coverage = builder->coverage;
-    const yvex_native_weight_info *source;
-    unsigned long long source_index;
-    unsigned int dimension;
-    unsigned long long row_index = coverage->summary.required_tensor_count;
-
-    if (!yvex_source_tensor_snapshot_find_index(
-            coverage->snapshot, name, &source_index)) {
-        coverage->summary.missing_count++;
-        return coverage_reject(
-            builder->failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_MISSING_REQUIREMENT,
-            collection, scope, name, layer, expert,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, 1u, 0u, builder->err);
-    }
-    if (row_index >= coverage->summary.source_tensor_count) {
-        return coverage_reject(
-            builder->failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_RESOURCE_LIMIT,
-            collection, scope, name, layer, expert,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            coverage->summary.source_tensor_count, row_index + 1u,
-            builder->err);
-    }
-    source = yvex_source_tensor_snapshot_at(coverage->snapshot, source_index);
-    if (builder->matched[source_index]) {
-        coverage->summary.ambiguous_count++;
-        return coverage_reject(
-            builder->failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_AMBIGUOUS_MATCH,
-            collection, scope, name, layer, expert,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, 1u, 2u, builder->err);
-    }
-    if (source->rank != rank) {
-        return coverage_reject(
-            builder->failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_RANK_MISMATCH,
-            collection, scope, name, layer, expert,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, rank, source->rank, builder->err);
-    }
-    for (dimension = 0u; dimension < rank; ++dimension) {
-        if (source->dims[dimension] != dims[dimension]) {
-            return coverage_reject(
-                builder->failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_SHAPE_MISMATCH,
-                collection, scope, name, layer, expert, dimension,
-                dims[dimension], source->dims[dimension], builder->err);
-        }
-    }
-    if (source->dtype != dtype) {
-        return coverage_reject(
-            builder->failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_DTYPE_MISMATCH,
-            collection, scope, name, layer, expert,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, (unsigned long long)dtype,
-            (unsigned long long)source->dtype, builder->err);
-    }
-    builder->matched[source_index] = 1u;
-    coverage->rows[row_index].source = source;
-    coverage->rows[row_index].collection = collection;
-    coverage->rows[row_index].scope = scope;
-    coverage->rows[row_index].layer_index = layer;
-    coverage->rows[row_index].expert_index = expert;
-    coverage->row_by_source[source_index] = &coverage->rows[row_index];
-    coverage->summary.required_tensor_count++;
-    coverage->summary.matched_tensor_count++;
-    coverage->summary.collection_counts[collection]++;
-    return YVEX_OK;
-}
-
-static int coverage_vector(coverage_builder *builder,
-                           const char *name,
-                           yvex_deepseek_tensor_collection collection,
-                           yvex_deepseek_tensor_scope scope,
-                           unsigned long long layer,
-                           unsigned long long expert,
-                           yvex_native_dtype dtype,
-                           unsigned long long width)
-{
-    unsigned long long dims[1] = {width};
-    return coverage_require(builder, name, collection, scope, layer, expert,
-                            dtype, 1u, dims);
-}
-
-static int coverage_matrix(coverage_builder *builder,
-                           const char *name,
-                           yvex_deepseek_tensor_collection collection,
-                           yvex_deepseek_tensor_scope scope,
-                           unsigned long long layer,
-                           unsigned long long expert,
-                           yvex_native_dtype dtype,
-                           unsigned long long rows,
-                           unsigned long long columns)
-{
-    unsigned long long dims[2] = {rows, columns};
-    return coverage_require(builder, name, collection, scope, layer, expert,
-                            dtype, 2u, dims);
-}
-
-/*
- * Admits a quantization companion as an independent source obligation. No
- * payload is read; absence prevents publication of complete coverage.
- */
-static int coverage_companion_matrix(
-    coverage_builder *builder,
-    const char *name,
-    yvex_deepseek_tensor_collection collection,
-    yvex_deepseek_tensor_scope scope,
-    unsigned long long layer,
-    unsigned long long expert,
-    yvex_native_dtype dtype,
-    unsigned long long rows,
-    unsigned long long columns)
-{
-    if (!yvex_source_tensor_snapshot_find(builder->coverage->snapshot, name)) {
-        builder->coverage->summary.missing_count++;
-        return coverage_reject(
-            builder->failure,
-            YVEX_DEEPSEEK_COVERAGE_FAILURE_SCALE_COMPANION,
-            collection, scope, name, layer, expert,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, 1u, 0u, builder->err);
-    }
-    return coverage_matrix(builder, name, collection, scope, layer, expert,
-                           dtype, rows, columns);
-}
-
-static int coverage_fp8_pair(coverage_builder *builder,
-                             const char *base,
-                             yvex_deepseek_tensor_collection collection,
-                             yvex_deepseek_tensor_scope scope,
-                             unsigned long long layer,
-                             unsigned long long expert,
-                             unsigned long long rows,
-                             unsigned long long columns,
-                             const yvex_deepseek_v4_source_constraint *storage)
-{
-    char name[256];
-    int rc;
-
-    if (!storage->quant_block_rows || !storage->quant_block_columns ||
-        rows % storage->quant_block_rows != 0u ||
-        columns % storage->quant_block_columns != 0u) {
-        return coverage_reject(
-            builder->failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_SCALE_COMPANION,
-            collection, scope, base, layer, expert,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, 0u, 0u, builder->err);
-    }
-    (void)snprintf(name, sizeof(name), "%s.weight", base);
-    rc = coverage_matrix(builder, name, collection, scope, layer, expert,
-                         YVEX_NATIVE_DTYPE_F8_E4M3, rows, columns);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%s.scale", base);
-    return coverage_companion_matrix(
-        builder, name, collection, scope, layer, expert, storage->scale_dtype,
-        rows / storage->quant_block_rows,
-        columns / storage->quant_block_columns);
-}
-
-/*
- * Derives pinned FP4 physical and E8M0 scale shapes with checked divisibility.
- * Invalid storage geometry is typed before either requirement can close.
- */
-static int coverage_fp4_pair(coverage_builder *builder,
-                             const char *base,
-                             yvex_deepseek_tensor_scope scope,
-                             unsigned long long layer,
-                             unsigned long long expert,
-                             unsigned long long rows,
-                             unsigned long long columns,
-                             const yvex_deepseek_v4_source_constraint *storage)
-{
-    char name[256];
-    int rc;
-
-    if (!storage->fp4_packing_factor || !storage->fp4_scale_group_width ||
-        columns % storage->fp4_packing_factor != 0u ||
-        columns % storage->fp4_scale_group_width != 0u) {
-        return coverage_reject(
-            builder->failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_SCALE_COMPANION,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTED_EXPERT, scope, base,
-            layer, expert, YVEX_DEEPSEEK_TENSOR_NO_INDEX, 0u, columns,
-            builder->err);
-    }
-    (void)snprintf(name, sizeof(name), "%s.weight", base);
-    rc = coverage_matrix(
-        builder, name, YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTED_EXPERT,
-        scope, layer, expert, storage->fp4_physical_dtype, rows,
-        columns / storage->fp4_packing_factor);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%s.scale", base);
-    return coverage_companion_matrix(
-        builder, name, YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTED_EXPERT,
-        scope, layer, expert, storage->scale_dtype, rows,
-        columns / storage->fp4_scale_group_width);
-}
-
-static int coverage_mhc(coverage_builder *builder,
-                        const char *prefix,
-                        const char *kind,
-                        yvex_deepseek_tensor_scope scope,
-                        unsigned long long layer,
-                        const yvex_deepseek_v4_mhc_spec *mhc)
-{
-    char name[256];
-    int rc;
-
-    (void)snprintf(name, sizeof(name), "%s.hc_%s_fn", prefix, kind);
-    rc = coverage_matrix(builder, name,
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_MHC, scope, layer,
-                         YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_NATIVE_DTYPE_F32,
-                         mhc->mixing_rows, mhc->mixing_columns);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%s.hc_%s_base", prefix, kind);
-    rc = coverage_vector(builder, name,
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_MHC, scope, layer,
-                         YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_NATIVE_DTYPE_F32,
-                         mhc->base_width);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%s.hc_%s_scale", prefix, kind);
-    return coverage_vector(builder, name,
-                           YVEX_DEEPSEEK_TENSOR_COLLECTION_MHC, scope, layer,
-                           YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                           YVEX_NATIVE_DTYPE_F32, mhc->scale_width);
-}
-
-static int coverage_mhc_head(
-    coverage_builder *builder,
-    const char *prefix,
-    yvex_deepseek_tensor_scope scope,
-    unsigned long long layer,
-    const yvex_deepseek_v4_mhc_head_spec *head,
-    yvex_deepseek_tensor_collection collection)
-{
-    char name[256];
-    int rc;
-
-    if (!head->required) return YVEX_OK;
-    (void)snprintf(name, sizeof(name), "%shc_head_fn", prefix);
-    rc = coverage_matrix(builder, name, collection, scope, layer,
-                         YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_NATIVE_DTYPE_F32,
-                         head->function_rows, head->function_columns);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%shc_head_base", prefix);
-    rc = coverage_vector(builder, name, collection, scope, layer,
-                         YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_NATIVE_DTYPE_F32,
-                         head->base_width);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%shc_head_scale", prefix);
-    return coverage_vector(builder, name, collection, scope, layer,
-                           YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                           YVEX_NATIVE_DTYPE_F32, head->scale_width);
-}
-
-/*
- * Projects the layer attention class and its IR-owned projection, compressor,
- * and indexer geometry into exact source obligations. It performs indexed
- * snapshot lookups only and returns on the first typed mismatch.
- */
-static int coverage_attention(
-    coverage_builder *builder,
-    const char *prefix,
-    const yvex_deepseek_v4_layer_spec *layer,
-    yvex_deepseek_tensor_scope scope,
-    const yvex_deepseek_v4_source_constraint *storage)
-{
-    char name[256];
-    char base[256];
-    int rc;
-
-    (void)snprintf(name, sizeof(name), "%s.attn.attn_sink", prefix);
-    rc = coverage_vector(builder, name,
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION, scope,
-                         layer->layer_index, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                         YVEX_NATIVE_DTYPE_F32, layer->attention_sink_count);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%s.attn.q_norm.weight", prefix);
-    rc = coverage_vector(builder, name,
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION, scope,
-                         layer->layer_index, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                         YVEX_NATIVE_DTYPE_BF16, layer->query_lora_rank);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%s.attn.kv_norm.weight", prefix);
-    rc = coverage_vector(builder, name,
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION, scope,
-                         layer->layer_index, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                         YVEX_NATIVE_DTYPE_BF16, layer->head_dimension);
-    if (rc != YVEX_OK) return rc;
-#define REQUIRE_ATTN_PAIR(member, suffix)                                      \
-    do {                                                                        \
-        (void)snprintf(base, sizeof(base), "%s.attn.%s", prefix, suffix);      \
-        rc = coverage_fp8_pair(builder, base,                                   \
-                               YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION,       \
-                               scope, layer->layer_index,                       \
-                               YVEX_DEEPSEEK_TENSOR_NO_INDEX,                   \
-                               layer->tensors.member##_rows,                    \
-                               layer->tensors.member##_columns, storage);       \
-        if (rc != YVEX_OK) return rc;                                           \
-    } while (0)
-    REQUIRE_ATTN_PAIR(kv, "wkv");
-    REQUIRE_ATTN_PAIR(q_a, "wq_a");
-    REQUIRE_ATTN_PAIR(q_b, "wq_b");
-    REQUIRE_ATTN_PAIR(o_a, "wo_a");
-    REQUIRE_ATTN_PAIR(o_b, "wo_b");
-#undef REQUIRE_ATTN_PAIR
-    if (layer->compressor_required) {
-        (void)snprintf(name, sizeof(name), "%s.attn.compressor.ape", prefix);
-        rc = coverage_matrix(builder, name,
-                             YVEX_DEEPSEEK_TENSOR_COLLECTION_COMPRESSOR,
-                             scope, layer->layer_index,
-                             YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                             YVEX_NATIVE_DTYPE_F32,
-                             layer->tensors.compressor_ape_rows,
-                             layer->tensors.compressor_ape_columns);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(name, sizeof(name),
-                       "%s.attn.compressor.norm.weight", prefix);
-        rc = coverage_vector(builder, name,
-                             YVEX_DEEPSEEK_TENSOR_COLLECTION_COMPRESSOR,
-                             scope, layer->layer_index,
-                             YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                             YVEX_NATIVE_DTYPE_BF16,
-                             layer->tensors.compressor_norm_width);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(name, sizeof(name),
-                       "%s.attn.compressor.wgate.weight", prefix);
-        rc = coverage_matrix(builder, name,
-                             YVEX_DEEPSEEK_TENSOR_COLLECTION_COMPRESSOR,
-                             scope, layer->layer_index,
-                             YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                             YVEX_NATIVE_DTYPE_BF16,
-                             layer->tensors.compressor_projection_rows,
-                             layer->tensors.compressor_projection_columns);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(name, sizeof(name),
-                       "%s.attn.compressor.wkv.weight", prefix);
-        rc = coverage_matrix(builder, name,
-                             YVEX_DEEPSEEK_TENSOR_COLLECTION_COMPRESSOR,
-                             scope, layer->layer_index,
-                             YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                             YVEX_NATIVE_DTYPE_BF16,
-                             layer->tensors.compressor_projection_rows,
-                             layer->tensors.compressor_projection_columns);
-        if (rc != YVEX_OK) return rc;
-    }
-    if (layer->indexer_required) {
-        (void)snprintf(name, sizeof(name),
-                       "%s.attn.indexer.compressor.ape", prefix);
-        rc = coverage_matrix(builder, name,
-                             YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER, scope,
-                             layer->layer_index, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                             YVEX_NATIVE_DTYPE_F32,
-                             layer->tensors.indexer_ape_rows,
-                             layer->tensors.indexer_ape_columns);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(name, sizeof(name),
-                       "%s.attn.indexer.compressor.norm.weight", prefix);
-        rc = coverage_vector(builder, name,
-                             YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER, scope,
-                             layer->layer_index, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                             YVEX_NATIVE_DTYPE_BF16,
-                             layer->tensors.indexer_norm_width);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(name, sizeof(name),
-                       "%s.attn.indexer.compressor.wgate.weight", prefix);
-        rc = coverage_matrix(builder, name,
-                             YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER, scope,
-                             layer->layer_index, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                             YVEX_NATIVE_DTYPE_BF16,
-                             layer->tensors.indexer_projection_rows,
-                             layer->tensors.indexer_projection_columns);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(name, sizeof(name),
-                       "%s.attn.indexer.compressor.wkv.weight", prefix);
-        rc = coverage_matrix(builder, name,
-                             YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER, scope,
-                             layer->layer_index, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                             YVEX_NATIVE_DTYPE_BF16,
-                             layer->tensors.indexer_projection_rows,
-                             layer->tensors.indexer_projection_columns);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(base, sizeof(base), "%s.attn.indexer.wq_b", prefix);
-        rc = coverage_fp8_pair(builder, base,
-                               YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER, scope,
-                               layer->layer_index,
-                               YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                               layer->tensors.indexer_query_rows,
-                               layer->tensors.indexer_query_columns, storage);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(name, sizeof(name),
-                       "%s.attn.indexer.weights_proj.weight", prefix);
-        rc = coverage_matrix(builder, name,
-                             YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER, scope,
-                             layer->layer_index, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                             YVEX_NATIVE_DTYPE_BF16,
-                             layer->tensors.indexer_weight_rows,
-                             layer->tensors.indexer_weight_columns);
-        if (rc != YVEX_OK) return rc;
-    }
-    return YVEX_OK;
-}
-
-/*
- * Derives router, routed-expert, and shared-expert obligations from one layer
- * IR. Expert iteration is bounded by validated IR counts and never rescans
- * source headers.
- */
-static int coverage_moe(coverage_builder *builder,
-                        const char *prefix,
-                        const yvex_deepseek_v4_layer_spec *layer,
-                        yvex_deepseek_tensor_scope scope,
-                        const yvex_deepseek_v4_source_constraint *storage,
-                        unsigned long long hidden_size)
-{
-    char base[256];
-    char name[256];
-    unsigned long long expert;
-    int rc;
-
-    for (expert = 0u; expert < layer->moe.routed_experts; ++expert) {
-        (void)snprintf(base, sizeof(base), "%s.ffn.experts.%llu.w1", prefix,
-                       expert);
-        rc = coverage_fp4_pair(builder, base, scope, layer->layer_index,
-                               expert, layer->moe.expert_intermediate_size,
-                               hidden_size, storage);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(base, sizeof(base), "%s.ffn.experts.%llu.w2", prefix,
-                       expert);
-        rc = coverage_fp4_pair(builder, base, scope, layer->layer_index,
-                               expert, hidden_size,
-                               layer->moe.expert_intermediate_size, storage);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(base, sizeof(base), "%s.ffn.experts.%llu.w3", prefix,
-                       expert);
-        rc = coverage_fp4_pair(builder, base, scope, layer->layer_index,
-                               expert, layer->moe.expert_intermediate_size,
-                               hidden_size, storage);
-        if (rc != YVEX_OK) return rc;
-    }
-    (void)snprintf(base, sizeof(base), "%s.ffn.shared_experts.w1", prefix);
-    rc = coverage_fp8_pair(builder, base,
-                           YVEX_DEEPSEEK_TENSOR_COLLECTION_SHARED_EXPERT,
-                           scope, layer->layer_index,
-                           YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                           layer->moe.shared_intermediate_size, hidden_size,
-                           storage);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(base, sizeof(base), "%s.ffn.shared_experts.w2", prefix);
-    rc = coverage_fp8_pair(builder, base,
-                           YVEX_DEEPSEEK_TENSOR_COLLECTION_SHARED_EXPERT,
-                           scope, layer->layer_index,
-                           YVEX_DEEPSEEK_TENSOR_NO_INDEX, hidden_size,
-                           layer->moe.shared_intermediate_size, storage);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(base, sizeof(base), "%s.ffn.shared_experts.w3", prefix);
-    rc = coverage_fp8_pair(builder, base,
-                           YVEX_DEEPSEEK_TENSOR_COLLECTION_SHARED_EXPERT,
-                           scope, layer->layer_index,
-                           YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                           layer->moe.shared_intermediate_size, hidden_size,
-                           storage);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%s.ffn.gate.weight", prefix);
-    rc = coverage_matrix(builder, name,
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTER, scope,
-                         layer->layer_index, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                         YVEX_NATIVE_DTYPE_BF16, layer->moe.routed_experts,
-                         hidden_size);
-    if (rc != YVEX_OK) return rc;
-    if (layer->moe.router_class == YVEX_DEEPSEEK_V4_ROUTER_HASH_TOKEN_ID) {
-        (void)snprintf(name, sizeof(name), "%s.ffn.gate.tid2eid", prefix);
-        return coverage_matrix(builder, name,
-                               YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTER, scope,
-                               layer->layer_index,
-                               YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                               YVEX_NATIVE_DTYPE_I64,
-                               layer->moe.hash_table_rows,
-                               layer->moe.hash_table_columns);
-    }
-    (void)snprintf(name, sizeof(name), "%s.ffn.gate.bias", prefix);
-    return coverage_vector(builder, name,
-                           YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTER, scope,
-                           layer->layer_index,
-                           YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                           YVEX_NATIVE_DTYPE_F32,
-                           layer->moe.correction_bias_width);
-}
-
-static int coverage_layer(coverage_builder *builder,
-                          const char *prefix,
-                          const yvex_deepseek_v4_layer_spec *layer,
-                          yvex_deepseek_tensor_scope scope,
-                          const yvex_deepseek_v4_model_spec *model)
-{
-    char name[256];
-    int rc = coverage_attention(builder, prefix, layer, scope,
-                                &model->source_constraint);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%s.attn_norm.weight", prefix);
-    rc = coverage_vector(builder, name,
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_NORM, scope,
-                         layer->layer_index, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                         YVEX_NATIVE_DTYPE_BF16,
-                         layer->attention_input_norm.width);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%s.ffn_norm.weight", prefix);
-    rc = coverage_vector(builder, name,
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_NORM, scope,
-                         layer->layer_index, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                         YVEX_NATIVE_DTYPE_BF16,
-                         layer->post_attention_ffn_norm.width);
-    if (rc != YVEX_OK) return rc;
-    rc = coverage_mhc(builder, prefix, "attn", scope, layer->layer_index,
-                      &layer->mhc);
-    if (rc != YVEX_OK) return rc;
-    rc = coverage_mhc(builder, prefix, "ffn", scope, layer->layer_index,
-                      &layer->mhc);
-    if (rc != YVEX_OK) return rc;
-    return coverage_moe(builder, prefix, layer, scope,
-                        &model->source_constraint, model->hidden_size);
-}
-
-/*
- * Enumerates the complete global, 43-layer, and auxiliary/MTP requirement set
- * in deterministic order. It mutates only the unpublished builder and stops
- * at the first refusal.
- */
-static int coverage_build_requirements(coverage_builder *builder,
-                                       const yvex_deepseek_v4_ir *ir)
-{
-    const yvex_deepseek_v4_model_spec *model = family_ir_model(ir);
-    unsigned long long layer_index;
-    char prefix[64];
-    int rc;
-
-    rc = coverage_matrix(builder, "embed.weight",
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-                         YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-                         YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                         YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                         YVEX_NATIVE_DTYPE_BF16,
-                         model->embedding.vocabulary_size,
-                         model->embedding.hidden_size);
-    if (rc != YVEX_OK) return rc;
-    rc = coverage_vector(builder, "norm.weight",
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-                         YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-                         YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                         YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                         YVEX_NATIVE_DTYPE_BF16, model->hidden_size);
-    if (rc != YVEX_OK) return rc;
-    rc = coverage_matrix(builder, "head.weight",
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-                         YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-                         YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                         YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                         YVEX_NATIVE_DTYPE_BF16,
-                         model->output.vocabulary_size,
-                         model->output.input_width);
-    if (rc != YVEX_OK) return rc;
-    rc = coverage_mhc_head(builder, "",
-                           YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-                           YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                           &model->final_mhc_head,
-                           YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL);
-    if (rc != YVEX_OK) return rc;
-    for (layer_index = 0u; layer_index < model->main_layer_count;
-         ++layer_index) {
-        const yvex_deepseek_v4_layer_spec *layer =
-            family_ir_layer_at(ir, layer_index);
-        (void)snprintf(prefix, sizeof(prefix), "layers.%llu", layer_index);
-        rc = coverage_layer(builder, prefix, layer,
-                            YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER, model);
-        if (rc != YVEX_OK) return rc;
-    }
-    for (layer_index = 0u; layer_index < model->auxiliary_layer_count;
-         ++layer_index) {
-        const yvex_deepseek_v4_auxiliary_spec *aux =
-            family_ir_auxiliary_at(ir, layer_index);
-        char name[256];
-        char base[256];
-
-        (void)snprintf(prefix, sizeof(prefix), "mtp.%llu", layer_index);
-        rc = coverage_layer(builder, prefix, &aux->layer,
-                            YVEX_DEEPSEEK_TENSOR_SCOPE_MTP, model);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(base, sizeof(base), "%s.e_proj", prefix);
-        rc = coverage_fp8_pair(builder, base,
-                               YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY,
-                               YVEX_DEEPSEEK_TENSOR_SCOPE_MTP,
-                               aux->layer.layer_index,
-                               YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                               aux->embedding_projection_output,
-                               aux->embedding_projection_input,
-                               &model->source_constraint);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(base, sizeof(base), "%s.h_proj", prefix);
-        rc = coverage_fp8_pair(builder, base,
-                               YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY,
-                               YVEX_DEEPSEEK_TENSOR_SCOPE_MTP,
-                               aux->layer.layer_index,
-                               YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                               aux->hidden_projection_output,
-                               aux->hidden_projection_input,
-                               &model->source_constraint);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(name, sizeof(name), "%s.enorm.weight", prefix);
-        rc = coverage_vector(builder, name,
-                             YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY,
-                             YVEX_DEEPSEEK_TENSOR_SCOPE_MTP,
-                             aux->layer.layer_index,
-                             YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                             YVEX_NATIVE_DTYPE_BF16,
-                             aux->embedding_projection_input);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(name, sizeof(name), "%s.hnorm.weight", prefix);
-        rc = coverage_vector(builder, name,
-                             YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY,
-                             YVEX_DEEPSEEK_TENSOR_SCOPE_MTP,
-                             aux->layer.layer_index,
-                             YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                             YVEX_NATIVE_DTYPE_BF16,
-                             aux->hidden_projection_input);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(name, sizeof(name), "%s.norm.weight", prefix);
-        rc = coverage_vector(builder, name,
-                             YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY,
-                             YVEX_DEEPSEEK_TENSOR_SCOPE_MTP,
-                             aux->layer.layer_index,
-                             YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                             YVEX_NATIVE_DTYPE_BF16, model->hidden_size);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(base, sizeof(base), "%s.", prefix);
-        rc = coverage_mhc_head(
-            builder, base, YVEX_DEEPSEEK_TENSOR_SCOPE_MTP,
-            aux->layer.layer_index, &aux->mhc_head,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY);
-        if (rc != YVEX_OK) return rc;
-    }
-    return YVEX_OK;
-}
-
-/* Parses one decimal name segment and distinguishes arithmetic overflow. */
-static int coverage_parse_name_index(const char *text,
-                                     unsigned long long *value,
-                                     const char **end)
-{
-    unsigned long long parsed = 0u;
-    const char *cursor = text;
-
-    if (!cursor || *cursor < '0' || *cursor > '9') return 0;
-    while (*cursor >= '0' && *cursor <= '9') {
-        unsigned long long digit = (unsigned long long)(*cursor - '0');
-        if (parsed > (ULLONG_MAX - digit) / 10u) return -1;
-        parsed = parsed * 10u + digit;
-        cursor++;
-    }
-    *value = parsed;
-    *end = cursor;
+    if (recipe->condition == YVEX_DEEPSEEK_RECIPE_COMPRESSOR) return layer->compressor_required;
+    if (recipe->condition == YVEX_DEEPSEEK_RECIPE_INDEXER) return layer->indexer_required;
+    if (recipe->condition == YVEX_DEEPSEEK_RECIPE_HASH_ROUTER)
+        return layer->moe.router_class == YVEX_DEEPSEEK_V4_ROUTER_HASH_TOKEN_ID;
+    if (recipe->condition == YVEX_DEEPSEEK_RECIPE_LEARNED_ROUTER)
+        return layer->moe.router_class == YVEX_DEEPSEEK_V4_ROUTER_LEARNED_HIDDEN_STATE;
     return 1;
 }
 
-/* Classifies out-of-range structured names before generic unexpected refusal. */
-static int coverage_reject_unexpected(coverage_builder *builder,
-                                      const yvex_deepseek_v4_ir *ir,
-                                      const yvex_native_weight_info *source)
-{
-    const yvex_deepseek_v4_model_spec *model =
-        family_ir_model(ir);
-    const yvex_deepseek_v4_layer_spec *layer_spec = NULL;
-    const yvex_deepseek_v4_auxiliary_spec *aux =
-        family_ir_auxiliary_at(ir, 0u);
-    yvex_deepseek_tensor_scope scope = YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL;
-    unsigned long long layer = YVEX_DEEPSEEK_TENSOR_NO_INDEX;
-    unsigned long long expert = YVEX_DEEPSEEK_TENSOR_NO_INDEX;
-    const char *tail = NULL;
-    const char *expert_text;
-    int parsed;
-
-    if (!source || !source->name || !model) {
-        return coverage_reject(
-            builder->failure,
-            YVEX_DEEPSEEK_COVERAGE_FAILURE_UNEXPECTED_SOURCE,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL, scope, "unknown",
-            layer, expert, YVEX_DEEPSEEK_TENSOR_NO_INDEX, 0u, 1u,
-            builder->err);
-    }
-    if (strncmp(source->name, "layers.", 7u) == 0) {
-        scope = YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER;
-        parsed = coverage_parse_name_index(source->name + 7u, &layer, &tail);
-        if (parsed < 0) goto arithmetic_overflow;
-        if (parsed > 0 && *tail == '.' && layer >= model->main_layer_count) {
-            return coverage_reject(
-                builder->failure,
-                YVEX_DEEPSEEK_COVERAGE_FAILURE_INVALID_INDEX,
-                YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL, scope, source->name,
-                layer, expert, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                model->main_layer_count - 1u, layer, builder->err);
-        }
-        if (parsed > 0 && *tail == '.')
-            layer_spec = family_ir_layer_at(ir, layer);
-    } else if (strncmp(source->name, "mtp.", 4u) == 0) {
-        unsigned long long predictor = 0u;
-        scope = YVEX_DEEPSEEK_TENSOR_SCOPE_MTP;
-        parsed = coverage_parse_name_index(source->name + 4u,
-                                           &predictor, &tail);
-        if (parsed < 0) goto arithmetic_overflow;
-        layer = aux ? aux->layer.layer_index : YVEX_DEEPSEEK_TENSOR_NO_INDEX;
-        if (parsed > 0 && *tail == '.' &&
-            (!aux || predictor != aux->predictor_index)) {
-            return coverage_reject(
-                builder->failure,
-                YVEX_DEEPSEEK_COVERAGE_FAILURE_INVALID_INDEX,
-                YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY, scope,
-                source->name, layer, predictor,
-                YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                aux ? aux->predictor_index : 0u, predictor, builder->err);
-        }
-        if (parsed > 0 && *tail == '.' && aux) layer_spec = &aux->layer;
-    }
-    expert_text = tail ? strstr(tail, ".ffn.experts.") : NULL;
-    if (expert_text && layer_spec) {
-        parsed = coverage_parse_name_index(
-            expert_text + strlen(".ffn.experts."), &expert, &tail);
-        if (parsed < 0) goto arithmetic_overflow;
-        if (parsed > 0 && *tail == '.' &&
-            expert >= layer_spec->moe.routed_experts) {
-            return coverage_reject(
-                builder->failure,
-                YVEX_DEEPSEEK_COVERAGE_FAILURE_INVALID_INDEX,
-                YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTED_EXPERT, scope,
-                source->name, layer, expert,
-                YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                layer_spec->moe.routed_experts - 1u, expert, builder->err);
-        }
-    }
-    return coverage_reject(
-        builder->failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_UNEXPECTED_SOURCE,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL, scope, source->name,
-        layer, expert, YVEX_DEEPSEEK_TENSOR_NO_INDEX, 0u, 1u, builder->err);
-
-arithmetic_overflow:
-    return coverage_reject(
-        builder->failure,
-        YVEX_DEEPSEEK_COVERAGE_FAILURE_ARITHMETIC_OVERFLOW,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL, scope, source->name,
-        layer, expert, YVEX_DEEPSEEK_TENSOR_NO_INDEX, ULLONG_MAX, 0u,
-        builder->err);
-}
-
-static int coverage_validate_inputs(
-    const yvex_source_verification *verification,
-    const yvex_deepseek_v4_ir *ir,
-    yvex_source_tensor_snapshot *snapshot,
-    yvex_source_tensor_snapshot_facts *facts,
-    yvex_deepseek_tensor_coverage_failure *failure,
-    yvex_error *err)
-{
-    const yvex_model_target_identity *identity =
-        yvex_model_target_release_identity();
-    const yvex_deepseek_v4_model_spec *model = family_ir_model(ir);
-
-    if (!verification || !ir || !snapshot || !model) {
-        return coverage_reject(
-            failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_INVALID_ARGUMENT,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "coverage-input",
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, 1u, 0u, err);
-    }
-    if (!verification->verified || verification->blocker_count != 0u ||
-        strcmp(verification->manifest_target_id, identity->target_id) != 0 ||
-        strcmp(verification->repository_id, identity->upstream_repo_id) != 0 ||
-        strcmp(verification->revision, identity->upstream_revision) != 0 ||
-        strcmp(model->target_id, identity->target_id) != 0 ||
-        strcmp(model->revision, identity->upstream_revision) != 0) {
-        return coverage_reject(
-            failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_SOURCE_IDENTITY,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "pinned-source-identity",
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, 1u, 0u, err);
-    }
-    if (strcmp(verification->inventory_authority, "upstream-index") != 0 ||
-        !verification->upstream_index_identity_verified ||
-        strcmp(verification->upstream_index_oid,
-               identity->upstream_index_oid) != 0 ||
-        strcmp(verification->local_index_oid,
-               identity->upstream_index_oid) != 0) {
-        return coverage_reject(
-            failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_INVENTORY_AUTHORITY,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "pinned-upstream-index",
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, 1u, 0u, err);
-    }
-    if (yvex_source_tensor_snapshot_facts_get(snapshot, facts, err) != YVEX_OK)
-        return yvex_error_code(err);
-    if (facts->tensor_count != verification->header_tensor_count ||
-        facts->shard_count != verification->header_shard_count ||
-        facts->header_scan_count != verification->header_scan_count ||
-        facts->payload_bytes_read != 0u) {
-        return coverage_reject(
-            failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_INVENTORY_DRIFT,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "snapshot-verification-facts",
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, verification->header_tensor_count,
-            facts->tensor_count, err);
-    }
-    if (model->main_layer_count != 43u || model->auxiliary_layer_count != 1u ||
-        model->source_constraint.quant_block_rows != 128u ||
-        model->source_constraint.quant_block_columns != 128u ||
-        model->source_constraint.fp4_packing_factor != 2u ||
-        model->source_constraint.fp4_scale_group_width != 32u ||
-        model->source_constraint.scale_dtype != YVEX_NATIVE_DTYPE_F8_E8M0 ||
-        !model->final_mhc_head.required) {
-        return coverage_reject(
-            failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_ARCHITECTURE_INCOMPLETE,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "tensor-relevant-ir",
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, 1u, 0u, err);
-    }
-    return YVEX_OK;
-}
-
-/*
- * Allocates and publishes an immutable result only after one-to-one
- * reconciliation. The result retains the snapshot; every partial allocation
- * and retained reference is released on failure.
- */
-static int coverage_build(
-    yvex_deepseek_tensor_coverage **out,
-    const yvex_source_verification *verification,
-    const yvex_deepseek_v4_ir *ir,
-    yvex_source_tensor_snapshot *snapshot,
-    const yvex_deepseek_tensor_coverage_options *options,
-    yvex_deepseek_tensor_coverage_failure *failure,
-    yvex_error *err)
-{
-    yvex_deepseek_tensor_coverage_options actual;
-    yvex_source_tensor_snapshot_facts source_facts;
-    yvex_deepseek_tensor_coverage *coverage;
-    coverage_builder builder;
-    unsigned long long index;
-    unsigned long long hash = 1469598103934665603ull;
-    int rc;
-
-    if (!out) return coverage_reject(
-        failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_INVALID_ARGUMENT,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-        YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "output",
-        YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-        YVEX_DEEPSEEK_TENSOR_NO_INDEX, 1u, 0u, err);
-    *out = NULL;
-    coverage_failure_clear(failure);
-    memset(&source_facts, 0, sizeof(source_facts));
-    rc = coverage_validate_inputs(verification, ir, snapshot, &source_facts,
-                                  failure, err);
-    if (rc != YVEX_OK) return rc;
-    actual.allocate = coverage_allocate;
-    actual.release = coverage_release;
-    actual.context = NULL;
-    actual.maximum_tensors = DEEPSEEK_COVERAGE_DEFAULT_LIMIT;
-    if (options) {
-        if ((options->allocate == NULL) != (options->release == NULL)) {
-            return coverage_reject(
-                failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_INVALID_ARGUMENT,
-                YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-                YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "allocator",
-                YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-                YVEX_DEEPSEEK_TENSOR_NO_INDEX, 1u, 0u, err);
-        }
-        if (options->allocate) {
-            actual.allocate = options->allocate;
-            actual.release = options->release;
-            actual.context = options->context;
-        }
-        if (options->maximum_tensors)
-            actual.maximum_tensors = options->maximum_tensors;
-    }
-    if (source_facts.tensor_count > actual.maximum_tensors ||
-        source_facts.tensor_count > (unsigned long long)(SIZE_MAX /
-                                     sizeof(yvex_deepseek_tensor_coverage_row))) {
-        return coverage_reject(
-            failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_RESOURCE_LIMIT,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "tensor-count",
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, actual.maximum_tensors,
-            source_facts.tensor_count, err);
-    }
-    coverage = (yvex_deepseek_tensor_coverage *)actual.allocate(
-        sizeof(*coverage), actual.context);
-    if (!coverage) return coverage_reject(
-        failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_ALLOCATION,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-        YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "coverage",
-        YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-        YVEX_DEEPSEEK_TENSOR_NO_INDEX, sizeof(*coverage), 0u, err);
-    memset(coverage, 0, sizeof(*coverage));
-    coverage->options = actual;
-    coverage->rows = (yvex_deepseek_tensor_coverage_row *)actual.allocate(
-        (size_t)source_facts.tensor_count * sizeof(coverage->rows[0]),
-        actual.context);
-    coverage->row_by_source =
-        (const yvex_deepseek_tensor_coverage_row **)actual.allocate(
-            (size_t)source_facts.tensor_count *
-                sizeof(coverage->row_by_source[0]), actual.context);
-    builder.matched = (unsigned char *)actual.allocate(
-        (size_t)source_facts.tensor_count, actual.context);
-    if (!coverage->rows || !coverage->row_by_source || !builder.matched) {
-        if (builder.matched) actual.release(builder.matched, actual.context);
-        coverage_close(coverage);
-        return coverage_reject(
-            failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_ALLOCATION,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "coverage-tables",
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, source_facts.tensor_count, 0u, err);
-    }
-    memset(coverage->rows, 0, (size_t)source_facts.tensor_count *
-                                    sizeof(coverage->rows[0]));
-    memset(coverage->row_by_source, 0, (size_t)source_facts.tensor_count *
-                                             sizeof(coverage->row_by_source[0]));
-    memset(builder.matched, 0, (size_t)source_facts.tensor_count);
-    coverage->snapshot = snapshot;
-    yvex_source_tensor_snapshot_retain(snapshot);
-    coverage->summary.source_tensor_count = source_facts.tensor_count;
-    coverage->summary.main_layer_count = 43u;
-    coverage->summary.auxiliary_layer_count = 1u;
-    coverage->summary.header_scan_count = source_facts.header_scan_count;
-    coverage->summary.payload_bytes_read = source_facts.payload_bytes_read;
-    coverage->summary.source_identity = source_facts.identity;
-    builder.coverage = coverage;
-    builder.failure = failure;
-    builder.err = err;
-    rc = coverage_build_requirements(&builder, ir);
-    if (rc == YVEX_OK) {
-        for (index = 0u; index < source_facts.tensor_count; ++index) {
-            if (!builder.matched[index]) {
-                const yvex_native_weight_info *unexpected =
-                    yvex_source_tensor_snapshot_at(snapshot, index);
-                coverage->summary.unexpected_count++;
-                rc = coverage_reject_unexpected(&builder, ir, unexpected);
-                break;
-            }
-        }
-    }
-    actual.release(builder.matched, actual.context);
-    if (rc != YVEX_OK) {
-        coverage_close(coverage);
-        return rc;
-    }
-    if (coverage->summary.required_tensor_count != source_facts.tensor_count ||
-        coverage->summary.matched_tensor_count != source_facts.tensor_count) {
-        unsigned long long matched = coverage->summary.matched_tensor_count;
-        coverage_close(coverage);
-        return coverage_reject(
-            failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_INVENTORY_DRIFT,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "one-to-one-count",
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, source_facts.tensor_count,
-            matched, err);
-    }
-    hash = coverage_hash_u64(hash, source_facts.identity);
-    for (index = 0u; index < coverage->summary.required_tensor_count; ++index) {
-        const yvex_native_weight_info *source = coverage->rows[index].source;
-        const char *collection = coverage_collection_name(
-            coverage->rows[index].collection);
-        const char *scope = coverage_scope_name(coverage->rows[index].scope);
-        hash = coverage_hash_bytes(hash, source->name, strlen(source->name) + 1u);
-        hash = coverage_hash_bytes(hash, collection, strlen(collection) + 1u);
-        hash = coverage_hash_bytes(hash, scope, strlen(scope) + 1u);
-        hash = coverage_hash_u64(hash, coverage->rows[index].layer_index);
-        hash = coverage_hash_u64(hash, coverage->rows[index].expert_index);
-    }
-    coverage->summary.routed_expert_count =
-        coverage->summary.collection_counts[
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTED_EXPERT];
-    coverage->summary.shared_expert_count =
-        coverage->summary.collection_counts[
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_SHARED_EXPERT];
-    if (yvex_source_tensor_snapshot_facts_get(snapshot, &source_facts, err) !=
-        YVEX_OK) {
-        coverage_close(coverage);
-        return yvex_error_code(err);
-    }
-    coverage->summary.source_lookup_count = source_facts.lookup_count;
-    coverage->summary.source_collision_count = source_facts.collision_count;
-    coverage->summary.source_maximum_probe = source_facts.maximum_probe;
-    coverage->summary.coverage_identity = hash;
-    coverage->summary.complete = 1;
-    *out = coverage;
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-/*
- * Coordinates one strict header scan, one IR construction, and exact coverage.
- * Source IO remains in the source owner; all temporary owners are released
- * before return.
- */
-static int coverage_open_verified_source(
-    yvex_deepseek_tensor_coverage **out,
-    yvex_source_verification *verification,
-    const char *source_path,
-    const char *models_root,
-    yvex_deepseek_tensor_coverage_failure *failure,
-    yvex_error *err)
-{
-    yvex_source_verify_options source_options;
-    yvex_source_tensor_snapshot *snapshot = NULL;
-    yvex_deepseek_v4_ir *ir = NULL;
-    yvex_deepseek_v4_ir_failure ir_failure;
-    int rc;
-
-    if (!out || !verification || !source_path || !source_path[0]) {
-        return coverage_reject(
-            failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_INVALID_ARGUMENT,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "verified-source-path",
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, 1u, 0u, err);
-    }
-    *out = NULL;
-    memset(&source_options, 0, sizeof(source_options));
-    source_options.identity = yvex_model_target_release_identity();
-    source_options.source_path = source_path;
-    source_options.models_root = models_root && models_root[0]
-                                     ? models_root
-                                     : "models";
-    source_options.promote_manifest = 0;
-    rc = yvex_source_verify_with_snapshot(&source_options, verification,
-                                          &snapshot, err);
-    if (rc != YVEX_OK) goto cleanup;
-    if (!verification->verified || !snapshot) {
-        rc = coverage_reject(
-            failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_SOURCE_IDENTITY,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, "strict-source-verification",
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, 1u, 0u, err);
-        goto cleanup;
-    }
-    rc = family_ir_build(&ir, verification, &ir_failure, err);
-    if (rc != YVEX_OK) {
-        rc = coverage_reject(
-            failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_ARCHITECTURE_INCOMPLETE,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-            ir_failure.field ? ir_failure.field : "architecture-ir",
-            ir_failure.layer_index, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, ir_failure.expected,
-            ir_failure.actual, err);
-        goto cleanup;
-    }
-    rc = coverage_build(
-        out, verification, ir, snapshot, NULL, failure, err);
-cleanup:
-    family_ir_close(ir);
-    yvex_source_tensor_snapshot_release(snapshot);
-    return rc;
-}
-
-/* Releases owned rows and the retained snapshot; null input is a no-op. */
-static void coverage_close(
-    yvex_deepseek_tensor_coverage *coverage)
-{
-    yvex_deepseek_tensor_coverage_options options;
-
-    if (!coverage) return;
-    options = coverage->options;
-    yvex_source_tensor_snapshot_release(coverage->snapshot);
-    if (coverage->row_by_source)
-        options.release((void *)coverage->row_by_source, options.context);
-    if (coverage->rows) options.release(coverage->rows, options.context);
-    options.release(coverage, options.context);
-}
-
-static const yvex_deepseek_tensor_coverage_summary *
-coverage_summary(
-    const yvex_deepseek_tensor_coverage *coverage)
-{
-    return coverage ? &coverage->summary : NULL;
-}
-
-static const yvex_deepseek_tensor_coverage_row *
-coverage_at(
-    const yvex_deepseek_tensor_coverage *coverage,
-    unsigned long long index)
-{
-    if (!coverage || index >= coverage->summary.required_tensor_count)
-        return NULL;
-    return &coverage->rows[index];
-}
-
-static const yvex_deepseek_tensor_coverage_row *
-coverage_find(
-    const yvex_deepseek_tensor_coverage *coverage,
-    const char *source_name)
-{
-    unsigned long long index;
-
-    if (!coverage || !source_name ||
-        !yvex_source_tensor_snapshot_find_index(coverage->snapshot,
-                                                source_name, &index))
-        return NULL;
-    return coverage->row_by_source[index];
-}
-
-/* Resolves a source name to its deterministic requirement-row index. */
-static int coverage_find_index(
-    const yvex_deepseek_tensor_coverage *coverage,
-    const char *source_name,
-    unsigned long long *row_index)
-{
-    unsigned long long source_index;
-    const yvex_deepseek_tensor_coverage_row *row;
-
-    if (!coverage || !source_name || !row_index || !coverage->rows ||
-        !yvex_source_tensor_snapshot_find_index(coverage->snapshot,
-                                                source_name, &source_index))
-        return 0;
-    row = coverage->row_by_source[source_index];
-    if (!row) return 0;
-    *row_index = (unsigned long long)(row - coverage->rows);
-    return 1;
-}
-
-/* Resolves one covered name to its retained snapshot tensor index. */
-static int coverage_find_source_index(
-    const yvex_deepseek_tensor_coverage *coverage,
-    const char *source_name,
-    unsigned long long *source_index)
-{
-    if (!coverage || !source_name || !source_index ||
-        !yvex_source_tensor_snapshot_find_index(coverage->snapshot,
-                                                source_name, source_index))
-        return 0;
-    return coverage->row_by_source[*source_index] != NULL;
-}
-
-static const char *coverage_collection_name(
-    yvex_deepseek_tensor_collection collection)
-{
-    static const char *names[] = {
-        "global", "attention", "compressor", "indexer", "norm", "mhc",
-        "router", "routed-expert", "shared-expert", "auxiliary"
-    };
-    return collection < YVEX_DEEPSEEK_TENSOR_COLLECTION_COUNT
-               ? names[collection]
-               : "unknown";
-}
-
-static const char *coverage_failure_name(
-    yvex_deepseek_tensor_coverage_failure_code code)
-{
-    static const char *names[] = {
-        "none", "invalid-argument", "wrong-source-identity",
-        "invalid-inventory-authority", "inventory-drift",
-        "architecture-incomplete", "missing-requirement", "ambiguous-match",
-        "unexpected-source", "invalid-index", "rank-mismatch",
-        "shape-mismatch", "dtype-mismatch",
-        "scale-companion-mismatch", "arithmetic-overflow", "resource-limit",
-        "allocation-failure"
-    };
-    return code <= YVEX_DEEPSEEK_COVERAGE_FAILURE_ALLOCATION
-               ? names[code]
-               : "unknown";
-}
-
-/* The family transform recipe registers semantics in the generic sealed IR. */
-#include "src/model/compilation/private.h"
-
-#include "src/core/sha256.h"
-
-
-typedef struct {
-    yvex_transform_builder *builder;
-    const yvex_source_verification *verification;
-    const yvex_deepseek_v4_ir *architecture;
-    const yvex_deepseek_v4_model_spec *model;
-    const yvex_deepseek_tensor_coverage *coverage;
-    const yvex_deepseek_tensor_coverage_summary *coverage_summary;
-    yvex_transform_allocator temporary_allocator;
-    yvex_transform_failure *failure;
-    yvex_error *err;
-    unsigned long long terminal_ordinal;
-} deepseek_transform_builder;
-
-static void *deepseek_default_allocate(size_t size, void *context)
-{
-    (void)context;
-    return malloc(size);
-}
-
-static void deepseek_default_release(void *allocation, void *context)
-{
-    (void)context;
-    free(allocation);
-}
-
-static int deepseek_identity_u64(yvex_sha256 *hash,
-                                 unsigned long long value)
-{
-    unsigned char bytes[8];
-    unsigned int index;
-
-    for (index = 0u; index < 8u; ++index)
-        bytes[7u - index] =
-            (unsigned char)((value >> (index * 8u)) & 0xffu);
-    return yvex_sha256_update(hash, bytes, sizeof(bytes));
-}
-
-static int deepseek_identity_text(yvex_sha256 *hash, const char *text)
-{
-    size_t length;
-
-    if (!text) return 0;
-    length = strlen(text);
-    return deepseek_identity_u64(hash, (unsigned long long)length) &&
-           yvex_sha256_update(hash, text, length);
-}
-
-static int deepseek_identity_double(yvex_sha256 *hash, double value)
-{
-    uint64_t bits;
-
-    memcpy(&bits, &value, sizeof(bits));
-    return deepseek_identity_u64(hash, (unsigned long long)bits);
-}
-
-/* Encodes the admitted logical architecture without native structure bytes. */
-static int transform_architecture_identity(
-    const yvex_deepseek_v4_ir *architecture,
-    char output[YVEX_TRANSFORM_IR_IDENTITY_CAP])
-{
-    static const char domain[] = "yvex.logical-model.deepseek-v4-flash.v1";
-    const yvex_deepseek_v4_model_spec *model =
-        family_ir_model(architecture);
-    yvex_sha256 hash;
-    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
-    unsigned long long index;
-
-    if (!model || !output) return 0;
-    yvex_sha256_init(&hash);
-#define ID_U64(value) do { if (!deepseek_identity_u64(                       \
-        &hash, (unsigned long long)(value))) return 0; } while (0)
-#define ID_TEXT(value) do { if (!deepseek_identity_text(&hash, (value)))     \
-        return 0; } while (0)
-#define ID_DOUBLE(value) do { if (!deepseek_identity_double(&hash, (value))) \
-        return 0; } while (0)
-#define ID_RUNTIME_ACTIVATION(policy) do {                                   \
-        ID_U64((policy).required);                                           \
-        ID_U64((policy).stage);                                              \
-        ID_U64((policy).quantization);                                       \
-        ID_U64((policy).block_axis);                                         \
-        ID_U64((policy).block_width);                                        \
-        ID_U64((policy).scale_format);                                       \
-        ID_U64((policy).scale_dtype);                                        \
-        ID_U64((policy).pre_transform);                                      \
-        ID_U64((policy).tail_policy);                                        \
-        ID_U64((policy).nonfinite_policy);                                   \
-        ID_U64((policy).fake_quant_inplace);                                 \
-        ID_U64((policy).zero_pad_hadamard_to_power_of_two);                  \
-    } while (0)
-#define ID_RUNTIME_TOPK(topk_obj) do {                                       \
-        ID_U64((topk_obj).required);                                         \
-        ID_U64((topk_obj).version);                                          \
-        ID_U64((topk_obj).policy);                                           \
-        ID_U64((topk_obj).k);                                                \
-        ID_U64((topk_obj).reject_nonfinite);                                 \
-        ID_U64((topk_obj).score_descending);                                 \
-        ID_U64((topk_obj).equal_score_ordinal_ascending);                    \
-        ID_U64((topk_obj).plus_zero_equals_minus_zero);                      \
-        ID_U64((topk_obj).duplicate_ordinal_refused);                        \
-        ID_U64((topk_obj).output_ranked_order);                              \
-    } while (0)
-    ID_TEXT(domain);
-    ID_TEXT(model->target_id);
-    ID_TEXT(model->family);
-    ID_TEXT(model->architecture);
-    ID_TEXT(model->repository);
-    ID_TEXT(model->revision);
-    ID_TEXT(model->hadamard_revision);
-    ID_U64(model->runtime_numeric_schema_version);
-    ID_U64(model->runtime_activation_policy_count);
-    ID_U64(model->runtime_sparse_topk_policy_count);
-    ID_U64(model->hidden_size);
-    ID_U64(model->vocabulary_size);
-    ID_U64(model->maximum_context);
-    ID_U64(model->main_layer_count);
-    ID_U64(model->auxiliary_layer_count);
-    ID_U64(model->embedding.required);
-    ID_U64(model->embedding.vocabulary_size);
-    ID_U64(model->embedding.hidden_size);
-    ID_U64(model->output.required);
-    ID_U64(model->output.tied_to_embedding);
-    ID_U64(model->output.input_width);
-    ID_U64(model->output.vocabulary_size);
-    ID_U64(model->source_constraint.weight_dtype);
-    ID_U64(model->source_constraint.expert_dtype);
-    ID_U64(model->source_constraint.quantization);
-    ID_U64(model->source_constraint.quant_block_rows);
-    ID_U64(model->source_constraint.quant_block_columns);
-    ID_U64(model->source_constraint.fp4_packing_factor);
-    ID_U64(model->source_constraint.fp4_scale_group_width);
-    ID_U64(model->source_constraint.fp4_physical_dtype);
-    ID_U64(model->source_constraint.scale_dtype);
-    ID_TEXT(model->tokenizer.tokenizer_class);
-    ID_TEXT(model->tokenizer.model_type);
-    ID_U64(model->tokenizer.vocabulary_size);
-    ID_U64(model->tokenizer.base_vocab_entries);
-    ID_U64(model->tokenizer.added_token_entries);
-    ID_U64(model->tokenizer.maximum_token_id);
-    ID_U64(model->tokenizer.maximum_context);
-    ID_U64(model->tokenizer.bos_token_id);
-    ID_U64(model->tokenizer.eos_token_id);
-    ID_U64(model->tokenizer.bos_required);
-    ID_U64(model->tokenizer.eos_required);
-    ID_U64(model->final_mhc.residual_streams);
-    ID_U64(model->final_mhc.stream_width);
-    ID_U64(model->final_mhc.expanded_width);
-    ID_U64(model->final_mhc.mixing_rows);
-    ID_U64(model->final_mhc.mixing_columns);
-    ID_U64(model->final_mhc.base_width);
-    ID_U64(model->final_mhc.scale_width);
-    ID_U64(model->final_mhc.sinkhorn_iterations);
-    ID_DOUBLE(model->final_mhc.epsilon);
-    ID_DOUBLE(model->final_mhc.residual_post_multiplier);
-    ID_U64(model->final_mhc.entry);
-    ID_U64(model->final_mhc.attention_pre_and_post);
-    ID_U64(model->final_mhc.ffn_pre_and_deferred_post);
-    ID_U64(model->final_mhc_head.required);
-    ID_U64(model->final_mhc_head.function_rows);
-    ID_U64(model->final_mhc_head.function_columns);
-    ID_U64(model->final_mhc_head.base_width);
-    ID_U64(model->final_mhc_head.scale_width);
-    ID_DOUBLE(model->final_norm_epsilon);
-    ID_U64(model->use_cache);
-    ID_U64(model->final_mhc_post_required);
-    ID_U64(model->final_mhc_head_required);
-    ID_U64(model->final_norm_after_mhc_head);
-
-    for (index = 0u; index < model->main_layer_count; ++index) {
-        const yvex_deepseek_v4_layer_spec *layer =
-            family_ir_layer_at(architecture, index);
-        if (!layer) return 0;
-        ID_U64(layer->layer_index);
-        ID_U64(layer->attention_class);
-        ID_U64(layer->compression_ratio);
-        ID_U64(layer->query_heads);
-        ID_U64(layer->kv_heads);
-        ID_U64(layer->head_dimension);
-        ID_U64(layer->rope_head_dimension);
-        ID_U64(layer->non_rope_head_dimension);
-        ID_U64(layer->query_lora_rank);
-        ID_U64(layer->output_lora_rank);
-        ID_U64(layer->output_groups);
-        ID_U64(layer->output_heads_per_group);
-        ID_U64(layer->output_group_input_width);
-        ID_U64(layer->indexer_heads);
-        ID_U64(layer->indexer_head_dimension);
-        ID_U64(layer->indexer_topk);
-        ID_U64(layer->attention_sink_count);
-        ID_DOUBLE(layer->attention_dropout);
-        ID_U64(layer->causal);
-        ID_U64(layer->attention_bias);
-        ID_U64(layer->query_norm_required);
-        ID_U64(layer->kv_norm_required);
-        ID_U64(layer->compressor_required);
-        ID_U64(layer->indexer_required);
-        ID_U64(layer->position.rope_dimension);
-        ID_U64(layer->position.theta);
-        ID_U64(layer->position.scaling_factor);
-        ID_U64(layer->position.original_context);
-        ID_U64(layer->position.beta_fast);
-        ID_U64(layer->position.beta_slow);
-        ID_U64(layer->position.maximum_context);
-        ID_U64(layer->position.partial_rope);
-        ID_U64(layer->position.inverse_output_rotation);
-        ID_U64(layer->kv.class_id);
-        ID_U64(layer->kv.compression_ratio);
-        ID_U64(layer->kv.sliding_window);
-        ID_U64(layer->kv.requires_state_cache);
-        ID_U64(layer->kv.requires_uncompressed_tail);
-        ID_U64(layer->kv.requires_compressed_core);
-        ID_U64(layer->kv.requires_indexer_cache);
-        ID_U64(layer->mhc.residual_streams);
-        ID_U64(layer->mhc.stream_width);
-        ID_U64(layer->mhc.expanded_width);
-        ID_U64(layer->mhc.mixing_rows);
-        ID_U64(layer->mhc.mixing_columns);
-        ID_U64(layer->mhc.base_width);
-        ID_U64(layer->mhc.scale_width);
-        ID_U64(layer->mhc.sinkhorn_iterations);
-        ID_U64(layer->mhc.entry);
-        ID_U64(layer->mhc.attention_pre_and_post);
-        ID_U64(layer->mhc.ffn_pre_and_deferred_post);
-        ID_DOUBLE(layer->mhc.epsilon);
-        ID_DOUBLE(layer->mhc.residual_post_multiplier);
-        ID_U64(layer->moe.router_class);
-        ID_U64(layer->moe.scoring);
-        ID_U64(layer->moe.topk_policy);
-        ID_U64(layer->moe.activation);
-        ID_U64(layer->moe.routed_experts);
-        ID_U64(layer->moe.shared_experts);
-        ID_U64(layer->moe.experts_per_token);
-        ID_U64(layer->moe.expert_intermediate_size);
-        ID_U64(layer->moe.shared_intermediate_size);
-        ID_U64(layer->moe.hash_table_rows);
-        ID_U64(layer->moe.hash_table_columns);
-        ID_U64(layer->moe.correction_bias_width);
-        ID_DOUBLE(layer->moe.routed_scaling_factor);
-        ID_DOUBLE(layer->moe.activation_limit);
-        ID_U64(layer->moe.requires_token_ids);
-        ID_U64(layer->moe.requires_hidden_state);
-        ID_U64(layer->moe.requires_correction_bias);
-        ID_U64(layer->moe.normalize_topk_probabilities);
-        ID_RUNTIME_ACTIVATION(layer->attention_kv_activation);
-        ID_RUNTIME_ACTIVATION(layer->compressor_activation);
-        ID_RUNTIME_ACTIVATION(layer->compressor_rotated_activation);
-        ID_RUNTIME_ACTIVATION(layer->indexer_query_activation);
-        ID_RUNTIME_TOPK(layer->sparse_topk);
-        ID_U64(layer->attention_input_norm.required);
-        ID_U64(layer->attention_input_norm.width);
-        ID_U64(layer->post_attention_ffn_norm.required);
-        ID_U64(layer->post_attention_ffn_norm.width);
-        ID_U64(layer->tensors.q_a_rows);
-        ID_U64(layer->tensors.q_a_columns);
-        ID_U64(layer->tensors.q_b_rows);
-        ID_U64(layer->tensors.q_b_columns);
-        ID_U64(layer->tensors.kv_rows);
-        ID_U64(layer->tensors.kv_columns);
-        ID_U64(layer->tensors.o_a_rows);
-        ID_U64(layer->tensors.o_a_columns);
-        ID_U64(layer->tensors.o_b_rows);
-        ID_U64(layer->tensors.o_b_columns);
-        ID_U64(layer->tensors.compressor_ape_rows);
-        ID_U64(layer->tensors.compressor_ape_columns);
-        ID_U64(layer->tensors.compressor_norm_width);
-        ID_U64(layer->tensors.compressor_projection_rows);
-        ID_U64(layer->tensors.compressor_projection_columns);
-        ID_U64(layer->tensors.indexer_ape_rows);
-        ID_U64(layer->tensors.indexer_ape_columns);
-        ID_U64(layer->tensors.indexer_norm_width);
-        ID_U64(layer->tensors.indexer_projection_rows);
-        ID_U64(layer->tensors.indexer_projection_columns);
-        ID_U64(layer->tensors.indexer_query_rows);
-        ID_U64(layer->tensors.indexer_query_columns);
-        ID_U64(layer->tensors.indexer_weight_rows);
-        ID_U64(layer->tensors.indexer_weight_columns);
-        ID_DOUBLE(layer->rms_norm_epsilon);
-    }
-    for (index = 0u; index < model->auxiliary_layer_count; ++index) {
-        const yvex_deepseek_v4_auxiliary_spec *aux =
-            family_ir_auxiliary_at(architecture, index);
-        if (!aux) return 0;
-        ID_U64(aux->predictor_index);
-        ID_U64(aux->layer.layer_index);
-        ID_U64(aux->layer.attention_class);
-        ID_U64(aux->layer.moe.router_class);
-        ID_U64(aux->layer.moe.routed_experts);
-        ID_U64(aux->layer.moe.expert_intermediate_size);
-        ID_U64(aux->layer.moe.shared_intermediate_size);
-        ID_U64(aux->layer.compression_ratio);
-        ID_U64(aux->layer.query_heads);
-        ID_U64(aux->layer.kv_heads);
-        ID_U64(aux->layer.head_dimension);
-        ID_U64(aux->layer.rope_head_dimension);
-        ID_U64(aux->layer.non_rope_head_dimension);
-        ID_U64(aux->layer.query_lora_rank);
-        ID_U64(aux->layer.output_lora_rank);
-        ID_U64(aux->layer.output_groups);
-        ID_U64(aux->layer.output_heads_per_group);
-        ID_U64(aux->layer.output_group_input_width);
-        ID_U64(aux->layer.indexer_heads);
-        ID_U64(aux->layer.indexer_head_dimension);
-        ID_U64(aux->layer.indexer_topk);
-        ID_U64(aux->layer.attention_sink_count);
-        ID_DOUBLE(aux->layer.attention_dropout);
-        ID_U64(aux->layer.causal);
-        ID_U64(aux->layer.attention_bias);
-        ID_U64(aux->layer.query_norm_required);
-        ID_U64(aux->layer.kv_norm_required);
-        ID_U64(aux->layer.compressor_required);
-        ID_U64(aux->layer.indexer_required);
-        ID_U64(aux->layer.position.rope_dimension);
-        ID_U64(aux->layer.position.theta);
-        ID_U64(aux->layer.position.scaling_factor);
-        ID_U64(aux->layer.position.original_context);
-        ID_U64(aux->layer.position.beta_fast);
-        ID_U64(aux->layer.position.beta_slow);
-        ID_U64(aux->layer.position.maximum_context);
-        ID_U64(aux->layer.position.partial_rope);
-        ID_U64(aux->layer.position.inverse_output_rotation);
-        ID_U64(aux->layer.kv.class_id);
-        ID_U64(aux->layer.kv.compression_ratio);
-        ID_U64(aux->layer.kv.sliding_window);
-        ID_U64(aux->layer.kv.requires_state_cache);
-        ID_U64(aux->layer.kv.requires_uncompressed_tail);
-        ID_U64(aux->layer.kv.requires_compressed_core);
-        ID_U64(aux->layer.kv.requires_indexer_cache);
-        ID_U64(aux->layer.mhc.residual_streams);
-        ID_U64(aux->layer.mhc.stream_width);
-        ID_U64(aux->layer.mhc.expanded_width);
-        ID_U64(aux->layer.mhc.mixing_rows);
-        ID_U64(aux->layer.mhc.mixing_columns);
-        ID_U64(aux->layer.mhc.base_width);
-        ID_U64(aux->layer.mhc.scale_width);
-        ID_U64(aux->layer.mhc.sinkhorn_iterations);
-        ID_DOUBLE(aux->layer.mhc.epsilon);
-        ID_DOUBLE(aux->layer.mhc.residual_post_multiplier);
-        ID_U64(aux->layer.mhc.entry);
-        ID_U64(aux->layer.mhc.attention_pre_and_post);
-        ID_U64(aux->layer.mhc.ffn_pre_and_deferred_post);
-        ID_U64(aux->layer.moe.scoring);
-        ID_U64(aux->layer.moe.topk_policy);
-        ID_U64(aux->layer.moe.activation);
-        ID_U64(aux->layer.moe.shared_experts);
-        ID_U64(aux->layer.moe.experts_per_token);
-        ID_U64(aux->layer.moe.hash_table_rows);
-        ID_U64(aux->layer.moe.hash_table_columns);
-        ID_U64(aux->layer.moe.correction_bias_width);
-        ID_DOUBLE(aux->layer.moe.routed_scaling_factor);
-        ID_DOUBLE(aux->layer.moe.activation_limit);
-        ID_U64(aux->layer.moe.requires_token_ids);
-        ID_U64(aux->layer.moe.requires_hidden_state);
-        ID_U64(aux->layer.moe.requires_correction_bias);
-        ID_U64(aux->layer.moe.normalize_topk_probabilities);
-        ID_RUNTIME_ACTIVATION(aux->layer.attention_kv_activation);
-        ID_RUNTIME_ACTIVATION(aux->layer.compressor_activation);
-        ID_RUNTIME_ACTIVATION(aux->layer.compressor_rotated_activation);
-        ID_RUNTIME_ACTIVATION(aux->layer.indexer_query_activation);
-        ID_RUNTIME_TOPK(aux->layer.sparse_topk);
-        ID_U64(aux->layer.attention_input_norm.required);
-        ID_U64(aux->layer.attention_input_norm.width);
-        ID_U64(aux->layer.post_attention_ffn_norm.required);
-        ID_U64(aux->layer.post_attention_ffn_norm.width);
-        ID_U64(aux->layer.tensors.q_a_rows);
-        ID_U64(aux->layer.tensors.q_a_columns);
-        ID_U64(aux->layer.tensors.q_b_rows);
-        ID_U64(aux->layer.tensors.q_b_columns);
-        ID_U64(aux->layer.tensors.kv_rows);
-        ID_U64(aux->layer.tensors.kv_columns);
-        ID_U64(aux->layer.tensors.o_a_rows);
-        ID_U64(aux->layer.tensors.o_a_columns);
-        ID_U64(aux->layer.tensors.o_b_rows);
-        ID_U64(aux->layer.tensors.o_b_columns);
-        ID_U64(aux->layer.tensors.compressor_ape_rows);
-        ID_U64(aux->layer.tensors.compressor_ape_columns);
-        ID_U64(aux->layer.tensors.compressor_norm_width);
-        ID_U64(aux->layer.tensors.compressor_projection_rows);
-        ID_U64(aux->layer.tensors.compressor_projection_columns);
-        ID_U64(aux->layer.tensors.indexer_ape_rows);
-        ID_U64(aux->layer.tensors.indexer_ape_columns);
-        ID_U64(aux->layer.tensors.indexer_norm_width);
-        ID_U64(aux->layer.tensors.indexer_projection_rows);
-        ID_U64(aux->layer.tensors.indexer_projection_columns);
-        ID_U64(aux->layer.tensors.indexer_query_rows);
-        ID_U64(aux->layer.tensors.indexer_query_columns);
-        ID_U64(aux->layer.tensors.indexer_weight_rows);
-        ID_U64(aux->layer.tensors.indexer_weight_columns);
-        ID_DOUBLE(aux->layer.rms_norm_epsilon);
-        ID_U64(aux->previous_hidden_width);
-        ID_U64(aux->embedding_projection_input);
-        ID_U64(aux->embedding_projection_output);
-        ID_U64(aux->hidden_projection_input);
-        ID_U64(aux->hidden_projection_output);
-        ID_U64(aux->requires_token_embedding);
-        ID_U64(aux->requires_previous_hidden_state);
-        ID_U64(aux->requires_embedding_norm);
-        ID_U64(aux->requires_hidden_norm);
-        ID_U64(aux->requires_separate_mhc_head);
-        ID_U64(aux->mhc_head.required);
-        ID_U64(aux->mhc_head.function_rows);
-        ID_U64(aux->mhc_head.function_columns);
-        ID_U64(aux->mhc_head.base_width);
-        ID_U64(aux->mhc_head.scale_width);
-        ID_U64(aux->shares_output_head);
-        ID_U64(aux->shares_final_norm);
-    }
-#undef ID_RUNTIME_TOPK
-#undef ID_RUNTIME_ACTIVATION
-#undef ID_DOUBLE
-#undef ID_TEXT
-#undef ID_U64
-    if (!yvex_sha256_final(&hash, digest)) return 0;
-    yvex_sha256_hex(digest, output);
-    return 1;
-}
-
-static unsigned long long deepseek_hash_text(unsigned long long hash,
-                                             const char *text)
-{
-    const unsigned char *cursor = (const unsigned char *)text;
-
-    while (*cursor) {
-        hash ^= (unsigned long long)*cursor++;
-        hash *= 1099511628211ull;
-    }
-    hash ^= 0u;
-    return hash * 1099511628211ull;
-}
-
-static unsigned long long deepseek_hash_u64(unsigned long long hash,
-                                            unsigned long long value)
-{
-    unsigned int index;
-    for (index = 0u; index < 8u; ++index) {
-        hash ^= (value >> (index * 8u)) & 0xffu;
-        hash *= 1099511628211ull;
-    }
-    return hash;
-}
-
-static yvex_transform_scope deepseek_scope(
-    yvex_deepseek_tensor_scope scope)
-{
-    if (scope == YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER)
-        return YVEX_TRANSFORM_SCOPE_MAIN_LAYER;
-    if (scope == YVEX_DEEPSEEK_TENSOR_SCOPE_MTP)
-        return YVEX_TRANSFORM_SCOPE_AUXILIARY;
-    return YVEX_TRANSFORM_SCOPE_GLOBAL;
-}
-
-static yvex_transform_subsystem deepseek_subsystem(
-    yvex_deepseek_tensor_collection collection)
-{
-    static const yvex_transform_subsystem map[] = {
-        YVEX_TRANSFORM_SUBSYSTEM_GLOBAL,
-        YVEX_TRANSFORM_SUBSYSTEM_ATTENTION,
-        YVEX_TRANSFORM_SUBSYSTEM_COMPRESSOR,
-        YVEX_TRANSFORM_SUBSYSTEM_INDEXER,
-        YVEX_TRANSFORM_SUBSYSTEM_NORMALIZATION,
-        YVEX_TRANSFORM_SUBSYSTEM_RESIDUAL,
-        YVEX_TRANSFORM_SUBSYSTEM_ROUTER,
-        YVEX_TRANSFORM_SUBSYSTEM_ROUTED_EXPERT,
-        YVEX_TRANSFORM_SUBSYSTEM_SHARED_EXPERT,
-        YVEX_TRANSFORM_SUBSYSTEM_AUXILIARY
-    };
-    return collection < YVEX_DEEPSEEK_TENSOR_COLLECTION_COUNT
-        ? map[collection] : YVEX_TRANSFORM_SUBSYSTEM_COUNT;
-}
-
-static yvex_transform_dtype deepseek_dtype(yvex_native_dtype dtype,
-                                           int packed_fp4)
-{
-    if (packed_fp4) return YVEX_TRANSFORM_DTYPE_PACKED_FP4;
-    switch (dtype) {
-    case YVEX_NATIVE_DTYPE_F32: return YVEX_TRANSFORM_DTYPE_F32;
-    case YVEX_NATIVE_DTYPE_F16: return YVEX_TRANSFORM_DTYPE_F16;
-    case YVEX_NATIVE_DTYPE_BF16: return YVEX_TRANSFORM_DTYPE_BF16;
-    case YVEX_NATIVE_DTYPE_I32: return YVEX_TRANSFORM_DTYPE_I32;
-    case YVEX_NATIVE_DTYPE_I64: return YVEX_TRANSFORM_DTYPE_I64;
-    case YVEX_NATIVE_DTYPE_F8_E4M3: return YVEX_TRANSFORM_DTYPE_FP8_E4M3;
-    case YVEX_NATIVE_DTYPE_F8_E8M0: return YVEX_TRANSFORM_DTYPE_E8M0_SCALE;
-    default: return YVEX_TRANSFORM_DTYPE_UNKNOWN;
-    }
-}
-
-static unsigned int deepseek_physical_classes(yvex_transform_dtype dtype)
-{
-    switch (dtype) {
-    case YVEX_TRANSFORM_DTYPE_F32: return YVEX_TRANSFORM_PHYSICAL_F32;
-    case YVEX_TRANSFORM_DTYPE_F16: return YVEX_TRANSFORM_PHYSICAL_F16 |
-                                           YVEX_TRANSFORM_PHYSICAL_F32;
-    case YVEX_TRANSFORM_DTYPE_BF16: return YVEX_TRANSFORM_PHYSICAL_BF16 |
-                                            YVEX_TRANSFORM_PHYSICAL_F32;
-    case YVEX_TRANSFORM_DTYPE_I32: return YVEX_TRANSFORM_PHYSICAL_I32;
-    default: return YVEX_TRANSFORM_PHYSICAL_F32 |
-                    YVEX_TRANSFORM_PHYSICAL_F16 |
-                    YVEX_TRANSFORM_PHYSICAL_BF16 |
-                    YVEX_TRANSFORM_PHYSICAL_QUANTIZED;
-    }
-}
-
-static int deepseek_refuse(deepseek_transform_builder *builder,
-                           yvex_transform_failure_code code,
-                           unsigned long long expected,
-                           unsigned long long actual,
-                           const char *where)
-{
-    return yvex_transform_fail(
-        builder ? builder->failure : NULL, code,
-        YVEX_TRANSFORM_IR_NO_ID, YVEX_TRANSFORM_IR_NO_ID,
-        YVEX_TRANSFORM_IR_NO_ID, YVEX_TRANSFORM_IR_NO_ID,
-        YVEX_TRANSFORM_IR_NO_ID, expected, actual, 0u,
-        builder ? builder->err : NULL, where);
-}
-
-/* Registers one exact retained coverage row as an immutable source value. */
-static int deepseek_add_source(deepseek_transform_builder *builder,
-                               const char *name,
-                               yvex_tensor_role role,
-                               yvex_deepseek_tensor_collection collection,
-                               yvex_deepseek_tensor_scope scope,
-                               unsigned long long layer,
-                               unsigned long long auxiliary,
-                               unsigned long long expert,
-                               yvex_native_dtype expected_dtype,
-                               int packed_fp4,
-                               unsigned long long *value_id)
-{
-    const yvex_deepseek_tensor_coverage_row *row;
-    yvex_transform_source_spec spec;
-    unsigned long long requirement_index;
-    unsigned long long source_index;
-    unsigned long long identity;
-    unsigned int dimension;
-
-    row = coverage_find(builder->coverage, name);
-    if (!row || !row->source ||
-        !coverage_find_index(
-            builder->coverage, name, &requirement_index) ||
-        !coverage_find_source_index(
-            builder->coverage, name, &source_index)) {
-        return deepseek_refuse(builder, YVEX_TRANSFORM_FAILURE_MISSING_SOURCE,
-                               1u, 0u, "deepseek_transform_source");
-    }
-    if (row->collection != collection || row->scope != scope ||
-        row->layer_index != layer || row->source->dtype != expected_dtype ||
-        (expert != YVEX_DEEPSEEK_TENSOR_NO_INDEX &&
-         row->expert_index != expert)) {
-        return deepseek_refuse(
-            builder,
-            row->source->dtype != expected_dtype
-                ? YVEX_TRANSFORM_FAILURE_UNSUPPORTED_SOURCE_DTYPE
-                : YVEX_TRANSFORM_FAILURE_UNEXPECTED_SOURCE,
-            (unsigned long long)expected_dtype,
-            (unsigned long long)row->source->dtype,
-            "deepseek_transform_source");
-    }
-    memset(&spec, 0, sizeof(spec));
-    spec.source_name = row->source->name;
-    spec.shard_name = row->source->shard_path;
-    spec.source_tensor_index = source_index;
-    spec.requirement_index = requirement_index;
-    spec.source_snapshot_identity = builder->coverage_summary->source_identity;
-    spec.source_dtype = row->source->dtype;
-    spec.value_dtype = deepseek_dtype(row->source->dtype, packed_fp4);
-    spec.shape.rank = row->source->rank;
-    for (dimension = 0u; dimension < row->source->rank; ++dimension)
-        spec.shape.dims[dimension] = row->source->dims[dimension];
-    spec.relative_begin = row->source->data_start;
-    spec.relative_end = row->source->data_end;
-    identity = deepseek_hash_text(1469598103934665603ull, name);
-    identity = deepseek_hash_u64(identity,
-                                 builder->coverage_summary->coverage_identity);
-    identity = deepseek_hash_u64(identity, requirement_index);
-    spec.requirement_identity = identity;
-    spec.scope = deepseek_scope(scope);
-    spec.subsystem = deepseek_subsystem(collection);
-    spec.role_hint = role;
-    spec.layer_index = layer;
-    spec.auxiliary_index = auxiliary;
-    spec.expert_index = expert;
-    spec.required_uses = 1u;
-    return yvex_transform_builder_add_source(
-        builder->builder, &spec, value_id, builder->failure, builder->err);
-}
-
-/* Publishes one terminal logical value and its sole semantic producer node. */
-static int deepseek_add_terminal(deepseek_transform_builder *builder,
-                                 yvex_tensor_role role,
-                                 yvex_deepseek_tensor_collection collection,
-                                 yvex_deepseek_tensor_scope scope,
-                                 unsigned long long layer,
-                                 unsigned long long auxiliary,
-                                 const yvex_transform_shape *shape,
-                                 yvex_transform_dtype dtype,
-                                 const yvex_transform_precision_constraint *precision,
-                                 const yvex_transform_node_spec *operation)
-{
-    yvex_transform_value_spec value;
-    yvex_transform_node_spec node = *operation;
-    unsigned long long value_id;
-    unsigned long long node_id;
-    unsigned long long semantic = 1469598103934665603ull;
-    int rc;
-
-    memset(&value, 0, sizeof(value));
-    value.kind = YVEX_TRANSFORM_VALUE_TERMINAL;
-    semantic = deepseek_hash_u64(semantic, (unsigned long long)scope);
-    semantic = deepseek_hash_u64(semantic, (unsigned long long)collection);
-    semantic = deepseek_hash_u64(semantic, (unsigned long long)role);
-    semantic = deepseek_hash_u64(semantic, layer);
-    semantic = deepseek_hash_u64(semantic, auxiliary);
-    value.semantic_id = semantic;
-    value.canonical_ordinal = builder->terminal_ordinal;
-    value.shape = *shape;
-    value.dtype = dtype;
-    value.precision = *precision;
-    value.logical_key.scope = deepseek_scope(scope);
-    value.logical_key.subsystem = deepseek_subsystem(collection);
-    value.logical_key.role = role;
-    value.logical_key.layer_index = scope == YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL
-        ? YVEX_TRANSFORM_IR_NO_ID : layer;
-    value.logical_key.auxiliary_index =
-        scope == YVEX_DEEPSEEK_TENSOR_SCOPE_MTP
-            ? auxiliary : YVEX_TRANSFORM_IR_NO_ID;
-    value.logical_key.group_index = 0u;
-    rc = yvex_transform_builder_declare_value(
-        builder->builder, &value, &value_id, builder->failure, builder->err);
-    if (rc != YVEX_OK) return rc;
-    node.output_value_id = value_id;
-    rc = yvex_transform_builder_add_node(
-        builder->builder, &node, &node_id, builder->failure, builder->err);
-    if (rc == YVEX_OK) builder->terminal_ordinal++;
-    return rc;
-}
-
-/* Adds a direct logical transfer or a checked I64-to-I32 narrowing plan. */
-static int deepseek_add_direct(deepseek_transform_builder *builder,
-                               yvex_tensor_role role,
-                               yvex_deepseek_tensor_collection collection,
-                               yvex_deepseek_tensor_scope scope,
-                               unsigned long long layer,
-                               unsigned long long auxiliary,
-                               const char *source_name,
-                               yvex_native_dtype source_dtype,
-                               int checked_cast)
-{
-    const yvex_deepseek_tensor_coverage_row *row =
-        coverage_find(builder->coverage, source_name);
-    yvex_transform_precision_constraint precision;
-    yvex_transform_node_spec node;
-    yvex_transform_shape shape;
-    unsigned long long input;
-    yvex_transform_dtype output_dtype;
-    unsigned int dimension;
-    int rc;
-
-    if (!row || !row->source)
-        return deepseek_refuse(builder, YVEX_TRANSFORM_FAILURE_MISSING_SOURCE,
-                               1u, 0u, "deepseek_transform_direct");
-    rc = deepseek_add_source(
-        builder, source_name, role, collection, scope, layer, auxiliary,
-        YVEX_DEEPSEEK_TENSOR_NO_INDEX, source_dtype, 0, &input);
-    if (rc != YVEX_OK) return rc;
-    memset(&shape, 0, sizeof(shape));
-    shape.rank = row->source->rank;
-    for (dimension = 0u; dimension < shape.rank; ++dimension)
-        shape.dims[dimension] = row->source->dims[dimension];
-    output_dtype = checked_cast ? YVEX_TRANSFORM_DTYPE_I32
-                                : deepseek_dtype(source_dtype, 0);
-    memset(&precision, 0, sizeof(precision));
-    precision.allowed_physical_classes = deepseek_physical_classes(output_dtype);
-    if (checked_cast) {
-        precision.flags = YVEX_TRANSFORM_PRECISION_LOSSLESS |
-                          YVEX_TRANSFORM_PRECISION_RANGE_PROOF |
-                          YVEX_TRANSFORM_PRECISION_INTEGER_ONLY;
-        precision.range_proof_required = 1;
-    } else {
-        precision.flags = YVEX_TRANSFORM_PRECISION_EXACT;
-    }
-    memset(&node, 0, sizeof(node));
-    node.kind = checked_cast ? YVEX_TRANSFORM_OP_CHECKED_CAST
-                             : YVEX_TRANSFORM_OP_IDENTITY;
-    node.input_value_ids = &input;
-    node.input_count = 1u;
-    node.numeric = checked_cast ? YVEX_TRANSFORM_NUMERIC_RANGE_PROOF
-                                : YVEX_TRANSFORM_NUMERIC_EXACT;
-    node.ordering = YVEX_TRANSFORM_ORDER_INPUT;
-    node.payload_execution_required = 1;
-    return deepseek_add_terminal(builder, role, collection, scope, layer,
-                                 auxiliary, &shape, output_dtype, &precision,
-                                 &node);
-}
-
-/* Adds one paired FP8 E4M3 weight and E8M0 scale decode requirement. */
-static int deepseek_add_fp8(deepseek_transform_builder *builder,
-                            yvex_tensor_role role,
-                            yvex_deepseek_tensor_collection collection,
-                            yvex_deepseek_tensor_scope scope,
-                            unsigned long long layer,
-                            unsigned long long auxiliary,
-                            const char *base)
-{
-    char weight[256];
-    char scale[256];
-    const yvex_deepseek_tensor_coverage_row *row;
-    yvex_transform_precision_constraint precision;
-    yvex_transform_node_spec node;
-    yvex_transform_shape shape;
-    unsigned long long inputs[2];
-    unsigned int dimension;
-    int rc;
-
-    (void)snprintf(weight, sizeof(weight), "%s.weight", base);
-    (void)snprintf(scale, sizeof(scale), "%s.scale", base);
-    row = coverage_find(builder->coverage, weight);
-    if (!row || !row->source)
-        return deepseek_refuse(builder, YVEX_TRANSFORM_FAILURE_MISSING_SOURCE,
-                               1u, 0u, "deepseek_transform_fp8");
-    rc = deepseek_add_source(
-        builder, weight, role, collection, scope, layer, auxiliary,
-        YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_NATIVE_DTYPE_F8_E4M3, 0,
-        &inputs[0]);
-    if (rc == YVEX_OK)
-        rc = deepseek_add_source(
-            builder, scale, role, collection, scope, layer, auxiliary,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_NATIVE_DTYPE_F8_E8M0, 0,
-            &inputs[1]);
-    if (rc != YVEX_OK) return rc;
-    memset(&shape, 0, sizeof(shape));
-    shape.rank = row->source->rank;
-    for (dimension = 0u; dimension < shape.rank; ++dimension)
-        shape.dims[dimension] = row->source->dims[dimension];
-    memset(&precision, 0, sizeof(precision));
-    precision.flags = YVEX_TRANSFORM_PRECISION_SCALE_PAIRED |
-                      YVEX_TRANSFORM_PRECISION_QUANTIZABLE_WEIGHT |
-                      YVEX_TRANSFORM_PRECISION_REFERENCE_COMPUTE;
-    precision.allowed_physical_classes =
-        YVEX_TRANSFORM_PHYSICAL_F32 | YVEX_TRANSFORM_PHYSICAL_F16 |
-        YVEX_TRANSFORM_PHYSICAL_BF16 | YVEX_TRANSFORM_PHYSICAL_QUANTIZED;
-    precision.approximation_allowed = 1;
-    precision.reference_compute_required = 1;
-    memset(&node, 0, sizeof(node));
-    node.kind = YVEX_TRANSFORM_OP_DECODE_SCALE_PAIR;
-    node.input_value_ids = inputs;
-    node.input_count = 2u;
-    node.scale_block_rows = builder->model->source_constraint.quant_block_rows;
-    node.scale_block_columns =
-        builder->model->source_constraint.quant_block_columns;
-    node.numeric = YVEX_TRANSFORM_NUMERIC_LOSSLESS;
-    node.ordering = YVEX_TRANSFORM_ORDER_INPUT;
-    node.payload_execution_required = 1;
-    return deepseek_add_terminal(
-        builder, role, collection, scope, layer, auxiliary, &shape,
-        YVEX_TRANSFORM_DTYPE_REAL, &precision, &node);
-}
-
-/* Adds one deterministic 256-expert, weight/scale-paired aggregation plan. */
-static int deepseek_add_experts(deepseek_transform_builder *builder,
-                                yvex_tensor_role role,
-                                yvex_deepseek_tensor_scope scope,
-                                unsigned long long layer,
-                                unsigned long long auxiliary,
-                                const char *prefix,
-                                const char *projection,
-                                unsigned long long expert_count)
-{
-    char weight[256];
-    char scale[256];
-    const yvex_deepseek_tensor_coverage_row *first;
-    yvex_transform_precision_constraint precision;
-    yvex_transform_node_spec node;
-    yvex_transform_shape shape;
-    unsigned long long *inputs = NULL;
-    unsigned long long input_count;
-    unsigned long long logical_width;
-    unsigned long long expert;
-    size_t bytes;
-    int rc = YVEX_OK;
-
-    if (!expert_count || expert_count > ULLONG_MAX / 2u)
-        return deepseek_refuse(
-            builder, YVEX_TRANSFORM_FAILURE_INVALID_AGGREGATION,
-            1u, expert_count, "deepseek_transform_experts");
-    input_count = expert_count * 2u;
-    if (input_count > (unsigned long long)(SIZE_MAX / sizeof(inputs[0])))
-        return deepseek_refuse(
-            builder, YVEX_TRANSFORM_FAILURE_RESOURCE_BUDGET,
-            SIZE_MAX, input_count, "deepseek_transform_experts");
-    bytes = (size_t)input_count * sizeof(inputs[0]);
-    inputs = (unsigned long long *)builder->temporary_allocator.allocate(
-        bytes, builder->temporary_allocator.context);
-    if (!inputs)
-        return deepseek_refuse(builder, YVEX_TRANSFORM_FAILURE_ALLOCATION,
-                               bytes, 0u, "deepseek_transform_experts");
-    (void)snprintf(weight, sizeof(weight), "%s.ffn.experts.0.%s.weight",
-                   prefix, projection);
-    first = coverage_find(builder->coverage, weight);
-    if (!first || !first->source || first->source->rank != 2u ||
-        first->source->dims[1] > ULLONG_MAX /
-            builder->model->source_constraint.fp4_packing_factor) {
-        rc = deepseek_refuse(
-            builder, first ? YVEX_TRANSFORM_FAILURE_DIMENSION_OVERFLOW
-                           : YVEX_TRANSFORM_FAILURE_MISSING_SOURCE,
-            1u, 0u, "deepseek_transform_experts");
-        goto cleanup;
-    }
-    for (expert = 0u; expert < expert_count; ++expert) {
-        (void)snprintf(weight, sizeof(weight),
-                       "%s.ffn.experts.%llu.%s.weight", prefix, expert,
-                       projection);
-        (void)snprintf(scale, sizeof(scale),
-                       "%s.ffn.experts.%llu.%s.scale", prefix, expert,
-                       projection);
-        rc = deepseek_add_source(
-            builder, weight, role,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTED_EXPERT, scope, layer,
-            auxiliary, expert, YVEX_NATIVE_DTYPE_I8, 1,
-            &inputs[expert * 2u]);
-        if (rc == YVEX_OK)
-            rc = deepseek_add_source(
-                builder, scale, role,
-                YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTED_EXPERT, scope, layer,
-                auxiliary, expert, YVEX_NATIVE_DTYPE_F8_E8M0, 0,
-                &inputs[expert * 2u + 1u]);
-        if (rc != YVEX_OK) goto cleanup;
-    }
-    logical_width = first->source->dims[1] *
-                    builder->model->source_constraint.fp4_packing_factor;
-    memset(&shape, 0, sizeof(shape));
-    shape.rank = 3u;
-    shape.dims[0] = expert_count;
-    shape.dims[1] = first->source->dims[0];
-    shape.dims[2] = logical_width;
-    memset(&precision, 0, sizeof(precision));
-    precision.flags = YVEX_TRANSFORM_PRECISION_SCALE_PAIRED |
-                      YVEX_TRANSFORM_PRECISION_QUANTIZABLE_WEIGHT |
-                      YVEX_TRANSFORM_PRECISION_REFERENCE_COMPUTE;
-    precision.allowed_physical_classes =
-        YVEX_TRANSFORM_PHYSICAL_F32 | YVEX_TRANSFORM_PHYSICAL_F16 |
-        YVEX_TRANSFORM_PHYSICAL_BF16 | YVEX_TRANSFORM_PHYSICAL_QUANTIZED;
-    precision.approximation_allowed = 1;
-    precision.reference_compute_required = 1;
-    memset(&node, 0, sizeof(node));
-    node.kind = YVEX_TRANSFORM_OP_EXPERT_AGGREGATE;
-    node.input_value_ids = inputs;
-    node.input_count = input_count;
-    node.axis = 0u;
-    node.expert_count = expert_count;
-    node.packing_factor =
-        builder->model->source_constraint.fp4_packing_factor;
-    node.scale_group_width =
-        builder->model->source_constraint.fp4_scale_group_width;
-    node.numeric = YVEX_TRANSFORM_NUMERIC_LOSSLESS;
-    node.ordering = YVEX_TRANSFORM_ORDER_EXPERT_INDEX;
-    node.payload_execution_required = 1;
-    rc = deepseek_add_terminal(
-        builder, role, YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTED_EXPERT,
-        scope, layer, auxiliary, &shape, YVEX_TRANSFORM_DTYPE_REAL,
-        &precision, &node);
-
-cleanup:
-    builder->temporary_allocator.release(
-        inputs, builder->temporary_allocator.context);
-    return rc;
-}
-
-static int deepseek_add_mhc(deepseek_transform_builder *builder,
-                            const char *prefix,
-                            const char *kind,
-                            yvex_deepseek_tensor_scope scope,
-                            unsigned long long layer,
-                            unsigned long long auxiliary)
-{
-    const yvex_tensor_role roles[3] = {
-        strcmp(kind, "attn") == 0
-            ? YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION
-            : YVEX_TENSOR_ROLE_HC_FFN_FUNCTION,
-        strcmp(kind, "attn") == 0
-            ? YVEX_TENSOR_ROLE_HC_ATTENTION_BASE
-            : YVEX_TENSOR_ROLE_HC_FFN_BASE,
-        strcmp(kind, "attn") == 0
-            ? YVEX_TENSOR_ROLE_HC_ATTENTION_SCALE
-            : YVEX_TENSOR_ROLE_HC_FFN_SCALE
-    };
-    const char *suffixes[3] = {"fn", "base", "scale"};
-    char name[256];
-    unsigned int index;
-    int rc;
-
-    for (index = 0u; index < 3u; ++index) {
-        (void)snprintf(name, sizeof(name), "%s.hc_%s_%s", prefix, kind,
-                       suffixes[index]);
-        rc = deepseek_add_direct(
-            builder, roles[index], YVEX_DEEPSEEK_TENSOR_COLLECTION_MHC,
-            scope, layer, auxiliary, name, YVEX_NATIVE_DTYPE_F32, 0);
-        if (rc != YVEX_OK) return rc;
-    }
-    return YVEX_OK;
-}
-
-static int deepseek_add_attention(
-    deepseek_transform_builder *builder,
-    const char *prefix,
-    const yvex_deepseek_v4_layer_spec *layer,
-    yvex_deepseek_tensor_scope scope,
-    unsigned long long auxiliary)
-{
-    char name[256];
-    char base[256];
-    int rc;
-
-#define DIRECT(role_id, collection_id, suffix, dtype_id) do {                 \
-    (void)snprintf(name, sizeof(name), "%s.%s", prefix, suffix);             \
-    rc = deepseek_add_direct(builder, role_id, collection_id, scope,          \
-                             layer->layer_index, auxiliary, name, dtype_id, 0);\
-    if (rc != YVEX_OK) return rc;                                               \
-} while (0)
-#define FP8(role_id, collection_id, suffix) do {                               \
-    (void)snprintf(base, sizeof(base), "%s.%s", prefix, suffix);             \
-    rc = deepseek_add_fp8(builder, role_id, collection_id, scope,              \
-                          layer->layer_index, auxiliary, base);                 \
-    if (rc != YVEX_OK) return rc;                                               \
-} while (0)
-    DIRECT(YVEX_TENSOR_ROLE_ATTENTION_SINKS,
-           YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION,
-           "attn.attn_sink", YVEX_NATIVE_DTYPE_F32);
-    DIRECT(YVEX_TENSOR_ROLE_ATTENTION_Q_A_NORM,
-           YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION,
-           "attn.q_norm.weight", YVEX_NATIVE_DTYPE_BF16);
-    DIRECT(YVEX_TENSOR_ROLE_ATTENTION_KV_NORM,
-           YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION,
-           "attn.kv_norm.weight", YVEX_NATIVE_DTYPE_BF16);
-    FP8(YVEX_TENSOR_ROLE_ATTENTION_KV,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION, "attn.wkv");
-    FP8(YVEX_TENSOR_ROLE_ATTENTION_Q_A,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION, "attn.wq_a");
-    FP8(YVEX_TENSOR_ROLE_ATTENTION_Q_B,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION, "attn.wq_b");
-    FP8(YVEX_TENSOR_ROLE_ATTENTION_OUT_A,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION, "attn.wo_a");
-    FP8(YVEX_TENSOR_ROLE_ATTENTION_OUT_B,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION, "attn.wo_b");
-    if (layer->compressor_required) {
-        DIRECT(YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_APE,
-               YVEX_DEEPSEEK_TENSOR_COLLECTION_COMPRESSOR,
-               "attn.compressor.ape", YVEX_NATIVE_DTYPE_F32);
-        DIRECT(YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_NORM,
-               YVEX_DEEPSEEK_TENSOR_COLLECTION_COMPRESSOR,
-               "attn.compressor.norm.weight", YVEX_NATIVE_DTYPE_BF16);
-        DIRECT(YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_GATE,
-               YVEX_DEEPSEEK_TENSOR_COLLECTION_COMPRESSOR,
-               "attn.compressor.wgate.weight", YVEX_NATIVE_DTYPE_BF16);
-        DIRECT(YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_KV,
-               YVEX_DEEPSEEK_TENSOR_COLLECTION_COMPRESSOR,
-               "attn.compressor.wkv.weight", YVEX_NATIVE_DTYPE_BF16);
-    }
-    if (layer->indexer_required) {
-        DIRECT(YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_APE,
-               YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER,
-               "attn.indexer.compressor.ape", YVEX_NATIVE_DTYPE_F32);
-        DIRECT(YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_NORM,
-               YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER,
-               "attn.indexer.compressor.norm.weight", YVEX_NATIVE_DTYPE_BF16);
-        DIRECT(YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_GATE,
-               YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER,
-               "attn.indexer.compressor.wgate.weight", YVEX_NATIVE_DTYPE_BF16);
-        DIRECT(YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_KV,
-               YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER,
-               "attn.indexer.compressor.wkv.weight", YVEX_NATIVE_DTYPE_BF16);
-        FP8(YVEX_TENSOR_ROLE_INDEXER_ATTENTION_Q_B,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER,
-            "attn.indexer.wq_b");
-        DIRECT(YVEX_TENSOR_ROLE_INDEXER_PROJECTION,
-               YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER,
-               "attn.indexer.weights_proj.weight", YVEX_NATIVE_DTYPE_BF16);
-    }
-#undef FP8
-#undef DIRECT
-    return YVEX_OK;
-}
-
-static int deepseek_add_moe(deepseek_transform_builder *builder,
-                            const char *prefix,
-                            const yvex_deepseek_v4_layer_spec *layer,
-                            yvex_deepseek_tensor_scope scope,
-                            unsigned long long auxiliary)
-{
-    char name[256];
-    char base[256];
-    int rc;
-
-    rc = deepseek_add_experts(
-        builder, YVEX_TENSOR_ROLE_MOE_EXPERT_GATE, scope,
-        layer->layer_index, auxiliary, prefix, "w1", layer->moe.routed_experts);
-    if (rc != YVEX_OK) return rc;
-    rc = deepseek_add_experts(
-        builder, YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN, scope,
-        layer->layer_index, auxiliary, prefix, "w2", layer->moe.routed_experts);
-    if (rc != YVEX_OK) return rc;
-    rc = deepseek_add_experts(
-        builder, YVEX_TENSOR_ROLE_MOE_EXPERT_UP, scope,
-        layer->layer_index, auxiliary, prefix, "w3", layer->moe.routed_experts);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(base, sizeof(base), "%s.ffn.shared_experts.w1", prefix);
-    rc = deepseek_add_fp8(
-        builder, YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_GATE,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_SHARED_EXPERT, scope,
-        layer->layer_index, auxiliary, base);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(base, sizeof(base), "%s.ffn.shared_experts.w2", prefix);
-    rc = deepseek_add_fp8(
-        builder, YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_DOWN,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_SHARED_EXPERT, scope,
-        layer->layer_index, auxiliary, base);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(base, sizeof(base), "%s.ffn.shared_experts.w3", prefix);
-    rc = deepseek_add_fp8(
-        builder, YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_UP,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_SHARED_EXPERT, scope,
-        layer->layer_index, auxiliary, base);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%s.ffn.gate.weight", prefix);
-    rc = deepseek_add_direct(
-        builder, YVEX_TENSOR_ROLE_MOE_ROUTER,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTER, scope, layer->layer_index,
-        auxiliary, name, YVEX_NATIVE_DTYPE_BF16, 0);
-    if (rc != YVEX_OK) return rc;
-    if (layer->moe.router_class == YVEX_DEEPSEEK_V4_ROUTER_HASH_TOKEN_ID) {
-        (void)snprintf(name, sizeof(name), "%s.ffn.gate.tid2eid", prefix);
-        return deepseek_add_direct(
-            builder, YVEX_TENSOR_ROLE_MOE_ROUTER_TABLE,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTER, scope,
-            layer->layer_index, auxiliary, name, YVEX_NATIVE_DTYPE_I64, 1);
-    }
-    (void)snprintf(name, sizeof(name), "%s.ffn.gate.bias", prefix);
-    return deepseek_add_direct(
-        builder, YVEX_TENSOR_ROLE_MOE_ROUTER_BIAS,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTER, scope, layer->layer_index,
-        auxiliary, name, YVEX_NATIVE_DTYPE_F32, 0);
-}
-
-static int deepseek_add_layer(deepseek_transform_builder *builder,
-                              const char *prefix,
-                              const yvex_deepseek_v4_layer_spec *layer,
-                              yvex_deepseek_tensor_scope scope,
-                              unsigned long long auxiliary)
-{
-    char name[256];
-    int rc;
-
-    rc = deepseek_add_attention(builder, prefix, layer, scope, auxiliary);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%s.attn_norm.weight", prefix);
-    rc = deepseek_add_direct(
-        builder, YVEX_TENSOR_ROLE_ATTENTION_NORM,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_NORM, scope, layer->layer_index,
-        auxiliary, name, YVEX_NATIVE_DTYPE_BF16, 0);
-    if (rc != YVEX_OK) return rc;
-    (void)snprintf(name, sizeof(name), "%s.ffn_norm.weight", prefix);
-    rc = deepseek_add_direct(
-        builder, YVEX_TENSOR_ROLE_FFN_NORM,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_NORM, scope, layer->layer_index,
-        auxiliary, name, YVEX_NATIVE_DTYPE_BF16, 0);
-    if (rc != YVEX_OK) return rc;
-    rc = deepseek_add_mhc(builder, prefix, "attn", scope,
-                          layer->layer_index, auxiliary);
-    if (rc != YVEX_OK) return rc;
-    rc = deepseek_add_mhc(builder, prefix, "ffn", scope,
-                          layer->layer_index, auxiliary);
-    if (rc != YVEX_OK) return rc;
-    return deepseek_add_moe(builder, prefix, layer, scope, auxiliary);
-}
-
-/* Enumerates the exact canonical terminal set without physical-format facts. */
-static int deepseek_build_graph(deepseek_transform_builder *builder)
-{
-    const yvex_tensor_role head_roles[3] = {
-        YVEX_TENSOR_ROLE_HC_HEAD_FUNCTION,
-        YVEX_TENSOR_ROLE_HC_HEAD_BASE,
-        YVEX_TENSOR_ROLE_HC_HEAD_SCALE
-    };
-    const char *head_names[3] = {
-        "hc_head_fn", "hc_head_base", "hc_head_scale"
-    };
-    unsigned long long layer;
-    unsigned int index;
-    int rc;
-
-    rc = deepseek_add_direct(
-        builder, YVEX_TENSOR_ROLE_TOKEN_EMBEDDING,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-        YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-        YVEX_DEEPSEEK_TENSOR_NO_INDEX, "embed.weight",
-        YVEX_NATIVE_DTYPE_BF16, 0);
-    if (rc != YVEX_OK) return rc;
-    rc = deepseek_add_direct(
-        builder, YVEX_TENSOR_ROLE_OUTPUT_NORM,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-        YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-        YVEX_DEEPSEEK_TENSOR_NO_INDEX, "norm.weight",
-        YVEX_NATIVE_DTYPE_BF16, 0);
-    if (rc != YVEX_OK) return rc;
-    rc = deepseek_add_direct(
-        builder, YVEX_TENSOR_ROLE_OUTPUT_HEAD,
-        YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-        YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-        YVEX_DEEPSEEK_TENSOR_NO_INDEX, "head.weight",
-        YVEX_NATIVE_DTYPE_BF16, 0);
-    if (rc != YVEX_OK) return rc;
-    for (index = 0u; index < 3u; ++index) {
-        rc = deepseek_add_direct(
-            builder, head_roles[index],
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX, YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            head_names[index], YVEX_NATIVE_DTYPE_F32, 0);
-        if (rc != YVEX_OK) return rc;
-    }
-    for (layer = 0u; layer < builder->model->main_layer_count; ++layer) {
-        char prefix[64];
-        (void)snprintf(prefix, sizeof(prefix), "layers.%llu", layer);
-        rc = deepseek_add_layer(
-            builder, prefix,
-            family_ir_layer_at(builder->architecture, layer),
-            YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX);
-        if (rc != YVEX_OK) return rc;
-    }
-    for (layer = 0u; layer < builder->model->auxiliary_layer_count; ++layer) {
-        const yvex_deepseek_v4_auxiliary_spec *aux =
-            family_ir_auxiliary_at(builder->architecture, layer);
-        char prefix[64];
-        char name[128];
-        char base[128];
-
-        if (!aux)
-            return deepseek_refuse(
-                builder, YVEX_TRANSFORM_FAILURE_ARCHITECTURE_NOT_ADMITTED,
-                1u, 0u, "deepseek_transform_auxiliary");
-        (void)snprintf(prefix, sizeof(prefix), "mtp.%llu", layer);
-        rc = deepseek_add_layer(builder, prefix, &aux->layer,
-                                YVEX_DEEPSEEK_TENSOR_SCOPE_MTP, layer);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(base, sizeof(base), "%s.e_proj", prefix);
-        rc = deepseek_add_fp8(
-            builder, YVEX_TENSOR_ROLE_MTP_EMBEDDING_PROJECTION,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_MTP, aux->layer.layer_index, layer,
-            base);
-        if (rc != YVEX_OK) return rc;
-        (void)snprintf(base, sizeof(base), "%s.h_proj", prefix);
-        rc = deepseek_add_fp8(
-            builder, YVEX_TENSOR_ROLE_MTP_HIDDEN_PROJECTION,
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_MTP, aux->layer.layer_index, layer,
-            base);
-        if (rc != YVEX_OK) return rc;
-#define MTP_DIRECT(role_id, suffix) do {                                       \
-    (void)snprintf(name, sizeof(name), "%s.%s", prefix, suffix);             \
-    rc = deepseek_add_direct(                                                   \
-        builder, role_id, YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY,          \
-        YVEX_DEEPSEEK_TENSOR_SCOPE_MTP, aux->layer.layer_index, layer, name,   \
-        YVEX_NATIVE_DTYPE_BF16, 0);                                             \
-    if (rc != YVEX_OK) return rc;                                               \
-} while (0)
-        MTP_DIRECT(YVEX_TENSOR_ROLE_MTP_EMBEDDING_NORM, "enorm.weight");
-        MTP_DIRECT(YVEX_TENSOR_ROLE_MTP_HIDDEN_NORM, "hnorm.weight");
-        MTP_DIRECT(YVEX_TENSOR_ROLE_MTP_OUTPUT_NORM, "norm.weight");
-#undef MTP_DIRECT
-        for (index = 0u; index < 3u; ++index) {
-            (void)snprintf(name, sizeof(name), "%s.hc_head_%s", prefix,
-                           index == 0u ? "fn" :
-                           (index == 1u ? "base" : "scale"));
-            rc = deepseek_add_direct(
-                builder, head_roles[index],
-                YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY,
-                YVEX_DEEPSEEK_TENSOR_SCOPE_MTP, aux->layer.layer_index,
-                layer, name, YVEX_NATIVE_DTYPE_F32, 0);
-            if (rc != YVEX_OK) return rc;
-        }
-    }
-    return YVEX_OK;
-}
-
-/* Validates identity/trust owners before any mutable graph allocation escapes. */
-static int deepseek_validate_inputs(
-    deepseek_transform_builder *builder,
-    const yvex_source_verification *verification,
-    const yvex_deepseek_v4_ir *architecture,
-    const yvex_deepseek_tensor_coverage *coverage,
-    yvex_transform_failure *failure,
-    yvex_error *err)
-{
-    const yvex_deepseek_v4_model_spec *model =
-        family_ir_model(architecture);
-    const yvex_deepseek_tensor_coverage_summary *summary =
-        coverage_summary(coverage);
-
-    memset(builder, 0, sizeof(*builder));
-    builder->failure = failure;
-    builder->err = err;
-    if (!verification || !architecture || !coverage || !model || !summary)
-        return deepseek_refuse(
-            builder, YVEX_TRANSFORM_FAILURE_INVALID_ARGUMENT,
-            1u, 0u, "deepseek_transform_build");
-    if (!verification->verified || verification->blocker_count != 0u ||
-        model->main_layer_count != 43u ||
-        model->auxiliary_layer_count != 1u) {
-        return deepseek_refuse(
-            builder, YVEX_TRANSFORM_FAILURE_ARCHITECTURE_NOT_ADMITTED,
-            44u, model->main_layer_count + model->auxiliary_layer_count,
-            "deepseek_transform_build");
-    }
-    if (!summary->complete ||
-        summary->source_tensor_count != YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT ||
-        summary->matched_tensor_count != YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT ||
-        summary->missing_count || summary->ambiguous_count ||
-        summary->unexpected_count || summary->header_scan_count != 1u ||
-        summary->payload_bytes_read != 0u) {
-        return deepseek_refuse(
-            builder, YVEX_TRANSFORM_FAILURE_COVERAGE_INCOMPLETE,
-            YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT,
-            summary->matched_tensor_count, "deepseek_transform_build");
-    }
-    if (verification->source_snapshot_identity != summary->source_identity)
-        return deepseek_refuse(
-            builder, YVEX_TRANSFORM_FAILURE_SOURCE_IDENTITY_MISMATCH,
-            verification->source_snapshot_identity, summary->source_identity,
-            "deepseek_transform_build");
-    if (!verification->manifest_payload_trusted ||
-        !yvex_sha256_hex_valid(verification->manifest_payload_identity) ||
-        verification->manifest_payload_source_snapshot_identity !=
-            summary->source_identity ||
-        (strcmp(verification->manifest_payload_trust_class,
-                "upstream_payload_verified") != 0 &&
-         strcmp(verification->manifest_payload_trust_class,
-                "local_payload_snapshot_sealed") != 0)) {
-        return deepseek_refuse(
-            builder, YVEX_TRANSFORM_FAILURE_PAYLOAD_IDENTITY_MISMATCH,
-            summary->source_identity,
-            verification->manifest_payload_source_snapshot_identity,
-            "deepseek_transform_build");
-    }
-    builder->verification = verification;
-    builder->architecture = architecture;
-    builder->model = model;
-    builder->coverage = coverage;
-    builder->coverage_summary = summary;
-    return YVEX_OK;
-}
-
-static int transform_ir_build(
-    yvex_transform_ir **out,
-    const yvex_source_verification *verification,
-    const yvex_deepseek_v4_ir *architecture,
-    const yvex_deepseek_tensor_coverage *coverage,
-    const yvex_transform_builder_options *options,
-    yvex_transform_failure *failure,
-    yvex_error *err)
-{
-    deepseek_transform_builder deepseek;
-    yvex_transform_header header;
-    char logical_identity[YVEX_TRANSFORM_IR_IDENTITY_CAP];
-    int rc;
-
-    if (out) *out = NULL;
-    if (failure) memset(failure, 0, sizeof(*failure));
-    yvex_error_clear(err);
-    if (!out)
-        return yvex_transform_fail(
-            failure, YVEX_TRANSFORM_FAILURE_INVALID_ARGUMENT,
-            YVEX_TRANSFORM_IR_NO_ID, YVEX_TRANSFORM_IR_NO_ID,
-            YVEX_TRANSFORM_IR_NO_ID, YVEX_TRANSFORM_IR_NO_ID,
-            YVEX_TRANSFORM_IR_NO_ID, 1u, 0u, 0u, err,
-            "deepseek_transform_build");
-    rc = deepseek_validate_inputs(&deepseek, verification, architecture,
-                                  coverage, failure, err);
-    if (rc != YVEX_OK) return rc;
-    if (!transform_architecture_identity(
-            architecture, logical_identity))
-        return deepseek_refuse(
-            &deepseek, YVEX_TRANSFORM_FAILURE_IDENTITY_ENCODING,
-            1u, 0u, "deepseek_transform_architecture_identity");
-    deepseek.temporary_allocator.allocate = deepseek_default_allocate;
-    deepseek.temporary_allocator.release = deepseek_default_release;
-    deepseek.temporary_allocator.context = NULL;
-    if (options && options->allocator.allocate)
-        deepseek.temporary_allocator = options->allocator;
-    memset(&header, 0, sizeof(header));
-    header.schema_version = YVEX_TRANSFORM_IR_SCHEMA_VERSION;
-    header.logical_model_identity = logical_identity;
-    header.source_snapshot_identity =
-        deepseek.coverage_summary->source_identity;
-    header.coverage_identity = deepseek.coverage_summary->coverage_identity;
-    header.required_payload_identity =
-        verification->manifest_payload_identity;
-    header.payload_trust_class = verification->manifest_payload_trust_class;
-    header.expected_source_count = YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT;
-    header.expected_terminal_count = YVEX_DEEPSEEK_TRANSFORM_TERMINAL_COUNT;
-    header.header_scan_count = deepseek.coverage_summary->header_scan_count;
-    rc = yvex_transform_builder_create(
-        &deepseek.builder, &header, options, failure, err);
-    if (rc == YVEX_OK) rc = deepseek_build_graph(&deepseek);
-    if (rc == YVEX_OK &&
-        deepseek.terminal_ordinal != YVEX_DEEPSEEK_TRANSFORM_TERMINAL_COUNT)
-        rc = deepseek_refuse(
-            &deepseek, YVEX_TRANSFORM_FAILURE_MISSING_TERMINAL,
-            YVEX_DEEPSEEK_TRANSFORM_TERMINAL_COUNT,
-            deepseek.terminal_ordinal, "deepseek_transform_build");
-    if (rc == YVEX_OK)
-        rc = yvex_transform_builder_seal(
-            deepseek.builder, out, failure, err);
-    yvex_transform_builder_release(&deepseek.builder);
-    if (rc == YVEX_OK) {
-        const yvex_transform_ir_summary *summary =
-            yvex_transform_ir_summary_get(*out);
-        if (!summary || !summary->complete ||
-            summary->source_value_count !=
-                YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT ||
-            summary->node_count != YVEX_DEEPSEEK_TRANSFORM_TERMINAL_COUNT ||
-            summary->edge_count != YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT ||
-            summary->terminal_count !=
-                YVEX_DEEPSEEK_TRANSFORM_TERMINAL_COUNT ||
-            summary->maximum_fan_in != 512u ||
-            summary->payload_bytes_read != 0u) {
-            yvex_transform_ir_release(out);
-            return deepseek_refuse(
-                &deepseek, YVEX_TRANSFORM_FAILURE_SEAL,
-                YVEX_DEEPSEEK_TRANSFORM_SOURCE_COUNT,
-                summary ? summary->edge_count : 0u,
-                "deepseek_transform_build");
-        }
-    }
-    return rc;
-}
-
-/* GGUF lowering projects the sealed IR without becoming semantic identity. */
-
-
-#define MAP_METADATA_CAP 48u
-
-typedef struct {
-    unsigned long long hash;
-    unsigned long long value_plus_one;
-} map_index_slot;
-
-struct yvex_deepseek_gguf_map {
-    yvex_deepseek_gguf_map_allocator allocator;
-    yvex_deepseek_gguf_descriptor *descriptors;
-    yvex_deepseek_gguf_contribution *contributions;
-    map_index_slot *source_index;
-    map_index_slot *emitted_index;
-    map_index_slot *role_index;
-    unsigned long long source_index_capacity;
-    unsigned long long emitted_index_capacity;
-    unsigned long long role_index_capacity;
-    yvex_deepseek_gguf_metadata metadata[MAP_METADATA_CAP];
-    yvex_deepseek_gguf_map_summary summary;
-};
-
-typedef struct {
-    yvex_deepseek_gguf_map *map;
-    const yvex_deepseek_v4_ir *architecture;
-    const yvex_transform_ir *transform_ir;
-    yvex_deepseek_gguf_map_failure *failure;
-    yvex_error *err;
-} map_builder;
-
-static void *map_default_allocate(size_t size, void *context)
-{
-    (void)context;
-    return malloc(size);
-}
-
-static void map_default_release(void *allocation, void *context)
-{
-    (void)context;
-    free(allocation);
-}
-
-static unsigned long long map_hash_bytes(unsigned long long hash,
-                                         const void *data,
-                                         size_t size)
-{
-    const unsigned char *bytes = (const unsigned char *)data;
-    size_t index;
-
-    for (index = 0u; index < size; ++index) {
-        hash ^= bytes[index];
-        hash *= 1099511628211ull;
-    }
-    return hash;
-}
-
-static unsigned long long map_hash_string(const char *text)
-{
-    return map_hash_bytes(1469598103934665603ull, text, strlen(text) + 1u);
-}
-
-/* Retains the versioned legacy mapping encoding for identity continuity. */
-static unsigned long long map_hash_u64(unsigned long long hash,
-                                       unsigned long long value)
-{
-    return map_hash_bytes(hash, &value, sizeof(value));
-}
-
-static void map_failure_clear(yvex_deepseek_gguf_map_failure *failure)
-{
-    if (!failure) return;
-    memset(failure, 0, sizeof(*failure));
-    failure->layer_index = YVEX_DEEPSEEK_GGUF_NO_INDEX;
-    failure->predictor_index = YVEX_DEEPSEEK_GGUF_NO_INDEX;
-    failure->expert_index = YVEX_DEEPSEEK_GGUF_NO_INDEX;
-}
-
-/* Records one format-lowering refusal without publishing a partial map. */
-static int map_reject(map_builder *builder,
-                      yvex_deepseek_gguf_map_failure_code code,
-                      yvex_tensor_role role,
-                      yvex_deepseek_tensor_scope scope,
-                      unsigned long long layer,
-                      unsigned long long predictor,
-                      unsigned long long expert,
-                      const char *source_name,
-                      const char *emitted_name,
-                      unsigned long long expected,
-                      unsigned long long actual)
-{
-    yvex_status status = code == YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ALLOCATION
-        ? YVEX_ERR_NOMEM
-        : (code == YVEX_DEEPSEEK_GGUF_MAP_FAILURE_INVALID_ARGUMENT
-            ? YVEX_ERR_INVALID_ARG : YVEX_ERR_FORMAT);
-    yvex_deepseek_gguf_map_failure *failure =
-        builder ? builder->failure : NULL;
-
-    if (failure) {
-        map_failure_clear(failure);
-        failure->code = code;
-        failure->role = role;
-        failure->scope = scope;
-        failure->layer_index = layer;
-        failure->predictor_index = predictor;
-        failure->expert_index = expert;
-        failure->expected = expected;
-        failure->actual = actual;
-        (void)snprintf(failure->source_name, sizeof(failure->source_name),
-                       "%s", source_name ? source_name : "");
-        (void)snprintf(failure->emitted_name, sizeof(failure->emitted_name),
-                       "%s", emitted_name ? emitted_name : "");
-    }
-    yvex_error_setf(builder ? builder->err : NULL, status,
-                    "deepseek_gguf_lowering",
-                    "%s role=%s source=%s emitted=%s layer=%llu expert=%llu expected=%llu actual=%llu",
-                    lowering_failure_name(code),
-                    yvex_tensor_role_name(role),
-                    source_name ? source_name : "none",
-                    emitted_name ? emitted_name : "none", layer, expert,
-                    expected, actual);
-    return status;
-}
-
-static void *map_allocate_zero(yvex_deepseek_gguf_map *map, size_t size)
-{
-    void *allocation = map->allocator.allocate(size, map->allocator.context);
-    if (allocation) memset(allocation, 0, size);
-    return allocation;
-}
-
-static unsigned long long map_index_capacity(unsigned long long count)
-{
-    unsigned long long capacity = 8u;
-    if (count > ULLONG_MAX / 2u) return 0u;
-    count *= 2u;
-    while (capacity < count) {
-        if (capacity > ULLONG_MAX / 2u) return 0u;
-        capacity *= 2u;
-    }
-    return capacity;
-}
-
-static int map_index_insert(map_index_slot *slots,
-                            unsigned long long capacity,
-                            unsigned long long hash,
-                            unsigned long long value)
-{
-    unsigned long long slot;
-    unsigned long long probe;
-
-    if (!slots || !capacity || (capacity & (capacity - 1u)) != 0u) return 0;
-    slot = hash & (capacity - 1u);
-    for (probe = 0u; probe < capacity; ++probe) {
-        if (!slots[slot].value_plus_one) {
-            slots[slot].hash = hash;
-            slots[slot].value_plus_one = value + 1u;
-            return 1;
-        }
-        slot = (slot + 1u) & (capacity - 1u);
-    }
-    return 0;
-}
-
-static int map_emitted_index_insert(yvex_deepseek_gguf_map *map,
-                                    unsigned long long hash,
-                                    unsigned long long value)
-{
-    unsigned long long slot = hash & (map->emitted_index_capacity - 1u);
-    unsigned long long probe;
-
-    for (probe = 0u; probe < map->emitted_index_capacity; ++probe) {
-        map_index_slot *entry = &map->emitted_index[slot];
-        if (!entry->value_plus_one) {
-            entry->hash = hash;
-            entry->value_plus_one = value + 1u;
-            return 1;
-        }
-        if (entry->hash == hash &&
-            strcmp(map->descriptors[entry->value_plus_one - 1u].emitted_name,
-                   map->descriptors[value].emitted_name) == 0) return 0;
-        slot = (slot + 1u) & (map->emitted_index_capacity - 1u);
-    }
-    return 0;
-}
-
-static int map_role_index_insert(yvex_deepseek_gguf_map *map,
-                                 unsigned long long hash,
-                                 unsigned long long value)
-{
-    const yvex_deepseek_gguf_descriptor *candidate = &map->descriptors[value];
-    unsigned long long slot = hash & (map->role_index_capacity - 1u);
-    unsigned long long probe;
-
-    for (probe = 0u; probe < map->role_index_capacity; ++probe) {
-        map_index_slot *entry = &map->role_index[slot];
-        if (!entry->value_plus_one) {
-            entry->hash = hash;
-            entry->value_plus_one = value + 1u;
-            return 1;
-        }
-        if (entry->hash == hash) {
-            const yvex_deepseek_gguf_descriptor *current =
-                &map->descriptors[entry->value_plus_one - 1u];
-            if (current->role == candidate->role &&
-                current->scope == candidate->scope &&
-                current->layer_index == candidate->layer_index &&
-                current->predictor_index == candidate->predictor_index)
-                return 0;
-        }
-        slot = (slot + 1u) & (map->role_index_capacity - 1u);
-    }
-    return 0;
-}
-
-static yvex_deepseek_tensor_scope map_scope(yvex_transform_scope scope)
-{
-    if (scope == YVEX_TRANSFORM_SCOPE_MAIN_LAYER)
-        return YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER;
-    if (scope == YVEX_TRANSFORM_SCOPE_AUXILIARY)
-        return YVEX_DEEPSEEK_TENSOR_SCOPE_MTP;
-    return YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL;
-}
-
-static yvex_deepseek_tensor_collection map_collection(
-    yvex_transform_subsystem subsystem)
-{
-    switch (subsystem) {
-    case YVEX_TRANSFORM_SUBSYSTEM_GLOBAL:
-    case YVEX_TRANSFORM_SUBSYSTEM_OUTPUT:
-        return YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL;
-    case YVEX_TRANSFORM_SUBSYSTEM_ATTENTION:
-        return YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION;
-    case YVEX_TRANSFORM_SUBSYSTEM_COMPRESSOR:
-        return YVEX_DEEPSEEK_TENSOR_COLLECTION_COMPRESSOR;
-    case YVEX_TRANSFORM_SUBSYSTEM_INDEXER:
-        return YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER;
-    case YVEX_TRANSFORM_SUBSYSTEM_NORMALIZATION:
-        return YVEX_DEEPSEEK_TENSOR_COLLECTION_NORM;
-    case YVEX_TRANSFORM_SUBSYSTEM_RESIDUAL:
-        return YVEX_DEEPSEEK_TENSOR_COLLECTION_MHC;
-    case YVEX_TRANSFORM_SUBSYSTEM_ROUTER:
-        return YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTER;
-    case YVEX_TRANSFORM_SUBSYSTEM_ROUTED_EXPERT:
-        return YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTED_EXPERT;
-    case YVEX_TRANSFORM_SUBSYSTEM_SHARED_EXPERT:
-        return YVEX_DEEPSEEK_TENSOR_COLLECTION_SHARED_EXPERT;
-    case YVEX_TRANSFORM_SUBSYSTEM_AUXILIARY:
-        return YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY;
-    default:
-        return YVEX_DEEPSEEK_TENSOR_COLLECTION_COUNT;
-    }
-}
-
-static int map_transform(const yvex_transform_node *node,
-                         yvex_deepseek_gguf_transform *transform,
-                         unsigned int *qtype)
-{
-    if (!node || !transform || !qtype) return 0;
-    *qtype = YVEX_GGUF_NO_FORCED_QTYPE;
-    switch (node->kind) {
-    case YVEX_TRANSFORM_OP_IDENTITY:
-        *transform = YVEX_DEEPSEEK_GGUF_TRANSFORM_DIRECT;
-        return 1;
-    case YVEX_TRANSFORM_OP_DECODE_SCALE_PAIR:
-        *transform = YVEX_DEEPSEEK_GGUF_TRANSFORM_FP8_E4M3_E8M0;
-        return 1;
-    case YVEX_TRANSFORM_OP_EXPERT_AGGREGATE:
-        *transform = YVEX_DEEPSEEK_GGUF_TRANSFORM_EXPERT_MXFP4;
-        *qtype = 39u;
-        return 1;
-    case YVEX_TRANSFORM_OP_CHECKED_CAST:
-        *transform = YVEX_DEEPSEEK_GGUF_TRANSFORM_I64_TO_I32;
-        *qtype = 26u;
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-static yvex_deepseek_gguf_contribution_kind map_contribution_kind(
-    yvex_deepseek_gguf_transform transform,
-    unsigned long long input)
-{
-    if (transform == YVEX_DEEPSEEK_GGUF_TRANSFORM_I64_TO_I32)
-        return YVEX_DEEPSEEK_GGUF_CONTRIBUTION_ROUTING_TABLE;
-    if (transform == YVEX_DEEPSEEK_GGUF_TRANSFORM_FP8_E4M3_E8M0)
-        return input ? YVEX_DEEPSEEK_GGUF_CONTRIBUTION_SCALE
-                     : YVEX_DEEPSEEK_GGUF_CONTRIBUTION_PRIMARY;
-    if (transform == YVEX_DEEPSEEK_GGUF_TRANSFORM_EXPERT_MXFP4)
-        return input & 1u
-            ? YVEX_DEEPSEEK_GGUF_CONTRIBUTION_EXPERT_SCALE
-            : YVEX_DEEPSEEK_GGUF_CONTRIBUTION_EXPERT_WEIGHT;
-    return YVEX_DEEPSEEK_GGUF_CONTRIBUTION_PRIMARY;
-}
-
-/* Begins one GGUF descriptor from a terminal logical key and operation. */
-static int map_descriptor_begin(map_builder *builder,
-                                const yvex_transform_value *terminal,
-                                const yvex_transform_node *node,
-                                unsigned long long descriptor_index)
-{
-    yvex_deepseek_gguf_map *map = builder->map;
-    yvex_deepseek_gguf_descriptor *descriptor =
-        &map->descriptors[descriptor_index];
-    yvex_gguf_name_provenance provenance;
-    yvex_deepseek_tensor_scope scope = map_scope(terminal->logical_key.scope);
-    yvex_deepseek_tensor_collection collection =
-        map_collection(terminal->logical_key.subsystem);
-    const char *reason = NULL;
-    unsigned long long role_hash = 1469598103934665603ull;
-    unsigned int qtype;
-    unsigned int dimension;
-
-    memset(descriptor, 0, sizeof(*descriptor));
-    descriptor->role = terminal->logical_key.role;
-    descriptor->collection = collection;
-    descriptor->scope = scope;
-    descriptor->layer_index = terminal->logical_key.layer_index;
-    descriptor->predictor_index = terminal->logical_key.auxiliary_index;
-    descriptor->expert_count = node->expert_count;
-    if (collection >= YVEX_DEEPSEEK_TENSOR_COLLECTION_COUNT ||
-        !map_transform(node, &descriptor->transform, &qtype) ||
-        terminal->shape.rank > YVEX_TENSOR_MAX_DIMS) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_LOWERING_DIVERGENCE,
-            descriptor->role, scope, descriptor->layer_index,
-            descriptor->predictor_index, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            NULL, NULL, 1u, 0u);
-    }
-    descriptor->forced_qtype = qtype;
-    descriptor->logical_rank = terminal->shape.rank;
-    descriptor->contribution_offset = map->summary.source_contribution_count;
-    for (dimension = 0u; dimension < terminal->shape.rank; ++dimension) {
-        unsigned int source_axis = terminal->shape.rank - dimension - 1u;
-        descriptor->logical_dims[dimension] =
-            terminal->shape.dims[source_axis];
-        descriptor->source_axis_for_logical[dimension] = source_axis;
-    }
-    if (node->kind == YVEX_TRANSFORM_OP_EXPERT_AGGREGATE) {
-        descriptor->source_axis_for_logical[0] = 1u;
-        descriptor->source_axis_for_logical[1] = 0u;
-        descriptor->source_axis_for_logical[2] =
-            YVEX_DEEPSEEK_GGUF_AGGREGATED_AXIS;
-    }
-    if (!yvex_gguf_name_map_resolve(
-            descriptor->role, scope == YVEX_DEEPSEEK_TENSOR_SCOPE_MTP,
-            descriptor->layer_index, descriptor->predictor_index,
-            descriptor->emitted_name, sizeof(descriptor->emitted_name),
-            &provenance, &reason)) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_NAME,
-            descriptor->role, scope, descriptor->layer_index,
-            descriptor->predictor_index, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            NULL, reason, 1u, 0u);
-    }
-    descriptor->name_provenance = provenance;
-    if (!yvex_gguf_layout_map_shape_supported(
-            descriptor->role, qtype, descriptor->logical_rank,
-            descriptor->logical_dims, &reason)) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_LAYOUT,
-            descriptor->role, scope, descriptor->layer_index,
-            descriptor->predictor_index, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            NULL, descriptor->emitted_name, 1u, 0u);
-    }
-    if (!map_emitted_index_insert(
-            map, map_hash_string(descriptor->emitted_name), descriptor_index)) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_DUPLICATE_NAME,
-            descriptor->role, scope, descriptor->layer_index,
-            descriptor->predictor_index, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            NULL, descriptor->emitted_name, 1u, 2u);
-    }
-    role_hash = map_hash_u64(role_hash, descriptor->role);
-    role_hash = map_hash_u64(role_hash, descriptor->scope);
-    role_hash = map_hash_u64(role_hash, descriptor->layer_index);
-    role_hash = map_hash_u64(role_hash, descriptor->predictor_index);
-    if (!map_role_index_insert(map, role_hash, descriptor_index)) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_DUPLICATE_NAME,
-            descriptor->role, scope, descriptor->layer_index,
-            descriptor->predictor_index, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            NULL, descriptor->emitted_name, 1u, 2u);
-    }
-    descriptor->identity = map_hash_string(descriptor->emitted_name);
-    descriptor->identity = map_hash_u64(descriptor->identity,
-                                        descriptor->transform);
-    descriptor->identity = map_hash_u64(descriptor->identity, qtype);
-    for (dimension = 0u; dimension < descriptor->logical_rank; ++dimension)
-        descriptor->identity = map_hash_u64(
-            descriptor->identity, descriptor->logical_dims[dimension]);
-    map->summary.descriptor_count++;
-    map->summary.collection_counts[collection]++;
-    if (scope == YVEX_DEEPSEEK_TENSOR_SCOPE_MTP)
-        map->summary.mtp_descriptor_count++;
-    else
-        map->summary.trunk_descriptor_count++;
-    if (provenance == YVEX_GGUF_NAME_PINNED_STANDARD)
-        map->summary.pinned_standard_count++;
-    else if (provenance == YVEX_GGUF_NAME_SEMANTIC_STANDARD)
-        map->summary.semantic_standard_count++;
-    else
-        map->summary.extension_count++;
-    return YVEX_OK;
-}
-
-/* Projects one IR source input without reclassifying its transformation role. */
-static int map_descriptor_add_source(
-    map_builder *builder,
-    const yvex_transform_node *node,
-    unsigned long long descriptor_index,
-    unsigned long long input_index)
-{
-    yvex_deepseek_gguf_map *map = builder->map;
-    yvex_deepseek_gguf_descriptor *descriptor =
-        &map->descriptors[descriptor_index];
-    const yvex_transform_value *value = yvex_transform_ir_node_input_at(
-        builder->transform_ir, node, input_index);
-    const yvex_transform_source_value *source;
-    yvex_deepseek_gguf_contribution *contribution;
-    unsigned long long index = map->summary.source_contribution_count;
-    unsigned int dimension;
-
-    if (!value || value->kind != YVEX_TRANSFORM_VALUE_SOURCE)
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_LOWERING_DIVERGENCE,
-            descriptor->role, descriptor->scope, descriptor->layer_index,
-            descriptor->predictor_index, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            NULL, descriptor->emitted_name, 1u, 0u);
-    source = yvex_transform_ir_source_at(
-        builder->transform_ir, value->source_index);
-    if (!source || index >= YVEX_DEEPSEEK_GGUF_SOURCE_COUNT ||
-        source->requirement_index >= YVEX_DEEPSEEK_GGUF_SOURCE_COUNT ||
-        source->shape.rank > 2u || source->role_hint != descriptor->role ||
-        map_scope(source->scope) != descriptor->scope ||
-        map_collection(source->subsystem) != descriptor->collection) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_COVERAGE_ROW,
-            descriptor->role, descriptor->scope, descriptor->layer_index,
-            descriptor->predictor_index,
-            source ? source->expert_index : YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            source ? source->source_name : NULL, descriptor->emitted_name,
-            1u, 0u);
-    }
-    contribution = &map->contributions[index];
-    (void)snprintf(contribution->source_name,
-                   sizeof(contribution->source_name), "%s",
-                   source->source_name);
-    contribution->source_dtype = source->source_dtype;
-    contribution->source_rank = source->shape.rank;
-    for (dimension = 0u; dimension < source->shape.rank; ++dimension)
-        contribution->source_dims[dimension] = source->shape.dims[dimension];
-    contribution->kind = map_contribution_kind(descriptor->transform,
-                                               input_index);
-    contribution->source_row_index = source->requirement_index;
-    contribution->descriptor_index = descriptor_index;
-    contribution->expert_index = source->expert_index;
-    if (!map_index_insert(map->source_index, map->source_index_capacity,
-                          map_hash_string(source->source_name), index)) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_DUPLICATE_SOURCE,
-            descriptor->role, descriptor->scope, descriptor->layer_index,
-            descriptor->predictor_index, source->expert_index,
-            source->source_name, descriptor->emitted_name, 1u, 2u);
-    }
-    descriptor->contribution_count++;
-    descriptor->identity = map_hash_bytes(
-        descriptor->identity, source->source_name,
-        strlen(source->source_name) + 1u);
-    map->summary.source_contribution_count++;
-    return YVEX_OK;
-}
-
-/* Lowers every terminal in canonical ordinal order from the sealed IR. */
-static int map_build_descriptors(map_builder *builder)
-{
-    const yvex_transform_ir_summary *summary =
-        yvex_transform_ir_summary_get(builder->transform_ir);
-    unsigned long long ordinal;
-
-    if (!summary || !summary->complete ||
-        summary->state != YVEX_TRANSFORM_IR_STATE_SEALED ||
-        summary->source_value_count != YVEX_DEEPSEEK_GGUF_SOURCE_COUNT ||
-        summary->terminal_count != YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT ||
-        summary->edge_count != YVEX_DEEPSEEK_GGUF_SOURCE_COUNT ||
-        summary->payload_bytes_read != 0u) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_TRANSFORM_IR,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL,
-            YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT,
-            summary ? summary->terminal_count : 0u);
-    }
-    for (ordinal = 0u; ordinal < summary->terminal_count; ++ordinal) {
-        const yvex_transform_value *terminal =
-            yvex_transform_ir_terminal_at(builder->transform_ir, ordinal);
-        const yvex_transform_node *node;
-        unsigned long long input;
-        int rc;
-
-        if (!terminal || terminal->canonical_ordinal != ordinal ||
-            terminal->producer_node_id >= summary->node_count) {
-            return map_reject(
-                builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_TRANSFORM_IR,
-                terminal ? terminal->logical_key.role : YVEX_TENSOR_ROLE_UNKNOWN,
-                terminal ? map_scope(terminal->logical_key.scope)
-                         : YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-                YVEX_DEEPSEEK_GGUF_NO_INDEX,
-                YVEX_DEEPSEEK_GGUF_NO_INDEX,
-                YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, ordinal,
-                terminal ? terminal->canonical_ordinal : ULLONG_MAX);
-        }
-        node = yvex_transform_ir_node_at(
-            builder->transform_ir, terminal->producer_node_id);
-        if (!node || node->output_value_id != terminal->id) {
-            return map_reject(
-                builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_TRANSFORM_IR,
-                terminal->logical_key.role,
-                map_scope(terminal->logical_key.scope),
-                terminal->logical_key.layer_index,
-                terminal->logical_key.auxiliary_index,
-                YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, terminal->id,
-                node ? node->output_value_id : ULLONG_MAX);
-        }
-        rc = map_descriptor_begin(builder, terminal, node, ordinal);
-        if (rc != YVEX_OK) return rc;
-        for (input = 0u; input < node->input_count; ++input) {
-            rc = map_descriptor_add_source(builder, node, ordinal, input);
-            if (rc != YVEX_OK) return rc;
-        }
-    }
-    return YVEX_OK;
-}
-
-static int map_add_metadata_string(map_builder *builder,
-                                   const char *key,
-                                   const char *value)
-{
-    yvex_deepseek_gguf_map *map = builder->map;
-    yvex_deepseek_gguf_metadata *entry;
-    unsigned long long index;
-
-    if (!key || !value || map->summary.metadata_count >= MAP_METADATA_CAP)
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_METADATA,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, key, NULL, MAP_METADATA_CAP,
-            map->summary.metadata_count + 1u);
-    for (index = 0u; index < map->summary.metadata_count; ++index)
-        if (strcmp(map->metadata[index].key, key) == 0)
-            return map_reject(
-                builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_METADATA,
-                YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-                YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-                YVEX_DEEPSEEK_GGUF_NO_INDEX, key, NULL, 1u, 2u);
-    entry = &map->metadata[map->summary.metadata_count++];
-    (void)snprintf(entry->key, sizeof(entry->key), "%s", key);
-    entry->type = YVEX_DEEPSEEK_GGUF_METADATA_STRING;
-    (void)snprintf(entry->string_value, sizeof(entry->string_value), "%s",
-                   value);
-    return YVEX_OK;
-}
-
-static int map_add_metadata_u64(map_builder *builder,
-                                const char *key,
-                                unsigned long long value)
-{
-    int rc = map_add_metadata_string(builder, key, "");
-    yvex_deepseek_gguf_metadata *entry;
-    if (rc != YVEX_OK) return rc;
-    entry = &builder->map->metadata[builder->map->summary.metadata_count - 1u];
-    entry->type = YVEX_DEEPSEEK_GGUF_METADATA_U64;
-    entry->u64_value = value;
-    return YVEX_OK;
-}
-
-static int map_add_metadata_bool(map_builder *builder,
-                                 const char *key,
-                                 int value)
-{
-    int rc = map_add_metadata_string(builder, key, "");
-    yvex_deepseek_gguf_metadata *entry;
-    if (rc != YVEX_OK) return rc;
-    entry = &builder->map->metadata[builder->map->summary.metadata_count - 1u];
-    entry->type = YVEX_DEEPSEEK_GGUF_METADATA_BOOL;
-    entry->bool_value = value != 0;
-    return YVEX_OK;
-}
-
-static int map_add_metadata_f64(map_builder *builder,
-                                const char *key,
-                                double value)
-{
-    int rc = map_add_metadata_string(builder, key, "");
-    yvex_deepseek_gguf_metadata *entry;
-    if (rc != YVEX_OK) return rc;
-    entry = &builder->map->metadata[builder->map->summary.metadata_count - 1u];
-    entry->type = YVEX_DEEPSEEK_GGUF_METADATA_F64;
-    entry->f64_value = value;
-    return YVEX_OK;
-}
-
-static int map_add_metadata_array(map_builder *builder,
-                                  const char *key,
-                                  const unsigned long long *values,
-                                  unsigned int count)
-{
-    yvex_deepseek_gguf_metadata *entry;
-    int rc;
-    if (!values || !count || count > 64u)
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_METADATA,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, key, NULL, 64u, count);
-    rc = map_add_metadata_string(builder, key, "");
-    if (rc != YVEX_OK) return rc;
-    entry = &builder->map->metadata[builder->map->summary.metadata_count - 1u];
-    entry->type = YVEX_DEEPSEEK_GGUF_METADATA_U64_ARRAY;
-    memcpy(entry->array_values, values,
-           (size_t)count * sizeof(entry->array_values[0]));
-    entry->array_count = count;
-    return YVEX_OK;
-}
-
-static int map_add_metadata_f64_array(map_builder *builder,
-                                      const char *key,
-                                      const double *values,
-                                      unsigned int count)
-{
-    yvex_deepseek_gguf_metadata *entry;
-    unsigned int index;
-    int rc;
-    if (!values || !count || count > 64u)
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_METADATA,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, key, NULL, 64u, count);
-    rc = map_add_metadata_string(builder, key, "");
-    if (rc != YVEX_OK) return rc;
-    entry = &builder->map->metadata[builder->map->summary.metadata_count - 1u];
-    entry->type = YVEX_DEEPSEEK_GGUF_METADATA_F64_ARRAY;
-    for (index = 0u; index < count; ++index)
-        entry->f64_array_values[index] = values[index];
-    entry->array_count = count;
-    return YVEX_OK;
-}
-
-/* Projects architecture/tokenizer facts; transformation truth is not involved. */
-static int map_build_metadata(map_builder *builder)
-{
-    const yvex_deepseek_v4_model_spec *model =
-        family_ir_model(builder->architecture);
-    const yvex_deepseek_v4_layer_spec *first =
-        family_ir_layer_at(builder->architecture, 0u);
-    const yvex_deepseek_v4_layer_spec *first_csa =
-        family_ir_layer_at(builder->architecture, 2u);
-    unsigned long long ratios[64];
-    double clamp[64];
-    unsigned long long index;
-    int rc;
-
-#define META_STR(k, v) do { rc = map_add_metadata_string(builder, k, v);     \
-    if (rc != YVEX_OK) return rc; } while (0)
-#define META_U64(k, v) do { rc = map_add_metadata_u64(builder, k, v);         \
-    if (rc != YVEX_OK) return rc; } while (0)
-#define META_BOOL(k, v) do { rc = map_add_metadata_bool(builder, k, v);       \
-    if (rc != YVEX_OK) return rc; } while (0)
-#define META_F64(k, v) do { rc = map_add_metadata_f64(builder, k, v);         \
-    if (rc != YVEX_OK) return rc; } while (0)
-    META_STR("general.architecture", "deepseek4");
-    META_STR("general.name", "DeepSeek-V4-Flash");
-    META_STR("general.source.huggingface.repository", model->repository);
-    META_STR("yvex.source.revision", model->revision);
-    META_U64("deepseek4.block_count", model->main_layer_count);
-    META_U64("deepseek4.embedding_length", model->hidden_size);
-    META_U64("deepseek4.context_length", model->maximum_context);
-    META_U64("deepseek4.vocab_size", model->vocabulary_size);
-    META_U64("deepseek4.attention.head_count", first->query_heads);
-    META_U64("deepseek4.attention.head_count_kv", first->kv_heads);
-    META_U64("deepseek4.attention.key_length", first->head_dimension);
-    META_U64("deepseek4.attention.value_length", first->head_dimension);
-    META_F64("deepseek4.attention.layer_norm_rms_epsilon",
-             first->rms_norm_epsilon);
-    META_U64("deepseek4.rope.dimension_count", first->rope_head_dimension);
-    META_F64("deepseek4.rope.freq_base", (double)first->position.theta);
-    META_U64("deepseek4.attention.q_lora_rank", first->query_lora_rank);
-    META_U64("deepseek4.attention.output_lora_rank", first->output_lora_rank);
-    META_U64("deepseek4.attention.output_group_count", first->output_groups);
-    for (index = 0u; index < model->main_layer_count; ++index)
-        ratios[index] = family_ir_layer_at(
-            builder->architecture, index)->compression_ratio;
-    rc = map_add_metadata_array(builder,
-                                "deepseek4.attention.compress_ratios",
-                                ratios, (unsigned int)model->main_layer_count);
-    if (rc != YVEX_OK) return rc;
-    META_U64("deepseek4.attention.sliding_window", first->kv.sliding_window);
-    META_U64("deepseek4.expert_count", first->moe.routed_experts);
-    META_U64("deepseek4.expert_used_count", first->moe.experts_per_token);
-    META_U64("deepseek4.expert_shared_count", first->moe.shared_experts);
-    META_U64("deepseek4.expert_feed_forward_length",
-             first->moe.expert_intermediate_size);
-    META_F64("deepseek4.expert_weights_scale",
-             first->moe.routed_scaling_factor);
-    META_BOOL("deepseek4.expert_weights_norm",
-              first->moe.normalize_topk_probabilities);
-    META_U64("deepseek4.expert_gating_func", 4u);
-    for (index = 0u; index < model->main_layer_count; ++index)
-        clamp[index] = family_ir_layer_at(
-            builder->architecture, index)->moe.activation_limit;
-    rc = map_add_metadata_f64_array(builder,
-                                    "deepseek4.swiglu_clamp_exp", clamp,
-                                    (unsigned int)model->main_layer_count);
-    if (rc != YVEX_OK) return rc;
-    rc = map_add_metadata_f64_array(builder,
-                                    "deepseek4.swiglu_clamp_shexp", clamp,
-                                    (unsigned int)model->main_layer_count);
-    if (rc != YVEX_OK) return rc;
-    META_U64("deepseek4.hash_layer_count", model->hash_router_layer_count);
-    META_F64("deepseek4.attention.compress_rope_freq_base",
-             (double)first_csa->position.theta);
-    META_U64("deepseek4.hyper_connection.count", first->mhc.residual_streams);
-    META_U64("deepseek4.hyper_connection.sinkhorn_iterations",
-             first->mhc.sinkhorn_iterations);
-    META_F64("deepseek4.hyper_connection.epsilon", first->mhc.epsilon);
-    META_U64("deepseek4.indexer.head_count", first_csa->indexer_heads);
-    META_U64("deepseek4.indexer.key_length", first_csa->indexer_head_dimension);
-    META_U64("deepseek4.indexer.top_k", first_csa->indexer_topk);
-    META_STR("tokenizer.ggml.model", "gpt2");
-    META_U64("tokenizer.ggml.vocab_size", model->tokenizer.vocabulary_size);
-    META_U64("tokenizer.ggml.bos_token_id", model->tokenizer.bos_token_id);
-    META_U64("tokenizer.ggml.eos_token_id", model->tokenizer.eos_token_id);
-    META_BOOL("yvex.tokenizer.sidecars_verified", 1);
-    META_U64("yvex.deepseek4.mtp.schema", YVEX_GGUF_MTP_EXTENSION_VERSION);
-    META_U64("yvex.deepseek4.mtp.predictor_count",
-             model->auxiliary_layer_count);
-    META_U64("yvex.deepseek4.mtp.descriptor_count",
-             YVEX_DEEPSEEK_GGUF_MTP_DESCRIPTOR_COUNT);
-    META_BOOL("yvex.deepseek4.mtp.runtime_supported", 0);
-    META_STR("yvex.deepseek4.mtp.name_prefix", "yvex.mtp.v1");
-#undef META_F64
-#undef META_BOOL
-#undef META_U64
-#undef META_STR
-    return YVEX_OK;
-}
-
-/* Verifies exhaustive projection and the pre-cutover mapping identity. */
-static int map_finalize(map_builder *builder)
-{
-    yvex_deepseek_gguf_map *map = builder->map;
-    unsigned long long trunk[YVEX_DEEPSEEK_TENSOR_COLLECTION_COUNT] = {0};
-    unsigned long long identity = 1469598103934665603ull;
-    unsigned long long index;
-
-    if (map->summary.source_contribution_count !=
-            YVEX_DEEPSEEK_GGUF_SOURCE_COUNT ||
-        map->summary.descriptor_count !=
-            YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT ||
-        map->summary.trunk_descriptor_count !=
-            YVEX_DEEPSEEK_GGUF_TRUNK_DESCRIPTOR_COUNT ||
-        map->summary.mtp_descriptor_count !=
-            YVEX_DEEPSEEK_GGUF_MTP_DESCRIPTOR_COUNT ||
-        map->summary.pinned_standard_count !=
-            YVEX_DEEPSEEK_GGUF_TRUNK_DESCRIPTOR_COUNT ||
-        map->summary.extension_count !=
-            YVEX_DEEPSEEK_GGUF_MTP_DESCRIPTOR_COUNT) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ACCOUNTING,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL,
-            YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT,
-            map->summary.descriptor_count);
-    }
-    for (index = 0u; index < map->summary.descriptor_count; ++index) {
-        const yvex_deepseek_gguf_descriptor *descriptor =
-            &map->descriptors[index];
-        if (descriptor->scope != YVEX_DEEPSEEK_TENSOR_SCOPE_MTP)
-            trunk[descriptor->collection]++;
-        identity = map_hash_u64(identity, descriptor->identity);
-    }
-    if (trunk[YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL] != 6u ||
-        trunk[YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION] != 344u ||
-        trunk[YVEX_DEEPSEEK_TENSOR_COLLECTION_MHC] != 258u ||
-        trunk[YVEX_DEEPSEEK_TENSOR_COLLECTION_NORM] != 86u ||
-        trunk[YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTED_EXPERT] != 129u ||
-        trunk[YVEX_DEEPSEEK_TENSOR_COLLECTION_SHARED_EXPERT] != 129u ||
-        trunk[YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTER] != 86u ||
-        trunk[YVEX_DEEPSEEK_TENSOR_COLLECTION_COMPRESSOR] != 164u ||
-        trunk[YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER] != 126u) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ACCOUNTING,
-            YVEX_TENSOR_ROLE_UNKNOWN,
-            YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, 1328u, 0u);
-    }
-    identity = map_hash_u64(identity, map->summary.source_identity);
-    identity = map_hash_u64(identity, map->summary.coverage_identity);
-    map->summary.mapping_identity = identity;
-    map->summary.complete = 1;
-    return YVEX_OK;
-}
-
-static int lowering_build_with_allocator(
-    yvex_deepseek_gguf_map **out,
-    const yvex_deepseek_v4_ir *architecture,
-    const yvex_transform_ir *transform_ir,
-    const yvex_deepseek_gguf_map_allocator *allocator,
-    yvex_deepseek_gguf_map_failure *failure,
-    yvex_error *err)
-{
-    const yvex_deepseek_v4_model_spec *model;
-    const yvex_transform_ir_summary *transform_summary;
-    yvex_deepseek_gguf_map *map;
-    map_builder builder;
-    size_t bytes;
-    int rc;
-
-    if (out) *out = NULL;
-    map_failure_clear(failure);
-    yvex_error_clear(err);
-    memset(&builder, 0, sizeof(builder));
-    builder.failure = failure;
-    builder.err = err;
-    if (!out || !architecture || !transform_ir || !allocator ||
-        !allocator->allocate || !allocator->release) {
-        return map_reject(
-            &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_INVALID_ARGUMENT,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, 1u, 0u);
-    }
-    model = family_ir_model(architecture);
-    transform_summary = yvex_transform_ir_summary_get(transform_ir);
-    if (!model || model->main_layer_count != 43u ||
-        model->auxiliary_layer_count != 1u) {
-        return map_reject(
-            &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ARCHITECTURE,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, 44u,
-            model ? model->main_layer_count + model->auxiliary_layer_count : 0u);
-    }
-    if (!transform_summary || !transform_summary->complete ||
-        transform_summary->source_value_count !=
-            YVEX_DEEPSEEK_GGUF_SOURCE_COUNT ||
-        transform_summary->terminal_count !=
-            YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT) {
-        return map_reject(
-            &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_TRANSFORM_IR,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL,
-            YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT,
-            transform_summary ? transform_summary->terminal_count : 0u);
-    }
-    map = (yvex_deepseek_gguf_map *)allocator->allocate(
-        sizeof(*map), allocator->context);
-    if (!map)
-        return map_reject(
-            &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ALLOCATION,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, "map", NULL, sizeof(*map), 0u);
-    memset(map, 0, sizeof(*map));
-    map->allocator = *allocator;
-    map->source_index_capacity =
-        map_index_capacity(YVEX_DEEPSEEK_GGUF_SOURCE_COUNT);
-    map->emitted_index_capacity =
-        map_index_capacity(YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT);
-    map->role_index_capacity =
-        map_index_capacity(YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT);
-    map->descriptors = (yvex_deepseek_gguf_descriptor *)map_allocate_zero(
-        map, (size_t)YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT *
-             sizeof(*map->descriptors));
-    map->contributions = (yvex_deepseek_gguf_contribution *)map_allocate_zero(
-        map, (size_t)YVEX_DEEPSEEK_GGUF_SOURCE_COUNT *
-             sizeof(*map->contributions));
-    bytes = (size_t)map->source_index_capacity * sizeof(*map->source_index);
-    map->source_index = (map_index_slot *)map_allocate_zero(map, bytes);
-    bytes = (size_t)map->emitted_index_capacity * sizeof(*map->emitted_index);
-    map->emitted_index = (map_index_slot *)map_allocate_zero(map, bytes);
-    bytes = (size_t)map->role_index_capacity * sizeof(*map->role_index);
-    map->role_index = (map_index_slot *)map_allocate_zero(map, bytes);
-    builder.map = map;
-    builder.architecture = architecture;
-    builder.transform_ir = transform_ir;
-    if (!map->descriptors || !map->contributions || !map->source_index ||
-        !map->emitted_index || !map->role_index) {
-        rc = map_reject(
-            &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ALLOCATION,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, "mapping-tables", NULL, 1u, 0u);
-        lowering_close(map);
-        return rc;
-    }
-    map->summary.header_scan_count = transform_summary->header_scan_count;
-    map->summary.payload_bytes_read = transform_summary->payload_bytes_read;
-    map->summary.source_identity = transform_summary->source_snapshot_identity;
-    map->summary.coverage_identity = transform_summary->coverage_identity;
-    rc = map_build_descriptors(&builder);
-    if (rc == YVEX_OK) rc = map_build_metadata(&builder);
-    if (rc == YVEX_OK) rc = map_finalize(&builder);
-    if (rc != YVEX_OK) {
-        lowering_close(map);
-        return rc;
-    }
-    *out = map;
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-static int lowering_build(
-    yvex_deepseek_gguf_map **out,
-    const yvex_deepseek_v4_ir *architecture,
-    const yvex_transform_ir *transform_ir,
-    yvex_deepseek_gguf_map_failure *failure,
-    yvex_error *err)
-{
-    yvex_deepseek_gguf_map_allocator allocator;
-    allocator.allocate = map_default_allocate;
-    allocator.release = map_default_release;
-    allocator.context = NULL;
-    return lowering_build_with_allocator(
-        out, architecture, transform_ir, &allocator, failure, err);
-}
-
-static void lowering_close(yvex_deepseek_gguf_map *map)
-{
-    yvex_deepseek_gguf_map_allocator allocator;
-    if (!map) return;
-    allocator = map->allocator;
-    if (map->role_index) allocator.release(map->role_index, allocator.context);
-    if (map->emitted_index)
-        allocator.release(map->emitted_index, allocator.context);
-    if (map->source_index)
-        allocator.release(map->source_index, allocator.context);
-    if (map->contributions)
-        allocator.release(map->contributions, allocator.context);
-    if (map->descriptors)
-        allocator.release(map->descriptors, allocator.context);
-    allocator.release(map, allocator.context);
-}
-
-static const yvex_deepseek_gguf_map_summary *lowering_summary(
-    const yvex_deepseek_gguf_map *map)
-{
-    return map ? &map->summary : NULL;
-}
-
-static const yvex_deepseek_gguf_descriptor *lowering_at(
-    const yvex_deepseek_gguf_map *map,
-    unsigned long long index)
-{
-    return map && index < map->summary.descriptor_count
-        ? &map->descriptors[index] : NULL;
-}
-
-static const yvex_deepseek_gguf_contribution *
-lowering_contribution_at(
-    const yvex_deepseek_gguf_map *map,
-    unsigned long long index)
-{
-    return map && index < map->summary.source_contribution_count
-        ? &map->contributions[index] : NULL;
-}
-
-static const yvex_deepseek_gguf_descriptor *map_find_name(
-    const yvex_deepseek_gguf_map *map,
-    const char *name,
-    int emitted)
-{
-    const map_index_slot *slots;
-    unsigned long long capacity;
-    unsigned long long hash;
-    unsigned long long slot;
-    unsigned long long probe;
-
-    if (!map || !name) return NULL;
-    slots = emitted ? map->emitted_index : map->source_index;
-    capacity = emitted ? map->emitted_index_capacity
-                       : map->source_index_capacity;
-    hash = map_hash_string(name);
-    slot = hash & (capacity - 1u);
-    for (probe = 0u; probe < capacity && slots[slot].value_plus_one; ++probe) {
-        if (slots[slot].hash == hash) {
-            unsigned long long value = slots[slot].value_plus_one - 1u;
-            if (emitted) {
-                if (strcmp(map->descriptors[value].emitted_name, name) == 0)
-                    return &map->descriptors[value];
-            } else if (strcmp(map->contributions[value].source_name,
-                              name) == 0) {
-                return &map->descriptors[
-                    map->contributions[value].descriptor_index];
-            }
-        }
-        slot = (slot + 1u) & (capacity - 1u);
-    }
-    return NULL;
-}
-
-static const yvex_deepseek_gguf_descriptor *lowering_find_source(
-    const yvex_deepseek_gguf_map *map,
-    const char *source_name)
-{
-    return map_find_name(map, source_name, 0);
-}
-
-static const yvex_deepseek_gguf_descriptor *lowering_find_emitted(
-    const yvex_deepseek_gguf_map *map,
-    const char *emitted_name)
-{
-    return map_find_name(map, emitted_name, 1);
-}
-
-static const yvex_deepseek_gguf_descriptor *lowering_find_role(
-    const yvex_deepseek_gguf_map *map,
-    yvex_tensor_role role,
-    yvex_deepseek_tensor_scope scope,
-    unsigned long long layer_index,
-    unsigned long long predictor_index)
-{
-    unsigned long long hash = 1469598103934665603ull;
-    unsigned long long slot;
-    unsigned long long probe;
-    if (!map) return NULL;
-    hash = map_hash_u64(hash, role);
-    hash = map_hash_u64(hash, scope);
-    hash = map_hash_u64(hash, layer_index);
-    hash = map_hash_u64(hash, predictor_index);
-    slot = hash & (map->role_index_capacity - 1u);
-    for (probe = 0u; probe < map->role_index_capacity &&
-         map->role_index[slot].value_plus_one; ++probe) {
-        if (map->role_index[slot].hash == hash) {
-            const yvex_deepseek_gguf_descriptor *descriptor =
-                &map->descriptors[map->role_index[slot].value_plus_one - 1u];
-            if (descriptor->role == role && descriptor->scope == scope &&
-                descriptor->layer_index == layer_index &&
-                descriptor->predictor_index == predictor_index)
-                return descriptor;
-        }
-        slot = (slot + 1u) & (map->role_index_capacity - 1u);
-    }
-    return NULL;
-}
-
-static const yvex_deepseek_gguf_metadata *lowering_metadata_at(
-    const yvex_deepseek_gguf_map *map,
-    unsigned long long index)
-{
-    return map && index < map->summary.metadata_count
-        ? &map->metadata[index] : NULL;
-}
-
-static const yvex_deepseek_gguf_metadata *lowering_metadata_find(
-    const yvex_deepseek_gguf_map *map,
-    const char *key)
-{
-    unsigned long long index;
-    if (!map || !key) return NULL;
-    for (index = 0u; index < map->summary.metadata_count; ++index)
-        if (strcmp(map->metadata[index].key, key) == 0)
-            return &map->metadata[index];
-    return NULL;
-}
-
-static const char *lowering_transform_name(
-    yvex_deepseek_gguf_transform transform)
-{
-    static const char *names[] = {
-        "direct", "fp8-e4m3-e8m0-pair", "expert-mxfp4-repack",
-        "i64-to-i32"
-    };
-    return transform <= YVEX_DEEPSEEK_GGUF_TRANSFORM_I64_TO_I32
-        ? names[transform] : "unknown";
-}
-
-static const char *lowering_failure_name(
-    yvex_deepseek_gguf_map_failure_code code)
-{
-    static const char *names[] = {
-        "none", "invalid-argument", "architecture-incomplete",
-        "coverage-row-mismatch", "missing-source", "duplicate-source",
-        "source-dtype-mismatch", "expert-sequence-mismatch", "name-refused",
-        "duplicate-name", "layout-refused", "metadata-refused",
-        "accounting-mismatch", "arithmetic-overflow", "allocation-failure",
-        "transform-ir-refused", "lowering-divergence",
-        "mapping-identity-mismatch"
-    };
-    return code <= YVEX_DEEPSEEK_GGUF_MAP_FAILURE_MAPPING_IDENTITY
-        ? names[code] : "unknown";
-}
-
-/* Payload handoff resolves typed family inputs through the common source ABI. */
-
-
-struct yvex_deepseek_payload_handoff {
-    char *source_path;
-    char *models_root;
-    char *manifest_path;
-    yvex_source_verify_options source_options;
-    yvex_source_verification verification;
-    yvex_deepseek_tensor_coverage *coverage;
-    yvex_transform_ir *transform_ir;
-    yvex_deepseek_gguf_map *map;
-    yvex_source_payload_session *session;
-    yvex_transform_binding *binding;
-    yvex_source_payload_plan *plan;
-    yvex_deepseek_payload_handoff_summary summary;
-};
-
-static char *handoff_strdup(const char *text)
-{
-    size_t length;
-    char *copy;
-
-    if (!text) return NULL;
-    length = strlen(text);
-    copy = (char *)malloc(length + 1u);
-    if (copy) memcpy(copy, text, length + 1u);
-    return copy;
-}
-
-static int handoff_reject(yvex_deepseek_payload_failure *failure,
-                          yvex_deepseek_payload_failure_code code,
-                          unsigned long long descriptor,
-                          unsigned long long contribution,
-                          int status,
-                          yvex_error *err,
-                          const char *message)
-{
-    if (failure) {
-        memset(failure, 0, sizeof(*failure));
-        failure->code = code;
-        failure->descriptor_index = descriptor;
-        failure->contribution_index = contribution;
-    }
-    yvex_error_set(err, (yvex_status)status, "deepseek_payload_handoff", message);
-    return status;
-}
-
-/* Resolves every canonical contribution and builds one physical-order source plan. */
-static int handoff_resolve(yvex_deepseek_payload_handoff *handoff,
-                           const yvex_deepseek_payload_handoff_options *options,
-                           yvex_deepseek_payload_failure *failure,
-                           yvex_error *err)
-{
-    const yvex_deepseek_gguf_map_summary *map_summary =
-        lowering_summary(handoff->map);
-    unsigned long long *tensor_indices;
-    unsigned long long contribution_index;
-    unsigned long long descriptor_index;
-    int rc;
-
-    if (!map_summary || !map_summary->complete ||
-        map_summary->mapping_identity !=
-            YVEX_DEEPSEEK_PAYLOAD_MAPPING_IDENTITY ||
-        map_summary->source_identity !=
-            handoff->verification.source_snapshot_identity) {
-        return handoff_reject(
-            failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_MAPPING_IDENTITY,
-            ULLONG_MAX, ULLONG_MAX, YVEX_ERR_FORMAT, err,
-            "canonical DeepSeek mapping identity mismatch");
-    }
-    if (map_summary->source_contribution_count >
-        (unsigned long long)(SIZE_MAX / sizeof(tensor_indices[0]))) {
-        return handoff_reject(
-            failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_ALLOCATION,
-            ULLONG_MAX, ULLONG_MAX, YVEX_ERR_BOUNDS, err,
-            "mapping contribution index allocation overflow");
-    }
-    tensor_indices = (unsigned long long *)calloc(
-        (size_t)map_summary->source_contribution_count,
-        sizeof(tensor_indices[0]));
-    if (!tensor_indices) {
-        return handoff_reject(
-            failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_ALLOCATION,
-            ULLONG_MAX, ULLONG_MAX, YVEX_ERR_NOMEM, err,
-            "mapping contribution index allocation failed");
-    }
-    handoff->summary.mapping_identity = map_summary->mapping_identity;
-    (void)snprintf(handoff->summary.transform_identity,
-                   sizeof(handoff->summary.transform_identity), "%s",
-                   yvex_transform_ir_summary_get(
-                       handoff->transform_ir)->transform_identity);
-    handoff->summary.source_snapshot_identity = map_summary->source_identity;
-    handoff->summary.descriptor_count = map_summary->descriptor_count;
-    handoff->summary.contribution_count = map_summary->source_contribution_count;
-    for (contribution_index = 0u;
-         contribution_index < map_summary->source_contribution_count;
-         ++contribution_index) {
-        const yvex_deepseek_gguf_contribution *contribution =
-            lowering_contribution_at(
-                handoff->map, contribution_index);
-        const yvex_source_payload_range *range;
-        const yvex_deepseek_tensor_coverage_row *coverage_row;
-        const yvex_deepseek_gguf_descriptor *descriptor;
-
-        if (!contribution ||
-            contribution->descriptor_index >= map_summary->descriptor_count) {
-            free(tensor_indices);
-            return handoff_reject(
-                failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_CONTRIBUTION,
-                ULLONG_MAX, contribution_index, YVEX_ERR_FORMAT, err,
-                "mapping contribution is incomplete");
-        }
-        descriptor = lowering_at(
-            handoff->map, contribution->descriptor_index);
-        coverage_row = coverage_at(
-            handoff->coverage, contribution->source_row_index);
-        range = yvex_source_payload_range_find(
-            handoff->session, contribution->source_name);
-        handoff->summary.range_lookup_count++;
-        if (!descriptor || !coverage_row || !coverage_row->source || !range ||
-            strcmp(coverage_row->source->name, contribution->source_name) != 0 ||
-            range->source_snapshot_identity != map_summary->source_identity ||
-            range->dtype != contribution->source_dtype ||
-            range->rank != contribution->source_rank) {
-            free(tensor_indices);
-            return handoff_reject(
-                failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_RANGE,
-                contribution->descriptor_index, contribution_index,
-                YVEX_ERR_FORMAT, err,
-                "mapping contribution does not resolve to its exact source range");
-        }
-        tensor_indices[contribution_index] = range->source_tensor_index;
-        handoff->summary.contributions_resolved++;
-        if (descriptor->transform == YVEX_DEEPSEEK_GGUF_TRANSFORM_DIRECT)
-            handoff->summary.direct_contributions++;
-        if (contribution->kind == YVEX_DEEPSEEK_GGUF_CONTRIBUTION_PRIMARY &&
-            contribution->source_dtype == YVEX_NATIVE_DTYPE_F8_E4M3)
-            handoff->summary.fp8_weight_contributions++;
-        if (contribution->kind == YVEX_DEEPSEEK_GGUF_CONTRIBUTION_SCALE &&
-            contribution->source_dtype == YVEX_NATIVE_DTYPE_F8_E8M0)
-            handoff->summary.e8m0_scale_contributions++;
-        if (contribution->kind ==
-                YVEX_DEEPSEEK_GGUF_CONTRIBUTION_EXPERT_WEIGHT ||
-            contribution->kind ==
-                YVEX_DEEPSEEK_GGUF_CONTRIBUTION_EXPERT_SCALE) {
-            if (ULLONG_MAX - handoff->summary.routed_expert_logical_bytes <
-                range->byte_length) {
-                free(tensor_indices);
-                return handoff_reject(
-                    failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_RANGE,
-                    contribution->descriptor_index, contribution_index,
-                    YVEX_ERR_BOUNDS, err,
-                    "routed expert payload accounting overflow");
-            }
-            handoff->summary.expert_contributions++;
-            handoff->summary.routed_expert_logical_bytes += range->byte_length;
-        }
-        if (descriptor->transform == YVEX_DEEPSEEK_GGUF_TRANSFORM_I64_TO_I32 &&
-            contribution->source_dtype == YVEX_NATIVE_DTYPE_I64)
-            handoff->summary.i64_router_contributions++;
-        if (descriptor->collection == YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL)
-            handoff->summary.global_contributions++;
-        if (descriptor->collection == YVEX_DEEPSEEK_TENSOR_COLLECTION_NORM)
-            handoff->summary.norm_contributions++;
-        if (descriptor->collection ==
-            YVEX_DEEPSEEK_TENSOR_COLLECTION_SHARED_EXPERT)
-            handoff->summary.shared_expert_contributions++;
-        if (descriptor->role == YVEX_TENSOR_ROLE_OUTPUT_HEAD) {
-            if (ULLONG_MAX - handoff->summary.output_head_logical_bytes <
-                range->byte_length) {
-                free(tensor_indices);
-                return handoff_reject(
-                    failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_RANGE,
-                    contribution->descriptor_index, contribution_index,
-                    YVEX_ERR_BOUNDS, err,
-                    "output head payload accounting overflow");
-            }
-            handoff->summary.output_head_contributions++;
-            handoff->summary.output_head_logical_bytes += range->byte_length;
-        }
-        if (descriptor->scope == YVEX_DEEPSEEK_TENSOR_SCOPE_MTP)
-            handoff->summary.mtp_contributions++;
-    }
-    for (descriptor_index = 0u;
-         descriptor_index < map_summary->descriptor_count; ++descriptor_index) {
-        const yvex_deepseek_gguf_descriptor *descriptor =
-            lowering_at(handoff->map, descriptor_index);
-        unsigned long long end;
-
-        if (!descriptor || descriptor->contribution_count == 0u ||
-            ULLONG_MAX - descriptor->contribution_offset <
-                descriptor->contribution_count) {
-            free(tensor_indices);
-            return handoff_reject(
-                failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_CONTRIBUTION,
-                descriptor_index, ULLONG_MAX, YVEX_ERR_FORMAT, err,
-                "logical descriptor has no bounded source contribution set");
-        }
-        end = descriptor->contribution_offset + descriptor->contribution_count;
-        if (end > handoff->summary.contributions_resolved) {
-            free(tensor_indices);
-            return handoff_reject(
-                failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_CONTRIBUTION,
-                descriptor_index, end, YVEX_ERR_FORMAT, err,
-                "logical descriptor contribution span exceeds resolved mapping");
-        }
-        handoff->summary.descriptors_covered++;
-    }
-    rc = yvex_source_payload_plan_build(
-        &handoff->plan, handoff->session, tensor_indices,
-        map_summary->source_contribution_count, options->chunk_bytes,
-        options->page_bytes, failure ? &failure->payload_failure : NULL, err);
-    free(tensor_indices);
-    if (rc != YVEX_OK) {
-        if (failure) failure->code = YVEX_DEEPSEEK_PAYLOAD_FAILURE_PLAN;
-        return rc;
-    }
-    handoff->summary.complete =
-        handoff->summary.descriptors_covered ==
-            YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT &&
-        handoff->summary.contributions_resolved ==
-            YVEX_DEEPSEEK_GGUF_SOURCE_COUNT &&
-        handoff->summary.fp8_weight_contributions != 0u &&
-        handoff->summary.e8m0_scale_contributions != 0u &&
-        handoff->summary.expert_contributions != 0u &&
-        handoff->summary.i64_router_contributions != 0u &&
-        handoff->summary.global_contributions != 0u &&
-        handoff->summary.norm_contributions != 0u &&
-        handoff->summary.shared_expert_contributions != 0u &&
-        handoff->summary.output_head_contributions != 0u &&
-        handoff->summary.mtp_contributions != 0u;
-    if (!handoff->summary.complete)
-        return handoff_reject(
-            failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_CONTRIBUTION,
-            ULLONG_MAX, ULLONG_MAX, YVEX_ERR_FORMAT, err,
-            "mapping payload handoff lacks one required contribution class");
-    return YVEX_OK;
-}
-
-/* Runs one canonical source pass and retains only typed downstream owners. */
-static int payload_open(
-    yvex_deepseek_payload_handoff **out,
-    const yvex_deepseek_payload_handoff_options *options,
-    yvex_deepseek_payload_failure *failure,
-    yvex_error *err)
-{
-    yvex_deepseek_payload_handoff *handoff;
-    yvex_source_tensor_snapshot *snapshot = NULL;
-    yvex_deepseek_v4_ir *ir = NULL;
-    yvex_deepseek_v4_ir_failure ir_failure;
-    yvex_deepseek_tensor_coverage_failure coverage_failure;
-    yvex_deepseek_gguf_map_failure map_failure;
-    yvex_transform_failure transform_failure;
-    yvex_source_payload_open_options payload_options;
-    int rc;
-
-    if (out) *out = NULL;
-    if (!out || !options || !options->source_path ||
-        !options->source_path[0] || !options->models_root ||
-        !options->models_root[0]) {
-        return handoff_reject(
-            failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_INVALID_ARGUMENT,
-            ULLONG_MAX, ULLONG_MAX, YVEX_ERR_INVALID_ARG, err,
-            "source path, models root, and output are required");
-    }
-    handoff = (yvex_deepseek_payload_handoff *)calloc(1u, sizeof(*handoff));
-    if (!handoff)
-        return handoff_reject(
-            failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_ALLOCATION,
-            ULLONG_MAX, ULLONG_MAX, YVEX_ERR_NOMEM, err,
-            "payload handoff allocation failed");
-    handoff->source_path = handoff_strdup(options->source_path);
-    handoff->models_root = handoff_strdup(options->models_root);
-    handoff->manifest_path = options->manifest_path
-        ? handoff_strdup(options->manifest_path) : NULL;
-    if (!handoff->source_path || !handoff->models_root ||
-        (options->manifest_path && !handoff->manifest_path)) {
-        payload_close(handoff);
-        return handoff_reject(
-            failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_ALLOCATION,
-            ULLONG_MAX, ULLONG_MAX, YVEX_ERR_NOMEM, err,
-            "payload handoff path allocation failed");
-    }
-    handoff->source_options.identity = yvex_model_target_release_identity();
-    handoff->source_options.source_path = handoff->source_path;
-    handoff->source_options.models_root = handoff->models_root;
-    handoff->source_options.manifest_path = handoff->manifest_path;
-    handoff->source_options.promote_manifest = 1;
-    rc = yvex_source_verify_with_snapshot(
-        &handoff->source_options, &handoff->verification, &snapshot, err);
-    if (rc != YVEX_OK || !handoff->verification.verified || !snapshot) {
-        yvex_source_tensor_snapshot_release(snapshot);
-        payload_close(handoff);
-        return handoff_reject(
-            failure, YVEX_DEEPSEEK_PAYLOAD_FAILURE_SOURCE,
-            ULLONG_MAX, ULLONG_MAX, rc == YVEX_OK ? YVEX_ERR_STATE : rc, err,
-            "exact source verification did not produce a retained snapshot");
-    }
-    rc = family_ir_build(
-        &ir, &handoff->verification, &ir_failure, err);
-    if (rc != YVEX_OK) {
-        yvex_source_tensor_snapshot_release(snapshot);
-        payload_close(handoff);
-        if (failure) failure->code = YVEX_DEEPSEEK_PAYLOAD_FAILURE_ARCHITECTURE;
-        return rc;
-    }
-    rc = coverage_build(
-        &handoff->coverage, &handoff->verification, ir, snapshot, NULL,
-        &coverage_failure, err);
-    if (rc == YVEX_OK)
-        rc = transform_ir_build(
-            &handoff->transform_ir, &handoff->verification, ir,
-            handoff->coverage, NULL, &transform_failure, err);
-    if (rc == YVEX_OK)
-        rc = lowering_build(
-            &handoff->map, ir, handoff->transform_ir, &map_failure, err);
-    family_ir_close(ir);
-    if (rc != YVEX_OK) {
-        yvex_deepseek_payload_failure_code code = !handoff->coverage
-            ? YVEX_DEEPSEEK_PAYLOAD_FAILURE_COVERAGE
-            : (!handoff->transform_ir
-                ? YVEX_DEEPSEEK_PAYLOAD_FAILURE_TRANSFORM_IR
-                : YVEX_DEEPSEEK_PAYLOAD_FAILURE_MAPPING);
-        yvex_source_tensor_snapshot_release(snapshot);
-        payload_close(handoff);
-        if (failure) failure->code = code;
-        return rc;
-    }
-    memset(&payload_options, 0, sizeof(payload_options));
-    payload_options.verification_options = &handoff->source_options;
-    payload_options.verification = &handoff->verification;
-    payload_options.snapshot = snapshot;
-    payload_options.budget = options->budget;
-    payload_options.manifest_path = handoff->verification.manifest_path;
-    rc = yvex_source_payload_session_open(
-        &handoff->session, &payload_options,
-        failure ? &failure->payload_failure : NULL, err);
-    yvex_source_tensor_snapshot_release(snapshot);
-    if (rc != YVEX_OK) {
-        if (failure) failure->code = YVEX_DEEPSEEK_PAYLOAD_FAILURE_SOURCE;
-        payload_close(handoff);
-        return rc;
-    }
-    rc = yvex_transform_binding_create(
-        &handoff->binding, handoff->transform_ir, handoff->session, NULL,
-        &transform_failure, err);
-    if (rc != YVEX_OK) {
-        if (failure) failure->code = YVEX_DEEPSEEK_PAYLOAD_FAILURE_BINDING;
-        payload_close(handoff);
-        return rc;
-    }
-    rc = handoff_resolve(handoff, options, failure, err);
-    if (rc != YVEX_OK) {
-        payload_close(handoff);
-        return rc;
-    }
-    *out = handoff;
-    if (failure) memset(failure, 0, sizeof(*failure));
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-/* Releases plan, session, map, coverage, and copied paths in dependency order. */
-static void payload_close(
-    yvex_deepseek_payload_handoff *handoff)
-{
-    if (!handoff) return;
-    yvex_source_payload_plan_close(handoff->plan);
-    yvex_transform_binding_release(&handoff->binding);
-    (void)yvex_source_payload_session_release(&handoff->session, NULL, NULL);
-    lowering_close(handoff->map);
-    yvex_transform_ir_release(&handoff->transform_ir);
-    coverage_close(handoff->coverage);
-    free(handoff->manifest_path);
-    free(handoff->models_root);
-    free(handoff->source_path);
-    free(handoff);
-}
-
-static const yvex_deepseek_payload_handoff_summary *
-payload_summary(
-    const yvex_deepseek_payload_handoff *handoff)
-{
-    return handoff ? &handoff->summary : NULL;
-}
-
-static const yvex_source_verification *payload_verification(
-    const yvex_deepseek_payload_handoff *handoff)
-{
-    return handoff ? &handoff->verification : NULL;
-}
-
-static const yvex_deepseek_gguf_map *payload_map(
-    const yvex_deepseek_payload_handoff *handoff)
-{
-    return handoff ? handoff->map : NULL;
-}
-
-static const yvex_transform_ir *payload_transform_ir(
-    const yvex_deepseek_payload_handoff *handoff)
-{
-    return handoff ? handoff->transform_ir : NULL;
-}
-
-static const yvex_transform_binding *payload_binding(
-    const yvex_deepseek_payload_handoff *handoff)
-{
-    return handoff ? handoff->binding : NULL;
-}
-
-static yvex_source_payload_session *payload_session(
-    yvex_deepseek_payload_handoff *handoff)
-{
-    return handoff ? handoff->session : NULL;
-}
-
-static const yvex_source_payload_plan *payload_plan(
-    const yvex_deepseek_payload_handoff *handoff)
-{
-    return handoff ? handoff->plan : NULL;
-}
-
-static const char *payload_failure_name(
-    yvex_deepseek_payload_failure_code code)
-{
-    static const char *const names[] = {
-        "none", "invalid-argument", "source-verification",
-        "architecture-ir", "tensor-coverage", "transform-ir", "gguf-mapping",
-        "mapping-identity-mismatch", "mapping-contribution",
-        "payload-range", "transform-binding", "payload-plan",
-        "allocation-failure"
-    };
-    size_t count = sizeof(names) / sizeof(names[0]);
-
-    return code >= 0 && (size_t)code < count ? names[code]
-                                                : "unknown-handoff-failure";
-}
-
-/* Publishes the single immutable family ABI.  The table contains functions,
- * not mutable state, and its address and contents remain stable for process
- * lifetime. */
+/* Purpose: read one recipe dimension from its typed model-or-layer field reference.
+ * Inputs: immutable recipe, dimension index, layer, and model specs.
+ * Effects: copies one unsigned dimension without retaining internal pointers.
+ * Failure: callers admit dimension index and offsets through the static recipe table.
+ * Boundary: family data projection into generic requirement construction. */
+static unsigned long long recipe_dimension(const yvex_deepseek_tensor_recipe *recipe,
+                                           unsigned int dimension,
+                                           const yvex_deepseek_v4_layer_spec *layer,
+                                           const yvex_deepseek_v4_model_spec *model)
+{
+    const yvex_deepseek_tensor_dimension_ref *ref = &recipe->dimensions[dimension];
+    const unsigned char *base = ref->model_field ? (const unsigned char *)model
+                                                  : (const unsigned char *)layer;
+    unsigned long long value;
+
+    memcpy(&value, base + ref->offset, sizeof(value));
+    return value;
+}
+
+/* Purpose: assemble and publish the single immutable DeepSeek family ABI from
+ * the family recipe and the generic lowering/binding owner projections.
+ * Inputs: none.
+ * Effects: initializes process-lifetime storage exactly once; no allocation or
+ * I/O occurs and acquire/release ordering publishes complete sub-API tables.
+ * Failure: cannot fail; concurrent callers wait for the winning initializer.
+ * Boundary: registration exposes typed composition, not runtime capability. */
 const yvex_model_family_api *yvex_model_register_deepseek_v4(void)
 {
-    static const yvex_model_family_api api = {
-        1u,
-        "deepseek-v4-flash",
-        {
+    static yvex_model_family_api api = {
+        .schema_version = 1u,
+        .family_key = "deepseek-v4-flash",
+        .ir = {
             family_ir_build,
             family_ir_build_with_allocator,
             family_ir_close,
@@ -5548,52 +1656,28 @@ const yvex_model_family_api *yvex_model_register_deepseek_v4(void)
             family_activation_stage_name,
             family_activation_quantization_name,
             family_runtime_transform_name,
-            family_sparse_topk_policy_name
+            family_sparse_topk_policy_name,
+            family_recipe_count,
+            family_recipe_at,
+            recipe_enabled,
+            recipe_dimension
         },
-        {
-            coverage_build,
-            coverage_open_verified_source,
-            coverage_close,
-            coverage_summary,
-            coverage_at,
-            coverage_find,
-            coverage_find_index,
-            coverage_find_source_index,
-            coverage_collection_name,
-            coverage_failure_name
-        },
-        {
-            transform_architecture_identity,
-            transform_ir_build
-        },
-        {
-            lowering_build,
-            lowering_build_with_allocator,
-            lowering_close,
-            lowering_summary,
-            lowering_at,
-            lowering_contribution_at,
-            lowering_find_source,
-            lowering_find_emitted,
-            lowering_find_role,
-            lowering_metadata_at,
-            lowering_metadata_find,
-            lowering_transform_name,
-            lowering_failure_name
-        },
-        {
-            payload_open,
-            payload_close,
-            payload_summary,
-            payload_verification,
-            payload_map,
-            payload_transform_ir,
-            payload_binding,
-            payload_session,
-            payload_plan,
-            payload_failure_name
-        }
     };
+    static atomic_int ready = ATOMIC_VAR_INIT(0);
+    static atomic_flag lock = ATOMIC_FLAG_INIT;
+
+    if (!atomic_load_explicit(&ready, memory_order_acquire)) {
+        while (atomic_flag_test_and_set_explicit(&lock, memory_order_acquire)) {
+        }
+        if (!atomic_load_explicit(&ready, memory_order_relaxed)) {
+            api.coverage = *yvex_model_deepseek_coverage_api();
+            api.transform = *yvex_model_deepseek_transform_api();
+            api.lowering = *yvex_model_deepseek_lowering_api();
+            api.payload = *yvex_model_deepseek_payload_api();
+            atomic_store_explicit(&ready, 1, memory_order_release);
+        }
+        atomic_flag_clear_explicit(&lock, memory_order_release);
+    }
 
     return &api;
 }

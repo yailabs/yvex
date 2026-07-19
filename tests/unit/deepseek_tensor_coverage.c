@@ -1,9 +1,11 @@
 /* Exact DeepSeek tensor coverage, mutation, scale, and lifetime tests. */
 #include "tests/test.h"
 
-#include "src/model/families.h"
-#include "src/model/target/catalog.h"
-#include "src/source/private.h"
+#include <yvex/internal/compilation.h>
+#include <yvex/internal/families/deepseek_v4.h>
+#include <yvex/internal/gguf.h>
+#include <yvex/internal/source.h>
+#include <yvex/internal/source_payload.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -54,7 +56,7 @@ static void fixture_verification(yvex_source_verification *source)
     source->indexed_tensor_count = 69187u;
     fixture_copy(source->manifest_target_id,
                  sizeof(source->manifest_target_id),
-                 yvex_model_target_release_identity()->target_id);
+                 yvex_source_release_identity()->target_id);
     fixture_copy(source->verification_stage,
                  sizeof(source->verification_stage),
                  "exact-source-metadata-header-verified");
@@ -62,19 +64,19 @@ static void fixture_verification(yvex_source_verification *source)
                  sizeof(source->inventory_authority), "upstream-index");
     fixture_copy(source->upstream_index_oid,
                  sizeof(source->upstream_index_oid),
-                 yvex_model_target_release_identity()->upstream_index_oid);
+                 yvex_source_release_identity()->upstream_index_oid);
     fixture_copy(source->local_index_oid, sizeof(source->local_index_oid),
-                 yvex_model_target_release_identity()->upstream_index_oid);
+                 yvex_source_release_identity()->upstream_index_oid);
     fixture_copy(source->source_kind, sizeof(source->source_kind),
                  "huggingface");
     fixture_copy(source->repository_id, sizeof(source->repository_id),
-                 yvex_model_target_release_identity()->upstream_repo_id);
+                 yvex_source_release_identity()->upstream_repo_id);
     fixture_copy(source->revision, sizeof(source->revision),
-                 yvex_model_target_release_identity()->upstream_revision);
+                 yvex_source_release_identity()->upstream_revision);
     fixture_copy(source->model_type, sizeof(source->model_type),
-                 yvex_model_target_release_identity()->config_model_type);
+                 yvex_source_release_identity()->config_model_type);
     fixture_copy(source->architecture, sizeof(source->architecture),
-                 yvex_model_target_release_identity()->config_architecture);
+                 yvex_source_release_identity()->config_architecture);
     fixture_copy(source->torch_dtype, sizeof(source->torch_dtype), "bfloat16");
     fixture_copy(source->expert_dtype, sizeof(source->expert_dtype), "fp4");
     fixture_copy(source->hidden_act, sizeof(source->hidden_act), "silu");
@@ -560,12 +562,12 @@ static int test_valid_target_scale(void)
                      summary->unexpected_count == 0u,
                      "target-scale one-to-one summary is exact");
     YVEX_TEST_ASSERT(summary->collection_counts[
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTED_EXPERT] ==
+                         YVEX_TENSOR_COLLECTION_ROUTED_EXPERT] ==
                          67584u &&
                      summary->collection_counts[
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION] == 572u &&
+                         YVEX_TENSOR_COLLECTION_ATTENTION] == 572u &&
                      summary->collection_counts[
-                         YVEX_DEEPSEEK_TENSOR_COLLECTION_AUXILIARY] == 10u,
+                         YVEX_TENSOR_COLLECTION_AUXILIARY] == 10u,
                      "major collection counts include main and MTP tensors");
     YVEX_TEST_ASSERT(summary->header_scan_count == 1u &&
                      summary->payload_bytes_read == 0u &&
@@ -938,36 +940,36 @@ static int test_mapping_target_scale(void)
 {
     static const struct {
         yvex_tensor_role role;
-        yvex_deepseek_tensor_scope scope;
+        yvex_tensor_scope scope;
         unsigned long long layer;
         unsigned long long predictor;
         const char *name;
     } pinned_names[] = {
         {YVEX_TENSOR_ROLE_TOKEN_EMBEDDING,
-         YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
+         YVEX_TENSOR_SCOPE_GLOBAL,
          YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
          "token_embd.weight"},
         {YVEX_TENSOR_ROLE_HC_HEAD_SCALE,
-         YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL,
+         YVEX_TENSOR_SCOPE_GLOBAL,
          YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
          "output_hc_scale.weight"},
         {YVEX_TENSOR_ROLE_ATTENTION_KV_NORM,
-         YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER, 0u,
+         YVEX_TENSOR_SCOPE_MAIN_LAYER, 0u,
          YVEX_DEEPSEEK_GGUF_NO_INDEX, "blk.0.attn_kv_a_norm.weight"},
         {YVEX_TENSOR_ROLE_MOE_ROUTER_TABLE,
-         YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER, 0u,
+         YVEX_TENSOR_SCOPE_MAIN_LAYER, 0u,
          YVEX_DEEPSEEK_GGUF_NO_INDEX, "blk.0.ffn_gate_tid2eid.weight"},
         {YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_KV,
-         YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER, 2u,
+         YVEX_TENSOR_SCOPE_MAIN_LAYER, 2u,
          YVEX_DEEPSEEK_GGUF_NO_INDEX, "blk.2.attn_compressor_kv.weight"},
         {YVEX_TENSOR_ROLE_INDEXER_PROJECTION,
-         YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER, 2u,
+         YVEX_TENSOR_SCOPE_MAIN_LAYER, 2u,
          YVEX_DEEPSEEK_GGUF_NO_INDEX, "blk.2.indexer.proj.weight"},
         {YVEX_TENSOR_ROLE_MOE_ROUTER_BIAS,
-         YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER, 6u,
+         YVEX_TENSOR_SCOPE_MAIN_LAYER, 6u,
          YVEX_DEEPSEEK_GGUF_NO_INDEX, "blk.6.exp_probs_b.bias"},
         {YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_DOWN,
-         YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER, 42u,
+         YVEX_TENSOR_SCOPE_MAIN_LAYER, 42u,
          YVEX_DEEPSEEK_GGUF_NO_INDEX, "blk.42.ffn_down_shexp.weight"}
     };
     yvex_deepseek_gguf_map *map = NULL;
@@ -976,7 +978,7 @@ static int test_mapping_target_scale(void)
     const yvex_deepseek_gguf_map_summary *summary;
     const yvex_deepseek_gguf_descriptor *descriptor;
     const yvex_deepseek_gguf_metadata *metadata;
-    unsigned long long trunk_counts[YVEX_DEEPSEEK_TENSOR_COLLECTION_COUNT] = {0};
+    unsigned long long trunk_counts[YVEX_TENSOR_COLLECTION_COUNT] = {0};
     unsigned long long descriptor_index;
     unsigned long long contribution_index;
     size_t reference_index;
@@ -1015,7 +1017,7 @@ static int test_mapping_target_scale(void)
                                  current->layer_index,
                                  current->predictor_index) == current,
                          "emitted-name and typed-role indexes are exact");
-        if (current->scope == YVEX_DEEPSEEK_TENSOR_SCOPE_MTP) {
+        if (current->scope == YVEX_TENSOR_SCOPE_MTP) {
             YVEX_TEST_ASSERT(
                 current->name_provenance == YVEX_GGUF_NAME_YVEX_EXTENSION &&
                     strncmp(current->emitted_name, "yvex.mtp.v1.",
@@ -1023,6 +1025,7 @@ static int test_mapping_target_scale(void)
                 "every MTP descriptor uses the versioned extension");
         } else {
             const char *pattern = fixture_pinned_pattern(current->role);
+            const char *layer_slot;
             char expected_name[192];
             int written;
 
@@ -1031,11 +1034,12 @@ static int test_mapping_target_scale(void)
                 "every trunk descriptor uses a pinned standard name");
             YVEX_TEST_ASSERT(pattern != NULL,
                              "every trunk role exists in the pinned oracle");
-            written = strstr(pattern, "%llu")
-                          ? snprintf(expected_name, sizeof(expected_name),
-                                     pattern, current->layer_index)
-                          : snprintf(expected_name, sizeof(expected_name),
-                                     "%s", pattern);
+            layer_slot = strstr(pattern, "%llu");
+            written = layer_slot
+                          ? snprintf(expected_name, sizeof(expected_name), "%.*s%llu%s",
+                                     (int)(layer_slot - pattern), pattern,
+                                     current->layer_index, layer_slot + 4)
+                          : snprintf(expected_name, sizeof(expected_name), "%s", pattern);
             YVEX_TEST_ASSERT(written > 0 &&
                                  (size_t)written < sizeof(expected_name) &&
                                  strcmp(current->emitted_name,
@@ -1107,15 +1111,15 @@ static int test_mapping_target_scale(void)
         }
     }
     YVEX_TEST_ASSERT(
-        trunk_counts[YVEX_DEEPSEEK_TENSOR_COLLECTION_GLOBAL] == 6u &&
-            trunk_counts[YVEX_DEEPSEEK_TENSOR_COLLECTION_ATTENTION] == 344u &&
-            trunk_counts[YVEX_DEEPSEEK_TENSOR_COLLECTION_MHC] == 258u &&
-            trunk_counts[YVEX_DEEPSEEK_TENSOR_COLLECTION_NORM] == 86u &&
-            trunk_counts[YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTED_EXPERT] == 129u &&
-            trunk_counts[YVEX_DEEPSEEK_TENSOR_COLLECTION_SHARED_EXPERT] == 129u &&
-            trunk_counts[YVEX_DEEPSEEK_TENSOR_COLLECTION_ROUTER] == 86u &&
-            trunk_counts[YVEX_DEEPSEEK_TENSOR_COLLECTION_COMPRESSOR] == 164u &&
-            trunk_counts[YVEX_DEEPSEEK_TENSOR_COLLECTION_INDEXER] == 126u,
+        trunk_counts[YVEX_TENSOR_COLLECTION_GLOBAL] == 6u &&
+            trunk_counts[YVEX_TENSOR_COLLECTION_ATTENTION] == 344u &&
+            trunk_counts[YVEX_TENSOR_COLLECTION_MHC] == 258u &&
+            trunk_counts[YVEX_TENSOR_COLLECTION_NORM] == 86u &&
+            trunk_counts[YVEX_TENSOR_COLLECTION_ROUTED_EXPERT] == 129u &&
+            trunk_counts[YVEX_TENSOR_COLLECTION_SHARED_EXPERT] == 129u &&
+            trunk_counts[YVEX_TENSOR_COLLECTION_ROUTER] == 86u &&
+            trunk_counts[YVEX_TENSOR_COLLECTION_COMPRESSOR] == 164u &&
+            trunk_counts[YVEX_TENSOR_COLLECTION_INDEXER] == 126u,
         "official trunk collection reconciliation is exact");
     for (reference_index = 0u;
          reference_index < sizeof(pinned_names) / sizeof(pinned_names[0]);
@@ -1169,7 +1173,7 @@ static int test_mapping_target_scale(void)
                      "hash routing table has checked official I32 projection");
     descriptor = yvex_model_register_deepseek_v4()->lowering.find_role(
         map, YVEX_TENSOR_ROLE_ATTENTION_Q_A,
-        YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER, 42u,
+        YVEX_TENSOR_SCOPE_MAIN_LAYER, 42u,
         YVEX_DEEPSEEK_GGUF_NO_INDEX);
     YVEX_TEST_ASSERT(descriptor &&
                          strcmp(descriptor->emitted_name,
@@ -1181,7 +1185,7 @@ static int test_mapping_target_scale(void)
                      "official attention name and logical axes match loader");
     descriptor = yvex_model_register_deepseek_v4()->lowering.find_source(map, "mtp.0.e_proj.scale");
     YVEX_TEST_ASSERT(descriptor &&
-                         descriptor->scope == YVEX_DEEPSEEK_TENSOR_SCOPE_MTP &&
+                         descriptor->scope == YVEX_TENSOR_SCOPE_MTP &&
                          descriptor->name_provenance ==
                              YVEX_GGUF_NAME_YVEX_EXTENSION &&
                          strncmp(descriptor->emitted_name, "yvex.mtp.v1.0.",
@@ -1343,7 +1347,7 @@ static int test_transform_stale_coverage_refusals(void)
     yvex_deepseek_tensor_coverage_row *row;
     yvex_native_weight_info *source;
     yvex_native_dtype saved_dtype;
-    yvex_deepseek_tensor_scope saved_scope;
+    yvex_tensor_scope saved_scope;
     unsigned long long saved_expert;
     yvex_error err;
 
@@ -1392,7 +1396,7 @@ static int test_transform_stale_coverage_refusals(void)
                                            "layers.0.attn_norm.weight");
     YVEX_TEST_ASSERT(row != NULL, "scope mutation row is addressable");
     saved_scope = row->scope;
-    row->scope = YVEX_DEEPSEEK_TENSOR_SCOPE_GLOBAL;
+    row->scope = YVEX_TENSOR_SCOPE_GLOBAL;
     YVEX_TEST_ASSERT(yvex_model_register_deepseek_v4()->transform.build(
                          &transform_ir, &verification, ir, coverage, NULL,
                          &failure, &err) != YVEX_OK && !transform_ir &&

@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "production_roots": ["src", "include"],
+  "owned_roots": ["src", "include", "tests", "tools", "scripts", "schema", "config"],
+  "production_suffixes": [".c", ".h", ".cu"],
+  "owned_suffixes": [".c", ".h", ".cu", ".sh", ".py", ".json", ".def", ".tsv"],
+  "header_tiers": {
+    "public_root": "include/yvex",
+    "internal_root": "include/yvex/internal",
+    "source_root": "src",
+    "umbrella": "include/yvex/api.h",
+    "source_private_basename": "private.h",
+    "source_special_boundaries": ["platform-interface", "backend-kernel", "generated-abi"]
+  },
+  "limits": {
+    "production_files": 220,
+    "translation_units": 164,
+    "headers": 48,
+    "public_headers": 16,
+    "source_headers": 24,
+    "translation_unit_lines": 2000,
+    "header_lines": 600,
+    "function_lines": 200,
+    "preferred_line_width": 100,
+    "hard_line_width": 120,
+    "physical_lines": 131559,
+    "code_lines": 115138,
+    "executable_lines": 65761,
+    "public_function_declarations": 427,
+    "library_global_symbols": 968,
+    "nonpublic_global_symbols": 541,
+    "family_sources": 3,
+    "family_headers": 1,
+    "family_sources_per_subsystem": 1,
+    "files_per_semantic_owner": 2,
+    "path_components": 5,
+    "basename_characters": 32,
+    "short_helper_lines": 20
+  },
+  "manifest": {
+    "path": "config/source_owners.tsv",
+    "fields": 9,
+    "scopes": ["generic", "family", "backend", "entrypoint"],
+    "visibilities": ["public", "private"],
+    "partitions": ["interface", "implementation", "backend-kernel", "entrypoint"],
+    "allowed_exception": "none",
+    "public_boundary": "public-abi",
+    "private_header_minimum_translation_unit_consumers": 2
+  },
+  "include_policy": {
+    "make_include_roots": ["include", "."],
+    "required_c_warnings": [
+      "-Wstrict-prototypes",
+      "-Wmissing-prototypes",
+      "-Wmissing-declarations",
+      "-Wshadow",
+      "-Wformat=2",
+      "-Wundef",
+      "-Wvla"
+    ],
+    "public_prefix": "yvex/",
+    "internal_prefix": "yvex/internal/",
+    "source_prefix": "src/",
+    "forbid_bare_quoted": true,
+    "forbid_umbrella_in_source": true,
+    "forwarding_header_allow": ["include/yvex/api.h"]
+  },
+  "contracts": {
+    "file_fields": ["Owner", "Owns", "Does not own", "Invariants", "Boundary", "Purpose", "Inputs", "Effects", "Failure"],
+    "function_full_fields": ["Purpose", "Inputs", "Effects", "Failure", "Boundary"],
+    "function_short_fields": ["Purpose"],
+    "nontrivial_name_fragments": ["alloc", "build", "close", "commit", "create", "decode", "encode", "execute", "free", "hash", "init", "load", "open", "parse", "publish", "read", "release", "seal", "stream", "validate", "verify", "write"],
+    "nontrivial_call_names": ["calloc", "close", "fopen", "free", "fstat", "fsync", "malloc", "mmap", "munmap", "open", "pread", "pthread_create", "pthread_join", "pwrite", "read", "realloc", "write"],
+    "forbidden_fragments": [
+      "boundary consumed by repository",
+      "match config/source_owners.tsv",
+      "moving this contract requires an ownership-manifest change",
+      "responsibilities assigned",
+      "consumes only typed",
+      "uses typed refusals or defined cli exit behavior",
+      "mutates only explicitly owned",
+      "performs cli adaptation or output only"
+    ],
+    "duplicate_contract_limit": 1
+  },
+  "dependencies": {
+    "forbidden_edges": [
+      {"from": "src/core", "to": "src/cli"},
+      {"from": "src/model", "to": "src/cli"},
+      {"from": "src/graph", "to": "src/cli"},
+      {"from": "src/runtime", "to": "src/cli"},
+      {"from": "src/generation", "to": "src/cli"},
+      {"from": "src/model/compilation", "to": "src/backend"},
+      {"from": "src/backend", "to": "src/model"}
+    ],
+    "planning_roots": ["src/model/compilation"],
+    "payload_io_calls": ["fopen", "mmap", "open", "pread", "read"],
+    "domain_roots": ["src/artifact", "src/backend", "src/generation", "src/gguf", "src/graph", "src/model", "src/runtime", "src/source"],
+    "shell_calls": ["execl", "execv", "popen", "system"]
+  },
+  "symbols": {
+    "namespace": "yvex_",
+    "forbidden_public_fragments": ["_fixture_", "_reference_", "_test_", "_render_", "_deepseek_"],
+    "family_entrypoints": ["yvex_model_register_deepseek_v4", "yvex_graph_lower_deepseek_v4", "yvex_backend_attention_execute"]
+  },
+  "archive": {
+    "path": "build/lib/libyvex.a",
+    "member_prefix": "build/obj/",
+    "source_variables": ["CORE_SRCS", "CLI_SRCS", "CUDA_SRCS", "CUDA_CU_SRCS"],
+    "object_variable": "CORE_OBJS"
+  },
+  "analysis": {
+    "duplicate_block_minimum_tokens": 24
+  },
+  "required_literals": [
+    {"text": "e7706faf8d1c3b9f241e36860640ad1dac644ede", "roots": ["src"]},
+    {"text": "yvex_attention_execute_supported", "roots": ["src/graph"]},
+    {"text": "yvex_attention_hadamard_cpu", "roots": ["src/graph"]},
+    {"text": "yvex_attention_topk_select", "roots": ["src/graph"]},
+    {"text": "yvex_graph_lower_deepseek_v4", "roots": ["src/graph"]},
+    {"text": "graph_plan_build", "roots": ["src/graph/families"]},
+    {"text": "yvex_backend_attention_execute", "roots": ["src/backend"]},
+    {"text": "yvex_test_attention_reference_execute", "roots": ["tests/reference"]},
+    {"text": "attention_execution_supported", "roots": ["src", "tests/live"]},
+    {"text": "attention_cuda_execution_ready", "roots": ["src", "tests/live"]},
+    {"text": "runtime_generation_ready", "roots": ["src", "tests/live"]}
+  ],
+  "forbidden_capability_assignments": [
+    "attention_execution_supported",
+    "attention_cuda_execution_ready",
+    "runtime_generation_ready"
+  ]
+}

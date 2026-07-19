@@ -19,7 +19,7 @@
  * Boundary:
  *   independent scalar comparison is test evidence, not runtime support.
  */
-#include "deepseek_attention.h"
+#include "tests/reference/deepseek_attention.h"
 
 #include <limits.h>
 #include <math.h>
@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <yvex/gguf_qtype.h>
+#include <yvex/qtype.h>
 
 #define REF_PI 3.14159265358979323846264338327950288
 
@@ -111,7 +111,7 @@ static const yvex_runtime_tensor_binding *ref_binding(
     unsigned long long layer)
 {
     return yvex_runtime_descriptor_find_role(
-        descriptor, role, YVEX_DEEPSEEK_TENSOR_SCOPE_MAIN_LAYER, layer,
+        descriptor, role, YVEX_TENSOR_SCOPE_MAIN_LAYER, layer,
         YVEX_DEEPSEEK_GGUF_NO_INDEX);
 }
 
@@ -296,7 +296,7 @@ static int ref_rms(float *values,
 }
 
 static double ref_yarn_frequency(
-    const yvex_deepseek_v4_position_spec *position,
+    const yvex_attention_position_policy *position,
     unsigned long long pair,
     unsigned long long rope_dimensions)
 {
@@ -339,7 +339,7 @@ static int ref_rope(float *values,
                     unsigned long long width,
                     unsigned long long rope_dimensions,
                     unsigned long long position_index,
-                    const yvex_deepseek_v4_position_spec *position,
+                    const yvex_attention_position_policy *position,
                     int inverse)
 {
     unsigned long long lane;
@@ -493,7 +493,7 @@ static int ref_fake_quant_block(float *values,
 }
 
 static int ref_activation(
-    const yvex_deepseek_v4_runtime_activation_policy *policy,
+    const yvex_attention_activation_policy *policy,
     float *values,
     unsigned long long count)
 {
@@ -505,7 +505,7 @@ static int ref_activation(
         count % policy->block_width != 0ull)
         return 0;
     if (policy->pre_transform ==
-        YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_DAO_FHT_V1_1_0_POST2) {
+        YVEX_ATTENTION_TRANSFORM_DAO_FHT_V1_1_0_POST2) {
         rotated = (float *)ref_alloc(count, sizeof(*rotated));
         if (!rotated ||
             !yvex_test_attention_reference_hadamard(
@@ -516,14 +516,14 @@ static int ref_activation(
         memcpy(values, rotated, (size_t)count * sizeof(*values));
         free(rotated);
     } else if (policy->pre_transform !=
-               YVEX_DEEPSEEK_V4_RUNTIME_TRANSFORM_NONE) {
+               YVEX_ATTENTION_TRANSFORM_NONE) {
         return 0;
     }
     for (offset = 0ull; offset < count; offset += policy->block_width) {
         int fp4 = policy->quantization ==
-            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT;
+            YVEX_ATTENTION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT;
         if (!fp4 && policy->quantization !=
-            YVEX_DEEPSEEK_V4_RUNTIME_ACTIVATION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT)
+            YVEX_ATTENTION_QUANT_FP8_E4M3_UE8M0_FAKE_DEQUANT)
             return 0;
         if (!ref_fake_quant_block(values + offset, policy->block_width,
                                   fp4))
@@ -609,7 +609,7 @@ static int ref_rolling_init(
             : layer->head_dimension;
     state->overlap =
         kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER ||
-        layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA;
+        layer->attention_class == YVEX_ATTENTION_CLASS_CSA;
     state->width = state->head_dimension * (state->overlap ? 2ull : 1ull);
     state->slots = state->ratio * (state->overlap ? 2ull : 1ull);
     if (!state->head_dimension || !state->width || !state->slots ||
@@ -1170,7 +1170,7 @@ static int ref_sparse_reduce(
     unsigned long long token;
     double scale = 1.0 / sqrt((double)layer->head_dimension);
 
-    if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA &&
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
         compressed_total) {
         selected = (unsigned long long *)ref_alloc(
             compressed_total < layer->sparse_topk.k
@@ -1183,7 +1183,7 @@ static int ref_sparse_reduce(
         unsigned long long selected_count = 0ull;
         unsigned long long head;
 
-        if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA &&
+        if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
             compressed_total &&
             !ref_csa_select(
                 layer, history, current_indexer, current_indexer_count,
@@ -1251,7 +1251,7 @@ static int ref_sparse_reduce(
                     goto fail;
                 if (score > maximum) maximum = score;
             }
-            if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_HCA) {
+            if (layer->attention_class == YVEX_ATTENTION_CLASS_HCA) {
                 for (candidate = 0ull; candidate < compressed_total;
                      ++candidate) {
                     unsigned long long position = ref_segmented_position(
@@ -1278,7 +1278,7 @@ static int ref_sparse_reduce(
                     if (score > maximum) maximum = score;
                 }
             } else if (layer->attention_class ==
-                       YVEX_DEEPSEEK_V4_ATTENTION_CSA) {
+                       YVEX_ATTENTION_CLASS_CSA) {
                 for (candidate = 0ull; candidate < selected_count;
                      ++candidate) {
                     const float *row = ref_segmented_row(
@@ -1324,7 +1324,7 @@ static int ref_sparse_reduce(
                         destination))
                     goto fail;
             }
-            if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_HCA) {
+            if (layer->attention_class == YVEX_ATTENTION_CLASS_HCA) {
                 for (candidate = 0ull; candidate < compressed_total;
                      ++candidate) {
                     unsigned long long position = ref_segmented_position(
@@ -1349,7 +1349,7 @@ static int ref_sparse_reduce(
                         goto fail;
                 }
             } else if (layer->attention_class ==
-                       YVEX_DEEPSEEK_V4_ATTENTION_CSA) {
+                       YVEX_ATTENTION_CLASS_CSA) {
                 for (candidate = 0ull; candidate < selected_count;
                      ++candidate) {
                     const float *row = ref_segmented_row(
@@ -1639,7 +1639,7 @@ int yvex_test_attention_reference_execute(
         ref_reason(reason, "reference history is not contiguous");
         goto cleanup;
     }
-    if (layer->attention_class != YVEX_DEEPSEEK_V4_ATTENTION_SWA &&
+    if (layer->attention_class != YVEX_ATTENTION_CLASS_SWA &&
         !ref_compressor_execute(
             session, descriptor, layer, architecture,
             YVEX_DEEPSEEK_ATTENTION_ROLLING_MAIN,
@@ -1648,7 +1648,7 @@ int yvex_test_attention_reference_execute(
             &compressed_positions, &compressed_count, &next_main_state,
             reason))
         goto cleanup;
-    if (layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA) {
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
         const yvex_runtime_tensor_binding *index_q = ref_binding(
             descriptor, YVEX_TENSOR_ROLE_INDEXER_ATTENTION_Q_B,
             layer->layer_index);
@@ -1747,10 +1747,10 @@ int yvex_test_attention_reference_execute(
     trace->indexer_count = indexer_count;
     trace->indexer_stride = indexer_count ? layer->indexer_head_dimension : 0ull;
     trace->index_query_stride =
-        layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA
+        layer->attention_class == YVEX_ATTENTION_CLASS_CSA
             ? layer->indexer_heads * layer->indexer_head_dimension : 0ull;
     trace->index_weight_stride =
-        layer->attention_class == YVEX_DEEPSEEK_V4_ATTENTION_CSA
+        layer->attention_class == YVEX_ATTENTION_CLASS_CSA
             ? layer->indexer_heads : 0ull;
     trace->topk_stride = topk_stride;
     trace->input = input;

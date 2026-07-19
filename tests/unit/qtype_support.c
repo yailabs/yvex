@@ -5,7 +5,7 @@
 
 #include <yvex/api.h>
 
-#include "src/backend/cuda/qtype.h"
+#include "src/backend/cuda/private.h"
 
 #include "tests/test.h"
 

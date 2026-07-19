@@ -1,30 +1,16 @@
-/*
- * output_head_map.c - output-head map report builder.
- *
- * Owner:
- *   src/model/target
- *
- * Owns:
- *   output-head candidate facts, embedding relation facts, tie-policy facts,
- *   and output-head sidecar report facts.
- *
- * Does not own:
- *   CLI parsing, rendering, logits execution, tensor payload loading, artifact
- *   emission, runtime execution, generation, eval, benchmark, or release
- *   decisions.
- *
- * Invariants:
- *   output-head reports are header/metadata mapping facts only and do not
- *   create logits support.
- *
- * Boundary:
- *   output-head mapping is not runtime logits, generation support, benchmark
- *   evidence, or release readiness.
- */
-#include "output_head_map.h"
-
-#include "private.h"
-#include "sidecar_write.h"
+/* Owner: src/model/target
+ * Owns: output-head candidate facts, embedding relation facts, tie-policy facts, and output-head sidecar report
+ *   facts.
+ * Does not own: CLI parsing, rendering, logits execution, tensor payload loading, artifact emission, runtime
+ *   execution, generation, eval, benchmark, or release decisions.
+ * Invariants: output-head reports are header/metadata mapping facts only and do not create logits support.
+ * Boundary: output-head mapping is not runtime logits, generation support, benchmark evidence, or release
+ *   readiness.
+ * Purpose: derive output-head mapping facts from bounded headers and configuration.
+ * Inputs: typed requests and source metadata evidence.
+ * Effects: updates report state and explicit sidecar output only.
+ * Failure: missing or ambiguous heads remain typed blockers. */
+#include <yvex/internal/model_target.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -40,140 +26,68 @@ typedef struct {
     int config_tie_false;
 } output_head_probe;
 
-static int output_head_validate(const yvex_model_target_request *request,
-                                yvex_model_target_report *report)
-{
-    if (!request->target_id[0]) {
-        report->exit_code = 2;
-        yvex_model_target_report_add_error(report, "model-target tensor-map: requires TARGET");
-        return 0;
-    }
-    if (!yvex_model_target_supported_source_target(request->target_id)) {
-        report->exit_code = 2;
-        yvex_model_target_report_add_error(report, "model-target tensor-map: unsupported target: %s",
-                                           request->target_id);
-        return 0;
-    }
-    return 1;
-}
+typedef struct {
+    const char *status;
+    const char *family;
+    const char *target;
+    const char *source_status;
+    int candidate_count;
+    int ambiguous_count;
+    const char *native;
+    const char *canonical;
+    const char *mapping;
+    const char *missing_status;
+    const char *tie;
+    const char *config_tie;
+    const char *shape_relation;
+} output_head_report_facts;
 
-static unsigned long long output_head_le64(const unsigned char bytes[8])
-{
-    return ((unsigned long long)bytes[0]) |
-           ((unsigned long long)bytes[1] << 8) |
-           ((unsigned long long)bytes[2] << 16) |
-           ((unsigned long long)bytes[3] << 24) |
-           ((unsigned long long)bytes[4] << 32) |
-           ((unsigned long long)bytes[5] << 40) |
-           ((unsigned long long)bytes[6] << 48) |
-           ((unsigned long long)bytes[7] << 56);
-}
+#define OUTPUT_HEAD_LITERAL(text) \
+    { YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u }
+#define OUTPUT_HEAD_STRING(field, format) \
+    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(output_head_report_facts, field) }
+#define OUTPUT_HEAD_INT(field, format) \
+    { YVEX_MODEL_TARGET_ROW_INT, (format), offsetof(output_head_report_facts, field) }
 
-static int output_head_source_path(const yvex_model_target_request *request,
-                                   const char *family,
-                                   const char *leaf,
-                                   char *out,
-                                   size_t cap)
-{
-    int n;
+static const yvex_model_target_row_spec output_head_audit_rows[] = {
+    OUTPUT_HEAD_STRING(status, "output_head_map_status: %s"),
+    OUTPUT_HEAD_STRING(family, "output_head_map_family: %s"),
+    OUTPUT_HEAD_STRING(target, "output_head_map_target_id: %s"),
+    OUTPUT_HEAD_LITERAL("output_head_map_stage: header-output-head-map"),
+    OUTPUT_HEAD_LITERAL("output_head_map_evidence_basis: header-metadata-only"),
+    OUTPUT_HEAD_STRING(source_status, "output_head_map_source_status: %s"),
+    OUTPUT_HEAD_INT(candidate_count, "output_head_candidate_count: %d"),
+    OUTPUT_HEAD_INT(ambiguous_count, "output_head_ambiguous_count: %d"),
+    OUTPUT_HEAD_STRING(native, "output_head_native_name: %s"),
+    OUTPUT_HEAD_STRING(canonical, "output_head_canonical_role: %s"),
+    OUTPUT_HEAD_STRING(mapping, "output_head_mapping_status: %s"),
+    OUTPUT_HEAD_STRING(missing_status, "output_head_missing_status: %s"),
+    OUTPUT_HEAD_LITERAL("embedding_canonical_role: model.embedding.token.weight"),
+    OUTPUT_HEAD_LITERAL("final_norm_canonical_role: model.final_norm.weight"),
+    OUTPUT_HEAD_STRING(tie, "tie_policy_status: %s"),
+    OUTPUT_HEAD_STRING(config_tie, "config_tie_word_embeddings_status: %s"),
+    OUTPUT_HEAD_STRING(shape_relation, "shape_relation_status: %s"),
+    OUTPUT_HEAD_LITERAL("output_head_runtime_consumer_status: not-implemented"),
+    OUTPUT_HEAD_LITERAL("output_head_logits_status: not-implemented"),
+    OUTPUT_HEAD_LITERAL("output_head_artifact_contract_status: not-implemented"),
+    OUTPUT_HEAD_LITERAL("output_head_runtime_descriptor_status: not-implemented"),
+    OUTPUT_HEAD_LITERAL("output_head_graph_consumer_status: not-implemented")
+};
 
-    if (!request || !family || !leaf || !out || cap == 0u) {
-        return 0;
-    }
-    out[0] = '\0';
-    if (request->source_path[0]) {
-        n = snprintf(out, cap, "%s/%s", request->source_path, leaf);
-    } else if (request->models_root[0]) {
-        n = snprintf(out, cap, "%s/hf/%s/%s/%s", request->models_root,
-                     family, request->target_id, leaf);
-    } else {
-        return 0;
-    }
-    if (n < 0 || (size_t)n >= cap) {
-        out[0] = '\0';
-        return 0;
-    }
-    return 1;
-}
+static const yvex_model_target_row_spec output_head_entry_rows[] = {
+    OUTPUT_HEAD_STRING(native, "output_head.entry.output.native_name: %s"),
+    OUTPUT_HEAD_STRING(canonical, "output_head.entry.output.canonical_role: %s")
+};
 
-/*
- * output_head_read_header()
- *
- * Purpose:
- *   read only the safetensors JSON header for output-head classification.
- *
- * Inputs:
- *   path is borrowed; out receives temporary heap text on success.
- *
- * Effects:
- *   opens and reads the safetensors header only; tensor payload bytes are not
- *   inspected.
- *
- * Failure:
- *   returns 0 for missing/malformed local files or allocation failure.
- *
- * Boundary:
- *   header inspection is mapping evidence only, not logits/runtime support.
- */
-static int output_head_read_header(const char *path, char **out)
-{
-    FILE *fp;
-    unsigned char len_bytes[8];
-    unsigned long long header_len;
-    char *json;
+#undef OUTPUT_HEAD_LITERAL
+#undef OUTPUT_HEAD_STRING
+#undef OUTPUT_HEAD_INT
 
-    if (!path || !out) {
-        return 0;
-    }
-    *out = NULL;
-    fp = fopen(path, "rb");
-    if (!fp) {
-        return 0;
-    }
-    if (fread(len_bytes, 1u, sizeof(len_bytes), fp) != sizeof(len_bytes)) {
-        fclose(fp);
-        return 0;
-    }
-    header_len = output_head_le64(len_bytes);
-    if (header_len == 0ull || header_len > 1024ull * 1024ull) {
-        fclose(fp);
-        return 0;
-    }
-    json = (char *)malloc((size_t)header_len + 1u);
-    if (!json) {
-        fclose(fp);
-        return 0;
-    }
-    if (fread(json, 1u, (size_t)header_len, fp) != (size_t)header_len) {
-        free(json);
-        fclose(fp);
-        return 0;
-    }
-    fclose(fp);
-    json[header_len] = '\0';
-    *out = json;
-    return 1;
-}
-
-static int output_head_read_small_file(const char *path, char *buf, size_t cap)
-{
-    FILE *fp;
-    size_t got;
-
-    if (!path || !buf || cap == 0u) {
-        return 0;
-    }
-    buf[0] = '\0';
-    fp = fopen(path, "rb");
-    if (!fp) {
-        return 0;
-    }
-    got = fread(buf, 1u, cap - 1u, fp);
-    buf[got] = '\0';
-    fclose(fp);
-    return 1;
-}
-
+/* Purpose: apply the canonical output head json bool field transformation and invariants.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static int output_head_json_bool_field(const char *text, const char *key,
                                        int *seen_true, int *seen_false)
 {
@@ -227,8 +141,7 @@ static int output_head_json_bool_field(const char *text, const char *key,
  *   report facts can still be emitted.
  *
  * Boundary:
- *   probe facts are output-head mapping evidence, not logits readiness.
- */
+ *   probe facts are output-head mapping evidence, not logits readiness. */
 static void output_head_probe_source(const yvex_model_target_request *request,
                                      const char *family,
                                      output_head_probe *probe)
@@ -241,9 +154,9 @@ static void output_head_probe_source(const yvex_model_target_request *request,
         return;
     }
     memset(probe, 0, sizeof(*probe));
-    if (output_head_source_path(request, family, "model.safetensors",
-                                path, sizeof(path)) &&
-        output_head_read_header(path, &header)) {
+    if (yvex_model_target_probe_source_path(
+            request, family, "model.safetensors", path, sizeof(path)) &&
+        yvex_model_target_probe_header(path, &header)) {
         probe->header_checked = 1;
         probe->embed_seen =
             strstr(header, "model.language_model.embed_tokens.weight") != NULL ||
@@ -258,9 +171,9 @@ static void output_head_probe_source(const yvex_model_target_request *request,
             (strstr(header, "output.weight") != NULL ? 1 : 0);
         free(header);
     }
-    if (output_head_source_path(request, family, "config.json",
-                                path, sizeof(path)) &&
-        output_head_read_small_file(path, config, sizeof(config))) {
+    if (yvex_model_target_probe_source_path(
+            request, family, "config.json", path, sizeof(path)) &&
+        yvex_model_target_probe_read(path, config, sizeof(config))) {
         probe->config_checked =
             output_head_json_bool_field(config, "tie_word_embeddings",
                                         &probe->config_tie_true,
@@ -268,6 +181,11 @@ static void output_head_probe_source(const yvex_model_target_request *request,
     }
 }
 
+/* Purpose: project typed output head status vocabulary without lost semantics.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static const char *output_head_status(const yvex_model_target_request *request,
                                       const char *family,
                                       const output_head_probe *probe)
@@ -306,6 +224,11 @@ static const char *output_head_status(const yvex_model_target_request *request,
     return "output-head-profiled";
 }
 
+/* Purpose: publish output head write sidecar through the bounded output boundary.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 static void output_head_write_sidecar(const yvex_model_target_request *request,
                                       const char *family,
                                       const char *status)
@@ -319,6 +242,11 @@ static void output_head_write_sidecar(const yvex_model_target_request *request,
                                                       family, status);
 }
 
+/* Purpose: construct bounded output head map report build state from admitted inputs.
+ * Inputs: typed facts are borrowed.
+ * Effects: updates bounded report or plan state.
+ * Failure: preserves typed refusal and cleanup.
+ * Boundary: never promotes payload or runtime execution. */
 int yvex_output_head_map_report_build(
     const yvex_model_target_request *request,
     yvex_model_target_report *report,
@@ -331,13 +259,15 @@ int yvex_output_head_map_report_build(
     const char *tie;
     const char *mapping;
     output_head_probe probe;
+    output_head_report_facts facts;
 
     if (!request || !report) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "output_head_map",
                        "request and report are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (!output_head_validate(request, report)) {
+    if (!yvex_model_target_validate_supported(
+            request, report, "tensor-map", 0)) {
         return YVEX_OK;
     }
     family = yvex_model_target_family_key(request->target_id);
@@ -375,6 +305,30 @@ int yvex_output_head_map_report_build(
                      strcmp(status, "source-missing") == 0
                          ? "missing"
                          : "mapped-candidate"));
+    memset(&facts, 0, sizeof(facts));
+    facts.status = status;
+    facts.family = family;
+    facts.target = request->target_id;
+    facts.source_status = strcmp(status, "source-missing") == 0
+                              ? "missing" : "present";
+    facts.candidate_count = strcmp(status, "source-missing") == 0 ||
+                            strcmp(status, "output-head-missing") == 0
+                                ? 0
+                                : (strcmp(status, "output-head-ambiguous") == 0
+                                       ? 2 : 1);
+    facts.ambiguous_count = strcmp(status, "output-head-ambiguous") == 0;
+    facts.native = native;
+    facts.canonical = canonical;
+    facts.mapping = mapping;
+    facts.missing_status = strcmp(status, "output-head-missing") == 0 ||
+                           strcmp(status, "source-missing") == 0
+                               ? "missing" : "present";
+    facts.tie = tie;
+    facts.config_tie = probe.config_checked
+                           ? (probe.config_tie_true ? "true" : "false")
+                           : "missing";
+    facts.shape_relation = strcmp(status, "source-missing") == 0
+                               ? "unknown" : "compatible-same-shape";
     output_head_write_sidecar(request, family, status);
 
     if (request->output_contract[0]) {
@@ -384,7 +338,10 @@ int yvex_output_head_map_report_build(
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
         yvex_model_target_report_add_row(report, "OUTPUT HEAD TENSOR MAP");
-        yvex_model_target_report_add_row(report, "FAMILY  TARGET                STATUS                           HEAD  FINAL_NORM  EMBED  TIE_POLICY                          SHAPE_RELATION            NEXT");
+        yvex_model_target_report_add_row(
+            report, "FAMILY  TARGET                STATUS                           HEAD  "
+                    "FINAL_NORM  EMBED  TIE_POLICY                          "
+                    "SHAPE_RELATION            NEXT");
         yvex_model_target_report_add_row(report,
                                          "%-8s%-22s%-33s%s    %s         %s    %s  %s  V010.MAP.8",
                                          family, request->target_id, status,
@@ -398,46 +355,10 @@ int yvex_output_head_map_report_build(
         return YVEX_OK;
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
-        yvex_model_target_report_add_row(report, "output_head_map_status: %s", status);
-        yvex_model_target_report_add_row(report, "output_head_map_family: %s", family);
-        yvex_model_target_report_add_row(report, "output_head_map_target_id: %s", request->target_id);
-        yvex_model_target_report_add_row(report, "output_head_map_stage: header-output-head-map");
-        yvex_model_target_report_add_row(report, "output_head_map_evidence_basis: header-metadata-only");
-        yvex_model_target_report_add_row(report, "output_head_map_source_status: %s",
-                                         strcmp(status, "source-missing") == 0 ? "missing" : "present");
-        yvex_model_target_report_add_row(
-            report, "output_head_candidate_count: %d",
-            strcmp(status, "source-missing") == 0 ? 0
-                : (strcmp(status, "output-head-missing") == 0 ? 0
-                   : (strcmp(status, "output-head-ambiguous") == 0 ? 2 : 1)));
-        yvex_model_target_report_add_row(
-            report, "output_head_ambiguous_count: %d",
-            strcmp(status, "output-head-ambiguous") == 0 ? 1 : 0);
-        yvex_model_target_report_add_row(report, "output_head_native_name: %s", native);
-        yvex_model_target_report_add_row(report, "output_head_canonical_role: %s", canonical);
-        yvex_model_target_report_add_row(report, "output_head_mapping_status: %s", mapping);
-        if (strcmp(status, "output-head-missing") == 0 ||
-            strcmp(status, "source-missing") == 0) {
-            yvex_model_target_report_add_row(report, "output_head_missing_status: missing");
-        } else {
-            yvex_model_target_report_add_row(report, "output_head_missing_status: present");
-        }
-        yvex_model_target_report_add_row(report, "embedding_canonical_role: model.embedding.token.weight");
-        yvex_model_target_report_add_row(report, "final_norm_canonical_role: model.final_norm.weight");
-        yvex_model_target_report_add_row(report, "tie_policy_status: %s", tie);
-        yvex_model_target_report_add_row(report, "config_tie_word_embeddings_status: %s",
-                                         probe.config_checked
-                                             ? (probe.config_tie_true ? "true" : "false")
-                                             : "missing");
-        yvex_model_target_report_add_row(report, "shape_relation_status: %s",
-                                         strcmp(status, "source-missing") == 0
-                                             ? "unknown"
-                                             : "compatible-same-shape");
-        yvex_model_target_report_add_row(report, "output_head_runtime_consumer_status: not-implemented");
-        yvex_model_target_report_add_row(report, "output_head_logits_status: not-implemented");
-        yvex_model_target_report_add_row(report, "output_head_artifact_contract_status: not-implemented");
-        yvex_model_target_report_add_row(report, "output_head_runtime_descriptor_status: not-implemented");
-        yvex_model_target_report_add_row(report, "output_head_graph_consumer_status: not-implemented");
+        yvex_model_target_report_project_rows(
+            report, output_head_audit_rows,
+            sizeof(output_head_audit_rows) / sizeof(output_head_audit_rows[0]),
+            &facts);
         if (strcmp(status, "output-head-missing") == 0) {
             yvex_model_target_report_add_row(report,
                                              "top_blocker: missing-output-head-tensor");
@@ -449,8 +370,10 @@ int yvex_output_head_map_report_build(
         yvex_model_target_report_add_row(report, "next_required_rows: V010.MAP.8");
         if (strcmp(status, "source-missing") != 0 &&
             strcmp(status, "output-head-missing") != 0) {
-            yvex_model_target_report_add_row(report, "output_head.entry.output.native_name: %s", native);
-            yvex_model_target_report_add_row(report, "output_head.entry.output.canonical_role: %s", canonical);
+            yvex_model_target_report_project_rows(
+                report, output_head_entry_rows,
+                sizeof(output_head_entry_rows) / sizeof(output_head_entry_rows[0]),
+                &facts);
         }
         return YVEX_OK;
     }
