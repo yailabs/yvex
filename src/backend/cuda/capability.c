@@ -117,6 +117,7 @@ static CUfunction cuda_variant_function(const yvex_cuda_backend_state *state,
                                         yvex_backend_operation_variant variant)
 {
     size_t index;
+    CUfunction first = NULL;
 
     if (!state) {
         return NULL;
@@ -129,11 +130,14 @@ static CUfunction cuda_variant_function(const yvex_cuda_backend_state *state,
     for (index = 0; index < sizeof(cuda_kernel_bindings) / sizeof(cuda_kernel_bindings[0]);
          ++index) {
         if (cuda_kernel_bindings[index].variant == variant) {
-            return *cuda_function_slot((yvex_cuda_backend_state *)state,
-                                       cuda_kernel_bindings[index].state_offset);
+            CUfunction function = *cuda_function_slot(
+                (yvex_cuda_backend_state *)state,
+                cuda_kernel_bindings[index].state_offset);
+            if (!function) return NULL;
+            if (!first) first = function;
         }
     }
-    return NULL;
+    return first;
 }
 
 /* Contract: classifies variants implemented entirely by the Driver memory API. */
@@ -191,7 +195,7 @@ static int cuda_resolve_required(yvex_cuda_backend_state *state,
 
     *out = NULL;
     if (injected &&
-        (strcmp(injected, "symbol") == 0 ||
+        (strcmp(injected, "symbol") == 0 || strcmp(injected, symbol) == 0 ||
          strcmp(injected, yvex_backend_operation_variant_name(variant)) == 0)) {
         yvex_error_setf(err, YVEX_ERR_BACKEND, "cuda.kernels.resolve",
                         "required CUDA function unavailable: %s", symbol);
@@ -530,6 +534,7 @@ int yvex_cuda_temporary_free(yvex_backend *backend,
                              yvex_error *err)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    int injected;
     int rc;
 
     if (!ptr) {
@@ -540,7 +545,8 @@ int yvex_cuda_temporary_free(yvex_backend *backend,
         yvex_error_set(err, YVEX_ERR_STATE, where, "CUDA backend state is missing");
         return YVEX_ERR_STATE;
     }
-    if (cuda_test_failure_matches("YVEX_TEST_CUDA_CLEANUP_FAILURE", variant)) {
+    injected = cuda_test_failure_matches("YVEX_TEST_CUDA_CLEANUP_FAILURE", variant);
+    if (injected && variant != YVEX_BACKEND_VARIANT_ATTENTION_ENCODED) {
         cuda_capability_fail(backend, variant,
                              YVEX_BACKEND_CAPABILITY_REASON_CLEANUP_FAILED);
         yvex_error_set(err, YVEX_ERR_BACKEND, where,
@@ -551,6 +557,14 @@ int yvex_cuda_temporary_free(yvex_backend *backend,
     if (rc != YVEX_OK) {
         cuda_capability_fail(backend, variant,
                              YVEX_BACKEND_CAPABILITY_REASON_CLEANUP_FAILED);
+        return rc;
     }
-    return rc;
+    if (injected) {
+        cuda_capability_fail(backend, variant,
+                             YVEX_BACKEND_CAPABILITY_REASON_CLEANUP_FAILED);
+        yvex_error_set(err, YVEX_ERR_BACKEND, where,
+                       "injected CUDA temporary cleanup failure after release");
+        return YVEX_ERR_BACKEND;
+    }
+    return YVEX_OK;
 }

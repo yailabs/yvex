@@ -260,7 +260,8 @@ static int test_arch_ir_golden_topology(void)
         "Dao-AILab/fast-hadamard-transform:v1.1.0.post2:"
         "e7706faf8d1c3b9f241e36860640ad1dac644ede",
         "Hadamard transform authority is pinned");
-    YVEX_TEST_ASSERT(model->runtime_numeric_schema_version == 1 &&
+    YVEX_TEST_ASSERT(model->runtime_numeric_schema_version == 2 &&
+                     model->runtime_compute_policy_count == 1 &&
                      model->runtime_activation_policy_count == 3 &&
                      model->runtime_sparse_topk_policy_count == 1,
                      "runtime numeric schema is explicit");
@@ -269,6 +270,12 @@ static int test_arch_ir_golden_topology(void)
     csa = yvex_model_register_deepseek_v4()->ir.layer_at(ir, 2);
     hca = yvex_model_register_deepseek_v4()->ir.layer_at(ir, 3);
     YVEX_TEST_ASSERT(swa && csa && hca &&
+                     swa->compute_contract ==
+                         YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 &&
+                     csa->compute_contract ==
+                         YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 &&
+                     hca->compute_contract ==
+                         YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 &&
                      swa->attention_class == YVEX_ATTENTION_CLASS_SWA &&
                      csa->attention_class == YVEX_ATTENTION_CLASS_CSA &&
                      hca->attention_class == YVEX_ATTENTION_CLASS_HCA,
@@ -277,8 +284,12 @@ static int test_arch_ir_golden_topology(void)
                      swa->rope_head_dimension == 64 &&
                      swa->non_rope_head_dimension == 448 &&
                      swa->position.theta == 10000 &&
-                     csa->position.theta == 160000,
-                     "head partition and position bases are normalized");
+                     swa->position.original_context == 0 &&
+                     csa->position.theta == 160000 &&
+                     csa->position.original_context == 65536 &&
+                     hca->position.theta == 160000 &&
+                     hca->position.original_context == 65536,
+                     "SWA disables YaRN while compressed attention retains it");
     YVEX_TEST_ASSERT(csa->compressor_required && csa->indexer_required &&
                      csa->indexer_heads == 64 &&
                      csa->indexer_head_dimension == 128 &&
@@ -365,6 +376,49 @@ static int test_arch_ir_golden_topology(void)
     YVEX_TEST_ASSERT(yvex_model_register_deepseek_v4()->ir.layer_at(ir, 43) == NULL &&
                      yvex_model_register_deepseek_v4()->ir.auxiliary_at(ir, 1) == NULL,
                      "borrowed accessors are bounds checked");
+    yvex_model_register_deepseek_v4()->ir.close(ir);
+    return 0;
+}
+
+/* Purpose: prove that position authority follows compression semantics, not one global mode. */
+static int test_arch_ir_position_authority(void)
+{
+    yvex_source_verification source;
+    yvex_deepseek_v4_ir *ir = NULL;
+    yvex_deepseek_v4_ir_failure failure;
+    unsigned long long i;
+
+    arch_ir_verification_fixture(&source);
+    source.rope_original_context = 32768;
+    YVEX_TEST_ASSERT(arch_ir_build(&source, &ir, &failure) == YVEX_OK && ir,
+                     "position-authority fixture builds");
+    for (i = 0u; i < source.num_hidden_layers; ++i) {
+        const yvex_deepseek_v4_layer_spec *layer =
+            yvex_model_register_deepseek_v4()->ir.layer_at(ir, i);
+
+        YVEX_TEST_ASSERT(layer != NULL,
+                         "position-authority layer resolves");
+        if (source.compress_ratios[i] == 0u) {
+            YVEX_TEST_ASSERT(
+                layer->attention_class == YVEX_ATTENTION_CLASS_SWA &&
+                    layer->position.theta == source.rope_theta &&
+                    layer->position.original_context == 0u,
+                "every SWA layer uses base RoPE with YaRN disabled");
+        } else {
+            YVEX_TEST_ASSERT(
+                layer->attention_class != YVEX_ATTENTION_CLASS_SWA &&
+                    layer->position.theta == source.compress_rope_theta &&
+                    layer->position.original_context ==
+                        source.rope_original_context,
+                "every compressed layer retains the admitted YaRN context");
+        }
+    }
+    YVEX_TEST_ASSERT(
+        yvex_model_register_deepseek_v4()->ir.auxiliary_at(ir, 0u)
+                ->layer.position.original_context == 0u &&
+            yvex_model_register_deepseek_v4()->ir.auxiliary_at(ir, 0u)
+                ->layer.position.theta == source.rope_theta,
+        "uncompressed MTP attention also disables YaRN");
     yvex_model_register_deepseek_v4()->ir.close(ir);
     return 0;
 }
@@ -775,6 +829,7 @@ static int test_runtime_numeric_identity_field_coverage(void)
 int yvex_test_deepseek_arch_ir(void)
 {
     if (test_arch_ir_golden_topology() != 0) return 1;
+    if (test_arch_ir_position_authority() != 0) return 1;
     if (test_arch_ir_refusal_matrix() != 0) return 1;
     if (test_arch_ir_payload_manifest_stage() != 0) return 1;
     if (test_arch_ir_lifetime_and_allocation() != 0) return 1;

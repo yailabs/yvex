@@ -427,6 +427,7 @@ static const identity_field topk_fields[] = {
 static const identity_field main_layer_fields[] = {
     ID_UNSIGNED(yvex_deepseek_v4_layer_spec, layer_index),
     ID_UNSIGNED(yvex_deepseek_v4_layer_spec, attention_class),
+    ID_UNSIGNED(yvex_deepseek_v4_layer_spec, compute_contract),
     ID_UNSIGNED(yvex_deepseek_v4_layer_spec, compression_ratio),
     ID_UNSIGNED(yvex_deepseek_v4_layer_spec, query_heads),
     ID_UNSIGNED(yvex_deepseek_v4_layer_spec, kv_heads),
@@ -452,6 +453,7 @@ static const identity_field main_layer_fields[] = {
 };
 
 static const identity_field auxiliary_layer_fields[] = {
+    ID_UNSIGNED(yvex_deepseek_v4_layer_spec, compute_contract),
     ID_UNSIGNED(yvex_deepseek_v4_layer_spec, compression_ratio),
     ID_UNSIGNED(yvex_deepseek_v4_layer_spec, query_heads),
     ID_UNSIGNED(yvex_deepseek_v4_layer_spec, kv_heads),
@@ -644,6 +646,7 @@ static const identity_field model_text_fields[] = {
 
 static const identity_field model_fields[] = {
     ID_UNSIGNED(yvex_deepseek_v4_model_spec, runtime_numeric_schema_version),
+    ID_UNSIGNED(yvex_deepseek_v4_model_spec, runtime_compute_policy_count),
     ID_UNSIGNED(yvex_deepseek_v4_model_spec, runtime_activation_policy_count),
     ID_UNSIGNED(yvex_deepseek_v4_model_spec, runtime_sparse_topk_policy_count),
     ID_UNSIGNED(yvex_deepseek_v4_model_spec, hidden_size),

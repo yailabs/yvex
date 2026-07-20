@@ -334,11 +334,12 @@ The implemented proof and ownership surfaces are:
 | Standalone attention op | Explicit F32 Q/K/V scaled dot-product attention primitive with bounded causal mask, scratch, output, cleanup, and reference comparison. |
 | Standalone matmul op | Explicit F32 row-major `input=[m,k]`, `weight=[k,n]`, `output=[m,n]` primitive with projection-shape reporting, output cleanup, and reference comparison. |
 | Standalone MLP op | Explicit F32 gated SiLU feed-forward primitive over deterministic dense weights or one bounded routed expert slice, with intermediate/output cleanup and reference comparison. |
+| DeepSeek attention | Complete SWA/CSA/HCA equations over the admitted descriptor and encoded weights, with independent reference, CPU execution, and device-complete GB10 CUDA parity; persistent KV and full transformer composition remain unsupported. |
 
-These are implementation facts, not a runtime progress ladder. None closes
-complete artifact, materialization, executable descriptor, transformer,
-generation, evaluation, benchmark, or release gates. The product runtime path
-is defined only by `PROJECT.md`.
+These are implementation facts, not a runtime progress ladder. Each row proves
+only its named boundary; no lower row promotes persistent KV, the complete
+transformer, generation, evaluation, benchmark, or release. The product
+runtime path is defined only by `PROJECT.md`.
 
 ## Graph Execution Contract
 
@@ -413,6 +414,35 @@ Every implemented graph result should report guard status, failure phase where
 applicable, backend/op status, output planning, reference planning, checksums,
 max diff, cleanup status, and the readiness fields that belong to that
 boundary.
+
+### DeepSeek Attention Execution Contract
+
+DeepSeek attention consumes an admitted runtime descriptor, immutable attention
+plan, materialized encoded bindings, explicit activations and positions, and a
+bounded attention-local state transaction. Preflight validates family,
+descriptor and plan identity, all 634 bindings, shapes, qtypes, head geometry,
+position policy, state capacity, scratch, and the exact CPU or CUDA operation
+set before candidate state or output can publish.
+
+The executor owns complete SWA, CSA, and HCA composition for all 43 main
+layers. SWA uses base RoPE without YaRN. Compressed CSA/HCA classes use the
+versioned YaRN policy. HCA forms complete non-overlapping groups at ratio 128,
+retains incomplete trailing history as raw local state, and permits raw and
+compressed representations to contribute without cross-representation
+deduplication. Rolling compression, index scoring, deterministic top-k, masks,
+stable softmax, value reduction, and output projection are numerical inputs to
+the committed result.
+
+Attention-local state follows begin, acquire, candidate write, seal, commit or
+abort, and idempotent release. A failed or cancelled execution publishes no
+partial output and leaves prior committed state unchanged. The CUDA path admits
+the generated bundle atomically, performs the claimed attention numerical work
+on device, and refuses missing variants before dispatch; it has no CPU
+numerical fallback or fallback PTX.
+
+This contract does not own persistent runtime KV shared by prefill and decode.
+It does not admit prefill, MoE, transformer composition, decode, logits,
+sampling, generation, evaluation, benchmark, or release support.
 
 ## Token and Prefill Contract
 

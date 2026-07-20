@@ -61,8 +61,8 @@ domain algorithms. No writer owns command output.
 | Artifact emission | source-faithful and selected complete DeepSeek artifacts emitted outside the repository | preserve exact physical identities and complete metadata/tokenizer evidence | see `PROJECT.md` |
 | GGUF roundtrip | both complete artifacts pass native full-byte and pinned official-reader admission; the selected artifact has deterministic second-serialization proof | preserve reader/writer equivalence and corruption refusal | see `PROJECT.md` |
 | Materialization | family-neutral materialization and a full bounded selected-artifact walk are complete; device residency is not admitted | consume the selected artifact through explicit placement and backend-residency plans | see `PROJECT.md` |
-| Runtime descriptor | immutable DeepSeek descriptor binds all 1,360 admitted tensors and topology facts | remain graph input until complete execution evidence exists | see `PROJECT.md` |
-| Graph/backend | reusable numeric primitives and selected-qtype CPU/CUDA compute are admitted; complete SWA/CSA/HCA attention is active and unadmitted | backend-bound complete transformer path | see `PROJECT.md` |
+| Runtime descriptor | immutable DeepSeek descriptor binds all 1,360 admitted tensors and topology facts | feed admitted attention, then persistent KV and complete transformer composition | see `PROJECT.md` |
+| Graph/backend | complete DeepSeek SWA/CSA/HCA attention is admitted on CPU and GB10 CUDA over all 43 layers and 634 bindings | persistent KV, prefill, MoE, and backend-bound complete transformer path | see `PROJECT.md` |
 
 ## Owner Rules
 

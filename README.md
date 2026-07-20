@@ -6,8 +6,9 @@ artifacts and admits each execution boundary only through executable evidence.
 
 The DeepSeek-V4-Flash path is complete through source trust, Transformation
 IR, quantization, GGUF emission, roundtrip admission, bounded materialization
-and runtime-descriptor construction. Full attention execution is the active
-frontier; autoregressive generation is not yet admitted.
+and runtime-descriptor construction. Complete SWA/CSA/HCA attention now runs
+on CPU and the admitted GB10 CUDA path; persistent KV is the active frontier,
+and autoregressive generation is not yet admitted.
 
 [Architecture](#architecture) · [Verified at scale](#verified-at-scale) ·
 [Build](#build-and-validate) · [Project status](PROJECT.md)
@@ -21,7 +22,7 @@ frontier; autoregressive generation is not yet admitted.
 | Selected physical artifact | Complete GGUF v3 file, 102,408,545,440 bytes, with all 1,360 tensors and exact tokenizer metadata |
 | Bounded materialization | All 102,396,843,592 encoded tensor bytes walked with 16 MiB peak executor-owned staging |
 | Numeric compute | Canonical codecs and direct CPU/CUDA compute evidence for every qtype selected by the release profile |
-| Runtime frontier | One descriptor binds all 1,360 tensors; complete DeepSeek attention remains active and unadmitted |
+| Runtime frontier | Complete DeepSeek attention executes 43 layers and 634 real-weight bindings on CPU and GB10 CUDA; persistent KV remains unsupported |
 
 These are identity-bound implementation results, not projections from file
 names, reports or fixture success. The selected artifact exists outside the
@@ -61,8 +62,9 @@ flowchart TD
     M --> Q["Selected profile + quantization<br/>complete"]
     Q --> G["GGUF emission + roundtrip + admission<br/>complete"]
     G --> R["Bounded materialization + descriptor<br/>complete"]
-    R --> A["DeepSeek attention<br/>active / unadmitted"]
-    A --> K["KV + transformer + generation<br/>blocked"]
+    R --> A["DeepSeek attention<br/>complete: CPU + GB10 CUDA"]
+    A --> K["Persistent KV<br/>active / unsupported"]
+    K --> T["Prefill + transformer + generation<br/>blocked"]
 ```
 
 Four rules shape the implementation:
@@ -84,9 +86,9 @@ sole v0.1.0 release target. Its pinned source revision is
 `60d8d70770c6776ff598c94bb586a859a38244f1`.
 
 The v0.1.0 end target is real autoregressive execution on NVIDIA DGX Spark /
-GB10 CUDA. Current CUDA evidence covers the selected qtype compute paths and
-bounded primitives; it does not establish device residency, complete attention
-or full-model execution.
+GB10 CUDA. Current CUDA evidence covers selected-qtype compute and the complete
+attention-owned SWA/CSA/HCA composition. It does not establish full-model
+residency, persistent KV, transformer composition or generation.
 
 The admitted logical model records 43 main layers and one MTP layer, hybrid
 SWA/CSA/HCA attention, mHC residual structure, position and KV requirements,
@@ -147,8 +149,9 @@ without promoting graph execution.
 | Physical profile, codecs and selected-qtype CPU/CUDA compute | complete |
 | GGUF writer, complete emission, roundtrip and artifact admission | complete |
 | Bounded materialization and DeepSeek runtime descriptor | complete |
-| Complete DeepSeek SWA/CSA/HCA attention | active; not admitted |
-| Persistent KV, model-backed prefill and transformer composition | blocked |
+| Complete DeepSeek SWA/CSA/HCA attention | complete on CPU and admitted GB10 CUDA |
+| Persistent KV | active; unsupported |
+| Model-backed prefill and transformer composition | blocked |
 | Autoregressive text generation | unsupported |
 | Evaluation | unavailable |
 | Benchmark | not measured |

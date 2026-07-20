@@ -38,6 +38,50 @@ typedef struct {
     unsigned long long index;
 } ref_ranked_candidate;
 
+/* Purpose: render one attention lifecycle status for test evidence only. */
+const char *yvex_test_attention_status_name(yvex_attention_status status)
+{
+    switch (status) {
+    case YVEX_DEEPSEEK_ATTENTION_STATUS_REFUSED: return "refused";
+    case YVEX_DEEPSEEK_ATTENTION_STATUS_PLANNED: return "planned";
+    case YVEX_DEEPSEEK_ATTENTION_STATUS_EXECUTION_UNSUPPORTED:
+        return "execution-unsupported";
+    case YVEX_DEEPSEEK_ATTENTION_STATUS_EXECUTION_READY:
+        return "execution-ready";
+    default: return "unknown";
+    }
+}
+
+/* Purpose: render one typed attention failure for test evidence only. */
+const char *yvex_test_attention_failure_name(yvex_attention_failure_code code)
+{
+    switch (code) {
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_NONE: return "none";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT:
+        return "invalid-argument";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_ARCHITECTURE: return "architecture";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_MATERIALIZATION:
+        return "materialization";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_DESCRIPTOR: return "descriptor";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_MISSING_BINDING:
+        return "missing-binding";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_QTYPE: return "qtype";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION: return "dimension";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY: return "history";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_EXECUTION_UNSUPPORTED:
+        return "execution-unsupported";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_READ: return "read";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC: return "numeric";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA: return "state-delta";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION: return "allocation";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH: return "scratch";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_CANCELLED: return "cancelled";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_CLEANUP: return "cleanup";
+    case YVEX_DEEPSEEK_ATTENTION_FAILURE_BACKEND: return "backend";
+    default: return "unknown";
+    }
+}
+
 static int ref_mul(unsigned long long a,
                    unsigned long long b,
                    unsigned long long *out)
@@ -384,18 +428,24 @@ static unsigned char ref_ue8m0_encode(float scale)
     int exponent;
     float fraction;
 
-    if (!(scale > 0.0f) || !isfinite(scale)) return 0u;
+    if (!(scale > 0.0f) || !isfinite(scale)) return 0xffu;
     fraction = frexpf(scale, &exponent);
     if (fraction > 0.5f) exponent++;
     exponent += 126;
     if (exponent < 0) return 0u;
-    if (exponent > 255) return 255u;
+    if (exponent > 254) return 254u;
     return (unsigned char)exponent;
 }
 
 static float ref_ue8m0_decode(unsigned char code)
 {
-    return code ? ldexpf(1.0f, (int)code - 127) : 0.0f;
+    unsigned int bits;
+    float value;
+
+    if (code == 0xffu) return NAN;
+    bits = code ? (unsigned int)code << 23 : 0x00400000u;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
 }
 
 static float ref_fp8_decode(unsigned char code)
@@ -406,10 +456,10 @@ static float ref_fp8_decode(unsigned char code)
     float magnitude;
 
     if ((code & 0x7fu) == 0u) return negative ? -0.0f : 0.0f;
+    if ((code & 0x7fu) == 0x7fu) return NAN;
     magnitude = exponent
         ? ldexpf(1.0f + (float)fraction / 8.0f, (int)exponent - 7)
         : ldexpf((float)fraction / 8.0f, -6);
-    if (magnitude > 448.0f) magnitude = 448.0f;
     return negative ? -magnitude : magnitude;
 }
 
@@ -417,18 +467,22 @@ static unsigned char ref_fp8_encode(float value)
 {
     unsigned int code;
     unsigned char best = 0u;
+    float magnitude = fabsf(value);
     float best_error = INFINITY;
+    int negative = signbit(value);
 
-    if (value > 448.0f) value = 448.0f;
-    if (value < -448.0f) value = -448.0f;
-    for (code = 0u; code < 256u; ++code) {
-        float error = fabsf(ref_fp8_decode((unsigned char)code) - value);
-        if (error < best_error) {
+    if (!isfinite(value)) return negative ? 0xffu : 0x7fu;
+    if (magnitude > 448.0f) magnitude = 448.0f;
+    for (code = 0u; code < 0x7fu; ++code) {
+        float decoded = ref_fp8_decode((unsigned char)code);
+        float error = fabsf(decoded - magnitude);
+        if (error < best_error ||
+            (error == best_error && !(code & 1u) && (best & 1u))) {
             best_error = error;
             best = (unsigned char)code;
         }
     }
-    return best;
+    return negative ? (unsigned char)(best | 0x80u) : best;
 }
 
 static float ref_fp4_decode(unsigned char code)
@@ -448,17 +502,140 @@ static unsigned char ref_fp4_encode(float value)
     unsigned int code;
     unsigned int best = 0u;
     float magnitude = fabsf(value);
-    float error = fabsf(magnitude - values[0]);
+    float error;
+
+    if (isnan(value)) return signbit(value) ? 8u : 0u;
+    if (magnitude > 6.0f) magnitude = 6.0f;
+    error = fabsf(magnitude - values[0]);
 
     for (code = 1u; code < 8u; ++code) {
         float next = fabsf(magnitude - values[code]);
-        if (next < error) {
+        if (next < error ||
+            (next == error && !(code & 1u) && (best & 1u))) {
             best = code;
             error = next;
         }
     }
-    if (best && signbit(value)) best |= 8u;
+    if (signbit(value)) best |= 8u;
     return (unsigned char)best;
+}
+
+/* Purpose: independently encode one F32 value with BF16 RNE semantics. */
+static unsigned short ref_bf16_encode(float value)
+{
+    unsigned int bits;
+    unsigned int upper;
+    unsigned int lower;
+
+    memcpy(&bits, &value, sizeof(bits));
+    upper = bits >> 16;
+    lower = bits & 0xffffu;
+    if ((bits & 0x7f800000u) == 0x7f800000u &&
+        (bits & 0x007fffffu) != 0u)
+        return (unsigned short)(upper | 0x0040u);
+    if (lower > 0x8000u || (lower == 0x8000u && (upper & 1u)))
+        upper++;
+    return (unsigned short)upper;
+}
+
+/* Purpose: independently decode one BF16 payload to its exact F32 value. */
+static float ref_bf16_decode(unsigned short encoded)
+{
+    unsigned int bits = (unsigned int)encoded << 16;
+    float value;
+
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+/* Purpose: independently publish one model-visible BF16 value boundary. */
+static int ref_compute_round(yvex_attention_compute_contract contract,
+                             float *values,
+                             unsigned long long count)
+{
+    unsigned long long lane;
+
+    if (contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 ||
+        !values || !count)
+        return 0;
+    for (lane = 0ull; lane < count; ++lane) {
+        if (!isfinite(values[lane])) return 0;
+        values[lane] = ref_bf16_decode(ref_bf16_encode(values[lane]));
+        if (!isfinite(values[lane])) return 0;
+    }
+    return 1;
+}
+
+int yvex_test_attention_reference_codec_selftest(void);
+
+/* Purpose: exhaustively prove the oracle's independent activation scalar codecs. */
+int yvex_test_attention_reference_codec_selftest(void)
+{
+    unsigned int code;
+    float boundary[] = {1.00390625f, 1.01171875f, -0.0f};
+
+    if (!ref_compute_round(YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
+                           boundary, 3ull) ||
+        boundary[0] != 1.0f || boundary[1] != 1.015625f ||
+        !signbit(boundary[2]) ||
+        ref_compute_round(YVEX_ATTENTION_COMPUTE_UNKNOWN, boundary, 3ull) ||
+        ref_ue8m0_decode(0u) != ldexpf(1.0f, -127) ||
+        !isnan(ref_ue8m0_decode(0xffu)) ||
+        ref_ue8m0_encode(ldexpf(1.0f, -127)) != 0u ||
+        ref_ue8m0_encode(ldexpf(1.0f, 127)) != 0xfeu ||
+        ref_ue8m0_encode(0.0f) != 0xffu)
+        return 0;
+    for (code = 0u; code <= 0xffu; ++code) {
+        float scale = ref_ue8m0_decode((unsigned char)code);
+        if (code == 0xffu) {
+            if (!isnan(scale)) return 0;
+        } else if (!isfinite(scale) || !(scale > 0.0f) ||
+                   ref_ue8m0_encode(scale) != (unsigned char)code) {
+            return 0;
+        }
+    }
+    for (code = 0u; code <= 0xffu; ++code) {
+        float value = ref_fp8_decode((unsigned char)code);
+        if ((code & 0x7fu) == 0x7fu) {
+            if (!isnan(value)) return 0;
+        } else if (!isfinite(value) ||
+                   ref_fp8_encode(value) != (unsigned char)code) {
+            return 0;
+        }
+    }
+    for (code = 0u; code < 0x7eu; ++code) {
+        float lower = ref_fp8_decode((unsigned char)code);
+        float upper = ref_fp8_decode((unsigned char)(code + 1u));
+        float midpoint = (lower + upper) * 0.5f;
+        unsigned char expected = (unsigned char)((code & 1u)
+            ? code + 1u : code);
+        if (ref_fp8_encode(midpoint) != expected ||
+            ref_fp8_encode(-midpoint) !=
+                (unsigned char)(expected | 0x80u))
+            return 0;
+    }
+    if (ref_fp8_encode(1.1875f) != 0x3au ||
+        ref_fp8_encode(-0.0f) != 0x80u ||
+        !isnan(ref_fp8_decode(0x7fu)) ||
+        ref_bf16_decode(ref_bf16_encode(1.00390625f)) != 1.0f ||
+        ref_bf16_decode(ref_bf16_encode(1.01171875f)) != 1.015625f)
+        return 0;
+    for (code = 0u; code < 16u; ++code)
+        if (ref_fp4_encode(ref_fp4_decode((unsigned char)code)) != code)
+            return 0;
+    for (code = 0u; code < 7u; ++code) {
+        float lower = ref_fp4_decode((unsigned char)code);
+        float upper = ref_fp4_decode((unsigned char)(code + 1u));
+        float midpoint = (lower + upper) * 0.5f;
+        unsigned char expected = (unsigned char)((code & 1u)
+            ? code + 1u : code);
+        if (ref_fp4_encode(midpoint) != expected ||
+            ref_fp4_encode(-midpoint) !=
+                (unsigned char)(expected | 0x8u))
+            return 0;
+    }
+    return ref_fp4_encode(1.75f) == 4u &&
+           ref_fp4_encode(-0.0f) == 8u;
 }
 
 static int ref_fake_quant_block(float *values,
@@ -486,8 +663,8 @@ static int ref_fake_quant_block(float *values,
         unsigned char code = fp4
             ? ref_fp4_encode(values[lane] / scale)
             : ref_fp8_encode(values[lane] / scale);
-        values[lane] = (fp4 ? ref_fp4_decode(code) : ref_fp8_decode(code)) *
-                       scale;
+        values[lane] = ref_bf16_decode(ref_bf16_encode(
+            (fp4 ? ref_fp4_decode(code) : ref_fp8_decode(code)) * scale));
     }
     return 1;
 }
@@ -588,6 +765,59 @@ static void ref_rolling_release(ref_rolling_state *state)
     memset(state, 0, sizeof(*state));
 }
 
+/* Contract: independently admits the unique rolling-state shape and fill for
+ * one next-token position without calling production validation. */
+static int ref_rolling_view_complete(
+    const yvex_attention_layer_plan *layer,
+    yvex_attention_rolling_kind kind,
+    const yvex_attention_rolling_state_view *view,
+    unsigned long long token_position)
+{
+    unsigned long long head_dimension;
+    unsigned long long width;
+    unsigned long long slots;
+    unsigned long long kv_extent;
+    unsigned long long score_extent;
+    unsigned long long expected_cursor;
+    unsigned long long expected_previous;
+    int overlap;
+    int rotated;
+
+    if (!layer || !view || !view->present || !layer->compression_ratio)
+        return 0;
+    head_dimension = kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER
+        ? layer->indexer_head_dimension : layer->head_dimension;
+    overlap = kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER ||
+        layer->attention_class == YVEX_ATTENTION_CLASS_CSA;
+    rotated = kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER;
+    if (!head_dimension ||
+        !ref_mul(head_dimension, overlap ? 2ull : 1ull, &width) ||
+        !ref_mul(layer->compression_ratio, overlap ? 2ull : 1ull, &slots) ||
+        view->kv_state_stride < width || view->score_state_stride < width ||
+        !ref_mul(slots, view->kv_state_stride, &kv_extent) ||
+        !ref_mul(slots, view->score_state_stride, &score_extent))
+        return 0;
+    expected_cursor = token_position % layer->compression_ratio;
+    expected_previous = overlap && token_position >= layer->compression_ratio
+        ? layer->compression_ratio : 0ull;
+    return view->schema_version ==
+               YVEX_DEEPSEEK_ATTENTION_ROLLING_STATE_SCHEMA_V1 &&
+        view->kind == kind &&
+        view->attention_class == layer->attention_class &&
+        view->layer_index == layer->layer_index &&
+        view->next_token_position == token_position &&
+        view->ratio == layer->compression_ratio &&
+        view->head_dimension == head_dimension &&
+        view->state_width == width && view->state_slots == slots &&
+        view->cursor == expected_cursor &&
+        view->current_fill == expected_cursor &&
+        view->previous_fill == expected_previous &&
+        view->overlap == overlap && view->rotated == rotated &&
+        view->kv_state && view->score_state &&
+        view->kv_state_extent >= kv_extent &&
+        view->score_state_extent >= score_extent;
+}
+
 /* Contract: creates an independently owned rolling state from one immutable
  * runtime view or the canonical empty state. */
 static int ref_rolling_init(
@@ -625,14 +855,7 @@ static int ref_rolling_init(
     state->next_position = token_position;
     state->cursor = token_position % state->ratio;
     if (view && view->present) {
-        if (view->ratio != state->ratio ||
-            view->head_dimension != state->head_dimension ||
-            view->state_width != state->width ||
-            view->state_slots != state->slots ||
-            view->kv_state_stride < state->width ||
-            view->score_state_stride < state->width ||
-            view->next_token_position != token_position ||
-            !view->kv_state || !view->score_state)
+        if (!ref_rolling_view_complete(layer, kind, view, token_position))
             goto fail;
         state->cursor = view->cursor;
         state->previous_fill = view->previous_fill;
@@ -788,6 +1011,47 @@ static int ref_rank_compare(const void *left, const void *right)
     if (a->position < b->position) return -1;
     if (a->position > b->position) return 1;
     return 0;
+}
+
+/* Contract: independently selects score-descending, position-ascending top-k. */
+int yvex_test_attention_reference_topk(
+    const float *scores,
+    const unsigned long long *positions,
+    unsigned long long count,
+    unsigned long long k,
+    unsigned long long *selected,
+    unsigned long long *selected_count)
+{
+    ref_ranked_candidate *ranked;
+    unsigned long long i;
+
+    if (selected_count) *selected_count = 0ull;
+    if (!scores || !positions || !selected || !selected_count) return 0;
+    if (!count || !k) return 1;
+    ranked = (ref_ranked_candidate *)ref_alloc(count, sizeof(*ranked));
+    if (!ranked) return 0;
+    for (i = 0ull; i < count; ++i) {
+        unsigned long long prior;
+        if (!isfinite(scores[i])) {
+            free(ranked);
+            return 0;
+        }
+        for (prior = 0ull; prior < i; ++prior) {
+            if (positions[prior] == positions[i]) {
+                free(ranked);
+                return 0;
+            }
+        }
+        ranked[i].score = scores[i];
+        ranked[i].position = positions[i];
+        ranked[i].index = i;
+    }
+    qsort(ranked, (size_t)count, sizeof(*ranked), ref_rank_compare);
+    *selected_count = k < count ? k : count;
+    for (i = 0ull; i < *selected_count; ++i)
+        selected[i] = ranked[i].index;
+    free(ranked);
+    return 1;
 }
 
 static const float *ref_segmented_row(const float *history,
@@ -972,15 +1236,21 @@ static int ref_compressor_execute(
         }
         if (!emitted) continue;
         if (emitted_count >= emissions ||
+            !ref_compute_round(layer->compute_contract, destination,
+                               state.head_dimension) ||
             !ref_rms(destination, state.head_dimension, norm_weight,
-                     architecture->rms_norm_epsilon)) {
+                     architecture->rms_norm_epsilon) ||
+            !ref_compute_round(layer->compute_contract, destination,
+                               state.head_dimension)) {
             ref_reason(reason, "reference compressor normalization failed");
             goto cleanup;
         }
         position = token_position + token + 1ull - state.ratio;
         if (!ref_rope(destination, state.head_dimension,
                       architecture->rope_head_dimension, position,
-                      &architecture->position, 0)) {
+                      &architecture->position, 0) ||
+            !ref_compute_round(layer->compute_contract, destination,
+                               state.head_dimension)) {
             ref_reason(reason, "reference compressor RoPE failed");
             goto cleanup;
         }
@@ -1136,6 +1406,124 @@ static int ref_accumulate(const float *query,
     *denominator += weight;
     for (lane = 0ull; lane < width; ++lane)
         output[lane] += (float)(weight * (double)row[lane]);
+    return 1;
+}
+
+/* Contract: independently refuses duplicate or unbound ordinals inside each
+ * typed history representation while permitting raw/compressed overlap. */
+static int ref_history_validate(
+    const yvex_attention_layer_plan *layer,
+    const yvex_attention_history_view *history,
+    int supplied,
+    char reason[YVEX_TEST_ATTENTION_REFERENCE_REASON_CAP])
+{
+    unsigned long long local_capacity;
+    unsigned long long expected_local;
+    unsigned long long local_start;
+    unsigned long long expected_compressed = 0ull;
+    unsigned long long i;
+
+    if (!layer || !history || !history->immutable || !layer->sliding_window ||
+        (history->local_tail_count &&
+         (!history->local_kv || !history->local_positions ||
+          history->local_kv_stride < layer->head_dimension)) ||
+        (history->compressed_entry_count &&
+         (!history->compressed_kv || !history->compressed_positions ||
+          history->compressed_kv_stride < layer->head_dimension)) ||
+        (history->indexer_entry_count &&
+         (!history->indexer_kv || !history->indexer_positions ||
+          history->indexer_kv_stride < layer->indexer_head_dimension))) {
+        ref_reason(reason, "reference history geometry is invalid");
+        return 0;
+    }
+    if (!supplied && history->token_count != 0ull) {
+        ref_reason(reason,
+                   "reference execution cannot omit nonempty history");
+        return 0;
+    }
+    local_capacity = layer->sliding_window - 1ull;
+    expected_local = history->token_count < local_capacity
+        ? history->token_count : local_capacity;
+    local_start = history->token_count - expected_local;
+    if (history->local_tail_count != expected_local) {
+        ref_reason(reason, "reference local history suffix is incomplete");
+        return 0;
+    }
+    if (layer->attention_class != YVEX_ATTENTION_CLASS_SWA) {
+        if (!layer->compression_ratio) {
+            ref_reason(reason, "reference compression ratio is invalid");
+            return 0;
+        }
+        expected_compressed =
+            history->token_count / layer->compression_ratio;
+    }
+    if (history->compressed_entry_count != expected_compressed ||
+        (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
+         history->indexer_entry_count != expected_compressed)) {
+        ref_reason(reason,
+                   "reference compressed history prefix is incomplete");
+        return 0;
+    }
+    if ((layer->attention_class == YVEX_ATTENTION_CLASS_SWA &&
+         (history->compressed_entry_count ||
+          history->indexer_entry_count)) ||
+        (layer->attention_class == YVEX_ATTENTION_CLASS_HCA &&
+         history->indexer_entry_count) ||
+        (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
+         history->compressed_entry_count != history->indexer_entry_count)) {
+        ref_reason(reason, "reference history class contract is invalid");
+        return 0;
+    }
+    for (i = 0ull; i < history->local_tail_count; ++i) {
+        if (history->local_positions[i] != local_start + i) {
+            ref_reason(reason,
+                       "reference local history is not the exact suffix");
+            return 0;
+        }
+    }
+    for (i = 0ull; i < history->compressed_entry_count; ++i) {
+        unsigned long long expected_position;
+
+        if (!ref_mul(i, layer->compression_ratio, &expected_position) ||
+            history->compressed_positions[i] != expected_position) {
+            ref_reason(reason,
+                       "reference compressed history omits a ratio group");
+            return 0;
+        }
+    }
+    for (i = 0ull; i < history->indexer_entry_count; ++i) {
+        if (layer->attention_class != YVEX_ATTENTION_CLASS_CSA ||
+            history->indexer_positions[i] !=
+                history->compressed_positions[i]) {
+            ref_reason(reason, "reference indexer ordinals are invalid");
+            return 0;
+        }
+    }
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_SWA) {
+        if (history->main_rolling_state.present ||
+            history->indexer_rolling_state.present) {
+            ref_reason(reason, "reference SWA history carries rolling state");
+            return 0;
+        }
+    } else if (supplied &&
+               !ref_rolling_view_complete(
+                   layer, YVEX_DEEPSEEK_ATTENTION_ROLLING_MAIN,
+                   &history->main_rolling_state, history->token_count)) {
+        ref_reason(reason, "reference main rolling history is incomplete");
+        return 0;
+    } else if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
+               supplied &&
+               !ref_rolling_view_complete(
+                   layer, YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER,
+                   &history->indexer_rolling_state, history->token_count)) {
+        ref_reason(reason,
+                   "reference indexer rolling history is incomplete");
+        return 0;
+    } else if (layer->attention_class == YVEX_ATTENTION_CLASS_HCA &&
+               history->indexer_rolling_state.present) {
+        ref_reason(reason, "reference HCA history carries indexer state");
+        return 0;
+    }
     return 1;
 }
 
@@ -1368,9 +1756,13 @@ static int ref_sparse_reduce(
             for (lane = 0ull; lane < layer->head_dimension; ++lane)
                 destination[lane] = (float)((double)destination[lane] /
                                             denominator);
-            if (!ref_rope(destination, layer->head_dimension,
+            if (!ref_compute_round(layer->compute_contract, destination,
+                                   layer->head_dimension) ||
+                !ref_rope(destination, layer->head_dimension,
                           architecture->rope_head_dimension, absolute,
-                          &architecture->position, 1))
+                          &architecture->position, 1) ||
+                !ref_compute_round(layer->compute_contract, destination,
+                                   layer->head_dimension))
                 goto fail;
         }
     }
@@ -1386,6 +1778,7 @@ static int ref_output_projection(
     yvex_materialization_session *session,
     const yvex_runtime_tensor_binding *out_a,
     const yvex_runtime_tensor_binding *out_b,
+    const yvex_attention_layer_plan *layer,
     const yvex_deepseek_v4_layer_spec *architecture,
     const float *attention,
     unsigned long long token_count,
@@ -1396,12 +1789,14 @@ static int ref_output_projection(
 {
     unsigned long long low_stride;
     unsigned long long low_count;
+    unsigned long long output_count;
     unsigned long long group;
     float *low;
 
-    if (!ref_mul(architecture->output_groups,
+    if (!layer || !ref_mul(architecture->output_groups,
                  architecture->output_lora_rank, &low_stride) ||
-        !ref_mul(token_count, low_stride, &low_count))
+        !ref_mul(token_count, low_stride, &low_count) ||
+        !ref_mul(token_count, hidden_width, &output_count))
         return 0;
     low = (float *)ref_alloc(low_count, sizeof(*low));
     if (!low) return 0;
@@ -1417,9 +1812,11 @@ static int ref_output_projection(
             return 0;
         }
     }
-    if (!ref_matrix_batch(session, out_b, 0ull, hidden_width, low,
+    if (!ref_compute_round(layer->compute_contract, low, low_count) ||
+        !ref_matrix_batch(session, out_b, 0ull, hidden_width, low,
                           token_count, low_stride, output, hidden_width,
-                          reason)) {
+                          reason) ||
+        !ref_compute_round(layer->compute_contract, output, output_count)) {
         free(low);
         return 0;
     }
@@ -1438,7 +1835,6 @@ int yvex_test_attention_reference_execute(
     yvex_attention_execution_trace *trace,
     char reason[YVEX_TEST_ATTENTION_REFERENCE_REASON_CAP])
 {
-    yvex_attention_cpu_options defaults;
     const yvex_attention_cpu_options *opts = options;
     const yvex_attention_layer_plan *layer;
     const yvex_deepseek_v4_layer_spec *architecture;
@@ -1489,13 +1885,8 @@ int yvex_test_attention_reference_execute(
     memset(&next_main_state, 0, sizeof(next_main_state));
     memset(&next_indexer_state, 0, sizeof(next_indexer_state));
     if (reason) reason[0] = '\0';
-    if (!opts) {
-        memset(&defaults, 0, sizeof(defaults));
-        defaults.token_count = 1ull;
-        defaults.scratch_limit_bytes = 64ull * 1024ull * 1024ull;
-        opts = &defaults;
-    }
-    if (!plan || !ir || !session || !descriptor || !trace || trace->owned) {
+    if (!plan || !ir || !session || !descriptor || !opts || !opts->input ||
+        !trace || trace->owned) {
         ref_reason(reason, "reference execution arguments are invalid");
         return 0;
     }
@@ -1506,6 +1897,21 @@ int yvex_test_attention_reference_execute(
         ref_reason(reason, "reference execution layer is absent");
         return 0;
     }
+    if (layer->compute_contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 ||
+        architecture->compute_contract != layer->compute_contract) {
+        ref_reason(reason, "reference compute contract is unsupported");
+        return 0;
+    }
+    memset(&empty_history, 0, sizeof(empty_history));
+    empty_history.immutable = 1;
+    empty_history.token_count = opts->token_position;
+    history = opts->history ? opts->history : &empty_history;
+    if (history->token_count != opts->token_position) {
+        ref_reason(reason, "reference history is not contiguous");
+        goto cleanup;
+    }
+    if (!ref_history_validate(layer, history, opts->history != NULL, reason))
+        goto cleanup;
     q_a = ref_binding(descriptor, YVEX_TENSOR_ROLE_ATTENTION_Q_A,
                       layer->layer_index);
     q_a_norm = ref_binding(descriptor, YVEX_TENSOR_ROLE_ATTENTION_Q_A_NORM,
@@ -1558,46 +1964,46 @@ int yvex_test_attention_reference_execute(
     }
     for (token = 0ull; token < token_count; ++token) {
         unsigned long long lane;
-        if (opts->input) {
-            if (opts->input_stride < hidden_width) {
-                ref_reason(reason, "reference input stride is invalid");
-                goto cleanup;
-            }
-            memcpy(input + token * hidden_width,
-                   opts->input + token * opts->input_stride,
-                   (size_t)hidden_width * sizeof(*input));
-        } else {
-            for (lane = 0ull; lane < hidden_width; ++lane) {
-                unsigned long long mixed =
-                    (lane * 1103515245ull) ^
-                    (layer->layer_index * 2654435761ull) ^
-                    ((opts->token_position + token) * 97ull);
-                input[token * hidden_width + lane] =
-                    (float)((int)(mixed % 257ull) - 128) / 128.0f;
-            }
+        if (opts->input_stride < hidden_width) {
+            ref_reason(reason, "reference input stride is invalid");
+            goto cleanup;
         }
+        memcpy(input + token * hidden_width,
+               opts->input + token * opts->input_stride,
+               (size_t)hidden_width * sizeof(*input));
         for (lane = 0ull; lane < hidden_width; ++lane) {
             if (!isfinite(input[token * hidden_width + lane])) {
                 ref_reason(reason, "reference input is non-finite");
                 goto cleanup;
             }
         }
+        if (!ref_compute_round(layer->compute_contract,
+                               input + token * hidden_width,
+                               hidden_width)) {
+            ref_reason(reason, "reference input BF16 publication failed");
+            goto cleanup;
+        }
     }
     if (!ref_matrix_batch(session, q_a, 0ull, q_rank, input, token_count,
                           hidden_width, q_low, q_rank, reason) ||
+        !ref_compute_round(layer->compute_contract, q_low, q_count) ||
         !ref_decode_row(session, q_a_norm, 0ull, q_norm, reason))
         goto cleanup;
     for (token = 0ull; token < token_count; ++token) {
         if (!ref_rms(q_low + token * q_rank, q_rank, q_norm,
-                     architecture->rms_norm_epsilon)) {
+                     architecture->rms_norm_epsilon) ||
+            !ref_compute_round(layer->compute_contract,
+                               q_low + token * q_rank, q_rank)) {
             ref_reason(reason, "reference Q-A norm failed");
             goto cleanup;
         }
     }
     if (!ref_matrix_batch(session, q_b, 0ull, query_width, q_low,
                           token_count, q_rank, query, query_width, reason) ||
+        !ref_compute_round(layer->compute_contract, query, query_count) ||
         !ref_matrix_batch(session, kv, 0ull, kv_width, input, token_count,
                           hidden_width, raw_kv, kv_width, reason) ||
+        !ref_compute_round(layer->compute_contract, raw_kv, kv_count) ||
         !ref_decode_row(session, kv_norm, 0ull, kv_norm_weight, reason) ||
         !ref_decode_flat(session, sinks_binding, sinks, layer->query_heads,
                          reason))
@@ -1609,20 +2015,28 @@ int yvex_test_attention_reference_execute(
                                 head * layer->head_dimension;
             if (!ref_rms(head_query, layer->head_dimension, NULL,
                          architecture->rms_norm_epsilon) ||
+                !ref_compute_round(layer->compute_contract, head_query,
+                                   layer->head_dimension) ||
                 !ref_rope(head_query, layer->head_dimension,
                           architecture->rope_head_dimension,
                           opts->token_position + token,
-                          &architecture->position, 0)) {
+                          &architecture->position, 0) ||
+                !ref_compute_round(layer->compute_contract, head_query,
+                                   layer->head_dimension)) {
                 ref_reason(reason, "reference query norm or RoPE failed");
                 goto cleanup;
             }
         }
         if (!ref_rms(raw_kv + token * kv_width, kv_width, kv_norm_weight,
                      architecture->rms_norm_epsilon) ||
+            !ref_compute_round(layer->compute_contract,
+                               raw_kv + token * kv_width, kv_width) ||
             !ref_rope(raw_kv + token * kv_width, kv_width,
                       architecture->rope_head_dimension,
                       opts->token_position + token,
                       &architecture->position, 0) ||
+            !ref_compute_round(layer->compute_contract,
+                               raw_kv + token * kv_width, kv_width) ||
             (kv_width > architecture->rope_head_dimension &&
              !ref_activation(&layer->attention_kv_activation,
                              raw_kv + token * kv_width,
@@ -1630,14 +2044,6 @@ int yvex_test_attention_reference_execute(
             ref_reason(reason, "reference KV norm, RoPE, or activation failed");
             goto cleanup;
         }
-    }
-    memset(&empty_history, 0, sizeof(empty_history));
-    empty_history.immutable = 1;
-    empty_history.token_count = opts->token_position;
-    history = opts->history ? opts->history : &empty_history;
-    if (history->token_count != opts->token_position) {
-        ref_reason(reason, "reference history is not contiguous");
-        goto cleanup;
     }
     if (layer->attention_class != YVEX_ATTENTION_CLASS_SWA &&
         !ref_compressor_execute(
@@ -1681,9 +2087,13 @@ int yvex_test_attention_reference_execute(
             !ref_matrix_batch(session, index_q, 0ull, index_query_stride,
                               q_low, token_count, q_rank, index_query,
                               index_query_stride, reason) ||
+            !ref_compute_round(layer->compute_contract, index_query,
+                               index_query_count) ||
             !ref_matrix_batch(session, index_w, 0ull, layer->indexer_heads,
                               input, token_count, hidden_width, index_weights,
-                              layer->indexer_heads, reason))
+                              layer->indexer_heads, reason) ||
+            !ref_compute_round(layer->compute_contract, index_weights,
+                               index_weight_count))
             goto cleanup;
         for (token = 0ull; token < token_count; ++token) {
             unsigned long long head;
@@ -1695,6 +2105,8 @@ int yvex_test_attention_reference_execute(
                               architecture->rope_head_dimension,
                               opts->token_position + token,
                               &architecture->position, 0) ||
+                    !ref_compute_round(layer->compute_contract, head_query,
+                                       layer->indexer_head_dimension) ||
                     !ref_activation(&layer->indexer_query_activation,
                                     head_query,
                                     layer->indexer_head_dimension)) {
@@ -1724,7 +2136,8 @@ int yvex_test_attention_reference_execute(
             indexer_count, indexer_positions, index_query, index_weights,
             sinks, token_count, opts->token_position, attention, topk_counts,
             topk_positions, topk_stride) ||
-        !ref_output_projection(session, out_a, out_b, architecture, attention,
+        !ref_output_projection(session, out_a, out_b, layer, architecture,
+                               attention,
                                token_count, query_width, hidden_width, output,
                                reason)) {
         ref_reason(reason, "reference attention or output projection failed");
@@ -1806,17 +2219,25 @@ cleanup:
 
 static int ref_compare_stage(
     const char *stage,
+    yvex_test_attention_reference_stage stage_id,
     const float *production,
     const float *reference,
     unsigned long long count,
-    double absolute_tolerance,
-    double relative_tolerance,
+    const yvex_test_attention_reference_contract *contract,
     yvex_test_attention_reference_metrics *metrics)
 {
     unsigned long long i;
+    double absolute_tolerance;
+    double relative_tolerance;
+
+    if (!contract || stage_id >= YVEX_TEST_ATTENTION_STAGE_COUNT)
+        return 0;
+    absolute_tolerance = contract->absolute[stage_id];
+    relative_tolerance = contract->relative[stage_id];
 
     if (count && (!production || !reference)) {
         if (!metrics->first_failed_stage) metrics->first_failed_stage = stage;
+        metrics->first_failed_index = 0ull;
         return 0;
     }
     for (i = 0ull; i < count; ++i) {
@@ -1833,8 +2254,10 @@ static int ref_compare_stage(
         if (relative > metrics->maximum_relative_error)
             metrics->maximum_relative_error = relative;
         if (!isfinite(left) || !isfinite(right) || absolute > allowed) {
-            if (!metrics->first_failed_stage)
+            if (!metrics->first_failed_stage) {
                 metrics->first_failed_stage = stage;
+                metrics->first_failed_index = i;
+            }
             return 0;
         }
     }
@@ -1845,10 +2268,10 @@ static int ref_compare_stage(
  * admitting equal signed infinities only for intentionally unused score lanes. */
 static int ref_compare_rolling_state(
     const char *stage,
+    yvex_test_attention_reference_stage stage_id,
     const yvex_attention_rolling_state_output *production,
     const yvex_attention_rolling_state_output *reference,
-    double absolute_tolerance,
-    double relative_tolerance,
+    const yvex_test_attention_reference_contract *contract,
     yvex_test_attention_reference_metrics *metrics)
 {
     unsigned long long i;
@@ -1856,6 +2279,7 @@ static int ref_compare_rolling_state(
     if (!production || !reference ||
         production->present != reference->present) {
         metrics->first_failed_stage = stage;
+        metrics->first_failed_index = 0ull;
         return 0;
     }
     if (!production->present) return 1;
@@ -1883,11 +2307,12 @@ static int ref_compare_rolling_state(
         !production->kv_state || !reference->kv_state ||
         !production->score_state || !reference->score_state) {
         metrics->first_failed_stage = stage;
+        metrics->first_failed_index = 0ull;
         return 0;
     }
-    if (!ref_compare_stage(stage, production->kv_state, reference->kv_state,
-                           production->kv_state_extent, absolute_tolerance,
-                           relative_tolerance, metrics))
+    if (!ref_compare_stage(stage, stage_id, production->kv_state,
+                           reference->kv_state,
+                           production->kv_state_extent, contract, metrics))
         return 0;
     for (i = 0ull; i < production->score_state_extent; ++i) {
         double left = production->score_state[i];
@@ -1897,6 +2322,7 @@ static int ref_compare_rolling_state(
         if (!isfinite(left) || !isfinite(right)) {
             if (left == right) continue;
             metrics->first_failed_stage = stage;
+            metrics->first_failed_index = i;
             return 0;
         }
         {
@@ -1904,8 +2330,8 @@ static int ref_compare_rolling_state(
             double denominator = fmax(fabs(left), fabs(right));
             double relative = denominator > 0.0
                 ? absolute / denominator : 0.0;
-            double allowed = absolute_tolerance +
-                relative_tolerance * denominator;
+            double allowed = contract->absolute[stage_id] +
+                contract->relative[stage_id] * denominator;
             metrics->squared_error_sum += absolute * absolute;
             if (absolute > metrics->maximum_absolute_error)
                 metrics->maximum_absolute_error = absolute;
@@ -1913,6 +2339,7 @@ static int ref_compare_rolling_state(
                 metrics->maximum_relative_error = relative;
             if (absolute > allowed) {
                 metrics->first_failed_stage = stage;
+                metrics->first_failed_index = i;
                 return 0;
             }
         }
@@ -1922,18 +2349,31 @@ static int ref_compare_rolling_state(
 
 /* Contract: compares every continuous and discrete full-equation stage and
  * identifies the first independently detected divergence. */
-int yvex_test_attention_reference_compare(
+int yvex_test_attention_reference_compare_contract(
     const yvex_attention_execution_trace *production,
     const yvex_attention_execution_trace *reference,
-    double absolute_tolerance,
-    double relative_tolerance,
+    const yvex_test_attention_reference_contract *contract,
     yvex_test_attention_reference_metrics *metrics)
 {
     unsigned long long count;
     unsigned long long i;
+    unsigned int stage;
 
     if (!metrics) return 0;
     memset(metrics, 0, sizeof(*metrics));
+    metrics->first_failed_index = ~0ull;
+    if (!contract ||
+        contract->schema_version != YVEX_TEST_ATTENTION_EVIDENCE_SCHEMA_V2 ||
+        !contract->path_name || !contract->compressed_positions_exact ||
+        !contract->indexer_positions_exact || !contract->topk_positions_exact)
+        return 0;
+    for (stage = 0u; stage < YVEX_TEST_ATTENTION_STAGE_COUNT; ++stage) {
+        if (!isfinite(contract->absolute[stage]) ||
+            !isfinite(contract->relative[stage]) ||
+            contract->absolute[stage] < 0.0 ||
+            contract->relative[stage] < 0.0)
+            return 0;
+    }
     if (!production || !reference || !production->owned || !reference->owned ||
         !production->complete || !reference->complete ||
         production->layer_index != reference->layer_index ||
@@ -1954,53 +2394,63 @@ int yvex_test_attention_reference_compare(
         metrics->first_failed_stage = "geometry";
         return 0;
     }
-#define REF_STAGE(name_, left_, right_, count_)                              \
+#define REF_STAGE(name_, stage_, left_, right_, count_)                      \
     do {                                                                     \
-        if (!ref_compare_stage((name_), (left_), (right_), (count_),         \
-                               absolute_tolerance, relative_tolerance,       \
-                               metrics))                                     \
+        if (!ref_compare_stage((name_), (stage_), (left_), (right_),         \
+                               (count_), contract, metrics))                 \
             return 0;                                                        \
     } while (0)
     count = production->token_count * production->hidden_width;
-    REF_STAGE("input", production->input, reference->input, count);
+    REF_STAGE("input", YVEX_TEST_ATTENTION_STAGE_INPUT,
+              production->input, reference->input, count);
     count = production->token_count * production->q_rank;
-    REF_STAGE("q-low", production->q_low, reference->q_low, count);
+    REF_STAGE("q-low", YVEX_TEST_ATTENTION_STAGE_Q_LOW,
+              production->q_low, reference->q_low, count);
     count = production->token_count * production->query_width;
-    REF_STAGE("query", production->query, reference->query, count);
+    REF_STAGE("query", YVEX_TEST_ATTENTION_STAGE_QUERY,
+              production->query, reference->query, count);
     count = production->token_count * production->kv_width;
-    REF_STAGE("raw-kv", production->raw_kv, reference->raw_kv, count);
+    REF_STAGE("raw-kv", YVEX_TEST_ATTENTION_STAGE_RAW_KV,
+              production->raw_kv, reference->raw_kv, count);
     count = production->compressed_count * production->compressed_stride;
-    REF_STAGE("compressed-kv", production->compressed_kv,
+    REF_STAGE("compressed-kv", YVEX_TEST_ATTENTION_STAGE_COMPRESSED_KV,
+              production->compressed_kv,
               reference->compressed_kv, count);
     count = production->indexer_count * production->indexer_stride;
-    REF_STAGE("indexer-kv", production->indexer_kv,
+    REF_STAGE("indexer-kv", YVEX_TEST_ATTENTION_STAGE_INDEXER_KV,
+              production->indexer_kv,
               reference->indexer_kv, count);
     count = production->token_count * production->index_query_stride;
-    REF_STAGE("index-query", production->index_query,
+    REF_STAGE("index-query", YVEX_TEST_ATTENTION_STAGE_INDEX_QUERY,
+              production->index_query,
               reference->index_query, count);
     count = production->token_count * production->index_weight_stride;
-    REF_STAGE("index-weights", production->index_weights,
+    REF_STAGE("index-weights", YVEX_TEST_ATTENTION_STAGE_INDEX_WEIGHTS,
+              production->index_weights,
               reference->index_weights, count);
     count = production->token_count * production->query_width;
-    REF_STAGE("attention", production->attention_values,
+    REF_STAGE("attention", YVEX_TEST_ATTENTION_STAGE_ATTENTION,
+              production->attention_values,
               reference->attention_values, count);
     count = production->token_count * production->hidden_width;
-    REF_STAGE("output", production->output, reference->output, count);
+    REF_STAGE("output", YVEX_TEST_ATTENTION_STAGE_OUTPUT,
+              production->output, reference->output, count);
 #undef REF_STAGE
     if (!ref_compare_rolling_state(
-            "main-rolling-state", &production->next_main_rolling_state,
-            &reference->next_main_rolling_state, absolute_tolerance,
-            relative_tolerance, metrics) ||
+            "main-rolling-state", YVEX_TEST_ATTENTION_STAGE_MAIN_STATE,
+            &production->next_main_rolling_state,
+            &reference->next_main_rolling_state, contract, metrics) ||
         !ref_compare_rolling_state(
-            "indexer-rolling-state", &production->next_indexer_rolling_state,
-            &reference->next_indexer_rolling_state, absolute_tolerance,
-            relative_tolerance, metrics))
+            "indexer-rolling-state", YVEX_TEST_ATTENTION_STAGE_INDEXER_STATE,
+            &production->next_indexer_rolling_state,
+            &reference->next_indexer_rolling_state, contract, metrics))
         return 0;
     for (i = 0ull; i < production->compressed_count; ++i) {
         if (production->compressed_positions[i] !=
             reference->compressed_positions[i]) {
             metrics->discrete_mismatches++;
             metrics->first_failed_stage = "compressed-positions";
+            metrics->first_failed_index = i;
             return 0;
         }
     }
@@ -2009,6 +2459,7 @@ int yvex_test_attention_reference_compare(
             reference->indexer_positions[i]) {
             metrics->discrete_mismatches++;
             metrics->first_failed_stage = "indexer-positions";
+            metrics->first_failed_index = i;
             return 0;
         }
     }
@@ -2018,6 +2469,7 @@ int yvex_test_attention_reference_compare(
             production->topk_counts[i] != reference->topk_counts[i]) {
             metrics->discrete_mismatches++;
             metrics->first_failed_stage = "topk-count";
+            metrics->first_failed_index = i;
             return 0;
         }
         for (j = 0ull; j < production->topk_stride; ++j) {
@@ -2027,9 +2479,366 @@ int yvex_test_attention_reference_compare(
                     i * reference->topk_stride + j]) {
                 metrics->discrete_mismatches++;
                 metrics->first_failed_stage = "topk-order";
+                metrics->first_failed_index =
+                    i * production->topk_stride + j;
                 return 0;
             }
         }
     }
+    return 1;
+}
+
+/* Contract: preserves the legacy uniform-tolerance comparison as a projection
+ * of the versioned stage-specific comparison contract. */
+int yvex_test_attention_reference_compare(
+    const yvex_attention_execution_trace *production,
+    const yvex_attention_execution_trace *reference,
+    double absolute_tolerance,
+    double relative_tolerance,
+    yvex_test_attention_reference_metrics *metrics)
+{
+    yvex_test_attention_reference_contract contract;
+    unsigned int stage;
+
+    memset(&contract, 0, sizeof(contract));
+    contract.schema_version = YVEX_TEST_ATTENTION_EVIDENCE_SCHEMA_V2;
+    contract.path_name = "legacy-uniform";
+    contract.compressed_positions_exact = 1;
+    contract.indexer_positions_exact = 1;
+    contract.topk_positions_exact = 1;
+    for (stage = 0u; stage < YVEX_TEST_ATTENTION_STAGE_COUNT; ++stage) {
+        contract.absolute[stage] = absolute_tolerance;
+        contract.relative[stage] = relative_tolerance;
+    }
+    return yvex_test_attention_reference_compare_contract(
+        production, reference, &contract, metrics);
+}
+
+static int ref_hash_finish(yvex_sha256 *hash, char identity[YVEX_SHA256_HEX_CAP])
+{
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+
+    if (!hash || !identity || !yvex_sha256_final(hash, digest)) return 0;
+    yvex_sha256_hex(digest, identity);
+    return 1;
+}
+
+static int ref_hash_float_array(yvex_sha256 *hash, const float *values,
+                                unsigned long long count)
+{
+    unsigned long long i;
+
+    if (!hash || (count && !values) || !yvex_sha256_update_u64(hash, count))
+        return 0;
+    for (i = 0ull; i < count; ++i) {
+        uint32_t bits;
+        memcpy(&bits, values + i, sizeof(bits));
+        if (!yvex_sha256_update_u64(hash, (unsigned long long)bits)) return 0;
+    }
+    return 1;
+}
+
+static int ref_hash_u64_array(yvex_sha256 *hash,
+                              const unsigned long long *values,
+                              unsigned long long count)
+{
+    unsigned long long i;
+
+    if (!hash || (count && !values) || !yvex_sha256_update_u64(hash, count))
+        return 0;
+    for (i = 0ull; i < count; ++i) {
+        if (!yvex_sha256_update_u64(hash, values[i])) return 0;
+    }
+    return 1;
+}
+
+static int ref_hash_contract(
+    const yvex_test_attention_reference_contract *contract,
+    char identity[YVEX_SHA256_HEX_CAP])
+{
+    yvex_sha256 hash;
+    unsigned int index;
+
+    if (!contract || !identity ||
+        contract->schema_version != YVEX_TEST_ATTENTION_EVIDENCE_SCHEMA_V2 ||
+        !contract->path_name)
+        return 0;
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(
+            &hash, "yvex.attention.reference.comparison.v2") ||
+        !yvex_sha256_update_u64(&hash, contract->schema_version) ||
+        !yvex_sha256_update_text(&hash, contract->path_name))
+        return 0;
+    for (index = 0u; index < YVEX_TEST_ATTENTION_STAGE_COUNT; ++index) {
+        uint64_t absolute_bits;
+        uint64_t relative_bits;
+
+        if (!isfinite(contract->absolute[index]) ||
+            !isfinite(contract->relative[index]) ||
+            contract->absolute[index] < 0.0 ||
+            contract->relative[index] < 0.0)
+            return 0;
+        memcpy(&absolute_bits, contract->absolute + index,
+               sizeof(absolute_bits));
+        memcpy(&relative_bits, contract->relative + index,
+               sizeof(relative_bits));
+        if (!yvex_sha256_update_u64(&hash, index) ||
+            !yvex_sha256_update_u64(&hash, absolute_bits) ||
+            !yvex_sha256_update_u64(&hash, relative_bits))
+            return 0;
+    }
+    for (index = 0u; index < YVEX_RUNTIME_DESCRIPTOR_QTYPE_CAP; ++index) {
+        if (!yvex_sha256_update_u64(&hash, index) ||
+            !yvex_sha256_update_u64(
+                &hash, contract->qtype_binding_counts[index]))
+            return 0;
+    }
+    if (!yvex_sha256_update_u64(
+            &hash, (unsigned long long)contract->compressed_positions_exact) ||
+        !yvex_sha256_update_u64(
+            &hash, (unsigned long long)contract->indexer_positions_exact) ||
+        !yvex_sha256_update_u64(
+            &hash, (unsigned long long)contract->topk_positions_exact))
+        return 0;
+    return ref_hash_finish(&hash, identity);
+}
+
+static int ref_hash_rolling_output(
+    yvex_sha256 *hash, const yvex_attention_rolling_state_output *state)
+{
+    if (!hash || !state ||
+        !yvex_sha256_update_u64(hash, (unsigned long long)state->present))
+        return 0;
+    if (!state->present) return 1;
+    return yvex_sha256_update_u64(hash, state->schema_version) &&
+           yvex_sha256_update_u64(hash, (unsigned long long)state->kind) &&
+           yvex_sha256_update_u64(
+               hash, (unsigned long long)state->attention_class) &&
+           yvex_sha256_update_u64(hash, state->layer_index) &&
+           yvex_sha256_update_u64(hash, state->next_token_position) &&
+           yvex_sha256_update_u64(hash, state->ratio) &&
+           yvex_sha256_update_u64(hash, state->head_dimension) &&
+           yvex_sha256_update_u64(hash, state->state_width) &&
+           yvex_sha256_update_u64(hash, state->state_slots) &&
+           yvex_sha256_update_u64(hash, state->previous_fill) &&
+           yvex_sha256_update_u64(hash, state->current_fill) &&
+           yvex_sha256_update_u64(hash, state->cursor) &&
+           yvex_sha256_update_u64(hash, state->kv_state_stride) &&
+           yvex_sha256_update_u64(hash, state->score_state_stride) &&
+           yvex_sha256_update_u64(hash, state->kv_state_extent) &&
+           yvex_sha256_update_u64(hash, state->score_state_extent) &&
+           yvex_sha256_update_u64(hash, (unsigned long long)state->overlap) &&
+           yvex_sha256_update_u64(hash, (unsigned long long)state->rotated) &&
+           yvex_sha256_update_text(hash, state->attention_plan_identity) &&
+           ref_hash_float_array(hash, state->kv_state,
+                                state->kv_state_extent) &&
+           ref_hash_float_array(hash, state->score_state,
+                                state->score_state_extent);
+}
+
+static int ref_hash_rolling_view(
+    yvex_sha256 *hash, const yvex_attention_rolling_state_view *state)
+{
+    yvex_attention_rolling_state_output projected;
+
+    if (!hash || !state) return 0;
+    memset(&projected, 0, sizeof(projected));
+    projected.present = state->present;
+    projected.schema_version = state->schema_version;
+    projected.kind = state->kind;
+    projected.attention_class = state->attention_class;
+    projected.layer_index = state->layer_index;
+    projected.next_token_position = state->next_token_position;
+    projected.ratio = state->ratio;
+    projected.head_dimension = state->head_dimension;
+    projected.state_width = state->state_width;
+    projected.state_slots = state->state_slots;
+    projected.previous_fill = state->previous_fill;
+    projected.current_fill = state->current_fill;
+    projected.cursor = state->cursor;
+    projected.kv_state_stride = state->kv_state_stride;
+    projected.score_state_stride = state->score_state_stride;
+    projected.kv_state_extent = state->kv_state_extent;
+    projected.score_state_extent = state->score_state_extent;
+    projected.kv_state = (float *)state->kv_state;
+    projected.score_state = (float *)state->score_state;
+    projected.overlap = state->overlap;
+    projected.rotated = state->rotated;
+    memcpy(projected.attention_plan_identity, state->attention_plan_identity,
+           sizeof(projected.attention_plan_identity));
+    return ref_hash_rolling_output(hash, &projected);
+}
+
+static int ref_hash_history(yvex_sha256 *hash,
+                            const yvex_attention_history_view *history)
+{
+    unsigned long long extent;
+
+    if (!hash ||
+        !yvex_sha256_update_u64(hash, history ? 1ull : 0ull))
+        return 0;
+    if (!history) return 1;
+    if (!ref_mul(history->local_tail_count, history->local_kv_stride,
+                 &extent) ||
+        !yvex_sha256_update_u64(hash, history->token_count) ||
+        !yvex_sha256_update_u64(hash, history->local_tail_count) ||
+        !yvex_sha256_update_u64(hash, history->local_kv_stride) ||
+        !ref_hash_float_array(hash, history->local_kv, extent) ||
+        !ref_hash_u64_array(hash, history->local_positions,
+                            history->local_tail_count))
+        return 0;
+    if (!ref_mul(history->compressed_entry_count,
+                 history->compressed_kv_stride, &extent) ||
+        !yvex_sha256_update_u64(hash, history->compressed_entry_count) ||
+        !yvex_sha256_update_u64(hash, history->compressed_kv_stride) ||
+        !ref_hash_float_array(hash, history->compressed_kv, extent) ||
+        !ref_hash_u64_array(hash, history->compressed_positions,
+                            history->compressed_entry_count))
+        return 0;
+    if (!ref_mul(history->indexer_entry_count, history->indexer_kv_stride,
+                 &extent) ||
+        !yvex_sha256_update_u64(hash, history->indexer_entry_count) ||
+        !yvex_sha256_update_u64(hash, history->indexer_kv_stride) ||
+        !ref_hash_float_array(hash, history->indexer_kv, extent) ||
+        !ref_hash_u64_array(hash, history->indexer_positions,
+                            history->indexer_entry_count) ||
+        !yvex_sha256_update_u64(hash, (unsigned long long)history->immutable) ||
+        !ref_hash_rolling_view(hash, &history->main_rolling_state) ||
+        !ref_hash_rolling_view(hash, &history->indexer_rolling_state))
+        return 0;
+    return 1;
+}
+
+/* Contract: binds independent equation output, every stage, exact selection,
+ * fixture/history bytes, qtype coverage, and comparison policy as evidence. */
+int yvex_test_attention_reference_evidence_build(
+    const yvex_attention_execution_trace *reference,
+    const yvex_attention_history_view *history,
+    const char *attention_plan_identity,
+    const yvex_test_attention_reference_contract *contract,
+    yvex_test_attention_reference_evidence *evidence)
+{
+    yvex_sha256 hash;
+    unsigned long long extent;
+    unsigned long long token;
+
+    if (!evidence) return 0;
+    memset(evidence, 0, sizeof(*evidence));
+    if (!reference || !reference->owned || !reference->complete ||
+        !attention_plan_identity || !yvex_sha256_hex_valid(
+            attention_plan_identity) ||
+        !ref_hash_contract(contract, evidence->comparison_contract_identity))
+        return 0;
+    evidence->schema_version = YVEX_TEST_ATTENTION_EVIDENCE_SCHEMA_V2;
+
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(&hash, "yvex.attention.reference.fixture.v2") ||
+        !yvex_sha256_update_text(&hash, attention_plan_identity) ||
+        !yvex_sha256_update_u64(&hash, reference->layer_index) ||
+        !yvex_sha256_update_u64(
+            &hash, (unsigned long long)reference->attention_class) ||
+        !yvex_sha256_update_u64(&hash, reference->token_position) ||
+        !yvex_sha256_update_u64(&hash, reference->token_count) ||
+        !yvex_sha256_update_u64(&hash, reference->hidden_width) ||
+        !ref_mul(reference->token_count, reference->hidden_width, &extent) ||
+        !ref_hash_float_array(&hash, reference->input, extent) ||
+        !ref_hash_finish(&hash, evidence->fixture_identity))
+        return 0;
+
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(&hash, "yvex.attention.reference.history.v2") ||
+        !ref_hash_history(&hash, history) ||
+        !ref_hash_finish(&hash, evidence->history_identity))
+        return 0;
+
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(&hash, "yvex.attention.reference.output.v2") ||
+        !yvex_sha256_update_u64(&hash, reference->layer_index) ||
+        !yvex_sha256_update_u64(&hash, reference->token_position) ||
+        !yvex_sha256_update_u64(&hash, reference->token_count) ||
+        !yvex_sha256_update_u64(&hash, reference->hidden_width) ||
+        !ref_mul(reference->token_count, reference->hidden_width, &extent) ||
+        !ref_hash_float_array(&hash, reference->output, extent) ||
+        !ref_hash_finish(&hash, evidence->oracle_output_identity))
+        return 0;
+
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(&hash, "yvex.attention.reference.trace.v2") ||
+        !yvex_sha256_update_text(&hash, evidence->fixture_identity) ||
+        !yvex_sha256_update_text(&hash, evidence->history_identity) ||
+        !yvex_sha256_update_u64(&hash, reference->q_rank) ||
+        !yvex_sha256_update_u64(&hash, reference->query_width) ||
+        !yvex_sha256_update_u64(&hash, reference->kv_width) ||
+        !yvex_sha256_update_u64(&hash, reference->compressed_count) ||
+        !yvex_sha256_update_u64(&hash, reference->compressed_stride) ||
+        !yvex_sha256_update_u64(&hash, reference->indexer_count) ||
+        !yvex_sha256_update_u64(&hash, reference->indexer_stride) ||
+        !yvex_sha256_update_u64(&hash, reference->index_query_stride) ||
+        !yvex_sha256_update_u64(&hash, reference->index_weight_stride) ||
+        !yvex_sha256_update_u64(&hash, reference->topk_stride))
+        return 0;
+#define REF_HASH_TRACE(field_, rows_, stride_)                               \
+    do {                                                                     \
+        if (!ref_mul((rows_), (stride_), &extent) ||                         \
+            !ref_hash_float_array(&hash, reference->field_, extent))         \
+            return 0;                                                        \
+    } while (0)
+    REF_HASH_TRACE(q_low, reference->token_count, reference->q_rank);
+    REF_HASH_TRACE(query, reference->token_count, reference->query_width);
+    REF_HASH_TRACE(raw_kv, reference->token_count, reference->kv_width);
+    REF_HASH_TRACE(compressed_kv, reference->compressed_count,
+                   reference->compressed_stride);
+    REF_HASH_TRACE(indexer_kv, reference->indexer_count,
+                   reference->indexer_stride);
+    REF_HASH_TRACE(index_query, reference->token_count,
+                   reference->index_query_stride);
+    REF_HASH_TRACE(index_weights, reference->token_count,
+                   reference->index_weight_stride);
+    REF_HASH_TRACE(attention_values, reference->token_count,
+                   reference->query_width);
+#undef REF_HASH_TRACE
+    if (!ref_hash_u64_array(&hash, reference->compressed_positions,
+                            reference->compressed_count) ||
+        !ref_hash_u64_array(&hash, reference->indexer_positions,
+                            reference->indexer_count))
+        return 0;
+    for (token = 0ull; token < reference->token_count; ++token) {
+        unsigned long long selected;
+        unsigned long long selected_count = reference->topk_stride
+            ? reference->topk_counts[token] : 0ull;
+
+        if (selected_count > reference->topk_stride ||
+            !yvex_sha256_update_u64(&hash, selected_count))
+            return 0;
+        for (selected = 0ull; selected < selected_count; ++selected) {
+            if (!yvex_sha256_update_u64(
+                    &hash, reference->topk_positions[
+                        token * reference->topk_stride + selected]))
+                return 0;
+        }
+        if (ULLONG_MAX - evidence->exact_topk_positions < selected_count)
+            return 0;
+        evidence->exact_topk_positions += selected_count;
+    }
+    if (!ref_hash_rolling_output(
+            &hash, &reference->next_main_rolling_state) ||
+        !ref_hash_rolling_output(
+            &hash, &reference->next_indexer_rolling_state) ||
+        !ref_hash_finish(&hash, evidence->oracle_trace_identity))
+        return 0;
+
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(
+            &hash, "yvex.attention.reference.evidence.v2") ||
+        !yvex_sha256_update_text(&hash, attention_plan_identity) ||
+        !yvex_sha256_update_text(&hash, evidence->oracle_trace_identity) ||
+        !yvex_sha256_update_text(&hash, evidence->oracle_output_identity) ||
+        !yvex_sha256_update_text(&hash, evidence->fixture_identity) ||
+        !yvex_sha256_update_text(&hash, evidence->history_identity) ||
+        !yvex_sha256_update_text(
+            &hash, evidence->comparison_contract_identity) ||
+        !yvex_sha256_update_u64(&hash, evidence->exact_topk_positions) ||
+        !ref_hash_finish(&hash, evidence->evidence_identity))
+        return 0;
     return 1;
 }

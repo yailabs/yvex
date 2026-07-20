@@ -354,10 +354,10 @@ grep -F '| `V010.REPO.SEMANTIC.COMPRESSION.0` | project | `complete` |' "$projec
   fail "repository semantic compression is not complete"
 grep -F '| `V010.REPO.C.CANONICALIZATION.0` | project | `complete` |' "$project" >/dev/null ||
   fail "repository C canonicalization is not complete"
-grep -F '| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `active` |' "$project" >/dev/null ||
-  fail "DeepSeek attention checkpoint is not active"
-grep -F '| `V010.RUNTIME.DEEPSEEK.KV.0` | DeepSeek | `blocked` |' "$project" >/dev/null ||
-  fail "DeepSeek KV is not blocked"
+grep -F '| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `complete` |' "$project" >/dev/null ||
+  fail "DeepSeek attention execution is not complete"
+grep -F '| `V010.RUNTIME.DEEPSEEK.KV.0` | DeepSeek | `active` |' "$project" >/dev/null ||
+  fail "DeepSeek KV is not active"
 grep -F '| V010.MODEL.TRANSFORM.IR.0 | recovered/promoted |' "$project" >/dev/null ||
   fail "quantization does not depend on the transformation IR"
 

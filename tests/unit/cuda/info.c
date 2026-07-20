@@ -40,7 +40,8 @@ static int assert_supported_variant(const yvex_backend *backend,
 
 /* Contract: proves atomic bundle rejection, cleared handles, and clean retry. */
 static int assert_bundle_rollback(const char *failure,
-                                  yvex_backend_capability_reason expected_reason)
+                                  yvex_backend_capability_reason expected_reason,
+                                  yvex_backend_operation_variant variant)
 {
     yvex_backend *backend = NULL;
     yvex_backend_options options;
@@ -61,9 +62,7 @@ static int assert_bundle_rollback(const char *failure,
     YVEX_TEST_ASSERT(rc == YVEX_OK &&
                      result.state == YVEX_BACKEND_CAPABILITY_SUPPORTED,
                      "Driver memory capability survives bundle rejection");
-    rc = yvex_backend_query_capability(backend,
-                                       YVEX_BACKEND_VARIANT_EMBED_F32_TO_F32,
-                                       &result, &err);
+    rc = yvex_backend_query_capability(backend, variant, &result, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "query rejected kernel capability");
     YVEX_TEST_ASSERT(result.state == YVEX_BACKEND_CAPABILITY_FAILED,
                      "rejected bundle cannot support kernel variant");
@@ -83,6 +82,18 @@ int yvex_cuda_test_info(void)
     yvex_backend_options options;
     yvex_backend_device_info info;
     yvex_error err;
+    static const char *attention_symbols[] = {
+        "yvex_deepseek_qtype_matvec",
+        "yvex_deepseek_decode",
+        "yvex_deepseek_weighted_norm",
+        "yvex_deepseek_unit_norm",
+        "yvex_deepseek_rope",
+        "yvex_deepseek_activation",
+        "yvex_deepseek_rolling",
+        "yvex_deepseek_topk",
+        "yvex_deepseek_reduce"
+    };
+    size_t symbol_index;
     int rc;
 
     memset(&options, 0, sizeof(options));
@@ -110,12 +121,23 @@ int yvex_cuda_test_info(void)
 
     YVEX_TEST_ASSERT(assert_bundle_rollback(
                          "module",
-                         YVEX_BACKEND_CAPABILITY_REASON_KERNEL_BUNDLE_REJECTED) == 0,
+                         YVEX_BACKEND_CAPABILITY_REASON_KERNEL_BUNDLE_REJECTED,
+                         YVEX_BACKEND_VARIANT_EMBED_F32_TO_F32) == 0,
                      "module failure rolls back atomically");
     YVEX_TEST_ASSERT(assert_bundle_rollback(
                          "symbol",
-                         YVEX_BACKEND_CAPABILITY_REASON_FUNCTION_MISSING) == 0,
+                         YVEX_BACKEND_CAPABILITY_REASON_FUNCTION_MISSING,
+                         YVEX_BACKEND_VARIANT_EMBED_F32_TO_F32) == 0,
                      "symbol failure rolls back atomically");
+    for (symbol_index = 0u;
+         symbol_index < sizeof(attention_symbols) / sizeof(attention_symbols[0]);
+         ++symbol_index) {
+        YVEX_TEST_ASSERT(assert_bundle_rollback(
+                             attention_symbols[symbol_index],
+                             YVEX_BACKEND_CAPABILITY_REASON_FUNCTION_MISSING,
+                             YVEX_BACKEND_VARIANT_ATTENTION_ENCODED) == 0,
+                         "each encoded-attention symbol is atomically required");
+    }
 
     backend = NULL;
     rc = yvex_backend_open(&backend, &options, &err);

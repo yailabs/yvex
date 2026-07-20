@@ -12,6 +12,27 @@
 static const double attention_pi =
     3.14159265358979323846264338327950288;
 
+/* Purpose: apply the identity-bearing DeepSeek activation storage boundary.
+ * Inputs: one admitted compute contract and finite F32 working values.
+ * Effects: rounds values in place to their model-visible storage precision.
+ * Failure: unknown contracts or non-finite values refuse without partial success.
+ * Boundary: storage rounding only; accumulation remains owned by each operation. */
+int yvex_attention_compute_round(yvex_attention_compute_contract contract,
+                                 float *values,
+                                 unsigned long long count)
+{
+    unsigned long long i;
+
+    if (contract != YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1 ||
+        !values || !count)
+        return 0;
+    for (i = 0ull; i < count; ++i) {
+        if (!isfinite(values[i])) return 0;
+        values[i] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(values[i]));
+    }
+    return 1;
+}
+
 // Purpose: Return the admitted rms norm fact without transferring ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
@@ -250,13 +271,16 @@ int yvex_attention_hadamard_cpu(
     float scale,
     int reject_nonfinite,
     float *output,
+    yvex_attention_scratch_budget *budget,
     yvex_attention_failure *failure,
     yvex_error *err)
 {
-    float *scratch;
+    float *scratch = NULL;
     unsigned long long padded_length;
     unsigned long long i;
     unsigned long long step;
+    size_t scratch_bytes = 0u;
+    int rc;
 
     if (!input || !output || length == 0ull ||
         !attention_next_power_of_two(length, &padded_length)) {
@@ -266,16 +290,30 @@ int yvex_attention_hadamard_cpu(
             0ull, err, YVEX_ERR_INVALID_ARG,
             "Hadamard CPU requires non-empty input and output");
     }
+    if (!yvex_attention_scratch_reserve(
+            budget, padded_length, sizeof(*scratch), &scratch_bytes))
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH, NULL,
+            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
+            budget ? budget->limit_bytes : 0ull,
+            budget ? (unsigned long long)budget->live_bytes : 0ull,
+            err, YVEX_ERR_BOUNDS,
+            "Hadamard CPU scratch budget exceeded");
     scratch = (float *)yvex_attention_calloc_array(padded_length, sizeof(*scratch));
     if (!scratch)
-        return yvex_attention_reject(
+        rc = yvex_attention_reject(
             failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
             YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
             padded_length, 0ull, err, YVEX_ERR_NOMEM,
             "Hadamard CPU scratch allocation failed");
+    if (!scratch) {
+        yvex_attention_scratch_release(budget, scratch_bytes);
+        return rc;
+    }
     for (i = 0ull; i < length; ++i) {
         if (reject_nonfinite && !isfinite(input[i])) {
             free(scratch);
+            yvex_attention_scratch_release(budget, scratch_bytes);
             return yvex_attention_reject(
                 failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
                 YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
@@ -299,6 +337,7 @@ int yvex_attention_hadamard_cpu(
     for (i = 0ull; i < length; ++i)
         output[i] = scratch[i] * scale;
     free(scratch);
+    yvex_attention_scratch_release(budget, scratch_bytes);
     yvex_error_clear(err);
     return YVEX_OK;
 }
@@ -394,12 +433,12 @@ static unsigned char attention_ue8m0_encode_scale(float value)
     int exponent;
     float mantissa;
 
-    if (!isfinite(value) || value <= 0.0f) return 0u;
+    if (!isfinite(value) || value <= 0.0f) return 0xffu;
     mantissa = frexpf(value, &exponent);
     if (mantissa > 0.5f) exponent++;
     exponent += 126;
     if (exponent < 0) return 0u;
-    if (exponent > 255) return 255u;
+    if (exponent > 254) return 254u;
     return (unsigned char)exponent;
 }
 
@@ -410,8 +449,7 @@ static unsigned char attention_ue8m0_encode_scale(float value)
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 static float attention_ue8m0_decode_scale(unsigned char code)
 {
-    if (code == 0u) return 0.0f;
-    return ldexpf(1.0f, (int)code - 127);
+    return yvex_quant_e8m0_decode(code);
 }
 
 // Purpose: Return the admitted fp8 e4m3fn encode fact without transferring ownership.
@@ -422,23 +460,25 @@ static float attention_ue8m0_decode_scale(unsigned char code)
 unsigned char yvex_attention_fp8_e4m3fn_encode(float value)
 {
     static const float finite_max = 448.0f;
+    float magnitude = fabsf(value);
     float best_error = INFINITY;
     unsigned char best = 0u;
     unsigned int code;
+    int negative = signbit(value);
 
-    if (!isfinite(value)) return 0u;
-    if (value > finite_max) value = finite_max;
-    if (value < -finite_max) value = -finite_max;
-    for (code = 0u; code < 256u; ++code) {
+    if (!isfinite(value)) return negative ? 0xffu : 0x7fu;
+    if (magnitude > finite_max) magnitude = finite_max;
+    for (code = 0u; code < 0x7fu; ++code) {
         float decoded = yvex_attention_fp8_e4m3fn_decode(
             (unsigned char)code);
-        float error = fabsf(decoded - value);
-        if (error < best_error) {
+        float error = fabsf(decoded - magnitude);
+        if (error < best_error ||
+            (error == best_error && !(code & 1u) && (best & 1u))) {
             best_error = error;
             best = (unsigned char)code;
         }
     }
-    return best;
+    return negative ? (unsigned char)(best | 0x80u) : best;
 }
 
 // Purpose: Return the admitted fp8 e4m3fn decode fact without transferring ownership.
@@ -448,20 +488,7 @@ unsigned char yvex_attention_fp8_e4m3fn_encode(float value)
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 float yvex_attention_fp8_e4m3fn_decode(unsigned char code)
 {
-    unsigned char sign = (unsigned char)(code & 0x80u);
-    unsigned char exponent = (unsigned char)((code >> 3u) & 0x0fu);
-    unsigned char mantissa = (unsigned char)(code & 0x07u);
-    float value;
-
-    if ((code & 0x7fu) == 0u) return sign ? -0.0f : 0.0f;
-    if (exponent == 0u) {
-        value = ldexpf((float)mantissa / 8.0f, -6);
-    } else {
-        value = ldexpf(1.0f + (float)mantissa / 8.0f,
-                       (int)exponent - 7);
-    }
-    if (value > 448.0f) value = 448.0f;
-    return sign ? -value : value;
+    return yvex_quant_fp8_e4m3fn_decode(code);
 }
 
 // Purpose: Return the admitted fp8 fake quant block fact without transferring ownership.
@@ -517,8 +544,8 @@ int yvex_attention_fp8_fake_quant_block(
         if (normalized > 448.0f) normalized = 448.0f;
         if (normalized < -448.0f) normalized = -448.0f;
         codes[i] = yvex_attention_fp8_e4m3fn_encode(normalized);
-        dequantized[i] =
-            yvex_attention_fp8_e4m3fn_decode(codes[i]) * scale;
+        dequantized[i] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(
+            yvex_attention_fp8_e4m3fn_decode(codes[i]) * scale));
     }
     yvex_error_clear(err);
     return YVEX_OK;
@@ -531,18 +558,26 @@ int yvex_attention_fp8_fake_quant_block(
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 unsigned char yvex_attention_fp4_e2m1_encode(float value)
 {
-    static const float thresholds[] = {
-        0.25f, 0.75f, 1.25f, 1.75f, 2.5f, 3.5f, 5.0f
+    static const float values[] = {
+        0.0f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 6.0f
     };
     float magnitude = fabsf(value);
-    unsigned char code = 0u;
-    unsigned int i;
+    float best_error;
+    unsigned char best = 0u;
+    unsigned int code;
 
-    for (i = 0u; i < sizeof(thresholds) / sizeof(thresholds[0]); ++i)
-        if (magnitude > thresholds[i]) code++;
-    if (code > 7u) code = 7u;
-    if (code != 0u && signbit(value)) code |= 0x8u;
-    return code;
+    if (isnan(value)) return signbit(value) ? 0x8u : 0u;
+    if (magnitude > 6.0f) magnitude = 6.0f;
+    best_error = fabsf(magnitude - values[0]);
+    for (code = 1u; code < 8u; ++code) {
+        float error = fabsf(magnitude - values[code]);
+        if (error < best_error ||
+            (error == best_error && !(code & 1u) && (best & 1u))) {
+            best_error = error;
+            best = (unsigned char)code;
+        }
+    }
+    return signbit(value) ? (unsigned char)(best | 0x8u) : best;
 }
 
 // Purpose: Return the admitted fp4 e2m1 decode fact without transferring ownership.
@@ -615,8 +650,8 @@ int yvex_attention_fp4_fake_quant_block(
     }
     for (i = 0ull; i < count; ++i) {
         codes[i] = yvex_attention_fp4_e2m1_encode(input[i] / scale);
-        dequantized[i] =
-            yvex_attention_fp4_e2m1_decode(codes[i]) * scale;
+        dequantized[i] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(
+            yvex_attention_fp4_e2m1_decode(codes[i]) * scale));
     }
     yvex_error_clear(err);
     return YVEX_OK;

@@ -296,9 +296,12 @@ MTP descriptor. Main layers 0 and 1 use sliding-window attention. Layers 2
 through 42 alternate 21 compressed sparse-attention layers at ratio 4 with 20
 heavy-compression layers at ratio 128; the auxiliary layer uses the explicit
 uncompressed class rather than being truncated from the 44-entry source
-schedule. Every descriptor carries its own partial-RoPE geometry, YaRN context
-extension, attention state class, compressed-core/tail requirements, and CSA
-indexer requirements.
+schedule. Every descriptor carries its own partial-RoPE geometry, attention
+state class, compressed-core/tail requirements, and CSA indexer requirements.
+SWA applies base RoPE without YaRN; compressed CSA/HCA classes apply the
+versioned YaRN extension. HCA admits complete non-overlapping groups at the
+exact ratio 128, retains an incomplete tail as raw local history, and composes
+raw and compressed representations without cross-representation deduplication.
 
 mHC is represented as a residual transformation, not a feature bit. Four
 4096-wide streams form a 16,384-wide state; each transition records the 24 by
@@ -323,6 +326,14 @@ attention/FFN norms, final and MTP mHC heads, FP4 weights, and FP8 companion
 scales. GGUF naming and transforms, payload access, artifact admission,
 materialization, executable descriptors, tokenizer execution, CUDA lowering,
 and generation remain separate owners and separate support boundaries.
+
+The admitted attention executor consumes this specification through the
+immutable runtime descriptor and attention plan. An independent full-equation
+reference, production CPU path, and device-complete GB10 CUDA path execute all
+43 main layers and 634 attention bindings. Rolling compression, history,
+deterministic top-k, masks, stable softmax, reductions, and output projection
+participate in the numerical result. This is complete attention execution, not
+persistent runtime KV, prefill, MoE, transformer composition, or generation.
 
 ### DeepSeek Logical GGUF Mapping
 
@@ -1070,8 +1081,10 @@ CUDA and Metal are not model families. They are backend execution environments.
 A family creates backend pressure through tensor shape, layout, dtype/qtype,
 attention mode, KV size, MLP/MoE structure, output-head size, and residency.
 
-YVEX has bounded CUDA primitive hardening. That proves selected primitive
-behavior against references. It does not make any family CUDA-supported.
+YVEX has bounded CUDA primitive hardening and admitted complete DeepSeek
+attention execution on GB10. That proves only the named operation boundary; it
+does not make the complete DeepSeek family runtime or another family
+CUDA-supported.
 
 Metal remains a future backend pressure lane. Qwen can force Metal questions,
 but Qwen identity remains backend-neutral.
@@ -1112,7 +1125,7 @@ This table records architectural scope, not delivery progress.
 
 | Family | v0.1.0 relation | Runtime class | Current support truth |
 | --- | --- | --- | --- |
-| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; canonical target id `deepseek4-v4-flash` | hybrid SWA/CSA/HCA decoder with mHC and MoE | typed architecture, exact 69,187-entry source coverage, sealed Transformation IR, complete quantization, two admitted complete artifacts, bounded selected-artifact materialization, and an immutable runtime descriptor exist; full attention, transformer execution, and generation remain unsupported |
+| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; canonical target id `deepseek4-v4-flash` | hybrid SWA/CSA/HCA decoder with mHC and MoE | typed architecture, exact 69,187-entry source coverage, sealed Transformation IR, complete quantization, two admitted complete artifacts, bounded materialization, an immutable runtime descriptor, and complete CPU/GB10 attention exist; persistent KV, prefill, MoE, transformer execution, and generation remain unsupported |
 | Qwen | outside v0.1.0 | target-dependent dense or sparse/MoE | unsupported; existing source/report facts do not enter the release path |
 | Gemma | outside v0.1.0 | dense | unsupported; existing source/report facts do not enter the release path |
 | GLM | outside v0.1.0 source-pressure work | sparse/MoE | unsupported; source evidence is not runtime support |

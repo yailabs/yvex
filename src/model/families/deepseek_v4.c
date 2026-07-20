@@ -30,7 +30,7 @@
 #define DEEPSEEK_V4_FLASH_AUX_LAYERS 1ull
 #define DEEPSEEK_V4_MHC_SCALE_WIDTH 3ull
 #define DEEPSEEK_V4_MHC_POST_MULTIPLIER 2.0
-#define DEEPSEEK_V4_RUNTIME_NUMERIC_SCHEMA_VERSION 1u
+#define DEEPSEEK_V4_RUNTIME_NUMERIC_SCHEMA_VERSION 2u
 #define DEEPSEEK_V4_RUNTIME_FP8_ACT_BLOCK 64ull
 #define DEEPSEEK_V4_RUNTIME_FP4_ACT_BLOCK 32ull
 #define DEEPSEEK_V4_RUNTIME_TOPK_POLICY_VERSION 1u
@@ -755,6 +755,17 @@ static int deepseek_v4_validate_runtime_numeric_layer(
 {
     int rc;
 
+    if (layer->compute_contract !=
+        YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1) {
+        return deepseek_v4_reject(
+            failure,
+            YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_RUNTIME_NUMERIC,
+            YVEX_DEEPSEEK_V4_IR_COMPONENT_RUNTIME_NUMERIC,
+            "attention-compute-contract", layer->layer_index,
+            YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
+            layer->compute_contract, err);
+    }
+
     rc = deepseek_v4_validate_runtime_activation_policy(
         &layer->attention_kv_activation, failure, layer->layer_index,
         "attention-kv-activation", err);
@@ -809,6 +820,7 @@ static void deepseek_v4_fill_layer(
     unsigned long long ratio = source->compress_ratios[layer_index];
     memset(layer, 0, sizeof(*layer));
     layer->layer_index = layer_index;
+    layer->compute_contract = YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1;
     layer->compression_ratio = ratio;
     layer->query_heads = source->num_attention_heads;
     layer->kv_heads = source->num_key_value_heads;
@@ -845,7 +857,8 @@ static void deepseek_v4_fill_layer(
     layer->position.theta = ratio == 0u ? source->rope_theta
                                        : source->compress_rope_theta;
     layer->position.scaling_factor = source->rope_scaling_factor;
-    layer->position.original_context = source->rope_original_context;
+    /* A zero original context is the typed switch that disables YaRN for pure SWA. */
+    layer->position.original_context = ratio == 0u ? 0u : source->rope_original_context;
     layer->position.beta_fast = source->rope_beta_fast;
     layer->position.beta_slow = source->rope_beta_slow;
     layer->position.maximum_context = source->max_position_embeddings;
@@ -965,6 +978,7 @@ static void deepseek_v4_fill_model(
                      deepseek_v4_hadamard_revision);
     model->runtime_numeric_schema_version =
         DEEPSEEK_V4_RUNTIME_NUMERIC_SCHEMA_VERSION;
+    model->runtime_compute_policy_count = 1u;
     model->runtime_activation_policy_count = 3u;
     model->runtime_sparse_topk_policy_count = 1u;
     model->hidden_size = source->hidden_size;

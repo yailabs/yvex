@@ -224,7 +224,8 @@ static int runtime_fill_deepseek_numeric_summary(
             YVEX_ERR_FORMAT,
             "DeepSeek runtime descriptor requires architecture numeric contract");
     }
-    if (model->runtime_numeric_schema_version == 0u ||
+    if (model->runtime_numeric_schema_version != 2u ||
+        model->runtime_compute_policy_count != 1ull ||
         model->runtime_activation_policy_count == 0ull ||
         !model->hadamard_revision[0]) {
         return runtime_reject(
@@ -243,6 +244,7 @@ static int runtime_fill_deepseek_numeric_summary(
     }
     descriptor->summary.runtime_numeric_schema_version =
         model->runtime_numeric_schema_version;
+    descriptor->summary.runtime_compute_policy_count = model->runtime_compute_policy_count;
     descriptor->summary.runtime_activation_policy_count =
         model->runtime_activation_policy_count;
     descriptor->summary.runtime_sparse_topk_policy_count =
@@ -252,10 +254,11 @@ static int runtime_fill_deepseek_numeric_summary(
                    "%s", model->hadamard_revision);
 
     yvex_sha256_init(&hash);
-    yvex_sha256_update_text(&hash, "yvex.runtime.numeric.deepseek-v4.v1");
+    yvex_sha256_update_text(&hash, "yvex.runtime.numeric.deepseek-v4.v2");
     yvex_sha256_update_text(&hash, model->hadamard_revision);
     yvex_sha256_update_text(&hash, model->sglang_revision);
     yvex_sha256_update_u64(&hash, model->runtime_numeric_schema_version);
+    yvex_sha256_update_u64(&hash, model->runtime_compute_policy_count);
     yvex_sha256_update_u64(&hash, model->runtime_activation_policy_count);
     yvex_sha256_update_u64(&hash, model->runtime_sparse_topk_policy_count);
     layer_count = yvex_model_register_deepseek_v4()->ir.layer_count(architecture_ir);
@@ -271,6 +274,7 @@ static int runtime_fill_deepseek_numeric_summary(
         }
         yvex_sha256_update_u64(&hash, layer->layer_index);
         yvex_sha256_update_u64(&hash, (unsigned long long)layer->attention_class);
+        yvex_sha256_update_u64(&hash, (unsigned long long)layer->compute_contract);
         runtime_hash_activation_policy(&hash, &layer->attention_kv_activation);
         runtime_hash_activation_policy(&hash, &layer->compressor_activation);
         runtime_hash_activation_policy(&hash, &layer->compressor_rotated_activation);
@@ -301,6 +305,7 @@ static void runtime_compute_identity(yvex_runtime_descriptor *descriptor)
     yvex_sha256_update_text(&hash, descriptor->summary.runtime_numeric_identity);
     yvex_sha256_update_u64(&hash,
                      descriptor->summary.runtime_numeric_schema_version);
+    yvex_sha256_update_u64(&hash, descriptor->summary.runtime_compute_policy_count);
     yvex_sha256_update_u64(&hash,
                      descriptor->summary.runtime_activation_policy_count);
     yvex_sha256_update_u64(&hash,

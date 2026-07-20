@@ -58,6 +58,15 @@ semantics and independent topology expectations. The canonical YVEX result is
 the immutable owner under `src/model/families/`, not an inherited Python
 class hierarchy or external support claim.
 
+`V010.GRAPH.DEEPSEEK.ATTENTION.0` resolves the executable attention boundary
+against those same pinned sources and runtime-numeric authority commit
+`e7706faf8d1c3b9f241e36860640ad1dac644ede`. The local source and pinned
+runtime implementations establish base RoPE without YaRN for SWA, the
+compressed-class YaRN policy for CSA/HCA, and HCA admission of a complete
+non-overlapping group when its end position becomes available at the exact
+ratio 128. The paper remains semantic context; it does not override the exact
+executable source transition or transfer external support into YVEX.
+
 ### Pinned GGUF Qtype Storage Baseline
 
 `V010.GGUF.QTYPE.ABI.1` uses ggml commit

@@ -117,6 +117,20 @@ static __device__ float bf16_bits_to_float(unsigned int bits)
     return __uint_as_float(bits << 16);
 }
 
+/* Purpose: Publish one F32 activation at the canonical BF16 RNE boundary. */
+static __device__ float float_to_bf16_rne(float value)
+{
+    unsigned int bits = __float_as_uint(value);
+    unsigned int upper = bits >> 16;
+    unsigned int lower = bits & 0xffffu;
+
+    if ((bits & 0x7f800000u) == 0x7f800000u &&
+        (bits & 0x007fffffu) != 0u)
+        return __uint_as_float((upper | 0x0040u) << 16);
+    if (lower > 0x8000u || (lower == 0x8000u && (upper & 1u))) upper++;
+    return __uint_as_float(upper << 16);
+}
+
 /* Purpose: Implement the canonical e8m0 bits to float mechanism owned by the CUDA backend boundary. */
 static __device__ float e8m0_bits_to_float(unsigned int bits)
 {
@@ -636,6 +650,7 @@ extern "C" __global__ void yvex_deepseek_qtype_matvec(
     unsigned int qtype,
     const float *vector,
     float *out,
+    int output_bf16,
     int *status)
 {
     extern __shared__ double partial[];
@@ -644,14 +659,17 @@ extern "C" __global__ void yvex_deepseek_qtype_matvec(
     double sum = 0.0;
     const unsigned char *row_data;
 
-    if (!encoded || !vector || !out || !status || !row_bytes || !row_width ||
-        row >= row_count) return;
-    if (*status != 0) return;
+    if (!status) return;
+    if (*status != 0 || row >= row_count) return;
+    if (!encoded || !vector || !out || !row_bytes || !row_width) {
+        atomicCAS(status, 0, 2);
+        return;
+    }
     row_data = encoded + (start_row + row) * row_bytes;
     for (unsigned long long i = (unsigned long long)lane; i < row_width;
          i += (unsigned long long)blockDim.x) {
         float weight = qtype_value(row_data, i, qtype);
-        float value = vector[i];
+        float value = float_to_bf16_rne(vector[i]);
         if (!isfinite(weight) || !isfinite(value)) {
             atomicCAS(status, 0, 1);
             continue;
@@ -666,7 +684,11 @@ extern "C" __global__ void yvex_deepseek_qtype_matvec(
     }
     if (lane == 0u) {
         if (!isfinite(partial[0])) atomicCAS(status, 0, 1);
-        else out[row] = (float)partial[0];
+        else {
+            float value = (float)partial[0];
+            if (!isfinite(value)) atomicCAS(status, 0, 1);
+            else out[row] = output_bf16 ? float_to_bf16_rne(value) : value;
+        }
     }
 }
 
@@ -686,7 +708,12 @@ extern "C" __global__ void yvex_deepseek_decode(
     unsigned long long index =
         (unsigned long long)blockIdx.x * (unsigned long long)blockDim.x +
         (unsigned long long)threadIdx.x;
-    if (!encoded || !out || !status || index >= count || *status != 0) return;
+    if (!status) return;
+    if (*status != 0 || index >= count) return;
+    if (!encoded || !out || !count) {
+        atomicCAS(status, 0, 2);
+        return;
+    }
     float value = qtype_value(encoded, index, qtype);
     if (!isfinite(value)) atomicCAS(status, 0, 1);
     else out[index] = value;
@@ -709,8 +736,12 @@ extern "C" __global__ void yvex_deepseek_weighted_norm(
     extern __shared__ double partial[];
     unsigned int lane = threadIdx.x;
     double sum = 0.0;
-    if (blockIdx.x != 0u || !values || !weight || !status || !count ||
-        epsilon <= 0.0 || *status != 0) return;
+    if (!status) return;
+    if (*status != 0 || blockIdx.x != 0u) return;
+    if (!values || !weight || !count || epsilon <= 0.0) {
+        if (lane == 0u) atomicCAS(status, 0, 2);
+        return;
+    }
     for (unsigned long long i = (unsigned long long)lane; i < count;
          i += (unsigned long long)blockDim.x) {
         double value = (double)values[i];
@@ -736,8 +767,10 @@ extern "C" __global__ void yvex_deepseek_weighted_norm(
          i += (unsigned long long)blockDim.x) {
         double scale = (double)qtype_value(weight, i, weight_qtype);
         double result = (double)values[i] * inverse * scale;
-        if (!isfinite(scale) || !isfinite(result)) atomicCAS(status, 0, 1);
-        else values[i] = (float)result;
+        float published = (float)result;
+        if (!isfinite(scale) || !isfinite(result) || !isfinite(published))
+            atomicCAS(status, 0, 1);
+        else values[i] = float_to_bf16_rne(published);
     }
 }
 
@@ -759,8 +792,12 @@ extern "C" __global__ void yvex_deepseek_unit_norm(
     unsigned int lane = threadIdx.x;
     double sum = 0.0;
     float *vector;
-    if (!values || !status || vector_index >= vector_count || !vector_width ||
-        epsilon <= 0.0 || *status != 0) return;
+    if (!status) return;
+    if (*status != 0 || vector_index >= vector_count) return;
+    if (!values || !vector_count || !vector_width || epsilon <= 0.0) {
+        if (lane == 0u) atomicCAS(status, 0, 2);
+        return;
+    }
     vector = values + vector_index * vector_width;
     for (unsigned long long i = (unsigned long long)lane; i < vector_width;
          i += (unsigned long long)blockDim.x) {
@@ -784,8 +821,11 @@ extern "C" __global__ void yvex_deepseek_unit_norm(
         return;
     }
     for (unsigned long long i = (unsigned long long)lane; i < vector_width;
-         i += (unsigned long long)blockDim.x)
-        vector[i] = (float)((double)vector[i] * inverse);
+         i += (unsigned long long)blockDim.x) {
+        float published = (float)((double)vector[i] * inverse);
+        if (!isfinite(published)) atomicCAS(status, 0, 1);
+        else vector[i] = float_to_bf16_rne(published);
+    }
 }
 
 /* Purpose: Implement the canonical deepseek yarn frequency mechanism owned by the CUDA backend boundary.
@@ -851,10 +891,23 @@ extern "C" __global__ void yvex_deepseek_rope(
     unsigned long long pair =
         (unsigned long long)blockIdx.x * (unsigned long long)blockDim.x +
         (unsigned long long)threadIdx.x;
-    unsigned long long pairs_per_vector = rope_dims / 2ull;
-    unsigned long long total = vector_count * pairs_per_vector;
-    if (!values || !status || !rope_dims || rope_dims > vector_width ||
-        (rope_dims & 1ull) || pair >= total || *status != 0) return;
+    unsigned long long pairs_per_vector;
+    unsigned long long total;
+    if (!status) return;
+    if (*status != 0) return;
+    if (!values || !vector_count || !rope_dims || rope_dims > vector_width ||
+        (rope_dims & 1ull) || theta <= 1ull || !scaling_factor ||
+        (original_context && (!beta_slow || beta_fast <= beta_slow))) {
+        atomicCAS(status, 0, 2);
+        return;
+    }
+    pairs_per_vector = rope_dims / 2ull;
+    if (vector_count > ~0ull / pairs_per_vector) {
+        atomicCAS(status, 0, 2);
+        return;
+    }
+    total = vector_count * pairs_per_vector;
+    if (pair >= total) return;
     unsigned long long vector_index = pair / pairs_per_vector;
     unsigned long long local_pair = pair % pairs_per_vector;
     unsigned long long start = vector_width - rope_dims;
@@ -870,10 +923,13 @@ extern "C" __global__ void yvex_deepseek_rope(
     double y = (double)values[offset + 1ull];
     double left = x * c - y * s;
     double right = x * s + y * c;
-    if (!isfinite(left) || !isfinite(right)) atomicCAS(status, 0, 1);
+    float published_left = (float)left;
+    float published_right = (float)right;
+    if (!isfinite(left) || !isfinite(right) || !isfinite(published_left) ||
+        !isfinite(published_right)) atomicCAS(status, 0, 1);
     else {
-        values[offset] = (float)left;
-        values[offset + 1ull] = (float)right;
+        values[offset] = float_to_bf16_rne(published_left);
+        values[offset + 1ull] = float_to_bf16_rne(published_right);
     }
 }
 
@@ -889,10 +945,10 @@ static __device__ float deepseek_fp8_decode(unsigned int code)
     unsigned int mantissa = code & 0x07u;
     float value;
     if ((code & 0x7fu) == 0u) return sign ? -0.0f : 0.0f;
+    if ((code & 0x7fu) == 0x7fu) return __uint_as_float(0x7fc00000u);
     value = exponent == 0u
         ? ldexpf((float)mantissa / 8.0f, -6)
         : ldexpf(1.0f + (float)mantissa / 8.0f, (int)exponent - 7);
-    if (value > 448.0f) value = 448.0f;
     return sign ? -value : value;
 }
 
@@ -903,18 +959,22 @@ static __device__ float deepseek_fp8_decode(unsigned int code)
  * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static __device__ unsigned int deepseek_fp8_encode(float value)
 {
+    float magnitude = fabsf(value);
     float best_error = INFINITY;
     unsigned int best = 0u;
-    if (value > 448.0f) value = 448.0f;
-    if (value < -448.0f) value = -448.0f;
-    for (unsigned int code = 0u; code < 256u; ++code) {
-        float error = fabsf(deepseek_fp8_decode(code) - value);
-        if (error < best_error) {
+    int negative = signbit(value);
+
+    if (!isfinite(value)) return negative ? 0xffu : 0x7fu;
+    if (magnitude > 448.0f) magnitude = 448.0f;
+    for (unsigned int code = 0u; code < 0x7fu; ++code) {
+        float error = fabsf(deepseek_fp8_decode(code) - magnitude);
+        if (error < best_error ||
+            (error == best_error && !(code & 1u) && (best & 1u))) {
             best_error = error;
             best = code;
         }
     }
-    return best;
+    return negative ? best | 0x80u : best;
 }
 
 /* Purpose: Decode deepseek fp4 decode according to its pinned numeric representation.
@@ -937,21 +997,55 @@ static __device__ float deepseek_fp4_decode(unsigned int code)
  * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
 static __device__ unsigned int deepseek_fp4_encode(float value)
 {
-    const float threshold[7] = {0.25f, 0.75f, 1.25f, 1.75f,
-                                2.5f, 3.5f, 5.0f};
+    const float table[8] = {0.0f, 0.5f, 1.0f, 1.5f,
+                            2.0f, 3.0f, 4.0f, 6.0f};
     float magnitude = fabsf(value);
-    unsigned int code = 0u;
-    for (unsigned int i = 0u; i < 7u; ++i)
-        if (magnitude > threshold[i]) code++;
-    if (code && signbit(value)) code |= 8u;
-    return code;
+    float best_error;
+    unsigned int best = 0u;
+
+    if (isnan(value)) return signbit(value) ? 8u : 0u;
+    if (magnitude > 6.0f) magnitude = 6.0f;
+    best_error = magnitude;
+    for (unsigned int code = 1u; code < 8u; ++code) {
+        float error = fabsf(magnitude - table[code]);
+        if (error < best_error ||
+            (error == best_error && !(code & 1u) && (best & 1u))) {
+            best_error = error;
+            best = code;
+        }
+    }
+    return signbit(value) ? best | 8u : best;
+}
+
+/* Purpose: Encode one positive power-of-two activation scale as UE8M0.
+ * Inputs: One finite positive device scalar selected by the activation block.
+ * Effects: Returns only the canonical scale code; mutates no device state.
+ * Failure: Returns the reserved NaN code for non-positive or non-finite input.
+ * Boundary: Numeric codec only; does not select activation or model policy. */
+static __device__ unsigned int deepseek_e8m0_encode(float value)
+{
+    int exponent;
+    float fraction;
+
+    if (!isfinite(value) || value <= 0.0f) return 0xffu;
+    fraction = frexpf(value, &exponent);
+    if (fraction > 0.5f) exponent++;
+    exponent += 126;
+    if (exponent < 0) return 0u;
+    if (exponent > 254) return 254u;
+    return (unsigned int)exponent;
 }
 
 /* Purpose: Implement the canonical deepseek power two ceil mechanism owned by the CUDA backend boundary. */
 static __device__ float deepseek_power_two_ceil(float value)
 {
+    int exponent;
+    float fraction;
+
     if (!isfinite(value) || value <= 0.0f) return 0.0f;
-    return exp2f(ceilf(log2f(value)));
+    fraction = frexpf(value, &exponent);
+    if (fraction > 0.5f) exponent++;
+    return ldexpf(1.0f, exponent - 1);
 }
 
 /* Executes Hadamard plus FP8/FP4 UE8M0 fake quantization entirely on device.
@@ -971,9 +1065,14 @@ extern "C" __global__ void yvex_deepseek_activation(
     int *status)
 {
     unsigned long long vector_index = (unsigned long long)blockIdx.x;
-    if (threadIdx.x != 0u || !values || !status || vector_index >= vector_count ||
-        !vector_width || !block_width || vector_width % block_width ||
-        *status != 0) return;
+    if (!status) return;
+    if (*status != 0 || threadIdx.x != 0u || vector_index >= vector_count)
+        return;
+    if (!values || !vector_count || !vector_width || !block_width ||
+        vector_width % block_width || (quantization != 1u && quantization != 2u)) {
+        atomicCAS(status, 0, 2);
+        return;
+    }
     float *vector = values + vector_index * vector_width;
     if (hadamard) {
         if ((vector_width & (vector_width - 1ull)) != 0ull ||
@@ -1010,6 +1109,8 @@ extern "C" __global__ void yvex_deepseek_activation(
         if (quantization == 2u && amax < minimum) amax = minimum;
         float scale = deepseek_power_two_ceil(
             amax / (quantization == 1u ? 448.0f : 6.0f));
+        unsigned int scale_code = deepseek_e8m0_encode(scale);
+        scale = e8m0_bits_to_float(scale_code);
         if (!isfinite(scale) || scale <= 0.0f) {
             atomicCAS(status, 0, 1);
             return;
@@ -1019,13 +1120,13 @@ extern "C" __global__ void yvex_deepseek_activation(
             if (quantization == 1u) {
                 if (normalized > 448.0f) normalized = 448.0f;
                 if (normalized < -448.0f) normalized = -448.0f;
-                vector[offset + i] =
-                    deepseek_fp8_decode(
-                        deepseek_fp8_encode(normalized)) * scale;
+                vector[offset + i] = float_to_bf16_rne(
+                    deepseek_fp8_decode(deepseek_fp8_encode(normalized)) *
+                    scale);
             } else if (quantization == 2u) {
-                vector[offset + i] =
-                    deepseek_fp4_decode(
-                        deepseek_fp4_encode(normalized)) * scale;
+                vector[offset + i] = float_to_bf16_rne(
+                    deepseek_fp4_decode(deepseek_fp4_encode(normalized)) *
+                    scale);
             } else {
                 atomicCAS(status, 0, 2);
                 return;
@@ -1059,12 +1160,27 @@ extern "C" __global__ void yvex_deepseek_rolling(
     int *status)
 {
     unsigned int thread = threadIdx.x;
-    unsigned long long extent = state_width * state_slots;
-    unsigned long long insert_slot = overlap ? ratio + cursor : cursor;
-    if (blockIdx.x != 0u || !before_kv || !before_score || !token_kv ||
-        !token_score || !ape || !after_kv || !after_score || !compressed ||
-        !status || !ratio || !head_dim || !state_width || !state_slots ||
-        cursor >= ratio || *status != 0) return;
+    unsigned long long extent;
+    unsigned long long insert_slot;
+    if (!status) return;
+    if (*status != 0 || blockIdx.x != 0u) return;
+    if (!before_kv || !before_score || !token_kv || !token_score || !ape ||
+        !after_kv || !after_score || !compressed || !ratio || !head_dim ||
+        !state_width || !state_slots || cursor >= ratio) {
+        if (thread == 0u) atomicCAS(status, 0, 2);
+        return;
+    }
+    if (state_width > ~0ull / state_slots ||
+        (overlap && ratio > ~0ull - cursor)) {
+        if (thread == 0u) atomicCAS(status, 0, 1);
+        return;
+    }
+    extent = state_width * state_slots;
+    insert_slot = overlap ? ratio + cursor : cursor;
+    if (insert_slot >= state_slots) {
+        if (thread == 0u) atomicCAS(status, 0, 1);
+        return;
+    }
     for (unsigned long long i = (unsigned long long)thread; i < extent;
          i += (unsigned long long)blockDim.x) {
         after_kv[i] = before_kv[i];
@@ -1109,9 +1225,11 @@ extern "C" __global__ void yvex_deepseek_rolling(
                                          lane + head_dim];
                 }
             }
+            float published = (float)(value / denominator);
             if (!isfinite(denominator) || denominator <= 0.0 ||
-                !isfinite(value)) atomicCAS(status, 0, 1);
-            else compressed[lane] = (float)(value / denominator);
+                !isfinite(value) || !isfinite(published))
+                atomicCAS(status, 0, 1);
+            else compressed[lane] = float_to_bf16_rne(published);
         }
         __syncthreads();
         if (overlap) {
@@ -1154,11 +1272,20 @@ extern "C" __global__ void yvex_deepseek_topk(
     unsigned long long *valid_indexes,
     int *status)
 {
-    if (blockIdx.x != 0u || threadIdx.x != 0u || !index_query ||
-        !index_weights || !selected || !selected_positions || !selected_count ||
-        !valid_count || !scores || !valid_indexes || !status || !heads ||
-        !head_dim || !ratio || !k || *status != 0) return;
-    unsigned long long total = history_count + current_count;
+    unsigned long long total;
+    if (!status) return;
+    if (*status != 0 || blockIdx.x != 0u || threadIdx.x != 0u) return;
+    if (!index_query || !index_weights || !selected || !selected_positions ||
+        !selected_count || !valid_count || !scores || !valid_indexes || !heads ||
+        !head_dim || !ratio || !k || history_count > ~0ull - current_count ||
+        (history_count && (!history_indexer || !history_positions ||
+                           history_stride < head_dim)) ||
+        (current_count && (!current_indexer || !current_positions ||
+                           current_stride < head_dim))) {
+        atomicCAS(status, 0, 2);
+        return;
+    }
+    total = history_count + current_count;
     unsigned long long valid = 0ull;
     for (unsigned long long candidate = 0ull; candidate < total; ++candidate) {
         const float *row;
@@ -1269,8 +1396,28 @@ extern "C" __global__ void yvex_deepseek_reduce(
     extern __shared__ double partial[];
     unsigned long long head = (unsigned long long)blockIdx.x;
     unsigned int thread = threadIdx.x;
-    if (!query || !current_kv || !sinks || !out || !status ||
-        head >= query_heads || !head_dim || *status != 0) return;
+    if (!status) return;
+    if (*status != 0 || head >= query_heads) return;
+    if (!query || !current_kv || !sinks || !out || !query_heads || !head_dim ||
+        !sliding_window || token_position == ~0ull || attention_class > 2u ||
+        history_local_count == ~0ull ||
+        history_compressed_count > ~0ull - current_compressed_count ||
+        current_kv_stride < head_dim ||
+        (history_local_count && (!history_local || !history_local_positions ||
+                                 history_local_stride < head_dim)) ||
+        (history_compressed_count &&
+         (!history_compressed || !history_compressed_positions ||
+          history_compressed_stride < head_dim)) ||
+        (current_compressed_count &&
+         (!current_compressed || !current_compressed_positions ||
+          current_compressed_stride < head_dim)) ||
+        (attention_class == 1u && (!selected || !selected_count_ptr)) ||
+        (attention_class == 1u && ratio != 4ull) ||
+        (attention_class == 2u && ratio != 128ull) ||
+        (attention_class == 0u && ratio != 0ull)) {
+        if (thread == 0u) atomicCAS(status, 0, 2);
+        return;
+    }
     const float *q = query + head * head_dim;
     double maximum = (double)sinks[head];
     unsigned long long local_total = history_local_count + 1ull;
@@ -1392,7 +1539,10 @@ extern "C" __global__ void yvex_deepseek_reduce(
         return;
     }
     for (unsigned long long lane = (unsigned long long)thread;
-         lane < head_dim; lane += (unsigned long long)blockDim.x)
-        out[head * head_dim + lane] =
-            (float)((double)out[head * head_dim + lane] / final_denominator);
+         lane < head_dim; lane += (unsigned long long)blockDim.x) {
+        float published = (float)((double)out[head * head_dim + lane] /
+                                  final_denominator);
+        if (!isfinite(published)) atomicCAS(status, 0, 1);
+        else out[head * head_dim + lane] = float_to_bf16_rne(published);
+    }
 }

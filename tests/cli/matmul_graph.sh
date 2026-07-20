@@ -21,7 +21,7 @@ fi
 contains "$OUT_DIR/matmul.out" "graph_integrity_guard: refused"
 contains "$OUT_DIR/matmul.out" "graph_execution_phase: admission"
 contains "$OUT_DIR/matmul.out" "execution_ready: false"
-contains "$OUT_DIR/matmul.out" "attention_execution_supported: false"
+contains "$OUT_DIR/matmul.out" "attention_execution_supported: true"
 contains "$OUT_DIR/matmul.out" "generation_ready: false"
 contains "$OUT_DIR/matmul.out" "reason: production-fixtures-are-test-owned"
 contains "$OUT_DIR/matmul.out" "status: graph-proof-retired"

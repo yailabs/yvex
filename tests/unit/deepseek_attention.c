@@ -29,6 +29,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+extern int yvex_test_attention_reference_codec_selftest(void);
+
 static yvex_attention_layer_plan layer_fixture(
     unsigned long long layer_index,
     yvex_attention_class attention_class,
@@ -50,11 +52,130 @@ static yvex_attention_layer_plan layer_fixture(
     layer.output_groups = 8ull;
     layer.hidden_dimension = 4096ull;
     if (attention_class == YVEX_ATTENTION_CLASS_CSA) {
+        layer.compressor_required = 1;
+        layer.indexer_required = 1;
         layer.indexer_heads = 64ull;
         layer.indexer_head_dimension = 128ull;
         layer.indexer_topk = 512ull;
+        layer.sparse_topk.required = 1;
+        layer.sparse_topk.k = 512ull;
+    } else if (attention_class == YVEX_ATTENTION_CLASS_HCA) {
+        layer.compressor_required = 1;
     }
     return layer;
+}
+
+typedef struct {
+    unsigned int samples;
+    unsigned int cancel_at;
+} cancellation_fixture;
+
+/* Purpose: request cancellation at one deterministic cooperative sample. */
+static int cancellation_requested(void *opaque)
+{
+    cancellation_fixture *fixture = (cancellation_fixture *)opaque;
+    fixture->samples++;
+    return fixture->samples >= fixture->cancel_at;
+}
+
+static int test_cpu_resource_guards(void)
+{
+    yvex_attention_layer_plan layer =
+        layer_fixture(0ull, YVEX_ATTENTION_CLASS_SWA, 0ull);
+    yvex_attention_history_view history;
+    yvex_attention_execution_trace trace;
+    yvex_attention_scratch_budget scratch;
+    yvex_materialized_tensor_binding binding;
+    yvex_attention_cpu_result result;
+    yvex_attention_failure failure;
+    yvex_error err;
+    unsigned long long row_bytes = 0ull;
+    unsigned long long row_count = 0ull;
+    unsigned long long trace_bytes = 0ull;
+    float input[4096] = {0.0f};
+    size_t reserved = 0u;
+    int rc;
+
+    memset(&scratch, 0, sizeof(scratch));
+    scratch.limit_bytes = 31ull;
+    YVEX_TEST_ASSERT(
+        !yvex_attention_scratch_reserve(&scratch, 8ull, sizeof(float),
+                                        &reserved) &&
+            scratch.live_bytes == 0u,
+        "scratch budget refuses one byte beyond the limit atomically");
+    scratch.limit_bytes = 32ull;
+    YVEX_TEST_ASSERT(
+        yvex_attention_scratch_reserve(&scratch, 8ull, sizeof(float),
+                                       &reserved) &&
+            reserved == 32u && scratch.live_bytes == 32u &&
+            scratch.peak_bytes == 32u,
+        "scratch budget admits the exact limit");
+    yvex_attention_scratch_release(&scratch, reserved);
+    YVEX_TEST_ASSERT(scratch.live_bytes == 0u && scratch.peak_bytes == 32u,
+                     "scratch release preserves peak accounting");
+
+    memset(&history, 0, sizeof(history));
+    rc = yvex_attention_cuda_trace_allocate(
+        &trace, &layer, &history, 0ull, input, ULLONG_MAX, &trace_bytes,
+        &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && trace_bytes != 0ull,
+                     "CUDA trace reports its complete owned bytes");
+    yvex_graph_lower_deepseek_v4()->publication_release(&trace);
+    yvex_graph_lower_deepseek_v4()->publication_release(&trace);
+    YVEX_TEST_ASSERT(!trace.owned && !trace.complete && !trace.output,
+                     "attention publication release is idempotent");
+    rc = yvex_attention_cuda_trace_allocate(
+        &trace, &layer, &history, 0ull, input, trace_bytes - 1ull,
+        &row_bytes, &failure, &err);
+    YVEX_TEST_ASSERT(
+        rc == YVEX_ERR_BOUNDS && row_bytes == 0ull && !trace.owned &&
+            failure.code == YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH,
+        "CUDA trace refuses budget minus one before allocation");
+    rc = yvex_attention_cuda_trace_allocate(
+        &trace, &layer, &history, 0ull, input, trace_bytes, &row_bytes,
+        &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && row_bytes == trace_bytes && trace.owned,
+                     "CUDA trace admits its exact host budget");
+    yvex_graph_lower_deepseek_v4()->publication_release(&trace);
+
+    memset(&binding, 0, sizeof(binding));
+    binding.role = YVEX_TENSOR_ROLE_ATTENTION_Q_A;
+    binding.layer_index = 1ull;
+    binding.row_width = 32ull;
+    binding.row_count = 2ull;
+    binding.block_size = 32ull;
+    binding.bytes_per_block = 34ull;
+    binding.encoded_bytes = 68ull;
+    yvex_error_clear(&err);
+    rc = yvex_attention_row_geometry(
+        &binding, &row_bytes, &row_count, &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && row_bytes == 34ull && row_count == 2ull,
+                     "exact encoded row geometry is admitted");
+    binding.encoded_bytes++;
+    rc = yvex_attention_row_geometry(
+        &binding, &row_bytes, &row_count, &failure, &err);
+    YVEX_TEST_ASSERT(
+        rc == YVEX_ERR_BOUNDS &&
+            failure.code == YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION,
+        "trailing encoded tensor bytes refuse");
+    binding.row_width = 1ull;
+    binding.row_count = ULLONG_MAX;
+    binding.block_size = 1ull;
+    binding.bytes_per_block = 2ull;
+    binding.encoded_bytes = 0ull;
+    rc = yvex_attention_row_geometry(
+        &binding, &row_bytes, &row_count, &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS,
+                     "encoded tensor byte multiplication overflow refuses");
+
+    memset(&result, 0, sizeof(result));
+    result.payload_bytes_read = ULLONG_MAX;
+    rc = yvex_attention_payload_account(
+        &result, 1ull, NULL, &failure, &err);
+    YVEX_TEST_ASSERT(
+        rc == YVEX_ERR_BOUNDS && result.payload_bytes_read == ULLONG_MAX,
+        "payload evidence overflow refuses without counter mutation");
+    return 0;
 }
 
 static void fill_vector(float *values,
@@ -120,6 +241,9 @@ static void init_rolling_view(
     state->state_width = width;
     state->state_slots = slots;
     state->cursor = next_token_position % ratio;
+    state->current_fill = state->cursor;
+    state->previous_fill = overlap && next_token_position >= ratio
+        ? ratio : 0ull;
     state->kv_state_stride = width;
     state->score_state_stride = width;
     state->kv_state_extent = slots * width;
@@ -128,6 +252,22 @@ static void init_rolling_view(
     state->score_state = score;
     state->overlap = overlap;
     state->rotated = kind == YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER;
+    for (i = 0ull; i < state->previous_fill; ++i) {
+        unsigned long long lane;
+        for (lane = 0ull; lane < head_dim; ++lane) {
+            kv[i * width + lane] = 0.0f;
+            score[i * width + lane] = 0.0f;
+        }
+    }
+    for (i = 0ull; i < state->current_fill; ++i) {
+        unsigned long long lane;
+        unsigned long long base = overlap ? ratio + i : i;
+        unsigned long long offset = overlap ? head_dim : 0ull;
+        for (lane = 0ull; lane < head_dim; ++lane) {
+            kv[base * width + offset + lane] = 0.0f;
+            score[base * width + offset + lane] = 0.0f;
+        }
+    }
 }
 
 static void init_rolling_output(
@@ -203,28 +343,103 @@ static int seal_zero_component(
     return 1;
 }
 
+static void memory_sink_options_reset(
+    yvex_attention_memory_sink_options *options)
+{
+    memset(options, 0, sizeof(*options));
+    options->fail_acquire_kind = YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT;
+    options->fail_seal_kind = YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT;
+}
+
 static int compare_float_ranges(const float *left,
                                 const float *right,
                                 unsigned long long count,
                                 const char *label);
 
-static int test_execution_gate_is_scoped_and_reopened(void)
+static int test_execution_gate_is_admitted(void)
 {
     const char *reason = NULL;
 
-    YVEX_TEST_ASSERT(yvex_attention_execute_supported(&reason) == 0,
-                     "attention executor admission is reopened");
-    YVEX_TEST_ASSERT_STREQ(reason,
-                     "attention-execution-incomplete",
-                     "reopened attention has a stable refusal reason");
+    YVEX_TEST_ASSERT(yvex_attention_execute_supported(&reason) == 1,
+                     "attention executor is admitted");
+    YVEX_TEST_ASSERT(reason == NULL,
+                     "admitted attention has no refusal reason");
     YVEX_TEST_ASSERT_STREQ(
-        yvex_attention_status_name(
+        yvex_test_attention_status_name(
             YVEX_DEEPSEEK_ATTENTION_STATUS_EXECUTION_READY),
         "execution-ready", "execution-ready status name");
     YVEX_TEST_ASSERT_STREQ(
-        yvex_attention_failure_name(
+        yvex_test_attention_failure_name(
             YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY),
         "history", "history failure name");
+    return 0;
+}
+
+/* Purpose: prove exact class geometry and borrowed cancellation refuse before execution. */
+static int test_execution_geometry_and_cancellation(void)
+{
+    yvex_attention_layer_plan swa =
+        layer_fixture(0ull, YVEX_ATTENTION_CLASS_SWA, 0ull);
+    yvex_attention_layer_plan csa =
+        layer_fixture(2ull, YVEX_ATTENTION_CLASS_CSA, 4ull);
+    yvex_attention_layer_plan hca =
+        layer_fixture(3ull, YVEX_ATTENTION_CLASS_HCA, 128ull);
+    cancellation_fixture fixture = {0u, 2u};
+    yvex_attention_cancellation cancellation = {
+        cancellation_requested, &fixture
+    };
+    yvex_attention_cancellation malformed = {NULL, NULL};
+    yvex_attention_failure failure;
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(
+        yvex_attention_class_geometry_validate(
+            &swa, 4ull, 128ull, &failure, &err) == YVEX_OK &&
+        yvex_attention_class_geometry_validate(
+            &csa, 4ull, 128ull, &failure, &err) == YVEX_OK &&
+        yvex_attention_class_geometry_validate(
+            &hca, 4ull, 128ull, &failure, &err) == YVEX_OK,
+        "SWA, CSA, and ratio-128 HCA geometry admit exactly");
+    hca.compression_ratio = 127ull;
+    YVEX_TEST_ASSERT(
+        yvex_attention_class_geometry_validate(
+            &hca, 4ull, 128ull, &failure, &err) == YVEX_ERR_FORMAT &&
+        failure.code == YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION,
+        "HCA ratio other than 128 refuses");
+    csa.sparse_topk.k = 0ull;
+    YVEX_TEST_ASSERT(
+        yvex_attention_class_geometry_validate(
+            &csa, 4ull, 128ull, &failure, &err) == YVEX_ERR_FORMAT,
+        "CSA without its exact sparse selection contract refuses");
+    swa.compressor_required = 1;
+    YVEX_TEST_ASSERT(
+        yvex_attention_class_geometry_validate(
+            &swa, 4ull, 128ull, &failure, &err) == YVEX_ERR_FORMAT,
+        "SWA compressor state refuses");
+    YVEX_TEST_ASSERT(
+        yvex_attention_cancel_check(
+            &malformed, 0ull, "malformed cancellation", &failure, &err) ==
+            YVEX_ERR_INVALID_ARG,
+        "cancellation without predicate refuses");
+    YVEX_TEST_ASSERT(
+        yvex_attention_cancel_check(
+            &cancellation, 0ull, "first safe point", &failure, &err) ==
+            YVEX_OK,
+        "clear cancellation continues at first safe point");
+    YVEX_TEST_ASSERT(
+        yvex_attention_cancel_check(
+            &cancellation, 0ull, "second safe point", &failure, &err) ==
+            YVEX_ERR_CANCELLED &&
+        failure.code == YVEX_DEEPSEEK_ATTENTION_FAILURE_CANCELLED &&
+        strcmp(yvex_test_attention_failure_name(failure.code), "cancelled") == 0,
+        "requested cancellation returns its typed result");
+    YVEX_TEST_ASSERT_STREQ(
+        yvex_test_attention_failure_name(YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH),
+        "scratch", "scratch budget has a distinct typed result");
+    YVEX_TEST_ASSERT_STREQ(
+        yvex_test_attention_failure_name(YVEX_DEEPSEEK_ATTENTION_FAILURE_CLEANUP),
+        "cleanup", "cleanup failure has a distinct typed result");
     return 0;
 }
 
@@ -281,11 +496,11 @@ static int test_history_contracts(void)
     for (i = 0ull; i < 128ull; ++i) local_positions[i] = i;
     memset(&history, 0, sizeof(history));
     history.immutable = 1;
-    history.local_tail_count = 128ull;
+    history.local_tail_count = 127ull;
     history.token_count = 128ull;
-    history.local_kv = local_kv;
+    history.local_kv = local_kv + 512ull;
     history.local_kv_stride = 512ull;
-    history.local_positions = local_positions;
+    history.local_positions = &local_positions[1];
     yvex_error_clear(&err);
     rc = yvex_graph_lower_deepseek_v4()->history_validate(
         &swa, &history, &failure, &err);
@@ -296,7 +511,7 @@ static int test_history_contracts(void)
         &swa, &history, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT,
                      "history count without raw KV storage refuses");
-    history.local_kv = local_kv;
+    history.local_kv = local_kv + 512ull;
 
     history.local_tail_count = 129ull;
     rc = yvex_graph_lower_deepseek_v4()->history_validate(
@@ -306,7 +521,7 @@ static int test_history_contracts(void)
     YVEX_TEST_ASSERT(failure.code == YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
                      "history bounds failure code");
 
-    history.local_tail_count = 1ull;
+    history.local_tail_count = 127ull;
     history.compressed_entry_count = 1ull;
     history.indexer_entry_count = 0ull;
     history.compressed_kv = compressed_kv;
@@ -330,7 +545,9 @@ static int test_history_contracts(void)
     history.compressed_entry_count = 3ull;
     history.indexer_entry_count = 3ull;
     history.token_count = 12ull;
-    history.local_positions = &local_positions[11];
+    history.local_tail_count = 12ull;
+    history.local_kv = local_kv;
+    history.local_positions = local_positions;
     init_rolling_view(&history.main_rolling_state,
                       YVEX_DEEPSEEK_ATTENTION_ROLLING_MAIN, &csa, 12ull,
                       main_state_kv, main_state_score);
@@ -341,6 +558,47 @@ static int test_history_contracts(void)
         &csa, &history, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK,
                      "CSA accepts compressed and indexer history");
+    history.local_positions = &local_positions[1];
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
+        &csa, &history, &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT,
+                     "history missing the local suffix head refuses");
+    history.local_positions = local_positions;
+    history.compressed_entry_count = 2ull;
+    history.indexer_entry_count = 2ull;
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
+        &csa, &history, &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT,
+                     "history missing the latest compressed group refuses");
+    history.compressed_entry_count = 3ull;
+    history.indexer_entry_count = 3ull;
+    history.main_rolling_state.previous_fill = 3ull;
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
+        &csa, &history, &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE,
+                     "partially filled prior rolling group refuses");
+    history.main_rolling_state.previous_fill = 4ull;
+    history.main_rolling_state.current_fill = 1ull;
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
+        &csa, &history, &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE,
+                     "stale rolling current fill refuses");
+    history.main_rolling_state.current_fill = 0ull;
+    history.main_rolling_state.cursor = 1ull;
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
+        &csa, &history, &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE,
+                     "stale rolling cursor refuses");
+    history.main_rolling_state.cursor = 0ull;
+    history.main_rolling_state.previous_fill = 0ull;
+    history.main_rolling_state.next_token_position = 0ull;
+    main_state_score[0] = 0.0f;
+    rc = yvex_graph_lower_deepseek_v4()->history_validate(
+        &csa, &history, &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT,
+                     "active first overlap emission refuses finite inactive history");
+    main_state_score[0] = -INFINITY;
+    history.main_rolling_state.cursor = 0ull;
     history.main_rolling_state.next_token_position = 1ull;
     rc = yvex_graph_lower_deepseek_v4()->history_validate(
         &csa, &history, &failure, &err);
@@ -349,41 +607,56 @@ static int test_history_contracts(void)
     return 0;
 }
 
-static int test_state_delta_lifecycle(void)
+/* Purpose: prove CSA candidate/ranking allocations obey one exact shared
+ * scratch budget and unwind their reservations on refusal and success. */
+static int test_csa_selection_scratch_budget(void)
 {
-    yvex_attention_layer_plan csa =
+    yvex_attention_layer_plan layer =
         layer_fixture(2ull, YVEX_ATTENTION_CLASS_CSA, 4ull);
-    yvex_attention_layer_plan hca =
-        layer_fixture(3ull, YVEX_ATTENTION_CLASS_HCA, 128ull);
-    yvex_attention_state_delta delta;
+    yvex_attention_history_view history;
+    yvex_attention_scratch_budget scratch;
     yvex_attention_failure failure;
     yvex_error err;
+    float key[2] = {1.0f, 0.0f};
+    float query[2] = {1.0f, 0.0f};
+    float weights[1] = {1.0f};
+    unsigned long long position = 0ull;
+    unsigned long long selected = ULLONG_MAX;
+    unsigned long long selected_count = 0ull;
+    unsigned long long valid_count = 0ull;
     int rc;
 
+    memset(&history, 0, sizeof(history));
+    layer.indexer_heads = 1ull;
+    layer.indexer_head_dimension = 2ull;
+    layer.sparse_topk.k = 1ull;
+    history.indexer_entry_count = 1ull;
+    history.indexer_kv = key;
+    history.indexer_kv_stride = 2ull;
+    history.indexer_positions = &position;
+    memset(&scratch, 0, sizeof(scratch));
+    scratch.limit_bytes = 27ull;
     yvex_error_clear(&err);
-    rc = yvex_attention_state_delta_begin(
-        &csa, 3ull, &delta, &failure, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "CSA delta begins");
-    YVEX_TEST_ASSERT(delta.raw_kv_entries == 1ull &&
-                     delta.compressed_kv_entries == 1ull &&
-                     delta.indexer_entries == 1ull,
-                     "CSA compression boundary publishes indexer delta");
-    rc = yvex_attention_state_delta_commit(&delta, &failure, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK && delta.published,
-                     "CSA delta commits");
-    rc = yvex_attention_state_delta_commit(&delta, &failure, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE,
-                     "committed delta cannot commit twice");
-
-    rc = yvex_attention_state_delta_begin(
-        &hca, 127ull, &delta, &failure, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "HCA delta begins");
-    YVEX_TEST_ASSERT(delta.compressed_kv_entries == 1ull &&
-                     delta.indexer_entries == 0ull,
-                     "HCA compression has no CSA indexer delta");
-    rc = yvex_attention_state_delta_abort(&delta, &failure, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK && !delta.published,
-                     "aborted delta publishes nothing");
+    rc = yvex_attention_csa_select(
+        &layer, &history, NULL, 0ull, 0ull, NULL, query, weights, 4ull,
+        &selected, &selected_count, &valid_count, &scratch, &failure, &err);
+    YVEX_TEST_ASSERT(
+        rc == YVEX_ERR_BOUNDS &&
+            failure.code == YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH &&
+            scratch.live_bytes == 0u && scratch.peak_bytes == 20u &&
+            selected_count == 0ull,
+        "CSA ranking refuses budget minus one and releases base scratch");
+    memset(&scratch, 0, sizeof(scratch));
+    scratch.limit_bytes = 28ull;
+    selected = ULLONG_MAX;
+    rc = yvex_attention_csa_select(
+        &layer, &history, NULL, 0ull, 0ull, NULL, query, weights, 4ull,
+        &selected, &selected_count, &valid_count, &scratch, &failure, &err);
+    YVEX_TEST_ASSERT(
+        rc == YVEX_OK && selected == 0ull && selected_count == 1ull &&
+            valid_count == 1ull && scratch.live_bytes == 0u &&
+            scratch.peak_bytes == 28u,
+        "CSA ranking admits the exact complete scratch budget");
     return 0;
 }
 
@@ -404,6 +677,12 @@ static int test_transactional_memory_sink(void)
     char second_identity[YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP];
     yvex_attention_failure failure;
     yvex_error err;
+    cancellation_fixture cancel_fixture = {0u, 1u};
+    yvex_attention_cancellation cancellation = {
+        cancellation_requested, &cancel_fixture
+    };
+    float local_kv[512] = {0.0f};
+    unsigned long long local_position = 0ull;
     float *copy = NULL;
     unsigned long long i;
     int rc;
@@ -435,10 +714,18 @@ static int test_transactional_memory_sink(void)
     YVEX_TEST_ASSERT(copy != NULL, "test output copy allocation");
     for (i = 0ull; i < output.expected_elements; ++i)
         copy[i] = (float)(i % 17ull) / 17.0f;
-    rc = yvex_attention_state_transaction_write(
+    YVEX_TEST_ASSERT(
+        output.byte_extent == output.expected_elements * sizeof(*copy),
+        "attention output span exposes its exact byte extent");
+    memcpy(output.data, copy, (size_t)output.byte_extent);
+    rc = yvex_attention_state_transaction_seal(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT,
-        copy, (size_t)output.byte_extent, &failure, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "attention output component writes");
+        output.expected_elements - 1ull, &failure, &err);
+    YVEX_TEST_ASSERT(
+        rc == YVEX_ERR_BOUNDS &&
+            !transaction.components[
+                YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT].sealed,
+        "attention output refuses a short direct write before sealing");
     rc = yvex_attention_state_transaction_seal(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT,
         output.expected_elements, &failure, &err);
@@ -481,6 +768,10 @@ static int test_transactional_memory_sink(void)
         "commit releases all transaction staging");
 
     history.token_count = 1ull;
+    history.local_tail_count = 1ull;
+    history.local_kv = local_kv;
+    history.local_kv_stride = 512ull;
+    history.local_positions = &local_position;
     rc = yvex_attention_state_transaction_begin(
         &sink, &swa, &history, 1ull, 1ull, &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "second transaction begins");
@@ -489,6 +780,12 @@ static int test_transactional_memory_sink(void)
         &output, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "abort transaction output acquired");
     ((float *)output.data)[0] = 99.0f;
+    rc = yvex_attention_cancel_check(
+        &cancellation, swa.layer_index, "cancel before commit", &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_CANCELLED &&
+                         failure.code ==
+                             YVEX_DEEPSEEK_ATTENTION_FAILURE_CANCELLED,
+                     "transaction observes cancellation before commit");
     rc = yvex_attention_state_transaction_abort(
         &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "aborted transaction succeeds");
@@ -505,13 +802,16 @@ static int test_transactional_memory_sink(void)
                      "abort preserves previous committed identity");
     yvex_attention_memory_sink_release(&sink);
 
-    yvex_attention_memory_sink_options_default(&options);
+    memory_sink_options_reset(&options);
     options.fail_acquire_kind =
         YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV;
     rc = yvex_attention_memory_sink_init(
         &sink, &options, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "failure-injection sink initializes");
     history.token_count = 0ull;
+    history.local_tail_count = 0ull;
+    history.local_kv = NULL;
+    history.local_positions = NULL;
     rc = yvex_attention_state_transaction_begin(
         &sink, &swa, &history, 0ull, 1ull, &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "failure-injection transaction begins");
@@ -526,7 +826,7 @@ static int test_transactional_memory_sink(void)
                      "transaction can abort after acquire failure");
     yvex_attention_memory_sink_release(&sink);
 
-    yvex_attention_memory_sink_options_default(&options);
+    memory_sink_options_reset(&options);
     options.fail_commit = 1;
     rc = yvex_attention_memory_sink_init(
         &sink, &options, &failure, &err);
@@ -579,11 +879,10 @@ static int test_transactional_memory_sink(void)
         &output, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK,
                      "determinism output span acquired");
-    rc = yvex_attention_state_transaction_write(
-        &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT,
-        copy, (size_t)output.byte_extent, &failure, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK,
-                     "determinism output component writes");
+    YVEX_TEST_ASSERT(
+        output.byte_extent == output.expected_elements * sizeof(*copy),
+        "determinism span preserves its exact byte extent");
+    memcpy(output.data, copy, (size_t)output.byte_extent);
     rc = yvex_attention_state_transaction_seal(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT,
         output.expected_elements, &failure, &err);
@@ -642,6 +941,11 @@ static int run_rolling_sequence(
     static float state_a_score[128ull * 1024ull];
     static float index_a_kv[8ull * 256ull];
     static float index_a_score[8ull * 256ull];
+    static float history_local_kv[127ull * 512ull];
+    static float history_compressed_kv[32ull * 512ull];
+    static float history_indexer_kv[32ull * 128ull];
+    unsigned long long history_local_positions[127ull];
+    unsigned long long history_compressed_positions[32ull];
     float token_kv[1024ull];
     float token_score[1024ull];
     float ape_row[1024ull];
@@ -710,6 +1014,37 @@ static int run_rolling_sequence(
             memset(&history, 0, sizeof(history));
             history.immutable = 1;
             history.token_count = token;
+            history.local_tail_count = token < 127ull ? token : 127ull;
+            history.local_kv = history_local_kv;
+            history.local_kv_stride = layer->head_dimension;
+            history.local_positions = history_local_positions;
+            {
+                unsigned long long position;
+                unsigned long long start =
+                    token - history.local_tail_count;
+                for (position = 0ull;
+                     position < history.local_tail_count; ++position)
+                    history_local_positions[position] = start + position;
+            }
+            history.compressed_entry_count =
+                token / layer->compression_ratio;
+            history.compressed_kv = history_compressed_kv;
+            history.compressed_kv_stride = layer->head_dimension;
+            history.compressed_positions = history_compressed_positions;
+            {
+                unsigned long long group;
+                for (group = 0ull;
+                     group < history.compressed_entry_count; ++group)
+                    history_compressed_positions[group] =
+                        group * layer->compression_ratio;
+            }
+            if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
+                history.indexer_entry_count =
+                    history.compressed_entry_count;
+                history.indexer_kv = history_indexer_kv;
+                history.indexer_kv_stride = layer->indexer_head_dimension;
+                history.indexer_positions = history_compressed_positions;
+            }
             history.main_rolling_state = before;
             if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA)
                 history.indexer_rolling_state = index_before;
@@ -950,18 +1285,24 @@ static int test_runtime_hadamard_policy(void)
     float reference[3];
     float production[3];
     yvex_attention_failure failure;
+    yvex_attention_scratch_budget scratch;
     yvex_error err;
     unsigned long long i;
 
     yvex_error_clear(&err);
+    memset(&scratch, 0, sizeof(scratch));
+    scratch.limit_bytes = 16ull;
     YVEX_TEST_ASSERT(
         yvex_test_attention_reference_hadamard(
             input, 3ull, 0.5f, 1, reference),
         "Hadamard reference accepts finite non-power-of-two input");
     YVEX_TEST_ASSERT(
         yvex_attention_hadamard_cpu(
-            input, 3ull, 0.5f, 1, production, &failure, &err) == YVEX_OK,
+            input, 3ull, 0.5f, 1, production, &scratch, &failure, &err) ==
+            YVEX_OK,
         "Hadamard CPU accepts finite non-power-of-two input");
+    YVEX_TEST_ASSERT(scratch.live_bytes == 0u && scratch.peak_bytes == 16u,
+                     "Hadamard CPU accounts padded scratch at exact limit");
     for (i = 0ull; i < 3ull; ++i) {
         char label[32];
         snprintf(label, sizeof(label), "hadamard-lane-%llu", i);
@@ -979,11 +1320,72 @@ static int test_runtime_hadamard_policy(void)
         const float bad[] = {1.0f, NAN};
         YVEX_TEST_ASSERT(
             yvex_attention_hadamard_cpu(
-                bad, 2ull, 1.0f, 1, production, &failure, &err) != YVEX_OK,
+                bad, 2ull, 1.0f, 1, production, &scratch, &failure,
+                &err) != YVEX_OK,
             "Hadamard CPU refuses non-finite input");
         YVEX_TEST_ASSERT(production[0] == 0.0f,
                          "Hadamard failure does not publish output");
     }
+    memset(&scratch, 0, sizeof(scratch));
+    scratch.limit_bytes = 15ull;
+    YVEX_TEST_ASSERT(
+        yvex_attention_hadamard_cpu(
+            input, 3ull, 0.5f, 1, production, &scratch, &failure, &err) ==
+            YVEX_ERR_BOUNDS &&
+            failure.code == YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH &&
+            scratch.live_bytes == 0u && scratch.peak_bytes == 0u,
+        "Hadamard CPU refuses budget minus one before allocation");
+    return 0;
+}
+
+static int test_runtime_activation_scratch_budget(void)
+{
+    yvex_attention_activation_policy policy;
+    yvex_attention_scratch_budget scratch;
+    yvex_attention_failure failure;
+    yvex_error err;
+    float values[] = {1.0f, -2.0f, 0.5f, 3.0f};
+    float original[4];
+    int rc;
+
+    memset(&policy, 0, sizeof(policy));
+    policy.required = 1;
+    policy.stage = YVEX_ATTENTION_ACTIVATION_COMPRESSOR_ROTATED;
+    policy.quantization =
+        YVEX_ATTENTION_QUANT_FP4_E2M1_UE8M0_FAKE_DEQUANT;
+    policy.block_axis = YVEX_ATTENTION_AXIS_FINAL_DIMENSION;
+    policy.block_width = 2ull;
+    policy.scale_format = YVEX_ATTENTION_SCALE_UE8M0;
+    policy.scale_dtype = YVEX_NATIVE_DTYPE_F8_E8M0;
+    policy.pre_transform =
+        YVEX_ATTENTION_TRANSFORM_DAO_FHT_V1_1_0_POST2;
+    policy.tail_policy = YVEX_ATTENTION_TAIL_EXACT_OR_SHORT_FINAL_BLOCK;
+    policy.nonfinite_policy = YVEX_ATTENTION_NONFINITE_REFUSE;
+    policy.fake_quant_inplace = 1;
+    policy.zero_pad_hadamard_to_power_of_two = 1;
+    memcpy(original, values, sizeof(values));
+
+    memset(&scratch, 0, sizeof(scratch));
+    scratch.limit_bytes = 31ull;
+    rc = yvex_attention_activation_apply(
+        &policy, values, 4ull, 0ull,
+        YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_KV, &scratch, &failure, &err);
+    YVEX_TEST_ASSERT(
+        rc == YVEX_ERR_BOUNDS &&
+            failure.code == YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH &&
+            scratch.live_bytes == 0u && scratch.peak_bytes == 16u &&
+            memcmp(values, original, sizeof(values)) == 0,
+        "activation fake quant refuses budget minus one without publication");
+
+    memset(&scratch, 0, sizeof(scratch));
+    scratch.limit_bytes = 32ull;
+    rc = yvex_attention_activation_apply(
+        &policy, values, 4ull, 0ull,
+        YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_KV, &scratch, &failure, &err);
+    YVEX_TEST_ASSERT(
+        rc == YVEX_OK && scratch.live_bytes == 0u &&
+            scratch.peak_bytes == 32u,
+        "activation fake quant accounts nested Hadamard at exact limit");
     return 0;
 }
 
@@ -1008,6 +1410,17 @@ static int test_runtime_topk_policy(void)
                      selected[2] == 1ull &&
                      selected[3] == 0ull,
                      "top-k uses score desc then ordinal asc");
+    selected_count = 99ull;
+    YVEX_TEST_ASSERT(
+        yvex_attention_topk_select(
+            scores, ordinals, 6ull, 0ull, selected, &selected_count,
+            &failure, &err) == YVEX_OK && selected_count == 0ull,
+        "top-k zero selects no candidate");
+    YVEX_TEST_ASSERT(
+        yvex_attention_topk_select(
+            scores, ordinals, 6ull, 9ull, selected, &selected_count,
+            &failure, &err) == YVEX_OK && selected_count == 6ull,
+        "top-k above the available count selects every candidate");
 
     {
         const float zero_scores[] = {-0.0f, 0.0f};
@@ -1057,8 +1470,9 @@ static int test_runtime_fp4_fake_quant_policy(void)
     YVEX_TEST_ASSERT(
         yvex_attention_fp4_e2m1_encode(0.0f) == 0u &&
         yvex_attention_fp4_e2m1_encode(0.6f) == 1u &&
+        yvex_attention_fp4_e2m1_encode(1.75f) == 4u &&
         yvex_attention_fp4_e2m1_encode(-6.5f) == 15u,
-        "FP4 E2M1 code thresholds follow pinned codec");
+        "FP4 E2M1 uses the pinned codebook and ties-to-even");
     YVEX_TEST_ASSERT(
         yvex_attention_fp4_e2m1_decode(15u) == -6.0f,
         "FP4 E2M1 decode table exposes signed max value");
@@ -1070,6 +1484,10 @@ static int test_runtime_fp4_fake_quant_policy(void)
     YVEX_TEST_ASSERT(scale_code != 0u, "FP4 fake quant publishes scale");
     YVEX_TEST_ASSERT(codes[0] == 0u && dequant[0] == 0.0f,
                      "FP4 fake quant preserves exact zero");
+    YVEX_TEST_ASSERT(
+        dequant[1] == yvex_quant_bf16_decode(yvex_quant_bf16_encode(
+                          dequant[1])),
+        "FP4 fake quant publishes BF16-rounded activation values");
     YVEX_TEST_ASSERT(isfinite(dequant[5]) && dequant[5] < 0.0f,
                      "FP4 fake quant dequantizes signed values");
     {
@@ -1083,9 +1501,9 @@ static int test_runtime_fp4_fake_quant_policy(void)
                 &err) == YVEX_OK,
             "FP4 fake quant accepts all-zero block");
         YVEX_TEST_ASSERT(scale_code != 0u && zero_codes[0] == 0u &&
-                         zero_codes[1] == 0u && zero_out[0] == 0.0f &&
-                         zero_out[1] == 0.0f,
-                         "FP4 fake quant all-zero block keeps kernel min scale");
+                         zero_codes[1] == 8u && zero_out[0] == 0.0f &&
+                         zero_out[1] == 0.0f && signbit(zero_out[1]),
+                         "FP4 fake quant preserves signed zero at kernel min scale");
     }
     {
         const float bad[] = {0.0f, NAN};
@@ -1120,6 +1538,10 @@ static int test_runtime_fp8_fake_quant_policy(void)
     YVEX_TEST_ASSERT(scale_code != 0u, "FP8 fake quant publishes UE8M0 scale");
     YVEX_TEST_ASSERT(codes[0] == 0u && dequant[0] == 0.0f,
                      "FP8 fake quant preserves exact zero");
+    YVEX_TEST_ASSERT(
+        dequant[1] == yvex_quant_bf16_decode(yvex_quant_bf16_encode(
+                          dequant[1])),
+        "FP8 fake quant publishes BF16-rounded activation values");
     YVEX_TEST_ASSERT(isfinite(dequant[4]) && dequant[4] < 0.0f,
                      "FP8 fake quant clamps and dequantizes signed values");
     {
@@ -1133,9 +1555,9 @@ static int test_runtime_fp8_fake_quant_policy(void)
                 &err) == YVEX_OK,
             "FP8 fake quant accepts all-zero block");
         YVEX_TEST_ASSERT(scale_code != 0u && zero_codes[0] == 0u &&
-                         zero_codes[1] == 0u && zero_out[0] == 0.0f &&
-                         zero_out[1] == 0.0f,
-                         "FP8 fake quant zero block uses kernel min scale");
+                         zero_codes[1] == 0x80u && zero_out[0] == 0.0f &&
+                         zero_out[1] == 0.0f && signbit(zero_out[1]),
+                         "FP8 fake quant preserves signed zero at kernel min scale");
     }
     {
         const float bad[] = {0.0f, INFINITY};
@@ -1145,6 +1567,81 @@ static int test_runtime_fp8_fake_quant_policy(void)
                 YVEX_OK,
             "FP8 fake quant refuses non-finite input");
     }
+    return 0;
+}
+
+/* Purpose: prove production and independent-oracle scalar codec edge contracts. */
+static int test_runtime_activation_codec_edges(void)
+{
+    unsigned int code;
+
+    YVEX_TEST_ASSERT(yvex_quant_e8m0_decode(0u) == ldexpf(1.0f, -127) &&
+                         isnan(yvex_quant_e8m0_decode(0xffu)),
+                     "UE8M0 code zero is minimum finite and 255 is NaN");
+    for (code = 0u; code <= 0xffu; ++code) {
+        float scale = yvex_quant_e8m0_decode((unsigned char)code);
+        if (code == 0xffu)
+            YVEX_TEST_ASSERT(isnan(scale),
+                             "UE8M0 special code decodes as NaN");
+        else
+            YVEX_TEST_ASSERT(isfinite(scale) && scale > 0.0f,
+                             "every admitted UE8M0 code is positive finite");
+    }
+    for (code = 0u; code <= 0xffu; ++code) {
+        float value = yvex_attention_fp8_e4m3fn_decode(
+            (unsigned char)code);
+        if ((code & 0x7fu) == 0x7fu) {
+            YVEX_TEST_ASSERT(isnan(value),
+                             "E4M3FN special magnitudes decode as NaN");
+        } else {
+            YVEX_TEST_ASSERT(isfinite(value) &&
+                                 yvex_attention_fp8_e4m3fn_encode(value) ==
+                                     (unsigned char)code,
+                             "every finite E4M3FN code roundtrips exactly");
+        }
+    }
+    for (code = 0u; code < 0x7eu; ++code) {
+        float lower = yvex_attention_fp8_e4m3fn_decode(
+            (unsigned char)code);
+        float upper = yvex_attention_fp8_e4m3fn_decode(
+            (unsigned char)(code + 1u));
+        float midpoint = (lower + upper) * 0.5f;
+        unsigned char expected = (unsigned char)((code & 1u)
+            ? code + 1u : code);
+        YVEX_TEST_ASSERT(
+            yvex_attention_fp8_e4m3fn_encode(midpoint) == expected &&
+                yvex_attention_fp8_e4m3fn_encode(-midpoint) ==
+                    (unsigned char)(expected | 0x80u),
+            "E4M3FN midpoint encoding rounds to the even code");
+    }
+    YVEX_TEST_ASSERT(
+        yvex_attention_fp8_e4m3fn_encode(1.1875f) == 0x3au &&
+            yvex_attention_fp8_e4m3fn_encode(-0.0f) == 0x80u &&
+            yvex_quant_bf16_decode(yvex_quant_bf16_encode(1.00390625f)) ==
+                1.0f &&
+            yvex_quant_bf16_decode(yvex_quant_bf16_encode(1.01171875f)) ==
+                1.015625f,
+        "E4M3FN and BF16 explicit midpoint cases are canonical");
+    for (code = 0u; code < 16u; ++code)
+        YVEX_TEST_ASSERT(
+            yvex_attention_fp4_e2m1_encode(
+                yvex_attention_fp4_e2m1_decode((unsigned char)code)) == code,
+            "every E2M1 code roundtrips exactly");
+    for (code = 0u; code < 7u; ++code) {
+        float lower = yvex_attention_fp4_e2m1_decode((unsigned char)code);
+        float upper = yvex_attention_fp4_e2m1_decode(
+            (unsigned char)(code + 1u));
+        float midpoint = (lower + upper) * 0.5f;
+        unsigned char expected = (unsigned char)((code & 1u)
+            ? code + 1u : code);
+        YVEX_TEST_ASSERT(
+            yvex_attention_fp4_e2m1_encode(midpoint) == expected &&
+                yvex_attention_fp4_e2m1_encode(-midpoint) ==
+                    (unsigned char)(expected | 0x8u),
+            "E2M1 midpoint encoding rounds to the even code");
+    }
+    YVEX_TEST_ASSERT(yvex_test_attention_reference_codec_selftest(),
+                     "independent oracle proves its own codec edge contract");
     return 0;
 }
 
@@ -1344,16 +1841,20 @@ static int test_independent_reference_detects_stage_mutations(void)
 
 int yvex_test_deepseek_attention(void)
 {
-    if (test_execution_gate_is_scoped_and_reopened() != 0) return 1;
+    if (test_execution_gate_is_admitted() != 0) return 1;
+    if (test_cpu_resource_guards() != 0) return 1;
+    if (test_execution_geometry_and_cancellation() != 0) return 1;
     if (test_plan_requires_committed_inputs() != 0) return 1;
     if (test_history_contracts() != 0) return 1;
-    if (test_state_delta_lifecycle() != 0) return 1;
+    if (test_csa_selection_scratch_budget() != 0) return 1;
     if (test_transactional_memory_sink() != 0) return 1;
     if (test_rolling_state_chunk_invariance() != 0) return 1;
     if (test_runtime_hadamard_policy() != 0) return 1;
+    if (test_runtime_activation_scratch_budget() != 0) return 1;
     if (test_runtime_topk_policy() != 0) return 1;
     if (test_runtime_fp4_fake_quant_policy() != 0) return 1;
     if (test_runtime_fp8_fake_quant_policy() != 0) return 1;
+    if (test_runtime_activation_codec_edges() != 0) return 1;
     if (test_independent_reference_detects_stage_mutations() != 0) return 1;
     return 0;
 }

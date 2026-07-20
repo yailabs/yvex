@@ -135,6 +135,7 @@ typedef struct {
 typedef struct yvex_deepseek_v4_layer_spec {
     unsigned long long layer_index;
     yvex_attention_class attention_class;
+    yvex_attention_compute_contract compute_contract;
     unsigned long long compression_ratio, query_heads, kv_heads, head_dimension;
     unsigned long long rope_head_dimension, non_rope_head_dimension, query_lora_rank;
     unsigned long long output_lora_rank, output_groups, output_heads_per_group;
@@ -200,7 +201,8 @@ typedef struct {
     char vllm_revision[64];
     char hadamard_revision[128];
     unsigned int runtime_numeric_schema_version;
-    unsigned long long runtime_activation_policy_count, runtime_sparse_topk_policy_count;
+    unsigned long long runtime_compute_policy_count, runtime_activation_policy_count;
+    unsigned long long runtime_sparse_topk_policy_count;
     unsigned long long hidden_size, vocabulary_size, maximum_context, main_layer_count;
     unsigned long long auxiliary_layer_count, swa_layer_count, csa_layer_count, hca_layer_count;
     unsigned long long hash_router_layer_count, learned_router_layer_count;

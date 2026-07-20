@@ -650,7 +650,8 @@ int yvex_graph_primitive_report_build(const yvex_graph_report_request *request,
     (void)graph_report_appendf(report, "graph_integrity_guard: refused\n");
     (void)graph_report_appendf(report, "graph_execution_phase: admission\n");
     (void)graph_report_appendf(report, "execution_ready: false\n");
-    (void)graph_report_appendf(report, "attention_execution_supported: false\n");
+    (void)graph_report_appendf(report, "attention_execution_supported: %s\n",
+        yvex_attention_execute_supported(NULL) ? "true" : "false");
     (void)graph_report_appendf(report, "generation_ready: false\n");
     (void)graph_report_appendf(report, "reason: %s\nstatus: %s\n",
                                report->reason, report->status);

@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-materialize test-runtime-descriptor test-materialize-live-plan test-materialize-live test-attention test-attention-live-plan test-attention-live test-quant test-quant-live-plan test-quant-live test-artifact-writer test-artifact-writer-fault test-artifact-live-plan test-artifact-live-structure test-artifact-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface test-source-ownership test-repository-layout test-architecture-boundaries smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-materialize test-runtime-descriptor test-materialize-live-plan test-materialize-live test-attention test-attention-live-plan test-attention-live test-attention-cuda test-quant test-quant-live-plan test-quant-live test-artifact-writer test-artifact-writer-fault test-artifact-live-plan test-artifact-live-structure test-artifact-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface test-source-ownership test-repository-layout test-architecture-boundaries smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -295,7 +295,7 @@ info:
 	@echo "token_input: explicit token boundary implemented"
 	@echo "prefill_state: segment-summary foundation and minimal KV binding implemented"
 	@echo "prompt: default renderer implemented"
-	@echo "graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE, attention, matmul, and MLP primitives, controlled block, and controlled layer scheduler implemented"
+	@echo "graph: complete DeepSeek SWA/CSA/HCA attention execution admitted; other graph composition remains partial"
 	@echo "planner: estimate-only implemented"
 	@echo "backend: CPU reference implemented"
 	@echo "backend_cuda: CUDA backend dynamic driver attachment implemented"
@@ -329,7 +329,7 @@ info:
 	@echo "sampling: bounded greedy sampler implemented"
 	@echo "generation: bounded diagnostic loop available; full model unsupported"
 	@echo "inference: not implemented"
-	@echo "cuda: tensor movement and F32/F16 embed, RMSNorm, RoPE, attention, matmul, and MLP primitives implemented when driver/device are available"
+	@echo "cuda: complete DeepSeek attention and admitted primitives implemented when the generated bundle and device are available"
 	@echo "server: yvexd status shell implemented"
 
 all: lib cli server
@@ -359,7 +359,7 @@ test-cuda: cuda
 smoke-cuda: cuda
 	YVEX_BIN=$(YVEX_BIN) YVEXD_BIN=$(YVEXD_BIN) sh $(CLI_TEST) --cuda
 
-check-cuda: cuda-info test-cuda smoke-cuda
+check-cuda: cuda-info test-cuda smoke-cuda test-attention-cuda
 	@echo "yvex check-cuda: ok"
 
 test-cuda-no-nvcc: tests/test_cuda_failclosed.sh
@@ -395,6 +395,20 @@ test-attention-live-plan: $(ATTENTION_LIVE_RUNNER)
 
 test-attention-live: $(ATTENTION_LIVE_RUNNER)
 	$(ATTENTION_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
+test-attention-cuda: $(ATTENTION_LIVE_RUNNER)
+	@set -eu; \
+	tmp_dir=$$(mktemp -d "$${TMPDIR:-/tmp}/yvex-attention-cuda.XXXXXX"); \
+	trap 'rm -rf "$$tmp_dir"' EXIT HUP INT TERM; \
+	YVEX_ATTENTION_CUDA_ONLY=1 $(ATTENTION_LIVE_RUNNER) \
+		"$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" \
+		"$(DEEPSEEK_SOURCE_MANIFEST)" >"$$tmp_dir/first.out"; \
+	YVEX_ATTENTION_CUDA_ONLY=1 $(ATTENTION_LIVE_RUNNER) \
+		"$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" \
+		"$(DEEPSEEK_SOURCE_MANIFEST)" >"$$tmp_dir/second.out"; \
+	cmp "$$tmp_dir/first.out" "$$tmp_dir/second.out"; \
+	cat "$$tmp_dir/first.out"; \
+	echo "attention CUDA live repeat: byte-identical"
 
 test-source-payload-live-plan: $(SOURCE_PAYLOAD_LIVE_RUNNER)
 	$(SOURCE_PAYLOAD_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"

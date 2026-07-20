@@ -64,6 +64,16 @@ typedef enum {
     YVEX_ATTENTION_TOPK_SCORE_DESC_ORDINAL_ASC_V1
 } yvex_attention_topk_policy_id;
 
+/* BF16 values are rounded-to-nearest-even at every model-visible projection,
+ * normalization, position, fake-quant, attention-output, and output-projection
+ * boundary. Working values are F32; scalar dot products, scores, softmax, and
+ * reductions use deterministic widened accumulation before F32 publication.
+ * Compressor input projections are the architecture's explicit F32 exception. */
+typedef enum {
+    YVEX_ATTENTION_COMPUTE_UNKNOWN = 0,
+    YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1
+} yvex_attention_compute_contract;
+
 typedef struct {
     int required;
     yvex_attention_activation_stage stage;

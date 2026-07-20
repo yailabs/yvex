@@ -22,7 +22,7 @@ fi
 contains "$OUT_DIR/attention.out" "graph_integrity_guard: refused"
 contains "$OUT_DIR/attention.out" "graph_execution_phase: admission"
 contains "$OUT_DIR/attention.out" "execution_ready: false"
-contains "$OUT_DIR/attention.out" "attention_execution_supported: false"
+contains "$OUT_DIR/attention.out" "attention_execution_supported: true"
 contains "$OUT_DIR/attention.out" "generation_ready: false"
 contains "$OUT_DIR/attention.out" "reason: production-fixtures-are-test-owned"
 contains "$OUT_DIR/attention.out" "status: graph-proof-retired"

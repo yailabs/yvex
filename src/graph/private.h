@@ -101,30 +101,6 @@ struct yvex_plan {
 const yvex_graph_op_edges *yvex_graph_op_edges_at(const yvex_graph *graph, unsigned long long index);
 yvex_backend_kind yvex_graph_backend_kind_from_name(const char *name);
 int yvex_graph_exit_for_status(int status);
-#define YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP 65u
-#define YVEX_DEEPSEEK_ATTENTION_ROLLING_STATE_SCHEMA_V1 1u
-typedef enum {
-    YVEX_DEEPSEEK_ATTENTION_STATUS_REFUSED = 0, YVEX_DEEPSEEK_ATTENTION_STATUS_PLANNED,
-    YVEX_DEEPSEEK_ATTENTION_STATUS_EXECUTION_UNSUPPORTED, YVEX_DEEPSEEK_ATTENTION_STATUS_EXECUTION_READY
-} yvex_attention_status;
-typedef enum {
-    YVEX_DEEPSEEK_ATTENTION_FAILURE_NONE = 0, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT,
-    YVEX_DEEPSEEK_ATTENTION_FAILURE_ARCHITECTURE, YVEX_DEEPSEEK_ATTENTION_FAILURE_MATERIALIZATION,
-    YVEX_DEEPSEEK_ATTENTION_FAILURE_DESCRIPTOR, YVEX_DEEPSEEK_ATTENTION_FAILURE_MISSING_BINDING,
-    YVEX_DEEPSEEK_ATTENTION_FAILURE_QTYPE, YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION,
-    YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, YVEX_DEEPSEEK_ATTENTION_FAILURE_EXECUTION_UNSUPPORTED,
-    YVEX_DEEPSEEK_ATTENTION_FAILURE_READ, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC,
-    YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION,
-    YVEX_DEEPSEEK_ATTENTION_FAILURE_BACKEND
-} yvex_attention_failure_code;
-typedef enum {
-    YVEX_DEEPSEEK_ATTENTION_DELTA_EMPTY = 0, YVEX_DEEPSEEK_ATTENTION_DELTA_PENDING,
-    YVEX_DEEPSEEK_ATTENTION_DELTA_COMMITTED, YVEX_DEEPSEEK_ATTENTION_DELTA_ABORTED
-} yvex_attention_delta_status;
-typedef enum {
-    YVEX_DEEPSEEK_ATTENTION_ROLLING_NONE = 0, YVEX_DEEPSEEK_ATTENTION_ROLLING_MAIN,
-    YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER
-} yvex_attention_rolling_kind;
 typedef enum {
     YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT = 0, YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV,
     YVEX_DEEPSEEK_ATTENTION_COMPONENT_COMPRESSED_MAIN_KV, YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV,
@@ -139,80 +115,6 @@ typedef enum {
     YVEX_DEEPSEEK_ATTENTION_TRANSACTION_EMPTY = 0, YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
     YVEX_DEEPSEEK_ATTENTION_TRANSACTION_ABORTED, YVEX_DEEPSEEK_ATTENTION_TRANSACTION_COMMITTED
 } yvex_attention_transaction_status;
-typedef struct {
-    yvex_attention_failure_code code;
-    unsigned long long layer_index;
-    yvex_tensor_role role;
-    unsigned long long expected, actual;
-    char tensor_name[YVEX_MATERIALIZATION_NAME_CAP];
-    const char *reason;
-} yvex_attention_failure;
-typedef struct {
-    int present;
-    unsigned int schema_version;
-    yvex_attention_rolling_kind kind;
-    yvex_attention_class attention_class;
-    unsigned long long layer_index, next_token_position, ratio, head_dimension, state_width, state_slots,
-        previous_fill, current_fill, cursor, kv_state_stride, score_state_stride, kv_state_extent,
-        score_state_extent;
-    const float *kv_state, *score_state;
-    int overlap, rotated;
-    char attention_plan_identity[YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP];
-} yvex_attention_rolling_state_view;
-typedef struct {
-    int present;
-    unsigned int schema_version;
-    yvex_attention_rolling_kind kind;
-    yvex_attention_class attention_class;
-    unsigned long long layer_index, next_token_position, ratio, head_dimension, state_width, state_slots,
-        previous_fill, current_fill, cursor, kv_state_stride, score_state_stride, kv_state_extent,
-        score_state_extent;
-    float *kv_state, *score_state;
-    int overlap, rotated;
-    char attention_plan_identity[YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP];
-} yvex_attention_rolling_state_output;
-typedef struct {
-    unsigned long long token_count, local_tail_count, compressed_entry_count, indexer_entry_count;
-    const float *local_kv;
-    unsigned long long local_kv_stride;
-    const unsigned long long *local_positions;
-    const float *compressed_kv;
-    unsigned long long compressed_kv_stride;
-    const unsigned long long *compressed_positions;
-    const float *indexer_kv;
-    unsigned long long indexer_kv_stride;
-    const unsigned long long *indexer_positions;
-    yvex_attention_rolling_state_view main_rolling_state;
-    yvex_attention_rolling_state_view indexer_rolling_state;
-    int immutable;
-} yvex_attention_history_view;
-typedef struct {
-    int owned, complete;
-    unsigned long long layer_index;
-    yvex_attention_class attention_class;
-    unsigned long long token_position, token_count, hidden_width, q_rank, query_width, kv_width, compressed_count,
-        compressed_stride, indexer_count, indexer_stride, index_query_stride, index_weight_stride, topk_stride;
-    float *input, *q_low, *query, *raw_kv, *compressed_kv, *indexer_kv, *index_query, *index_weights,
-        *attention_values, *output;
-    unsigned long long *compressed_positions, *indexer_positions, *topk_counts, *topk_positions;
-    yvex_attention_rolling_state_output next_main_rolling_state;
-    yvex_attention_rolling_state_output next_indexer_rolling_state;
-} yvex_attention_execution_trace;
-typedef struct {
-    yvex_attention_delta_status status;
-    unsigned long long layer_index;
-    yvex_attention_class attention_class;
-    unsigned long long raw_kv_entries, compressed_kv_entries, indexer_entries, token_position;
-    float *raw_kv_out;
-    unsigned long long raw_kv_stride;
-    float *compressed_kv_out;
-    unsigned long long compressed_kv_stride;
-    float *indexer_kv_out;
-    unsigned long long indexer_kv_stride;
-    yvex_attention_rolling_state_output next_main_rolling_state;
-    yvex_attention_rolling_state_output next_indexer_rolling_state;
-    int published;
-} yvex_attention_state_delta;
 typedef struct {
     yvex_attention_component_kind kind;
     yvex_attention_component_storage storage;
@@ -246,62 +148,25 @@ typedef struct {
         YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT];
 } yvex_attention_state_transaction;
 typedef struct {
-    yvex_attention_status status;
-    char artifact_identity[YVEX_SHA256_HEX_CAP], materialization_plan_identity[YVEX_MATERIALIZATION_IDENTITY_CAP],
-        logical_model_identity[YVEX_RUNTIME_DESCRIPTOR_IDENTITY_CAP],
-        runtime_descriptor_identity[YVEX_RUNTIME_DESCRIPTOR_IDENTITY_CAP],
-        runtime_numeric_identity[YVEX_RUNTIME_DESCRIPTOR_IDENTITY_CAP],
-        attention_plan_identity[YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP];
-    unsigned long long layer_count, auxiliary_layer_count, swa_layer_count, csa_layer_count, hca_layer_count,
-        required_binding_count, missing_binding_count, qtype_compute_refusal_count, payload_bytes_bound;
-    int history_contract_ready, state_delta_contract_ready, cpu_reference_ready, cuda_execution_ready,
-        full_execution_ready;
-} yvex_attention_summary;
-typedef struct yvex_attention_plan yvex_attention_plan;
-typedef struct {
-    unsigned long long layer_index, token_position, token_count, local_history_tokens, compressed_history_tokens,
-        max_q_b_rows, max_kv_rows, max_compressor_rows, max_indexer_rows, scratch_limit_bytes;
-    int collect_reference_metrics;
-    const float *input;
-    unsigned long long input_stride;
-    const yvex_attention_history_view *history;
-    yvex_attention_execution_trace *trace;
-} yvex_attention_cpu_options;
-typedef struct {
-    int executed, full_attention, reference_independent, cuda_executed;
-    unsigned long long layer_index;
-    yvex_attention_class attention_class;
-    unsigned long long token_position, q_a_rows, q_b_rows, kv_rows, compressor_rows, indexer_rows, topk_candidates,
-        topk_selected, local_entries, compressed_entries, deduplicated_entries, payload_bytes_read,
-        state_raw_entries, state_compressed_entries, state_indexer_entries, reference_comparisons,
-        cuda_kernel_launches, cuda_peak_device_bytes;
-    double q_projection_checksum, kv_projection_checksum, rope_checksum, attention_checksum, output_checksum;
-    char output_identity[YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP];
-    double max_abs_error, max_relative_error, rmse;
-} yvex_attention_cpu_result;
+    unsigned long long limit_bytes;
+    size_t live_bytes, peak_bytes;
+} yvex_attention_scratch_budget;
 typedef struct {
     unsigned char *owned[YVEX_BACKEND_ATTENTION_WEIGHT_COUNT];
     unsigned long long payload_bytes_read;
 } attention_cuda_weights;
-const char *yvex_attention_status_name(yvex_attention_status status);
-const char *yvex_attention_failure_name(yvex_attention_failure_code code);
 int yvex_attention_execute_supported(const char **reason);
+int yvex_attention_cancel_check(const yvex_attention_cancellation *cancellation,
+    unsigned long long layer_index, const char *safe_point, yvex_attention_failure *failure, yvex_error *err);
+int yvex_attention_class_geometry_validate(const yvex_attention_layer_plan *layer,
+    unsigned long long csa_ratio, unsigned long long hca_ratio,
+    yvex_attention_failure *failure, yvex_error *err);
 int yvex_attention_history_validate(const yvex_attention_layer_plan *layer,
     const yvex_attention_history_view *history, yvex_attention_failure *failure, yvex_error *err);
-int yvex_attention_rolling_state_validate(const yvex_attention_layer_plan *layer,
-    const yvex_attention_rolling_state_view *state, yvex_attention_rolling_kind kind,
-    yvex_attention_failure *failure, yvex_error *err);
 int yvex_attention_rolling_state_step_cpu(const yvex_attention_layer_plan *layer,
     const yvex_attention_rolling_state_view *before, const float *token_kv, const float *token_score,
     const float *ape_row, yvex_attention_rolling_state_output *after, float *compressed_out,
     unsigned long long compressed_out_count, int *emitted, yvex_attention_failure *failure, yvex_error *err);
-int yvex_attention_state_delta_begin(const yvex_attention_layer_plan *layer, unsigned long long token_position,
-    yvex_attention_state_delta *delta, yvex_attention_failure *failure, yvex_error *err);
-int yvex_attention_state_delta_commit(yvex_attention_state_delta *delta, yvex_attention_failure *failure,
-    yvex_error *err);
-int yvex_attention_state_delta_abort(yvex_attention_state_delta *delta, yvex_attention_failure *failure,
-    yvex_error *err);
-void yvex_attention_memory_sink_options_default(yvex_attention_memory_sink_options *options);
 int yvex_attention_memory_sink_init(yvex_attention_memory_sink *sink,
     const yvex_attention_memory_sink_options *options, yvex_attention_failure *failure, yvex_error *err);
 void yvex_attention_memory_sink_release(yvex_attention_memory_sink *sink);
@@ -310,9 +175,6 @@ int yvex_attention_state_transaction_begin(yvex_attention_memory_sink *sink, con
     yvex_attention_state_transaction *transaction, yvex_attention_failure *failure, yvex_error *err);
 int yvex_attention_state_transaction_acquire(yvex_attention_state_transaction *transaction,
     yvex_attention_component_kind kind, yvex_attention_component_span *out, yvex_attention_failure *failure,
-    yvex_error *err);
-int yvex_attention_state_transaction_write(yvex_attention_state_transaction *transaction,
-    yvex_attention_component_kind kind, const void *bytes, size_t byte_count, yvex_attention_failure *failure,
     yvex_error *err);
 int yvex_attention_state_transaction_seal(yvex_attention_state_transaction *transaction,
     yvex_attention_component_kind kind, unsigned long long produced_elements, yvex_attention_failure *failure,
@@ -325,42 +187,6 @@ const yvex_attention_component_span *
 yvex_attention_memory_sink_committed_component(const yvex_attention_memory_sink *sink,
     yvex_attention_component_kind kind);
 const char *yvex_attention_memory_sink_identity(const yvex_attention_memory_sink *sink);
-typedef struct yvex_graph_family_api {
-    int (*plan_build)(yvex_attention_plan **out, const void *family_ir,
-        const yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
-        yvex_attention_failure *failure, yvex_error *err);
-    void (*plan_close)(yvex_attention_plan *plan);
-    const yvex_attention_summary *(*plan_summary)(const yvex_attention_plan *plan);
-    unsigned long long (*plan_layer_count)(const yvex_attention_plan *plan);
-    const yvex_attention_layer_plan *(*plan_layer_at)(const yvex_attention_plan *plan, unsigned long long index);
-    int (*history_validate)(const yvex_attention_layer_plan *layer, const yvex_attention_history_view *history,
-        yvex_attention_failure *failure, yvex_error *err);
-    int (*rolling_state_validate)(const yvex_attention_layer_plan *layer,
-        const yvex_attention_rolling_state_view *state, yvex_attention_rolling_kind kind,
-        yvex_attention_failure *failure, yvex_error *err);
-    int (*rolling_state_step_cpu)(const yvex_attention_layer_plan *layer,
-        const yvex_attention_rolling_state_view *before, const float *token_kv, const float *token_score,
-        const float *ape_row, yvex_attention_rolling_state_output *after, float *compressed_out,
-        unsigned long long compressed_out_count, int *emitted, yvex_attention_failure *failure, yvex_error *err);
-    void (*cpu_options_default)(yvex_attention_cpu_options *options);
-    void (*execution_trace_release)(yvex_attention_execution_trace *trace);
-    int (*cpu_probe_execute)(const yvex_attention_plan *plan, const void *family_ir,
-        yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
-        const yvex_attention_cpu_options *options, yvex_attention_cpu_result *result,
-        yvex_attention_failure *failure, yvex_error *err);
-    int (*cpu_first_token_execute)(const yvex_attention_plan *plan, const void *family_ir,
-        yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
-        const yvex_attention_cpu_options *options, yvex_attention_cpu_result *result,
-        yvex_attention_failure *failure, yvex_error *err);
-    int (*cuda_token_execute)(const yvex_attention_plan *plan, const void *family_ir,
-        yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor, yvex_backend *backend,
-        const yvex_attention_cpu_options *options, yvex_attention_cpu_result *result,
-        yvex_attention_failure *failure, yvex_error *err);
-    int (*cpu_chunk_execute)(const yvex_attention_plan *plan, const void *family_ir,
-        yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
-        const yvex_attention_cpu_options *options, yvex_attention_cpu_result *result,
-        yvex_attention_failure *failure, yvex_error *err);
-} yvex_graph_family_api;
 
 /* Attention internals share this single graph-private contract. */
 struct yvex_attention_plan {
@@ -380,42 +206,50 @@ int yvex_attention_reject(yvex_attention_failure *failure, yvex_attention_failur
     const yvex_runtime_tensor_binding *binding, unsigned long long layer_index, yvex_tensor_role role,
     unsigned long long expected, unsigned long long actual, yvex_error *err, yvex_status err_code,
     const char *reason);
+int yvex_attention_accept(yvex_attention_failure *failure, yvex_error *err);
 int yvex_attention_hash_u64(yvex_sha256 *hash, unsigned long long value);
 int yvex_attention_hash_text(yvex_sha256 *hash, const char *text);
 int yvex_attention_checked_size(unsigned long long count, unsigned long long width, size_t *out);
 unsigned long long yvex_attention_min_u64(unsigned long long a, unsigned long long b);
 void *yvex_attention_calloc_array(unsigned long long count, unsigned long long width);
+int yvex_attention_scratch_reserve(yvex_attention_scratch_budget *budget,
+    unsigned long long count, size_t element_size, size_t *bytes_out);
+void yvex_attention_scratch_release(yvex_attention_scratch_budget *budget,
+    size_t bytes);
 int yvex_attention_context_validate(const yvex_attention_plan *plan, const char *logical_identity,
     const yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
     yvex_attention_failure *failure, yvex_error *err);
 void yvex_attention_result_reset(yvex_attention_cpu_result *result);
 const yvex_runtime_tensor_binding *yvex_attention_binding_find(const yvex_runtime_descriptor *descriptor,
     yvex_tensor_role role, unsigned long long layer_index);
-void yvex_attention_fill_activation(float *out, unsigned long long count, unsigned long long layer_index,
-    unsigned long long token_position);
-int yvex_attention_decode_row(yvex_materialization_session *session, const yvex_runtime_tensor_binding *binding,
-    unsigned long long row, float *out, unsigned long long elements, yvex_attention_cpu_result *result,
+int yvex_attention_row_geometry(const yvex_materialized_tensor_binding *binding,
+    unsigned long long *row_bytes, unsigned long long *row_count,
     yvex_attention_failure *failure, yvex_error *err);
-int yvex_attention_dot_rows(yvex_materialization_session *session, const yvex_runtime_tensor_binding *binding,
-    const float *vector, unsigned long long vector_len, unsigned long long max_rows, float *out,
-    unsigned long long *rows, int reference, yvex_attention_cpu_result *result, yvex_attention_failure *failure,
-    yvex_error *err);
+int yvex_attention_payload_account(yvex_attention_cpu_result *result,
+    unsigned long long bytes, const yvex_runtime_tensor_binding *binding,
+    yvex_attention_failure *failure, yvex_error *err);
+int yvex_attention_decode_row(yvex_materialization_session *session, const yvex_runtime_tensor_binding *binding,
+    unsigned long long row, float *out, unsigned long long elements, yvex_attention_scratch_budget *scratch,
+    yvex_attention_cpu_result *result, yvex_attention_failure *failure, yvex_error *err);
 int yvex_attention_dot_batch(yvex_materialization_session *session, const yvex_runtime_tensor_binding *binding,
     unsigned long long start_row, const float *vectors, unsigned long long token_count,
     unsigned long long vector_stride, unsigned long long vector_len, unsigned long long max_rows, float *out,
-    unsigned long long output_stride, unsigned long long *rows, int reference, yvex_attention_cpu_result *result,
+    unsigned long long output_stride, unsigned long long *rows, yvex_attention_scratch_budget *scratch,
+    yvex_attention_cpu_result *result,
     yvex_attention_failure *failure, yvex_error *err);
 int yvex_attention_decode_flat(yvex_materialization_session *session, const yvex_runtime_tensor_binding *binding,
-    float *out, unsigned long long elements, yvex_attention_cpu_result *result, yvex_attention_failure *failure,
-    yvex_error *err);
+    float *out, unsigned long long elements, yvex_attention_scratch_budget *scratch,
+    yvex_attention_cpu_result *result, yvex_attention_failure *failure, yvex_error *err);
 double yvex_attention_checksum(const float *values, unsigned long long count);
 int yvex_attention_rms_norm(float *values, unsigned long long count, const float *weights, double epsilon);
 int yvex_attention_unit_rms_norm(float *values, unsigned long long count, double epsilon);
+int yvex_attention_compute_round(yvex_attention_compute_contract contract,
+    float *values, unsigned long long count);
 int yvex_attention_rope_apply(float *values, unsigned long long width, unsigned long long rope_width,
     unsigned long long position, const yvex_attention_position_policy *position_spec, int inverse);
 int yvex_attention_activation_apply(const yvex_attention_activation_policy *policy, float *values,
-    unsigned long long count, unsigned long long layer_index, yvex_tensor_role role, yvex_attention_failure *failure,
-    yvex_error *err);
+    unsigned long long count, unsigned long long layer_index, yvex_tensor_role role,
+    yvex_attention_scratch_budget *scratch, yvex_attention_failure *failure, yvex_error *err);
 const float *yvex_attention_segment_row(const float *history, unsigned long long history_count,
     unsigned long long history_stride, const float *current, unsigned long long current_count,
     unsigned long long current_stride, unsigned long long index);
@@ -426,10 +260,7 @@ int yvex_attention_csa_select(const yvex_attention_layer_plan *layer, const yvex
     const float *current_indexer, unsigned long long current_count, unsigned long long current_stride,
     const unsigned long long *current_positions, const float *query, const float *weights,
     unsigned long long absolute, unsigned long long *selected, unsigned long long *selected_count,
-    unsigned long long *valid_count, yvex_attention_failure *failure, yvex_error *err);
-int yvex_attention_softmax_probe(const float *query, unsigned long long query_count, const float *kv,
-    unsigned long long kv_count, unsigned long long local_entries, unsigned long long compressed_entries,
-    yvex_attention_class attention_class, unsigned long long topk, yvex_attention_cpu_result *result,
+    unsigned long long *valid_count, yvex_attention_scratch_budget *scratch,
     yvex_attention_failure *failure, yvex_error *err);
 int yvex_attention_reduce_chunk(const yvex_attention_layer_plan *layer,
     const float *query, const yvex_attention_history_view *history, const float *current_kv,
@@ -441,18 +272,16 @@ int yvex_attention_reduce_chunk(const yvex_attention_layer_plan *layer,
     unsigned long long index_query_stride, const float *index_weights, unsigned long long index_weight_stride,
     const float *sinks, unsigned long long token_count, unsigned long long token_position, float *out,
     unsigned long long *trace_topk_counts, unsigned long long *trace_topk_positions,
-    unsigned long long trace_topk_stride, yvex_attention_cpu_result *result, yvex_attention_failure *failure,
-    yvex_error *err);
+    unsigned long long trace_topk_stride, yvex_attention_scratch_budget *scratch,
+    yvex_attention_cpu_result *result, yvex_attention_failure *failure, yvex_error *err);
 int yvex_attention_output_project(yvex_materialization_session *session, const yvex_runtime_tensor_binding *out_a,
     const yvex_runtime_tensor_binding *out_b, const float *values, unsigned long long token_count,
     unsigned long long value_stride, unsigned long long groups, unsigned long long group_width,
-    unsigned long long rank, unsigned long long hidden_width, float *out, unsigned long long output_stride,
-    yvex_attention_cpu_result *result, yvex_attention_failure *failure, yvex_error *err);
-int yvex_attention_compressor_probe(const yvex_attention_layer_plan *layer,
-    yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
-    const float *hidden, unsigned long long hidden_width,
-    unsigned long long token_position, yvex_attention_cpu_result *result, yvex_attention_failure *failure,
-    yvex_error *err);
+    unsigned long long rank, unsigned long long hidden_width,
+    yvex_attention_compute_contract compute_contract, float *out,
+    unsigned long long output_stride,
+    yvex_attention_scratch_budget *scratch, yvex_attention_cpu_result *result,
+    yvex_attention_failure *failure, yvex_error *err);
 int yvex_attention_rolling_storage_allocate(const yvex_attention_layer_plan *layer,
     yvex_attention_rolling_kind kind, unsigned long long token_position, float **kv, float **score,
     yvex_attention_rolling_state_view *view, yvex_attention_failure *failure, yvex_error *err);
@@ -485,14 +314,15 @@ int yvex_attention_cuda_rolling_project(const yvex_attention_rolling_state_view 
     yvex_backend_attention_rolling *out);
 int yvex_attention_cuda_trace_allocate(yvex_attention_execution_trace *trace,
     const yvex_attention_layer_plan *layer, const yvex_attention_history_view *history,
-    unsigned long long token_position, const float *input, yvex_attention_failure *failure, yvex_error *err);
+    unsigned long long token_position, const float *input, unsigned long long limit_bytes,
+    unsigned long long *owned_bytes, yvex_attention_failure *failure, yvex_error *err);
 void yvex_attention_cuda_rolling_commit(const yvex_attention_rolling_state_view *before,
     unsigned long long token_position, yvex_attention_rolling_state_output *after);
 double yvex_attention_cuda_checksum(const float *values, unsigned long long count);
 int yvex_attention_cuda_output_identity(const yvex_attention_plan *plan,
     const yvex_attention_execution_trace *trace, char out[YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP]);
 int yvex_attention_hadamard_cpu(const float *input, unsigned long long length, float scale, int reject_nonfinite,
-    float *output, yvex_attention_failure *failure, yvex_error *err);
+    float *output, yvex_attention_scratch_budget *scratch, yvex_attention_failure *failure, yvex_error *err);
 int yvex_attention_topk_select(const float *scores, const unsigned long long *ordinals,
     unsigned long long candidate_count, unsigned long long k, unsigned long long *selected_indices,
     unsigned long long *selected_count, yvex_attention_failure *failure, yvex_error *err);

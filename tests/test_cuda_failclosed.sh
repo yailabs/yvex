@@ -20,6 +20,24 @@ if grep -RIn -E 'Fallback embedded PTX|\.visible[[:space:]]+\.entry' \
     fail "production C source contains embedded CUDA entry points"
 fi
 
+for contract in \
+    'max_host_bytes' \
+    'peak_host_bytes' \
+    'cuda.deepseek_attention.validate.geometry' \
+    'cuda.deepseek_attention.validate.alias' \
+    'cuda.deepseek_attention.validate.host_budget' \
+    'cuda.deepseek_attention.context'; do
+    grep -R -F "$contract" include/yvex/backend.h \
+        src/backend/cuda/families/deepseek_v4.c >/dev/null ||
+        fail "encoded-attention admission missing: $contract"
+done
+grep -F 'atomicCAS(status, 0, 2)' src/backend/cuda/kernels.cu >/dev/null ||
+    fail "encoded-attention kernels do not publish contract failures"
+if grep -E 'yvex_(attention|graph)|cpu_(chunk|probe|reference)' \
+    src/backend/cuda/families/deepseek_v4.c >/dev/null; then
+    fail "encoded-attention CUDA owner contains a CPU numerical fallback"
+fi
+
 set +e
 "$YVEX_BIN" backend cuda >"$OUT_DIR/backend.out" 2>"$OUT_DIR/backend.err"
 rc=$?
@@ -49,6 +67,7 @@ contains "$OUT_DIR/backend.out" "kernel_bundle_reason: kernel-bundle-absent"
 contains "$OUT_DIR/backend.out" "embed-f32-to-f32: unsupported (kernel-bundle-absent)"
 contains "$OUT_DIR/backend.out" "attention-noncausal-f32: unsupported (kernel-bundle-absent)"
 contains "$OUT_DIR/backend.out" "qtype-row-dot: unsupported (kernel-bundle-absent)"
+contains "$OUT_DIR/backend.out" "encoded-attention: unsupported (kernel-bundle-absent)"
 contains "$OUT_DIR/backend.out" "status: backend-capabilities"
 
 set +e

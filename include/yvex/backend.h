@@ -206,8 +206,37 @@ typedef struct {
     int hadamard;
 } yvex_backend_attention_activation;
 
+typedef enum {
+    YVEX_BACKEND_ATTENTION_SWA = 0,
+    YVEX_BACKEND_ATTENTION_CSA,
+    YVEX_BACKEND_ATTENTION_HCA
+} yvex_backend_attention_class;
+
+typedef enum {
+    YVEX_BACKEND_ATTENTION_COMPUTE_UNKNOWN = 0,
+    YVEX_BACKEND_ATTENTION_COMPUTE_BF16_F32_RNE_V1
+} yvex_backend_attention_compute;
+
+typedef int (*yvex_backend_cancelled_fn)(void *context);
+
+typedef struct {
+    yvex_backend_cancelled_fn requested;
+    void *context;
+} yvex_backend_cancellation;
+
+typedef struct {
+    float *data;
+    unsigned long long capacity;
+} yvex_backend_float_span;
+
+typedef struct {
+    unsigned long long *data;
+    unsigned long long capacity;
+} yvex_backend_u64_span;
+
 typedef struct {
     int present;
+    unsigned long long next_token_position;
     unsigned long long ratio;
     unsigned long long head_dimension;
     unsigned long long state_width;
@@ -216,12 +245,15 @@ typedef struct {
     unsigned long long previous_fill;
     unsigned long long current_fill;
     const float *kv_state;
+    unsigned long long kv_state_capacity;
     const float *score_state;
+    unsigned long long score_state_capacity;
     int overlap;
 } yvex_backend_attention_rolling;
 
 typedef struct {
-    unsigned int attention_class;
+    yvex_backend_attention_class attention_class;
+    yvex_backend_attention_compute compute_contract;
     unsigned long long token_position;
     unsigned long long hidden_width;
     unsigned long long q_rank;
@@ -258,30 +290,34 @@ typedef struct {
     unsigned long long indexer_stride;
     yvex_backend_attention_rolling main_rolling;
     yvex_backend_attention_rolling indexer_rolling;
+    const yvex_backend_cancellation *cancellation;
+    unsigned long long max_host_bytes;
     unsigned long long max_device_bytes;
 } yvex_backend_attention_job;
 
 typedef struct {
-    float *q_low;
-    float *query;
-    float *raw_kv;
-    float *compressed_kv;
-    float *indexer_kv;
-    float *index_query;
-    float *index_weights;
-    float *attention_values;
-    float *output;
-    unsigned long long *compressed_positions;
-    unsigned long long *indexer_positions;
-    unsigned long long *topk_positions;
-    float *main_kv_state;
-    float *main_score_state;
-    float *indexer_kv_state;
-    float *indexer_score_state;
+    yvex_backend_float_span q_low;
+    yvex_backend_float_span query;
+    yvex_backend_float_span raw_kv;
+    yvex_backend_float_span compressed_kv;
+    yvex_backend_float_span indexer_kv;
+    yvex_backend_float_span index_query;
+    yvex_backend_float_span index_weights;
+    yvex_backend_float_span attention_values;
+    yvex_backend_float_span output;
+    yvex_backend_u64_span compressed_positions;
+    yvex_backend_u64_span indexer_positions;
+    yvex_backend_u64_span topk_positions;
+    yvex_backend_float_span main_kv_state;
+    yvex_backend_float_span main_score_state;
+    yvex_backend_float_span indexer_kv_state;
+    yvex_backend_float_span indexer_score_state;
     unsigned long long compressed_count;
     unsigned long long indexer_count;
     unsigned long long topk_count;
     unsigned long long valid_candidate_count;
+    unsigned long long host_bytes;
+    unsigned long long peak_host_bytes;
     unsigned long long device_bytes;
     unsigned long long peak_device_bytes;
     unsigned long long kernel_launches;
@@ -297,6 +333,7 @@ typedef enum {
     YVEX_BACKEND_ATTENTION_FAILURE_LAUNCH,
     YVEX_BACKEND_ATTENTION_FAILURE_SYNCHRONIZE,
     YVEX_BACKEND_ATTENTION_FAILURE_NUMERIC,
+    YVEX_BACKEND_ATTENTION_FAILURE_CANCELLED,
     YVEX_BACKEND_ATTENTION_FAILURE_CLEANUP
 } yvex_backend_attention_failure_code;
 

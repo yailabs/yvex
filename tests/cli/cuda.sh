@@ -35,7 +35,7 @@ assert_graph_proof_retired() {
     contains "$out" "graph_integrity_guard: refused"
     contains "$out" "graph_execution_phase: admission"
     contains "$out" "execution_ready: false"
-    contains "$out" "attention_execution_supported: false"
+    contains "$out" "attention_execution_supported: true"
     contains "$out" "generation_ready: false"
     contains "$out" "reason: production-fixtures-are-test-owned"
     contains "$out" "status: graph-proof-retired"

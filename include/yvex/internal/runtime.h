@@ -81,6 +81,7 @@ typedef struct {
     char runtime_numeric_identity[YVEX_RUNTIME_DESCRIPTOR_IDENTITY_CAP];
     char runtime_hadamard_revision[128];
     unsigned int runtime_numeric_schema_version;
+    unsigned long long runtime_compute_policy_count;
     unsigned long long runtime_activation_policy_count;
     unsigned long long runtime_sparse_topk_policy_count;
     unsigned long long tensor_count;
