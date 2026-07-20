@@ -6,12 +6,14 @@ artifacts and admits each execution boundary only through executable evidence.
 
 The DeepSeek-V4-Flash path is complete through source trust, Transformation
 IR, quantization, GGUF emission, roundtrip admission, bounded materialization
-and runtime-descriptor construction. Complete SWA/CSA/HCA attention now runs
-on CPU and the admitted GB10 CUDA path; persistent KV is the active frontier,
-and autoregressive generation is not yet admitted.
+and runtime-descriptor construction. Complete SWA/CSA/HCA attention is now
+operator-reachable through the main `yvex` binary on CPU and the admitted GB10
+CUDA path; persistent KV is the active frontier, and autoregressive generation
+is not yet admitted.
 
 [Architecture](#architecture) · [Verified at scale](#verified-at-scale) ·
-[Build](#build-and-validate) · [Project status](PROJECT.md)
+[Run attention](#run-the-attention-boundary) · [Build](#build-and-validate) ·
+[Project status](PROJECT.md)
 
 ## Verified at scale
 
@@ -22,7 +24,7 @@ and autoregressive generation is not yet admitted.
 | Selected physical artifact | Complete GGUF v3 file, 102,408,545,440 bytes, with all 1,360 tensors and exact tokenizer metadata |
 | Bounded materialization | All 102,396,843,592 encoded tensor bytes walked with 16 MiB peak executor-owned staging |
 | Numeric compute | Canonical codecs and direct CPU/CUDA compute evidence for every qtype selected by the release profile |
-| Runtime frontier | Complete DeepSeek attention executes 43 layers and 634 real-weight bindings on CPU and GB10 CUDA; persistent KV remains unsupported |
+| Runtime frontier | Complete DeepSeek attention executes 43 layers and 634 real-weight bindings through the production API and main CLI on CPU and GB10 CUDA; persistent KV remains unsupported |
 
 These are identity-bound implementation results, not projections from file
 names, reports or fixture success. The selected artifact exists outside the
@@ -62,7 +64,7 @@ flowchart TD
     M --> Q["Selected profile + quantization<br/>complete"]
     Q --> G["GGUF emission + roundtrip + admission<br/>complete"]
     G --> R["Bounded materialization + descriptor<br/>complete"]
-    R --> A["DeepSeek attention<br/>complete: CPU + GB10 CUDA"]
+    R --> A["DeepSeek attention<br/>operator-reachable: CPU + GB10 CUDA"]
     A --> K["Persistent KV<br/>active / unsupported"]
     K --> T["Prefill + transformer + generation<br/>blocked"]
 ```
@@ -150,6 +152,7 @@ without promoting graph execution.
 | GGUF writer, complete emission, roundtrip and artifact admission | complete |
 | Bounded materialization and DeepSeek runtime descriptor | complete |
 | Complete DeepSeek SWA/CSA/HCA attention | complete on CPU and admitted GB10 CUDA |
+| Operator attention probe | available through `yvex graph attention execute` |
 | Persistent KV | active; unsupported |
 | Model-backed prefill and transformer composition | blocked |
 | Autoregressive text generation | unsupported |
@@ -169,6 +172,46 @@ release target; it is not yet a supported generation target.
 Qwen and Gemma remain bounded engineering evidence for common and family
 contracts. GLM remains planned. None is presented as a supported generation
 target.
+
+## Run the attention boundary
+
+The main binary can execute the admitted DeepSeek attention implementation over
+the external selected GGUF. The input is a deterministic
+`canonical_attention_probe` at exact model geometry, not a prompt, prefill,
+decode, or generation request.
+
+```sh
+# Representative SWA, CSA, and HCA layers on CPU.
+./yvex graph attention execute \
+  --target deepseek4-v4-flash --backend cpu \
+  --probe canonical --scope quick --output audit
+
+# All 43 layers and 634 attention bindings on CPU.
+./yvex graph attention execute \
+  --target deepseek4-v4-flash --backend cpu \
+  --probe canonical --scope full --output audit
+
+# Representative and complete execution on the admitted GB10 CUDA path.
+./yvex graph attention execute \
+  --target deepseek4-v4-flash --backend cuda \
+  --probe canonical --scope quick --output audit
+./yvex graph attention execute \
+  --target deepseek4-v4-flash --backend cuda \
+  --probe canonical --scope full --output audit
+
+# Independent production CPU and CUDA runs with structured comparison.
+./yvex graph attention execute \
+  --target deepseek4-v4-flash --compare-backends \
+  --probe canonical --scope full --output json
+```
+
+By default the command resolves the canonical operator model root and admitted
+artifact; `--models-root DIR --artifact FILE` selects explicit external paths.
+Quick mode reports the three representative layers it ran. Full mode fails
+unless all 2 SWA, 21 CSA, and 20 HCA descriptors and all 634 bindings execute.
+The command calls the production API directly; it does not run a Make target,
+test binary, or the test-only semantic oracle. Its output keeps
+`runtime_generation_ready=false` and `end_user_generation_available=false`.
 
 ## Build and validate
 

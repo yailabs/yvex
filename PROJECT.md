@@ -5,7 +5,7 @@ Status: living engineering control
 Authority: product target, architecture tracks, complete wave ledger, milestone
 state, dependencies, evidence rank, family scope, release gates, and Active Next
 Recovery baseline: pre-refoundation `docs/spine.md` at commit `10ad6c3`
-Current proof stage: complete DeepSeek SWA/CSA/HCA attention is admitted on CPU and the GB10 CUDA path; persistent family-correct KV is the active boundary
+Current proof stage: complete DeepSeek SWA/CSA/HCA attention is operator-reachable through the real YVEX CPU and GB10 CUDA paths; persistent family-correct KV is the active boundary
 
 ## 1. Authority And Update Contract
 
@@ -360,6 +360,7 @@ in a conversation or closure report is not part of the architecture.
 | Runtime descriptor | The common runtime descriptor and DeepSeek specialization project the admitted artifact, materialization plan, canonical qtype facts, all 1,360 tensor bindings, topology, MoE/expert geometry, output/vocabulary geometry, tokenizer availability, and runtime numeric authority into one immutable graph-input descriptor. Logical-model identity `ec22b4bf78811265d1881071919593991f33ab883303f3df16d64c0689a63950`, runtime-numeric identity `33182fd6b75e9263861d5a873550e6d0c5d5010267fb315ec687c693c9572dcd`, and runtime-descriptor identity `61e25532554505b1536e8ec11198b680ca812e0cdc8f2966a6f6652103a95574` are distinct from unchanged artifact and materialization identities. |
 | CUDA | Production C contains no fallback PTX. Context, Driver API memory operations, generated-bundle admission, resolved functions, and exact variants are distinct typed facts. A no-`nvcc` build refuses every kernel before dispatch. Complete DeepSeek attention is admitted on the generated-bundle GB10 path with direct independent-reference parity and no CPU numerical fallback; it reports `attention_cuda_execution_ready=1`. |
 | Transformer | The immutable DeepSeek attention plan now drives complete SWA/CSA/HCA execution through independent full-equation reference, production CPU, and device-complete GB10 CUDA paths over all 43 layers and 634 bindings. Attention reports `attention_execution_supported=1`; persistent runtime KV, prefill integration, MoE, transformer composition, residual execution, and final norm remain unsupported. |
+| Operator | `yvex graph attention execute` invokes the production attention boundary directly over the admitted external artifact. Quick and full canonical-probe scopes support CPU, CUDA, deterministic structured output, typed refusal, and optional CPU/CUDA comparison. This is operator reachability for attention, not prompt execution or generation. |
 | Text path | Exact tokenizer-backed autoregressive DeepSeek text generation is unsupported. |
 | Evaluation | No release-path generation evaluation exists. |
 | Benchmark | Not measured. |
@@ -396,6 +397,7 @@ V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0: complete (DeepSeek descriptor binding all 1,
 V010.REPO.SEMANTIC.COMPRESSION.0: complete (repository-wide semantic ownership, compact paths, dependency boundaries, and permanent gates)
 V010.REPO.C.CANONICALIZATION.0: complete (canonical C interfaces, ownership, contracts, archive identity, and complexity gates)
 V010.GRAPH.DEEPSEEK.ATTENTION.0: complete (independent reference, complete SWA/CSA/HCA CPU execution, and direct GB10 CUDA parity)
+V010.CLI.GRAPH.0: complete (production attention is reachable through the main YVEX binary with honest probe semantics)
 V010.RUNTIME.DEEPSEEK.KV.0: active (consume the admitted attention-local state boundary as persistent prefill/decode KV)
 Active Next: V010.RUNTIME.DEEPSEEK.KV.0
 ```
@@ -549,8 +551,8 @@ the published selected plan identity
 `4b47814e06c43b3426efcaab72b836596c42358a7c59ea5619ddd70c0eefe9fd`
 produced 102,396,843,592 tensor payload bytes in a 102,408,545,440-byte file.
 Plan-only re-derivation over the current runtime-numeric-aware transformation
-identity yields `2795f53756293d14ace2f63db9a3f101b7d697405d1f259fb099ae4625418672`
-and `a2f8e70b3d3348a5982e5e1d13de6e6a473f9acce37bdfb1b8320107d508a367`,
+identity yields `9dc39cf987270562859238ba423a3f17b1d3c11c1f2e049516866a853c600a84`
+and `db0344991f10237119b32152a8c4ccb6bffc31f968464820a1a74e13590c7b30`,
 respectively, with zero payload reads and no artifact publication.
 Both artifacts contain 47 lowering metadata entries plus 21 exact
 artifact/tokenizer/provenance entries, 129,280 tokenizer tokens, 127,741
@@ -578,10 +580,16 @@ policy; HCA emits complete non-overlapping groups at the exact ratio 128,
 retains an incomplete tail as raw local history, and lets raw and compressed
 representations participate without cross-representation deduplication.
 
-The complete live comparison covered 6,772,096 values and produced zero
-maximum absolute error, zero maximum relative error, and zero RMSE for
-reference/CPU, reference/CUDA, and CPU/CUDA comparisons on GB10 compute
-capability 12.1. Attention execution evidence identity is
+The complete live comparison covered 6,772,096 values and observed zero
+maximum absolute error, zero maximum relative error, and zero finite-only RMSE
+for reference/CPU, reference/CUDA, and CPU/CUDA comparisons on GB10 compute
+capability 12.1. CPU/CUDA comparison admission uses versioned comparison schema
+v2: every finite pair must satisfy
+`abs(a - b) <= 5e-4 + 5e-4 * max(abs(a), abs(b))`, non-finite values refuse,
+and RMSE is accumulated only over finite pairs. Raw object-byte comparison
+also observed bitwise equality for this evidence run, but bitwise equality is
+not required and no causal explanation is inferred from that observation.
+Attention execution evidence identity is
 `f4afb4a97ef13c7f7d5805509dbffdbbf15bdc10a933e7b0a0871733238833e5`;
 independent-oracle trace and output identities are
 `96a0ff53a4bfb82c3d1db1f3dce2694e1d1500eb5c305dbd5470978bf5e16435`
@@ -618,13 +626,52 @@ Derived quant profile
 Source-faithful/selected writer plans
 `3b5d331029a9cda537d00789e7e7fa1d8fb5b1c7729ca19004c0443734cbad74`
 and `0a2dd84be2c98e72b8ce039442e514a528a55bb4d5f9319e458816bac35e906e`
-became `2795f53756293d14ace2f63db9a3f101b7d697405d1f259fb099ae4625418672`
-and `a2f8e70b3d3348a5982e5e1d13de6e6a473f9acce37bdfb1b8320107d508a367`.
+became `9dc39cf987270562859238ba423a3f17b1d3c11c1f2e049516866a853c600a84`
+and `db0344991f10237119b32152a8c4ccb6bffc31f968464820a1a74e13590c7b30`.
 Mapping identity `1aecbbe25b04de0d`, selected artifact identity
 `01b2bed4f070d0a3fdb02e546764b3a49cb69886eebe17b4877d20294725682c`,
 and materialization identity
 `77dba687ceedc417c447265e33deb7a6e34d0ccaec76b1b23843203b7595d0c8`
 remain unchanged.
+
+The operator cutover proves that semantic derivation drift does not require new
+physical bytes through three independent facts. First, the zero-read canonical
+payload recipe for all 1,360 tensors has identity
+`6c6289c096b5502eba98498bf498c80d9ca9c13ab06f5dcb62075e372274e97b`;
+it covers source ranges, transformation operations, physical decisions,
+lowering geometry, ordering, and encoded sizes, but is not a digest of emitted
+payload bytes. Second, a complete quantization pass and an independent read of
+the admitted artifact produced the same aggregate payload-byte identity
+`249277b42eb1aa231bddcb33b33ae3d805f3aa5991eaa99ae091f2ea9b928eb0`.
+Third, operator admission rehashes the exact 102,408,545,440-byte GGUF and
+revalidates its immutable file snapshot against artifact identity
+`01b2bed4f070d0a3fdb02e546764b3a49cb69886eebe17b4877d20294725682c`
+before graph dispatch. The zero-read comparison separately proves names,
+ranks, logical and physical dimensions, qtypes, encoded sizes, directory order,
+offsets, and payload ranges; it does not claim to have read or digested payload
+bytes. Together these gates report `physical_payload_compatible=1`,
+`artifact_rebuild_required=0`, and `materialization_rebuild_required=0`. The
+writer now owns copied provenance
+strings instead of retaining stack-borrowed metadata values; its corrected
+deterministic current selected-plan identity is
+`db0344991f10237119b32152a8c4ccb6bffc31f968464820a1a74e13590c7b30`.
+That bug fix changes planning evidence, not the unchanged serialized artifact.
+
+The main executable now exposes the production boundary through
+`yvex graph attention execute`. The command resolves the admitted external
+artifact, current runtime descriptor, and current attention plan, then invokes
+the production API directly with a full-width deterministic attention probe.
+Quick scope executes one SWA, CSA, and HCA representative including real top-k
+and ratio-128 state; full scope executes all 43 main layers and 634 bindings.
+CPU, generated-bundle CUDA, JSON, audit, and CPU/CUDA comparison modes are
+operator reachable. The independent full-equation oracle remains test-only and
+is excluded from both `libyvex.a` and `yvex`. Operator CPU/CUDA admission uses
+the versioned combined absolute-plus-relative schema-v2 bound, refuses
+non-finite pairs, and computes RMSE over finite pairs only. Raw object bytes
+matched in the admitted run, but that bitwise observation is neither required
+nor presented as proof of why the numerical results agree; independent
+mutation and history/top-k/ratio sensitivity tests prevent a tautological
+comparison.
 
 Recovered `V010.BACKEND.0`, `.6`, `.7`, `.8`, and `.9` are promoted from
 planned subtasks to completed bounded capabilities because the exact matrix,
@@ -649,6 +696,7 @@ V010.DOCS.README.COMPILATION.0
 -> V010.REPO.SEMANTIC.COMPRESSION.0
 -> V010.REPO.C.CANONICALIZATION.0
 -> V010.GRAPH.DEEPSEEK.ATTENTION.0
+-> V010.CLI.GRAPH.0
 -> V010.RUNTIME.DEEPSEEK.KV.0
 -> V010.RUNTIME.DEEPSEEK.PREFILL.0
 -> V010.RUNTIME.DEEPSEEK.MOE.0
@@ -672,7 +720,7 @@ another supported model.
 
 | Family/scope | Source/profile truth | Tensor/map truth | Artifact/materialization truth | Runtime truth | Project role |
 | --- | --- | --- | --- | --- | --- |
-| DeepSeek-V4-Flash | Exact source metadata/header verification, upstream payload trust, bounded streaming handoff, and typed architecture IR complete | Exact 69,187-entry coverage, artifact-neutral Transformation IR, 1,360-descriptor GGUF lowering, and selected quantization plan complete | Source-faithful and selected complete GGUF artifacts emitted, roundtrip-verified, admitted, fully walked through bounded materialization access, and projected into a DeepSeek runtime descriptor | Complete SWA/CSA/HCA attention is admitted on CPU and GB10 CUDA; persistent KV, prefill, MoE, transformer composition, and generation remain unsupported | sole v0.1.0 release target |
+| DeepSeek-V4-Flash | Exact source metadata/header verification, upstream payload trust, bounded streaming handoff, and typed architecture IR complete | Exact 69,187-entry coverage, artifact-neutral Transformation IR, 1,360-descriptor GGUF lowering, and selected quantization plan complete | Source-faithful and selected complete GGUF artifacts emitted, roundtrip-verified, admitted, fully walked through bounded materialization access, and projected into a DeepSeek runtime descriptor | Complete SWA/CSA/HCA attention is admitted on CPU and GB10 CUDA; the main `yvex` binary reaches it with a canonical probe. Persistent KV, prefill, MoE, transformer composition, prompt execution, and generation remain unsupported | sole v0.1.0 release target |
 | Qwen | Source target/profile, header inventory, naming-map, and role-coverage work exists | Implemented at bounded source/header/report stages | No complete supported artifact or full materialization claim | generation unsupported | active multi-family/common architecture evidence |
 | Gemma | Source target/profile and header tensor-collection work exists | Dense/common mapping can be reused; exact complete family gate not claimed | No complete supported artifact or full materialization claim | generation unsupported | active dense/common architecture evidence |
 | Dense/common | Common naming, collections, proof artifacts, validators, and primitive evidence exist | Partial reusable capability | Family-neutral admitted-artifact materialization and runtime descriptor projection are implemented; backend residency and graph execution remain future rows | no supported full-model runtime | common engine architecture and regression surface |
@@ -696,12 +744,12 @@ calculated from rows rather than protected by a summary hash.
 | Recovered IDs | 631 |
 | Explicit new IDs | 50 |
 | Canonical IDs | 681 |
-| First-class milestones | 42 |
-| State: complete | 235 |
+| First-class milestones | 43 |
+| State: complete | 236 |
 | State: active | 1 |
 | State: partial | 1 |
 | State: blocked | 11 |
-| State: planned | 397 |
+| State: planned | 396 |
 | State: reopened | 2 |
 | State: deferred | 22 |
 | State: superseded | 11 |
@@ -728,7 +776,7 @@ calculated from rows rather than protected by a summary hash.
 | `TRACK.SAMPLING` | Deterministic and stochastic token selection over real vocabulary logits, seeding, reproducibility, validation, and refusal. | bounded fixture sampling only | Selected token IDs derive from real output-head logits. |
 | `TRACK.TOKENIZER` | Exact tokenizer loading, prompt encoding, templates, special/EOS/stop policy, append boundary, detokenization, and failure behavior. | metadata and token-ID contract evidence only | Prompt text and generated IDs traverse the exact tokenizer contract. |
 | `TRACK.GENERATION` | Tokenizer/prefill/KV/decode/logits/sampling composition, append, stop, cancellation, partial output, trace, cleanup, and autoregression. | bounded diagnostic control flow only | Multiple real autoregressive tokens become detokenized text. |
-| `TRACK.OPERATOR` | CLI grammar, command adaptation, typed input, dispatch, rendering, refusal, control-plane integration, topology guards, and operator acceptance. | substantial control-plane/topology work exists; release command is unsupported | One truthful command invokes the accepted runtime path without owning domain behavior. |
+| `TRACK.OPERATOR` | CLI grammar, command adaptation, typed input, dispatch, rendering, refusal, control-plane integration, topology guards, and operator acceptance. | complete DeepSeek attention is reachable through one truthful production command; prompt and release generation commands remain unsupported | Every executable milestone reaches its accepted production API through a real command or records an owned non-applicability reason. |
 | `TRACK.SERVE` | Runtime-backed daemon generation, streaming, cancellation, observability, and protocol compatibility. | deferred outside v0.1.0 | Defined only after real local generation is stable and separately scoped. |
 | `TRACK.EVAL` | Release-path correctness, regression, failure, tokenizer, context, and capability evaluation. | blocked by real generation | Repeatable evaluation passes over the release path. |
 | `TRACK.BENCH` | Reproducible machine, artifact, qtype, context, prefill, decode, generation, timing, throughput, and memory measurements. | not measured | Accepted DGX Spark benchmark evidence over the release path. |
@@ -762,7 +810,7 @@ closure.
 | `TRACK.SAMPLING` | 15 | 16 | 0/0/0/0/1/0 | 4 | 11 | 0 |
 | `TRACK.TOKENIZER` | 13 | 14 | 0/0/0/0/1/0 | 2 | 11 | 0 |
 | `TRACK.GENERATION` | 53 | 54 | 0/0/0/0/1/0 | 22 | 31 | 0 |
-| `TRACK.OPERATOR` | 81 | 82 | 0/0/0/1/1/0 | 37 | 43 | 0 |
+| `TRACK.OPERATOR` | 81 | 82 | 1/0/0/1/1/0 | 37 | 42 | 0 |
 | `TRACK.SERVE` | 12 | 12 | 0/0/0/0/0/0 | 0 | 12 | 0 |
 | `TRACK.EVAL` | 15 | 16 | 0/0/0/0/1/0 | 0 | 15 | 0 |
 | `TRACK.BENCH` | 16 | 17 | 0/0/0/0/0/1 | 0 | 16 | 0 |
@@ -823,20 +871,21 @@ written after inspection of owner code, consumers, tests, and current contracts.
 | 26 | `V010.REPO.SEMANTIC.COMPRESSION.0` | `TRACK.SCOPE` | project | `complete` | Reconstructed repository-wide semantic ownership, compacted paths and symbols, enforced family budgets and dependency boundaries, and preserved all admitted identities without promoting inference. | V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0 |
 | 27 | `V010.REPO.C.CANONICALIZATION.0` | `TRACK.SCOPE` | project | `complete` | Canonicalized public/internal/private C interfaces, explicit includes, source-relative archive identities, symbol visibility, semantic contracts, large owners, and hard ABI/complexity gates without promoting inference. | V010.REPO.SEMANTIC.COMPRESSION.0 |
 | 28 | `V010.GRAPH.DEEPSEEK.ATTENTION.0` | `TRACK.GRAPH` | DeepSeek | `complete` | Complete SWA/CSA/HCA execution consumes the admitted descriptor and real encoded weights through independent reference, production CPU, and device-complete GB10 CUDA paths. | V010.REPO.C.CANONICALIZATION.0 |
-| 29 | `V010.RUNTIME.DEEPSEEK.KV.0` | `TRACK.KV` | DeepSeek | `active` | Allocate, index, write, read, advance, bound, clear, and release the exact persistent DeepSeek KV state used by prefill and decode. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
-| 30 | `V010.RUNTIME.DEEPSEEK.PREFILL.0` | `TRACK.PREFILL` | DeepSeek | `blocked` | Execute full prompt prefill through every required layer and write real attention-derived KV state. | V010.RUNTIME.DEEPSEEK.KV.0 |
-| 31 | `V010.RUNTIME.DEEPSEEK.MOE.0` | `TRACK.GRAPH` | DeepSeek | `blocked` | Compute router logits, select experts, execute real expert weights, combine outputs, integrate shared experts, and clean up failures. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
-| 32 | `V010.GRAPH.DEEPSEEK.TRANSFORMER.0` | `TRACK.GRAPH` | DeepSeek | `blocked` | Execute embedding through repeated attention/MoE layers, residual paths, and final norm over the complete descriptor. | V010.RUNTIME.DEEPSEEK.MOE.0 |
-| 33 | `V010.RUNTIME.DEEPSEEK.DECODE.0` | `TRACK.DECODE` | DeepSeek | `blocked` | Run repeated model-backed decode steps that consume prior KV, advance positions, preserve cancellation, and produce real hidden state. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
-| 34 | `V010.RUNTIME.DEEPSEEK.LOGITS.0` | `TRACK.LOGITS` | DeepSeek | `blocked` | Apply final norm and the complete output head to real transformer state and produce vocabulary logits with numeric proof. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
-| 35 | `V010.RUNTIME.SAMPLING.0` | `TRACK.SAMPLING` | common | `blocked` | Select token IDs from real vocabulary logits with deterministic greedy behavior, seeded stochastic policies, validation, and refusal. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
-| 36 | `V010.RUNTIME.DEEPSEEK.TOKENIZER.0` | `TRACK.TOKENIZER` | DeepSeek | `blocked` | Load the exact tokenizer, encode prompts, apply template/special/EOS/stop rules, and detokenize generated IDs. | V010.RUNTIME.SAMPLING.0 |
-| 37 | `V010.RUNTIME.DEEPSEEK.GENERATION.0` | `TRACK.GENERATION` | DeepSeek | `blocked` | Compose tokenizer, prefill, KV, decode, logits, sampling, append, stop, cancellation, partial-output, and cleanup for multiple real tokens. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
-| 38 | `V010.CLI.DEEPSEEK.GENERATE.0` | `TRACK.OPERATOR` | DeepSeek | `blocked` | Expose one operator command that invokes the accepted generation path and reports precise refusal, cancellation, partial output, and cleanup. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
-| 39 | `V010.EVAL.DEEPSEEK.0` | `TRACK.EVAL` | DeepSeek | `blocked` | Run repeatable correctness, tokenizer, regression, long-context, refusal, and release-path generation evaluations. | V010.CLI.DEEPSEEK.GENERATE.0 |
-| 40 | `V010.BENCH.DEEPSEEK.0` | `TRACK.BENCH` | DeepSeek / DGX Spark | `not-measured` | Record reproducible artifact, qtype, prompt/context, prefill, decode, generation, timing, throughput, and memory evidence. | V010.EVAL.DEEPSEEK.0 |
-| 41 | `V010.RELEASE.0` | `TRACK.RELEASE` | DeepSeek v0.1.0 | `blocked` | Close every source, architecture, mapping, artifact, materialization, backend, transformer, generation, evaluation, benchmark, validation, claim, operator, packaging, and version gate. | V010.BENCH.DEEPSEEK.0 |
-| 42 | `TOPOLOGY.CELL.CLOSURE.0` | `TRACK.OPERATOR` | common | `planned` | Close residual mixed ownership only where concrete behavior still crosses domain/report/input/command/render/write boundaries. | V010.DOCS.ARCHITECTURE.0; supporting, not a product-stage promotion |
+| 29 | `V010.CLI.GRAPH.0` | `TRACK.OPERATOR` | DeepSeek + common operator | `complete` | Exposed complete production DeepSeek attention through the main YVEX binary with CPU, CUDA, quick/full canonical probes, typed structured refusal, and explicit non-generation semantics. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| 30 | `V010.RUNTIME.DEEPSEEK.KV.0` | `TRACK.KV` | DeepSeek | `active` | Allocate, index, write, read, advance, bound, clear, and release the exact persistent DeepSeek KV state used by prefill and decode. | V010.CLI.GRAPH.0 |
+| 31 | `V010.RUNTIME.DEEPSEEK.PREFILL.0` | `TRACK.PREFILL` | DeepSeek | `blocked` | Execute full prompt prefill through every required layer and write real attention-derived KV state. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| 32 | `V010.RUNTIME.DEEPSEEK.MOE.0` | `TRACK.GRAPH` | DeepSeek | `blocked` | Compute router logits, select experts, execute real expert weights, combine outputs, integrate shared experts, and clean up failures. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| 33 | `V010.GRAPH.DEEPSEEK.TRANSFORMER.0` | `TRACK.GRAPH` | DeepSeek | `blocked` | Execute embedding through repeated attention/MoE layers, residual paths, and final norm over the complete descriptor. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| 34 | `V010.RUNTIME.DEEPSEEK.DECODE.0` | `TRACK.DECODE` | DeepSeek | `blocked` | Run repeated model-backed decode steps that consume prior KV, advance positions, preserve cancellation, and produce real hidden state. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| 35 | `V010.RUNTIME.DEEPSEEK.LOGITS.0` | `TRACK.LOGITS` | DeepSeek | `blocked` | Apply final norm and the complete output head to real transformer state and produce vocabulary logits with numeric proof. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| 36 | `V010.RUNTIME.SAMPLING.0` | `TRACK.SAMPLING` | common | `blocked` | Select token IDs from real vocabulary logits with deterministic greedy behavior, seeded stochastic policies, validation, and refusal. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| 37 | `V010.RUNTIME.DEEPSEEK.TOKENIZER.0` | `TRACK.TOKENIZER` | DeepSeek | `blocked` | Load the exact tokenizer, encode prompts, apply template/special/EOS/stop rules, and detokenize generated IDs. | V010.RUNTIME.SAMPLING.0 |
+| 38 | `V010.RUNTIME.DEEPSEEK.GENERATION.0` | `TRACK.GENERATION` | DeepSeek | `blocked` | Compose tokenizer, prefill, KV, decode, logits, sampling, append, stop, cancellation, partial-output, and cleanup for multiple real tokens. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| 39 | `V010.CLI.DEEPSEEK.GENERATE.0` | `TRACK.OPERATOR` | DeepSeek | `blocked` | Expose one operator command that invokes the accepted generation path and reports precise refusal, cancellation, partial output, and cleanup. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| 40 | `V010.EVAL.DEEPSEEK.0` | `TRACK.EVAL` | DeepSeek | `blocked` | Run repeatable correctness, tokenizer, regression, long-context, refusal, and release-path generation evaluations. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| 41 | `V010.BENCH.DEEPSEEK.0` | `TRACK.BENCH` | DeepSeek / DGX Spark | `not-measured` | Record reproducible artifact, qtype, prompt/context, prefill, decode, generation, timing, throughput, and memory evidence. | V010.EVAL.DEEPSEEK.0 |
+| 42 | `V010.RELEASE.0` | `TRACK.RELEASE` | DeepSeek v0.1.0 | `blocked` | Close every source, architecture, mapping, artifact, materialization, backend, transformer, generation, evaluation, benchmark, validation, claim, operator, packaging, and version gate. | V010.BENCH.DEEPSEEK.0 |
+| 43 | `TOPOLOGY.CELL.CLOSURE.0` | `TRACK.OPERATOR` | common | `planned` | Close residual mixed ownership only where concrete behavior still crosses domain/report/input/command/render/write boundaries. | V010.DOCS.ARCHITECTURE.0; supporting, not a product-stage promotion |
 
 ## 9. Complete Track/Wave Ledger
 
@@ -1460,7 +1509,7 @@ target or payload snapshot exists.
 
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
-| `V010.RUNTIME.DEEPSEEK.KV.0` | DeepSeek | `active` | Allocate, index, write, read, advance, bound, clear, and release the exact persistent DeepSeek KV state used by prefill and decode. | V010.GRAPH.DEEPSEEK.ATTENTION.0 | current |
+| `V010.RUNTIME.DEEPSEEK.KV.0` | DeepSeek | `active` | Allocate, index, write, read, advance, bound, clear, and release the exact persistent DeepSeek KV state used by prefill and decode. | V010.CLI.GRAPH.0 | current |
 
 #### Recovered And Subordinate Rows
 
@@ -1707,14 +1756,15 @@ target or payload snapshot exists.
 
 **Owner:** CLI grammar, command adaptation, typed input, dispatch, rendering, refusal, control-plane integration, topology guards, and operator acceptance.
 
-**Current truth:** substantial control-plane/topology work exists; release command is unsupported
+**Current truth:** `yvex graph attention execute` directly reaches complete production DeepSeek attention on CPU and GB10 CUDA through honest canonical-probe scopes; prompt execution and the release generation command remain unsupported
 
-**Ledger summary:** 81 recovered IDs; 2 first-class milestones; 37 complete support rows; 43 open support rows; 0 superseded/deferred rows.
+**Ledger summary:** 81 recovered IDs; 3 first-class milestones; 37 complete support rows; 42 open support rows; 0 superseded/deferred rows.
 
 #### First-Class Milestones
 
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
+| `V010.CLI.GRAPH.0` | DeepSeek + common operator | `complete` | Expose production DeepSeek attention through the main YVEX binary with CPU, CUDA, quick/full canonical probes, typed structured refusal, and explicit non-generation semantics. | V010.GRAPH.DEEPSEEK.ATTENTION.0 | recovered/promoted |
 | `V010.CLI.DEEPSEEK.GENERATE.0` | DeepSeek | `blocked` | Expose one operator command that invokes the accepted generation path and reports precise refusal, cancellation, partial output, and cleanup. | V010.RUNTIME.DEEPSEEK.GENERATION.0 | current |
 | `TOPOLOGY.CELL.CLOSURE.0` | common | `planned` | Close residual mixed ownership only where concrete behavior still crosses domain/report/input/command/render/write boundaries. | V010.DOCS.ARCHITECTURE.0; supporting, not a product-stage promotion | recovered/promoted |
 
@@ -1786,7 +1836,6 @@ target or payload snapshot exists.
 | `V010.CLI.SOURCE.0` | `subtask` | common | `planned` | source-manifest/native-weights porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
 | `V010.CLI.ACCOUNTS.0` | `subtask` | common | `planned` | accounts/provider porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
 | `V010.CLI.PATHS.0` | `subtask` | common | `planned` | paths porcelain finalization. | V010.CLI.DEEPSEEK.GENERATE.0 |
-| `V010.CLI.GRAPH.0` | `subtask` | common | `planned` | graph check/operator porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
 | `V010.CLI.RUNTIME.0` | `subtask` | common | `planned` | runtime diagnostic command grammar. | V010.CLI.DEEPSEEK.GENERATE.0 |
 | `V010.CLI.GENERATE.0` | `subtask` | common | `planned` | diagnostic generate porcelain grammar. | V010.CLI.DEEPSEEK.GENERATE.0 |
 | `V010.CLI.CHAT.0` | `subtask` | common | `planned` | accepted-only chat UX grammar. | V010.CLI.DEEPSEEK.GENERATE.0 |
@@ -2157,7 +2206,10 @@ Before proposing or implementing a delivery:
 7. Preserve Qwen, Gemma, dense/common, fixture, diagnostic, and topology work at
    its truthful rank.
 8. Run focused tests and complete repository validation.
-9. Update this map atomically with implementation result and next dependency.
+9. Classify `cli_applicability` for every milestone. Executable capability is
+   incomplete until the main `yvex` binary invokes its production API directly;
+   non-executable work records an owned non-applicability reason.
+10. Update this map atomically with implementation result and next dependency.
 
 The complete current ledger remains in this file. Future refinement may improve
 rank, descriptions, or milestone grouping, but it must preserve every ID or

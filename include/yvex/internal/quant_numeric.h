@@ -275,6 +275,7 @@ typedef struct {
     yvex_quant_plan_state state;
     char profile_name[64];
     char profile_identity[YVEX_QUANT_PLAN_IDENTITY_CAP];
+    char payload_plan_identity[YVEX_QUANT_PLAN_IDENTITY_CAP];
     char transform_identity[YVEX_QUANT_PLAN_IDENTITY_CAP];
     unsigned long long source_snapshot_identity;
     char required_payload_identity[YVEX_QUANT_PLAN_IDENTITY_CAP];
@@ -367,6 +368,7 @@ typedef struct {
     unsigned long long qtype_bytes[
         YVEX_GGUF_QTYPE_ABI_UPSTREAM_MAX_ID + 1u];
     char execution_identity[YVEX_QUANT_PLAN_IDENTITY_CAP];
+    char payload_byte_identity[YVEX_QUANT_PLAN_IDENTITY_CAP];
     int complete;
 } yvex_quant_digest_summary;
 typedef struct {

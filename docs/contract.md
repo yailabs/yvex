@@ -375,17 +375,13 @@ independent reference. RoPE support is only a position operation boundary; it is
 not attention, QKV projection, transformer block execution, layer scheduling,
 decode, logits, sampling, generation, or a provider path.
 
-The standalone attention operation is admitted through `yvex graph
---execute-op --op attention`. It does not use a model artifact and does not
-project Q/K/V from model tensors. It validates backend availability, backend
-attention support, explicit F32 query/key/value shapes, `seq_len`, `position`,
-positive `head_dim`, causal mask bounds, score/probability scratch sizing,
-output allocation, dispatch, reference comparison, and cleanup status. The
-result reports checksums, softmax probability diff, output max absolute diff,
-visible and masked key counts, dispatch/reference/allocation/cleanup fields, and
-unsupported readiness fields. Attention primitive support is not transformer
-block execution, layer scheduling, full transformer prefill, decode, logits,
-sampling, generation, or a provider path.
+The standalone attention primitive remains a focused test-owned proof over
+explicit F32 Q/K/V. Its former production fixture command, `yvex graph
+--execute-op --op attention`, now refuses rather than presenting fixture
+execution as operator capability. The real operator path is the admitted
+DeepSeek attention command described below. Neither boundary establishes
+persistent KV, transformer prefill, decode, logits, sampling, generation, or a
+provider path.
 
 The standalone matmul operation is admitted through `yvex graph --execute-op
 --op matmul`. It does not use a model artifact and does not read model
@@ -443,6 +439,70 @@ numerical fallback or fallback PTX.
 This contract does not own persistent runtime KV shared by prefill and decode.
 It does not admit prefill, MoE, transformer composition, decode, logits,
 sampling, generation, evaluation, benchmark, or release support.
+
+### DeepSeek Attention Operator Contract
+
+`yvex graph attention execute` is the canonical operator consumer of that
+production boundary. Its chain is CLI grammar, typed input, the internal graph
+operator ABI, admitted runtime descriptor and external selected artifact,
+bounded materialization, production CPU or CUDA attention, typed result, and
+CLI rendering. It does not invoke Make, scripts, tests, another process, or the
+test-only oracle.
+
+The accepted commands are:
+
+```sh
+./yvex graph attention execute --target deepseek4-v4-flash \
+  --backend cpu --probe canonical --scope quick --output audit
+./yvex graph attention execute --target deepseek4-v4-flash \
+  --backend cpu --probe canonical --scope full --output audit
+./yvex graph attention execute --target deepseek4-v4-flash \
+  --backend cuda --probe canonical --scope quick --output audit
+./yvex graph attention execute --target deepseek4-v4-flash \
+  --backend cuda --probe canonical --scope full --output audit
+./yvex graph attention execute --target deepseek4-v4-flash \
+  --compare-backends --probe canonical --scope full --output json
+```
+
+The canonical probe preserves the real width, heads, bindings, qtypes,
+position policy, history, top-k, and HCA ratio geometry. Quick scope executes
+one representative SWA, CSA, and HCA layer, including active history and the
+ratio-128 boundary. Full scope executes all 43 main layers and all 634
+bindings: 2 SWA, 21 CSA, and 20 HCA. Neither scope accepts prompt text or
+represents prefill, decode, or generation.
+
+CPU/CUDA comparison runs both production backends independently and does not
+consult the semantic oracle. Comparison schema v2 admits every finite pair
+under the combined bound
+`abs(a - b) <= 5e-4 + 5e-4 * max(abs(a), abs(b))`, refuses non-finite values,
+and computes RMSE over finite pairs only. Raw object-byte comparison records
+`bitwise_equality_observed`; the admitted probes currently observe equality,
+while `bitwise_equality_required=false`. The observation is neither the
+admission contract nor a causal explanation for numerical agreement. The
+independent full-equation oracle remains
+in a separate test-only translation unit, is absent from the production
+binary, and is protected by dependency and stage-mutation guards.
+
+Physical compatibility has three independent gates. A zero-read canonical
+payload recipe identity binds every source range, transformation operation,
+physical decision, lowering geometry, ordering, and encoded size; the selected
+recipe identity is
+`6c6289c096b5502eba98498bf498c80d9ca9c13ab06f5dcb62075e372274e97b`.
+It is not a payload digest. Complete quantization and an independent artifact
+read must agree on aggregate payload-byte identity
+`249277b42eb1aa231bddcb33b33ae3d805f3aa5991eaa99ae091f2ea9b928eb0`.
+Operator admission separately hashes the exact complete GGUF and revalidates
+the immutable file snapshot before dispatch. A zero-read layout comparison can
+prove directory, shape, qtype, offset, range, and encoded-size equality, but it
+cannot prove payload-byte equality by itself.
+
+Normal, table, audit, and JSON rendering project one typed result. Refusal is a
+non-zero process status and includes the typed code and failing boundary. CUDA
+never falls back to CPU, full never degrades to quick, and no failed execution
+publishes partial attention state. Current successful output classifies the
+input as `canonical_attention_probe`, the weights as an admitted external
+artifact, and both `runtime_generation_ready` and
+`end_user_generation_available` as false.
 
 ## Token and Prefill Contract
 

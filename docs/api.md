@@ -140,7 +140,7 @@ runtime capability.
 | Backend transfer proof | Driver/device/context discovery, exact typed capability queries, bounded tensor allocation/transfer/checked release, generated CUDA bundle admission, and materialization summaries. |
 | Engine ownership proof | Engine creation, bounded weight attachment, engine-owned lifetime, and graph proof entry points. |
 | Session visibility | Session reports over engine-attached runtime state and minimal session-owned KV state. |
-| Graph proofs | Controlled fixture results, bounded embedding/segment results, standalone RoPE, attention, matmul/projection, and MLP/feed-forward comparisons, graph guards, checksums, and max-diff reports. |
+| Graph proofs | Controlled fixture results, bounded embedding/segment results, standalone RoPE, attention, matmul/projection, and MLP/feed-forward comparisons, graph guards, checksums, and max-diff reports. Production DeepSeek attention uses the non-installed operator ABI described below. |
 | Token input | Bounded explicit token lists, token validation, token selection, and prompt-to-token boundaries through tokenizer paths. |
 | Diagnostic sequence state | Segment-summary reports over validated token sequences, with optional minimal session-owned KV storage. |
 | Runtime reporting | Metrics, traces, profiles, integrity reports, materialization reports, graph reports, and failure phases. |
@@ -387,9 +387,56 @@ dispatch, allocation, cleanup, checksum, and max-diff fields. This API surface
 does not project Q/K/V from model tensors, execute a transformer block, schedule
 layers, run prefill/decode, produce logits, sample, or generate text.
 
-These graph APIs remain bounded proof contracts. Full layer, prefill, decode,
-logits, and generation APIs are not documented as implemented because they do
-not exist.
+These public graph APIs remain bounded proof contracts. They do not expose
+full-layer execution, prefill, decode, logits, or generation as installed C
+ABI.
+
+### Internal DeepSeek Attention Operator Boundary
+
+The main CLI reaches production DeepSeek attention through the non-installed
+`<yvex/internal/graph.h>` contract. It is intentionally separate from the
+public umbrella while persistent KV and transformer composition remain active
+boundaries.
+
+`yvex_graph_attention_operator_execute` accepts caller-borrowed canonical
+source, model-root, manifest, and artifact paths plus a typed target, backend,
+probe, scope, cancellation callback, and comparison request. It owns the
+temporary artifact, compilation, materialization, descriptor, attention-plan,
+backend, and probe lifecycle for the duration of the call. The caller owns the
+request, result, and error storage; the function publishes copied result facts
+and releases all temporary state before returning.
+
+The operator adapter validates physical artifact compatibility before calling
+`yvex_attention_probe_execute`. That admission keeps three facts separate: the
+zero-read payload recipe identity
+`6c6289c096b5502eba98498bf498c80d9ca9c13ab06f5dcb62075e372274e97b`,
+the independently read aggregate payload-byte identity
+`249277b42eb1aa231bddcb33b33ae3d805f3aa5991eaa99ae091f2ea9b928eb0`,
+and the exact whole-file hash plus immutable snapshot validation. Structural
+layout and recipe comparison read no tensor bytes and therefore are not
+payload-digest evidence. Quick scope executes one representative SWA, CSA, and
+HCA layer. Full scope executes all 43 main layers and 634 bindings. The result
+contains the consumed identities, execution counts, qtype payload reads,
+output digests, CUDA facts, compatibility facts, readiness flags, and a typed
+refusal boundary. Failure never commits partial attention output or state and
+never mutates the external artifact.
+
+Comparison mode runs the production CPU and CUDA paths independently. Its
+versioned schema-v2 contract admits each finite pair when
+`abs(a - b) <= 5e-4 + 5e-4 * max(abs(a), abs(b))`, refuses non-finite pairs,
+and computes RMSE over finite pairs only. It reports maximum absolute error,
+maximum relative error, RMSE, first failing coordinate, and separate output
+digests. A raw object-byte comparison additionally records
+`bitwise_equality_observed`; current admitted probes observe equality, but
+`bitwise_equality_required` remains false. That observation is not used as a
+causal explanation or a general backend promise.
+
+The independent full-equation oracle is linked only into tests and does not
+enter this ABI or the `yvex` binary. Operator comparison therefore cannot use
+the oracle as a production dependency or duplicate graph mathematics in the
+CLI. This internal API consumes a canonical attention probe, not prompt input,
+and does not provide persistent KV, prefill, decode, logits, sampling, or
+generation.
 
 ## Token Input
 

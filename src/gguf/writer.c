@@ -535,6 +535,8 @@ static int writer_plan_identity(yvex_gguf_writer_plan *plan) {
     if (!yvex_sha256_update(&hash, scalar, sizeof(scalar)) ||
         !yvex_sha256_update(&hash, plan->summary.profile_identity,
                             strlen(plan->summary.profile_identity)) ||
+        !yvex_sha256_update(&hash, plan->summary.payload_plan_identity,
+                            strlen(plan->summary.payload_plan_identity)) ||
         !yvex_sha256_update(&hash, plan->summary.required_execution_identity,
                             strlen(plan->summary.required_execution_identity)) ||
         !yvex_sha256_final(&hash, digest))
@@ -566,6 +568,9 @@ static void writer_plan_seed(yvex_gguf_writer_plan *plan, const yvex_quant_plan 
                    quant->profile_name);
     (void)snprintf(plan->summary.profile_identity, sizeof(plan->summary.profile_identity), "%s",
                    quant->profile_identity);
+    (void)snprintf(plan->summary.payload_plan_identity,
+                   sizeof(plan->summary.payload_plan_identity), "%s",
+                   quant->payload_plan_identity);
     if (options->required_execution_identity)
         (void)snprintf(plan->summary.required_execution_identity,
                        sizeof(plan->summary.required_execution_identity), "%s",
@@ -832,6 +837,8 @@ typedef struct {
     const unsigned char *raw_config;
     size_t raw_json_bytes;
     size_t raw_config_bytes;
+    char source_identity[32];
+    char mapping_identity[32];
     writer_buffer buffer;
     unsigned long long data_span;
     yvex_gguf_writer_failure *failure;
@@ -954,21 +961,21 @@ static int writer_deepseek_add_tokenizer_metadata(writer_deepseek_context *conte
  * Failure: returns false for duplicate or unrepresentable metadata rows.
  * Boundary: records existing identities and never derives replacement identities. */
 static int writer_deepseek_add_provenance_metadata(writer_deepseek_context *context) {
-    char source_identity[32];
-    char mapping_identity[32];
     writer_metadata *metadata = context->metadata;
     unsigned int *count = &context->metadata_count;
 
-    (void)snprintf(source_identity, sizeof(source_identity), "%016llx",
+    (void)snprintf(context->source_identity, sizeof(context->source_identity), "%016llx",
                    context->quant->source_snapshot_identity);
-    (void)snprintf(mapping_identity, sizeof(mapping_identity), "%016llx",
+    (void)snprintf(context->mapping_identity, sizeof(context->mapping_identity), "%016llx",
                    context->quant->mapping_identity);
-    return writer_meta_text(metadata, count, "yvex.source.snapshot.identity", source_identity) &&
+    return writer_meta_text(metadata, count, "yvex.source.snapshot.identity",
+                            context->source_identity) &&
            writer_meta_text(metadata, count, "yvex.source.payload.identity",
                             context->quant->required_payload_identity) &&
            writer_meta_text(metadata, count, "yvex.transform.identity",
                             context->quant->transform_identity) &&
-           writer_meta_text(metadata, count, "yvex.gguf.mapping.identity", mapping_identity) &&
+           writer_meta_text(metadata, count, "yvex.gguf.mapping.identity",
+                            context->mapping_identity) &&
            writer_meta_text(metadata, count, "yvex.quant.profile.name",
                             context->quant->profile_name) &&
            writer_meta_text(metadata, count, "yvex.quant.profile.identity",

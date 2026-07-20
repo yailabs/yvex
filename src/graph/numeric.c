@@ -12,6 +12,68 @@
 static const double attention_pi =
     3.14159265358979323846264338327950288;
 
+/* Purpose: compare two finite F32 ranges under one deterministic numeric contract.
+ * Inputs: equally sized arrays plus finite non-negative absolute and relative tolerances.
+ * Effects: replaces caller-owned metrics; performs no allocation or I/O.
+ * Failure: invalid geometry refuses; non-finite values produce a typed failed verdict.
+ * Boundary: bitwise equality is observed separately from tolerance admission. */
+int yvex_graph_f32_compare(const float *left, const float *right,
+                           unsigned long long count, double absolute_tolerance,
+                           double relative_tolerance, yvex_graph_f32_comparison *out,
+                           yvex_error *err)
+{
+    yvex_graph_f32_comparison next = {0};
+    unsigned long long index;
+    size_t bytes;
+
+    next.first_failing_coordinate = ULLONG_MAX;
+    if (!left || !right || !count || !out || !isfinite(absolute_tolerance) ||
+        !isfinite(relative_tolerance) || absolute_tolerance < 0.0 ||
+        relative_tolerance < 0.0 || count > SIZE_MAX / sizeof(*left)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "graph.f32.compare",
+                       "finite tolerances and representable non-empty F32 ranges are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    bytes = (size_t)count * sizeof(*left);
+    next.value_count = count;
+    next.within_tolerance = 1;
+    next.bitwise_equal = memcmp(left, right, bytes) == 0;
+    for (index = 0ull; index < count; ++index) {
+        double left_value = left[index];
+        double right_value = right[index];
+        double absolute;
+        double scale;
+        double relative;
+        double allowed;
+
+        if (!isfinite(left_value) || !isfinite(right_value)) {
+            next.nonfinite_value_count++;
+            next.within_tolerance = 0;
+            if (next.first_failing_coordinate == ULLONG_MAX)
+                next.first_failing_coordinate = index;
+            continue;
+        }
+        absolute = fabs(left_value - right_value);
+        scale = fmax(fabs(left_value), fabs(right_value));
+        relative = scale > 0.0 ? absolute / scale : 0.0;
+        allowed = absolute_tolerance + relative_tolerance * scale;
+        next.finite_value_count++;
+        if (absolute > next.maximum_absolute_error)
+            next.maximum_absolute_error = absolute;
+        if (relative > next.maximum_relative_error)
+            next.maximum_relative_error = relative;
+        next.squared_error_sum += absolute * absolute;
+        if ((!isfinite(allowed) || absolute > allowed) &&
+            next.first_failing_coordinate == ULLONG_MAX) {
+            next.first_failing_coordinate = index;
+            next.within_tolerance = 0;
+        }
+    }
+    *out = next;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 /* Purpose: apply the identity-bearing DeepSeek activation storage boundary.
  * Inputs: one admitted compute contract and finite F32 working values.
  * Effects: rounds values in place to their model-visible storage precision.

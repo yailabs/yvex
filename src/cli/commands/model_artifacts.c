@@ -45,44 +45,27 @@ static const char *const literal_lines_1[] = { "provider_process_alive: true",
     "deleted: 0",
     "status: model-download-cleanup-blocked"};
 
-typedef int (*model_artifacts_surface_command_fn)(int arg_count, char **args);
-typedef void (*model_artifacts_surface_help_fn)(FILE *fp);
+typedef struct {
+    const char *target_id;
+    const char *family;
+    const char *repo_id;
+    const char *local_name;
+    const char *revision;
+    const char *provider_name;
+    const char *token_value;
+    yvex_model_download_resolved_target resolved;
+    int resolved_dynamic;
+    int token_present;
+} download_identity;
 
-/*
- * Contract: keep the adapter compiled against the typed cell interfaces while
- * historical surfaces are decomposed. Allocates nothing, mutates no domain
- * state, performs no IO, and does not call the compatibility surface. */
-/* Purpose: Compute model artifacts adapter contract for its CLI invariant (`model_artifacts_adapter_contract`). */
-static void model_artifacts_adapter_contract(void)
-{
-    (void)yvex_model_artifacts_args_parse;
-    (void)yvex_model_artifact_report_build;
-    (void)yvex_model_artifacts_render;
-}
-
-/*
- * Contract: dispatch to an existing CLI surface without inspecting artifacts,
- * opening backends, formatting output, or owning command facts. The callee owns
- * its current transitional behavior and exit-code semantics. */
-/* Purpose: Compute model artifacts dispatch for its CLI invariant (`model_artifacts_dispatch`). */
-static int model_artifacts_dispatch(int arg_count,
-                                    char **args,
-                                    model_artifacts_surface_command_fn run)
-{
-    model_artifacts_adapter_contract();
-    return run(arg_count, args);
-}
-
-/*
- * Contract: forward help rendering to the transitional surface while renderer
- * ownership is completed. Allocates no memory and writes only through the
- * callee's existing CLI IO path. */
-/* Purpose: Render model artifacts help from typed facts (`model_artifacts_help`). */
-static void model_artifacts_help(FILE *fp, model_artifacts_surface_help_fn help)
-{
-    model_artifacts_adapter_contract();
-    help(fp);
-}
+static int download_identity_resolve(const yvex_cli_models_download_options *options,
+    yvex_model_download_report *report, yvex_operator_paths *operator_paths,
+    yvex_account_provider *provider_kind, download_identity *identity,
+    yvex_error *err, int control_mode);
+static int download_paths_prepare(const yvex_cli_models_download_options *options,
+    yvex_model_download_report *report, const yvex_operator_paths *operator_paths,
+    yvex_account_provider provider_kind, const download_identity *identity,
+    yvex_error *err, int create_paths);
 
 /* Purpose: Orchestrate the typed models command request (`yvex_models_command`).
  * Inputs: Borrowed typed facts.
@@ -91,9 +74,10 @@ static void model_artifacts_help(FILE *fp, model_artifacts_surface_help_fn help)
  * Boundary: No capability policy. */
 int yvex_models_command(int arg_count, char **args)
 {
-    return model_artifacts_dispatch(arg_count,
-                                    args,
-                                    yvex_model_artifacts_surface_models_command);
+    (void)yvex_model_artifacts_args_parse;
+    (void)yvex_model_artifact_report_build;
+    (void)yvex_model_artifacts_render;
+    return yvex_model_artifacts_surface_models_command(arg_count, args);
 }
 
 /* Purpose: Render models help from typed facts (`yvex_models_help`).
@@ -103,7 +87,7 @@ int yvex_models_command(int arg_count, char **args)
  * Boundary: No capability policy. */
 void yvex_models_help(FILE *fp)
 {
-    model_artifacts_help(fp, yvex_model_artifacts_surface_models_help);
+    yvex_model_artifacts_surface_models_help(fp);
 }
 
 /* Purpose: Orchestrate the typed fullmodel command request (`yvex_fullmodel_command`).
@@ -113,9 +97,7 @@ void yvex_models_help(FILE *fp)
  * Boundary: No capability policy. */
 int yvex_fullmodel_command(int arg_count, char **args)
 {
-    return model_artifacts_dispatch(arg_count,
-                                    args,
-                                    yvex_model_artifacts_surface_fullmodel_command);
+    return yvex_model_artifacts_surface_fullmodel_command(arg_count, args);
 }
 
 /* Purpose: Render fullmodel help from typed facts (`yvex_fullmodel_help`).
@@ -125,7 +107,7 @@ int yvex_fullmodel_command(int arg_count, char **args)
  * Boundary: No capability policy. */
 void yvex_fullmodel_help(FILE *fp)
 {
-    model_artifacts_help(fp, yvex_model_artifacts_surface_fullmodel_help);
+    yvex_model_artifacts_surface_fullmodel_help(fp);
 }
 
 /* Purpose: Orchestrate the typed attention command request (`yvex_attention_command`).
@@ -135,9 +117,7 @@ void yvex_fullmodel_help(FILE *fp)
  * Boundary: No capability policy. */
 int yvex_attention_command(int arg_count, char **args)
 {
-    return model_artifacts_dispatch(arg_count,
-                                    args,
-                                    yvex_model_artifacts_surface_attention_command);
+    return yvex_model_artifacts_surface_attention_command(arg_count, args);
 }
 
 /* Purpose: Render attention help from typed facts (`yvex_attention_help`).
@@ -147,7 +127,7 @@ int yvex_attention_command(int arg_count, char **args)
  * Boundary: No capability policy. */
 void yvex_attention_help(FILE *fp)
 {
-    model_artifacts_help(fp, yvex_model_artifacts_surface_attention_help);
+    yvex_model_artifacts_surface_attention_help(fp);
 }
 
 /* Purpose: Orchestrate the typed context command request (`yvex_context_command`).
@@ -157,9 +137,7 @@ void yvex_attention_help(FILE *fp)
  * Boundary: No capability policy. */
 int yvex_context_command(int arg_count, char **args)
 {
-    return model_artifacts_dispatch(arg_count,
-                                    args,
-                                    yvex_model_artifacts_surface_context_command);
+    return yvex_model_artifacts_surface_context_command(arg_count, args);
 }
 
 /* Purpose: Render context help from typed facts (`yvex_context_help`).
@@ -169,7 +147,7 @@ int yvex_context_command(int arg_count, char **args)
  * Boundary: No capability policy. */
 void yvex_context_help(FILE *fp)
 {
-    model_artifacts_help(fp, yvex_model_artifacts_surface_context_help);
+    yvex_model_artifacts_surface_context_help(fp);
 }
 
 /* Purpose: Orchestrate the typed moe command request (`yvex_moe_command`).
@@ -179,9 +157,7 @@ void yvex_context_help(FILE *fp)
  * Boundary: No capability policy. */
 int yvex_moe_command(int arg_count, char **args)
 {
-    return model_artifacts_dispatch(arg_count,
-                                    args,
-                                    yvex_model_artifacts_surface_moe_command);
+    return yvex_model_artifacts_surface_moe_command(arg_count, args);
 }
 
 /* Purpose: Render moe help from typed facts (`yvex_moe_help`).
@@ -191,7 +167,7 @@ int yvex_moe_command(int arg_count, char **args)
  * Boundary: No capability policy. */
 void yvex_moe_help(FILE *fp)
 {
-    model_artifacts_help(fp, yvex_model_artifacts_surface_moe_help);
+    yvex_model_artifacts_surface_moe_help(fp);
 }
 
 /* Purpose: Orchestrate the typed tensor collection command request (`yvex_tensor_collection_command`).
@@ -201,10 +177,7 @@ void yvex_moe_help(FILE *fp)
  * Boundary: No capability policy. */
 int yvex_tensor_collection_command(int arg_count, char **args)
 {
-    return model_artifacts_dispatch(
-        arg_count,
-        args,
-        yvex_model_artifacts_surface_tensor_collection_command);
+    return yvex_model_artifacts_surface_tensor_collection_command(arg_count, args);
 }
 
 /* Purpose: Render tensor collection help from typed facts (`yvex_tensor_collection_help`).
@@ -214,7 +187,7 @@ int yvex_tensor_collection_command(int arg_count, char **args)
  * Boundary: No capability policy. */
 void yvex_tensor_collection_help(FILE *fp)
 {
-    model_artifacts_help(fp, yvex_model_artifacts_surface_tensor_collection_help);
+    yvex_model_artifacts_surface_tensor_collection_help(fp);
 }
 
 /* Purpose: Transfer bounded model download read receipt status data (`model_download_read_receipt_status`).
@@ -222,9 +195,7 @@ void yvex_tensor_collection_help(FILE *fp)
  * Effects: Mutates declared CLI state only.
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
-static int model_download_read_receipt_status(const char *path,
-                                              char *status,
-                                              size_t status_cap)
+static int model_download_read_receipt_status(const char *path, char *status, size_t status_cap)
 {
     char buf[8192];
 
@@ -241,8 +212,7 @@ static int model_download_read_receipt_status(const char *path,
  * Effects: Mutates declared CLI state only.
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
-static int model_download_read_active_process(const char *active_path,
-                                              pid_t *pid_out,
+static int model_download_read_active_process(const char *active_path, pid_t *pid_out,
                                               pid_t *pgid_out)
 {
     char buf[8192];
@@ -264,8 +234,8 @@ static int model_download_read_active_process(const char *active_path,
  * Effects: Mutates declared CLI state only.
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
-static void model_download_find_provider_processes(const char *local_source_dir,
-                                                   yvex_model_download_process_match *match)
+static void model_download_find_provider_processes(
+    const char *local_source_dir, yvex_model_download_process_match *match)
 {
     DIR *proc;
     struct dirent *ent;
@@ -323,194 +293,23 @@ static void model_download_find_provider_processes(const char *local_source_dir,
  * Effects: Mutates declared CLI state only.
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
-static int model_download_resolve_for_control(int arg_count,
-                                              char **args,
-                                              int start_index,
-                                              yvex_cli_models_download_options *options,
-                                              yvex_model_download_report *report,
-                                              yvex_operator_paths *operator_paths,
-                                              yvex_account_provider *provider_kind,
-                                              yvex_error *err)
+static int model_download_resolve_for_control(int arg_count, char **args, int start_index,
+    yvex_cli_models_download_options *options, yvex_model_download_report *report,
+    yvex_operator_paths *operator_paths, yvex_account_provider *provider_kind,
+    yvex_error *err)
 {
-    const yvex_model_download_catalog_row *row = NULL;
-    yvex_paths paths;
-    char hf_family_dir[YVEX_PATH_CAP];
-    char provider_root_dir[YVEX_PATH_CAP];
-    char github_repo_dir[YVEX_PATH_CAP];
-    char reports_family_dir[YVEX_PATH_CAP];
-    char registry_family_dir[YVEX_PATH_CAP];
-    char logs_dir[YVEX_PATH_CAP];
-    char file_name[256];
-    const char *target_id;
-    const char *family;
-    const char *repo_id;
-    const char *local_name;
-    const char *revision;
-    const char *provider_name;
-    yvex_model_download_resolved_target resolved;
-    int resolved_dynamic = 0;
+    download_identity identity;
     int rc;
 
     rc = parse_models_download_options_from(arg_count, args, start_index, options);
     if (rc != 0) return rc;
     model_download_report_init(report);
-    memset(&paths, 0, sizeof(paths));
-    memset(operator_paths, 0, sizeof(*operator_paths));
     model_download_timestamp(report->created_at, sizeof(report->created_at));
-    if (!yvex_account_provider_from_name(options->provider, provider_kind)) {
-        yvex_cli_out_writef(stderr, "yvex: models download --provider requires hf|huggingface|gh|github\n");
-        return 2;
-    }
-    provider_name = yvex_account_provider_name(*provider_kind);
-    rc = yvex_operator_paths_resolve(&paths, options->models_root, operator_paths, err);
+    rc = download_identity_resolve(options, report, operator_paths, provider_kind,
+                                   &identity, err, 1);
     if (rc != YVEX_OK) return rc;
-
-    if (options->repo) {
-        target_id = options->name;
-        family = *provider_kind == YVEX_ACCOUNT_PROVIDER_GITHUB ? "github" : options->family;
-        repo_id = options->repo;
-        local_name = options->name;
-        revision = *provider_kind == YVEX_ACCOUNT_PROVIDER_GITHUB
-            ? (options->release ? options->release : "latest")
-            : (options->revision ? options->revision : "main");
-    } else {
-        memset(&resolved, 0, sizeof(resolved));
-        resolved_dynamic = model_download_resolve_downloaded_target(options->target,
-                                                                    operator_paths,
-                                                                    &resolved,
-                                                                    err);
-        if (resolved_dynamic) {
-            target_id = resolved.target_id;
-            family = resolved.family;
-            repo_id = resolved.repo_id;
-            local_name = resolved.local_name;
-            revision = options->revision ? options->revision : resolved.revision;
-            if (!yvex_account_provider_from_name(resolved.provider, provider_kind)) {
-                *provider_kind = YVEX_ACCOUNT_PROVIDER_HUGGINGFACE;
-            }
-            provider_name = yvex_account_provider_name(*provider_kind);
-        } else if ((row = model_download_find_catalog(options->target)) != NULL) {
-            target_id = row->target_id;
-            family = row->family;
-            repo_id = row->repo_id;
-            local_name = row->local_name;
-            revision = options->revision ? options->revision : row->revision_default;
-            if (!yvex_account_provider_from_name(row->provider, provider_kind)) {
-                *provider_kind = YVEX_ACCOUNT_PROVIDER_HUGGINGFACE;
-            }
-            provider_name = yvex_account_provider_name(*provider_kind);
-        } else {
-            yvex_cli_out_writef(stderr, "yvex: unknown models download target: %s\n",
-                    options->target ? options->target : "");
-            return 2;
-        }
-    }
-    snprintf(report->target_id, sizeof(report->target_id), "%s", target_id);
-    snprintf(report->family, sizeof(report->family), "%s", family);
-    snprintf(report->provider, sizeof(report->provider), "%s", provider_name);
-    snprintf(report->repo_id, sizeof(report->repo_id), "%s", repo_id);
-    snprintf(report->revision, sizeof(report->revision), "%s", revision);
-    snprintf(report->local_name, sizeof(report->local_name), "%s", local_name);
-    snprintf(report->token_env_name, sizeof(report->token_env_name), "%s",
-             options->token_env ? options->token_env : yvex_account_default_token_env(*provider_kind));
-    snprintf(report->models_root, sizeof(report->models_root), "%s", operator_paths->models_root);
-    snprintf(report->models_root_source, sizeof(report->models_root_source), "%s",
-             operator_paths->models_root_source);
-    if (*provider_kind == YVEX_ACCOUNT_PROVIDER_GITHUB) {
-        rc = path_join2(provider_root_dir, sizeof(provider_root_dir), operator_paths->models_root,
-                        "github", err, "models_download_control");
-        if (rc == YVEX_OK) rc = path_join2(github_repo_dir, sizeof(github_repo_dir),
-                                           provider_root_dir, repo_id, err,
-                                           "models_download_control");
-        if (rc == YVEX_OK) rc = path_join2(report->local_source_dir,
-                                           sizeof(report->local_source_dir),
-                                           github_repo_dir, revision, err,
-                                           "models_download_control");
-    } else {
-        rc = path_join2(hf_family_dir, sizeof(hf_family_dir), operator_paths->hf_root,
-                        family, err, "models_download_control");
-        if (rc == YVEX_OK) rc = path_join2(report->local_source_dir,
-                                           sizeof(report->local_source_dir),
-                                           hf_family_dir, local_name, err,
-                                           "models_download_control");
-    }
-    if (rc == YVEX_OK && resolved_dynamic && resolved.local_source_dir[0]) {
-        snprintf(report->local_source_dir, sizeof(report->local_source_dir), "%s",
-                 resolved.local_source_dir);
-    }
-    if (rc == YVEX_OK) rc = path_join2(reports_family_dir, sizeof(reports_family_dir),
-                                       operator_paths->reports_root, family, err,
-                                       "models_download_control");
-    if (rc == YVEX_OK) rc = path_join2(registry_family_dir, sizeof(registry_family_dir),
-                                       operator_paths->registry_root, family, err,
-                                       "models_download_control");
-    if (rc == YVEX_OK) rc = path_join2(logs_dir, sizeof(logs_dir), operator_paths->models_root,
-                                       "logs", err, "models_download_control");
-    if (rc != YVEX_OK) return rc;
-    snprintf(report->reports_dir, sizeof(report->reports_dir), "%s", reports_family_dir);
-    snprintf(report->registry_dir, sizeof(report->registry_dir), "%s", registry_family_dir);
-    snprintf(file_name, sizeof(file_name), "%s.download.receipt", target_id);
-    rc = path_join2(report->receipt_path, sizeof(report->receipt_path),
-                    reports_family_dir, file_name, err, "models_download_control");
-    snprintf(file_name, sizeof(file_name), "%s.download.active.json", target_id);
-    if (rc == YVEX_OK) rc = path_join2(report->active_receipt_path,
-                                       sizeof(report->active_receipt_path),
-                                       reports_family_dir, file_name, err,
-                                       "models_download_control");
-    snprintf(file_name, sizeof(file_name), "%s.download.last.json", target_id);
-    if (rc == YVEX_OK) rc = path_join2(report->last_receipt_path,
-                                       sizeof(report->last_receipt_path),
-                                       reports_family_dir, file_name, err,
-                                       "models_download_control");
-    snprintf(file_name, sizeof(file_name), "%s.download-report.json", target_id);
-    if (rc == YVEX_OK) rc = path_join2(report->download_report_path,
-                                       sizeof(report->download_report_path),
-                                       reports_family_dir, file_name, err,
-                                       "models_download_control");
-    snprintf(file_name, sizeof(file_name), "%s.source-manifest.json", target_id);
-    if (rc == YVEX_OK) rc = path_join2(report->manifest_path,
-                                       sizeof(report->manifest_path),
-                                       reports_family_dir, file_name, err,
-                                       "models_download_control");
-    snprintf(file_name, sizeof(file_name), "%s.native-inventory.json", target_id);
-    if (rc == YVEX_OK) rc = path_join2(report->native_inventory_path,
-                                       sizeof(report->native_inventory_path),
-                                       reports_family_dir, file_name, err,
-                                       "models_download_control");
-    snprintf(file_name, sizeof(file_name), "%s.download.json", target_id);
-    if (rc == YVEX_OK) rc = path_join2(report->registry_path,
-                                       sizeof(report->registry_path),
-                                       registry_family_dir, file_name, err,
-                                       "models_download_control");
-    snprintf(file_name, sizeof(file_name), "%s.download.stdout.log", target_id);
-    if (rc == YVEX_OK) rc = path_join2(report->stdout_log_path,
-                                       sizeof(report->stdout_log_path),
-                                       logs_dir, file_name, err,
-                                       "models_download_control");
-    snprintf(file_name, sizeof(file_name), "%s.download.stderr.log", target_id);
-    if (rc == YVEX_OK) rc = path_join2(report->stderr_log_path,
-                                       sizeof(report->stderr_log_path),
-                                       logs_dir, file_name, err,
-                                       "models_download_control");
-    if (rc == YVEX_OK && resolved_dynamic) {
-        if (resolved.registry_path[0]) {
-            snprintf(report->registry_path, sizeof(report->registry_path), "%s",
-                     resolved.registry_path);
-        }
-        if (resolved.download_report_path[0]) {
-            snprintf(report->download_report_path, sizeof(report->download_report_path), "%s",
-                     resolved.download_report_path);
-        }
-        if (resolved.manifest_path[0]) {
-            snprintf(report->manifest_path, sizeof(report->manifest_path), "%s",
-                     resolved.manifest_path);
-        }
-        if (resolved.native_inventory_path[0]) {
-            snprintf(report->native_inventory_path, sizeof(report->native_inventory_path), "%s",
-                     resolved.native_inventory_path);
-        }
-    }
-    return rc;
+    return download_paths_prepare(options, report, operator_paths, *provider_kind,
+                                  &identity, err, 0);
 }
 
 /* Purpose: Transfer bounded command models download status data (`command_models_download_status`).
@@ -689,10 +488,8 @@ static int command_models_download_stop(int arg_count, char **args)
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
 static int model_download_delete_lock_paths(const yvex_model_download_report *report,
-                                            int dry_run,
-                                            int yes,
-                                            unsigned long long *candidate_index,
-                                            unsigned long long *deleted_out)
+    int dry_run, int yes, unsigned long long *candidate_index,
+    unsigned long long *deleted_out)
 {
     unsigned long long i;
     unsigned long long deleted = 0ull;
@@ -793,13 +590,9 @@ static int model_download_path_exists(const char *path)
  * Effects: Mutates declared CLI state only.
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
-static int model_download_delete_path_candidate(const char *path,
-                                                int recursive,
-                                                int dry_run,
-                                                int yes,
-                                                unsigned long long *candidate_index,
-                                                unsigned long long *deleted_out,
-                                                unsigned long long *missing_out)
+static int model_download_delete_path_candidate(const char *path, int recursive,
+    int dry_run, int yes, unsigned long long *candidate_index,
+    unsigned long long *deleted_out, unsigned long long *missing_out)
 {
     unsigned long long removed = 0ull;
 
@@ -830,60 +623,14 @@ static int model_download_delete_path_candidate(const char *path,
  * Effects: Mutates declared CLI state only.
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
-static void model_download_cleanup_sidecars(const yvex_model_download_report *report,
-                                            int dry_run,
-                                            int yes,
-                                            unsigned long long *candidate_index,
-                                            unsigned long long *deleted_inout,
-                                            unsigned long long *missing_inout,
-                                            unsigned long long *failed_inout)
+static void model_download_cleanup_paths(const char *const *paths, size_t path_count,
+    int dry_run, int yes, unsigned long long *candidate_index,
+    unsigned long long *deleted_inout, unsigned long long *missing_inout,
+    unsigned long long *failed_inout)
 {
-    const char *paths[7];
-    unsigned long long i;
+    size_t i;
 
-    if (!report) return;
-    paths[0] = report->receipt_path;
-    paths[1] = report->active_receipt_path;
-    paths[2] = report->last_receipt_path;
-    paths[3] = report->download_report_path;
-    paths[4] = report->manifest_path;
-    paths[5] = report->native_inventory_path;
-    paths[6] = report->registry_path;
-    for (i = 0ull; i < sizeof(paths) / sizeof(paths[0]); ++i) {
-        unsigned long long deleted = 0ull;
-        unsigned long long missing = 0ull;
-
-        if (model_download_delete_path_candidate(paths[i], 0, dry_run, yes,
-                                                 candidate_index, &deleted,
-                                                 &missing)) {
-            if (deleted_inout) *deleted_inout += deleted;
-            if (missing_inout) *missing_inout += missing;
-        } else if (failed_inout) {
-            (*failed_inout)++;
-        }
-    }
-}
-
-/* Purpose: Release or reset owned model download cleanup logs state (`model_download_cleanup_logs`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static void model_download_cleanup_logs(const yvex_model_download_report *report,
-                                        int dry_run,
-                                        int yes,
-                                        unsigned long long *candidate_index,
-                                        unsigned long long *deleted_inout,
-                                        unsigned long long *missing_inout,
-                                        unsigned long long *failed_inout)
-{
-    const char *paths[2];
-    unsigned long long i;
-
-    if (!report) return;
-    paths[0] = report->stdout_log_path;
-    paths[1] = report->stderr_log_path;
-    for (i = 0ull; i < sizeof(paths) / sizeof(paths[0]); ++i) {
+    for (i = 0u; i < path_count; ++i) {
         unsigned long long deleted = 0ull;
         unsigned long long missing = 0ull;
 
@@ -921,6 +668,8 @@ static int command_models_download_cleanup(int arg_count, char **args)
     unsigned long long lock_deleted = 0ull;
     unsigned long long failed_deletes = 0ull;
     const char *cleanup_status;
+    const char *sidecar_paths[7];
+    const char *log_paths[2];
     int sidecars_requested;
     int logs_requested;
     int rc;
@@ -949,6 +698,15 @@ static int command_models_download_cleanup(int arg_count, char **args)
     }
     sidecars_requested = options.cleanup_receipts || options.cleanup_failed_partials;
     logs_requested = options.cleanup_logs || options.cleanup_failed_partials;
+    sidecar_paths[0] = report.receipt_path;
+    sidecar_paths[1] = report.active_receipt_path;
+    sidecar_paths[2] = report.last_receipt_path;
+    sidecar_paths[3] = report.download_report_path;
+    sidecar_paths[4] = report.manifest_path;
+    sidecar_paths[5] = report.native_inventory_path;
+    sidecar_paths[6] = report.registry_path;
+    log_paths[0] = report.stdout_log_path;
+    log_paths[1] = report.stderr_log_path;
     if (options.cleanup_stale_locks) {
         (void)model_download_delete_lock_paths(&report, options.dry_run, options.yes,
                                                &candidates, &lock_deleted);
@@ -991,15 +749,15 @@ static int command_models_download_cleanup(int arg_count, char **args)
         }
     }
     if (sidecars_requested) {
-        model_download_cleanup_sidecars(&report, options.dry_run, options.yes,
-                                        &candidates, &sidecar_deleted,
-                                        &missing, &failed_deletes);
+        model_download_cleanup_paths(sidecar_paths, sizeof(sidecar_paths) / sizeof(sidecar_paths[0]),
+                                     options.dry_run, options.yes, &candidates,
+                                     &sidecar_deleted, &missing, &failed_deletes);
         deleted += sidecar_deleted;
     }
     if (logs_requested) {
-        model_download_cleanup_logs(&report, options.dry_run, options.yes,
-                                    &candidates, &log_deleted,
-                                    &missing, &failed_deletes);
+        model_download_cleanup_paths(log_paths, sizeof(log_paths) / sizeof(log_paths[0]),
+                                     options.dry_run, options.yes, &candidates,
+                                     &log_deleted, &missing, &failed_deletes);
         deleted += log_deleted;
     }
     cleanup_status = options.dry_run ? "model-download-cleanup-dry-run" :
@@ -1028,19 +786,6 @@ static int command_models_download_cleanup(int arg_count, char **args)
     return failed_deletes > 0ull ? 1 : 0;
 }
 
-typedef struct {
-    const char *target_id;
-    const char *family;
-    const char *repo_id;
-    const char *local_name;
-    const char *revision;
-    const char *provider_name;
-    const char *token_value;
-    yvex_model_download_resolved_target resolved;
-    int resolved_dynamic;
-    int token_present;
-} download_identity;
-
 /* Resolve provider, catalog identity, operator roots, and token provenance. */
 /* Purpose: Construct the owned download identity resolve state (`download_identity_resolve`).
  * Inputs: Borrowed typed facts.
@@ -1048,11 +793,9 @@ typedef struct {
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
 static int download_identity_resolve(const yvex_cli_models_download_options *options,
-                                     yvex_model_download_report *report,
-                                     yvex_operator_paths *operator_paths,
-                                     yvex_account_provider *provider_kind,
-                                     download_identity *identity,
-                                     yvex_error *err)
+    yvex_model_download_report *report, yvex_operator_paths *operator_paths,
+    yvex_account_provider *provider_kind, download_identity *identity,
+    yvex_error *err, int control_mode)
 {
     const yvex_model_download_catalog_row *row;
     yvex_paths paths;
@@ -1069,6 +812,7 @@ static int download_identity_resolve(const yvex_cli_models_download_options *opt
     identity->provider_name = yvex_account_provider_name(*provider_kind);
     rc = yvex_operator_paths_resolve(&paths, options->models_root, operator_paths, err);
     if (rc != YVEX_OK) {
+        if (control_mode) return rc;
         snprintf(report->status, sizeof(report->status), "model-download-fail");
         snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
         return print_yvex_error(err, exit_for_status(rc));
@@ -1107,6 +851,11 @@ static int download_identity_resolve(const yvex_cli_models_download_options *opt
                 *provider_kind = YVEX_ACCOUNT_PROVIDER_HUGGINGFACE;
             }
         } else {
+            if (control_mode) {
+                yvex_cli_out_writef(stderr, "yvex: unknown models download target: %s\n",
+                                    options->target ? options->target : "");
+                return 2;
+            }
             yvex_cli_out_writef(stdout, "models: download\ntarget_id: %s\n",
                                 options->target ? options->target : "");
             model_stage_print("resolve-target", "fail");
@@ -1143,11 +892,9 @@ static int download_identity_resolve(const yvex_cli_models_download_options *opt
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
 static int download_paths_prepare(const yvex_cli_models_download_options *options,
-                                  yvex_model_download_report *report,
-                                  const yvex_operator_paths *operator_paths,
-                                  yvex_account_provider provider_kind,
-                                  const download_identity *identity,
-                                  yvex_error *err)
+    yvex_model_download_report *report, const yvex_operator_paths *operator_paths,
+    yvex_account_provider provider_kind, const download_identity *identity,
+    yvex_error *err, int create_paths)
 {
     char provider_root[YVEX_PATH_CAP];
     char family_dir[YVEX_PATH_CAP];
@@ -1183,7 +930,9 @@ static int download_paths_prepare(const yvex_cli_models_download_options *option
         operator_paths->registry_root, identity->family, err, "models_download");
     if (rc == YVEX_OK) rc = path_join2(logs_dir, sizeof(logs_dir),
         operator_paths->models_root, "logs", err, "models_download");
-    if (rc != YVEX_OK) return print_yvex_error(err, exit_for_status(rc));
+    if (rc != YVEX_OK) {
+        return create_paths ? print_yvex_error(err, exit_for_status(rc)) : rc;
+    }
     snprintf(report->reports_dir, sizeof(report->reports_dir), "%s", reports_dir);
     snprintf(report->registry_dir, sizeof(report->registry_dir), "%s", registry_dir);
 #define DOWNLOAD_PATH(field, suffix, root) do { \
@@ -1212,27 +961,24 @@ static int download_paths_prepare(const yvex_cli_models_download_options *option
             sizeof(report->native_inventory_path), "%s", identity->resolved.native_inventory_path);
     }
     if (rc != YVEX_OK) return print_yvex_error(err, exit_for_status(rc));
+    if (!create_paths) return YVEX_OK;
     if (!model_download_source_path_allowed(operator_paths, report->local_source_dir, report)) {
         snprintf(report->status, sizeof(report->status), "model-download-blocked");
         snprintf(report->stage_resolve_paths, sizeof(report->stage_resolve_paths), "fail");
         return model_download_finish(options, report);
     }
     snprintf(report->stage_resolve_paths, sizeof(report->stage_resolve_paths), "pass");
-    rc = yvex_core_mkdir_parent(report->local_source_dir, "model_registry_json", err);
-    if (rc == YVEX_OK)
-        rc = yvex_core_mkdir_parent(report->receipt_path, "model_registry_json", err);
-    if (rc == YVEX_OK)
-        rc = yvex_core_mkdir_parent(report->active_receipt_path, "model_registry_json", err);
-    if (rc == YVEX_OK)
-        rc = yvex_core_mkdir_parent(report->last_receipt_path, "model_registry_json", err);
-    if (rc == YVEX_OK)
-        rc = yvex_core_mkdir_parent(report->download_report_path, "model_registry_json", err);
-    if (rc == YVEX_OK)
-        rc = yvex_core_mkdir_parent(report->registry_path, "model_registry_json", err);
-    if (rc == YVEX_OK)
-        rc = yvex_core_mkdir_parent(report->stdout_log_path, "model_registry_json", err);
-    if (rc == YVEX_OK)
-        rc = yvex_core_mkdir_parent(report->stderr_log_path, "model_registry_json", err);
+    {
+        const char *paths[] = { report->local_source_dir, report->receipt_path,
+            report->active_receipt_path, report->last_receipt_path,
+            report->download_report_path, report->registry_path,
+            report->stdout_log_path, report->stderr_log_path };
+        size_t i;
+
+        for (i = 0u; rc == YVEX_OK && i < sizeof(paths) / sizeof(paths[0]); ++i) {
+            rc = yvex_core_mkdir_parent(paths[i], "model_registry_json", err);
+        }
+    }
     if (rc != YVEX_OK) {
         snprintf(report->status, sizeof(report->status), "model-download-fail");
         snprintf(report->stage_prepare_dirs, sizeof(report->stage_prepare_dirs), "fail");
@@ -1250,12 +996,9 @@ static int download_paths_prepare(const yvex_cli_models_download_options *option
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
 static int download_account_admit(const yvex_cli_models_download_options *options,
-                                  yvex_model_download_report *report,
-                                  yvex_account_provider provider_kind,
-                                  yvex_account_observation *observation,
-                                  int token_present,
-                                  yvex_error *err,
-                                  int *admitted)
+    yvex_model_download_report *report, yvex_account_provider provider_kind,
+    yvex_account_observation *observation, int token_present,
+    yvex_error *err, int *admitted)
 {
     int rc;
 
@@ -1500,10 +1243,10 @@ static int command_models_download_execute(int arg_count, char **args, int start
     model_download_timestamp(report.created_at, sizeof(report.created_at));
 
     rc = download_identity_resolve(&options, &report, &operator_paths,
-                                   &provider_kind, &identity, &err);
+                                   &provider_kind, &identity, &err, 0);
     if (rc != 0) return rc;
     rc = download_paths_prepare(&options, &report, &operator_paths,
-                                provider_kind, &identity, &err);
+                                provider_kind, &identity, &err, 1);
     if (rc != 0) return rc;
 
     {

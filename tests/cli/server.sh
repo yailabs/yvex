@@ -11,6 +11,8 @@
 
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 YVEXD_BIN=${YVEXD_BIN:-./yvexd}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/cli-server}
@@ -19,7 +21,7 @@ ALIAS_MODEL="$OUT_DIR/deepseek4-v4-flash-selected-embed-F32-noimatrix-yvex-v1.gg
 ALIAS_REGISTRY="$OUT_DIR/models.local.json"
 ALIAS="deepseek4-v4-flash-selected-embed"
 
-rm -rf "$OUT_DIR"
+yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 fail() {

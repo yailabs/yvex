@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/cli-artifact-corruption}
 GEN_DIR="$OUT_DIR/generated"
@@ -101,7 +103,7 @@ exercise_structural_case() {
         "$YVEX_BIN" graph --model "$path" --backend cpu --execute-partial --partial-token 0
 }
 
-rm -rf "$OUT_DIR"
+yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$GEN_DIR"
 
 python3 - "$GEN_DIR" <<'PY'

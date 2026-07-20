@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include <yvex/api.h>
+#include <yvex/internal/artifact.h>
 
 #include "tests/test.h"
 #include <yvex/gguf.h>
@@ -526,6 +527,131 @@ static int test_digest_is_explicit(void)
     return 0;
 }
 
+/* Proves a fresh snapshot cannot make same-size mutated bytes match prior admission. */
+static int test_admission_identity_binds_bytes(void)
+{
+    static const unsigned char contents[] = {
+        0x59u, 0x56u, 0x45u, 0x58u, 0x2du, 0x61u, 0x64u, 0x6du,
+        0x69u, 0x73u, 0x73u, 0x69u, 0x6fu, 0x6eu, 0x2du, 0x76u,
+        0x31u
+    };
+    char root[] = LAYOUT_TEST_DIR "/admission-identity-XXXXXX";
+    char path[sizeof(root) + 32u];
+    yvex_artifact_options options;
+    yvex_artifact_file_identity identity;
+    yvex_complete_artifact_admission admission;
+    yvex_artifact_admission_failure admission_failure;
+    yvex_artifact *artifact = NULL;
+    yvex_error err;
+    FILE *stream = NULL;
+    const char *failure = NULL;
+    int root_owned = 0;
+    int file_owned = 0;
+    int written;
+    int rc;
+
+    if (!mkdtemp(root)) {
+        failure = "create collision-free admission identity root";
+        goto cleanup;
+    }
+    root_owned = 1;
+    written = snprintf(path, sizeof(path), "%s/artifact.bin", root);
+    if (written < 0 || (size_t)written >= sizeof(path)) {
+        failure = "construct owned admission identity path";
+        goto cleanup;
+    }
+    stream = fopen(path, "wb");
+    if (!stream) {
+        failure = "create owned admission identity fixture";
+        goto cleanup;
+    }
+    file_owned = 1;
+    if (!write_bytes(stream, contents, sizeof(contents)) || fflush(stream) != 0) {
+        failure = "write exact admission identity fixture";
+        goto cleanup;
+    }
+    if (fclose(stream) != 0) {
+        stream = NULL;
+        failure = "close exact admission identity fixture";
+        goto cleanup;
+    }
+    stream = NULL;
+
+    yvex_error_clear(&err);
+    memset(&identity, 0, sizeof(identity));
+    if (yvex_artifact_identity_read(path, &identity, &err) != YVEX_OK) {
+        failure = "derive exact admission identity";
+        goto cleanup;
+    }
+    memset(&options, 0, sizeof(options));
+    options.path = path;
+    options.readonly = 1;
+    if (yvex_artifact_open(&artifact, &options, &err) != YVEX_OK) {
+        failure = "open exact admission fixture";
+        goto cleanup;
+    }
+    memset(&admission, 0, sizeof(admission));
+    admission.file_bytes = identity.file_size;
+    admission.complete = 1;
+    (void)snprintf(admission.artifact_identity, sizeof(admission.artifact_identity), "%s",
+                   identity.sha256);
+    if (yvex_artifact_snapshot_get(artifact, &admission.file_snapshot, &err) != YVEX_OK) {
+        failure = "capture exact admission snapshot";
+        goto cleanup;
+    }
+    memset(&admission_failure, 0, sizeof(admission_failure));
+    rc = yvex_artifact_admission_identity_verify(artifact, &admission, &admission_failure, &err);
+    if (rc != YVEX_OK || !admission.artifact_identity_verified ||
+        admission.artifact_bytes_hashed != sizeof(contents)) {
+        failure = "exact admission bytes must verify";
+        goto cleanup;
+    }
+    yvex_artifact_close(artifact);
+    artifact = NULL;
+
+    stream = fopen(path, "r+b");
+    if (!stream || fseeko(stream, 8, SEEK_SET) != 0 || fputc(0x58, stream) == EOF ||
+        fflush(stream) != 0 || fsync(fileno(stream)) != 0) {
+        failure = "mutate one owned artifact byte without changing size";
+        goto cleanup;
+    }
+    if (fclose(stream) != 0) {
+        stream = NULL;
+        failure = "close same-size artifact mutation";
+        goto cleanup;
+    }
+    stream = NULL;
+    if (yvex_artifact_open(&artifact, &options, &err) != YVEX_OK ||
+        yvex_artifact_size(artifact) != identity.file_size ||
+        yvex_artifact_snapshot_get(artifact, &admission.file_snapshot, &err) != YVEX_OK) {
+        failure = "reopen same-size mutation with a fresh snapshot";
+        goto cleanup;
+    }
+    admission.artifact_identity_verified = 0;
+    admission.artifact_bytes_hashed = 0ull;
+    memset(&admission_failure, 0, sizeof(admission_failure));
+    rc = yvex_artifact_admission_identity_verify(artifact, &admission, &admission_failure, &err);
+    if (rc != YVEX_ERR_FORMAT ||
+        admission_failure.code != YVEX_ARTIFACT_ADMISSION_IDENTITY_MISMATCH ||
+        strcmp(admission_failure.field, "artifact-byte-identity") != 0 ||
+        admission.artifact_identity_verified || admission.artifact_bytes_hashed != 0ull) {
+        failure = "fresh snapshot must not admit a same-size byte mutation";
+        goto cleanup;
+    }
+
+cleanup:
+    if (stream && fclose(stream) != 0 && !failure)
+        failure = "close admission identity fixture";
+    yvex_artifact_close(artifact);
+    if (file_owned && unlink(path) != 0 && !failure)
+        failure = "remove owned admission identity fixture";
+    if (root_owned && rmdir(root) != 0 && !failure)
+        failure = "remove owned admission identity root";
+    if (failure)
+        YVEX_TEST_FAIL(failure);
+    return 0;
+}
+
 int yvex_test_gguf_layout_integrity(void)
 {
     YVEX_TEST_ASSERT(prepare_dir(), "prepare GGUF layout test directory");
@@ -539,5 +665,6 @@ int yvex_test_gguf_layout_integrity(void)
     if (test_open_snapshot_drift() != 0) return 1;
     if (test_materialization_consumes_layout() != 0) return 1;
     if (test_digest_is_explicit() != 0) return 1;
+    if (test_admission_identity_binds_bytes() != 0) return 1;
     return 0;
 }

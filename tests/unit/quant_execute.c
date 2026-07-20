@@ -666,22 +666,11 @@ cleanup:
     return rc == YVEX_OK && fixture->ir;
 }
 
-/* Binds the trusted graph and seals exact physical decisions for each op. */
-static int quant_fixture_build_plan(
-    quant_execute_fixture *fixture,
-    yvex_error *err)
+/* Fills the four canonical fixture decisions with one selectable expert codec. */
+static void quant_fixture_decisions(yvex_quant_explicit_decision decisions[QUANT_EXEC_TERMINAL_COUNT],
+                                    unsigned int expert_qtype)
 {
-    yvex_transform_failure transform_failure;
-    yvex_quant_failure quant_failure;
-    yvex_quant_explicit_decision decisions[QUANT_EXEC_TERMINAL_COUNT];
-    const yvex_quant_plan_summary *summary;
-    int rc;
-
-    rc = yvex_transform_binding_create(
-        &fixture->binding, fixture->ir, fixture->session, NULL,
-        &transform_failure, err);
-    if (rc != YVEX_OK) return 0;
-    memset(decisions, 0, sizeof(decisions));
+    memset(decisions, 0, sizeof(*decisions) * QUANT_EXEC_TERMINAL_COUNT);
     decisions[0].qtype = YVEX_GGUF_QTYPE_BF16;
     decisions[0].rank = 1u;
     decisions[0].dims[0] = 4096u;
@@ -693,24 +682,55 @@ static int quant_fixture_build_plan(
     decisions[2].qtype = YVEX_GGUF_QTYPE_I32;
     decisions[2].rank = 1u;
     decisions[2].dims[0] = 4u;
-    decisions[3].qtype = YVEX_GGUF_QTYPE_Q2_K;
+    decisions[3].qtype = expert_qtype;
     decisions[3].approximation = 1;
     decisions[3].rank = 3u;
     decisions[3].dims[0] = QUANT_EXEC_EXPERT_LOGICAL_COLUMNS;
     decisions[3].dims[1] = 1u;
     decisions[3].dims[2] = QUANT_EXEC_EXPERTS;
+}
+
+/* Seals one exact physical fixture plan over the already-bound graph. */
+static int quant_fixture_build_selected_plan(quant_execute_fixture *fixture,
+                                             unsigned int expert_qtype,
+                                             unsigned long long lowering_identity,
+                                             yvex_quant_plan **out, yvex_error *err)
+{
+    yvex_quant_failure quant_failure;
+    yvex_quant_explicit_decision decisions[QUANT_EXEC_TERMINAL_COUNT];
+    int rc;
+
+    quant_fixture_decisions(decisions, expert_qtype);
     rc = yvex_quant_plan_build_explicit(
-        &fixture->plan, fixture->ir, fixture->binding,
-        "quant-executor-four-ops-v1", 0xf00dcafeu, decisions,
+        out, fixture->ir, fixture->binding, "quant-executor-four-ops-v1", lowering_identity,
+        decisions,
         QUANT_EXEC_TERMINAL_COUNT, NULL, &quant_failure, err);
+    return rc == YVEX_OK && *out && yvex_quant_plan_summary_get(*out) &&
+           yvex_quant_plan_summary_get(*out)->complete;
+}
+
+/* Binds the trusted graph and seals exact physical decisions for each op. */
+static int quant_fixture_build_plan(quant_execute_fixture *fixture, yvex_error *err)
+{
+    yvex_transform_failure transform_failure;
+    const yvex_quant_plan_summary *summary;
+    int rc;
+
+    rc = yvex_transform_binding_create(&fixture->binding, fixture->ir, fixture->session, NULL,
+                                       &transform_failure, err);
+    if (rc != YVEX_OK) return 0;
+    if (!quant_fixture_build_selected_plan(fixture, YVEX_GGUF_QTYPE_Q2_K, 0xf00dcafeu,
+                                           &fixture->plan, err))
+        return 0;
     summary = yvex_quant_plan_summary_get(fixture->plan);
-    return rc == YVEX_OK && summary && summary->complete &&
-           summary->source_value_count == QUANT_EXEC_SOURCE_COUNT &&
+    return summary->source_value_count == QUANT_EXEC_SOURCE_COUNT &&
            summary->decision_count == QUANT_EXEC_TERMINAL_COUNT &&
            summary->encoded_bytes == 726544u;
 }
 
 /* Constructs a completely trusted four-operation fixture. */
+static void quant_fixture_release(quant_execute_fixture *fixture);
+
 static int quant_fixture_create(
     quant_execute_fixture *fixture,
     const char *suffix,
@@ -718,32 +738,29 @@ static int quant_fixture_create(
     int bad_scale,
     yvex_error *err)
 {
-    char command[768];
-
     memset(fixture, 0, sizeof(*fixture));
     (void)snprintf(fixture->root, sizeof(fixture->root),
-                   "build/tests/quant-execute-%s-%ld", suffix,
-                   (long)getpid());
+                   "build/tests/quant-execute-%s-XXXXXX", suffix);
+    if (!quant_mkdir("build") || !quant_mkdir("build/tests") ||
+        !mkdtemp(fixture->root))
+        return 0;
     (void)snprintf(fixture->shard_path, sizeof(fixture->shard_path),
                    "%s/quant-execute-00001.safetensors", fixture->root);
     (void)snprintf(fixture->manifest_path, sizeof(fixture->manifest_path),
                    "%s/manifest.json", fixture->root);
-    (void)snprintf(command, sizeof(command), "rm -rf %s", fixture->root);
-    (void)system(command);
-    if (!quant_mkdir("build") || !quant_mkdir("build/tests") ||
-        !quant_mkdir(fixture->root) ||
-        !quant_fixture_write_payload(fixture, bad_cast, bad_scale, err) ||
+    if (!quant_fixture_write_payload(fixture, bad_cast, bad_scale, err) ||
         !quant_fixture_open_session(fixture, err) ||
         !quant_fixture_build_ir(fixture, err) ||
-        !quant_fixture_build_plan(fixture, err)) return 0;
+        !quant_fixture_build_plan(fixture, err)) {
+        quant_fixture_release(fixture);
+        return 0;
+    }
     return 1;
 }
 
 /* Releases every owner and removes all generated payload bytes. */
 static void quant_fixture_release(quant_execute_fixture *fixture)
 {
-    char command[768];
-
     if (!fixture) return;
     yvex_quant_plan_release(&fixture->plan);
     yvex_transform_binding_release(&fixture->binding);
@@ -751,8 +768,9 @@ static void quant_fixture_release(quant_execute_fixture *fixture)
     (void)yvex_source_payload_session_release(&fixture->session, NULL, NULL);
     yvex_source_tensor_snapshot_release(fixture->snapshot);
     fixture->snapshot = NULL;
-    (void)snprintf(command, sizeof(command), "rm -rf %s", fixture->root);
-    (void)system(command);
+    if (fixture->shard_path[0]) (void)unlink(fixture->shard_path);
+    if (fixture->manifest_path[0]) (void)unlink(fixture->manifest_path);
+    if (fixture->root[0]) (void)rmdir(fixture->root);
 }
 
 /* Executes one plan through the digest sink with a selected bounded schedule. */
@@ -852,10 +870,66 @@ static int quant_test_executor_success(void)
     YVEX_TEST_ASSERT(second_ok && second.complete &&
                          second.workers_started == 4u &&
                          strcmp(first_digest.execution_identity,
-                                second_digest.execution_identity) == 0,
+                                second_digest.execution_identity) == 0 &&
+                         strcmp(first_digest.payload_byte_identity,
+                                second_digest.payload_byte_identity) == 0,
                      "chunk boundaries and worker scheduling preserve identity");
     YVEX_TEST_ASSERT(first.source_chunks != second.source_chunks,
                      "different source chunks must exercise distinct plans");
+    quant_fixture_release(&fixture);
+    return 0;
+}
+
+/* Proves payload recipe identity tracks byte semantics, not opaque lowering provenance. */
+static int quant_test_payload_recipe_identity(void)
+{
+    quant_execute_fixture fixture;
+    yvex_quant_plan *q8_plan = NULL;
+    yvex_quant_plan *provenance_plan = NULL;
+    yvex_quant_plan *original_plan;
+    yvex_quant_digest_summary q2_digest;
+    yvex_quant_digest_summary q8_digest;
+    yvex_quant_execution_summary execution;
+    yvex_quant_failure failure;
+    yvex_error err;
+    const yvex_quant_plan_summary *q2_summary;
+    const yvex_quant_plan_summary *q8_summary;
+    const yvex_quant_plan_summary *provenance_summary;
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(quant_fixture_create(&fixture, "payload-recipe", 0, 0, &err),
+                     "payload-recipe fixture must construct");
+    original_plan = fixture.plan;
+    YVEX_TEST_ASSERT(quant_fixture_build_selected_plan(
+                         &fixture, YVEX_GGUF_QTYPE_Q8_0, 0xf00dcafeu, &q8_plan, &err) &&
+                         quant_fixture_build_selected_plan(
+                             &fixture, YVEX_GGUF_QTYPE_Q2_K, 0x5aa55aa5u,
+                             &provenance_plan, &err),
+                     "alternate physical and provenance plans must seal");
+    q2_summary = yvex_quant_plan_summary_get(original_plan);
+    q8_summary = yvex_quant_plan_summary_get(q8_plan);
+    provenance_summary = yvex_quant_plan_summary_get(provenance_plan);
+    YVEX_TEST_ASSERT(q2_summary && q8_summary && provenance_summary &&
+                         strcmp(q2_summary->payload_plan_identity,
+                                q8_summary->payload_plan_identity) != 0 &&
+                         strcmp(q2_summary->payload_plan_identity,
+                                provenance_summary->payload_plan_identity) == 0 &&
+                         q2_summary->encoded_bytes != q8_summary->encoded_bytes,
+                     "byte-changing codec selection changes recipe while provenance does not");
+    YVEX_TEST_ASSERT(quant_fixture_execute(&fixture, 4096u, 4096u, 1u, &q2_digest,
+                                           &execution, &failure, &err),
+                     "baseline payload recipe must execute");
+    fixture.plan = q8_plan;
+    YVEX_TEST_ASSERT(quant_fixture_execute(&fixture, 4096u, 4096u, 1u, &q8_digest,
+                                           &execution, &failure, &err),
+                     "changed payload recipe must execute");
+    fixture.plan = original_plan;
+    YVEX_TEST_ASSERT(strcmp(q2_digest.payload_byte_identity,
+                            q8_digest.payload_byte_identity) != 0 &&
+                         q2_digest.encoded_bytes != q8_digest.encoded_bytes,
+                     "byte-changing recipe produces a distinct aggregate payload identity");
+    yvex_quant_plan_release(&q8_plan);
+    yvex_quant_plan_release(&provenance_plan);
     quant_fixture_release(&fixture);
     return 0;
 }
@@ -1007,6 +1081,148 @@ static void quant_roundtrip_progress_capture(
     fixture->planned_bytes = planned_file_bytes;
 }
 
+/* Purpose: prove semantic-plan compatibility and exact stale/name refusals on one fixture.
+ * Inputs: quant fixture, emitted writer facts, immutable artifact path, and two name catalogs.
+ * Effects: opens one read-only artifact snapshot and releases every temporary plan and view.
+ * Failure: returns false unless success, name drift, and stale execution produce exact outcomes.
+ * Boundary: verifies physical directory consequences without reading tensor payload bytes. */
+static int quant_physical_compatibility_prove(
+    const quant_execute_fixture *fixture,
+    const yvex_gguf_writer_fixture_tensor *names,
+    const yvex_gguf_writer_fixture_tensor *changed_names,
+    const yvex_gguf_writer_plan_summary *summary,
+    const yvex_gguf_file_sink_summary *emission,
+    const yvex_gguf_roundtrip_summary *roundtrip,
+    const char *artifact_path)
+{
+    typedef struct {
+        char *destination;
+        size_t capacity;
+        const char *source;
+    } text_binding;
+    yvex_gguf_writer_plan *writer = NULL;
+    yvex_gguf_writer_plan *changed = NULL;
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    yvex_complete_artifact_admission admission;
+    yvex_artifact_physical_compatibility result;
+    yvex_artifact_compatibility_failure failure;
+    yvex_gguf_writer_plan_options writer_options;
+    yvex_gguf_writer_failure writer_failure;
+    yvex_artifact_options artifact_options;
+    yvex_artifact_snapshot snapshot;
+    yvex_artifact_payload_identity payload_identity;
+    yvex_error error;
+    const yvex_gguf_writer_plan_summary *writer_summary;
+    size_t index;
+    int proved = 0;
+
+    yvex_error_clear(&error);
+    yvex_gguf_writer_plan_options_default(&writer_options);
+    writer_options.required_execution_identity = emission->execution_identity;
+    artifact_options = (yvex_artifact_options){.path = artifact_path, .readonly = 1};
+    if (yvex_gguf_writer_plan_build_fixture(&writer, fixture->plan, names,
+                                            QUANT_EXEC_TERMINAL_COUNT, &writer_options,
+                                            &writer_failure, &error) != YVEX_OK)
+        goto done;
+    writer_summary = yvex_gguf_writer_plan_summary_get(writer);
+    if (!writer_summary || strcmp(writer_summary->writer_plan_identity,
+                                  summary->writer_plan_identity) == 0 ||
+        yvex_artifact_open(&artifact, &artifact_options, &error) != YVEX_OK ||
+        yvex_gguf_open(&gguf, artifact, &error) != YVEX_OK ||
+        yvex_artifact_snapshot_get(artifact, &snapshot, &error) != YVEX_OK ||
+        yvex_artifact_payload_identity_compute(artifact, gguf, 4096u, &payload_identity,
+                                               &error) != YVEX_OK ||
+        !payload_identity.complete ||
+        strcmp(payload_identity.payload_byte_identity,
+               emission->payload_byte_identity) != 0)
+        goto done;
+    admission = (yvex_complete_artifact_admission){
+        .artifact_class = YVEX_ARTIFACT_CLASS_COMPLETE_YVEX,
+        .metadata_count = summary->metadata_count,
+        .tensor_count = summary->tensor_count,
+        .payload_bytes = summary->tensor_payload_bytes,
+        .file_bytes = summary->final_file_bytes,
+        .source_snapshot_identity = summary->source_snapshot_identity,
+        .mapping_identity = summary->mapping_identity,
+        .file_snapshot = snapshot,
+        .tokenizer_complete = 1,
+        .native_reader_accepted = 1,
+        .official_reader_accepted = 1,
+        .payload_integrity_accepted = 1,
+        .materialization_input_ready = 1,
+        .artifact_bytes_hashed = roundtrip->bytes_hashed,
+        .artifact_identity_verified = 1,
+        .complete = 1,
+    };
+    {
+        const text_binding texts[] = {
+            {admission.artifact_path, sizeof(admission.artifact_path), artifact_path},
+            {admission.payload_identity, sizeof(admission.payload_identity), summary->payload_identity},
+            {admission.transform_identity, sizeof(admission.transform_identity), summary->transform_identity},
+            {admission.profile_identity, sizeof(admission.profile_identity), summary->profile_identity},
+            {admission.profile_name, sizeof(admission.profile_name), summary->profile_name},
+            {admission.quant_execution_identity, sizeof(admission.quant_execution_identity),
+             emission->execution_identity},
+            {admission.payload_plan_identity, sizeof(admission.payload_plan_identity),
+             writer_summary->payload_plan_identity},
+            {admission.payload_byte_identity, sizeof(admission.payload_byte_identity),
+             emission->payload_byte_identity},
+            {admission.writer_plan_identity, sizeof(admission.writer_plan_identity),
+             summary->writer_plan_identity},
+            {admission.artifact_identity, sizeof(admission.artifact_identity), roundtrip->artifact_identity},
+            {admission.official_reader_revision, sizeof(admission.official_reader_revision),
+             YVEX_GGUF_OFFICIAL_READER_REVISION},
+        };
+        for (index = 0u; index < sizeof(texts) / sizeof(texts[0]); ++index)
+            (void)snprintf(texts[index].destination, texts[index].capacity, "%s",
+                           texts[index].source);
+    }
+    if (yvex_artifact_admission_record_identity(
+            &admission, admission.admission_identity, &error) != YVEX_OK)
+        goto done;
+    if (yvex_artifact_physical_compatibility_validate(writer, &admission, artifact, gguf,
+                                                       &result, &failure, &error) != YVEX_OK ||
+        !result.physical_payload_compatible || result.artifact_rebuild_required ||
+        result.materialization_rebuild_required || !result.tensor_inventory_equal ||
+        !result.qtype_equal || !result.layout_equal || !result.offset_equal ||
+        !result.payload_digest_equal || result.tensors_compared != QUANT_EXEC_TERMINAL_COUNT ||
+        result.payload_bytes_read != 0u)
+        goto done;
+    if (yvex_gguf_writer_plan_build_fixture(&changed, fixture->plan, changed_names,
+                                            QUANT_EXEC_TERMINAL_COUNT, &writer_options,
+                                            &writer_failure, &error) != YVEX_OK ||
+        !yvex_gguf_writer_plan_summary_get(changed) ||
+        strcmp(yvex_gguf_writer_plan_summary_get(changed)->payload_plan_identity,
+               writer_summary->payload_plan_identity) != 0 ||
+        yvex_artifact_physical_compatibility_validate(changed, &admission, artifact, gguf,
+                                                       &result, &failure, &error) == YVEX_OK ||
+        failure.code != YVEX_ARTIFACT_COMPATIBILITY_TENSOR_NAME ||
+        !result.artifact_rebuild_required || !result.materialization_rebuild_required)
+        goto done;
+    admission.payload_plan_identity[0] =
+        admission.payload_plan_identity[0] == '0' ? '1' : '0';
+    if (yvex_artifact_physical_compatibility_validate(writer, &admission, artifact, gguf,
+                                                       &result, &failure, &error) == YVEX_OK ||
+        failure.code != YVEX_ARTIFACT_COMPATIBILITY_IDENTITY || result.payload_digest_equal)
+        goto done;
+    admission.payload_plan_identity[0] =
+        admission.payload_plan_identity[0] == '0' ? '1' : '0';
+    admission.payload_byte_identity[0] =
+        admission.payload_byte_identity[0] == '0' ? '1' : '0';
+    if (yvex_artifact_physical_compatibility_validate(writer, &admission, artifact, gguf,
+                                                       &result, &failure, &error) == YVEX_OK ||
+        failure.code != YVEX_ARTIFACT_COMPATIBILITY_IDENTITY || result.payload_digest_equal)
+        goto done;
+    proved = 1;
+done:
+    yvex_gguf_close(gguf);
+    yvex_artifact_close(artifact);
+    yvex_gguf_writer_plan_release(&changed);
+    yvex_gguf_writer_plan_release(&writer);
+    return proved;
+}
+
 /*
  * Exercises structural planning, transactional file delivery, native
  * roundtrip, physical corruption refusal, support refusal without tokenizer,
@@ -1022,6 +1238,10 @@ int yvex_test_gguf_writer_artifact(void)
         {"fixture.duplicate"}, {"fixture.duplicate"},
         {"fixture.cast"}, {"fixture.experts"}
     };
+    static const yvex_gguf_writer_fixture_tensor changed_names[] = {
+        {"fixture.mirect"}, {"fixture.scale-pair"},
+        {"fixture.cast"}, {"fixture.experts"}
+    };
     quant_execute_fixture fixture;
     yvex_gguf_writer_plan *writer = NULL;
     yvex_gguf_writer_plan *duplicate_writer = NULL;
@@ -1031,6 +1251,7 @@ int yvex_test_gguf_writer_artifact(void)
     yvex_quant_execution_summary execution;
     yvex_gguf_file_sink_options file_options;
     yvex_gguf_file_sink_summary emission;
+    yvex_gguf_file_sink_summary tampered_emission;
     yvex_gguf_roundtrip_options roundtrip_options;
     yvex_gguf_roundtrip_summary roundtrip;
     yvex_gguf_writer_failure writer_failure;
@@ -1176,6 +1397,8 @@ int yvex_test_gguf_writer_artifact(void)
                          &roundtrip_options, &roundtrip,
                          &roundtrip_failure, &err) == YVEX_OK &&
                          roundtrip.complete && roundtrip.payload_accepted &&
+                         strcmp(roundtrip.payload_byte_identity,
+                                emission.payload_byte_identity) == 0 &&
                          !roundtrip.tokenizer_complete &&
                          roundtrip.bytes_hashed == summary->final_file_bytes &&
                          progress_fixture.calls > 0u &&
@@ -1197,6 +1420,12 @@ int yvex_test_gguf_writer_artifact(void)
                          strcmp(independent_identity.sha256,
                                 roundtrip.artifact_identity) == 0,
                      "streaming artifact identity must match independent exact-file identity");
+
+    YVEX_TEST_ASSERT(quant_physical_compatibility_prove(
+                         &fixture, names, changed_names, summary, &emission, &roundtrip,
+                         artifact_path),
+                     "semantic identity drift must preserve exact bytes and reject stale inputs");
+
     memset(&official, 0, sizeof(official));
     (void)snprintf(official.revision, sizeof(official.revision), "%s",
                    YVEX_GGUF_OFFICIAL_READER_REVISION);
@@ -1216,6 +1445,18 @@ int yvex_test_gguf_writer_artifact(void)
     admission_request.emission = &emission;
     admission_request.native_roundtrip = &roundtrip;
     admission_request.official_reader = &official;
+    tampered_emission = emission;
+    tampered_emission.payload_byte_identity[0] =
+        tampered_emission.payload_byte_identity[0] == '0' ? '1' : '0';
+    admission_request.emission = &tampered_emission;
+    YVEX_TEST_ASSERT(yvex_complete_artifact_admit(
+                         &admission_request, &admission,
+                         &admission_failure, &err) != YVEX_OK &&
+                         admission_failure.code ==
+                             YVEX_ARTIFACT_ADMISSION_IDENTITY_MISMATCH &&
+                         !admission.complete,
+                     "tampered emission payload identity must refuse admission");
+    admission_request.emission = &emission;
     YVEX_TEST_ASSERT(yvex_complete_artifact_admit(
                          &admission_request, &admission,
                          &admission_failure, &err) != YVEX_OK &&
@@ -1704,6 +1945,7 @@ int yvex_test_gguf_writer_artifact(void)
 int yvex_test_quant_execute(void)
 {
     if (quant_test_executor_success() != 0) return 1;
+    if (quant_test_payload_recipe_identity() != 0) return 1;
     if (quant_test_cast_refusal() != 0) return 1;
     if (quant_test_negative_cast_refusal() != 0) return 1;
     if (quant_test_scale_refusal() != 0) return 1;

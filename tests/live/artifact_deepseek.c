@@ -182,20 +182,95 @@ static void artifact_print_quant_failure(const char *phase,
             yvex_error_where(error), yvex_error_message(error));
 }
 
-/* Builds and prints one complete plan while reading zero payload bytes. */
+/* Proves that one current writer plan preserves the admitted selected artifact bytes. */
+static int artifact_plan_compatibility(
+    const char *artifact_path,
+    const yvex_gguf_writer_plan *writer)
+{
+    yvex_artifact_options options;
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    yvex_complete_artifact_admission admission;
+    yvex_artifact_admission_failure admission_failure;
+    yvex_artifact_physical_compatibility compatibility;
+    yvex_artifact_compatibility_failure failure;
+    yvex_error error;
+    int rc;
+
+    memset(&options, 0, sizeof(options));
+    memset(&admission_failure, 0, sizeof(admission_failure));
+    memset(&failure, 0, sizeof(failure));
+    options.path = artifact_path;
+    options.readonly = 1;
+    yvex_error_clear(&error);
+    rc = yvex_artifact_open(&artifact, &options, &error);
+    if (rc == YVEX_OK) rc = yvex_gguf_open(&gguf, artifact, &error);
+    if (rc == YVEX_OK)
+        rc = yvex_artifact_admit_deepseek(
+            artifact, &admission, &admission_failure, &error);
+    if (rc == YVEX_OK)
+        rc = yvex_artifact_admission_identity_verify(
+            artifact, &admission, &admission_failure, &error);
+    if (rc == YVEX_OK)
+        rc = yvex_artifact_physical_compatibility_validate(
+            writer, &admission, artifact, gguf, &compatibility, &failure,
+            &error);
+    if (rc != YVEX_OK) {
+        fprintf(stderr,
+                "physical_compatibility_failure=%u field=%s tensor=%llu name=%s expected=%llu actual=%llu where=%s message=%s\n",
+                (unsigned int)failure.code, failure.field,
+                failure.tensor_index, failure.tensor_name, failure.expected,
+                failure.actual, yvex_error_where(&error),
+                yvex_error_message(&error));
+    } else {
+        printf("physical_payload_compatible=%d\n",
+               compatibility.physical_payload_compatible);
+        printf("artifact_rebuild_required=%d\n",
+               compatibility.artifact_rebuild_required);
+        printf("materialization_rebuild_required=%d\n",
+               compatibility.materialization_rebuild_required);
+        printf("tensor_inventory_equal=%d\n",
+               compatibility.tensor_inventory_equal);
+        printf("qtype_equal=%d\n", compatibility.qtype_equal);
+        printf("layout_equal=%d\n", compatibility.layout_equal);
+        printf("offset_equal=%d\n", compatibility.offset_equal);
+        printf("payload_digest_equal=%d\n",
+               compatibility.payload_digest_equal);
+        printf("compatibility_tensors_compared=%llu\n",
+               compatibility.tensors_compared);
+        printf("compatibility_payload_bytes_read=%llu\n",
+               compatibility.payload_bytes_read);
+        printf("compatibility_writer_plan_identity=%s\n",
+               compatibility.writer_plan_identity);
+        printf("compatibility_artifact_identity=%s\n",
+               compatibility.artifact_identity);
+    }
+    yvex_gguf_close(gguf);
+    yvex_artifact_close(artifact);
+    return rc == YVEX_OK ? 0 : 1;
+}
+
+/* Builds and prints one complete plan while reading zero source payload bytes. */
 static int artifact_plan_one(
     const yvex_deepseek_payload_handoff *handoff,
     yvex_quant_profile_kind profile,
-    const char *execution_identity)
+    const char *execution_identity,
+    const char *artifact_path)
 {
     yvex_quant_plan *quant = NULL;
     yvex_gguf_writer_plan *writer = NULL;
+    yvex_gguf_writer_plan *repeat_writer = NULL;
     yvex_quant_failure quant_failure;
     yvex_gguf_writer_failure writer_failure;
     yvex_gguf_writer_plan_options writer_options;
     yvex_error error;
     const yvex_quant_plan_summary *quant_summary;
     const yvex_gguf_writer_plan_summary *writer_summary;
+    const yvex_gguf_writer_plan_summary *repeat_summary;
+    const unsigned char *prefix;
+    const unsigned char *repeat_prefix;
+    size_t prefix_bytes;
+    size_t repeat_prefix_bytes;
     unsigned int qtype;
     int rc;
 
@@ -229,10 +304,36 @@ static int artifact_plan_one(
     }
     quant_summary = yvex_quant_plan_summary_get(quant);
     writer_summary = yvex_gguf_writer_plan_summary_get(writer);
+    rc = yvex_gguf_writer_build_deepseek(
+        &repeat_writer, quant,
+        yvex_model_register_deepseek_v4()->payload.map(handoff),
+        yvex_model_register_deepseek_v4()->payload.verification(handoff),
+        &writer_options, &writer_failure, &error);
+    repeat_summary = yvex_gguf_writer_plan_summary_get(repeat_writer);
+    prefix = yvex_gguf_writer_plan_prefix(writer, &prefix_bytes);
+    repeat_prefix = yvex_gguf_writer_plan_prefix(
+        repeat_writer, &repeat_prefix_bytes);
+    if (rc != YVEX_OK || !writer_summary || !repeat_summary || !prefix ||
+        !repeat_prefix || prefix_bytes != repeat_prefix_bytes ||
+        memcmp(prefix, repeat_prefix, prefix_bytes) != 0 ||
+        strcmp(writer_summary->writer_plan_identity,
+               repeat_summary->writer_plan_identity) != 0) {
+        fprintf(stderr,
+                "writer_plan_determinism_failure first=%s repeat=%s\n",
+                writer_summary ? writer_summary->writer_plan_identity : "",
+                repeat_summary ? repeat_summary->writer_plan_identity : "");
+        yvex_gguf_writer_plan_release(&repeat_writer);
+        yvex_gguf_writer_plan_release(&writer);
+        yvex_quant_plan_release(&quant);
+        return 1;
+    }
     printf("profile_name=%s\n", quant_summary->profile_name);
     printf("profile_identity=%s\n", quant_summary->profile_identity);
     printf("writer_plan_identity=%s\n",
            writer_summary->writer_plan_identity);
+    printf("writer_plan_repeat_identity=%s\n",
+           repeat_summary->writer_plan_identity);
+    printf("writer_plan_deterministic=1\n");
     printf("metadata_count=%llu\n", writer_summary->metadata_count);
     printf("tokenizer_tokens=%llu\n",
            writer_summary->tokenizer_token_count);
@@ -259,9 +360,12 @@ static int artifact_plan_one(
         printf("profile_qtype_%u_bytes=%llu\n", qtype,
                writer_summary->qtype_payload_bytes[qtype]);
     }
+    if (artifact_path && artifact_plan_compatibility(artifact_path, writer) != 0)
+        rc = YVEX_ERR_FORMAT;
+    yvex_gguf_writer_plan_release(&repeat_writer);
     yvex_gguf_writer_plan_release(&writer);
     yvex_quant_plan_release(&quant);
-    return 0;
+    return rc == YVEX_OK ? 0 : 1;
 }
 
 /* Verifies one official-reader process against an unchanged regular inode. */
@@ -782,11 +886,15 @@ int main(int argc, char **argv)
     if (plan_only) {
         printf("mode=plan-only\n");
         rc = artifact_plan_one(
-            handoff, YVEX_QUANT_PROFILE_SOURCE_FAITHFUL, NULL);
-        if (rc == 0)
+            handoff, YVEX_QUANT_PROFILE_SOURCE_FAITHFUL, NULL, NULL);
+        if (rc == 0 && artifact_path_build(
+                selected_path, sizeof(selected_path), argv[argument + 1],
+                "deepseek-v4-flash-q8_0-q2_k-v1.gguf"))
             rc = artifact_plan_one(
                 handoff, YVEX_QUANT_PROFILE_RELEASE_Q8_Q2,
-                SELECTED_EXECUTION_IDENTITY);
+                SELECTED_EXECUTION_IDENTITY, selected_path);
+        else if (rc == 0)
+            rc = 1;
         yvex_model_register_deepseek_v4()->payload.close(handoff);
         return rc;
     }

@@ -10,13 +10,14 @@
  * Failure: propagates stream or encoding failure without changing domain state. */
 #include "src/cli/io/private.h"
 
-/* Purpose: Compute json string for its CLI invariant (`json_string`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static void json_string(FILE *fp, const char *text)
-{
+#include <math.h>
+
+/* Purpose: Escape a JSON string.
+ * Inputs: stream and text.
+ * Effects: writes encoded bytes.
+ * Failure: stream state.
+ * Boundary: CLI I/O. */
+static void json_string(FILE *fp, const char *text) {
     const unsigned char *p = (const unsigned char *)(text ? text : "");
 
     (void)yvex_cli_out_char(fp, '"');
@@ -30,6 +31,8 @@ static void json_string(FILE *fp, const char *text)
             (void)yvex_cli_out_puts(fp, "\\r");
         } else if (*p == '\t') {
             (void)yvex_cli_out_puts(fp, "\\t");
+        } else if (*p < 0x20u) {
+            (void)yvex_cli_out_writef(fp, "\\u%04x", (unsigned int)*p);
         } else {
             (void)yvex_cli_out_char(fp, *p);
         }
@@ -38,60 +41,120 @@ static void json_string(FILE *fp, const char *text)
     (void)yvex_cli_out_char(fp, '"');
 }
 
-/* Purpose: Compute json begin for its CLI invariant (`yvex_cli_json_begin`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-void yvex_cli_json_begin(FILE *fp)
-{
+/* Purpose: Begin a JSON object.
+ * Inputs: stream.
+ * Effects: writes delimiter.
+ * Failure: stream state.
+ * Boundary: CLI I/O. */
+void yvex_cli_json_begin(FILE *fp) {
     yvex_cli_out_line(fp, "{");
 }
 
-/* Purpose: Compute json end for its CLI invariant (`yvex_cli_json_end`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-void yvex_cli_json_end(FILE *fp)
-{
+/* Purpose: End a JSON object.
+ * Inputs: stream.
+ * Effects: writes delimiter.
+ * Failure: stream state.
+ * Boundary: CLI I/O. */
+void yvex_cli_json_end(FILE *fp) {
     yvex_cli_out_line(fp, "}");
 }
 
-/* Purpose: Compute json field str for its CLI invariant (`yvex_cli_json_field_str`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-void yvex_cli_json_field_str(FILE *fp, const char *key, const char *value, int comma)
-{
+/* Purpose: Serialize a JSON value.
+ * Inputs: stream, key, kind, and value.
+ * Effects: writes a member.
+ * Failure: typed refusal.
+ * Boundary: availability and capability remain caller-owned. */
+static int json_field(FILE *fp, const char *key, yvex_cli_field_kind kind, const void *value,
+                      int comma) {
     (void)yvex_cli_out_puts(fp, "  ");
     json_string(fp, key);
     (void)yvex_cli_out_puts(fp, ": ");
-    json_string(fp, value);
+    switch (kind) {
+    case YVEX_CLI_FIELD_TEXT:
+    case YVEX_CLI_FIELD_TEXT_ARRAY:
+        json_string(fp, value);
+        break;
+    case YVEX_CLI_FIELD_U64:
+        (void)yvex_cli_out_writef(fp, "%llu", *(const unsigned long long *)value);
+        break;
+    case YVEX_CLI_FIELD_U32:
+        (void)yvex_cli_out_writef(fp, "%u", *(const unsigned int *)value);
+        break;
+    case YVEX_CLI_FIELD_I32:
+        (void)yvex_cli_out_writef(fp, "%d", *(const int *)value);
+        break;
+    case YVEX_CLI_FIELD_BOOL:
+        (void)yvex_cli_out_puts(fp, *(const int *)value ? "true" : "false");
+        break;
+    case YVEX_CLI_FIELD_DOUBLE:
+        if (isfinite(*(const double *)value))
+            (void)yvex_cli_out_writef(fp, "%.17g", *(const double *)value);
+        else
+            (void)yvex_cli_out_puts(fp, "null");
+        break;
+    default:
+        return YVEX_ERR_UNSUPPORTED;
+    }
     (void)yvex_cli_out_writef(fp, "%s\n", comma ? "," : "");
+    return ferror(fp) ? YVEX_ERR_IO : YVEX_OK;
 }
 
-/* Purpose: Compute json field u64 for its CLI invariant (`yvex_cli_json_field_u64`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-void yvex_cli_json_field_u64(FILE *fp, const char *key, unsigned long long value, int comma)
-{
-    (void)yvex_cli_out_puts(fp, "  ");
-    json_string(fp, key);
-    (void)yvex_cli_out_writef(fp, ": %llu%s\n", value, comma ? "," : "");
+/* Purpose: Emit a JSON string.
+ * Inputs: stream, key, value.
+ * Effects: writes a member.
+ * Failure: stream state.
+ * Boundary: CLI I/O. */
+void yvex_cli_json_field_str(FILE *fp, const char *key, const char *value, int comma) {
+    (void)json_field(fp, key, YVEX_CLI_FIELD_TEXT_ARRAY, value ? value : "", comma);
 }
 
-/* Purpose: Compute json field bool for its CLI invariant (`yvex_cli_json_field_bool`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-void yvex_cli_json_field_bool(FILE *fp, const char *key, int value, int comma)
-{
-    (void)yvex_cli_out_puts(fp, "  ");
-    json_string(fp, key);
-    (void)yvex_cli_out_writef(fp, ": %s%s\n", value ? "true" : "false", comma ? "," : "");
+/* Purpose: Emit a JSON u64.
+ * Inputs: stream, key, value.
+ * Effects: writes a member.
+ * Failure: stream state.
+ * Boundary: CLI I/O. */
+void yvex_cli_json_field_u64(FILE *fp, const char *key, unsigned long long value, int comma) {
+    (void)json_field(fp, key, YVEX_CLI_FIELD_U64, &value, comma);
+}
+
+/* Purpose: Emit a JSON boolean.
+ * Inputs: stream, key, value.
+ * Effects: writes a member.
+ * Failure: stream state.
+ * Boundary: CLI I/O. */
+void yvex_cli_json_field_bool(FILE *fp, const char *key, int value, int comma) {
+    (void)json_field(fp, key, YVEX_CLI_FIELD_BOOL, &value, comma);
+}
+
+/* Purpose: Emit a JSON number.
+ * Inputs: stream, key, value.
+ * Effects: writes a member.
+ * Failure: stream state.
+ * Boundary: CLI I/O. */
+void yvex_cli_json_field_double(FILE *fp, const char *key, double value, int comma) {
+    (void)json_field(fp, key, YVEX_CLI_FIELD_DOUBLE, &value, comma);
+}
+
+/* Purpose: Project JSON fields.
+ * Inputs: stream, object, and schema.
+ * Effects: writes ordered members.
+ * Failure: typed refusal.
+ * Boundary: availability remains caller-owned. */
+int yvex_cli_json_fields(FILE *fp, const void *object, const yvex_cli_field_spec *fields,
+                         size_t field_count, int comma) {
+    const unsigned char *base = object;
+    size_t index;
+
+    if (!fp || !object || (!fields && field_count))
+        return YVEX_ERR_INVALID_ARG;
+    for (index = 0; index < field_count; ++index) {
+        const yvex_cli_field_spec *field = &fields[index];
+        const void *value = base + field->offset;
+        int separator = comma || index + 1u < field_count;
+        if (field->kind == YVEX_CLI_FIELD_TEXT)
+            value = *(const char *const *)value;
+        if (json_field(fp, field->key, field->kind, value, separator) != YVEX_OK)
+            return ferror(fp) ? YVEX_ERR_IO : YVEX_ERR_UNSUPPORTED;
+    }
+    return ferror(fp) ? YVEX_ERR_IO : YVEX_OK;
 }

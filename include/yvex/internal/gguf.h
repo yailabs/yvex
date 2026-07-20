@@ -329,6 +329,7 @@ typedef struct yvex_gguf_roundtrip_summary {
     long long file_ctime_seconds;
     long long file_ctime_nanoseconds;
     char artifact_identity[YVEX_SHA256_HEX_CAP];
+    char payload_byte_identity[YVEX_SHA256_HEX_CAP];
     int tokenizer_complete;
     int reader_accepted;
     int layout_accepted;

@@ -11,6 +11,8 @@
 
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/source-manifest-cli}
 MODEL_DIR="$OUT_DIR/model"
@@ -21,7 +23,7 @@ fail() {
     exit 1
 }
 
-rm -rf "$OUT_DIR"
+yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$MODEL_DIR"
 printf '{}\n' > "$MODEL_DIR/config.json"
 printf '{}\n' > "$MODEL_DIR/tokenizer.json"

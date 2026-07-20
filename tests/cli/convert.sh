@@ -4,6 +4,8 @@
 
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/convert-cli}
 NATIVE="$OUT_DIR/native"
@@ -13,7 +15,7 @@ fail() {
     exit 1
 }
 
-rm -rf "$OUT_DIR"
+yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$NATIVE"
 
 OUT_DIR="$OUT_DIR" python3 - <<'PY'

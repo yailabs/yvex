@@ -67,6 +67,8 @@
 
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/cli}
 
@@ -234,7 +236,7 @@ contains "$OUT_DIR/commands.out" "tensor-map         source           diagnostic
 contains "$OUT_DIR/commands.out" "group: artifact"
 contains "$OUT_DIR/commands.out" "integrity          artifact         mixed-transitional   Artifact integrity reports."
 contains "$OUT_DIR/commands.out" "group: graph"
-contains "$OUT_DIR/commands.out" "graph              graph            mixed-transitional   Graph diagnostics and narrow proofs."
+contains "$OUT_DIR/commands.out" "graph              graph            mixed-transitional   Graph diagnostics and production attention probes."
 contains "$OUT_DIR/commands.out" "group: runtime"
 contains "$OUT_DIR/commands.out" "generate           runtime          diagnostic           Bounded diagnostic generation loop."
 contains "$OUT_DIR/commands.out" "kv                 runtime          mixed-transitional   KV diagnostics and reports."
@@ -444,8 +446,8 @@ contains "$OUT_DIR/help_graph.out" "command: graph [mixed-transitional]"
 contains "$OUT_DIR/help_graph.out" "group: graph"
 contains "$OUT_DIR/help_graph.out" "usage: yvex graph [--model] FILE_OR_ALIAS"
 contains "$OUT_DIR/help_graph.out" "example: yvex graph check --suite primitives --backend cpu"
-contains "$OUT_DIR/help_graph.out" "option_classes: selector, behavior, diagnostic"
-contains "$OUT_DIR/help_graph.out" "boundary: graph proof is not generation"
+contains "$OUT_DIR/help_graph.out" "option_classes: selector, path, behavior, diagnostic, json"
+contains "$OUT_DIR/help_graph.out" "boundary: production attention probe; not prompt execution or generation"
 contains "$OUT_DIR/help_graph.out" "domain help:"
 contains "$OUT_DIR/help_graph.out" "usage: yvex graph [--model] FILE_OR_ALIAS"
 
@@ -534,7 +536,7 @@ run_fail_code source_manifest_report_unknown_flag 2 "$YVEX_BIN" source-manifest 
 contains "$OUT_DIR/source_manifest_report_unknown_flag.err" "source-manifest report: unknown option: --unknown"
 
 QWEN_MISSING_ROOT="$OUT_DIR/qwen-missing-models-root"
-rm -rf "$QWEN_MISSING_ROOT"
+yvex_test_cleanup "$QWEN_MISSING_ROOT"
 run_ok source_manifest_report_missing_source "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --models-root "$QWEN_MISSING_ROOT"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "report: qwen-source-pressure"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "status: source-target-profiled"
@@ -709,7 +711,7 @@ contains "$OUT_DIR/source_manifest_report_audit.out" "blocker_0: missing-qwen-so
 contains "$OUT_DIR/source_manifest_report_audit.out" "next_required_rows: V010.MAP.8"
 
 GEMMA_MISSING_ROOT="$OUT_DIR/gemma-missing-models-root"
-rm -rf "$GEMMA_MISSING_ROOT"
+yvex_test_cleanup "$GEMMA_MISSING_ROOT"
 run_ok source_manifest_report_gemma_missing_source "$YVEX_BIN" source-manifest report --family gemma --release v0.1.0 --models-root "$GEMMA_MISSING_ROOT"
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "report: gemma-source-pressure"
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "status: source-target-profiled"
@@ -794,7 +796,7 @@ contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "next_required_rows: 
 
 QWEN_FAKE_SOURCE="${TMPDIR:-/tmp}/yvex-native-safetensors-inventory-test-$$"
 QWEN_FAKE_MODELS="${TMPDIR:-/tmp}/yvex-native-safetensors-inventory-models-$$"
-rm -rf "$QWEN_FAKE_SOURCE" "$QWEN_FAKE_MODELS"
+yvex_test_cleanup "$QWEN_FAKE_SOURCE" "$QWEN_FAKE_MODELS"
 mkdir -p "$QWEN_FAKE_SOURCE"
 printf 'readme\n' > "$QWEN_FAKE_SOURCE/README.md"
 printf 'license\n' > "$QWEN_FAKE_SOURCE/LICENSE"
@@ -946,11 +948,11 @@ contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_1_dtype: F32"
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_1_shape: [2,3]"
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "blocker_0: missing-qwen-source-manifest"
-rm -rf "$QWEN_FAKE_SOURCE" "$QWEN_FAKE_MODELS"
+yvex_test_cleanup "$QWEN_FAKE_SOURCE" "$QWEN_FAKE_MODELS"
 
 QWEN_FAKE_MANIFEST_SOURCE="${TMPDIR:-/tmp}/yvex-source-manifest-hardening-test-$$"
 QWEN_FAKE_MANIFEST_MODELS="${TMPDIR:-/tmp}/yvex-source-manifest-hardening-models-$$"
-rm -rf "$QWEN_FAKE_MANIFEST_SOURCE" "$QWEN_FAKE_MANIFEST_MODELS"
+yvex_test_cleanup "$QWEN_FAKE_MANIFEST_SOURCE" "$QWEN_FAKE_MANIFEST_MODELS"
 mkdir -p "$QWEN_FAKE_MANIFEST_SOURCE"
 printf '{}\n' > "$QWEN_FAKE_MANIFEST_SOURCE/config.json"
 printf '{}\n' > "$QWEN_FAKE_MANIFEST_SOURCE/tokenizer.json"
@@ -999,11 +1001,11 @@ contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "runtime_clai
 contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "generation: unsupported-full-model"
 contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "benchmark_status: not-measured"
 contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "release_ready: false"
-rm -rf "$QWEN_FAKE_MANIFEST_SOURCE" "$QWEN_FAKE_MANIFEST_MODELS"
+yvex_test_cleanup "$QWEN_FAKE_MANIFEST_SOURCE" "$QWEN_FAKE_MANIFEST_MODELS"
 
 QWEN_BROKEN_SOURCE="${TMPDIR:-/tmp}/yvex-native-safetensors-malformed-test-$$"
 QWEN_BROKEN_MODELS="${TMPDIR:-/tmp}/yvex-native-safetensors-malformed-models-$$"
-rm -rf "$QWEN_BROKEN_SOURCE" "$QWEN_BROKEN_MODELS"
+yvex_test_cleanup "$QWEN_BROKEN_SOURCE" "$QWEN_BROKEN_MODELS"
 mkdir -p "$QWEN_BROKEN_SOURCE"
 printf '{}\n' > "$QWEN_BROKEN_SOURCE/config.json"
 printf '{}\n' > "$QWEN_BROKEN_SOURCE/tokenizer.json"
@@ -1028,7 +1030,7 @@ contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "source_
 contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "source_tensor_metadata_payload_bytes_read: 0"
 contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "source_tensor_count: 0"
 contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "source_tensor_metadata_error_count: 1"
-rm -rf "$QWEN_BROKEN_SOURCE" "$QWEN_BROKEN_MODELS"
+yvex_test_cleanup "$QWEN_BROKEN_SOURCE" "$QWEN_BROKEN_MODELS"
 
 run_ok model_target_classes "$YVEX_BIN" model-target classes
 contains "$OUT_DIR/model_target_classes.out" "status: model-target-classes"
@@ -1603,7 +1605,7 @@ contains "$OUT_DIR/model_target_help_subcommand.out" "Release-target selection a
 
 MODEL_TARGET_PATHS_DIR="$OUT_DIR/model-target-paths"
 MODEL_TARGET_MODELS_ROOT="$(pwd)/$MODEL_TARGET_PATHS_DIR/models"
-rm -rf "$MODEL_TARGET_PATHS_DIR"
+yvex_test_cleanup "$MODEL_TARGET_PATHS_DIR"
 mkdir -p "$MODEL_TARGET_PATHS_DIR/models"
 
 run_ok model_target_paths_config "$YVEX_BIN" paths --project "$MODEL_TARGET_PATHS_DIR" configure --models-root "$MODEL_TARGET_PATHS_DIR/models" --create
@@ -1974,16 +1976,26 @@ rc=$?
 set -e
 contains "$OUT_DIR/backend_cuda.out" "backend: cuda"
 if [ "$rc" -eq 0 ]; then
-    contains "$OUT_DIR/backend_cuda.out" "status: ready"
     contains "$OUT_DIR/backend_cuda.out" "tensor_alloc: yes"
     contains "$OUT_DIR/backend_cuda.out" "tensor_read_write: yes"
-    contains "$OUT_DIR/backend_cuda.out" "op_embed: yes"
-    contains "$OUT_DIR/backend_cuda.out" "op_matmul: yes"
-    contains "$OUT_DIR/backend_cuda.out" "op_mlp: yes"
-    contains "$OUT_DIR/backend_cuda.out" "op_rope: yes"
-    contains "$OUT_DIR/backend_cuda.out" "op_attention: yes"
     contains "$OUT_DIR/backend_cuda.out" "context_available: yes"
-    contains "$OUT_DIR/backend_cuda.out" "kernel_bundle: admitted"
+    if grep -F "kernel_bundle: admitted" "$OUT_DIR/backend_cuda.out" >/dev/null; then
+        contains "$OUT_DIR/backend_cuda.out" "status: ready"
+        contains "$OUT_DIR/backend_cuda.out" "op_embed: yes"
+        contains "$OUT_DIR/backend_cuda.out" "op_matmul: yes"
+        contains "$OUT_DIR/backend_cuda.out" "op_mlp: yes"
+        contains "$OUT_DIR/backend_cuda.out" "op_rope: yes"
+        contains "$OUT_DIR/backend_cuda.out" "op_attention: yes"
+    else
+        contains "$OUT_DIR/backend_cuda.out" "status: context-ready"
+        contains "$OUT_DIR/backend_cuda.out" "kernel_bundle: absent"
+        contains "$OUT_DIR/backend_cuda.out" "kernel_bundle_reason: kernel-bundle-absent"
+        contains "$OUT_DIR/backend_cuda.out" "op_embed: no"
+        contains "$OUT_DIR/backend_cuda.out" "op_matmul: no"
+        contains "$OUT_DIR/backend_cuda.out" "op_mlp: no"
+        contains "$OUT_DIR/backend_cuda.out" "op_rope: no"
+        contains "$OUT_DIR/backend_cuda.out" "op_attention: no"
+    fi
     contains "$OUT_DIR/backend_cuda.out" "status: backend-capabilities"
 elif [ "$rc" -eq 5 ]; then
     contains "$OUT_DIR/backend_cuda.out" "status: unsupported"
@@ -2032,7 +2044,11 @@ rc=$?
 set -e
 contains "$OUT_DIR/session_cuda.out" "backend: cuda"
 if [ "$rc" -eq 0 ]; then
-    contains "$OUT_DIR/session_cuda.out" "backend_status: ready"
+    if grep -F "backend_status: ready" "$OUT_DIR/session_cuda.out" >/dev/null; then
+        contains "$OUT_DIR/session_cuda.out" "backend_status: ready"
+    else
+        contains "$OUT_DIR/session_cuda.out" "backend_status: context-ready"
+    fi
     contains "$OUT_DIR/session_cuda.out" "execution_ready: false"
     contains "$OUT_DIR/session_cuda.out" "status: session-created"
 elif [ "$rc" -eq 5 ]; then
@@ -2101,7 +2117,7 @@ contains "$OUT_DIR/paths_run_create.out" "root: $OUT_DIR/runs/run_"
 test -d "$OUT_DIR/runs" || fail "paths --run --create did not create run root"
 
 OPERATOR_PATHS_DIR="$OUT_DIR/operator-paths"
-rm -rf "$OPERATOR_PATHS_DIR"
+yvex_test_cleanup "$OPERATOR_PATHS_DIR"
 mkdir -p "$OPERATOR_PATHS_DIR"
 
 run_ok operator_paths_initial "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" --audit

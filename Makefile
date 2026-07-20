@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-materialize test-runtime-descriptor test-materialize-live-plan test-materialize-live test-attention test-attention-live-plan test-attention-live test-attention-cuda test-quant test-quant-live-plan test-quant-live test-artifact-writer test-artifact-writer-fault test-artifact-live-plan test-artifact-live-structure test-artifact-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface test-source-ownership test-repository-layout test-architecture-boundaries smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-materialize test-runtime-descriptor test-materialize-live-plan test-materialize-live test-attention test-attention-fixture-isolation test-attention-live-plan test-attention-live test-attention-cli-live test-attention-cuda test-quant test-quant-live-plan test-quant-live test-artifact-writer test-artifact-writer-fault test-artifact-live-plan test-artifact-live-structure test-artifact-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface test-source-ownership test-repository-layout test-architecture-boundaries smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -51,12 +51,40 @@ TEST_DIR ?= $(BUILD_DIR)/tests
 DEEPSEEK_SOURCE ?= $(HOME)/lab/models/hf/deepseek/DeepSeek-V4-Flash
 DEEPSEEK_MODELS_ROOT ?= $(HOME)/lab/models/gguf
 DEEPSEEK_SOURCE_MANIFEST ?= $(DEEPSEEK_MODELS_ROOT)/deepseek/deepseek-source-manifest.json
+DEEPSEEK_OPERATOR_MODELS_ROOT ?= $(HOME)/lab/models
+DEEPSEEK_SELECTED_ARTIFACT ?= $(DEEPSEEK_MODELS_ROOT)/deepseek/deepseek-v4-flash-q8_0-q2_k-v1.gguf
 PINNED_GGML_ROOT ?= /tmp/yvex-ggml-af97976
 PINNED_GGML_BUILD ?= $(PINNED_GGML_ROOT)/build-yvex
 
 LIBYVEX ?= $(LIB_DIR)/libyvex.a
 YVEX_BIN ?= ./yvex
 YVEXD_BIN ?= ./yvexd
+
+# Attention wrappers own a collision-free temporary root and delete only that
+# root after validating its canonical parent and generated basename.
+define ATTENTION_OWNED_TMP_BEGIN
+tmp_parent=$${TMPDIR:-/tmp}; \
+case "$$tmp_parent" in /*) ;; *) echo "attention temp parent must be absolute: $$tmp_parent" >&2; exit 1;; esac; \
+test -d "$$tmp_parent" && test ! -L "$$tmp_parent"; \
+tmp_parent=$$(cd "$$tmp_parent" && pwd -P); \
+tmp_dir=$$(mktemp -d "$$tmp_parent/yvex-$$tmp_tag.XXXXXX"); \
+case "$$tmp_dir" in "$$tmp_parent"/yvex-"$$tmp_tag".*) ;; *) echo "attention temp ownership mismatch: $$tmp_dir" >&2; exit 1;; esac; \
+cleanup_attention_tmp() { \
+	status=$$?; \
+	trap - EXIT HUP INT TERM; \
+	case "$$tmp_dir" in "$$tmp_parent"/yvex-"$$tmp_tag".*) ;; *) echo "refusing unowned attention cleanup: $$tmp_dir" >&2; exit 1;; esac; \
+	if test -e "$$tmp_dir"; then \
+		test -d "$$tmp_dir" && test ! -L "$$tmp_dir" || { echo "refusing unsafe attention cleanup: $$tmp_dir" >&2; exit 1; }; \
+		find "$$tmp_dir" -xdev -mindepth 1 -delete || exit 1; \
+		rmdir "$$tmp_dir" || exit 1; \
+	fi; \
+	exit $$status; \
+}; \
+trap cleanup_attention_tmp EXIT; \
+trap 'exit 129' HUP; \
+trap 'exit 130' INT; \
+trap 'exit 143' TERM;
+endef
 
 CLI_COMMAND_SRCS := src/cli/commands/generate.c \
 	src/cli/commands/graph.c \
@@ -387,8 +415,29 @@ test-materialize-live-plan: $(MATERIALIZE_LIVE_RUNNER)
 test-materialize-live: $(MATERIALIZE_LIVE_RUNNER)
 	$(MATERIALIZE_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
 
-test-attention: $(TEST_RUNNER)
+test-attention: $(TEST_RUNNER) test-attention-fixture-isolation
 	$(TEST_RUNNER)
+
+test-attention-fixture-isolation: $(YVEX_BIN) tests/cli/attention_graph.sh
+	@set -eu; \
+	tmp_tag=attention-fixture-isolation; \
+	$(ATTENTION_OWNED_TMP_BEGIN) \
+	YVEX_BIN="$(YVEX_BIN)" YVEX_TEST_OUT_DIR="$$tmp_dir/first" \
+		sh tests/cli/attention_graph.sh >"$$tmp_dir/first.log" 2>&1 & \
+	first_pid=$$!; \
+	YVEX_BIN="$(YVEX_BIN)" YVEX_TEST_OUT_DIR="$$tmp_dir/second" \
+		sh tests/cli/attention_graph.sh >"$$tmp_dir/second.log" 2>&1 & \
+	second_pid=$$!; \
+	set +e; \
+	wait $$first_pid; first_status=$$?; \
+	wait $$second_pid; second_status=$$?; \
+	set -e; \
+	test $$first_status -eq 0 || { cat "$$tmp_dir/first.log" >&2; exit $$first_status; }; \
+	test $$second_status -eq 0 || { cat "$$tmp_dir/second.log" >&2; exit $$second_status; }; \
+	test -d "$$tmp_dir/first" && test -d "$$tmp_dir/second"; \
+	test "$$tmp_dir/first" != "$$tmp_dir/second"; \
+	cmp "$$tmp_dir/first.log" "$$tmp_dir/second.log"; \
+	echo "attention fixture isolation: concurrent runs byte-identical"
 
 test-attention-live-plan: $(ATTENTION_LIVE_RUNNER)
 	$(ATTENTION_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
@@ -396,10 +445,20 @@ test-attention-live-plan: $(ATTENTION_LIVE_RUNNER)
 test-attention-live: $(ATTENTION_LIVE_RUNNER)
 	$(ATTENTION_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
 
+test-attention-cli-live: $(YVEX_BIN) tests/cli/attention_graph.sh
+	@set -eu; \
+	tmp_tag=attention-cli-live; \
+	$(ATTENTION_OWNED_TMP_BEGIN) \
+	YVEX_BIN="$(YVEX_BIN)" YVEX_TEST_OUT_DIR="$$tmp_dir/output" \
+		YVEX_ATTENTION_LIVE=1 \
+		YVEX_ATTENTION_MODELS_ROOT="$(DEEPSEEK_OPERATOR_MODELS_ROOT)" \
+		YVEX_ATTENTION_ARTIFACT="$(DEEPSEEK_SELECTED_ARTIFACT)" \
+		sh tests/cli/attention_graph.sh
+
 test-attention-cuda: $(ATTENTION_LIVE_RUNNER)
 	@set -eu; \
-	tmp_dir=$$(mktemp -d "$${TMPDIR:-/tmp}/yvex-attention-cuda.XXXXXX"); \
-	trap 'rm -rf "$$tmp_dir"' EXIT HUP INT TERM; \
+	tmp_tag=attention-cuda; \
+	$(ATTENTION_OWNED_TMP_BEGIN) \
 	YVEX_ATTENTION_CUDA_ONLY=1 $(ATTENTION_LIVE_RUNNER) \
 		"$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" \
 		"$(DEEPSEEK_SOURCE_MANIFEST)" >"$$tmp_dir/first.out"; \
@@ -430,7 +489,7 @@ test-quant-live-plan: $(QUANT_LIVE_RUNNER)
 	$(QUANT_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
 
 test-quant-live: $(QUANT_LIVE_RUNNER)
-	$(QUANT_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+	$(QUANT_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)" "$(DEEPSEEK_SELECTED_ARTIFACT)"
 
 test-artifact-live-plan: $(ARTIFACT_LIVE_RUNNER)
 	$(ARTIFACT_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
@@ -476,8 +535,10 @@ test-source-ownership: tests/test_source_ownership.sh config/source_owners.tsv
 test-repository-layout: tests/test_repository_layout.sh Makefile
 	sh tests/test_repository_layout.sh
 
-test-architecture-boundaries: $(LIBYVEX) tests/test_architecture_boundaries.sh
-	sh tests/test_architecture_boundaries.sh
+test-architecture-boundaries: $(LIBYVEX) $(YVEX_BIN) $(TEST_REFERENCE_OBJS) tests/test_architecture_boundaries.sh
+	YVEX_LIB="$(LIBYVEX)" YVEX_BIN="$(YVEX_BIN)" \
+		YVEX_REFERENCE_OBJS="$(TEST_REFERENCE_OBJS)" \
+		sh tests/test_architecture_boundaries.sh
 
 smoke: test-cli
 
@@ -611,10 +672,12 @@ check-docs:
 	@grep -F "YVEX Runtime Contract" docs/contract.md >/dev/null
 	@grep -F "YVEX Operator Runbook" docs/operator-runbook.md >/dev/null
 
-check-guardrails: $(LIBYVEX)
+check-guardrails: $(LIBYVEX) $(YVEX_BIN) $(TEST_REFERENCE_OBJS)
 	@sh tests/test_source_ownership.sh
 	@sh tests/test_repository_layout.sh
-	@sh tests/test_architecture_boundaries.sh
+	@YVEX_LIB="$(LIBYVEX)" YVEX_BIN="$(YVEX_BIN)" \
+		YVEX_REFERENCE_OBJS="$(TEST_REFERENCE_OBJS)" \
+		sh tests/test_architecture_boundaries.sh
 	@test ! -e docs/spine.md
 	@test ! -d docs/spines
 	@test ! -d docs/integration

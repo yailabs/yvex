@@ -14,9 +14,17 @@
 #include "src/cli/io/private.h"
 #include "src/cli/model_artifacts/private.h"
 
+#include <string.h>
+
 static const char *const literal_lines_0[] = {
     "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda]",
     "       yvex graph check [--suite primitives|block|layers|all] [--backend cpu|cuda]",
+    "       yvex graph attention execute --target deepseek4-v4-flash --backend cpu|cuda",
+    "           [--artifact FILE] [--models-root DIR] [--probe canonical] [--scope quick|full]",
+    "           [--output normal|table|audit|json]",
+    "       yvex graph attention execute --target deepseek4-v4-flash --compare-backends",
+    "           [--artifact FILE] [--models-root DIR] [--probe canonical] [--scope quick|full]",
+    "           [--output normal|table|audit|json]",
     "       yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N",
     "       yvex graph --backend cpu|cuda --execute-op --op attention --seq-len N --position N --head-dim N [--causal]",
     "       yvex graph --backend cpu|cuda --execute-op --op matmul --m M --k K --n N",
@@ -33,8 +41,9 @@ static const char *const literal_lines_0[] = {
         "rmsnorm [--partial-token N | --tokens IDS --token-index N]",
     "",
     "example: yvex graph check --suite primitives --backend cpu",
-    "boundary: graph construction, selected primitive proof, and selected graph slice proof are not full "
-        "transformer execution or generation readiness"
+    "example: yvex graph attention execute --target deepseek4-v4-flash --backend cpu --scope quick",
+    "boundary: the attention command executes a canonical production probe over admitted weights; it is not "
+        "prompt execution, persistent KV, transformer execution, or generation"
 };
 
 /* Purpose: Render graph render body from typed facts (`graph_render_body`). */
@@ -43,114 +52,287 @@ static const char *graph_render_body(const yvex_graph_report *report)
     return report && report->body ? report->body : "";
 }
 
-/* Render a graph admission result without making the graph owner write operator output. */
-/* Purpose: Render graph guard print from typed facts (`yvex_cli_graph_guard_print`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
+static const yvex_cli_field_spec graph_guard_fields[] = {
+    {"graph_integrity_guard", YVEX_CLI_FIELD_TEXT, offsetof(yvex_cli_graph_guard_report, guard_status), "fail"},
+    {"graph_execution_phase", YVEX_CLI_FIELD_TEXT, offsetof(yvex_cli_graph_guard_report, phase), "preflight"},
+    {"graph_kind", YVEX_CLI_FIELD_TEXT, offsetof(yvex_cli_graph_guard_report, graph_kind), "unknown"},
+    {"integrity_status", YVEX_CLI_FIELD_TEXT, offsetof(yvex_cli_graph_guard_report, integrity_status), "unchecked"},
+    {"identity_status", YVEX_CLI_FIELD_TEXT, offsetof(yvex_cli_graph_guard_report, identity_status), "unregistered"},
+    {"metadata_status", YVEX_CLI_FIELD_TEXT, offsetof(yvex_cli_graph_guard_report, metadata_status), "unregistered"},
+    {"shape_status", YVEX_CLI_FIELD_TEXT, offsetof(yvex_cli_graph_guard_report, shape_status), "unchecked"},
+    {"range_status", YVEX_CLI_FIELD_TEXT, offsetof(yvex_cli_graph_guard_report, range_status), "unchecked"},
+    {"slice_range_status", YVEX_CLI_FIELD_TEXT, offsetof(yvex_cli_graph_guard_report, slice_range_status), "unchecked"},
+    {"backend_status", YVEX_CLI_FIELD_TEXT, offsetof(yvex_cli_graph_guard_report, backend_status), "not-opened"},
+    {"backend_op_status", YVEX_CLI_FIELD_TEXT, offsetof(yvex_cli_graph_guard_report, backend_op_status), "unchecked"},
+    {"dispatch_attempted", YVEX_CLI_FIELD_BOOL, offsetof(yvex_cli_graph_guard_report, dispatch_attempted), NULL},
+    {"reference_read_attempted", YVEX_CLI_FIELD_BOOL,
+     offsetof(yvex_cli_graph_guard_report, reference_read_attempted), NULL},
+    {"output_allocation_attempted", YVEX_CLI_FIELD_BOOL,
+     offsetof(yvex_cli_graph_guard_report, output_allocation_attempted), NULL},
+    {"cleanup_attempted", YVEX_CLI_FIELD_BOOL, offsetof(yvex_cli_graph_guard_report, cleanup_attempted), NULL},
+    {"cleanup_status", YVEX_CLI_FIELD_TEXT, offsetof(yvex_cli_graph_guard_report, cleanup_status), "not-needed"},
+    {"output_bytes_planned", YVEX_CLI_FIELD_U64,
+     offsetof(yvex_cli_graph_guard_report, output_bytes_planned), NULL},
+    {"output_bytes_allocated", YVEX_CLI_FIELD_U64,
+     offsetof(yvex_cli_graph_guard_report, output_bytes_allocated), NULL},
+    {"reference_bytes_planned", YVEX_CLI_FIELD_U64,
+     offsetof(yvex_cli_graph_guard_report, reference_bytes_planned), NULL},
+};
+
+/* Purpose: Render graph guard.
+ * Inputs: report.
+ * Effects: writes CLI fields.
+ * Failure: stream state.
+ * Boundary: CLI presentation. */
 void yvex_cli_graph_guard_print(const yvex_cli_graph_guard_report *report)
 {
     if (!report) return;
-    yvex_cli_out_writef(stdout, "graph_integrity_guard: %s\n",
-                        report->guard_status ? report->guard_status : "fail");
-    yvex_cli_out_writef(stdout, "graph_execution_phase: %s\n",
-                        report->phase ? report->phase : "preflight");
-    yvex_cli_out_writef(stdout, "graph_kind: %s\n",
-                        report->graph_kind ? report->graph_kind : "unknown");
-    yvex_cli_out_writef(stdout, "integrity_status: %s\n",
-                        report->integrity_status ? report->integrity_status : "unchecked");
-    yvex_cli_out_writef(stdout, "identity_status: %s\n",
-                        report->identity_status ? report->identity_status : "unregistered");
-    yvex_cli_out_writef(stdout, "metadata_status: %s\n",
-                        report->metadata_status ? report->metadata_status : "unregistered");
-    yvex_cli_out_writef(stdout, "shape_status: %s\n",
-                        report->shape_status ? report->shape_status : "unchecked");
-    yvex_cli_out_writef(stdout, "range_status: %s\n",
-                        report->range_status ? report->range_status : "unchecked");
-    yvex_cli_out_writef(stdout, "slice_range_status: %s\n",
-                        report->slice_range_status ? report->slice_range_status : "unchecked");
-    yvex_cli_out_writef(stdout, "backend_status: %s\n",
-                        report->backend_status ? report->backend_status : "not-opened");
-    yvex_cli_out_writef(stdout, "backend_op_status: %s\n",
-                        report->backend_op_status ? report->backend_op_status : "unchecked");
-    yvex_cli_out_writef(stdout, "dispatch_attempted: %s\n",
-                        report->dispatch_attempted ? "true" : "false");
-    yvex_cli_out_writef(stdout, "reference_read_attempted: %s\n",
-                        report->reference_read_attempted ? "true" : "false");
-    yvex_cli_out_writef(stdout, "output_allocation_attempted: %s\n",
-                        report->output_allocation_attempted ? "true" : "false");
-    yvex_cli_out_writef(stdout, "cleanup_attempted: %s\n",
-                        report->cleanup_attempted ? "true" : "false");
-    yvex_cli_out_writef(stdout, "cleanup_status: %s\n",
-                        report->cleanup_status ? report->cleanup_status : "not-needed");
-    yvex_cli_out_writef(stdout, "output_bytes_planned: %llu\n",
-                        report->output_bytes_planned);
-    yvex_cli_out_writef(stdout, "output_bytes_allocated: %llu\n",
-                        report->output_bytes_allocated);
-    yvex_cli_out_writef(stdout, "reference_bytes_planned: %llu\n",
-                        report->reference_bytes_planned);
+    (void)yvex_cli_out_fields(stdout, report, graph_guard_fields,
+                              sizeof(graph_guard_fields) / sizeof(graph_guard_fields[0]));
 }
 
-/* Purpose: Render graph render normal from typed facts (`yvex_graph_render_normal`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-int yvex_graph_render_normal(FILE *fp,
-                             const yvex_graph_report *report)
-{
-    yvex_cli_out_writef(fp, "%s", graph_render_body(report));
-    return YVEX_OK;
-}
-
-/* Purpose: Render graph render table from typed facts (`yvex_graph_render_table`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-int yvex_graph_render_table(FILE *fp,
-                            const yvex_graph_report *report)
-{
-    yvex_cli_out_writef(fp, "%s", graph_render_body(report));
-    return YVEX_OK;
-}
-
-/* Purpose: Render graph render audit from typed facts (`yvex_graph_render_audit`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-int yvex_graph_render_audit(FILE *fp,
-                            const yvex_graph_report *report)
-{
-    yvex_cli_out_writef(fp, "%s", graph_render_body(report));
-    return YVEX_OK;
-}
-
-/* Purpose: Render graph render from typed facts (`yvex_graph_render`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
+/* Purpose: Render graph report.
+ * Inputs: stream, mode, report.
+ * Effects: writes report body.
+ * Failure: typed I/O refusal.
+ * Boundary: CLI presentation. */
 int yvex_graph_render(FILE *fp,
                       yvex_graph_report_mode mode,
                       const yvex_graph_report *report)
 {
-    if (mode == YVEX_GRAPH_REPORT_MODE_TABLE) {
-        return yvex_graph_render_table(fp, report);
-    }
-    if (mode == YVEX_GRAPH_REPORT_MODE_AUDIT) {
-        return yvex_graph_render_audit(fp, report);
-    }
-    return yvex_graph_render_normal(fp, report);
+    (void)mode;
+    return yvex_cli_out_writef(fp, "%s", graph_render_body(report)) < 0 ? YVEX_ERR_IO : YVEX_OK;
 }
 
-/* Purpose: Render graph render help from typed facts (`yvex_graph_render_help`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
+#define ATTENTION_FIELD(KEY, KIND, MEMBER) \
+    {KEY, KIND, offsetof(yvex_graph_attention_operator_result, MEMBER), ""}
+#define FIELD_COUNT(FIELDS) (sizeof(FIELDS) / sizeof((FIELDS)[0]))
+
+static const yvex_cli_field_spec attention_base_fields[] = {
+    ATTENTION_FIELD("command", YVEX_CLI_FIELD_TEXT_ARRAY, command),
+    ATTENTION_FIELD("status", YVEX_CLI_FIELD_TEXT_ARRAY, status),
+    ATTENTION_FIELD("target", YVEX_CLI_FIELD_TEXT_ARRAY, target),
+    ATTENTION_FIELD("backend", YVEX_CLI_FIELD_TEXT_ARRAY, backend),
+    ATTENTION_FIELD("scope", YVEX_CLI_FIELD_TEXT_ARRAY, scope),
+    ATTENTION_FIELD("artifact_path", YVEX_CLI_FIELD_TEXT_ARRAY, artifact_path),
+};
+static const yvex_cli_field_spec attention_target_fields[] = {
+    ATTENTION_FIELD("family", YVEX_CLI_FIELD_TEXT_ARRAY, family),
+    ATTENTION_FIELD("input_class", YVEX_CLI_FIELD_TEXT_ARRAY, input_class),
+};
+static const yvex_cli_field_spec attention_admission_fields[] = {
+    ATTENTION_FIELD("execution_class", YVEX_CLI_FIELD_TEXT_ARRAY, execution_class),
+    ATTENTION_FIELD("weights_class", YVEX_CLI_FIELD_TEXT_ARRAY, weights_class),
+    ATTENTION_FIELD("artifact_identity", YVEX_CLI_FIELD_TEXT_ARRAY, artifact_identity),
+    ATTENTION_FIELD("artifact_bytes_hashed", YVEX_CLI_FIELD_U64, artifact_bytes_hashed),
+    ATTENTION_FIELD("artifact_identity_verified", YVEX_CLI_FIELD_BOOL,
+                    artifact_identity_verified),
+    ATTENTION_FIELD("materialization_identity", YVEX_CLI_FIELD_TEXT_ARRAY, materialization_identity),
+    ATTENTION_FIELD("logical_model_identity", YVEX_CLI_FIELD_TEXT_ARRAY, logical_model_identity),
+    ATTENTION_FIELD("runtime_numeric_identity", YVEX_CLI_FIELD_TEXT_ARRAY, runtime_numeric_identity),
+    ATTENTION_FIELD("runtime_descriptor_identity", YVEX_CLI_FIELD_TEXT_ARRAY, runtime_descriptor_identity),
+    ATTENTION_FIELD("attention_plan_identity", YVEX_CLI_FIELD_TEXT_ARRAY, attention_plan_identity),
+    ATTENTION_FIELD("main_layers_total", YVEX_CLI_FIELD_U64, main_layers_total),
+    ATTENTION_FIELD("bindings_total", YVEX_CLI_FIELD_U64, bindings_total),
+    ATTENTION_FIELD("attention_execution_supported", YVEX_CLI_FIELD_BOOL, attention_execution_supported),
+    ATTENTION_FIELD("attention_cuda_execution_ready", YVEX_CLI_FIELD_BOOL, attention_cuda_execution_ready),
+};
+static const yvex_cli_field_spec attention_execution_fields[] = {
+    ATTENTION_FIELD("attention_execution_identity", YVEX_CLI_FIELD_TEXT_ARRAY, attention_execution_identity),
+    ATTENTION_FIELD("layers_executed", YVEX_CLI_FIELD_U64, layers_executed),
+    ATTENTION_FIELD("bindings_executed", YVEX_CLI_FIELD_U64, bindings_executed),
+    ATTENTION_FIELD("swa_layers_executed", YVEX_CLI_FIELD_U64, swa_layers_executed),
+    ATTENTION_FIELD("csa_layers_executed", YVEX_CLI_FIELD_U64, csa_layers_executed),
+    ATTENTION_FIELD("hca_layers_executed", YVEX_CLI_FIELD_U64, hca_layers_executed),
+    ATTENTION_FIELD("topk_selected", YVEX_CLI_FIELD_U64, topk_selected),
+    ATTENTION_FIELD("hca_ratio", YVEX_CLI_FIELD_U64, hca_ratio),
+    ATTENTION_FIELD("output_digest", YVEX_CLI_FIELD_TEXT_ARRAY, output_digest),
+};
+static const yvex_cli_field_spec attention_cuda_fields[] = {
+    ATTENTION_FIELD("cuda_device", YVEX_CLI_FIELD_TEXT_ARRAY, cuda_device),
+    ATTENTION_FIELD("compute_capability_major", YVEX_CLI_FIELD_I32, cuda_compute_capability_major),
+    ATTENTION_FIELD("compute_capability_minor", YVEX_CLI_FIELD_I32, cuda_compute_capability_minor),
+    ATTENTION_FIELD("kernel_launches", YVEX_CLI_FIELD_U64, kernel_launches),
+    ATTENTION_FIELD("peak_device_bytes", YVEX_CLI_FIELD_U64, peak_device_bytes),
+};
+static const yvex_cli_field_spec attention_comparison_fields[] = {
+    ATTENTION_FIELD("cpu_output_digest", YVEX_CLI_FIELD_TEXT_ARRAY, cpu_output_digest),
+    ATTENTION_FIELD("cuda_output_digest", YVEX_CLI_FIELD_TEXT_ARRAY, cuda_output_digest),
+    ATTENTION_FIELD("comparison_contract_identity", YVEX_CLI_FIELD_TEXT_ARRAY, comparison_contract_identity),
+    ATTENTION_FIELD("comparison_values", YVEX_CLI_FIELD_U64, comparison_values),
+    ATTENTION_FIELD("comparison_finite_values", YVEX_CLI_FIELD_U64, comparison_finite_values),
+    ATTENTION_FIELD("comparison_nonfinite_values", YVEX_CLI_FIELD_U64, comparison_nonfinite_values),
+    ATTENTION_FIELD("comparison_maximum_absolute_error", YVEX_CLI_FIELD_DOUBLE,
+                    comparison_maximum_absolute_error),
+    ATTENTION_FIELD("comparison_maximum_relative_error", YVEX_CLI_FIELD_DOUBLE,
+                    comparison_maximum_relative_error),
+    ATTENTION_FIELD("comparison_rmse", YVEX_CLI_FIELD_DOUBLE, comparison_rmse),
+    ATTENTION_FIELD("comparison_passed", YVEX_CLI_FIELD_BOOL, comparison_passed),
+    ATTENTION_FIELD("bitwise_equality_observed", YVEX_CLI_FIELD_BOOL, bitwise_equality_observed),
+    ATTENTION_FIELD("bitwise_equality_required", YVEX_CLI_FIELD_BOOL, bitwise_equality_required),
+};
+static const yvex_cli_field_spec attention_failure_fields[] = {
+    ATTENTION_FIELD("first_failing_layer", YVEX_CLI_FIELD_U64, first_failing_layer),
+    ATTENTION_FIELD("first_failing_coordinate", YVEX_CLI_FIELD_U64, first_failing_coordinate),
+};
+static const yvex_cli_field_spec attention_provenance_fields[] = {
+    ATTENTION_FIELD("source_snapshot_identity", YVEX_CLI_FIELD_TEXT_ARRAY, source_snapshot_identity),
+    ATTENTION_FIELD("payload_identity", YVEX_CLI_FIELD_TEXT_ARRAY, payload_identity),
+    ATTENTION_FIELD("artifact_transform_identity", YVEX_CLI_FIELD_TEXT_ARRAY, artifact_transform_identity),
+    ATTENTION_FIELD("transform_identity", YVEX_CLI_FIELD_TEXT_ARRAY, transform_identity),
+    ATTENTION_FIELD("payload_bytes_read", YVEX_CLI_FIELD_U64, payload_bytes_read),
+};
+static const yvex_cli_field_spec attention_compatibility_fields[] = {
+    ATTENTION_FIELD("current_writer_plan_identity", YVEX_CLI_FIELD_TEXT_ARRAY, current_writer_plan_identity),
+    ATTENTION_FIELD("payload_plan_identity", YVEX_CLI_FIELD_TEXT_ARRAY, payload_plan_identity),
+    ATTENTION_FIELD("payload_byte_identity", YVEX_CLI_FIELD_TEXT_ARRAY, payload_byte_identity),
+    ATTENTION_FIELD("physical_payload_compatible", YVEX_CLI_FIELD_BOOL, physical_payload_compatible),
+    ATTENTION_FIELD("artifact_rebuild_required", YVEX_CLI_FIELD_BOOL, artifact_rebuild_required),
+    ATTENTION_FIELD("materialization_rebuild_required", YVEX_CLI_FIELD_BOOL,
+                    materialization_rebuild_required),
+    ATTENTION_FIELD("tensor_inventory_equal", YVEX_CLI_FIELD_BOOL, tensor_inventory_equal),
+    ATTENTION_FIELD("qtype_equal", YVEX_CLI_FIELD_BOOL, qtype_equal),
+    ATTENTION_FIELD("layout_equal", YVEX_CLI_FIELD_BOOL, layout_equal),
+    ATTENTION_FIELD("offset_equal", YVEX_CLI_FIELD_BOOL, offset_equal),
+    ATTENTION_FIELD("payload_digest_equal", YVEX_CLI_FIELD_BOOL, payload_digest_equal),
+};
+static const yvex_cli_field_spec attention_reachability_fields[] = {
+    ATTENTION_FIELD("operator_command_available", YVEX_CLI_FIELD_BOOL, operator_command_available),
+    ATTENTION_FIELD("production_api_available", YVEX_CLI_FIELD_BOOL, production_api_available),
+    ATTENTION_FIELD("internal_live_runner_available", YVEX_CLI_FIELD_BOOL, internal_live_runner_available),
+    ATTENTION_FIELD("end_user_generation_available", YVEX_CLI_FIELD_BOOL, end_user_generation_available),
+};
+static const yvex_cli_field_spec attention_reason_field[] = {
+    ATTENTION_FIELD("failure_code", YVEX_CLI_FIELD_TEXT_ARRAY, failure_code),
+    ATTENTION_FIELD("failure_where", YVEX_CLI_FIELD_TEXT_ARRAY, failure_where),
+    ATTENTION_FIELD("reason", YVEX_CLI_FIELD_TEXT_ARRAY, reason),
+};
+static const yvex_cli_field_spec attention_final_field[] = {
+    ATTENTION_FIELD("runtime_generation_ready", YVEX_CLI_FIELD_BOOL, runtime_generation_ready),
+};
+
+typedef enum {
+    ATTENTION_FIELDS_ALWAYS,
+    ATTENTION_FIELDS_TARGET,
+    ATTENTION_FIELDS_ADMITTED,
+    ATTENTION_FIELDS_COMPLETED,
+    ATTENTION_FIELDS_CUDA,
+    ATTENTION_FIELDS_COMPARISON,
+    ATTENTION_FIELDS_COMPARISON_FAILURE,
+    ATTENTION_FIELDS_DETAILED_ADMISSION,
+    ATTENTION_FIELDS_COMPATIBILITY,
+    ATTENTION_FIELDS_REASON
+} attention_field_condition;
+
+typedef struct {
+    const yvex_cli_field_spec *fields;
+    size_t count;
+    attention_field_condition condition;
+    int final;
+} attention_field_group;
+
+#define ATTENTION_GROUP(FIELDS, CONDITION) \
+    {FIELDS, FIELD_COUNT(FIELDS), CONDITION, 0}
+
+static const attention_field_group attention_field_groups[] = {
+    ATTENTION_GROUP(attention_base_fields, ATTENTION_FIELDS_ALWAYS),
+    ATTENTION_GROUP(attention_target_fields, ATTENTION_FIELDS_TARGET),
+    ATTENTION_GROUP(attention_admission_fields, ATTENTION_FIELDS_ADMITTED),
+    ATTENTION_GROUP(attention_execution_fields, ATTENTION_FIELDS_COMPLETED),
+    ATTENTION_GROUP(attention_cuda_fields, ATTENTION_FIELDS_CUDA),
+    ATTENTION_GROUP(attention_comparison_fields, ATTENTION_FIELDS_COMPARISON),
+    ATTENTION_GROUP(attention_failure_fields, ATTENTION_FIELDS_COMPARISON_FAILURE),
+    ATTENTION_GROUP(attention_provenance_fields, ATTENTION_FIELDS_DETAILED_ADMISSION),
+    ATTENTION_GROUP(attention_compatibility_fields, ATTENTION_FIELDS_COMPATIBILITY),
+    ATTENTION_GROUP(attention_reachability_fields, ATTENTION_FIELDS_ALWAYS),
+    ATTENTION_GROUP(attention_reason_field, ATTENTION_FIELDS_REASON),
+    {attention_final_field, FIELD_COUNT(attention_final_field), ATTENTION_FIELDS_ALWAYS, 1},
+};
+
+#undef ATTENTION_GROUP
+
+/* Purpose: Select attention fields.
+ * Inputs: condition, result, detail flag.
+ * Effects: none.
+ * Failure: returns false.
+ * Boundary: presentation availability only. */
+static int graph_attention_group_visible(attention_field_condition condition,
+                                         const yvex_graph_attention_operator_result *result,
+                                         int detailed)
+{
+    int admitted = result->attention_plan_identity[0] != '\0';
+
+    switch (condition) {
+    case ATTENTION_FIELDS_ALWAYS: return 1;
+    case ATTENTION_FIELDS_TARGET: return strcmp(result->family, "unavailable") != 0;
+    case ATTENTION_FIELDS_ADMITTED: return admitted;
+    case ATTENTION_FIELDS_COMPLETED: return result->completed;
+    case ATTENTION_FIELDS_CUDA: return result->cuda_device[0] != '\0';
+    case ATTENTION_FIELDS_COMPARISON: return result->comparison_available;
+    case ATTENTION_FIELDS_COMPARISON_FAILURE:
+        return result->comparison_available && !result->comparison_passed;
+    case ATTENTION_FIELDS_DETAILED_ADMISSION: return detailed && admitted;
+    case ATTENTION_FIELDS_COMPATIBILITY:
+        return detailed && result->current_writer_plan_identity[0] != '\0';
+    case ATTENTION_FIELDS_REASON: return result->reason[0] != '\0';
+    }
+    return 0;
+}
+
+/* Purpose: Emit a field group. Inputs: stream/schema/result. Effects: writes. Failure: typed I/O.
+ * Boundary: projection only; capability and availability stay runtime-owned. */
+static int graph_attention_emit(FILE *fp,
+                                int json,
+                                const yvex_graph_attention_operator_result *result,
+                                const yvex_cli_field_spec *fields,
+                                size_t count,
+                                int comma)
+{
+    int rc = json ? yvex_cli_json_fields(fp, result, fields, count, comma)
+                  : yvex_cli_out_fields(fp, result, fields, count);
+    return rc < 0 ? YVEX_ERR_IO : rc;
+}
+
+/* Purpose: Render attention fields. Inputs: stream/mode/result. Effects: writes. Failure: typed I/O.
+ * Boundary: omits unavailable measurements without deriving capability. */
+static int graph_attention_render_fields(FILE *fp,
+                                         yvex_graph_report_mode mode,
+                                         const yvex_graph_attention_operator_result *result)
+{
+    int json = mode == YVEX_GRAPH_REPORT_MODE_JSON;
+    int detailed = json || mode == YVEX_GRAPH_REPORT_MODE_AUDIT;
+    size_t index;
+    int rc = YVEX_OK;
+
+    if (json) yvex_cli_json_begin(fp);
+    for (index = 0; rc == YVEX_OK && index < FIELD_COUNT(attention_field_groups); ++index) {
+        const attention_field_group *group = &attention_field_groups[index];
+
+        if (graph_attention_group_visible(group->condition, result, detailed))
+            rc = graph_attention_emit(fp, json, result, group->fields, group->count, !group->final);
+    }
+    if (json) yvex_cli_json_end(fp);
+    return rc < 0 || ferror(fp) ? YVEX_ERR_IO : rc;
+}
+
+/* Purpose: Render attention result.
+ * Inputs: stream, mode, result.
+ * Effects: writes fields.
+ * Failure: typed I/O refusal.
+ * Boundary: presentation only; no graph math. */
+int yvex_graph_attention_render(FILE *fp,
+                                yvex_graph_report_mode mode,
+                                const yvex_graph_attention_operator_result *result)
+{
+    if (!fp || !result) return YVEX_ERR_INVALID_ARG;
+    return graph_attention_render_fields(fp, mode, result);
+}
+
+/* Purpose: Render graph help.
+ * Inputs: stream.
+ * Effects: writes CLI text.
+ * Failure: stream state.
+ * Boundary: CLI presentation. */
 int yvex_graph_render_help(FILE *fp)
 {
     yvex_cli_out_lines(fp, literal_lines_0, sizeof(literal_lines_0) / sizeof(literal_lines_0[0]));
@@ -217,11 +399,11 @@ static const char *const literal_pair_17[] = {
 static const char *const literal_pair_18[] = {
     "graph.rope_position_op: implemented-primitive", "graph.attention_primitive: implemented-fixture"};
 
-/* Purpose: Map one admitted tensor role to its descriptor collection.
- * Inputs: Borrowed canonical role text.
- * Effects: No externally visible effect.
- * Failure: Unknown roles resolve to the explicit unknown collection.
- * Boundary: Classification is presentation-only and cannot alter model truth. */
+/* Purpose: Map a role to its display collection.
+ * Inputs: role text.
+ * Effects: none.
+ * Failure: returns unknown.
+ * Boundary: presentation classification. */
 static const char *fullmodel_descriptor_role_collection(const char *role)
 {
     if (!role) return "unknown";
@@ -256,11 +438,11 @@ static const char *fullmodel_descriptor_role_residency(const char *role,
     return backend && strcmp(backend, "cuda") == 0 ? "cuda-resident-planned" : "cpu-resident-planned";
 }
 
-/* Purpose: Render fullmodel print descriptor role from typed facts (`fullmodel_print_descriptor_role`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
+/* Purpose: Render a descriptor role.
+ * Inputs: model, collection, role, backend.
+ * Effects: writes CLI fields.
+ * Failure: stream state.
+ * Boundary: descriptor presentation only. */
 static void fullmodel_print_descriptor_role(yvex_model_context *ctx,
                                             const yvex_fullmodel_collections *collections,
                                             const char *role,
@@ -328,75 +510,85 @@ static void fullmodel_print_descriptor_collection(const char *name,
     yvex_cli_out_writef(stdout, "collection.%s.blocker: %s\n", name, blocker && blocker[0] ? blocker : "none");
 }
 
-/* Purpose: Render fullmodel print descriptor phases from typed facts (`fullmodel_print_descriptor_phases`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-void fullmodel_print_descriptor_phases(const char *role_status,
-                                              const char *collection_status,
-                                              const char *failure_phase)
+typedef enum {
+    DESCRIPTOR_PHASE_PASS,
+    DESCRIPTOR_PHASE_ROLE,
+    DESCRIPTOR_PHASE_COLLECTION,
+    DESCRIPTOR_PHASE_PLANNED,
+    DESCRIPTOR_PHASE_BLOCKED,
+    DESCRIPTOR_PHASE_FAILURE_MARKER
+} descriptor_phase_kind;
+
+typedef struct {
+    const char *name;
+    descriptor_phase_kind kind;
+} descriptor_phase_spec;
+
+static const descriptor_phase_spec descriptor_phases[] = {
+    {"preflight", DESCRIPTOR_PHASE_PASS}, {"resolve-model", DESCRIPTOR_PHASE_PASS},
+    {"artifact-identity", DESCRIPTOR_PHASE_PASS}, {"tensor-inventory", DESCRIPTOR_PHASE_PASS},
+    {"role-map", DESCRIPTOR_PHASE_ROLE}, {"collection-map", DESCRIPTOR_PHASE_COLLECTION},
+    {"shape-requirements", DESCRIPTOR_PHASE_PASS},
+    {"residency-requirements", DESCRIPTOR_PHASE_PLANNED},
+    {"graph-requirements", DESCRIPTOR_PHASE_PLANNED},
+    {"prefill-requirements", DESCRIPTOR_PHASE_BLOCKED},
+    {"kv-requirements", DESCRIPTOR_PHASE_BLOCKED},
+    {"decode-requirements", DESCRIPTOR_PHASE_BLOCKED},
+    {"logits-requirements", DESCRIPTOR_PHASE_BLOCKED},
+    {"sampling-requirements", DESCRIPTOR_PHASE_BLOCKED},
+    {"tokenizer-requirements", DESCRIPTOR_PHASE_PASS},
+    {"backend-requirements", DESCRIPTOR_PHASE_PLANNED},
+    {"blocker-report", DESCRIPTOR_PHASE_PASS}, {"descriptor-build", DESCRIPTOR_PHASE_PASS},
+    {"complete", DESCRIPTOR_PHASE_PASS}, {"failed", DESCRIPTOR_PHASE_FAILURE_MARKER},
+    {"cleanup", DESCRIPTOR_PHASE_PASS},
+};
+
+/* Purpose: select one phase status from immutable phase kind and caller-owned outcomes. */
+static const char *descriptor_phase_status(descriptor_phase_kind kind,
+                                           const char *role_status,
+                                           const char *collection_status,
+                                           int failed_seen,
+                                           int failure_here,
+                                           int has_failure)
 {
-    static const char *const phases[] = {
-        "preflight",
-        "resolve-model",
-        "artifact-identity",
-        "tensor-inventory",
-        "role-map",
-        "collection-map",
-        "shape-requirements",
-        "residency-requirements",
-        "graph-requirements",
-        "prefill-requirements",
-        "kv-requirements",
-        "decode-requirements",
-        "logits-requirements",
-        "sampling-requirements",
-        "tokenizer-requirements",
-        "backend-requirements",
-        "blocker-report",
-        "descriptor-build",
-        "complete",
-        "failed",
-        "cleanup"
-    };
-    unsigned int i;
+    if (failure_here) return "fail";
+    if (failed_seen) return "skipped";
+    if (kind == DESCRIPTOR_PHASE_ROLE) return role_status ? role_status : "partial";
+    if (kind == DESCRIPTOR_PHASE_COLLECTION)
+        return collection_status ? collection_status : "partial";
+    if (kind == DESCRIPTOR_PHASE_PLANNED) return "planned";
+    if (kind == DESCRIPTOR_PHASE_BLOCKED) return "blocked";
+    if (kind == DESCRIPTOR_PHASE_FAILURE_MARKER && !has_failure) return "skipped";
+    return "pass";
+}
+
+/* Purpose: render the declared descriptor lifecycle with exact failure cutover.
+ * Inputs: role and collection status plus optional failing phase name.
+ * Effects: writes ordered phase facts through CLI I/O.
+ * Failure: unknown failure names leave the ordinary phase sequence intact.
+ * Boundary: rendering never changes descriptor admission. */
+void fullmodel_print_descriptor_phases(const char *role_status,
+                                       const char *collection_status,
+                                       const char *failure_phase)
+{
+    size_t index;
     int failed_seen = 0;
 
-    for (i = 0; i < sizeof(phases) / sizeof(phases[0]); ++i) {
-        const char *status = "pass";
-        if (failure_phase && strcmp(failure_phase, phases[i]) == 0) {
-            status = "fail";
-            failed_seen = 1;
-        } else if (failed_seen) {
-            status = "skipped";
-        } else if (strcmp(phases[i], "role-map") == 0) {
-            status = role_status ? role_status : "partial";
-        } else if (strcmp(phases[i], "collection-map") == 0) {
-            status = collection_status ? collection_status : "partial";
-        } else if (strcmp(phases[i], "residency-requirements") == 0 ||
-                   strcmp(phases[i], "graph-requirements") == 0 ||
-                   strcmp(phases[i], "backend-requirements") == 0) {
-            status = "planned";
-        } else if (strcmp(phases[i], "prefill-requirements") == 0 ||
-                   strcmp(phases[i], "kv-requirements") == 0 ||
-                   strcmp(phases[i], "decode-requirements") == 0 ||
-                   strcmp(phases[i], "logits-requirements") == 0 ||
-                   strcmp(phases[i], "sampling-requirements") == 0) {
-            status = "blocked";
-        } else if (strcmp(phases[i], "failed") == 0 && !failure_phase) {
-            status = "skipped";
-        }
-        model_phase_print("descriptor_phase", i, phases[i], status, "planned");
+    for (index = 0; index < sizeof(descriptor_phases) / sizeof(descriptor_phases[0]); ++index) {
+        const descriptor_phase_spec *phase = &descriptor_phases[index];
+        int failure_here = failure_phase && strcmp(failure_phase, phase->name) == 0;
+        const char *status = descriptor_phase_status(phase->kind, role_status, collection_status,
+                                                     failed_seen, failure_here, failure_phase != NULL);
+        model_phase_print("descriptor_phase", (unsigned int)index, phase->name, status, "planned");
+        failed_seen |= failure_here;
     }
 }
 
-/* Purpose: Render fullmodel print descriptor graph requirements from typed facts
- * (`fullmodel_print_descriptor_graph_requirements`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
+/* Purpose: Render graph requirements.
+ * Inputs: collections.
+ * Effects: writes CLI fields.
+ * Failure: stream state.
+ * Boundary: descriptor presentation only. */
 static void fullmodel_print_descriptor_graph_requirements(const yvex_fullmodel_collections *collections)
 {
     int has_attention = fullmodel_has_attention_collection(collections);
@@ -497,11 +689,11 @@ static unsigned long long collection_value(const yvex_fullmodel_collections *col
 }
 
 /* Resolve whether a descriptor collection satisfies its exact role contract. */
-/* Purpose: Transfer bounded descriptor collection ready data (`descriptor_collection_ready`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
+/* Purpose: Resolve collection readiness.
+ * Inputs: schema, collections, count.
+ * Effects: none.
+ * Failure: returns false.
+ * Boundary: descriptor presentation only. */
 static int descriptor_collection_ready(const descriptor_collection_spec *spec,
                                        const yvex_fullmodel_collections *collections,
                                        unsigned long long count)
@@ -518,11 +710,11 @@ static int descriptor_collection_ready(const descriptor_collection_spec *spec,
     return 0;
 }
 
-/* Purpose: Render fullmodel print descriptor inventory from typed facts (`fullmodel_print_descriptor_inventory`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
+/* Purpose: Render inventory.
+ * Inputs: model, collections, backend.
+ * Effects: writes CLI fields.
+ * Failure: stream state.
+ * Boundary: descriptor presentation only. */
 static void fullmodel_print_descriptor_inventory(
     yvex_model_context *ctx,
     const yvex_fullmodel_collections *collections,
@@ -563,11 +755,11 @@ yvex_cli_out_writef(stdout, "kv_descriptor: unsupported-real-attention-backed-kv
     }
 }
 
-/* Purpose: Render fullmodel print descriptor report from typed facts (`fullmodel_print_descriptor_report`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
+/* Purpose: Render fullmodel descriptor.
+ * Inputs: admitted report facts.
+ * Effects: writes CLI report.
+ * Failure: stream state.
+ * Boundary: presentation does not promote runtime capability. */
 void fullmodel_print_descriptor_report(const yvex_cli_fullmodel_options *options,
                                               yvex_model_ref *ref,
                                               yvex_model_context *ctx,

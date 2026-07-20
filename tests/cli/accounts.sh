@@ -1,12 +1,14 @@
 #!/usr/bin/env sh
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN="${YVEX_BIN:-./yvex}"
 ROOT=${YVEX_TEST_OUT_DIR:-build/tests/accounts-cli}
 FAKE_HF="$PWD/tests/fixtures/bin/fake-hf"
 FAKE_GH="$PWD/tests/fixtures/bin/fake-gh"
 
-rm -rf "$ROOT"
+yvex_test_cleanup "$ROOT"
 mkdir -p "$ROOT"
 
 "$YVEX_BIN" help accounts > "$ROOT/help.out"

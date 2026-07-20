@@ -1,5 +1,11 @@
 --model
+--target
+--artifact
+--models-root
 --backend
+--probe
+--scope
+--compare-backends
 --seq
 --ctx
 --suite
@@ -31,4 +37,5 @@
 --tokens
 --token-index
 --audit
+--json
 --output

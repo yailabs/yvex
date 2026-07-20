@@ -1,6 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN="${YVEX_BIN:-./yvex}"
 ROOT=${YVEX_TEST_OUT_DIR:-build/tests/fullmodel-cli}
 REG="$ROOT/registry/models.local.json"
@@ -9,7 +11,7 @@ RMSNORM="$ROOT/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.g
 FULLISH="$ROOT/deepseek4-v4-flash-fullish-F32-noimatrix-yvex-v1.gguf"
 CORRUPT="$ROOT/corrupt.gguf"
 
-rm -rf "$ROOT"
+yvex_test_cleanup "$ROOT"
 mkdir -p "$ROOT" "$ROOT/registry"
 
 "$YVEX_BIN" gguf-emit controlled \

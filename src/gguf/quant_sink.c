@@ -337,6 +337,7 @@ void yvex_quant_digest_sink_adapter(yvex_quant_digest_sink *sink, yvex_quant_out
 int yvex_quant_digest_sink_finalize(yvex_quant_digest_sink *sink, yvex_quant_digest_summary *out,
                                     yvex_quant_failure *failure, yvex_error *err) {
     yvex_sha256 hash;
+    yvex_sha256 payload_hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     unsigned long long ordinal = 0u;
 
@@ -356,11 +357,14 @@ int yvex_quant_digest_sink_finalize(yvex_quant_digest_sink *sink, yvex_quant_dig
                                "all terminal transactions must commit before finalization");
     }
     yvex_sha256_init(&hash);
+    yvex_sha256_init(&payload_hash);
     if (!yvex_sha256_update_text(&hash, "yvex.quant.execution.v1") ||
         !yvex_sha256_update_text(&hash, sink->plan_identity) ||
         !yvex_sha256_update_text(&hash, sink->payload_identity) ||
         !yvex_sha256_update_u64(&hash, YVEX_QUANT_NUMERIC_CONTRACT_VERSION) ||
-        !yvex_sha256_update_u64(&hash, sink->summary.terminal_count))
+        !yvex_sha256_update_u64(&hash, sink->summary.terminal_count) ||
+        !yvex_sha256_update_text(&payload_hash, "yvex.quant.payload.bytes.v1") ||
+        !yvex_sha256_update_u64(&payload_hash, sink->summary.terminal_count))
         goto encoding_failure;
     for (ordinal = 0u; ordinal < sink->summary.terminal_count; ++ordinal) {
         const yvex_quant_decision *decision = yvex_quant_plan_decision_at(sink->plan, ordinal);
@@ -369,12 +373,19 @@ int yvex_quant_digest_sink_finalize(yvex_quant_digest_sink *sink, yvex_quant_dig
             !yvex_sha256_update_u64(&hash, ordinal) ||
             !yvex_sha256_update_text(&hash, decision->decision_identity) ||
             !yvex_sha256_update_u64(&hash, record->delivered_bytes) ||
-            !yvex_sha256_update_text(&hash, record->digest))
+            !yvex_sha256_update_text(&hash, record->digest) ||
+            !yvex_sha256_update_u64(&payload_hash, ordinal) ||
+            !yvex_sha256_update_u64(&payload_hash, decision->qtype) ||
+            !yvex_sha256_update_u64(&payload_hash, record->delivered_bytes) ||
+            !yvex_sha256_update_text(&payload_hash, record->digest))
             goto encoding_failure;
     }
     if (!yvex_sha256_final(&hash, digest))
         goto encoding_failure;
     yvex_sha256_hex(digest, sink->summary.execution_identity);
+    if (!yvex_sha256_final(&payload_hash, digest))
+        goto encoding_failure;
+    yvex_sha256_hex(digest, sink->summary.payload_byte_identity);
     sink->summary.complete = 1;
     sink->finalized = 1;
     *out = sink->summary;

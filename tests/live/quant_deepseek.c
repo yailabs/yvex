@@ -9,6 +9,7 @@
  * Boundary: execution mode is added only through the canonical discard sink.
  */
 #define _POSIX_C_SOURCE 200809L
+#include <yvex/internal/artifact.h>
 #include <yvex/internal/compilation.h>
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/families/deepseek_v4.h>
@@ -92,6 +93,10 @@ int main(int argc, char **argv)
     const yvex_source_verification *verification;
     yvex_quant_failure failure;
     yvex_error error;
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *artifact_gguf = NULL;
+    yvex_artifact_payload_identity artifact_payload_identity;
+    yvex_artifact_options artifact_options;
     yvex_source_payload_session_facts source_facts;
     struct timespec begin;
     struct timespec end;
@@ -102,18 +107,21 @@ int main(int argc, char **argv)
     unsigned int qtype;
     int argument = 1;
     int plan_only = 0;
+    const char *artifact_path = NULL;
     int rc;
 
     if (argc > 1 && strcmp(argv[1], "--plan-only") == 0) {
         plan_only = 1;
         argument++;
     }
-    if (argc - argument != 3) {
+    if (argc - argument != 3 && (plan_only || argc - argument != 4)) {
         fprintf(stderr,
-                "usage: %s [--plan-only] SOURCE MODELS_ROOT MANIFEST\n",
+                "usage: %s [--plan-only] SOURCE MODELS_ROOT MANIFEST [ARTIFACT]\n",
                 argv[0]);
         return 2;
     }
+    if (!plan_only && argc - argument == 4)
+        artifact_path = argv[argument + 3];
     memset(&options, 0, sizeof(options));
     options.source_path = argv[argument];
     options.models_root = argv[argument + 1];
@@ -234,6 +242,33 @@ int main(int argc, char **argv)
         yvex_model_register_deepseek_v4()->payload.close(handoff);
         return 1;
     }
+    memset(&artifact_payload_identity, 0, sizeof(artifact_payload_identity));
+    if (artifact_path) {
+        artifact_options = (yvex_artifact_options){.path = artifact_path, .readonly = 1};
+        rc = yvex_artifact_open(&artifact, &artifact_options, &error);
+        if (rc == YVEX_OK)
+            rc = yvex_gguf_open(&artifact_gguf, artifact, &error);
+        if (rc == YVEX_OK)
+            rc = yvex_artifact_payload_identity_compute(
+                artifact, artifact_gguf, 16u * 1024u * 1024u,
+                &artifact_payload_identity, &error);
+        if (rc != YVEX_OK || !artifact_payload_identity.complete ||
+            strcmp(artifact_payload_identity.payload_byte_identity,
+                   digest_summary.payload_byte_identity) != 0) {
+            fprintf(stderr, "artifact_payload_compatibility=failed status=%s where=%s\n",
+                    yvex_status_name(yvex_error_code(&error)), yvex_error_where(&error));
+            yvex_gguf_close(artifact_gguf);
+            yvex_artifact_close(artifact);
+            yvex_quant_digest_sink_release(&digest_sink);
+            yvex_quant_plan_release(&plan);
+            yvex_model_register_deepseek_v4()->payload.close(handoff);
+            return 1;
+        }
+        yvex_gguf_close(artifact_gguf);
+        artifact_gguf = NULL;
+        yvex_artifact_close(artifact);
+        artifact = NULL;
+    }
     printf("mode=%s\n", plan_only ? "plan-only" : "execute-discard");
     printf("source_snapshot_identity=%016llx\n",
            summary->source_snapshot_identity);
@@ -247,6 +282,7 @@ int main(int argc, char **argv)
     printf("profile_name=%s\n", summary->profile_name);
     printf("profile_schema=%u\n", summary->schema_version);
     printf("profile_identity=%s\n", summary->profile_identity);
+    printf("payload_plan_identity=%s\n", summary->payload_plan_identity);
     printf("terminal_decisions=%llu\n", summary->decision_count);
     printf("source_values=%llu\n", summary->source_value_count);
     printf("source_shards=%llu\n", verification->shard_count);
@@ -303,6 +339,17 @@ int main(int argc, char **argv)
     printf("aggregate_execution_identity=%s\n",
            digest_summary.complete ? digest_summary.execution_identity
                                    : "not-executed");
+    printf("quant_payload_byte_identity=%s\n",
+           digest_summary.complete ? digest_summary.payload_byte_identity : "not-executed");
+    printf("artifact_payload_byte_identity=%s\n",
+           artifact_payload_identity.complete
+               ? artifact_payload_identity.payload_byte_identity : "not-checked");
+    printf("artifact_payload_bytes_read=%llu\n",
+           artifact_payload_identity.payload_bytes_read);
+    printf("payload_digest_equal=%d\n",
+           artifact_payload_identity.complete &&
+               strcmp(artifact_payload_identity.payload_byte_identity,
+                      digest_summary.payload_byte_identity) == 0);
     printf("terminals_executed=%llu\n", execution.terminals_executed);
     printf("source_values_consumed=%llu\n",
            execution.source_values_consumed);

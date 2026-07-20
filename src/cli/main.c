@@ -24,7 +24,8 @@ static const char *const literal_lines_0[] = {
     "\nusage:\n  yvex <command> [args]\n  yvex help <command>\n  yvex commands",
     "\ncommand shape:\n  yvex <family> <action> [object] [selectors] [behavior flags] [diagnostic flags]",
     "\ncommon:\n  yvex paths\n  yvex models list\n  yvex models prepare TARGET\n  yvex models check TARGET\n"
-        "  yvex model-target inspect TARGET\n  yvex graph check --suite primitives --backend cpu\n  yvex "
+        "  yvex model-target inspect TARGET\n  yvex graph attention execute --target deepseek4-v4-flash "
+        "--backend cpu --scope quick\n  yvex "
         "generate --model TARGET --backend cpu --tokens IDS --max-new-tokens N",
     "\ncommand groups:\n  core: help, commands, info, version\n  operator: paths, models, accounts\n  "
         "model/source: model-target, fullmodel, source-manifest, native-weights, tensor-map\n  artifact: "
@@ -107,9 +108,12 @@ static const yvex_cli_command yvex_commands[] = {
             "selector, path, behavior, diagnostic, transitional-layout",
                 "report/materialization planning only unless subcommand proves more",yvex_fullmodel_command,
                     yvex_fullmodel_help),
-    CMD("graph","graph","mixed-transitional","Graph diagnostics and narrow proofs.",
-        "yvex graph [--model] TARGET","yvex graph check --suite primitives --backend cpu",
-            "selector, behavior, diagnostic","graph proof is not generation",yvex_graph_command,yvex_graph_help),
+    CMD("graph","graph","mixed-transitional","Graph diagnostics and production attention probes.",
+        "yvex graph attention execute --target TARGET --backend cpu|cuda",
+            "yvex graph attention execute --target deepseek4-v4-flash --backend cpu --scope quick",
+                "selector, path, behavior, diagnostic, json",
+                    "production attention probe; not prompt execution or generation",
+                        yvex_graph_command,yvex_graph_help),
     CMD("generate","runtime","diagnostic","Bounded diagnostic generation loop.",
         "yvex generate --model TARGET --backend cpu|cuda",
             "yvex generate --model TARGET --backend cpu --tokens IDS --max-new-tokens N",

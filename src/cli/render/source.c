@@ -224,6 +224,199 @@ static const yvex_render_field_spec u64_fields_13[] = {
         source_tensor_sample_count), NULL},
 };
 
+#define SOURCE_FIELD(key_, kind_, member_, fallback_) \
+    {key_, kind_, offsetof(yvex_source_report, member_), fallback_}
+#define PROFILE_FIELD(key_, member_, fallback_) \
+    {key_, YVEX_RENDER_FIELD_TEXT, offsetof(yvex_source_family_profile, member_), fallback_}
+
+static const yvex_render_field_spec source_profile_origin_fields[] = {
+    PROFILE_FIELD("target_class", target_class, "unknown"),
+    PROFILE_FIELD("source_target_status", source_target_status, "unknown"),
+    PROFILE_FIELD("source_family_profile_status", source_family_profile_status, "unknown"),
+    PROFILE_FIELD("source_artifact_class", source_artifact_class, "unknown"),
+    PROFILE_FIELD("source_artifact_format", source_artifact_format, "unknown"),
+    PROFILE_FIELD("source_artifact_origin", source_artifact_origin, "unknown"),
+    PROFILE_FIELD("source_artifact_authority", source_artifact_authority, "unknown"),
+    PROFILE_FIELD("source_tensor_container", source_tensor_container, "unknown"),
+};
+
+static const yvex_render_field_spec source_profile_target_fields[] = {
+    PROFILE_FIELD("target_artifact_class", target_artifact_class, "unknown"),
+    PROFILE_FIELD("target_artifact_origin", target_artifact_origin, "unknown"),
+    PROFILE_FIELD("target_artifact_required", target_artifact_required, "unknown"),
+    PROFILE_FIELD("external_reference_status", external_reference_status, "unknown"),
+    PROFILE_FIELD("yvex_produced_artifact_status", yvex_produced_artifact_status, "planned"),
+    PROFILE_FIELD("pressure_purpose", pressure_purpose, "unknown"),
+    PROFILE_FIELD("runtime_shape", runtime_shape, "unknown"),
+    PROFILE_FIELD("hardware_lane", hardware_lane, "unknown"),
+    PROFILE_FIELD("backend_lane", backend_lane, "unknown"),
+    PROFILE_FIELD("source_class", source_class, "unknown"),
+};
+
+static const yvex_render_field_spec source_origin_fields[] = {
+    SOURCE_FIELD("source_artifact_status", YVEX_RENDER_FIELD_TEXT, source_state, "unknown"),
+    SOURCE_FIELD("source_sidecar_status", YVEX_RENDER_FIELD_TEXT, semantics.sidecar_status,
+                 "unknown"),
+    SOURCE_FIELD("source_tensor_payload_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.tensor_payload_status, "unknown"),
+    SOURCE_FIELD("source_provenance_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.provenance_status, "unknown"),
+    SOURCE_FIELD("source_origin", YVEX_RENDER_FIELD_TEXT, semantics.provenance_origin_audit,
+                 "unknown"),
+    SOURCE_FIELD("source_authority", YVEX_RENDER_FIELD_TEXT, semantics.authority, "unknown"),
+    SOURCE_FIELD("source_authority_status", YVEX_RENDER_FIELD_TEXT, semantics.authority_status,
+                 "unknown"),
+    SOURCE_FIELD("source_path", YVEX_RENDER_FIELD_TEXT_ARRAY, source_path, "unknown"),
+    SOURCE_FIELD("source_path_source", YVEX_RENDER_FIELD_TEXT_ARRAY, source_path_source, "unknown"),
+    SOURCE_FIELD("source_path_status", YVEX_RENDER_FIELD_TEXT, source_state, "unknown"),
+    SOURCE_FIELD("source_exists", YVEX_RENDER_FIELD_BOOL, source_exists, NULL),
+    SOURCE_FIELD("download_registry_path", YVEX_RENDER_FIELD_TEXT_ARRAY, download_registry_path,
+                 "unknown"),
+    SOURCE_FIELD("download_report_path", YVEX_RENDER_FIELD_TEXT_ARRAY, download_report_path,
+                 "unknown"),
+    SOURCE_FIELD("download_repo_id", YVEX_RENDER_FIELD_TEXT_ARRAY, identity_repo_id, "unknown"),
+    SOURCE_FIELD("download_revision", YVEX_RENDER_FIELD_TEXT_ARRAY, identity_revision, "unknown"),
+    SOURCE_FIELD("source_footprint_class", YVEX_RENDER_FIELD_TEXT, semantics.footprint_class,
+                 "unknown"),
+    SOURCE_FIELD("source_footprint_status", YVEX_RENDER_FIELD_TEXT, semantics.footprint_status,
+                 "unknown"),
+    SOURCE_FIELD("largest_source_file_bytes", YVEX_RENDER_FIELD_U64, largest_source_file_bytes,
+                 NULL),
+    SOURCE_FIELD("largest_source_file_name", YVEX_RENDER_FIELD_TEXT_ARRAY,
+                 largest_source_file_name, "none"),
+};
+
+static const yvex_render_field_spec source_manifest_fields[] = {
+    SOURCE_FIELD("source_manifest_status", YVEX_RENDER_FIELD_TEXT, semantics.manifest_status,
+                 "unknown"),
+    SOURCE_FIELD("source_manifest_path", YVEX_RENDER_FIELD_TEXT_ARRAY, manifest_path, "unknown"),
+    SOURCE_FIELD("source_manifest_schema_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.manifest_schema_status, "unknown"),
+    SOURCE_FIELD("source_manifest_schema_version", YVEX_RENDER_FIELD_TEXT_ARRAY,
+                 manifest_schema_version, "unknown"),
+    SOURCE_FIELD("source_manifest_source_path_status", YVEX_RENDER_FIELD_TEXT, source_state,
+                 "unknown"),
+    SOURCE_FIELD("source_manifest_artifact_class_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.manifest_artifact_class_status, "unknown"),
+    SOURCE_FIELD("source_manifest_footprint_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.manifest_footprint_status, "unknown"),
+    SOURCE_FIELD("source_manifest_authority", YVEX_RENDER_FIELD_TEXT,
+                 semantics.manifest_authority, "unknown"),
+    SOURCE_FIELD("source_manifest_provenance_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.manifest_provenance_status, "unknown"),
+    SOURCE_FIELD("source_manifest_native_inventory_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.manifest_native_inventory_status, "unknown"),
+    SOURCE_FIELD("source_manifest_tensor_metadata_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.manifest_tensor_metadata_status, "unknown"),
+    SOURCE_FIELD("source_manifest_consistency_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.manifest_consistency_status, "unknown"),
+    SOURCE_FIELD("source_manifest_hardening_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.manifest_hardening_status, "unknown"),
+    SOURCE_FIELD("source_manifest_creation_performed", YVEX_RENDER_FIELD_BOOL,
+                 semantics.manifest_creation_performed, NULL),
+};
+
+static const yvex_render_field_spec source_revision_fields[] = {
+    SOURCE_FIELD("source_revision", YVEX_RENDER_FIELD_TEXT_ARRAY, identity_revision, "unknown"),
+    SOURCE_FIELD("source_revision_status", YVEX_RENDER_FIELD_TEXT, semantics.revision_status,
+                 "unknown"),
+    SOURCE_FIELD("source_commit", YVEX_RENDER_FIELD_TEXT_ARRAY, identity_revision, "unknown"),
+    SOURCE_FIELD("source_commit_status", YVEX_RENDER_FIELD_TEXT, semantics.revision_status,
+                 "unknown"),
+};
+
+static const yvex_render_field_spec source_inventory_fields[] = {
+    SOURCE_FIELD("native_inventory_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.native_inventory_status, "unknown"),
+    SOURCE_FIELD("native_inventory_source", YVEX_RENDER_FIELD_TEXT,
+                 semantics.native_inventory_source, "unknown"),
+    SOURCE_FIELD("native_tensor_count", YVEX_RENDER_FIELD_U64, native_tensor_count, NULL),
+    SOURCE_FIELD("native_tensor_metadata_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.native_tensor_metadata_status, "unknown"),
+    SOURCE_FIELD("native_tensor_payload_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.native_tensor_payload_status, "unknown"),
+    SOURCE_FIELD("native_largest_tensor_name", YVEX_RENDER_FIELD_TEXT_ARRAY,
+                 native_largest_tensor_name, "none"),
+    SOURCE_FIELD("native_inventory_report_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.native_inventory_report_status, "unknown"),
+    SOURCE_FIELD("native_inventory_path", YVEX_RENDER_FIELD_TEXT_ARRAY, native_inventory_path,
+                 "unknown"),
+    SOURCE_FIELD("source_tensor_metadata_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.tensor_metadata_status, "unknown"),
+    SOURCE_FIELD("source_tensor_metadata_source", YVEX_RENDER_FIELD_TEXT,
+                 semantics.tensor_metadata_source, "unknown"),
+    SOURCE_FIELD("source_tensor_largest_name", YVEX_RENDER_FIELD_TEXT_ARRAY,
+                 source_tensor_largest_name, "none"),
+    SOURCE_FIELD("source_tensor_largest_file", YVEX_RENDER_FIELD_TEXT_ARRAY,
+                 source_tensor_largest_file, "none"),
+    SOURCE_FIELD("source_tensor_largest_dtype", YVEX_RENDER_FIELD_TEXT_ARRAY,
+                 source_tensor_largest_dtype, "none"),
+    SOURCE_FIELD("source_tensor_largest_rank", YVEX_RENDER_FIELD_U64,
+                 source_tensor_largest_rank, NULL),
+    SOURCE_FIELD("source_tensor_largest_shape", YVEX_RENDER_FIELD_TEXT_ARRAY,
+                 source_tensor_largest_shape, "[]"),
+};
+
+static const yvex_render_field_spec source_boundary_fields[] = {
+    SOURCE_FIELD("tensor_map_path", YVEX_RENDER_FIELD_TEXT_ARRAY, tensor_map_path, "unknown"),
+    SOURCE_FIELD("tensor_map_status", YVEX_RENDER_FIELD_TEXT, semantics.tensor_map_report_status,
+                 "unknown"),
+    SOURCE_FIELD("tensor_role_map_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.tensor_role_map_report_status, "unknown"),
+    SOURCE_FIELD("output_head_map_path", YVEX_RENDER_FIELD_TEXT_ARRAY, output_head_map_path,
+                 "unknown"),
+    SOURCE_FIELD("output_head_map_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.output_head_map_report_status, "unknown"),
+    SOURCE_FIELD("tokenizer_map_path", YVEX_RENDER_FIELD_TEXT_ARRAY, tokenizer_map_path, "unknown"),
+    SOURCE_FIELD("tokenizer_map_status", YVEX_RENDER_FIELD_TEXT,
+                 semantics.tokenizer_map_report_status, "unknown"),
+};
+
+static const yvex_render_field_spec source_json_report_fields[] = {
+    SOURCE_FIELD("status", YVEX_RENDER_FIELD_TEXT, status, "unknown"),
+    SOURCE_FIELD("repository", YVEX_RENDER_FIELD_TEXT_ARRAY, identity_repo_id, "unknown"),
+    SOURCE_FIELD("revision", YVEX_RENDER_FIELD_TEXT_ARRAY, identity_revision, "unknown"),
+    SOURCE_FIELD("source_path", YVEX_RENDER_FIELD_TEXT_ARRAY, source_path, "unknown"),
+    SOURCE_FIELD("top_blocker", YVEX_RENDER_FIELD_TEXT, top_blocker, "unknown"),
+    SOURCE_FIELD("next", YVEX_RENDER_FIELD_TEXT, next_row, "unknown"),
+    SOURCE_FIELD("source_file_count", YVEX_RENDER_FIELD_U64, source_file_count, NULL),
+    SOURCE_FIELD("source_total_bytes", YVEX_RENDER_FIELD_U64, total_size_bytes, NULL),
+    SOURCE_FIELD("shard_count", YVEX_RENDER_FIELD_U64, safetensors_count, NULL),
+    SOURCE_FIELD("header_shard_count", YVEX_RENDER_FIELD_U64,
+                 native_safetensors_header_read_count, NULL),
+    SOURCE_FIELD("header_tensor_count", YVEX_RENDER_FIELD_U64, native_tensor_count, NULL),
+};
+
+#define VERIFY_JSON_FIELD(key_, kind_, member_) \
+    {key_, kind_, offsetof(yvex_source_verification, member_), ""}
+static const yvex_render_field_spec source_json_verification_fields[] = {
+    VERIFY_JSON_FIELD("source_kind", YVEX_RENDER_FIELD_TEXT_ARRAY, source_kind),
+    VERIFY_JSON_FIELD("inventory_authority", YVEX_RENDER_FIELD_TEXT_ARRAY, inventory_authority),
+    VERIFY_JSON_FIELD("upstream_index_oid", YVEX_RENDER_FIELD_TEXT_ARRAY, upstream_index_oid),
+    VERIFY_JSON_FIELD("upstream_index_identity_verified", YVEX_RENDER_FIELD_BOOL,
+                      upstream_index_identity_verified),
+    VERIFY_JSON_FIELD("header_scan_count", YVEX_RENDER_FIELD_U64, header_scan_count),
+    VERIFY_JSON_FIELD("manifest_schema", YVEX_RENDER_FIELD_TEXT_ARRAY, manifest_schema),
+    VERIFY_JSON_FIELD("manifest_state", YVEX_RENDER_FIELD_TEXT_ARRAY, manifest_status),
+    VERIFY_JSON_FIELD("manifest_verification_stage", YVEX_RENDER_FIELD_TEXT_ARRAY,
+                      verification_stage),
+    VERIFY_JSON_FIELD("manifest_verified", YVEX_RENDER_FIELD_BOOL, manifest_verified),
+    VERIFY_JSON_FIELD("source_verification_blocker_count", YVEX_RENDER_FIELD_U32, blocker_count),
+    VERIFY_JSON_FIELD("header_dtype_bf16_count", YVEX_RENDER_FIELD_U64, dtype_bf16_count),
+    VERIFY_JSON_FIELD("header_dtype_f32_count", YVEX_RENDER_FIELD_U64, dtype_f32_count),
+    VERIFY_JSON_FIELD("header_dtype_i64_count", YVEX_RENDER_FIELD_U64, dtype_i64_count),
+    VERIFY_JSON_FIELD("header_dtype_i8_count", YVEX_RENDER_FIELD_U64, dtype_i8_count),
+    VERIFY_JSON_FIELD("header_dtype_f8_e4m3_count", YVEX_RENDER_FIELD_U64, dtype_f8_count),
+    VERIFY_JSON_FIELD("header_dtype_f8_e8m0_count", YVEX_RENDER_FIELD_U64, dtype_f8_e8m0_count),
+    VERIFY_JSON_FIELD("config_valid", YVEX_RENDER_FIELD_BOOL, config_valid),
+    VERIFY_JSON_FIELD("generation_config_valid", YVEX_RENDER_FIELD_BOOL, generation_config_valid),
+    VERIFY_JSON_FIELD("shard_index_valid", YVEX_RENDER_FIELD_BOOL, shard_index_valid),
+};
+#undef VERIFY_JSON_FIELD
+
+#undef PROFILE_FIELD
+#undef SOURCE_FIELD
+
 #define VERIFY_FIELD(key_, kind_, member_, fallback_) \
     {key_, kind_, offsetof(yvex_source_verification, member_), fallback_}
 
@@ -441,264 +634,11 @@ static const char *source_render_present_missing(int present)
     return present ? "present" : "missing";
 }
 
-/* Purpose: Render source render tokenizer status from typed facts (`source_render_tokenizer_status`). */
-static const char *source_render_tokenizer_status(const yvex_source_report *report)
-{
-    return report->semantics.tokenizer_status;
-}
-
-/* Purpose: Render source render safetensors status from typed facts (`source_render_safetensors_status`). */
-static const char *source_render_safetensors_status(const yvex_source_report *report)
-{
-    return report->semantics.safetensors_status;
-}
-
-/* Purpose: Render source render manifest status from typed facts (`source_render_manifest_status`). */
-static const char *source_render_manifest_status(const yvex_source_report *report)
-{
-    return report->semantics.manifest_status;
-}
-
-/* Purpose: Render source render native inventory report status from typed facts
- *   (`source_render_native_inventory_report_status`). */
-static const char *source_render_native_inventory_report_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.native_inventory_report_status;
-}
-
-/* Purpose: Render source render tensor map report status from typed facts
- *   (`source_render_tensor_map_report_status`). */
-static const char *source_render_tensor_map_report_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.tensor_map_report_status;
-}
-
-/* Purpose: Render source render tensor role map report status from typed facts
- *   (`source_render_tensor_role_map_report_status`). */
-static const char *source_render_tensor_role_map_report_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.tensor_role_map_report_status;
-}
-
-/* Purpose: Render source render output head map report status from typed facts
- *   (`source_render_output_head_map_report_status`). */
-static const char *source_render_output_head_map_report_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.output_head_map_report_status;
-}
-
-/* Purpose: Render source render tokenizer map report status from typed facts
- *   (`source_render_tokenizer_map_report_status`). */
-static const char *source_render_tokenizer_map_report_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.tokenizer_map_report_status;
-}
-
-/* Purpose: Render source render native inventory status from typed facts (`source_render_native_inventory_status`). */
-static const char *source_render_native_inventory_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.native_inventory_status;
-}
-
-/* Purpose: Render source render native inventory source from typed facts (`source_render_native_inventory_source`). */
-static const char *source_render_native_inventory_source(
-    const yvex_source_report *report)
-{
-    return report->semantics.native_inventory_source;
-}
-
-/* Purpose: Render source render tensor metadata status from typed facts (`source_render_tensor_metadata_status`). */
-static const char *source_render_tensor_metadata_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.tensor_metadata_status;
-}
-
-/* Purpose: Render source render tensor metadata source from typed facts (`source_render_tensor_metadata_source`). */
-static const char *source_render_tensor_metadata_source(
-    const yvex_source_report *report)
-{
-    return report->semantics.tensor_metadata_source;
-}
-
-/* Purpose: Render source render native tensor metadata status from typed facts
- *   (`source_render_native_tensor_metadata_status`). */
-static const char *source_render_native_tensor_metadata_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.native_tensor_metadata_status;
-}
-
-/* Purpose: Render source render native tensor payload status from typed facts
- * (`source_render_native_tensor_payload_status`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static const char *source_render_native_tensor_payload_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.native_tensor_payload_status;
-}
-
-/* Purpose: Render source render sidecar status from typed facts (`source_render_sidecar_status`). */
-static const char *source_render_sidecar_status(const yvex_source_report *report)
-{
-    return report->semantics.sidecar_status;
-}
-
-/* Purpose: Render source render tensor payload status from typed facts (`source_render_tensor_payload_status`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static const char *source_render_tensor_payload_status(const yvex_source_report *report)
-{
-    return report->semantics.tensor_payload_status;
-}
-
 /* Purpose: Render source render target artifact status from typed facts (`source_render_target_artifact_status`). */
 static const char *source_render_target_artifact_status(const yvex_source_family_profile *profile)
 {
     return profile && profile->yvex_produced_artifact_status
                ? profile->yvex_produced_artifact_status : "planned";
-}
-
-/* Purpose: Render source render footprint class from typed facts (`source_render_footprint_class`). */
-static const char *source_render_footprint_class(const yvex_source_report *report)
-{
-    return report->semantics.footprint_class;
-}
-
-/* Purpose: Render source render footprint status from typed facts (`source_render_footprint_status`). */
-static const char *source_render_footprint_status(const yvex_source_report *report)
-{
-    return report->semantics.footprint_status;
-}
-
-/* Purpose: Render source render provenance origin normal from typed facts
- *   (`source_render_provenance_origin_normal`). */
-static const char *source_render_provenance_origin_normal(
-    const yvex_source_report *report)
-{
-    return report->semantics.provenance_origin_normal;
-}
-
-/* Purpose: Render source render provenance origin audit from typed facts (`source_render_provenance_origin_audit`). */
-static const char *source_render_provenance_origin_audit(
-    const yvex_source_report_request *options,
-    const yvex_source_report *report)
-{
-    (void)options;
-    return report->semantics.provenance_origin_audit;
-}
-
-/* Purpose: Render source render provenance status from typed facts (`source_render_provenance_status`). */
-static const char *source_render_provenance_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.provenance_status;
-}
-
-/* Purpose: Render source render identity status from typed facts (`source_render_identity_status`). */
-static const char *source_render_identity_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.identity_status;
-}
-
-/* Purpose: Render source render authority from typed facts (`source_render_authority`). */
-static const char *source_render_authority(const yvex_source_report *report)
-{
-    return report->semantics.authority;
-}
-
-/* Purpose: Render source render authority status from typed facts (`source_render_authority_status`). */
-static const char *source_render_authority_status(const yvex_source_report *report)
-{
-    return report->semantics.authority_status;
-}
-
-/* Purpose: Render source render manifest provenance status from typed facts
- *   (`source_render_manifest_provenance_status`). */
-static const char *source_render_manifest_provenance_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.manifest_provenance_status;
-}
-
-/* Purpose: Render source render manifest authority from typed facts (`source_render_manifest_authority`). */
-static const char *source_render_manifest_authority(
-    const yvex_source_report *report)
-{
-    return report->semantics.manifest_authority;
-}
-
-/* Purpose: Render source render manifest schema status from typed facts (`source_render_manifest_schema_status`). */
-static const char *source_render_manifest_schema_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.manifest_schema_status;
-}
-
-/* Purpose: Render source render manifest family status from typed facts (`source_render_manifest_family_status`). */
-static const char *source_render_manifest_family_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.manifest_family_status;
-}
-
-/* Purpose: Render source render manifest target status from typed facts (`source_render_manifest_target_status`). */
-static const char *source_render_manifest_target_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.manifest_target_status;
-}
-
-/* Purpose: Render source render manifest artifact class status from typed facts
- *   (`source_render_manifest_artifact_class_status`). */
-static const char *source_render_manifest_artifact_class_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.manifest_artifact_class_status;
-}
-
-/* Purpose: Render source render manifest footprint status from typed facts
- *   (`source_render_manifest_footprint_status`). */
-static const char *source_render_manifest_footprint_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.manifest_footprint_status;
-}
-
-/* Purpose: Render source render manifest native inventory status from typed facts
- *   (`source_render_manifest_native_inventory_status`). */
-static const char *source_render_manifest_native_inventory_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.manifest_native_inventory_status;
-}
-
-/* Purpose: Render source render manifest tensor metadata status from typed facts
- *   (`source_render_manifest_tensor_metadata_status`). */
-static const char *source_render_manifest_tensor_metadata_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.manifest_tensor_metadata_status;
-}
-
-/* Purpose: Render source render manifest consistency status from typed facts
- *   (`source_render_manifest_consistency_status`). */
-static const char *source_render_manifest_consistency_status(
-    const yvex_source_report *report)
-{
-    return report->semantics.manifest_consistency_status;
 }
 
 /* Purpose: Render source render presence verification status from typed facts
@@ -732,25 +672,25 @@ int yvex_source_render_normal(FILE *fp, const yvex_source_report *report)
            report->source_file_count,
            report->safetensors_count,
            report->total_size_bytes,
-           source_render_footprint_class(report));
+           report->semantics.footprint_class);
     yvex_cli_out_writef(fp, "provenance: %s status=%s revision=%s\n",
-           source_render_provenance_origin_normal(report),
+           report->semantics.provenance_origin_normal,
            deepseek ? report->semantics.verification_status
-                    : source_render_provenance_status(report),
+                    : report->semantics.provenance_status,
            report->identity_revision[0] ? report->identity_revision : "unknown");
     yvex_cli_out_writef(fp, "native: %s  files=%llu  tensors=%llu  header_bytes=%llu\n",
-           source_render_native_inventory_status(report),
+           report->semantics.native_inventory_status,
            report->native_safetensors_count,
            report->native_tensor_count,
            report->native_safetensors_header_bytes);
     yvex_cli_out_writef(fp, "metadata: %s  tensors=%llu  dtypes=%llu  max_rank=%llu\n",
-           source_render_tensor_metadata_status(report),
+           report->semantics.tensor_metadata_status,
            report->source_tensor_count,
            report->source_tensor_dtype_count,
            report->source_tensor_max_rank);
     yvex_cli_out_writef(fp, "manifest: %s  consistency=%s\n",
-           source_render_manifest_status(report),
-           source_render_manifest_consistency_status(report));
+           report->semantics.manifest_status,
+           report->semantics.manifest_consistency_status);
     if (deepseek) {
         yvex_cli_out_writef(fp, "repository: %s  status=%s\n",
                            report->identity_repo_id[0]
@@ -825,8 +765,8 @@ int yvex_source_render_table(FILE *fp, const yvex_source_report *report)
            options->target,
            report->source_state,
            report->source_tensor_count,
-           source_render_manifest_status(report),
-           source_render_manifest_consistency_status(report),
+           report->semantics.manifest_status,
+           report->semantics.manifest_consistency_status,
            report->next_row);
     render_tensor_rows(fp, options, report);
     return report->exit_code;
@@ -954,126 +894,53 @@ static void source_render_generic_source(FILE *fp, const yvex_source_report *rep
 {
     const yvex_source_report_request *options = &report->request;
 
-    yvex_cli_out_writef(fp, "target_class: %s\n", options->profile->target_class);
-    yvex_cli_out_writef(fp, "source_target_status: %s\n", options->profile->source_target_status);
-    yvex_cli_out_writef(fp, "source_family_profile_status: %s\n",
-       options->profile->source_family_profile_status);
-    yvex_cli_out_writef(fp, "source_artifact_class: %s\n", options->profile->source_artifact_class);
-    yvex_cli_out_writef(fp, "source_artifact_status: %s\n", report->source_state);
-    yvex_cli_out_writef(fp, "source_artifact_format: %s\n", options->profile->source_artifact_format);
-    yvex_cli_out_writef(fp, "source_artifact_origin: %s\n", options->profile->source_artifact_origin);
-    yvex_cli_out_writef(fp, "source_artifact_authority: %s\n",
-       options->profile->source_artifact_authority);
-    yvex_cli_out_writef(fp, "source_sidecar_status: %s\n", source_render_sidecar_status(report));
-    yvex_cli_out_writef(fp, "source_tensor_container: %s\n", options->profile->source_tensor_container);
-    yvex_cli_out_writef(fp, "source_tensor_payload_status: %s\n",
-       source_render_tensor_payload_status(report));
-    yvex_cli_out_writef(fp, "target_artifact_class: %s\n", options->profile->target_artifact_class);
+    render_object_fields(fp, options->profile, source_profile_origin_fields, 4u);
+    render_object_fields(fp, report, source_origin_fields, 1u);
+    render_object_fields(fp, options->profile, source_profile_origin_fields + 4u, 3u);
+    render_object_fields(fp, report, source_origin_fields + 1u, 1u);
+    render_object_fields(fp, options->profile, source_profile_origin_fields + 7u, 1u);
+    render_object_fields(fp, report, source_origin_fields + 2u, 1u);
+    render_object_fields(fp, options->profile, source_profile_target_fields, 1u);
     yvex_cli_out_writef(fp, "target_artifact_status: %s\n",
-       source_render_target_artifact_status(options->profile));
-    yvex_cli_out_writef(fp, "target_artifact_origin: %s\n", options->profile->target_artifact_origin);
-    yvex_cli_out_writef(fp, "target_artifact_required: %s\n",
-       options->profile->target_artifact_required);
-    yvex_cli_out_writef(fp, "external_reference_status: %s\n",
-       options->profile->external_reference_status);
-    yvex_cli_out_writef(fp, "yvex_produced_artifact_status: %s\n",
-       options->profile->yvex_produced_artifact_status);
-    yvex_cli_out_writef(fp, "pressure_purpose: %s\n", options->profile->pressure_purpose);
-    yvex_cli_out_writef(fp, "runtime_shape: %s\n", options->profile->runtime_shape);
-    yvex_cli_out_writef(fp, "hardware_lane: %s\n", options->profile->hardware_lane);
-    yvex_cli_out_writef(fp, "backend_lane: %s\n", options->profile->backend_lane);
-    yvex_cli_out_writef(fp, "source_class: %s\n", options->profile->source_class);
-    yvex_cli_out_writef(fp, "source_provenance_status: %s\n", source_render_provenance_status(report));
-    yvex_cli_out_writef(fp, "source_origin: %s\n", source_render_provenance_origin_audit(options, report));
-    yvex_cli_out_writef(fp, "source_authority: %s\n", source_render_authority(report));
-    yvex_cli_out_writef(fp, "source_authority_status: %s\n", source_render_authority_status(report));
-    yvex_cli_out_writef(fp, "source_path: %s\n", report->source_path);
-    yvex_cli_out_writef(fp, "source_path_source: %s\n", report->source_path_source);
-    yvex_cli_out_writef(fp, "source_path_status: %s\n", report->source_state);
-    yvex_cli_out_writef(fp, "source_exists: %s\n", report->source_exists ? "true" : "false");
-    yvex_cli_out_writef(fp, "download_registry_path: %s\n",
-       report->download_registry_path[0] ? report->download_registry_path : "unknown");
+                        source_render_target_artifact_status(options->profile));
+    render_object_fields(fp, options->profile, source_profile_target_fields + 1u, 9u);
+    render_object_fields(fp, report, source_origin_fields + 3u, 8u);
+    render_object_fields(fp, report, source_origin_fields + 11u, 1u);
     yvex_cli_out_writef(fp, "download_registry_status: %s\n",
-       report->download_registry_exists ? "present" : "missing");
-    yvex_cli_out_writef(fp, "download_report_path: %s\n",
-       report->download_report_path[0] ? report->download_report_path : "unknown");
+                        report->download_registry_exists ? "present" : "missing");
+    render_object_fields(fp, report, source_origin_fields + 12u, 1u);
     yvex_cli_out_writef(fp, "download_report_status: %s\n",
-       report->download_report_exists ? "present" : "missing");
-    yvex_cli_out_writef(fp, "download_repo_id: %s\n",
-       report->identity_repo_id[0] ? report->identity_repo_id : "unknown");
-    yvex_cli_out_writef(fp, "download_revision: %s\n",
-       report->identity_revision[0] ? report->identity_revision : "unknown");
+                        report->download_report_exists ? "present" : "missing");
+    render_object_fields(fp, report, source_origin_fields + 13u, 2u);
     render_object_fields(fp, report, u64_fields_7, sizeof(u64_fields_7) / sizeof(u64_fields_7[0]));
-    yvex_cli_out_writef(fp, "source_footprint_class: %s\n", source_render_footprint_class(report));
-    yvex_cli_out_writef(fp, "source_footprint_status: %s\n", source_render_footprint_status(report));
+    render_object_fields(fp, report, source_origin_fields + 15u, 2u);
     yvex_cli_out_lines(fp, literal_pair_4, sizeof(literal_pair_4) / sizeof(literal_pair_4[0]));
-    yvex_cli_out_writef(fp, "largest_source_file_bytes: %llu\n", report->largest_source_file_bytes);
-    yvex_cli_out_writef(fp, "largest_source_file_name: %s\n",
-       report->largest_source_file_name[0]
-           ? report->largest_source_file_name
-           : "none");
+    render_object_fields(fp, report, source_origin_fields + 17u, 2u);
     yvex_cli_out_writef(fp, "config_status: %s\n", source_render_present_missing(report->config_exists));
-    yvex_cli_out_writef(fp, "tokenizer_status: %s\n", source_render_tokenizer_status(report));
+    yvex_cli_out_writef(fp, "tokenizer_status: %s\n", report->semantics.tokenizer_status);
     yvex_cli_out_writef(fp, "generation_config_status: %s\n",
        source_render_present_missing(report->generation_config_exists));
-    yvex_cli_out_writef(fp, "safetensors_status: %s\n", source_render_safetensors_status(report));
+    yvex_cli_out_writef(fp, "safetensors_status: %s\n", report->semantics.safetensors_status);
     yvex_cli_out_writef(fp, "safetensors_count: %llu\n", report->safetensors_count);
     yvex_cli_out_writef(fp, "source_manifest_expected: true\n");
-    yvex_cli_out_writef(fp, "source_manifest_status: %s\n", source_render_manifest_status(report));
-    yvex_cli_out_writef(fp, "source_manifest_path: %s\n",
-       report->manifest_path[0] ? report->manifest_path : "unknown");
-    yvex_cli_out_writef(fp, "source_manifest_schema_status: %s\n",
-       source_render_manifest_schema_status(report));
-    yvex_cli_out_writef(fp, "source_manifest_schema_version: %s\n",
-       report->manifest_schema_version[0]
-           ? report->manifest_schema_version
-           : "unknown");
+    render_object_fields(fp, report, source_manifest_fields, 4u);
     yvex_cli_out_writef(fp, "source_manifest_family: %s\n", options->profile->family_key);
     yvex_cli_out_writef(fp, "source_manifest_family_status: %s\n",
-       source_render_manifest_family_status(report));
+       report->semantics.manifest_family_status);
     yvex_cli_out_writef(fp, "source_manifest_target_id: %s\n", options->target);
     yvex_cli_out_writef(fp, "source_manifest_target_status: %s\n",
-       source_render_manifest_target_status(report));
-    yvex_cli_out_writef(fp, "source_manifest_source_path_status: %s\n", report->source_state);
-    yvex_cli_out_writef(fp, "source_manifest_artifact_class_status: %s\n",
-       source_render_manifest_artifact_class_status(report));
-    yvex_cli_out_writef(fp, "source_manifest_footprint_status: %s\n",
-       source_render_manifest_footprint_status(report));
-    yvex_cli_out_writef(fp, "source_manifest_authority: %s\n",
-       source_render_manifest_authority(report));
-    yvex_cli_out_writef(fp, "source_manifest_provenance_status: %s\n",
-       source_render_manifest_provenance_status(report));
-    yvex_cli_out_writef(fp, "source_manifest_native_inventory_status: %s\n",
-       source_render_manifest_native_inventory_status(report));
-    yvex_cli_out_writef(fp, "source_manifest_tensor_metadata_status: %s\n",
-       source_render_manifest_tensor_metadata_status(report));
-    yvex_cli_out_writef(fp, "source_manifest_consistency_status: %s\n",
-       source_render_manifest_consistency_status(report));
-    yvex_cli_out_writef(fp, "source_manifest_hardening_status: %s\n",
-                   report->semantics.manifest_hardening_status);
-    yvex_cli_out_writef(fp, "source_manifest_creation_performed: %s\n",
-                   report->semantics.manifest_creation_performed
-                       ? "true" : "false");
+                        report->semantics.manifest_target_status);
+    render_object_fields(fp, report, source_manifest_fields + 4u, 10u);
     yvex_cli_out_lines(fp, literal_lines_1, sizeof(literal_lines_1) / sizeof(literal_lines_1[0]));
-    yvex_cli_out_writef(fp, "source_revision: %s\n",
-                   report->identity_revision[0]
-                       ? report->identity_revision
-                       : "unknown");
-    yvex_cli_out_writef(fp, "source_revision_status: %s\n",
-                   report->semantics.revision_status);
-    yvex_cli_out_writef(fp, "source_commit: %s\n",
-                   report->identity_revision[0]
-                       ? report->identity_revision
-                       : "unknown");
-    yvex_cli_out_writef(fp, "source_commit_status: %s\n",
-                   report->semantics.revision_status);
+    render_object_fields(fp, report, source_revision_fields,
+                         sizeof(source_revision_fields) / sizeof(source_revision_fields[0]));
     yvex_cli_out_lines(fp, literal_pair_3, sizeof(literal_pair_3) / sizeof(literal_pair_3[0]));
     yvex_cli_out_writef(fp, "source_license_status: %s\n",
        source_render_presence_verification_status(report->license_exists));
     yvex_cli_out_writef(fp, "source_readme_status: %s\n",
        source_render_presence_verification_status(report->readme_exists));
     yvex_cli_out_writef(fp, "source_identity_status: %s\n",
-       source_render_identity_status(report));
+       report->semantics.identity_status);
     yvex_cli_out_lines(fp, literal_pair_2, sizeof(literal_pair_2) / sizeof(literal_pair_2[0]));
 
 }
@@ -1093,53 +960,21 @@ static void source_render_generic_inventory(FILE *fp, const yvex_source_report *
     yvex_cli_out_writef(fp, "source_verification_status: not-verified\n");
     }
     yvex_cli_out_writef(fp, "source_remote_checked: false\n");
-    yvex_cli_out_writef(fp, "native_inventory_status: %s\n",
-       source_render_native_inventory_status(report));
+    render_object_fields(fp, report, source_inventory_fields, 1u);
     yvex_cli_out_writef(fp, "native_inventory_scope: top-level-safetensors-headers\n");
-    yvex_cli_out_writef(fp, "native_inventory_source: %s\n",
-       source_render_native_inventory_source(report));
+    render_object_fields(fp, report, source_inventory_fields + 1u, 1u);
     render_object_fields(fp, report, u64_fields_8, sizeof(u64_fields_8) / sizeof(u64_fields_8[0]));
     yvex_cli_out_lines(fp, literal_pair_1, sizeof(literal_pair_1) / sizeof(literal_pair_1[0]));
-    yvex_cli_out_writef(fp, "native_tensor_count: %llu\n", report->native_tensor_count);
-    yvex_cli_out_writef(fp, "native_tensor_metadata_status: %s\n",
-       source_render_native_tensor_metadata_status(report));
-    yvex_cli_out_writef(fp, "native_tensor_payload_status: %s\n",
-       source_render_native_tensor_payload_status(report));
+    render_object_fields(fp, report, source_inventory_fields + 2u, 3u);
     render_object_fields(fp, report, u64_fields_9, sizeof(u64_fields_9) / sizeof(u64_fields_9[0]));
-    yvex_cli_out_writef(fp, "native_largest_tensor_name: %s\n",
-       report->native_largest_tensor_name[0]
-           ? report->native_largest_tensor_name
-           : "none");
+    render_object_fields(fp, report, source_inventory_fields + 5u, 1u);
     render_object_fields(fp, report, u64_fields_10, sizeof(u64_fields_10) / sizeof(u64_fields_10[0]));
-    yvex_cli_out_writef(fp, "native_inventory_report_status: %s\n",
-       source_render_native_inventory_report_status(report));
-    yvex_cli_out_writef(fp, "native_inventory_path: %s\n",
-       report->native_inventory_path[0] ? report->native_inventory_path : "unknown");
-    yvex_cli_out_writef(fp, "source_tensor_metadata_status: %s\n",
-       source_render_tensor_metadata_status(report));
+    render_object_fields(fp, report, source_inventory_fields + 6u, 3u);
     yvex_cli_out_writef(fp, "source_tensor_metadata_scope: safetensors-header\n");
-    yvex_cli_out_writef(fp, "source_tensor_metadata_source: %s\n",
-       source_render_tensor_metadata_source(report));
+    render_object_fields(fp, report, source_inventory_fields + 9u, 1u);
     yvex_cli_out_lines(fp, literal_pair_0, sizeof(literal_pair_0) / sizeof(literal_pair_0[0]));
     render_object_fields(fp, report, u64_fields_11, sizeof(u64_fields_11) / sizeof(u64_fields_11[0]));
-    yvex_cli_out_writef(fp, "source_tensor_largest_name: %s\n",
-       report->source_tensor_largest_name[0]
-           ? report->source_tensor_largest_name
-           : "none");
-    yvex_cli_out_writef(fp, "source_tensor_largest_file: %s\n",
-       report->source_tensor_largest_file[0]
-           ? report->source_tensor_largest_file
-           : "none");
-    yvex_cli_out_writef(fp, "source_tensor_largest_dtype: %s\n",
-       report->source_tensor_largest_dtype[0]
-           ? report->source_tensor_largest_dtype
-           : "none");
-    yvex_cli_out_writef(fp, "source_tensor_largest_rank: %llu\n",
-       report->source_tensor_largest_rank);
-    yvex_cli_out_writef(fp, "source_tensor_largest_shape: %s\n",
-       report->source_tensor_largest_shape[0]
-           ? report->source_tensor_largest_shape
-           : "[]");
+    render_object_fields(fp, report, source_inventory_fields + 10u, 5u);
     render_object_fields(fp, report, u64_fields_12, sizeof(u64_fields_12) / sizeof(u64_fields_12[0]));
     yvex_cli_out_writef(fp, "source_tensor_name_pattern_status: lexical-only\n");
     render_object_fields(fp, report, u64_fields_13, sizeof(u64_fields_13) / sizeof(u64_fields_13[0]));
@@ -1174,20 +1009,8 @@ static void source_render_generic_boundary(FILE *fp, const yvex_source_report *r
        strcmp(options->profile->family_key, "gemma") == 0
            ? "command-visible"
            : "missing");
-    yvex_cli_out_writef(fp, "tensor_map_path: %s\n",
-       report->tensor_map_path[0] ? report->tensor_map_path : "unknown");
-    yvex_cli_out_writef(fp, "tensor_map_status: %s\n",
-       source_render_tensor_map_report_status(report));
-    yvex_cli_out_writef(fp, "tensor_role_map_status: %s\n",
-       source_render_tensor_role_map_report_status(report));
-    yvex_cli_out_writef(fp, "output_head_map_path: %s\n",
-       report->output_head_map_path[0] ? report->output_head_map_path : "unknown");
-    yvex_cli_out_writef(fp, "output_head_map_status: %s\n",
-       source_render_output_head_map_report_status(report));
-    yvex_cli_out_writef(fp, "tokenizer_map_path: %s\n",
-       report->tokenizer_map_path[0] ? report->tokenizer_map_path : "unknown");
-    yvex_cli_out_writef(fp, "tokenizer_map_status: %s\n",
-       source_render_tokenizer_map_report_status(report));
+    render_object_fields(fp, report, source_boundary_fields,
+                         sizeof(source_boundary_fields) / sizeof(source_boundary_fields[0]));
     yvex_cli_out_lines(fp, literal_lines_2, sizeof(literal_lines_2) / sizeof(literal_lines_2[0]));
     yvex_cli_out_writef(fp, "blocker_count: %lu\n", report->blocker_count);
     for (i = 0; i < report->blocker_count; ++i) {
@@ -1240,69 +1063,30 @@ int yvex_source_render_json(FILE *fp, const yvex_source_report *report)
     if (!report || !options || !options->profile) return 3;
     verification_status = report->semantics.verification_status;
     yvex_cli_json_begin(fp);
-    yvex_cli_json_field_str(fp, "status", report->status, 1);
+    (void)yvex_cli_json_fields(fp, report, source_json_report_fields, 1u, 1);
     yvex_cli_json_field_str(fp, "family", options->profile->family_key, 1);
     yvex_cli_json_field_str(fp, "target_id", options->target, 1);
-    yvex_cli_json_field_str(fp, "source_kind",
-                            report->verification.source_kind, 1);
-    yvex_cli_json_field_str(fp, "repository", report->identity_repo_id, 1);
-    yvex_cli_json_field_str(fp, "revision", report->identity_revision, 1);
-    yvex_cli_json_field_str(fp, "source_path", report->source_path, 1);
+    (void)yvex_cli_json_fields(fp, &report->verification, source_json_verification_fields, 1u, 1);
+    (void)yvex_cli_json_fields(fp, report, source_json_report_fields + 1u, 3u, 1);
     yvex_cli_json_field_str(fp, "verification", verification_status, 1);
-    yvex_cli_json_field_str(fp, "inventory_authority",
-                            report->verification.inventory_authority, 1);
-    yvex_cli_json_field_str(fp, "upstream_index_oid",
-                            report->verification.upstream_index_oid, 1);
-    yvex_cli_json_field_bool(fp, "upstream_index_identity_verified",
-                             report->verification.upstream_index_identity_verified,
-                             1);
-    yvex_cli_json_field_u64(fp, "header_scan_count",
-                            report->verification.header_scan_count, 1);
-    yvex_cli_json_field_str(fp, "manifest_schema",
-                            report->verification.manifest_schema, 1);
-    yvex_cli_json_field_str(fp, "manifest_state",
-                            report->verification.manifest_status, 1);
-    yvex_cli_json_field_str(fp, "manifest_verification_stage",
-                            report->verification.verification_stage, 1);
-    yvex_cli_json_field_bool(fp, "manifest_verified",
-                             report->verification.manifest_verified, 1);
-    yvex_cli_json_field_str(fp, "top_blocker", report->top_blocker, 1);
-    yvex_cli_json_field_u64(fp, "source_verification_blocker_count",
-                            report->verification.blocker_count, 1);
+    (void)yvex_cli_json_fields(fp, &report->verification,
+                               source_json_verification_fields + 1u, 8u, 1);
+    (void)yvex_cli_json_fields(fp, report, source_json_report_fields + 4u, 1u, 1);
+    (void)yvex_cli_json_fields(fp, &report->verification,
+                               source_json_verification_fields + 9u, 1u, 1);
     yvex_cli_json_field_u64(fp, "blocker_count", report->blocker_count, 1);
     for (i = 0; i < report->blocker_count; ++i) {
         (void)snprintf(blocker_key, sizeof(blocker_key), "blocker_%lu", i);
         yvex_cli_json_field_str(fp, blocker_key, report->blockers[i], 1);
     }
-    yvex_cli_json_field_str(fp, "next", report->next_row, 1);
-    yvex_cli_json_field_u64(fp, "source_file_count", report->source_file_count, 1);
-    yvex_cli_json_field_u64(fp, "source_total_bytes", report->total_size_bytes, 1);
-    yvex_cli_json_field_u64(fp, "shard_count", report->safetensors_count, 1);
-    yvex_cli_json_field_u64(fp, "header_shard_count",
-                            report->native_safetensors_header_read_count, 1);
-    yvex_cli_json_field_u64(fp, "header_tensor_count",
-                            report->native_tensor_count, 1);
-    yvex_cli_json_field_u64(fp, "header_dtype_bf16_count",
-                            report->verification.dtype_bf16_count, 1);
-    yvex_cli_json_field_u64(fp, "header_dtype_f32_count",
-                            report->verification.dtype_f32_count, 1);
-    yvex_cli_json_field_u64(fp, "header_dtype_i64_count",
-                            report->verification.dtype_i64_count, 1);
-    yvex_cli_json_field_u64(fp, "header_dtype_i8_count",
-                            report->verification.dtype_i8_count, 1);
-    yvex_cli_json_field_u64(fp, "header_dtype_f8_e4m3_count",
-                            report->verification.dtype_f8_count, 1);
-    yvex_cli_json_field_u64(fp, "header_dtype_f8_e8m0_count",
-                            report->verification.dtype_f8_e8m0_count, 1);
-    yvex_cli_json_field_bool(fp, "config_valid",
-                             report->verification.config_valid, 1);
+    (void)yvex_cli_json_fields(fp, report, source_json_report_fields + 5u, 6u, 1);
+    (void)yvex_cli_json_fields(fp, &report->verification,
+                               source_json_verification_fields + 10u, 7u, 1);
     yvex_cli_json_field_bool(fp, "tokenizer_valid",
                              report->semantics.tokenizer_verified,
                              1);
-    yvex_cli_json_field_bool(fp, "generation_config_valid",
-                             report->verification.generation_config_valid, 1);
-    yvex_cli_json_field_bool(fp, "shard_index_valid",
-                             report->verification.shard_index_valid, 1);
+    (void)yvex_cli_json_fields(fp, &report->verification,
+                               source_json_verification_fields + 17u, 2u, 1);
     yvex_cli_json_field_bool(fp, "tensor_payload_loaded", 0, 1);
     yvex_cli_json_field_str(fp, "artifact_status",
                             source_render_target_artifact_status(options->profile), 1);

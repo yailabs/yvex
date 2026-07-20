@@ -79,9 +79,7 @@ typedef struct {
 #define YVEX_MODEL_DOWNLOAD_PATTERN_CAP 32u
 #define YVEX_MODELS_ARTIFACT_ROWS_CAP 256u
 
-enum {
-    YVEX_MODEL_DOWNLOAD_INTERRUPT_TIMEOUT_SECONDS = 5
-};
+enum { YVEX_MODEL_DOWNLOAD_INTERRUPT_TIMEOUT_SECONDS = 5 };
 
 typedef enum {
     YVEX_MODEL_DOWNLOAD_AUTH_AUTO = 0,
@@ -442,17 +440,11 @@ int parse_positive_ull(const char *text, unsigned long long *out);
 int parse_ull_allow_zero(const char *text, unsigned long long *out);
 int parse_uint_allow_zero(const char *text, unsigned int *out);
 void print_metadata_drift_cli(const yvex_model_metadata_drift_report *report);
-int models_registry_open(yvex_model_registry **registry,
-                         const char *registry_path,
-                         int create_if_missing,
-                         yvex_error *err);
+int models_registry_open(yvex_model_registry **registry, const char *registry_path,
+                         int create_if_missing, yvex_error *err);
 int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths,
-                                       const char *family,
-                                       const char *kind,
-                                       char *out,
-                                       size_t cap,
-                                       int *out_exists,
-                                       yvex_error *err);
+                                       const char *family, const char *kind, char *out, size_t cap,
+                                       int *out_exists, yvex_error *err);
 
 /* Json contract. */
 void yvex_cli_json_begin(FILE *fp);
@@ -460,6 +452,9 @@ void yvex_cli_json_end(FILE *fp);
 void yvex_cli_json_field_str(FILE *fp, const char *key, const char *value, int comma);
 void yvex_cli_json_field_u64(FILE *fp, const char *key, unsigned long long value, int comma);
 void yvex_cli_json_field_bool(FILE *fp, const char *key, int value, int comma);
+void yvex_cli_json_field_double(FILE *fp, const char *key, double value, int comma);
+int yvex_cli_json_fields(FILE *fp, const void *object, const yvex_cli_field_spec *fields,
+                         size_t field_count, int comma);
 
 /* Out contract. */
 int yvex_cli_out_writef(FILE *fp, const char *fmt, ...);
@@ -467,29 +462,21 @@ int yvex_cli_out_vwritef(FILE *fp, const char *fmt, va_list ap);
 int yvex_cli_out_puts(FILE *fp, const char *text);
 int yvex_cli_out_fputs(const char *text, FILE *fp);
 int yvex_cli_out_char(FILE *fp, int ch);
+int yvex_cli_out_flush(FILE *fp);
 FILE *yvex_cli_out_stdout(void);
 FILE *yvex_cli_out_stderr(void);
 void yvex_cli_out_line(FILE *fp, const char *text);
-void yvex_cli_out_lines(FILE *fp,
-                        const char *const *lines,
-                        size_t line_count);
+void yvex_cli_out_lines(FILE *fp, const char *const *lines, size_t line_count);
 void yvex_cli_out_blank(FILE *fp);
 void yvex_cli_out_kv_str(FILE *fp, const char *key, const char *value);
 void yvex_cli_out_kv_u64(FILE *fp, const char *key, unsigned long long value);
 void yvex_cli_out_kv_u32(FILE *fp, const char *key, unsigned int value);
 void yvex_cli_out_kv_bool(FILE *fp, const char *key, int value);
 void yvex_cli_out_kv_double(FILE *fp, const char *key, double value);
-void yvex_cli_out_optional_u64(FILE *fp,
-                               const char *key,
-                               int seen,
-                               unsigned long long value);
-void yvex_cli_out_token_list(FILE *fp,
-                             const char *key,
-                             const unsigned int *tokens,
+void yvex_cli_out_optional_u64(FILE *fp, const char *key, int seen, unsigned long long value);
+void yvex_cli_out_token_list(FILE *fp, const char *key, const unsigned int *tokens,
                              unsigned long long count);
-int yvex_cli_out_fields(FILE *fp,
-                        const void *object,
-                        const yvex_cli_field_spec *fields,
+int yvex_cli_out_fields(FILE *fp, const void *object, const yvex_cli_field_spec *fields,
                         size_t field_count);
 
 /* Table contract. */

@@ -24,6 +24,8 @@
 
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/cli-chat}
 FIXTURE=tests/fixtures/gguf/valid-tokenizer-simple.gguf
@@ -32,7 +34,7 @@ SELECTED_REGISTRY="$OUT_DIR/models.local.json"
 SELECTED_ALIAS="chat-selected-model-fixture"
 EMPTY_REGISTRY="$OUT_DIR/empty/models.local.json"
 
-rm -rf "$OUT_DIR"
+yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 fail() {

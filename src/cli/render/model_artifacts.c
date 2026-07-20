@@ -13,6 +13,8 @@
 #include "src/cli/model_artifacts/private.h"
 #include "src/cli/io/private.h"
 
+#include <string.h>
+
 typedef struct {
     const char *key;
     const char *role;

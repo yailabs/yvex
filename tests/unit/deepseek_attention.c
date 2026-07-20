@@ -25,6 +25,7 @@
 #include "tests/reference/deepseek_attention.h"
 
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1839,6 +1840,81 @@ static int test_independent_reference_detects_stage_mutations(void)
     return 0;
 }
 
+/* Proves the production comparison contract distinguishes numeric admission from object bytes. */
+static int test_f32_comparison_contract(void)
+{
+    const float identical[] = {0.0f, 1.0f, -2.0f};
+    const float signed_zero[] = {-0.0f, 1.0f, -2.0f};
+    const float near_left[] = {1000.0f};
+    const float near_right[] = {1000.4f};
+    const float far_right[] = {1001.0f};
+    const float nonfinite[] = {NAN, INFINITY};
+    const float finite_mixed[] = {NAN, 1.0f};
+    const float delayed_left[] = {1.0f, 2.0f, 3.0f};
+    const float delayed_right[] = {1.0f, 2.0f, 4.0f};
+    const uint32_t nan_bits[] = {UINT32_C(0x7fc00001), UINT32_C(0x7fc00002)};
+    float distinct_nan[2];
+    yvex_graph_f32_comparison comparison;
+    yvex_graph_f32_comparison unchanged;
+    yvex_error error;
+
+    memcpy(distinct_nan, nan_bits, sizeof(distinct_nan));
+    yvex_error_clear(&error);
+    YVEX_TEST_ASSERT(yvex_graph_f32_compare(identical, identical, 3ull, 5.0e-4, 5.0e-4,
+                                            &comparison, &error) == YVEX_OK &&
+                         comparison.within_tolerance && comparison.bitwise_equal &&
+                         comparison.finite_value_count == 3ull &&
+                         comparison.nonfinite_value_count == 0ull,
+                     "identical finite F32 values compare exactly");
+    YVEX_TEST_ASSERT(yvex_graph_f32_compare(identical, signed_zero, 3ull, 5.0e-4, 5.0e-4,
+                                            &comparison, &error) == YVEX_OK &&
+                         comparison.within_tolerance && !comparison.bitwise_equal,
+                     "signed zero is numerically equal but not bitwise equal");
+    YVEX_TEST_ASSERT(yvex_graph_f32_compare(near_left, near_right, 1ull, 5.0e-4, 5.0e-4,
+                                            &comparison, &error) == YVEX_OK &&
+                         comparison.within_tolerance,
+                     "combined absolute-relative tolerance admits its finite bound");
+    YVEX_TEST_ASSERT(yvex_graph_f32_compare(near_left, far_right, 1ull, 5.0e-4, 5.0e-4,
+                                            &comparison, &error) == YVEX_OK &&
+                         !comparison.within_tolerance &&
+                         comparison.first_failing_coordinate == 0ull,
+                     "comparison reports the first finite tolerance failure");
+    YVEX_TEST_ASSERT(yvex_graph_f32_compare(nonfinite, nonfinite, 2ull, 5.0e-4, 5.0e-4,
+                                            &comparison, &error) == YVEX_OK &&
+                         !comparison.within_tolerance && comparison.bitwise_equal &&
+                         comparison.finite_value_count == 0ull &&
+                         comparison.nonfinite_value_count == comparison.value_count &&
+                         comparison.first_failing_coordinate == 0ull &&
+                         isfinite(comparison.squared_error_sum),
+                     "matching non-finite bytes still fail numeric admission");
+    YVEX_TEST_ASSERT(yvex_graph_f32_compare(distinct_nan, distinct_nan + 1, 1ull, 5.0e-4,
+                                            5.0e-4, &comparison, &error) == YVEX_OK &&
+                         !comparison.within_tolerance && !comparison.bitwise_equal &&
+                         comparison.nonfinite_value_count == 1ull,
+                     "different NaN payloads fail bitwise and numeric admission");
+    YVEX_TEST_ASSERT(yvex_graph_f32_compare(nonfinite, finite_mixed, 2ull, 5.0e-4, 5.0e-4,
+                                            &comparison, &error) == YVEX_OK &&
+                         !comparison.within_tolerance &&
+                         comparison.finite_value_count + comparison.nonfinite_value_count ==
+                             comparison.value_count,
+                     "mixed finite and non-finite pairs retain exact accounting");
+    YVEX_TEST_ASSERT(yvex_graph_f32_compare(delayed_left, delayed_right, 3ull, 0.0, 0.0,
+                                            &comparison, &error) == YVEX_OK &&
+                         !comparison.within_tolerance &&
+                         comparison.first_failing_coordinate == 2ull &&
+                         comparison.maximum_absolute_error == 1.0 &&
+                         comparison.maximum_relative_error == 0.25 &&
+                         comparison.squared_error_sum == 1.0,
+                     "finite metrics and first delayed failure are exact");
+    memset(&unchanged, 0x5a, sizeof(unchanged));
+    comparison = unchanged;
+    YVEX_TEST_ASSERT(yvex_graph_f32_compare(NULL, identical, 3ull, 5.0e-4, 5.0e-4,
+                                            &comparison, &error) == YVEX_ERR_INVALID_ARG &&
+                         memcmp(&comparison, &unchanged, sizeof(comparison)) == 0,
+                     "invalid comparison arguments preserve caller output");
+    return 0;
+}
+
 int yvex_test_deepseek_attention(void)
 {
     if (test_execution_gate_is_admitted() != 0) return 1;
@@ -1855,6 +1931,7 @@ int yvex_test_deepseek_attention(void)
     if (test_runtime_fp4_fake_quant_policy() != 0) return 1;
     if (test_runtime_fp8_fake_quant_policy() != 0) return 1;
     if (test_runtime_activation_codec_edges() != 0) return 1;
+    if (test_f32_comparison_contract() != 0) return 1;
     if (test_independent_reference_detects_stage_mutations() != 0) return 1;
     return 0;
 }

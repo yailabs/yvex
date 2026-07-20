@@ -1,6 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN="${YVEX_BIN:-./yvex}"
 ROOT=${YVEX_TEST_OUT_DIR:-build/tests/models-cli}
 REG="$ROOT/models.local.json"
@@ -15,7 +17,7 @@ matches() {
 make_missing_role_source() {
   dir=$1
   variant=${2:-complete}
-  rm -rf "$dir"
+  yvex_test_cleanup "$dir"
   mkdir -p "$dir"
   if [ "$variant" != "missing-metadata" ]; then
     cat > "$dir/config.json" <<'JSON'
@@ -351,7 +353,7 @@ JSON
   fi
 }
 
-rm -rf "$ROOT"
+yvex_test_cleanup "$ROOT"
 mkdir -p "$ROOT"
 
 "$YVEX_BIN" gguf-emit controlled \
@@ -1423,7 +1425,7 @@ CHECK_REG="$CHECK/registry/models.local.json"
 CHECK_GGUF="$CHECK/models/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
 CHECK_ROOT="$CHECK/root"
 CHECK_ROOT_GGUF="$CHECK_ROOT/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
-rm -rf "$CHECK"
+yvex_test_cleanup "$CHECK"
 mkdir -p "$CHECK/models" "$CHECK/registry" "$CHECK_ROOT/gguf/deepseek"
 
 "$YVEX_BIN" gguf-emit controlled --out "$CHECK_GGUF" --model-name model-check-test --arch llama --overwrite >/dev/null
@@ -1836,7 +1838,7 @@ grep 'release_ready: false' "$ROOT/tensor-collection-gemma-missing-audit.out"
 grep 'next_required_rows: V010.MAP.8' "$ROOT/tensor-collection-gemma-missing-audit.out"
 
 QWEN_CLASS_SOURCE="${TMPDIR:-/tmp}/yvex-qwen-class-profile-test-$$"
-rm -rf "$QWEN_CLASS_SOURCE"
+yvex_test_cleanup "$QWEN_CLASS_SOURCE"
 mkdir -p "$QWEN_CLASS_SOURCE"
 printf '{}\n' > "$QWEN_CLASS_SOURCE/config.json"
 printf '{}\n' > "$QWEN_CLASS_SOURCE/tokenizer.json"
@@ -1921,7 +1923,7 @@ matches "$ROOT/model-class-qwen-models-root-audit.out" 'source_path: .*/qwen-cla
 grep 'model_class_source_metadata_status: header-only' "$ROOT/model-class-qwen-models-root-audit.out"
 
 QWEN_COLLECTION_SOURCE="${TMPDIR:-/tmp}/yvex-qwen-tensor-collection-test-$$"
-rm -rf "$QWEN_COLLECTION_SOURCE"
+yvex_test_cleanup "$QWEN_COLLECTION_SOURCE"
 mkdir -p "$QWEN_COLLECTION_SOURCE"
 printf '{}\n' > "$QWEN_COLLECTION_SOURCE/config.json"
 printf '{}\n' > "$QWEN_COLLECTION_SOURCE/tokenizer.json"
@@ -2137,7 +2139,7 @@ grep 'output_head.entry.output.canonical_role: model.output_head.weight' "$ROOT/
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role output-head --source "$QWEN_COLLECTION_SOURCE" --check-output-contract audit > "$ROOT/output-contract-qwen-output-head-audit.out"
 
 TOKENIZER_COMPLETE_SOURCE="${TMPDIR:-/tmp}/yvex-tokenizer-map-complete-test-$$"
-rm -rf "$TOKENIZER_COMPLETE_SOURCE"
+yvex_test_cleanup "$TOKENIZER_COMPLETE_SOURCE"
 mkdir -p "$TOKENIZER_COMPLETE_SOURCE"
 cat > "$TOKENIZER_COMPLETE_SOURCE/config.json" <<'JSON'
 {
@@ -2295,7 +2297,7 @@ grep 'runtime_claim: unsupported' "$ROOT/tokenizer-map-gemma-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/tokenizer-map-gemma-audit.out"
 
 TOKENIZER_MISSING_SOURCE="${TMPDIR:-/tmp}/yvex-tokenizer-map-missing-test-$$"
-rm -rf "$TOKENIZER_MISSING_SOURCE"
+yvex_test_cleanup "$TOKENIZER_MISSING_SOURCE"
 mkdir -p "$TOKENIZER_MISSING_SOURCE"
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --source "$TOKENIZER_MISSING_SOURCE" --audit > "$ROOT/tokenizer-map-metadata-missing-audit.out"
 grep 'tokenizer_map_status: metadata-missing' "$ROOT/tokenizer-map-metadata-missing-audit.out"
@@ -2303,10 +2305,10 @@ grep 'top_blocker: missing-tokenizer-sidecars' "$ROOT/tokenizer-map-metadata-mis
 grep 'next_required_rows: V010.MAP.7' "$ROOT/tokenizer-map-metadata-missing-audit.out"
 grep 'runtime_claim: unsupported' "$ROOT/tokenizer-map-metadata-missing-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/tokenizer-map-metadata-missing-audit.out"
-rm -rf "$TOKENIZER_MISSING_SOURCE"
+yvex_test_cleanup "$TOKENIZER_MISSING_SOURCE"
 
 TOKENIZER_INCOMPLETE_SOURCE="${TMPDIR:-/tmp}/yvex-tokenizer-map-incomplete-test-$$"
-rm -rf "$TOKENIZER_INCOMPLETE_SOURCE"
+yvex_test_cleanup "$TOKENIZER_INCOMPLETE_SOURCE"
 mkdir -p "$TOKENIZER_INCOMPLETE_SOURCE"
 printf '{"vocab_size":16}\n' > "$TOKENIZER_INCOMPLETE_SOURCE/config.json"
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --source "$TOKENIZER_INCOMPLETE_SOURCE" --audit > "$ROOT/tokenizer-map-incomplete-audit.out"
@@ -2315,10 +2317,10 @@ grep 'vocab_size: 16' "$ROOT/tokenizer-map-incomplete-audit.out"
 grep 'tokenizer_json_status: missing' "$ROOT/tokenizer-map-incomplete-audit.out"
 grep 'tokenizer_runtime_status: not-implemented' "$ROOT/tokenizer-map-incomplete-audit.out"
 grep 'next_required_rows: V010.MAP.7' "$ROOT/tokenizer-map-incomplete-audit.out"
-rm -rf "$TOKENIZER_INCOMPLETE_SOURCE"
+yvex_test_cleanup "$TOKENIZER_INCOMPLETE_SOURCE"
 
 TOKENIZER_MISMATCH_SOURCE="${TMPDIR:-/tmp}/yvex-tokenizer-map-mismatch-test-$$"
-rm -rf "$TOKENIZER_MISMATCH_SOURCE"
+yvex_test_cleanup "$TOKENIZER_MISMATCH_SOURCE"
 cp -R "$TOKENIZER_COMPLETE_SOURCE" "$TOKENIZER_MISMATCH_SOURCE"
 perl -0pi -e 's/"vocab_size": 16/"vocab_size": 17/' "$TOKENIZER_MISMATCH_SOURCE/config.json"
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --source "$TOKENIZER_MISMATCH_SOURCE" --audit > "$ROOT/tokenizer-map-mismatch-audit.out"
@@ -2327,10 +2329,10 @@ grep 'vocab_size: 17' "$ROOT/tokenizer-map-mismatch-audit.out"
 grep 'output_head_vocab_relation_status: vocab-size-mismatch-output-head' "$ROOT/tokenizer-map-mismatch-audit.out"
 grep 'runtime_claim: unsupported' "$ROOT/tokenizer-map-mismatch-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/tokenizer-map-mismatch-audit.out"
-rm -rf "$TOKENIZER_MISMATCH_SOURCE"
+yvex_test_cleanup "$TOKENIZER_MISMATCH_SOURCE"
 
 TOKENIZER_MALFORMED_SOURCE="${TMPDIR:-/tmp}/yvex-tokenizer-map-malformed-test-$$"
-rm -rf "$TOKENIZER_MALFORMED_SOURCE"
+yvex_test_cleanup "$TOKENIZER_MALFORMED_SOURCE"
 cp -R "$TOKENIZER_COMPLETE_SOURCE" "$TOKENIZER_MALFORMED_SOURCE"
 printf '{"tokenizer_class":' > "$TOKENIZER_MALFORMED_SOURCE/tokenizer_config.json"
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --source "$TOKENIZER_MALFORMED_SOURCE" --audit > "$ROOT/tokenizer-map-malformed-audit.out"
@@ -2338,8 +2340,8 @@ grep 'tokenizer_map_status: tokenizer-metadata-malformed' "$ROOT/tokenizer-map-m
 grep 'tokenizer_config_status: malformed' "$ROOT/tokenizer-map-malformed-audit.out"
 grep 'runtime_claim: unsupported' "$ROOT/tokenizer-map-malformed-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/tokenizer-map-malformed-audit.out"
-rm -rf "$TOKENIZER_MALFORMED_SOURCE"
-rm -rf "$TOKENIZER_COMPLETE_SOURCE"
+yvex_test_cleanup "$TOKENIZER_MALFORMED_SOURCE"
+yvex_test_cleanup "$TOKENIZER_COMPLETE_SOURCE"
 
 MISSING_ROLE_COMPLETE_SOURCE="${TMPDIR:-/tmp}/yvex-missing-role-complete-test-$$"
 make_missing_role_source "$MISSING_ROLE_COMPLETE_SOURCE" complete
@@ -2557,7 +2559,7 @@ grep 'top_blocker: ambiguous-output-head-tensor' "$ROOT/tensor-mapping-gate-qwen
 grep 'next: V010.MAP.9' "$ROOT/tensor-mapping-gate-qwen-ambiguous.out"
 
 MISSING_ROLE_MISSING_ROOT="$ROOT/missing-role-missing-root"
-rm -rf "$MISSING_ROLE_MISSING_ROOT"
+yvex_test_cleanup "$MISSING_ROLE_MISSING_ROOT"
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --models-root "$MISSING_ROLE_MISSING_ROOT" > "$ROOT/missing-role-qwen-missing-source.out"
 grep 'missing-roles: qwen3-8b \[blocked\]' "$ROOT/missing-role-qwen-missing-source.out"
 grep 'source_roles: 0/12 present, 12 missing, 0 ambiguous' "$ROOT/missing-role-qwen-missing-source.out"
@@ -2653,7 +2655,7 @@ grep 'top_blocker: missing-qwen-source-path' "$ROOT/qtype-policy-qwen-missing-so
 grep 'next: V010.MAP.9' "$ROOT/qtype-policy-qwen-missing-source.out"
 
 QTYPE_MISSING_DTYPE_SOURCE="${TMPDIR:-/tmp}/yvex-qtype-policy-missing-dtype-test-$$"
-rm -rf "$QTYPE_MISSING_DTYPE_SOURCE"
+yvex_test_cleanup "$QTYPE_MISSING_DTYPE_SOURCE"
 cp -R "$MODEL_TARGET_QTYPE_SOURCE" "$QTYPE_MISSING_DTYPE_SOURCE"
 rm -f "$QTYPE_MISSING_DTYPE_SOURCE"/*.safetensors
 "$YVEX_BIN" model-target quant-policy qwen3-8b --source "$QTYPE_MISSING_DTYPE_SOURCE" > "$ROOT/qtype-policy-qwen-missing-dtype.out"
@@ -2661,7 +2663,7 @@ grep 'qtype-policy: qwen3-8b \[blocked\]' "$ROOT/qtype-policy-qwen-missing-dtype
 grep 'source_dtype: F32=0 F16=0 BF16=0 other=0' "$ROOT/qtype-policy-qwen-missing-dtype.out"
 grep 'top_blocker: missing-source-dtype-profile' "$ROOT/qtype-policy-qwen-missing-dtype.out"
 grep 'next: V010.MAP.9' "$ROOT/qtype-policy-qwen-missing-dtype.out"
-rm -rf "$QTYPE_MISSING_DTYPE_SOURCE"
+yvex_test_cleanup "$QTYPE_MISSING_DTYPE_SOURCE"
 
 "$YVEX_BIN" model-target quant-policy qwen3-8b --source "$MISSING_ROLE_NO_K_SOURCE" > "$ROOT/qtype-policy-qwen-blocked-gate.out"
 grep 'qtype-policy: qwen3-8b \[blocked\]' "$ROOT/qtype-policy-qwen-blocked-gate.out"
@@ -2706,12 +2708,12 @@ grep 'source requires DIR' "$ROOT/qtype-policy-missing-source-arg.err"
 expect_rc 2 "$YVEX_BIN" model-target quant-policy qwen3-8b --models-root > "$ROOT/qtype-policy-missing-models-root.out" 2> "$ROOT/qtype-policy-missing-models-root.err"
 grep 'models-root requires DIR' "$ROOT/qtype-policy-missing-models-root.err"
 
-rm -rf "$MISSING_ROLE_COMPLETE_SOURCE" "$MISSING_ROLE_NO_K_SOURCE" \
+yvex_test_cleanup "$MISSING_ROLE_COMPLETE_SOURCE" "$MISSING_ROLE_NO_K_SOURCE" \
   "$MISSING_ROLE_NO_HEAD_SOURCE" "$MISSING_ROLE_NO_METADATA_SOURCE" \
   "$MISSING_ROLE_AMBIG_SOURCE"
 
 QWEN_OUTPUT_HEAD_MISSING_SOURCE="${TMPDIR:-/tmp}/yvex-qwen-output-head-missing-test-$$"
-rm -rf "$QWEN_OUTPUT_HEAD_MISSING_SOURCE"
+yvex_test_cleanup "$QWEN_OUTPUT_HEAD_MISSING_SOURCE"
 mkdir -p "$QWEN_OUTPUT_HEAD_MISSING_SOURCE"
 python3 - "$QWEN_OUTPUT_HEAD_MISSING_SOURCE/model.safetensors" <<'PY'
 import json
@@ -2748,10 +2750,10 @@ grep 'output_head_missing_status: missing' "$ROOT/output-head-qwen-missing-head-
 grep 'top_blocker: missing-output-head-tensor' "$ROOT/output-head-qwen-missing-head-audit.out"
 grep 'runtime_claim: unsupported' "$ROOT/output-head-qwen-missing-head-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/output-head-qwen-missing-head-audit.out"
-rm -rf "$QWEN_OUTPUT_HEAD_MISSING_SOURCE"
+yvex_test_cleanup "$QWEN_OUTPUT_HEAD_MISSING_SOURCE"
 
 QWEN_OUTPUT_HEAD_AMBIGUOUS_SOURCE="${TMPDIR:-/tmp}/yvex-qwen-output-head-ambiguous-test-$$"
-rm -rf "$QWEN_OUTPUT_HEAD_AMBIGUOUS_SOURCE"
+yvex_test_cleanup "$QWEN_OUTPUT_HEAD_AMBIGUOUS_SOURCE"
 mkdir -p "$QWEN_OUTPUT_HEAD_AMBIGUOUS_SOURCE"
 python3 - "$QWEN_OUTPUT_HEAD_AMBIGUOUS_SOURCE/model.safetensors" <<'PY'
 import json
@@ -2791,10 +2793,10 @@ grep 'output_head_ambiguous_count: 1' "$ROOT/output-head-qwen-ambiguous-audit.ou
 grep 'output_head_mapping_status: ambiguous' "$ROOT/output-head-qwen-ambiguous-audit.out"
 grep 'runtime_claim: unsupported' "$ROOT/output-head-qwen-ambiguous-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/output-head-qwen-ambiguous-audit.out"
-rm -rf "$QWEN_OUTPUT_HEAD_AMBIGUOUS_SOURCE"
+yvex_test_cleanup "$QWEN_OUTPUT_HEAD_AMBIGUOUS_SOURCE"
 
 QWEN_TENSOR_MAP_UNKNOWN_SOURCE="${TMPDIR:-/tmp}/yvex-qwen-tensor-map-unknown-test-$$"
-rm -rf "$QWEN_TENSOR_MAP_UNKNOWN_SOURCE"
+yvex_test_cleanup "$QWEN_TENSOR_MAP_UNKNOWN_SOURCE"
 mkdir -p "$QWEN_TENSOR_MAP_UNKNOWN_SOURCE"
 printf '{}\n' > "$QWEN_TENSOR_MAP_UNKNOWN_SOURCE/config.json"
 printf '{}\n' > "$QWEN_TENSOR_MAP_UNKNOWN_SOURCE/tokenizer.json"
@@ -2845,8 +2847,8 @@ grep 'tensor_map_unmapped_unknown_count: 1' "$ROOT/tensor-map-qwen-unknown-audit
 grep 'tensor_map.entry.' "$ROOT/tensor-map-qwen-unknown-audit.out"
 grep 'model.layers.0.weird_unknown.weight' "$ROOT/tensor-map-qwen-unknown-audit.out"
 grep 'mapping_status: unmapped-unknown' "$ROOT/tensor-map-qwen-unknown-audit.out"
-rm -rf "$QWEN_TENSOR_MAP_UNKNOWN_SOURCE"
-rm -rf "$QWEN_COLLECTION_SOURCE"
+yvex_test_cleanup "$QWEN_TENSOR_MAP_UNKNOWN_SOURCE"
+yvex_test_cleanup "$QWEN_COLLECTION_SOURCE"
 
 BAD_RUNTIME_CLAIM='runtime_claim: support''ed'
 BAD_GENERATION_READY='generation_ready: tr''ue'
@@ -2856,10 +2858,10 @@ BAD_RELEASE_READY='release_ready: tr''ue'
 ! grep "$BAD_GENERATION_READY" "$ROOT/model-class-qwen-audit.out"
 ! grep "$BAD_BENCHMARK_MEASURED" "$ROOT/model-class-qwen-audit.out"
 ! grep "$BAD_RELEASE_READY" "$ROOT/model-class-qwen-audit.out"
-rm -rf "$QWEN_CLASS_SOURCE"
+yvex_test_cleanup "$QWEN_CLASS_SOURCE"
 
 GEMMA_CLASS_SOURCE="${TMPDIR:-/tmp}/yvex-gemma-class-profile-test-$$"
-rm -rf "$GEMMA_CLASS_SOURCE"
+yvex_test_cleanup "$GEMMA_CLASS_SOURCE"
 mkdir -p "$GEMMA_CLASS_SOURCE"
 printf '{}\n' > "$GEMMA_CLASS_SOURCE/config.json"
 printf '{}\n' > "$GEMMA_CLASS_SOURCE/tokenizer.json"
@@ -3121,7 +3123,7 @@ grep 'output_head.entry.output.canonical_role: model.output_head.weight' "$ROOT/
 "$YVEX_BIN" model-target tensor-map gemma-4-12b-it --role output-head --source "$GEMMA_CLASS_SOURCE" --check-output-contract audit > "$ROOT/output-contract-gemma-output-head-audit.out"
 
 GEMMA_TENSOR_MAP_UNKNOWN_SOURCE="${TMPDIR:-/tmp}/yvex-gemma-tensor-map-unknown-test-$$"
-rm -rf "$GEMMA_TENSOR_MAP_UNKNOWN_SOURCE"
+yvex_test_cleanup "$GEMMA_TENSOR_MAP_UNKNOWN_SOURCE"
 mkdir -p "$GEMMA_TENSOR_MAP_UNKNOWN_SOURCE"
 printf '{}\n' > "$GEMMA_TENSOR_MAP_UNKNOWN_SOURCE/config.json"
 printf '{}\n' > "$GEMMA_TENSOR_MAP_UNKNOWN_SOURCE/tokenizer.json"
@@ -3171,10 +3173,10 @@ grep 'tensor_map_mapped_total_count: 12' "$ROOT/tensor-map-gemma-unknown-audit.o
 grep 'tensor_map_unmapped_unknown_count: 1' "$ROOT/tensor-map-gemma-unknown-audit.out"
 grep 'model.layers.0.weird_unknown.weight' "$ROOT/tensor-map-gemma-unknown-audit.out"
 grep 'mapping_status: unmapped-unknown' "$ROOT/tensor-map-gemma-unknown-audit.out"
-rm -rf "$GEMMA_TENSOR_MAP_UNKNOWN_SOURCE"
+yvex_test_cleanup "$GEMMA_TENSOR_MAP_UNKNOWN_SOURCE"
 
 GEMMA_TENSOR_MAP_NORM_SOURCE="${TMPDIR:-/tmp}/yvex-gemma-tensor-map-norm-test-$$"
-rm -rf "$GEMMA_TENSOR_MAP_NORM_SOURCE"
+yvex_test_cleanup "$GEMMA_TENSOR_MAP_NORM_SOURCE"
 mkdir -p "$GEMMA_TENSOR_MAP_NORM_SOURCE"
 python3 - "$GEMMA_TENSOR_MAP_NORM_SOURCE/model.safetensors" <<'PY'
 import json
@@ -3212,13 +3214,13 @@ grep 'tensor_map_runtime_role_coverage_status: report-only' "$ROOT/tensor-map-ge
 grep 'runtime_claim: unsupported' "$ROOT/tensor-map-gemma-norm-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/tensor-map-gemma-norm-audit.out"
 grep 'release_ready: false' "$ROOT/tensor-map-gemma-norm-audit.out"
-rm -rf "$GEMMA_TENSOR_MAP_NORM_SOURCE"
+yvex_test_cleanup "$GEMMA_TENSOR_MAP_NORM_SOURCE"
 
 ! grep "$BAD_RUNTIME_CLAIM" "$ROOT/model-class-gemma-audit.out"
 ! grep "$BAD_GENERATION_READY" "$ROOT/model-class-gemma-audit.out"
 ! grep "$BAD_BENCHMARK_MEASURED" "$ROOT/model-class-gemma-audit.out"
 ! grep "$BAD_RELEASE_READY" "$ROOT/model-class-gemma-audit.out"
-rm -rf "$GEMMA_CLASS_SOURCE"
+yvex_test_cleanup "$GEMMA_CLASS_SOURCE"
 
 expect_rc 2 "$YVEX_BIN" model-target class-profile > "$ROOT/model-class-missing-target.out" 2> "$ROOT/model-class-missing-target.err"
 grep 'requires TARGET' "$ROOT/model-class-missing-target.err"

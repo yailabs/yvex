@@ -10,40 +10,18 @@
  * Effects: renders help, parser errors, runtime errors, or typed KV reports.
  * Failure: returns parser, report-build, or renderer exit codes. */
 #include "src/cli/input/private.h"
-#include "src/cli/render/private.h"
 #include "src/cli/io/private.h"
+#include "src/cli/render/private.h"
 
 #include <stdio.h>
 #include <string.h>
-
-/* Purpose: Parse kv print parse error into typed CLI state (`kv_cli_print_parse_error`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int kv_cli_print_parse_error(const yvex_error *err)
-{
-    yvex_cli_out_writef(yvex_cli_out_stderr(), "%s\n",
-                        yvex_error_message(err));
-    return 2;
-}
-
-/* Purpose: Render kv print runtime error from typed facts (`kv_cli_print_runtime_error`). */
-static int kv_cli_print_runtime_error(const yvex_error *err, int status)
-{
-    yvex_cli_out_writef(yvex_cli_out_stderr(), "yvex: %s: %s\n",
-                        yvex_error_where(err),
-                        yvex_error_message(err));
-    return exit_for_status(status);
-}
 
 /* Purpose: dispatch the KV command through parser, domain/report builder, and typed renderer.
  * Inputs: Borrowed typed facts.
  * Effects: Writes through CLI I/O only.
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
-int yvex_kv_command(int argc, char **argv)
-{
+int yvex_kv_command(int argc, char **argv) {
     yvex_kv_args args;
     yvex_kv_report report;
     yvex_error err;
@@ -54,7 +32,8 @@ int yvex_kv_command(int argc, char **argv)
 
     rc = yvex_kv_args_parse(argc, argv, &args, &err);
     if (rc != YVEX_OK) {
-        return kv_cli_print_parse_error(&err);
+        yvex_cli_out_writef(yvex_cli_out_stderr(), "%s\n", yvex_error_message(&err));
+        return 2;
     }
     if (args.help_requested) {
         return yvex_kv_render_help(yvex_cli_out_stdout());
@@ -68,16 +47,12 @@ int yvex_kv_command(int argc, char **argv)
 
     if (rc != YVEX_OK) {
         if (report.status) {
-            (void)yvex_kv_render(yvex_cli_out_stdout(),
-                                 args.request.report_mode,
-                                 &report);
+            (void)yvex_kv_render(yvex_cli_out_stdout(), args.request.report_mode, &report);
         }
-        return kv_cli_print_runtime_error(&err, rc);
+        return print_yvex_error(&err, exit_for_status(rc));
     }
 
-    (void)yvex_kv_render(yvex_cli_out_stdout(),
-                         args.request.report_mode,
-                         &report);
+    (void)yvex_kv_render(yvex_cli_out_stdout(), args.request.report_mode, &report);
     return report.exit_code;
 }
 
@@ -86,7 +61,6 @@ int yvex_kv_command(int argc, char **argv)
  * Effects: CLI-local effects only.
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
-void yvex_kv_help(FILE *fp)
-{
+void yvex_kv_help(FILE *fp) {
     (void)yvex_kv_render_help(fp);
 }

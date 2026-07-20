@@ -7,6 +7,8 @@
 
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/quant-policy-cli}
 
@@ -15,7 +17,7 @@ fail() {
     exit 1
 }
 
-rm -rf "$OUT_DIR"
+yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 cat > "$OUT_DIR/policy.json" <<'JSON'

@@ -13,11 +13,11 @@
 #include <stddef.h>
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
-#include <yvex/model.h>
-#include <yvex/qtype.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/gguf.h>
 #include <yvex/internal/gguf_writer.h>
+#include <yvex/model.h>
+#include <yvex/qtype.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,37 +32,43 @@ typedef struct {
     unsigned long long bytes;
     int active;
 } yvex_artifact_identity_stream;
-void yvex_artifact_identity_stream_init(
-    yvex_artifact_identity_stream *stream);
-int yvex_artifact_identity_stream_update(
-    yvex_artifact_identity_stream *stream,
-    const unsigned char *bytes,
-    size_t byte_count,
-    yvex_error *err);
-int yvex_artifact_identity_stream_final(
-    yvex_artifact_identity_stream *stream,
-    unsigned long long expected_bytes,
-    char out_hex[YVEX_SHA256_HEX_CAP],
-    yvex_error *err);
+void yvex_artifact_identity_stream_init(yvex_artifact_identity_stream *stream);
+int yvex_artifact_identity_stream_update(yvex_artifact_identity_stream *stream,
+                                         const unsigned char *bytes, size_t byte_count,
+                                         yvex_error *err);
+int yvex_artifact_identity_stream_final(yvex_artifact_identity_stream *stream,
+                                        unsigned long long expected_bytes,
+                                        char out_hex[YVEX_SHA256_HEX_CAP], yvex_error *err);
+typedef struct {
+    unsigned long long tensor_count;
+    unsigned long long payload_bytes_read;
+    char payload_byte_identity[YVEX_SHA256_HEX_CAP];
+    int complete;
+} yvex_artifact_payload_identity;
+int yvex_artifact_payload_identity_compute(const yvex_artifact *artifact, const yvex_gguf *gguf,
+                                           size_t buffer_bytes,
+                                           yvex_artifact_payload_identity *out,
+                                           yvex_error *err);
 
 /* Roundtrip Gate contract. */
-#define YVEX_GGUF_OFFICIAL_READER_REVISION \
-    "af97976c7810cdabb1863172f31c432dab767de7"
-#define YVEX_SELECTED_DEEPSEEK_ARTIFACT_FILENAME \
-    "deepseek-v4-flash-q8_0-q2_k-v1.gguf"
-#define YVEX_SELECTED_DEEPSEEK_ARTIFACT_IDENTITY \
+#define YVEX_GGUF_OFFICIAL_READER_REVISION "af97976c7810cdabb1863172f31c432dab767de7"
+#define YVEX_SELECTED_DEEPSEEK_ARTIFACT_FILENAME "deepseek-v4-flash-q8_0-q2_k-v1.gguf"
+#define YVEX_SELECTED_DEEPSEEK_ARTIFACT_IDENTITY                                                   \
     "01b2bed4f070d0a3fdb02e546764b3a49cb69886eebe17b4877d20294725682c"
-#define YVEX_SELECTED_DEEPSEEK_PROFILE_NAME \
-    "deepseek-v4-flash-q8_0-q2_k-v1"
-#define YVEX_SELECTED_DEEPSEEK_PROFILE_IDENTITY \
+#define YVEX_SELECTED_DEEPSEEK_PROFILE_NAME "deepseek-v4-flash-q8_0-q2_k-v1"
+#define YVEX_SELECTED_DEEPSEEK_PROFILE_IDENTITY                                                    \
     "04be09e124fd997ae3b785d0d3018f9d571cb6b96df5488d0ab21de3345bce25"
-#define YVEX_SELECTED_DEEPSEEK_EXECUTION_IDENTITY \
+#define YVEX_SELECTED_DEEPSEEK_EXECUTION_IDENTITY                                                  \
     "b81f3c5d670737bf20c938e635a1bffdbb0d60f885f994225a02225bb7ba51db"
-#define YVEX_SELECTED_DEEPSEEK_PAYLOAD_IDENTITY \
+#define YVEX_SELECTED_DEEPSEEK_PAYLOAD_PLAN_IDENTITY                                               \
+    "6c6289c096b5502eba98498bf498c80d9ca9c13ab06f5dcb62075e372274e97b"
+#define YVEX_SELECTED_DEEPSEEK_PAYLOAD_BYTE_IDENTITY                                               \
+    "249277b42eb1aa231bddcb33b33ae3d805f3aa5991eaa99ae091f2ea9b928eb0"
+#define YVEX_SELECTED_DEEPSEEK_PAYLOAD_IDENTITY                                                    \
     "e22b3678d131d334f154a93214bdddfafc172c9869f4c52db28fea198eaa9165"
-#define YVEX_SELECTED_DEEPSEEK_TRANSFORM_IDENTITY \
+#define YVEX_SELECTED_DEEPSEEK_TRANSFORM_IDENTITY                                                  \
     "1c5ceab43fa9f9bf437aacc3b4b3c246ff26446ab0d7abd22ea642ce726017f5"
-#define YVEX_SELECTED_DEEPSEEK_WRITER_PLAN_IDENTITY \
+#define YVEX_SELECTED_DEEPSEEK_WRITER_PLAN_IDENTITY                                                \
     "4b47814e06c43b3426efcaab72b836596c42358a7c59ea5619ddd70c0eefe9fd"
 #define YVEX_SELECTED_DEEPSEEK_FILE_BYTES 102408545440ull
 #define YVEX_SELECTED_DEEPSEEK_PAYLOAD_BYTES 102396843592ull
@@ -130,8 +136,11 @@ typedef struct yvex_complete_artifact_admission {
     char profile_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
     char profile_name[64];
     char quant_execution_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    char payload_plan_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    char payload_byte_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
     char writer_plan_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
     char artifact_identity[YVEX_SHA256_HEX_CAP];
+    char admission_identity[YVEX_SHA256_HEX_CAP];
     char official_reader_revision[41];
     int tokenizer_complete;
     int native_reader_accepted;
@@ -139,8 +148,73 @@ typedef struct yvex_complete_artifact_admission {
     int payload_integrity_accepted;
     int materialization_input_ready;
     int runtime_supported;
+    unsigned long long artifact_bytes_hashed;
+    int artifact_identity_verified;
     int complete;
 } yvex_complete_artifact_admission;
+
+/* Physical compatibility contract. */
+#define YVEX_ARTIFACT_PHYSICAL_COMPATIBILITY_SCHEMA_VERSION 1u
+typedef enum {
+    YVEX_ARTIFACT_COMPATIBILITY_OK = 0,
+    YVEX_ARTIFACT_COMPATIBILITY_INVALID_ARGUMENT,
+    YVEX_ARTIFACT_COMPATIBILITY_WRITER_PLAN,
+    YVEX_ARTIFACT_COMPATIBILITY_ADMISSION,
+    YVEX_ARTIFACT_COMPATIBILITY_SNAPSHOT,
+    YVEX_ARTIFACT_COMPATIBILITY_IDENTITY,
+    YVEX_ARTIFACT_COMPATIBILITY_LAYOUT,
+    YVEX_ARTIFACT_COMPATIBILITY_TENSOR_COUNT,
+    YVEX_ARTIFACT_COMPATIBILITY_TENSOR_NAME,
+    YVEX_ARTIFACT_COMPATIBILITY_TENSOR_RANK,
+    YVEX_ARTIFACT_COMPATIBILITY_TENSOR_DIMENSION,
+    YVEX_ARTIFACT_COMPATIBILITY_TENSOR_QTYPE,
+    YVEX_ARTIFACT_COMPATIBILITY_TENSOR_BYTES,
+    YVEX_ARTIFACT_COMPATIBILITY_TENSOR_OFFSET,
+    YVEX_ARTIFACT_COMPATIBILITY_TENSOR_RANGE
+} yvex_artifact_compatibility_code;
+typedef struct {
+    yvex_artifact_compatibility_code code;
+    unsigned long long tensor_index;
+    unsigned int dimension;
+    unsigned long long expected;
+    unsigned long long actual;
+    char field[64];
+    char tensor_name[YVEX_GGUF_WRITER_NAME_CAP];
+} yvex_artifact_compatibility_failure;
+typedef struct {
+    unsigned int schema_version;
+    unsigned long long source_snapshot_identity;
+    unsigned long long mapping_identity;
+    unsigned long long tensor_count;
+    unsigned long long tensors_compared;
+    unsigned long long payload_bytes;
+    unsigned long long payload_bytes_read;
+    char writer_plan_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    char admitted_writer_plan_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    char artifact_identity[YVEX_SHA256_HEX_CAP];
+    char payload_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    char writer_transform_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    char admitted_transform_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    char writer_profile_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    char admitted_profile_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    char quant_execution_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    char payload_plan_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    char payload_byte_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    int physical_payload_compatible;
+    int artifact_rebuild_required;
+    int materialization_rebuild_required;
+    int tensor_inventory_equal;
+    int qtype_equal;
+    int layout_equal;
+    int offset_equal;
+    int payload_digest_equal;
+} yvex_artifact_physical_compatibility;
+
+int yvex_artifact_physical_compatibility_validate(
+    const yvex_gguf_writer_plan *writer_plan, const yvex_complete_artifact_admission *admission,
+    const yvex_artifact *artifact, const yvex_gguf *gguf, yvex_artifact_physical_compatibility *out,
+    yvex_artifact_compatibility_failure *failure, yvex_error *err);
+
 typedef enum {
     YVEX_ARTIFACT_DESCRIPTOR_REFUSED = 0,
     YVEX_ARTIFACT_DESCRIPTOR_REPORT_ONLY = 1,
@@ -156,17 +230,19 @@ typedef struct {
     int materialization_input_ready;
     int runtime_supported;
 } yvex_artifact_descriptor_fact;
-int yvex_complete_artifact_admit(
-    const yvex_artifact_admission_request *request,
-    yvex_complete_artifact_admission *out,
-    yvex_artifact_admission_failure *failure,
-    yvex_error *err);
-const char *yvex_artifact_class_name(yvex_artifact_class artifact_class);
-const char *yvex_artifact_admission_code_name(
-    yvex_artifact_admission_code code);
-int yvex_artifact_descriptor_from_admission(
+int yvex_complete_artifact_admit(const yvex_artifact_admission_request *request,
+                                 yvex_complete_artifact_admission *out,
+                                 yvex_artifact_admission_failure *failure, yvex_error *err);
+int yvex_artifact_admission_identity_verify(
+    const yvex_artifact *artifact, yvex_complete_artifact_admission *admission,
+    yvex_artifact_admission_failure *failure, yvex_error *err);
+int yvex_artifact_admission_record_identity(
     const yvex_complete_artifact_admission *admission,
-    yvex_artifact_descriptor_fact *fact);
+    char output[YVEX_SHA256_HEX_CAP], yvex_error *err);
+const char *yvex_artifact_class_name(yvex_artifact_class artifact_class);
+const char *yvex_artifact_admission_code_name(yvex_artifact_admission_code code);
+int yvex_artifact_descriptor_from_admission(const yvex_complete_artifact_admission *admission,
+                                            yvex_artifact_descriptor_fact *fact);
 
 /* Materialize contract. */
 #define YVEX_MATERIALIZATION_IDENTITY_CAP 65u
@@ -304,57 +380,45 @@ typedef struct {
 } yvex_materialization_summary;
 typedef struct yvex_materialization_plan yvex_materialization_plan;
 typedef struct yvex_materialization_session yvex_materialization_session;
-typedef void (*yvex_materialization_progress_fn)(
-    void *context,
-    const yvex_materialization_summary *summary,
-    const yvex_materialized_tensor_binding *binding);
+typedef void (*yvex_materialization_progress_fn)(void *context,
+                                                 const yvex_materialization_summary *summary,
+                                                 const yvex_materialized_tensor_binding *binding);
 void yvex_materialization_options_default(yvex_materialization_options *options);
 const char *yvex_materialization_status_name(yvex_materialization_status status);
 const char *yvex_materialization_failure_name(yvex_materialization_failure_code code);
 void yvex_materialization_plan_close(yvex_materialization_plan *plan);
-const yvex_materialization_summary *yvex_materialization_plan_summary(
-    const yvex_materialization_plan *plan);
-const yvex_materialized_tensor_binding *yvex_materialization_plan_find_name(
-    const yvex_materialization_plan *plan,
-    const char *name);
-int yvex_materialization_session_open(
-    yvex_materialization_session **out,
-    const yvex_materialization_plan *plan,
-    const yvex_artifact *artifact,
-    const yvex_materialization_options *options,
-    yvex_materialization_failure *failure,
-    yvex_error *err);
-int yvex_materialization_session_commit(
-    yvex_materialization_session *session,
-    yvex_materialization_failure *failure,
-    yvex_error *err);
+const yvex_materialization_summary *
+yvex_materialization_plan_summary(const yvex_materialization_plan *plan);
+const yvex_materialized_tensor_binding *
+yvex_materialization_plan_find_name(const yvex_materialization_plan *plan, const char *name);
+int yvex_materialization_session_open(yvex_materialization_session **out,
+                                      const yvex_materialization_plan *plan,
+                                      const yvex_artifact *artifact,
+                                      const yvex_materialization_options *options,
+                                      yvex_materialization_failure *failure, yvex_error *err);
+int yvex_materialization_session_commit(yvex_materialization_session *session,
+                                        yvex_materialization_failure *failure, yvex_error *err);
 void yvex_materialization_session_close(yvex_materialization_session *session);
-const yvex_materialization_summary *yvex_materialization_session_summary(
-    const yvex_materialization_session *session);
-const yvex_materialized_tensor_binding *yvex_materialization_session_tensor_at(
-    const yvex_materialization_session *session,
-    unsigned long long index);
-int yvex_materialization_session_read(
-    yvex_materialization_session *session,
-    const yvex_materialized_tensor_binding *binding,
-    unsigned long long binding_offset,
-    void *dst,
-    size_t len,
-    yvex_materialization_failure *failure,
-    yvex_error *err);
-int yvex_materialization_session_walk_payload(
-    yvex_materialization_session *session,
-    yvex_materialization_progress_fn progress,
-    void *progress_context,
-    yvex_materialization_failure *failure,
-    yvex_error *err);
-int yvex_materialization_session_expert_subview(
-    const yvex_materialization_session *session,
-    const yvex_materialized_tensor_binding *binding,
-    unsigned long long expert_index,
-    yvex_materialized_expert_subview *out,
-    yvex_materialization_failure *failure,
-    yvex_error *err);
+const yvex_materialization_summary *
+yvex_materialization_session_summary(const yvex_materialization_session *session);
+const yvex_materialized_tensor_binding *
+yvex_materialization_session_tensor_at(const yvex_materialization_session *session,
+                                       unsigned long long index);
+int yvex_materialization_session_read(yvex_materialization_session *session,
+                                      const yvex_materialized_tensor_binding *binding,
+                                      unsigned long long binding_offset, void *dst, size_t len,
+                                      yvex_materialization_failure *failure, yvex_error *err);
+int yvex_materialization_session_walk_payload(yvex_materialization_session *session,
+                                              yvex_materialization_progress_fn progress,
+                                              void *progress_context,
+                                              yvex_materialization_failure *failure,
+                                              yvex_error *err);
+int yvex_materialization_session_expert_subview(const yvex_materialization_session *session,
+                                                const yvex_materialized_tensor_binding *binding,
+                                                unsigned long long expert_index,
+                                                yvex_materialized_expert_subview *out,
+                                                yvex_materialization_failure *failure,
+                                                yvex_error *err);
 
 #ifdef __cplusplus
 }

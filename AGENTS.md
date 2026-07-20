@@ -290,6 +290,34 @@ Supported operator modes are `normal`, `table`, and `audit` unless a typed
 surface explicitly owns and tests JSON. Normal output stays compact; audit
 output carries evidence. No mode may imply a higher capability stage.
 
+### Executable reachability
+
+Every first-class milestone that adds or changes executable behavior closes
+with a real operator-reachable command in the main `yvex` CLI. A milestone may
+declare `cli_applicability=not_applicable` only when its project-control owner
+records a repository-grounded `cli_non_applicability_reason`.
+
+Make targets, test binaries, shell scripts, internal live runners, reports, and
+fixtures do not satisfy operator reachability. The CLI command invokes the
+production API directly; it never duplicates, mocks, shells out to, or wraps a
+test implementation. Prefer extending one coherent capability-oriented
+command hierarchy over adding a top-level command for each milestone.
+
+Every closure report classifies:
+
+- `production_capability_available`;
+- `production_api_available`;
+- `internal_live_runner_available`;
+- `operator_command_available`;
+- `end_user_path_available`;
+- `cli_applicability` and, when not applicable, its owned reason.
+
+Every available operator command is listed exactly and executed during
+acceptance. Runtime, graph, backend, artifact execution, residency, KV,
+prefill, decode, logits, sampling, tokenizer, and generation milestones are
+presumed CLI-applicable. Pure documentation or project-control milestones may
+be not applicable when their owner records why no executable behavior changed.
+
 ## 9. Evidence and claim discipline
 
 Use the lowest true evidence stage from the project ledger. A fixture, selected

@@ -1,13 +1,15 @@
 #!/usr/bin/env sh
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN="${YVEX_BIN:-./yvex}"
 ROOT=${YVEX_TEST_OUT_DIR:-build/tests/model-aliases}
 REG="$ROOT/models.local.json"
 MODEL="$ROOT/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
 ALIAS="deepseek4-v4-flash-selected-embed"
 
-rm -rf "$ROOT"
+yvex_test_cleanup "$ROOT"
 mkdir -p "$ROOT"
 
 "$YVEX_BIN" gguf-emit controlled \

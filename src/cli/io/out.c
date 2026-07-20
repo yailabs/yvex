@@ -67,6 +67,18 @@ int yvex_cli_out_char(FILE *fp, int ch)
     return fputc(ch, fp ? fp : stdout);
 }
 
+/* Purpose: force buffered operator bytes to their selected stream.
+ * Inputs: explicit stream, or stdout when absent.
+ * Effects: flushes only the selected CLI-owned stream.
+ * Failure: returns typed I/O refusal for flush or sticky stream failure.
+ * Boundary: transport completion does not alter rendered domain facts. */
+int yvex_cli_out_flush(FILE *fp)
+{
+    FILE *stream = fp ? fp : stdout;
+
+    return fflush(stream) == 0 && !ferror(stream) ? YVEX_OK : YVEX_ERR_IO;
+}
+
 /* Purpose: Compute out stdout for its CLI invariant (`yvex_cli_out_stdout`).
  * Inputs: Borrowed typed facts.
  * Effects: Mutates declared CLI state only.

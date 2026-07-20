@@ -24,53 +24,11 @@
 #include <yvex/internal/artifact.h>
 #include <yvex/internal/graph.h>
 #include <yvex/internal/quant_numeric.h>
-#include <yvex/internal/runtime.h>
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-typedef enum {
-    YVEX_GRAPH_REPORT_KIND_GRAPH = 0, YVEX_GRAPH_REPORT_KIND_MEMORY_PLAN, YVEX_GRAPH_REPORT_KIND_PLAN,
-    YVEX_GRAPH_REPORT_KIND_PRIMITIVE, YVEX_GRAPH_REPORT_KIND_GUARD
-} yvex_graph_report_kind;
-typedef enum {
-    YVEX_GRAPH_REPORT_MODE_NORMAL = 0, YVEX_GRAPH_REPORT_MODE_TABLE, YVEX_GRAPH_REPORT_MODE_AUDIT
-} yvex_graph_report_mode;
-typedef enum {
-    YVEX_GRAPH_ACTION_DUMP = 0, YVEX_GRAPH_ACTION_CHECK, YVEX_GRAPH_ACTION_EXECUTE_FIXTURE,
-    YVEX_GRAPH_ACTION_EXECUTE_PARTIAL, YVEX_GRAPH_ACTION_EXECUTE_SEGMENT, YVEX_GRAPH_ACTION_EXECUTE_OP,
-    YVEX_GRAPH_ACTION_EXECUTE_BLOCK, YVEX_GRAPH_ACTION_EXECUTE_LAYERS
-} yvex_graph_action;
-typedef struct yvex_graph_report_request {
-    yvex_graph_report_kind kind;
-    yvex_graph_action action;
-    yvex_graph_report_mode mode;
-    const char *model, *backend, *segment, *tokens_text, *op, *block, *suite, *activation;
-    unsigned long long sequence_length, context_length, fixture_token, partial_token, token_index, position,
-        head_dim, seq_len, m, k, n, hidden_dim, ffn_dim, experts, expert_id, layers;
-    int execute_fixture, execute_partial, execute_segment, execute_op, execute_block, execute_layers, causal, gated,
-        use_expert, tokens_seen, fixture_token_seen, partial_token_seen, token_index_seen;
-} yvex_graph_report_request;
-typedef struct yvex_graph_report {
-    yvex_graph_report_kind kind;
-    const char *status, *graph_status, *architecture, *model_name, *backend, *backend_status;
-    int backend_capability_tensor_alloc, backend_capability_tensor_read_write, backend_capability_op_embed,
-        backend_capability_op_matmul, backend_capability_op_mlp, backend_capability_op_rms_norm,
-        backend_capability_op_rope, backend_capability_op_attention;
-    unsigned long long value_count, op_count, missing_required_count;
-    const char *memory_status;
-    unsigned long long model_tensor_bytes_known, activation_peak_bytes, total_known_bytes;
-    int execution_ready;
-    const char *reason, *boundary;
-    char *body;
-    size_t body_len, body_cap;
-    int exit_code;
-} yvex_graph_report;
-void yvex_graph_report_clear(yvex_graph_report *report);
-int yvex_graph_report_build(const yvex_graph_report_request *request, yvex_graph_report *report, yvex_error *err);
-int yvex_graph_primitive_report_build(const yvex_graph_report_request *request, yvex_graph_report *report,
-    yvex_error *err);
 typedef struct {
     unsigned int input_ids[4], output_ids[4];
 } yvex_graph_op_edges;

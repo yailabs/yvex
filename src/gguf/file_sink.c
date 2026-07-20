@@ -970,6 +970,8 @@ int yvex_gguf_file_sink_finalize(yvex_gguf_file_sink *sink, yvex_gguf_file_sink_
     file_stat_capture_validated(&sink->summary, &final_stat);
     memcpy(sink->summary.execution_identity, digest.execution_identity,
            sizeof(sink->summary.execution_identity));
+    memcpy(sink->summary.payload_byte_identity, digest.payload_byte_identity,
+           sizeof(sink->summary.payload_byte_identity));
     sink->summary.finalized = 1;
     sink->finalized = 1;
     *out = sink->summary;
@@ -1039,7 +1041,9 @@ int yvex_gguf_file_sink_publish(yvex_gguf_file_sink *sink,
         roundtrip->file_mtime_nanoseconds != sink->summary.validated_mtime_nanoseconds ||
         roundtrip->file_ctime_seconds != sink->summary.validated_ctime_seconds ||
         roundtrip->file_ctime_nanoseconds != sink->summary.validated_ctime_nanoseconds ||
-        strlen(roundtrip->artifact_identity) != 64u)
+        strlen(roundtrip->artifact_identity) != 64u ||
+        strlen(roundtrip->payload_byte_identity) != 64u ||
+        strcmp(roundtrip->payload_byte_identity, sink->summary.payload_byte_identity) != 0)
         return file_sink_fail(failure, YVEX_GGUF_FILE_VALIDATION_REQUIRED, 0, ULLONG_MAX,
                               sink->summary.file_size, roundtrip ? roundtrip->bytes_hashed : 0u, 0u,
                               err, YVEX_ERR_STATE,

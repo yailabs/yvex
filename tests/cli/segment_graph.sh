@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/segment-graph}
 SEGMENT_MODEL="$OUT_DIR/deepseek-test-segment-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf"
@@ -27,7 +29,7 @@ not_contains() {
     ! grep -F "$text" "$file" >/dev/null || fail "$file unexpectedly contained: $text"
 }
 
-rm -rf "$OUT_DIR"
+yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 python3 - "$OUT_DIR" <<'PY'

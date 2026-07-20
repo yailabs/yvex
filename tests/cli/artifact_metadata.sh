@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/cli-artifact-metadata}
 MODEL="$OUT_DIR/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
@@ -110,7 +112,7 @@ with open(dst, "w", encoding="utf-8") as fh:
 PY
 }
 
-rm -rf "$OUT_DIR"
+yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 "$YVEX_BIN" gguf-emit controlled \

@@ -546,6 +546,142 @@ static int quant_build_candidate_decision(yvex_quant_profile_kind profile,
     return YVEX_OK;
 }
 
+/* Purpose: encode one payload scalar.
+ * Inputs: active hash and explicit-width value.
+ * Effects: advances the hash.
+ * Failure: returns false on overflow.
+ * Boundary: recipe identity only. */
+static int payload_u64(yvex_sha256 *hash, unsigned long long value)
+{
+    return yvex_sha256_update_u64(hash, value);
+}
+
+/* Purpose: bind one source value exactly as consumed by byte execution.
+ * Inputs: canonical hash and immutable source value.
+ * Effects: advances only the supplied hash.
+ * Failure: returns false on malformed shape or canonical encoding failure.
+ * Boundary: excludes logical display keys and allocation identities. */
+static int quant_payload_source_identity(yvex_sha256 *hash,
+                                         const yvex_transform_source_value *source)
+{
+    unsigned int dimension;
+
+    if (!hash || !source || !yvex_sha256_update_text(hash, source->source_name) ||
+        !yvex_sha256_update_text(hash, source->shard_name) ||
+        !payload_u64(hash, source->source_tensor_index) || !payload_u64(hash, source->requirement_index) ||
+        !payload_u64(hash, source->source_snapshot_identity) || !payload_u64(hash, source->source_dtype) ||
+        !payload_u64(hash, source->value_dtype) || !payload_u64(hash, source->shape.rank))
+        return 0;
+    for (dimension = 0u; dimension < source->shape.rank; ++dimension)
+        if (!payload_u64(hash, source->shape.dims[dimension]))
+            return 0;
+    return payload_u64(hash, source->relative_begin) && payload_u64(hash, source->relative_end) &&
+           payload_u64(hash, source->requirement_identity) &&
+           payload_u64(hash, source->expert_index) && payload_u64(hash, source->required_uses);
+}
+
+/* Purpose: bind one transformation node and its ordered byte inputs.
+ * Inputs: canonical hash, immutable IR, and terminal producer.
+ * Effects: advances only the supplied hash.
+ * Failure: unresolved inputs or encoding failure return false.
+ * Boundary: records execution geometry without the enclosing Transform IR identity. */
+static int quant_payload_node_identity(yvex_sha256 *hash, const yvex_transform_ir *ir,
+                                       const yvex_transform_node *node)
+{
+    unsigned long long input;
+    unsigned int axis;
+
+    if (!hash || !ir || !node || !payload_u64(hash, node->kind) || !payload_u64(hash, node->input_count) ||
+        !payload_u64(hash, node->axis) || !payload_u64(hash, node->permutation_rank))
+        return 0;
+    for (axis = 0u; axis < node->permutation_rank; ++axis)
+        if (!payload_u64(hash, node->permutation[axis]))
+            return 0;
+    if (!payload_u64(hash, node->expert_count) || !payload_u64(hash, node->packing_factor) ||
+        !payload_u64(hash, node->scale_group_width) || !payload_u64(hash, node->scale_block_rows) ||
+        !payload_u64(hash, node->scale_block_columns) || !payload_u64(hash, node->numeric) ||
+        !payload_u64(hash, node->ordering) || !payload_u64(hash, node->payload_execution_required))
+        return 0;
+    for (input = 0ull; input < node->input_count; ++input) {
+        const yvex_transform_value *value = yvex_transform_ir_node_input_at(ir, node, input);
+        const yvex_transform_source_value *source;
+
+        if (!value || !payload_u64(hash, input) || !payload_u64(hash, value->kind) ||
+            !payload_u64(hash, value->dtype) || !payload_u64(hash, value->shape.rank))
+            return 0;
+        for (axis = 0u; axis < value->shape.rank; ++axis)
+            if (!payload_u64(hash, value->shape.dims[axis]))
+                return 0;
+        if (value->kind != YVEX_TRANSFORM_VALUE_SOURCE) {
+            if (!payload_u64(hash, value->semantic_id) || !payload_u64(hash, value->producer_node_id))
+                return 0;
+            continue;
+        }
+        source = yvex_transform_ir_source_at(ir, value->source_index);
+        if (!quant_payload_source_identity(hash, source))
+            return 0;
+    }
+    return 1;
+}
+
+/* Purpose: bind one selected physical encoding decision.
+ * Inputs: canonical hash and immutable decision.
+ * Effects: advances only the supplied hash.
+ * Failure: returns false for invalid rank or encoding failure.
+ * Boundary: excludes logical role and terminal/node allocation IDs. */
+static int quant_payload_decision_identity(yvex_sha256 *hash,
+                                           const yvex_quant_decision *decision)
+{
+    unsigned int dimension;
+
+    if (!hash || !decision || !payload_u64(hash, decision->terminal_ordinal) ||
+        !payload_u64(hash, decision->qtype) || !payload_u64(hash, decision->rank))
+        return 0;
+    for (dimension = 0u; dimension < decision->rank; ++dimension)
+        if (!payload_u64(hash, decision->dims[dimension]))
+            return 0;
+    return payload_u64(hash, decision->row_axis) && payload_u64(hash, decision->row_width) &&
+           payload_u64(hash, decision->row_count) && payload_u64(hash, decision->element_count) &&
+           payload_u64(hash, decision->encoded_bytes) && payload_u64(hash, decision->approximation) &&
+           payload_u64(hash, decision->calibration) && payload_u64(hash, decision->numeric_contract_version);
+}
+
+/* Purpose: derive the byte-execution recipe identity independently from semantic IR identity.
+ * Inputs: sealed construction state with canonical source edges, operations, and decisions.
+ * Effects: writes only the payload-plan identity.
+ * Failure: unresolved recipe facts or canonical encoding failure return false.
+ * Boundary: excludes GGUF names, mapping provenance, and layout; writer identity binds those. */
+static int quant_payload_plan_identity(yvex_quant_plan *plan)
+{
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    unsigned long long ordinal;
+
+    if (!plan || !plan->ir)
+        return 0;
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(&hash, "yvex.quant.payload.plan.v2") ||
+        !payload_u64(&hash, plan->summary.source_snapshot_identity) ||
+        !yvex_sha256_update_text(&hash, plan->summary.required_payload_identity) ||
+        !yvex_sha256_update_text(&hash, plan->summary.calibration_identity) ||
+        !yvex_sha256_update_u64(&hash, plan->summary.decision_count))
+        return 0;
+    for (ordinal = 0ull; ordinal < plan->summary.decision_count; ++ordinal) {
+        const yvex_transform_value *terminal =
+            yvex_transform_ir_terminal_at(plan->ir, ordinal);
+        const yvex_transform_node *node =
+            terminal ? yvex_transform_ir_node_at(plan->ir, terminal->producer_node_id) : NULL;
+
+        if (!node || !quant_payload_decision_identity(&hash, &plan->decisions[ordinal]) ||
+            !quant_payload_node_identity(&hash, plan->ir, node))
+            return 0;
+    }
+    if (!yvex_sha256_final(&hash, digest))
+        return 0;
+    yvex_sha256_hex(digest, plan->summary.payload_plan_identity);
+    return 1;
+}
+
 /* Purpose: derive canonical identity for one complete physical quant plan.
  * Inputs: populated plan summary and canonical-ordinal decision identities.
  * Effects: writes the profile identity into the owned summary.
@@ -568,13 +704,14 @@ static int quant_plan_identity(yvex_quant_plan *plan) {
         !yvex_sha256_update_text(&hash, plan->summary.backend_compute_contract) ||
         !yvex_sha256_update_u64(&hash, plan->summary.decision_count))
         return 0;
-    for (ordinal = 0u; ordinal < plan->summary.decision_count; ++ordinal)
+    for (ordinal = 0u; ordinal < plan->summary.decision_count; ++ordinal) {
         if (!yvex_sha256_update_text(&hash, plan->decisions[ordinal].decision_identity))
             return 0;
+    }
     if (!yvex_sha256_final(&hash, digest))
         return 0;
     yvex_sha256_hex(digest, plan->summary.profile_identity);
-    return 1;
+    return quant_payload_plan_identity(plan);
 }
 
 typedef struct {

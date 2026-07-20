@@ -7,6 +7,8 @@
 
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/native-weights-cli}
 
@@ -15,7 +17,7 @@ fail() {
     exit 1
 }
 
-rm -rf "$OUT_DIR"
+yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 python3 - "$OUT_DIR/model-00001.safetensors" <<'PY'

@@ -80,6 +80,7 @@ typedef struct {
     unsigned long long mapping_identity;
     char profile_name[64];
     char profile_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
+    char payload_plan_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
     char required_execution_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
     char writer_plan_identity[YVEX_GGUF_WRITER_IDENTITY_CAP];
     unsigned long long qtype_tensor_counts[
@@ -191,6 +192,7 @@ typedef struct {
     long long published_ctime_seconds;
     long long published_ctime_nanoseconds;
     char execution_identity[YVEX_QUANT_PLAN_IDENTITY_CAP];
+    char payload_byte_identity[YVEX_QUANT_PLAN_IDENTITY_CAP];
     char temporary_path[YVEX_ARTIFACT_PATH_CAP];
     char published_path[YVEX_ARTIFACT_PATH_CAP];
     int preallocated;

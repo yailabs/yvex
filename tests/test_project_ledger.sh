@@ -356,6 +356,8 @@ grep -F '| `V010.REPO.C.CANONICALIZATION.0` | project | `complete` |' "$project"
   fail "repository C canonicalization is not complete"
 grep -F '| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `complete` |' "$project" >/dev/null ||
   fail "DeepSeek attention execution is not complete"
+grep -F '| `V010.CLI.GRAPH.0` | DeepSeek + common operator | `complete` |' "$project" >/dev/null ||
+  fail "DeepSeek attention operator reachability is not complete"
 grep -F '| `V010.RUNTIME.DEEPSEEK.KV.0` | DeepSeek | `active` |' "$project" >/dev/null ||
   fail "DeepSeek KV is not active"
 grep -F '| V010.MODEL.TRANSFORM.IR.0 | recovered/promoted |' "$project" >/dev/null ||
@@ -370,7 +372,8 @@ in_block && /^```$/ {
       block ~ /V010\.GGUF\.WRITER\.1/ &&
       block ~ /V010\.REPO\.SEMANTIC\.COMPRESSION\.0/ &&
       block ~ /V010\.REPO\.C\.CANONICALIZATION\.0/ &&
-      block ~ /V010\.GRAPH\.DEEPSEEK\.ATTENTION\.0/) {
+      block ~ /V010\.GRAPH\.DEEPSEEK\.ATTENTION\.0/ &&
+      block ~ /V010\.CLI\.GRAPH\.0/) {
     print block
     exit
   }

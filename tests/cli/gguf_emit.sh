@@ -4,6 +4,8 @@
 
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/gguf-emit}
 OUT="$OUT_DIR/yvex-owned.gguf"
@@ -13,7 +15,7 @@ fail() {
     exit 1
 }
 
-rm -rf "$OUT_DIR"
+yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 "$YVEX_BIN" gguf-emit controlled \

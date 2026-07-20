@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/artifact-integrity-regression}
 GEN_DIR="$OUT_DIR/generated"
@@ -177,7 +179,7 @@ with open(path, "r+b") as fh:
 PY
 }
 
-rm -rf "$OUT_DIR"
+yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$GEN_DIR" "$OUT_DIR/stale"
 printf 'case|surface|expected_status|expected_phase|allocation_attempted|dispatch_attempted|cleanup_status\n' >"$MATRIX"
 

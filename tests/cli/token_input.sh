@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+. tests/support/cleanup.sh
+
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/token-input}
 PARTIAL_MODEL="$OUT_DIR/token-input-partial-F16.gguf"
@@ -30,7 +32,7 @@ expect_fail() {
     "$@" >"$OUT_DIR/$name.out" 2>"$OUT_DIR/$name.err" && fail "$name unexpectedly passed" || true
 }
 
-rm -rf "$OUT_DIR"
+yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 "$YVEX_BIN" gguf-emit controlled \
