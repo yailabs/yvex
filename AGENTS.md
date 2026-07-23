@@ -408,6 +408,102 @@ A closure that changes ownership reports:
 No implementation may be declared complete because a report says so. Project
 control changes only after executable evidence passes.
 
+### Progression admissibility
+
+A completed boundary is progression-safe only when its next declared consumer
+can use it without bypassing semantics, ownership, identity, lifecycle,
+failure, resource, or operator contracts. Passing a build, one execution path,
+focused tests, or a self-authored closure report is not sufficient.
+
+Before activating a dependent milestone, classify every unresolved item exactly
+once:
+
+- `gate_blocker`: a defect inside the current gate that makes the downstream
+  consumer unsafe or incorrect;
+- `boundary_incomplete`: required after-state is missing, scaffolded,
+  simulated, test-only, happy-path-only, or unused by production;
+- `evidence_gap`: required independent, live, failure, cleanup, operator, or
+  scale evidence is absent;
+- `deferred_depth`: additional behavior outside the current gate, unnecessary
+  to the next consumer, with an explicit later owner and pass;
+- `optimization_debt`: admitted behavior is slower, larger, or less efficient
+  without violating a current correctness or resource contract;
+- `generalization_debt`: the common mechanism has one proven vertical but no
+  concrete second-family pressure test;
+- `external_blocker`: complete local work awaits an unavailable external
+  resource, platform, authority, or decision.
+
+The only progression decisions are:
+
+- `gate_blocker` or `boundary_incomplete` -> `repair_same_boundary`;
+- `evidence_gap` -> `complete_evidence`;
+- admitted `deferred_depth`, `optimization_debt`, or `generalization_debt` ->
+  `proceed`;
+- `external_blocker` -> `blocked_external`.
+
+Deferral is forbidden when the next milestone consumes the missing behavior,
+correctness depends on it, ownership or rollback is ambiguous, production uses
+a fixture, a supported mode is scaffolded, the CLI cannot reach executable
+behavior, or identity/capability admission can be bypassed. Deferral is valid
+only when the current boundary is complete, the next consumer is independent,
+the non-claim and later owner/pass are explicit, and no duplicate owner or
+compatibility shell is introduced.
+
+Every implementation closure includes a `Progression Admissibility` block
+containing:
+
+```text
+progression_decision: proceed | repair_same_boundary | complete_evidence | blocked_external
+downstream_consumer: exact milestone or none
+downstream_safe: true | false
+unresolved_gate_blockers: count and exact list
+boundary_incompleteness: count and exact list
+evidence_gaps: count and exact list
+deferred_depth: count, owner, and later pass
+optimization_debt: count, measured effect, and later pass
+generalization_debt: count, current vertical, and concrete pressure test
+external_blockers: count and exact dependency
+required_before_next: exact repairs or none
+non_claims: higher capabilities not established
+```
+
+Each remaining item names its class, owner, consumer impact, progression effect,
+later pass or immediate repair, and evidence. Vague classifications such as
+“partially complete”, “good enough”, or “more work remains” are invalid.
+
+### Six-pass vertical iteration
+
+YVEX advances one accepted system through six focused passes:
+
+1. `PASS 1 — Vertical closure`: complete one real source-to-output production
+   path with truthful limitations.
+2. `PASS 2 — Correctness and ownership hardening`: repair semantic, lifecycle,
+   identity, ownership, and composition defects exposed end to end.
+3. `PASS 3 — Memory and residency optimization`: improve placement, movement,
+   persistent state, scratch, expert storage, and streaming from measured
+   resource evidence.
+4. `PASS 4 — Kernel and execution optimization`: improve fusion, scheduling,
+   graph capture, launch count, parallelism, and hardware tuning without
+   changing semantics.
+5. `PASS 5 — Evaluation and benchmark`: measure quality, regressions, latency,
+   throughput, memory, and reliability through identity-bound owners.
+6. `PASS 6 — Multi-family generalization`: admit a second complete family
+   through the common engine and change common mechanisms only where that
+   concrete vertical proves the abstraction insufficient.
+
+These passes consume earlier accepted boundaries; they are not wholesale
+rewrites. Concrete evidence may reopen an earlier boundary. Hypothetical family
+needs do not justify speculative mechanisms, and the first DeepSeek vertical
+pressures the common engine without defining it.
+
+Future families reuse common source, compilation, artifact, runtime, residency,
+backend, operator, evaluation, and benchmark mechanisms. They add only their
+semantics, schedules, tensor-role lowering, sequence-mixer and state rules,
+MoE/FFN composition, tokenizer/output policy, and conformance evidence. A
+common owner changes only when a concrete family exposes a missing invariant;
+per-family runtimes, duplicated storage or registries, target-string branches,
+placeholder support, and consumer-free abstractions are forbidden.
+
 ### Commit format
 
 New commits use Conventional Commits:

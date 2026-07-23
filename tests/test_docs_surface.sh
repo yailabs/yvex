@@ -131,6 +131,40 @@ require_text AGENTS.md '### Commit format'
 require_text AGENTS.md 'New commits use Conventional Commits:'
 require_text AGENTS.md 'Runtime benchmark baselines, CSV/JSON evidence, and'
 require_text AGENTS.md 'generated charts are identity-bound external operator assets'
+require_text AGENTS.md '### Progression admissibility'
+require_text AGENTS.md '### Six-pass vertical iteration'
+
+for classification in \
+  gate_blocker \
+  boundary_incomplete \
+  evidence_gap \
+  deferred_depth \
+  optimization_debt \
+  generalization_debt \
+  external_blocker
+do
+  require_text AGENTS.md "\`$classification\`"
+done
+
+for decision in proceed repair_same_boundary complete_evidence blocked_external
+do
+  require_text AGENTS.md "\`$decision\`"
+done
+
+for pass in \
+  'PASS 1 — Vertical closure' \
+  'PASS 2 — Correctness and ownership hardening' \
+  'PASS 3 — Memory and residency optimization' \
+  'PASS 4 — Kernel and execution optimization' \
+  'PASS 5 — Evaluation and benchmark' \
+  'PASS 6 — Multi-family generalization'
+do
+  require_text AGENTS.md "$pass"
+done
+
+require_text AGENTS.md 'progression_decision: proceed | repair_same_boundary | complete_evidence | blocked_external'
+require_text AGENTS.md 'downstream_safe: true | false'
+require_text AGENTS.md 'per-family runtimes, duplicated storage or registries, target-string branches,'
 
 require_pattern README.md '^# YVEX$'
 require_text README.md '[Project status](PROJECT.md)'
