@@ -43,11 +43,6 @@ static const char *const selected_deepseek_identities[] = {
     YVEX_SELECTED_DEEPSEEK_PAYLOAD_BYTE_IDENTITY, YVEX_SELECTED_DEEPSEEK_PAYLOAD_IDENTITY,
     YVEX_SELECTED_DEEPSEEK_TRANSFORM_IDENTITY, YVEX_SELECTED_DEEPSEEK_WRITER_PLAN_IDENTITY,
 };
-static const char *const artifact_class_names[] = {
-    [YVEX_ARTIFACT_CLASS_REFUSED] = "refused", [YVEX_ARTIFACT_CLASS_TENSOR_PROOF] = "tensor-proof-artifact",
-    [YVEX_ARTIFACT_CLASS_EXTERNAL_UNADMITTED] = "external-unadmitted-artifact",
-    [YVEX_ARTIFACT_CLASS_COMPLETE_YVEX] = "complete-yvex-artifact",
-};
 static const char *const artifact_admission_names[] = {
     [YVEX_ARTIFACT_ADMISSION_OK] = "ok", [YVEX_ARTIFACT_ADMISSION_INVALID_ARGUMENT] = "invalid-argument",
     [YVEX_ARTIFACT_ADMISSION_WRITER_INCOMPLETE] = "writer-incomplete",
@@ -59,30 +54,10 @@ static const char *const artifact_admission_names[] = {
     [YVEX_ARTIFACT_ADMISSION_TENSOR_COVERAGE] = "tensor-coverage", [YVEX_ARTIFACT_ADMISSION_FILE_OPEN] = "file-open",
     [YVEX_ARTIFACT_ADMISSION_FILE_DRIFT] = "file-drift",
 };
-static const char *const roundtrip_code_names[] = {
-    [YVEX_GGUF_ROUNDTRIP_OK] = "ok", [YVEX_GGUF_ROUNDTRIP_INVALID_ARGUMENT] = "invalid-argument",
-    [YVEX_GGUF_ROUNDTRIP_ARTIFACT_OPEN] = "artifact-open", [YVEX_GGUF_ROUNDTRIP_READER_REFUSAL] = "reader-refusal",
-    [YVEX_GGUF_ROUNDTRIP_LAYOUT_REFUSAL] = "layout-refusal",
-    [YVEX_GGUF_ROUNDTRIP_HEADER_DIVERGENCE] = "header-divergence",
-    [YVEX_GGUF_ROUNDTRIP_METADATA_DIVERGENCE] = "metadata-divergence",
-    [YVEX_GGUF_ROUNDTRIP_TENSOR_DIVERGENCE] = "tensor-divergence",
-    [YVEX_GGUF_ROUNDTRIP_PREFIX_DIVERGENCE] = "prefix-divergence",
-    [YVEX_GGUF_ROUNDTRIP_PAYLOAD_DIGEST] = "payload-digest",
-    [YVEX_GGUF_ROUNDTRIP_ARTIFACT_DIGEST] = "artifact-digest", [YVEX_GGUF_ROUNDTRIP_SHORT_READ] = "short-read",
-    [YVEX_GGUF_ROUNDTRIP_NONZERO_PADDING] = "nonzero-padding",
-    [YVEX_GGUF_ROUNDTRIP_TOKENIZER_INCOMPLETE] = "tokenizer-incomplete",
-    [YVEX_GGUF_ROUNDTRIP_FILE_DRIFT] = "file-drift", [YVEX_GGUF_ROUNDTRIP_ALLOCATION] = "allocation",
-};
-/* Purpose: copy one bounded text fact into caller-owned result storage. */
-static void artifact_text_copy(char *destination, size_t capacity, const char *source)
-{
-    (void)snprintf(destination, capacity, "%s", source);
-}
-
 /* Purpose: copy one canonical SHA-256 identity into fixed-width result storage. */
 static void artifact_identity_copy(char destination[YVEX_SHA256_HEX_CAP], const char *source)
 {
-    artifact_text_copy(destination, YVEX_SHA256_HEX_CAP, source);
+    yvex_core_text_copy(destination, YVEX_SHA256_HEX_CAP, source);
 }
 
 /* Purpose: project a contiguous typed code through its immutable name table. */
@@ -107,7 +82,7 @@ static int admission_fail(yvex_artifact_admission_failure *failure,
         failure->expected = expected;
         failure->actual = actual;
         if (field)
-            (void)snprintf(failure->field, sizeof(failure->field), "%s", field);
+            yvex_core_text_copy(failure->field, sizeof(failure->field), field);
     }
     yvex_error_set(err, status, "artifact.complete.admission", message);
     return status;
@@ -193,26 +168,6 @@ static int admission_deepseek_identities_valid(void)
         if (!yvex_sha256_hex_is_valid(selected_deepseek_identities[index]))
             return 0;
     return 1;
-}
-
-/* Purpose: expose canonical admission-record encoding without granting admission.
- * Inputs: populated immutable record and fixed-width output.
- * Effects: writes only the record identity.
- * Failure: invalid or unencodable facts publish no identity.
- * Boundary: callers cannot use this helper to verify artifact bytes or promote capability. */
-int yvex_artifact_admission_record_identity(
-    const yvex_complete_artifact_admission *admission,
-    char output[YVEX_SHA256_HEX_CAP], yvex_error *err)
-{
-    if (output)
-        output[0] = '\0';
-    if (!admission || !output || !admission_identity_encode(admission, output)) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "artifact.admission.identity",
-                       "populated admission facts and output are required");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    yvex_error_clear(err);
-    return YVEX_OK;
 }
 
 /* Purpose: admit a published artifact when every independent proof agrees.
@@ -302,7 +257,6 @@ int yvex_complete_artifact_admit(const yvex_artifact_admission_request *request,
     memset(&artifact_options, 0, sizeof(artifact_options));
     artifact_options.path = request->artifact_path;
     artifact_options.readonly = 1;
-    artifact_options.map = 0;
     rc = yvex_artifact_open(&artifact, &artifact_options, err);
     if (rc != YVEX_OK)
         return admission_fail(failure, YVEX_ARTIFACT_ADMISSION_FILE_OPEN, "artifact-path", 1u, 0u,
@@ -327,17 +281,17 @@ int yvex_complete_artifact_admit(const yvex_artifact_admission_request *request,
     out->source_snapshot_identity = plan->source_snapshot_identity;
     out->mapping_identity = plan->mapping_identity;
     out->file_snapshot = snapshot;
-    artifact_text_copy(out->artifact_path, sizeof(out->artifact_path), request->artifact_path);
+    yvex_core_text_copy(out->artifact_path, sizeof(out->artifact_path), request->artifact_path);
     artifact_identity_copy(out->payload_identity, plan->payload_identity);
     artifact_identity_copy(out->transform_identity, plan->transform_identity);
     artifact_identity_copy(out->profile_identity, plan->profile_identity);
-    artifact_text_copy(out->profile_name, sizeof(out->profile_name), plan->profile_name);
+    yvex_core_text_copy(out->profile_name, sizeof(out->profile_name), plan->profile_name);
     artifact_identity_copy(out->quant_execution_identity, emission->execution_identity);
     artifact_identity_copy(out->payload_plan_identity, plan->payload_plan_identity);
     artifact_identity_copy(out->payload_byte_identity, emission->payload_byte_identity);
     artifact_identity_copy(out->writer_plan_identity, plan->writer_plan_identity);
     artifact_identity_copy(out->artifact_identity, roundtrip->artifact_identity);
-    artifact_text_copy(out->official_reader_revision, sizeof(out->official_reader_revision),
+    yvex_core_text_copy(out->official_reader_revision, sizeof(out->official_reader_revision),
                        official->revision);
     out->tokenizer_complete = 1;
     out->native_reader_accepted = 1;
@@ -394,8 +348,7 @@ int yvex_artifact_admit_deepseek(const yvex_artifact *artifact,
 
     *out = selected_deepseek_admission;
     out->file_snapshot = snapshot;
-    (void)snprintf(out->artifact_path, sizeof(out->artifact_path), "%s",
-                   yvex_artifact_path(artifact));
+    yvex_core_text_copy(out->artifact_path, sizeof(out->artifact_path), yvex_artifact_path(artifact));
     if (!admission_identity_encode(out, out->admission_identity))
         return admission_fail(failure, YVEX_ARTIFACT_ADMISSION_IDENTITY_MISMATCH,
                               "admission-identity", 1u, 0u, err, YVEX_ERR_BOUNDS,
@@ -414,6 +367,8 @@ int yvex_artifact_admit_deepseek(const yvex_artifact *artifact,
  * Boundary: verifies physical bytes only; it does not rederive semantic completeness. */
 int yvex_artifact_admission_identity_verify(
     const yvex_artifact *artifact, yvex_complete_artifact_admission *admission,
+    int (*progress)(void *context, unsigned long long completed,
+                    unsigned long long total), void *progress_context,
     yvex_artifact_admission_failure *failure, yvex_error *err)
 {
     yvex_complete_artifact_admission next;
@@ -428,7 +383,8 @@ int yvex_artifact_admission_identity_verify(
                               "complete artifact admission and opened handle are required");
     next = *admission;
     memset(&identity, 0, sizeof(identity));
-    rc = yvex_artifact_identity_read_open(artifact, &identity, err);
+    rc = yvex_artifact_identity_read_open_progress(
+        artifact, &identity, progress, progress_context, err);
     if (rc == YVEX_OK)
         rc = yvex_artifact_snapshot_get(artifact, &snapshot, err);
     if (rc != YVEX_OK || identity.file_size != admission->file_bytes ||
@@ -487,10 +443,9 @@ static int compatibility_fail(compatibility_check *check, yvex_artifact_compatib
         failure->dimension = check->dimension;
         failure->expected = expected;
         failure->actual = actual;
-        (void)snprintf(failure->field, sizeof(failure->field), "%s", field);
+        yvex_core_text_copy(failure->field, sizeof(failure->field), field);
         if (check->tensor_name)
-            (void)snprintf(failure->tensor_name, sizeof(failure->tensor_name), "%s",
-                           check->tensor_name);
+            yvex_core_text_copy(failure->tensor_name, sizeof(failure->tensor_name), check->tensor_name);
     }
     yvex_error_set(check->error, status, "artifact.physical.compatibility", compatibility_message);
     return status;
@@ -756,17 +711,6 @@ int yvex_artifact_physical_compatibility_validate(
     return YVEX_OK;
 }
 
-/* Purpose: project an artifact class to its stable diagnostic spelling.
- * Inputs: typed artifact class.
- * Effects: none.
- * Failure: unknown values map to the fail-closed refused spelling.
- * Boundary: diagnostic projection only; never classifies an artifact. */
-const char *yvex_artifact_class_name(yvex_artifact_class artifact_class) {
-    return artifact_name_at(artifact_class_names,
-                            sizeof(artifact_class_names) / sizeof(artifact_class_names[0]),
-                            (unsigned int)artifact_class, "refused");
-}
-
 /* Purpose: project an admission refusal code to stable diagnostic text.
  * Inputs: typed admission code.
  * Effects: none.
@@ -797,7 +741,7 @@ static int roundtrip_fail(yvex_gguf_roundtrip_failure *failure, yvex_gguf_roundt
         failure->actual = actual;
         failure->file_offset = offset;
         if (name)
-            (void)snprintf(failure->name, sizeof(failure->name), "%s", name);
+            yvex_core_text_copy(failure->name, sizeof(failure->name), name);
     }
     yvex_error_set(err, status, "gguf.roundtrip", message);
     return status;
@@ -1252,26 +1196,4 @@ int yvex_gguf_roundtrip_validate(const char *path, const yvex_gguf_writer_plan *
     if (rc != YVEX_OK && out)
         memset(out, 0, sizeof(*out));
     return rc;
-}
-
-/* Purpose: project a native-roundtrip code to stable diagnostic text.
- * Inputs: typed roundtrip result code.
- * Effects: none.
- * Failure: unknown values map to an explicit unknown spelling.
- * Boundary: diagnostics never substitute for typed recovery logic. */
-const char *yvex_gguf_roundtrip_code_name(yvex_gguf_roundtrip_code code) {
-    return artifact_name_at(roundtrip_code_names,
-                            sizeof(roundtrip_code_names) / sizeof(roundtrip_code_names[0]),
-                            (unsigned int)code, "unknown");
-}
-
-/* Purpose: report availability of native structural and payload roundtrip.
- * Inputs: optional borrowed reason output.
- * Effects: publishes a static implementation-boundary explanation.
- * Failure: this compiled capability is unconditional and returns supported.
- * Boundary: reports native verification only, never runtime/model support. */
-int yvex_gguf_roundtrip_supported(const char **reason) {
-    if (reason)
-        *reason = "native structural and full-payload roundtrip is implemented";
-    return 1;
 }

@@ -11,7 +11,6 @@
  * Covers:
  *   - yvex_memory_plan_from_graph
  *   - yvex_memory_plan_get_summary
- *   - yvex_memory_plan_dump
  *
  * Commands:
  *   - make test-core
@@ -106,29 +105,6 @@ static int test_memory_plan_summary(void)
     return 0;
 }
 
-static int test_memory_plan_dump(void)
-{
-    memory_fixture fixture;
-    yvex_memory_plan *plan = NULL;
-    yvex_error err;
-    FILE *fp;
-    int rc;
-
-    YVEX_TEST_ASSERT(open_fixture(&fixture) == 0, "open memory fixture for dump");
-    rc = yvex_memory_plan_from_graph(&plan, fixture.graph, fixture.table, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "memory plan builds for dump");
-
-    fp = fopen("build/tests/test_memory_plan_dump.out", "wb");
-    YVEX_TEST_ASSERT(fp != NULL, "open memory dump file");
-    rc = yvex_memory_plan_dump(plan, fp, &err);
-    fclose(fp);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "memory dump succeeds");
-
-    yvex_memory_plan_close(plan);
-    close_fixture(&fixture);
-    return 0;
-}
-
 static yvex_graph_value_info *activation_value(yvex_graph *graph)
 {
     unsigned long long i;
@@ -177,7 +153,6 @@ static int test_memory_plan_uses_row_geometry(void)
 int yvex_test_memory_plan(void)
 {
     if (test_memory_plan_summary() != 0) return 1;
-    if (test_memory_plan_dump() != 0) return 1;
     if (test_memory_plan_uses_row_geometry() != 0) return 1;
     return 0;
 }

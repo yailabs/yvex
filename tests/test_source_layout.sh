@@ -26,7 +26,6 @@ src/gguf/reader.c
 src/gguf/writer.c
 src/artifact/materialize.c
 src/runtime/core.c
-src/generation/core.c
 '
 for path in $required_paths; do
   test -f "$path" || {
@@ -65,7 +64,7 @@ if find src -type f \( -name '*_internal.c' -o -name '*_private.c' -o -name '*_i
 fi
 
 if grep -RInE '#include[[:space:]]+["<].*src/cli/' \
-    src/core src/model src/graph src/runtime src/generation src/backend; then
+    src/core src/model src/graph src/runtime src/backend; then
   echo "source layout: domain owner depends on CLI" >&2
   exit 1
 fi

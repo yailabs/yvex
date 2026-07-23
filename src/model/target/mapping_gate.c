@@ -17,17 +17,10 @@
 #include <yvex/internal/families/deepseek_v4.h>
 #include <yvex/internal/source.h>
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 typedef struct {
-    int source_requested;
-    int source_exists;
-    int metadata_present;
-    int attention_k_present;
-    int output_head_present;
-    int output_head_ambiguous;
+    yvex_model_target_source_profile source;
     int source_observed;
     int source_missing;
     int source_ambiguous;
@@ -40,6 +33,18 @@ typedef struct {
     const char *status;
     const char *result;
 } mapping_gate_state;
+
+typedef struct {
+    int source_observed;
+    int source_missing;
+    int source_ambiguous;
+    int metadata_observed;
+    int metadata_missing;
+    const char *missing_roles;
+    const char *ambiguous_roles;
+    const char *top_blocker;
+    const char *status;
+} mapping_gate_block;
 
 typedef struct {
     const char *status;
@@ -88,9 +93,60 @@ static const yvex_model_target_row_spec mapping_gate_audit_rows[] = {
     MAPPING_LITERAL("graph_consumer_fed: false")
 };
 
+static const mapping_gate_block mapping_source_qwen_block = {
+    0, 12, 0, 0, 4, "all-source-roles", "none",
+    "missing-qwen-source-path", "blocked-missing-source"
+};
+static const mapping_gate_block mapping_source_gemma_block = {
+    0, 12, 0, 0, 4, "all-source-roles", "none",
+    "missing-gemma-source-path", "blocked-missing-source"
+};
+static const mapping_gate_block mapping_attention_k_block = {
+    11, 1, 0, 4, 0, "attention_k", "none",
+    "missing-source-role-attention-k", "blocked-missing-runtime-roles"
+};
+static const mapping_gate_block mapping_output_ambiguous_block = {
+    11, 0, 1, 4, 0, "none", "output_head",
+    "ambiguous-output-head-tensor", "blocked-missing-runtime-roles"
+};
+static const mapping_gate_block mapping_output_missing_block = {
+    11, 1, 0, 4, 0, "output_head", "none",
+    "missing-output-head-tensor", "blocked-missing-runtime-roles"
+};
+static const mapping_gate_block mapping_metadata_block = {
+    12, 0, 0, 0, 4,
+    "tokenizer_metadata,config_metadata,generation_metadata,special_tokens",
+    "none", "missing-tokenizer-sidecars", "blocked-missing-runtime-roles"
+};
+
+static const yvex_model_target_request_rules mapping_gate_rules = {
+    YVEX_MODEL_TARGET_COMMAND_TENSOR_MAP,
+    "mapping-gate-fail",
+    "mapping gate report requires tensor-map command kind",
+    NULL,
+    0
+};
+
 #undef MAPPING_LITERAL
 #undef MAPPING_STRING
 #undef MAPPING_INT
+
+/* Purpose: apply one immutable blocker fact without duplicating lifecycle state. */
+static void mapping_gate_apply_block(mapping_gate_state *state,
+                                     const mapping_gate_block *block)
+{
+    state->source_observed = block->source_observed;
+    state->source_missing = block->source_missing;
+    state->source_ambiguous = block->source_ambiguous;
+    state->metadata_observed = block->metadata_observed;
+    state->metadata_missing = block->metadata_missing;
+    state->missing_roles = block->missing_roles;
+    state->ambiguous_roles = block->ambiguous_roles;
+    state->top_blocker = block->top_blocker;
+    state->status = block->status;
+    state->next_row = "V010.MAP.9";
+    state->result = "block";
+}
 
 /*
  * yvex_model_mapping_report_deepseek()
@@ -264,10 +320,6 @@ static void mapping_gate_build_state(const yvex_model_target_request *request,
                                      const char *family,
                                      mapping_gate_state *state)
 {
-    char dir[1024];
-    char path[1200];
-    char *header = NULL;
-
     memset(state, 0, sizeof(*state));
     state->source_observed = 12;
     state->metadata_observed = 4;
@@ -278,82 +330,27 @@ static void mapping_gate_build_state(const yvex_model_target_request *request,
     state->status = "passed-for-artifact-planning";
     state->result = "pass";
 
-    (void)yvex_model_target_probe_source_path(
-        request, family, NULL, dir, sizeof(dir));
-    state->source_requested = dir[0] != '\0';
-    if (!state->source_requested) {
+    yvex_model_target_probe_source_profile(request, family, &state->source);
+    if (!state->source.source_requested) {
         return;
     }
 
-    (void)snprintf(path, sizeof(path), "%s/model.safetensors", dir);
-    state->source_exists = yvex_model_target_probe_header(path, &header);
-    if (!state->source_exists) {
-        state->source_observed = 0;
-        state->source_missing = 12;
-        state->metadata_observed = 0;
-        state->metadata_missing = 4;
-        state->missing_roles = "all-source-roles";
-        state->top_blocker = strcmp(family, "gemma") == 0
-                                 ? "missing-gemma-source-path"
-                                 : "missing-qwen-source-path";
-        state->next_row = "V010.MAP.9";
-        state->status = "blocked-missing-source";
-        state->result = "block";
+    if (!state->source.header_present) {
+        mapping_gate_apply_block(
+            state, strcmp(family, "gemma") == 0
+                       ? &mapping_source_gemma_block
+                       : &mapping_source_qwen_block);
         return;
     }
 
-    state->attention_k_present = strstr(header, "k_proj.weight") != NULL;
-    state->output_head_present = strstr(header, "lm_head.weight") != NULL ||
-                                 strstr(header, "output.weight") != NULL;
-    state->output_head_ambiguous = strstr(header, "lm_head.weight") != NULL &&
-                                   strstr(header, "output.weight") != NULL;
-    free(header);
-
-    (void)snprintf(path, sizeof(path), "%s/tokenizer.json", dir);
-    state->metadata_present = yvex_model_target_probe_file(path);
-    (void)snprintf(path, sizeof(path), "%s/config.json", dir);
-    state->metadata_present = state->metadata_present &&
-                              yvex_model_target_probe_file(path);
-    (void)snprintf(path, sizeof(path), "%s/generation_config.json", dir);
-    state->metadata_present = state->metadata_present &&
-                              yvex_model_target_probe_file(path);
-    (void)snprintf(path, sizeof(path), "%s/special_tokens_map.json", dir);
-    state->metadata_present = state->metadata_present &&
-                              yvex_model_target_probe_file(path);
-
-    if (!state->attention_k_present) {
-        state->source_observed = 11;
-        state->source_missing = 1;
-        state->missing_roles = "attention_k";
-        state->top_blocker = "missing-source-role-attention-k";
-        state->next_row = "V010.MAP.9";
-        state->status = "blocked-missing-runtime-roles";
-        state->result = "block";
-    } else if (state->output_head_ambiguous) {
-        state->source_observed = 11;
-        state->source_ambiguous = 1;
-        state->ambiguous_roles = "output_head";
-        state->top_blocker = "ambiguous-output-head-tensor";
-        state->next_row = "V010.MAP.9";
-        state->status = "blocked-missing-runtime-roles";
-        state->result = "block";
-    } else if (!state->output_head_present) {
-        state->source_observed = 11;
-        state->source_missing = 1;
-        state->missing_roles = "output_head";
-        state->top_blocker = "missing-output-head-tensor";
-        state->next_row = "V010.MAP.9";
-        state->status = "blocked-missing-runtime-roles";
-        state->result = "block";
-    } else if (!state->metadata_present) {
-        state->metadata_observed = 0;
-        state->metadata_missing = 4;
-        state->missing_roles =
-            "tokenizer_metadata,config_metadata,generation_metadata,special_tokens";
-        state->top_blocker = "missing-tokenizer-sidecars";
-        state->next_row = "V010.MAP.9";
-        state->status = "blocked-missing-runtime-roles";
-        state->result = "block";
+    if (!state->source.attention_k_present) {
+        mapping_gate_apply_block(state, &mapping_attention_k_block);
+    } else if (state->source.output_head_ambiguous) {
+        mapping_gate_apply_block(state, &mapping_output_ambiguous_block);
+    } else if (!state->source.output_head_present) {
+        mapping_gate_apply_block(state, &mapping_output_missing_block);
+    } else if (!state->source.metadata_present) {
+        mapping_gate_apply_block(state, &mapping_metadata_block);
     }
 }
 
@@ -417,20 +414,8 @@ static int mapping_gate_validate(const yvex_model_target_request *request,
 {
     const char *target = request->target_id[0] ? request->target_id : "qwen3-8b";
 
-    if (request->kind != YVEX_MODEL_TARGET_COMMAND_TENSOR_MAP) {
-        report->status = "mapping-gate-fail";
-        report->exit_code = 2;
-        yvex_model_target_report_add_error(report,
-                                           "mapping gate report requires tensor-map command kind");
-        return 1;
-    }
-    if (request->gate[0] && strcmp(request->gate, "v0.1.0") != 0) {
-        report->status = "unsupported-release";
-        report->exit_code = 2;
-        yvex_model_target_report_add_row(report, "status: unsupported-release");
-        yvex_model_target_report_add_row(report, "release: %s", request->gate);
-        yvex_model_target_report_add_error(report, "unsupported release: %s",
-                                           request->gate);
+    if (!yvex_model_target_validate_request_shape(
+            request, report, &mapping_gate_rules, request->gate)) {
         return 1;
     }
     if (!yvex_model_target_supported_source_target(target)) {
@@ -499,7 +484,7 @@ static void mapping_gate_add_audit(const mapping_gate_state *state,
 {
     mapping_gate_audit_facts facts = {
         state->status, state->result, report->target_id, report->family,
-        state->metadata_present ? "present-report-only" : "missing",
+        state->source.metadata_present ? "present-report-only" : "missing",
         state->missing_roles, state->ambiguous_roles, state->next_row,
         state->source_observed, state->metadata_observed
     };

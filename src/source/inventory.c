@@ -8,14 +8,11 @@
  * Effects: allocates immutable indexes and reads only index and header metadata.
  * Failure: missing, duplicate, malformed, overflowed, or inconsistent facts refuse. */
 #include <ctype.h>
-#include <dirent.h>
-#include <errno.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/source.h>
 #include <yvex/internal/source_payload.h>
@@ -48,30 +45,30 @@ typedef struct {
 } source_index;
 
 typedef struct {
-    char **names;
-    unsigned long long *sizes;
+    char *name;
+    unsigned long long size;
+} source_named_size;
+
+typedef struct {
+    source_named_size *items;
     size_t count;
     size_t cap;
     unsigned int declared_total;
 } source_shards;
 
 typedef struct {
-    char *name;
-    unsigned long long size;
-} source_shard_sort_row;
-
-typedef struct {
-    char *name;
-    unsigned long long size;
-} source_upstream_file;
-
-typedef struct {
-    source_upstream_file *items;
+    source_named_size *items;
     size_t count;
     size_t cap;
     char repo[256];
     char revision[128];
 } source_upstream_inventory;
+
+typedef struct {
+    char name[YVEX_PATH_CAP];
+    unsigned long long size;
+    unsigned int seen;
+} source_upstream_parse_state;
 
 struct yvex_source_tensor_snapshot {
     yvex_native_weight_table *table;
@@ -82,6 +79,112 @@ struct yvex_source_tensor_snapshot {
     unsigned long long identity;
     unsigned int references;
 };
+
+typedef struct {
+    size_t initial_capacity;
+    const char *where;
+    const char *storage_failure;
+    const char *name_failure;
+} source_row_policy;
+
+static const source_row_policy source_shard_row_policy = {
+    64u, "source_shards", "shard name allocation failed", "shard name copy failed"};
+static const source_row_policy source_upstream_row_policy = {
+    64u,
+    "source_upstream_inventory",
+    "upstream inventory allocation failed",
+    "upstream inventory name allocation failed"};
+
+/* Purpose: append one owned name/size row for source catalogs that share vector semantics.
+ * Inputs: caller-owned row vector, exact name and size, and initial growth capacity.
+ * Effects: grows storage only when needed and publishes the row after its name is owned.
+ * Failure: overflow or allocation failure preserves the logical row count and prior rows.
+ * Boundary: vector ownership does not assign shard or upstream authority semantics. */
+static int source_named_size_append(source_named_size **items,
+                                    size_t *count,
+                                    size_t *capacity,
+                                    const char *name,
+                                    unsigned long long size,
+                                    const source_row_policy *policy,
+                                    yvex_error *err) {
+    source_named_size *grown;
+    size_t next_capacity;
+    char *copy;
+
+    if (!items || !count || !capacity || !name || !policy || policy->initial_capacity == 0u)
+        return inventory_refuse(
+            err, YVEX_ERR_BOUNDS, policy ? policy->where : "source_rows",
+            policy ? policy->storage_failure : "source row policy is invalid");
+    if (*count == *capacity) {
+        next_capacity = *capacity ? *capacity * 2u : policy->initial_capacity;
+        if (next_capacity < *capacity || next_capacity > SIZE_MAX / sizeof(**items))
+            return inventory_refuse(
+                err, YVEX_ERR_BOUNDS, policy->where, policy->storage_failure);
+        grown = (source_named_size *)realloc(*items, next_capacity * sizeof(**items));
+        if (!grown)
+            return inventory_refuse(
+                err, YVEX_ERR_NOMEM, policy->where, policy->storage_failure);
+        *items = grown;
+        *capacity = next_capacity;
+    }
+    copy = yvex_core_strdup(name);
+    if (!copy)
+        return inventory_refuse(err, YVEX_ERR_NOMEM, policy->where, policy->name_failure);
+    (*items)[*count] = (source_named_size){.name = copy, .size = size};
+    (*count)++;
+    return YVEX_OK;
+}
+
+/* Purpose: release an owned name/size row vector without interpreting its domain.
+ * Inputs: caller-owned rows and their exact initialized count.
+ * Effects: releases every owned name and the containing vector.
+ * Failure: null storage and an empty count remain harmless.
+ * Boundary: generic vector cleanup does not alter source admission state. */
+static void source_named_size_free(source_named_size *items, size_t count) {
+    size_t index;
+
+    for (index = 0u; index < count; ++index)
+        free(items[index].name);
+    free(items);
+}
+
+/* Purpose: order two immutable name/size rows by their complete canonical names. */
+static int source_named_size_compare(const void *left, const void *right) {
+    const source_named_size *a = (const source_named_size *)left;
+    const source_named_size *b = (const source_named_size *)right;
+
+    return strcmp(a->name, b->name);
+}
+
+/* Purpose: compare a borrowed name key with one immutable sorted name/size row. */
+static int source_named_size_key_compare(const void *key, const void *row) {
+    return strcmp((const char *)key, ((const source_named_size *)row)->name);
+}
+
+static const size_t source_dtype_counter_offsets[YVEX_NATIVE_DTYPE_OTHER + 1u] = {
+    [YVEX_NATIVE_DTYPE_F16] = offsetof(yvex_source_verification, dtype_f16_count),
+    [YVEX_NATIVE_DTYPE_BF16] = offsetof(yvex_source_verification, dtype_bf16_count),
+    [YVEX_NATIVE_DTYPE_F32] = offsetof(yvex_source_verification, dtype_f32_count),
+    [YVEX_NATIVE_DTYPE_I64] = offsetof(yvex_source_verification, dtype_i64_count),
+    [YVEX_NATIVE_DTYPE_I8] = offsetof(yvex_source_verification, dtype_i8_count),
+    [YVEX_NATIVE_DTYPE_FP4] = offsetof(yvex_source_verification, dtype_fp4_count),
+    [YVEX_NATIVE_DTYPE_F8_E4M3] = offsetof(yvex_source_verification, dtype_f8_count),
+    [YVEX_NATIVE_DTYPE_F8_E5M2] = offsetof(yvex_source_verification, dtype_f8_count),
+    [YVEX_NATIVE_DTYPE_F8_E8M0] = offsetof(yvex_source_verification, dtype_f8_e8m0_count),
+};
+
+/* Purpose: project one native dtype through the immutable verification-counter map. */
+static void source_count_dtype(yvex_source_verification *out, yvex_native_dtype dtype) {
+    size_t offset = (unsigned int)dtype <= YVEX_NATIVE_DTYPE_OTHER
+                        ? source_dtype_counter_offsets[(unsigned int)dtype]
+                        : 0u;
+    unsigned long long *counter;
+
+    if (offset == 0u)
+        offset = offsetof(yvex_source_verification, dtype_other_count);
+    counter = (unsigned long long *)(void *)((unsigned char *)out + offset);
+    (*counter)++;
+}
 
 /* Purpose: copies a canonical shard catalog into snapshot-owned immutable storage.
  * Inputs: typed source inventory arguments; borrowed inputs outlive the call.
@@ -296,6 +399,12 @@ yvex_source_tensor_snapshot_shard_at(const yvex_source_tensor_snapshot *snapshot
                                                                          : NULL;
 }
 
+/* Purpose: compare a borrowed shard name with one immutable snapshot row. */
+static int source_snapshot_shard_key_compare(const void *key, const void *row) {
+    return strcmp((const char *)key,
+                  ((const yvex_source_shard_snapshot *)row)->canonical_name);
+}
+
 /* Purpose: binary-searches the immutable canonical shard catalog without allocation.
  * Inputs: typed source inventory arguments; borrowed inputs outlive the call.
  * Effects: mutates only explicit caller-owned source inventory state.
@@ -304,23 +413,13 @@ yvex_source_tensor_snapshot_shard_at(const yvex_source_tensor_snapshot *snapshot
 const yvex_source_shard_snapshot *
 yvex_source_tensor_snapshot_shard_find(const yvex_source_tensor_snapshot *snapshot,
                                        const char *canonical_name) {
-    unsigned long long lower = 0u;
-    unsigned long long upper;
-
     if (!snapshot || !snapshot->shards || !canonical_name)
         return NULL;
-    upper = snapshot->shard_count;
-    while (lower < upper) {
-        unsigned long long middle = lower + (upper - lower) / 2u;
-        int order = strcmp(snapshot->shards[middle].canonical_name, canonical_name);
-        if (order == 0)
-            return &snapshot->shards[middle];
-        if (order < 0)
-            lower = middle + 1u;
-        else
-            upper = middle;
-    }
-    return NULL;
+    return (const yvex_source_shard_snapshot *)bsearch(canonical_name,
+                                                       snapshot->shards,
+                                                       (size_t)snapshot->shard_count,
+                                                       sizeof(snapshot->shards[0]),
+                                                       source_snapshot_shard_key_compare);
 }
 
 /* Purpose: reports whether geometry came from the canonical retained header pass.
@@ -455,6 +554,11 @@ static int source_index_compare(const void *left, const void *right) {
     return strcmp(a->tensor, b->tensor);
 }
 
+/* Purpose: compare a borrowed tensor key with one immutable sorted index row. */
+static int source_index_key_compare(const void *key, const void *row) {
+    return strcmp((const char *)key, ((const source_index_entry *)row)->tensor);
+}
+
 /* Purpose: parses the upstream declared payload size with duplicate-field refusal.
  * Inputs: typed source inventory arguments; borrowed inputs outlive the call.
  * Effects: mutates only explicit caller-owned source inventory state.
@@ -462,36 +566,23 @@ static int source_index_compare(const void *left, const void *right) {
  * Boundary: header inventory is not payload trust or transform execution. */
 static int source_parse_index_metadata(yvex_json *json, source_index *index) {
     char key[YVEX_JSON_KEY_CAP];
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    yvex_json_space(json);
-    if (json->cursor >= json->end || *json->cursor++ != '{')
+    if (!yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_OBJECT))
         return 0;
-    for (;;) {
-        yvex_json_space(json);
-        if (json->cursor < json->end && *json->cursor == '}') {
-            json->cursor++;
-            return 1;
-        }
-        if (!yvex_json_string(json, key, sizeof(key)))
-            return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end || *json->cursor++ != ':')
-            return 0;
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
         if (strcmp(key, "total_size") == 0) {
-            if (index->has_declared_total_size || !yvex_json_u64(json, &index->declared_total_size))
+            if (index->has_declared_total_size ||
+                !yvex_json_u64(json, &index->declared_total_size))
                 return 0;
             index->has_declared_total_size = 1;
         } else if (!yvex_json_skip_value(json)) {
             return 0;
         }
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == '}')
-            continue;
-        if (*json->cursor++ != ',')
-            return 0;
     }
+    return item == YVEX_JSON_ITEM_END;
 }
 
 /* Purpose: parses all unique tensor-to-shard assignments from the upstream weight map.
@@ -502,34 +593,21 @@ static int source_parse_index_metadata(yvex_json *json, source_index *index) {
 static int source_parse_weight_map(yvex_json *json, source_index *index, yvex_error *err) {
     char tensor[YVEX_JSON_KEY_CAP];
     char shard[YVEX_PATH_CAP];
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    yvex_json_space(json);
-    if (json->cursor >= json->end || *json->cursor++ != '{')
+    if (!yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_OBJECT))
         return 0;
-    for (;;) {
+    while ((item = yvex_json_object_member(&iter, tensor, sizeof(tensor))) ==
+           YVEX_JSON_ITEM_READY) {
         int rc;
-        yvex_json_space(json);
-        if (json->cursor < json->end && *json->cursor == '}') {
-            json->cursor++;
-            return index->count > 0u;
-        }
-        if (!yvex_json_string(json, tensor, sizeof(tensor)))
-            return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end || *json->cursor++ != ':' ||
-            !yvex_json_string(json, shard, sizeof(shard)))
+        if (!yvex_json_string(json, shard, sizeof(shard)))
             return 0;
         rc = source_index_append(index, tensor, shard, err);
         if (rc != YVEX_OK)
             return -1;
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == '}')
-            continue;
-        if (*json->cursor++ != ',')
-            return 0;
     }
+    return item == YVEX_JSON_ITEM_END && index->count > 0u;
 }
 
 /* Purpose: parses a complete upstream index and requires metadata plus a nonempty map.
@@ -540,26 +618,18 @@ static int source_parse_weight_map(yvex_json *json, source_index *index, yvex_er
 static int
 source_parse_index_json(const char *data, size_t length, source_index *index, yvex_error *err) {
     yvex_json json;
+    yvex_json_iter iter;
+    yvex_json_item item;
     char key[YVEX_JSON_KEY_CAP];
     unsigned int seen = 0u;
     size_t i;
 
     yvex_json_init(&json, data, length);
-    yvex_json_space(&json);
-    if (json.cursor >= json.end || *json.cursor++ != '{')
+    if (!yvex_json_iter_begin(&json, &iter, YVEX_JSON_COLLECTION_OBJECT))
         return 0;
-    for (;;) {
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
         int parsed = 1;
-        yvex_json_space(&json);
-        if (json.cursor < json.end && *json.cursor == '}') {
-            json.cursor++;
-            break;
-        }
-        if (!yvex_json_string(&json, key, sizeof(key)))
-            return 0;
-        yvex_json_space(&json);
-        if (json.cursor >= json.end || *json.cursor++ != ':')
-            return 0;
         if (strcmp(key, "metadata") == 0) {
             if ((seen & 1u) || !source_parse_index_metadata(&json, index))
                 return 0;
@@ -576,15 +646,8 @@ source_parse_index_json(const char *data, size_t length, source_index *index, yv
         } else if (!yvex_json_skip_value(&json)) {
             return 0;
         }
-        yvex_json_space(&json);
-        if (json.cursor >= json.end)
-            return 0;
-        if (*json.cursor == '}')
-            continue;
-        if (*json.cursor++ != ',')
-            return 0;
     }
-    if (!yvex_json_complete(&json) || !(seen & 2u))
+    if (item != YVEX_JSON_ITEM_END || !yvex_json_complete(&json) || !(seen & 2u))
         return 0;
     qsort(index->items, index->count, sizeof(index->items[0]), source_index_compare);
     for (i = 1u; i < index->count; ++i) {
@@ -598,20 +661,13 @@ source_parse_index_json(const char *data, size_t length, source_index *index, yv
 
 /* Purpose: locate the source inventory entry associated with a canonical key. */
 static source_index_entry *source_index_find(source_index *index, const char *tensor) {
-    size_t low = 0u;
-    size_t high = index ? index->count : 0u;
-
-    while (low < high) {
-        size_t mid = low + (high - low) / 2u;
-        int cmp = strcmp(tensor, index->items[mid].tensor);
-        if (cmp == 0)
-            return &index->items[mid];
-        if (cmp < 0)
-            high = mid;
-        else
-            low = mid + 1u;
-    }
-    return NULL;
+    return index && tensor
+               ? (source_index_entry *)bsearch(tensor,
+                                               index->items,
+                                               index->count,
+                                               sizeof(index->items[0]),
+                                               source_index_key_compare)
+               : NULL;
 }
 
 /* Purpose: adds one unique root shard and its checked local file size.
@@ -623,31 +679,8 @@ static int source_shards_append(source_shards *shards,
                                 const char *name,
                                 unsigned long long size,
                                 yvex_error *err) {
-    char **next_names;
-    unsigned long long *next_sizes;
-    size_t cap;
-
-    if (shards->count == shards->cap) {
-        cap = shards->cap ? shards->cap * 2u : 64u;
-        next_names = (char **)realloc(shards->names, cap * sizeof(shards->names[0]));
-        if (!next_names) {
-            return inventory_refuse(err, YVEX_ERR_NOMEM, "source_shards", "shard name allocation failed");
-        }
-        shards->names = next_names;
-        next_sizes = (unsigned long long *)realloc(shards->sizes, cap * sizeof(shards->sizes[0]));
-        if (!next_sizes) {
-            return inventory_refuse(err, YVEX_ERR_NOMEM, "source_shards", "shard size allocation failed");
-        }
-        shards->sizes = next_sizes;
-        shards->cap = cap;
-    }
-    shards->names[shards->count] = yvex_core_strdup(name);
-    if (!shards->names[shards->count]) {
-        return inventory_refuse(err, YVEX_ERR_NOMEM, "source_shards", "shard name copy failed");
-    }
-    shards->sizes[shards->count] = size;
-    shards->count++;
-    return YVEX_OK;
+    return source_named_size_append(
+        &shards->items, &shards->count, &shards->cap, name, size, &source_shard_row_policy, err);
 }
 
 /* Purpose: release the canonical shard catalog and its owned names.
@@ -656,14 +689,9 @@ static int source_shards_append(source_shards *shards,
  * Failure: null or released source inventory handles remain harmless.
  * Boundary: header inventory is not payload trust or transform execution. */
 static void source_shards_free(source_shards *shards) {
-    size_t i;
-
     if (!shards)
         return;
-    for (i = 0; i < shards->count; ++i)
-        free(shards->names[i]);
-    free(shards->names);
-    free(shards->sizes);
+    source_named_size_free(shards->items, shards->count);
     memset(shards, 0, sizeof(*shards));
 }
 
@@ -702,59 +730,23 @@ source_shard_name_parse(const char *name, unsigned int *index_out, unsigned int 
 }
 
 /* Purpose: order canonical shard rows by numeric shard identity and relative name. */
-static int source_shard_compare(const void *left, const void *right) {
-    const source_shard_sort_row *a = (const source_shard_sort_row *)left;
-    const source_shard_sort_row *b = (const source_shard_sort_row *)right;
-    return strcmp(a->name, b->name);
-}
-
-/* Purpose: sorts shard names and keeps their corresponding byte sizes paired.
- * Inputs: typed source inventory arguments; borrowed inputs outlive the call.
- * Effects: mutates only explicit caller-owned source inventory state.
- * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
- * Boundary: header inventory is not payload trust or transform execution. */
-static int source_shards_sort(source_shards *shards, yvex_error *err) {
-    source_shard_sort_row *rows;
-    size_t i;
-
-    if (shards->count < 2u)
-        return YVEX_OK;
-    rows = (source_shard_sort_row *)calloc(shards->count, sizeof(*rows));
-    if (!rows) {
-        return inventory_refuse(err, YVEX_ERR_NOMEM, "source_shards_sort", "shard sort allocation failed");
-    }
-    for (i = 0u; i < shards->count; ++i) {
-        rows[i].name = shards->names[i];
-        rows[i].size = shards->sizes[i];
-    }
-    qsort(rows, shards->count, sizeof(*rows), source_shard_compare);
-    for (i = 0u; i < shards->count; ++i) {
-        shards->names[i] = rows[i].name;
-        shards->sizes[i] = rows[i].size;
-    }
-    free(rows);
-    return YVEX_OK;
+/* Purpose: sort canonical shard rows in place without a second allocation lifecycle. */
+static void source_shards_sort(source_shards *shards) {
+    qsort(shards->items, shards->count, sizeof(shards->items[0]), source_named_size_compare);
 }
 
 /* Purpose: binary-searches the canonical sorted shard table. */
 static long source_shards_find(const source_shards *shards, const char *name) {
-    size_t lower = 0u;
-    size_t upper;
+    const source_named_size *row;
 
     if (!shards || !name)
         return -1;
-    upper = shards->count;
-    while (lower < upper) {
-        size_t middle = lower + (upper - lower) / 2u;
-        int order = strcmp(shards->names[middle], name);
-        if (order == 0)
-            return (long)middle;
-        if (order < 0)
-            lower = middle + 1u;
-        else
-            upper = middle;
-    }
-    return -1;
+    row = (const source_named_size *)bsearch(name,
+                                             shards->items,
+                                             shards->count,
+                                             sizeof(shards->items[0]),
+                                             source_named_size_key_compare);
+    return row ? (long)(row - shards->items) : -1;
 }
 
 /* Purpose: inventories only root safetensors shards and rejects unexpected shard forms.
@@ -766,50 +758,31 @@ static int source_scan_root(const char *source_path,
                             source_shards *shards,
                             yvex_source_verification *out,
                             yvex_error *err) {
-    DIR *dir;
-    struct dirent *entry;
+    yvex_source_manifest_file_list files;
+    size_t row;
+    int rc;
 
-    dir = opendir(source_path);
-    if (!dir) {
-        yvex_error_setf(err,
-                        YVEX_ERR_IO,
-                        "source_inventory_root",
-                        "cannot inspect source directory: %s",
-                        source_path);
-        return YVEX_ERR_IO;
+    yvex_source_manifest_file_list_init(&files);
+    rc = yvex_source_manifest_scan_files(source_path, 1, &files, err);
+    if (rc == YVEX_ERR_BOUNDS) {
+        out->footprint_overflow = 1;
+        yvex_source_verification_add_blocker(out, "source-footprint-overflow");
+        yvex_error_clear(err);
+        rc = YVEX_OK;
+    } else if (rc == YVEX_OK) {
+        out->source_file_count = files.summary.file_count;
+        out->source_total_bytes = files.summary.total_size_bytes;
     }
-    for (;;) {
-        char path[YVEX_PATH_CAP];
-        struct stat st;
+    if (rc != YVEX_OK)
+        goto cleanup;
+    for (row = 0u; row < files.count; ++row) {
+        const yvex_source_manifest_file *file = &files.items[row];
         unsigned int shard_index = 0u;
         unsigned int shard_total = 0u;
-        int rc;
 
-        errno = 0;
-        entry = readdir(dir);
-        if (!entry) {
-            if (errno != 0) {
-                yvex_source_verification_add_blocker(out, "source-directory-read-failed");
-            }
-            break;
-        }
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+        if (strchr(file->path, '/') || strcmp(file->kind, "safetensors") != 0)
             continue;
-        if (!yvex_source_path_join(path, sizeof(path), source_path, entry->d_name)) {
-            yvex_source_verification_add_blocker(out, "source-entry-path-overflow");
-            continue;
-        }
-        if (lstat(path, &st) != 0) {
-            yvex_source_verification_add_blocker(out, "source-entry-unreadable");
-            continue;
-        }
-        if (!S_ISREG(st.st_mode) || st.st_size < 0)
-            continue;
-        if (strlen(entry->d_name) <= strlen(".safetensors") ||
-            strcmp(entry->d_name + strlen(entry->d_name) - strlen(".safetensors"),
-                   ".safetensors") != 0)
-            continue;
-        if (!source_shard_name_parse(entry->d_name, &shard_index, &shard_total)) {
+        if (!source_shard_name_parse(file->path, &shard_index, &shard_total)) {
             yvex_source_verification_add_blocker(out, "unexpected-shard");
             continue;
         }
@@ -818,24 +791,15 @@ static int source_scan_root(const char *source_path,
         } else if (shards->declared_total != shard_total) {
             yvex_source_verification_add_blocker(out, "inconsistent-shard-set");
         }
-        rc = source_shards_append(shards, entry->d_name, (unsigned long long)st.st_size, err);
-        if (rc != YVEX_OK) {
-            closedir(dir);
-            return rc;
-        }
-        if (!yvex_source_checked_add_u64(&out->shard_bytes, (unsigned long long)st.st_size)) {
+        rc = source_shards_append(shards, file->path, file->size_bytes, err);
+        if (rc != YVEX_OK)
+            goto cleanup;
+        if (!yvex_core_u64_add(out->shard_bytes, file->size_bytes, &out->shard_bytes)) {
             out->footprint_overflow = 1;
             yvex_source_verification_add_blocker(out, "source-footprint-overflow");
         }
     }
-    if (closedir(dir) != 0) {
-        yvex_source_verification_add_blocker(out, "source-directory-close-failed");
-    }
-    {
-        int rc = source_shards_sort(shards, err);
-        if (rc != YVEX_OK)
-            return rc;
-    }
+    source_shards_sort(shards);
     out->shard_count = (unsigned long long)shards->count;
     if (!shards->count) {
         yvex_source_verification_add_blocker(out, "missing-source-shards");
@@ -846,16 +810,21 @@ static int source_scan_root(const char *source_path,
     for (size_t i = 0u; i < shards->count; ++i) {
         unsigned int index = 0u;
         unsigned int prior_index = 0u;
-        if (i > 0u && source_shard_name_parse(shards->names[i - 1u], &prior_index, NULL) &&
-            source_shard_name_parse(shards->names[i], &index, NULL) && prior_index == index) {
+        if (i > 0u &&
+            source_shard_name_parse(shards->items[i - 1u].name, &prior_index, NULL) &&
+            source_shard_name_parse(shards->items[i].name, &index, NULL) &&
+            prior_index == index) {
             yvex_source_verification_add_blocker(out, "duplicate-source-shard");
         }
-        if (!source_shard_name_parse(shards->names[i], &index, NULL) || index != i + 1u) {
+        if (!source_shard_name_parse(shards->items[i].name, &index, NULL) || index != i + 1u) {
             yvex_source_verification_add_blocker(out, "discontinuous-shard-set");
             break;
         }
     }
-    return YVEX_OK;
+    rc = YVEX_OK;
+cleanup:
+    yvex_source_manifest_file_list_free(&files);
+    return rc;
 }
 
 /* Purpose: adds one unique official snapshot file and its declared metadata size.
@@ -867,27 +836,13 @@ static int source_upstream_append(source_upstream_inventory *inventory,
                                   const char *name,
                                   unsigned long long size,
                                   yvex_error *err) {
-    source_upstream_file *next;
-    size_t cap;
-
-    if (inventory->count == inventory->cap) {
-        cap = inventory->cap ? inventory->cap * 2u : 64u;
-        next = (source_upstream_file *)realloc(inventory->items, cap * sizeof(inventory->items[0]));
-        if (!next) {
-            return inventory_refuse(err, YVEX_ERR_NOMEM, "source_upstream_inventory",
-                "upstream inventory allocation failed");
-        }
-        inventory->items = next;
-        inventory->cap = cap;
-    }
-    inventory->items[inventory->count].name = yvex_core_strdup(name);
-    if (!inventory->items[inventory->count].name) {
-        return inventory_refuse(err, YVEX_ERR_NOMEM, "source_upstream_inventory",
-            "upstream inventory name allocation failed");
-    }
-    inventory->items[inventory->count].size = size;
-    inventory->count++;
-    return YVEX_OK;
+    return source_named_size_append(&inventory->items,
+                                    &inventory->count,
+                                    &inventory->cap,
+                                    name,
+                                    size,
+                                    &source_upstream_row_policy,
+                                    err);
 }
 
 /* Purpose: release parsed upstream inventory rows and their owned tensor names.
@@ -896,15 +851,10 @@ static int source_upstream_append(source_upstream_inventory *inventory,
  * Failure: null or released source inventory handles remain harmless.
  * Boundary: header inventory is not payload trust or transform execution. */
 static void source_upstream_free(source_upstream_inventory *inventory) {
-    size_t i;
-
-    for (i = 0u; inventory && i < inventory->count; ++i) {
-        free(inventory->items[i].name);
-    }
-    if (inventory) {
-        free(inventory->items);
-        memset(inventory, 0, sizeof(*inventory));
-    }
+    if (!inventory)
+        return;
+    source_named_size_free(inventory->items, inventory->count);
+    memset(inventory, 0, sizeof(*inventory));
 }
 
 /* Purpose: parses one file row from a pinned upstream snapshot inventory.
@@ -915,43 +865,29 @@ static void source_upstream_free(source_upstream_inventory *inventory) {
 static int
 source_upstream_parse_file(yvex_json *json, source_upstream_inventory *inventory, yvex_error *err) {
     char key[YVEX_JSON_KEY_CAP];
-    char name[YVEX_PATH_CAP] = "";
-    unsigned long long size = 0u;
-    unsigned int seen = 0u;
+    source_upstream_parse_state state = {{0}, 0u, 0u};
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    yvex_json_space(json);
-    if (json->cursor >= json->end || *json->cursor++ != '{')
+    if (!yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_OBJECT))
         return 0;
-    for (;;) {
-        yvex_json_space(json);
-        if (json->cursor < json->end && *json->cursor == '}') {
-            json->cursor++;
-            return seen == 3u && source_upstream_append(inventory, name, size, err) == YVEX_OK;
-        }
-        if (!yvex_json_string(json, key, sizeof(key)))
-            return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end || *json->cursor++ != ':')
-            return 0;
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
         if (strcmp(key, "path") == 0) {
-            if ((seen & 1u) || !yvex_json_string(json, name, sizeof(name)))
+            if ((state.seen & 1u) ||
+                !yvex_json_string(json, state.name, sizeof(state.name)))
                 return 0;
-            seen |= 1u;
+            state.seen |= 1u;
         } else if (strcmp(key, "size_bytes") == 0) {
-            if ((seen & 2u) || !yvex_json_u64(json, &size))
+            if ((state.seen & 2u) || !yvex_json_u64(json, &state.size))
                 return 0;
-            seen |= 2u;
+            state.seen |= 2u;
         } else if (!yvex_json_skip_value(json)) {
             return 0;
         }
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == '}')
-            continue;
-        if (*json->cursor++ != ',')
-            return 0;
     }
+    return item == YVEX_JSON_ITEM_END && state.seen == 3u &&
+           source_upstream_append(inventory, state.name, state.size, err) == YVEX_OK;
 }
 
 /* Purpose: parses the bounded official file list without accepting duplicates.
@@ -962,25 +898,16 @@ source_upstream_parse_file(yvex_json *json, source_upstream_inventory *inventory
 static int source_upstream_parse_files(yvex_json *json,
                                        source_upstream_inventory *inventory,
                                        yvex_error *err) {
-    yvex_json_space(json);
-    if (json->cursor >= json->end || *json->cursor++ != '[')
+    yvex_json_iter iter;
+    yvex_json_item item;
+
+    if (!yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_ARRAY))
         return 0;
-    yvex_json_space(json);
-    if (json->cursor < json->end && *json->cursor == ']')
-        return 0;
-    for (;;) {
+    while ((item = yvex_json_array_value(&iter)) == YVEX_JSON_ITEM_READY) {
         if (!source_upstream_parse_file(json, inventory, err))
             return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == ']') {
-            json->cursor++;
-            return inventory->count > 0u;
-        }
-        if (*json->cursor++ != ',')
-            return 0;
     }
+    return item == YVEX_JSON_ITEM_END && !iter.trailing_separator && inventory->count > 0u;
 }
 
 /* Purpose: parses and verifies repository/revision identity for an indexless snapshot.
@@ -993,32 +920,25 @@ static int source_upstream_parse(const char *data,
                                  source_upstream_inventory *inventory,
                                  yvex_error *err) {
     yvex_json json;
+    yvex_json_iter iter;
+    yvex_json_item item;
     char key[YVEX_JSON_KEY_CAP];
     char schema[64];
     unsigned int seen = 0u;
 
     yvex_json_init(&json, data, length);
-    yvex_json_space(&json);
-    if (json.cursor >= json.end || *json.cursor++ != '{')
+    if (!yvex_json_iter_begin(&json, &iter, YVEX_JSON_COLLECTION_OBJECT))
         return 0;
-    for (;;) {
-        yvex_json_space(&json);
-        if (json.cursor < json.end && *json.cursor == '}') {
-            json.cursor++;
-            break;
-        }
-        if (!yvex_json_string(&json, key, sizeof(key)))
-            return 0;
-        yvex_json_space(&json);
-        if (json.cursor >= json.end || *json.cursor++ != ':')
-            return 0;
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
         if (strcmp(key, "schema") == 0) {
             if ((seen & 1u) || !yvex_json_string(&json, schema, sizeof(schema)) ||
                 strcmp(schema, "yvex.source_upstream_inventory.v1") != 0)
                 return 0;
             seen |= 1u;
         } else if (strcmp(key, "repository") == 0) {
-            if ((seen & 2u) || !yvex_json_string(&json, inventory->repo, sizeof(inventory->repo)))
+            if ((seen & 2u) ||
+                !yvex_json_string(&json, inventory->repo, sizeof(inventory->repo)))
                 return 0;
             seen |= 2u;
         } else if (strcmp(key, "revision") == 0) {
@@ -1033,15 +953,8 @@ static int source_upstream_parse(const char *data,
         } else if (!yvex_json_skip_value(&json)) {
             return 0;
         }
-        yvex_json_space(&json);
-        if (json.cursor >= json.end)
-            return 0;
-        if (*json.cursor == '}')
-            continue;
-        if (*json.cursor++ != ',')
-            return 0;
     }
-    return yvex_json_complete(&json) && seen == 15u;
+    return item == YVEX_JSON_ITEM_END && yvex_json_complete(&json) && seen == 15u;
 }
 
 /* Purpose: verifies the official index file, provider identity, and declared shard map.
@@ -1166,7 +1079,7 @@ static int source_verify_upstream_indexless(const yvex_source_verify_options *op
     }
     for (i = 0u; i < upstream.count; ++i) {
         long local = source_shards_find(shards, upstream.items[i].name);
-        if (local < 0 || shards->sizes[local] != upstream.items[i].size) {
+        if (local < 0 || shards->items[local].size != upstream.items[i].size) {
             yvex_source_verification_add_blocker(out, "upstream-local-inventory-drift");
         }
     }
@@ -1275,10 +1188,11 @@ static int source_verify_headers(const yvex_source_verify_options *options,
         unsigned long long before = table->count;
         unsigned long long row;
 
-        rc = yvex_source_provenance_verify_file(options, shards->names[i], 0, out, err);
+        rc = yvex_source_provenance_verify_file(options, shards->items[i].name, 0, out, err);
         if (rc != YVEX_OK)
             goto cleanup;
-        if (!yvex_source_path_join(path, sizeof(path), options->source_path, shards->names[i])) {
+        if (!yvex_source_path_join(
+                path, sizeof(path), options->source_path, shards->items[i].name)) {
             yvex_source_verification_add_blocker(out, "invalid-safetensors-header");
             shard_catalog_complete = 0;
             continue;
@@ -1286,7 +1200,7 @@ static int source_verify_headers(const yvex_source_verify_options *options,
         yvex_error_clear(&header_error);
         memset(&file_facts, 0, sizeof(file_facts));
         rc = yvex_safetensors_read_header_file_with_facts(
-            path, shards->names[i], table, &file_facts, &header_error);
+            path, shards->items[i].name, table, &file_facts, &header_error);
         if (rc == YVEX_ERR_NOMEM) {
             yvex_error_set(err,
                            YVEX_ERR_NOMEM,
@@ -1310,14 +1224,14 @@ static int source_verify_headers(const yvex_source_verify_options *options,
         }
         if (shard_facts) {
             shard_facts[i].canonical_id = (unsigned long long)i;
-            shard_facts[i].canonical_name = shards->names[i];
+            shard_facts[i].canonical_name = shards->items[i].name;
             shard_facts[i].file_bytes = file_facts.file_bytes;
             shard_facts[i].data_region_offset = file_facts.data_region_offset;
             shard_facts[i].payload_bytes = file_facts.payload_bytes;
         }
         for (row = before; row < table->count && indexed; ++row) {
             source_index_entry *entry = source_index_find(index, table->items[row].name);
-            if (!entry || strcmp(entry->shard, shards->names[i]) != 0) {
+            if (!entry || strcmp(entry->shard, shards->items[i].name) != 0) {
                 mismatch = 1;
             } else {
                 entry->seen_in_header = 1;
@@ -1349,36 +1263,7 @@ static int source_verify_headers(const yvex_source_verify_options *options,
         const yvex_native_weight_info *info = &table->items[i];
         if (info->rank > out->max_tensor_rank)
             out->max_tensor_rank = info->rank;
-        switch (info->dtype) {
-        case YVEX_NATIVE_DTYPE_F16:
-            out->dtype_f16_count++;
-            break;
-        case YVEX_NATIVE_DTYPE_BF16:
-            out->dtype_bf16_count++;
-            break;
-        case YVEX_NATIVE_DTYPE_F32:
-            out->dtype_f32_count++;
-            break;
-        case YVEX_NATIVE_DTYPE_I64:
-            out->dtype_i64_count++;
-            break;
-        case YVEX_NATIVE_DTYPE_I8:
-            out->dtype_i8_count++;
-            break;
-        case YVEX_NATIVE_DTYPE_FP4:
-            out->dtype_fp4_count++;
-            break;
-        case YVEX_NATIVE_DTYPE_F8_E4M3:
-        case YVEX_NATIVE_DTYPE_F8_E5M2:
-            out->dtype_f8_count++;
-            break;
-        case YVEX_NATIVE_DTYPE_F8_E8M0:
-            out->dtype_f8_e8m0_count++;
-            break;
-        default:
-            out->dtype_other_count++;
-            break;
-        }
+        source_count_dtype(out, info->dtype);
     }
     out->header_shard_count = table->header_read_count;
     out->header_tensor_count = table->count;

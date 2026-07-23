@@ -123,17 +123,6 @@ contains "$OUT_DIR/materialize-stale.out" "identity_status: fail"
 contains "$OUT_DIR/materialize-stale.out" "status: models-identity-fail"
 not_contains "$OUT_DIR/materialize-stale.out" "status: weights-materialized"
 
-YVEX_MODELS_REGISTRY="$STALE_REG" "$YVEX_BIN" graph \
-  --model "$ALIAS" \
-  --backend cpu \
-  --execute-partial \
-  --partial-token 0 \
-  >"$OUT_DIR/graph-stale.out" 2>"$OUT_DIR/graph-stale.err" && \
-  fail "graph stale alias unexpectedly passed" || true
-contains "$OUT_DIR/graph-stale.out" "identity_status: fail"
-contains "$OUT_DIR/graph-stale.out" "status: models-identity-fail"
-not_contains "$OUT_DIR/graph-stale.out" "status: real-partial-graph-executed"
-
 "$YVEX_BIN" model-gate check \
   --model "$MODEL" \
   --label identity-bad-sha \

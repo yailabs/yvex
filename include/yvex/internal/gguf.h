@@ -11,11 +11,13 @@
 #define INCLUDE_YVEX_INTERNAL_GGUF_H_INCLUDED
 
 #include <stddef.h>
+#include <stdint.h>
 #include <yvex/artifact.h>
 #include <yvex/core.h>
 #include <yvex/gguf.h>
 #include <yvex/model.h>
 #include <yvex/qtype.h>
+#include <yvex/internal/core.h>
 #include <yvex/internal/gguf_writer.h>
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/source.h>
@@ -24,144 +26,53 @@
 extern "C" {
 #endif
 
-int yvex_gguf_qtype_reference_dequantization_supported(unsigned int qtype);
-
-/* Private contract. */
-#define YVEX_GGUF_ABI_NEXT_ROW "V010.CUDA.FAILCLOSED.0"
-#define YVEX_GGUF_QTYPE_ABI_NEXT_ROW "V010.GGUF.ARTIFACT.ABI.1"
-typedef enum {
-    YVEX_GGUF_BOUNDARY_OPERATIONAL = 0,
-    YVEX_GGUF_BOUNDARY_REPORT_ONLY = 1,
-    YVEX_GGUF_BOUNDARY_UNSUPPORTED = 2,
-    YVEX_GGUF_BOUNDARY_REFUSED = 3
-} yvex_gguf_boundary_status;
-typedef enum {
-    YVEX_GGUF_ABI_SECTION_NOT_EVALUATED = 0,
-    YVEX_GGUF_ABI_SECTION_OK = 1,
-    YVEX_GGUF_ABI_SECTION_REPORT_ONLY = 2,
-    YVEX_GGUF_ABI_SECTION_REFUSED = 3,
-    YVEX_GGUF_ABI_SECTION_UNSUPPORTED = 4,
-    YVEX_GGUF_ABI_SECTION_MALFORMED = 5,
-    YVEX_GGUF_ABI_SECTION_NOT_PRESENT = 6
-} yvex_gguf_abi_section_status;
+/* Bounded GGUF-owned JSON document cursor shared by quantization metadata owners. */
 typedef struct {
-    const char *owner;
-    const char *stage;
-    yvex_gguf_boundary_status status;
-    const char *reason;
-    const char *next_row;
-} yvex_gguf_boundary_fact;
-typedef struct {
-    unsigned int qtype;
-    const char *name;
-    const char *identity_status;
-    const char *storage_class;
-    unsigned int block_size;
-    unsigned int bytes_per_block;
-    unsigned int scalar_width;
-    const char *storage_status;
-    const char *reference_dequantization;
-    unsigned long long expected_storage_bytes;
-    const char *reason;
-    const char *next_row;
-} yvex_gguf_qtype_report_row;
-typedef struct {
-    yvex_gguf_abi_section_status status;
-    unsigned int magic;
-    unsigned int version;
-    unsigned long long metadata_count;
-    unsigned long long tensor_count;
-    const char *reason;
-} yvex_gguf_container_abi;
-typedef struct {
-    yvex_gguf_abi_section_status status;
-    unsigned long long entry_count;
-    unsigned long long string_value_count;
-    unsigned long long array_value_count;
-    const char *reason;
-} yvex_gguf_metadata_abi;
-typedef struct {
-    yvex_gguf_abi_section_status status;
-    unsigned long long tensor_count;
-    unsigned int max_rank;
-    unsigned long long rank_one_tensor_count;
-    unsigned long long named_tensor_count;
-    unsigned long long qtype_known_tensor_count;
-    unsigned long long qtype_refused_tensor_count;
-    const char *reason;
-} yvex_gguf_tensor_info_abi;
-typedef struct {
-    yvex_gguf_abi_section_status status;
-    unsigned long long checked_tensor_count;
-    unsigned long long known_tensor_count;
-    unsigned long long refused_tensor_count;
-    unsigned long long total_storage_bytes;
-    unsigned int first_refused_qtype;
-    const char *reason;
-    const char *next_row;
-} yvex_gguf_qtype_abi;
-typedef struct {
-    yvex_gguf_abi_section_status status;
-    unsigned long long checked_tensor_count;
-    unsigned long long tensor_data_offset;
-    unsigned long long file_size;
-    unsigned long long total_expected_storage_bytes;
-    unsigned long long first_expected_storage_bytes;
-    unsigned long long first_actual_available_bytes;
-    unsigned long long qtype_checked_tensor_count;
-    unsigned int alignment;
-    const char *reason;
-} yvex_gguf_range_fact;
-typedef struct {
-    yvex_gguf_abi_section_status status;
-    const char *reason;
-} yvex_gguf_descriptor_abi;
-typedef struct {
+    yvex_json cursor;
+    char *buffer;
     const char *path;
-    yvex_gguf_abi_section_status status;
-    yvex_gguf_container_abi container;
-    yvex_gguf_metadata_abi metadata;
-    yvex_gguf_tensor_info_abi tensor_info;
-    yvex_gguf_qtype_abi qtype;
-    yvex_gguf_layout_result layout;
-    yvex_gguf_range_fact range;
-    yvex_gguf_descriptor_abi descriptor;
-    int parser_status;
-    yvex_gguf_parse_result parse_result;
-    yvex_gguf_reader_stats reader_stats;
-    char failure_where[YVEX_ERROR_WHERE_CAP];
-    char failure_reason[YVEX_ERROR_MESSAGE_CAP];
-    const char *next_row;
-} yvex_gguf_abi_report;
-typedef struct {
-    const char *kind;
-    const char *status;
-    const char *reason;
-    const char *next_row;
-} yvex_gguf_report_fact;
-void yvex_gguf_container_abi_init(yvex_gguf_container_abi *abi);
-void yvex_gguf_container_abi_from_header(const yvex_gguf_header *header,
-                                         yvex_gguf_container_abi *abi);
-void yvex_gguf_metadata_abi_init(yvex_gguf_metadata_abi *abi);
-int yvex_gguf_metadata_abi_from_gguf(const yvex_gguf *gguf,
-                                     yvex_gguf_metadata_abi *abi,
-                                     const char **reason);
-void yvex_gguf_tensor_info_abi_init(yvex_gguf_tensor_info_abi *abi);
-int yvex_gguf_tensor_info_abi_from_gguf(const yvex_gguf *gguf,
-                                        yvex_gguf_tensor_info_abi *abi,
-                                        const char **reason);
-void yvex_gguf_qtype_abi_init(yvex_gguf_qtype_abi *abi);
-int yvex_gguf_qtype_abi_from_gguf(const yvex_gguf *gguf,
-                                  yvex_gguf_qtype_abi *abi,
-                                  const char **reason);
-void yvex_gguf_qtype_report_row_from_geometry(const yvex_gguf_qtype_geometry *geometry,
-                                              const unsigned long long *dims,
-                                              unsigned int rank,
-                                              yvex_gguf_qtype_report_row *row);
-void yvex_gguf_range_fact_init(yvex_gguf_range_fact *fact);
-int yvex_gguf_range_fact_from_layout(const yvex_gguf_layout_result *layout,
-                                     yvex_gguf_range_fact *fact,
-                                     const char **reason);
+    const char *context;
+    yvex_error *err;
+} yvex_gguf_json;
+int yvex_gguf_json_open(yvex_gguf_json *json,
+                        const char *path,
+                        const char *context,
+                        yvex_error *err);
+void yvex_gguf_json_close(yvex_gguf_json *json);
+int yvex_gguf_json_fail(yvex_gguf_json *json, const char *message);
+int yvex_gguf_json_expect(yvex_gguf_json *json, char expected);
+char *yvex_gguf_json_string(yvex_gguf_json *json);
+int yvex_gguf_json_skip(yvex_gguf_json *json);
+int yvex_gguf_json_member(yvex_gguf_json *json, char **key, int *complete);
+void yvex_gguf_json_optional_comma(yvex_gguf_json *json);
+typedef int (*yvex_gguf_json_array_item_fn)(yvex_gguf_json *json, void *context);
+int yvex_gguf_json_array(yvex_gguf_json *json,
+                         yvex_gguf_json_array_item_fn item,
+                         void *context,
+                         const char *malformed,
+                         const char *unterminated);
+
+/* Purpose: decode one admitted canonical little-endian unsigned 16-bit field. */
+static inline unsigned short gguf_u16le_load(const unsigned char *bytes)
+{
+    return (unsigned short)((unsigned short)bytes[0] | ((unsigned short)bytes[1] << 8));
+}
+
+/* Purpose: decode one admitted canonical little-endian unsigned 32-bit field. */
+static inline unsigned int gguf_u32le_load(const unsigned char *bytes)
+{
+    return (unsigned int)bytes[0] | ((unsigned int)bytes[1] << 8) |
+           ((unsigned int)bytes[2] << 16) | ((unsigned int)bytes[3] << 24);
+}
+
+/* Purpose: interpret one portable two's-complement I32 bit pattern without narrowing. */
+static inline int32_t gguf_i32_from_u32(uint32_t value)
+{
+    return value <= (uint32_t)INT32_MAX ? (int32_t)value
+                                        : -1 - (int32_t)(UINT32_MAX - value);
+}
+
+/* Private parser failure contract. */
 void yvex_gguf_parse_result_reset(yvex_gguf_parse_result *result);
 int yvex_gguf_reader_fail(yvex_gguf_parse_result *result,
                           yvex_gguf_parse_code code,
@@ -171,22 +82,6 @@ int yvex_gguf_reader_fail(yvex_gguf_parse_result *result,
                           yvex_error *err,
                           const char *where,
                           const char *reason);
-void yvex_gguf_reader_classify_error(int parse_rc,
-                                     const yvex_gguf_parse_result *result,
-                                     const yvex_error *err,
-                                     yvex_gguf_abi_report *report);
-int yvex_gguf_writer_supported(const char **reason);
-int yvex_gguf_roundtrip_supported(const char **reason);
-void yvex_gguf_descriptor_abi_from_sections(const yvex_gguf_container_abi *container,
-                                            const yvex_gguf_metadata_abi *metadata,
-                                            const yvex_gguf_tensor_info_abi *tensor_info,
-                                            const yvex_gguf_qtype_abi *qtype,
-                                            const yvex_gguf_range_fact *range,
-                                            yvex_gguf_descriptor_abi *descriptor);
-int yvex_gguf_artifact_abi_report_build(const char *path,
-                                        yvex_gguf_abi_report *report,
-                                        yvex_error *err);
-
 /* Map contract. */
 #define YVEX_GGUF_MAPPING_REFERENCE_COMMIT \
     "e920c523e3b8a0163fe498af5bf90df35ff51d25"
@@ -356,8 +251,6 @@ int yvex_gguf_roundtrip_validate(
     yvex_gguf_roundtrip_summary *out,
     yvex_gguf_roundtrip_failure *failure,
     yvex_error *err);
-const char *yvex_gguf_roundtrip_code_name(yvex_gguf_roundtrip_code code);
-
 #ifdef __cplusplus
 }
 #endif

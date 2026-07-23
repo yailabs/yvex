@@ -53,11 +53,6 @@ test "$family_files" -eq 3 || {
   exit 1
 }
 
-grep -A8 'int yvex_attention_execute_supported' src/graph/attention.c |
-  grep -F 'return 1;' >/dev/null || {
-  echo "topology closure: complete attention execution is not admitted" >&2
-  exit 1
-}
 grep -F 'plan->summary.cuda_execution_ready = 1;' src/graph/plan.c >/dev/null || {
   echo "topology closure: attention CUDA readiness is not admitted" >&2
   exit 1

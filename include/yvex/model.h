@@ -20,14 +20,6 @@ typedef struct yvex_gguf yvex_gguf;
 typedef struct yvex_backend yvex_backend;
 typedef struct yvex_device_tensor yvex_device_tensor;
 
-/* Runtime-independent geometry shared by KV planning and decode requests. */
-typedef struct {
-    unsigned long long layer_count;
-    unsigned long long kv_head_count;
-    unsigned long long head_dim;
-    unsigned long long capacity;
-} yvex_kv_shape;
-
 /* Dtype geometry. */
 typedef enum {
     YVEX_DTYPE_UNKNOWN = 0,
@@ -406,11 +398,6 @@ typedef struct {
     unsigned int output_count;
     const char *reason;
 } yvex_graph_op_info;
-
-const char *yvex_op_kind_name(yvex_op_kind kind);
-const char *yvex_op_status_name(yvex_op_status status);
-const char *yvex_value_kind_name(yvex_value_kind kind);
-const char *yvex_residency_name(yvex_residency residency);
 
 #ifdef __cplusplus
 }

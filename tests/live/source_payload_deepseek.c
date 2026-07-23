@@ -148,10 +148,9 @@ int main(int argc, char **argv)
     rc = yvex_model_register_deepseek_v4()->payload.open(
         &handoff, &options, &handoff_failure, &error);
     if (rc != YVEX_OK) {
-        fprintf(stderr, "handoff_failure=%s payload_failure=%s status=%s where=%s\n",
+        fprintf(stderr, "handoff_failure=%s payload_failure=%u status=%s where=%s\n",
                 yvex_model_register_deepseek_v4()->payload.failure_name(handoff_failure.code),
-                yvex_source_payload_failure_name(
-                    handoff_failure.payload_failure.code),
+                (unsigned int)handoff_failure.payload_failure.code,
                 yvex_status_name(yvex_error_code(&error)),
                 yvex_error_where(&error));
         return 1;
@@ -224,8 +223,8 @@ int main(int argc, char **argv)
         elapsed = live_elapsed(&begin, &end);
         if (rc != YVEX_OK) {
             fprintf(stderr,
-                    "stream_failure=%s status=%s where=%s requested=%llu delivered=%llu\n",
-                    yvex_source_payload_failure_name(failure.code),
+                    "stream_failure=%u status=%s where=%s requested=%llu delivered=%llu\n",
+                    (unsigned int)failure.code,
                     yvex_status_name(yvex_error_code(&error)),
                     yvex_error_where(&error), failure.requested_bytes,
                     failure.delivered_bytes);

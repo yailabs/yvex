@@ -1,0 +1,1568 @@
+/* Owner: runtime attention-state tests.
+ * Owns: bounded lifecycle, phase-equivalence, boundary, and rollback evidence.
+ * Does not own: production equations, persistent KV, CUDA, artifacts, or CLI rendering.
+ * Invariants: expected state is independently compared across chunk and decode transactions.
+ * Boundary: focused internal-ABI coverage; no fixture enters production objects.
+ * Purpose: prove the session-local provider is allocation-stable and transactionally exact.
+ * Inputs: three admitted class geometries and deterministic publication values.
+ * Effects: allocates only process-local test state and releases every candidate.
+ * Failure: any state, identity, capacity, or lifecycle mismatch fails the unit runner. */
+#include "tests/test.h"
+
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <yvex/internal/graph_state.h>
+#include <yvex/internal/runtime.h>
+
+#include "src/graph/private.h"
+
+typedef struct {
+    yvex_attention_publication publication;
+    float raw[2], compressed[2], indexer[2];
+    unsigned long long compressed_position, indexer_position;
+} state_token;
+
+typedef struct {
+    yvex_attention_plan plan;
+    yvex_attention_layer_plan layers[3];
+} state_plan_fixture;
+
+/* Purpose: expose one mutable cancellation flag at provider publication safe points. */
+static int state_cancel_requested(void *context)
+{
+    return context && *(const int *)context;
+}
+
+/* Purpose: construct one exact bounded class geometry for provider lifecycle tests. */
+static yvex_attention_layer_plan state_layer(unsigned long long index,
+                                             yvex_attention_class attention_class)
+{
+    yvex_attention_layer_plan layer;
+
+    memset(&layer, 0, sizeof(layer));
+    layer.layer_index = index;
+    layer.attention_class = attention_class;
+    layer.head_dimension = 2ull;
+    layer.hidden_dimension = 4ull;
+    layer.query_heads = 2ull;
+    layer.kv_heads = 1ull;
+    layer.sliding_window = attention_class == YVEX_ATTENTION_CLASS_HCA ? 128ull : 4ull;
+    if (attention_class != YVEX_ATTENTION_CLASS_SWA) {
+        layer.compressor_required = 1;
+        layer.compression_ratio = attention_class == YVEX_ATTENTION_CLASS_CSA ? 4ull : 128ull;
+    }
+    if (attention_class == YVEX_ATTENTION_CLASS_CSA) {
+        layer.indexer_required = 1;
+        layer.indexer_heads = 1ull;
+        layer.indexer_head_dimension = 2ull;
+        layer.indexer_topk = 512ull;
+        layer.sparse_topk.required = 1;
+        layer.sparse_topk.version = 1u;
+        layer.sparse_topk.k = 512ull;
+        layer.sparse_topk.score_descending = 1;
+        layer.sparse_topk.equal_score_ordinal_ascending = 1;
+        layer.sparse_topk.duplicate_ordinal_refused = 1;
+        layer.sparse_topk.output_ranked_order = 1;
+    }
+    return layer;
+}
+
+/* Purpose: initialize one opaque plan fixture without calling production plan construction. */
+static void state_plan_open(state_plan_fixture *fixture)
+{
+    memset(fixture, 0, sizeof(*fixture));
+    fixture->layers[0] = state_layer(0ull, YVEX_ATTENTION_CLASS_SWA);
+    fixture->layers[1] = state_layer(1ull, YVEX_ATTENTION_CLASS_CSA);
+    fixture->layers[2] = state_layer(2ull, YVEX_ATTENTION_CLASS_HCA);
+    fixture->plan.layers = fixture->layers;
+    fixture->plan.layer_count = 3ull;
+    fixture->plan.summary.layer_count = 3ull;
+    fixture->plan.summary.swa_layer_count = 1ull;
+    fixture->plan.summary.csa_layer_count = 1ull;
+    fixture->plan.summary.hca_layer_count = 1ull;
+    fixture->plan.summary.status = YVEX_ATTENTION_STATUS_EXECUTION_READY;
+    (void)snprintf(fixture->plan.summary.attention_plan_identity,
+                   sizeof(fixture->plan.summary.attention_plan_identity),
+                   "%064x", 0x5a7eu);
+}
+
+/* Purpose: append one family-selected history component to a test state recipe. */
+static void state_recipe_history(yvex_attention_state_recipe *recipe,
+                                 yvex_attention_state_binding binding,
+                                 unsigned long long capacity,
+                                 unsigned long long width)
+{
+    yvex_attention_state_component_recipe *component =
+        &recipe->components[recipe->component_count];
+
+    component->schema_version = YVEX_ATTENTION_STATE_RECIPE_SCHEMA_V1;
+    component->ordinal = recipe->component_count++;
+    component->kind = YVEX_ATTENTION_STATE_COMPONENT_HISTORY;
+    component->binding = binding;
+    component->capacity = capacity;
+    component->value_width = width;
+}
+
+/* Purpose: append one pointer-free family-selected rolling component to a test recipe. */
+static int state_recipe_rolling(yvex_attention_state_recipe *recipe,
+                                const yvex_attention_layer_plan *layer,
+                                yvex_attention_rolling_kind kind,
+                                yvex_attention_state_binding binding)
+{
+    yvex_attention_state_component_recipe *component =
+        &recipe->components[recipe->component_count];
+    yvex_attention_rolling_state_view *rolling = &component->rolling;
+    unsigned long long extent;
+    int overlap, rotated;
+
+    component->schema_version = YVEX_ATTENTION_STATE_RECIPE_SCHEMA_V1;
+    component->ordinal = recipe->component_count++;
+    component->kind = YVEX_ATTENTION_STATE_COMPONENT_ROLLING;
+    component->binding = binding;
+    if (!yvex_attention_rolling_geometry(
+            layer, kind, &rolling->ratio, &rolling->head_dimension,
+            &rolling->state_width, &rolling->state_slots, &overlap, &rotated) ||
+        !yvex_core_u64_mul(rolling->state_slots, rolling->state_width, &extent))
+        return 0;
+    component->capacity = rolling->state_slots;
+    component->value_width = rolling->state_width;
+    rolling->present = 1;
+    rolling->schema_version = YVEX_ATTENTION_ROLLING_STATE_SCHEMA_V1;
+    rolling->kind = kind;
+    rolling->attention_class = layer->attention_class;
+    rolling->layer_index = layer->layer_index;
+    rolling->next_token_position = recipe->initial_position;
+    rolling->cursor = recipe->initial_position % rolling->ratio;
+    rolling->kv_state_stride = rolling->state_width;
+    rolling->score_state_stride = rolling->state_width;
+    rolling->kv_state_extent = extent;
+    rolling->score_state_extent = extent;
+    rolling->overlap = overlap;
+    rolling->rotated = rotated;
+    (void)snprintf(rolling->attention_plan_identity,
+                   sizeof(rolling->attention_plan_identity), "%s",
+                   recipe->attention_plan_identity);
+    return 1;
+}
+
+/* Purpose: project the fixture family's exact state geometry into the generic recipe ABI. */
+static int state_recipe_project(
+    const yvex_attention_layer_plan *layer,
+    const yvex_attention_state_recipe_request *request,
+    yvex_attention_state_recipe *recipe, yvex_attention_failure *failure,
+    yvex_error *err)
+{
+    unsigned long long local_limit, compressed_capacity = 0ull;
+
+    if (!layer || !request || !recipe ||
+        request->layer_ordinal != layer->layer_index ||
+        !request->attention_plan_identity) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "test.graph.state.recipe",
+                       "complete family state recipe facts are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(recipe, 0, sizeof(*recipe));
+    recipe->schema_version = YVEX_ATTENTION_STATE_RECIPE_SCHEMA_V1;
+    recipe->layer_index = layer->layer_index;
+    recipe->selection_key = (unsigned long long)layer->attention_class + 1ull;
+    recipe->initial_position = request->initial_position;
+    recipe->final_position = request->final_position;
+    (void)snprintf(recipe->attention_plan_identity,
+                   sizeof(recipe->attention_plan_identity), "%s",
+                   request->attention_plan_identity);
+    local_limit = layer->sliding_window - 1ull;
+    state_recipe_history(recipe, YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY,
+                         request->final_position < local_limit
+                             ? request->final_position : local_limit,
+                         layer->head_dimension);
+    if (layer->compressor_required) {
+        compressed_capacity = request->final_position / layer->compression_ratio;
+        state_recipe_history(
+            recipe, YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY,
+            compressed_capacity, layer->head_dimension);
+        if (!state_recipe_rolling(recipe, layer, YVEX_ATTENTION_ROLLING_MAIN,
+                                  YVEX_ATTENTION_STATE_BINDING_MAIN_ROLLING))
+            goto malformed;
+    }
+    if (layer->indexer_required) {
+        state_recipe_history(recipe, YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY,
+                             compressed_capacity,
+                             layer->indexer_head_dimension);
+        if (!state_recipe_rolling(recipe, layer, YVEX_ATTENTION_ROLLING_INDEXER,
+                                  YVEX_ATTENTION_STATE_BINDING_INDEXER_ROLLING))
+            goto malformed;
+    }
+    return yvex_attention_state_recipe_seal(recipe, err);
+
+malformed:
+    if (failure) {
+        memset(failure, 0, sizeof(*failure));
+        failure->code = YVEX_ATTENTION_FAILURE_HISTORY;
+        failure->layer_index = layer->layer_index;
+        failure->reason = "family rolling recipe is malformed";
+    }
+    yvex_error_set(err, YVEX_ERR_FORMAT, "test.graph.state.recipe",
+                   "family rolling recipe is malformed");
+    return YVEX_ERR_FORMAT;
+}
+
+/* Purpose: bind fixture-only state policy without changing the production family owner. */
+static const yvex_graph_family_api *state_family(void)
+{
+    static const yvex_graph_family_api family = {
+        .state_recipe = state_recipe_project,
+        .workspace_recipe = yvex_attention_workspace_recipe_build,
+        .history_validate = yvex_attention_history_validate,
+        .rolling_state_step_cpu = yvex_attention_rolling_state_step_cpu};
+    return &family;
+}
+
+/* Purpose: read one typed component capacity without class-aware generic state logic. */
+static unsigned long long state_recipe_capacity(
+    const yvex_attention_state_recipe *recipe,
+    yvex_attention_state_binding binding)
+{
+    unsigned int index;
+    for (index = 0u; index < recipe->component_count; ++index)
+        if (recipe->components[index].binding == binding)
+            return recipe->components[index].capacity;
+    return 0ull;
+}
+
+/* Purpose: clear fixture identities before deliberately sealing mutated policy facts. */
+static int state_recipe_unseal(yvex_attention_state_recipe *recipe)
+{
+    recipe->identity[0] = '\0';
+    return 1;
+}
+
+/* Purpose: prove state recipes detect stale fields and bind every family-owned policy fact. */
+static int test_state_recipe_identity(const state_plan_fixture *fixture)
+{
+    yvex_attention_state_recipe_request request;
+    yvex_attention_state_recipe recipe, changed;
+    yvex_attention_failure failure;
+    char baseline[YVEX_ATTENTION_IDENTITY_CAP];
+    yvex_error err;
+
+    memset(&request, 0, sizeof(request));
+    request.layer_ordinal = 1ull;
+    request.initial_position = 12ull;
+    request.final_position = 2052ull;
+    request.attention_plan_identity = fixture->plan.summary.attention_plan_identity;
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(
+        state_recipe_project(&fixture->layers[1], &request, &recipe,
+                             &failure, &err) == YVEX_OK &&
+            yvex_attention_state_recipe_seal(&recipe, &err) == YVEX_OK,
+        "family state recipe seals and independently validates");
+    (void)snprintf(baseline, sizeof(baseline), "%s", recipe.identity);
+    changed = recipe;
+    changed.components[0].capacity++;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_recipe_seal(&changed, &err) == YVEX_ERR_STATE &&
+            state_recipe_unseal(&changed) &&
+            yvex_attention_state_recipe_seal(&changed, &err) == YVEX_OK &&
+            strcmp(baseline, changed.identity) != 0,
+        "history-capacity mutation is stale until resealed and changes identity");
+    changed = recipe;
+    changed.components[1].binding = changed.components[0].binding;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_recipe_seal(&changed, &err) == YVEX_ERR_FORMAT,
+        "duplicate state binding refuses before state allocation");
+    changed = recipe;
+    changed.components[2].rolling.cursor++;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_recipe_seal(&changed, &err) == YVEX_ERR_STATE &&
+            state_recipe_unseal(&changed) &&
+            yvex_attention_state_recipe_seal(&changed, &err) == YVEX_OK &&
+            strcmp(baseline, changed.identity) != 0,
+        "rolling-policy mutation changes the sealed state recipe identity");
+    changed = recipe;
+    changed.selection_key++;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_recipe_seal(&changed, &err) == YVEX_ERR_STATE &&
+            state_recipe_unseal(&changed) &&
+            yvex_attention_state_recipe_seal(&changed, &err) == YVEX_OK &&
+            strcmp(baseline, changed.identity) != 0,
+        "family selection-key mutation changes the state recipe identity");
+    return 0;
+}
+
+/* Purpose: prove workspace recipes bind ordered extents without backend or pointer identity. */
+static int test_workspace_recipe_identity(void)
+{
+    yvex_attention_workspace_recipe recipe, changed;
+    char baseline[YVEX_ATTENTION_IDENTITY_CAP];
+    yvex_error err;
+    unsigned int index;
+
+    memset(&recipe, 0, sizeof(recipe));
+    recipe.schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1;
+    recipe.layer_index = 1ull;
+    recipe.token_capacity = 4ull;
+    recipe.mode = YVEX_ATTENTION_EXECUTION_FULL;
+    recipe.scope = YVEX_ATTENTION_OPERATION_ENVELOPE;
+    recipe.component_count = 2u;
+    (void)snprintf(recipe.state_recipe_identity,
+                   sizeof(recipe.state_recipe_identity), "%064x", 0x713u);
+    for (index = 0u; index < recipe.component_count; ++index) {
+        recipe.components[index].schema_version =
+            YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1;
+        recipe.components[index].ordinal = index;
+        recipe.components[index].kind = index == 0u
+                                            ? YVEX_ATTENTION_WORKSPACE_INGRESS
+                                            : YVEX_ATTENTION_WORKSPACE_QUERY;
+        recipe.components[index].lifetime = YVEX_ATTENTION_WORKSPACE_EXECUTION;
+        recipe.components[index].element_count = index == 0u ? 4ull : 8ull;
+        recipe.components[index].element_width = sizeof(float);
+        recipe.components[index].alignment = 8ull;
+        recipe.components[index].scales_with_tokens = 1;
+    }
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(
+        yvex_attention_workspace_recipe_seal(&recipe, &err) == YVEX_OK,
+        "pointer-free workspace recipe seals deterministically");
+    (void)snprintf(baseline, sizeof(baseline), "%s", recipe.identity);
+    changed = recipe;
+    changed.token_capacity++;
+    changed.identity[0] = '\0';
+    YVEX_TEST_ASSERT(
+        yvex_attention_workspace_recipe_seal(&changed, &err) == YVEX_OK &&
+            strcmp(baseline, changed.identity) != 0,
+        "token bucket mutation changes workspace recipe identity");
+    changed = recipe;
+    changed.evidence_level = YVEX_ATTENTION_EVIDENCE_FULL;
+    YVEX_TEST_ASSERT(
+        yvex_attention_workspace_recipe_seal(&changed, &err) == YVEX_OK &&
+            strcmp(baseline, changed.identity) != 0,
+        "evidence policy changes workspace recipe identity");
+    changed = recipe;
+    changed.components[1].element_count++;
+    changed.identity[0] = '\0';
+    YVEX_TEST_ASSERT(
+        yvex_attention_workspace_recipe_seal(&changed, &err) == YVEX_OK &&
+            strcmp(baseline, changed.identity) != 0,
+        "component-extent mutation changes workspace recipe identity");
+    changed = recipe;
+    changed.components[1].kind = changed.components[0].kind;
+    YVEX_TEST_ASSERT(
+        yvex_attention_workspace_recipe_seal(&changed, &err) == YVEX_ERR_FORMAT,
+        "duplicate workspace component kind refuses before backend lowering");
+    return 0;
+}
+
+/* Purpose: prove semantic rolling state and final deltas remain token-independent before backend lowering. */
+static int test_workspace_capture_geometry(const state_plan_fixture *fixture)
+{
+    const yvex_graph_family_api *family = state_family();
+    yvex_attention_state_recipe_request request;
+    yvex_attention_state_recipe state;
+    yvex_attention_workspace_recipe workspace;
+    const yvex_attention_workspace_component *local = NULL;
+    const yvex_attention_workspace_component *current = NULL;
+    const yvex_attention_workspace_component *candidate = NULL;
+    yvex_attention_failure failure;
+    yvex_error err;
+    unsigned int index;
+
+    memset(&request, 0, sizeof(request));
+    request.layer_ordinal = 2ull;
+    request.final_position = 384ull;
+    request.attention_plan_identity =
+        fixture->plan.summary.attention_plan_identity;
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(
+        state_recipe_project(&fixture->layers[2], &request, &state,
+                             &failure, &err) == YVEX_OK &&
+            yvex_attention_state_recipe_seal(&state, &err) == YVEX_OK &&
+            family->workspace_recipe(
+                &fixture->layers[2], &state, YVEX_ATTENTION_EXECUTION_FULL,
+                YVEX_ATTENTION_OPERATION_CORE, YVEX_ATTENTION_EVIDENCE_FULL,
+                4ull, &workspace, &failure, &err) == YVEX_OK,
+        "HCA capture workspace recipe seals from the admitted state geometry");
+    for (index = 0u; index < workspace.component_count; ++index) {
+        const yvex_attention_workspace_component *component =
+            &workspace.components[index];
+        if (component->kind == YVEX_ATTENTION_WORKSPACE_LOCAL_VALUES)
+            local = component;
+        else if (component->kind == YVEX_ATTENTION_WORKSPACE_MAIN_ROLLING_VALUES)
+            current = component;
+        else if (component->kind ==
+                 YVEX_ATTENTION_WORKSPACE_MAIN_ROLLING_CANDIDATE_VALUES)
+            candidate = component;
+    }
+    YVEX_TEST_ASSERT(
+        local &&
+            local->element_count ==
+                state.components[0].capacity + workspace.token_capacity &&
+            !local->scales_with_tokens,
+        "captured local staging reserves the sealed history plus token bucket");
+    YVEX_TEST_ASSERT(
+        current && candidate &&
+            current->element_count == state.components[2].rolling.kv_state_extent &&
+            candidate->element_count == current->element_count &&
+            !current->scales_with_tokens &&
+            !candidate->scales_with_tokens,
+        "rolling current and final delta own exact token-independent semantic extents");
+    return 0;
+}
+
+/* Purpose: prove one immutable capacity plan owns selection, exact per-layer geometry, and identity. */
+static int test_capacity_plan(const state_plan_fixture *fixture)
+{
+    const yvex_graph_family_api *family = state_family();
+    yvex_graph_attention_capacity_plan *first = NULL, *second = NULL;
+    yvex_graph_attention_capacity_request request;
+    const yvex_graph_attention_capacity_summary *summary;
+    const yvex_graph_attention_capacity_layer *swa, *csa, *hca;
+    char identity[YVEX_SHA256_HEX_CAP];
+    yvex_error err;
+
+    memset(&request, 0, sizeof(request));
+    request.scope = YVEX_ATTENTION_PROBE_SCOPE_QUICK;
+    request.token_count = 2ull;
+    request.execution_count = 2ull;
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(yvex_graph_attention_capacity_plan_build(
+                         &first, family, &fixture->plan, &request, &err) == YVEX_OK,
+                     "quick capacity plan seals without state allocation");
+    summary = yvex_graph_attention_capacity_plan_summary(first);
+    swa = yvex_graph_attention_capacity_plan_layer(first, 0ull);
+    csa = yvex_graph_attention_capacity_plan_layer(first, 1ull);
+    hca = yvex_graph_attention_capacity_plan_layer(first, 2ull);
+    YVEX_TEST_ASSERT(summary && summary->schema_version ==
+                                    YVEX_GRAPH_ATTENTION_CAPACITY_SCHEMA_V1 &&
+                         summary->selected_layer_count == 3ull &&
+                         summary->first_layer == 0ull &&
+                         summary->maximum_token_count == 2ull &&
+                         yvex_sha256_hex_valid(summary->identity),
+                     "capacity summary publishes sealed selection and identity facts");
+    YVEX_TEST_ASSERT(
+        summary->components[YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY].capacity == 133ull,
+                     "capacity summary publishes exact aggregate local capacity");
+    YVEX_TEST_ASSERT(
+        summary->components[YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY].capacity == 515ull,
+                     "capacity summary publishes exact aggregate compressed capacity");
+    YVEX_TEST_ASSERT(
+        summary->components[YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY].capacity == 514ull,
+                     "capacity summary publishes exact aggregate indexer capacity");
+    YVEX_TEST_ASSERT(
+        summary->components[YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY].maximum_capacity == 127ull &&
+            summary->components[YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY].maximum_capacity == 514ull &&
+            summary->components[YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY].maximum_capacity == 514ull &&
+                         summary->maximum_compression_ratio == 128ull &&
+                         summary->maximum_topk_capacity == 512ull,
+                     "capacity summary publishes exact maxima and policy facts");
+    YVEX_TEST_ASSERT(
+        swa && swa->selected && swa->recipe.initial_position == 4ull &&
+            swa->recipe.final_position == 8ull &&
+            state_recipe_capacity(&swa->recipe,
+                                  YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY) == 3ull &&
+            csa && csa->selected && csa->recipe.initial_position == 2052ull &&
+            csa->recipe.final_position == 2056ull &&
+            state_recipe_capacity(&csa->recipe,
+                                  YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY) == 514ull &&
+            state_recipe_capacity(&csa->recipe,
+                                  YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY) == 514ull &&
+            hca && hca->selected && hca->recipe.initial_position == 127ull &&
+            hca->recipe.final_position == 131ull &&
+            state_recipe_capacity(&hca->recipe,
+                                  YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY) == 1ull,
+                     "quick capacity plan derives exact canonical class positions");
+    (void)snprintf(identity, sizeof(identity), "%s", summary->identity);
+    YVEX_TEST_ASSERT(yvex_graph_attention_capacity_plan_build(
+                         &second, family, &fixture->plan, &request, &err) == YVEX_OK &&
+                         strcmp(identity,
+                                yvex_graph_attention_capacity_plan_summary(second)->identity) == 0,
+                     "equivalent capacity facts produce one deterministic identity");
+    yvex_graph_attention_capacity_plan_close(&second);
+    request.execution_count++;
+    YVEX_TEST_ASSERT(yvex_graph_attention_capacity_plan_build(
+                         &second, family, &fixture->plan, &request, &err) == YVEX_OK &&
+                         strcmp(identity,
+                                yvex_graph_attention_capacity_plan_summary(second)->identity) != 0,
+                     "execution extent mutation changes capacity identity");
+    yvex_graph_attention_capacity_plan_close(&second);
+    request.scope = YVEX_ATTENTION_PROBE_SCOPE_FULL;
+    request.execution_count = 1ull;
+    request.history_tokens = request.start_position = 2052ull;
+    request.select_selection_key = 1;
+    request.selection_key = (unsigned long long)YVEX_ATTENTION_CLASS_CSA + 1ull;
+    YVEX_TEST_ASSERT(yvex_graph_attention_capacity_plan_build(
+                         &second, family, &fixture->plan, &request, &err) == YVEX_OK &&
+                         yvex_graph_attention_capacity_plan_summary(second)->selected_layer_count == 1ull &&
+                         state_recipe_capacity(
+                             &yvex_graph_attention_capacity_plan_layer(second, 1ull)->recipe,
+                             YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY) == 513ull &&
+                         state_recipe_capacity(
+                             &yvex_graph_attention_capacity_plan_layer(second, 1ull)->recipe,
+                             YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY) == 513ull,
+                     "selected full-scope history derives exact CSA boundary capacity");
+    yvex_graph_attention_capacity_plan_close(&second);
+    request.start_position++;
+    YVEX_TEST_ASSERT(yvex_graph_attention_capacity_plan_build(
+                         &second, family, &fixture->plan, &request, &err) == YVEX_ERR_INVALID_ARG && !second,
+                     "history and start-position mismatch refuses before allocation");
+    memset(&request, 0, sizeof(request));
+    request.scope = YVEX_ATTENTION_PROBE_SCOPE_FULL;
+    request.token_count = 1ull;
+    request.execution_count = 23ull;
+    YVEX_TEST_ASSERT(yvex_graph_attention_capacity_plan_build(
+                         &second, family, &fixture->plan, &request, &err) == YVEX_OK,
+                     "mixed-class 23-dispatch capacity plan seals");
+    summary = yvex_graph_attention_capacity_plan_summary(second);
+    swa = yvex_graph_attention_capacity_plan_layer(second, 0ull);
+    csa = yvex_graph_attention_capacity_plan_layer(second, 1ull);
+    hca = yvex_graph_attention_capacity_plan_layer(second, 2ull);
+    YVEX_TEST_ASSERT(
+        summary && summary->selected_layer_count == 3ull &&
+            summary->maximum_token_count == 1ull &&
+            summary->components[YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY].capacity == 29ull &&
+            summary->components[YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY].capacity == 5ull &&
+            summary->components[YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY].capacity == 5ull &&
+            summary->components[YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY].maximum_capacity == 23ull &&
+            summary->components[YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY].maximum_capacity == 5ull &&
+            summary->components[YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY].maximum_capacity == 5ull &&
+            summary->maximum_compression_ratio == 128ull &&
+            summary->maximum_topk_capacity == 512ull && swa &&
+            swa->recipe.final_position == 23ull &&
+            state_recipe_capacity(&swa->recipe,
+                                  YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY) == 3ull &&
+            !state_recipe_capacity(&swa->recipe,
+                                   YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY) &&
+            csa && csa->recipe.final_position == 23ull &&
+            state_recipe_capacity(&csa->recipe,
+                                  YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY) == 3ull &&
+            state_recipe_capacity(&csa->recipe,
+                                  YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY) == 5ull &&
+            state_recipe_capacity(&csa->recipe,
+                                  YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY) == 5ull &&
+            hca && hca->recipe.final_position == 23ull &&
+            state_recipe_capacity(&hca->recipe,
+                                  YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY) == 23ull &&
+            !state_recipe_capacity(&hca->recipe,
+                                   YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY),
+        "mixed-class capacity keeps per-layer facts and publishes shared graph-bucket maxima");
+    yvex_graph_attention_capacity_plan_close(&second);
+    yvex_graph_attention_capacity_plan_close(&first);
+    yvex_graph_attention_capacity_plan_close(&first);
+    return 0;
+}
+
+/* Purpose: release only rolling ranges allocated while constructing one publication. */
+static void state_token_release(state_token *token)
+{
+    free(token->publication.next_main_rolling_state.kv_state);
+    free(token->publication.next_main_rolling_state.score_state);
+    free(token->publication.next_indexer_rolling_state.kv_state);
+    free(token->publication.next_indexer_rolling_state.score_state);
+    memset(token, 0, sizeof(*token));
+}
+
+/* Purpose: execute one canonical rolling transition into publication-owned test storage. */
+static int state_token_rolling(const yvex_attention_layer_plan *layer,
+                               const yvex_attention_rolling_state_view *before,
+                               yvex_attention_rolling_state_output *after,
+                               float compressed[2], int *emitted)
+{
+    const yvex_graph_family_api *family = state_family();
+    float *values = NULL, *scores = NULL, *ape = NULL;
+    unsigned long long index, extent;
+    yvex_attention_failure failure;
+    yvex_error err;
+    int rc;
+
+    if (!before || !before->present) return 0;
+    extent = before->kv_state_extent;
+    values = (float *)calloc((size_t)before->state_width, sizeof(float));
+    scores = (float *)calloc((size_t)before->state_width, sizeof(float));
+    ape = (float *)calloc((size_t)before->state_width, sizeof(float));
+    after->kv_state = (float *)calloc((size_t)extent, sizeof(float));
+    after->score_state = (float *)calloc((size_t)before->score_state_extent, sizeof(float));
+    if (!values || !scores || !ape || !after->kv_state || !after->score_state) {
+        free(values);
+        free(scores);
+        free(ape);
+        return 0;
+    }
+    after->kv_state_stride = before->kv_state_stride;
+    after->score_state_stride = before->score_state_stride;
+    after->kv_state_extent = before->kv_state_extent;
+    after->score_state_extent = before->score_state_extent;
+    for (index = 0ull; index < before->state_width; ++index) {
+        values[index] = (float)((before->next_token_position + index) % 17ull) / 16.0f;
+        scores[index] = values[index] * 0.5f;
+        ape[index] = (float)(index % 3ull) / 32.0f;
+    }
+    yvex_error_clear(&err);
+    rc = family->rolling_state_step_cpu(layer, before, values, scores, ape, after,
+                                        compressed, layer->head_dimension, emitted,
+                                        &failure, &err);
+    free(values);
+    free(scores);
+    free(ape);
+    return rc == YVEX_OK;
+}
+
+/* Purpose: construct one deterministic complete token publication from an immutable prior view. */
+static int state_token_open(state_token *token,
+                            const yvex_attention_layer_plan *layer,
+                            const yvex_attention_history_view *history,
+                            unsigned long long position)
+{
+    int main_emitted = 0, indexer_emitted = 0;
+
+    memset(token, 0, sizeof(*token));
+    token->raw[0] = (float)(position % 29ull) / 29.0f;
+    token->raw[1] = -token->raw[0] - 0.03125f;
+    token->publication.owned = 1;
+    token->publication.complete = 1;
+    token->publication.layer_index = layer->layer_index;
+    token->publication.attention_class = layer->attention_class;
+    token->publication.token_position = position;
+    token->publication.token_count = 1ull;
+    token->publication.kv_width = layer->head_dimension;
+    token->publication.raw_kv = token->raw;
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_SWA) return 1;
+    if (!state_token_rolling(layer, &history->main_rolling_state,
+                             &token->publication.next_main_rolling_state,
+                             token->compressed, &main_emitted))
+        goto fail;
+    if (main_emitted) {
+        token->compressed_position = position + 1ull - layer->compression_ratio;
+        token->publication.compressed_count = 1ull;
+        token->publication.compressed_stride = layer->head_dimension;
+        token->publication.compressed_kv = token->compressed;
+        token->publication.compressed_positions = &token->compressed_position;
+    }
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
+        if (!state_token_rolling(layer, &history->indexer_rolling_state,
+                                 &token->publication.next_indexer_rolling_state,
+                                 token->indexer, &indexer_emitted) ||
+            indexer_emitted != main_emitted)
+            goto fail;
+        if (indexer_emitted) {
+            token->indexer_position = token->compressed_position;
+            token->publication.indexer_count = 1ull;
+            token->publication.indexer_stride = layer->indexer_head_dimension;
+            token->publication.indexer_kv = token->indexer;
+            token->publication.indexer_positions = &token->indexer_position;
+        }
+    }
+    return 1;
+fail:
+    state_token_release(token);
+    return 0;
+}
+
+typedef yvex_attention_state_provider test_state;
+
+/* Purpose: open one ephemeral provider fixture through its only production ABI. */
+static int state_open(test_state *state, const yvex_graph_family_api *family,
+                      const yvex_attention_plan *plan,
+                      unsigned long long maximum_host_bytes,
+                      yvex_attention_failure *failure, yvex_error *err)
+{
+    return yvex_attention_state_provider_open_ephemeral(
+        family, plan, maximum_host_bytes, state, failure, err);
+}
+
+/* Purpose: release one test-owned provider while preserving retryable ownership. */
+static int state_close(test_state *state)
+{
+    yvex_error err;
+    int rc;
+
+    if (!state || !state->context) return 1;
+    yvex_error_clear(&err);
+    rc = state->release ? state->release(&state->context, &err) : YVEX_ERR_STATE;
+    if (rc == YVEX_OK) memset(state, 0, sizeof(*state));
+    return rc == YVEX_OK;
+}
+
+/* Purpose: borrow one immutable provider history for focused invariant checks. */
+static const yvex_attention_history_view *state_view(
+    const test_state *state, unsigned long long layer_index,
+    yvex_attention_state_view_kind kind)
+{
+    return state && state->view
+               ? state->view(state->context, layer_index, kind) : NULL;
+}
+
+/* Purpose: copy one provider summary without exposing its concrete storage. */
+static int state_summary(const test_state *state,
+                         yvex_graph_attention_state_summary *summary,
+                         yvex_error *err)
+{
+    return state && state->summary
+               ? state->summary(state->context, summary, err) : YVEX_ERR_STATE;
+}
+
+/* Purpose: copy one committed provider identity through its opaque contract. */
+static int state_identity(const test_state *state, unsigned long long layer_index,
+                          char output[YVEX_SHA256_HEX_CAP], yvex_error *err)
+{
+    return state && state->identity
+               ? state->identity(state->context, layer_index, output, err)
+               : YVEX_ERR_STATE;
+}
+
+/* Purpose: begin one provider transaction and discard only the borrowed prior view. */
+static int state_begin(test_state *state, const yvex_attention_layer_plan *layer,
+                       unsigned long long token_position,
+                       unsigned long long token_count,
+                       const yvex_attention_cancellation *cancellation,
+                       yvex_attention_failure *failure, yvex_error *err)
+{
+    const yvex_attention_history_view *history = NULL;
+
+    return state && state->begin && layer
+               ? state->begin(state->context, layer->layer_index, layer, NULL,
+                              token_position, token_count, cancellation,
+                              &history, failure, err)
+               : YVEX_ERR_STATE;
+}
+
+/* Purpose: prepare one provider layer with the exact boundary capacity used by its class. */
+static int state_prepare(test_state *state, const yvex_attention_layer_plan *layer,
+                         const char *plan_identity)
+{
+    yvex_attention_state_recipe_request request;
+    yvex_attention_state_recipe recipe;
+    yvex_attention_failure failure;
+    yvex_error err;
+
+    memset(&request, 0, sizeof(request));
+    request.layer_ordinal = layer->layer_index;
+    request.final_position = layer->attention_class == YVEX_ATTENTION_CLASS_CSA
+                                 ? 2052ull
+                             : layer->attention_class == YVEX_ATTENTION_CLASS_HCA
+                                 ? 384ull : 6ull;
+    request.attention_plan_identity = plan_identity;
+    yvex_error_clear(&err);
+    return state_recipe_project(layer, &request, &recipe, &failure, &err) == YVEX_OK &&
+           state->prepare(state->context, layer->layer_index, &recipe, NULL,
+                          &failure, &err) == YVEX_OK;
+}
+
+/* Purpose: apply one generated token using either an outer chunk or one decode transaction. */
+static int state_apply_token(test_state *state,
+                             const yvex_attention_layer_plan *layer,
+                             unsigned long long position, int outer_transaction,
+                             char delta_identity[YVEX_SHA256_HEX_CAP])
+{
+    const yvex_attention_history_view *history;
+    yvex_attention_failure failure;
+    yvex_error err;
+    state_token token;
+    int rc;
+
+    yvex_error_clear(&err);
+    if (!outer_transaction &&
+        state_begin(state, layer, position, 1ull, NULL, &failure, &err) != YVEX_OK)
+        return 0;
+    history = state_view(state, layer->layer_index,
+                         YVEX_ATTENTION_STATE_VIEW_CANDIDATE);
+    if (!history || !state_token_open(&token, layer, history, position)) return 0;
+    rc = state->stage(state->context, &token.publication, NULL, delta_identity,
+                      &failure, &err);
+    state_token_release(&token);
+    if (rc != YVEX_OK) return 0;
+    if (!outer_transaction)
+        return state->commit(state->context, &failure, &err) == YVEX_OK;
+    return 1;
+}
+
+/* Purpose: clone one plan fixture while rebinding its source-local layer storage. */
+static void state_plan_copy(state_plan_fixture *output,
+                            const state_plan_fixture *input)
+{
+    *output = *input;
+    memcpy(output->layers, input->layers, sizeof(output->layers));
+    output->plan.layers = output->layers;
+}
+
+/* Purpose: collect layout, committed, candidate, and delta identities for one empty-to-token transition. */
+static int state_identity_sample(
+    const state_plan_fixture *fixture, unsigned long long layer_index,
+    char layout[YVEX_SHA256_HEX_CAP], char committed[YVEX_SHA256_HEX_CAP],
+    char delta_identity[YVEX_SHA256_HEX_CAP])
+{
+    const yvex_graph_family_api *family = state_family();
+    const yvex_attention_layer_plan *layer = &fixture->layers[layer_index];
+    test_state state = {0};
+    yvex_graph_attention_state_summary summary;
+    yvex_attention_failure failure;
+    yvex_error err;
+    int ok = 0;
+
+    yvex_error_clear(&err);
+    if (state_open(&state, family, &fixture->plan, 16ull * 1024ull * 1024ull,
+                   &failure, &err) != YVEX_OK ||
+        !state_prepare(&state, layer, fixture->plan.summary.attention_plan_identity) ||
+        state_summary(&state, &summary, &err) != YVEX_OK ||
+        state_identity(&state, layer_index, committed, &err) != YVEX_OK ||
+        state_begin(&state, layer, 0ull, 1ull, NULL, &failure, &err) != YVEX_OK ||
+        !state_apply_token(&state, layer, 0ull, 1, delta_identity))
+        goto done;
+    (void)snprintf(layout, YVEX_SHA256_HEX_CAP, "%s", summary.state_layout_identity);
+    ok = state.abort(state.context, &failure, &err) == YVEX_OK;
+done:
+    (void)state_close(&state);
+    return ok;
+}
+
+/* Purpose: prove identical values cannot alias across plan, layout, or rolling-geometry changes. */
+static int test_state_identity_geometry(const state_plan_fixture *fixture)
+{
+    state_plan_fixture plan_changed, geometry_changed;
+    char layout[3][YVEX_SHA256_HEX_CAP], committed[3][YVEX_SHA256_HEX_CAP];
+    char delta[3][YVEX_SHA256_HEX_CAP];
+
+    state_plan_copy(&plan_changed, fixture);
+    (void)snprintf(plan_changed.plan.summary.attention_plan_identity,
+                   sizeof(plan_changed.plan.summary.attention_plan_identity),
+                   "%064x", 0x6b8fu);
+    state_plan_copy(&geometry_changed, fixture);
+    geometry_changed.layers[1].compression_ratio = 8ull;
+    YVEX_TEST_ASSERT(
+        state_identity_sample(fixture, 1ull, layout[0], committed[0], delta[0]) &&
+            state_identity_sample(&plan_changed, 1ull, layout[1], committed[1],
+                                  delta[1]) &&
+            state_identity_sample(&geometry_changed, 1ull, layout[2], committed[2],
+                                  delta[2]),
+        "state identity fixtures execute one equal-content transition");
+    YVEX_TEST_ASSERT(
+        strcmp(layout[0], layout[1]) != 0 && strcmp(committed[0], committed[1]) != 0 &&
+            strcmp(delta[0], delta[1]) != 0,
+        "plan identity changes layout, committed, and delta identities");
+    YVEX_TEST_ASSERT(
+        strcmp(layout[0], layout[2]) != 0 && strcmp(committed[0], committed[2]) != 0 &&
+            strcmp(delta[0], delta[2]) != 0,
+        "rolling ratio changes layout, committed, and delta identities");
+    return 0;
+}
+
+/* Purpose: compare one N-token candidate transaction against N committed decode steps. */
+static int state_phase_equivalence(const state_plan_fixture *fixture,
+                                   unsigned long long layer_index,
+                                   unsigned long long token_count)
+{
+    const yvex_graph_family_api *family = state_family();
+    const yvex_attention_layer_plan *layer = &fixture->layers[layer_index];
+    test_state chunk = {0}, decode = {0};
+    char chunk_delta[YVEX_SHA256_HEX_CAP], decode_delta[YVEX_SHA256_HEX_CAP];
+    char chunk_identity[YVEX_SHA256_HEX_CAP];
+    char decode_identity[YVEX_SHA256_HEX_CAP];
+    yvex_attention_failure failure;
+    yvex_error err;
+    unsigned long long position;
+    int result = 0;
+
+    yvex_error_clear(&err);
+    if (state_open(&chunk, family, &fixture->plan, 16ull * 1024ull * 1024ull,
+                   &failure, &err) != YVEX_OK ||
+        state_open(&decode, family, &fixture->plan, 16ull * 1024ull * 1024ull,
+                   &failure, &err) != YVEX_OK ||
+        !state_prepare(&chunk, layer, fixture->plan.summary.attention_plan_identity) ||
+        !state_prepare(&decode, layer, fixture->plan.summary.attention_plan_identity) ||
+        state_begin(&chunk, layer, 0ull, token_count, NULL, &failure, &err) != YVEX_OK)
+        goto done;
+    for (position = 0ull; position < token_count; ++position) {
+        if (!state_apply_token(&chunk, layer, position, 1, chunk_delta) ||
+            !state_apply_token(&decode, layer, position, 0, decode_delta))
+            goto done;
+        if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
+            const yvex_attention_history_view *view =
+                state_view(&decode, layer_index, YVEX_ATTENTION_STATE_VIEW_COMMITTED);
+            if ((position == 27ull && view->compressed_entry_count != 7ull) ||
+                (position == 2047ull && view->compressed_entry_count != 512ull))
+                goto done;
+        }
+        if (layer->attention_class == YVEX_ATTENTION_CLASS_HCA) {
+            const yvex_attention_history_view *view =
+                state_view(&decode, layer_index, YVEX_ATTENTION_STATE_VIEW_COMMITTED);
+            if ((position == 126ull && view->compressed_entry_count != 0ull) ||
+                (position == 127ull && view->compressed_entry_count != 1ull) ||
+                (position == 128ull && view->compressed_entry_count != 1ull))
+                goto done;
+        }
+    }
+    if (chunk.commit(chunk.context, &failure, &err) != YVEX_OK ||
+        !yvex_sha256_hex_valid(chunk_delta) ||
+        !yvex_sha256_hex_valid(decode_delta) ||
+        state_identity(&chunk, layer_index, chunk_identity, &err) != YVEX_OK ||
+        state_identity(&decode, layer_index, decode_identity, &err) != YVEX_OK ||
+        strcmp(chunk_identity, decode_identity) != 0)
+        goto done;
+    {
+        const yvex_attention_history_view *left =
+            state_view(&chunk, layer_index, YVEX_ATTENTION_STATE_VIEW_COMMITTED);
+        const yvex_attention_history_view *right =
+            state_view(&decode, layer_index, YVEX_ATTENTION_STATE_VIEW_COMMITTED);
+        if (!left || !right || left->token_count != right->token_count ||
+            left->local_tail_count != right->local_tail_count ||
+            left->compressed_entry_count != right->compressed_entry_count ||
+            left->indexer_entry_count != right->indexer_entry_count)
+            goto done;
+        if (layer->attention_class == YVEX_ATTENTION_CLASS_SWA &&
+            (left->local_tail_count != 3ull || left->local_positions[0] != 3ull ||
+             left->local_positions[2] != 5ull))
+            goto done;
+        if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
+            (left->compressed_entry_count != 513ull ||
+             left->indexer_entry_count != 513ull))
+            goto done;
+        if (layer->attention_class == YVEX_ATTENTION_CLASS_HCA &&
+            left->compressed_entry_count != 3ull)
+            goto done;
+    }
+    result = 1;
+done:
+    (void)state_close(&chunk);
+    (void)state_close(&decode);
+    return result;
+}
+
+/* Purpose: prove candidate abort, cancellation, reset, and idempotent cleanup preserve state. */
+static int test_state_lifecycle(const state_plan_fixture *fixture)
+{
+    const yvex_graph_family_api *family = state_family();
+    test_state state = {0};
+    char delta[YVEX_SHA256_HEX_CAP];
+    yvex_graph_attention_state_summary transaction_summary;
+    yvex_attention_failure failure;
+    yvex_attention_cancellation cancellation;
+    yvex_error err;
+    const yvex_attention_history_view *view;
+    char invalid_identity[YVEX_SHA256_HEX_CAP];
+    int cancel_requested = 0;
+
+    yvex_error_clear(&err);
+    cancellation.requested = state_cancel_requested;
+    cancellation.context = &cancel_requested;
+    YVEX_TEST_ASSERT(
+        state_open(&state, family, &fixture->plan, 1024ull * 1024ull,
+                   &failure, &err) == YVEX_OK &&
+            state_prepare(&state, &fixture->layers[0],
+                          fixture->plan.summary.attention_plan_identity),
+        "ephemeral attention state opens and prepares one layer");
+    YVEX_TEST_ASSERT(
+        state_begin(&state, &fixture->layers[0], 0ull, 1ull, &cancellation,
+                    &failure, &err) == YVEX_OK &&
+            state_apply_token(&state, &fixture->layers[0], 0ull, 1, delta),
+        "candidate state accepts one complete publication");
+    view = state_view(&state, 0ull, YVEX_ATTENTION_STATE_VIEW_COMMITTED);
+    YVEX_TEST_ASSERT(view && view->token_count == 0ull &&
+                         yvex_sha256_hex_valid(delta),
+                     "candidate apply leaves committed prior immutable");
+    cancel_requested = 1;
+    YVEX_TEST_ASSERT(
+        state.commit(state.context, &failure, &err) ==
+                YVEX_ERR_CANCELLED &&
+            state.abort(state.context, &failure, &err) == YVEX_OK &&
+            state_summary(&state, &transaction_summary, &err) == YVEX_OK &&
+            transaction_summary.cancellation_count == 1ull &&
+            state_view(&state, 0ull,
+                       YVEX_ATTENTION_STATE_VIEW_COMMITTED)->token_count == 0ull,
+        "cancellation after staging refuses publication and preserves committed state");
+    YVEX_TEST_ASSERT(
+        state_begin(&state, &fixture->layers[0], 0ull, 1ull, NULL,
+                    &failure, &err) == YVEX_OK &&
+            setenv("YVEX_TEST_RUNTIME_STATE_ABORT_FAILURE", "1", 1) == 0 &&
+            state.abort(state.context, &failure, &err) == YVEX_ERR_STATE &&
+            state_summary(&state, &transaction_summary, &err) == YVEX_OK &&
+            transaction_summary.transaction_active &&
+            state_view(&state, 0ull,
+                       YVEX_ATTENTION_STATE_VIEW_COMMITTED)->token_count == 0ull,
+        "abort synchronization failure retains the candidate and committed prior");
+    YVEX_TEST_ASSERT(
+        unsetenv("YVEX_TEST_RUNTIME_STATE_ABORT_FAILURE") == 0 &&
+            state.abort(state.context, &failure, &err) == YVEX_OK,
+        "abort retry discharges the retained candidate transaction");
+    {
+        yvex_graph_attention_state_summary before, after;
+
+        YVEX_TEST_ASSERT(
+            state_summary(&state, &before, &err) == YVEX_OK &&
+                state.invalidate(state.context, &err) == YVEX_OK &&
+                state_summary(&state, &after, &err) == YVEX_OK &&
+                after.invalidated && after.generation == before.generation + 1ull,
+            "state invalidation advances one synchronized fail-closed generation");
+        YVEX_TEST_ASSERT(
+            state_begin(&state, &fixture->layers[0], 0ull, 1ull, NULL,
+                        &failure, &err) == YVEX_ERR_STATE,
+            "invalidated state refuses new transactions without revival");
+        YVEX_TEST_ASSERT(
+            state_view(&state, 0ull, YVEX_ATTENTION_STATE_VIEW_COMMITTED) == NULL &&
+                state_identity(&state, 0ull, invalid_identity, &err) == YVEX_ERR_STATE &&
+                !state_prepare(&state, &fixture->layers[1],
+                               fixture->plan.summary.attention_plan_identity) &&
+                state_summary(&state, &after, &err) == YVEX_OK && after.invalidated,
+            "invalidated state exposes diagnostics but no data-bearing access or preparation");
+    }
+    YVEX_TEST_ASSERT(state_close(&state) && state_close(&state) && state.context == NULL,
+                     "state close is idempotent through provider ownership");
+    return 0;
+}
+
+/* Purpose: prove prepared attention banks reset to canonical empty state without reallocating. */
+static int test_state_reset(const state_plan_fixture *fixture)
+{
+    const yvex_graph_family_api *family = state_family();
+    test_state state = {0};
+    char delta[YVEX_SHA256_HEX_CAP];
+    yvex_graph_attention_state_summary before, after;
+    yvex_attention_failure failure;
+    yvex_error err;
+    char empty_identity[YVEX_SHA256_HEX_CAP], populated_identity[YVEX_SHA256_HEX_CAP];
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(
+        state_open(&state, family, &fixture->plan, 16ull * 1024ull * 1024ull,
+                   &failure, &err) == YVEX_OK &&
+            state_prepare(&state, &fixture->layers[1],
+                          fixture->plan.summary.attention_plan_identity) &&
+            state_identity(&state, 1ull, empty_identity, &err) == YVEX_OK &&
+            state_summary(&state, &before, &err) == YVEX_OK,
+        "reset fixture owns one allocation-stable empty CSA bank pair");
+    YVEX_TEST_ASSERT(
+        state_begin(&state, &fixture->layers[1], 0ull, 1ull, NULL,
+                    &failure, &err) == YVEX_OK &&
+            state.reset(state.context, &failure, &err) == YVEX_ERR_STATE &&
+            state.abort(state.context, &failure, &err) == YVEX_OK,
+        "reset refuses an active candidate and preserves explicit rollback ownership");
+    YVEX_TEST_ASSERT(
+        state_begin(&state, &fixture->layers[1], 0ull, 1ull, NULL,
+                    &failure, &err) == YVEX_OK &&
+            state_apply_token(&state, &fixture->layers[1], 0ull, 1, delta) &&
+            state.commit(state.context, &failure, &err) == YVEX_OK &&
+            state_identity(&state, 1ull, populated_identity, &err) == YVEX_OK &&
+            strcmp(empty_identity, populated_identity) != 0,
+        "reset fixture first commits non-empty history");
+    YVEX_TEST_ASSERT(
+        state.reset(state.context, &failure, &err) == YVEX_OK,
+        "idle prepared state resets without allocation or refusal");
+    YVEX_TEST_ASSERT(
+        state_summary(&state, &after, &err) == YVEX_OK &&
+            after.allocated_bytes == before.allocated_bytes &&
+            after.prepared_layer_count == before.prepared_layer_count &&
+            after.reset_count == before.reset_count + 1ull &&
+            after.generation == before.generation + 1ull,
+        "reset advances lifecycle evidence while preserving prepared allocation");
+    YVEX_TEST_ASSERT(
+        state_view(&state, 1ull,
+                   YVEX_ATTENTION_STATE_VIEW_COMMITTED)->token_count == 0ull &&
+            state_identity(&state, 1ull, populated_identity, &err) == YVEX_OK &&
+            strcmp(empty_identity, populated_identity) == 0,
+        "reset restores the canonical empty state identity");
+    (void)state_close(&state);
+    return 0;
+}
+
+/* Purpose: prove a failed later-layer preparation cannot publish or corrupt prior state ownership. */
+static int test_prepare_failure_is_atomic(const state_plan_fixture *fixture)
+{
+    const yvex_graph_family_api *family = state_family();
+    test_state state = {0};
+    yvex_attention_state_recipe_request request;
+    yvex_attention_state_recipe recipe;
+    yvex_graph_attention_state_summary before, after;
+    yvex_attention_failure failure;
+    yvex_error err;
+    char delta[YVEX_SHA256_HEX_CAP];
+    char identity_before[YVEX_SHA256_HEX_CAP], identity_after[YVEX_SHA256_HEX_CAP];
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(
+        state_open(&state, family, &fixture->plan, 4096ull,
+                   &failure, &err) == YVEX_OK &&
+            state_prepare(&state, &fixture->layers[0],
+                          fixture->plan.summary.attention_plan_identity) &&
+            state_summary(&state, &before, &err) == YVEX_OK &&
+            state_identity(&state, 0ull, identity_before, &err) == YVEX_OK,
+        "first prepared layer establishes committed state before injected budget failure");
+    memset(&request, 0, sizeof(request));
+    request.layer_ordinal = 1ull;
+    request.final_position = 2052ull;
+    request.attention_plan_identity = fixture->plan.summary.attention_plan_identity;
+    YVEX_TEST_ASSERT(
+        state_recipe_project(&fixture->layers[1], &request, &recipe,
+                             &failure, &err) == YVEX_OK &&
+            state.prepare(state.context, 1ull, &recipe, NULL,
+                          &failure, &err) == YVEX_ERR_BOUNDS &&
+            state_summary(&state, &after, &err) == YVEX_OK &&
+            before.prepared_layer_count == after.prepared_layer_count &&
+            before.allocated_bytes == after.allocated_bytes &&
+            memcmp(before.components, after.components,
+                   sizeof(before.components)) == 0 &&
+            before.generation == after.generation &&
+            strcmp(before.state_layout_identity, after.state_layout_identity) == 0 &&
+            state_view(&state, 1ull, YVEX_ATTENTION_STATE_VIEW_COMMITTED) == NULL,
+        "failed preparation publishes no layer, counters, or layout identity");
+    YVEX_TEST_ASSERT(
+        state_begin(&state, &fixture->layers[0], 0ull, 1ull, NULL,
+                    &failure, &err) == YVEX_OK &&
+            state_apply_token(&state, &fixture->layers[0], 0ull, 1, delta) &&
+            state.commit(state.context, &failure, &err) == YVEX_OK &&
+            state_identity(&state, 0ull, identity_after, &err) == YVEX_OK &&
+            strcmp(identity_before, identity_after) != 0 &&
+            yvex_sha256_hex_valid(delta),
+        "prior prepared bank remains owned and executable after later preparation failure");
+    (void)state_close(&state);
+    return 0;
+}
+
+/* Purpose: prove a multi-layer batch flips no selector until one atomic publish. */
+static int test_batch_publication_is_atomic(const state_plan_fixture *fixture)
+{
+    const yvex_graph_family_api *family = state_family();
+    test_state state = {0};
+    char delta[YVEX_SHA256_HEX_CAP];
+    yvex_graph_attention_state_summary summary;
+    yvex_attention_failure failure;
+    yvex_error err;
+    unsigned long long layer;
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(
+        state_open(&state, family, &fixture->plan, 16ull * 1024ull * 1024ull,
+                   &failure, &err) == YVEX_OK &&
+            state_prepare(&state, &fixture->layers[0],
+                          fixture->plan.summary.attention_plan_identity) &&
+            state_prepare(&state, &fixture->layers[1],
+                          fixture->plan.summary.attention_plan_identity),
+        "two-layer atomic state fixture opens and prepares");
+    YVEX_TEST_ASSERT(
+        state_begin(&state, &fixture->layers[0], 0ull, 1ull, NULL,
+                    &failure, &err) == YVEX_OK &&
+            state_apply_token(&state, &fixture->layers[0], 0ull, 1, delta),
+        "first layer stages without publishing its alternate bank");
+    YVEX_TEST_ASSERT(
+        state_begin(&state, &fixture->layers[1], 1ull, 1ull, NULL,
+                    &failure, &err) == YVEX_ERR_STATE &&
+            state_summary(&state, &summary, &err) == YVEX_OK &&
+            summary.transaction_active && summary.abort_required &&
+            !summary.candidate_active && summary.staged_layer_count == 1ull &&
+            summary.commit_count == 0ull &&
+            state.commit(state.context, &failure, &err) == YVEX_ERR_STATE &&
+            state_view(&state, 0ull,
+                       YVEX_ATTENTION_STATE_VIEW_COMMITTED)->token_count == 0ull &&
+            state_view(&state, 1ull,
+                       YVEX_ATTENTION_STATE_VIEW_COMMITTED)->token_count == 0ull,
+        "failure after staging poisons the batch and cannot publish a subset");
+    YVEX_TEST_ASSERT(
+        state.abort(state.context, &failure, &err) == YVEX_OK &&
+            state_summary(&state, &summary, &err) == YVEX_OK &&
+            !summary.transaction_active && !summary.abort_required &&
+            summary.abort_count == 1ull && summary.commit_count == 0ull,
+        "abort discharges the poisoned batch without changing committed state");
+    for (layer = 0ull; layer < 2ull; ++layer) {
+        YVEX_TEST_ASSERT(
+            state_begin(&state, &fixture->layers[layer], 0ull, 1ull, NULL,
+                        &failure, &err) == YVEX_OK &&
+                state_apply_token(&state, &fixture->layers[layer], 0ull, 1, delta),
+            "retry batch stages each complete layer");
+    }
+    YVEX_TEST_ASSERT(
+        setenv("YVEX_TEST_RUNTIME_STATE_PUBLISH_FAILURE", "1", 1) == 0 &&
+            state.commit(state.context, &failure, &err) == YVEX_ERR_STATE &&
+            unsetenv("YVEX_TEST_RUNTIME_STATE_PUBLISH_FAILURE") == 0 &&
+            state_summary(&state, &summary, &err) == YVEX_OK &&
+            summary.abort_required && summary.staged_layer_count == 2ull &&
+            summary.commit_count == 0ull &&
+            state.commit(state.context, &failure, &err) == YVEX_ERR_STATE &&
+            state_view(&state, 0ull,
+                       YVEX_ATTENTION_STATE_VIEW_COMMITTED)->token_count == 0ull &&
+            state_view(&state, 1ull,
+                       YVEX_ATTENTION_STATE_VIEW_COMMITTED)->token_count == 0ull,
+        "publication failure also requires abort and preserves every prior selector");
+    YVEX_TEST_ASSERT(
+        state.abort(state.context, &failure, &err) == YVEX_OK &&
+            state_summary(&state, &summary, &err) == YVEX_OK &&
+            !summary.transaction_active && !summary.abort_required &&
+            summary.abort_count == 2ull && summary.commit_count == 0ull,
+        "second poisoned batch aborts before a clean retry");
+    for (layer = 0ull; layer < 2ull; ++layer) {
+        YVEX_TEST_ASSERT(
+            state_begin(&state, &fixture->layers[layer], 0ull, 1ull, NULL,
+                        &failure, &err) == YVEX_OK &&
+                state_apply_token(&state, &fixture->layers[layer], 0ull, 1, delta),
+            "clean batch restages every layer after explicit abort");
+    }
+    YVEX_TEST_ASSERT(
+        state.commit(state.context, &failure, &err) == YVEX_OK &&
+            state_summary(&state, &summary, &err) == YVEX_OK &&
+            !summary.transaction_active && summary.staged_layer_count == 0ull &&
+            summary.commit_count == 2ull &&
+            state_view(&state, 0ull,
+                       YVEX_ATTENTION_STATE_VIEW_COMMITTED)->token_count == 1ull &&
+            state_view(&state, 1ull,
+                       YVEX_ATTENTION_STATE_VIEW_COMMITTED)->token_count == 1ull,
+        "successful publication flips the complete staged set together");
+    (void)state_close(&state);
+    return 0;
+}
+
+/* Purpose: prove aggregate capacity accounting remains distinct from one-layer capture maxima. */
+static int test_summary_capacity_accounting(const state_plan_fixture *fixture)
+{
+    const yvex_graph_family_api *family = state_family();
+    test_state state = {0};
+    yvex_graph_attention_state_summary summary;
+    yvex_graph_attention_state_summary initial;
+    yvex_attention_failure failure;
+    yvex_error err;
+    char initial_identity[YVEX_SHA256_HEX_CAP];
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(
+        state_open(&state, family, &fixture->plan, 1024ull * 1024ull,
+                   &failure, &err) == YVEX_OK,
+        "capacity-accounting fixture opens");
+    YVEX_TEST_ASSERT(
+        state_summary(&state, &initial, &err) == YVEX_OK &&
+            snprintf(initial_identity, sizeof(initial_identity), "%s",
+                     initial.state_layout_identity) > 0 &&
+            state_prepare(&state, &fixture->layers[0],
+                          fixture->plan.summary.attention_plan_identity) &&
+            state_prepare(&state, &fixture->layers[1],
+                          fixture->plan.summary.attention_plan_identity) &&
+            state_prepare(&state, &fixture->layers[2],
+                          fixture->plan.summary.attention_plan_identity) &&
+            state_summary(&state, &summary, &err) == YVEX_OK,
+        "all class capacities prepare and summarize atomically");
+    YVEX_TEST_ASSERT(
+        summary.components[YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY].capacity == 133ull &&
+            summary.components[YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY].capacity == 516ull &&
+            summary.components[YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY].capacity == 513ull &&
+            summary.components[YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY].maximum_capacity == 127ull &&
+            summary.components[YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY].maximum_capacity == 513ull &&
+            summary.components[YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY].maximum_capacity == 513ull,
+        "summary separates aggregate accounting from maximum per-layer capacities");
+    YVEX_TEST_ASSERT(
+        strcmp(initial_identity, summary.state_layout_identity) != 0,
+        "synchronized summary exposes the bound aggregate layout");
+    (void)state_close(&state);
+    return 0;
+}
+
+/* Purpose: fill one complete execution descriptor fixture with canonical compatibility facts. */
+static void execution_descriptor_fixture(
+    yvex_runtime_execution_descriptor_facts *facts)
+{
+    memset(facts, 0, sizeof(*facts));
+    facts->schema_version = YVEX_RUNTIME_EXECUTION_DESCRIPTOR_SCHEMA_V2;
+    facts->runtime_model_identity =
+        "1111111111111111111111111111111111111111111111111111111111111111";
+    facts->runtime_binding_identity =
+        "2222222222222222222222222222222222222222222222222222222222222222";
+    facts->artifact_identity =
+        "3333333333333333333333333333333333333333333333333333333333333333";
+    facts->runtime_numeric_identity =
+        "4444444444444444444444444444444444444444444444444444444444444444";
+    facts->runtime_descriptor_identity =
+        "5555555555555555555555555555555555555555555555555555555555555555";
+    facts->semantic_graph_identity =
+        "6666666666666666666666666666666666666666666666666666666666666666";
+    facts->executable_graph_identity =
+        "7777777777777777777777777777777777777777777777777777777777777777";
+    facts->residency_identity =
+        "8888888888888888888888888888888888888888888888888888888888888888";
+    facts->workspace_identity =
+        "9999999999999999999999999999999999999999999999999999999999999999";
+    facts->capacity_plan_identity =
+        "abababababababababababababababababababababababababababababababab";
+    facts->state_layout_identity =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    facts->selected_mode = "eager";
+    facts->capture_bucket = "not-applicable";
+    facts->family_adapter_id = 0x44535634ull;
+    facts->family_adapter_version = 1ull;
+    facts->probe = YVEX_ATTENTION_PROBE_CANONICAL_V2;
+    facts->probe_scope = YVEX_ATTENTION_PROBE_SCOPE_FULL;
+    facts->operation_scope = YVEX_RUNTIME_SCOPE_ATTENTION_ENVELOPE;
+    facts->phase = YVEX_RUNTIME_PHASE_ATTENTION_PREFILL;
+    facts->backend = YVEX_BACKEND_KIND_CPU;
+    facts->requested_mode = YVEX_RUNTIME_MODE_EAGER;
+    facts->token_count = 4ull;
+    facts->request_count = 1ull;
+    facts->layer_start = 0ull;
+    facts->layer_count = 43ull;
+    facts->selection_key = ~0ull;
+    facts->binding_count = 634ull;
+    facts->state_component_entries[YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY] = 64ull;
+    facts->state_component_entries[YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY] = 8ull;
+    facts->state_component_entries[YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY] = 4ull;
+    facts->state_component_capacities[YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY] = 129ull;
+    facts->state_component_capacities[YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY] = 16ull;
+    facts->state_component_capacities[YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY] = 8ull;
+    facts->maximum_compression_ratio = 128ull;
+    facts->maximum_topk_capacity = 512ull;
+    facts->maximum_host_bytes = 8ull * 1024ull * 1024ull;
+    facts->residency_generation = 1ull;
+    facts->resident_binding_count = 634ull;
+    facts->resident_encoded_bytes = 5693189120ull;
+    facts->workspace_bytes = 1024ull * 1024ull;
+    facts->workspace_generation = 1ull;
+    facts->prepared_state_layers = 3ull;
+    facts->state_allocated_bytes = 65536ull;
+    facts->state_generation = 4ull;
+    facts->qtype_binding_counts[0] = 105ull;
+    facts->qtype_binding_counts[1] = 236ull;
+    facts->qtype_bytes[0] = 4096ull;
+    facts->qtype_bytes[1] = 8192ull;
+    facts->device_kind = YVEX_BACKEND_KIND_CPU;
+    facts->device_index = 0;
+    facts->total_device_bytes = 16ull * 1024ull * 1024ull * 1024ull;
+}
+
+/* Purpose: report whether one canonical fact mutation changes descriptor identity. */
+static int execution_descriptor_changed(
+    const char *baseline, const yvex_runtime_execution_descriptor_facts *facts)
+{
+    char identity[YVEX_SHA256_HEX_CAP];
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    return yvex_runtime_execution_descriptor_identity_compute(
+               facts, identity, &err) == YVEX_OK &&
+           strcmp(baseline, identity) != 0;
+}
+
+/* Purpose: prove descriptor identity covers compatibility and excludes orchestration evidence. */
+static int test_execution_descriptor_identity(void)
+{
+    yvex_runtime_execution_descriptor_facts facts, changed;
+    yvex_graph_attention_operator_request orchestration, unrelated;
+    char first[YVEX_SHA256_HEX_CAP], second[YVEX_SHA256_HEX_CAP];
+    double timing = 1.0, changed_timing = 999.0;
+    yvex_error err;
+
+    execution_descriptor_fixture(&facts);
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(yvex_runtime_execution_descriptor_identity_compute(
+                         &facts, first, &err) == YVEX_OK,
+                     "execution descriptor fixture seals");
+    YVEX_TEST_ASSERT(strcmp(first,
+                            "1b1461b1dbcf06f7ae22786d8eba6c052356b115cbb0b8be532e503982922997") == 0,
+                     "execution descriptor canonical field order is stable");
+    changed = facts;
+    changed.runtime_binding_identity =
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "binding mutation changes execution descriptor");
+    changed = facts;
+    changed.runtime_model_identity =
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "model mutation changes execution descriptor");
+    changed = facts;
+    changed.probe = YVEX_ATTENTION_PROBE_UNSPECIFIED;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_execution_descriptor_identity_compute(
+            &changed, second, &err) == YVEX_ERR_INVALID_ARG,
+        "legacy numeric zero probe refuses descriptor admission");
+    changed.probe = (yvex_attention_probe_kind)(YVEX_ATTENTION_PROBE_CANONICAL_V2 + 1u);
+    YVEX_TEST_ASSERT(
+        yvex_runtime_execution_descriptor_identity_compute(
+            &changed, second, &err) == YVEX_ERR_INVALID_ARG &&
+            strcmp(facts.runtime_model_identity, changed.runtime_model_identity) == 0 &&
+            strcmp(facts.runtime_binding_identity, changed.runtime_binding_identity) == 0 &&
+            strcmp(facts.runtime_descriptor_identity,
+                   changed.runtime_descriptor_identity) == 0 &&
+            strcmp(facts.semantic_graph_identity, changed.semantic_graph_identity) == 0 &&
+            strcmp(facts.executable_graph_identity,
+                   changed.executable_graph_identity) == 0,
+        "unknown probe refuses without changing upstream identity facts");
+    changed = facts;
+    changed.phase = YVEX_RUNTIME_PHASE_ATTENTION_DECODE;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "phase mutation changes execution descriptor");
+    changed = facts;
+    changed.requested_mode = YVEX_RUNTIME_MODE_AUTO;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "requested-mode mutation changes execution descriptor");
+    changed = facts;
+    changed.selected_mode = "full";
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "selected-mode mutation changes execution descriptor");
+    changed = facts;
+    changed.capture_bucket = "prefill-4";
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "capture-bucket mutation changes execution descriptor");
+    changed = facts;
+    changed.token_count++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "request geometry mutation changes execution descriptor");
+    changed = facts;
+    changed.layer_start++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "layer-range mutation changes execution descriptor");
+    changed = facts;
+    changed.selection_key--;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "family selection-key mutation changes execution descriptor");
+    changed = facts;
+    changed.state_component_entries[YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY]++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "local-history mutation changes execution descriptor");
+    changed = facts;
+    changed.state_component_entries[YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY]++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "compressed-history mutation changes execution descriptor");
+    changed = facts;
+    changed.state_component_entries[YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY]++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "indexer-history mutation changes execution descriptor");
+    changed = facts;
+    changed.state_component_capacities[YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY]++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "local-capacity mutation changes execution descriptor");
+    changed = facts;
+    changed.state_component_capacities[YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY]++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "compressed-capacity mutation changes execution descriptor");
+    changed = facts;
+    changed.state_component_capacities[YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY]++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "indexer-capacity mutation changes execution descriptor");
+    changed = facts;
+    changed.maximum_compression_ratio++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "compression-ratio mutation changes execution descriptor");
+    changed = facts;
+    changed.maximum_topk_capacity++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "top-k capacity mutation changes execution descriptor");
+    changed = facts;
+    changed.residency_identity =
+        "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "residency mutation changes execution descriptor");
+    changed = facts;
+    changed.residency_generation++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "residency-generation mutation changes execution descriptor");
+    changed = facts;
+    changed.workspace_identity =
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "workspace mutation changes execution descriptor");
+    changed = facts;
+    changed.workspace_generation++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "workspace-generation mutation changes execution descriptor");
+    changed = facts;
+    changed.capacity_plan_identity =
+        "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "capacity-plan mutation changes execution descriptor");
+    changed = facts;
+    changed.state_layout_identity =
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "state-layout mutation changes execution descriptor");
+    changed = facts;
+    changed.state_generation++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "state-generation mutation changes execution descriptor");
+    changed = facts;
+    changed.device_index++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "device mutation changes execution descriptor");
+    changed = facts;
+    changed.qtype_binding_counts[1]++;
+    YVEX_TEST_ASSERT(execution_descriptor_changed(first, &changed),
+                     "qtype requirement mutation changes execution descriptor");
+    memset(&orchestration, 0, sizeof(orchestration));
+    orchestration.operator_action = YVEX_RUNTIME_OPERATOR_EXECUTE;
+    orchestration.repeat = 1ull;
+    unrelated = orchestration;
+    unrelated.operator_action = YVEX_RUNTIME_OPERATOR_BENCHMARK;
+    unrelated.repeat = 99ull;
+    unrelated.warmup = 7ull;
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(
+        yvex_runtime_execution_descriptor_identity_compute(
+            &facts, second, &err) == YVEX_OK && strcmp(first, second) == 0 &&
+            (orchestration.operator_action != unrelated.operator_action) &&
+            orchestration.repeat != unrelated.repeat &&
+            orchestration.warmup != unrelated.warmup && timing != changed_timing,
+        "action, repeat, warmup, and timing remain outside descriptor identity");
+    changed = facts;
+    changed.schema_version++;
+    YVEX_TEST_ASSERT(yvex_runtime_execution_descriptor_identity_compute(
+                         &changed, second, &err) == YVEX_ERR_INVALID_ARG,
+                     "unsupported execution descriptor schema refuses");
+    return 0;
+}
+
+/* Purpose: prove a selected family recipe cannot bypass a missing runtime-binding refusal. */
+static int test_operator_missing_binding_refusal(void)
+{
+    yvex_graph_attention_operator_request request;
+    yvex_graph_attention_operator_result result;
+    yvex_runtime_cleanup_lease *cleanup = NULL;
+    yvex_error err;
+    int rc;
+
+    memset(&request, 0, sizeof(request));
+    request.target = "deepseek4-v4-flash";
+    request.artifact_path = "/tmp/yvex-definitely-missing.gguf";
+    request.runtime_binding_path = "/tmp/yvex-definitely-missing.runtime-binding";
+    request.backend = YVEX_BACKEND_KIND_CPU;
+    request.probe = YVEX_ATTENTION_PROBE_UNSPECIFIED;
+    request.scope = YVEX_ATTENTION_PROBE_SCOPE_QUICK;
+    request.phase = YVEX_RUNTIME_PHASE_ATTENTION_PREFILL;
+    request.mode = YVEX_RUNTIME_MODE_EAGER;
+    request.operation_scope = YVEX_RUNTIME_SCOPE_ATTENTION_CORE;
+    request.operator_action = YVEX_RUNTIME_OPERATOR_STATE_EXERCISE;
+    request.token_count = 2ull;
+    request.repeat = 1ull;
+    request.history_tokens = 4ull;
+    request.selection_key = 2ull;
+    request.select_selection_key = 1;
+    yvex_error_clear(&err);
+    rc = yvex_graph_attention_operator_execute(&request, &result, &cleanup, &err);
+    YVEX_TEST_ASSERT(
+        rc == YVEX_ERR_INVALID_ARG && cleanup == NULL && !result.completed &&
+            strcmp(result.status, "refused") == 0,
+        "legacy numeric zero probe refuses before runtime binding access");
+    request.probe = YVEX_ATTENTION_PROBE_CANONICAL_V2;
+    yvex_error_clear(&err);
+    rc = yvex_graph_attention_operator_execute(&request, &result, &cleanup, &err);
+    YVEX_TEST_ASSERT(rc != YVEX_OK && cleanup == NULL && !result.completed &&
+                         strcmp(result.status, "refused") == 0 && yvex_error_is_set(&err),
+                     "missing runtime binding refuses selected state exercise without mutation");
+    return 0;
+}
+
+int yvex_test_runtime_state(void)
+{
+    state_plan_fixture fixture;
+
+    state_plan_open(&fixture);
+    if (test_state_recipe_identity(&fixture) != 0) return 1;
+    if (test_workspace_recipe_identity() != 0) return 1;
+    if (test_workspace_capture_geometry(&fixture) != 0) return 1;
+    if (test_capacity_plan(&fixture) != 0) return 1;
+    if (test_execution_descriptor_identity() != 0) return 1;
+    if (test_operator_missing_binding_refusal() != 0) return 1;
+    if (test_state_identity_geometry(&fixture) != 0) return 1;
+    if (test_state_lifecycle(&fixture) != 0) return 1;
+    if (test_state_reset(&fixture) != 0) return 1;
+    if (test_summary_capacity_accounting(&fixture) != 0) return 1;
+    if (test_prepare_failure_is_atomic(&fixture) != 0) return 1;
+    if (test_batch_publication_is_atomic(&fixture) != 0) return 1;
+    YVEX_TEST_ASSERT(state_phase_equivalence(&fixture, 0ull, 6ull),
+                     "SWA chunk and ordered decode preserve rollover state exactly");
+    YVEX_TEST_ASSERT(state_phase_equivalence(&fixture, 1ull, 2052ull),
+                     "CSA chunk and decode preserve fewer/exact/513 candidate state exactly");
+    YVEX_TEST_ASSERT(state_phase_equivalence(&fixture, 2ull, 384ull),
+                     "HCA chunk and decode preserve 127/128/129 and three-group state exactly");
+    return 0;
+}

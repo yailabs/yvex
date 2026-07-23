@@ -6,6 +6,7 @@
  */
 #include "tests/test.h"
 
+#include <yvex/internal/core.h>
 #include <yvex/internal/families/deepseek_v4.h>
 #include <yvex/internal/source.h>
 
@@ -356,6 +357,59 @@ static int source_verify_write_upstream_inventory_two(
            source_verify_write_text(path, json);
 }
 
+static int source_verify_json_iteration(void)
+{
+    static const char document[] = "{\"values\":[1,2,],\"empty\":{},}";
+    static const char malformed[] = "{\"first\":1 \"second\":2}";
+    yvex_json json;
+    yvex_json_iter object;
+    yvex_json_iter array;
+    yvex_json_item item;
+    unsigned long long value;
+    char key[32];
+
+    yvex_json_init(&json, document, sizeof(document) - 1u);
+    YVEX_TEST_ASSERT(yvex_json_iter_begin(&json, &object, YVEX_JSON_COLLECTION_OBJECT), "JSON object iterator begins");
+    YVEX_TEST_ASSERT(yvex_json_object_member(&object, key, sizeof(key)) ==
+                             YVEX_JSON_ITEM_READY &&
+                         strcmp(key, "values") == 0 && yvex_json_iter_begin(&json, &array, YVEX_JSON_COLLECTION_ARRAY),
+                     "JSON object member exposes its unconsumed array");
+    YVEX_TEST_ASSERT(yvex_json_array_value(&array) == YVEX_JSON_ITEM_READY &&
+                         yvex_json_u64(&json, &value) && value == 1u &&
+                         yvex_json_array_value(&array) == YVEX_JSON_ITEM_READY &&
+                         yvex_json_u64(&json, &value) && value == 2u &&
+                         yvex_json_array_value(&array) == YVEX_JSON_ITEM_END &&
+                         array.trailing_separator,
+                     "JSON array iterator preserves trailing-separator evidence");
+    YVEX_TEST_ASSERT(yvex_json_object_member(&object, key, sizeof(key)) ==
+                             YVEX_JSON_ITEM_READY &&
+                         strcmp(key, "empty") == 0 && yvex_json_iter_begin(&json, &array, YVEX_JSON_COLLECTION_OBJECT) &&
+                         yvex_json_object_member(&array, key, sizeof(key)) ==
+                             YVEX_JSON_ITEM_END &&
+                         yvex_json_object_member(&object, key, sizeof(key)) ==
+                             YVEX_JSON_ITEM_END &&
+                         object.trailing_separator && yvex_json_complete(&json),
+                     "JSON iterators close nested and trailing-comma objects exactly");
+
+    yvex_json_init(&json, malformed, sizeof(malformed) - 1u);
+    YVEX_TEST_ASSERT(yvex_json_iter_begin(&json, &object, YVEX_JSON_COLLECTION_OBJECT) &&
+                         yvex_json_object_member(&object, key, sizeof(key)) ==
+                             YVEX_JSON_ITEM_READY &&
+                         yvex_json_u64(&json, &value),
+                     "JSON malformed-separator fixture consumes its first member");
+    item = yvex_json_object_member(&object, key, sizeof(key));
+    YVEX_TEST_ASSERT(item == YVEX_JSON_ITEM_ERROR,
+                     "JSON object iterator rejects a missing comma");
+
+    yvex_json_init(&json, "[1,]", 4u);
+    YVEX_TEST_ASSERT(!yvex_json_skip_value(&json),
+                     "canonical recursive JSON arrays still reject trailing commas");
+    yvex_json_init(&json, "{\"key\":1,}", 10u);
+    YVEX_TEST_ASSERT(!yvex_json_skip_value(&json),
+                     "canonical recursive JSON objects still reject trailing commas");
+    return 0;
+}
+
 int yvex_test_source_verify(void)
 {
     const char *root = "build/tests/source-verify";
@@ -366,6 +420,9 @@ int yvex_test_source_verify(void)
     unsigned long long total;
     char path[512];
     int rc;
+
+    if (source_verify_json_iteration() != 0)
+        return 1;
 
     YVEX_TEST_ASSERT(
         yvex_source_is_release_target(YVEX_SOURCE_RELEASE_TARGET_ID) &&
@@ -811,10 +868,10 @@ int yvex_test_source_verify(void)
                      "invalid safetensors header is refused");
 
     total = ULLONG_MAX - 1u;
-    YVEX_TEST_ASSERT(!yvex_source_checked_add_u64(&total, 2u) &&
+    YVEX_TEST_ASSERT(!yvex_core_u64_add(total, 2u, &total) &&
                      total == ULLONG_MAX - 1u,
                      "footprint overflow fails without mutation");
-    YVEX_TEST_ASSERT(yvex_source_checked_add_u64(&total, 1u) &&
+    YVEX_TEST_ASSERT(yvex_core_u64_add(total, 1u, &total) &&
                      total == ULLONG_MAX,
                      "checked footprint addition accepts exact limit");
     return 0;

@@ -19,34 +19,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Projects immutable CUDA arithmetic truth without launching a kernel. */
-/* Purpose: Implement the canonical qtype refuse mechanism owned by the CUDA backend boundary.
- * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
- * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
- * Failure: Returns a typed CUDA refusal and publishes no partial success state.
- * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
-void yvex_cuda_qtype_refuse(yvex_cuda_qtype_fact *fact, const char *qtype)
-{
-    const yvex_quant_numeric_capability *capability;
-
-    if (!fact) return;
-    fact->qtype = qtype ? qtype : "unknown";
-    capability = yvex_quant_numeric_capability_by_name(qtype);
-    if (!capability) {
-        fact->status = "unknown-qtype";
-        fact->reason = "unknown-qtype";
-        return;
-    }
-    fact->status = capability->dedicated_cuda_compute_available
-        ? "available" : "unavailable";
-    fact->reason = capability->dedicated_cuda_compute_available
-        ? "dedicated-cuda-encoded-row-dot-v1"
-        : yvex_quant_refusal_name(
-              capability->identity_known && capability->storage_admitted
-                  ? YVEX_QUANT_REFUSAL_CUDA_COMPUTE_UNAVAILABLE
-                  : capability->refusal);
-}
-
 /* Purpose: Implement the canonical quant fail mechanism owned by the CUDA backend boundary.
  * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
  * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
@@ -77,41 +49,6 @@ static int cuda_quant_fail(yvex_quant_failure *failure,
     return status;
 }
 
-/* Releases all raw temporaries; the first cleanup failure remains observable. */
-/* Purpose: Implement the canonical quant cleanup mechanism owned by the CUDA backend boundary.
- * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
- * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
- * Failure: Returns a typed CUDA refusal and publishes no partial success state.
- * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
-static int cuda_quant_cleanup(yvex_backend *backend,
-                              CUdeviceptr *encoded,
-                              CUdeviceptr *vector,
-                              CUdeviceptr *output,
-                              yvex_error *err)
-{
-    CUdeviceptr pointers[3];
-    unsigned int index;
-    int result = YVEX_OK;
-    yvex_error cleanup_error;
-
-    pointers[0] = output ? *output : 0u;
-    pointers[1] = vector ? *vector : 0u;
-    pointers[2] = encoded ? *encoded : 0u;
-    for (index = 0u; index < 3u; ++index) {
-        int rc = yvex_cuda_temporary_free(
-            backend, YVEX_BACKEND_VARIANT_QTYPE_ROW_DOT, pointers[index],
-            "cuda.quant.row_dot.cleanup", &cleanup_error);
-        if (rc != YVEX_OK && result == YVEX_OK) {
-            result = rc;
-            if (err) *err = cleanup_error;
-        }
-    }
-    if (encoded) *encoded = 0u;
-    if (vector) *vector = 0u;
-    if (output) *output = 0u;
-    return result;
-}
-
 /*
  * Executes one encoded row dot directly on CUDA. Host inputs are borrowed,
  * device temporaries are always released, and no decoded tensor is retained. */
@@ -133,6 +70,7 @@ int yvex_cuda_quant_row_dot(yvex_backend *backend,
     const yvex_quant_numeric_capability *capability =
         yvex_quant_numeric_capability_at(qtype);
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_cuda_work work;
     yvex_gguf_qtype_storage_result storage;
     unsigned long long dims[1];
     CUdeviceptr device_encoded = 0u;
@@ -141,9 +79,12 @@ int yvex_cuda_quant_row_dot(yvex_backend *backend,
     size_t vector_bytes;
     void *params[5];
     const char *copy_failure;
+    yvex_error cleanup_error;
+    yvex_error primary_error;
     int rc;
     int cleanup_rc;
 
+    memset(&work, 0, sizeof(work));
     if (failure) memset(failure, 0, sizeof(*failure));
     yvex_error_clear(err);
     if (!backend || !state || !encoded || !vector || !out || !elements ||
@@ -160,6 +101,8 @@ int yvex_cuda_quant_row_dot(yvex_backend *backend,
             err, YVEX_ERR_INVALID_ARG,
             "CUDA encoded row, aligned vector/result, and backend are required");
     }
+    rc = backend_dispatch_admit(backend, "cuda.quant.row_dot", err);
+    if (rc != YVEX_OK) return rc;
     if (!capability || !capability->dedicated_cuda_compute_available) {
         return cuda_quant_fail(
             failure, YVEX_QUANT_FAILURE_CUDA_COMPUTE_UNAVAILABLE, qtype,
@@ -183,6 +126,12 @@ int yvex_cuda_quant_row_dot(yvex_backend *backend,
             "CUDA encoded row byte geometry is inconsistent");
     }
     vector_bytes = (size_t)elements * sizeof(float);
+    rc = yvex_cuda_deferred_release_drain(backend, err);
+    if (rc != YVEX_OK) {
+        return cuda_quant_fail(
+            failure, YVEX_QUANT_FAILURE_CLEANUP, qtype, 0u, 0u, err, rc,
+            "prior CUDA qtype temporary cleanup remains incomplete");
+    }
     rc = yvex_cuda_require_capability(
         backend, YVEX_BACKEND_VARIANT_QTYPE_ROW_DOT,
         "cuda.quant.row_dot.capability", err);
@@ -194,20 +143,18 @@ int yvex_cuda_quant_row_dot(yvex_backend *backend,
     }
     rc = yvex_cuda_set_current(backend, "cuda.quant.row_dot.context", err);
     if (rc != YVEX_OK) goto execution_failure;
-    rc = yvex_cuda_status(
-        &state->driver,
-        state->driver.cuMemAlloc_v2(&device_encoded, encoded_bytes),
-        "cuda.quant.row_dot.alloc_encoded", err);
+    work.backend = backend;
+    work.state = state;
+    work.variant = YVEX_BACKEND_VARIANT_QTYPE_ROW_DOT;
+    work.raw_only = 1;
+    rc = yvex_cuda_work_allocate(&work, &device_encoded, encoded_bytes, NULL, 0,
+                                 "cuda.quant.row_dot.alloc_encoded", NULL, err);
     if (rc != YVEX_OK) goto execution_failure;
-    rc = yvex_cuda_status(
-        &state->driver,
-        state->driver.cuMemAlloc_v2(&device_vector, vector_bytes),
-        "cuda.quant.row_dot.alloc_vector", err);
+    rc = yvex_cuda_work_allocate(&work, &device_vector, vector_bytes, NULL, 0,
+                                 "cuda.quant.row_dot.alloc_vector", NULL, err);
     if (rc != YVEX_OK) goto execution_failure;
-    rc = yvex_cuda_status(
-        &state->driver,
-        state->driver.cuMemAlloc_v2(&device_output, sizeof(float)),
-        "cuda.quant.row_dot.alloc_output", err);
+    rc = yvex_cuda_work_allocate(&work, &device_output, sizeof(float), NULL, 1,
+                                 "cuda.quant.row_dot.alloc_output", NULL, err);
     if (rc != YVEX_OK) goto execution_failure;
 
     copy_failure = getenv("YVEX_TEST_CUDA_QTYPE_COPY_FAILURE");
@@ -227,12 +174,6 @@ int yvex_cuda_quant_row_dot(yvex_backend *backend,
         state->driver.cuMemcpyHtoD_v2(device_vector, vector, vector_bytes),
         "cuda.quant.row_dot.copy_vector", err);
     if (rc != YVEX_OK) goto execution_failure;
-    rc = yvex_cuda_status(
-        &state->driver,
-        state->driver.cuMemsetD8_v2(device_output, 0u, sizeof(float)),
-        "cuda.quant.row_dot.zero_output", err);
-    if (rc != YVEX_OK) goto execution_failure;
-
     params[0] = &device_encoded;
     params[1] = &device_vector;
     params[2] = &elements;
@@ -259,8 +200,7 @@ int yvex_cuda_quant_row_dot(yvex_backend *backend,
         "cuda.quant.row_dot.copy_output", err);
     if (rc != YVEX_OK) goto execution_failure;
 
-    cleanup_rc = cuda_quant_cleanup(
-        backend, &device_encoded, &device_vector, &device_output, err);
+    cleanup_rc = yvex_cuda_work_cleanup(&work, err);
     if (cleanup_rc != YVEX_OK) {
         return cuda_quant_fail(
             failure, YVEX_QUANT_FAILURE_CLEANUP, qtype, 3u, 0u, err,
@@ -271,15 +211,18 @@ int yvex_cuda_quant_row_dot(yvex_backend *backend,
     return YVEX_OK;
 
 execution_failure:
-    cleanup_rc = cuda_quant_cleanup(
-        backend, &device_encoded, &device_vector, &device_output, err);
-    if (cleanup_rc != YVEX_OK) {
-        return cuda_quant_fail(
-            failure, YVEX_QUANT_FAILURE_CLEANUP, qtype, 3u, 0u, err,
-            cleanup_rc, "CUDA qtype cleanup after execution failure failed");
-    }
-    return cuda_quant_fail(
+    if (err)
+        primary_error = *err;
+    else
+        yvex_error_clear(&primary_error);
+    yvex_error_clear(&cleanup_error);
+    cleanup_rc = yvex_cuda_work_cleanup(&work, &cleanup_error);
+    (void)cleanup_rc;
+    rc = cuda_quant_fail(
         failure, YVEX_QUANT_FAILURE_WORKER, qtype, 1u, 0u, err,
         rc == YVEX_OK ? YVEX_ERR_BACKEND : rc,
         "CUDA qtype encoded-row execution failed");
+    if (err)
+        *err = primary_error;
+    return rc;
 }

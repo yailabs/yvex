@@ -108,6 +108,11 @@ int yvex_source_payload_manifest_publish(const yvex_source_payload_session *sess
                        "payload session and manifest path are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    return yvex_source_manifest_publish_payload(
-        session->manifest_path, &session->verification, session, err);
+    return yvex_source_publish(&(yvex_source_publication_request){
+                                   .kind = YVEX_SOURCE_PUBLICATION_PAYLOAD_MANIFEST,
+                                   .out_path = session->manifest_path,
+                                   .verification = &session->verification,
+                                   .payload_session = session,
+                               },
+                               err);
 }

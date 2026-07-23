@@ -544,16 +544,342 @@ static const char *const literal_lines_43[] = {
     "Boundary: no full model execution, no inference readiness, no DeepSeek generation, no provider "
         "generation, no streaming generation, no eval, no benchmark, no throughput."};
 
-/* Purpose: Compute artifact kind name for its CLI invariant (`artifact_kind_name`). */
-static const char *artifact_kind_name(yvex_model_artifact_report_kind kind)
-{
-    switch (kind) {
-    case YVEX_MODEL_ARTIFACT_REPORT_LIST: return "list";
-    case YVEX_MODEL_ARTIFACT_REPORT_CHECK: return "check";
-    case YVEX_MODEL_ARTIFACT_REPORT_STATUS:
-    default: return "status";
-    }
-}
+typedef struct {
+    const char *model;
+    const char *resolved_path;
+    const char *target_id;
+    const char *target_class;
+    const char *backend;
+} fullmodel_failure_identity;
+
+typedef struct {
+    const char *const *lines;
+    size_t count;
+} fullmodel_line_group;
+
+typedef struct {
+    const yvex_render_field_spec *fields;
+    size_t count;
+} fullmodel_field_group;
+
+typedef struct {
+    fullmodel_line_group descriptor_title;
+    fullmodel_line_group descriptor_body;
+    fullmodel_line_group family_title;
+    fullmodel_line_group family_identity;
+    fullmodel_line_group family_body;
+    fullmodel_line_group generic_identity;
+    fullmodel_line_group generic_backend;
+    fullmodel_line_group generic_runtime;
+    const char *descriptor_phase;
+    const char *family_phase;
+    const char *target_class;
+    int artifact_bytes_visible;
+} fullmodel_failure_layout;
+
+typedef struct {
+    const char *empty;
+    const char *model;
+    const char *resolved_path;
+    const char *target_id;
+    const char *target_class;
+    const char *backend;
+    const char *family_detected;
+    const char *family_requested;
+    const char *adapter_status;
+    const char *artifact_identity_status;
+    const char *attention_rule_status;
+    const char *mlp_rule_status;
+    const char *output_head_rule_status;
+    const char *tokenizer_rule_status;
+    const char *moe_expert_roles;
+    const char *router_present;
+    const char *expert_tensors_present;
+    const char *output_head_present;
+    const char *output_head_tensor;
+    const char *vocab_size;
+    const char *graph_attention_status;
+    const char *backend_requirements_status;
+    const char *backend_available;
+    const char *backend_memory_known;
+    const char *backend_fit_status;
+    const char *missing_required_roles;
+    const char *unsupported_required_roles;
+    const char *runtime_blockers;
+    unsigned long long tensor_count;
+    unsigned long long total_tensor_bytes;
+    unsigned long long backend_required_bytes;
+} fullmodel_runtime_view;
+
+#define FULLMODEL_LINE_GROUP(lines_) {lines_, sizeof(lines_) / sizeof((lines_)[0])}
+#define FAILURE_IDENTITY_FIELD(key_, member_, fallback_) \
+    {key_, YVEX_RENDER_FIELD_TEXT, offsetof(fullmodel_failure_identity, member_), fallback_}
+
+static const yvex_render_field_spec failure_core_fields[] = {
+    FAILURE_IDENTITY_FIELD("model", model, ""),
+    FAILURE_IDENTITY_FIELD("model_resolved_path", resolved_path, ""),
+    FAILURE_IDENTITY_FIELD("target_id", target_id, "unknown"),
+};
+
+static const yvex_render_field_spec failure_class_fields[] = {
+    FAILURE_IDENTITY_FIELD("target_class", target_class, "unresolved-artifact"),
+    FAILURE_IDENTITY_FIELD("backend", backend, "cpu"),
+};
+
+#define RUNTIME_TEXT(key_, member_, fallback_) \
+    {key_, YVEX_RENDER_FIELD_TEXT, offsetof(fullmodel_runtime_view, member_), fallback_}
+#define RUNTIME_U64(key_, member_) \
+    {key_, YVEX_RENDER_FIELD_U64, offsetof(fullmodel_runtime_view, member_), NULL}
+
+static const yvex_render_field_spec runtime_identity_fields[] = {
+    RUNTIME_TEXT("status", empty, "fullmodel-family-runtime"),
+    RUNTIME_TEXT("model", model, ""),
+    RUNTIME_TEXT("model_resolved_path", resolved_path, ""),
+    RUNTIME_TEXT("target_id", target_id, "path"),
+    RUNTIME_TEXT("target_class", target_class, "candidate-GGUF-path"),
+    RUNTIME_TEXT("backend", backend, "cpu"),
+    RUNTIME_TEXT("family", empty, "deepseek"),
+    RUNTIME_TEXT("family_detected", family_detected, "unknown"),
+    RUNTIME_TEXT("family_requested", family_requested, "auto"),
+    RUNTIME_TEXT("family_adapter", empty, "deepseek-runtime-report"),
+    RUNTIME_TEXT("family_adapter_status", adapter_status, "partial"),
+};
+
+static const yvex_render_field_spec runtime_descriptor_fields[] = {
+    RUNTIME_TEXT("descriptor_status", adapter_status, "partial"),
+};
+
+static const yvex_render_field_spec runtime_tensor_fields[] = {
+    RUNTIME_U64("tensor_count", tensor_count),
+    RUNTIME_U64("total_tensor_bytes", total_tensor_bytes),
+    RUNTIME_TEXT("artifact_identity_status", artifact_identity_status, "not-checked"),
+};
+
+static const yvex_render_field_spec runtime_rule_fields[] = {
+    RUNTIME_TEXT("role_adapter_status", adapter_status, "partial"),
+    RUNTIME_TEXT("collection_adapter_status", adapter_status, "partial"),
+    RUNTIME_TEXT("attention_rule_status", attention_rule_status, "blocked-missing-qkv"),
+    RUNTIME_TEXT("attention_rules", attention_rule_status, "blocked-missing-qkv"),
+};
+
+static const yvex_render_field_spec runtime_family_rule_fields[] = {
+    RUNTIME_TEXT("mlp_rule_status", mlp_rule_status, "blocked-missing-mlp"),
+    RUNTIME_TEXT("output_head_rule_status", output_head_rule_status, "blocked-missing-output-head"),
+    RUNTIME_TEXT("tokenizer_rule_status", tokenizer_rule_status, "blocked-missing-tokenizer-metadata"),
+};
+
+static const yvex_render_field_spec runtime_moe_fields[] = {
+    RUNTIME_TEXT("moe_expert_roles", moe_expert_roles, "missing"),
+};
+
+static const yvex_render_field_spec runtime_presence_fields[] = {
+    RUNTIME_TEXT("router_present", router_present, "false"),
+    RUNTIME_TEXT("moe_router_present", router_present, "false"),
+    RUNTIME_TEXT("expert_tensors_present", expert_tensors_present, "false"),
+};
+
+static const yvex_render_field_spec runtime_output_fields[] = {
+    RUNTIME_TEXT("output_head_present", output_head_present, "false"),
+    RUNTIME_TEXT("output_head_tensor", output_head_tensor, "none"),
+    RUNTIME_TEXT("vocab_size", vocab_size, "unknown"),
+};
+
+static const yvex_render_field_spec runtime_graph_fields[] = {
+    RUNTIME_TEXT("graph.full_transformer_attention", graph_attention_status, "missing-tensor"),
+    RUNTIME_TEXT("full_transformer_graph_ready", empty, "false"),
+};
+
+static const yvex_render_field_spec runtime_backend_fields[] = {
+    RUNTIME_TEXT("backend_requirements_status", backend_requirements_status, "unsupported"),
+    RUNTIME_TEXT("backend_available", backend_available, "false"),
+    RUNTIME_TEXT("backend_memory_known", backend_memory_known, "false"),
+    RUNTIME_U64("backend_required_bytes", backend_required_bytes),
+    RUNTIME_TEXT("backend_fit_status", backend_fit_status, "unknown"),
+    RUNTIME_TEXT("backend_allocation_attempted", empty, "false"),
+};
+
+static const yvex_render_field_spec runtime_blocker_fields[] = {
+    RUNTIME_TEXT("missing_required_roles", missing_required_roles, "unknown"),
+    RUNTIME_TEXT("unsupported_required_roles", unsupported_required_roles, "unknown"),
+};
+
+static const yvex_render_field_spec runtime_final_fields[] = {
+    RUNTIME_TEXT("runtime_blockers", runtime_blockers, "unknown"),
+};
+
+#define FULLMODEL_FIELD_GROUP(fields_) {fields_, sizeof(fields_) / sizeof((fields_)[0])}
+
+static const fullmodel_field_group runtime_field_groups[] = {
+    FULLMODEL_FIELD_GROUP(runtime_identity_fields),
+    FULLMODEL_FIELD_GROUP(runtime_descriptor_fields),
+    FULLMODEL_FIELD_GROUP(runtime_tensor_fields),
+    FULLMODEL_FIELD_GROUP(runtime_rule_fields),
+    FULLMODEL_FIELD_GROUP(runtime_family_rule_fields),
+    FULLMODEL_FIELD_GROUP(runtime_moe_fields),
+    FULLMODEL_FIELD_GROUP(runtime_presence_fields),
+    FULLMODEL_FIELD_GROUP(runtime_output_fields),
+    FULLMODEL_FIELD_GROUP(runtime_graph_fields),
+    FULLMODEL_FIELD_GROUP(runtime_backend_fields),
+    FULLMODEL_FIELD_GROUP(runtime_blocker_fields),
+    FULLMODEL_FIELD_GROUP(runtime_final_fields),
+};
+
+#undef FULLMODEL_FIELD_GROUP
+
+#undef RUNTIME_U64
+#undef RUNTIME_TEXT
+
+static const fullmodel_failure_layout failure_layouts[] = {
+    {
+        FULLMODEL_LINE_GROUP(literal_pair_5), FULLMODEL_LINE_GROUP(literal_lines_31),
+        FULLMODEL_LINE_GROUP(literal_pair_4), FULLMODEL_LINE_GROUP(literal_pair_3),
+        FULLMODEL_LINE_GROUP(literal_lines_32), FULLMODEL_LINE_GROUP(literal_lines_33),
+        FULLMODEL_LINE_GROUP(literal_lines_34), FULLMODEL_LINE_GROUP(literal_lines_35),
+        "resolve-model", "resolve-model", "unresolved-artifact", 0,
+    },
+    {
+        FULLMODEL_LINE_GROUP(literal_pair_2), FULLMODEL_LINE_GROUP(literal_lines_36),
+        FULLMODEL_LINE_GROUP(literal_pair_1), FULLMODEL_LINE_GROUP(literal_pair_0),
+        FULLMODEL_LINE_GROUP(literal_lines_37), FULLMODEL_LINE_GROUP(literal_lines_38),
+        FULLMODEL_LINE_GROUP(literal_lines_40), FULLMODEL_LINE_GROUP(literal_lines_41),
+        "tensor-inventory", "load-descriptor", "GGUF-artifact", 1,
+    },
+};
+
+static const fullmodel_materialize_report materialize_failure_templates[] = {
+    {
+        .status = "fullmodel-materialize-fail",
+        .target_class = "unresolved-artifact",
+        .artifact_identity_status = "unavailable",
+        .tensor_inventory_status = "failed",
+        .required_role_coverage = "none",
+        .missing_required_roles = "artifact",
+        .unsupported_required_roles = "full-runtime-model",
+        .placement_plan_status = "failed",
+        .memory_budget_status = "not-performed",
+        .backend_preflight_status = "not-performed",
+        .materialization_mode = "none",
+        .full_model_materialization = "failed",
+        .full_model_materialization_proof = "fail",
+        .phase = "failed",
+        .failed_phase = "resolve-model",
+        .cleanup_attempted = "false",
+        .cleanup_status = "not-needed",
+        .cleanup_idempotent = "true",
+        .owned_state_released = "true",
+        .partial_materialization = "false",
+        .residency_plan = "unavailable",
+        .runtime_blockers = "artifact path missing",
+    },
+    {
+        .status = "fullmodel-materialize-fail",
+        .target_class = "GGUF-artifact",
+        .artifact_identity_status = "not-checked",
+        .tensor_inventory_status = "failed",
+        .required_role_coverage = "none",
+        .missing_required_roles = "parseable-GGUF-tensor-directory",
+        .unsupported_required_roles = "full-runtime-model",
+        .placement_plan_status = "failed",
+        .memory_budget_status = "not-performed",
+        .backend_preflight_status = "not-performed",
+        .materialization_mode = "none",
+        .full_model_materialization = "failed",
+        .full_model_materialization_proof = "fail",
+        .phase = "failed",
+        .failed_phase = "tensor-inventory",
+        .cleanup_attempted = "false",
+        .cleanup_status = "not-needed",
+        .cleanup_idempotent = "true",
+        .owned_state_released = "true",
+        .partial_materialization = "false",
+        .residency_plan = "unavailable",
+        .runtime_blockers = "GGUF metadata or tensor directory parse failed",
+    },
+};
+
+static const fullmodel_materialize_report source_only_materialize_template = {
+    .status = "fullmodel-materialize-unsupported",
+    .model_resolved_path = "source-only-target",
+    .target_class = "official-source-huge-model",
+    .artifact_identity_status = "not-applicable",
+    .tensor_inventory_status = "not-performed-source-only-target",
+    .required_role_coverage = "none",
+    .missing_required_roles = "YVEX-produced-GGUF-artifact",
+    .unsupported_required_roles =
+        "GLM-runtime-family-mapping,GLM-YVEX-produced-GGUF-emission,GLM-runtime-execution",
+    .placement_plan_status = "unsupported",
+    .memory_budget_status = "not-performed",
+    .backend_preflight_status = "not-performed",
+    .materialization_mode = "source-only-refusal",
+    .full_model_materialization = "unsupported-source-only",
+    .full_model_materialization_proof = "unsupported",
+    .phase = "failed",
+    .failed_phase = "resolve-model",
+    .failed_reason = "YVEX-produced-GGUF-artifact-missing",
+    .cleanup_attempted = "false",
+    .cleanup_status = "not-needed",
+    .cleanup_idempotent = "true",
+    .owned_state_released = "true",
+    .partial_materialization = "false",
+    .residency_plan = "future-YVEX-produced-artifact-required",
+    .runtime_blockers =
+        "source-only target; YVEX-produced GGUF emission planned; full model runtime unsupported",
+};
+
+static const char *const fullmodel_usage_lines[] = {
+    "usage: yvex fullmodel report --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] "
+        "[--limit-tensors N] [--registry FILE] [--audit | --output normal|table|audit]",
+    "usage: yvex fullmodel materialization-plan --model FILE_OR_ALIAS [--backend cpu|cuda] "
+        "[--residency resident|host-staged|ssd-staged|hybrid] [--target TARGET] [--limit-tensors N] "
+        "[--registry FILE] [--audit | --output normal|table|audit]",
+    "usage: yvex fullmodel materialize --model FILE_OR_ALIAS [--backend cpu|cuda] [--registry FILE] "
+        "[--dry-run] [--plan-only] [--require-role ROLE] [--require-collection COLLECTION] "
+        "[--limit-bytes N] [--fail-after-phase PHASE] [--report-dir DIR] "
+        "[--audit | --output normal|table|audit]",
+    "usage: yvex fullmodel descriptor --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] "
+        "[--format text] [--limit-tensors N] [--require-role ROLE] [--require-collection COLLECTION] "
+        "[--include-blockers] [--include-placement] [--include-graph] [--include-kv] "
+        "[--include-logits] [--audit | --output normal|table|audit]",
+    "usage: yvex fullmodel family-runtime --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] "
+        "[--backend cpu|cuda] [--include-blockers] [--include-roles] [--include-graph] [--include-kv] "
+        "[--include-moe] [--include-output] [--audit | --output normal|table|audit]",
+};
+
+typedef enum {
+    FAMILY_PHASE_PASS,
+    FAMILY_PHASE_ADAPTER,
+    FAMILY_PHASE_BLOCKED,
+    FAMILY_PHASE_FAILURE_MARKER,
+} family_phase_kind;
+
+typedef struct {
+    const char *name;
+    family_phase_kind kind;
+} family_phase_spec;
+
+static const family_phase_spec family_runtime_phases[] = {
+    {"preflight", FAMILY_PHASE_PASS}, {"resolve-model", FAMILY_PHASE_PASS},
+    {"resolve-family", FAMILY_PHASE_PASS}, {"load-descriptor", FAMILY_PHASE_PASS},
+    {"family-profile", FAMILY_PHASE_PASS}, {"role-adapter", FAMILY_PHASE_ADAPTER},
+    {"collection-adapter", FAMILY_PHASE_ADAPTER}, {"attention-rules", FAMILY_PHASE_BLOCKED},
+    {"position-rules", FAMILY_PHASE_BLOCKED}, {"kv-rules", FAMILY_PHASE_BLOCKED},
+    {"moe-rules", FAMILY_PHASE_BLOCKED}, {"mlp-rules", FAMILY_PHASE_BLOCKED},
+    {"output-head-rules", FAMILY_PHASE_BLOCKED}, {"tokenizer-rules", FAMILY_PHASE_BLOCKED},
+    {"graph-requirements", FAMILY_PHASE_BLOCKED},
+    {"runtime-phase-blockers", FAMILY_PHASE_BLOCKED}, {"adapter-report", FAMILY_PHASE_PASS},
+    {"complete", FAMILY_PHASE_PASS}, {"failed", FAMILY_PHASE_FAILURE_MARKER},
+    {"cleanup", FAMILY_PHASE_PASS},
+};
+
+static const char *const materialize_phases[] = {
+    "preflight", "resolve-model", "artifact-identity", "tensor-inventory", "role-coverage",
+    "placement-plan", "memory-budget", "backend-preflight", "materialize-embedding",
+    "materialize-normalization", "materialize-attention", "materialize-mlp", "materialize-moe",
+    "materialize-output", "materialize-tokenizer", "cleanup", "complete",
+};
+
+#undef FAILURE_IDENTITY_FIELD
+#undef FULLMODEL_LINE_GROUP
 
 /* Render one source-backed prepare refusal from typed report facts. */
 /* Purpose: Render model prepare source report render from typed facts (`model_prepare_source_report_render`).
@@ -594,50 +920,6 @@ void model_prepare_source_report_render(
                              sizeof(prepare_result_fields[0]));
 }
 
-/* Purpose: Render model artifacts render from typed facts (`yvex_model_artifacts_render`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-int yvex_model_artifacts_render(FILE *fp,
-                                yvex_model_artifact_render_mode mode,
-                                const yvex_model_artifact_report *report)
-{
-    unsigned long i;
-
-    (void)mode;
-    if (!report) return 1;
-    yvex_cli_out_kv_str(fp, "report", "model-artifacts");
-    yvex_cli_out_kv_str(fp, "kind", artifact_kind_name(report->kind));
-    yvex_cli_out_kv_str(fp, "status", report->status ? report->status : "unknown");
-    yvex_cli_out_kv_str(fp, "alias", report->alias ? report->alias : "");
-    yvex_cli_out_kv_str(fp, "path", report->path ? report->path : "");
-    yvex_cli_out_kv_bool(fp, "execution_ready", report->execution_ready);
-    for (i = 0; i < report->row_count; ++i) {
-        yvex_cli_out_writef(fp, "row_%lu: %s %s %s\n", i,
-                            report->rows[i].name ? report->rows[i].name : "",
-                            report->rows[i].status ? report->rows[i].status : "",
-                            report->rows[i].detail ? report->rows[i].detail : "");
-    }
-    yvex_cli_out_kv_str(fp, "reason", report->reason ? report->reason : "");
-    yvex_cli_out_kv_str(fp, "boundary", report->boundary ? report->boundary : "");
-    yvex_cli_out_kv_str(fp, "next_row", report->next_row ? report->next_row : "");
-    return 0;
-}
-
-/* Purpose: Render model artifacts render help from typed facts (`yvex_model_artifacts_render_help`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-int yvex_model_artifacts_render_help(FILE *fp)
-{
-    yvex_cli_out_line(fp, "usage: yvex models <action> [TARGET] [options]");
-    yvex_cli_out_line(fp, "actions: list, current, use, add, remove, scan, check, prepare, artifacts");
-    yvex_cli_out_line(fp, "boundary: model artifact registry reports are not runtime generation");
-    return 0;
-}
-
 /* Purpose: Render print fullmodel common boundaries from typed facts (`print_fullmodel_common_boundaries`).
  * Inputs: Borrowed typed facts.
  * Effects: Writes through CLI I/O only.
@@ -646,6 +928,12 @@ int yvex_model_artifacts_render_help(FILE *fp)
 void print_fullmodel_common_boundaries(void)
 {
     yvex_cli_out_lines(stdout, literal_lines_0, sizeof(literal_lines_0) / sizeof(literal_lines_0[0]));
+}
+
+/* Purpose: Emit one declarative field group from a renderer-owned typed view. */
+static void fullmodel_print_field_group(const void *object, fullmodel_field_group group)
+{
+    render_object_fields(stdout, object, group.fields, group.count);
 }
 
 /* Purpose: Compute fullmodel descriptor role collection for its CLI invariant (`fullmodel_descriptor_role_collection`).
@@ -661,55 +949,25 @@ void print_fullmodel_common_boundaries(void)
 static void fullmodel_print_family_runtime_phases(const char *adapter_status,
                                                   const char *failure_phase)
 {
-    static const char *const phases[] = {
-        "preflight",
-        "resolve-model",
-        "resolve-family",
-        "load-descriptor",
-        "family-profile",
-        "role-adapter",
-        "collection-adapter",
-        "attention-rules",
-        "position-rules",
-        "kv-rules",
-        "moe-rules",
-        "mlp-rules",
-        "output-head-rules",
-        "tokenizer-rules",
-        "graph-requirements",
-        "runtime-phase-blockers",
-        "adapter-report",
-        "complete",
-        "failed",
-        "cleanup"
-    };
     unsigned int i;
     int failed_seen = 0;
 
-    for (i = 0; i < sizeof(phases) / sizeof(phases[0]); ++i) {
+    for (i = 0; i < sizeof(family_runtime_phases) / sizeof(family_runtime_phases[0]); ++i) {
+        const family_phase_spec *phase = &family_runtime_phases[i];
         const char *status = "pass";
-        if (failure_phase && strcmp(failure_phase, phases[i]) == 0) {
+        if (failure_phase && strcmp(failure_phase, phase->name) == 0) {
             status = "fail";
             failed_seen = 1;
         } else if (failed_seen) {
             status = "skipped";
-        } else if (strcmp(phases[i], "role-adapter") == 0 ||
-                   strcmp(phases[i], "collection-adapter") == 0) {
+        } else if (phase->kind == FAMILY_PHASE_ADAPTER) {
             status = adapter_status ? adapter_status : "partial";
-        } else if (strcmp(phases[i], "attention-rules") == 0 ||
-                   strcmp(phases[i], "position-rules") == 0 ||
-                   strcmp(phases[i], "kv-rules") == 0 ||
-                   strcmp(phases[i], "moe-rules") == 0 ||
-                   strcmp(phases[i], "mlp-rules") == 0 ||
-                   strcmp(phases[i], "output-head-rules") == 0 ||
-                   strcmp(phases[i], "tokenizer-rules") == 0 ||
-                   strcmp(phases[i], "graph-requirements") == 0 ||
-                   strcmp(phases[i], "runtime-phase-blockers") == 0) {
+        } else if (phase->kind == FAMILY_PHASE_BLOCKED) {
             status = "blocked";
-        } else if (strcmp(phases[i], "failed") == 0 && !failure_phase) {
+        } else if (phase->kind == FAMILY_PHASE_FAILURE_MARKER && !failure_phase) {
             status = "skipped";
         }
-        model_phase_print("family_runtime_phase", i, phases[i], status, "planned");
+        model_phase_print("family_runtime_phase", i, phase->name, status, "planned");
     }
 }
 
@@ -782,6 +1040,8 @@ int fullmodel_print_family_runtime_report(const yvex_cli_fullmodel_options *opti
                                                  int selected_target)
 {
     yvex_fullmodel_backend_fit fit;
+    const yvex_tensor_info *output_head;
+    fullmodel_runtime_view view;
     size_t role_index;
     const char *backend = options && options->backend ? options->backend : "cpu";
     const char *requested = model_requested_family(options ? options->family : NULL);
@@ -790,13 +1050,54 @@ int fullmodel_print_family_runtime_report(const yvex_cli_fullmodel_options *opti
                                  (role_coverage && strcmp(role_coverage, "complete") == 0
                                       ? "complete"
                                       : "partial");
-    int has_attention = fullmodel_has_attention_collection(collections);
     int has_mlp = fullmodel_has_mlp_collection(collections);
     int has_output = collections && collections->has_output_head;
     int supported_family = fullmodel_family_request_matches(requested, detected) &&
                            strcmp(detected, "deepseek") == 0;
 
     fullmodel_probe_backend_fit(backend, total_tensor_bytes, &fit);
+    output_head = fullmodel_descriptor_find_tensor(ctx, "output_head");
+    view = (fullmodel_runtime_view){
+        .model = options && options->model ? options->model : "",
+        .resolved_path = ref && ref->path ? ref->path : "",
+        .target_id = target_id,
+        .target_class = target_class,
+        .backend = backend,
+        .family_detected = detected,
+        .family_requested = requested,
+        .adapter_status = adapter_status,
+        .artifact_identity_status = fullmodel_identity_status(ref, artifact_bytes),
+        .attention_rule_status = fullmodel_attention_rule_status(collections),
+        .mlp_rule_status = has_mlp ? "blocked-full-transformer-integration" : "blocked-missing-mlp",
+        .output_head_rule_status = has_output ? "blocked-logits-runtime" : "blocked-missing-output-head",
+        .tokenizer_rule_status = collections && collections->has_tokenizer_metadata
+                                     ? "partial" : "blocked-missing-tokenizer-metadata",
+        .moe_expert_roles = collections && collections->has_moe_expert ? "present" : "missing",
+        .router_present = collections && collections->has_moe_router ? "true" : "false",
+        .expert_tensors_present = collections && collections->has_moe_expert ? "true" : "false",
+        .output_head_present = has_output ? "true" : "false",
+        .output_head_tensor = output_head ? output_head->name : "none",
+        .vocab_size = has_output ? "from-output-head-shape" : "unknown",
+        .graph_attention_status = fullmodel_has_attention_collection(collections)
+                                      ? "unsupported" : "missing-tensor",
+        .backend_requirements_status = fit.available ? "planned" : "unsupported",
+        .backend_available = fit.available ? "true" : "false",
+        .backend_memory_known = fit.memory_known ? "true" : "false",
+        .backend_fit_status = fit.fit_status,
+        .missing_required_roles = missing_roles,
+        .unsupported_required_roles = unsupported_roles,
+        .runtime_blockers = selected_target
+                                ? "selected runtime slice is incomplete; attention Q/K/V/O tensors missing; "
+                                  "output head missing; real transformer prefill unsupported; real attention-"
+                                  "backed KV unsupported; real DeepSeek decode unsupported; real output-head "
+                                  "logits unsupported; real vocabulary sampling unsupported"
+                                : "real transformer prefill unsupported; real attention-backed KV unsupported; "
+                                  "real DeepSeek decode unsupported; real output-head logits unsupported; real "
+                                  "vocabulary sampling unsupported",
+        .tensor_count = tensor_count,
+        .total_tensor_bytes = total_tensor_bytes,
+        .backend_required_bytes = fit.required_bytes,
+    };
 
     yvex_cli_out_writef(stdout, "family_runtime: report\n");
     if (!supported_family) {
@@ -805,36 +1106,14 @@ int fullmodel_print_family_runtime_report(const yvex_cli_fullmodel_options *opti
                                                    requested, detected);
     }
 
-    yvex_cli_out_writef(stdout, "status: fullmodel-family-runtime\n");
-    yvex_cli_out_writef(stdout, "model: %s\n", options && options->model ? options->model : "");
-    yvex_cli_out_writef(stdout, "model_resolved_path: %s\n", ref && ref->path ? ref->path : "");
-    yvex_cli_out_writef(stdout, "target_id: %s\n", target_id ? target_id : "path");
-    yvex_cli_out_writef(stdout, "target_class: %s\n", target_class ? target_class : "candidate-GGUF-path");
-    yvex_cli_out_writef(stdout, "backend: %s\n", backend);
-    yvex_cli_out_writef(stdout, "family: deepseek\n");
-    yvex_cli_out_writef(stdout, "family_detected: %s\n", detected);
-    yvex_cli_out_writef(stdout, "family_requested: %s\n", requested);
-    yvex_cli_out_writef(stdout, "family_adapter: deepseek-runtime-report\n");
-    yvex_cli_out_writef(stdout, "family_adapter_status: %s\n", adapter_status);
+    fullmodel_print_field_group(&view, runtime_field_groups[0]);
     yvex_cli_out_lines(stdout, literal_lines_10, sizeof(literal_lines_10) / sizeof(literal_lines_10[0]));
-
-    yvex_cli_out_writef(stdout, "descriptor_status: %s\n", adapter_status);
+    fullmodel_print_field_group(&view, runtime_field_groups[1]);
     yvex_cli_out_lines(stdout, literal_lines_11, sizeof(literal_lines_11) / sizeof(literal_lines_11[0]));
-    yvex_cli_out_writef(stdout, "tensor_count: %llu\n", tensor_count);
-    yvex_cli_out_writef(stdout, "total_tensor_bytes: %llu\n", total_tensor_bytes);
-    yvex_cli_out_writef(stdout, "artifact_identity_status: %s\n", fullmodel_identity_status(ref, artifact_bytes));
-
-    yvex_cli_out_writef(stdout, "role_adapter_status: %s\n", adapter_status);
-    yvex_cli_out_writef(stdout, "collection_adapter_status: %s\n", adapter_status);
-    yvex_cli_out_writef(stdout, "attention_rule_status: %s\n", fullmodel_attention_rule_status(collections));
-    yvex_cli_out_writef(stdout, "attention_rules: %s\n", fullmodel_attention_rule_status(collections));
+    fullmodel_print_field_group(&view, runtime_field_groups[2]);
+    fullmodel_print_field_group(&view, runtime_field_groups[3]);
     yvex_cli_out_lines(stdout, literal_lines_12, sizeof(literal_lines_12) / sizeof(literal_lines_12[0]));
-    yvex_cli_out_writef(stdout, "mlp_rule_status: %s\n",
-        has_mlp ? "blocked-full-transformer-integration" : "blocked-missing-mlp");
-    yvex_cli_out_writef(stdout, "output_head_rule_status: %s\n",
-        has_output ? "blocked-logits-runtime" : "blocked-missing-output-head");
-    yvex_cli_out_writef(stdout, "tokenizer_rule_status: %s\n",
-           collections && collections->has_tokenizer_metadata ? "partial" : "blocked-missing-tokenizer-metadata");
+    fullmodel_print_field_group(&view, runtime_field_groups[4]);
     yvex_cli_out_lines(stdout, literal_pair_14, sizeof(literal_pair_14) / sizeof(literal_pair_14[0]));
 
     for (role_index = 0u;
@@ -844,46 +1123,17 @@ int fullmodel_print_family_runtime_report(const yvex_cli_fullmodel_options *opti
         yvex_cli_out_writef(stdout, "%s: %s\n", role->key,
                             fullmodel_role_status_from_tensor(ctx, collections, role->role));
     }
-    yvex_cli_out_writef(stdout, "moe_expert_roles: %s\n",
-           collections && collections->has_moe_expert ? "present" : "missing");
-
+    fullmodel_print_field_group(&view, runtime_field_groups[5]);
     yvex_cli_out_lines(stdout, literal_lines_13, sizeof(literal_lines_13) / sizeof(literal_lines_13[0]));
-    yvex_cli_out_writef(stdout, "router_present: %s\n", collections && collections->has_moe_router ? "true" : "false");
-    yvex_cli_out_writef(stdout, "moe_router_present: %s\n",
-        collections && collections->has_moe_router ? "true" : "false");
-    yvex_cli_out_writef(stdout, "expert_tensors_present: %s\n",
-        collections && collections->has_moe_expert ? "true" : "false");
+    fullmodel_print_field_group(&view, runtime_field_groups[6]);
     yvex_cli_out_lines(stdout, literal_lines_14, sizeof(literal_lines_14) / sizeof(literal_lines_14[0]));
-    yvex_cli_out_writef(stdout, "output_head_present: %s\n", has_output ? "true" : "false");
-    yvex_cli_out_writef(stdout, "output_head_tensor: %s\n",
-           fullmodel_descriptor_find_tensor(ctx, "output_head")
-               ? fullmodel_descriptor_find_tensor(ctx, "output_head")->name
-               : "none");
-    yvex_cli_out_writef(stdout, "vocab_size: %s\n", has_output ? "from-output-head-shape" : "unknown");
+    fullmodel_print_field_group(&view, runtime_field_groups[7]);
     yvex_cli_out_lines(stdout, literal_lines_15, sizeof(literal_lines_15) / sizeof(literal_lines_15[0]));
-    yvex_cli_out_writef(stdout, "graph.full_transformer_attention: %s\n",
-        has_attention ? "unsupported" : "missing-tensor");
-    yvex_cli_out_writef(stdout, "full_transformer_graph_ready: false\n");
-
-    yvex_cli_out_writef(stdout, "backend_requirements_status: %s\n", fit.available ? "planned" : "unsupported");
-    yvex_cli_out_writef(stdout, "backend_available: %s\n", fit.available ? "true" : "false");
-    yvex_cli_out_writef(stdout, "backend_memory_known: %s\n", fit.memory_known ? "true" : "false");
-    yvex_cli_out_writef(stdout, "backend_required_bytes: %llu\n", fit.required_bytes);
-    yvex_cli_out_writef(stdout, "backend_fit_status: %s\n", fit.fit_status);
-    yvex_cli_out_writef(stdout, "backend_allocation_attempted: false\n");
-
-    yvex_cli_out_writef(stdout, "missing_required_roles: %s\n", missing_roles ? missing_roles : "unknown");
-    yvex_cli_out_writef(stdout, "unsupported_required_roles: %s\n", unsupported_roles ? unsupported_roles : "unknown");
+    fullmodel_print_field_group(&view, runtime_field_groups[8]);
+    fullmodel_print_field_group(&view, runtime_field_groups[9]);
+    fullmodel_print_field_group(&view, runtime_field_groups[10]);
     yvex_cli_out_lines(stdout, literal_lines_16, sizeof(literal_lines_16) / sizeof(literal_lines_16[0]));
-    yvex_cli_out_writef(stdout, "runtime_blockers: %s\n",
-           selected_target
-               ? "selected runtime slice is incomplete; attention Q/K/V/O tensors missing; output head "
-                   "missing; real transformer prefill unsupported; real attention-backed KV unsupported; "
-                   "real DeepSeek decode unsupported; real output-head logits unsupported; real vocabulary "
-                   "sampling unsupported"
-               : "real transformer prefill unsupported; real attention-backed KV unsupported; real "
-                   "DeepSeek decode unsupported; real output-head logits unsupported; real vocabulary "
-                   "sampling unsupported");
+    fullmodel_print_field_group(&view, runtime_field_groups[11]);
     yvex_cli_out_lines(stdout, literal_lines_17, sizeof(literal_lines_17) / sizeof(literal_lines_17[0]));
     fullmodel_print_family_runtime_phases(adapter_status, NULL);
     return 0;
@@ -897,45 +1147,27 @@ int fullmodel_print_family_runtime_report(const yvex_cli_fullmodel_options *opti
 static void fullmodel_print_materialize_phase_set(const char *terminal_phase,
                                                   const char *failed_phase)
 {
-    static const char *const phases[] = {
-        "preflight",
-        "resolve-model",
-        "artifact-identity",
-        "tensor-inventory",
-        "role-coverage",
-        "placement-plan",
-        "memory-budget",
-        "backend-preflight",
-        "materialize-embedding",
-        "materialize-normalization",
-        "materialize-attention",
-        "materialize-mlp",
-        "materialize-moe",
-        "materialize-output",
-        "materialize-tokenizer",
-        "cleanup",
-        "complete"
-    };
     int failed_seen = 0;
     unsigned int i;
 
-    for (i = 0; i < sizeof(phases) / sizeof(phases[0]); ++i) {
+    for (i = 0; i < sizeof(materialize_phases) / sizeof(materialize_phases[0]); ++i) {
+        const char *phase = materialize_phases[i];
         const char *status = "planned";
-        if (failed_phase && failed_phase[0] && strcmp(failed_phase, phases[i]) == 0) {
+        if (failed_phase && failed_phase[0] && strcmp(failed_phase, phase) == 0) {
             status = "fail";
             failed_seen = 1;
         } else if (!failed_seen &&
                    terminal_phase &&
                    (strcmp(terminal_phase, "complete") == 0 ||
-                    strcmp(terminal_phase, phases[i]) == 0)) {
+                    strcmp(terminal_phase, phase) == 0)) {
             status = "pass";
         } else if (failed_seen) {
             status = "skipped";
         }
-        if (strcmp(phases[i], "materialize-moe") == 0 && !failed_seen) {
+        if (strcmp(phase, "materialize-moe") == 0 && !failed_seen) {
             status = "skipped";
         }
-        model_phase_print("materialization_phase", i, phases[i], status, "planned");
+        model_phase_print("materialization_phase", i, phase, status, "planned");
     }
 }
 
@@ -1163,36 +1395,9 @@ int print_fullmodel_source_only_plan(const yvex_cli_fullmodel_options *options,
 int print_fullmodel_source_only_materialize(const yvex_cli_fullmodel_options *options,
                                                    const char *target)
 {
-    fullmodel_materialize_report report;
-
-    memset(&report, 0, sizeof(report));
+    fullmodel_materialize_report report = source_only_materialize_template;
     report.options = options;
-    report.status = "fullmodel-materialize-unsupported";
-    report.model_resolved_path = "source-only-target";
     report.target_id = target ? target : "source-only-target";
-    report.target_class = "official-source-huge-model";
-    report.artifact_identity_status = "not-applicable";
-    report.tensor_inventory_status = "not-performed-source-only-target";
-    report.required_role_coverage = "none";
-    report.missing_required_roles = "YVEX-produced-GGUF-artifact";
-    report.unsupported_required_roles = "GLM-runtime-family-mapping,GLM-YVEX-produced-GGUF-emission,GLM-"
-        "runtime-execution";
-    report.placement_plan_status = "unsupported";
-    report.memory_budget_status = "not-performed";
-    report.backend_preflight_status = "not-performed";
-    report.materialization_mode = "source-only-refusal";
-    report.full_model_materialization = "unsupported-source-only";
-    report.full_model_materialization_proof = "unsupported";
-    report.phase = "failed";
-    report.failed_phase = "resolve-model";
-    report.failed_reason = "YVEX-produced-GGUF-artifact-missing";
-    report.cleanup_attempted = "false";
-    report.cleanup_status = "not-needed";
-    report.cleanup_idempotent = "true";
-    report.owned_state_released = "true";
-    report.partial_materialization = "false";
-    report.residency_plan = "future-YVEX-produced-artifact-required";
-    report.runtime_blockers = "source-only target; YVEX-produced GGUF emission planned; full model runtime unsupported";
     fullmodel_print_materialize_report(&report);
     return 5;
 }
@@ -1270,6 +1475,102 @@ static void print_fullmodel_failed_plan_fields(const yvex_cli_fullmodel_options 
     yvex_cli_out_lines(stdout, literal_lines_30, sizeof(literal_lines_30) / sizeof(literal_lines_30[0]));
 }
 
+/* Purpose: Emit one immutable group of failure-report lines in canonical order. */
+static void fullmodel_print_line_group(fullmodel_line_group group)
+{
+    yvex_cli_out_lines(stdout, group.lines, group.count);
+}
+
+/* Purpose: Render one typed fullmodel failure shared by missing and malformed artifacts.
+ * Inputs: Borrowed CLI options, optional admitted model reference, resolved path, reason, and byte count.
+ * Effects: Writes the selected report mode through CLI I/O only.
+ * Failure: Returns the supplied typed exit status without changing domain state.
+ * Boundary: This renderer does not inspect or repair artifacts. */
+static int fullmodel_print_failure(const yvex_cli_fullmodel_options *options,
+                                   const yvex_model_ref *ref,
+                                   const char *resolved_path,
+                                   const char *reason,
+                                   unsigned long long artifact_bytes,
+                                   int rc,
+                                   unsigned int layout_index)
+{
+    const fullmodel_failure_layout *layout = &failure_layouts[layout_index];
+    const char *fallback_reason = layout_index ? "parse failed" : "artifact path does not exist";
+    const char *target_id = options && options->target ? options->target
+                            : ref && ref->alias && ref->alias[0] ? ref->alias
+                            : layout_index ? "path" : "unknown";
+    fullmodel_failure_identity identity = {
+        options && options->model ? options->model : "", resolved_path, target_id,
+        layout->target_class, options && options->backend ? options->backend : "cpu",
+    };
+    int is_plan = options && options->command == YVEX_FULLMODEL_COMMAND_MATERIALIZATION_PLAN;
+    int is_materialize = options && options->command == YVEX_FULLMODEL_COMMAND_MATERIALIZE;
+    int is_descriptor = options && options->command == YVEX_FULLMODEL_COMMAND_DESCRIPTOR;
+    int is_family = options && options->command == YVEX_FULLMODEL_COMMAND_FAMILY_RUNTIME;
+
+    reason = reason ? reason : fallback_reason;
+    if (is_materialize) {
+        fullmodel_materialize_report report = materialize_failure_templates[layout_index];
+        report.options = options;
+        report.model_resolved_path = resolved_path;
+        report.target_id = target_id;
+        report.failed_reason = reason;
+        fullmodel_print_materialize_report(&report);
+        if (layout->artifact_bytes_visible) yvex_cli_out_writef(stdout, "artifact_bytes: %llu\n", artifact_bytes);
+        yvex_cli_out_writef(stdout, "reason: %s\n", reason);
+        return exit_for_status(rc);
+    }
+    if (is_descriptor) {
+        fullmodel_print_line_group(layout->descriptor_title);
+        render_object_fields(stdout, &identity, failure_core_fields,
+                             sizeof(failure_core_fields) / sizeof(failure_core_fields[0]));
+        render_object_fields(stdout, &identity, failure_class_fields,
+                             sizeof(failure_class_fields) / sizeof(failure_class_fields[0]));
+        fullmodel_print_line_group(layout->descriptor_body);
+        fullmodel_print_descriptor_phases("fail", "fail", layout->descriptor_phase);
+        if (layout->artifact_bytes_visible) yvex_cli_out_writef(stdout, "artifact_bytes: %llu\n", artifact_bytes);
+        yvex_cli_out_writef(stdout, "reason: %s\n", reason);
+        return exit_for_status(rc);
+    }
+    if (is_family) {
+        fullmodel_print_line_group(layout->family_title);
+        render_object_fields(stdout, &identity, failure_core_fields,
+                             sizeof(failure_core_fields) / sizeof(failure_core_fields[0]));
+        render_object_fields(stdout, &identity, failure_class_fields,
+                             sizeof(failure_class_fields) / sizeof(failure_class_fields[0]));
+        fullmodel_print_line_group(layout->family_identity);
+        yvex_cli_out_writef(stdout, "family_requested: %s\n",
+                            model_requested_family(options ? options->family : NULL));
+        fullmodel_print_line_group(layout->family_body);
+        fullmodel_print_family_runtime_phases("failed", layout->family_phase);
+        if (layout->artifact_bytes_visible) yvex_cli_out_writef(stdout, "artifact_bytes: %llu\n", artifact_bytes);
+        yvex_cli_out_writef(stdout, "reason: %s\n", reason);
+        return exit_for_status(rc);
+    }
+    yvex_cli_out_writef(stdout, "fullmodel: %s\n", is_plan ? "materialization-plan" : "report");
+    yvex_cli_out_writef(stdout, "status: %s\n",
+                        is_plan ? "fullmodel-materialization-plan-fail" : "fullmodel-report-fail");
+    render_object_fields(stdout, &identity, failure_core_fields,
+                         sizeof(failure_core_fields) / sizeof(failure_core_fields[0]));
+    fullmodel_print_line_group(layout->generic_identity);
+    if (layout_index) {
+        yvex_cli_out_writef(stdout, "artifact_bytes: %llu\n", artifact_bytes);
+        yvex_cli_out_lines(stdout, literal_lines_39, sizeof(literal_lines_39) / sizeof(literal_lines_39[0]));
+    }
+    yvex_cli_out_writef(stdout, "backend: %s\n", identity.backend);
+    fullmodel_print_line_group(layout->generic_backend);
+    yvex_cli_out_writef(stdout, "cuda_context_available: %s\n",
+                        yvex_backend_cuda_context_available() ? "true" : "false");
+    fullmodel_print_line_group(layout->generic_runtime);
+    print_fullmodel_common_boundaries();
+    if (is_plan) {
+        print_fullmodel_failed_plan_fields(options, layout_index ? "tensor-directory" : "preflight",
+                                           reason, artifact_bytes);
+    }
+    yvex_cli_out_writef(stdout, "reason: %s\n", reason);
+    return exit_for_status(rc);
+}
+
 /* Purpose: Render print fullmodel missing report from typed facts (`print_fullmodel_missing_report`).
  * Inputs: Borrowed typed facts.
  * Effects: Writes through CLI I/O only.
@@ -1278,98 +1579,8 @@ static void print_fullmodel_failed_plan_fields(const yvex_cli_fullmodel_options 
 int print_fullmodel_missing_report(const yvex_cli_fullmodel_options *options,
                                           const char *resolved_path)
 {
-    int is_plan = options &&
-                  options->command == YVEX_FULLMODEL_COMMAND_MATERIALIZATION_PLAN;
-    int is_materialize = options &&
-                         options->command == YVEX_FULLMODEL_COMMAND_MATERIALIZE;
-    int is_descriptor = options &&
-                        options->command == YVEX_FULLMODEL_COMMAND_DESCRIPTOR;
-    int is_family_runtime = options &&
-                            options->command == YVEX_FULLMODEL_COMMAND_FAMILY_RUNTIME;
-
-    if (is_materialize) {
-        fullmodel_materialize_report report;
-        memset(&report, 0, sizeof(report));
-        report.options = options;
-        report.status = "fullmodel-materialize-fail";
-        report.model_resolved_path = resolved_path ? resolved_path : "";
-        report.target_id = options && options->target ? options->target : "unknown";
-        report.target_class = "unresolved-artifact";
-        report.artifact_identity_status = "unavailable";
-        report.tensor_inventory_status = "failed";
-        report.required_role_coverage = "none";
-        report.missing_required_roles = "artifact";
-        report.unsupported_required_roles = "full-runtime-model";
-        report.placement_plan_status = "failed";
-        report.memory_budget_status = "not-performed";
-        report.backend_preflight_status = "not-performed";
-        report.materialization_mode = "none";
-        report.full_model_materialization = "failed";
-        report.full_model_materialization_proof = "fail";
-        report.phase = "failed";
-        report.failed_phase = "resolve-model";
-        report.failed_reason = "artifact path does not exist";
-        report.cleanup_attempted = "false";
-        report.cleanup_status = "not-needed";
-        report.cleanup_idempotent = "true";
-        report.owned_state_released = "true";
-        report.partial_materialization = "false";
-        report.residency_plan = "unavailable";
-        report.runtime_blockers = "artifact path missing";
-        fullmodel_print_materialize_report(&report);
-        yvex_cli_out_writef(stdout, "reason: artifact path does not exist\n");
-        return exit_for_status(YVEX_ERR_IO);
-    }
-
-    if (is_descriptor) {
-        yvex_cli_out_lines(stdout, literal_pair_5, sizeof(literal_pair_5) / sizeof(literal_pair_5[0]));
-        yvex_cli_out_writef(stdout, "model: %s\n", options && options->model ? options->model : "");
-        yvex_cli_out_writef(stdout, "model_resolved_path: %s\n", resolved_path ? resolved_path : "");
-        yvex_cli_out_writef(stdout, "target_id: %s\n", options && options->target ? options->target : "unknown");
-        yvex_cli_out_writef(stdout, "target_class: unresolved-artifact\n");
-        yvex_cli_out_writef(stdout, "backend: %s\n", options && options->backend ? options->backend : "cpu");
-        yvex_cli_out_lines(stdout, literal_lines_31, sizeof(literal_lines_31) / sizeof(literal_lines_31[0]));
-        fullmodel_print_descriptor_phases("fail", "fail", "resolve-model");
-        yvex_cli_out_writef(stdout, "reason: artifact path does not exist\n");
-        return exit_for_status(YVEX_ERR_IO);
-    }
-
-    if (is_family_runtime) {
-        yvex_cli_out_lines(stdout, literal_pair_4, sizeof(literal_pair_4) / sizeof(literal_pair_4[0]));
-        yvex_cli_out_writef(stdout, "model: %s\n", options && options->model ? options->model : "");
-        yvex_cli_out_writef(stdout, "model_resolved_path: %s\n", resolved_path ? resolved_path : "");
-        yvex_cli_out_writef(stdout, "target_id: %s\n", options && options->target ? options->target : "unknown");
-        yvex_cli_out_writef(stdout, "target_class: unresolved-artifact\n");
-        yvex_cli_out_writef(stdout, "backend: %s\n", options && options->backend ? options->backend : "cpu");
-        yvex_cli_out_lines(stdout, literal_pair_3, sizeof(literal_pair_3) / sizeof(literal_pair_3[0]));
-        yvex_cli_out_writef(stdout, "family_requested: %s\n", model_requested_family(options ? options->family : NULL));
-        yvex_cli_out_lines(stdout, literal_lines_32, sizeof(literal_lines_32) / sizeof(literal_lines_32[0]));
-        fullmodel_print_family_runtime_phases("failed", "resolve-model");
-        yvex_cli_out_writef(stdout, "reason: artifact path does not exist\n");
-        return exit_for_status(YVEX_ERR_IO);
-    }
-
-    yvex_cli_out_writef(stdout, "fullmodel: %s\n", is_plan ? "materialization-plan" : "report");
-    yvex_cli_out_writef(stdout, "status: %s\n",
-        is_plan ? "fullmodel-materialization-plan-fail" : "fullmodel-report-fail");
-    yvex_cli_out_writef(stdout, "model: %s\n", options && options->model ? options->model : "");
-    yvex_cli_out_writef(stdout, "model_resolved_path: %s\n", resolved_path ? resolved_path : "");
-    yvex_cli_out_writef(stdout, "target_id: %s\n", options && options->target ? options->target : "unknown");
-    yvex_cli_out_lines(stdout, literal_lines_33, sizeof(literal_lines_33) / sizeof(literal_lines_33[0]));
-    yvex_cli_out_writef(stdout, "backend: %s\n", options && options->backend ? options->backend : "cpu");
-    yvex_cli_out_lines(stdout, literal_lines_34, sizeof(literal_lines_34) / sizeof(literal_lines_34[0]));
-    yvex_cli_out_writef(stdout, "cuda_context_available: %s\n",
-        yvex_backend_cuda_context_available() ? "true" : "false");
-    yvex_cli_out_lines(stdout, literal_lines_35, sizeof(literal_lines_35) / sizeof(literal_lines_35[0]));
-    print_fullmodel_common_boundaries();
-    if (is_plan) {
-        print_fullmodel_failed_plan_fields(options,
-                                           "preflight",
-                                           "artifact path does not exist",
-                                           0ull);
-    }
-    yvex_cli_out_writef(stdout, "reason: artifact path does not exist\n");
-    return exit_for_status(YVEX_ERR_IO);
+    return fullmodel_print_failure(options, NULL, resolved_path ? resolved_path : "",
+                                   "artifact path does not exist", 0ull, YVEX_ERR_IO, 0u);
 }
 
 /* Purpose: Parse print fullmodel parse failure report into typed CLI state (`print_fullmodel_parse_failure_report`).
@@ -1383,106 +1594,10 @@ int print_fullmodel_parse_failure_report(const yvex_cli_fullmodel_options *optio
                                                 int rc)
 {
     unsigned long long artifact_bytes = 0ull;
-    int is_plan = options &&
-                  options->command == YVEX_FULLMODEL_COMMAND_MATERIALIZATION_PLAN;
-    int is_materialize = options &&
-                         options->command == YVEX_FULLMODEL_COMMAND_MATERIALIZE;
-    int is_descriptor = options &&
-                        options->command == YVEX_FULLMODEL_COMMAND_DESCRIPTOR;
-    int is_family_runtime = options &&
-                            options->command == YVEX_FULLMODEL_COMMAND_FAMILY_RUNTIME;
 
     fullmodel_file_size(ref && ref->path ? ref->path : "", &artifact_bytes);
-    if (is_materialize) {
-        fullmodel_materialize_report report;
-        memset(&report, 0, sizeof(report));
-        report.options = options;
-        report.status = "fullmodel-materialize-fail";
-        report.model_resolved_path = ref && ref->path ? ref->path : "";
-        report.target_id = options && options->target
-            ? options->target
-            : (ref && ref->alias && ref->alias[0] ? ref->alias : "path");
-        report.target_class = "GGUF-artifact";
-        report.artifact_identity_status = "not-checked";
-        report.tensor_inventory_status = "failed";
-        report.required_role_coverage = "none";
-        report.missing_required_roles = "parseable-GGUF-tensor-directory";
-        report.unsupported_required_roles = "full-runtime-model";
-        report.placement_plan_status = "failed";
-        report.memory_budget_status = "not-performed";
-        report.backend_preflight_status = "not-performed";
-        report.materialization_mode = "none";
-        report.full_model_materialization = "failed";
-        report.full_model_materialization_proof = "fail";
-        report.phase = "failed";
-        report.failed_phase = "tensor-inventory";
-        report.failed_reason = reason ? reason : "parse failed";
-        report.cleanup_attempted = "false";
-        report.cleanup_status = "not-needed";
-        report.cleanup_idempotent = "true";
-        report.owned_state_released = "true";
-        report.partial_materialization = "false";
-        report.residency_plan = "unavailable";
-        report.runtime_blockers = "GGUF metadata or tensor directory parse failed";
-        fullmodel_print_materialize_report(&report);
-        yvex_cli_out_writef(stdout, "artifact_bytes: %llu\n", artifact_bytes);
-        yvex_cli_out_writef(stdout, "reason: %s\n", reason ? reason : "parse failed");
-        return exit_for_status(rc);
-    }
-    if (is_descriptor) {
-        yvex_cli_out_lines(stdout, literal_pair_2, sizeof(literal_pair_2) / sizeof(literal_pair_2[0]));
-        yvex_cli_out_writef(stdout, "model: %s\n", options && options->model ? options->model : "");
-        yvex_cli_out_writef(stdout, "model_resolved_path: %s\n", ref && ref->path ? ref->path : "");
-        yvex_cli_out_writef(stdout, "target_id: %s\n",
-            options && options->target ? options->target : (ref && ref->alias && ref->alias[0] ? ref->alias : "path"));
-        yvex_cli_out_writef(stdout, "target_class: GGUF-artifact\n");
-        yvex_cli_out_writef(stdout, "backend: %s\n", options && options->backend ? options->backend : "cpu");
-        yvex_cli_out_lines(stdout, literal_lines_36, sizeof(literal_lines_36) / sizeof(literal_lines_36[0]));
-        fullmodel_print_descriptor_phases("fail", "fail", "tensor-inventory");
-        yvex_cli_out_writef(stdout, "artifact_bytes: %llu\n", artifact_bytes);
-        yvex_cli_out_writef(stdout, "reason: %s\n", reason ? reason : "parse failed");
-        return exit_for_status(rc);
-    }
-    if (is_family_runtime) {
-        yvex_cli_out_lines(stdout, literal_pair_1, sizeof(literal_pair_1) / sizeof(literal_pair_1[0]));
-        yvex_cli_out_writef(stdout, "model: %s\n", options && options->model ? options->model : "");
-        yvex_cli_out_writef(stdout, "model_resolved_path: %s\n", ref && ref->path ? ref->path : "");
-        yvex_cli_out_writef(stdout, "target_id: %s\n",
-            options && options->target ? options->target : (ref && ref->alias && ref->alias[0] ? ref->alias : "path"));
-        yvex_cli_out_writef(stdout, "target_class: GGUF-artifact\n");
-        yvex_cli_out_writef(stdout, "backend: %s\n", options && options->backend ? options->backend : "cpu");
-        yvex_cli_out_lines(stdout, literal_pair_0, sizeof(literal_pair_0) / sizeof(literal_pair_0[0]));
-        yvex_cli_out_writef(stdout, "family_requested: %s\n", model_requested_family(options ? options->family : NULL));
-        yvex_cli_out_lines(stdout, literal_lines_37, sizeof(literal_lines_37) / sizeof(literal_lines_37[0]));
-        fullmodel_print_family_runtime_phases("failed", "load-descriptor");
-        yvex_cli_out_writef(stdout, "artifact_bytes: %llu\n", artifact_bytes);
-        yvex_cli_out_writef(stdout, "reason: %s\n", reason ? reason : "parse failed");
-        return exit_for_status(rc);
-    }
-    yvex_cli_out_writef(stdout, "fullmodel: %s\n", is_plan ? "materialization-plan" : "report");
-    yvex_cli_out_writef(stdout, "status: %s\n",
-        is_plan ? "fullmodel-materialization-plan-fail" : "fullmodel-report-fail");
-    yvex_cli_out_writef(stdout, "model: %s\n", options && options->model ? options->model : "");
-    yvex_cli_out_writef(stdout, "model_resolved_path: %s\n", ref && ref->path ? ref->path : "");
-    yvex_cli_out_writef(stdout, "target_id: %s\n",
-        options && options->target ? options->target : (ref && ref->alias && ref->alias[0] ? ref->alias : "path"));
-    yvex_cli_out_lines(stdout, literal_lines_38, sizeof(literal_lines_38) / sizeof(literal_lines_38[0]));
-    yvex_cli_out_writef(stdout, "artifact_bytes: %llu\n", artifact_bytes);
-    yvex_cli_out_lines(stdout, literal_lines_39, sizeof(literal_lines_39) / sizeof(literal_lines_39[0]));
-    yvex_cli_out_writef(stdout, "backend: %s\n", options && options->backend ? options->backend : "cpu");
-    yvex_cli_out_lines(stdout, literal_lines_40, sizeof(literal_lines_40) / sizeof(literal_lines_40[0]));
-    yvex_cli_out_writef(stdout, "cuda_context_available: %s\n",
-        yvex_backend_cuda_context_available() ? "true" : "false");
-    yvex_cli_out_lines(stdout, literal_lines_41, sizeof(literal_lines_41) / sizeof(literal_lines_41[0]));
-    print_fullmodel_common_boundaries();
-    if (is_plan) {
-        print_fullmodel_failed_plan_fields(options,
-                                           "tensor-directory",
-                                           reason ? reason : "parse failed",
-                                           artifact_bytes);
-    }
-    yvex_cli_out_writef(stdout, "reason: %s\n", reason ? reason : "parse failed");
-    return exit_for_status(rc);
+    return fullmodel_print_failure(options, ref, ref && ref->path ? ref->path : "", reason,
+                                   artifact_bytes, rc, 1u);
 }
 
 /* Purpose: Render model artifacts surface fullmodel help from typed facts
@@ -1493,27 +1608,9 @@ int print_fullmodel_parse_failure_report(const yvex_cli_fullmodel_options *optio
  * Boundary: No capability policy. */
 void yvex_model_artifacts_surface_fullmodel_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp,
-        "usage: yvex fullmodel report --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] [--"
-            "limit-tensors N] [--registry FILE] [--audit | --output normal|table|audit]\n");
-    yvex_cli_out_writef(fp,
-        "usage: yvex fullmodel materialization-plan --model FILE_OR_ALIAS [--backend cpu|cuda] [--"
-            "residency resident|host-staged|ssd-staged|hybrid] [--target TARGET] [--limit-tensors N] [--"
-            "registry FILE] [--audit | --output normal|table|audit]\n");
-    yvex_cli_out_writef(fp,
-        "usage: yvex fullmodel materialize --model FILE_OR_ALIAS [--backend cpu|cuda] [--registry FILE] [--"
-            "dry-run] [--plan-only] [--require-role ROLE] [--require-collection COLLECTION] [--limit-bytes N] "
-            "[--fail-after-phase PHASE] [--report-dir DIR] [--audit | --output normal|table|audit]\n");
-    yvex_cli_out_writef(fp,
-        "usage: yvex fullmodel descriptor --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] [--"
-            "format text] [--limit-tensors N] [--require-role ROLE] [--require-collection COLLECTION] [--"
-            "include-blockers] [--include-placement] [--include-graph] [--include-kv] [--include-logits] [--"
-            "audit | --output normal|table|audit]\n");
-    yvex_cli_out_writef(fp,
-        "usage: yvex fullmodel family-runtime --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--"
-            "backend cpu|cuda] [--include-blockers] [--include-roles] [--include-graph] [--include-kv] [--"
-            "include-moe] [--include-output] [--audit | --output normal|table|audit]\n");
+    yvex_cli_out_lines(fp, fullmodel_usage_lines,
+                       sizeof(fullmodel_usage_lines) / sizeof(fullmodel_usage_lines[0]));
     yvex_cli_out_lines(fp, literal_lines_42, sizeof(literal_lines_42) / sizeof(literal_lines_42[0]));
-    yvex_cli_out_writef(fp, "  Default output is compact. Use --audit for full diagnostic fields.\n");
+    yvex_cli_out_line(fp, "  Default output is compact. Use --audit for full diagnostic fields.");
     yvex_cli_out_lines(fp, literal_lines_43, sizeof(literal_lines_43) / sizeof(literal_lines_43[0]));
 }

@@ -43,12 +43,7 @@ typedef struct {
     const unsigned char *end;
 } tokenizer_json;
 
-typedef struct {
-    unsigned char *bytes;
-    size_t length;
-    size_t capacity;
-    size_t maximum;
-} tokenizer_arena;
+typedef yvex_core_bytes tokenizer_arena;
 
 struct yvex_gguf_tokenizer_metadata {
     yvex_gguf_tokenizer_summary summary;
@@ -83,7 +78,7 @@ static int tokenizer_fail(yvex_gguf_tokenizer_failure *failure, yvex_gguf_tokeni
         failure->expected = expected;
         failure->actual = actual;
         if (field)
-            (void)snprintf(failure->field, sizeof(failure->field), "%s", field);
+            yvex_core_text_copy(failure->field, sizeof(failure->field), field);
     }
     yvex_error_set(err, status, "gguf.tokenizer.metadata", message);
     return status;
@@ -159,47 +154,9 @@ static int tokenizer_hex4(const unsigned char *text, uint32_t *value) {
     return 1;
 }
 
-/* Purpose: grow the tokenizer byte arena through checked geometric allocation.
- * Inputs: arena and additional required bytes.
- * Effects: may replace arena storage while preserving existing content.
- * Failure: size overflow or allocation failure leaves prior ownership intact.
- * Boundary: growth does not publish string references. */
-static int tokenizer_arena_reserve(tokenizer_arena *arena, size_t extra) {
-    size_t required;
-    size_t capacity;
-    unsigned char *grown;
-
-    if (!arena || extra > SIZE_MAX - arena->length)
-        return 0;
-    required = arena->length + extra;
-    if (required > arena->maximum)
-        return 0;
-    if (required <= arena->capacity)
-        return 1;
-    capacity = arena->capacity ? arena->capacity : 4096u;
-    while (capacity < required) {
-        if (capacity > arena->maximum / 2u) {
-            capacity = arena->maximum;
-            break;
-        }
-        capacity *= 2u;
-    }
-    if (capacity < required)
-        return 0;
-    grown = (unsigned char *)realloc(arena->bytes, capacity);
-    if (!grown)
-        return 0;
-    arena->bytes = grown;
-    arena->capacity = capacity;
-    return 1;
-}
-
 /* Purpose: append one byte to the checked tokenizer arena. */
 static int tokenizer_arena_byte(tokenizer_arena *arena, unsigned char byte) {
-    if (!tokenizer_arena_reserve(arena, 1u))
-        return 0;
-    arena->bytes[arena->length++] = byte;
-    return 1;
+    return yvex_core_bytes_append(arena, &byte, 1u);
 }
 
 /* Purpose: append one valid Unicode scalar as canonical UTF-8 bytes.
@@ -238,7 +195,7 @@ static int tokenizer_decode_string(tokenizer_arena *arena, const unsigned char *
 
     if (!arena || !begin || !end || end < begin || !out)
         return 0;
-    start = arena->length;
+    start = arena->count;
     while (cursor < end) {
         unsigned char ch = *cursor++;
         if (ch != '\\') {
@@ -291,7 +248,7 @@ static int tokenizer_decode_string(tokenizer_arena *arena, const unsigned char *
         }
     }
     out->offset = start;
-    out->length = arena->length - start;
+    out->length = arena->count - start;
     out->present = 1;
     return 1;
 }
@@ -310,16 +267,17 @@ static int tokenizer_string_key(tokenizer_json *json, char *out, size_t capacity
 
     memset(&arena, 0, sizeof(arena));
     arena.maximum = capacity ? capacity - 1u : 0u;
+    arena.initial_capacity = 4096u;
     if (!tokenizer_json_string_raw(json, &begin, &end) || !capacity)
         return 0;
     ok = tokenizer_decode_string(&arena, begin, end, &ref);
     if (ok && ref.length < capacity) {
-        memcpy(out, arena.bytes + ref.offset, ref.length);
+        memcpy(out, arena.data + ref.offset, ref.length);
         out[ref.length] = '\0';
     } else {
         ok = 0;
     }
-    free(arena.bytes);
+    free(arena.data);
     return ok;
 }
 
@@ -364,7 +322,7 @@ static int tokenizer_json_skip(tokenizer_json *json, unsigned int depth) {
 static int tokenizer_ref_equal(const yvex_gguf_tokenizer_metadata *metadata,
                                tokenizer_string_ref left, tokenizer_string_ref right) {
     return left.present && right.present && left.length == right.length &&
-           memcmp(metadata->arena.bytes + left.offset, metadata->arena.bytes + right.offset,
+           memcmp(metadata->arena.data + left.offset, metadata->arena.data + right.offset,
                   left.length) == 0;
 }
 
@@ -945,8 +903,8 @@ int yvex_gguf_tokenizer_metadata_load(yvex_gguf_tokenizer_metadata **out,
                               "tokenizer metadata allocation failed");
     metadata->summary.token_count = expected_vocab_size;
     metadata->arena.maximum = maximum_owned_bytes;
-    (void)snprintf(metadata->summary.pre_tokenizer, sizeof(metadata->summary.pre_tokenizer), "%s",
-                   pre_tokenizer);
+    metadata->arena.initial_capacity = 4096u;
+    yvex_core_text_copy(metadata->summary.pre_tokenizer, sizeof(metadata->summary.pre_tokenizer), pre_tokenizer);
     rc = yvex_source_provenance_metadata_read(verification, "tokenizer.json", TOKENIZER_JSON_LIMIT,
                                               &metadata->tokenizer_json, err);
     if (rc == YVEX_OK)
@@ -1002,7 +960,7 @@ int yvex_gguf_tokenizer_metadata_load(yvex_gguf_tokenizer_metadata **out,
     }
     metadata->summary.tokenizer_json_bytes = metadata->tokenizer_json.byte_count;
     metadata->summary.tokenizer_config_bytes = metadata->tokenizer_config.byte_count;
-    metadata->summary.decoded_string_bytes = metadata->arena.length;
+    metadata->summary.decoded_string_bytes = metadata->arena.count;
     metadata->summary.owned_bytes =
         sizeof(*metadata) + token_bytes + type_bytes + metadata->arena.capacity +
         metadata->merge_capacity * sizeof(*metadata->merges) +
@@ -1047,7 +1005,7 @@ void yvex_gguf_tokenizer_metadata_release(yvex_gguf_tokenizer_metadata **metadat
     free(metadata->token_types);
     free(metadata->merges);
     free(metadata->added);
-    free(metadata->arena.bytes);
+    free(metadata->arena.data);
     memset(metadata, 0, sizeof(*metadata));
     free(metadata);
 }
@@ -1073,7 +1031,7 @@ int yvex_gguf_tokenizer_token_at(const yvex_gguf_tokenizer_metadata *metadata,
     if (!metadata || !metadata->summary.complete || !bytes || !byte_count || !token_type ||
         index >= metadata->summary.token_count || !metadata->tokens[index].present)
         return 0;
-    *bytes = metadata->arena.bytes + metadata->tokens[index].offset;
+    *bytes = metadata->arena.data + metadata->tokens[index].offset;
     *byte_count = metadata->tokens[index].length;
     *token_type = metadata->token_types[index];
     return 1;
@@ -1090,7 +1048,7 @@ int yvex_gguf_tokenizer_merge_at(const yvex_gguf_tokenizer_metadata *metadata,
     if (!metadata || !metadata->summary.complete || !bytes || !byte_count ||
         index >= metadata->summary.merge_count)
         return 0;
-    *bytes = metadata->arena.bytes + metadata->merges[index].offset;
+    *bytes = metadata->arena.data + metadata->merges[index].offset;
     *byte_count = metadata->merges[index].length;
     return 1;
 }

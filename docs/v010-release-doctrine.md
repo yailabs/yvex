@@ -1,6 +1,6 @@
 # v0.1.0 Release Doctrine
 
-Date: 2026-07-14
+Date: 2026-07-22
 Status: normative release contract
 
 ## Authority
@@ -23,7 +23,7 @@ Exact source target:
 $HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash
 ```
 
-Future canonical full target:
+Canonical full target:
 
 ```text
 deepseek4-v4-flash
@@ -120,7 +120,8 @@ transformer, generation, evaluation, benchmark, or release capability.
 - Refusal behavior is part of every gate.
 - External execution is comparison evidence only.
 - A later-stage result cannot repair missing earlier-stage ownership or facts.
-- Benchmark evidence is accepted only from the same supported release path.
+- Release-benchmark evidence is accepted only from the same supported release
+  path; lower-stage attention measurements do not close the release benchmark.
 - Release evidence must be reproducible from a clean checkout plus the named
   operator-local source and artifact.
 
@@ -128,14 +129,13 @@ transformer, generation, evaluation, benchmark, or release capability.
 
 YVEX does not currently claim:
 
-- DeepSeek-V4-Flash model support or generation;
-- a complete or supported DeepSeek-V4-Flash model artifact;
-- valid complete-artifact GGUF or qtype ABI closure;
-- complete conversion, quantization, writer, or roundtrip behavior;
-- full materialization or executable runtime descriptors;
-- full transformer, attention-backed KV, MoE, decode, logits, or sampling;
+- DeepSeek-V4-Flash supported-model status or text generation;
+- that complete GGUF emission, materialization or admitted attention execution
+  alone closes the supported-artifact contract;
+- persistent attention-backed KV, a complete transformer, MoE, model decode,
+  logits or sampling;
 - CUDA model generation;
-- evaluation readiness, benchmark measurement, or release readiness;
+- evaluation readiness, a full-model release benchmark or release readiness;
 - v0.1.0 support for Qwen, Gemma, GLM, Metal, ROCm, or another target.
 
 The selected aliases are legacy bounded proof surfaces until an owning row

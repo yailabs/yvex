@@ -27,33 +27,46 @@ static int scan_refuse(yvex_error *err,
     return status;
 }
 
-/* Purpose: project name starts ci facts while preserving the canonical source footprint invariants. */
-static int scan_name_starts_ci(const char *s, const char *prefix) {
-    size_t i;
+typedef enum {
+    SCAN_NAME_EXACT,
+    SCAN_NAME_PREFIX,
+    SCAN_NAME_SUFFIX
+} scan_name_match;
 
-    if (!s || !prefix) {
-        return 0;
-    }
-    for (i = 0; prefix[i] != '\0'; ++i) {
-        if (s[i] == '\0') {
+typedef struct {
+    const char *pattern;
+    const char *kind;
+    scan_name_match match;
+} scan_kind_rule;
+
+static const scan_kind_rule scan_kind_rules[] = {
+    {"generation_config.json", "config", SCAN_NAME_EXACT},
+    {"config", "config", SCAN_NAME_PREFIX},
+    {"tokenizer", "tokenizer", SCAN_NAME_PREFIX},
+    {".model", "tokenizer", SCAN_NAME_SUFFIX},
+    {"readme", "readme", SCAN_NAME_PREFIX},
+    {"license", "license", SCAN_NAME_PREFIX},
+    {"copying", "license", SCAN_NAME_PREFIX},
+    {".json", "metadata", SCAN_NAME_SUFFIX},
+    {".txt", "metadata", SCAN_NAME_SUFFIX},
+    {".md", "metadata", SCAN_NAME_SUFFIX},
+};
+
+/* Purpose: apply one immutable lexical classification rule to a source basename. */
+static int scan_name_matches(const char *name, const scan_kind_rule *rule) {
+    size_t index;
+
+    if (rule->match == SCAN_NAME_EXACT)
+        return strcmp(name, rule->pattern) == 0;
+    if (rule->match == SCAN_NAME_SUFFIX)
+        return yvex_source_ends_with(name, rule->pattern);
+    for (index = 0u; rule->pattern[index] != '\0'; ++index) {
+        if (name[index] == '\0' ||
+            tolower((unsigned char)name[index]) !=
+                tolower((unsigned char)rule->pattern[index]))
             return 0;
-        }
-        if (tolower((unsigned char)s[i]) != tolower((unsigned char)prefix[i])) {
-            return 0;
-        }
     }
     return 1;
-}
-
-/* Purpose: project basename facts while preserving the canonical source footprint invariants. */
-static const char *scan_basename(const char *path) {
-    const char *slash;
-
-    if (!path) {
-        return "";
-    }
-    slash = strrchr(path, '/');
-    return slash ? slash + 1 : path;
 }
 
 /* Purpose: project kind for path facts while preserving the canonical source footprint invariants.
@@ -62,28 +75,14 @@ static const char *scan_basename(const char *path) {
  * Failure: invalid, short, inconsistent, or I/O input yields typed refusal.
  * Boundary: footprint discovery does not create trust. */
 static const char *scan_kind_for_path(const char *rel_path) {
-    const char *base = scan_basename(rel_path);
+    const char *base = rel_path && rel_path[0] ? yvex_source_path_basename(rel_path) : "";
+    size_t index;
 
-    if (yvex_source_ends_with(base, ".safetensors")) {
+    if (yvex_source_ends_with(base, ".safetensors"))
         return "safetensors";
-    }
-    if (strcmp(base, "config.json") == 0 || strcmp(base, "generation_config.json") == 0 ||
-        scan_name_starts_ci(base, "config")) {
-        return "config";
-    }
-    if (scan_name_starts_ci(base, "tokenizer") || yvex_source_ends_with(base, ".model")) {
-        return "tokenizer";
-    }
-    if (scan_name_starts_ci(base, "readme")) {
-        return "readme";
-    }
-    if (scan_name_starts_ci(base, "license") || scan_name_starts_ci(base, "copying")) {
-        return "license";
-    }
-    if (yvex_source_ends_with(base, ".json") || yvex_source_ends_with(base, ".txt") ||
-        yvex_source_ends_with(base, ".md")) {
-        return "metadata";
-    }
+    for (index = 0u; index < sizeof(scan_kind_rules) / sizeof(scan_kind_rules[0]); ++index)
+        if (scan_name_matches(base, &scan_kind_rules[index]))
+            return scan_kind_rules[index].kind;
     return "other";
 }
 

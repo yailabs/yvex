@@ -657,30 +657,9 @@ static int report_has(const yvex_model_target_report *report,
 
 static int test_arch_ir_report_consumer_and_family_preservation(void)
 {
-    yvex_source_verification source;
     yvex_model_target_request request;
     yvex_model_target_report report;
     yvex_error err;
-
-    arch_ir_verification_fixture(&source);
-    memset(&request, 0, sizeof(request));
-    memset(&report, 0, sizeof(report));
-    request.kind = YVEX_MODEL_TARGET_COMMAND_CLASS_PROFILE;
-    request.mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
-    arch_ir_copy(request.target_id, sizeof(request.target_id),
-                 yvex_source_release_identity()->target_id);
-    yvex_error_clear(&err);
-    YVEX_TEST_ASSERT(
-        yvex_model_class_profile_deepseek_from_verification(
-            &request, &source, &report, &err) == YVEX_OK &&
-            report.family_architecture != NULL &&
-            strcmp(report.status, "typed-architecture-specified") == 0 &&
-            strcmp(report.next_row,
-                   "V010.SOURCE.PAYLOAD.STREAM.0") == 0,
-        "release class profile consumes canonical IR");
-    YVEX_TEST_ASSERT(source.header_scan_count == 1,
-                     "IR consumer does not rescan source headers");
-    yvex_model_target_report_close(&report);
 
     memset(&request, 0, sizeof(request));
     memset(&report, 0, sizeof(report));

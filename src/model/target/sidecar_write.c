@@ -59,96 +59,54 @@ static int sidecar_close_tmp(FILE *fp, const char *tmp, const char *path)
     return 1;
 }
 
-/* Purpose: publish write tensor map sidecar through the bounded output boundary.
- * Inputs: typed facts are borrowed.
- * Effects: updates bounded report or plan state.
- * Failure: preserves typed refusal and cleanup.
- * Boundary: never promotes payload or runtime execution. */
-int yvex_model_target_write_tensor_map_sidecar(const char *path,
-                                               const char *target_id,
-                                               const char *family,
-                                               const char *status,
-                                               const char *coverage)
+
+/* Purpose: serialize one typed sidecar variant through the shared atomic file boundary.
+ * Inputs: sidecar kind, optional destination, target/family/status, and optional coverage.
+ * Effects: creates and publishes only the requested sidecar destination.
+ * Failure: invalid kind or file failure returns false and removes owned temporary state.
+ * Boundary: publication records report facts and cannot promote runtime capability. */
+int yvex_model_target_write_sidecar(yvex_model_target_sidecar_kind kind, const char *path,
+                                    const char *target_id, const char *family,
+                                    const char *status, const char *coverage)
 {
     char tmp[1024];
     FILE *fp;
 
     if (!path || !path[0]) return 1;
-    if (!sidecar_open_tmp(path, tmp, sizeof(tmp), &fp)) return 0;
+    if (kind < YVEX_MODEL_TARGET_SIDECAR_TENSOR_MAP ||
+        kind > YVEX_MODEL_TARGET_SIDECAR_TOKENIZER ||
+        !sidecar_open_tmp(path, tmp, sizeof(tmp), &fp)) return 0;
     fprintf(fp, "{\n");
-    fprintf(fp, "  \"schema\": \"yvex.source.tensor_map.v1\",\n");
-    fprintf(fp, "  \"row\": \"MODELS.SOURCE.MAP.HANDOFF.0\",\n");
+    if (kind == YVEX_MODEL_TARGET_SIDECAR_TOKENIZER)
+        fprintf(fp, "  \"schema_version\": \"yvex.source.tokenizer_map.v1\",\n");
+    else
+        fprintf(fp, "  \"schema\": \"yvex.source.%s.v1\",\n",
+                kind == YVEX_MODEL_TARGET_SIDECAR_TENSOR_MAP ? "tensor_map"
+                                                            : "output_head_map");
+    fprintf(fp, "  \"row\": \"%s\",\n",
+            kind == YVEX_MODEL_TARGET_SIDECAR_TOKENIZER
+                ? "V010.MAP.7" : "MODELS.SOURCE.MAP.HANDOFF.0");
     fprintf(fp, "  \"target_id\": ");
     yvex_file_json_write_string(fp, target_id);
     fprintf(fp, ",\n  \"family\": ");
     yvex_file_json_write_string(fp, family);
-    fprintf(fp, ",\n  \"tensor_map_status\": ");
-    yvex_file_json_write_string(fp, status);
-    fprintf(fp, ",\n  \"required_role_coverage_status\": ");
-    yvex_file_json_write_string(fp, coverage);
-    fprintf(fp, "\n}\n");
-    return sidecar_close_tmp(fp, tmp, path);
-}
-
-/* Purpose: publish write output head sidecar through the bounded output boundary.
- * Inputs: typed facts are borrowed.
- * Effects: updates bounded report or plan state.
- * Failure: preserves typed refusal and cleanup.
- * Boundary: never promotes payload or runtime execution. */
-int yvex_model_target_write_output_head_sidecar(const char *path,
-                                                const char *target_id,
-                                                const char *family,
-                                                const char *status)
-{
-    char tmp[1024];
-    FILE *fp;
-
-    if (!path || !path[0]) return 1;
-    if (!sidecar_open_tmp(path, tmp, sizeof(tmp), &fp)) return 0;
-    fprintf(fp, "{\n");
-    fprintf(fp, "  \"schema\": \"yvex.source.output_head_map.v1\",\n");
-    fprintf(fp, "  \"row\": \"MODELS.SOURCE.MAP.HANDOFF.0\",\n");
-    fprintf(fp, "  \"target_id\": ");
-    yvex_file_json_write_string(fp, target_id);
-    fprintf(fp, ",\n  \"family\": ");
-    yvex_file_json_write_string(fp, family);
-    fprintf(fp, ",\n  \"output_head_map_status\": ");
-    yvex_file_json_write_string(fp, status);
-    fprintf(fp, ",\n  \"output_head_status\": ");
-    yvex_file_json_write_string(fp,
-                        strcmp(status, "output-head-missing") == 0
-                            ? "missing"
-                            : "present");
-    fprintf(fp, "\n}\n");
-    return sidecar_close_tmp(fp, tmp, path);
-}
-
-/* Purpose: publish write tokenizer sidecar through the bounded output boundary.
- * Inputs: typed facts are borrowed.
- * Effects: updates bounded report or plan state.
- * Failure: preserves typed refusal and cleanup.
- * Boundary: never promotes payload or runtime execution. */
-int yvex_model_target_write_tokenizer_sidecar(const char *path,
-                                              const char *target_id,
-                                              const char *family,
-                                              const char *status)
-{
-    char tmp[1024];
-    FILE *fp;
-
-    if (!path || !path[0]) return 1;
-    if (!sidecar_open_tmp(path, tmp, sizeof(tmp), &fp)) return 0;
-    fprintf(fp, "{\n");
-    fprintf(fp, "  \"schema_version\": \"yvex.source.tokenizer_map.v1\",\n");
-    fprintf(fp, "  \"row\": \"V010.MAP.7\",\n");
-    fprintf(fp, "  \"target_id\": ");
-    yvex_file_json_write_string(fp, target_id);
-    fprintf(fp, ",\n  \"family\": ");
-    yvex_file_json_write_string(fp, family);
-    fprintf(fp, ",\n  \"tokenizer_map_status\": ");
-    yvex_file_json_write_string(fp, status);
-    fprintf(fp, ",\n  \"status\": ");
-    yvex_file_json_write_string(fp, status);
+    if (kind == YVEX_MODEL_TARGET_SIDECAR_TENSOR_MAP) {
+        fprintf(fp, ",\n  \"tensor_map_status\": ");
+        yvex_file_json_write_string(fp, status);
+        fprintf(fp, ",\n  \"required_role_coverage_status\": ");
+        yvex_file_json_write_string(fp, coverage);
+    } else if (kind == YVEX_MODEL_TARGET_SIDECAR_OUTPUT_HEAD) {
+        fprintf(fp, ",\n  \"output_head_map_status\": ");
+        yvex_file_json_write_string(fp, status);
+        fprintf(fp, ",\n  \"output_head_status\": ");
+        yvex_file_json_write_string(fp, strcmp(status, "output-head-missing") == 0
+                                            ? "missing" : "present");
+    } else {
+        fprintf(fp, ",\n  \"tokenizer_map_status\": ");
+        yvex_file_json_write_string(fp, status);
+        fprintf(fp, ",\n  \"status\": ");
+        yvex_file_json_write_string(fp, status);
+    }
     fprintf(fp, "\n}\n");
     return sidecar_close_tmp(fp, tmp, path);
 }

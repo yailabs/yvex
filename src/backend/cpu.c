@@ -48,30 +48,11 @@ static int cpu_op_attention(yvex_backend *, const yvex_device_tensor *,
                                  yvex_device_tensor *, yvex_device_tensor *,
                                  yvex_device_tensor *, yvex_error *);
 
-/* Purpose: Release CPU-owned backend state after the generic close dispatcher has admitted it.
- * Inputs: An owned object that may be null or already released where its lifecycle permits.
- * Effects: Releases only resources owned by the supplied object and leaves it reset or unusable.
- * Failure: Null and already-released inputs follow the idempotent lifecycle contract.
- * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
-static int cpu_close(yvex_backend *backend, yvex_error *err)
-{
-    if (!backend) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cpu.close", "backend is required");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
 /* Purpose: Implement the canonical memory stats mechanism owned by the backend boundary. */
 static int cpu_memory_stats(const yvex_backend *backend,
                             yvex_backend_memory_stats *out,
                             yvex_error *err)
 {
-    if (!backend || !out) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cpu.memory_stats", "backend and out are required");
-        return YVEX_ERR_INVALID_ARG;
-    }
     *out = backend->stats;
     yvex_error_clear(err);
     return YVEX_OK;
@@ -82,10 +63,6 @@ static int cpu_device_info(const yvex_backend *backend,
                            yvex_backend_device_info *out,
                            yvex_error *err)
 {
-    if (!backend || !out) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cpu.device_info", "backend and out are required");
-        return YVEX_ERR_INVALID_ARG;
-    }
     *out = backend->device_info;
     yvex_error_clear(err);
     return YVEX_OK;
@@ -94,10 +71,7 @@ static int cpu_device_info(const yvex_backend *backend,
 /* Purpose: Implement the canonical sync mechanism owned by the backend boundary. */
 static int cpu_sync(yvex_backend *backend, yvex_error *err)
 {
-    if (!backend) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cpu.sync", "backend is required");
-        return YVEX_ERR_INVALID_ARG;
-    }
+    (void)backend;
     yvex_error_clear(err);
     return YVEX_OK;
 }
@@ -131,7 +105,7 @@ static int cpu_query_capability(const yvex_backend *backend,
 }
 
 static const yvex_backend_vtable cpu_vtable = {
-    cpu_close,
+    NULL,
     cpu_memory_stats,
     cpu_device_info,
     cpu_tensor_alloc,
@@ -147,35 +121,36 @@ static const yvex_backend_vtable cpu_vtable = {
     cpu_op_matmul,
     cpu_op_mlp,
     cpu_op_attention,
+    NULL,
+    NULL,
 };
 
-/* Purpose: Construct the admitted open impl state only after its identities and resources are valid.
- * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
+/* Purpose: construct one admitted CPU backend through the public lifecycle owner.
+ * Inputs: caller-owned result storage and typed error output.
  * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
  * Failure: Returns a typed backend refusal and publishes no partial success state.
  * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
-int yvex_backend_open_cpu_impl(yvex_backend **out,
-                               unsigned long long memory_limit_bytes,
-                               yvex_error *err)
+int yvex_backend_open_cpu(yvex_backend **out, yvex_error *err)
 {
     yvex_backend *backend;
 
     if (!out) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_open_cpu_impl", "out is required");
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_open_cpu", "out is required");
         return YVEX_ERR_INVALID_ARG;
     }
     *out = NULL;
 
     backend = (yvex_backend *)calloc(1, sizeof(*backend));
     if (!backend) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_backend_open_cpu_impl",
+        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_backend_open_cpu",
                        "failed to allocate CPU backend");
         return YVEX_ERR_NOMEM;
     }
     backend->kind = YVEX_BACKEND_KIND_CPU;
-    backend->status = YVEX_BACKEND_STATUS_READY;
+    atomic_init(&backend->status, YVEX_BACKEND_STATUS_READY);
     backend->vtable = &cpu_vtable;
-    backend->stats.memory_limit_bytes = memory_limit_bytes;
+    backend->resource_owner = backend;
+    atomic_init(&backend->lifecycle, 0ull);
     backend->device_info.kind = YVEX_BACKEND_KIND_CPU;
     backend->device_info.name = "cpu";
     backend->tensor_id_next = 1;
@@ -610,8 +585,8 @@ static int cpu_op_rope(yvex_backend *backend,
     double frequency = 1.0;
     int rc;
 
-    if (!yvex_backend_tensor_owner_is(backend, input) ||
-        !yvex_backend_tensor_owner_is(backend, out)) {
+    if (!backend_tensor_owner_is(backend, input) ||
+        !backend_tensor_owner_is(backend, out)) {
         yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_op_rope",
                        "input and output tensors must belong to this backend");
         return YVEX_ERR_STATE;
@@ -635,8 +610,8 @@ static int cpu_op_rope(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
-    if (!yvex_backend_tensor_f32_elements(input, head_dim) ||
-        !yvex_backend_tensor_f32_elements(out, head_dim)) {
+    if (!backend_tensor_f32_elements(input, head_dim) ||
+        !backend_tensor_f32_elements(out, head_dim)) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rope",
                        "RoPE input/output bytes must match F32 head_dim");
         return YVEX_ERR_BOUNDS;
@@ -772,7 +747,7 @@ static int cpu_tensor_alloc(yvex_backend *backend,
     }
     tensor->bytes = desc->bytes;
 
-    yvex_backend_memory_acquire(backend, desc->bytes);
+    backend_memory_acquire(backend, desc->bytes);
 
     *out = tensor;
     yvex_error_clear(err);
@@ -788,12 +763,12 @@ static int cpu_tensor_free(yvex_backend *backend,
                          yvex_device_tensor *tensor,
                          yvex_error *err)
 {
-    if (!backend || !tensor || !yvex_backend_tensor_owner_is(backend, tensor)) {
+    if (!backend || !tensor || !backend_tensor_owner_is(backend, tensor)) {
         yvex_error_set(err, YVEX_ERR_STATE, "cpu.tensor_free",
                        "tensor does not belong to this backend");
         return YVEX_ERR_STATE;
     }
-    yvex_backend_memory_release(backend, tensor->bytes);
+    backend_memory_release(backend, tensor->bytes);
     tensor->owner = NULL;
     tensor->owner_id = 0;
     free(tensor->data);

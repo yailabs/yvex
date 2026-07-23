@@ -195,11 +195,12 @@ int yvex_transform_binding_create(yvex_transform_binding **out, const yvex_trans
     binding->summary.terminal_count = ir_summary->terminal_count;
     binding->summary.node_count = ir_summary->node_count;
     binding->summary.source_snapshot_identity = ir_summary->source_snapshot_identity;
-    (void)snprintf(binding->summary.required_payload_identity,
-                   sizeof(binding->summary.required_payload_identity), "%s",
-                   ir_summary->required_payload_identity);
-    (void)snprintf(binding->summary.transform_identity, sizeof(binding->summary.transform_identity),
-                   "%s", ir_summary->transform_identity);
+    yvex_core_text_copy(binding->summary.required_payload_identity,
+                        sizeof(binding->summary.required_payload_identity),
+                        ir_summary->required_payload_identity);
+    yvex_core_text_copy(binding->summary.transform_identity,
+                        sizeof(binding->summary.transform_identity),
+                        ir_summary->transform_identity);
     binding->summary.owned_bytes = sizeof(*binding) + index_bytes;
     binding->summary.payload_bytes_read = 0u;
     binding->summary.payload_readable_at_bind =
@@ -459,8 +460,10 @@ static int handoff_resolve(yvex_deepseek_payload_handoff *handoff,
                               "mapping contribution index allocation failed");
     }
     handoff->summary.mapping_identity = map_summary->mapping_identity;
-    (void)snprintf(handoff->summary.transform_identity, sizeof(handoff->summary.transform_identity),
-                   "%s", yvex_transform_ir_summary_get(handoff->transform_ir)->transform_identity);
+    yvex_core_text_copy(
+        handoff->summary.transform_identity,
+        sizeof(handoff->summary.transform_identity),
+        yvex_transform_ir_summary_get(handoff->transform_ir)->transform_identity);
     handoff->summary.source_snapshot_identity = map_summary->source_identity;
     handoff->summary.descriptor_count = map_summary->descriptor_count;
     handoff->summary.contribution_count = map_summary->source_contribution_count;

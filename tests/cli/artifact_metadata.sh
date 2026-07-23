@@ -213,17 +213,6 @@ contains "$OUT_DIR/materialize-drift.out" "metadata_status: fail"
 contains "$OUT_DIR/materialize-drift.out" "status: models-metadata-drift"
 not_contains "$OUT_DIR/materialize-drift.out" "status: weights-materialized"
 
-YVEX_MODELS_REGISTRY="$DTYPE_REG" "$YVEX_BIN" graph \
-  --model "$ALIAS" \
-  --backend cpu \
-  --execute-partial \
-  --partial-token 0 \
-  >"$OUT_DIR/graph-drift.out" 2>"$OUT_DIR/graph-drift.err" && \
-  fail "graph metadata drift unexpectedly passed" || true
-contains "$OUT_DIR/graph-drift.out" "metadata_status: fail"
-contains "$OUT_DIR/graph-drift.out" "status: models-metadata-drift"
-not_contains "$OUT_DIR/graph-drift.out" "real_partial_graph_executed: true"
-
 "$YVEX_BIN" integrity check --model "$MODEL" \
   >"$OUT_DIR/integrity-raw.out" 2>"$OUT_DIR/integrity-raw.err"
 contains "$OUT_DIR/integrity-raw.out" "digest_status: not-requested"

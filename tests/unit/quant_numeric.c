@@ -292,6 +292,9 @@ static int quant_test_block(unsigned int qtype,
     size_t encoded_bytes = 0u;
     size_t repeated_bytes = 0u;
     float cpu_dot = 0.0f;
+    double dot_absolute_error;
+    double mean_absolute_error;
+    double mean_relative_error;
     double reference_dot = 0.0;
     unsigned int index;
 
@@ -334,15 +337,14 @@ static int quant_test_block(unsigned int qtype,
                          metrics.nonfinite_count == 0u &&
                          metrics.maximum_absolute_error <= maximum_error_limit,
                      "qtype block error must remain within its test bound");
+    mean_absolute_error = metrics.absolute_error_sum / (double)metrics.finite_count;
+    mean_relative_error = metrics.relative_error_sum / (double)metrics.finite_count;
+    dot_absolute_error = fabs(metrics.dot_reconstructed - metrics.dot_reference);
     YVEX_TEST_ASSERT(
-        isfinite(yvex_quant_metrics_mean_absolute_error(&metrics)) &&
-            isfinite(yvex_quant_metrics_rmse(&metrics)) &&
-            isfinite(yvex_quant_metrics_mean_relative_error(&metrics)) &&
-            isfinite(yvex_quant_metrics_dot_absolute_error(&metrics)) &&
-            yvex_quant_metrics_mean_absolute_error(&metrics) >= 0.0 &&
-            yvex_quant_metrics_rmse(&metrics) >= 0.0 &&
-            yvex_quant_metrics_mean_relative_error(&metrics) >= 0.0 &&
-            yvex_quant_metrics_dot_absolute_error(&metrics) >= 0.0,
+        isfinite(mean_absolute_error) && isfinite(yvex_quant_metrics_rmse(&metrics)) &&
+            isfinite(mean_relative_error) && isfinite(dot_absolute_error) &&
+            mean_absolute_error >= 0.0 && yvex_quant_metrics_rmse(&metrics) >= 0.0 &&
+            mean_relative_error >= 0.0 && dot_absolute_error >= 0.0,
         "lossy codec metrics must expose finite MAE, RMSE, relative, and dot error");
     YVEX_TEST_ASSERT(yvex_quant_cpu_dot(
                          qtype, encoded, encoded_bytes, vector, elements,
@@ -406,7 +408,7 @@ static int quant_test_registry(void)
 {
     unsigned int qtype;
 
-    YVEX_TEST_ASSERT(yvex_quant_numeric_capability_count() ==
+    YVEX_TEST_ASSERT(yvex_gguf_qtype_geometry_count() ==
                          YVEX_GGUF_QTYPE_ABI_UPSTREAM_MAX_ID + 1u,
                      "numeric registry must cover every pinned identity");
     for (qtype = 0u; qtype <= YVEX_GGUF_QTYPE_ABI_UPSTREAM_MAX_ID; ++qtype) {

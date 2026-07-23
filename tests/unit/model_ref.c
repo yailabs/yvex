@@ -48,16 +48,6 @@ static int write_registry(const char *path, const char *model_path)
     return fclose(fp) == 0;
 }
 
-static int test_names(void)
-{
-    YVEX_TEST_ASSERT_STREQ(yvex_model_ref_kind_name(YVEX_MODEL_REF_PATH), "path", "path kind");
-    YVEX_TEST_ASSERT_STREQ(yvex_model_ref_kind_name(YVEX_MODEL_REF_ALIAS), "alias", "alias kind");
-    YVEX_TEST_ASSERT_STREQ(yvex_model_ref_status_name(YVEX_MODEL_REF_STATUS_RESOLVED), "resolved", "resolved status");
-    YVEX_TEST_ASSERT_STREQ(yvex_model_ref_status_name(YVEX_MODEL_REF_STATUS_NOT_FOUND), "not-found", "not found status");
-    YVEX_TEST_ASSERT_STREQ(yvex_model_ref_status_name(YVEX_MODEL_REF_STATUS_ALIAS_PATH_MISSING), "alias-path-missing", "missing path status");
-    return 0;
-}
-
 static int test_path_resolution(void)
 {
     yvex_model_ref ref;
@@ -168,7 +158,6 @@ static int test_failures(void)
 
 int yvex_test_model_ref(void)
 {
-    if (test_names() != 0) return 1;
     if (test_path_resolution() != 0) return 1;
     if (test_alias_resolution() != 0) return 1;
     if (test_failures() != 0) return 1;

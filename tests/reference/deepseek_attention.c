@@ -566,6 +566,161 @@ static int ref_compute_round(yvex_attention_compute_contract contract,
     return 1;
 }
 
+/* Purpose: independently evaluate a stable sigmoid for the mHC oracle. */
+static double ref_mhc_sigmoid(double value)
+{
+    if (value >= 0.0) {
+        double inverse = exp(-value);
+        return 1.0 / (1.0 + inverse);
+    }
+    {
+        double direct = exp(value);
+        return direct / (1.0 + direct);
+    }
+}
+
+/* Purpose: independently apply the pinned mHC Sinkhorn normalization schedule. */
+static int ref_mhc_sinkhorn(float *matrix, unsigned long long streams,
+                            unsigned long long iterations, double epsilon)
+{
+    unsigned long long row, column, iteration;
+
+    for (row = 0ull; row < streams; ++row) {
+        double maximum = -INFINITY;
+        double total = 0.0;
+        for (column = 0ull; column < streams; ++column)
+            if (matrix[row * streams + column] > maximum)
+                maximum = matrix[row * streams + column];
+        for (column = 0ull; column < streams; ++column) {
+            double value = exp((double)matrix[row * streams + column] - maximum);
+            matrix[row * streams + column] = (float)value;
+            total += value;
+        }
+        if (!isfinite(total) || total <= 0.0) return 0;
+        for (column = 0ull; column < streams; ++column)
+            matrix[row * streams + column] =
+                (float)((double)matrix[row * streams + column] / total + epsilon);
+    }
+    for (iteration = 0ull; iteration < iterations; ++iteration) {
+        if (iteration) {
+            for (row = 0ull; row < streams; ++row) {
+                double total = 0.0;
+                for (column = 0ull; column < streams; ++column)
+                    total += matrix[row * streams + column];
+                for (column = 0ull; column < streams; ++column)
+                    matrix[row * streams + column] =
+                        (float)((double)matrix[row * streams + column] / (total + epsilon));
+            }
+        }
+        for (column = 0ull; column < streams; ++column) {
+            double total = 0.0;
+            for (row = 0ull; row < streams; ++row)
+                total += matrix[row * streams + column];
+            for (row = 0ull; row < streams; ++row)
+                matrix[row * streams + column] =
+                    (float)((double)matrix[row * streams + column] / (total + epsilon));
+        }
+    }
+    return 1;
+}
+
+/* Purpose: independently evaluate attention mHC ingress, RMS norm, and immediate egress.
+ * Inputs: raw plan facts and caller-owned arrays; no production numeric helper is called.
+ * Effects: writes independent core-input, coefficient, and expanded-envelope oracle values.
+ * Failure: malformed geometry or non-finite arithmetic returns false without a success claim.
+ * Boundary: stops before FFN mHC ingress, FFN normalization, MoE, and transformer composition. */
+int yvex_test_attention_reference_envelope(
+    const yvex_test_attention_envelope_case *test_case)
+{
+    const yvex_attention_layer_plan *layer = test_case ? test_case->layer : NULL;
+    float *canonical_residual;
+    unsigned long long token, stream, lane;
+    int accepted = 0;
+
+    if (!test_case || !layer || !test_case->residual || !test_case->linear_mixes ||
+        !test_case->scale || !test_case->base || !test_case->norm_weights ||
+        !test_case->core_output || !test_case->core_input || !test_case->post ||
+        !test_case->combination || !test_case->envelope_output || !test_case->token_count ||
+        test_case->residual_stride < layer->residual_expanded_width ||
+        test_case->mix_stride < layer->mhc_mixing_rows ||
+        test_case->core_stride < layer->residual_stream_width ||
+        test_case->core_input_stride < layer->residual_stream_width ||
+        test_case->post_stride < layer->residual_stream_count ||
+        test_case->combination_stride < layer->residual_stream_count *
+                                            layer->residual_stream_count ||
+        test_case->envelope_stride < layer->residual_expanded_width)
+        return 0;
+    canonical_residual = (float *)calloc((size_t)layer->residual_expanded_width,
+                                         sizeof(*canonical_residual));
+    if (!canonical_residual) return 0;
+    for (token = 0ull; token < test_case->token_count; ++token) {
+        const float *raw_residual = test_case->residual + token * test_case->residual_stride;
+        const float *residual = canonical_residual;
+        const float *mix = test_case->linear_mixes + token * test_case->mix_stride;
+        const float *core = test_case->core_output + token * test_case->core_stride;
+        float *input = test_case->core_input + token * test_case->core_input_stride;
+        float *post = test_case->post + token * test_case->post_stride;
+        float *comb = test_case->combination + token * test_case->combination_stride;
+        float *output = test_case->envelope_output + token * test_case->envelope_stride;
+        double squares = 0.0;
+        double inverse;
+
+        memcpy(canonical_residual, raw_residual,
+               (size_t)layer->residual_expanded_width * sizeof(*canonical_residual));
+        if (!ref_compute_round(layer->compute_contract, canonical_residual,
+                               layer->residual_expanded_width))
+            goto done;
+        memset(input, 0, (size_t)layer->residual_stream_width * sizeof(*input));
+        for (lane = 0ull; lane < layer->residual_expanded_width; ++lane)
+            squares += (double)residual[lane] * (double)residual[lane];
+        inverse = 1.0 / sqrt(squares / (double)layer->residual_expanded_width +
+                             layer->rms_norm_epsilon);
+        for (stream = 0ull; stream < layer->residual_stream_count; ++stream) {
+            unsigned long long target;
+            double pre = ref_mhc_sigmoid((double)mix[stream] * inverse *
+                                         (double)test_case->scale[0] +
+                                         (double)test_case->base[stream]) + layer->mhc_epsilon;
+            post[stream] = (float)(layer->mhc_residual_post_multiplier * ref_mhc_sigmoid(
+                (double)mix[layer->residual_stream_count + stream] * inverse *
+                    (double)test_case->scale[1] +
+                (double)test_case->base[layer->residual_stream_count + stream]));
+            for (target = 0ull; target < layer->residual_stream_count; ++target) {
+                unsigned long long index = 2ull * layer->residual_stream_count +
+                    stream * layer->residual_stream_count + target;
+                comb[stream * layer->residual_stream_count + target] =
+                    (float)((double)mix[index] * inverse * (double)test_case->scale[2] +
+                            (double)test_case->base[index]);
+            }
+            for (lane = 0ull; lane < layer->residual_stream_width; ++lane)
+                input[lane] += (float)(pre * residual[stream * layer->residual_stream_width + lane]);
+        }
+        if (!ref_mhc_sinkhorn(comb, layer->residual_stream_count,
+                              layer->mhc_sinkhorn_iterations, layer->mhc_epsilon) ||
+            !ref_compute_round(layer->compute_contract, input, layer->residual_stream_width) ||
+            !ref_rms(input, layer->residual_stream_width, test_case->norm_weights,
+                     layer->rms_norm_epsilon) ||
+            !ref_compute_round(layer->compute_contract, input, layer->residual_stream_width))
+            goto done;
+        for (stream = 0ull; stream < layer->residual_stream_count; ++stream) {
+            for (lane = 0ull; lane < layer->residual_stream_width; ++lane) {
+                unsigned long long source;
+                double value = (double)post[stream] * (double)core[lane];
+                for (source = 0ull; source < layer->residual_stream_count; ++source)
+                    value += (double)comb[source * layer->residual_stream_count + stream] *
+                             (double)residual[source * layer->residual_stream_width + lane];
+                output[stream * layer->residual_stream_width + lane] = (float)value;
+            }
+        }
+        if (!ref_compute_round(layer->compute_contract, output,
+                               layer->residual_expanded_width))
+            goto done;
+    }
+    accepted = 1;
+done:
+    free(canonical_residual);
+    return accepted;
+}
+
 int yvex_test_attention_reference_codec_selftest(void);
 
 /* Purpose: exhaustively prove the oracle's independent activation scalar codecs. */
@@ -1890,6 +2045,10 @@ int yvex_test_attention_reference_execute(
         ref_reason(reason, "reference execution arguments are invalid");
         return 0;
     }
+    if (!yvex_test_attention_external_conformance_validate(NULL)) {
+        ref_reason(reason, "pinned external conformance vectors are invalid");
+        return 0;
+    }
     token_count = opts->token_count ? opts->token_count : 1ull;
     layer = yvex_graph_lower_deepseek_v4()->plan_layer_at(plan, opts->layer_index);
     architecture = yvex_model_register_deepseek_v4()->ir.layer_at(ir, opts->layer_index);
@@ -2548,6 +2707,314 @@ static int ref_hash_u64_array(yvex_sha256 *hash,
         return 0;
     for (i = 0ull; i < count; ++i) {
         if (!yvex_sha256_update_u64(hash, values[i])) return 0;
+    }
+    return 1;
+}
+
+static const yvex_test_attention_external_vectors ref_external_vectors = {
+    YVEX_TEST_ATTENTION_EXTERNAL_SCHEMA_V1,
+    "arXiv:2606.19348v1",
+    "sections-2.3.1-2.3.4;equations-9-27;section-4.2.1;section-5.2.1",
+    "96a04cb13f9c3ed86028e090784a9eb059cf5318",
+    "python/sglang/srt/layers/attention/dsv4/compressor.py;"
+    "python/sglang/srt/layers/attention/dsv4/indexer.py;"
+    "python/sglang/srt/layers/attention/dsv4/deepseek_v4_rope.py;"
+    "python/sglang/srt/layers/mhc.py",
+    "8df14cfc8c8a09b4e57f082e59593a3abce4ffb3",
+    "vllm/models/deepseek_v4/attention.py;"
+    "vllm/models/deepseek_v4/common/rope.py;"
+    "vllm/models/deepseek_v4/compressor.py;"
+    "vllm/model_executor/kernels/mhc/torch.py;"
+    "vllm/v1/attention/backends/mla/indexer.py",
+    "e7706faf8d1c3b9f241e36860640ad1dac644ede",
+    "fast_hadamard_transform/fast_hadamard_transform_interface.py;"
+    "tests/test_fast_hadamard_transform.py",
+    {1.0f, -2.0f, 0.5f},
+    {-0.25f, 1.75f, -0.75f},
+    0.5f,
+    {10.0f, 20.0f, 30.0f, 40.0f, 1.0f, 2.0f},
+    {10.0f, 20.0f, 30.0f, 40.0f, -1.1426396369934082f,
+     1.922075629234314f},
+    {10.0f, 20.0f, 30.0f, 40.0f, 2.2232441902160645f,
+     0.23913362622261047f},
+    1ull, 131ull, 128ull,
+    {0x3f80u, 0x3f82u, 0x8000u},
+    {1.00390625f, 1.01171875f, -0.0f},
+    {1.0f, 1.015625f, -0.0f},
+    {0.0f, 0.49f, 1.01f, -1.51f, 3.99f, -8.0f},
+    {0x00u, 0x00u, 0x01u, 0x0au, 0x04u, 0x0eu},
+    0x80u,
+    {0.0f, 0.0f, 1.0f, -2.0f, 4.0f, -8.0f},
+    {0.0f, 1.0f, -2.0f, 448.0f, -512.0f},
+    {0x00u, 0x30u, 0xb8u, 0x76u, 0xf8u},
+    0x80u,
+    {0.0f, 1.0f, -2.0f, 448.0f, -512.0f},
+    {0.0f, 1.0986123085021973f, 0.6931471824645996f,
+     1.3862943649291992f},
+    {1.0f, 5.0f, 7.0f, 11.0f},
+    7.4f,
+    {0.0f, 0.6931471824645996f, 1.0986123085021973f,
+     1.3862943649291992f},
+    {1.0f, 5.0f, 7.0f, 11.0f},
+    7.6f,
+    {0.25f, 4.0f, 1.5f, 5.0f, -2.0f, 3.0f},
+    {40ull, 12ull, 32ull, 8ull, 44ull, 16ull},
+    {3ull, 1ull, 5ull, 2ull},
+    128ull,
+    {127ull, 128ull, 129ull, 384ull},
+    {0ull, 1ull, 1ull, 3ull},
+    {127ull, 0ull, 1ull, 0ull},
+    {0.0f, 0.6931471824645996f},
+    {1.0f, 2.0f, 3.0f, 4.0f},
+    0.0f,
+    {1.75f, 2.5f},
+    {0.5f, -0.25f},
+    {1.0f, 2.0f, 3.0f, 4.0f},
+    {2.0f, 1.0f},
+    {1.0f, 2.0f, 3.0f, 4.0f},
+    {11.0f, 13.5f, 14.5f, 19.75f}
+};
+
+/* Purpose: expose immutable external literals without transferring ownership. */
+const yvex_test_attention_external_vectors *
+yvex_test_attention_external_vectors_get(void)
+{
+    return &ref_external_vectors;
+}
+
+/* Purpose: hash one byte vector without depending on native aggregate layout. */
+static int ref_hash_bytes(yvex_sha256 *hash, const unsigned char *values,
+                          unsigned long long count)
+{
+    unsigned long long index;
+
+    if (!hash || (count && !values) || !yvex_sha256_update_u64(hash, count))
+        return 0;
+    for (index = 0ull; index < count; ++index)
+        if (!yvex_sha256_update_u64(hash, values[index])) return 0;
+    return 1;
+}
+
+/* Purpose: hash one unsigned-short vector as canonical integer values. */
+static int ref_hash_shorts(yvex_sha256 *hash, const unsigned short *values,
+                           unsigned long long count)
+{
+    unsigned long long index;
+
+    if (!hash || (count && !values) || !yvex_sha256_update_u64(hash, count))
+        return 0;
+    for (index = 0ull; index < count; ++index)
+        if (!yvex_sha256_update_u64(hash, values[index])) return 0;
+    return 1;
+}
+
+/* Purpose: compute one scalar compressed entry from externally supplied logits. */
+static int ref_external_compress(const float *logits, const float *values,
+                                 unsigned long long count, float *result)
+{
+    unsigned long long index;
+    double maximum = -INFINITY;
+    double denominator = 0.0;
+    double numerator = 0.0;
+
+    if (!logits || !values || !count || !result) return 0;
+    for (index = 0ull; index < count; ++index) {
+        if (!isfinite(logits[index]) || !isfinite(values[index])) return 0;
+        if (logits[index] > maximum) maximum = logits[index];
+    }
+    for (index = 0ull; index < count; ++index) {
+        double weight = exp((double)logits[index] - maximum);
+        denominator += weight;
+        numerator += weight * (double)values[index];
+    }
+    if (!(denominator > 0.0) || !isfinite(numerator)) return 0;
+    *result = (float)(numerator / denominator);
+    return isfinite(*result);
+}
+
+/* Purpose: build a provenance-bound identity over every external literal. */
+static int ref_external_identity(char identity[YVEX_SHA256_HEX_CAP])
+{
+    const yvex_test_attention_external_vectors *v = &ref_external_vectors;
+    yvex_sha256 hash;
+
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(&hash, "yvex.attention.external-conformance.v1") ||
+        !yvex_sha256_update_u64(&hash, v->schema_version) ||
+        !yvex_sha256_update_text(&hash, v->paper_revision) ||
+        !yvex_sha256_update_text(&hash, v->paper_locator) ||
+        !yvex_sha256_update_text(&hash, v->sglang_revision) ||
+        !yvex_sha256_update_text(&hash, v->sglang_locator) ||
+        !yvex_sha256_update_text(&hash, v->vllm_revision) ||
+        !yvex_sha256_update_text(&hash, v->vllm_locator) ||
+        !yvex_sha256_update_text(&hash, v->hadamard_revision) ||
+        !yvex_sha256_update_text(&hash, v->hadamard_locator) ||
+        !ref_hash_float_array(&hash, v->hadamard_input, 3ull) ||
+        !ref_hash_float_array(&hash, v->hadamard_expected, 3ull) ||
+        !ref_hash_float_array(&hash, &v->hadamard_scale, 1ull) ||
+        !ref_hash_float_array(&hash, v->position_input, 6ull) ||
+        !ref_hash_float_array(&hash, v->position_forward_expected, 6ull) ||
+        !ref_hash_float_array(&hash, v->position_inverse_expected, 6ull) ||
+        !yvex_sha256_update_u64(&hash, v->position) ||
+        !yvex_sha256_update_u64(&hash, v->compressed_source_position) ||
+        !yvex_sha256_update_u64(&hash, v->compressed_position) ||
+        !ref_hash_shorts(&hash, v->bf16_expected_codes, 3ull) ||
+        !ref_hash_float_array(&hash, v->bf16_input, 3ull) ||
+        !ref_hash_float_array(&hash, v->bf16_expected, 3ull) ||
+        !ref_hash_float_array(&hash, v->fp4_input, 6ull) ||
+        !ref_hash_bytes(&hash, v->fp4_expected_codes, 6ull) ||
+        !yvex_sha256_update_u64(&hash, v->fp4_expected_scale) ||
+        !ref_hash_float_array(&hash, v->fp4_expected, 6ull) ||
+        !ref_hash_float_array(&hash, v->fp8_input, 5ull) ||
+        !ref_hash_bytes(&hash, v->fp8_expected_codes, 5ull) ||
+        !yvex_sha256_update_u64(&hash, v->fp8_expected_scale) ||
+        !ref_hash_float_array(&hash, v->fp8_expected, 5ull) ||
+        !ref_hash_float_array(&hash, v->csa_compress_logits, 4ull) ||
+        !ref_hash_float_array(&hash, v->csa_compress_values, 4ull) ||
+        !ref_hash_float_array(&hash, &v->csa_compress_expected, 1ull) ||
+        !ref_hash_float_array(&hash, v->hca_compress_logits, 4ull) ||
+        !ref_hash_float_array(&hash, v->hca_compress_values, 4ull) ||
+        !ref_hash_float_array(&hash, &v->hca_compress_expected, 1ull) ||
+        !ref_hash_float_array(&hash, v->topk_scores, 6ull) ||
+        !ref_hash_u64_array(&hash, v->topk_positions, 6ull) ||
+        !ref_hash_u64_array(&hash, v->topk_expected, 4ull) ||
+        !yvex_sha256_update_u64(&hash, v->hca_ratio) ||
+        !ref_hash_u64_array(&hash, v->hca_tokens, 4ull) ||
+        !ref_hash_u64_array(&hash, v->hca_emissions, 4ull) ||
+        !ref_hash_u64_array(&hash, v->hca_tails, 4ull) ||
+        !ref_hash_float_array(&hash, v->reduction_logits, 2ull) ||
+        !ref_hash_float_array(&hash, v->reduction_values, 4ull) ||
+        !ref_hash_float_array(&hash, &v->reduction_sink_logit, 1ull) ||
+        !ref_hash_float_array(&hash, v->reduction_expected, 2ull) ||
+        !ref_hash_float_array(&hash, v->mhc_core, 2ull) ||
+        !ref_hash_float_array(&hash, v->mhc_residual, 4ull) ||
+        !ref_hash_float_array(&hash, v->mhc_post, 2ull) ||
+        !ref_hash_float_array(&hash, v->mhc_combination, 4ull) ||
+        !ref_hash_float_array(&hash, v->mhc_expected, 4ull))
+        return 0;
+    return ref_hash_finish(&hash, identity);
+}
+
+/* Purpose: validate fixed primary-source vectors through only independent scalar equations. */
+int yvex_test_attention_external_conformance_validate(
+    yvex_test_attention_external_summary *summary)
+{
+    const yvex_test_attention_external_vectors *v = &ref_external_vectors;
+    yvex_attention_position_policy position = {0};
+    float actual[8];
+    float compressed;
+    unsigned long long selected[4], selected_count = 0ull, index;
+    char identity[YVEX_SHA256_HEX_CAP];
+    double maximum, denominator;
+
+    if (v->schema_version != YVEX_TEST_ATTENTION_EXTERNAL_SCHEMA_V1 ||
+        strcmp(v->paper_revision, "arXiv:2606.19348v1") != 0 ||
+        strcmp(v->sglang_revision,
+               "96a04cb13f9c3ed86028e090784a9eb059cf5318") != 0 ||
+        strcmp(v->vllm_revision,
+               "8df14cfc8c8a09b4e57f082e59593a3abce4ffb3") != 0 ||
+        strcmp(v->hadamard_revision,
+               "e7706faf8d1c3b9f241e36860640ad1dac644ede") != 0 ||
+        !ref_external_identity(identity))
+        return 0;
+    if (!yvex_test_attention_reference_hadamard(
+            v->hadamard_input, 3ull, v->hadamard_scale, 1, actual) ||
+        memcmp(actual, v->hadamard_expected, 3u * sizeof(float)) != 0)
+        return 0;
+    position.rope_dimension = 2ull;
+    position.theta = 10000ull;
+    position.partial_rope = 1;
+    position.inverse_output_rotation = 1;
+    memcpy(actual, v->position_input, 6u * sizeof(float));
+    if (!ref_rope(actual, 6ull, 2ull, v->position, &position, 0)) return 0;
+    for (index = 0ull; index < 6ull; ++index)
+        if (fabsf(actual[index] - v->position_forward_expected[index]) >
+            1.0e-6f) return 0;
+    memcpy(actual, v->position_input, 6u * sizeof(float));
+    if (!ref_rope(actual, 6ull, 2ull, v->position, &position, 1)) return 0;
+    for (index = 0ull; index < 6ull; ++index)
+        if (fabsf(actual[index] - v->position_inverse_expected[index]) >
+            1.0e-6f) return 0;
+    if (v->compressed_source_position / 128ull * 128ull !=
+        v->compressed_position) return 0;
+    for (index = 0ull; index < 3ull; ++index)
+        if (ref_bf16_encode(v->bf16_input[index]) != v->bf16_expected_codes[index] ||
+            memcmp(&v->bf16_expected[index],
+                   &(float){ref_bf16_decode(v->bf16_expected_codes[index])},
+                   sizeof(float)) != 0)
+            return 0;
+    memcpy(actual, v->fp4_input, 6u * sizeof(float));
+    if (!ref_fake_quant_block(actual, 6ull, 1) ||
+        memcmp(actual, v->fp4_expected, 6u * sizeof(float)) != 0 ||
+        ref_ue8m0_encode(2.0f) != v->fp4_expected_scale)
+        return 0;
+    for (index = 0ull; index < 6ull; ++index)
+        if (ref_fp4_encode(v->fp4_input[index] / 2.0f) !=
+            v->fp4_expected_codes[index]) return 0;
+    memcpy(actual, v->fp8_input, 5u * sizeof(float));
+    if (!ref_fake_quant_block(actual, 5ull, 0) ||
+        memcmp(actual, v->fp8_expected, 5u * sizeof(float)) != 0 ||
+        ref_ue8m0_encode(2.0f) != v->fp8_expected_scale)
+        return 0;
+    for (index = 0ull; index < 5ull; ++index)
+        if (ref_fp8_encode(v->fp8_input[index] / 2.0f) !=
+            v->fp8_expected_codes[index]) return 0;
+    if (!ref_external_compress(v->csa_compress_logits,
+                               v->csa_compress_values, 4ull, &compressed) ||
+        fabsf(compressed - v->csa_compress_expected) > 1.0e-6f ||
+        !ref_external_compress(v->hca_compress_logits,
+                               v->hca_compress_values, 4ull, &compressed) ||
+        fabsf(compressed - v->hca_compress_expected) > 1.0e-6f ||
+        !yvex_test_attention_reference_topk(
+            v->topk_scores, v->topk_positions, 6ull, 4ull,
+            selected, &selected_count) || selected_count != 4ull ||
+        memcmp(selected, v->topk_expected, 4u * sizeof(*selected)) != 0)
+        return 0;
+    for (index = 0ull; index < 4ull; ++index)
+        if (v->hca_tokens[index] / v->hca_ratio != v->hca_emissions[index] ||
+            v->hca_tokens[index] % v->hca_ratio != v->hca_tails[index])
+            return 0;
+    maximum = v->reduction_sink_logit;
+    for (index = 0ull; index < 2ull; ++index)
+        if ((double)v->reduction_logits[index] > maximum)
+            maximum = v->reduction_logits[index];
+    denominator = exp((double)v->reduction_sink_logit - maximum);
+    for (index = 0ull; index < 2ull; ++index)
+        denominator += exp((double)v->reduction_logits[index] - maximum);
+    for (index = 0ull; index < 2ull; ++index) {
+        double value = exp((double)v->reduction_logits[0] - maximum) *
+                           (double)v->reduction_values[index] +
+                       exp((double)v->reduction_logits[1] - maximum) *
+                           (double)v->reduction_values[2ull + index];
+        if (fabs(value / denominator - (double)v->reduction_expected[index]) >
+            1.0e-7) return 0;
+    }
+    for (index = 0ull; index < 2ull; ++index) {
+        unsigned long long source, lane;
+        for (lane = 0ull; lane < 2ull; ++lane) {
+            double value = (double)v->mhc_post[index] * v->mhc_core[lane];
+            for (source = 0ull; source < 2ull; ++source)
+                value += (double)v->mhc_combination[source * 2ull + index] *
+                         (double)v->mhc_residual[source * 2ull + lane];
+            if ((float)value != v->mhc_expected[index * 2ull + lane]) return 0;
+        }
+    }
+    if (summary) {
+        memset(summary, 0, sizeof(*summary));
+        summary->schema_version = v->schema_version;
+        memcpy(summary->vector_identity, identity, sizeof(summary->vector_identity));
+        summary->vector_count = 11ull;
+        summary->provenance_complete = 1;
+        summary->position_policy_exact = 1;
+        summary->bf16_publication_exact = 1;
+        summary->fp8_fake_quant_exact = 1;
+        summary->fp4_fake_quant_exact = 1;
+        summary->compressor_transition_exact = 1;
+        summary->csa_topk_order_exact = 1;
+        summary->hca_ratio_exact = 1;
+        summary->local_compressed_reduction_exact = 1;
+        summary->envelope_mhc_exact = 1;
+        summary->hadamard_exact = 1;
     }
     return 1;
 }

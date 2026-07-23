@@ -20,6 +20,7 @@ extern "C" {
 #endif
 
 typedef struct yvex_gguf_tokenizer_metadata yvex_gguf_tokenizer_metadata;
+typedef struct yvex_model_family_api yvex_model_family_api;
 
 /* Writer contract. */
 #define YVEX_GGUF_WRITER_SCHEMA_VERSION 1u
@@ -102,15 +103,36 @@ typedef struct yvex_gguf_writer_plan_options {
 typedef struct yvex_gguf_writer_plan yvex_gguf_writer_plan;
 typedef struct {
     const char *name;
-} yvex_gguf_writer_fixture_tensor;
+} yvex_gguf_writer_proof_tensor;
+typedef enum {
+    YVEX_GGUF_WRITER_INPUT_INVALID = 0,
+    YVEX_GGUF_WRITER_INPUT_COMPLETE_ARTIFACT,
+    YVEX_GGUF_WRITER_INPUT_TENSOR_PROOF
+} yvex_gguf_writer_input_class;
+typedef struct {
+    const yvex_model_family_api *family_adapter;
+    const void *lowering;
+    const yvex_source_verification *verification;
+} yvex_gguf_writer_complete_input;
+typedef struct {
+    const yvex_gguf_writer_proof_tensor *tensors;
+    unsigned long long tensor_count;
+} yvex_gguf_writer_proof_input;
+typedef union {
+    yvex_gguf_writer_complete_input complete;
+    yvex_gguf_writer_proof_input tensor_proof;
+} yvex_gguf_writer_input;
+typedef struct {
+    yvex_gguf_writer_input_class input_class;
+    const yvex_quant_plan *quant_plan;
+    const yvex_gguf_writer_plan_options *options;
+    yvex_gguf_writer_input input;
+} yvex_gguf_writer_plan_request;
 void yvex_gguf_writer_plan_options_default(
     yvex_gguf_writer_plan_options *options);
-int yvex_gguf_writer_plan_build_fixture(
+int yvex_gguf_writer_plan_build(
     yvex_gguf_writer_plan **out,
-    const yvex_quant_plan *quant_plan,
-    const yvex_gguf_writer_fixture_tensor *tensors,
-    unsigned long long tensor_count,
-    const yvex_gguf_writer_plan_options *options,
+    const yvex_gguf_writer_plan_request *request,
     yvex_gguf_writer_failure *failure,
     yvex_error *err);
 void yvex_gguf_writer_plan_release(yvex_gguf_writer_plan **plan);
@@ -120,7 +142,6 @@ const yvex_gguf_writer_tensor *yvex_gguf_writer_plan_tensor_at(
     const yvex_gguf_writer_plan *plan, unsigned long long ordinal);
 const unsigned char *yvex_gguf_writer_plan_prefix(
     const yvex_gguf_writer_plan *plan, size_t *byte_count);
-const char *yvex_gguf_writer_code_name(yvex_gguf_writer_code code);
 
 /* File Sink contract. */
 typedef enum {
@@ -236,7 +257,6 @@ int yvex_gguf_file_sink_summary_get(
     yvex_gguf_file_sink *sink,
     yvex_gguf_file_sink_summary *out);
 void yvex_gguf_file_sink_release(yvex_gguf_file_sink **sink);
-const char *yvex_gguf_file_code_name(yvex_gguf_file_code code);
 
 #ifdef __cplusplus
 }

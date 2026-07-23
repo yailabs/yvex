@@ -22,9 +22,6 @@ if [ "${1:-}" = "--cuda" ]; then
 fi
 
 run_section core tests/cli/core.sh
-run_section run tests/cli/run.sh
-run_section chat tests/cli/chat.sh
-run_section metrics tests/cli/metrics.sh
 run_section server tests/cli/server.sh
 run_section artifact-integrity tests/cli/artifact_integrity.sh
 run_section integrity-report tests/cli/integrity_report.sh
@@ -35,20 +32,9 @@ run_section accounts tests/cli/accounts.sh
 run_section materialize tests/cli/materialize.sh
 run_section materialize-gate tests/cli/materialize_gate.sh
 run_section materialization-integrity-gate tests/cli/materialize_gate.sh
-run_section fixture-graph tests/cli/fixture_graph.sh
-run_section partial-graph tests/cli/partial_graph.sh
-run_section segment-graph tests/cli/segment_graph.sh
-run_section rope-graph tests/cli/rope_graph.sh
 run_section attention-graph tests/cli/attention_graph.sh
-run_section matmul-graph tests/cli/matmul_graph.sh
-run_section mlp-graph tests/cli/mlp_graph.sh
-run_section block-graph tests/cli/block_graph.sh
 run_section token-input tests/cli/token_input.sh
-run_section prefill-state tests/cli/prefill_state.sh
-run_section kv tests/cli/kv.sh
-run_section generation tests/cli/generation.sh
 run_section fullmodel tests/cli/fullmodel.sh
-run_section graph-integrity-guard tests/cli/graph_integrity_guard.sh
 run_section artifact-integrity-regression tests/cli/artifact_integrity_regression.sh
 run_section source-manifest tests/cli/source_manifest.sh
 run_section native-weights tests/cli/native_weights.sh
@@ -58,7 +44,6 @@ run_section tensor-map tests/cli/tensor_map.sh
 run_section convert tests/cli/convert.sh
 run_section model-gate tests/cli/model_gate.sh
 run_section models tests/cli/models.sh
-run_section model-aliases tests/cli/model_aliases.sh
 run_section quant-job tests/cli/quant_job.sh
 run_section quant-policy tests/cli/quant_policy.sh
 run_section imatrix tests/cli/imatrix.sh

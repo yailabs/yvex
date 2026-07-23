@@ -197,71 +197,6 @@ const char *yvex_source_payload_trust_class_name(yvex_source_payload_trust_class
     }
 }
 
-/* Purpose: map payload failure taxonomy to stable diagnostic spelling.
- * Inputs: typed source payload session arguments; borrowed inputs outlive the call.
- * Effects: mutates only explicit caller-owned source payload session state.
- * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
- * Boundary: payload readability performs no numeric transformation. */
-const char *yvex_source_payload_failure_name(yvex_source_payload_failure_code code) {
-    static const char *const names[] = {"none",
-                                        "invalid-argument",
-                                        "invalid-lifecycle-state",
-                                        "source-metadata-not-verified",
-                                        "payload-not-trusted",
-                                        "manifest-version-unsupported",
-                                        "source-snapshot-identity-mismatch",
-                                        "payload-identity-mismatch",
-                                        "mapping-identity-mismatch",
-                                        "duplicate-shard",
-                                        "duplicate-tensor",
-                                        "shard-not-indexed",
-                                        "tensor-not-indexed",
-                                        "path-escape",
-                                        "symlink-refusal",
-                                        "shard-open-failure",
-                                        "non-regular-shard",
-                                        "stat-failure",
-                                        "shard-size-mismatch",
-                                        "shard-replacement-drift",
-                                        "expected-digest-unavailable",
-                                        "digest-algorithm-unsupported",
-                                        "digest-mismatch",
-                                        "range-arithmetic-overflow",
-                                        "range-outside-data-region",
-                                        "range-outside-file",
-                                        "inconsistent-tensor-byte-length",
-                                        "invalid-chunk-configuration",
-                                        "resource-budget-exceeded",
-                                        "allocation-failure",
-                                        "handle-cache-exhausted",
-                                        "short-read",
-                                        "underlying-io-failure",
-                                        "consumer-failure",
-                                        "cancellation",
-                                        "close-while-busy",
-                                        "cleanup-failure"};
-    size_t count = sizeof(names) / sizeof(names[0]);
-
-    return code >= 0 && (size_t)code < count ? names[code] : "unknown-payload-failure";
-}
-
-/* Purpose: project name is canonical facts while preserving the canonical payload session invariants.
- * Inputs: typed source payload session arguments; borrowed inputs outlive the call.
- * Effects: mutates only explicit caller-owned source payload session state.
- * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
- * Boundary: payload readability performs no numeric transformation. */
-static int payload_name_is_canonical(const char *name) {
-    const char *cursor;
-
-    if (!name || !name[0] || name[0] == '/' || strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
-        return 0;
-    for (cursor = name; *cursor; ++cursor) {
-        if (*cursor == '/' || *cursor == '\\' || *cursor == '\n' || *cursor == '\r')
-            return 0;
-    }
-    return 1;
-}
-
 /* Purpose: copy payload session data into independently owned bounded storage.
  * Inputs: typed source payload session arguments; borrowed inputs outlive the call.
  * Effects: mutates only explicit caller-owned source payload session state.
@@ -523,7 +458,7 @@ static int payload_index_shard(yvex_source_payload_session *session,
     int rc;
 
     if (!source || source->canonical_id != index ||
-        !payload_name_is_canonical(source->canonical_name)) {
+        !yvex_source_payload_name_is_canonical(source->canonical_name)) {
                 return yvex_source_payload_refuse_at(failure,
                                  source && source->canonical_name
                                      ? YVEX_SOURCE_PAYLOAD_FAILURE_PATH_ESCAPE
@@ -926,10 +861,9 @@ int yvex_source_payload_session_open_with_ops(yvex_source_payload_session **out,
         options->verification->manifest_payload_source_snapshot_identity ==
             snapshot_facts.identity &&
         yvex_sha256_hex_valid(options->verification->manifest_payload_identity)) {
-        (void)snprintf(session->facts.admitted_payload_identity,
-                       sizeof(session->facts.admitted_payload_identity),
-                       "%s",
-                       options->verification->manifest_payload_identity);
+        yvex_core_text_copy(session->facts.admitted_payload_identity,
+                            sizeof(session->facts.admitted_payload_identity),
+                            options->verification->manifest_payload_identity);
     }
     if (pthread_mutex_init(&session->mutex, NULL) != 0) {
         ops->free_fn(session);
@@ -1349,6 +1283,9 @@ int yvex_source_payload_exact_read(yvex_source_payload_session *session,
                                      "source payload physical byte accounting overflow");
         }
     }
+    yvex_core_execution_observation_record(
+        YVEX_CORE_OBSERVE_SOURCE_PAYLOAD_BYTES,
+        (unsigned long long)completed);
     return YVEX_OK;
 }
 

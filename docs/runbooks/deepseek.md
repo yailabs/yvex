@@ -1,81 +1,88 @@
 # DeepSeek Operator Runbook
 
-Date: 2026-07-14
-Status: unsupported current-state boundary
+Date: 2026-07-22
+Status: admitted artifact and attention-runtime boundary
 
 ## Current Target
 
 Canonical source: `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`.
-
 Canonical v0.1.0 release target: `deepseek4-v4-flash` on DGX Spark CUDA.
-
-The local source has passed exact metadata and header verification against
-`deepseek-ai/DeepSeek-V4-Flash` at commit
-`60d8d70770c6776ff598c94bb586a859a38244f1`. The pinned upstream index owns 46
-shards and 69,187 unique tensor records. Payload trust is separate: a complete
-read-only scan checks every authoritative Hugging Face Git LFS SHA-256, seals
-the aggregate identity in the verifier-owned manifest, and binds every mapped
-contribution to a checked range.
+The verified snapshot pins commit `60d8d70770c6776ff598c94bb586a859a38244f1`,
+46 shards and 69,187 tensor records with independent payload trust.
 
 ## Current Boundary
 
-YVEX cannot currently produce a complete DeepSeek-V4-Flash GGUF, materialize
-the complete model, execute the transformer/MoE stack, or generate text.
+YVEX has produced and admitted the selected complete DeepSeek-V4-Flash GGUF,
+materializes its attention bindings, and executes the complete attention core
+and immediate envelope through the common CPU/CUDA runtime. It does not yet
+own persistent KV, execute the transformer/MoE stack, or generate text.
 There is no supported DeepSeek generation command to run yet.
 
-Selected aliases, bounded graph segments, diagnostic runtime commands,
-report-only fullmodel surfaces, fixture logits, and printed token IDs are not a
-DeepSeek operator lane. Their dispositions remain in `../../PROJECT.md`.
+Prepare the immutable runtime binding, then execute the production attention
+path. All generated evidence remains outside the repository:
 
-Current milestone state, dependencies, gates, and Active Next live only in
-`../../PROJECT.md`; this file records executable operator procedures.
+```sh
+MODELS_ROOT="$HOME/lab/models"
+ARTIFACT="$MODELS_ROOT/gguf/deepseek/deepseek-v4-flash-q8_0-q2_k-v1.gguf"
+EVIDENCE="$(mktemp -d /tmp/yvex-runtime-evidence.XXXXXX)"
+mkdir "$EVIDENCE/bindings"
+
+./yvex graph attention prepare \
+  --target deepseek4-v4-flash --models-root "$MODELS_ROOT" --artifact "$ARTIFACT" \
+  --runtime-binding-dir "$EVIDENCE/bindings" --output json \
+  >"$EVIDENCE/prepare.json"
+BINDING="$(python3 -c \
+  'import json,sys; print(json.load(open(sys.argv[1]))["runtime_binding_path"])' \
+  "$EVIDENCE/prepare.json")"
+
+./yvex graph attention execute \
+  --target deepseek4-v4-flash --models-root "$MODELS_ROOT" --artifact "$ARTIFACT" \
+  --runtime-binding "$BINDING" --backend cuda --phase decode --mode full \
+  --operation-scope release-attention-set --probe canonical --scope full \
+  --output json
+```
+
+The input is a canonical activation probe, not prompt text. This exact lane
+writes an identity-bound baseline, JSON/CSV reports and deterministic SVGs:
+
+```sh
+MODE=full
+./yvex graph attention benchmark --target deepseek4-v4-flash \
+  --models-root "$MODELS_ROOT" --artifact "$ARTIFACT" --runtime-binding "$BINDING" \
+  --backend cuda --phase decode --mode "$MODE" --scope full \
+  --operation-scope release-attention-set --probe canonical --warmup 3 --repeat 20 \
+  --progress off --baseline "$EVIDENCE/$MODE.yvex-benchmark" --write-baseline \
+  --chart "$EVIDENCE/$MODE.svg" --output json >"$EVIDENCE/$MODE.json"
+./yvex graph attention benchmark --target deepseek4-v4-flash \
+  --models-root "$MODELS_ROOT" --artifact "$ARTIFACT" --runtime-binding "$BINDING" \
+  --backend cuda --phase decode --mode "$MODE" --scope full \
+  --operation-scope release-attention-set --probe canonical --warmup 3 --repeat 20 \
+  --progress off --baseline "$EVIDENCE/$MODE.yvex-benchmark" \
+  --chart "$EVIDENCE/$MODE-comparison.svg" --output csv \
+  >"$EVIDENCE/$MODE-comparison.csv"
+```
+
+Repeat with `MODE=eager` and `MODE=piecewise` for all three CUDA modes. The
+files are runtime-local evidence, not full-model benchmark results.
 
 ## Source Verification
 
-The strict metadata/header pass is:
-
 ```sh
 ./yvex source-manifest report \
-  --release v0.1.0 \
-  --family deepseek \
-  --target deepseek4-v4-flash \
-  --models-root "$HOME/lab/models" \
-  --audit \
-  --strict
+  --release v0.1.0 --family deepseek --target deepseek4-v4-flash \
+  --models-root "$HOME/lab/models" --audit --strict
 ```
-
-It exits non-zero for provenance, structured-config, index, shard, header, or
-footprint contradictions. It may atomically publish only a complete manifest;
-it reads no tensor payload and proves no artifact or runtime support.
-
-## Source Payload Verification
-
-Plan every retained tensor range without reading payload bytes:
 
 ```sh
 make test-source-payload-live-plan
-```
-
-Read all 46 shards through the payload API, verify authoritative digests,
-deliver every mapped logical range to a counting sink, and atomically publish
-the payload identity:
-
-```sh
 make test-source-payload-live
 ```
 
-Both targets default to the canonical root. `DEEPSEEK_SOURCE`,
-`DEEPSEEK_MODELS_ROOT`, and `DEEPSEEK_SOURCE_MANIFEST` select an equivalent
-explicit snapshot. The full scan reads about 159.6 GB and may take substantial
-time. It never writes beneath the source root or prints weight bytes. Reported
-timings are diagnostic, not a release benchmark.
-
-This proves source payload trust and bounded transactional delivery only. It
-does not transform, quantize, emit GGUF, materialize, or execute model code.
+The plan reads no payload; the live target verifies all 46 shard digests and
+about 159.6 GB. This proves source trust, not artifact or runtime support.
 
 ## Canonical Control
 
-- Project control: `../../PROJECT.md`
-- Release gates: `../v010-release-doctrine.md`
-- Filesystem ownership: `../system-target.md`
-- Artifact terminology: `../../MODEL_ARTIFACTS.md`
+Current milestone state, dependencies, gates, and Active Next live only in
+`PROJECT.md`. See `../v010-release-doctrine.md`, `../system-target.md`, and
+`../../MODEL_ARTIFACTS.md` for their owned contracts.

@@ -294,11 +294,6 @@ run_reject_smoke bad-magic inspect "status: descriptor-only" \
     "$YVEX_BIN" inspect "$BAD_MAGIC"
 run_reject_smoke bad-magic tensors "tensor_count:" \
     "$YVEX_BIN" tensors "$BAD_MAGIC"
-run_reject_smoke bad-magic engine "status: engine-" \
-    "$YVEX_BIN" engine "$BAD_MAGIC"
-run_reject_smoke bad-magic session "status: session-" \
-    "$YVEX_BIN" session "$BAD_MAGIC" --backend cpu
-
 run_expect_fail bad-magic materialize "status: materialization-integrity-fail" preflight false false not-needed \
     "$YVEX_BIN" materialize --model "$BAD_MAGIC" --backend cpu
 contains "$OUT_DIR/bad-magic.materialize.out" "materialization_gate: fail"
@@ -321,18 +316,6 @@ contains "$OUT_DIR/bad-magic.materialize-gate.report" "materialization_phase: pr
 contains "$OUT_DIR/bad-magic.materialize-gate.report" "allocation_attempted: false"
 contains "$OUT_DIR/bad-magic.materialize-gate.report" "status: materialize-gate-fail"
 append_matrix_row bad-magic materialize-gate "status: materialize-gate-fail" preflight false false not-needed
-
-run_expect_fail bad-magic graph-partial "status: graph-integrity-fail" preflight false false not-needed \
-    "$YVEX_BIN" graph --model "$BAD_MAGIC" --backend cpu --execute-partial --partial-token 0
-contains "$OUT_DIR/bad-magic.graph-partial.out" "graph_integrity_guard: fail"
-contains "$OUT_DIR/bad-magic.graph-partial.out" "graph_execution_phase: preflight"
-contains "$OUT_DIR/bad-magic.graph-partial.out" "dispatch_attempted: false"
-
-run_expect_fail bad-magic graph-fixture "status: graph-proof-retired" admission false false not-needed \
-    "$YVEX_BIN" graph --model "$BAD_MAGIC" --backend cpu --execute-fixture --fixture-token 0
-contains "$OUT_DIR/bad-magic.graph-fixture.out" "graph_integrity_guard: refused"
-contains "$OUT_DIR/bad-magic.graph-fixture.out" "execution_ready: false"
-contains "$OUT_DIR/bad-magic.graph-fixture.out" "reason: production-fixtures-are-test-owned"
 
 "$YVEX_BIN" models add \
   --path "$F16_MODEL" \
@@ -374,11 +357,6 @@ run_expect_fail stale-alias materialize "status: materialization-integrity-fail"
 contains "$OUT_DIR/stale-alias.materialize.out" "identity_status: fail"
 contains "$OUT_DIR/stale-alias.materialize.out" "allocation_attempted: false"
 
-run_expect_fail stale-alias graph-partial "status: graph-integrity-fail" preflight false false not-needed \
-    env YVEX_MODELS_REGISTRY="$STALE_REG" "$YVEX_BIN" graph --model "$ALIAS" --backend cpu --execute-partial --partial-token 0
-contains "$OUT_DIR/stale-alias.graph-partial.out" "identity_status: fail"
-contains "$OUT_DIR/stale-alias.graph-partial.out" "dispatch_attempted: false"
-
 mutate_registry "$REG" "$DTYPE_REG" "primary_tensor_dtype" "F32"
 mutate_registry "$REG" "$DIMS_REG" "primary_tensor_dims" "[4,7]"
 mutate_registry "$REG" "$ARCH_REG" "architecture" "qwen"
@@ -415,11 +393,6 @@ run_expect_fail metadata-dtype materialize "status: materialization-integrity-fa
 contains "$OUT_DIR/metadata-dtype.materialize.out" "metadata_status: fail"
 contains "$OUT_DIR/metadata-dtype.materialize.out" "allocation_attempted: false"
 
-run_expect_fail metadata-dtype graph-partial "status: graph-integrity-fail" preflight false false not-needed \
-    env YVEX_MODELS_REGISTRY="$DTYPE_REG" "$YVEX_BIN" graph --model "$ALIAS" --backend cpu --execute-partial --partial-token 0
-contains "$OUT_DIR/metadata-dtype.graph-partial.out" "metadata_status: fail"
-contains "$OUT_DIR/metadata-dtype.graph-partial.out" "dispatch_attempted: false"
-
 run_expect_pass valid-f16 materialize "status: weights-materialized" complete true false not-needed \
     "$YVEX_BIN" materialize --model "$F16_MODEL" --backend cpu
 contains "$OUT_DIR/valid-f16.materialize.out" "materialization_gate: pass"
@@ -448,34 +421,8 @@ contains "$OUT_DIR/valid.materialize-gate.report" "cleanup_status: pass"
 contains "$OUT_DIR/valid.materialize-gate.report" "status: materialize-gate-pass"
 append_matrix_row valid-f16 materialize-gate "status: materialize-gate-pass" complete true false pass
 
-run_expect_fail valid-f32 graph-fixture "status: graph-proof-retired" admission false false not-needed \
-    "$YVEX_BIN" graph --model "$F32_MODEL" --backend cpu --execute-fixture --fixture-token 0
-contains "$OUT_DIR/valid-f32.graph-fixture.out" "graph_integrity_guard: refused"
-contains "$OUT_DIR/valid-f32.graph-fixture.out" "execution_ready: false"
-contains "$OUT_DIR/valid-f32.graph-fixture.out" "reason: production-fixtures-are-test-owned"
-
-run_expect_pass valid-f16 graph-partial "status: real-partial-graph-executed" complete false true not-needed \
-    "$YVEX_BIN" graph --model "$F16_MODEL" --backend cpu --execute-partial --partial-token 0
-contains "$OUT_DIR/valid-f16.graph-partial.out" "graph_integrity_guard: pass"
-contains "$OUT_DIR/valid-f16.graph-partial.out" "reference_read_attempted: true"
-
-run_expect_fail token-out-of-range graph-partial "status: graph-integrity-fail" preflight false false not-needed \
-    "$YVEX_BIN" graph --model "$F16_MODEL" --backend cpu --execute-partial --partial-token 99
-contains "$OUT_DIR/token-out-of-range.graph-partial.out" "slice_range_status: fail"
-contains "$OUT_DIR/token-out-of-range.graph-partial.out" "dispatch_attempted: false"
-
-run_expect_fail graph-injected graph-partial "status: graph-failed-cleaned" dispatch false true pass \
-    env YVEX_TEST_FAIL_GRAPH_AFTER_DISPATCH=1 "$YVEX_BIN" graph --model "$F16_MODEL" --backend cpu --execute-partial --partial-token 0
-contains "$OUT_DIR/graph-injected.graph-partial.out" "cleanup_attempted: true"
-contains "$OUT_DIR/graph-injected.graph-partial.out" "cleanup_status: pass"
-
-run_expect_pass graph-repeat graph-partial "status: real-partial-graph-executed" complete false true not-needed \
-    "$YVEX_BIN" graph --model "$F16_MODEL" --backend cpu --execute-partial --partial-token 0
-
 contains "$MATRIX" "bad-magic|integrity|status: artifact-integrity-fail"
 contains "$MATRIX" "stale-alias|models-verify|status: models-identity-fail"
 contains "$MATRIX" "metadata-dtype|models-verify|status: models-metadata-drift"
 contains "$MATRIX" "materialize-injected|materialize|status: materialization-failed-cleaned"
-contains "$MATRIX" "graph-injected|graph-partial|status: graph-failed-cleaned"
-
 echo "cli artifact integrity regression: ok"

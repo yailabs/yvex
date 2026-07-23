@@ -24,14 +24,13 @@ static const char *const literal_lines_0[] = {
     "\nusage:\n  yvex <command> [args]\n  yvex help <command>\n  yvex commands",
     "\ncommand shape:\n  yvex <family> <action> [object] [selectors] [behavior flags] [diagnostic flags]",
     "\ncommon:\n  yvex paths\n  yvex models list\n  yvex models prepare TARGET\n  yvex models check TARGET\n"
-        "  yvex model-target inspect TARGET\n  yvex graph attention execute --target deepseek4-v4-flash "
-        "--backend cpu --scope quick\n  yvex "
-        "generate --model TARGET --backend cpu --tokens IDS --max-new-tokens N",
-    "\ncommand groups:\n  core: help, commands, info, version\n  operator: paths, models, accounts\n  "
+        "  yvex model-target inspect TARGET\n  yvex graph attention describe --target deepseek4-v4-flash\n"
+        "  yvex graph attention execute --target deepseek4-v4-flash --backend cpu --scope quick",
+    "\ncommand groups:\n  core: help, commands, version\n  operator: paths, models, accounts\n  "
         "model/source: model-target, fullmodel, source-manifest, native-weights, tensor-map\n  artifact: "
-        "inspect, metadata, tensors, integrity, materialize, gguf-template, gguf-emit\n  graph: graph, plan\n  "
-        "runtime: input, engine, session, prefill, kv, decode, logits, sample, generate\n  diagnostics: "
-        "backend, cuda-info, tokenizer, tokenize, detokenize, prompt, chat, run\n  server: yvexd daemon status "
+        "inspect, metadata, tensors, integrity, materialize, gguf-template, gguf-emit\n  graph: graph\n  "
+        "runtime: input and graph attention\n  diagnostics: "
+        "backend, cuda-info, tokenizer, tokenize, detokenize, prompt\n  server: yvexd daemon status "
         "surface\n  research/future: documented future lanes only",
     "\noption classes:\n  selector: --model, --backend, --role, --gate\n  path: --models-root, --source, --"
         "out, --out-dir, --registry\n  behavior: --dry-run, --overwrite, --no-register, --no-use\n  diagnostic:"
@@ -42,6 +41,8 @@ static const char *const literal_lines_0[] = {
 };
 
 typedef int (*yvex_cli_handler_fn)(int argc, char **argv);
+typedef int (*yvex_cli_owned_handler_fn)(int argc, char **argv,
+                                         yvex_runtime_cleanup_lease **retained_cleanup);
 typedef void (*yvex_cli_help_fn)(FILE *fp);
 
 typedef struct {
@@ -54,6 +55,7 @@ typedef struct {
     const char *option_classes;
     const char *boundary;
     yvex_cli_handler_fn handler;
+    yvex_cli_owned_handler_fn owned_handler;
     yvex_cli_help_fn help;
 } yvex_cli_command;
 
@@ -65,21 +67,16 @@ static void command_help_help(FILE *fp);
 static void command_version_help(FILE *fp);
 
 /* Purpose: Build one declarative command-catalog row without dispatch side effects. */
-#define CMD(N, G, S, P, U, E, O, B, H, HF) {N, G, S, P, U, E, O, B, H, HF}
+#define CMD(N, G, S, P, U, E, O, B, H, HF) {N, G, S, P, U, E, O, B, H, NULL, HF}
+#define OWNED_CMD(N, G, S, P, U, E, O, B, H, HF) \
+    {N, G, S, P, U, E, O, B, NULL, H, HF}
 
 static const yvex_cli_command yvex_commands[] = {
     CMD("accounts","operator","mixed-transitional","Provider account status.",
         "yvex accounts status [provider]","yvex accounts status","selector, diagnostic, transitional-layout",
             "local provider observation only",yvex_accounts_command,yvex_accounts_help),
-    CMD("attention","model","diagnostic","Attention requirement reports.",
-        "yvex attention report --model TARGET","yvex attention report --model TARGET",
-            "selector, path, diagnostic, transitional-layout","report-only; not full attention runtime",
-                yvex_attention_command,yvex_attention_help),
     CMD("backend","diagnostic","diagnostic","Backend availability reports.","yvex backend cpu|cuda",
         "yvex backend cuda","selector","backend status is not model support",yvex_backend_command,yvex_backend_help),
-    CMD("chat","runtime","diagnostic","Accepted-only diagnostic console.","yvex chat [--model TARGET]",
-        "yvex chat --backend cpu","selector, path, behavior, diagnostic","diagnostic console; no generation",
-            yvex_chat_command,yvex_chat_help),
     CMD("commands","core","porcelain","Grouped command catalog.","yvex commands","yvex commands","none",
         "catalog only; no domain execution",command_commands,command_commands_help),
     CMD("context","runtime","diagnostic","Context class and boundary reports.",
@@ -92,34 +89,20 @@ static const yvex_cli_command yvex_commands[] = {
                 yvex_convert_command,yvex_convert_help),
     CMD("cuda-info","diagnostic","diagnostic","CUDA device facts.","yvex cuda-info","yvex cuda-info","none",
         "device probe only; not CUDA model runtime",yvex_cuda_info_command,yvex_cuda_info_help),
-    CMD("decode","runtime","diagnostic","Bounded diagnostic decode step.",
-        "yvex decode --model TARGET --backend cpu|cuda",
-            "yvex decode --model TARGET --backend cpu --tokens 0,1","selector, behavior, diagnostic",
-                "diagnostic decode only; no generation",yvex_decode_command,yvex_decode_help),
     CMD("detokenize","diagnostic","diagnostic","Decode token IDs.","yvex detokenize FILE --ids IDS",
         "yvex detokenize FILE --ids 1,2","selector","tokenizer diagnostic only",yvex_detokenize_command,
             yvex_detokenize_help),
-    CMD("engine","runtime","diagnostic","Open an engine descriptor.",
-        "yvex engine [--model] TARGET [--backend cpu|cuda]","yvex engine --model TARGET --backend cpu",
-            "selector, path, diagnostic","engine descriptor only; no decode or generation",
-                yvex_engine_command,yvex_engine_help),
     CMD("fullmodel","model","mixed-transitional","Fullmodel inventory and plan reports.",
         "yvex fullmodel report --model TARGET","yvex fullmodel report --model TARGET",
             "selector, path, behavior, diagnostic, transitional-layout",
                 "report/materialization planning only unless subcommand proves more",yvex_fullmodel_command,
                     yvex_fullmodel_help),
-    CMD("graph","graph","mixed-transitional","Graph diagnostics and production attention probes.",
-        "yvex graph attention execute --target TARGET --backend cpu|cuda",
+    OWNED_CMD("graph","graph","mixed-transitional","Graph diagnostics and production attention probes.",
+        "yvex graph attention prepare|describe|capabilities|plan|execute|compare|benchmark --target TARGET",
             "yvex graph attention execute --target deepseek4-v4-flash --backend cpu --scope quick",
                 "selector, path, behavior, diagnostic, json",
                     "production attention probe; not prompt execution or generation",
                         yvex_graph_command,yvex_graph_help),
-    CMD("generate","runtime","diagnostic","Bounded diagnostic generation loop.",
-        "yvex generate --model TARGET --backend cpu|cuda",
-            "yvex generate --model TARGET --backend cpu --tokens IDS --max-new-tokens N",
-                "selector, behavior, diagnostic",
-                    "diagnostic generation only; full model generation unsupported",yvex_generate_command,
-                        yvex_generate_help),
     CMD("gguf-template","artifact","diagnostic","Template validation.","yvex gguf-template validate FILE",
         "yvex gguf-template inspect FILE","path, diagnostic","template validation only",
             yvex_gguf_template_command,yvex_gguf_template_help),
@@ -131,9 +114,6 @@ static const yvex_cli_command yvex_commands[] = {
     CMD("imatrix","source","diagnostic","Imatrix manifest diagnostics.",
         "yvex imatrix create|inspect|validate [options]","yvex imatrix validate FILE",
             "path, behavior, diagnostic","manifest tooling only",yvex_imatrix_command,yvex_imatrix_help),
-    CMD("info","core","porcelain","Build and boundary status.","yvex info [--audit | --output normal|audit]",
-        "yvex info","diagnostic, transitional-layout","status summary only",yvex_runtime_info_command,
-            yvex_runtime_info_help),
     CMD("inspect","artifact","diagnostic","Artifact descriptor inspection.","yvex inspect FILE",
         "yvex inspect FILE","path, diagnostic","descriptor only; no materialization",yvex_inspect_command,
             yvex_inspect_help),
@@ -144,14 +124,6 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex integrity check|report --model TARGET","yvex integrity report --model TARGET --backend cpu",
             "selector, path, diagnostic, transitional-layout","integrity evidence is not execution",
                 yvex_integrity_command,yvex_integrity_help),
-    CMD("kv","runtime","mixed-transitional","KV diagnostics and reports.","yvex kv report --model TARGET",
-        "yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8",
-            "selector, behavior, diagnostic, transitional-layout",
-                "diagnostic/report-only KV unless subcommand proves more",yvex_kv_command,yvex_kv_help),
-    CMD("logits","runtime","diagnostic","Bounded diagnostic logits buffer.",
-        "yvex logits --model TARGET --backend cpu|cuda",
-            "yvex logits --model TARGET --backend cpu --tokens 0,1","selector, behavior, diagnostic",
-                "diagnostic logits only; no output-head runtime",yvex_logits_command,yvex_logits_help),
     CMD("materialize","artifact","mixed-transitional","Materialize selected weights.",
         "yvex materialize --model TARGET --backend cpu|cuda","yvex materialize --model TARGET --backend cpu",
             "selector, path, behavior, diagnostic","materialization is not execution",
@@ -183,12 +155,6 @@ static const yvex_cli_command yvex_commands[] = {
                 yvex_native_weights_command,yvex_native_weights_help),
     CMD("paths","operator","porcelain","Operator filesystem paths.","yvex paths [--create]","yvex paths",
         "path, behavior, diagnostic, transitional-layout","path reporting only",yvex_paths_command,yvex_paths_help),
-    CMD("plan","graph","diagnostic","Estimate-only execution plan.","yvex plan FILE [--backend cpu|cuda]",
-        "yvex plan FILE","selector, path, diagnostic","plan only; no execution",yvex_plan_command,yvex_plan_help),
-    CMD("prefill","runtime","diagnostic","Diagnostic prefill state summary.",
-        "yvex prefill --model TARGET --backend cpu|cuda",
-            "yvex prefill --model TARGET --backend cpu --tokens 0,1","selector, behavior, diagnostic",
-                "diagnostic prefill only; no full transformer prefill",yvex_prefill_command,yvex_prefill_help),
     CMD("prompt","diagnostic","diagnostic","Bounded prompt rendering.","yvex prompt FILE --user TEXT",
         "yvex prompt FILE --user hello","path, behavior, diagnostic","prompt diagnostic only",
             yvex_prompt_command,yvex_prompt_help),
@@ -203,18 +169,6 @@ static const yvex_cli_command yvex_commands[] = {
     CMD("qtype-support","source","diagnostic","Qtype support policy.","yvex qtype-support",
         "yvex qtype-support","diagnostic","support policy only; no per-role qtype completion",
             yvex_qtype_support_command,yvex_qtype_support_help),
-    CMD("run","runtime","diagnostic","Accepted prompt diagnostics.",
-        "yvex run --model FILE --backend cpu|cuda --prompt TEXT",
-            "yvex run --model TARGET --backend cpu --prompt hello","selector, path, behavior, diagnostic",
-                "accepted-only runtime shell; no generation",yvex_run_command,yvex_run_help),
-    CMD("sample","runtime","diagnostic","Bounded diagnostic token selection.",
-        "yvex sample --model TARGET --backend cpu|cuda",
-            "yvex sample --model TARGET --backend cpu --tokens 0,1","selector, behavior, diagnostic",
-                "diagnostic sampling only",yvex_sample_command,yvex_sample_help),
-    CMD("session","runtime","diagnostic","Engine/session diagnostic state.",
-        "yvex session TARGET [--backend cpu|cuda]","yvex session TARGET --backend cpu",
-            "selector, path, behavior, diagnostic","diagnostic session only; no generation",
-                yvex_session_command,yvex_session_help),
     CMD("source-manifest","source","mixed-transitional","Source provenance reports.",
         "yvex source-manifest create|report [options]",
             "yvex source-manifest report --family qwen --release v0.1.0",
@@ -240,6 +194,7 @@ static const yvex_cli_command yvex_commands[] = {
 };
 
 #undef CMD
+#undef OWNED_CMD
 
 static const unsigned long yvex_command_count = sizeof(yvex_commands) / sizeof(yvex_commands[0]);
 static const char *yvex_command_groups[] = {
@@ -400,6 +355,9 @@ static void command_version_help(FILE *fp)
 int main(int argc, char **argv)
 {
     const yvex_cli_command *command;
+    yvex_runtime_cleanup_lease *cleanup = NULL;
+    yvex_error cleanup_error;
+    int status, cleanup_status;
 
     if (argc == 1) {
         print_top_level_help(stdout);
@@ -414,7 +372,17 @@ int main(int argc, char **argv)
     }
     command = find_command(argv[1]);
     if (command) {
-        return command->handler(argc, argv);
+        status = command->owned_handler
+                     ? command->owned_handler(argc, argv, &cleanup)
+                     : command->handler(argc, argv);
+        yvex_error_clear(&cleanup_error);
+        cleanup_status = yvex_runtime_cleanup_lease_close(&cleanup, &cleanup_error);
+        if (cleanup_status != YVEX_OK) {
+            yvex_cli_out_writef(stderr, "yvex: runtime cleanup failed: %s\n",
+                                yvex_error_message(&cleanup_error));
+            return status ? status : 1;
+        }
+        return status;
     }
     yvex_cli_out_writef(stderr, "yvex: unknown command: %s\n", argv[1]);
     yvex_cli_out_writef(stderr, "Try 'yvex help' for usage.\n");

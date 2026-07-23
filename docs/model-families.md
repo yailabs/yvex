@@ -332,8 +332,10 @@ immutable runtime descriptor and attention plan. An independent full-equation
 reference, production CPU path, and device-complete GB10 CUDA path execute all
 43 main layers and 634 attention bindings. Rolling compression, history,
 deterministic top-k, masks, stable softmax, reductions, and output projection
-participate in the numerical result. This is complete attention execution, not
-persistent runtime KV, prefill, MoE, transformer composition, or generation.
+participate in the numerical result. This is complete attention execution with
+attention-local activation prefill/decode phases, not persistent runtime KV,
+tokenizer-backed full-model prompt prefill, model decode, MoE, transformer
+composition, or generation.
 
 ### DeepSeek Logical GGUF Mapping
 
@@ -709,6 +711,33 @@ policy, shared expert policy, and expert residency requirements.
 The descriptor does not execute the model. It defines the execution contract
 the runtime must satisfy.
 
+## Common Runtime Model
+
+Runtime lifecycle is common across families. One immutable runtime model binds
+an admitted artifact, a content-addressed runtime binding, imported descriptor
+and executable graph, read-only resident resources and granular backend
+capabilities. Mutable execution sessions own workspace, state transactions,
+cancellation and graph registries.
+
+The runtime model never selects family behavior from a target-name string. A
+typed runtime family adapter projects an already admitted family descriptor and
+sequence-mixer recipe into common runtime contracts. DeepSeek-V4-Flash is the
+first admitted adapter; it is not a separate engine or session implementation.
+
+The common sequence-mixer taxonomy separates mathematical semantics, state
+model, position/candidate policy, execution phase and backend mode. Current
+admission covers DeepSeek sliding-window, compressed-sparse and hierarchical
+compressed softmax attention. Dense MHA/GQA/MQA, MLA, cross-attention, DeltaNet,
+Kimi Delta Attention and Mamba remain independently unsupported or not admitted
+unless their exact family adapters and execution evidence exist.
+
+A runtime binding is the immutable bridge between compiler output and runtime
+open. It binds artifact, materialization, logical model, family adapter,
+runtime-numeric, runtime-descriptor, semantic-graph, executable-graph, qtype,
+residency and state-layout requirements. Runtime consumes that record without
+reopening source inventories or rebuilding Transformation IR, quantization or
+writer plans.
+
 ## Backend Lowering Contract
 
 Backend lowering is the translation from canonical roles and graph operations
@@ -982,7 +1011,8 @@ and expert execution participate in the actual runtime path.
 ## Family Adapter Contract
 
 A family adapter translates family-specific source and artifact facts into YVEX
-canonical runtime facts. The adapter owns interpretation, not execution.
+canonical compilation and runtime facts. It owns family interpretation and
+irreducible composition, not common lifecycle, memory or backend execution.
 
 It must define:
 
@@ -1010,13 +1040,25 @@ residency assumptions
 current blockers
 ```
 
+Its runtime projection additionally declares:
+
+```text
+adapter schema and identity
+sequence-mixer family and semantics
+semantic and executable graph identities
+attention/state requirements
+residency and workspace requirements
+backend/mode capability prerequisites
+```
+
 The adapter must expose blockers precisely. If a tensor is mapped but no graph
 operation can consume it, that is a graph blocker. If a graph operation exists
 but no backend kernel supports it, that is a backend blocker. If the tensor
 exists but cannot be placed, that is a residency blocker.
 
-A family adapter does not make a model supported. It makes support or refusal
-mechanically explainable.
+A family adapter does not make a model supported and does not create a family
+runtime. It makes support or refusal mechanically explainable through the one
+common runtime model/session boundary.
 
 ## Family Adapter Output Contract
 
@@ -1125,11 +1167,15 @@ This table records architectural scope, not delivery progress.
 
 | Family | v0.1.0 relation | Runtime class | Current support truth |
 | --- | --- | --- | --- |
-| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; canonical target id `deepseek4-v4-flash` | hybrid SWA/CSA/HCA decoder with mHC and MoE | typed architecture, exact 69,187-entry source coverage, sealed Transformation IR, complete quantization, two admitted complete artifacts, bounded materialization, an immutable runtime descriptor, and complete CPU/GB10 attention exist; persistent KV, prefill, MoE, transformer execution, and generation remain unsupported |
+| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; canonical target id `deepseek4-v4-flash` | hybrid SWA/CSA/HCA decoder with mHC and MoE | typed architecture, exact 69,187-entry source coverage, sealed Transformation IR, complete quantization, two admitted complete artifacts, bounded materialization, a content-addressed runtime binding, one common runtime model/session, resident attention weights, and complete CPU/GB10 attention exist; persistent KV, prefill, MoE, transformer execution, and generation remain unsupported |
 | Qwen | outside v0.1.0 | target-dependent dense or sparse/MoE | unsupported; existing source/report facts do not enter the release path |
 | Gemma | outside v0.1.0 | dense | unsupported; existing source/report facts do not enter the release path |
 | GLM | outside v0.1.0 source-pressure work | sparse/MoE | unsupported; source evidence is not runtime support |
 | Phi/Llama/Mistral | unscoped architecture examples | target-dependent | unsupported; no current release target |
+
+In this table, unsupported `prefill` means tokenizer-backed full-model prompt
+prefill; unsupported model decode is distinct from the admitted attention-local
+activation-chunk and one-token phases.
 
 Legacy bounded DeepSeek proof code and Qwen/Gemma report surfaces may remain
 until their owning rows remove or absorb them. They do not define family posture
@@ -1279,6 +1325,13 @@ artifact integrity
 The artifact-to-runtime path is the real support boundary. Everything before it
 is classification, planning, or selected proof.
 
+For the admitted DeepSeek attention plane, `prefill` and `decode` are runtime
+attention phases over activation tensors and explicit prior attention state.
+They are not tokenizer-backed prompt prefill or autoregressive model decode.
+CPU eager and CUDA eager/piecewise/full execution share the same immutable
+runtime model, resident weights and typed state-delta boundary. Persistent KV
+must implement that boundary before the promotion paths above advance.
+
 ## Family Classification Table
 
 This table records families as integration classes, not support claims.
@@ -1369,7 +1422,9 @@ This document does not claim support for any model family.
 
 It does not claim dense runtime support. It does not claim sparse or MoE runtime
 support. It does not claim tokenizer support, full artifact support, backend
-support, generation, serving, evaluation, or benchmark performance.
+support, generation, serving, evaluation, full-model benchmark performance, or
+release readiness. Runtime-local attention benchmark/profile evidence and its
+external identity-bound SVG charts do not change those claims.
 
 Family-specific non-claims:
 

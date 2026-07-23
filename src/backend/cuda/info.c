@@ -29,6 +29,22 @@ static int load_symbol(void *library, void **slot, const char *name, yvex_error 
     return YVEX_OK;
 }
 
+/* Purpose: resolve one optional Driver entrypoint without affecting eager admission.
+ * Inputs: Loaded Driver library, destination slot, primary symbol, and optional alias.
+ * Effects: Writes only the destination function slot.
+ * Failure: Missing optional symbols leave the slot null and preserve eager admission.
+ * Boundary: Optional CUDA Graph and asynchronous APIs never become base-context requirements. */
+static void load_optional_symbol(void *library,
+                                 void **slot,
+                                 const char *name,
+                                 const char *fallback)
+{
+    *slot = dlsym(library, name);
+    if (!*slot && fallback) {
+        *slot = dlsym(library, fallback);
+    }
+}
+
 #define YVEX_LOAD_REQUIRED(driver, field) \
     do { \
         if (load_symbol((driver)->library, (void **)&((driver)->field), #field, err) != YVEX_OK) { \
@@ -84,6 +100,62 @@ int yvex_cuda_driver_load(yvex_cuda_driver *driver, yvex_error *err)
     YVEX_LOAD_REQUIRED(driver, cuLaunchKernel);
     YVEX_LOAD_REQUIRED(driver, cuGetErrorName);
     YVEX_LOAD_REQUIRED(driver, cuGetErrorString);
+
+    load_optional_symbol(driver->library, (void **)&driver->cuStreamCreate,
+                         "cuStreamCreate", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuStreamDestroy_v2,
+                         "cuStreamDestroy_v2", "cuStreamDestroy");
+    load_optional_symbol(driver->library, (void **)&driver->cuStreamSynchronize,
+                         "cuStreamSynchronize", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuStreamBeginCapture_v2,
+                         "cuStreamBeginCapture_v2", "cuStreamBeginCapture");
+    load_optional_symbol(driver->library, (void **)&driver->cuStreamEndCapture,
+                         "cuStreamEndCapture", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuGraphGetNodes,
+                         "cuGraphGetNodes", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuGraphGetEdges_v2,
+                         "cuGraphGetEdges_v2", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuGraphNodeGetType,
+                         "cuGraphNodeGetType", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuGraphInstantiateWithFlags,
+                         "cuGraphInstantiateWithFlags", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuGraphUpload,
+                         "cuGraphUpload", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuGraphLaunch,
+                         "cuGraphLaunch", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuGraphExecUpdate_v2,
+                         "cuGraphExecUpdate_v2", NULL);
+    load_optional_symbol(
+        driver->library, (void **)&driver->cuGraphExecKernelNodeSetParams_v2,
+        "cuGraphExecKernelNodeSetParams_v2", "cuGraphExecKernelNodeSetParams");
+    load_optional_symbol(driver->library, (void **)&driver->cuGraphExecDestroy,
+                         "cuGraphExecDestroy", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuGraphDestroy,
+                         "cuGraphDestroy", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuMemAllocAsync,
+                         "cuMemAllocAsync", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuMemFreeAsync,
+                         "cuMemFreeAsync", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuMemcpyHtoDAsync_v2,
+                         "cuMemcpyHtoDAsync_v2", "cuMemcpyHtoDAsync");
+    load_optional_symbol(driver->library, (void **)&driver->cuMemcpyDtoHAsync_v2,
+                         "cuMemcpyDtoHAsync_v2", "cuMemcpyDtoHAsync");
+    load_optional_symbol(driver->library, (void **)&driver->cuMemsetD8Async,
+                         "cuMemsetD8Async", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuMemHostAlloc,
+                         "cuMemHostAlloc", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuMemFreeHost,
+                         "cuMemFreeHost", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuEventCreate,
+                         "cuEventCreate", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuEventRecord,
+                         "cuEventRecord", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuEventSynchronize,
+                         "cuEventSynchronize", NULL);
+    load_optional_symbol(driver->library, (void **)&driver->cuEventElapsedTime_v2,
+                         "cuEventElapsedTime_v2", "cuEventElapsedTime");
+    load_optional_symbol(driver->library, (void **)&driver->cuEventDestroy_v2,
+                         "cuEventDestroy_v2", "cuEventDestroy");
 
     yvex_error_clear(err);
     return YVEX_OK;
@@ -150,6 +222,8 @@ int yvex_cuda_refresh_memory_info(yvex_backend *backend, yvex_error *err)
                        "CUDA backend is required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "cuda.memory_info", err);
+    if (rc != YVEX_OK) return rc;
     rc = yvex_cuda_set_current(backend, "cuda.memory_info", err);
     if (rc != YVEX_OK) {
         return rc;

@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <yvex/internal/gguf.h>
+#include <yvex/internal/io.h>
 
 #define YVEX_GGUF_HEADER_BYTES 24u
 #define YVEX_GGUF_SUPPORTED_VERSION 3u
@@ -31,6 +32,180 @@ typedef struct {
     unsigned long long *slots;
     size_t capacity;
 } yvex_name_index;
+
+/* Purpose: open one bounded GGUF metadata JSON document.
+ * Inputs: caller-owned cursor, path, diagnostic context, and error sink.
+ * Effects: owns one bounded file buffer until close.
+ * Failure: typed I/O refusal leaves the cursor empty.
+ * Boundary: metadata parsing never reads tensor payload bytes. */
+int yvex_gguf_json_open(yvex_gguf_json *json,
+                        const char *path,
+                        const char *context,
+                        yvex_error *err)
+{
+    size_t length = 0u;
+
+    if (!json || !path || !context) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, context ? context : "gguf_json",
+                       "JSON cursor, path, and context are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(json, 0, sizeof(*json));
+    json->buffer = yvex_read_bounded_file(path, 16u * 1024u * 1024u, &length, err);
+    if (!json->buffer) {
+        if (yvex_error_code(err) == YVEX_OK)
+            yvex_error_setf(err, YVEX_ERR_IO, context, "cannot read JSON document: %s", path);
+        return yvex_error_code(err);
+    }
+    yvex_json_init(&json->cursor, json->buffer, length);
+    json->path = path;
+    json->context = context;
+    json->err = err;
+    return YVEX_OK;
+}
+
+/* Purpose: release one GGUF metadata JSON document cursor idempotently.
+ * Inputs: optional caller-owned cursor.
+ * Effects: frees its bounded buffer and clears every borrowed view.
+ * Failure: none; null and repeated close are safe.
+ * Boundary: closing metadata does not affect referenced payloads. */
+void yvex_gguf_json_close(yvex_gguf_json *json)
+{
+    if (!json) return;
+    free(json->buffer);
+    memset(json, 0, sizeof(*json));
+}
+
+/* Purpose: advance one GGUF metadata document past insignificant JSON whitespace. */
+static void gguf_json_space(yvex_gguf_json *json)
+{
+    yvex_json_space(&json->cursor);
+}
+
+/* Purpose: publish one document-specific GGUF JSON format refusal.
+ * Inputs: admitted cursor and exact immutable reason.
+ * Effects: replaces the typed error record.
+ * Failure: always returns the format-error status.
+ * Boundary: diagnostics never advance the parser cursor. */
+int yvex_gguf_json_fail(yvex_gguf_json *json, const char *message)
+{
+    yvex_error_setf(json->err, YVEX_ERR_FORMAT, json->context, "%s in %s", message, json->path);
+    return YVEX_ERR_FORMAT;
+}
+
+/* Purpose: consume whitespace followed by one required GGUF JSON structural byte.
+ * Inputs: admitted cursor and expected delimiter.
+ * Effects: advances exactly one byte after a match.
+ * Failure: format refusal preserves the unmatched cursor.
+ * Boundary: delimiter admission does not parse a value. */
+int yvex_gguf_json_expect(yvex_gguf_json *json, char expected)
+{
+    gguf_json_space(json);
+    if (json->cursor.cursor >= json->cursor.end || *json->cursor.cursor != expected)
+        return yvex_gguf_json_fail(json, "unexpected JSON token");
+    json->cursor.cursor++;
+    return YVEX_OK;
+}
+
+/* Purpose: allocate one bounded decoded GGUF metadata JSON string.
+ * Inputs: admitted cursor positioned at a string.
+ * Effects: advances the cursor and returns caller-owned decoded text.
+ * Failure: format refusal returns null without publishing text.
+ * Boundary: decoding does not interpret field semantics. */
+char *yvex_gguf_json_string(yvex_gguf_json *json)
+{
+    char *value = yvex_json_string_dup(&json->cursor, 16u * 1024u * 1024u);
+
+    if (!value) yvex_gguf_json_fail(json, "expected bounded JSON string");
+    return value;
+}
+
+/* Purpose: skip one complete unknown GGUF metadata JSON value.
+ * Inputs: admitted cursor positioned at a value.
+ * Effects: advances over exactly one bounded value.
+ * Failure: malformed grammar leaves a typed format refusal.
+ * Boundary: skipped values cannot affect known document facts. */
+int yvex_gguf_json_skip(yvex_gguf_json *json)
+{
+    return yvex_json_skip_value(&json->cursor)
+               ? YVEX_OK
+               : yvex_gguf_json_fail(json, "malformed JSON value");
+}
+
+/* Purpose: consume one object member prefix or its closing delimiter.
+ * Inputs: an object cursor plus caller-owned key and completion outputs.
+ * Effects: allocates one key only when a member is available.
+ * Failure: malformed key or separator publishes no owned key.
+ * Boundary: member iteration does not interpret field values. */
+int yvex_gguf_json_member(yvex_gguf_json *json, char **key, int *complete)
+{
+    int rc;
+
+    *key = NULL;
+    *complete = 0;
+    gguf_json_space(json);
+    if (json->cursor.cursor < json->cursor.end && *json->cursor.cursor == '}') {
+        json->cursor.cursor++;
+        *complete = 1;
+        return YVEX_OK;
+    }
+    *key = yvex_gguf_json_string(json);
+    if (!*key) return yvex_error_code(json->err);
+    rc = yvex_gguf_json_expect(json, ':');
+    if (rc != YVEX_OK) {
+        free(*key);
+        *key = NULL;
+    }
+    return rc;
+}
+
+/* Purpose: consume the optional comma admitted between parsed object members.
+ * Inputs: admitted object cursor.
+ * Effects: advances over whitespace and at most one comma.
+ * Failure: none; required delimiter checks remain with the enclosing parser.
+ * Boundary: compatibility grammar remains unchanged. */
+void yvex_gguf_json_optional_comma(yvex_gguf_json *json)
+{
+    gguf_json_space(json);
+    if (json->cursor.cursor < json->cursor.end && *json->cursor.cursor == ',')
+        json->cursor.cursor++;
+}
+
+/* Purpose: parse one ordered GGUF metadata array through a typed item callback.
+ * Inputs: document cursor, item parser, owner context, and exact refusal messages.
+ * Effects: advances through every complete item in document order.
+ * Failure: malformed delimiters or item refusal stop without publishing later items.
+ * Boundary: array mechanics do not interpret item semantics. */
+int yvex_gguf_json_array(yvex_gguf_json *json,
+                         yvex_gguf_json_array_item_fn item,
+                         void *context,
+                         const char *malformed,
+                         const char *unterminated)
+{
+    int rc = yvex_gguf_json_expect(json, '[');
+
+    if (rc != YVEX_OK) return rc;
+    gguf_json_space(json);
+    if (json->cursor.cursor < json->cursor.end && *json->cursor.cursor == ']') {
+        json->cursor.cursor++;
+        return YVEX_OK;
+    }
+    while (json->cursor.cursor < json->cursor.end) {
+        rc = item(json, context);
+        if (rc != YVEX_OK) return rc;
+        gguf_json_space(json);
+        if (json->cursor.cursor < json->cursor.end && *json->cursor.cursor == ',') {
+            json->cursor.cursor++;
+            continue;
+        }
+        if (json->cursor.cursor < json->cursor.end && *json->cursor.cursor == ']') {
+            json->cursor.cursor++;
+            return YVEX_OK;
+        }
+        return yvex_gguf_json_fail(json, malformed);
+    }
+    return yvex_gguf_json_fail(json, unterminated);
+}
 
 typedef struct {
     const yvex_artifact *artifact;
@@ -144,8 +319,7 @@ static int cursor_read_u32le(yvex_file_cursor *cur, unsigned int *out, const cha
     int rc = cursor_read_exact(cur, bytes, sizeof(bytes), where, field);
     if (rc != YVEX_OK)
         return rc;
-    *out = (unsigned int)bytes[0] | ((unsigned int)bytes[1] << 8) | ((unsigned int)bytes[2] << 16) |
-           ((unsigned int)bytes[3] << 24);
+    *out = gguf_u32le_load(bytes);
     return YVEX_OK;
 }
 
@@ -983,16 +1157,6 @@ static void gguf_clear(yvex_gguf *gguf) {
     gguf->tensor_index.slots = NULL;
 }
 
-/* Purpose: decode a fixed four-byte little-endian header field.
- * Inputs: at least four readable bytes.
- * Effects: returns the decoded integer without mutation.
- * Failure: caller owns buffer admission; this helper has no status result.
- * Boundary: fixed header decoding only. */
-static unsigned int decode_u32le(const unsigned char *bytes) {
-    return (unsigned int)bytes[0] | ((unsigned int)bytes[1] << 8) | ((unsigned int)bytes[2] << 16) |
-           ((unsigned int)bytes[3] << 24);
-}
-
 /* Purpose: decode a fixed eight-byte little-endian header field.
  * Inputs: at least eight readable bytes.
  * Effects: returns the decoded integer without mutation.
@@ -1027,12 +1191,12 @@ int yvex_gguf_read_header(const yvex_artifact *artifact, yvex_gguf_header *out, 
     rc = yvex_artifact_read_at(artifact, 0ull, bytes, sizeof(bytes), err);
     if (rc != YVEX_OK)
         return rc;
-    magic = decode_u32le(bytes);
+    magic = gguf_u32le_load(bytes);
     if (magic != YVEX_GGUF_MAGIC) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_gguf_read_header", "invalid GGUF magic");
         return YVEX_ERR_FORMAT;
     }
-    out->version = decode_u32le(bytes + 4u);
+    out->version = gguf_u32le_load(bytes + 4u);
     if (out->version != YVEX_GGUF_SUPPORTED_VERSION) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_gguf_read_header",
                        "unsupported GGUF container version");
@@ -1062,7 +1226,7 @@ int yvex_gguf_probe_file(const yvex_artifact *artifact, yvex_gguf_probe *out, yv
         rc = yvex_artifact_read_at(artifact, 0ull, bytes, sizeof(bytes), err);
         if (rc != YVEX_OK)
             return rc;
-        if (decode_u32le(bytes) != YVEX_GGUF_MAGIC) {
+        if (gguf_u32le_load(bytes) != YVEX_GGUF_MAGIC) {
             yvex_error_clear(err);
             return YVEX_OK;
         }
@@ -1220,15 +1384,6 @@ unsigned long long yvex_gguf_metadata_count(const yvex_gguf *gguf) {
  * Boundary: caller must not retain the key after close. */
 const char *yvex_gguf_metadata_key(const yvex_gguf *gguf, unsigned long long index) {
     return gguf && index < gguf->header.metadata_count ? gguf->metadata[index].key : NULL;
-}
-
-/* Purpose: return one metadata key's exact byte length by ordinal.
- * Inputs: immutable view and ordinal.
- * Effects: reads one length fact without mutation.
- * Failure: returns zero for absent view or out-of-range ordinal.
- * Boundary: does not infer null-terminated string semantics. */
-unsigned long long yvex_gguf_metadata_key_len(const yvex_gguf *gguf, unsigned long long index) {
-    return gguf && index < gguf->header.metadata_count ? gguf->metadata[index].key_len : 0ull;
 }
 
 /* Purpose: borrow one parsed metadata value by deterministic ordinal.

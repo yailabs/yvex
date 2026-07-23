@@ -1,6 +1,6 @@
 # YVEX System Target
 
-Date: 2026-07-14
+Date: 2026-07-22
 Status: filesystem and module ownership contract
 Authority: filesystem and module topology; current project state belongs only
 to `PROJECT.md`
@@ -18,13 +18,13 @@ src/cli/                 CLI dispatch, input, surfaces, render, IO
 src/source/              source manifests, provenance, inventory, payload trust/streaming
 src/model/target/        generic target catalogs, gates and qtype reports
 src/model/families/      family architecture, coverage and lowering recipes
-src/model/artifacts/     model registry/ref/gate/report/write ownership
-src/model/               dtype/model tables and runtime descriptor target
+src/model/artifacts/     model registry, reference, gate and write ownership
+src/model/               core model tables and artifact-neutral compilation
 src/gguf/                GGUF parser plus target ABI/writer/roundtrip owners
 src/artifact/            artifact IO, identity, integrity, descriptor gates
 src/graph/               graph core, plans, attention protocol/numeric owners and family recipes
 src/backend/             backend abstraction, compute admission and platform implementations
-src/generation/          legacy proof cells and future runtime implementation owners
+src/runtime/             common immutable model, binding, execution sessions, state and benchmark
 ```
 
 ## Target Tree Summary
@@ -35,9 +35,10 @@ input -> command -> surface router -> report/domain -> render -> cli/io
 file writer -> explicit local files only
 source facts -> architecture IR -> coverage -> contribution map -> transformation IR
 payload session -> bounded chunks -> transformation execution -> quantization
-GGUF ABI -> artifact descriptor -> materialization -> runtime descriptor
-runtime descriptor -> backend tensor binding -> graph bind -> graph execute
-graph execute -> prefill -> KV -> decode -> logits -> sampling -> generation
+GGUF ABI -> artifact descriptor -> materialization -> runtime descriptor -> runtime binding
+runtime binding -> immutable runtime model -> resident weights -> execution session
+execution session -> attention prefill/decode phases -> state delta
+persistent KV -> model prefill -> transformer -> logits -> sampling -> generation
 ```
 
 No domain file owns command grammar or operator byte output. No renderer owns
@@ -60,9 +61,10 @@ domain algorithms. No writer owns command output.
 | GGUF writer | deterministic v3 plan and transactional file writer complete | preserve checked layout and atomic publication for admitted profiles | see `PROJECT.md` |
 | Artifact emission | source-faithful and selected complete DeepSeek artifacts emitted outside the repository | preserve exact physical identities and complete metadata/tokenizer evidence | see `PROJECT.md` |
 | GGUF roundtrip | both complete artifacts pass native full-byte and pinned official-reader admission; the selected artifact has deterministic second-serialization proof | preserve reader/writer equivalence and corruption refusal | see `PROJECT.md` |
-| Materialization | family-neutral materialization and a full bounded selected-artifact walk are complete; device residency is not admitted | consume the selected artifact through explicit placement and backend-residency plans | see `PROJECT.md` |
-| Runtime descriptor | immutable DeepSeek descriptor binds all 1,360 admitted tensors and topology facts | feed admitted attention, then persistent KV and complete transformer composition | see `PROJECT.md` |
-| Graph/backend | complete DeepSeek SWA/CSA/HCA attention is admitted on CPU and GB10 CUDA over all 43 layers and 634 bindings | persistent KV, prefill, MoE, and backend-bound complete transformer path | see `PROJECT.md` |
+| Materialization | family-neutral materialization and a full bounded selected-artifact walk are complete; the runtime owns an attention-only resident pack, not full-model device residency | preserve exact physical bindings while later owners add KV, MoE and output-head residency | see `PROJECT.md` |
+| Runtime descriptor | immutable DeepSeek descriptor binds all 1,360 admitted tensors and topology facts and is consumed by the common attention runtime | feed persistent KV and complete transformer composition without rebuilding compiler truth | see `PROJECT.md` |
+| Graph/backend | complete DeepSeek SWA/CSA/HCA attention is admitted on CPU eager and GB10 CUDA eager/piecewise/full modes over all 43 layers and 634 bindings | persistent KV, model prefill, MoE, and backend-bound complete transformer path | see `PROJECT.md` |
+| Common runtime | content-addressed binding, immutable family-neutral model, session-owned state/workspace, resident attention weights, phase-aware dispatch, and CPU eager/CUDA eager-piecewise-full execution | preserve warm reuse and typed family adapters while persistent KV becomes the next consumer | see `PROJECT.md` |
 
 ## Owner Rules
 
@@ -98,11 +100,12 @@ domain algorithms. No writer owns command output.
 - The DeepSeek payload handoff owner binds every canonical mapping contribution
   to the common source payload index and plan. It proves coverage and pressure
   facts but performs no source transform, quantization, or artifact emission.
-- The future compilation owner consumes architecture, coverage, source
-  contribution, payload-range, physical-format, quantization, residency, and
-  backend requirements to construct immutable plans and variant identities. It
-  does not perform source IO, quantization, writing, allocation, kernel
-  execution, evaluation, or benchmarking.
+- The compilation owner consumes architecture, coverage, source-contribution,
+  and payload-range facts to construct immutable transformation plans and
+  derivation identities. Future physical-variant planning may consume typed
+  format, quantization, residency, backend, evaluation, and benchmark
+  requirements. Neither path performs source IO, quantization, writing,
+  allocation, kernel execution, evaluation, or benchmark measurement.
 - Transformation-plan construction is metadata-only. Transformation execution
   consumes exact payload chunks later, and quantization may not rediscover
   source names, roles, aggregation axes, or scaling companions.
@@ -120,12 +123,14 @@ domain algorithms. No writer owns command output.
 - Model artifacts own registry, references, gates, typed artifact reports, and
   explicit file writers.
 - GGUF owns container ABI, metadata ABI, tensor_info ABI, canonical qtype
-  identity and row-aware storage geometry,
-  ranges, reader, writer, roundtrip, emitted names, emitted layout, descriptor,
-  and GGUF reports.
+  identity and row-aware storage geometry, ranges, reader, writer, roundtrip,
+  emitted names, emitted layout, descriptor, and typed format facts.
 - Artifact owns YVEX artifact descriptors, materialization boundary, roundtrip
   gates, identity, integrity, and artifact reports.
-- Model owns runtime descriptor projection.
+- Model owns runtime-descriptor projection. Runtime owns descriptor import and
+  consumption, binding import, immutable model lifecycle, mutable sessions,
+  residency, state, and bounded benchmark execution; model families supply
+  typed family facts.
 - Graph owns bind plans and graph execution boundary.
 - Backend owns exact tensor, primitive, bundle, failure, cleanup, and qtype
   support/refusal facts.
@@ -151,42 +156,42 @@ domain algorithms. No writer owns command output.
 | --- | --- |
 | `include/yvex/qtype.h` | public qtype identity, admission, and typed storage result |
 | `include/yvex/artifact.h` | read-only file handle, optional explicit mapping, and exact positioned reads |
-| `include/yvex/gguf.h` | public reader budgets, typed parse result, immutable view, metrics, and accessors |
-| `include/yvex/gguf.h` | public typed global layout result, failure categories, byte totals, and IO metrics |
-| `src/gguf/core.c` | file-backed GGUF v3 decoding and owned metadata/tensor view |
-| `src/gguf/container.c` | magic/version/container ABI |
-| `src/gguf/core.c` | metadata key/value and tensor_info name/rank/type/shape ABI |
+| `include/yvex/gguf.h` | public reader budgets, typed parse/layout results, immutable view, failures, byte/IO metrics, and accessors |
+| `src/gguf/core.c` | file-backed GGUF v3 decoding, canonical container/metadata admission, and owned metadata/tensor view |
 | `src/gguf/qtype.c` | pinned qtype registry and row-aware tensor storage |
-| `src/gguf/layout_integrity.c` | canonical ordered layout, padding, aggregate span, tail, and drift admission |
-| `src/gguf/layout_integrity.c` | bounded local range arithmetic and canonical layout projection |
-| `src/gguf/reader.c` | reader policy, resource defaults, typed failure ABI, and report projection |
-| `src/gguf/writer.c` | writer refusal until writer row |
+| `src/gguf/layout_integrity.c` | bounded range arithmetic, canonical ordered layout, padding/span/tail/drift admission, and typed structural facts |
+| `src/gguf/reader.c` | reader policy, resource defaults, and typed failure ABI |
+| `src/gguf/writer.c` | transactional GGUF v3 writer planning and emission |
 | `src/artifact/roundtrip_gate.c` | writer-reader equivalence boundary |
 | `src/model/target/tensor_naming.c` | emitted GGUF tensor names and layout projection |
 | `src/gguf/descriptor.c` | GGUF descriptor facts |
-| `src/gguf/report.c` | typed GGUF report facts |
 
 ## Artifact And Materialization Target Map
 
 | Owner | Boundary |
 | --- | --- |
 | `src/artifact/descriptor.c` | YVEX artifact descriptor facts |
-| `src/artifact/materialize.c` | materialization refusal/input contract |
+| `src/artifact/materialize.c` | admitted artifact materialization, range binding, and lifecycle |
 | `src/artifact/roundtrip_gate.c` | emitted artifact roundtrip gate |
 
-## Runtime Descriptor Target Map
+## Runtime Target Map
 
 | Owner | Boundary |
 | --- | --- |
-| `src/runtime/descriptor.c` | artifact descriptor to runtime descriptor projection |
+| `src/runtime/descriptor.c` | runtime-descriptor ABI, deterministic import, validation, lookup, and typed result projection |
+| `src/runtime/core.c` | immutable runtime-model and mutable execution-session lifecycle |
+| `src/runtime/binding.c` | transactional, content-addressed runtime-binding serialization and admission |
+| `src/runtime/residency.c` | read-only resident attention-weight packs and generation-bound invalidation |
+| `src/runtime/graph.c` | execution descriptors, phase/mode dispatch, reusable workspace, and transactional publication |
+| `src/runtime/benchmark.c` | identity-bound runtime timing, baseline, CSV, and external SVG serialization |
 
 ## Model Architecture Target Map
 
 | Owner | Boundary |
 | --- | --- |
-| `src/model/families/deepseek_v4.c` | immutable architecture, exact source coverage, family Transformation IR construction, GGUF lowering and payload handoff for the admitted identity |
+| `src/model/families/deepseek_v4.c` | immutable architecture, exact source coverage, family Transformation IR construction, GGUF lowering, runtime-descriptor facts, and payload handoff for the admitted identity |
 | `include/yvex/internal/families/deepseek_v4.h` | private typed DeepSeek recipe ABI shared by production consumers |
-| `src/source/inventory.[ch]` | retained immutable source tensor snapshot, deterministic identity, indexed lookup, one-header-pass and zero-payload-read accounting |
+| `src/source/inventory.c` | retained immutable source tensor snapshot, deterministic identity, indexed lookup, one-header-pass and zero-payload-read accounting |
 | `src/model/target/tensor_collection.c` | release-target collection projection from canonical coverage; Qwen/Gemma evidence remains separate |
 | `src/model/target/missing_role.c` | release-target missing-role projection from canonical coverage |
 | `src/model/target/mapping_gate.c` | operational projection of the canonical mapping plan and payload-streaming handoff |
@@ -200,10 +205,12 @@ domain algorithms. No writer owns command output.
 | `src/graph/plan.c` | runtime descriptor roles, immutable graph plan and backend admission facts |
 | `src/graph/attention.c` | generic attention protocol, identity validation and transactional state boundary |
 | `src/graph/numeric.c` | reusable attention numerical operations without family policy |
+| `src/graph/state.c` | immutable prior-state views, candidate deltas, and transactional attention-state lifecycle |
 | `src/graph/families/deepseek_v4.c` | DeepSeek schedule, recurrence and CPU/CUDA operation composition |
 | `src/backend/core.c` | backend lifecycle, tensor binding and canonical qtype compute projection |
 | `src/backend/report.c` | typed device, context, bundle, exact-variant, and memory reports |
 | `src/backend/cuda/capability.c` | atomic generated-bundle admission, exact CUDA capability, launch/sync demotion, and cleanup failure |
+| `src/backend/cuda/graph.c` | CUDA launch-graph registry, capture, instantiate, replay, update, invalidation, and release |
 | `src/backend/cuda/ops.c` | validated host launch binding for admitted exact variants |
 | `src/backend/cuda/kernels.cu` | canonical bounded device kernels; generated bundle remains build output |
 | `src/backend/cuda/qtype.c` | CUDA qtype capability/refusal facts |
@@ -244,14 +251,16 @@ to `PROJECT.md`.
 
 ## Forbidden Claims
 
-This target does not claim any completed implementation state for:
+This target does not claim:
 
-- quantization
-- the GGUF writer
-- GGUF writer-to-reader equivalence
-- a complete or supported model artifact
-- artifact materialization
-- executable runtime descriptors
-- graph execution
-- full prefill, attention-backed KV, MoE, decode, logits, sampling, or generation
-- eval, benchmark, performance-rate evidence, or release readiness
+- persistent family-correct KV
+- tokenizer-backed prompt prefill
+- MoE or complete transformer execution
+- model decode, logits, sampling, or generation
+- evaluation or full-model benchmark results
+- supported-model or release readiness
+
+Attention-local prefill/decode phases operate on activation tensors and an
+explicit state view. Runtime-local benchmark/profile output and deterministic
+external SVG charts measure cold/warm latency plus identity-bound residency,
+transfer, allocation and graph-launch facts for that boundary only.

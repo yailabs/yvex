@@ -17,18 +17,6 @@
 #include <string.h>
 #include <time.h>
 
-/* Purpose: admit one payload stream entry while preserving uniqueness and checked capacity.
- * Inputs: typed source payload streaming arguments; borrowed inputs outlive the call.
- * Effects: mutates only explicit caller-owned source payload streaming state.
- * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
- * Boundary: streamed source bytes are not emitted artifact tensors. */
-static int payload_stream_add(unsigned long long *total, unsigned long long value) {
-    if (!total || ULLONG_MAX - *total < value)
-        return 0;
-    *total += value;
-    return 1;
-}
-
 /* Purpose: compare complete payload stream facts without mutating either input.
  * Inputs: typed source payload streaming arguments; borrowed inputs outlive the call.
  * Effects: mutates only explicit caller-owned source payload streaming state.
@@ -199,8 +187,9 @@ static int payload_stream_deliver(yvex_source_payload_session *session,
                                 0, err, YVEX_ERR_STATE, "source_payload_sink",
                                 "payload consumer refused a bounded chunk");
     }
-    if (!payload_stream_add(&result->delivered_logical_bytes,
-                            (unsigned long long)chunk->byte_length)) {
+    if (!yvex_core_u64_add(result->delivered_logical_bytes,
+                           (unsigned long long)chunk->byte_length,
+                           &result->delivered_logical_bytes)) {
                 return yvex_source_payload_refuse_at(
                     failure,
                     YVEX_SOURCE_PAYLOAD_FAILURE_RANGE_OVERFLOW,

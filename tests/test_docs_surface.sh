@@ -13,21 +13,21 @@ require_file() {
 require_text() {
   file=$1
   value=$2
-  grep -nF "$value" "$file" >/dev/null ||
+  grep -nF -- "$value" "$file" >/dev/null ||
     fail "$file missing required text: $value"
 }
 
 require_pattern() {
   file=$1
   pattern=$2
-  grep -nE "$pattern" "$file" >/dev/null ||
+  grep -nE -- "$pattern" "$file" >/dev/null ||
     fail "$file missing required pattern: $pattern"
 }
 
 reject_text() {
   file=$1
   value=$2
-  if grep -nF "$value" "$file" >/dev/null; then
+  if grep -nF -- "$value" "$file" >/dev/null; then
     fail "$file retains forbidden text: $value"
   fi
 }
@@ -127,6 +127,10 @@ require_text AGENTS.md 'Quantization is not a GGUF artifact.'
 require_text AGENTS.md 'tensor proof artifact'
 require_text AGENTS.md 'complete model artifact'
 require_text AGENTS.md 'supported model artifact'
+require_text AGENTS.md '### Commit format'
+require_text AGENTS.md 'New commits use Conventional Commits:'
+require_text AGENTS.md 'Runtime benchmark baselines, CSV/JSON evidence, and'
+require_text AGENTS.md 'generated charts are identity-bound external operator assets'
 
 require_pattern README.md '^# YVEX$'
 require_text README.md '[Project status](PROJECT.md)'
@@ -171,9 +175,16 @@ require_pattern README.md 'GGUF writer.*artifact admission.*complete'
 require_pattern README.md 'materialization.*runtime descriptor.*complete'
 require_pattern README.md 'DeepSeek SWA/CSA/HCA attention.*complete.*GB10 CUDA'
 require_text README.md './yvex graph attention execute'
+require_text README.md './yvex graph attention benchmark'
+require_text README.md '--chart "$EVIDENCE/full.svg"'
 require_text README.md '`canonical_attention_probe` at exact model geometry, not a prompt'
 require_text docs/contract.md '### DeepSeek Attention Operator Contract'
 require_text docs/api.md '### Internal DeepSeek Attention Operator Boundary'
+require_text docs/contract.md '## Benchmark And Profile Contract'
+require_text docs/api.md '## Benchmark And Chart Contract'
+require_text docs/runbooks/deepseek.md '--chart "$EVIDENCE/$MODE.svg"'
+require_text docs/runbooks/deepseek.md 'not full-model benchmark results.'
+require_text docs/runbooks/README.md 'production attention commands, benchmark charts, unsupported'
 require_pattern README.md 'Persistent KV.*active.*unsupported'
 require_pattern README.md 'Model-backed prefill.*transformer composition.*blocked'
 require_pattern README.md 'Autoregressive text generation.*unsupported'
@@ -225,6 +236,12 @@ reject_text README.md 'state of the art'
 
 if grep -nE 'V010\.|POST010\.' README.md; then
   fail 'README exposes internal project-control IDs'
+fi
+if grep -nE 'former .* owner|former CLI .* adapter' docs/topology-closure-audit.md; then
+  fail 'historical topology evidence lost its commit-qualified path'
+fi
+if test -n "$(git ls-files '*.yvex-benchmark' '*.svg')"; then
+  fail 'generated benchmark baseline or SVG is tracked'
 fi
 if grep -nE '(/home/|/Users/|\$HOME/)' README.md; then
   fail 'README exposes a local filesystem path'
@@ -279,7 +296,7 @@ for heading in \
   "## 10. Evidence Lanes" \
   "### 10.1 Decommission Obligations" \
   "## 11. Release Gates" \
-  "## 12. Reference Engineering Ownership" \
+  "## 12. Reference Architecture Ownership" \
   "## 13. Explicit Non-Claims" \
   "## 14. Version Sequence" \
   "## 15. Documentation Ownership And Cutover" \
@@ -301,18 +318,18 @@ require_text "$project" 'Manifest v3 binds every shard to its authoritative Hugg
 require_text "$project" 'all 69,187 contributions and mapping identity `1aecbbe25b04de0d` remain exact'
 require_text "$project" 'Production C contains no fallback PTX.'
 require_text "$project" 'A no-`nvcc` build refuses every kernel before dispatch'
-require_text "$project" 'Complete DeepSeek attention is admitted on the generated-bundle GB10 path'
+require_text "$project" 'Complete resident DeepSeek attention is admitted on the generated-bundle GB10 path'
 require_text "$project" '`attention_execution_supported=1`, `attention_cuda_execution_ready=1`, and'
-require_text "$project" 'Complete SWA/CSA/HCA attention is admitted on CPU and GB10 CUDA;'
+require_text "$project" 'complete DeepSeek SWA/CSA/HCA attention core and its immediate envelope are admitted'
 require_text "$project" 'a supported DeepSeek-V4-Flash model artifact; the admitted artifacts are consumed by attention but have not passed the complete runtime and release gates;'
-require_text "$project" 'backend/device residency or full DeepSeek DGX Spark residency;'
-require_text "$project" 'an execution-complete DeepSeek transformer runtime; attention is admitted but persistent KV, MoE, residual composition, and final norm are not;'
+require_text "$project" 'complete-model, MoE, output-head, or persistent-KV residency; only the admitted attention weight pack is resident;'
+require_text "$project" 'an execution-complete DeepSeek transformer runtime; the common attention runtime is admitted but persistent KV, FFN/MoE, complete layer composition, and final model output are not;'
 require_text "$project" 'Persistent KV, prefill, MoE, transformer'
 reject_text "$project" 'complete GGUF writer, complete-model emission, writer-reader roundtrip, or artifact support admission;'
 require_text "$project" '| Recovered IDs | 631 |'
 require_text "$project" '| Explicit new IDs | 50 |'
 require_text "$project" '| Canonical IDs | 681 |'
-require_text "$project" '| First-class milestones | 43 |'
+require_text "$project" '| First-class milestones | 44 |'
 require_text "$project" '### 3.5 Model Compilation Boundaries'
 require_text "$project" '| `TRACK.COMPILATION` | Artifact-neutral transformation IR'
 require_text "$project" 'verified source facts'
@@ -325,7 +342,7 @@ require_text "$project" 'streaming is build-time source access; it is not infere
 
 for category in \
   "Selected embedding and segment commands" \
-  "Bounded diagnostic prefill and KV" \
+  "Persistent KV" \
   "Diagnostic decode" \
   "Fixture logits and sampling" \
   "Bounded diagnostic generation" \
@@ -354,9 +371,16 @@ if grep -nE '^### 9\.[0-9]+ TRACK\.(ARCHITECTURE|EXECUTION|MODELS|PROJECT|CLAIMS
 fi
 
 reference=docs/reference-architecture.md
-require_text "$reference" 'This document owns the external engineering baseline.'
+require_pattern "$reference" '^# Reference Architecture for Verified Transformer Inference$'
+require_text "$reference" 'Status: implementation-agnostic research architecture'
+require_text "$reference" 'This document defines a conformance model.'
+require_text "$reference" 'This appendix is intentionally separated from the implementation-agnostic'
+require_text "$reference" 'It owns the external engineering baseline and maps'
 require_text "$reference" 'It does not own project'
 require_text "$reference" 'state, milestone state, dependency order, capability claims, or Active Next;'
+require_text "$reference" '## 21. Architectural Invariants'
+require_text "$reference" '## 22. Conformance Criteria'
+require_text "$reference" '## References'
 for source in \
   'vLLM architecture' \
   'vllm/model_executor/models/deepseek_v4.py' \
@@ -415,8 +439,8 @@ require_text docs/runbooks/deepseek.md '$HOME/lab/models/hf/deepseek/DeepSeek-V4
 require_text docs/runbooks/deepseek.md 'deepseek4-v4-flash'
 require_text docs/runbooks/deepseek.md 'There is no supported DeepSeek generation command to run yet.'
 require_text docs/runbooks/deepseek.md 'Current milestone state, dependencies, gates, and Active Next live only in'
-if grep -nE '\./yvex (generate|prefill|decode|logits|sample|graph|fullmodel|materialize)' docs/runbooks/deepseek.md; then
-  fail "DeepSeek runbook retains a selected or diagnostic execution lane"
+if grep -nE '\./yvex (generate|prefill|decode|logits|sample|fullmodel|materialize)' docs/runbooks/deepseek.md; then
+  fail "DeepSeek runbook retains an unsupported generation execution lane"
 fi
 
 require_text docs/system-target.md 'Authority: filesystem and module topology; current project state belongs only'
@@ -424,7 +448,7 @@ require_text docs/system-target.md '## GGUF Structural Reader Boundary'
 require_text docs/system-target.md '## GGUF Qtype ABI Boundary'
 require_text docs/system-target.md '| Transformation plan | sealed artifact-neutral IR binds all 69,187 source values to 1,360 terminal tensors'
 require_text docs/system-target.md '| GGUF writer | deterministic v3 plan and transactional file writer complete |'
-require_text docs/system-target.md '| Runtime descriptor | immutable DeepSeek descriptor binds all 1,360 admitted tensors and topology facts |'
+require_text docs/system-target.md '| Runtime descriptor | immutable DeepSeek descriptor binds all 1,360 admitted tensors and topology facts and is consumed by the common attention runtime |'
 reject_text docs/system-target.md '| Transformation plan | no artifact-neutral transformation IR exists |'
 require_text docs/topology-closure-audit.md 'point-in-time inventory'
 require_text docs/topology-closure-audit.md '`PROJECT.md` owns when each finding is removed or'
@@ -438,6 +462,12 @@ require_text docs/contract.md 'defined only by `PROJECT.md`.'
 require_text docs/contract.md '### Model Compilation Contract'
 require_text docs/contract.md 'Source payload streaming remains build-time access and does'
 require_text docs/api.md 'decommission obligations in `PROJECT.md`'
+for retired_header in runtime.h generation.h metrics.h; do
+  require_text docs/api.md "$retired_header"
+done
+require_text docs/api.md 'incompatible pre-release ABI cutover'
+require_text PROJECT.md '`V010.RUNTIME.1` is the completed cutover'
+require_text PROJECT.md 'Historical diagnostic runtime/generation state'
 
 repair_path=$(printf 'docs/%s' repair)
 if rg -nF "$repair_path" AGENTS.md PROJECT.md MODEL_ARTIFACTS.md docs tests Makefile; then

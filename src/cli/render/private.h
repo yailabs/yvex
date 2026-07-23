@@ -16,14 +16,12 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <yvex/internal/backend.h>
-#include <yvex/internal/generation.h>
 #include <yvex/internal/graph.h>
 #include <yvex/internal/model_artifact.h>
 #include <yvex/internal/model_target.h>
 #include <yvex/internal/runtime.h>
 #include <yvex/internal/source_payload.h>
 
-void yvex_cli_graph_guard_print(const yvex_cli_graph_guard_report *report);
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,6 +37,13 @@ typedef struct {
     FILE *fp;
     yvex_render_mode mode;
 } yvex_render_out;
+/* Purpose: read one immutable collection counter selected by a renderer table. */
+static inline unsigned long long cli_collection_value(
+    const yvex_fullmodel_collections *collections, size_t offset) {
+    if (!collections || offset == (size_t)-1)
+        return 0ull;
+    return *(const unsigned long long *)((const unsigned char *)collections + offset);
+}
 
 typedef yvex_cli_field_kind yvex_render_field_kind;
 typedef yvex_cli_field_spec yvex_render_field_spec;
@@ -122,47 +127,16 @@ int yvex_backend_render(FILE *fp, const yvex_backend_report *report);
 int yvex_backend_render_help(FILE *fp);
 int yvex_cuda_info_render_help(FILE *fp);
 
-/* Generate contract. */
-int yvex_generate_render(FILE *fp, yvex_generate_render_mode mode,
-                         const yvex_generation_report *report);
-int yvex_generate_render_normal(FILE *fp, const yvex_generation_report *report);
-int yvex_generate_render_audit(FILE *fp, const yvex_generation_report *report);
-int yvex_generate_render_trace(FILE *fp, const yvex_generation_report *report);
-int yvex_generate_render_help(FILE *fp);
-
-/* Generate Trace contract. */
-int yvex_generate_render_trace(FILE *fp, const yvex_generation_report *report);
-
 /* Graph contract. */
-int yvex_graph_render(FILE *fp, yvex_graph_report_mode mode, const yvex_graph_report *report);
 int yvex_graph_attention_render(FILE *fp, yvex_graph_report_mode mode,
                                 const yvex_graph_attention_operator_result *result);
 int yvex_graph_render_help(FILE *fp);
-
-/* Kv contract. */
-int yvex_kv_render(FILE *fp, yvex_kv_report_mode mode, const yvex_kv_report *report);
-int yvex_kv_render_normal(FILE *fp, const yvex_kv_report *report);
-int yvex_kv_render_table(FILE *fp, const yvex_kv_report *report);
-int yvex_kv_render_audit(FILE *fp, const yvex_kv_report *report);
-int yvex_kv_render_help(FILE *fp);
-
-/* Model Artifacts contract. */
-int yvex_model_artifacts_render(FILE *fp, yvex_model_artifact_render_mode mode,
-                                const yvex_model_artifact_report *report);
-int yvex_model_artifacts_render_help(FILE *fp);
 
 /* Model Target contract. */
 int yvex_model_target_render(FILE *fp, yvex_model_target_render_mode mode,
                              const yvex_model_target_report *report);
 int yvex_model_target_render_errors(FILE *fp, const yvex_model_target_report *report);
 int yvex_model_target_render_help(FILE *fp);
-
-/* Sampling contract. */
-int yvex_sampling_render(FILE *fp, yvex_sampling_report_mode mode,
-                         const yvex_sampling_report *report);
-int yvex_sampling_render_normal(FILE *fp, const yvex_sampling_report *report);
-int yvex_sampling_render_audit(FILE *fp, const yvex_sampling_report *report);
-int yvex_sampling_render_help(FILE *fp);
 
 /* Source contract. */
 int yvex_source_render(FILE *fp, yvex_source_render_mode mode, const yvex_source_report *report);

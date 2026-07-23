@@ -8,19 +8,20 @@
  * Effects: mutates only caller-owned outputs and explicitly owned rolling state.
  * Failure: typed validation or numeric refusal leaves capability flags unchanged. */
 #include "src/graph/private.h"
-
 typedef struct {
-    float *kv, *score;
     unsigned long long kv_stride, score_stride, kv_extent, score_extent;
+    float *kv, *score;
 } attention_rolling_output_storage;
-
+_Static_assert(sizeof(attention_rolling_output_storage) ==
+                   offsetof(yvex_attention_rolling_state_output, overlap) -
+                       offsetof(yvex_attention_rolling_state_output, kv_state_stride),
+               "rolling output storage must remain one contiguous representation");
 _Static_assert(sizeof(yvex_attention_rolling_state_view) ==
                    sizeof(yvex_attention_rolling_state_output),
                "rolling view/output layouts must remain representation-compatible");
 _Static_assert(offsetof(yvex_attention_rolling_state_view, attention_plan_identity) ==
                    offsetof(yvex_attention_rolling_state_output, attention_plan_identity),
                "rolling view/output identity offsets must remain compatible");
-
 /* Purpose: publish graph-attention failures that carry no tensor-specific identity. */
 static int attention_refuse(yvex_attention_failure *failure, yvex_attention_failure_code code,
                             unsigned long long layer, unsigned long long expected,
@@ -29,43 +30,19 @@ static int attention_refuse(yvex_attention_failure *failure, yvex_attention_fail
     return yvex_attention_reject(failure, code, NULL, layer, YVEX_TENSOR_ROLE_UNKNOWN, expected,
                                  actual, error, status, reason);
 }
-
-// Purpose: Return the admitted segment row fact without transferring ownership.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-const float *yvex_attention_segment_row(const float *history, unsigned long long history_count,
-                                        unsigned long long history_stride, const float *current,
-                                        unsigned long long current_count,
-                                        unsigned long long current_stride,
-                                        unsigned long long index) {
-    if (index < history_count)
-        return history + index * history_stride;
-    index -= history_count;
-    if (index >= current_count)
-        return NULL;
-    return current + index * current_stride;
+/* Purpose: publish one history refusal through the canonical graph-attention taxonomy.
+ * Inputs: optional layer, expected/actual facts, diagnostics, status, and stable reason.
+ * Effects: mutates only caller-owned failure diagnostics.
+ * Failure: returns the requested typed status without publishing capability.
+ * Boundary: applies to attention-local history and rolling state, never persistent KV. */
+static int attention_history_refuse(const yvex_attention_layer_plan *layer,
+                                    unsigned long long expected, unsigned long long actual,
+                                    yvex_attention_failure *failure, yvex_error *err,
+                                    yvex_status status, const char *reason) {
+    return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
+                            layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER, expected, actual,
+                            err, status, reason);
 }
-
-// Purpose: Return the admitted segment position fact without transferring ownership.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-unsigned long long yvex_attention_segment_position(const unsigned long long *history,
-                                                   unsigned long long history_count,
-                                                   const unsigned long long *current,
-                                                   unsigned long long current_count,
-                                                   unsigned long long index) {
-    if (index < history_count)
-        return history[index];
-    index -= history_count;
-    if (index >= current_count)
-        return ULLONG_MAX;
-    return current[index];
-}
-
 /* Purpose: sample one borrowed cooperative-cancellation predicate at a named safe point.
  * Inputs: optional borrowed predicate, layer identity, stable safe-point text, and diagnostics.
  * Effects: invokes only the caller-owned predicate and otherwise mutates diagnostics on refusal.
@@ -86,7 +63,6 @@ int yvex_attention_cancel_check(const yvex_attention_cancellation *cancellation,
                                 safe_point ? safe_point : "attention execution cancelled");
     return YVEX_OK;
 }
-
 /* Purpose: validate one family-selected attention class before payload access or state mutation.
  * Inputs: immutable layer geometry and the family's exact CSA/HCA compression ratios.
  * Effects: reads geometry only and clears no admitted identity or state.
@@ -109,7 +85,6 @@ int yvex_attention_class_geometry_validate(const yvex_attention_layer_plan *laye
                 yvex_core_u64_mul(layer->output_groups, output_group_width, &output_width) &&
                 output_width == query_width &&
                 yvex_core_u64_mul(layer->output_groups, layer->output_lora_rank, &output_low_width);
-
     if (!valid)
         return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION,
                                 layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER, 1ull, 0ull,
@@ -147,6 +122,283 @@ int yvex_attention_class_geometry_validate(const yvex_attention_layer_plan *laye
             layer->compression_ratio, err, YVEX_ERR_FORMAT,
             "attention class geometry does not match the family contract");
     return yvex_attention_accept(failure, err);
+}
+/* Purpose: release all generic attention-envelope coefficient storage idempotently.
+ * Inputs: optional workspace owned by one execution.
+ * Effects: frees only workspace-owned numeric arrays and clears the object.
+ * Failure: none.
+ * Boundary: does not release caller input, output, weights, or attention state. */
+void yvex_attention_envelope_workspace_release(yvex_attention_envelope_workspace *workspace)
+{
+    if (!workspace) return;
+    if (!workspace->workspace) {
+        free(workspace->residual);
+        free(workspace->linear_mixes);
+        free(workspace->scale);
+        free(workspace->base);
+        free(workspace->post);
+        free(workspace->combination);
+        free(workspace->norm_weights);
+    }
+    memset(workspace, 0, sizeof(*workspace));
+}
+/* Purpose: derive the exact generic mHC-envelope workspace element count.
+ * Inputs: immutable layer geometry and a nonzero token count.
+ * Effects: publishes one count only after every checked operation succeeds.
+ * Failure: malformed or overflowing geometry returns false without modifying the output.
+ * Boundary: excludes attention-core and transactional publication storage. */
+int yvex_attention_envelope_scratch_elements(const yvex_attention_layer_plan *layer,
+                                             unsigned long long token_count,
+                                             unsigned long long *elements)
+{
+    unsigned long long per_token, stream_square, total;
+    if (!layer || !token_count || !elements || !layer->residual_stream_count ||
+        !layer->mhc_mixing_rows ||
+        !yvex_core_u64_mul(layer->residual_stream_count, layer->residual_stream_count,
+                           &stream_square) ||
+        !yvex_core_u64_add(layer->mhc_mixing_rows, layer->residual_stream_count,
+                           &per_token) ||
+        !yvex_core_u64_add(per_token, stream_square, &per_token) ||
+        !yvex_core_u64_add(per_token, layer->residual_expanded_width, &per_token) ||
+        !yvex_core_u64_mul(per_token, token_count, &total) ||
+        !yvex_core_u64_add(total, layer->mhc_base_width, &total) ||
+        !yvex_core_u64_add(total, layer->mhc_scale_width, &total) ||
+        !yvex_core_u64_add(total, layer->attention_input_norm_width, &total))
+        return 0;
+    *elements = total;
+    return 1;
+}
+
+/* Purpose: reject one attention-envelope binding or geometry mismatch consistently. */
+static int attention_envelope_reject(const yvex_attention_layer_plan *layer,
+                                     yvex_attention_failure_code code,
+                                     const yvex_runtime_tensor_binding *binding,
+                                     yvex_tensor_role role, unsigned long long expected,
+                                     unsigned long long actual, yvex_attention_failure *failure,
+                                     yvex_error *err, yvex_status status, const char *reason)
+{
+    return yvex_attention_reject(
+        failure, code, binding, layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER, role,
+        expected, actual, err, status, reason);
+}
+
+/* Purpose: validate the four exact bindings consumed by the attention envelope.
+ * Inputs: family-projected layer geometry and borrowed runtime/materialization bindings.
+ * Effects: none.
+ * Failure: missing, non-F32 mHC, or shape-incompatible bindings refuse before payload access.
+ * Boundary: validates canonical runtime facts without reading payload or family source metadata. */
+static int attention_envelope_bindings_validate(
+    const yvex_attention_layer_plan *layer, const yvex_runtime_tensor_binding *function,
+    const yvex_runtime_tensor_binding *base, const yvex_runtime_tensor_binding *scale,
+    const yvex_runtime_tensor_binding *norm, yvex_attention_failure *failure, yvex_error *err)
+{
+    unsigned long long base_elements, scale_elements, norm_elements;
+
+    if (!layer || !function || !base || !scale || !norm || !function->binding || !base->binding ||
+        !scale->binding || !norm->binding)
+        return attention_envelope_reject(
+            layer, YVEX_DEEPSEEK_ATTENTION_FAILURE_MISSING_BINDING, NULL,
+            YVEX_TENSOR_ROLE_UNKNOWN, 4ull, 0ull, failure, err,
+            YVEX_ERR_FORMAT, "attention envelope requires mHC and input-norm bindings");
+    if (function->qtype != YVEX_GGUF_QTYPE_F32 || base->qtype != YVEX_GGUF_QTYPE_F32 ||
+        scale->qtype != YVEX_GGUF_QTYPE_F32)
+        return attention_envelope_reject(
+            layer, YVEX_DEEPSEEK_ATTENTION_FAILURE_QTYPE, function,
+            layer->mhc_function_role, YVEX_GGUF_QTYPE_F32,
+            function->qtype, failure, err, YVEX_ERR_UNSUPPORTED,
+            "attention envelope mHC bindings require exact F32 storage");
+    if (!yvex_core_u64_mul(base->binding->row_count, base->binding->row_width,
+                           &base_elements) ||
+        !yvex_core_u64_mul(scale->binding->row_count, scale->binding->row_width,
+                           &scale_elements) ||
+        !yvex_core_u64_mul(norm->binding->row_count, norm->binding->row_width,
+                           &norm_elements) ||
+        function->binding->row_count != layer->mhc_mixing_rows ||
+        function->binding->row_width != layer->mhc_mixing_columns ||
+        base_elements != layer->mhc_base_width ||
+        scale_elements != layer->mhc_scale_width ||
+        norm_elements != layer->attention_input_norm_width)
+        return attention_envelope_reject(
+            layer, YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION, function,
+            layer->mhc_function_role, layer->mhc_mixing_columns,
+            function->binding->row_width, failure, err, YVEX_ERR_FORMAT,
+            "attention envelope binding shapes do not match the immutable plan");
+    return YVEX_OK;
+}
+
+/* Purpose: resolve the exact envelope roles and then apply canonical binding validation. */
+static int attention_envelope_bind(
+    const yvex_runtime_descriptor *descriptor, const yvex_attention_layer_plan *layer,
+    const yvex_runtime_tensor_binding **function, const yvex_runtime_tensor_binding **base,
+    const yvex_runtime_tensor_binding **scale, const yvex_runtime_tensor_binding **norm,
+    yvex_attention_failure *failure, yvex_error *err)
+{
+    *function = yvex_attention_binding_find(descriptor, layer->mhc_function_role,
+                                            layer->layer_index);
+    *base = yvex_attention_binding_find(descriptor, layer->mhc_base_role, layer->layer_index);
+    *scale = yvex_attention_binding_find(descriptor, layer->mhc_scale_role, layer->layer_index);
+    *norm = yvex_attention_binding_find(descriptor, layer->attention_input_norm_role,
+                                        layer->layer_index);
+    return attention_envelope_bindings_validate(
+        layer, *function, *base, *scale, *norm, failure, err);
+}
+
+/* Purpose: prepare exact mHC ingress and attention input RMS normalization for one CPU chunk.
+ * Inputs: admitted materialization/descriptor, immutable layer plan, and expanded residual input.
+ * Effects: reads four bound tensors and owns coefficients until workspace release.
+ * Failure: any read, allocation, shape, or numeric refusal leaves no usable workspace.
+ * Boundary: produces attention-core input only; core equations and persistent state remain separate. */
+int yvex_attention_envelope_prepare(
+    yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
+    const yvex_attention_layer_plan *layer, const float *expanded_input,
+    unsigned long long token_count, unsigned long long input_stride, float *core_input,
+    unsigned long long core_stride, yvex_attention_envelope_workspace *workspace,
+    yvex_attention_scratch_budget *scratch, yvex_attention_cpu_result *result,
+    yvex_attention_failure *failure, yvex_error *err)
+{
+    const yvex_runtime_tensor_binding *function, *base, *scale, *norm;
+    yvex_attention_mhc_pre_args pre;
+    unsigned long long rows = 0ull, token;
+    int rc = YVEX_OK;
+
+    if (!session || !descriptor || !layer || !expanded_input || !token_count || !core_input ||
+        !workspace || workspace->linear_mixes || input_stride < layer->residual_expanded_width ||
+        core_stride < layer->hidden_dimension)
+        return attention_envelope_reject(
+            layer, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
+            YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, failure, err,
+            YVEX_ERR_INVALID_ARG, "attention envelope preparation arguments are invalid");
+    rc = attention_envelope_bind(descriptor, layer, &function, &base, &scale, &norm,
+                                 failure, err);
+    if (rc != YVEX_OK) return rc;
+    if (!yvex_core_u64_mul(token_count, layer->residual_expanded_width,
+                           &workspace->residual_elements) ||
+        !yvex_core_u64_mul(token_count, layer->mhc_mixing_rows, &workspace->mix_elements) ||
+        !yvex_core_u64_mul(token_count, layer->residual_stream_count,
+                           &workspace->post_elements) ||
+        !yvex_core_u64_mul(workspace->post_elements, layer->residual_stream_count,
+                           &workspace->combination_elements))
+        return attention_envelope_reject(
+            layer, YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH, function,
+            layer->mhc_function_role, ULLONG_MAX, token_count,
+            failure, err, YVEX_ERR_BOUNDS, "attention envelope workspace geometry overflowed");
+    workspace->residual_stride = layer->residual_expanded_width;
+    workspace->workspace = scratch ? scratch->workspace : NULL;
+    workspace->residual = yvex_attention_scratch_calloc(
+        scratch, workspace->residual_elements, sizeof(float));
+    workspace->linear_mixes = yvex_attention_scratch_calloc(
+        scratch, workspace->mix_elements, sizeof(float));
+    workspace->scale = yvex_attention_scratch_calloc(
+        scratch, layer->mhc_scale_width, sizeof(float));
+    workspace->base = yvex_attention_scratch_calloc(
+        scratch, layer->mhc_base_width, sizeof(float));
+    workspace->post = yvex_attention_scratch_calloc(
+        scratch, workspace->post_elements, sizeof(float));
+    workspace->combination = yvex_attention_scratch_calloc(
+        scratch, workspace->combination_elements, sizeof(float));
+    workspace->norm_weights = yvex_attention_scratch_calloc(
+        scratch, layer->attention_input_norm_width, sizeof(float));
+    if (!workspace->residual || !workspace->linear_mixes || !workspace->scale ||
+        !workspace->base || !workspace->post || !workspace->combination ||
+        !workspace->norm_weights) {
+        unsigned long long expected = workspace->mix_elements;
+        yvex_attention_envelope_workspace_release(workspace);
+        return attention_envelope_reject(
+            layer, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, function,
+            layer->mhc_function_role, expected, 0ull,
+            failure, err, YVEX_ERR_NOMEM, "attention envelope workspace allocation failed");
+    }
+    for (token = 0ull; token < token_count; ++token) {
+        const float *source = expanded_input + token * input_stride;
+        float *residual = workspace->residual + token * workspace->residual_stride;
+        unsigned long long lane;
+
+        memcpy(residual, source, (size_t)workspace->residual_stride * sizeof(*residual));
+        for (lane = 0ull; lane < workspace->residual_stride; ++lane)
+            if (!isfinite(residual[lane])) {
+                rc = attention_envelope_reject(
+                    layer, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
+                    YVEX_TENSOR_ROLE_UNKNOWN, 1ull, token, failure, err,
+                    YVEX_ERR_FORMAT, "attention envelope residual input is non-finite");
+                goto done;
+            }
+        if (!yvex_attention_compute_round(layer->compute_contract, residual,
+                                          workspace->residual_stride)) {
+            rc = attention_envelope_reject(
+                layer, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
+                YVEX_TENSOR_ROLE_UNKNOWN, workspace->residual_stride,
+                token, failure, err, YVEX_ERR_FORMAT,
+                "attention envelope residual input cannot reach its BF16 boundary");
+            goto done;
+        }
+    }
+    rc = yvex_attention_dot_batch(
+        session, function, 0ull, workspace->residual, token_count,
+        workspace->residual_stride,
+        layer->residual_expanded_width, layer->mhc_mixing_rows, workspace->linear_mixes,
+        layer->mhc_mixing_rows, &rows, scratch, result, failure, err);
+    if (rc == YVEX_OK && rows != layer->mhc_mixing_rows)
+        rc = attention_envelope_reject(
+            layer, YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION, function,
+            layer->mhc_function_role, layer->mhc_mixing_rows, rows,
+            failure, err, YVEX_ERR_FORMAT, "attention envelope mHC projection is incomplete");
+    if (rc == YVEX_OK)
+        rc = yvex_attention_decode_flat(session, scale, workspace->scale,
+                                        layer->mhc_scale_width, scratch, result, failure, err);
+    if (rc == YVEX_OK)
+        rc = yvex_attention_decode_flat(session, base, workspace->base,
+                                        layer->mhc_base_width, scratch, result, failure, err);
+    if (rc == YVEX_OK)
+        rc = yvex_attention_decode_flat(session, norm, workspace->norm_weights,
+                                        layer->attention_input_norm_width, scratch, result,
+                                        failure, err);
+    pre = (yvex_attention_mhc_pre_args){
+        layer, workspace->residual, workspace->linear_mixes, workspace->scale, workspace->base,
+        token_count, workspace->residual_stride, layer->mhc_mixing_rows, core_input, workspace->post,
+        workspace->combination, core_stride, layer->residual_stream_count,
+        layer->residual_stream_count * layer->residual_stream_count};
+    if (rc == YVEX_OK) rc = yvex_attention_mhc_pre(&pre, failure, err);
+    for (token = 0ull; rc == YVEX_OK && token < token_count; ++token) {
+        float *row = core_input + token * core_stride;
+        if (!yvex_attention_rms_norm(row, layer->attention_input_norm_width,
+                                     workspace->norm_weights, layer->rms_norm_epsilon) ||
+            !yvex_attention_compute_round(layer->compute_contract, row,
+                                          layer->attention_input_norm_width))
+            rc = attention_envelope_reject(
+                layer, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, norm,
+                layer->attention_input_norm_role,
+                layer->attention_input_norm_width, token, failure, err, YVEX_ERR_FORMAT,
+                "attention envelope input normalization failed");
+    }
+done:
+    if (rc != YVEX_OK) yvex_attention_envelope_workspace_release(workspace);
+    return rc;
+}
+
+/* Purpose: complete the immediate attention envelope from core output and prepared mHC state.
+ * Inputs: immutable layer, prepared coefficients, original residuals, and core output.
+ * Effects: writes only the explicit expanded output through generic mHC egress.
+ * Failure: malformed state or numeric failure publishes no success.
+ * Boundary: stops before FFN mHC ingress, FFN norm, MoE, or transformer composition. */
+int yvex_attention_envelope_finish(
+    const yvex_attention_layer_plan *layer, const float *core_output,
+    unsigned long long core_stride, unsigned long long token_count,
+    const yvex_attention_envelope_workspace *workspace, float *envelope_output,
+    unsigned long long envelope_stride, yvex_attention_failure *failure, yvex_error *err)
+{
+    yvex_attention_mhc_post_args post;
+
+    if (!workspace || !workspace->residual || !workspace->post || !workspace->combination)
+        return attention_envelope_reject(
+            layer, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
+            YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION, 1ull, 0ull,
+            failure, err, YVEX_ERR_STATE, "attention envelope coefficients are absent");
+    post = (yvex_attention_mhc_post_args){
+        layer, core_output, workspace->residual, workspace->post, workspace->combination,
+        token_count, core_stride, workspace->residual_stride, layer->residual_stream_count,
+        layer->residual_stream_count * layer->residual_stream_count,
+        envelope_output, envelope_stride};
+    return yvex_attention_mhc_post(&post, failure, err);
 }
 
 // Purpose: Return the admitted csa select fact without transferring ownership.
@@ -195,10 +447,11 @@ int yvex_attention_csa_select(
                                 scratch ? (unsigned long long)scratch->live_bytes : 0ull, err,
                                 YVEX_ERR_BOUNDS,
                                 "CSA selection exceeds the attention scratch budget");
-    scores = (float *)yvex_attention_calloc_array(total, sizeof(*scores));
-    ordinals = (unsigned long long *)yvex_attention_calloc_array(total, sizeof(*ordinals));
-    valid_indexes =
-        (unsigned long long *)yvex_attention_calloc_array(total, sizeof(*valid_indexes));
+    scores = (float *)yvex_attention_scratch_calloc(scratch, total, sizeof(*scores));
+    ordinals = (unsigned long long *)yvex_attention_scratch_calloc(
+        scratch, total, sizeof(*ordinals));
+    valid_indexes = (unsigned long long *)yvex_attention_scratch_calloc(
+        scratch, total, sizeof(*valid_indexes));
     if (!scores || !ordinals || !valid_indexes) {
         rc = attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION,
                               layer->layer_index, total, 0ull, err, YVEX_ERR_NOMEM,
@@ -206,10 +459,10 @@ int yvex_attention_csa_select(
         goto cleanup;
     }
     for (candidate = 0ull; candidate < total; ++candidate) {
-        const float *key = yvex_attention_segment_row(
+        const float *key = attention_segment_row(
             history->indexer_kv, history->indexer_entry_count, history->indexer_kv_stride,
             current_indexer, current_indexer_count, current_indexer_stride, candidate);
-        unsigned long long position = yvex_attention_segment_position(
+        unsigned long long position = attention_segment_position(
             history->indexer_positions, history->indexer_entry_count, current_indexer_positions,
             current_indexer_count, candidate);
         unsigned long long head;
@@ -244,7 +497,7 @@ int yvex_attention_csa_select(
         valid++;
     }
     if (valid) {
-        unsigned long long ranked_capacity = yvex_attention_min_u64(valid, layer->sparse_topk.k);
+        unsigned long long ranked_capacity = attention_min_u64(valid, layer->sparse_topk.k);
         unsigned long long index;
 
         if (!yvex_attention_scratch_reserve(scratch, ranked_capacity, sizeof(*ranked),
@@ -256,8 +509,8 @@ int yvex_attention_csa_select(
                                   "CSA ranked selection exceeds the attention scratch budget");
             goto cleanup;
         }
-        ranked =
-            (unsigned long long *)yvex_attention_calloc_array(ranked_capacity, sizeof(*ranked));
+        ranked = (unsigned long long *)yvex_attention_scratch_calloc(
+            scratch, ranked_capacity, sizeof(*ranked));
         if (!ranked) {
             rc = attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION,
                                   layer->layer_index, valid, 0ull, err, YVEX_ERR_NOMEM,
@@ -265,7 +518,7 @@ int yvex_attention_csa_select(
             goto cleanup;
         }
         rc = yvex_attention_topk_select(scores, ordinals, valid, layer->sparse_topk.k, ranked,
-                                        &ranked_count, failure, err);
+                                        &ranked_count, scratch, failure, err);
         if (rc != YVEX_OK)
             goto cleanup;
         for (index = 0ull; index < ranked_count; ++index)
@@ -274,12 +527,12 @@ int yvex_attention_csa_select(
     }
     *valid_count = valid;
 cleanup:
-    free(ranked);
-    free(scores);
-    free(ordinals);
-    free(valid_indexes);
-    yvex_attention_scratch_release(scratch, ranked_reserved);
-    yvex_attention_scratch_release(scratch, base_reserved);
+    yvex_attention_scratch_free(scratch, ranked);
+    yvex_attention_scratch_free(scratch, scores);
+    yvex_attention_scratch_free(scratch, ordinals);
+    yvex_attention_scratch_free(scratch, valid_indexes);
+    attention_scratch_release(scratch, ranked_reserved);
+    attention_scratch_release(scratch, base_reserved);
     return rc;
 
 numeric:
@@ -386,51 +639,45 @@ static int attention_rolling_state_validate(const yvex_attention_layer_plan *lay
     int overlap, rotated;
 
     if (!layer || !state || !state->present)
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER, 1ull, 0ull,
-                                err, YVEX_ERR_INVALID_ARG,
-                                "DeepSeek attention rolling state is missing");
+        return attention_history_refuse(layer, 1ull, 0ull, failure, err, YVEX_ERR_INVALID_ARG,
+                                        "DeepSeek attention rolling state is missing");
     if (!yvex_attention_rolling_geometry(layer, kind, &ratio, &head_dim, &state_width, &state_slots,
                                          &overlap, &rotated))
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, 1ull, 0ull, err, YVEX_ERR_UNSUPPORTED,
-                                "DeepSeek attention rolling state is not used by this class");
+        return attention_history_refuse(
+            layer, 1ull, 0ull, failure, err, YVEX_ERR_UNSUPPORTED,
+            "DeepSeek attention rolling state is not used by this class");
     if (state->schema_version != YVEX_DEEPSEEK_ATTENTION_ROLLING_STATE_SCHEMA_V1 ||
         state->kind != kind || state->attention_class != layer->attention_class ||
         state->layer_index != layer->layer_index || state->ratio != ratio ||
         state->head_dimension != head_dim || state->state_width != state_width ||
         state->state_slots != state_slots || state->overlap != overlap || state->rotated != rotated)
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, state_width, state->state_width, err,
-                                YVEX_ERR_FORMAT,
-                                "DeepSeek attention rolling state identity or geometry mismatch");
+        return attention_history_refuse(
+            layer, state_width, state->state_width, failure, err, YVEX_ERR_FORMAT,
+            "DeepSeek attention rolling state identity or geometry mismatch");
     if (state->cursor >= ratio || state->previous_fill > ratio || state->current_fill > ratio ||
         (!overlap && state->previous_fill))
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, ratio, state->cursor, err, YVEX_ERR_BOUNDS,
-                                "DeepSeek attention rolling state cursor or fill is invalid");
+        return attention_history_refuse(
+            layer, ratio, state->cursor, failure, err, YVEX_ERR_BOUNDS,
+            "DeepSeek attention rolling state cursor or fill is invalid");
     expected_cursor = state->next_token_position % ratio;
     expected_previous_fill = overlap && state->next_token_position >= ratio ? ratio : 0ull;
     if (state->cursor != expected_cursor || state->current_fill != expected_cursor ||
         state->previous_fill != expected_previous_fill)
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, expected_cursor, state->cursor, err,
-                                YVEX_ERR_STATE,
-                                "DeepSeek attention rolling state does not match its token position");
+        return attention_history_refuse(
+            layer, expected_cursor, state->cursor, failure, err, YVEX_ERR_STATE,
+            "DeepSeek attention rolling state does not match its token position");
     if (state->kv_state_stride < state_width || state->score_state_stride < state_width ||
         !state->kv_state || !state->score_state)
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, state_width, state->kv_state_stride, err,
-                                YVEX_ERR_FORMAT,
-                                "DeepSeek attention rolling state storage is incomplete");
+        return attention_history_refuse(
+            layer, state_width, state->kv_state_stride, failure, err, YVEX_ERR_FORMAT,
+            "DeepSeek attention rolling state storage is incomplete");
     if (!yvex_core_u64_mul(state_slots, state->kv_state_stride, &required_extent) ||
         state->kv_state_extent < required_extent ||
         !yvex_core_u64_mul(state_slots, state->score_state_stride, &required_extent) ||
         state->score_state_extent < required_extent)
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, state_slots, state->kv_state_extent, err,
-                                YVEX_ERR_BOUNDS,
-                                "DeepSeek attention rolling state extent is too small");
+        return attention_history_refuse(
+            layer, state_slots, state->kv_state_extent, failure, err, YVEX_ERR_BOUNDS,
+            "DeepSeek attention rolling state extent is too small");
     if (!attention_rolling_active_values_are_finite(
             state->kv_state, state->score_state, state->kv_state_stride, state->score_state_stride,
             head_dim, ratio, state->previous_fill, state->current_fill, overlap))
@@ -452,42 +699,39 @@ static int attention_history_positions_validate(const yvex_attention_layer_plan 
     unsigned long long expected_compressed = 0ull;
 
     if (!layer->sliding_window)
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, 1ull, 0ull, err, YVEX_ERR_FORMAT,
-                                "DeepSeek attention history requires a nonzero sliding window");
+        return attention_history_refuse(
+            layer, 1ull, 0ull, failure, err, YVEX_ERR_FORMAT,
+            "DeepSeek attention history requires a nonzero sliding window");
     local_capacity = layer->sliding_window - 1ull;
     expected_local = history->token_count < local_capacity ? history->token_count : local_capacity;
     local_start = history->token_count - expected_local;
     if (history->local_tail_count != expected_local)
-        return attention_refuse(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, layer->layer_index, expected_local,
-            history->local_tail_count, err,
+        return attention_history_refuse(
+            layer, expected_local, history->local_tail_count, failure, err,
             history->local_tail_count > expected_local ? YVEX_ERR_BOUNDS : YVEX_ERR_FORMAT,
             "DeepSeek attention local history is not the complete window suffix");
     if (layer->attention_class != YVEX_ATTENTION_CLASS_SWA) {
         if (!layer->compression_ratio)
-            return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                    layer->layer_index, 1ull, 0ull, err, YVEX_ERR_FORMAT,
-                                    "compressed attention history requires a nonzero ratio");
+            return attention_history_refuse(
+                layer, 1ull, 0ull, failure, err, YVEX_ERR_FORMAT,
+                "compressed attention history requires a nonzero ratio");
         expected_compressed = history->token_count / layer->compression_ratio;
     }
     if (history->compressed_entry_count != expected_compressed)
-        return attention_refuse(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, layer->layer_index,
-            expected_compressed, history->compressed_entry_count, err, YVEX_ERR_FORMAT,
+        return attention_history_refuse(
+            layer, expected_compressed, history->compressed_entry_count, failure, err,
+            YVEX_ERR_FORMAT,
             "DeepSeek attention compressed history is not the complete prefix");
     if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
         history->indexer_entry_count != expected_compressed)
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, expected_compressed,
-                                history->indexer_entry_count, err, YVEX_ERR_FORMAT,
-                                "CSA indexer history is not the complete compressed prefix");
+        return attention_history_refuse(
+            layer, expected_compressed, history->indexer_entry_count, failure, err,
+            YVEX_ERR_FORMAT, "CSA indexer history is not the complete compressed prefix");
     for (i = 0ull; i < expected_local; ++i) {
         if (history->local_positions[i] != local_start + i)
-            return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                    layer->layer_index, local_start + i,
-                                    history->local_positions[i], err, YVEX_ERR_FORMAT,
-                                    "local history does not contain the exact contiguous suffix");
+            return attention_history_refuse(
+                layer, local_start + i, history->local_positions[i], failure, err,
+                YVEX_ERR_FORMAT, "local history does not contain the exact contiguous suffix");
     }
     for (i = 0ull; i < expected_compressed; ++i) {
         unsigned long long expected_position = 0ull;
@@ -496,9 +740,9 @@ static int attention_history_positions_validate(const yvex_attention_layer_plan 
             history->compressed_positions[i] != expected_position ||
             (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
              history->indexer_positions[i] != expected_position))
-            return attention_refuse(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, layer->layer_index,
-                expected_position, history->compressed_positions[i], err, YVEX_ERR_FORMAT,
+            return attention_history_refuse(
+                layer, expected_position, history->compressed_positions[i], failure, err,
+                YVEX_ERR_FORMAT,
                 "compressed history does not contain every completed ratio group");
     }
     return yvex_attention_accept(failure, err);
@@ -592,7 +836,7 @@ int yvex_attention_rolling_state_step_cpu(const yvex_attention_layer_plan *layer
     unsigned long long ratio, head_dim, state_width, state_slots, required_extent;
     unsigned long long slot, lane;
     attention_rolling_output_storage storage;
-    int overlap, rotated, should_emit, rc;
+    int overlap, rotated, rc;
 
     if (emitted)
         *emitted = 0;
@@ -605,35 +849,24 @@ int yvex_attention_rolling_state_step_cpu(const yvex_attention_layer_plan *layer
                                 layer->layer_index, 1ull, 0ull, err, YVEX_ERR_INVALID_ARG,
                                 "DeepSeek attention rolling transition requires token vectors and output state");
     if (before->next_token_position == ULLONG_MAX)
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, ULLONG_MAX, before->next_token_position, err,
-                                YVEX_ERR_BOUNDS,
-                                "DeepSeek attention rolling token position would overflow");
+        return attention_history_refuse(
+            layer, ULLONG_MAX, before->next_token_position, failure, err, YVEX_ERR_BOUNDS,
+            "DeepSeek attention rolling token position would overflow");
     if (!yvex_attention_rolling_geometry(layer, before->kind, &ratio, &head_dim, &state_width,
                                          &state_slots, &overlap, &rotated))
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, 1ull, 0ull, err, YVEX_ERR_UNSUPPORTED,
-                                "DeepSeek attention rolling transition lacks geometry");
+        return attention_history_refuse(
+            layer, 1ull, 0ull, failure, err, YVEX_ERR_UNSUPPORTED,
+            "DeepSeek attention rolling transition lacks geometry");
     if (!after->kv_state || !after->score_state || after->kv_state_stride < state_width ||
         after->score_state_stride < state_width ||
         !yvex_core_u64_mul(state_slots, after->kv_state_stride, &required_extent) ||
         after->kv_state_extent < required_extent ||
         !yvex_core_u64_mul(state_slots, after->score_state_stride, &required_extent) ||
         after->score_state_extent < required_extent)
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, state_width,
-                                after ? after->kv_state_stride : 0ull, err, YVEX_ERR_FORMAT,
-                                "DeepSeek attention rolling output storage is incomplete");
-    if (before->cursor != (before->next_token_position % ratio))
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, before->next_token_position % ratio,
-                                before->cursor, err, YVEX_ERR_STATE,
-                                "DeepSeek attention rolling cursor is stale for token position");
-    storage = (attention_rolling_output_storage){after->kv_state, after->score_state,
-                                                 after->kv_state_stride,
-                                                 after->score_state_stride,
-                                                 after->kv_state_extent,
-                                                 after->score_state_extent};
+        return attention_history_refuse(
+            layer, state_width, after ? after->kv_state_stride : 0ull, failure, err,
+            YVEX_ERR_FORMAT, "DeepSeek attention rolling output storage is incomplete");
+    memcpy(&storage, &after->kv_state_stride, sizeof(storage));
     for (lane = 0ull; lane < state_width; ++lane) {
         if (!isfinite(token_kv[lane]) || !isfinite(token_score[lane]) || !isfinite(ape_row[lane]))
             return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC,
@@ -643,12 +876,7 @@ int yvex_attention_rolling_state_step_cpu(const yvex_attention_layer_plan *layer
     memcpy(after, before, sizeof(*after));
     after->next_token_position = before->next_token_position + 1ull;
     after->cursor = (before->cursor + 1ull) % ratio;
-    after->kv_state = storage.kv;
-    after->score_state = storage.score;
-    after->kv_state_stride = storage.kv_stride;
-    after->score_state_stride = storage.score_stride;
-    after->kv_state_extent = storage.kv_extent;
-    after->score_state_extent = storage.score_extent;
+    memcpy(&after->kv_state_stride, &storage, sizeof(storage));
     attention_rolling_copy_state(before, after);
     slot = overlap ? ratio + before->cursor : before->cursor;
     for (lane = 0ull; lane < state_width; ++lane) {
@@ -658,8 +886,7 @@ int yvex_attention_rolling_state_step_cpu(const yvex_attention_layer_plan *layer
     }
     if (after->current_fill < before->cursor + 1ull)
         after->current_fill = before->cursor + 1ull;
-    should_emit = ((before->next_token_position + 1ull) % ratio) == 0ull;
-    if (should_emit) {
+    if (after->cursor == 0ull) {
         if (!attention_rolling_emit(after, head_dim, ratio, overlap, compressed_out,
                                     compressed_out_count))
             return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC,
@@ -703,63 +930,52 @@ int yvex_attention_history_validate(const yvex_attention_layer_plan *layer,
                                 err, YVEX_ERR_INVALID_ARG,
                                 "DeepSeek attention history validation requires layer and history");
     if (!history->immutable)
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, 1ull, 0ull, err, YVEX_ERR_STATE,
-                                "DeepSeek attention history view must be immutable");
+        return attention_history_refuse(layer, 1ull, 0ull, failure, err, YVEX_ERR_STATE,
+                                        "DeepSeek attention history view must be immutable");
     if (history->local_tail_count && (!history->local_kv || !history->local_positions ||
                                       history->local_kv_stride < layer->head_dimension))
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, layer->head_dimension,
-                                history->local_kv_stride, err, YVEX_ERR_FORMAT,
-                                "DeepSeek attention local history lacks raw KV storage");
+        return attention_history_refuse(
+            layer, layer->head_dimension, history->local_kv_stride, failure, err, YVEX_ERR_FORMAT,
+            "DeepSeek attention local history lacks raw KV storage");
     if (history->compressed_entry_count &&
         (!history->compressed_kv || !history->compressed_positions ||
          history->compressed_kv_stride < layer->head_dimension))
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, layer->head_dimension,
-                                history->compressed_kv_stride, err, YVEX_ERR_FORMAT,
-                                "DeepSeek attention compressed history lacks KV storage");
+        return attention_history_refuse(
+            layer, layer->head_dimension, history->compressed_kv_stride, failure, err,
+            YVEX_ERR_FORMAT, "DeepSeek attention compressed history lacks KV storage");
     if (history->indexer_entry_count &&
         (!history->indexer_kv || !history->indexer_positions ||
          history->indexer_kv_stride < layer->indexer_head_dimension))
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, layer->indexer_head_dimension,
-                                history->indexer_kv_stride, err, YVEX_ERR_FORMAT,
-                                "DeepSeek attention indexer history lacks KV storage");
-    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA &&
-        history->compressed_entry_count != history->indexer_entry_count)
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, history->compressed_entry_count,
-                                history->indexer_entry_count, err, YVEX_ERR_FORMAT,
-                                "CSA compressed and indexer history cardinalities differ");
+        return attention_history_refuse(
+            layer, layer->indexer_head_dimension, history->indexer_kv_stride, failure, err,
+            YVEX_ERR_FORMAT, "DeepSeek attention indexer history lacks KV storage");
     rc = attention_history_positions_validate(layer, history, failure, err);
     if (rc != YVEX_OK)
         return rc;
     if (layer->attention_class == YVEX_ATTENTION_CLASS_SWA &&
         (history->compressed_entry_count || history->indexer_entry_count))
-        return attention_refuse(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, layer->layer_index, 0ull,
-            history->compressed_entry_count + history->indexer_entry_count, err, YVEX_ERR_FORMAT,
+        return attention_history_refuse(
+            layer, 0ull, history->compressed_entry_count + history->indexer_entry_count, failure,
+            err, YVEX_ERR_FORMAT,
             "SWA history may not carry compressed or indexer entries");
     if (layer->attention_class == YVEX_ATTENTION_CLASS_HCA && history->indexer_entry_count)
-        return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                layer->layer_index, 0ull, history->indexer_entry_count, err,
-                                YVEX_ERR_FORMAT, "HCA history may not carry CSA indexer entries");
+        return attention_history_refuse(
+            layer, 0ull, history->indexer_entry_count, failure, err, YVEX_ERR_FORMAT,
+            "HCA history may not carry CSA indexer entries");
     if (layer->attention_class == YVEX_ATTENTION_CLASS_SWA) {
         if (history->main_rolling_state.present || history->indexer_rolling_state.present)
-            return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                    layer->layer_index, 0ull, 1ull, err, YVEX_ERR_FORMAT,
-                                    "SWA history may not carry compressor rolling state");
+            return attention_history_refuse(
+                layer, 0ull, 1ull, failure, err, YVEX_ERR_FORMAT,
+                "SWA history may not carry compressor rolling state");
     } else {
         rc = attention_rolling_state_validate(layer, &history->main_rolling_state,
                                               YVEX_DEEPSEEK_ATTENTION_ROLLING_MAIN, failure, err);
         if (rc != YVEX_OK)
             return rc;
         if (history->main_rolling_state.next_token_position != history->token_count)
-            return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                    layer->layer_index, history->token_count,
-                                    history->main_rolling_state.next_token_position, err,
-                                    YVEX_ERR_STATE, "main rolling state token position is stale");
+            return attention_history_refuse(
+                layer, history->token_count, history->main_rolling_state.next_token_position,
+                failure, err, YVEX_ERR_STATE, "main rolling state token position is stale");
         if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
             rc = attention_rolling_state_validate(layer, &history->indexer_rolling_state,
                                                   YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER, failure,
@@ -767,14 +983,13 @@ int yvex_attention_history_validate(const yvex_attention_layer_plan *layer,
             if (rc != YVEX_OK)
                 return rc;
             if (history->indexer_rolling_state.next_token_position != history->token_count)
-                return attention_refuse(
-                    failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, layer->layer_index,
-                    history->token_count, history->indexer_rolling_state.next_token_position, err,
-                    YVEX_ERR_STATE, "indexer rolling state token position is stale");
+                return attention_history_refuse(
+                    layer, history->token_count, history->indexer_rolling_state.next_token_position,
+                    failure, err, YVEX_ERR_STATE, "indexer rolling state token position is stale");
         } else if (history->indexer_rolling_state.present) {
-            return attention_refuse(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
-                                    layer->layer_index, 0ull, 1ull, err, YVEX_ERR_FORMAT,
-                                    "HCA history may not carry indexer rolling state");
+            return attention_history_refuse(
+                layer, 0ull, 1ull, failure, err, YVEX_ERR_FORMAT,
+                "HCA history may not carry indexer rolling state");
         }
     }
     return yvex_attention_accept(failure, err);
@@ -784,40 +999,6 @@ int yvex_attention_history_validate(const yvex_attention_layer_plan *layer,
 
 #define YVEX_ATTENTION_PI 3.14159265358979323846264338327950288
 
-// Purpose: Return the admitted attention-execution capability fact.
-// Inputs: Optional writable refusal-reason slot.
-// Effects: Clears the refusal reason and performs no I/O.
-// Failure: This immutable capability query cannot fail.
-// Boundary: Admits attention only; persistent KV and generation remain separate.
-
-int yvex_attention_execute_supported(const char **reason) {
-    if (reason)
-        *reason = NULL;
-    return 1;
-}
-
-/* Purpose: refuse the retired controlled-layer fixture at the graph boundary.
- * Inputs: optional fixture options and writable result/error facts.
- * Effects: clears the result and publishes an explicit unsupported status.
- * Failure: always returns the stable unsupported exit status.
- * Boundary: historical fixtures are test-owned and never runtime evidence. */
-int yvex_graph_execute_layer_fixture(const yvex_graph_layer_fixture_options *options,
-                                     yvex_graph_layer_fixture_result *out, yvex_error *err) {
-    (void)options;
-    if (out) {
-        memset(out, 0, sizeof(*out));
-        out->status = "fixture-retired";
-        out->graph_integrity_guard = "refused";
-        out->graph_execution_phase = "admission";
-        out->backend_status = "not-opened";
-        out->backend_op_status = "unsupported";
-        out->cleanup_status = "not-needed";
-    }
-    yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "graph_layer_fixture",
-                   "controlled layer fixtures are test-owned");
-    return yvex_graph_exit_for_status(YVEX_ERR_UNSUPPORTED);
-}
-
 enum {
     ATTENTION_PROBE_CPU = 0,
     ATTENTION_PROBE_CUDA,
@@ -825,33 +1006,21 @@ enum {
     ATTENTION_PROBE_CLASS_COUNT = 3,
     ATTENTION_PROBE_OWNED_BUFFERS = 6
 };
-
-enum {
-    ATTENTION_COMPARISON_SCHEMA_VERSION = 2,
-    ATTENTION_COMPARISON_TOLERANCE_NUMERATOR = 5,
-    ATTENTION_COMPARISON_TOLERANCE_DENOMINATOR = 10000,
-    ATTENTION_COMPARISON_SCALE_MAX_ABS = 1,
-    ATTENTION_COMPARISON_NONFINITE_REFUSE = 1,
-    ATTENTION_COMPARISON_RMSE_FINITE_ONLY = 1,
-    ATTENTION_COMPARISON_BITWISE_MEMCMP = 1,
-    ATTENTION_COMPARISON_BITWISE_NOT_REQUIRED = 0,
-    ATTENTION_COMPARISON_TRAVERSAL_LAYER_COORDINATE = 1
-};
-
 static const double attention_comparison_absolute_tolerance = 5.0e-4;
 static const double attention_comparison_relative_tolerance = 5.0e-4;
-
-static const char *const probe_output_domains[] = {"yvex.attention.operator.cpu.output.v1",
-                                                   "yvex.attention.operator.cuda.output.v1"};
-
-typedef struct {
+static const char *const probe_output_domain = "yvex.attention.tensor-output.v2";
+static const char *const probe_state_domain = "yvex.attention.state-delta.v2";
+struct yvex_attention_probe_history {
     yvex_attention_history_view view;
     void *owned[ATTENTION_PROBE_OWNED_BUFFERS];
-} attention_probe_history;
-
+    yvex_attention_workspace *workspace;
+};
 typedef struct {
-    yvex_sha256 hash[ATTENTION_PROBE_BACKEND_COUNT];
+    yvex_sha256 output_hash[ATTENTION_PROBE_BACKEND_COUNT];
+    yvex_sha256 state_hash[ATTENTION_PROBE_BACKEND_COUNT];
+    yvex_sha256 committed_state_hash;
     double squared_error;
+    int committed_state_available;
 } attention_probe_metrics;
 
 typedef struct {
@@ -865,17 +1034,19 @@ typedef struct {
 } attention_probe_identity_field;
 
 static const attention_probe_identity_field attention_comparison_identity_fields[] = {
-    {NULL, ATTENTION_COMPARISON_SCHEMA_VERSION},
-    {NULL, ATTENTION_COMPARISON_TOLERANCE_NUMERATOR},
-    {NULL, ATTENTION_COMPARISON_TOLERANCE_DENOMINATOR},
-    {NULL, ATTENTION_COMPARISON_SCALE_MAX_ABS},
-    {NULL, ATTENTION_COMPARISON_NONFINITE_REFUSE},
-    {NULL, ATTENTION_COMPARISON_RMSE_FINITE_ONLY},
-    {NULL, ATTENTION_COMPARISON_BITWISE_MEMCMP},
-    {NULL, ATTENTION_COMPARISON_BITWISE_NOT_REQUIRED},
-    {NULL, ATTENTION_COMPARISON_TRAVERSAL_LAYER_COORDINATE},
+    {NULL, 3ull},     /* schema */
+    {NULL, 5ull},     /* tolerance numerator */
+    {NULL, 10000ull}, /* tolerance denominator */
+    {NULL, 1ull},     /* scale by max(abs(reference), 1) */
+    {NULL, 1ull},     /* reject non-finite values */
+    {NULL, 1ull},     /* RMSE covers finite values only */
+    {NULL, 1ull},     /* observe bitwise equality with memcmp */
+    {NULL, 0ull},     /* bitwise equality is not required */
+    {NULL, 1ull},     /* traverse layer then coordinate */
+    {NULL, 1ull},     /* compare state-delta numerics */
+    {NULL, 1ull},     /* require exact state geometry */
+    {NULL, 1ull},     /* require exact state positions */
 };
-
 typedef struct {
     unsigned long long count;
     unsigned long long width;
@@ -883,7 +1054,6 @@ typedef struct {
     unsigned long long extent;
     float *values;
 } attention_probe_segment;
-
 typedef struct {
     const yvex_graph_family_api *family;
     const yvex_attention_plan *plan;
@@ -898,7 +1068,6 @@ typedef struct {
     yvex_backend *cuda_backend;
     attention_probe_metrics metrics;
 } attention_probe_context;
-
 /* Purpose: publish one canonical probe failure without repeating its owner tag. */
 static int attention_probe_fail(yvex_error *error, int code, const char *message) {
     yvex_error_set(error, code, "attention.probe", message);
@@ -910,13 +1079,14 @@ static int attention_probe_fail(yvex_error *error, int code, const char *message
  * Effects: frees and clears all buffers.
  * Failure: cannot fail.
  * Boundary: never releases borrowed graph state. */
-static void attention_probe_history_release(attention_probe_history *history) {
+static void attention_probe_history_release(yvex_attention_probe_history *history) {
     unsigned int index;
 
     if (!history)
         return;
-    for (index = 0u; index < ATTENTION_PROBE_OWNED_BUFFERS; ++index)
-        free(history->owned[index]);
+    if (!history->workspace)
+        for (index = 0u; index < ATTENTION_PROBE_OWNED_BUFFERS; ++index)
+            free(history->owned[index]);
     memset(history, 0, sizeof(*history));
 }
 
@@ -927,10 +1097,23 @@ static void attention_probe_fill(float *values, float *scores, unsigned long lon
 
     for (index = 0ull; index < count; ++index) {
         unsigned long long code = (index * 37ull + seed * 19ull + 11ull) % 257ull;
-        values[index] = (float)((long long)code - 128ll) / 256.0f;
+        values[index] = (float)((long long)code - 128ll) / 257.0f;
         if (scores)
             scores[index] = values[index] * 0.5f;
     }
+}
+
+/* Purpose: allocate one zeroed probe span from the prepared workspace or owned heap.
+ * Inputs: optional borrowed workspace, nonzero element count, and element width.
+ * Effects: advances workspace ownership or creates one caller-released heap span.
+ * Failure: returns null when the requested span is empty or cannot be allocated.
+ * Boundary: probe storage only; no persistent state or capability is published. */
+static void *attention_probe_calloc(yvex_attention_workspace *workspace,
+                                    unsigned long long count, size_t width) {
+    if (!count)
+        return NULL;
+    return workspace ? yvex_attention_workspace_calloc(workspace, count, width)
+                     : yvex_attention_calloc_array(count, width);
 }
 
 /* Purpose: construct one release-safe rolling state at its exact probe position.
@@ -938,7 +1121,7 @@ static void attention_probe_fill(float *values, float *scores, unsigned long lon
  * Effects: records both allocations in the history envelope.
  * Failure: allocation or geometry refusal remains release-safe.
  * Boundary: bounded attention history, never persistent KV. */
-static int attention_probe_rolling_init(attention_probe_history *history,
+static int attention_probe_rolling_init(yvex_attention_probe_history *history,
                                         yvex_attention_rolling_state_view *state,
                                         const yvex_attention_layer_plan *layer,
                                         yvex_attention_rolling_kind kind,
@@ -951,8 +1134,9 @@ static int attention_probe_rolling_init(attention_probe_history *history,
     int rc;
 
     yvex_error_clear(&error);
-    rc = yvex_attention_rolling_storage_allocate(layer, kind, position, &values, &scores, state,
-                                                 &failure, &error);
+    rc = yvex_attention_rolling_storage_acquire(
+        layer, kind, position, history->workspace, &values, &scores, state,
+        &failure, &error);
     history->owned[owner] = values;
     history->owned[owner + 1u] = scores;
     if (rc != YVEX_OK)
@@ -968,8 +1152,7 @@ static int attention_probe_rolling_init(attention_probe_history *history,
     if (extent)
         attention_probe_fill(values + offset, scores + offset, extent,
                              layer->layer_index + (unsigned long long)kind + 31ull);
-    (void)snprintf(state->attention_plan_identity, sizeof(state->attention_plan_identity), "%s",
-                   plan_identity);
+    yvex_core_text_copy(state->attention_plan_identity, sizeof(state->attention_plan_identity), plan_identity);
     return 1;
 }
 
@@ -978,7 +1161,7 @@ static int attention_probe_rolling_init(attention_probe_history *history,
  * Effects: owns all backing arrays in one release envelope.
  * Failure: checked geometry or allocation refusal publishes no view.
  * Boundary: deterministic attention probe state, not prompt, prefill, or KV. */
-static int attention_probe_history_init(attention_probe_history *history,
+static int attention_probe_history_init(yvex_attention_probe_history *history,
                                         const yvex_attention_layer_plan *layer,
                                         const yvex_attention_summary *summary,
                                         unsigned long long position) {
@@ -991,7 +1174,11 @@ static int attention_probe_history_init(attention_probe_history *history,
     if (!history || !layer || !summary || !layer->sliding_window ||
         (layer->attention_class != YVEX_ATTENTION_CLASS_SWA && !layer->compression_ratio))
         return 0;
-    memset(history, 0, sizeof(*history));
+    {
+        yvex_attention_workspace *workspace = history->workspace;
+        memset(history, 0, sizeof(*history));
+        history->workspace = workspace;
+    }
     segments[0] = (attention_probe_segment){
         position < layer->sliding_window - 1ull ? position : layer->sliding_window - 1ull,
         layer->head_dimension, layer->layer_index + 101ull, 0ull, NULL};
@@ -1011,9 +1198,8 @@ static int attention_probe_history_init(attention_probe_history *history,
     }
     if (!yvex_core_u64_add(segments[0].count, segments[1].count, &position_count))
         return 0;
-    values = value_count ? yvex_attention_calloc_array(value_count, sizeof(*values)) : NULL;
-    positions =
-        position_count ? yvex_attention_calloc_array(position_count, sizeof(*positions)) : NULL;
+    values = attention_probe_calloc(history->workspace, value_count, sizeof(*values));
+    positions = attention_probe_calloc(history->workspace, position_count, sizeof(*positions));
     history->owned[0] = values;
     history->owned[1] = positions;
     if ((value_count && !values) || (position_count && !positions))
@@ -1062,7 +1248,42 @@ fail:
     attention_probe_history_release(history);
     return 0;
 }
-
+/* Purpose: construct one independently owned canonical probe history for a runtime seed.
+ * Inputs: admitted layer, plan summary, and causal position.
+ * Effects: publishes an independently owned immutable typed view.
+ * Failure: invalid geometry or allocation leaves outputs empty.
+ * Boundary: canonical probe data is not persistent KV. */
+int yvex_attention_probe_history_open(yvex_attention_probe_history **out,
+    const yvex_attention_layer_plan *layer, const yvex_attention_summary *summary,
+    unsigned long long position, const yvex_attention_history_view **view, yvex_error *err) {
+    yvex_attention_probe_history *history;
+    if (out) *out = NULL;
+    if (view) *view = NULL;
+    if (!out || !view || !position || !layer || !summary)
+        return attention_probe_fail(err, YVEX_ERR_INVALID_ARG,
+                                    "canonical probe history arguments are invalid");
+    history = calloc(1u, sizeof(*history));
+    if (!history || !attention_probe_history_init(history, layer, summary, position)) {
+        free(history);
+        return attention_probe_fail(err, YVEX_ERR_NOMEM,
+                                    "canonical probe history allocation failed");
+    }
+    *out = history;
+    *view = &history->view;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+/* Purpose: release exactly one graph-owned canonical probe history envelope.
+ * Inputs: optional address of a graph-owned history handle.
+ * Effects: releases owned arrays and clears the caller handle.
+ * Failure: absent and already closed handles are accepted.
+ * Boundary: no runtime-session or persistent-KV storage is released. */
+void yvex_attention_probe_history_close(yvex_attention_probe_history **history) {
+    if (!history || !*history) return;
+    attention_probe_history_release(*history);
+    free(*history);
+    *history = NULL;
+}
 /* Purpose: encode one ordered evidence identity without hashing object memory.
  * Inputs: domain, canonical text/number fields, and fixed-width output.
  * Effects: writes only the resulting SHA-256 text.
@@ -1097,30 +1318,70 @@ static int attention_probe_identity(const char *domain,
  * Boundary: the identity describes numeric admission, not backend output bytes. */
 static int attention_probe_comparison_identity(char output[YVEX_SHA256_HEX_CAP]) {
     return attention_probe_identity(
-        "yvex.attention.cpu-cuda.comparison.v2", attention_comparison_identity_fields,
+        "yvex.attention.cpu-cuda.comparison.v3", attention_comparison_identity_fields,
         sizeof(attention_comparison_identity_fields) /
             sizeof(attention_comparison_identity_fields[0]),
         output);
 }
 
-/* Purpose: hash one publication.
- * Inputs: hash state and complete output.
- * Effects: advances the digest.
- * Failure: rejects incomplete geometry or hashing.
- * Boundary: produces execution evidence only. */
-static int attention_probe_hash_output(yvex_sha256 *hash,
-                                       const yvex_attention_publication *output) {
-    unsigned long long count;
-    size_t bytes;
+/* Purpose: compare one CPU/CUDA publication pair and aggregate probe evidence.
+ * Inputs: two complete publications, canonical tolerances, aggregate result, and error sum.
+ * Effects: advances comparison metrics only after output and state comparisons complete.
+ * Failure: malformed geometry or state preserves all caller-owned aggregate fields.
+ * Boundary: probe aggregation only; canonical numeric comparison remains graph-owned. */
+static int attention_probe_pair_compare(const yvex_attention_publication *cpu,
+                                        const yvex_attention_publication *cuda,
+                                        double absolute_tolerance, double relative_tolerance,
+                                        yvex_attention_probe_result *result,
+                                        double *squared_error, yvex_error *err) {
+    yvex_graph_f32_comparison output;
+    yvex_attention_state_comparison state;
+    unsigned long long cpu_width, cuda_width, count;
+    const float *cpu_values, *cuda_values;
+    int rc;
 
-    return output && output->complete && output->output &&
-           yvex_core_u64_mul(output->token_count, output->hidden_width, &count) &&
-           yvex_attention_checked_size(count, sizeof(float), &bytes) &&
-           yvex_sha256_update_u64(hash, output->layer_index) &&
-           yvex_sha256_update_u64(hash, output->attention_class) &&
-           yvex_sha256_update_u64(hash, output->token_position) &&
-           yvex_sha256_update_u64(hash, output->token_count) &&
-           yvex_sha256_update(hash, output->output, bytes);
+    if (!cpu || !cuda || !result || !squared_error) return YVEX_ERR_INVALID_ARG;
+    cpu_width = cpu->envelope_output_width ? cpu->envelope_output_width : cpu->hidden_width;
+    cuda_width = cuda->envelope_output_width ? cuda->envelope_output_width : cuda->hidden_width;
+    cpu_values = cpu->envelope_output_width ? cpu->envelope_output : cpu->output;
+    cuda_values = cuda->envelope_output_width ? cuda->envelope_output : cuda->output;
+    if (!cpu_values || !cuda_values || !cpu->complete || !cuda->complete ||
+        cpu->layer_index != cuda->layer_index || cpu->token_count != cuda->token_count ||
+        cpu_width != cuda_width || !yvex_core_u64_mul(cpu->token_count, cpu_width, &count))
+        return YVEX_ERR_FORMAT;
+    rc = yvex_graph_f32_compare(cpu_values, cuda_values, count, absolute_tolerance,
+                                relative_tolerance, &output, err);
+    if (rc == YVEX_OK)
+        rc = yvex_attention_state_compare(cpu, cuda, absolute_tolerance, relative_tolerance,
+                                          &state, err);
+    if (rc != YVEX_OK) return rc;
+    result->bitwise_equality_observed &=
+        output.bitwise_equal && state.geometry_equal && state.numeric.bitwise_equal;
+    result->comparison_maximum_absolute_error =
+        fmax(result->comparison_maximum_absolute_error,
+             fmax(output.maximum_absolute_error, state.numeric.maximum_absolute_error));
+    result->comparison_maximum_relative_error =
+        fmax(result->comparison_maximum_relative_error,
+             fmax(output.maximum_relative_error, state.numeric.maximum_relative_error));
+    *squared_error += output.squared_error_sum + state.numeric.squared_error_sum;
+    result->comparison_output_values += count;
+    result->comparison_state_values += state.numeric.value_count;
+    result->comparison_values += count + state.numeric.value_count;
+    result->comparison_finite_values +=
+        output.finite_value_count + state.numeric.finite_value_count;
+    result->comparison_nonfinite_values +=
+        output.nonfinite_value_count + state.numeric.nonfinite_value_count;
+    if (result->first_failing_layer == YVEX_ATTENTION_NO_LAYER && !output.within_tolerance) {
+        result->first_failing_layer = cpu->layer_index;
+        result->first_failing_coordinate = output.first_failing_coordinate;
+        result->first_failing_stage = YVEX_ATTENTION_COMPARISON_STAGE_OUTPUT;
+    } else if (result->first_failing_layer == YVEX_ATTENTION_NO_LAYER &&
+               (!state.geometry_equal || !state.numeric.within_tolerance)) {
+        result->first_failing_layer = cpu->layer_index;
+        result->first_failing_coordinate = state.numeric.first_failing_coordinate;
+        result->first_failing_stage = state.first_failing_stage;
+    }
+    return result->first_failing_layer == cpu->layer_index ? YVEX_ERR_FORMAT : YVEX_OK;
 }
 
 /* Purpose: compare one CPU/CUDA output pair.
@@ -1131,35 +1392,58 @@ static int attention_probe_hash_output(yvex_sha256 *hash,
 static int attention_probe_compare(attention_probe_context *context,
                                    const yvex_attention_publication *cpu,
                                    const yvex_attention_publication *cuda) {
-    yvex_attention_probe_result *result = &context->candidate;
-    yvex_graph_f32_comparison comparison;
-    unsigned long long count;
+    int rc = attention_probe_pair_compare(
+        cpu, cuda, attention_comparison_absolute_tolerance,
+        attention_comparison_relative_tolerance, &context->candidate,
+        &context->metrics.squared_error, context->error);
+
+    if (rc == YVEX_ERR_FORMAT)
+        return attention_probe_fail(context->error, YVEX_ERR_FORMAT,
+                                    "CPU/CUDA attention output or state comparison failed");
+    return rc;
+}
+
+/* Purpose: discard staged state without erasing the failure that required rollback.
+ * Inputs: probe context and the status produced before cleanup.
+ * Effects: aborts through isolated failure storage, then restores the primary diagnostic on success.
+ * Failure: an abort failure supersedes the primary error because cleanup ownership is unresolved.
+ * Boundary: cleanup changes no committed state and never converts a failed execution to success. */
+static int attention_probe_state_abort(attention_probe_context *context, int primary_status)
+{
+    const yvex_attention_probe_state_provider *provider = context->request->state_provider;
+    yvex_attention_failure primary_failure =
+        context->failure ? *context->failure : (yvex_attention_failure){0};
+    yvex_attention_failure cleanup_failure = {0};
+    yvex_error primary_error = context->error ? *context->error : (yvex_error){0};
+    yvex_error cleanup_error = {0};
     int rc;
 
-    if (!cpu || !cuda || !cpu->complete || !cuda->complete ||
-        cpu->layer_index != cuda->layer_index || cpu->token_count != cuda->token_count ||
-        cpu->hidden_width != cuda->hidden_width ||
-        !yvex_core_u64_mul(cpu->token_count, cpu->hidden_width, &count))
-        return YVEX_ERR_FORMAT;
-    rc = yvex_graph_f32_compare(cpu->output, cuda->output, count,
-                                attention_comparison_absolute_tolerance,
-                                attention_comparison_relative_tolerance,
-                                &comparison, context->error);
-    if (rc != YVEX_OK)
+    if (!provider)
+        return YVEX_OK;
+    rc = provider->abort(provider->context, &cleanup_failure, &cleanup_error);
+    if (rc != YVEX_OK) {
+        if (context->failure)
+            *context->failure = cleanup_failure;
+        if (context->error)
+            *context->error = cleanup_error;
         return rc;
-    result->bitwise_equality_observed &= comparison.bitwise_equal;
-    if (comparison.maximum_absolute_error > result->comparison_maximum_absolute_error)
-        result->comparison_maximum_absolute_error = comparison.maximum_absolute_error;
-    if (comparison.maximum_relative_error > result->comparison_maximum_relative_error)
-        result->comparison_maximum_relative_error = comparison.maximum_relative_error;
-    context->metrics.squared_error += comparison.squared_error_sum;
-    result->comparison_values += count;
-    result->comparison_finite_values += comparison.finite_value_count;
-    result->comparison_nonfinite_values += comparison.nonfinite_value_count;
-    if (!comparison.within_tolerance &&
-        result->first_failing_layer == YVEX_ATTENTION_NO_LAYER) {
-        result->first_failing_layer = cpu->layer_index;
-        result->first_failing_coordinate = comparison.first_failing_coordinate;
+    }
+    if (primary_status != YVEX_OK) {
+        if (context->failure)
+            *context->failure = primary_failure;
+        if (context->error) {
+            if (yvex_error_is_set(&primary_error))
+                *context->error = primary_error;
+            else
+                yvex_error_set(context->error, (yvex_status)primary_status,
+                               "graph.attention.execute",
+                               primary_failure.reason ? primary_failure.reason
+                                                      : "attention execution failed before rollback");
+        }
+    } else {
+        if (context->failure)
+            memset(context->failure, 0, sizeof(*context->failure));
+        yvex_error_clear(context->error);
     }
     return YVEX_OK;
 }
@@ -1170,39 +1454,80 @@ static int attention_probe_compare(attention_probe_context *context,
  * Failure: releases every publication and history allocation without partial state.
  * Boundary: production attention only; no oracle or persistent KV. */
 static int attention_probe_layer_execute(attention_probe_context *context,
+                                         unsigned long long layer_ordinal,
                                          const yvex_attention_layer_plan *layer,
                                          unsigned long long position) {
     yvex_attention_cpu_options options;
     yvex_attention_cancellation cancellation = {context->request->cancel_requested,
                                                 context->request->cancel_context};
     attention_probe_backend backend[ATTENTION_PROBE_BACKEND_COUNT] = {0};
-    attention_probe_history history = {0};
-    float *input = yvex_attention_calloc_array(layer->hidden_dimension, sizeof(*input));
+    yvex_attention_probe_history history = {0};
+    const yvex_attention_history_view *execution_history = NULL;
+    unsigned long long token_count = context->request->token_count ? context->request->token_count : 1ull;
+    unsigned long long input_width = context->request->operation_scope ==
+                                             YVEX_ATTENTION_OPERATION_ENVELOPE
+                                         ? layer->residual_expanded_width : layer->hidden_dimension;
+    unsigned long long input_count, workspace_mark = 0ull, token;
+    float *input;
     unsigned int index;
-    int rc = YVEX_OK;
-
+    int state_started = 0, rc = YVEX_OK;
+    if (!yvex_core_u64_mul(token_count, input_width, &input_count))
+        return attention_probe_fail(context->error, YVEX_ERR_BOUNDS,
+                                    "canonical attention input extent overflowed");
+    if (context->request->workspace)
+        workspace_mark = yvex_attention_workspace_mark(context->request->workspace);
+    input = attention_probe_calloc(context->request->workspace, input_count, sizeof(*input));
     if (!input)
-        return attention_probe_fail(context->error, YVEX_ERR_NOMEM,
-                                    "canonical attention input allocation failed");
-    attention_probe_fill(input, NULL, layer->hidden_dimension,
-                         layer->layer_index + position + 1009ull);
+        return attention_probe_fail(
+            context->error,
+            context->request->workspace ? YVEX_ERR_BOUNDS : YVEX_ERR_NOMEM,
+            context->request->workspace
+                ? "canonical attention workspace capacity is insufficient"
+                : "canonical attention input allocation failed");
+    for (token = 0ull; token < token_count; ++token)
+        attention_probe_fill(input + token * input_width, NULL, input_width,
+                             layer->layer_index + position + token + 1009ull);
+    history.workspace = context->request->workspace;
     if (position && !attention_probe_history_init(&history, layer, context->summary, position)) {
-        rc = attention_probe_fail(context->error, YVEX_ERR_NOMEM,
-                                  "canonical attention history allocation failed");
+        rc = attention_probe_fail(
+            context->error,
+            context->request->workspace ? YVEX_ERR_BOUNDS : YVEX_ERR_NOMEM,
+            context->request->workspace
+                ? "canonical attention history exceeds prepared workspace capacity"
+                : "canonical attention history allocation failed");
         goto cleanup;
     }
+    execution_history = position ? &history.view : NULL;
+    if (context->request->state_provider) {
+        const yvex_attention_probe_state_provider *provider =
+            context->request->state_provider;
+        if (!provider->context || !provider->begin || !provider->stage || !provider->abort) {
+            rc = attention_probe_fail(context->error, YVEX_ERR_INVALID_ARG,
+                                      "attention state provider contract is incomplete");
+            goto cleanup;
+        }
+        rc = provider->begin(provider->context, layer_ordinal, layer,
+                             execution_history, position, token_count,
+                             context->request->cancel_requested ? &cancellation : NULL,
+                             &execution_history, context->failure, context->error);
+        if (rc != YVEX_OK) goto cleanup;
+        state_started = 1;
+    }
     context->family->cpu_options_default(&options);
+    options.operation_scope = context->request->operation_scope;
+    options.logical_model_identity = context->request->logical_model_identity;
     options.layer_index = layer->layer_index;
     options.token_position = position;
-    options.token_count = 1ull;
+    options.token_count = token_count;
     options.input = input;
-    options.input_stride = layer->hidden_dimension;
-    options.history = position ? &history.view : NULL;
+    options.input_stride = input_width;
+    options.history = execution_history;
+    options.evidence_level = context->request->evidence_level;
+    options.workspace = context->request->workspace;
     options.cancellation = context->request->cancel_requested ? &cancellation : NULL;
     for (index = 0u; index < ATTENTION_PROBE_BACKEND_COUNT; ++index) {
         attention_probe_backend *run = &backend[index];
         int cuda = index == ATTENTION_PROBE_CUDA;
-
         if (!context->request->compare_backends &&
             context->request->backend != (cuda ? YVEX_BACKEND_KIND_CUDA : YVEX_BACKEND_KIND_CPU))
             continue;
@@ -1215,17 +1540,43 @@ static int attention_probe_layer_execute(attention_probe_context *context,
                         context->plan, context->family_ir, context->session, context->descriptor,
                         &options, &run->evidence, context->failure, context->error);
         options.publication = NULL;
-        if (rc != YVEX_OK)
-            goto cleanup;
+        if (rc != YVEX_OK) goto cleanup;
         if (!(cuda ? run->evidence.cuda_executed : run->evidence.executed) ||
-            !attention_probe_hash_output(&context->metrics.hash[index], &run->publication)) {
+            !yvex_attention_publication_hash_update(
+                &context->metrics.output_hash[index], &context->metrics.state_hash[index],
+                &run->publication)) {
             rc = attention_probe_fail(context->error, YVEX_ERR_STATE,
                                       cuda ? "CUDA attention publication was incomplete"
                                            : "CPU attention publication was incomplete");
             goto cleanup;
         }
-        context->candidate.payload_bytes_read += run->evidence.payload_bytes_read;
-        context->candidate.kernel_launches += run->evidence.cuda_kernel_launches;
+        if (context->request->evidence) {
+            rc = context->request->evidence(
+                context->request->evidence_context,
+                cuda ? YVEX_BACKEND_KIND_CUDA : YVEX_BACKEND_KIND_CPU,
+                &run->publication, context->error);
+            if (rc != YVEX_OK) goto cleanup;
+        }
+        if (!yvex_core_u64_add(context->candidate.payload_bytes_read,
+                               run->evidence.payload_bytes_read,
+                               &context->candidate.payload_bytes_read) ||
+            !yvex_core_u64_add(context->candidate.kernel_launches,
+                               run->evidence.cuda_kernel_launches,
+                               &context->candidate.kernel_launches) ||
+            !yvex_core_u64_add(context->candidate.h2d_bytes,
+                               run->evidence.cuda_h2d_bytes,
+                               &context->candidate.h2d_bytes) ||
+            !yvex_core_u64_add(context->candidate.d2h_bytes,
+                               run->evidence.cuda_d2h_bytes,
+                               &context->candidate.d2h_bytes) ||
+            !yvex_core_u64_add(
+                context->candidate.cuda_device_execution_elapsed_ns,
+                run->evidence.cuda_device_execution_elapsed_ns,
+                &context->candidate.cuda_device_execution_elapsed_ns)) {
+            rc = attention_probe_fail(context->error, YVEX_ERR_BOUNDS,
+                                      "attention execution counter overflowed");
+            goto cleanup;
+        }
         if (run->evidence.cuda_peak_device_bytes > context->candidate.peak_device_bytes)
             context->candidate.peak_device_bytes = run->evidence.cuda_peak_device_bytes;
         if (run->evidence.topk_selected > context->candidate.topk_selected)
@@ -1240,6 +1591,34 @@ static int attention_probe_layer_execute(attention_probe_context *context,
                                            "CPU/CUDA attention output geometry disagrees");
             goto cleanup;
         }
+        if (state_started) {
+            rc = attention_probe_state_abort(context, YVEX_OK);
+            if (rc == YVEX_OK) state_started = 0;
+        }
+    }
+    if (context->request->state_provider && !context->request->compare_backends) {
+        const unsigned int committed_backend =
+            context->request->backend == YVEX_BACKEND_KIND_CPU
+                ? ATTENTION_PROBE_CPU
+                : ATTENTION_PROBE_CUDA;
+        char state_delta_identity[YVEX_SHA256_HEX_CAP];
+        rc = context->request->state_provider->stage(
+            context->request->state_provider->context,
+            &backend[committed_backend].publication,
+            context->request->cancel_requested ? &cancellation : NULL,
+            state_delta_identity, context->failure, context->error);
+        if (rc != YVEX_OK) goto cleanup;
+        state_started = 0;
+        if (!yvex_sha256_hex_valid(state_delta_identity) ||
+            !yvex_sha256_update_u64(&context->metrics.committed_state_hash,
+                                    layer->layer_index) ||
+            !yvex_sha256_update_text(&context->metrics.committed_state_hash,
+                                     state_delta_identity)) {
+            rc = attention_probe_fail(context->error, YVEX_ERR_STATE,
+                                      "attention state provider returned an invalid identity");
+            goto cleanup;
+        }
+        context->metrics.committed_state_available = 1;
     }
     context->candidate.bindings_executed += layer->required_binding_count;
     context->candidate.layers_executed++;
@@ -1252,26 +1631,58 @@ static int attention_probe_layer_execute(attention_probe_context *context,
     else
         ++context->candidate.hca_layers_executed;
 cleanup:
+    if (state_started) {
+        int abort_rc = attention_probe_state_abort(context, rc);
+        if (abort_rc != YVEX_OK)
+            rc = abort_rc;
+    }
     for (index = 0u; index < ATTENTION_PROBE_BACKEND_COUNT; ++index)
         context->family->publication_release(&backend[index].publication);
     attention_probe_history_release(&history);
-    free(input);
+    if (context->request->workspace) {
+        yvex_error rewind_error;
+        yvex_error_clear(&rewind_error);
+        if (yvex_attention_workspace_rewind(
+                context->request->workspace, workspace_mark, &rewind_error) != YVEX_OK &&
+            rc == YVEX_OK) {
+            rc = attention_probe_fail(context->error, YVEX_ERR_STATE,
+                                      "attention workspace rewind failed after publication");
+        }
+    } else {
+        free(input);
+    }
     return rc;
 }
-
-/* Purpose: select each class's deep state probe once and shallow positions thereafter. */
-static unsigned long long attention_probe_position(const yvex_attention_layer_plan *layer,
-                                                   int selected[ATTENTION_PROBE_CLASS_COUNT]) {
-    unsigned int kind = (unsigned int)layer->attention_class;
-
-    if (kind >= ATTENTION_PROBE_CLASS_COUNT || selected[kind])
-        return layer->attention_class == YVEX_ATTENTION_CLASS_SWA ? 0ull : 1ull;
-    selected[kind] = 1;
-    if (layer->attention_class == YVEX_ATTENTION_CLASS_SWA)
-        return layer->sliding_window;
-    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA)
-        return layer->compression_ratio * (layer->indexer_topk + 1ull);
-    return layer->compression_ratio - 1ull;
+/* Purpose: resolve one deep canonical class position plus a bounded repeat offset.
+ * Inputs: admitted layer, prior class selection, and repeat offset.
+ * Effects: publishes one causal position without changing plan state.
+ * Failure: malformed class geometry or overflow refuses.
+ * Boundary: position selection is canonical probe policy only. */
+int yvex_attention_probe_position_resolve(const yvex_attention_layer_plan *layer, int class_selected,
+    unsigned long long offset, unsigned long long *position, yvex_error *err) {
+    unsigned long long base, count;
+    if (!layer || !position)
+        return attention_probe_fail(err, YVEX_ERR_INVALID_ARG,
+                                    "canonical probe position arguments are invalid");
+    if (class_selected)
+        base = layer->attention_class == YVEX_ATTENTION_CLASS_SWA ? 0ull : 1ull;
+    else if (layer->attention_class == YVEX_ATTENTION_CLASS_SWA)
+        base = layer->sliding_window;
+    else if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
+        if (!yvex_core_u64_add(layer->indexer_topk, 1ull, &count) ||
+            !yvex_core_u64_mul(layer->compression_ratio, count, &base))
+            return attention_probe_fail(err, YVEX_ERR_BOUNDS,
+                                        "canonical CSA probe position overflowed");
+    } else if (layer->attention_class == YVEX_ATTENTION_CLASS_HCA && layer->compression_ratio)
+        base = layer->compression_ratio - 1ull;
+    else
+        return attention_probe_fail(err, YVEX_ERR_FORMAT,
+                                    "canonical probe position geometry is invalid");
+    if (!yvex_core_u64_add(base, offset, position))
+        return attention_probe_fail(err, YVEX_ERR_BOUNDS,
+                                    "canonical probe position overflowed");
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 /* Purpose: finalize output, execution, and comparison-contract identities.
@@ -1284,7 +1695,9 @@ static int attention_probe_finalize(attention_probe_context *context) {
     const yvex_attention_probe_request *request = context->request;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     char *backend_digest[] = {result->cpu_output_digest, result->cuda_output_digest};
-    attention_probe_identity_field fields[6];
+    char *backend_state_digest[] = {result->cpu_state_delta_digest,
+                                    result->cuda_state_delta_digest};
+    attention_probe_identity_field fields[16];
     const char *selected_digest;
     unsigned int index;
 
@@ -1303,37 +1716,69 @@ static int attention_probe_finalize(attention_probe_context *context) {
         isfinite(result->comparison_maximum_absolute_error) &&
         isfinite(result->comparison_maximum_relative_error) && isfinite(result->comparison_rmse) &&
         result->first_failing_layer == YVEX_ATTENTION_NO_LAYER;
-    if (request->compare_backends && !result->comparison_passed)
-        return attention_probe_fail(context->error, YVEX_ERR_FORMAT,
-                                    "CPU/CUDA comparison contract failed");
     for (index = 0u; index < ATTENTION_PROBE_BACKEND_COUNT; ++index) {
         int selected = request->compare_backends ||
                        request->backend == (index ? YVEX_BACKEND_KIND_CUDA : YVEX_BACKEND_KIND_CPU);
-        if (selected && !yvex_sha256_final(&context->metrics.hash[index], digest))
+        if (selected && !yvex_sha256_final(&context->metrics.output_hash[index], digest))
             goto identity_failure;
         if (selected)
             yvex_sha256_hex(digest, backend_digest[index]);
+        if (selected && !yvex_sha256_final(&context->metrics.state_hash[index], digest))
+            goto identity_failure;
+        if (selected)
+            yvex_sha256_hex(digest, backend_state_digest[index]);
+    }
+    if (context->metrics.committed_state_available) {
+        if (!yvex_sha256_final(&context->metrics.committed_state_hash, digest))
+            goto identity_failure;
+        yvex_sha256_hex(digest, result->state_delta_digest);
     }
     if (request->compare_backends) {
-        fields[0] = (attention_probe_identity_field){result->cpu_output_digest, 0ull};
-        fields[1] = (attention_probe_identity_field){result->cuda_output_digest, 0ull};
-        if (!attention_probe_identity("yvex.attention.operator.compare.output.v1", fields, 2u,
-                                      result->output_digest))
-            goto identity_failure;
+        result->output_digest_equal =
+            strcmp(result->cpu_output_digest, result->cuda_output_digest) == 0;
+        result->state_delta_digest_equal =
+            strcmp(result->cpu_state_delta_digest, result->cuda_state_delta_digest) == 0;
+        if (result->output_digest_equal)
+            yvex_core_text_copy(result->tensor_output_digest,
+                                sizeof(result->tensor_output_digest),
+                                result->cpu_output_digest);
+        if (result->state_delta_digest_equal && !context->metrics.committed_state_available)
+            yvex_core_text_copy(result->state_delta_digest,
+                                sizeof(result->state_delta_digest),
+                                result->cpu_state_delta_digest);
+        if (!result->comparison_passed)
+            return attention_probe_fail(context->error, YVEX_ERR_FORMAT,
+                                        "CPU/CUDA comparison contract failed");
     } else {
-        selected_digest = request->backend == YVEX_BACKEND_KIND_CPU ? result->cpu_output_digest
-                                                                    : result->cuda_output_digest;
-        (void)snprintf(result->output_digest, sizeof(result->output_digest), "%s", selected_digest);
+        index = request->backend == YVEX_BACKEND_KIND_CPU ? ATTENTION_PROBE_CPU
+                                                          : ATTENTION_PROBE_CUDA;
+        selected_digest = backend_digest[index];
+        yvex_core_text_copy(result->tensor_output_digest, sizeof(result->tensor_output_digest), selected_digest);
+        if (!context->metrics.committed_state_available) {
+            selected_digest = backend_state_digest[index];
+            yvex_core_text_copy(result->state_delta_digest, sizeof(result->state_delta_digest), selected_digest);
+        }
     }
-    selected_digest = result->output_digest;
     fields[0] = (attention_probe_identity_field){context->summary->attention_plan_identity, 0ull};
-    fields[1] = (attention_probe_identity_field){NULL, request->scope};
-    fields[2] = (attention_probe_identity_field){
+    fields[1] = (attention_probe_identity_field){request->logical_model_identity, 0ull};
+    fields[2] = (attention_probe_identity_field){NULL, YVEX_ATTENTION_PROBE_CANONICAL_V2};
+    fields[3] = (attention_probe_identity_field){NULL, request->scope};
+    fields[4] = (attention_probe_identity_field){NULL, request->operation_scope};
+    fields[5] = (attention_probe_identity_field){NULL, request->token_count};
+    fields[6] = (attention_probe_identity_field){
+        NULL, request->select_layer ? request->layer_ordinal : YVEX_ATTENTION_NO_LAYER};
+    fields[7] = (attention_probe_identity_field){
+        NULL, request->select_position ? request->token_position : YVEX_ATTENTION_NO_LAYER};
+    fields[8] = (attention_probe_identity_field){
         NULL, request->compare_backends ? 2ull : (unsigned long long)request->backend};
-    fields[3] = (attention_probe_identity_field){NULL, result->layers_executed};
-    fields[4] = (attention_probe_identity_field){NULL, result->bindings_executed};
-    fields[5] = (attention_probe_identity_field){selected_digest, 0ull};
-    if (!attention_probe_identity("yvex.attention.operator.execution.v1", fields, 6u,
+    fields[9] = (attention_probe_identity_field){NULL, result->layers_executed};
+    fields[10] = (attention_probe_identity_field){NULL, result->bindings_executed};
+    fields[11] = (attention_probe_identity_field){result->cpu_output_digest, 0ull};
+    fields[12] = (attention_probe_identity_field){result->cuda_output_digest, 0ull};
+    fields[13] = (attention_probe_identity_field){result->cpu_state_delta_digest, 0ull};
+    fields[14] = (attention_probe_identity_field){result->cuda_state_delta_digest, 0ull};
+    fields[15] = (attention_probe_identity_field){result->state_delta_digest, 0ull};
+    if (!attention_probe_identity("yvex.attention.operator.execution.v3", fields, 16u,
                                   result->attention_execution_identity))
         goto identity_failure;
     return YVEX_OK;
@@ -1351,8 +1796,12 @@ static int attention_probe_cuda_open(attention_probe_context *context) {
     yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CUDA};
     yvex_backend_capability_result capability = {0};
     yvex_backend_device_info device = {0};
-    int rc = yvex_backend_open(&context->cuda_backend, &options, context->error);
+    int rc = YVEX_OK;
 
+    if (context->request->backend_context)
+        context->cuda_backend = context->request->backend_context;
+    else
+        rc = yvex_backend_open(&context->cuda_backend, &options, context->error);
     if (rc == YVEX_OK)
         rc = yvex_backend_query_capability(context->cuda_backend,
                                            YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, &capability,
@@ -1364,8 +1813,9 @@ static int attention_probe_cuda_open(attention_probe_context *context) {
     if (rc == YVEX_OK)
         rc = yvex_backend_get_device_info(context->cuda_backend, &device, context->error);
     if (rc == YVEX_OK) {
-        (void)snprintf(context->candidate.cuda_device, sizeof(context->candidate.cuda_device), "%s",
-                       device.name ? device.name : "unknown");
+        yvex_core_text_copy(context->candidate.cuda_device,
+                            sizeof(context->candidate.cuda_device),
+                            device.name ? device.name : "unknown");
         context->candidate.cuda_compute_capability_major = device.compute_capability_major;
         context->candidate.cuda_compute_capability_minor = device.compute_capability_minor;
     }
@@ -1379,11 +1829,14 @@ static int attention_probe_cuda_open(attention_probe_context *context) {
  * Boundary: never publishes success. */
 static void attention_probe_comparison_publish(yvex_attention_probe_result *result,
                                                const yvex_attention_probe_result *candidate) {
+    size_t identities = offsetof(yvex_attention_probe_result, cuda_device) -
+                        offsetof(yvex_attention_probe_result, cpu_output_digest);
     size_t counts = offsetof(yvex_attention_probe_result, cuda_compute_capability_major) -
                     offsetof(yvex_attention_probe_result, comparison_values);
     size_t metrics = sizeof(*result) -
                      offsetof(yvex_attention_probe_result, comparison_maximum_absolute_error);
 
+    memcpy(&result->cpu_output_digest, &candidate->cpu_output_digest, identities);
     memcpy(&result->comparison_values, &candidate->comparison_values, counts);
     memcpy(&result->comparison_maximum_absolute_error,
            &candidate->comparison_maximum_absolute_error, metrics);
@@ -1412,33 +1865,59 @@ int yvex_attention_probe_execute(const yvex_graph_family_api *family,
                                        .error = err};
     unsigned long long index;
     int selected[ATTENTION_PROBE_CLASS_COUNT] = {0};
+    int workspace_started = 0;
     int rc = YVEX_OK;
-
-    if (!family || !plan || !family_ir || !session || !descriptor || !request || !result ||
+    if (!request || request->probe != YVEX_ATTENTION_PROBE_CANONICAL_V2 ||
+        (request->backend != YVEX_BACKEND_KIND_CPU &&
+         request->backend != YVEX_BACKEND_KIND_CUDA) ||
+        (request->scope != YVEX_ATTENTION_PROBE_SCOPE_QUICK &&
+         request->scope != YVEX_ATTENTION_PROBE_SCOPE_FULL) ||
+        (request->operation_scope != YVEX_ATTENTION_OPERATION_CORE &&
+         request->operation_scope != YVEX_ATTENTION_OPERATION_ENVELOPE))
+        return attention_probe_fail(err, YVEX_ERR_INVALID_ARG, "canonical V2 probe request is invalid");
+    if (!family || !plan || !session || !descriptor || !result ||
         !family->plan_summary || !family->plan_layer_count || !family->plan_layer_at ||
         !family->cpu_options_default || !family->cpu_chunk_execute || !family->cuda_token_execute ||
-        !family->publication_release) {
+        !family->publication_release)
         return attention_probe_fail(err, YVEX_ERR_INVALID_ARG,
                                     "sealed attention owners and execution API are required");
-    }
     context.summary = family->plan_summary(plan);
     if (!context.summary || !context.summary->full_execution_ready ||
         !context.summary->cpu_reference_ready ||
         ((request->compare_backends || request->backend == YVEX_BACKEND_KIND_CUDA) &&
-         !context.summary->cuda_execution_ready)) {
+         !context.summary->cuda_execution_ready))
         return attention_probe_fail(err, YVEX_ERR_UNSUPPORTED,
                                     "requested production attention capability is not admitted");
-    }
+    if ((unsigned int)request->evidence_level >
+            (unsigned int)YVEX_ATTENTION_EVIDENCE_FULL ||
+        (request->select_layer &&
+         request->layer_ordinal >= family->plan_layer_count(plan)) ||
+        (request->select_position && !request->select_layer && !request->state_provider))
+        return attention_probe_fail(err, YVEX_ERR_BOUNDS,
+                                    "selected attention probe layer or position is invalid");
     memset(&context.candidate, 0, sizeof(context.candidate));
     context.candidate.comparison_available = request->compare_backends;
     context.candidate.first_failing_layer = YVEX_ATTENTION_NO_LAYER;
     context.candidate.first_failing_coordinate = YVEX_ATTENTION_NO_LAYER;
     context.candidate.bitwise_equality_observed = request->compare_backends;
+    yvex_sha256_init(&context.metrics.committed_state_hash);
+    if (!yvex_sha256_update_text(&context.metrics.committed_state_hash,
+                                 "yvex.attention.committed-state-delta.v1"))
+        return attention_probe_fail(err, YVEX_ERR_STATE,
+                                    "attention state identity initialization failed");
     for (index = 0ull; index < ATTENTION_PROBE_BACKEND_COUNT; ++index) {
-        yvex_sha256_init(&context.metrics.hash[index]);
-        if (!yvex_sha256_update_text(&context.metrics.hash[index], probe_output_domains[index]))
+        yvex_sha256_init(&context.metrics.output_hash[index]);
+        yvex_sha256_init(&context.metrics.state_hash[index]);
+        if (!yvex_sha256_update_text(&context.metrics.output_hash[index], probe_output_domain) ||
+            !yvex_sha256_update_text(&context.metrics.state_hash[index], probe_state_domain))
             return attention_probe_fail(err, YVEX_ERR_STATE,
                                         "attention output identity initialization failed");
+    }
+    if (request->workspace) {
+        rc = yvex_attention_workspace_begin(request->workspace, err);
+        if (rc != YVEX_OK)
+            return rc;
+        workspace_started = 1;
     }
     if (request->compare_backends || request->backend == YVEX_BACKEND_KIND_CUDA) {
         rc = attention_probe_cuda_open(&context);
@@ -1447,27 +1926,40 @@ int yvex_attention_probe_execute(const yvex_graph_family_api *family,
     }
     for (index = 0ull; index < family->plan_layer_count(plan); ++index) {
         const yvex_attention_layer_plan *layer = family->plan_layer_at(plan, index);
+        int class_selected;
         int include;
+        unsigned long long position = request->token_position;
 
         if (!layer) {
             rc = attention_probe_fail(err, YVEX_ERR_STATE,
                                       "attention layer disappeared during traversal");
             goto cleanup;
         }
-        include = request->scope == YVEX_ATTENTION_PROBE_SCOPE_FULL ||
-                  ((unsigned int)layer->attention_class < ATTENTION_PROBE_CLASS_COUNT &&
-                   !selected[(unsigned int)layer->attention_class]);
+        class_selected = (unsigned int)layer->attention_class >= ATTENTION_PROBE_CLASS_COUNT ||
+                         selected[layer->attention_class];
+        include = request->select_layer ? index == request->layer_ordinal
+                                        : request->scope == YVEX_ATTENTION_PROBE_SCOPE_FULL ||
+                                              !class_selected;
         if (!include)
             continue;
-        rc = attention_probe_layer_execute(&context, layer,
-                                           attention_probe_position(layer, selected));
-        if (rc != YVEX_OK)
+        if ((unsigned int)layer->attention_class < ATTENTION_PROBE_CLASS_COUNT)
+            selected[layer->attention_class] = 1;
+        if (!request->select_position)
+            rc = yvex_attention_probe_position_resolve(
+                layer, class_selected, request->token_position, &position, err);
+        if (rc == YVEX_OK)
+            rc = attention_probe_layer_execute(&context, index, layer, position);
+        if (rc != YVEX_OK) {
+            if (rc == YVEX_ERR_FORMAT && request->compare_backends)
+                attention_probe_comparison_publish(result, &context.candidate);
             goto cleanup;
+        }
     }
-    if ((request->scope == YVEX_ATTENTION_PROBE_SCOPE_QUICK &&
+    if ((request->select_layer && context.candidate.layers_executed != 1ull) ||
+        (!request->select_layer && request->scope == YVEX_ATTENTION_PROBE_SCOPE_QUICK &&
          (context.candidate.layers_executed != 3ull || !selected[0] || !selected[1] ||
           !selected[2])) ||
-        (request->scope == YVEX_ATTENTION_PROBE_SCOPE_FULL &&
+        (!request->select_layer && request->scope == YVEX_ATTENTION_PROBE_SCOPE_FULL &&
          (context.candidate.layers_executed != context.summary->layer_count ||
           context.candidate.bindings_executed != context.summary->required_binding_count))) {
         rc = attention_probe_fail(err, YVEX_ERR_STATE,
@@ -1477,11 +1969,32 @@ int yvex_attention_probe_execute(const yvex_graph_family_api *family,
     rc = attention_probe_finalize(&context);
     if (rc == YVEX_ERR_FORMAT && request->compare_backends)
         attention_probe_comparison_publish(result, &context.candidate);
+cleanup:
+    if (!request->backend_context)
+        yvex_backend_close(context.cuda_backend);
+    if (workspace_started) {
+        yvex_error workspace_error;
+        int workspace_rc;
+
+        yvex_error_clear(&workspace_error);
+        if (rc != YVEX_OK)
+            (void)yvex_attention_workspace_rewind(
+                request->workspace, 0ull, &workspace_error);
+        workspace_rc = yvex_attention_workspace_finish(
+            request->workspace, &workspace_error);
+        if (workspace_rc != YVEX_OK && rc == YVEX_OK)
+            rc = attention_probe_fail(
+                err, YVEX_ERR_STATE,
+                "attention workspace retained spans after execution publication");
+    }
+    if (rc != YVEX_OK && request->state_provider) {
+        int abort_rc = attention_probe_state_abort(&context, rc);
+        if (abort_rc != YVEX_OK)
+            rc = abort_rc;
+    }
     if (rc == YVEX_OK) {
         *result = context.candidate;
         yvex_error_clear(err);
     }
-cleanup:
-    yvex_backend_close(context.cuda_backend);
     return rc;
 }

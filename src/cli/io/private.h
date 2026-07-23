@@ -17,20 +17,15 @@
 #include <yvex/artifact.h>
 #include <yvex/backend.h>
 #include <yvex/core.h>
-#include <yvex/generation.h>
 #include <yvex/gguf.h>
 #include <yvex/model.h>
 #include <yvex/registry.h>
 #include <yvex/source.h>
+#include <yvex/tokenizer.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef enum {
-    YVEX_GENERATE_RENDER_NORMAL = 0,
-    YVEX_GENERATE_RENDER_AUDIT
-} yvex_generate_render_mode;
 
 typedef enum {
     YVEX_SOURCE_RENDER_NORMAL = 0,
@@ -439,6 +434,13 @@ int exit_for_status(int status);
 int parse_positive_ull(const char *text, unsigned long long *out);
 int parse_ull_allow_zero(const char *text, unsigned long long *out);
 int parse_uint_allow_zero(const char *text, unsigned int *out);
+void print_quoted_bytes(const char *data, unsigned long long len);
+int open_artifact_for_gguf(const char *path, yvex_artifact **artifact, yvex_error *err);
+void print_tensor_dims(const unsigned long long *dims, unsigned int rank);
+void print_native_dims(const unsigned long long *dims, unsigned int rank);
+void print_token_ids(const yvex_tokens *tokens);
+int parse_id_list(const char *text, unsigned int **out_ids, unsigned long long *out_len);
+int parse_dims_csv(const char *text, unsigned int rank, unsigned long long dims[4]);
 void print_metadata_drift_cli(const yvex_model_metadata_drift_report *report);
 int models_registry_open(yvex_model_registry **registry, const char *registry_path,
                          int create_if_missing, yvex_error *err);
@@ -452,7 +454,6 @@ void yvex_cli_json_end(FILE *fp);
 void yvex_cli_json_field_str(FILE *fp, const char *key, const char *value, int comma);
 void yvex_cli_json_field_u64(FILE *fp, const char *key, unsigned long long value, int comma);
 void yvex_cli_json_field_bool(FILE *fp, const char *key, int value, int comma);
-void yvex_cli_json_field_double(FILE *fp, const char *key, double value, int comma);
 int yvex_cli_json_fields(FILE *fp, const void *object, const yvex_cli_field_spec *fields,
                          size_t field_count, int comma);
 
@@ -467,20 +468,10 @@ FILE *yvex_cli_out_stdout(void);
 FILE *yvex_cli_out_stderr(void);
 void yvex_cli_out_line(FILE *fp, const char *text);
 void yvex_cli_out_lines(FILE *fp, const char *const *lines, size_t line_count);
-void yvex_cli_out_blank(FILE *fp);
 void yvex_cli_out_kv_str(FILE *fp, const char *key, const char *value);
-void yvex_cli_out_kv_u64(FILE *fp, const char *key, unsigned long long value);
-void yvex_cli_out_kv_u32(FILE *fp, const char *key, unsigned int value);
 void yvex_cli_out_kv_bool(FILE *fp, const char *key, int value);
-void yvex_cli_out_kv_double(FILE *fp, const char *key, double value);
-void yvex_cli_out_optional_u64(FILE *fp, const char *key, int seen, unsigned long long value);
-void yvex_cli_out_token_list(FILE *fp, const char *key, const unsigned int *tokens,
-                             unsigned long long count);
 int yvex_cli_out_fields(FILE *fp, const void *object, const yvex_cli_field_spec *fields,
                         size_t field_count);
-
-/* Table contract. */
-void yvex_cli_table_row(FILE *fp, const char *row);
 
 #ifdef __cplusplus
 }

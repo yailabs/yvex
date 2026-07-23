@@ -131,6 +131,32 @@ static __device__ float float_to_bf16_rne(float value)
     return __uint_as_float(upper << 16);
 }
 
+/* Purpose: publish one attention activation vector at the canonical BF16 RNE boundary.
+ * Inputs: one finite F32 vector, its exact element count, and shared device status.
+ * Effects: rounds each admitted element in place through the versioned attention boundary.
+ * Failure: records malformed storage or non-finite input in shared device status.
+ * Boundary: generic attention numeric ingress; family composition selects when it applies. */
+extern "C" __global__ void yvex_attention_bf16_round(
+    float *values, unsigned long long count, int *status)
+{
+    unsigned long long index =
+        (unsigned long long)blockIdx.x * (unsigned long long)blockDim.x +
+        (unsigned long long)threadIdx.x;
+    float value;
+
+    if (!status || index >= count || *status != 0) return;
+    if (!values) {
+        atomicCAS(status, 0, 2);
+        return;
+    }
+    value = values[index];
+    if (!isfinite(value)) {
+        atomicCAS(status, 0, 1);
+        return;
+    }
+    values[index] = float_to_bf16_rne(value);
+}
+
 /* Purpose: Implement the canonical e8m0 bits to float mechanism owned by the CUDA backend boundary. */
 static __device__ float e8m0_bits_to_float(unsigned int bits)
 {
@@ -733,44 +759,39 @@ extern "C" __global__ void yvex_deepseek_weighted_norm(
     double epsilon,
     int *status)
 {
-    extern __shared__ double partial[];
     unsigned int lane = threadIdx.x;
-    double sum = 0.0;
+    double mean = 0.0;
     if (!status) return;
     if (*status != 0 || blockIdx.x != 0u) return;
     if (!values || !weight || !count || epsilon <= 0.0) {
         if (lane == 0u) atomicCAS(status, 0, 2);
         return;
     }
-    for (unsigned long long i = (unsigned long long)lane; i < count;
-         i += (unsigned long long)blockDim.x) {
+    if (lane != 0u) return;
+    for (unsigned long long i = 0ull; i < count; ++i) {
         double value = (double)values[i];
         if (!isfinite(value)) {
             atomicCAS(status, 0, 1);
-            continue;
+            return;
         }
-        sum += value * value;
+        mean = __dadd_rn(mean, __dmul_rn(value, value));
     }
-    partial[lane] = sum;
-    __syncthreads();
-    for (unsigned int offset = blockDim.x >> 1; offset; offset >>= 1) {
-        if (lane < offset) partial[lane] += partial[lane + offset];
-        __syncthreads();
-    }
-    if (*status != 0) return;
-    double inverse = rsqrt(partial[0] / (double)count + epsilon);
+    mean = __ddiv_rn(mean, (double)count);
+    double inverse = __ddiv_rn(1.0, sqrt(__dadd_rn(mean, epsilon)));
     if (!isfinite(inverse)) {
-        if (lane == 0u) atomicCAS(status, 0, 1);
+        atomicCAS(status, 0, 1);
         return;
     }
-    for (unsigned long long i = (unsigned long long)lane; i < count;
-         i += (unsigned long long)blockDim.x) {
+    for (unsigned long long i = 0ull; i < count; ++i) {
         double scale = (double)qtype_value(weight, i, weight_qtype);
-        double result = (double)values[i] * inverse * scale;
+        double result = __dmul_rn(
+            __dmul_rn((double)values[i], inverse), scale);
         float published = (float)result;
-        if (!isfinite(scale) || !isfinite(result) || !isfinite(published))
+        if (!isfinite(scale) || !isfinite(result) || !isfinite(published)) {
             atomicCAS(status, 0, 1);
-        else values[i] = float_to_bf16_rne(published);
+            return;
+        }
+        values[i] = float_to_bf16_rne(published);
     }
 }
 
@@ -1135,6 +1156,162 @@ extern "C" __global__ void yvex_deepseek_activation(
     }
 }
 
+/* Purpose: execute the DeepSeek mHC ingress after the encoded function projection.
+ * Inputs: one residual token, decoded coefficients, exact geometry, and status.
+ * Effects: writes BF16 core input plus private post/Sinkhorn coefficients on device.
+ * Failure: atomically records malformed geometry or non-finite arithmetic.
+ * Boundary: device attention-envelope work only; no host completion or FFN/MoE. */
+extern "C" __global__ void yvex_deepseek_mhc_pre(
+    float *residual,
+    const float *linear_mix,
+    const float *scale,
+    const float *base,
+    unsigned long long streams,
+    unsigned long long stream_width,
+    unsigned long long mixing_rows,
+    unsigned long long sinkhorn_iterations,
+    double rms_epsilon,
+    double mhc_epsilon,
+    double post_multiplier,
+    float *collapsed,
+    float *post,
+    float *combination,
+    int *status)
+{
+    if (!status || blockIdx.x != 0u || threadIdx.x != 0u || *status != 0)
+        return;
+    if (!residual || !linear_mix || !scale || !base || !collapsed || !post ||
+        !combination || !streams || !stream_width || !sinkhorn_iterations ||
+        mixing_rows != (streams + 2ull) * streams || rms_epsilon <= 0.0 ||
+        mhc_epsilon <= 0.0 || post_multiplier <= 0.0) {
+        atomicCAS(status, 0, 2);
+        return;
+    }
+    unsigned long long expanded = streams * stream_width;
+    double squares = 0.0;
+    for (unsigned long long lane = 0ull; lane < expanded; ++lane) {
+        float value = float_to_bf16_rne(residual[lane]);
+        residual[lane] = value;
+        if (!isfinite(value)) {
+            atomicCAS(status, 0, 1);
+            return;
+        }
+        squares += (double)value * (double)value;
+    }
+    double inverse = 1.0 / sqrt(squares / (double)expanded + rms_epsilon);
+    if (!isfinite(inverse)) {
+        atomicCAS(status, 0, 1);
+        return;
+    }
+    for (unsigned long long lane = 0ull; lane < stream_width; ++lane)
+        collapsed[lane] = 0.0f;
+    for (unsigned long long stream = 0ull; stream < streams; ++stream) {
+        double pre_arg = (double)linear_mix[stream] * inverse * (double)scale[0] +
+                         (double)base[stream];
+        double pre = pre_arg >= 0.0 ? 1.0 / (1.0 + exp(-pre_arg))
+                                    : exp(pre_arg) / (1.0 + exp(pre_arg));
+        unsigned long long post_index = streams + stream;
+        double post_arg = (double)linear_mix[post_index] * inverse * (double)scale[1] +
+                          (double)base[post_index];
+        double post_sigmoid = post_arg >= 0.0 ? 1.0 / (1.0 + exp(-post_arg))
+                                              : exp(post_arg) / (1.0 + exp(post_arg));
+        post[stream] = (float)(post_multiplier * post_sigmoid);
+        for (unsigned long long target = 0ull; target < streams; ++target) {
+            unsigned long long index = 2ull * streams + stream * streams + target;
+            combination[stream * streams + target] =
+                (float)((double)linear_mix[index] * inverse * (double)scale[2] +
+                        (double)base[index]);
+        }
+        for (unsigned long long lane = 0ull; lane < stream_width; ++lane)
+            collapsed[lane] += (float)((pre + mhc_epsilon) *
+                (double)residual[stream * stream_width + lane]);
+    }
+    for (unsigned long long row = 0ull; row < streams; ++row) {
+        double maximum = -INFINITY;
+        double total = 0.0;
+        for (unsigned long long column = 0ull; column < streams; ++column)
+            maximum = maximum > (double)combination[row * streams + column]
+                ? maximum : (double)combination[row * streams + column];
+        for (unsigned long long column = 0ull; column < streams; ++column) {
+            double value = exp((double)combination[row * streams + column] - maximum);
+            combination[row * streams + column] = (float)value;
+            total += value;
+        }
+        if (!isfinite(total) || total <= 0.0) {
+            atomicCAS(status, 0, 1);
+            return;
+        }
+        for (unsigned long long column = 0ull; column < streams; ++column)
+            combination[row * streams + column] =
+                (float)((double)combination[row * streams + column] / total + mhc_epsilon);
+    }
+    for (unsigned long long iteration = 0ull; iteration < sinkhorn_iterations; ++iteration) {
+        if (iteration != 0ull) {
+            for (unsigned long long row = 0ull; row < streams; ++row) {
+                double total = 0.0;
+                for (unsigned long long column = 0ull; column < streams; ++column)
+                    total += combination[row * streams + column];
+                for (unsigned long long column = 0ull; column < streams; ++column)
+                    combination[row * streams + column] =
+                        (float)((double)combination[row * streams + column] /
+                                (total + mhc_epsilon));
+            }
+        }
+        for (unsigned long long column = 0ull; column < streams; ++column) {
+            double total = 0.0;
+            for (unsigned long long row = 0ull; row < streams; ++row)
+                total += combination[row * streams + column];
+            for (unsigned long long row = 0ull; row < streams; ++row)
+                combination[row * streams + column] =
+                    (float)((double)combination[row * streams + column] /
+                            (total + mhc_epsilon));
+        }
+    }
+    for (unsigned long long lane = 0ull; lane < stream_width; ++lane) {
+        if (!isfinite(collapsed[lane]) || !isfinite(post[lane % streams])) {
+            atomicCAS(status, 0, 1);
+            return;
+        }
+        collapsed[lane] = float_to_bf16_rne(collapsed[lane]);
+    }
+}
+
+/* Purpose: execute the immediate mHC attention egress on device.
+ * Inputs: core output, original residual, ingress coefficients, and geometry.
+ * Effects: writes one expanded BF16 post-attention activation.
+ * Failure: atomically records malformed geometry or non-finite arithmetic.
+ * Boundary: completes the attention envelope and stops before FFN/MoE. */
+extern "C" __global__ void yvex_deepseek_mhc_post(
+    const float *core,
+    const float *residual,
+    const float *post,
+    const float *combination,
+    unsigned long long streams,
+    unsigned long long stream_width,
+    float *output,
+    int *status)
+{
+    unsigned long long index =
+        (unsigned long long)blockIdx.x * (unsigned long long)blockDim.x +
+        (unsigned long long)threadIdx.x;
+    unsigned long long expanded = streams * stream_width;
+    if (!status || *status != 0 || index >= expanded) return;
+    if (!core || !residual || !post || !combination || !output || !streams ||
+        !stream_width) {
+        atomicCAS(status, 0, 2);
+        return;
+    }
+    unsigned long long target = index / stream_width;
+    unsigned long long lane = index % stream_width;
+    double value = (double)post[target] * (double)core[lane];
+    for (unsigned long long source = 0ull; source < streams; ++source)
+        value += (double)combination[source * streams + target] *
+                 (double)residual[source * stream_width + lane];
+    float published = (float)value;
+    if (!isfinite(published)) atomicCAS(status, 0, 1);
+    else output[index] = float_to_bf16_rne(published);
+}
+
 /* Executes one complete ratio-4 or ratio-128 compressor transition on device. */
 /* Purpose: Implement the canonical deepseek rolling mechanism owned by the CUDA backend boundary.
  * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
@@ -1212,20 +1389,26 @@ extern "C" __global__ void yvex_deepseek_rolling(
             }
             for (unsigned long long slot = 0ull; slot < ratio; ++slot) {
                 double score = (double)after_score[slot * state_width + lane];
-                double weight = exp(score - maximum);
-                denominator += weight;
-                value += weight * (double)after_kv[slot * state_width + lane];
+                double weight = exp(__dadd_rn(score, -maximum));
+                denominator = __dadd_rn(denominator, weight);
+                value = __dadd_rn(
+                    value,
+                    __dmul_rn(weight,
+                              (double)after_kv[slot * state_width + lane]));
                 if (overlap) {
                     score = (double)after_score[(ratio + slot) * state_width +
                                                 lane + head_dim];
-                    weight = exp(score - maximum);
-                    denominator += weight;
-                    value += weight *
-                        (double)after_kv[(ratio + slot) * state_width +
-                                         lane + head_dim];
+                    weight = exp(__dadd_rn(score, -maximum));
+                    denominator = __dadd_rn(denominator, weight);
+                    value = __dadd_rn(
+                        value,
+                        __dmul_rn(
+                            weight,
+                            (double)after_kv[(ratio + slot) * state_width +
+                                             lane + head_dim]));
                 }
             }
-            float published = (float)(value / denominator);
+            float published = (float)__ddiv_rn(value, denominator);
             if (!isfinite(denominator) || denominator <= 0.0 ||
                 !isfinite(value) || !isfinite(published))
                 atomicCAS(status, 0, 1);
@@ -1315,12 +1498,16 @@ extern "C" __global__ void yvex_deepseek_topk(
         for (unsigned long long head = 0ull; head < heads; ++head) {
             double dot = 0.0;
             const float *query = index_query + head * head_dim;
-            for (unsigned long long lane = 0ull; lane < head_dim; ++lane)
-                dot += (double)query[lane] * (double)row[lane];
+            for (unsigned long long lane = 0ull; lane < head_dim; ++lane) {
+                double term = __dmul_rn((double)query[lane], (double)row[lane]);
+                dot = __dadd_rn(dot, term);
+            }
             if (dot < 0.0) dot = 0.0;
-            score += dot * (double)index_weights[head];
+            score = __dadd_rn(
+                score, __dmul_rn(dot, (double)index_weights[head]));
         }
-        score *= rsqrt((double)head_dim) * rsqrt((double)heads);
+        score = __dmul_rn(score, 1.0 / sqrt((double)head_dim));
+        score = __dmul_rn(score, 1.0 / sqrt((double)heads));
         if (!isfinite(score)) {
             atomicCAS(status, 0, 1);
             return;
@@ -1358,8 +1545,8 @@ extern "C" __global__ void yvex_deepseek_topk(
 }
 
 /* Executes sparse/local masking, stable softmax and value reduction on device.
- * One block owns one query head; selected compressed indexes originate only
- * from the device top-k kernel. */
+ * One block owns one query head and retains the versioned scalar lane/candidate
+ * order; selected compressed indexes originate only from device top-k. */
 /* Purpose: Implement the canonical deepseek reduce mechanism owned by the CUDA backend boundary.
  * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
  * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
@@ -1393,11 +1580,11 @@ extern "C" __global__ void yvex_deepseek_reduce(
     float *out,
     int *status)
 {
-    extern __shared__ double partial[];
     unsigned long long head = (unsigned long long)blockIdx.x;
     unsigned int thread = threadIdx.x;
     if (!status) return;
     if (*status != 0 || head >= query_heads) return;
+    if (thread != 0u) return;
     if (!query || !current_kv || !sinks || !out || !query_heads || !head_dim ||
         !sliding_window || token_position == ~0ull || attention_class > 2u ||
         history_local_count == ~0ull ||
@@ -1415,11 +1602,12 @@ extern "C" __global__ void yvex_deepseek_reduce(
         (attention_class == 1u && ratio != 4ull) ||
         (attention_class == 2u && ratio != 128ull) ||
         (attention_class == 0u && ratio != 0ull)) {
-        if (thread == 0u) atomicCAS(status, 0, 2);
+        atomicCAS(status, 0, 2);
         return;
     }
     const float *q = query + head * head_dim;
     double maximum = (double)sinks[head];
+    double scale = 1.0 / sqrt((double)head_dim);
     unsigned long long local_total = history_local_count + 1ull;
     unsigned long long selected_count = selected_count_ptr
         ? *selected_count_ptr : 0ull;
@@ -1458,27 +1646,17 @@ extern "C" __global__ void yvex_deepseek_reduce(
                     position + ratio - 1ull > token_position) continue;
             }
             double dot = 0.0;
-            for (unsigned long long lane = (unsigned long long)thread;
-                 lane < head_dim; lane += (unsigned long long)blockDim.x)
-                dot += (double)q[lane] * (double)row[lane];
-            partial[thread] = dot;
-            __syncthreads();
-            for (unsigned int offset = blockDim.x >> 1; offset; offset >>= 1) {
-                if (thread < offset) partial[thread] += partial[thread + offset];
-                __syncthreads();
+            for (unsigned long long lane = 0ull; lane < head_dim; ++lane) {
+                double term = __dmul_rn((double)q[lane], (double)row[lane]);
+                dot = __dadd_rn(dot, term);
             }
-            if (thread == 0u) {
-                double score = partial[0] * rsqrt((double)head_dim);
-                if (score > maximum) maximum = score;
-            }
-            __syncthreads();
+            double score = __dmul_rn(dot, scale);
+            if (score > maximum) maximum = score;
         }
     }
-    double denominator = exp((double)sinks[head] - maximum);
-    for (unsigned long long lane = (unsigned long long)thread;
-         lane < head_dim; lane += (unsigned long long)blockDim.x)
+    double denominator = exp(__dadd_rn((double)sinks[head], -maximum));
+    for (unsigned long long lane = 0ull; lane < head_dim; ++lane)
         out[head * head_dim + lane] = 0.0f;
-    __syncthreads();
     for (unsigned long long pass = 0ull; pass < 2ull; ++pass) {
         unsigned long long count = pass == 0ull ? local_total : compressed_total;
         for (unsigned long long candidate = 0ull; candidate < count; ++candidate) {
@@ -1511,37 +1689,26 @@ extern "C" __global__ void yvex_deepseek_reduce(
                     position + ratio - 1ull > token_position) continue;
             }
             double dot = 0.0;
-            for (unsigned long long lane = (unsigned long long)thread;
-                 lane < head_dim; lane += (unsigned long long)blockDim.x)
-                dot += (double)q[lane] * (double)row[lane];
-            partial[thread] = dot;
-            __syncthreads();
-            for (unsigned int offset = blockDim.x >> 1; offset; offset >>= 1) {
-                if (thread < offset) partial[thread] += partial[thread + offset];
-                __syncthreads();
+            for (unsigned long long lane = 0ull; lane < head_dim; ++lane) {
+                double term = __dmul_rn((double)q[lane], (double)row[lane]);
+                dot = __dadd_rn(dot, term);
             }
-            double probability = exp(partial[0] * rsqrt((double)head_dim) - maximum);
-            if (thread == 0u) partial[0] = probability;
-            __syncthreads();
-            probability = partial[0];
-            if (thread == 0u) denominator += probability;
-            for (unsigned long long lane = (unsigned long long)thread;
-                 lane < head_dim; lane += (unsigned long long)blockDim.x)
-                out[head * head_dim + lane] += (float)(probability * row[lane]);
-            __syncthreads();
+            double probability = exp(__dadd_rn(__dmul_rn(dot, scale), -maximum));
+            denominator = __dadd_rn(denominator, probability);
+            for (unsigned long long lane = 0ull; lane < head_dim; ++lane) {
+                float term = (float)__dmul_rn(probability, (double)row[lane]);
+                unsigned long long offset = head * head_dim + lane;
+                out[offset] = __fadd_rn(out[offset], term);
+            }
         }
     }
-    __shared__ double final_denominator;
-    if (thread == 0u) final_denominator = denominator;
-    __syncthreads();
-    if (!isfinite(final_denominator) || final_denominator <= 0.0) {
-        if (thread == 0u) atomicCAS(status, 0, 1);
+    if (!isfinite(denominator) || denominator <= 0.0) {
+        atomicCAS(status, 0, 1);
         return;
     }
-    for (unsigned long long lane = (unsigned long long)thread;
-         lane < head_dim; lane += (unsigned long long)blockDim.x) {
-        float published = (float)((double)out[head * head_dim + lane] /
-                                  final_denominator);
+    for (unsigned long long lane = 0ull; lane < head_dim; ++lane) {
+        float published = (float)__ddiv_rn((double)out[head * head_dim + lane],
+                                           denominator);
         if (!isfinite(published)) atomicCAS(status, 0, 1);
         else out[head * head_dim + lane] = float_to_bf16_rne(published);
     }

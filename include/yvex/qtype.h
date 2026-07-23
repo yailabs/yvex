@@ -134,9 +134,7 @@ const yvex_gguf_qtype_geometry *yvex_gguf_qtype_geometry_find_by_name(const char
 
 const char *yvex_gguf_qtype_name(unsigned int qtype);
 const char *yvex_gguf_qtype_identity_status_name(yvex_gguf_qtype_identity_status status);
-const char *yvex_gguf_qtype_storage_class_name(yvex_gguf_qtype_storage_class storage_class);
 const char *yvex_gguf_qtype_storage_status_name(yvex_gguf_qtype_storage_status status);
-const char *yvex_gguf_qtype_refusal_reason(unsigned int qtype);
 
 int yvex_gguf_qtype_supported_for_storage(unsigned int qtype, const char **reason);
 

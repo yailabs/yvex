@@ -192,26 +192,6 @@ static int quant_execute_fail(yvex_quant_failure *failure, yvex_quant_failure_co
     return status;
 }
 
-/* Purpose: initialize a reusable quantization cancellation token to the clear state.
- * Inputs: caller-owned cancellation storage, which may be null.
- * Effects: atomically clears the request flag when storage is present.
- * Failure: has no failure result and performs no allocation.
- * Boundary: initializes coordination state but never starts or stops execution itself. */
-void yvex_quant_cancellation_init(yvex_quant_cancellation *cancellation) {
-    if (cancellation)
-        atomic_init(&cancellation->requested, 0);
-}
-
-/* Purpose: request cooperative termination of executions observing a cancellation token.
- * Inputs: initialized caller-owned token, which may be null.
- * Effects: atomically publishes the request with release ordering.
- * Failure: has no failure result and leaves a null token untouched.
- * Boundary: requests cancellation; workers retain responsibility for transactional abort. */
-void yvex_quant_cancellation_request(yvex_quant_cancellation *cancellation) {
-    if (cancellation)
-        atomic_store_explicit(&cancellation->requested, 1, memory_order_release);
-}
-
 /* Purpose: sample an optional cancellation token with acquire ordering. */
 static int quant_cancellation_requested(const yvex_quant_cancellation *cancellation) {
     return cancellation &&

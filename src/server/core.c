@@ -1,12 +1,12 @@
 /* Owner: server.core.
  * Owns: HTTP server lifecycle, bounded request parsing, routing, and response framing.
- * Does not own: engine semantics, backend policy, model support, or generation.
+ * Does not own: runtime semantics, backend policy, model support, or generation.
  * Invariants: one server owns one socket and every advertised generation fact remains false.
- * Boundary: provider shell over typed engine/backend APIs; it cannot promote capability.
+ * Boundary: provider status shell; it cannot open a runtime model or promote capability.
  * Purpose: expose health, metrics, and admitted model facts through a local HTTP endpoint.
  * Inputs: server options, accepted socket bytes, and immutable domain summaries.
- * Effects: owns sockets, request counters, optional engine/backend handles, and HTTP replies.
- * Failure: rejects invalid requests and unwinds socket, engine, and backend resources. */
+ * Effects: owns sockets, request counters, and HTTP replies.
+ * Failure: rejects invalid requests and unwinds only server-owned socket resources. */
 #define _POSIX_C_SOURCE 200809L
 
 /*
@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <yvex/internal/core.h>
 #include <yvex/server.h>
 
 #define YVEX_SERVER_LABEL_CAP 128
@@ -39,8 +40,6 @@ struct yvex_server {
     char backend_status[YVEX_SERVER_LABEL_CAP];
     char model_name[YVEX_SERVER_LABEL_CAP];
     char architecture[YVEX_SERVER_LABEL_CAP];
-    yvex_engine *engine;
-    yvex_backend *backend;
     int listen_fd;
     int one_request;
     unsigned long long request_count;
@@ -48,16 +47,6 @@ struct yvex_server {
 };
 
 static void record_response(yvex_server *server, int status_code);
-
-/* Purpose: copy a nullable server label into fixed storage with termination. */
-static void copy_label(char *dst, size_t cap, const char *src)
-{
-    if (!dst || cap == 0) {
-        return;
-    }
-    snprintf(dst, cap, "%s", src ? src : "");
-    dst[cap - 1u] = '\0';
-}
 
 /* Purpose: close and invalidate the server's listening descriptor.
  * Inputs: nullable mutable server state.
@@ -69,69 +58,6 @@ static void close_listen_fd(yvex_server *server)
     if (server && server->listen_fd >= 0) {
         close(server->listen_fd);
         server->listen_fd = -1;
-    }
-}
-
-/* Purpose: attach the explicitly requested admitted engine and CPU backend.
- * Inputs: mutable created server and typed error output.
- * Effects: may publish owned engine/backend handles and copied summary labels.
- * Failure: unsupported backend or open failure leaves cleanup to server close.
- * Boundary: adapter over canonical runtime admission; no generation is enabled. */
-static int load_server_runtime(yvex_server *server, yvex_error *err)
-{
-    yvex_backend_options backend_options;
-    yvex_engine_summary engine_summary;
-    int rc;
-
-    if (!server || server->model_path[0] == '\0') {
-        return YVEX_OK;
-    }
-    if (strcmp(server->backend_name, "cpu") != 0) {
-        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_server_create",
-                       "server model backend is unsupported in server shell");
-        return YVEX_ERR_UNSUPPORTED;
-    }
-
-    rc = yvex_engine_open_path(&server->engine, server->model_path, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-
-    memset(&backend_options, 0, sizeof(backend_options));
-    backend_options.kind = YVEX_BACKEND_KIND_CPU;
-    rc = yvex_backend_open(&server->backend, &backend_options, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-
-    if (yvex_engine_get_summary(server->engine, &engine_summary, err) == YVEX_OK) {
-        copy_label(server->engine_status, sizeof(server->engine_status),
-                   yvex_engine_status_name(engine_summary.status));
-        copy_label(server->model_name, sizeof(server->model_name), engine_summary.model_name);
-        copy_label(server->architecture, sizeof(server->architecture), engine_summary.architecture);
-    } else {
-        copy_label(server->engine_status, sizeof(server->engine_status), "failed");
-    }
-    copy_label(server->backend_status, sizeof(server->backend_status),
-               yvex_backend_status_name(yvex_backend_status_of(server->backend)));
-
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-/* Purpose: map server lifecycle state to a stable diagnostic label.
- * Inputs: typed server status.
- * Effects: none; returned storage is static.
- * Failure: unknown values map to "unknown".
- * Boundary: status projection, not lifecycle admission. */
-const char *yvex_server_status_name(yvex_server_status status)
-{
-    switch (status) {
-    case YVEX_SERVER_STATUS_CREATED: return "created";
-    case YVEX_SERVER_STATUS_LISTENING: return "listening";
-    case YVEX_SERVER_STATUS_STOPPED: return "stopped";
-    case YVEX_SERVER_STATUS_FAILED: return "failed";
-    default: return "unknown";
     }
 }
 
@@ -148,7 +74,6 @@ int yvex_server_create(yvex_server **out,
     const char *host = "127.0.0.1";
     const char *backend_name = "cpu";
     int should_load = 0;
-    int rc;
 
     if (!out) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_server_create", "out is required");
@@ -175,24 +100,23 @@ int yvex_server_create(yvex_server **out,
 
     server->status = YVEX_SERVER_STATUS_CREATED;
     server->listen_fd = -1;
-    copy_label(server->host, sizeof(server->host), host);
+    yvex_core_text_copy(server->host, sizeof(server->host), host);
     server->port = options ? options->port : 8080;
-    copy_label(server->backend_name, sizeof(server->backend_name), backend_name);
-    copy_label(server->engine_status, sizeof(server->engine_status), "not_loaded");
-    copy_label(server->backend_status, sizeof(server->backend_status), "not_loaded");
+    yvex_core_text_copy(server->backend_name, sizeof(server->backend_name), backend_name);
+    yvex_core_text_copy(server->engine_status, sizeof(server->engine_status), "not_loaded");
+    yvex_core_text_copy(server->backend_status, sizeof(server->backend_status), "not_loaded");
     if (options && options->model_path) {
-        copy_label(server->model_path, sizeof(server->model_path), options->model_path);
+        yvex_core_text_copy(server->model_path, sizeof(server->model_path), options->model_path);
     }
     server->one_request = options ? options->one_request : 0;
 
     should_load = options && (options->load_engine || server->model_path[0] != '\0');
     if (should_load) {
-        rc = load_server_runtime(server, err);
-        if (rc != YVEX_OK) {
-            yvex_server_close(server);
-            *out = NULL;
-            return rc;
-        }
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_server_create",
+                       "server runtime attachment is not implemented");
+        yvex_server_close(server);
+        *out = NULL;
+        return YVEX_ERR_UNSUPPORTED;
     }
 
     *out = server;
@@ -359,7 +283,7 @@ int yvex_server_stop(yvex_server *server,
 
 /* Purpose: release all resources owned by one server.
  * Inputs: nullable owned server state.
- * Effects: closes socket, backend, engine, and allocation in dependency order.
+ * Effects: closes the socket and server allocation in dependency order.
  * Failure: none is reportable through this terminal void operation.
  * Boundary: deterministic server teardown. */
 void yvex_server_close(yvex_server *server)
@@ -368,19 +292,7 @@ void yvex_server_close(yvex_server *server)
         return;
     }
     close_listen_fd(server);
-    yvex_backend_close(server->backend);
-    yvex_engine_close(server->engine);
     free(server);
-}
-
-/* Purpose: read the current server lifecycle state.
- * Inputs: nullable immutable server.
- * Effects: none.
- * Failure: NULL projects the safe stopped state.
- * Boundary: read-only status view. */
-yvex_server_status yvex_server_status_of(const yvex_server *server)
-{
-    return server ? server->status : YVEX_SERVER_STATUS_STOPPED;
 }
 
 /* Purpose: expose an immutable snapshot of server and attached-runtime facts.
@@ -452,8 +364,8 @@ static int handle_health(const yvex_server *server,
                          yvex_error *err)
 {
     char body[YVEX_HTTP_BODY_CAP];
-    const char *engine_status = server && server->engine ? server->engine_status : "not_loaded";
-    const char *backend_status = server && server->backend ? server->backend_status : "not_loaded";
+    const char *engine_status = server ? server->engine_status : "not_loaded";
+    const char *backend_status = server ? server->backend_status : "not_loaded";
 
     snprintf(body, sizeof(body),
              "{\n"
@@ -478,8 +390,8 @@ static int handle_metrics(const yvex_server *server,
                           yvex_error *err)
 {
     char body[YVEX_HTTP_BODY_CAP];
-    const char *engine_status = server && server->engine ? server->engine_status : "not_loaded";
-    const char *backend_status = server && server->backend ? server->backend_status : "not_loaded";
+    const char *engine_status = server ? server->engine_status : "not_loaded";
+    const char *backend_status = server ? server->backend_status : "not_loaded";
     unsigned long long request_count = server ? server->request_count + 1u : 0;
     unsigned long long error_count = server ? server->error_count : 0;
 
@@ -507,36 +419,15 @@ static int handle_models(const yvex_server *server,
 {
     char body[YVEX_HTTP_BODY_CAP];
 
-    if (!server || !server->engine) {
-        snprintf(body, sizeof(body),
-                 "{\n"
-                 "  \"schema\": \"yvex.models.v1\",\n"
-                 "  \"object\": \"list\",\n"
-                 "  \"generation_available\": false,\n"
-                 "  \"data\": []\n"
-                 "}\n");
-        return response_body(response, 200, body, err);
-    }
+    (void)server;
 
     snprintf(body, sizeof(body),
              "{\n"
              "  \"schema\": \"yvex.models.v1\",\n"
              "  \"object\": \"list\",\n"
              "  \"generation_available\": false,\n"
-             "  \"data\": [\n"
-             "    {\n"
-             "      \"id\": \"%s\",\n"
-             "      \"object\": \"model\",\n"
-             "      \"status\": \"descriptor-only\",\n"
-             "      \"architecture\": \"%s\",\n"
-             "      \"backend\": \"%s\",\n"
-             "      \"inference\": \"not_implemented\"\n"
-             "    }\n"
-             "  ]\n"
-             "}\n",
-             server->model_name[0] ? server->model_name : "unknown",
-             server->architecture[0] ? server->architecture : "unknown",
-             server->backend_name[0] ? server->backend_name : "cpu");
+             "  \"data\": []\n"
+             "}\n");
     return response_body(response, 200, body, err);
 }
 

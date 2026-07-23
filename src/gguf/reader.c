@@ -15,21 +15,6 @@
 #include <stdio.h>
 #include <yvex/internal/gguf.h>
 
-static const char *const parse_code_names[] = {
-    "ok", "invalid-argument", "file-unreadable", "short-read", "invalid-magic",
-    "unsupported-version", "invalid-count", "resource-limit", "malformed-metadata-key",
-    "duplicate-metadata-key", "unsupported-metadata-type", "malformed-metadata-value",
-    "malformed-string", "malformed-array", "invalid-alignment", "malformed-tensor-name",
-    "duplicate-tensor-name", "invalid-rank", "invalid-dimension", "refused-qtype",
-    "offset-overflow", "incomplete-directory", "allocation-failure", "empty-metadata-key",
-    "empty-tensor-name", "element-count-overflow", "row-count-overflow", "row-byte-overflow",
-    "total-byte-overflow",
-};
-
-static const char *const parse_section_names[] = {
-    "none", "file", "container", "metadata", "tensor-info", "qtype", "range", "resource",
-};
-
 /* Purpose: initialize target-capable structural reader budgets without allocation.
  * Inputs: an optional writable options record.
  * Effects: replaces every budget field when the record is present.
@@ -118,87 +103,4 @@ int yvex_gguf_reader_fail(yvex_gguf_parse_result *result, yvex_gguf_parse_code c
     yvex_error_set(err, rc, where ? where : "yvex_gguf_open_ex",
                    reason ? reason : "GGUF structural reader refused input");
     return rc;
-}
-
-/* Purpose: project one parse code as a stable diagnostic name.
- * Inputs: parser code value.
- * Effects: none.
- * Failure: out-of-range values yield unknown-parse-code.
- * Boundary: text never becomes the source of failure classification. */
-const char *yvex_gguf_parse_code_name(yvex_gguf_parse_code code) {
-    return code >= YVEX_GGUF_PARSE_OK &&
-                   (size_t)code < sizeof(parse_code_names) / sizeof(parse_code_names[0])
-               ? parse_code_names[code]
-               : "unknown-parse-code";
-}
-
-/* Purpose: project one structural parser section as a stable diagnostic name.
- * Inputs: parser section value.
- * Effects: none.
- * Failure: out-of-range values yield unknown-section.
- * Boundary: section text does not infer parser state. */
-const char *yvex_gguf_parse_section_name(yvex_gguf_parse_section section) {
-    return section >= YVEX_GGUF_PARSE_SECTION_NONE &&
-                   (size_t)section < sizeof(parse_section_names) / sizeof(parse_section_names[0])
-               ? parse_section_names[section]
-               : "unknown-section";
-}
-
-/* Purpose: copy bounded diagnostic text with deterministic null handling. */
-static void copy_error_text(char *dst, size_t cap, const char *text) {
-    if (!dst || cap == 0u)
-        return;
-    (void)snprintf(dst, cap, "%s", text ? text : "");
-}
-
-/* Purpose: project one typed parse failure into the affected ABI report section.
- * Inputs: public parse status, optional typed result/error, and writable report.
- * Effects: updates report status, location, reason, and the single affected section.
- * Failure: missing reports are ignored; no failure is inferred from diagnostic text.
- * Boundary: report projection cannot promote structural acceptance or artifact support. */
-void yvex_gguf_reader_classify_error(int parse_rc, const yvex_gguf_parse_result *result,
-                                     const yvex_error *err, yvex_gguf_abi_report *report) {
-    yvex_gguf_abi_section_status status;
-    const char *reason;
-
-    if (!report)
-        return;
-    report->parser_status = parse_rc;
-    if (result)
-        report->parse_result = *result;
-    reason = result && result->reason ? result->reason : yvex_error_message(err);
-    copy_error_text(report->failure_where, sizeof(report->failure_where),
-                    result ? yvex_gguf_parse_section_name(result->section) : yvex_error_where(err));
-    copy_error_text(report->failure_reason, sizeof(report->failure_reason), reason);
-
-    status = YVEX_GGUF_ABI_SECTION_MALFORMED;
-    if (parse_rc == YVEX_ERR_IO)
-        status = YVEX_GGUF_ABI_SECTION_NOT_PRESENT;
-    else if (parse_rc == YVEX_ERR_UNSUPPORTED)
-        status = YVEX_GGUF_ABI_SECTION_UNSUPPORTED;
-    else if (parse_rc == YVEX_ERR_BOUNDS || parse_rc == YVEX_ERR_NOMEM)
-        status = YVEX_GGUF_ABI_SECTION_REFUSED;
-    if (result && result->section == YVEX_GGUF_PARSE_SECTION_QTYPE) {
-        status = YVEX_GGUF_ABI_SECTION_REFUSED;
-    }
-    report->status = status;
-
-    if (!result || result->section == YVEX_GGUF_PARSE_SECTION_FILE ||
-        result->section == YVEX_GGUF_PARSE_SECTION_CONTAINER ||
-        result->section == YVEX_GGUF_PARSE_SECTION_RESOURCE) {
-        report->container.status = status;
-        report->container.reason = reason;
-    } else if (result->section == YVEX_GGUF_PARSE_SECTION_METADATA) {
-        report->metadata.status = status;
-        report->metadata.reason = reason;
-    } else if (result->section == YVEX_GGUF_PARSE_SECTION_TENSOR_INFO) {
-        report->tensor_info.status = status;
-        report->tensor_info.reason = reason;
-    } else if (result->section == YVEX_GGUF_PARSE_SECTION_QTYPE) {
-        report->qtype.status = status;
-        report->qtype.reason = reason;
-    } else {
-        report->range.status = status;
-        report->range.reason = reason;
-    }
 }

@@ -1,19 +1,21 @@
 # CLI Output Architecture
 
-This document records the completed `CLI.ARCH.AUDIT.0` inventory and doctrine.
-It is an architecture audit only: it does not change command behavior, add a
-renderer, remove output flags, or implement JSON output.
+This document owns durable CLI-output doctrine and retains the completed
+`CLI.ARCH.AUDIT.0` inventory as historical evidence. The print inventory was
+measured at commit
+`f05f0766ff17bff4430d4e7a377d17f294ccb434`; its paths and counts are not
+current-tree claims. Later doctrine and command-shape examples remain normative
+only where they state an ownership or output rule.
 
-The production inventory below counts direct C/CUDA output forms in the source
-tree, excluding `tests/`, `build/`, and documentation. The counted forms are
-`printf`, `fprintf`, `puts`, `fputs`, `putchar`, `perror`, `vprintf`, and
-`vfprintf`. No direct-print macros were found in the scanned production tree.
-Function recovery and surface classification are heuristic, so the file and
-call-kind totals are the authoritative part of this audit.
+At that snapshot, the inventory counted direct C/CUDA output forms excluding
+`tests/`, `build/`, and documentation. The counted forms were `printf`,
+`fprintf`, `puts`, `fputs`, `putchar`, `perror`, `vprintf`, and `vfprintf`.
+Function recovery and surface classification were heuristic, so the file and
+call-kind totals are authoritative only for that pinned snapshot.
 
 ## Print Inventory Summary
 
-Manual production print sites: 7319.
+Manual production print sites at `f05f0766`: 7,319.
 
 | File group | Count |
 | --- | ---: |
@@ -54,7 +56,7 @@ Manual production print sites: 7319.
 
 ## Top Files by Manual Print Count
 
-| File | Count | Current pressure |
+| File | Count | Recorded pressure at `f05f0766` |
 | --- | ---: | --- |
 | `artifacts.c` | 2581 | model/download/fullmodel report walls and audit records |
 | `core.c` | 1409 | model-target, tensor-map, mapping gate, qtype policy, list/table output |
@@ -80,16 +82,14 @@ Manual production print sites: 7319.
 | `main.c` | 17 | top-level dispatch/help only |
 | `yvexd.c` | 14 | daemon process output |
 
-The immediate concentration is clear: the first four files contain 5112 print
-sites. The next migration should reduce those owner-file walls before touching
-lower-pressure modules.
+At that snapshot, the first four files contained 5,112 print sites. The
+retained conclusion was to reduce those owner-file walls before lower-pressure
+modules.
 
 ## Print Kinds by Category
 
-Most output is still hardcoded in command/report branches. That was acceptable
-while YVEX needed proof text quickly, but it now creates an architectural
-problem: command bodies own both semantic decisions and layout. The future split
-should be report construction first, rendering second.
+At that snapshot, most output was hardcoded in command/report branches. The
+durable rule is report construction first and renderer-owned layout second.
 
 The rough categories are:
 
@@ -125,9 +125,9 @@ exists for the reports that need it.
 
 ## Existing Flag Surface
 
-The production source contains 256 unique `--...` strings. Not all are output
-flags; many are selectors, paths, or domain options. The output-related pressure
-is concentrated here:
+At the documented snapshot, the production source contained 256 unique `--...`
+strings. Not all were output flags; many were selectors, paths, or domain
+options. The output-related pressure was concentrated here:
 
 | Flag family | Count | Classification | Notes |
 | --- | ---: | --- | --- |
@@ -222,8 +222,9 @@ yvex models prepare TARGET
 yvex models check TARGET
 yvex model-target inspect TARGET
 yvex model-target tensor-map TARGET
-yvex graph check --suite primitives
-yvex generate --model TARGET
+yvex graph attention describe --target deepseek4-v4-flash --output normal
+yvex graph attention execute --target deepseek4-v4-flash --artifact ARTIFACT \
+  --runtime-binding BINDING --backend cpu --scope quick
 ```
 
 Top-level command families are:

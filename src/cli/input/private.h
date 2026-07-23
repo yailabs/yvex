@@ -16,7 +16,6 @@
 #include <yvex/artifact.h>
 #include <yvex/core.h>
 #include <yvex/internal/backend.h>
-#include <yvex/internal/generation.h>
 #include <yvex/internal/graph.h>
 #include <yvex/internal/model_artifact.h>
 #include <yvex/internal/model_target.h>
@@ -32,41 +31,25 @@ extern "C" {
 
 /* Shared CLI command, parser, and diagnostic rendering contract. */
 int cli_backend_name_valid(const char *name);
-void print_quoted_bytes(const char *data, unsigned long long len);
-int open_artifact_for_gguf(const char *path, yvex_artifact **artifact, yvex_error *err);
-void print_tensor_dims(const unsigned long long *dims, unsigned int rank);
-void print_native_dims(const unsigned long long *dims, unsigned int rank);
-void print_token_ids(const yvex_tokens *tokens);
-int parse_id_list(const char *text, unsigned int **out_ids, unsigned long long *out_len);
-int parse_dims_csv(const char *text, unsigned int expected_rank, unsigned long long dims[4]);
 int enforce_registered_identity_cli(const yvex_model_ref *ref, const char *surface);
 void print_token_input_summary(const yvex_token_input *input, const char *status,
                                const char *bounds_status, unsigned long long selected_index,
                                unsigned int selected_token, int has_selected);
 int yvex_accounts_command(int arg_count, char **args);
 void yvex_accounts_help(FILE *fp);
-int yvex_attention_command(int arg_count, char **args);
-void yvex_attention_help(FILE *fp);
 int yvex_backend_command(int arg_count, char **args);
 void yvex_backend_help(FILE *fp);
-int yvex_chat_command(int arg_count, char **args);
-void yvex_chat_help(FILE *fp);
 int yvex_context_command(int arg_count, char **args);
 void yvex_context_help(FILE *fp);
 int yvex_convert_command(int arg_count, char **args);
 void yvex_convert_help(FILE *fp);
 int yvex_cuda_info_command(int arg_count, char **args);
 void yvex_cuda_info_help(FILE *fp);
-int yvex_decode_command(int arg_count, char **args);
-void yvex_decode_help(FILE *fp);
 int yvex_detokenize_command(int arg_count, char **args);
 void yvex_detokenize_help(FILE *fp);
-int yvex_engine_command(int arg_count, char **args);
-void yvex_engine_help(FILE *fp);
-int yvex_graph_command(int arg_count, char **args);
+int yvex_graph_command(int arg_count, char **args,
+                       yvex_runtime_cleanup_lease **retained_cleanup);
 void yvex_graph_help(FILE *fp);
-int yvex_generate_command(int arg_count, char **args);
-void yvex_generate_help(FILE *fp);
 int yvex_fullmodel_command(int arg_count, char **args);
 void yvex_fullmodel_help(FILE *fp);
 int yvex_gguf_template_command(int arg_count, char **args);
@@ -75,18 +58,12 @@ int yvex_gguf_emit_command(int arg_count, char **args);
 void yvex_gguf_emit_help(FILE *fp);
 int yvex_imatrix_command(int arg_count, char **args);
 void yvex_imatrix_help(FILE *fp);
-int yvex_runtime_info_command(int arg_count, char **args);
-void yvex_runtime_info_help(FILE *fp);
 int yvex_inspect_command(int arg_count, char **args);
 void yvex_inspect_help(FILE *fp);
 int yvex_input_command(int arg_count, char **args);
 void yvex_input_help(FILE *fp);
 int yvex_integrity_command(int arg_count, char **args);
 void yvex_integrity_help(FILE *fp);
-int yvex_kv_command(int arg_count, char **args);
-void yvex_kv_help(FILE *fp);
-int yvex_logits_command(int arg_count, char **args);
-void yvex_logits_help(FILE *fp);
 int yvex_materialize_command(int arg_count, char **args);
 void yvex_materialize_help(FILE *fp);
 int yvex_materialize_gate_command(int arg_count, char **args);
@@ -105,10 +82,6 @@ int yvex_native_weights_command(int arg_count, char **args);
 void yvex_native_weights_help(FILE *fp);
 int yvex_paths_command(int arg_count, char **args);
 void yvex_paths_help(FILE *fp);
-int yvex_plan_command(int arg_count, char **args);
-void yvex_plan_help(FILE *fp);
-int yvex_prefill_command(int arg_count, char **args);
-void yvex_prefill_help(FILE *fp);
 int yvex_prompt_command(int arg_count, char **args);
 void yvex_prompt_help(FILE *fp);
 int yvex_quant_job_command(int arg_count, char **args);
@@ -117,12 +90,6 @@ int yvex_quant_policy_command(int arg_count, char **args);
 void yvex_quant_policy_help(FILE *fp);
 int yvex_qtype_support_command(int arg_count, char **args);
 void yvex_qtype_support_help(FILE *fp);
-int yvex_run_command(int arg_count, char **args);
-void yvex_run_help(FILE *fp);
-int yvex_sample_command(int arg_count, char **args);
-void yvex_sample_help(FILE *fp);
-int yvex_session_command(int arg_count, char **args);
-void yvex_session_help(FILE *fp);
 int yvex_source_manifest_command(int arg_count, char **args);
 void yvex_source_manifest_help(FILE *fp);
 int yvex_source_manifest_report_command(int arg_count, char **args);
@@ -145,47 +112,70 @@ typedef struct {
 int yvex_backend_args_parse(int argc, char **argv, yvex_backend_args *out, yvex_error *err);
 int yvex_cuda_info_args_parse(int argc, char **argv, yvex_backend_args *out, yvex_error *err);
 
-/* Generate contract. */
-typedef struct {
-    yvex_generation_request request;
-    yvex_generate_render_mode render_mode;
-    int help_requested;
-} yvex_generate_args;
-int yvex_generate_args_parse(int argc, char **argv, yvex_generate_args *out, yvex_error *err);
-
 /* Graph contract. */
+typedef enum {
+    YVEX_GRAPH_ATTENTION_ACTION_NONE = 0,
+    YVEX_GRAPH_ATTENTION_ACTION_PREPARE,
+    YVEX_GRAPH_ATTENTION_ACTION_DESCRIBE,
+    YVEX_GRAPH_ATTENTION_ACTION_CAPABILITIES,
+    YVEX_GRAPH_ATTENTION_ACTION_PLAN,
+    YVEX_GRAPH_ATTENTION_ACTION_EXECUTE,
+    YVEX_GRAPH_ATTENTION_ACTION_COMPARE,
+    YVEX_GRAPH_ATTENTION_ACTION_STATE_INSPECT,
+    YVEX_GRAPH_ATTENTION_ACTION_STATE_VALIDATE,
+    YVEX_GRAPH_ATTENTION_ACTION_STATE_EXERCISE,
+    YVEX_GRAPH_ATTENTION_ACTION_RESIDENCY_INSPECT,
+    YVEX_GRAPH_ATTENTION_ACTION_CAPTURE,
+    YVEX_GRAPH_ATTENTION_ACTION_REPLAY,
+    YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_LIST,
+    YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_INSPECT,
+    YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_WARMUP,
+    YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_UPDATE,
+    YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_INVALIDATE,
+    YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_RELEASE,
+    YVEX_GRAPH_ATTENTION_ACTION_TRACE,
+    YVEX_GRAPH_ATTENTION_ACTION_PROFILE,
+    YVEX_GRAPH_ATTENTION_ACTION_BENCHMARK
+} yvex_graph_attention_action;
+
 typedef struct {
-    yvex_graph_report_request request;
     yvex_graph_report_mode render_mode;
     struct {
+        yvex_graph_attention_action action;
         const char *target;
         const char *artifact_path;
+        const char *runtime_binding_path;
+        const char *runtime_binding_dir;
         const char *models_root;
         const char *backend;
         const char *probe;
-        const char *scope;
-        int execute;
+        const char *coverage;
+        const char *phase;
+        const char *mode;
+        const char *operation_scope;
+        const char *trace_level;
+        const char *progress;
+        const char *input_class;
+        const char *attention_class;
+        const char *capture_bucket;
+        const char *baseline_path;
+        const char *chart_path;
+        unsigned long long token_count, warmup, repeat;
+        unsigned long long layer, layer_start, layer_count, position, history_tokens;
+        unsigned long long local_capacity, compressed_capacity, indexer_capacity;
+        unsigned long long maximum_host_bytes, maximum_device_bytes;
+        int layer_seen, layer_start_seen, layer_count_seen, position_seen, history_tokens_seen;
+        int phase_seen, mode_seen, token_count_seen;
+        int local_capacity_seen, compressed_capacity_seen, indexer_capacity_seen;
+        int active;
         int compare_backends;
+        int require_mode;
+        int write_baseline;
     } attention;
     int help_requested;
     int help_exit_code;
 } yvex_graph_args;
 int yvex_graph_args_parse(int argc, char **argv, yvex_graph_args *out, yvex_error *err);
-
-/* Kv contract. */
-typedef struct {
-    yvex_kv_report_request request;
-    int help_requested;
-} yvex_kv_args;
-int yvex_kv_args_parse(int argc, char **argv, yvex_kv_args *out, yvex_error *err);
-
-/* Model Artifacts contract. */
-typedef struct {
-    yvex_model_artifact_report_request request;
-    int help_requested;
-} yvex_model_artifacts_args;
-int yvex_model_artifacts_args_parse(int argc, char **argv, yvex_model_artifacts_args *out,
-                                    yvex_error *err);
 
 /* Model Target contract. */
 typedef struct {
@@ -196,15 +186,6 @@ typedef struct {
 } yvex_model_target_args;
 int yvex_model_target_args_parse(int argc, char **argv, yvex_model_target_args *out,
                                  yvex_error *err);
-
-/* Sampling contract. */
-typedef struct {
-    yvex_sampling_report_request request;
-    yvex_sampling_report_mode render_mode;
-    int help_requested;
-    int help_exit_code;
-} yvex_sampling_args;
-int yvex_sampling_args_parse(int argc, char **argv, yvex_sampling_args *out, yvex_error *err);
 
 /* Source contract. */
 typedef struct {

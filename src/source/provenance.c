@@ -428,19 +428,6 @@ static const manifest_field manifest_payload_fields[] = {
     {"shards", 256u, MANIFEST_PAYLOAD_SHARDS, 0u, 0u},
 };
 
-/* Purpose: resolve one immutable manifest schema field by exact key. */
-static const manifest_field *manifest_field_find(const manifest_field *fields,
-                                                 size_t count,
-                                                 const char *key) {
-    size_t index;
-
-    for (index = 0u; index < count; ++index) {
-        if (strcmp(fields[index].key, key) == 0)
-            return &fields[index];
-    }
-    return NULL;
-}
-
 /* Purpose: decode one scalar manifest field selected by immutable schema.
  * Inputs: active JSON cursor, schema row, and caller-owned destination object.
  * Effects: mutates only the exact destination field named by the schema row.
@@ -481,24 +468,17 @@ static int manifest_object_parse(yvex_json *json,
                                  void *object) {
     char key[YVEX_JSON_KEY_CAP];
     unsigned int seen = 0u;
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    yvex_json_space(json);
-    if (json->cursor >= json->end || *json->cursor++ != '{')
+    if (!yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_OBJECT))
         return 0;
-    for (;;) {
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
         const manifest_field *field;
 
-        yvex_json_space(json);
-        if (json->cursor < json->end && *json->cursor == '}') {
-            json->cursor++;
-            return (seen & required) == required;
-        }
-        if (!yvex_json_string(json, key, sizeof(key)))
-            return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end || *json->cursor++ != ':')
-            return 0;
-        field = manifest_field_find(fields, field_count, key);
+        field = yvex_core_keyed_row_find(
+            fields, field_count, sizeof(fields[0]), offsetof(manifest_field, key), key);
         if (!field) {
             if (!yvex_json_skip_value(json))
                 return 0;
@@ -507,14 +487,8 @@ static int manifest_object_parse(yvex_json *json,
         } else {
             seen |= field->bit;
         }
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == '}')
-            continue;
-        if (*json->cursor++ != ',')
-            return 0;
     }
+    return item == YVEX_JSON_ITEM_END && (seen & required) == required;
 }
 
 /* Purpose: parses exact repository and revision declarations from a manifest source.
@@ -543,21 +517,13 @@ static int source_manifest_parse_source(yvex_json *json, yvex_source_verificatio
 static int source_manifest_parse_local(yvex_json *json, char *path, size_t cap) {
     char key[YVEX_JSON_KEY_CAP];
     int seen = 0;
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    yvex_json_space(json);
-    if (json->cursor >= json->end || *json->cursor++ != '{')
+    if (!yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_OBJECT))
         return 0;
-    for (;;) {
-        yvex_json_space(json);
-        if (json->cursor < json->end && *json->cursor == '}') {
-            json->cursor++;
-            return seen;
-        }
-        if (!yvex_json_string(json, key, sizeof(key)))
-            return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end || *json->cursor++ != ':')
-            return 0;
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
         if (strcmp(key, "path") == 0) {
             if (seen || !yvex_json_string(json, path, cap))
                 return 0;
@@ -565,14 +531,8 @@ static int source_manifest_parse_local(yvex_json *json, char *path, size_t cap) 
         } else if (!yvex_json_skip_value(json)) {
             return 0;
         }
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == '}')
-            continue;
-        if (*json->cursor++ != ',')
-            return 0;
     }
+    return item == YVEX_JSON_ITEM_END && seen;
 }
 
 /* Purpose: parses the canonical target identity declared by a verifier-owned manifest.
@@ -612,23 +572,6 @@ static int source_manifest_parse_verification(yvex_json *json, yvex_source_verif
         out);
 }
 
-/* Purpose: accepts only one root-relative canonical shard basename without allocation.
- * Inputs: typed source provenance arguments; borrowed inputs outlive the call.
- * Effects: mutates only explicit caller-owned source provenance state.
- * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
- * Boundary: provider provenance is not full shard payload trust. */
-static int source_manifest_payload_name_valid(const char *name) {
-    const char *cursor;
-
-    if (!name || !name[0] || name[0] == '/' || strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
-        return 0;
-    for (cursor = name; *cursor; ++cursor) {
-        if (*cursor == '/' || *cursor == '\\' || *cursor == '\n' || *cursor == '\r')
-            return 0;
-    }
-    return 1;
-}
-
 /* Purpose: validates one published payload shard and returns stable aggregate facts.
  * Inputs: typed source provenance arguments; borrowed inputs outlive the call.
  * Effects: mutates only explicit caller-owned source provenance state.
@@ -654,7 +597,7 @@ static int source_manifest_parse_payload_shard(yvex_json *json,
                                    sizeof(manifest_payload_shard_fields[0]),
                                1023u,
                                &shard) ||
-        shard.id != expected_id || !source_manifest_payload_name_valid(shard.name) ||
+        shard.id != expected_id || !yvex_source_payload_name_is_canonical(shard.name) ||
         (previous_name[0] && strcmp(previous_name, shard.name) >= 0) ||
         shard.file_bytes == 0u || shard.data_region_offset > shard.file_bytes ||
         shard.payload_bytes != shard.file_bytes - shard.data_region_offset ||
@@ -688,37 +631,28 @@ static int source_manifest_parse_payload_shards(yvex_json *json,
     unsigned long long total = 0u;
     char previous_name[YVEX_PATH_CAP] = "";
     int all_upstream_trust = 1;
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    yvex_json_space(json);
-    if (json->cursor >= json->end || *json->cursor++ != '[')
+    if (!yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_ARRAY))
         return 0;
-    yvex_json_space(json);
-    if (json->cursor < json->end && *json->cursor == ']')
-        return 0;
-    for (;;) {
+    while ((item = yvex_json_array_value(&iter)) == YVEX_JSON_ITEM_READY) {
         unsigned long long file_bytes;
         int upstream_trust;
 
         if (!source_manifest_parse_payload_shard(
                 json, index, previous_name, &file_bytes, &upstream_trust) ||
-            ULLONG_MAX - total < file_bytes)
+            !yvex_core_u64_add(total, file_bytes, &total))
             return 0;
         if (!upstream_trust)
             all_upstream_trust = 0;
-        total += file_bytes;
         index++;
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == ']') {
-            json->cursor++;
-            *count = index;
-            *total_file_bytes = total;
-            return all_upstream_trust ? 2 : 1;
-        }
-        if (*json->cursor++ != ',')
-            return 0;
     }
+    if (item != YVEX_JSON_ITEM_END || iter.trailing_separator || index == 0u)
+        return 0;
+    *count = index;
+    *total_file_bytes = total;
+    return all_upstream_trust ? 2 : 1;
 }
 
 /* Purpose: parses v3 aggregate payload identity and validates all published shard rows.
@@ -784,24 +718,16 @@ static int source_manifest_parse(const char *data,
                                  char *local_path,
                                  size_t local_path_cap) {
     yvex_json json;
+    yvex_json_iter iter;
+    yvex_json_item item;
     char key[YVEX_JSON_KEY_CAP];
     unsigned int seen = 0u;
 
     yvex_json_init(&json, data, length);
-    yvex_json_space(&json);
-    if (json.cursor >= json.end || *json.cursor++ != '{')
+    if (!yvex_json_iter_begin(&json, &iter, YVEX_JSON_COLLECTION_OBJECT))
         return 0;
-    for (;;) {
-        yvex_json_space(&json);
-        if (json.cursor < json.end && *json.cursor == '}') {
-            json.cursor++;
-            break;
-        }
-        if (!yvex_json_string(&json, key, sizeof(key)))
-            return 0;
-        yvex_json_space(&json);
-        if (json.cursor >= json.end || *json.cursor++ != ':')
-            return 0;
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
         if (strcmp(key, "schema") == 0) {
             if ((seen & 1u) ||
                 !yvex_json_string(&json, out->manifest_schema, sizeof(out->manifest_schema)))
@@ -835,15 +761,8 @@ static int source_manifest_parse(const char *data,
         } else if (!yvex_json_skip_value(&json)) {
             return 0;
         }
-        yvex_json_space(&json);
-        if (json.cursor >= json.end)
-            return 0;
-        if (*json.cursor == '}')
-            continue;
-        if (*json.cursor++ != ',')
-            return 0;
     }
-    if (!yvex_json_complete(&json) || (seen & 15u) != 15u)
+    if (item != YVEX_JSON_ITEM_END || !yvex_json_complete(&json) || (seen & 15u) != 15u)
         return 0;
     if (strcmp(out->manifest_schema, "yvex.source_manifest.v1") == 0) {
         return seen == 15u;
@@ -1130,7 +1049,7 @@ static int source_metadata_identity(const yvex_source_verification *verification
         return provenance_refuse(err, YVEX_ERR_FORMAT, "source_metadata_identity",
             "metadata sidecar Git blob identity mismatch");
     }
-    (void)snprintf(fact.canonical_name, sizeof(fact.canonical_name), "%s", canonical_name);
+    yvex_core_text_copy(fact.canonical_name, sizeof(fact.canonical_name), canonical_name);
     memcpy(fact.revision, provider_revision, 41u);
     memcpy(fact.expected_git_blob_oid, provider_oid, 41u);
     fact.file_bytes = file_bytes;

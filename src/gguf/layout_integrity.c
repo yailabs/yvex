@@ -15,6 +15,7 @@
 #include <string.h>
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
+#include <yvex/internal/core.h>
 #include <yvex/qtype.h>
 
 #define YVEX_GGUF_LAYOUT_PADDING_CHUNK 4096u
@@ -31,14 +32,6 @@ static const char *const layout_code_names[] = {
     "tensor-info-missing", "tensor-range-mismatch",
 };
 
-/* Purpose: copy a bounded layout reason while normalizing null text. */
-static void layout_copy(char *dst, size_t cap, const char *text) {
-    if (!dst || cap == 0u)
-        return;
-    (void)snprintf(dst, cap, "%s", text ? text : "");
-    dst[cap - 1u] = '\0';
-}
-
 /* Purpose: initialize one self-contained fail-closed layout result.
  * Inputs: writable result storage.
  * Effects: clears all counters and installs invalid-argument/not-evaluated state.
@@ -48,7 +41,7 @@ static void layout_result_init(yvex_gguf_layout_result *result) {
     memset(result, 0, sizeof(*result));
     result->code = YVEX_GGUF_LAYOUT_INVALID_ARGUMENT;
     result->tensor_index = ULLONG_MAX;
-    layout_copy(result->reason, sizeof(result->reason), "layout not evaluated");
+    yvex_core_text_copy(result->reason, sizeof(result->reason), "layout not evaluated");
 }
 
 /* Purpose: add one layout counter without unsigned overflow.
@@ -113,7 +106,7 @@ static int layout_fail(yvex_gguf_layout_result *result, yvex_gguf_layout_code co
                        const char *reason, yvex_error *err) {
     result->accepted = 0;
     result->code = code;
-    layout_copy(result->reason, sizeof(result->reason), reason);
+    yvex_core_text_copy(result->reason, sizeof(result->reason), reason);
     yvex_error_setf(err, YVEX_ERR_FORMAT, "yvex_gguf_layout_validate", "%s: %s",
                     yvex_gguf_layout_code_name(code), reason);
     return YVEX_ERR_FORMAT;
@@ -199,7 +192,7 @@ static int layout_validate_tensor(const yvex_artifact *artifact, const yvex_gguf
     if (!tensor)
         return layout_fail(out, YVEX_GGUF_LAYOUT_TENSOR_INFO_MISSING,
                            "parsed tensor directory row is unavailable", err);
-    layout_copy(out->tensor_name, sizeof(out->tensor_name), tensor->name);
+    yvex_core_text_copy(out->tensor_name, sizeof(out->tensor_name), tensor->name);
     out->expected_relative_offset = cursor->expected;
     out->declared_relative_offset = tensor->relative_offset;
     if (yvex_gguf_qtype_tensor_storage(tensor->ggml_type, tensor->dims, tensor->rank, &storage) !=
@@ -414,7 +407,7 @@ int yvex_gguf_layout_validate(const yvex_artifact *artifact, const yvex_gguf *gg
     out->tensor_name[0] = '\0';
     out->code = YVEX_GGUF_LAYOUT_OK;
     out->accepted = 1;
-    layout_copy(out->reason, sizeof(out->reason),
+    yvex_core_text_copy(out->reason, sizeof(out->reason),
                 "canonical GGUF directory order, padded spans, and zero padding accepted");
     yvex_error_clear(err);
     return YVEX_OK;

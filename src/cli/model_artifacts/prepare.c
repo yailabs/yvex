@@ -15,7 +15,6 @@
 
 #include <yvex/artifact.h>
 #include <yvex/graph.h>
-#include <yvex/runtime.h>
 
 static const char *const literal_pair_0[] = { "boundary: report-only refusal, generation unsupported",
     "status: model-check-unsupported"};
@@ -34,6 +33,42 @@ static const char *const literal_lines_0[] = { "execution_ready: false",
     "prefill_ready: false",
     "logits_ready: false",
     "generation: unsupported"};
+
+typedef enum {
+    PREPARE_SOURCE_PRESENT = 1u << 0,
+    PREPARE_TENSOR_MAP_PRESENT = 1u << 1,
+    PREPARE_TENSOR_MAP_INCOMPLETE = 1u << 2,
+    PREPARE_OUTPUT_MAP_PRESENT = 1u << 3,
+    PREPARE_OUTPUT_MAP_MISSING = 1u << 4,
+    PREPARE_TOKENIZER_MAP_PRESENT = 1u << 5,
+    PREPARE_ARTIFACT_PRESENT = 1u << 6,
+    PREPARE_FAMILY_DEEPSEEK = 1u << 7
+} prepare_source_fact;
+
+typedef struct {
+    unsigned int required;
+    unsigned int forbidden;
+    const char *reason;
+} prepare_reason_rule;
+
+static const prepare_reason_rule prepare_reason_rules[] = {
+    {0u, PREPARE_TENSOR_MAP_PRESENT, "missing tensor map / model class / artifact path"},
+    {PREPARE_TENSOR_MAP_INCOMPLETE, PREPARE_TOKENIZER_MAP_PRESENT,
+     "incomplete tensor map / tokenizer metadata mapping / artifact path missing"},
+    {PREPARE_TENSOR_MAP_INCOMPLETE | PREPARE_TOKENIZER_MAP_PRESENT, 0u,
+     "incomplete tensor map / artifact path missing"},
+    {0u, PREPARE_OUTPUT_MAP_PRESENT | PREPARE_TOKENIZER_MAP_PRESENT,
+     "missing output head map / tokenizer metadata mapping / artifact path missing"},
+    {PREPARE_TOKENIZER_MAP_PRESENT, PREPARE_OUTPUT_MAP_PRESENT,
+     "missing output head map / artifact path missing"},
+    {PREPARE_OUTPUT_MAP_MISSING, PREPARE_TOKENIZER_MAP_PRESENT,
+     "output head mapping missing / tokenizer metadata mapping / artifact path missing"},
+    {PREPARE_OUTPUT_MAP_MISSING | PREPARE_TOKENIZER_MAP_PRESENT, 0u,
+     "output head mapping missing / artifact path missing"},
+    {0u, PREPARE_TOKENIZER_MAP_PRESENT, "tokenizer metadata mapping / artifact path missing"},
+    {PREPARE_FAMILY_DEEPSEEK, 0u, "complete artifact admission not bound to this request"},
+    {0u, 0u, "family quantization plan unimplemented"},
+};
 
 typedef struct {
     const char *target;
@@ -235,11 +270,11 @@ void prepare_probe_map_sidecar_status(const char *tensor_map_path,
     if (tensor_map_incomplete) *tensor_map_incomplete = 0;
     if (output_head_map_missing) *output_head_map_missing = 0;
     if (tensor_map_path && tensor_map_path[0] &&
-        model_download_read_small_file(tensor_map_path, buf, sizeof(buf))) {
-        if (model_download_json_string_field(buf,
-                                             "required_role_coverage_status",
-                                             coverage,
-                                             sizeof(coverage))) {
+        yvex_core_file_read_text_prefix(tensor_map_path, buf, sizeof(buf))) {
+        if (yvex_json_probe_string_field(buf,
+                                         "required_role_coverage_status",
+                                         coverage,
+                                         sizeof(coverage))) {
             if (strcmp(coverage, "required-groups-present") != 0 &&
                 tensor_map_incomplete) {
                 *tensor_map_incomplete = 1;
@@ -253,13 +288,43 @@ void prepare_probe_map_sidecar_status(const char *tensor_map_path,
         }
     }
     if (output_head_map_path && output_head_map_path[0] &&
-        model_download_read_small_file(output_head_map_path, buf, sizeof(buf)) &&
-        model_download_json_string_field(buf, "output_head_status", status,
-                                         sizeof(status)) &&
+        yvex_core_file_read_text_prefix(output_head_map_path, buf, sizeof(buf)) &&
+        yvex_json_probe_string_field(buf, "output_head_status", status, sizeof(status)) &&
         strcmp(status, "present") != 0 &&
         output_head_map_missing) {
         *output_head_map_missing = 1;
     }
+}
+
+/* Purpose: Copy one optional downloaded-target fact into its fixed report field. */
+static void prepare_report_text(char *out, size_t cap, const char *value, const char *fallback)
+{
+    snprintf(out, cap, "%s", value && value[0] ? value : fallback);
+}
+
+/* Purpose: Construct one family report sidecar path without publishing or opening it. */
+static void prepare_report_path(char *out,
+                                size_t cap,
+                                const char *root,
+                                const char *family,
+                                const char *target,
+                                const char *suffix)
+{
+    int n = snprintf(out, cap, "%s/%s/%s.%s", root, family, target, suffix);
+
+    if (n < 0 || (size_t)n >= cap) out[0] = '\0';
+}
+
+/* Purpose: Select the first exact blocker-reason rule admitted by the source facts. */
+static const char *prepare_report_reason(unsigned int facts)
+{
+    size_t index;
+
+    for (index = 0u; index < sizeof(prepare_reason_rules) / sizeof(prepare_reason_rules[0]); ++index) {
+        const prepare_reason_rule *rule = &prepare_reason_rules[index];
+        if ((facts & rule->required) == rule->required && !(facts & rule->forbidden)) return rule->reason;
+    }
+    return "family quantization plan unimplemented";
 }
 
 /* Purpose: Construct the owned prepare source report build state (`prepare_source_report_build`).
@@ -273,176 +338,107 @@ static void prepare_source_report_build(
     const yvex_model_download_resolved_target *target,
     yvex_models_prepare_source_report *report)
 {
-    int source_present;
-    int expected_artifact_present = 0;
-    int tensor_map_present = 0;
-    int output_head_map_present = 0;
-    int tokenizer_map_present = 0;
+    unsigned int facts = 0u;
     int tensor_map_incomplete = 0;
     int output_head_map_missing = 0;
+    int has_identity = operator_paths && target && target->family[0] && target->target_id[0];
 
     memset(report, 0, sizeof(*report));
-    snprintf(report->target_id, sizeof(report->target_id), "%s",
-             target && target->target_id[0]
-                 ? target->target_id
-                 : options && options->target ? options->target : "unknown");
-    snprintf(report->family, sizeof(report->family), "%s",
-             target && target->family[0] ? target->family : "unknown");
-    snprintf(report->provider, sizeof(report->provider), "%s",
-             target && target->provider[0] ? target->provider : "huggingface");
-    snprintf(report->repo_id, sizeof(report->repo_id), "%s",
-             target && target->repo_id[0] ? target->repo_id : "unknown");
-    snprintf(report->revision, sizeof(report->revision), "%s",
-             target && target->revision[0] ? target->revision : "main");
-    snprintf(report->models_root, sizeof(report->models_root), "%s",
-             operator_paths ? operator_paths->models_root : "unknown");
-    snprintf(report->source_path, sizeof(report->source_path), "%s",
-             target && target->local_source_dir[0] ? target->local_source_dir : "unknown");
-    snprintf(report->source_manifest_path, sizeof(report->source_manifest_path), "%s",
-             target && target->manifest_path[0] ? target->manifest_path : "unknown");
-    snprintf(report->native_inventory_path, sizeof(report->native_inventory_path), "%s",
-             target && target->native_inventory_path[0] ? target->native_inventory_path : "unknown");
-    snprintf(report->download_registry_path, sizeof(report->download_registry_path), "%s",
-             target && target->registry_path[0] ? target->registry_path : "unknown");
-    snprintf(report->download_report_path, sizeof(report->download_report_path), "%s",
-             target && target->download_report_path[0] ? target->download_report_path : "unknown");
+    prepare_report_text(report->target_id, sizeof(report->target_id),
+                        target ? target->target_id : NULL, options ? options->target : "unknown");
+    prepare_report_text(report->family, sizeof(report->family), target ? target->family : NULL, "unknown");
+    prepare_report_text(report->provider, sizeof(report->provider), target ? target->provider : NULL, "huggingface");
+    prepare_report_text(report->repo_id, sizeof(report->repo_id), target ? target->repo_id : NULL, "unknown");
+    prepare_report_text(report->revision, sizeof(report->revision), target ? target->revision : NULL, "main");
+    prepare_report_text(report->models_root, sizeof(report->models_root),
+                        operator_paths ? operator_paths->models_root : NULL, "unknown");
+    prepare_report_text(report->source_path, sizeof(report->source_path),
+                        target ? target->local_source_dir : NULL, "unknown");
+    prepare_report_text(report->source_manifest_path, sizeof(report->source_manifest_path),
+                        target ? target->manifest_path : NULL, "unknown");
+    prepare_report_text(report->native_inventory_path, sizeof(report->native_inventory_path),
+                        target ? target->native_inventory_path : NULL, "unknown");
+    prepare_report_text(report->download_registry_path, sizeof(report->download_registry_path),
+                        target ? target->registry_path : NULL, "unknown");
+    prepare_report_text(report->download_report_path, sizeof(report->download_report_path),
+                        target ? target->download_report_path : NULL, "unknown");
 
-    source_present = target && target->local_source_dir[0] &&
-                     path_exists(target->local_source_dir);
-    if (operator_paths && target && target->family[0] && target->target_id[0]) {
-        int n;
-        n = snprintf(report->expected_artifact_path,
-                     sizeof(report->expected_artifact_path),
-                     "%s/%s/%s.gguf",
-                     operator_paths->gguf_root,
-                     target->family,
-                     target->target_id);
-        if (n < 0 || (size_t)n >= sizeof(report->expected_artifact_path)) {
-            report->expected_artifact_path[0] = '\0';
+    if (target && target->local_source_dir[0] && path_exists(target->local_source_dir)) {
+        facts |= PREPARE_SOURCE_PRESENT;
+    }
+    if (target && strcmp(target->family, "deepseek") == 0) facts |= PREPARE_FAMILY_DEEPSEEK;
+    if (has_identity) {
+        prepare_report_path(report->expected_artifact_path, sizeof(report->expected_artifact_path),
+                            operator_paths->gguf_root, target->family, target->target_id, "gguf");
+        prepare_report_path(report->tensor_map_path, sizeof(report->tensor_map_path),
+                            operator_paths->reports_root, target->family, target->target_id, "tensor-map.json");
+        prepare_report_path(report->output_head_map_path, sizeof(report->output_head_map_path),
+                            operator_paths->reports_root, target->family, target->target_id, "output-head-map.json");
+        prepare_report_path(report->tokenizer_map_path, sizeof(report->tokenizer_map_path),
+                            operator_paths->reports_root, target->family, target->target_id, "tokenizer-map.json");
+        if (report->expected_artifact_path[0] && path_exists(report->expected_artifact_path)) {
+            facts |= PREPARE_ARTIFACT_PRESENT;
         }
-        expected_artifact_present = report->expected_artifact_path[0] &&
-                                    path_exists(report->expected_artifact_path);
-        n = snprintf(report->tensor_map_path,
-                     sizeof(report->tensor_map_path),
-                     "%s/%s/%s.tensor-map.json",
-                     operator_paths->reports_root,
-                     target->family,
-                     target->target_id);
-        if (n < 0 || (size_t)n >= sizeof(report->tensor_map_path)) {
-            report->tensor_map_path[0] = '\0';
+        if (report->tensor_map_path[0] && path_exists(report->tensor_map_path)) facts |= PREPARE_TENSOR_MAP_PRESENT;
+        if (report->output_head_map_path[0] && path_exists(report->output_head_map_path)) {
+            facts |= PREPARE_OUTPUT_MAP_PRESENT;
         }
-        n = snprintf(report->output_head_map_path,
-                     sizeof(report->output_head_map_path),
-                     "%s/%s/%s.output-head-map.json",
-                     operator_paths->reports_root,
-                     target->family,
-                     target->target_id);
-        if (n < 0 || (size_t)n >= sizeof(report->output_head_map_path)) {
-            report->output_head_map_path[0] = '\0';
+        if (report->tokenizer_map_path[0] && path_exists(report->tokenizer_map_path)) {
+            facts |= PREPARE_TOKENIZER_MAP_PRESENT;
         }
-        n = snprintf(report->tokenizer_map_path,
-                     sizeof(report->tokenizer_map_path),
-                     "%s/%s/%s.tokenizer-map.json",
-                     operator_paths->reports_root,
-                     target->family,
-                     target->target_id);
-        if (n < 0 || (size_t)n >= sizeof(report->tokenizer_map_path)) {
-            report->tokenizer_map_path[0] = '\0';
-        }
-        tensor_map_present = report->tensor_map_path[0] &&
-                             path_exists(report->tensor_map_path);
-        output_head_map_present = report->output_head_map_path[0] &&
-                                  path_exists(report->output_head_map_path);
-        tokenizer_map_present = report->tokenizer_map_path[0] &&
-                                path_exists(report->tokenizer_map_path);
-        prepare_probe_map_sidecar_status(report->tensor_map_path,
-                                         report->output_head_map_path,
-                                         &tensor_map_incomplete,
-                                         &output_head_map_missing);
+        prepare_probe_map_sidecar_status(report->tensor_map_path, report->output_head_map_path,
+                                         &tensor_map_incomplete, &output_head_map_missing);
+        if (tensor_map_incomplete) facts |= PREPARE_TENSOR_MAP_INCOMPLETE;
+        if (output_head_map_missing) facts |= PREPARE_OUTPUT_MAP_MISSING;
     } else {
-        snprintf(report->expected_artifact_path,
-                 sizeof(report->expected_artifact_path), "unknown");
+        prepare_report_text(report->expected_artifact_path, sizeof(report->expected_artifact_path), NULL, "unknown");
         snprintf(report->tensor_map_path, sizeof(report->tensor_map_path), "unknown");
-        snprintf(report->output_head_map_path,
-                 sizeof(report->output_head_map_path), "unknown");
-        snprintf(report->tokenizer_map_path,
-                 sizeof(report->tokenizer_map_path), "unknown");
+        snprintf(report->output_head_map_path, sizeof(report->output_head_map_path), "unknown");
+        snprintf(report->tokenizer_map_path, sizeof(report->tokenizer_map_path), "unknown");
     }
 
-    if (!source_present) report->blocker_count++;
-    if (!tensor_map_present || tensor_map_incomplete) report->blocker_count++;
-    if (!output_head_map_present || output_head_map_missing) report->blocker_count++;
-    if (!tokenizer_map_present) report->blocker_count++;
-    if (!expected_artifact_present) report->blocker_count++;
+    if (!(facts & PREPARE_SOURCE_PRESENT)) report->blocker_count++;
+    if (!(facts & PREPARE_TENSOR_MAP_PRESENT) || (facts & PREPARE_TENSOR_MAP_INCOMPLETE)) report->blocker_count++;
+    if (!(facts & PREPARE_OUTPUT_MAP_PRESENT) || (facts & PREPARE_OUTPUT_MAP_MISSING)) report->blocker_count++;
+    if (!(facts & PREPARE_TOKENIZER_MAP_PRESENT)) report->blocker_count++;
+    if (!(facts & PREPARE_ARTIFACT_PRESENT)) report->blocker_count++;
     report->blocker_count++; /* full artifact emitter/identity is not implemented for dynamic source targets. */
 
-    report->source_status = source_present ? "present" : "missing";
-    report->model_class_status = source_present ? "present" : "missing";
-    report->tensor_map_status =
-        tensor_map_present
-            ? (tensor_map_incomplete ? "incomplete-report-only" : "present-report-only")
-            : "missing";
-    report->output_head_map_status =
-        output_head_map_present
-            ? (output_head_map_missing ? "missing-in-report" : "present-report-only")
-            : "missing";
-    report->tokenizer_map_status =
-        tokenizer_map_present ? "present-report-only" : "missing";
-    report->artifact_status = expected_artifact_present ? "present" : "missing";
+    report->source_status = facts & PREPARE_SOURCE_PRESENT ? "present" : "missing";
+    report->model_class_status = report->source_status;
+    report->tensor_map_status = !(facts & PREPARE_TENSOR_MAP_PRESENT) ? "missing" :
+        facts & PREPARE_TENSOR_MAP_INCOMPLETE ? "incomplete-report-only" : "present-report-only";
+    report->output_head_map_status = !(facts & PREPARE_OUTPUT_MAP_PRESENT) ? "missing" :
+        facts & PREPARE_OUTPUT_MAP_MISSING ? "missing-in-report" : "present-report-only";
+    report->tokenizer_map_status = facts & PREPARE_TOKENIZER_MAP_PRESENT ? "present-report-only" : "missing";
+    report->artifact_status = facts & PREPARE_ARTIFACT_PRESENT ? "present" : "missing";
     report->artifact_plan_status = "planned-full-gguf";
     report->artifact_emission_status = "not-performed";
-    report->artifact_identity_status =
-        expected_artifact_present ? "not-checked" : "missing";
-    if (!tensor_map_present || tensor_map_incomplete ||
-        !output_head_map_present || output_head_map_missing) {
+    report->artifact_identity_status = facts & PREPARE_ARTIFACT_PRESENT ? "not-checked" : "missing";
+    if (!(facts & PREPARE_TENSOR_MAP_PRESENT) || (facts & PREPARE_TENSOR_MAP_INCOMPLETE) ||
+        !(facts & PREPARE_OUTPUT_MAP_PRESENT) || (facts & PREPARE_OUTPUT_MAP_MISSING)) {
         report->next = "V010.MAP.8";
-    } else if (!tokenizer_map_present) {
+    } else if (!(facts & PREPARE_TOKENIZER_MAP_PRESENT)) {
         report->next = "V010.MAP.7";
     } else {
-        report->next = target && strcmp(target->family, "deepseek") == 0
-            ? "V010.ARTIFACT.MATERIALIZE.0" : "not-scheduled";
+        report->next = facts & PREPARE_FAMILY_DEEPSEEK ? "V010.ARTIFACT.MATERIALIZE.0" : "not-scheduled";
     }
     report->final_status = "model-prepare-unsupported";
     report->downloaded_target_resolved = 1;
 
-    if (!source_present) {
+    if (!(facts & PREPARE_SOURCE_PRESENT)) {
         report->top_blocker = "missing-source";
-    } else if (!output_head_map_present || output_head_map_missing) {
+    } else if (!(facts & PREPARE_OUTPUT_MAP_PRESENT) || (facts & PREPARE_OUTPUT_MAP_MISSING)) {
         report->top_blocker = "missing-output-head-map";
-    } else if (!tensor_map_present || tensor_map_incomplete) {
+    } else if (!(facts & PREPARE_TENSOR_MAP_PRESENT) || (facts & PREPARE_TENSOR_MAP_INCOMPLETE)) {
         report->top_blocker = "incomplete-tensor-map";
-    } else if (!tokenizer_map_present) {
+    } else if (!(facts & PREPARE_TOKENIZER_MAP_PRESENT)) {
         report->top_blocker = "missing-tokenizer-map";
     } else {
-        report->top_blocker =
-            target && strcmp(target->family, "deepseek") == 0
-                ? "complete-artifact-admission-required"
-                : "family-quantization-plan-unimplemented";
+        report->top_blocker = facts & PREPARE_FAMILY_DEEPSEEK ? "complete-artifact-admission-required" :
+            "family-quantization-plan-unimplemented";
     }
-
-    report->reason =
-        !tensor_map_present
-            ? "missing tensor map / model class / artifact path"
-            : tensor_map_incomplete
-                  ? (!tokenizer_map_present
-                         ? "incomplete tensor map / tokenizer metadata mapping / artifact path missing"
-                         : "incomplete tensor map / artifact path missing")
-                  : !output_head_map_present
-                        ? (!tokenizer_map_present
-                               ? "missing output head map / tokenizer metadata mapping / artifact path missing"
-                               : "missing output head map / artifact path missing")
-                        : output_head_map_missing
-                              ? (!tokenizer_map_present
-                                     ? "output head mapping missing / tokenizer metadata mapping / "
-                                         "artifact path missing"
-                                     : "output head mapping missing / artifact path missing")
-                              : !tokenizer_map_present
-                                    ? "tokenizer metadata mapping / artifact path missing"
-                                    : target &&
-                                              strcmp(target->family,
-                                                     "deepseek") == 0
-                                          ? "complete artifact admission not bound to this request"
-                                          : "family quantization plan unimplemented";
+    report->reason = prepare_report_reason(facts);
 }
 
 /* Purpose: Render print prepare downloaded source unsupported from typed facts
@@ -465,46 +461,60 @@ static int print_prepare_downloaded_source_unsupported(
     return exit_for_status(YVEX_ERR_UNSUPPORTED);
 }
 
-/* Purpose: Validate prepare registry verify before downstream use (`prepare_registry_verify`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int prepare_registry_verify(const yvex_model_registry_entry *entry,
-                                   yvex_error *err)
+/* Purpose: Reopen one registered artifact and compare its physical identity and metadata snapshot.
+ * Inputs: Registered entry, artifact path, owner-specific mismatch messages, and caller error state.
+ * Effects: Reads the artifact identity and metadata without modifying the registry or artifact.
+ * Failure: Propagates read failures or returns state refusal on identity/metadata drift.
+ * Boundary: Shared CLI admission mechanism; capability policy remains in the domain gates. */
+static int registry_snapshot_verify(const yvex_model_registry_entry *entry,
+                                    const char *path,
+                                    const char *where,
+                                    const char *identity_failure,
+                                    const char *metadata_failure,
+                                    yvex_error *err)
 {
     yvex_artifact_file_identity identity;
     yvex_model_metadata_snapshot current_metadata;
     yvex_model_metadata_drift_report metadata_report;
     int rc;
 
-    if (!entry) {
-        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry",
-            "prepared alias was not found after registration");
-        return YVEX_ERR_STATE;
-    }
     memset(&identity, 0, sizeof(identity));
-    rc = yvex_artifact_identity_read(entry->path, &identity, err);
-    if (rc != YVEX_OK) return rc;
-    if (!entry->sha256 || strcmp(entry->sha256, identity.sha256) != 0 ||
-        entry->file_size != identity.file_size) {
-        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry",
-            "registered identity does not match emitted artifact");
-        return YVEX_ERR_STATE;
-    }
     memset(&current_metadata, 0, sizeof(current_metadata));
     memset(&metadata_report, 0, sizeof(metadata_report));
-    rc = yvex_model_metadata_snapshot_read(&current_metadata, entry->path, err);
+    rc = yvex_artifact_identity_read(path, &identity, err);
+    if (rc != YVEX_OK) return rc;
+    if (!entry->sha256 || strcmp(entry->sha256, identity.sha256) != 0 ||
+        (entry->file_size && entry->file_size != identity.file_size)) {
+        yvex_error_set(err, YVEX_ERR_STATE, where, identity_failure);
+        return YVEX_ERR_STATE;
+    }
+    rc = yvex_model_metadata_snapshot_read(&current_metadata, path, err);
     if (rc != YVEX_OK) return rc;
     rc = yvex_model_registry_compare_metadata(entry, &current_metadata.entry, &metadata_report, err);
     if (rc != YVEX_OK) return rc;
     if (strcmp(metadata_report.metadata_status, "pass") != 0 ||
         strcmp(metadata_report.readiness_status, "pass") != 0) {
-        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry",
-            "registered metadata drifted immediately after prepare");
+        yvex_error_set(err, YVEX_ERR_STATE, where, metadata_failure);
         return YVEX_ERR_STATE;
     }
     return YVEX_OK;
+}
+
+/* Purpose: Re-admit the alias published by the active prepare transaction.
+ * Inputs: Registered entry and caller-owned typed error state.
+ * Effects: Reads artifact identity and metadata without modifying publication state.
+ * Failure: Refuses a missing alias or propagates physical and metadata drift.
+ * Boundary: Verification cannot promote runtime or generation capability. */
+static int prepare_registry_verify(const yvex_model_registry_entry *entry, yvex_error *err)
+{
+    if (!entry) {
+        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry",
+                       "prepared alias was not found after registration");
+        return YVEX_ERR_STATE;
+    }
+    return registry_snapshot_verify(entry, entry->path, "model_prepare_registry",
+                                    "registered identity does not match emitted artifact",
+                                    "registered metadata drifted immediately after prepare", err);
 }
 
 typedef struct {
@@ -881,6 +891,17 @@ typedef struct {
     const char *final_status;
 } yvex_cli_model_check_report;
 
+typedef struct {
+    yvex_cli_models_check_options options;
+    yvex_cli_model_check_report report;
+    yvex_model_ref ref;
+    yvex_model_context context;
+    yvex_model_metadata_snapshot metadata;
+    yvex_artifact_integrity_report integrity;
+    yvex_error error;
+    char registry_path[YVEX_PATH_CAP];
+} model_check_run;
+
 typedef struct model_check_stage_spec {
     const char *name;
     size_t status_offset;
@@ -1222,7 +1243,7 @@ static int model_check_resolve_canonical_path(
                         artifact_path);
         return YVEX_ERR_IO;
     }
-    rc = set_path_ref(ref, artifact_path, err);
+    rc = yvex_model_ref_resolve(ref, artifact_path, NULL, err);
     if (rc == YVEX_OK) {
         snprintf(report->model_input_kind, sizeof(report->model_input_kind), "target");
     }
@@ -1280,51 +1301,13 @@ static int model_check_resolve_ref(const yvex_cli_models_check_options *options,
 static int model_check_verify_registry_identity(const yvex_model_ref *ref,
                                                 yvex_error *err)
 {
-    yvex_artifact_file_identity identity;
-    yvex_model_metadata_snapshot current_metadata;
     yvex_model_registry_entry registered_metadata;
-    yvex_model_metadata_drift_report metadata_report;
-    int rc;
 
-    if (!ref || ref->kind != YVEX_MODEL_REF_ALIAS) {
-        return YVEX_OK;
-    }
-    memset(&identity, 0, sizeof(identity));
-    memset(&current_metadata, 0, sizeof(current_metadata));
+    if (!ref || ref->kind != YVEX_MODEL_REF_ALIAS) return YVEX_OK;
     memset(&registered_metadata, 0, sizeof(registered_metadata));
-    memset(&metadata_report, 0, sizeof(metadata_report));
-
-    rc = yvex_artifact_identity_read(ref->path, &identity, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    if (!ref->sha256 || !ref->sha256[0] ||
-        strcmp(ref->sha256, identity.sha256) != 0 ||
-        (ref->registered_file_size != 0ull &&
-         ref->registered_file_size != identity.file_size)) {
-        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
-                       "registry identity drift");
-        return YVEX_ERR_STATE;
-    }
-    rc = yvex_model_metadata_snapshot_read(&current_metadata, ref->path, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
     yvex_model_ref_registry_entry_view(ref, &registered_metadata);
-    rc = yvex_model_registry_compare_metadata(&registered_metadata,
-                                              &current_metadata.entry,
-                                              &metadata_report,
-                                              err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    if (strcmp(metadata_report.metadata_status, "pass") != 0 ||
-        strcmp(metadata_report.readiness_status, "pass") != 0) {
-        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
-                       "registry identity drift");
-        return YVEX_ERR_STATE;
-    }
-    return YVEX_OK;
+    return registry_snapshot_verify(&registered_metadata, ref->path, "models_check",
+                                    "registry identity drift", "registry identity drift", err);
 }
 
 /* Purpose: Validate model check integrity before downstream use (`model_check_integrity`). */
@@ -1415,94 +1398,7 @@ static int model_check_materialize(const char *path,
     return rc;
 }
 
-/* Purpose: Validate model check engine before downstream use (`model_check_engine`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int model_check_engine(const char *path,
-                              const char *backend_name,
-                              yvex_error *err)
-{
-    yvex_engine *engine = NULL;
-    yvex_engine_options options;
-    yvex_engine_summary summary;
-    int rc;
 
-    memset(&options, 0, sizeof(options));
-    memset(&summary, 0, sizeof(summary));
-    options.model_path = path;
-    options.load_tokenizer = 0;
-    options.build_descriptor = 1;
-    options.build_default_graph = 1;
-    options.attach_weights = 1;
-    options.backend_name = backend_name;
-    options.require_all_weights = 1;
-    rc = yvex_engine_open(&engine, &options, err);
-    if (rc == YVEX_OK) {
-        rc = yvex_engine_get_summary(engine, &summary, err);
-    }
-    if (rc == YVEX_OK && !summary.weights_attached) {
-        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
-                       "engine did not attach selected weights");
-        rc = YVEX_ERR_STATE;
-    }
-    yvex_engine_close(engine);
-    return rc;
-}
-
-/* Purpose: Validate model check session before downstream use (`model_check_session`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int model_check_session(const char *path,
-                               const char *backend_name,
-                               yvex_error *err)
-{
-    yvex_engine *engine = NULL;
-    yvex_backend *backend = NULL;
-    yvex_session *session = NULL;
-    yvex_engine_options engine_options;
-    yvex_backend_options backend_options;
-    yvex_session_options session_options;
-    yvex_session_summary summary;
-    int rc;
-
-    memset(&engine_options, 0, sizeof(engine_options));
-    memset(&backend_options, 0, sizeof(backend_options));
-    memset(&session_options, 0, sizeof(session_options));
-    memset(&summary, 0, sizeof(summary));
-    engine_options.model_path = path;
-    engine_options.load_tokenizer = 0;
-    engine_options.build_descriptor = 1;
-    engine_options.build_default_graph = 1;
-    engine_options.attach_weights = 1;
-    engine_options.backend_name = backend_name;
-    engine_options.require_all_weights = 1;
-    rc = yvex_engine_open(&engine, &engine_options, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    (void)model_backend_kind_from_name(backend_name, &backend_options.kind);
-    rc = yvex_backend_open(&backend, &backend_options, err);
-    if (rc == YVEX_OK) {
-        session_options.allow_partial_graph = 1;
-        rc = yvex_session_create(&session, engine, backend, &session_options, err);
-    }
-    if (rc == YVEX_OK) {
-        rc = yvex_session_get_summary(session, &summary, err);
-    }
-    if (rc == YVEX_OK && !summary.weights_attached) {
-        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
-                       "session did not observe attached weights");
-        rc = YVEX_ERR_STATE;
-    }
-    yvex_session_close(session);
-    yvex_backend_close(backend);
-    yvex_engine_close(engine);
-    return rc;
-}
 
 /* Purpose: Validate model check plan before downstream use (`model_check_plan`).
  * Inputs: Borrowed typed facts.
@@ -1532,45 +1428,6 @@ static int model_check_plan(const char *path,
     return rc;
 }
 
-/* Purpose: Validate model check graph partial before downstream use (`model_check_graph_partial`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int model_check_graph_partial(const char *path,
-                                     const char *backend_name,
-                                     yvex_error *err)
-{
-    yvex_engine *engine = NULL;
-    yvex_engine_options engine_options;
-    yvex_partial_graph_options partial_options;
-    yvex_partial_graph_result partial_result;
-    int rc;
-
-    memset(&engine_options, 0, sizeof(engine_options));
-    memset(&partial_options, 0, sizeof(partial_options));
-    memset(&partial_result, 0, sizeof(partial_result));
-    engine_options.model_path = path;
-    engine_options.load_tokenizer = 0;
-    engine_options.build_descriptor = 1;
-    engine_options.build_default_graph = 1;
-    engine_options.attach_weights = 1;
-    engine_options.backend_name = backend_name;
-    engine_options.require_all_weights = 1;
-    partial_options.token_id = 0u;
-    rc = yvex_engine_open(&engine, &engine_options, err);
-    if (rc == YVEX_OK) {
-        rc = yvex_engine_execute_partial_graph(engine, &partial_options,
-                                              &partial_result, err);
-    }
-    if (rc == YVEX_OK && !partial_result.executed) {
-        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
-                       "selected partial graph did not execute");
-        rc = YVEX_ERR_STATE;
-    }
-    yvex_engine_close(engine);
-    return rc;
-}
 
 /* Purpose: Validate model check is real selected embedding before downstream use
  *   (`model_check_is_real_selected_embedding`). */
@@ -1585,138 +1442,93 @@ static int model_check_is_real_selected_embedding(
            metadata->entry.primary_tensor_bytes == 1059061760ull;
 }
 
-/* Purpose: Validate model check run model gate before downstream use (`model_check_run_model_gate`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int model_check_run_model_gate(const yvex_model_ref *ref,
-                                      const char *backend_name,
-                                      yvex_error *err)
+/* Purpose: Execute the selected-slice model or materialization gate from one canonical tensor contract.
+ * Inputs: Admitted artifact reference, backend name, gate kind, and caller error state.
+ * Effects: Runs exactly one typed gate without mutating registry or artifact state.
+ * Failure: Propagates the gate refusal or rejects a non-pass summary.
+ * Boundary: This selected-slice evidence never promotes full-model runtime capability. */
+static int model_check_run_gate(const yvex_model_ref *ref,
+                                const char *backend_name,
+                                int materialize,
+                                yvex_error *err)
 {
-    yvex_model_gate_expected_tensor expected;
-    yvex_model_gate_options options;
-    yvex_model_gate_summary summary;
+    static const yvex_model_gate_expected_tensor model_expected = {
+        .name = "token_embd.weight", .dtype = "F16", .rank = 2u,
+        .dims = {4096ull, 129280ull}, .bytes = 1059061760ull};
+    static const yvex_materialize_expected_tensor materialize_expected = {
+        .name = "token_embd.weight", .dtype = "F16", .rank = 2u,
+        .dims = {4096ull, 129280ull}, .bytes = 1059061760ull};
+    int cpu = strcmp(backend_name, "cpu") == 0;
+    int cuda = strcmp(backend_name, "cuda") == 0;
     int rc;
 
-    memset(&expected, 0, sizeof(expected));
-    memset(&options, 0, sizeof(options));
-    memset(&summary, 0, sizeof(summary));
-    expected.name = "token_embd.weight";
-    expected.dtype = "F16";
-    expected.rank = 2u;
-    expected.dims[0] = 4096ull;
-    expected.dims[1] = 129280ull;
-    expected.bytes = 1059061760ull;
-    options.model_path = ref->path;
-    options.model_label = "deepseek-v4-flash-selected-embedding";
-    options.family = "deepseek4";
-    options.artifact_sha256 = ref->kind == YVEX_MODEL_REF_ALIAS ? ref->sha256 : NULL;
-    options.expected_tensors = &expected;
-    options.expected_tensor_count = 1ull;
-    options.check_cpu = strcmp(backend_name, "cpu") == 0;
-    options.check_cuda = strcmp(backend_name, "cuda") == 0;
-    options.require_cpu = options.check_cpu;
-    options.require_cuda = options.check_cuda;
-    rc = yvex_model_gate_check(&options, &summary, err);
-    if (rc != YVEX_OK) {
-        return rc;
+    if (materialize) {
+        yvex_materialize_gate_options options = {0};
+        yvex_materialize_gate_summary summary = {0};
+        options.model_path = ref->path;
+        options.label = "deepseek-v4-flash-selected-embedding";
+        options.family = "deepseek4";
+        options.sha256 = ref->kind == YVEX_MODEL_REF_ALIAS ? ref->sha256 : NULL;
+        options.metadata_status = "pass";
+        options.scope = YVEX_MATERIALIZE_SCOPE_SELECTED_TENSOR;
+        options.expected_tensors = &materialize_expected;
+        options.expected_tensor_count = 1ull;
+        options.check_cpu = options.require_cpu = cpu;
+        options.check_cuda = options.require_cuda = cuda;
+        options.repeat_count = options.check_cleanup = 1u;
+        rc = yvex_materialize_gate_check(&options, &summary, err);
+        if (rc == YVEX_OK && summary.status != YVEX_MATERIALIZE_GATE_PASS) {
+            yvex_error_set(err, YVEX_ERR_STATE, "models_check", "materialize gate did not pass");
+            rc = YVEX_ERR_STATE;
+        }
+    } else {
+        yvex_model_gate_options options = {0};
+        yvex_model_gate_summary summary = {0};
+        options.model_path = ref->path;
+        options.model_label = "deepseek-v4-flash-selected-embedding";
+        options.family = "deepseek4";
+        options.artifact_sha256 = ref->kind == YVEX_MODEL_REF_ALIAS ? ref->sha256 : NULL;
+        options.expected_tensors = &model_expected;
+        options.expected_tensor_count = 1ull;
+        options.check_cpu = options.require_cpu = cpu;
+        options.check_cuda = options.require_cuda = cuda;
+        rc = yvex_model_gate_check(&options, &summary, err);
+        if (rc == YVEX_OK && summary.status != YVEX_MODEL_GATE_PASS) {
+            yvex_error_set(err, YVEX_ERR_STATE, "models_check", "model gate did not pass");
+            rc = YVEX_ERR_STATE;
+        }
     }
-    if (summary.status != YVEX_MODEL_GATE_PASS) {
-        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
-                       "model gate did not pass");
-        return YVEX_ERR_STATE;
-    }
-    return YVEX_OK;
-}
-
-/* Purpose: Validate model check run materialize gate before downstream use (`model_check_run_materialize_gate`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int model_check_run_materialize_gate(const yvex_model_ref *ref,
-                                            const char *backend_name,
-                                            yvex_error *err)
-{
-    yvex_materialize_expected_tensor expected;
-    yvex_materialize_gate_options options;
-    yvex_materialize_gate_summary summary;
-    int rc;
-
-    memset(&expected, 0, sizeof(expected));
-    memset(&options, 0, sizeof(options));
-    memset(&summary, 0, sizeof(summary));
-    expected.name = "token_embd.weight";
-    expected.dtype = "F16";
-    expected.rank = 2u;
-    expected.dims[0] = 4096ull;
-    expected.dims[1] = 129280ull;
-    expected.bytes = 1059061760ull;
-    options.model_path = ref->path;
-    options.label = "deepseek-v4-flash-selected-embedding";
-    options.family = "deepseek4";
-    options.sha256 = ref->kind == YVEX_MODEL_REF_ALIAS ? ref->sha256 : NULL;
-    options.metadata_status = "pass";
-    options.scope = YVEX_MATERIALIZE_SCOPE_SELECTED_TENSOR;
-    options.expected_tensors = &expected;
-    options.expected_tensor_count = 1ull;
-    options.check_cpu = strcmp(backend_name, "cpu") == 0;
-    options.check_cuda = strcmp(backend_name, "cuda") == 0;
-    options.require_cpu = options.check_cpu;
-    options.require_cuda = options.check_cuda;
-    options.repeat_count = 1u;
-    options.check_cleanup = 1;
-    rc = yvex_materialize_gate_check(&options, &summary, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    if (summary.status != YVEX_MATERIALIZE_GATE_PASS) {
-        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
-                       "materialize gate did not pass");
-        return YVEX_ERR_STATE;
-    }
-    return YVEX_OK;
+    return rc;
 }
 
 /* Purpose: Validate model check finish before downstream use (`model_check_finish`). */
-static int model_check_finish(yvex_cli_models_check_options *options,
-                              yvex_cli_model_check_report *report,
-                              int exit_code,
-                              yvex_error *err)
+static int model_check_finish(model_check_run *run, int exit_code)
 {
     int rc;
 
-    rc = model_check_write_report(options, report, err);
+    rc = model_check_write_report(&run->options, &run->report, &run->error);
     if (rc != YVEX_OK && exit_code == 0) {
-        snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
-        report->final_status = "model-check-fail";
+        snprintf(run->report.error, sizeof(run->report.error), "%s", yvex_error_message(&run->error));
+        run->report.final_status = "model-check-fail";
         exit_code = exit_for_status(rc);
     }
-    if (options && options->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
-        model_check_report_print_normal(stdout, report);
+    yvex_model_context_close(&run->context);
+    yvex_model_ref_clear(&run->ref);
+    if (run->options.output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
+        model_check_report_print_normal(stdout, &run->report);
     } else {
-        model_check_report_print(stdout, report);
+        model_check_report_print(stdout, &run->report);
     }
     return exit_code;
 }
 
-/* Close admitted check resources before rendering the terminal report. */
-/* Purpose: Validate model check close finish before downstream use (`model_check_close_finish`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int model_check_close_finish(yvex_cli_models_check_options *options,
-                                    yvex_cli_model_check_report *report,
-                                    yvex_model_context *ctx,
-                                    yvex_model_ref *ref,
-                                    int exit_code,
-                                    yvex_error *err)
+/* Purpose: Record one failed check stage and close the common report lifecycle exactly once. */
+static int model_check_fail(model_check_run *run, const char **stage, int rc, const char *message)
 {
-    yvex_model_context_close(ctx);
-    yvex_model_ref_clear(ref);
-    return model_check_finish(options, report, exit_code, err);
+    if (stage) *stage = "fail";
+    snprintf(run->report.error, sizeof(run->report.error), "%s",
+             message ? message : yvex_error_message(&run->error));
+    return model_check_finish(run, rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc));
 }
 
 /* Execute the admitted runtime-boundary checks after metadata and integrity pass. */
@@ -1725,22 +1537,14 @@ static int model_check_close_finish(yvex_cli_models_check_options *options,
  * Effects: Mutates declared CLI state only.
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
-static int model_check_runtime_pipeline(yvex_cli_models_check_options *options,
-                                        yvex_cli_model_check_report *report,
-                                        yvex_model_ref *ref,
-                                        yvex_model_context *ctx,
-                                        const yvex_model_metadata_snapshot *metadata,
-                                        yvex_error *err)
+static int model_check_runtime_pipeline(model_check_run *run)
 {
+    yvex_cli_models_check_options *options = &run->options;
+    yvex_cli_model_check_report *report = &run->report;
     int rc;
 
-    rc = model_check_backend_probe(options->backend_name, err);
-    if (rc != YVEX_OK) {
-        report->stage_integrity_report = "fail";
-        snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
-        return model_check_close_finish(options, report, ctx, ref,
-                                        rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc), err);
-    }
+    rc = model_check_backend_probe(options->backend_name, &run->error);
+    if (rc != YVEX_OK) return model_check_fail(run, &report->stage_integrity_report, rc, NULL);
     report->stage_integrity_report = "pass";
     if (options->no_materialize) {
         report->stage_materialize = "skipped";
@@ -1754,76 +1558,33 @@ static int model_check_runtime_pipeline(yvex_cli_models_check_options *options,
         report->stage_materialize_gate = "skipped";
         report->runtime_execution = "not-performed";
         report->final_status = "model-check-pass";
-        return model_check_close_finish(options, report, ctx, ref, 0, err);
+        return model_check_finish(run, 0);
     }
-    rc = model_check_materialize(ref->path, options->backend_name, err);
-    if (rc != YVEX_OK) {
-        report->stage_materialize = "fail";
-        snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
-        return model_check_close_finish(options, report, ctx, ref,
-                                        rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc), err);
-    }
+    rc = model_check_materialize(run->ref.path, options->backend_name, &run->error);
+    if (rc != YVEX_OK) return model_check_fail(run, &report->stage_materialize, rc, NULL);
     report->stage_materialize = "pass";
-    rc = model_check_engine(ref->path, options->backend_name, err);
-    if (rc != YVEX_OK) {
-        report->stage_engine = "fail";
-        snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
-        return model_check_close_finish(options, report, ctx, ref,
-                                        rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc), err);
-    }
-    report->stage_engine = "pass";
-    rc = model_check_session(ref->path, options->backend_name, err);
-    if (rc != YVEX_OK) {
-        report->stage_session = "fail";
-        snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
-        return model_check_close_finish(options, report, ctx, ref,
-                                        rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc), err);
-    }
-    report->stage_session = "pass";
-    rc = model_check_plan(ref->path, options->backend_name, err);
-    if (rc != YVEX_OK) {
-        report->stage_plan = "fail";
-        snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
-        return model_check_close_finish(options, report, ctx, ref, exit_for_status(rc), err);
-    }
+    rc = model_check_plan(run->ref.path, options->backend_name, &run->error);
+    if (rc != YVEX_OK) return model_check_fail(run, &report->stage_plan, rc, NULL);
     report->stage_plan = "pass";
-    if (options->no_graph) {
-        report->stage_graph_partial = "skipped";
-        snprintf(report->graph_skip_reason, sizeof(report->graph_skip_reason),
-                 "disabled by --no-graph");
-    } else {
-        rc = model_check_graph_partial(ref->path, options->backend_name, err);
-        if (rc != YVEX_OK) {
-            report->stage_graph_partial = rc == YVEX_ERR_UNSUPPORTED ? "unsupported" : "fail";
-            snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
-            return model_check_close_finish(options, report, ctx, ref,
-                                            rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc), err);
-        }
-        report->stage_graph_partial = "pass";
-    }
-    report->runtime_execution = "selected-boundary-only";
+    report->stage_graph_partial = "skipped";
+    snprintf(report->graph_skip_reason, sizeof(report->graph_skip_reason),
+             "%s", options->no_graph ? "disabled by --no-graph"
+                                      : "legacy selected-graph diagnostic retired");
+    report->runtime_execution = "not-performed";
     if (options->level == YVEX_CLI_MODEL_CHECK_FULL &&
-        model_check_is_real_selected_embedding(metadata)) {
-        rc = model_check_run_model_gate(ref, options->backend_name, err);
-        if (rc != YVEX_OK) {
-            report->stage_model_gate = "fail";
-            snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
-            return model_check_close_finish(options, report, ctx, ref, exit_for_status(rc), err);
-        }
+        model_check_is_real_selected_embedding(&run->metadata)) {
+        rc = model_check_run_gate(&run->ref, options->backend_name, 0, &run->error);
+        if (rc != YVEX_OK) return model_check_fail(run, &report->stage_model_gate, rc, NULL);
         report->stage_model_gate = "pass";
-        rc = model_check_run_materialize_gate(ref, options->backend_name, err);
-        if (rc != YVEX_OK) {
-            report->stage_materialize_gate = "fail";
-            snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
-            return model_check_close_finish(options, report, ctx, ref, exit_for_status(rc), err);
-        }
+        rc = model_check_run_gate(&run->ref, options->backend_name, 1, &run->error);
+        if (rc != YVEX_OK) return model_check_fail(run, &report->stage_materialize_gate, rc, NULL);
         report->stage_materialize_gate = "pass";
     } else if (options->level == YVEX_CLI_MODEL_CHECK_FULL) {
         report->stage_model_gate = "skipped";
         report->stage_materialize_gate = "skipped";
     }
     report->final_status = "model-check-pass";
-    return model_check_close_finish(options, report, ctx, ref, 0, err);
+    return model_check_finish(run, 0);
 }
 
 /* Purpose: Validate models check surface command before downstream use (`yvex_models_check_surface_command`).
@@ -1833,121 +1594,78 @@ static int model_check_runtime_pipeline(yvex_cli_models_check_options *options,
  * Boundary: No capability policy. */
 int yvex_models_check_surface_command(int arg_count, char **args)
 {
-    yvex_cli_models_check_options options;
-    yvex_cli_model_check_report report;
-    yvex_model_ref ref;
-    yvex_model_context ctx;
-    yvex_model_metadata_snapshot metadata_snapshot;
-    yvex_artifact_integrity_report integrity_report;
-    yvex_error err;
-    char registry_path[YVEX_PATH_CAP];
+    model_check_run run = {0};
     int rc;
 
-    yvex_error_clear(&err);
-    memset(&ref, 0, sizeof(ref));
-    memset(&ctx, 0, sizeof(ctx));
-    memset(&metadata_snapshot, 0, sizeof(metadata_snapshot));
-    memset(&integrity_report, 0, sizeof(integrity_report));
-    memset(registry_path, 0, sizeof(registry_path));
-
-    rc = parse_models_check_options(arg_count, args, &options);
-    if (rc != 0) {
-        return rc;
+    yvex_error_clear(&run.error);
+    rc = parse_models_check_options(arg_count, args, &run.options);
+    if (rc != 0) return rc;
+    if (strcmp(run.options.target, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0 ||
+        strcmp(run.options.target, "glm-5.2-official-safetensors") == 0) {
+        return print_model_check_unsupported(&run.options);
     }
-    if (strcmp(options.target, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0 ||
-        strcmp(options.target, "glm-5.2-official-safetensors") == 0) {
-        return print_model_check_unsupported(&options);
-    }
-    if (strcmp(options.target, "deepseek4-v4-flash-selected-embed") != 0 &&
-        !is_path_like_reference(options.target)) {
-        yvex_model_ref_options ref_options;
-        memset(&ref_options, 0, sizeof(ref_options));
+    if (strcmp(run.options.target, "deepseek4-v4-flash-selected-embed") != 0 &&
+        !is_path_like_reference(run.options.target)) {
+        yvex_model_ref_options ref_options = {0};
         ref_options.allow_registry = 1;
-        ref_options.registry_path = options.registry_path;
-        rc = yvex_model_ref_resolve(&ref, options.target, &ref_options, &err);
+        ref_options.registry_path = run.options.registry_path;
+        rc = yvex_model_ref_resolve(&run.ref, run.options.target, &ref_options, &run.error);
+        if (rc != YVEX_OK) return print_yvex_error(&run.error, exit_for_status(rc));
+        yvex_model_ref_clear(&run.ref);
+    }
+
+    model_check_report_init(&run.report, &run.options);
+    rc = model_check_resolve_registry_path(&run.options, run.registry_path,
+                                           sizeof(run.registry_path), &run.error);
+    if (rc != YVEX_OK) {
+        return model_check_fail(&run, NULL, rc, NULL);
+    }
+    snprintf(run.report.registry_path, sizeof(run.report.registry_path), "%s", run.registry_path);
+
+    rc = model_check_resolve_ref(&run.options, run.registry_path, &run.ref, &run.report, &run.error);
+    if (rc != YVEX_OK) return model_check_fail(&run, &run.report.stage_resolve_target, rc, NULL);
+    run.report.stage_resolve_target = "pass";
+    snprintf(run.report.artifact_path, sizeof(run.report.artifact_path), "%s", run.ref.path);
+    if (!path_exists(run.ref.path)) {
+        return model_check_fail(&run, &run.report.stage_resolve_artifact, YVEX_ERR_IO,
+                                "artifact path does not exist");
+    }
+    run.report.stage_resolve_artifact = "pass";
+
+    rc = yvex_model_context_open(run.ref.path, &run.context, &run.error);
+    if (rc != YVEX_OK) return model_check_fail(&run, &run.report.stage_inspect, rc, NULL);
+    run.report.stage_inspect = run.report.stage_tensors = "pass";
+
+    rc = yvex_model_metadata_snapshot_read(&run.metadata, run.ref.path, &run.error);
+    if (rc != YVEX_OK) return model_check_fail(&run, &run.report.stage_metadata, rc, NULL);
+    run.report.stage_metadata = "pass";
+
+    if (run.ref.kind == YVEX_MODEL_REF_ALIAS) {
+        rc = model_check_verify_registry_identity(&run.ref, &run.error);
         if (rc != YVEX_OK) {
-            return print_yvex_error(&err, exit_for_status(rc));
+            return model_check_fail(&run, &run.report.stage_registry_identity,
+                                    YVEX_ERR_STATE, "registry identity drift");
         }
-        yvex_model_ref_clear(&ref);
-    }
-
-    model_check_report_init(&report, &options);
-    rc = model_check_resolve_registry_path(&options, registry_path,
-                                           sizeof(registry_path), &err);
-    if (rc != YVEX_OK) {
-        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-        return model_check_finish(&options, &report, exit_for_status(rc), &err);
-    }
-    snprintf(report.registry_path, sizeof(report.registry_path), "%s", registry_path);
-
-    rc = model_check_resolve_ref(&options, registry_path, &ref, &report, &err);
-    if (rc != YVEX_OK) {
-        report.stage_resolve_target = "fail";
-        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-        return model_check_finish(&options, &report, exit_for_status(rc), &err);
-    }
-    report.stage_resolve_target = "pass";
-    snprintf(report.artifact_path, sizeof(report.artifact_path), "%s", ref.path);
-    report.stage_resolve_artifact = path_exists(ref.path) ? "pass" : "fail";
-    if (strcmp(report.stage_resolve_artifact, "pass") != 0) {
-        snprintf(report.error, sizeof(report.error), "artifact path does not exist");
-        yvex_model_ref_clear(&ref);
-        return model_check_finish(&options, &report,
-                                  exit_for_status(YVEX_ERR_IO), &err);
-    }
-
-    rc = yvex_model_context_open(ref.path, &ctx, &err);
-    if (rc != YVEX_OK) {
-        report.stage_inspect = "fail";
-        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-        yvex_model_ref_clear(&ref);
-        return model_check_finish(&options, &report, exit_for_status(rc), &err);
-    }
-    report.stage_inspect = "pass";
-    report.stage_tensors = "pass";
-
-    rc = yvex_model_metadata_snapshot_read(&metadata_snapshot, ref.path, &err);
-    if (rc != YVEX_OK) {
-        report.stage_metadata = "fail";
-        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-        return model_check_close_finish(&options, &report, &ctx, &ref,
-                                        exit_for_status(rc), &err);
-    }
-    report.stage_metadata = "pass";
-
-    if (ref.kind == YVEX_MODEL_REF_ALIAS) {
-        rc = model_check_verify_registry_identity(&ref, &err);
-        if (rc != YVEX_OK) {
-            report.stage_registry_identity = "fail";
-            snprintf(report.error, sizeof(report.error), "registry identity drift");
-            return model_check_close_finish(&options, &report, &ctx, &ref,
-                                            exit_for_status(YVEX_ERR_STATE), &err);
-        }
-        report.stage_registry_identity = "pass";
+        run.report.stage_registry_identity = "pass";
     } else {
-        report.stage_registry_identity = "unregistered";
+        run.report.stage_registry_identity = "unregistered";
     }
 
-    rc = model_check_integrity(&ref, 0, &integrity_report, &err);
-    if (rc != YVEX_OK || !integrity_report.passed) {
-        report.stage_integrity_check = "fail";
-        snprintf(report.error, sizeof(report.error), "%s",
-                 rc != YVEX_OK ? yvex_error_message(&err) : "artifact integrity failed");
-        return model_check_close_finish(&options, &report, &ctx, &ref,
-                                        exit_for_status(rc != YVEX_OK ? rc : YVEX_ERR_FORMAT),
-                                        &err);
+    rc = model_check_integrity(&run.ref, 0, &run.integrity, &run.error);
+    if (rc != YVEX_OK || !run.integrity.passed) {
+        return model_check_fail(&run, &run.report.stage_integrity_check,
+                                rc != YVEX_OK ? rc : YVEX_ERR_FORMAT,
+                                rc == YVEX_OK ? "artifact integrity failed" : NULL);
     }
-    report.stage_integrity_check = "pass";
+    run.report.stage_integrity_check = "pass";
 
-    if (options.level == YVEX_CLI_MODEL_CHECK_QUICK) {
-        if (options.no_graph) {
-            snprintf(report.graph_skip_reason, sizeof(report.graph_skip_reason),
+    if (run.options.level == YVEX_CLI_MODEL_CHECK_QUICK) {
+        if (run.options.no_graph) {
+            snprintf(run.report.graph_skip_reason, sizeof(run.report.graph_skip_reason),
                      "quick level does not run graph");
         }
-        report.final_status = "model-check-pass";
-        return model_check_close_finish(&options, &report, &ctx, &ref, 0, &err);
+        run.report.final_status = "model-check-pass";
+        return model_check_finish(&run, 0);
     }
-
-    return model_check_runtime_pipeline(&options, &report, &ref, &ctx,
-                                        &metadata_snapshot, &err);
+    return model_check_runtime_pipeline(&run);
 }

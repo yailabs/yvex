@@ -12,7 +12,6 @@
  *   - yvex_graph_build_for_model
  *   - graph value/op accessors
  *   - missing-role diagnostics
- *   - graph dump
  *
  * Commands:
  *   - make test-core
@@ -73,23 +72,6 @@ static void close_fixture(graph_fixture *fixture)
     memset(fixture, 0, sizeof(*fixture));
 }
 
-static int file_contains(const char *path, const char *needle)
-{
-    FILE *fp = fopen(path, "rb");
-    char buf[8192];
-    size_t n;
-    int found = 0;
-
-    if (!fp) {
-        return 0;
-    }
-    n = fread(buf, 1, sizeof(buf) - 1u, fp);
-    buf[n] = '\0';
-    fclose(fp);
-    found = strstr(buf, needle) != NULL;
-    return found;
-}
-
 static int test_graph_from_fixture(void)
 {
     graph_fixture fixture;
@@ -148,38 +130,8 @@ static int test_graph_from_fixture(void)
     return 0;
 }
 
-static int test_graph_dump(void)
-{
-    graph_fixture fixture;
-    yvex_graph *graph = NULL;
-    yvex_error err;
-    FILE *fp;
-    int rc;
-
-    YVEX_TEST_ASSERT(open_fixture(&fixture) == 0, "open graph fixture for dump");
-    rc = yvex_graph_build_for_model(&graph, fixture.model, fixture.table, NULL, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "graph builds for dump");
-
-    fp = fopen("build/tests/test_graph_dump.out", "wb");
-    YVEX_TEST_ASSERT(fp != NULL, "open graph dump output");
-    rc = yvex_graph_dump(graph, fp, &err);
-    fclose(fp);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "graph dump succeeds");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_graph_dump.out", "graph status: partial"),
-                     "dump status line");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_graph_dump.out", "op 0 embed status=planned"),
-                     "dump embed op");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_graph_dump.out", "missing output_head"),
-                     "dump missing output head");
-
-    yvex_graph_close(graph);
-    close_fixture(&fixture);
-    return 0;
-}
-
 int yvex_test_graph(void)
 {
     if (test_graph_from_fixture() != 0) return 1;
-    if (test_graph_dump() != 0) return 1;
     return 0;
 }

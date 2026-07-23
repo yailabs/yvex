@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 
 #include <yvex/source.h>
+#include <yvex/internal/core.h>
 
 static int make_dir(const char *path)
 {
@@ -54,6 +55,7 @@ int yvex_test_safetensors_header(void)
     yvex_native_weight_table *table = NULL;
     yvex_native_weight_summary summary;
     const yvex_native_weight_info *row;
+    yvex_core_execution_observation observed_before, observed_after, observed_delta;
     yvex_error err;
     int rc;
 
@@ -69,8 +71,14 @@ int yvex_test_safetensors_header(void)
     options.source_dir = root;
     options.recursive = 1;
     yvex_error_clear(&err);
+    yvex_core_execution_observation_snapshot(&observed_before);
     rc = yvex_native_weight_table_open(&table, &options, &err);
+    yvex_core_execution_observation_snapshot(&observed_after);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "valid safetensors header parses");
+    YVEX_TEST_ASSERT(yvex_core_execution_observation_delta(
+                         &observed_before, &observed_after, &observed_delta) &&
+                         observed_delta.source_headers_read == 1ull,
+                     "successful source owner advances the observed header counter");
     YVEX_TEST_ASSERT(yvex_native_weight_table_summary(table, &summary, &err) == YVEX_OK, "summary works");
     YVEX_TEST_ASSERT(summary.shard_count == 1, "shard count matches");
     YVEX_TEST_ASSERT(summary.tensor_count == 2, "tensor count matches");

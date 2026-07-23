@@ -24,6 +24,12 @@
 
 #include <yvex/api.h>
 
+static const char *materialization_status_name(yvex_materialization_status status) {
+    static const char *const names[] = {"refused", "planned", "committed", "aborted"};
+
+    return (unsigned int)status < sizeof(names) / sizeof(names[0]) ? names[status] : "refused";
+}
+
 typedef struct {
     struct timespec begin;
     unsigned long long last_bytes;
@@ -329,15 +335,14 @@ int main(int argc, char **argv)
     session_summary = yvex_materialization_session_summary(session);
     descriptor_summary = yvex_runtime_descriptor_summary_get(descriptor);
     printf("materialization_status=%s\n",
-           yvex_materialization_status_name(session_summary->status));
+           materialization_status_name(session_summary->status));
     printf("payload_bytes_accessed=%llu\n",
            session_summary->payload_bytes_accessed);
     printf("access_calls=%llu\n", session_summary->access_calls);
     printf("peak_executor_owned_bytes=%llu\n",
            session_summary->peak_executor_owned_bytes);
     printf("expert_subviews=%llu\n", expert_subviews);
-    printf("runtime_descriptor_status=%s\n",
-           yvex_runtime_descriptor_status_name(descriptor_summary->status));
+    printf("runtime_descriptor_status=%u\n", (unsigned int)descriptor_summary->status);
     printf("runtime_descriptor_identity=%s\n",
            descriptor_summary->runtime_descriptor_identity);
     printf("runtime_numeric_identity=%s\n",

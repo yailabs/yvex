@@ -2,7 +2,7 @@
  * Owns: small CLI-only helper implementations shared by model-artifacts command family surfaces.
  * Does not own: command-family dispatch bodies, provider execution, domain algorithms, renderer contracts, libyvex
  *   sources, artifact emission, runtime generation, eval, benchmark, or release decisions.
- * Invariants: this file remains under 500 lines and contains no command-family owner.
+ * Invariants: shared rendering stays policy-free, table-driven, and below the repository unit limit.
  * Boundary: shared CLI helpers do not imply runtime support or artifact emission.
  * Purpose: provide small CLI-only helper implementations shared by model-artifacts command family surfaces.
  * Inputs: typed domain facts, requested output mode, and caller-owned render state.
@@ -298,37 +298,23 @@ int is_path_like_reference(const char *input) {
     return len >= 5u && strcmp(input + len - 5u, ".gguf") == 0;
 }
 
-/* Purpose: Compute set path ref for its CLI invariant (`set_path_ref`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-int set_path_ref(yvex_model_ref *out, const char *input, yvex_error *err) {
-    memset(out, 0, sizeof(*out));
-    out->input = yvex_core_strdup(input);
-    out->path = yvex_core_strdup(input);
-    out->alias = yvex_core_strdup("");
-    out->family = yvex_core_strdup("");
-    out->sha256 = yvex_core_strdup("");
-    out->support_level = yvex_core_strdup("");
-    out->format = yvex_core_strdup("");
-    out->architecture = yvex_core_strdup("");
-    out->primary_tensor_name = yvex_core_strdup("");
-    out->primary_tensor_role = yvex_core_strdup("");
-    out->primary_tensor_dtype = yvex_core_strdup("");
-    out->primary_tensor_dims = yvex_core_strdup("");
-    out->status = YVEX_MODEL_REF_STATUS_RESOLVED;
-    out->kind = YVEX_MODEL_REF_PATH;
-    out->execution_ready = 0;
-    if (!out->input || !out->path || !out->alias || !out->family || !out->sha256 ||
-        !out->support_level || !out->format || !out->architecture || !out->primary_tensor_name ||
-        !out->primary_tensor_role || !out->primary_tensor_dtype || !out->primary_tensor_dims) {
-        yvex_model_ref_clear(out);
-        yvex_error_set(err, YVEX_ERR_NOMEM, "model_ref", "path reference allocation failed");
-        return YVEX_ERR_NOMEM;
+/* Purpose: append one admitted role to a bounded comma-separated CLI field.
+ * Inputs: caller-owned field, exact capacity, and immutable role name.
+ * Effects: appends one comma and role only when the complete suffix fits.
+ * Failure: invalid or exhausted buffers remain unchanged.
+ * Boundary: formatting cannot alter role admission. */
+void model_artifact_append_role(char *out, size_t out_cap, const char *role)
+{
+    size_t used;
+
+    if (!out || out_cap == 0u || !role || !role[0]) return;
+    used = strlen(out);
+    if (used > 0u) {
+        if (used + 1u >= out_cap) return;
+        out[used++] = ',';
+        out[used] = '\0';
     }
-    yvex_error_clear(err);
-    return YVEX_OK;
+    snprintf(out + used, used < out_cap ? out_cap - used : 0u, "%s", role);
 }
 
 /* Purpose: Transfer bounded write escaped data (`write_escaped`).
@@ -1018,15 +1004,6 @@ static void fullmodel_print_materialization_phases(
     fullmodel_print_phase(10u, "cleanup", "planned", 0ull, 0ull, "not-applicable", 1, 0, "none");
 }
 
-/* Read one immutable collection counter selected by the plan table. */
-/* Purpose: Compute plan collection value for its CLI invariant (`plan_collection_value`). */
-static unsigned long long plan_collection_value(const yvex_fullmodel_collections *collections,
-                                                size_t offset) {
-    if (!collections || offset == (size_t)-1)
-        return 0ull;
-    return *(const unsigned long long *)((const unsigned char *)collections + offset);
-}
-
 /* Resolve status, placement, and blocker without duplicating collection policy. */
 /* Purpose: Render fullmodel print planned collection from typed facts (`fullmodel_print_planned_collection`).
  * Inputs: Borrowed typed facts.
@@ -1036,8 +1013,8 @@ static unsigned long long plan_collection_value(const yvex_fullmodel_collections
 static void fullmodel_print_planned_collection(const plan_collection_spec *spec,
                                                const yvex_fullmodel_collections *collections,
                                                const char *backend, const char *residency) {
-    unsigned long long count = plan_collection_value(collections, spec->count_offset);
-    unsigned long long bytes = plan_collection_value(collections, spec->bytes_offset);
+    unsigned long long count = cli_collection_value(collections, spec->count_offset);
+    unsigned long long bytes = cli_collection_value(collections, spec->bytes_offset);
     int present = count > 0ull;
     int ready = present;
     const char *status;

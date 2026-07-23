@@ -236,18 +236,7 @@ encode_failure:
         YVEX_TRANSFORM_IR_NO_ID, 1u, 0u, 0u, err,
         "transform_ir_identity");
 }
-/* Purpose: encode deepseek identity u64 fields in canonical identity order. */
-static int deepseek_identity_u64(yvex_sha256 *hash,
-                                 unsigned long long value)
-{
-    unsigned char bytes[8];
-    unsigned int index;
-
-    for (index = 0u; index < 8u; ++index)
-        bytes[7u - index] =
-            (unsigned char)((value >> (index * 8u)) & 0xffu);
-    return yvex_sha256_update(hash, bytes, sizeof(bytes));
-}
+#define deepseek_identity_u64 yvex_sha256_update_u64_be
 
 /* Purpose: encode deepseek identity text fields in canonical identity order. */
 static int deepseek_identity_text(yvex_sha256 *hash, const char *text)

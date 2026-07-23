@@ -151,8 +151,8 @@ int main(int argc, char **argv)
     if (rc != YVEX_OK) {
         quant_print_terminal_context(handoff, failure.terminal_ordinal);
         fprintf(stderr,
-                "quant_plan_failure=%s terminal=%llu source=%llu qtype=%u operation=%u expected=%llu actual=%llu status=%s where=%s\n",
-                yvex_quant_failure_name(failure.code),
+                "quant_plan_failure=%u terminal=%llu source=%llu qtype=%u operation=%u expected=%llu actual=%llu status=%s where=%s\n",
+                (unsigned int)failure.code,
                 failure.terminal_ordinal, failure.source_index, failure.qtype,
                 (unsigned int)failure.operation, failure.expected,
                 failure.actual,
@@ -184,8 +184,8 @@ int main(int argc, char **argv)
             &digest_sink, plan, summary->required_payload_identity,
             &failure, &error);
         if (rc != YVEX_OK) {
-            fprintf(stderr, "digest_sink_failure=%s status=%s\n",
-                    yvex_quant_failure_name(failure.code),
+            fprintf(stderr, "digest_sink_failure=%u status=%s\n",
+                    (unsigned int)failure.code,
                     yvex_status_name(yvex_error_code(&error)));
             yvex_quant_plan_release(&plan);
             yvex_model_register_deepseek_v4()->payload.close(handoff);
@@ -207,8 +207,8 @@ int main(int argc, char **argv)
         if (rc != YVEX_OK) {
             quant_print_terminal_context(handoff, failure.terminal_ordinal);
             fprintf(stderr,
-                    "quant_execution_failure=%s terminal=%llu source=%llu row=%llu block=%llu expected=%llu actual=%llu qtype=%u operation=%u status=%s where=%s\n",
-                    yvex_quant_failure_name(failure.code),
+                    "quant_execution_failure=%u terminal=%llu source=%llu row=%llu block=%llu expected=%llu actual=%llu qtype=%u operation=%u status=%s where=%s\n",
+                    (unsigned int)failure.code,
                     failure.terminal_ordinal, failure.source_index,
                     failure.row_index, failure.block_index,
                     failure.expected, failure.actual, failure.qtype,
@@ -294,9 +294,7 @@ int main(int argc, char **argv)
     printf("transform_maximum_depth=%llu\n",
            transform_summary->maximum_depth);
     for (operation = 0u; operation < YVEX_TRANSFORM_OP_COUNT; ++operation)
-        printf("operation_%s=%llu\n",
-               yvex_transform_operation_name(
-                   (yvex_transform_operation_kind)operation),
+        printf("operation_%u=%llu\n", operation,
                transform_summary->operation_counts[operation]);
     printf("encoded_output_bytes=%llu\n", summary->encoded_bytes);
     printf("exact_scalar_bytes=%llu\n", summary->exact_scalar_bytes);

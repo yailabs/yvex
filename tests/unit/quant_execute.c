@@ -17,7 +17,6 @@
 #include <yvex/internal/gguf.h>
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/compilation.h>
-#include <yvex/internal/model_artifact.h>
 #include <yvex/internal/source.h>
 #include <yvex/internal/source_payload.h>
 
@@ -1081,148 +1080,6 @@ static void quant_roundtrip_progress_capture(
     fixture->planned_bytes = planned_file_bytes;
 }
 
-/* Purpose: prove semantic-plan compatibility and exact stale/name refusals on one fixture.
- * Inputs: quant fixture, emitted writer facts, immutable artifact path, and two name catalogs.
- * Effects: opens one read-only artifact snapshot and releases every temporary plan and view.
- * Failure: returns false unless success, name drift, and stale execution produce exact outcomes.
- * Boundary: verifies physical directory consequences without reading tensor payload bytes. */
-static int quant_physical_compatibility_prove(
-    const quant_execute_fixture *fixture,
-    const yvex_gguf_writer_fixture_tensor *names,
-    const yvex_gguf_writer_fixture_tensor *changed_names,
-    const yvex_gguf_writer_plan_summary *summary,
-    const yvex_gguf_file_sink_summary *emission,
-    const yvex_gguf_roundtrip_summary *roundtrip,
-    const char *artifact_path)
-{
-    typedef struct {
-        char *destination;
-        size_t capacity;
-        const char *source;
-    } text_binding;
-    yvex_gguf_writer_plan *writer = NULL;
-    yvex_gguf_writer_plan *changed = NULL;
-    yvex_artifact *artifact = NULL;
-    yvex_gguf *gguf = NULL;
-    yvex_complete_artifact_admission admission;
-    yvex_artifact_physical_compatibility result;
-    yvex_artifact_compatibility_failure failure;
-    yvex_gguf_writer_plan_options writer_options;
-    yvex_gguf_writer_failure writer_failure;
-    yvex_artifact_options artifact_options;
-    yvex_artifact_snapshot snapshot;
-    yvex_artifact_payload_identity payload_identity;
-    yvex_error error;
-    const yvex_gguf_writer_plan_summary *writer_summary;
-    size_t index;
-    int proved = 0;
-
-    yvex_error_clear(&error);
-    yvex_gguf_writer_plan_options_default(&writer_options);
-    writer_options.required_execution_identity = emission->execution_identity;
-    artifact_options = (yvex_artifact_options){.path = artifact_path, .readonly = 1};
-    if (yvex_gguf_writer_plan_build_fixture(&writer, fixture->plan, names,
-                                            QUANT_EXEC_TERMINAL_COUNT, &writer_options,
-                                            &writer_failure, &error) != YVEX_OK)
-        goto done;
-    writer_summary = yvex_gguf_writer_plan_summary_get(writer);
-    if (!writer_summary || strcmp(writer_summary->writer_plan_identity,
-                                  summary->writer_plan_identity) == 0 ||
-        yvex_artifact_open(&artifact, &artifact_options, &error) != YVEX_OK ||
-        yvex_gguf_open(&gguf, artifact, &error) != YVEX_OK ||
-        yvex_artifact_snapshot_get(artifact, &snapshot, &error) != YVEX_OK ||
-        yvex_artifact_payload_identity_compute(artifact, gguf, 4096u, &payload_identity,
-                                               &error) != YVEX_OK ||
-        !payload_identity.complete ||
-        strcmp(payload_identity.payload_byte_identity,
-               emission->payload_byte_identity) != 0)
-        goto done;
-    admission = (yvex_complete_artifact_admission){
-        .artifact_class = YVEX_ARTIFACT_CLASS_COMPLETE_YVEX,
-        .metadata_count = summary->metadata_count,
-        .tensor_count = summary->tensor_count,
-        .payload_bytes = summary->tensor_payload_bytes,
-        .file_bytes = summary->final_file_bytes,
-        .source_snapshot_identity = summary->source_snapshot_identity,
-        .mapping_identity = summary->mapping_identity,
-        .file_snapshot = snapshot,
-        .tokenizer_complete = 1,
-        .native_reader_accepted = 1,
-        .official_reader_accepted = 1,
-        .payload_integrity_accepted = 1,
-        .materialization_input_ready = 1,
-        .artifact_bytes_hashed = roundtrip->bytes_hashed,
-        .artifact_identity_verified = 1,
-        .complete = 1,
-    };
-    {
-        const text_binding texts[] = {
-            {admission.artifact_path, sizeof(admission.artifact_path), artifact_path},
-            {admission.payload_identity, sizeof(admission.payload_identity), summary->payload_identity},
-            {admission.transform_identity, sizeof(admission.transform_identity), summary->transform_identity},
-            {admission.profile_identity, sizeof(admission.profile_identity), summary->profile_identity},
-            {admission.profile_name, sizeof(admission.profile_name), summary->profile_name},
-            {admission.quant_execution_identity, sizeof(admission.quant_execution_identity),
-             emission->execution_identity},
-            {admission.payload_plan_identity, sizeof(admission.payload_plan_identity),
-             writer_summary->payload_plan_identity},
-            {admission.payload_byte_identity, sizeof(admission.payload_byte_identity),
-             emission->payload_byte_identity},
-            {admission.writer_plan_identity, sizeof(admission.writer_plan_identity),
-             summary->writer_plan_identity},
-            {admission.artifact_identity, sizeof(admission.artifact_identity), roundtrip->artifact_identity},
-            {admission.official_reader_revision, sizeof(admission.official_reader_revision),
-             YVEX_GGUF_OFFICIAL_READER_REVISION},
-        };
-        for (index = 0u; index < sizeof(texts) / sizeof(texts[0]); ++index)
-            (void)snprintf(texts[index].destination, texts[index].capacity, "%s",
-                           texts[index].source);
-    }
-    if (yvex_artifact_admission_record_identity(
-            &admission, admission.admission_identity, &error) != YVEX_OK)
-        goto done;
-    if (yvex_artifact_physical_compatibility_validate(writer, &admission, artifact, gguf,
-                                                       &result, &failure, &error) != YVEX_OK ||
-        !result.physical_payload_compatible || result.artifact_rebuild_required ||
-        result.materialization_rebuild_required || !result.tensor_inventory_equal ||
-        !result.qtype_equal || !result.layout_equal || !result.offset_equal ||
-        !result.payload_digest_equal || result.tensors_compared != QUANT_EXEC_TERMINAL_COUNT ||
-        result.payload_bytes_read != 0u)
-        goto done;
-    if (yvex_gguf_writer_plan_build_fixture(&changed, fixture->plan, changed_names,
-                                            QUANT_EXEC_TERMINAL_COUNT, &writer_options,
-                                            &writer_failure, &error) != YVEX_OK ||
-        !yvex_gguf_writer_plan_summary_get(changed) ||
-        strcmp(yvex_gguf_writer_plan_summary_get(changed)->payload_plan_identity,
-               writer_summary->payload_plan_identity) != 0 ||
-        yvex_artifact_physical_compatibility_validate(changed, &admission, artifact, gguf,
-                                                       &result, &failure, &error) == YVEX_OK ||
-        failure.code != YVEX_ARTIFACT_COMPATIBILITY_TENSOR_NAME ||
-        !result.artifact_rebuild_required || !result.materialization_rebuild_required)
-        goto done;
-    admission.payload_plan_identity[0] =
-        admission.payload_plan_identity[0] == '0' ? '1' : '0';
-    if (yvex_artifact_physical_compatibility_validate(writer, &admission, artifact, gguf,
-                                                       &result, &failure, &error) == YVEX_OK ||
-        failure.code != YVEX_ARTIFACT_COMPATIBILITY_IDENTITY || result.payload_digest_equal)
-        goto done;
-    admission.payload_plan_identity[0] =
-        admission.payload_plan_identity[0] == '0' ? '1' : '0';
-    admission.payload_byte_identity[0] =
-        admission.payload_byte_identity[0] == '0' ? '1' : '0';
-    if (yvex_artifact_physical_compatibility_validate(writer, &admission, artifact, gguf,
-                                                       &result, &failure, &error) == YVEX_OK ||
-        failure.code != YVEX_ARTIFACT_COMPATIBILITY_IDENTITY || result.payload_digest_equal)
-        goto done;
-    proved = 1;
-done:
-    yvex_gguf_close(gguf);
-    yvex_artifact_close(artifact);
-    yvex_gguf_writer_plan_release(&changed);
-    yvex_gguf_writer_plan_release(&writer);
-    return proved;
-}
-
 /*
  * Exercises structural planning, transactional file delivery, native
  * roundtrip, physical corruption refusal, support refusal without tokenizer,
@@ -1230,16 +1087,12 @@ done:
  */
 int yvex_test_gguf_writer_artifact(void)
 {
-    static const yvex_gguf_writer_fixture_tensor names[] = {
+    static const yvex_gguf_writer_proof_tensor names[] = {
         {"fixture.direct"}, {"fixture.scale-pair"},
         {"fixture.cast"}, {"fixture.experts"}
     };
-    static const yvex_gguf_writer_fixture_tensor duplicate_names[] = {
+    static const yvex_gguf_writer_proof_tensor duplicate_names[] = {
         {"fixture.duplicate"}, {"fixture.duplicate"},
-        {"fixture.cast"}, {"fixture.experts"}
-    };
-    static const yvex_gguf_writer_fixture_tensor changed_names[] = {
-        {"fixture.mirect"}, {"fixture.scale-pair"},
         {"fixture.cast"}, {"fixture.experts"}
     };
     quant_execute_fixture fixture;
@@ -1252,6 +1105,7 @@ int yvex_test_gguf_writer_artifact(void)
     yvex_gguf_file_sink_options file_options;
     yvex_gguf_file_sink_summary emission;
     yvex_gguf_file_sink_summary tampered_emission;
+    yvex_gguf_writer_plan_request writer_request;
     yvex_gguf_roundtrip_options roundtrip_options;
     yvex_gguf_roundtrip_summary roundtrip;
     yvex_gguf_writer_failure writer_failure;
@@ -1260,12 +1114,8 @@ int yvex_test_gguf_writer_artifact(void)
     yvex_artifact_official_reader_fact official;
     yvex_artifact_admission_request admission_request;
     yvex_complete_artifact_admission admission;
-    yvex_complete_artifact_admission admitted_fixture;
     yvex_artifact_admission_failure admission_failure;
     yvex_artifact_file_identity independent_identity;
-    yvex_artifact_descriptor_fact descriptor;
-    yvex_model_complete_artifact_gate_fact complete_gate;
-    yvex_model_artifact_report admitted_report;
     yvex_quant_failure quant_failure;
     yvex_quant_failure protocol_failure;
     yvex_error err;
@@ -1292,10 +1142,13 @@ int yvex_test_gguf_writer_artifact(void)
     YVEX_TEST_ASSERT(quant_fixture_create(
                          &fixture, "gguf-writer", 0, 0, &err),
                      "writer fixture must construct trusted quant inputs");
-    YVEX_TEST_ASSERT(yvex_gguf_writer_plan_build_fixture(
-                         &writer, fixture.plan, names,
-                         QUANT_EXEC_TERMINAL_COUNT, NULL,
-                         &writer_failure, &err) == YVEX_OK,
+    memset(&writer_request, 0, sizeof(writer_request));
+    writer_request.input_class = YVEX_GGUF_WRITER_INPUT_TENSOR_PROOF;
+    writer_request.quant_plan = fixture.plan;
+    writer_request.input.tensor_proof.tensors = names;
+    writer_request.input.tensor_proof.tensor_count = QUANT_EXEC_TERMINAL_COUNT;
+    YVEX_TEST_ASSERT(yvex_gguf_writer_plan_build(
+                         &writer, &writer_request, &writer_failure, &err) == YVEX_OK,
                      "explicit fixture writer plan must seal");
     summary = yvex_gguf_writer_plan_summary_get(writer);
     YVEX_TEST_ASSERT(summary && summary->complete &&
@@ -1305,14 +1158,26 @@ int yvex_test_gguf_writer_artifact(void)
                              summary->tensor_payload_bytes &&
                          summary->tokenizer_token_count == 0u,
                      "fixture writer plan must account exact physical bytes");
-    YVEX_TEST_ASSERT(yvex_gguf_writer_plan_build_fixture(
-                         &duplicate_writer, fixture.plan,
-                         duplicate_names, QUANT_EXEC_TERMINAL_COUNT, NULL,
-                         &writer_failure, &err) != YVEX_OK &&
+    writer_request.input.tensor_proof.tensors = duplicate_names;
+    YVEX_TEST_ASSERT(yvex_gguf_writer_plan_build(
+                         &duplicate_writer, &writer_request, &writer_failure, &err) != YVEX_OK &&
                          writer_failure.code ==
                              YVEX_GGUF_WRITER_DUPLICATE_TENSOR &&
                          !duplicate_writer,
                      "duplicate tensor names must refuse during planning");
+    writer_request.input_class = YVEX_GGUF_WRITER_INPUT_INVALID;
+    YVEX_TEST_ASSERT(yvex_gguf_writer_plan_build(
+                         &duplicate_writer, &writer_request, &writer_failure, &err) != YVEX_OK &&
+                         writer_failure.code == YVEX_GGUF_WRITER_INVALID_ARGUMENT &&
+                         !duplicate_writer,
+                     "unknown writer input classes must refuse without a plan");
+    writer_request.input_class = YVEX_GGUF_WRITER_INPUT_COMPLETE_ARTIFACT;
+    memset(&writer_request.input, 0, sizeof(writer_request.input));
+    YVEX_TEST_ASSERT(yvex_gguf_writer_plan_build(
+                         &duplicate_writer, &writer_request, &writer_failure, &err) != YVEX_OK &&
+                         writer_failure.code == YVEX_GGUF_WRITER_INVALID_ARGUMENT &&
+                         !duplicate_writer,
+                     "complete input without a family adapter must refuse");
 
     (void)snprintf(symlink_directory, sizeof(symlink_directory),
                    "%s/linkdir", fixture.root);
@@ -1421,11 +1286,6 @@ int yvex_test_gguf_writer_artifact(void)
                                 roundtrip.artifact_identity) == 0,
                      "streaming artifact identity must match independent exact-file identity");
 
-    YVEX_TEST_ASSERT(quant_physical_compatibility_prove(
-                         &fixture, names, changed_names, summary, &emission, &roundtrip,
-                         artifact_path),
-                     "semantic identity drift must preserve exact bytes and reject stale inputs");
-
     memset(&official, 0, sizeof(official));
     (void)snprintf(official.revision, sizeof(official.revision), "%s",
                    YVEX_GGUF_OFFICIAL_READER_REVISION);
@@ -1473,53 +1333,6 @@ int yvex_test_gguf_writer_artifact(void)
                              YVEX_ARTIFACT_ADMISSION_OFFICIAL_READER &&
                          !admission.complete,
                      "mismatched official-reader revision must refuse admission");
-
-    memset(&admitted_fixture, 0, sizeof(admitted_fixture));
-    admitted_fixture.artifact_class = YVEX_ARTIFACT_CLASS_COMPLETE_YVEX;
-    admitted_fixture.tensor_count = 1360u;
-    admitted_fixture.file_bytes = 102408545440ull;
-    admitted_fixture.materialization_input_ready = 1;
-    admitted_fixture.runtime_supported = 0;
-    admitted_fixture.complete = 1;
-    (void)snprintf(admitted_fixture.artifact_path,
-                   sizeof(admitted_fixture.artifact_path), "%s",
-                   artifact_path);
-    (void)snprintf(admitted_fixture.artifact_identity,
-                   sizeof(admitted_fixture.artifact_identity), "%064x", 1);
-    (void)snprintf(admitted_fixture.profile_name,
-                   sizeof(admitted_fixture.profile_name), "%s",
-                   "deepseek-v4-flash-q8_0-q2_k-v1");
-    YVEX_TEST_ASSERT(yvex_artifact_descriptor_from_admission(
-                         &admitted_fixture, &descriptor) &&
-                         descriptor.materialization_input_ready &&
-                         !descriptor.runtime_supported &&
-                         descriptor.tensor_count == 1360u,
-                     "artifact inventory must project canonical admission");
-    YVEX_TEST_ASSERT(yvex_model_artifact_gate_from_admission(
-                         &admitted_fixture, &complete_gate, &err) == YVEX_OK &&
-                         complete_gate.status == YVEX_MODEL_GATE_PASS &&
-                         complete_gate.support_level ==
-                             YVEX_MODEL_SUPPORT_DESCRIPTOR_ONLY &&
-                         complete_gate.complete_artifact_admitted &&
-                         complete_gate.materialization_input_ready &&
-                         !complete_gate.execution_ready,
-                     "model gate must consume admission without runtime promotion");
-    YVEX_TEST_ASSERT(yvex_model_artifact_report_from_admission(
-                         &admitted_fixture, &admitted_report, &err) ==
-                         YVEX_OK &&
-                         strcmp(admitted_report.status,
-                                "complete-artifact-admitted") == 0 &&
-                         strcmp(admitted_report.qprofile,
-                                "deepseek-v4-flash-q8_0-q2_k-v1") == 0 &&
-                         admitted_report.tensor_count == 1360u &&
-                         !admitted_report.execution_ready,
-                     "typed report must project the same canonical admission");
-    admitted_fixture.complete = 0;
-    YVEX_TEST_ASSERT(yvex_model_artifact_report_from_admission(
-                         &admitted_fixture, &admitted_report, &err) !=
-                         YVEX_OK &&
-                         strcmp(admitted_report.status, "blocked") == 0,
-                     "incomplete artifact must refuse every complete report path");
 
     (void)snprintf(corrupt_path, sizeof(corrupt_path), "%s/corrupt.gguf",
                    fixture.root);

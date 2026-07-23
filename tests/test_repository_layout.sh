@@ -8,8 +8,8 @@ fail() {
     exit 1
 }
 
-# The canonical clean target may remove repository build products. No other
-# Make recipe may use an unbounded recursive deletion as test cleanup.
+# The canonical clean target accepts only owned build roots and never follows
+# a caller-controlled symlink. No recipe may use recursive deletion as cleanup.
 make_cleanup=$(awk '
     /^[^[:space:]#][^=]*:/ { target = $0 }
     /^\t/ && /rm[[:space:]]+([^[:space:]]+[[:space:]]+)*(--recursive|-[^[:space:]]*[rR][^[:space:]]*)/ && target !~ /^clean[[:space:]]*:/ {
@@ -20,6 +20,17 @@ if [ -n "$make_cleanup" ]; then
     printf '%s\n' "$make_cleanup" >&2
     fail "recursive cleanup outside the canonical clean target"
 fi
+if make -s BUILD_DIR=/ clean >/dev/null 2>&1; then
+    fail "clean target accepts the filesystem root"
+fi
+clean_probe=$(mktemp -d /tmp/yvex-clean-guard.XXXXXX)
+clean_external=$(mktemp -d /tmp/clean-guard-external.XXXXXX)
+ln -s "$clean_external" "$clean_probe/build"
+if make -s BUILD_DIR="$clean_probe/build" clean >/dev/null 2>&1; then
+    fail "clean target follows a caller-controlled build symlink"
+fi
+unlink "$clean_probe/build"
+rmdir "$clean_probe" "$clean_external"
 
 # Operator attention and its sanitizer wrappers own mkdtemp roots and must
 # never grow broad deletion shortcuts as the command surface evolves.
@@ -27,5 +38,68 @@ if rg -n --glob '*attention*.sh' \
     'rm[[:space:]]+([^[:space:]]+[[:space:]]+)*(--recursive|-[^[:space:]]*[rR][^[:space:]]*)' tests; then
     fail "attention operator or sanitizer script uses recursive rm"
 fi
+
+# Commit-bound benchmark provenance is generated as an explicit object
+# dependency. A process-wide CPPFLAGS define would leave incremental builds
+# carrying the previous HEAD after a commit.
+if rg -n 'CPPFLAGS.*YVEX_BUILD_COMMIT' Makefile; then
+    fail "build commit provenance is an untracked process-wide compiler define"
+fi
+rg -q '^BUILD_COMMIT_HEADER[[:space:]]*:=' Makefile ||
+    fail "build commit provenance header is missing"
+rg -q '^YVEX_BUILD_SOURCE_STATE[[:space:]]+[?]=' Makefile ||
+    fail "build source-state provenance is missing"
+rg -q '^YVEX_BUILD_SOURCE_DELTA_IDENTITY[[:space:]]+[?]=' Makefile ||
+    fail "exact dirty source-delta provenance is missing"
+rg -q '^YVEX_BUILD_IDENTITY[[:space:]]+[?]=' Makefile ||
+    fail "compiler/link/CUDA build provenance is missing"
+rg -q '^YVEX_BUILD_SOURCE_ROOT[[:space:]]+[?]=' Makefile ||
+    fail "external benchmark path boundary lacks a generated source root"
+rg -q '^\$\(OBJ_DIR\)/src/cli/commands/graph\.o: \$\(BUILD_COMMIT_HEADER\)' Makefile ||
+    fail "operator object does not depend on build commit provenance"
+rg -q '^\$\(OBJ_DIR\)/src/runtime/benchmark\.o: \$\(BUILD_COMMIT_HEADER\)' Makefile ||
+    fail "runtime benchmark object does not depend on build commit provenance"
+rg -q '^\$\(BUILD_COMMIT_HEADER\): FORCE' Makefile ||
+    fail "build commit provenance does not revalidate on incremental builds"
+for field in YVEX_BUILD_SOURCE_STATE YVEX_BUILD_SOURCE_DELTA_IDENTITY \
+             YVEX_BUILD_IDENTITY; do
+    rg -q "$field" src/runtime/benchmark.c ||
+        fail "runtime benchmark records do not consume generated $field provenance"
+done
+rg -q 'YVEX_BUILD_SOURCE_ROOT' src/cli/commands/graph.c ||
+    fail "operator benchmark paths do not consume the generated source-root boundary"
+if rg -n 'git[[:space:]]+(status|diff|rev-parse)' src/runtime src/cli/commands/graph.c; then
+    fail "runtime benchmark provenance must not inspect the repository at execution time"
+fi
+
+provenance_root=$(mktemp -d /tmp/yvex-build-provenance.XXXXXX)
+provenance_header="$provenance_root/generated/build_commit.h"
+cleanup_provenance() {
+    rm -f "$provenance_header"
+    rmdir "$provenance_root/generated" 2>/dev/null || :
+    rmdir "$provenance_root" 2>/dev/null || :
+}
+trap cleanup_provenance EXIT HUP INT TERM
+for source_state in clean dirty; do
+    make -s BUILD_DIR="$provenance_root" \
+        YVEX_BUILD_COMMIT=0123456789abcdef0123456789abcdef01234567 \
+        YVEX_BUILD_SOURCE_STATE="$source_state" \
+        YVEX_BUILD_SOURCE_DELTA_IDENTITY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+        YVEX_BUILD_IDENTITY=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+        YVEX_BUILD_SOURCE_ROOT=/tmp/yvex-provenance-source \
+        "$provenance_header"
+    rg -q '^#define YVEX_BUILD_COMMIT "0123456789abcdef0123456789abcdef01234567"$' \
+        "$provenance_header" || fail "generated build provenance lost the exact commit"
+    rg -q "^#define YVEX_BUILD_SOURCE_STATE \"$source_state\"$" "$provenance_header" ||
+        fail "generated build provenance did not retain $source_state source state"
+    rg -q '^#define YVEX_BUILD_SOURCE_DELTA_IDENTITY "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"$' \
+        "$provenance_header" || fail "generated provenance lost the exact source delta"
+    rg -q '^#define YVEX_BUILD_IDENTITY "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"$' \
+        "$provenance_header" || fail "generated provenance lost the exact build identity"
+    rg -q '^#define YVEX_BUILD_SOURCE_ROOT "/tmp/yvex-provenance-source"$' \
+        "$provenance_header" || fail "generated provenance lost the source-root boundary"
+done
+cleanup_provenance
+trap - EXIT HUP INT TERM
 
 python3 tests/c_structure.py check layout

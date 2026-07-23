@@ -112,30 +112,6 @@ typedef char
                                                   : -1];
 
 static const char *const calibration_names[] = {"none", "optional", "required", "unsupported"};
-static const char *const refusal_names[] = {
-    "none", "unknown-qtype", "removed-qtype", "outside-pinned-baseline",
-    "storage-unavailable", "encoder-unavailable", "decoder-unavailable",
-    "cpu-compute-unavailable", "cuda-compute-unavailable", "calibration-required",
-};
-static const char *const failure_names[] = {
-    "none", "invalid-argument", "invalid-lifecycle-state", "unsupported-profile-schema",
-    "transform-identity-mismatch", "mapping-identity-mismatch", "source-snapshot-mismatch",
-    "payload-identity-mismatch", "payload-session-not-readable", "missing-terminal-decision",
-    "duplicate-terminal-decision", "unmatched-lowering-descriptor",
-    "duplicate-lowering-descriptor", "precision-constraint-violation", "approximation-forbidden",
-    "unknown-qtype", "removed-qtype", "qtype-outside-pinned-baseline", "encoder-unavailable",
-    "reference-decoder-unavailable", "cpu-compute-unavailable", "cuda-compute-unavailable",
-    "calibration-required", "calibration-identity-mismatch",
-    "unsupported-transformation-operation", "invalid-rank", "invalid-dimension",
-    "invalid-row-axis", "row-block-divisibility", "element-count-overflow", "byte-count-overflow",
-    "malformed-fp8-scale-pair", "malformed-mxfp4-block", "malformed-q8-0-block",
-    "malformed-q2-k-block", "checked-cast-range-failure", "non-finite-input-forbidden",
-    "source-short-read", "source-drift", "sink-short-write", "sink-protocol-violation",
-    "cancellation", "resource-budget-exhaustion", "allocation-failure", "worker-failure",
-    "cleanup-failure", "numeric-bound-violation", "output-digest-mismatch",
-    "incomplete-execution",
-};
-
 /* Purpose: resolve the immutable numeric capability for one exact qtype identity.
  * Inputs: canonical numeric qtype ID.
  * Effects: none.
@@ -161,12 +137,8 @@ const yvex_quant_numeric_capability *yvex_quant_numeric_capability_by_name(const
     return geometry ? yvex_quant_numeric_capability_at(geometry->qtype) : NULL;
 }
 
-/* Purpose: expose the cardinality of the closed pinned numeric registry.
- * Inputs: none.
- * Effects: none.
- * Failure: none.
- * Boundary: cardinality includes explicit refusal rows. */
-unsigned int yvex_quant_numeric_capability_count(void) {
+/* Purpose: retain the closed registry cardinality inside its sole owner. */
+static unsigned int numeric_capability_count(void) {
     return (unsigned int)(sizeof(quant_registry) / sizeof(quant_registry[0]));
 }
 
@@ -181,7 +153,7 @@ const yvex_qtype_support_info *yvex_qtype_support_by_name(const char *qtype) {
     if (!qtype)
         return NULL;
     geometry = yvex_gguf_qtype_geometry_find_by_name(qtype);
-    return geometry && geometry->qtype < yvex_quant_numeric_capability_count()
+    return geometry && geometry->qtype < numeric_capability_count()
                ? &quant_registry[geometry->qtype].compatibility
                : NULL;
 }
@@ -192,7 +164,7 @@ const yvex_qtype_support_info *yvex_qtype_support_by_name(const char *qtype) {
  * Failure: none.
  * Boundary: the count is exactly the numeric registry count. */
 unsigned long long yvex_qtype_support_count(void) {
-    return yvex_quant_numeric_capability_count();
+    return numeric_capability_count();
 }
 
 /* Purpose: resolve one bounds-checked compatibility row by ordinal.
@@ -201,8 +173,7 @@ unsigned long long yvex_qtype_support_count(void) {
  * Failure: an out-of-range index returns null.
  * Boundary: the returned view remains owned by the registry. */
 const yvex_qtype_support_info *yvex_qtype_support_at(unsigned long long index) {
-    return index < yvex_quant_numeric_capability_count() ? &quant_registry[index].compatibility
-                                                         : NULL;
+    return index < numeric_capability_count() ? &quant_registry[index].compatibility : NULL;
 }
 
 /* Purpose: obtain the geometry-owned canonical name for a compatibility row.
@@ -233,25 +204,4 @@ int yvex_qtype_support_storage_supported(const yvex_qtype_support_info *info) {
 const char *yvex_quant_calibration_name(yvex_quant_calibration_requirement requirement) {
     return requirement <= YVEX_QUANT_CALIBRATION_UNSUPPORTED ? calibration_names[requirement]
                                                               : "unknown";
-}
-
-/* Purpose: render one canonical qtype capability refusal code.
- * Inputs: refusal enum value.
- * Effects: none.
- * Failure: out-of-range values yield a stable unknown label.
- * Boundary: labels project typed truth; they never classify from text. */
-const char *yvex_quant_refusal_name(yvex_quant_refusal_code refusal) {
-    return refusal <= YVEX_QUANT_REFUSAL_CALIBRATION_REQUIRED ? refusal_names[refusal]
-                                                               : "unknown-refusal";
-}
-
-/* Purpose: render one executor failure code for structured diagnostics.
- * Inputs: quantization failure enum value.
- * Effects: none.
- * Failure: out-of-range values yield a stable unknown label.
- * Boundary: failure naming does not change recovery or capability state. */
-const char *yvex_quant_failure_name(yvex_quant_failure_code code) {
-    return code >= 0 && (size_t)code < sizeof(failure_names) / sizeof(failure_names[0])
-               ? failure_names[code]
-               : "unknown-quant-failure";
 }

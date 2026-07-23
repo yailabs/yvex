@@ -9,18 +9,19 @@ trap 'rm -f "$out"' EXIT
 build/tests/test >"$out" 2>&1
 grep -nF 'test: gguf_artifact_abi' "$out" >/dev/null
 
-# The operational reader owns one typed, file-backed parse; the completed
-# layout owner now hands the foundation sequence to CUDA fail-closed repair.
-# Reports and consumers may not restore whole-file parsing or string-derived
-# failure policy.
-grep -nF '#define YVEX_GGUF_ABI_NEXT_ROW "V010.CUDA.FAILCLOSED.0"' \
-  include/yvex/internal/gguf.h >/dev/null
+# The operational reader and layout owner are the only structural authority.
+# A report-only parser projection must not return as a second admission path.
 grep -nF 'int yvex_artifact_read_at(' include/yvex/artifact.h >/dev/null
 grep -nF 'int yvex_gguf_open_ex(' include/yvex/gguf.h >/dev/null
-grep -nF 'yvex_gguf_parse_result parse_result;' \
-  include/yvex/internal/gguf.h >/dev/null
-grep -nF 'yvex_gguf_reader_stats reader_stats;' \
-  include/yvex/internal/gguf.h >/dev/null
+test ! -e src/gguf/report.c
+if rg -nF 'yvex_gguf_artifact_abi_report_build' \
+  src include tests/unit tests/live >/dev/null; then
+  echo 'artifact ABI guard: report-only structural authority returned' >&2
+  exit 1
+fi
+grep -nF 'yvex_gguf_open_ex(gguf' tests/unit/gguf_artifact_abi.c >/dev/null
+grep -nF 'yvex_gguf_layout_validate(artifact, gguf' \
+  tests/unit/gguf_artifact_abi.c >/dev/null
 
 if grep -nE '\b(fseek|ftell|fread)\b' src/artifact/core.c >/dev/null; then
   echo 'artifact ABI guard: whole-file stdio path returned' >&2
@@ -43,11 +44,6 @@ if grep -R -nF 'required_key_count' src/gguf include/yvex >/dev/null; then
   exit 1
 fi
 
-test "$(grep -cF 'yvex_gguf_open_ex(' src/gguf/report.c)" -eq 1
-if grep -nF 'yvex_gguf_read_header' src/gguf/report.c >/dev/null; then
-  echo 'artifact ABI guard: report reparses the GGUF header' >&2
-  exit 1
-fi
 grep -nF '69187ull' tests/unit/gguf_artifact_abi.c >/dev/null
 grep -nF '129280ull' tests/unit/gguf_artifact_abi.c >/dev/null
 grep -nF '160ull * 1024ull * 1024ull * 1024ull' \

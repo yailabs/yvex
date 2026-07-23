@@ -176,16 +176,11 @@ int yvex_gguf_open(yvex_gguf **out, const yvex_artifact *artifact, yvex_error *e
 /* Safe for null and for every successfully returned parsed view. */
 void yvex_gguf_close(yvex_gguf *gguf);
 
-const char *yvex_gguf_parse_code_name(yvex_gguf_parse_code code);
-const char *yvex_gguf_parse_section_name(yvex_gguf_parse_section section);
-
 const yvex_gguf_header *yvex_gguf_header_view(const yvex_gguf *gguf);
 const char *yvex_gguf_value_type_name(yvex_gguf_value_type type);
 
 unsigned long long yvex_gguf_metadata_count(const yvex_gguf *gguf);
 const char *yvex_gguf_metadata_key(const yvex_gguf *gguf, unsigned long long index);
-unsigned long long yvex_gguf_metadata_key_len(const yvex_gguf *gguf,
-                                               unsigned long long index);
 const yvex_gguf_value *yvex_gguf_metadata_value(const yvex_gguf *gguf, unsigned long long index);
 const yvex_gguf_value *yvex_gguf_metadata_find(const yvex_gguf *gguf, const char *key);
 
@@ -493,9 +488,7 @@ int yvex_conversion_suggest_artifact_name(char *out,
                                           const char *schema,
                                           yvex_error *err);
 
-const char *yvex_conversion_status_name(yvex_conversion_status status);
 const char *yvex_convert_tensor_status_name(yvex_convert_tensor_status status);
-const char *yvex_convert_transform_kind_name(yvex_convert_transform_kind transform);
 
 /* Tensor name mapping. */
 #define YVEX_WEIGHT_MAPPING_MAX_DIMS 8u

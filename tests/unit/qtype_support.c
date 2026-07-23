@@ -4,16 +4,14 @@
 #include <string.h>
 
 #include <yvex/api.h>
-
-#include "src/backend/cuda/private.h"
+#include <yvex/internal/quant_numeric.h>
 
 #include "tests/test.h"
 
 int yvex_test_qtype_support(void)
 {
     const yvex_qtype_support_info *row;
-    yvex_backend_qtype_fact backend;
-    yvex_cuda_qtype_fact cuda;
+    const yvex_quant_numeric_capability *capability;
 
     YVEX_TEST_ASSERT(yvex_qtype_support_count() == 43u,
                      "support projection covers every pinned qtype identity");
@@ -39,15 +37,15 @@ int yvex_test_qtype_support(void)
     row = yvex_qtype_support_by_name("Q4_2");
     YVEX_TEST_ASSERT(row && !row->policy_supported && !row->emit_supported,
                      "removed qtype projects deterministic refusal");
-    yvex_backend_qtype_refuse(&backend, "cpu", "Q8_0");
-    YVEX_TEST_ASSERT_STREQ(backend.compute_status, "available",
-                           "CPU backend projects canonical Q8_0 compute");
-    yvex_backend_qtype_refuse(&backend, "cpu", "Q4_K");
-    YVEX_TEST_ASSERT_STREQ(backend.compute_status, "unavailable",
-                           "CPU backend projects canonical refusal");
-    yvex_cuda_qtype_refuse(&cuda, "Q2_K");
-    YVEX_TEST_ASSERT_STREQ(cuda.status, "available",
-                           "CUDA backend projects canonical Q2_K compute");
+    capability = yvex_quant_numeric_capability_by_name("Q8_0");
+    YVEX_TEST_ASSERT(capability && capability->dedicated_cpu_compute_available,
+                     "canonical Q8_0 row admits dedicated CPU compute");
+    capability = yvex_quant_numeric_capability_by_name("Q2_K");
+    YVEX_TEST_ASSERT(capability && capability->dedicated_cuda_compute_available,
+                     "canonical Q2_K row admits dedicated CUDA compute");
+    capability = yvex_quant_numeric_capability_by_name("Q4_K");
+    YVEX_TEST_ASSERT(capability && !capability->dedicated_cpu_compute_available,
+                     "canonical Q4_K row preserves CPU compute refusal");
     YVEX_TEST_ASSERT(yvex_qtype_support_by_name("NOPE") == NULL, "unknown missing");
     return 0;
 }

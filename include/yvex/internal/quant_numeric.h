@@ -152,11 +152,8 @@ const yvex_quant_numeric_capability *yvex_quant_numeric_capability_at(
     unsigned int qtype);
 const yvex_quant_numeric_capability *yvex_quant_numeric_capability_by_name(
     const char *name);
-unsigned int yvex_quant_numeric_capability_count(void);
 const char *yvex_quant_calibration_name(
     yvex_quant_calibration_requirement requirement);
-const char *yvex_quant_refusal_name(yvex_quant_refusal_code refusal);
-const char *yvex_quant_failure_name(yvex_quant_failure_code code);
 float yvex_quant_f16_decode(unsigned short bits);
 unsigned short yvex_quant_f16_encode(float value);
 float yvex_quant_bf16_decode(unsigned short bits);
@@ -198,13 +195,7 @@ int yvex_quant_metrics_update(yvex_quant_metrics *metrics,
                               const float *reconstructed,
                               const float *dot_vector,
                               unsigned long long count);
-double yvex_quant_metrics_mean_absolute_error(
-    const yvex_quant_metrics *metrics);
 double yvex_quant_metrics_rmse(const yvex_quant_metrics *metrics);
-double yvex_quant_metrics_mean_relative_error(
-    const yvex_quant_metrics *metrics);
-double yvex_quant_metrics_dot_absolute_error(
-    const yvex_quant_metrics *metrics);
 int yvex_quant_cpu_dot(unsigned int qtype,
                        const unsigned char *encoded,
                        size_t encoded_bytes,
@@ -471,8 +462,6 @@ typedef struct {
     unsigned int workers_started;
     int complete;
 } yvex_quant_execution_summary;
-void yvex_quant_cancellation_init(yvex_quant_cancellation *cancellation);
-void yvex_quant_cancellation_request(yvex_quant_cancellation *cancellation);
 void yvex_quant_executor_options_default(yvex_quant_executor_options *options);
 int yvex_quant_execute(
     const yvex_quant_plan *plan,

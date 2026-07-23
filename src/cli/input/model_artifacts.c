@@ -1,10 +1,10 @@
 /* Owner: src/cli/input
- * Owns: argc/argv parsing into typed model artifact report request fields.
- * Does not own: registry lookup, model gate checks, report building, rendering, stdout/stderr, artifact emission,
- *   runtime generation, eval, benchmark, or release decisions.
- * Invariants: parser performs no artifact IO and calls no report builders.
+ * Owns: typed model-download and fullmodel argument parsing.
+ * Does not own: registry lookup, model gate checks, rendering, stdout/stderr, artifact emission, runtime
+ *   generation, eval, benchmark, or release decisions.
+ * Invariants: parsers perform no artifact IO and call no domain builders.
  * Boundary: argument parsing is not artifact emission or runtime support.
- * Purpose: provide argc/argv parsing into typed model artifact report request fields.
+ * Purpose: provide bounded model-download and fullmodel command arguments.
  * Inputs: bounded command arguments and caller-owned typed request storage.
  * Effects: publishes request fields only after complete grammar validation.
  * Failure: invalid or ambiguous grammar leaves the request uncommitted. */
@@ -47,125 +47,284 @@ static const char *const literal_lines_1[] = {
     "usage: yvex fullmodel family-runtime --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] "
     "[--backend cpu|cuda]"};
 
-static const yvex_models_option_spec download_bound_options[] = {
-    {"--models-root", YVEX_MODELS_OPTION_TEXT,
-     offsetof(yvex_cli_models_download_options, models_root)},
-    {"--repo", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_models_download_options, repo)},
-    {"--family", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_models_download_options, family)},
-    {"--name", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_models_download_options, name)},
-    {"--revision", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_models_download_options, revision)},
-    {"--asset", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_models_download_options, asset)},
-    {"--asset-name", YVEX_MODELS_OPTION_TEXT,
-     offsetof(yvex_cli_models_download_options, asset_name)},
-    {"--token-env", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_models_download_options, token_env)},
-    {"--cli", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_models_download_options, cli)},
-    {"--dry-run", YVEX_MODELS_OPTION_FLAG, offsetof(yvex_cli_models_download_options, dry_run)},
-    {"--no-manifest", YVEX_MODELS_OPTION_FLAG,
+typedef enum {
+    INPUT_OPTION_TEXT = 0,
+    INPUT_OPTION_FLAG,
+    INPUT_OPTION_CHOICE_TEXT,
+    INPUT_OPTION_CHOICE_INT,
+    INPUT_OPTION_MIRRORED_TEXT,
+    INPUT_OPTION_PATTERN,
+    INPUT_OPTION_POSITIVE_U64,
+    INPUT_OPTION_OUTPUT,
+    INPUT_OPTION_FIXED_INT,
+    INPUT_OPTION_REJECT,
+    INPUT_OPTION_PROVIDER,
+    INPUT_OPTION_SOURCE
+} input_option_kind;
+
+typedef enum {
+    INPUT_VALUE_STANDARD = 0,
+    INPUT_VALUE_NONEMPTY
+} input_value_policy;
+
+typedef enum {
+    INPUT_ERROR_NONE = 0,
+    INPUT_ERROR_FLAG,
+    INPUT_ERROR_VALUE
+} input_error_detail;
+
+typedef struct {
+    const char *name;
+    const char *canonical;
+    int number;
+} input_option_choice;
+
+typedef struct {
+    const char *flag;
+    input_option_kind kind;
+    size_t offset;
+    size_t auxiliary_offset;
+    const input_option_choice *choices;
+    unsigned int command_mask;
+    unsigned long long maximum;
+    int fixed_value;
+    input_value_policy value_policy;
+    const char *invalid_error;
+    input_error_detail invalid_detail;
+    const char *scope_error;
+    input_error_detail scope_detail;
+} input_option_spec;
+
+enum {
+    FULLMODEL_REPORT_MASK = 1u << YVEX_FULLMODEL_COMMAND_REPORT,
+    FULLMODEL_PLAN_MASK = 1u << YVEX_FULLMODEL_COMMAND_MATERIALIZATION_PLAN,
+    FULLMODEL_MATERIALIZE_MASK = 1u << YVEX_FULLMODEL_COMMAND_MATERIALIZE,
+    FULLMODEL_DESCRIPTOR_MASK = 1u << YVEX_FULLMODEL_COMMAND_DESCRIPTOR,
+    FULLMODEL_FAMILY_RUNTIME_MASK = 1u << YVEX_FULLMODEL_COMMAND_FAMILY_RUNTIME
+};
+
+static const input_option_choice source_choices[] = {{"hf", "hf", 0}, {NULL, NULL, 0}};
+static const input_option_choice github_source_choices[] = {
+    {"release-asset", "release-asset", 0}, {NULL, NULL, 0}};
+static const input_option_choice auth_choices[] = {
+    {"auto", NULL, YVEX_MODEL_DOWNLOAD_AUTH_AUTO},
+    {"required", NULL, YVEX_MODEL_DOWNLOAD_AUTH_REQUIRED},
+    {"never", NULL, YVEX_MODEL_DOWNLOAD_AUTH_NEVER},
+    {NULL, NULL, 0}};
+static const input_option_choice progress_choices[] = {
+    {"auto", NULL, YVEX_MODEL_DOWNLOAD_PROGRESS_AUTO},
+    {"live", NULL, YVEX_MODEL_DOWNLOAD_PROGRESS_LIVE},
+    {"plain", NULL, YVEX_MODEL_DOWNLOAD_PROGRESS_PLAIN},
+    {"log", NULL, YVEX_MODEL_DOWNLOAD_PROGRESS_LOG},
+    {"off", NULL, YVEX_MODEL_DOWNLOAD_PROGRESS_OFF},
+    {NULL, NULL, 0}};
+static const input_option_choice backend_choices[] = {
+    {"cpu", "cpu", 0}, {"cuda", "cuda", 0}, {NULL, NULL, 0}};
+static const input_option_choice residency_choices[] = {
+    {"resident", "resident", 0},
+    {"host-staged", "host-staged", 0},
+    {"ssd-staged", "ssd-staged", 0},
+    {"hybrid", "hybrid", 0},
+    {"ssd-streamed", "ssd-streamed", 0},
+    {"managed-memory", "managed-memory", 0},
+    {"distributed", "distributed", 0},
+    {NULL, NULL, 0}};
+static const input_option_choice format_choices[] = {
+    {"text", "text", 0}, {NULL, NULL, 0}};
+static const input_option_choice phase_choices[] = {
+    {"preflight", "preflight", 0},
+    {"resolve-model", "resolve-model", 0},
+    {"artifact-identity", "artifact-identity", 0},
+    {"tensor-inventory", "tensor-inventory", 0},
+    {"role-coverage", "role-coverage", 0},
+    {"placement-plan", "placement-plan", 0},
+    {"memory-budget", "memory-budget", 0},
+    {"backend-preflight", "backend-preflight", 0},
+    {"materialize-embedding", "materialize-embedding", 0},
+    {"materialize-normalization", "materialize-normalization", 0},
+    {"materialize-attention", "materialize-attention", 0},
+    {"materialize-mlp", "materialize-mlp", 0},
+    {"materialize-moe", "materialize-moe", 0},
+    {"materialize-output", "materialize-output", 0},
+    {"materialize-tokenizer", "materialize-tokenizer", 0},
+    {"cleanup", "cleanup", 0},
+    {"complete", "complete", 0},
+    {"failed", "failed", 0},
+    {NULL, NULL, 0}};
+
+static const input_option_spec download_options[] = {
+    {.flag = "--models-root", INPUT_OPTION_TEXT, offsetof(yvex_cli_models_download_options, models_root)},
+    {.flag = "--repo", INPUT_OPTION_TEXT, offsetof(yvex_cli_models_download_options, repo)},
+    {.flag = "--family", INPUT_OPTION_TEXT, offsetof(yvex_cli_models_download_options, family)},
+    {.flag = "--name", INPUT_OPTION_TEXT, offsetof(yvex_cli_models_download_options, name)},
+    {.flag = "--revision", INPUT_OPTION_TEXT, offsetof(yvex_cli_models_download_options, revision)},
+    {.flag = "--asset", INPUT_OPTION_TEXT, offsetof(yvex_cli_models_download_options, asset)},
+    {.flag = "--asset-name", INPUT_OPTION_TEXT, offsetof(yvex_cli_models_download_options, asset_name)},
+    {.flag = "--token-env", INPUT_OPTION_TEXT, offsetof(yvex_cli_models_download_options, token_env)},
+    {.flag = "--cli", INPUT_OPTION_TEXT, offsetof(yvex_cli_models_download_options, cli)},
+    {.flag = "--dry-run", INPUT_OPTION_FLAG, offsetof(yvex_cli_models_download_options, dry_run)},
+    {.flag = "--no-manifest", INPUT_OPTION_FLAG,
      offsetof(yvex_cli_models_download_options, no_manifest)},
-    {"--no-native-inventory", YVEX_MODELS_OPTION_FLAG,
+    {.flag = "--no-native-inventory", INPUT_OPTION_FLAG,
      offsetof(yvex_cli_models_download_options, no_native_inventory)},
-    {"--force-sidecars", YVEX_MODELS_OPTION_FLAG,
+    {.flag = "--force-sidecars", INPUT_OPTION_FLAG,
      offsetof(yvex_cli_models_download_options, force_sidecars)},
-    {"--yes", YVEX_MODELS_OPTION_FLAG, offsetof(yvex_cli_models_download_options, yes)},
-    {"--clear-stale-locks", YVEX_MODELS_OPTION_FLAG,
+    {.flag = "--yes", INPUT_OPTION_FLAG, offsetof(yvex_cli_models_download_options, yes)},
+    {.flag = "--clear-stale-locks", INPUT_OPTION_FLAG,
      offsetof(yvex_cli_models_download_options, clear_stale_locks)},
-    {"--force", YVEX_MODELS_OPTION_FLAG, offsetof(yvex_cli_models_download_options, force)},
-    {"--match-provider-process", YVEX_MODELS_OPTION_FLAG,
+    {.flag = "--force", INPUT_OPTION_FLAG, offsetof(yvex_cli_models_download_options, force)},
+    {.flag = "--match-provider-process", INPUT_OPTION_FLAG,
      offsetof(yvex_cli_models_download_options, match_provider_process)},
-    {"--stale-locks", YVEX_MODELS_OPTION_FLAG,
+    {.flag = "--stale-locks", INPUT_OPTION_FLAG,
      offsetof(yvex_cli_models_download_options, cleanup_stale_locks)},
-    {"--logs", YVEX_MODELS_OPTION_FLAG, offsetof(yvex_cli_models_download_options, cleanup_logs)},
-    {"--receipts", YVEX_MODELS_OPTION_FLAG,
+    {.flag = "--logs", INPUT_OPTION_FLAG, offsetof(yvex_cli_models_download_options, cleanup_logs)},
+    {.flag = "--receipts", INPUT_OPTION_FLAG,
      offsetof(yvex_cli_models_download_options, cleanup_receipts)},
-    {"--failed-partials", YVEX_MODELS_OPTION_FLAG,
+    {.flag = "--failed-partials", INPUT_OPTION_FLAG,
      offsetof(yvex_cli_models_download_options, cleanup_failed_partials)},
-    {"--all-provider-cache", YVEX_MODELS_OPTION_FLAG,
+    {.flag = "--all-provider-cache", INPUT_OPTION_FLAG,
      offsetof(yvex_cli_models_download_options, cleanup_all_provider_cache)},
-};
+    {.flag = "--source", INPUT_OPTION_SOURCE, offsetof(yvex_cli_models_download_options, source),
+     offsetof(yvex_cli_models_download_options, provider), source_choices, 0u, 0ull, 0,
+     INPUT_VALUE_STANDARD, "yvex: models download --source supports hf only\n"},
+    {.flag = "--provider", INPUT_OPTION_PROVIDER, offsetof(yvex_cli_models_download_options, provider), 0u,
+     NULL, 0u, 0ull, 0, INPUT_VALUE_STANDARD,
+     "yvex: models download --provider requires hf|huggingface|gh|github\n"},
+    {.flag = "--release", INPUT_OPTION_MIRRORED_TEXT,
+     offsetof(yvex_cli_models_download_options, release),
+     offsetof(yvex_cli_models_download_options, revision)},
+    {.flag = "--github-source", INPUT_OPTION_CHOICE_TEXT,
+     offsetof(yvex_cli_models_download_options, github_source), 0u, github_source_choices, 0u, 0ull,
+     0, INPUT_VALUE_STANDARD,
+     "yvex: models download --github-source supports release-asset only\n"},
+    {.flag = "--auth", INPUT_OPTION_CHOICE_INT, offsetof(yvex_cli_models_download_options, auth_mode), 0u,
+     auth_choices, 0u, 0ull, 0, INPUT_VALUE_STANDARD,
+     "yvex: models download --auth requires auto|required|never\n"},
+    {.flag = "--include", INPUT_OPTION_PATTERN,
+     offsetof(yvex_cli_models_download_options, include_patterns),
+     offsetof(yvex_cli_models_download_options, include_count), NULL, 0u,
+     YVEX_MODEL_DOWNLOAD_PATTERN_CAP, 0, INPUT_VALUE_STANDARD,
+     "yvex: models download too many --include patterns\n"},
+    {.flag = "--exclude", INPUT_OPTION_PATTERN,
+     offsetof(yvex_cli_models_download_options, exclude_patterns),
+     offsetof(yvex_cli_models_download_options, exclude_count), NULL, 0u,
+     YVEX_MODEL_DOWNLOAD_PATTERN_CAP, 0, INPUT_VALUE_STANDARD,
+     "yvex: models download too many --exclude patterns\n"},
+    {.flag = "--max-workers", INPUT_OPTION_POSITIVE_U64,
+     offsetof(yvex_cli_models_download_options, max_workers), 0u, NULL, 0u, 0ull, 0,
+     INPUT_VALUE_STANDARD,
+     "yvex: models download --max-workers requires a positive integer\n"},
+    {.flag = "--progress", INPUT_OPTION_CHOICE_INT,
+     offsetof(yvex_cli_models_download_options, progress_mode), 0u, progress_choices, 0u, 0ull, 0,
+     INPUT_VALUE_STANDARD,
+     "yvex: models download --progress requires auto|live|plain|log|off\n"},
+    {.flag = "--tick-seconds", INPUT_OPTION_POSITIVE_U64,
+     offsetof(yvex_cli_models_download_options, tick_seconds), 0u, NULL, 0u, 0ull, 0,
+     INPUT_VALUE_STANDARD,
+     "yvex: models download --tick-seconds requires a positive integer\n"},
+    {.flag = "--timeout-seconds", INPUT_OPTION_POSITIVE_U64,
+     offsetof(yvex_cli_models_download_options, timeout_seconds), 0u, NULL, 0u, 0ull, 0,
+     INPUT_VALUE_STANDARD,
+     "yvex: models download --timeout-seconds requires a positive integer\n"},
+    {.flag = "--output", INPUT_OPTION_OUTPUT, offsetof(yvex_cli_models_download_options, output_mode), 0u,
+     NULL, 0u, 0ull, 0, INPUT_VALUE_STANDARD,
+     "yvex: models download unsupported output mode: %s\n", INPUT_ERROR_VALUE},
+    {.flag = "--audit", INPUT_OPTION_FIXED_INT, offsetof(yvex_cli_models_download_options, output_mode), 0u,
+     NULL, 0u, 0ull, YVEX_MODELS_OUTPUT_AUDIT},
+    {.flag = "--no-progress", INPUT_OPTION_FIXED_INT,
+     offsetof(yvex_cli_models_download_options, progress_mode), 0u, NULL, 0u, 0ull,
+     YVEX_MODEL_DOWNLOAD_PROGRESS_OFF},
+    {.flag = "--json", INPUT_OPTION_REJECT, 0u, 0u, NULL, 0u, 0ull, 0, INPUT_VALUE_STANDARD,
+     "yvex: models download JSON output is unsupported; use --output normal|table|audit\n"},
+    {.flag = NULL, INPUT_OPTION_TEXT, 0u}};
 
-static const yvex_models_option_spec fullmodel_bound_options[] = {
-    {"--model", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, model)},
-    {"--backend", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, backend)},
-    {"--target", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, target)},
-    {"--registry", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, registry_path)},
-    {"--family", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, family)},
-    {"--residency", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, residency)},
-    {"--require-role", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, require_role)},
-    {"--require-collection", YVEX_MODELS_OPTION_TEXT,
-     offsetof(yvex_cli_fullmodel_options, require_collection)},
-    {"--fail-after-phase", YVEX_MODELS_OPTION_TEXT,
-     offsetof(yvex_cli_fullmodel_options, fail_after_phase)},
-    {"--report-dir", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, report_dir)},
-    {"--format", YVEX_MODELS_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, format)},
-    {"--dry-run", YVEX_MODELS_OPTION_FLAG, offsetof(yvex_cli_fullmodel_options, dry_run)},
-    {"--plan-only", YVEX_MODELS_OPTION_FLAG, offsetof(yvex_cli_fullmodel_options, plan_only)},
-    {"--include-blockers", YVEX_MODELS_OPTION_FLAG,
-     offsetof(yvex_cli_fullmodel_options, include_blockers)},
-    {"--include-roles", YVEX_MODELS_OPTION_FLAG,
-     offsetof(yvex_cli_fullmodel_options, include_roles)},
-    {"--include-placement", YVEX_MODELS_OPTION_FLAG,
-     offsetof(yvex_cli_fullmodel_options, include_placement)},
-    {"--include-graph", YVEX_MODELS_OPTION_FLAG,
-     offsetof(yvex_cli_fullmodel_options, include_graph)},
-    {"--include-kv", YVEX_MODELS_OPTION_FLAG, offsetof(yvex_cli_fullmodel_options, include_kv)},
-    {"--include-logits", YVEX_MODELS_OPTION_FLAG,
-     offsetof(yvex_cli_fullmodel_options, include_logits)},
-    {"--include-moe", YVEX_MODELS_OPTION_FLAG, offsetof(yvex_cli_fullmodel_options, include_moe)},
-    {"--include-output", YVEX_MODELS_OPTION_FLAG,
-     offsetof(yvex_cli_fullmodel_options, include_output)},
-    {"--output", YVEX_MODELS_OPTION_OUTPUT, offsetof(yvex_cli_fullmodel_options, output_mode)},
-};
-
-/* Purpose: Parse model artifacts args parse into typed CLI state (`yvex_model_artifacts_args_parse`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-int yvex_model_artifacts_args_parse(int argc, char **argv, yvex_model_artifacts_args *out,
-                                    yvex_error *err) {
-    int i;
-
-    if (!out) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_artifacts_args",
-                       "output args are required");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    memset(out, 0, sizeof(*out));
-    out->request.kind = YVEX_MODEL_ARTIFACT_REPORT_STATUS;
-    out->request.mode = YVEX_MODEL_ARTIFACT_RENDER_NORMAL;
-
-    for (i = 0; i < argc; ++i) {
-        const char *arg = argv ? argv[i] : NULL;
-        if (!arg)
-            continue;
-        if (strcmp(arg, "--help") == 0 || strcmp(arg, "help") == 0) {
-            out->help_requested = 1;
-        } else if (strcmp(arg, "list") == 0) {
-            out->request.kind = YVEX_MODEL_ARTIFACT_REPORT_LIST;
-        } else if (strcmp(arg, "check") == 0) {
-            out->request.kind = YVEX_MODEL_ARTIFACT_REPORT_CHECK;
-        } else if (strcmp(arg, "--audit") == 0) {
-            out->request.mode = YVEX_MODEL_ARTIFACT_RENDER_AUDIT;
-        } else if (strcmp(arg, "--output") == 0 && i + 1 < argc) {
-            const char *mode = argv[++i];
-            if (strcmp(mode, "table") == 0)
-                out->request.mode = YVEX_MODEL_ARTIFACT_RENDER_TABLE;
-            else if (strcmp(mode, "audit") == 0)
-                out->request.mode = YVEX_MODEL_ARTIFACT_RENDER_AUDIT;
-            else
-                out->request.mode = YVEX_MODEL_ARTIFACT_RENDER_NORMAL;
-        } else if (strcmp(arg, "--registry") == 0 && i + 1 < argc) {
-            out->request.registry_path = argv[++i];
-        } else if (strcmp(arg, "--model") == 0 && i + 1 < argc) {
-            out->request.model_ref = argv[++i];
-        } else if (strcmp(arg, "--path") == 0 && i + 1 < argc) {
-            out->request.artifact_path = argv[++i];
-        }
-    }
-
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
+static const input_option_spec fullmodel_options[] = {
+    {.flag = "--model", INPUT_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, model)},
+    {.flag = "--backend", INPUT_OPTION_CHOICE_TEXT, offsetof(yvex_cli_fullmodel_options, backend), 0u,
+     backend_choices, 0u, 0ull, 0, INPUT_VALUE_STANDARD,
+     "yvex: fullmodel --backend must be cpu or cuda\n"},
+    {.flag = "--target", INPUT_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, target)},
+    {.flag = "--registry", INPUT_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, registry_path)},
+    {.flag = "--family", INPUT_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, family), 0u, NULL,
+     FULLMODEL_FAMILY_RUNTIME_MASK, 0ull, 0, INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel --family is only valid with family-runtime\n"},
+    {.flag = "--residency", INPUT_OPTION_CHOICE_TEXT, offsetof(yvex_cli_fullmodel_options, residency), 0u,
+     residency_choices, 0u, 0ull, 0, INPUT_VALUE_STANDARD,
+     "yvex: fullmodel --residency must be resident, host-staged, ssd-staged, hybrid, "
+     "ssd-streamed, managed-memory, or distributed\n"},
+    {.flag = "--require-role", INPUT_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, require_role), 0u,
+     NULL, FULLMODEL_MATERIALIZE_MASK | FULLMODEL_DESCRIPTOR_MASK, 0ull, 0,
+     INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel %s is only valid with materialize or descriptor\n", INPUT_ERROR_FLAG},
+    {.flag = "--require-collection", INPUT_OPTION_TEXT,
+     offsetof(yvex_cli_fullmodel_options, require_collection), 0u, NULL,
+     FULLMODEL_MATERIALIZE_MASK | FULLMODEL_DESCRIPTOR_MASK, 0ull, 0,
+     INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel %s is only valid with materialize or descriptor\n", INPUT_ERROR_FLAG},
+    {.flag = "--fail-after-phase", INPUT_OPTION_CHOICE_TEXT,
+     offsetof(yvex_cli_fullmodel_options, fail_after_phase), 0u, phase_choices,
+     FULLMODEL_MATERIALIZE_MASK, 0ull, 0, INPUT_VALUE_STANDARD,
+     "yvex: fullmodel --fail-after-phase value is not a known materialize phase\n",
+     INPUT_ERROR_NONE, "yvex: fullmodel %s is only valid with materialize\n", INPUT_ERROR_FLAG},
+    {.flag = "--report-dir", INPUT_OPTION_TEXT, offsetof(yvex_cli_fullmodel_options, report_dir), 0u, NULL,
+     FULLMODEL_MATERIALIZE_MASK, 0ull, 0, INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel %s is only valid with materialize\n", INPUT_ERROR_FLAG},
+    {.flag = "--format", INPUT_OPTION_CHOICE_TEXT, offsetof(yvex_cli_fullmodel_options, format), 0u,
+     format_choices, FULLMODEL_DESCRIPTOR_MASK, 0ull, 0, INPUT_VALUE_STANDARD,
+     "yvex: fullmodel descriptor currently supports --format text only\n", INPUT_ERROR_NONE,
+     "yvex: fullmodel --format is only valid with descriptor\n"},
+    {.flag = "--dry-run", INPUT_OPTION_FLAG, offsetof(yvex_cli_fullmodel_options, dry_run), 0u, NULL,
+     FULLMODEL_MATERIALIZE_MASK, 0ull, 0, INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel %s is only valid with materialize\n", INPUT_ERROR_FLAG},
+    {.flag = "--plan-only", INPUT_OPTION_FLAG, offsetof(yvex_cli_fullmodel_options, plan_only), 0u, NULL,
+     FULLMODEL_MATERIALIZE_MASK, 0ull, 0, INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel %s is only valid with materialize\n", INPUT_ERROR_FLAG},
+    {.flag = "--include-blockers", INPUT_OPTION_FLAG,
+     offsetof(yvex_cli_fullmodel_options, include_blockers), 0u, NULL,
+     FULLMODEL_DESCRIPTOR_MASK | FULLMODEL_FAMILY_RUNTIME_MASK, 0ull, 0,
+     INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel %s is only valid with descriptor or family-runtime\n", INPUT_ERROR_FLAG},
+    {.flag = "--include-roles", INPUT_OPTION_FLAG, offsetof(yvex_cli_fullmodel_options, include_roles), 0u,
+     NULL, FULLMODEL_FAMILY_RUNTIME_MASK, 0ull, 0, INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel %s is only valid with family-runtime\n", INPUT_ERROR_FLAG},
+    {.flag = "--include-placement", INPUT_OPTION_FLAG,
+     offsetof(yvex_cli_fullmodel_options, include_placement), 0u, NULL,
+     FULLMODEL_DESCRIPTOR_MASK | FULLMODEL_FAMILY_RUNTIME_MASK, 0ull, 0,
+     INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel %s is only valid with descriptor or family-runtime\n", INPUT_ERROR_FLAG},
+    {.flag = "--include-graph", INPUT_OPTION_FLAG, offsetof(yvex_cli_fullmodel_options, include_graph), 0u,
+     NULL, FULLMODEL_DESCRIPTOR_MASK | FULLMODEL_FAMILY_RUNTIME_MASK, 0ull, 0,
+     INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel %s is only valid with descriptor or family-runtime\n", INPUT_ERROR_FLAG},
+    {.flag = "--include-kv", INPUT_OPTION_FLAG, offsetof(yvex_cli_fullmodel_options, include_kv), 0u, NULL,
+     FULLMODEL_DESCRIPTOR_MASK | FULLMODEL_FAMILY_RUNTIME_MASK, 0ull, 0,
+     INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel %s is only valid with descriptor or family-runtime\n", INPUT_ERROR_FLAG},
+    {.flag = "--include-logits", INPUT_OPTION_FLAG, offsetof(yvex_cli_fullmodel_options, include_logits),
+     0u, NULL, FULLMODEL_DESCRIPTOR_MASK | FULLMODEL_FAMILY_RUNTIME_MASK, 0ull, 0,
+     INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel %s is only valid with descriptor or family-runtime\n", INPUT_ERROR_FLAG},
+    {.flag = "--include-moe", INPUT_OPTION_FLAG, offsetof(yvex_cli_fullmodel_options, include_moe), 0u,
+     NULL, FULLMODEL_FAMILY_RUNTIME_MASK, 0ull, 0, INPUT_VALUE_STANDARD, NULL, INPUT_ERROR_NONE,
+     "yvex: fullmodel %s is only valid with family-runtime\n", INPUT_ERROR_FLAG},
+    {.flag = "--include-output", INPUT_OPTION_FLAG, offsetof(yvex_cli_fullmodel_options, include_output),
+     0u, NULL, FULLMODEL_FAMILY_RUNTIME_MASK, 0ull, 0, INPUT_VALUE_STANDARD, NULL,
+     INPUT_ERROR_NONE, "yvex: fullmodel %s is only valid with family-runtime\n", INPUT_ERROR_FLAG},
+    {.flag = "--output", INPUT_OPTION_OUTPUT, offsetof(yvex_cli_fullmodel_options, output_mode), 0u, NULL,
+     0u, 0ull, 0, INPUT_VALUE_STANDARD, "yvex: fullmodel unsupported output mode: %s\n",
+     INPUT_ERROR_VALUE},
+    {.flag = "--limit-tensors", INPUT_OPTION_POSITIVE_U64,
+     offsetof(yvex_cli_fullmodel_options, limit_tensors), 0u, NULL, 0u, 16ull, 0,
+     INPUT_VALUE_NONEMPTY,
+     "yvex: fullmodel --limit-tensors requires a positive integer\n"},
+    {.flag = "--limit-bytes", INPUT_OPTION_POSITIVE_U64,
+     offsetof(yvex_cli_fullmodel_options, limit_bytes),
+     offsetof(yvex_cli_fullmodel_options, has_limit_bytes), NULL, FULLMODEL_MATERIALIZE_MASK, 0ull,
+     0, INPUT_VALUE_NONEMPTY, "yvex: fullmodel --limit-bytes requires a positive integer\n",
+     INPUT_ERROR_NONE, "yvex: fullmodel --limit-bytes is only valid with materialize\n"},
+    {.flag = "--audit", INPUT_OPTION_FIXED_INT, offsetof(yvex_cli_fullmodel_options, output_mode), 0u,
+     NULL, 0u, 0ull, YVEX_MODELS_OUTPUT_AUDIT},
+    {.flag = NULL, INPUT_OPTION_TEXT, 0u}};
 
 /* Purpose: Compute fullmodel string is empty for its CLI invariant (`fullmodel_string_is_empty`).
  * Inputs: Borrowed typed facts.
@@ -176,23 +335,164 @@ int fullmodel_string_is_empty(const char *text) {
     return !text || !text[0];
 }
 
-/* Purpose: Parse fullmodel parse value option into typed CLI state (`fullmodel_parse_value_option`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int fullmodel_parse_value_option(const char *flag, int arg_count, char **args, int *index,
-                                        const char **value) {
+_Static_assert(sizeof(yvex_model_download_auth_mode) == sizeof(int),
+               "download auth enum must use int storage");
+_Static_assert(sizeof(yvex_model_download_progress_mode) == sizeof(int),
+               "download progress enum must use int storage");
+_Static_assert(sizeof(yvex_models_output_mode) == sizeof(int),
+               "models output enum must use int storage");
+
+/* Purpose: Resolve one option declaration without encoding grammar in parser control flow. */
+static const input_option_spec *input_option_find(const input_option_spec *specs,
+                                                  const char *flag) {
+    while (specs->flag) {
+        if (strcmp(specs->flag, flag) == 0)
+            return specs;
+        ++specs;
+    }
+    return NULL;
+}
+
+/* Purpose: Resolve one declared spelling to its canonical string or typed numeric value. */
+static const input_option_choice *input_option_choice_find(const input_option_choice *choices,
+                                                           const char *value) {
+    if (!choices)
+        return NULL;
+    while (choices->name) {
+        if (strcmp(choices->name, value) == 0)
+            return choices;
+        ++choices;
+    }
+    return NULL;
+}
+
+/* Purpose: Emit a declared parser refusal with its exact flag or value context. */
+static void input_option_error(const char *message, input_error_detail detail,
+                               const input_option_spec *spec, const char *value) {
+    if (detail == INPUT_ERROR_FLAG)
+        yvex_cli_out_writef(stderr, message, spec->flag);
+    else if (detail == INPUT_ERROR_VALUE)
+        yvex_cli_out_writef(stderr, message, value);
+    else
+        yvex_cli_out_fputs(message, stderr);
+}
+
+/* Purpose: Acquire one required option value under the command's established empty-value policy.
+ * Inputs: Borrowed argv and immutable option declaration.
+ * Effects: Advances the caller's argument index only after a value exists.
+ * Failure: Preserves the command-specific missing or invalid value diagnostic.
+ * Boundary: Value acquisition does not interpret the option. */
+static int input_option_value(const char *command, const input_option_spec *spec, int arg_count,
+                              char **args, int *index, const char **value) {
     if (*index + 1 >= arg_count) {
-        yvex_cli_out_writef(stderr, "yvex: fullmodel %s requires a value\n", flag);
+        yvex_cli_out_writef(stderr, "yvex: %s %s requires a value\n", command, spec->flag);
         return 2;
     }
     *value = args[++(*index)];
-    if (fullmodel_string_is_empty(*value)) {
-        yvex_cli_out_writef(stderr, "yvex: fullmodel %s value is empty\n", flag);
+    if (spec->value_policy == INPUT_VALUE_NONEMPTY ? fullmodel_string_is_empty(*value)
+                                                    : !cli_arg_value_valid(*value)) {
+        yvex_cli_out_writef(stderr, "yvex: %s %s value is empty%s\n", command, spec->flag,
+                            spec->value_policy == INPUT_VALUE_NONEMPTY ? "" : " or invalid");
         return 2;
     }
     return 0;
+}
+
+/* Purpose: Apply one typed option declaration to caller-owned command state.
+ * Inputs: Immutable grammar, bounded argv, optional fullmodel command selector, and typed storage.
+ * Effects: Writes only the field and auxiliary field named by the declaration.
+ * Failure: Reports the declaration's exact refusal before downstream command dispatch.
+ * Boundary: Parsing does not infer artifact, runtime, or capability truth. */
+static int input_option_apply(const char *command, const input_option_spec *spec, int option_command,
+                              int arg_count, char **args, int *index, void *options) {
+    unsigned char *base = options;
+    unsigned char *field = base + spec->offset;
+    const input_option_choice *choice;
+    const char *value = NULL;
+    unsigned long long parsed = 0ull;
+
+    if (spec->kind == INPUT_OPTION_REJECT) {
+        input_option_error(spec->invalid_error, spec->invalid_detail, spec, NULL);
+        return 2;
+    }
+    if (spec->kind == INPUT_OPTION_FLAG)
+        *(int *)field = 1;
+    else if (spec->kind == INPUT_OPTION_FIXED_INT)
+        memcpy(field, &spec->fixed_value, sizeof(spec->fixed_value));
+    else if (input_option_value(command, spec, arg_count, args, index, &value) != 0)
+        return 2;
+
+    if (spec->command_mask != 0u &&
+        (option_command < 0 || !(spec->command_mask & (1u << (unsigned int)option_command)))) {
+        input_option_error(spec->scope_error, spec->scope_detail, spec, value);
+        return 2;
+    }
+    if (spec->kind == INPUT_OPTION_FLAG || spec->kind == INPUT_OPTION_FIXED_INT)
+        return 0;
+    if (spec->kind == INPUT_OPTION_TEXT) {
+        *(const char **)field = value;
+        return 0;
+    }
+    if (spec->kind == INPUT_OPTION_MIRRORED_TEXT) {
+        *(const char **)field = value;
+        *(const char **)(base + spec->auxiliary_offset) = value;
+        return 0;
+    }
+    if (spec->kind == INPUT_OPTION_PROVIDER) {
+        yvex_account_provider provider;
+        if (!yvex_account_provider_from_name(value, &provider)) {
+            input_option_error(spec->invalid_error, spec->invalid_detail, spec, value);
+            return 2;
+        }
+        *(const char **)field = yvex_account_provider_name(provider);
+        return 0;
+    }
+    choice = input_option_choice_find(spec->choices, value);
+    if ((spec->kind == INPUT_OPTION_SOURCE || spec->kind == INPUT_OPTION_CHOICE_TEXT ||
+         spec->kind == INPUT_OPTION_CHOICE_INT) &&
+        !choice) {
+        input_option_error(spec->invalid_error, spec->invalid_detail, spec, value);
+        return 2;
+    }
+    if (spec->kind == INPUT_OPTION_SOURCE) {
+        *(const char **)field = choice->canonical;
+        if (!*(const char **)(base + spec->auxiliary_offset))
+            *(const char **)(base + spec->auxiliary_offset) = "huggingface";
+        return 0;
+    }
+    if (spec->kind == INPUT_OPTION_CHOICE_TEXT) {
+        *(const char **)field = choice->canonical;
+        return 0;
+    }
+    if (spec->kind == INPUT_OPTION_CHOICE_INT) {
+        memcpy(field, &choice->number, sizeof(choice->number));
+        return 0;
+    }
+    if (spec->kind == INPUT_OPTION_PATTERN) {
+        unsigned int *count = (unsigned int *)(base + spec->auxiliary_offset);
+        if (*count >= spec->maximum) {
+            input_option_error(spec->invalid_error, spec->invalid_detail, spec, value);
+            return 2;
+        }
+        ((const char **)field)[(*count)++] = value;
+        return 0;
+    }
+    if (spec->kind == INPUT_OPTION_POSITIVE_U64) {
+        if (!parse_positive_ull(value, &parsed) || parsed == 0ull) {
+            input_option_error(spec->invalid_error, spec->invalid_detail, spec, value);
+            return 2;
+        }
+        *(unsigned long long *)field = spec->maximum && parsed > spec->maximum ? spec->maximum
+                                                                                : parsed;
+        if (spec->auxiliary_offset)
+            *(int *)(base + spec->auxiliary_offset) = 1;
+        return 0;
+    }
+    if (spec->kind == INPUT_OPTION_OUTPUT &&
+        parse_models_output_mode(value, (yvex_models_output_mode *)field))
+        return 0;
+    input_option_error(spec->invalid_error, spec->invalid_detail, spec, value);
+    return 2;
 }
 
 /* Purpose: Transfer bounded model download progress mode name data (`model_download_progress_mode_name`).
@@ -235,38 +535,6 @@ const char *model_download_signal_name(int signo) {
     return "unknown";
 }
 
-/* Purpose: Parse model download parse progress mode into typed CLI state (`model_download_parse_progress_mode`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int model_download_parse_progress_mode(const char *value,
-                                              yvex_model_download_progress_mode *out) {
-    if (!value || !out)
-        return 0;
-    if (strcmp(value, "auto") == 0) {
-        *out = YVEX_MODEL_DOWNLOAD_PROGRESS_AUTO;
-        return 1;
-    }
-    if (strcmp(value, "live") == 0) {
-        *out = YVEX_MODEL_DOWNLOAD_PROGRESS_LIVE;
-        return 1;
-    }
-    if (strcmp(value, "plain") == 0) {
-        *out = YVEX_MODEL_DOWNLOAD_PROGRESS_PLAIN;
-        return 1;
-    }
-    if (strcmp(value, "log") == 0) {
-        *out = YVEX_MODEL_DOWNLOAD_PROGRESS_LOG;
-        return 1;
-    }
-    if (strcmp(value, "off") == 0) {
-        *out = YVEX_MODEL_DOWNLOAD_PROGRESS_OFF;
-        return 1;
-    }
-    return 0;
-}
-
 /* Purpose: Transfer bounded model download effective progress mode data (`model_download_effective_progress_mode`).
  * Inputs: Borrowed typed facts.
  * Effects: Mutates declared CLI state only.
@@ -279,29 +547,6 @@ model_download_effective_progress_mode(yvex_model_download_progress_mode mode) {
     }
     return isatty(STDOUT_FILENO) && isatty(STDERR_FILENO) ? YVEX_MODEL_DOWNLOAD_PROGRESS_LIVE
                                                           : YVEX_MODEL_DOWNLOAD_PROGRESS_PLAIN;
-}
-
-/* Purpose: Parse model download auth mode parse into typed CLI state (`model_download_auth_mode_parse`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int model_download_auth_mode_parse(const char *value, yvex_model_download_auth_mode *out) {
-    if (!value || !out)
-        return 0;
-    if (strcmp(value, "auto") == 0) {
-        *out = YVEX_MODEL_DOWNLOAD_AUTH_AUTO;
-        return 1;
-    }
-    if (strcmp(value, "required") == 0) {
-        *out = YVEX_MODEL_DOWNLOAD_AUTH_REQUIRED;
-        return 1;
-    }
-    if (strcmp(value, "never") == 0) {
-        *out = YVEX_MODEL_DOWNLOAD_AUTH_NEVER;
-        return 1;
-    }
-    return 0;
 }
 
 /* Purpose: Transfer bounded model download auth mode name data (`model_download_auth_mode_name`).
@@ -367,7 +612,7 @@ static int model_download_options_validate(yvex_cli_models_download_options *opt
     }
     if (options->repo && !options->name) {
         options->name =
-            options->asset_name ? options->asset_name : model_download_repo_basename(options->repo);
+            options->asset_name ? options->asset_name : yvex_source_path_basename(options->repo);
     }
     if (options->repo && !model_download_local_name_valid(options->name)) {
         yvex_cli_out_writef(
@@ -404,162 +649,34 @@ int parse_models_download_options_from(int arg_count, char **args, int start_ind
     }
 
     for (i = start_index; i < arg_count; ++i) {
-        const char *value = NULL;
-        int handled = 0;
-        int rc = parse_models_bound_option(
-            "models download", arg_count, args, &i, options, download_bound_options,
-            sizeof(download_bound_options) / sizeof(download_bound_options[0]), &handled);
-        if (rc != 0)
-            return rc;
-        if (handled)
-            continue;
+        const input_option_spec *spec = input_option_find(download_options, args[i]);
 
-        if (strcmp(args[i], "--source") == 0 || strcmp(args[i], "--provider") == 0 ||
-            strcmp(args[i], "--release") == 0 || strcmp(args[i], "--github-source") == 0 ||
-            strcmp(args[i], "--auth") == 0 || strcmp(args[i], "--include") == 0 ||
-            strcmp(args[i], "--exclude") == 0 || strcmp(args[i], "--max-workers") == 0 ||
-            strcmp(args[i], "--progress") == 0 || strcmp(args[i], "--tick-seconds") == 0 ||
-            strcmp(args[i], "--timeout-seconds") == 0 || strcmp(args[i], "--output") == 0) {
-            const char *flag = args[i];
-            rc = parse_models_value_option("models download", flag, arg_count, args, &i, &value);
+        if (spec) {
+            int rc =
+                input_option_apply("models download", spec, -1, arg_count, args, &i, options);
             if (rc != 0)
                 return rc;
-            if (strcmp(flag, "--source") == 0) {
-                if (strcmp(value, "hf") != 0) {
-                    yvex_cli_out_writef(stderr,
-                                        "yvex: models download --source supports hf only\n");
-                    return 2;
-                }
-                options->source = value;
-                if (!options->provider)
-                    options->provider = "huggingface";
-            } else if (strcmp(flag, "--provider") == 0) {
-                yvex_account_provider provider;
-                if (!yvex_account_provider_from_name(value, &provider)) {
-                    yvex_cli_out_writef(
-                        stderr,
-                        "yvex: models download --provider requires hf|huggingface|gh|github\n");
-                    return 2;
-                }
-                options->provider = yvex_account_provider_name(provider);
-            } else if (strcmp(flag, "--release") == 0) {
-                options->release = value;
-                options->revision = value;
-            } else if (strcmp(flag, "--github-source") == 0) {
-                if (strcmp(value, "release-asset") != 0) {
-                    yvex_cli_out_writef(
-                        stderr,
-                        "yvex: models download --github-source supports release-asset only\n");
-                    return 2;
-                }
-                options->github_source = value;
-            } else if (strcmp(flag, "--auth") == 0) {
-                if (!model_download_auth_mode_parse(value, &options->auth_mode)) {
-                    yvex_cli_out_writef(
-                        stderr, "yvex: models download --auth requires auto|required|never\n");
-                    return 2;
-                }
-            } else if (strcmp(flag, "--include") == 0) {
-                if (options->include_count >= YVEX_MODEL_DOWNLOAD_PATTERN_CAP) {
-                    yvex_cli_out_writef(stderr,
-                                        "yvex: models download too many --include patterns\n");
-                    return 2;
-                }
-                options->include_patterns[options->include_count++] = value;
-            } else if (strcmp(flag, "--exclude") == 0) {
-                if (options->exclude_count >= YVEX_MODEL_DOWNLOAD_PATTERN_CAP) {
-                    yvex_cli_out_writef(stderr,
-                                        "yvex: models download too many --exclude patterns\n");
-                    return 2;
-                }
-                options->exclude_patterns[options->exclude_count++] = value;
-            } else if (strcmp(flag, "--max-workers") == 0) {
-                unsigned long long parsed = 0ull;
-                if (!parse_positive_ull(value, &parsed) || parsed == 0ull) {
-                    yvex_cli_out_writef(
-                        stderr,
-                        "yvex: models download --max-workers requires a positive integer\n");
-                    return 2;
-                }
-                options->max_workers = parsed;
-            } else if (strcmp(flag, "--progress") == 0) {
-                if (!model_download_parse_progress_mode(value, &options->progress_mode)) {
-                    yvex_cli_out_writef(
-                        stderr,
-                        "yvex: models download --progress requires auto|live|plain|log|off\n");
-                    return 2;
-                }
-            } else if (strcmp(flag, "--tick-seconds") == 0) {
-                unsigned long long parsed = 0ull;
-                if (!parse_positive_ull(value, &parsed) || parsed == 0ull) {
-                    yvex_cli_out_writef(
-                        stderr,
-                        "yvex: models download --tick-seconds requires a positive integer\n");
-                    return 2;
-                }
-                options->tick_seconds = parsed;
-            } else if (strcmp(flag, "--timeout-seconds") == 0) {
-                unsigned long long parsed = 0ull;
-                if (!parse_positive_ull(value, &parsed) || parsed == 0ull) {
-                    yvex_cli_out_writef(
-                        stderr,
-                        "yvex: models download --timeout-seconds requires a positive integer\n");
-                    return 2;
-                }
-                options->timeout_seconds = parsed;
-            } else if (strcmp(flag, "--output") == 0) {
-                if (!parse_models_output_mode(value, &options->output_mode)) {
-                    yvex_cli_out_writef(
-                        stderr, "yvex: models download unsupported output mode: %s\n", value);
-                    return 2;
-                }
-            }
-        } else if (strcmp(args[i], "--audit") == 0) {
-            options->output_mode = YVEX_MODELS_OUTPUT_AUDIT;
-        } else if (strcmp(args[i], "--no-progress") == 0) {
-            options->progress_mode = YVEX_MODEL_DOWNLOAD_PROGRESS_OFF;
-        } else if (strcmp(args[i], "--json") == 0) {
-            yvex_cli_out_writef(stderr, "yvex: models download JSON output is unsupported; use "
-                                        "--output normal|table|audit\n");
-            return 2;
-        } else if (args[i][0] == '-') {
+            continue;
+        }
+        if (args[i][0] == '-') {
             yvex_cli_out_writef(stderr, "yvex: unknown models download option: %s\n", args[i]);
             return 2;
-        } else if (!options->target) {
+        }
+        if (!options->target) {
             options->target = args[i];
             if (!cli_arg_value_valid(options->target)) {
                 yvex_cli_out_writef(stderr, "yvex: models download target is empty or invalid\n");
                 return 2;
             }
-        } else {
-            yvex_cli_out_writef(
-                stderr, "yvex: models download received extra positional argument: %s\n", args[i]);
-            return 2;
+            continue;
         }
+        yvex_cli_out_writef(stderr,
+                            "yvex: models download received extra positional argument: %s\n",
+                            args[i]);
+        return 2;
     }
 
     return model_download_options_validate(options);
-}
-
-/* Purpose: Transfer bounded model download read small file data (`model_download_read_small_file`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-int model_download_read_small_file(const char *path, char *buf, size_t cap) {
-    FILE *fp;
-    size_t got;
-
-    if (!path || !buf || cap == 0u)
-        return 0;
-    buf[0] = '\0';
-    fp = fopen(path, "rb");
-    if (!fp)
-        return 0;
-    got = fread(buf, 1u, cap - 1u, fp);
-    buf[got] = '\0';
-    fclose(fp);
-    return 1;
 }
 
 /* Purpose: Transfer bounded model download json i64 field data (`model_download_json_i64_field`).
@@ -568,61 +685,12 @@ int model_download_read_small_file(const char *path, char *buf, size_t cap) {
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
 long long model_download_json_i64_field(const char *text, const char *key) {
-    char needle[96];
     const char *p;
 
-    if (!text || !key)
-        return -1;
-    snprintf(needle, sizeof(needle), "\"%s\"", key);
-    p = strstr(text, needle);
+    p = yvex_json_probe_field_value(text, key);
     if (!p)
         return -1;
-    p = strchr(p, ':');
-    if (!p)
-        return -1;
-    p++;
-    while (*p && isspace((unsigned char)*p))
-        p++;
     return strtoll(p, NULL, 10);
-}
-
-/* Purpose: Transfer bounded model download json string field data (`model_download_json_string_field`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-int model_download_json_string_field(const char *text, const char *key, char *out, size_t cap) {
-    char needle[96];
-    const char *p;
-    const char *q;
-    size_t len;
-
-    if (out && cap > 0u)
-        out[0] = '\0';
-    if (!text || !key || !out || cap == 0u)
-        return 0;
-    snprintf(needle, sizeof(needle), "\"%s\"", key);
-    p = strstr(text, needle);
-    if (!p)
-        return 0;
-    p = strchr(p, ':');
-    if (!p)
-        return 0;
-    p++;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    if (*p != '"')
-        return 0;
-    p++;
-    q = strchr(p, '"');
-    if (!q)
-        return 0;
-    len = (size_t)(q - p);
-    if (len >= cap)
-        len = cap - 1u;
-    memcpy(out, p, len);
-    out[len] = '\0';
-    return 1;
 }
 
 /* Purpose: Transfer bounded model download identity family hint data (`model_download_identity_family_hint`).
@@ -719,7 +787,7 @@ int model_download_read_identity_file(const char *path, const char *target, cons
         return 0;
     if (access(path, F_OK) != 0)
         return 0;
-    if (!model_download_read_small_file(path, buf, sizeof(buf)))
+    if (!yvex_core_file_read_text_prefix(path, buf, sizeof(buf)))
         return 0;
 
     memset(parsed_target, 0, sizeof(parsed_target));
@@ -729,21 +797,21 @@ int model_download_read_identity_file(const char *path, const char *target, cons
     memset(parsed_revision, 0, sizeof(parsed_revision));
     memset(parsed_source, 0, sizeof(parsed_source));
 
-    model_download_json_string_field(buf, "target_id", parsed_target, sizeof(parsed_target));
+    yvex_json_probe_string_field(buf, "target_id", parsed_target, sizeof(parsed_target));
     if (parsed_target[0] && strcmp(parsed_target, target) != 0)
         return 0;
-    model_download_json_string_field(buf, "family", parsed_family, sizeof(parsed_family));
+    yvex_json_probe_string_field(buf, "family", parsed_family, sizeof(parsed_family));
     if (parsed_family[0] && strcmp(parsed_family, family) != 0)
         return 0;
-    model_download_json_string_field(buf, "repo_id", parsed_repo, sizeof(parsed_repo));
+    yvex_json_probe_string_field(buf, "repo_id", parsed_repo, sizeof(parsed_repo));
     if (!parsed_repo[0]) {
-        model_download_json_string_field(buf, "repo", parsed_repo, sizeof(parsed_repo));
+        yvex_json_probe_string_field(buf, "repo", parsed_repo, sizeof(parsed_repo));
     }
-    model_download_json_string_field(buf, "provider", parsed_provider, sizeof(parsed_provider));
-    model_download_json_string_field(buf, "revision", parsed_revision, sizeof(parsed_revision));
-    model_download_json_string_field(buf, "local_source_dir", parsed_source, sizeof(parsed_source));
+    yvex_json_probe_string_field(buf, "provider", parsed_provider, sizeof(parsed_provider));
+    yvex_json_probe_string_field(buf, "revision", parsed_revision, sizeof(parsed_revision));
+    yvex_json_probe_string_field(buf, "local_source_dir", parsed_source, sizeof(parsed_source));
     if (!parsed_source[0]) {
-        model_download_json_string_field(buf, "path", parsed_source, sizeof(parsed_source));
+        yvex_json_probe_string_field(buf, "path", parsed_source, sizeof(parsed_source));
     }
 
     snprintf(out->target_id, sizeof(out->target_id), "%s",
@@ -838,68 +906,6 @@ int model_download_resolve_downloaded_target(const char *target,
     return 0;
 }
 
-/* Purpose: Compute fullmodel phase name is valid for its CLI invariant (`fullmodel_phase_name_is_valid`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int fullmodel_phase_name_is_valid(const char *phase) {
-    static const char *const phases[] = {"preflight",
-                                         "resolve-model",
-                                         "artifact-identity",
-                                         "tensor-inventory",
-                                         "role-coverage",
-                                         "placement-plan",
-                                         "memory-budget",
-                                         "backend-preflight",
-                                         "materialize-embedding",
-                                         "materialize-normalization",
-                                         "materialize-attention",
-                                         "materialize-mlp",
-                                         "materialize-moe",
-                                         "materialize-output",
-                                         "materialize-tokenizer",
-                                         "cleanup",
-                                         "complete",
-                                         "failed"};
-    unsigned int i;
-
-    if (!phase || !phase[0])
-        return 0;
-    for (i = 0; i < sizeof(phases) / sizeof(phases[0]); ++i) {
-        if (strcmp(phase, phases[i]) == 0)
-            return 1;
-    }
-    return 0;
-}
-
-/* Purpose: Orchestrate the typed fullmodel command is materialize request (`fullmodel_command_is_materialize`). */
-static int fullmodel_command_is_materialize(const yvex_cli_fullmodel_options *options) {
-    return options && options->command == YVEX_FULLMODEL_COMMAND_MATERIALIZE;
-}
-
-/* Purpose: Orchestrate the typed fullmodel command is descriptor request (`fullmodel_command_is_descriptor`). */
-static int fullmodel_command_is_descriptor(const yvex_cli_fullmodel_options *options) {
-    return options && options->command == YVEX_FULLMODEL_COMMAND_DESCRIPTOR;
-}
-
-/* Purpose: Orchestrate the typed fullmodel command is family runtime request
- *   (`fullmodel_command_is_family_runtime`). */
-static int fullmodel_command_is_family_runtime(const yvex_cli_fullmodel_options *options) {
-    return options && options->command == YVEX_FULLMODEL_COMMAND_FAMILY_RUNTIME;
-}
-
-/* Purpose: Orchestrate the typed fullmodel command accepts includes request (`fullmodel_command_accepts_includes`). */
-static int fullmodel_command_accepts_includes(const yvex_cli_fullmodel_options *options) {
-    return fullmodel_command_is_descriptor(options) || fullmodel_command_is_family_runtime(options);
-}
-
-/* Purpose: Orchestrate the typed fullmodel command accepts requirements request
- *   (`fullmodel_command_accepts_requirements`). */
-static int fullmodel_command_accepts_requirements(const yvex_cli_fullmodel_options *options) {
-    return fullmodel_command_is_materialize(options) || fullmodel_command_is_descriptor(options);
-}
-
 /* Purpose: Compute fullmodel options begin for its CLI invariant (`fullmodel_options_begin`).
  * Inputs: Borrowed typed facts.
  * Effects: Mutates declared CLI state only.
@@ -982,126 +988,16 @@ int model_artifacts_fullmodel_options_parse(int arg_count, char **args,
         return begin_rc;
 
     for (i = 3; i < arg_count; ++i) {
-        const char *value = NULL;
-        const char *flag = args[i];
-        int handled = 0;
-        int rc = parse_models_bound_option(
-            "fullmodel", arg_count, args, &i, options, fullmodel_bound_options,
-            sizeof(fullmodel_bound_options) / sizeof(fullmodel_bound_options[0]), &handled);
-        if (rc != 0)
-            return rc;
-        if (handled) {
-            value = i > 3 ? args[i] : NULL;
-            if (strcmp(flag, "--backend") == 0 && strcmp(options->backend, "cpu") != 0 &&
-                strcmp(options->backend, "cuda") != 0) {
-                yvex_cli_out_writef(stderr, "yvex: fullmodel --backend must be cpu or cuda\n");
-                return 2;
-            }
-            if (strcmp(flag, "--family") == 0 && !fullmodel_command_is_family_runtime(options)) {
-                yvex_cli_out_writef(stderr,
-                                    "yvex: fullmodel --family is only valid with family-runtime\n");
-                return 2;
-            }
-            if (strcmp(flag, "--residency") == 0 && strcmp(options->residency, "resident") != 0 &&
-                strcmp(options->residency, "host-staged") != 0 &&
-                strcmp(options->residency, "ssd-staged") != 0 &&
-                strcmp(options->residency, "hybrid") != 0 &&
-                strcmp(options->residency, "ssd-streamed") != 0 &&
-                strcmp(options->residency, "managed-memory") != 0 &&
-                strcmp(options->residency, "distributed") != 0) {
-                yvex_cli_out_writef(stderr, "yvex: fullmodel --residency must be resident, "
-                                            "host-staged, ssd-staged, hybrid, ssd-"
-                                            "streamed, managed-memory, or distributed\n");
-                return 2;
-            }
-            if ((strcmp(flag, "--require-role") == 0 ||
-                 strcmp(flag, "--require-collection") == 0) &&
-                !fullmodel_command_accepts_requirements(options)) {
-                yvex_cli_out_writef(
-                    stderr, "yvex: fullmodel %s is only valid with materialize or descriptor\n",
-                    flag);
-                return 2;
-            }
-            if ((strcmp(flag, "--dry-run") == 0 || strcmp(flag, "--plan-only") == 0 ||
-                 strcmp(flag, "--report-dir") == 0 || strcmp(flag, "--fail-after-phase") == 0) &&
-                !fullmodel_command_is_materialize(options)) {
-                yvex_cli_out_writef(stderr, "yvex: fullmodel %s is only valid with materialize\n",
-                                    flag);
-                return 2;
-            }
-            if (strcmp(flag, "--fail-after-phase") == 0 &&
-                !fullmodel_phase_name_is_valid(options->fail_after_phase)) {
-                yvex_cli_out_writef(
-                    stderr,
-                    "yvex: fullmodel --fail-after-phase value is not a known materialize phase\n");
-                return 2;
-            }
-            if (strcmp(flag, "--format") == 0) {
-                if (!fullmodel_command_is_descriptor(options)) {
-                    yvex_cli_out_writef(stderr,
-                                        "yvex: fullmodel --format is only valid with descriptor\n");
-                    return 2;
-                }
-                if (strcmp(options->format, "text") != 0) {
-                    yvex_cli_out_writef(
-                        stderr,
-                        "yvex: fullmodel descriptor currently supports --format text only\n");
-                    return 2;
-                }
-            }
-            if ((strcmp(flag, "--include-blockers") == 0 ||
-                 strcmp(flag, "--include-placement") == 0 || strcmp(flag, "--include-graph") == 0 ||
-                 strcmp(flag, "--include-kv") == 0 || strcmp(flag, "--include-logits") == 0) &&
-                !fullmodel_command_accepts_includes(options)) {
-                yvex_cli_out_writef(
-                    stderr, "yvex: fullmodel %s is only valid with descriptor or family-runtime\n",
-                    flag);
-                return 2;
-            }
-            if ((strcmp(flag, "--include-roles") == 0 || strcmp(flag, "--include-moe") == 0 ||
-                 strcmp(flag, "--include-output") == 0) &&
-                !fullmodel_command_is_family_runtime(options)) {
-                yvex_cli_out_writef(stderr,
-                                    "yvex: fullmodel %s is only valid with family-runtime\n", flag);
-                return 2;
-            }
-            continue;
-        }
+        const input_option_spec *spec = input_option_find(fullmodel_options, args[i]);
 
-        if (strcmp(flag, "--limit-tensors") == 0) {
-            unsigned long long parsed = 0ull;
-            rc = fullmodel_parse_value_option(flag, arg_count, args, &i, &value);
-            if (rc != 0)
-                return rc;
-            if (!parse_positive_ull(value, &parsed) || parsed == 0ull) {
-                yvex_cli_out_writef(
-                    stderr, "yvex: fullmodel --limit-tensors requires a positive integer\n");
-                return 2;
-            }
-            options->limit_tensors = parsed > 16ull ? 16ull : parsed;
-        } else if (strcmp(flag, "--limit-bytes") == 0) {
-            unsigned long long parsed = 0ull;
-            rc = fullmodel_parse_value_option(flag, arg_count, args, &i, &value);
-            if (rc != 0)
-                return rc;
-            if (!fullmodel_command_is_materialize(options)) {
-                yvex_cli_out_writef(
-                    stderr, "yvex: fullmodel --limit-bytes is only valid with materialize\n");
-                return 2;
-            }
-            if (!parse_positive_ull(value, &parsed) || parsed == 0ull) {
-                yvex_cli_out_writef(stderr,
-                                    "yvex: fullmodel --limit-bytes requires a positive integer\n");
-                return 2;
-            }
-            options->limit_bytes = parsed;
-            options->has_limit_bytes = 1;
-        } else if (strcmp(flag, "--audit") == 0) {
-            options->output_mode = YVEX_MODELS_OUTPUT_AUDIT;
-        } else {
-            yvex_cli_out_writef(stderr, "yvex: unknown fullmodel option: %s\n", flag);
+        if (!spec) {
+            yvex_cli_out_writef(stderr, "yvex: unknown fullmodel option: %s\n", args[i]);
             return 2;
         }
+        begin_rc = input_option_apply("fullmodel", spec, options->command, arg_count, args, &i,
+                                      options);
+        if (begin_rc != 0)
+            return begin_rc;
     }
     return fullmodel_options_finish(options);
 }

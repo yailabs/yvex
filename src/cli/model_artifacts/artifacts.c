@@ -260,16 +260,9 @@ static void artifacts_relative_path(const yvex_operator_paths *operator_paths,
 /* Purpose: Compute artifacts strip suffix for its CLI invariant (`artifacts_strip_suffix`). */
 static void artifacts_strip_suffix(char *text, const char *suffix)
 {
-    size_t text_len;
-    size_t suffix_len;
-
-    if (!text || !suffix) return;
-    text_len = strlen(text);
-    suffix_len = strlen(suffix);
-    if (suffix_len <= text_len &&
-        strcmp(text + text_len - suffix_len, suffix) == 0) {
-        text[text_len - suffix_len] = '\0';
-    }
+    if (!yvex_source_ends_with(text, suffix))
+        return;
+    text[strlen(text) - strlen(suffix)] = '\0';
 }
 
 /* Purpose: Compute artifacts target from gguf name for its CLI invariant (`artifacts_target_from_gguf_name`). */
@@ -471,7 +464,7 @@ static void artifacts_scan_gguf_family(const yvex_operator_paths *operator_paths
         yvex_models_artifact_row *row;
 
         if (ent->d_name[0] == '.') continue;
-        if (!model_download_file_name_ends_with(ent->d_name, ".gguf")) continue;
+        if (!yvex_source_ends_with(ent->d_name, ".gguf")) continue;
         if (path_join2(path, sizeof(path), family_dir, ent->d_name, &err,
                        "models_artifacts") != YVEX_OK) {
             continue;
@@ -523,7 +516,7 @@ static void artifacts_scan_dynamic_sidecar_dir(
         size_t name_len;
 
         if (ent->d_name[0] == '.') continue;
-        if (!model_download_file_name_ends_with(ent->d_name, suffix)) continue;
+        if (!yvex_source_ends_with(ent->d_name, suffix)) continue;
         name_len = strlen(ent->d_name);
         if (name_len >= sizeof(target)) continue;
         memcpy(target, ent->d_name, name_len + 1u);

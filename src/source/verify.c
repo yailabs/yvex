@@ -51,6 +51,33 @@ static int source_parse_sidecar(source_sidecar_kind kind,
                                 size_t length,
                                 const yvex_source_target_identity *identity,
                                 yvex_source_verification *out);
+static int source_parse_config_json(const char *data,
+                                    size_t length,
+                                    const yvex_source_target_identity *identity,
+                                    yvex_source_verification *out);
+static int source_parse_tokenizer_config(const char *data,
+                                         size_t length,
+                                         yvex_source_verification *out);
+static int source_parse_generation_config(const char *data,
+                                          size_t length,
+                                          yvex_source_verification *out);
+static int source_parse_tokenizer_json(const char *data,
+                                       size_t length,
+                                       yvex_source_verification *out);
+
+typedef int (*source_sidecar_parser)(const char *, size_t, yvex_source_verification *);
+
+static const source_sidecar_parser source_sidecar_parsers[] = {
+    source_parse_tokenizer_json,
+    source_parse_tokenizer_config,
+    source_parse_generation_config,
+};
+
+static const size_t source_sidecar_valid_offsets[] = {
+    offsetof(yvex_source_verification, tokenizer_json_valid),
+    offsetof(yvex_source_verification, tokenizer_config_valid),
+    offsetof(yvex_source_verification, generation_config_valid),
+};
 
 /* Purpose: project path join facts while preserving the canonical source verification invariants.
  * Inputs: typed source verification arguments; borrowed inputs outlive the call.
@@ -138,18 +165,6 @@ int yvex_source_revision_is_commit(const char *text) {
     return 1;
 }
 
-/* Purpose: project checked add u64 facts while preserving the canonical source verification invariants.
- * Inputs: typed source verification arguments; borrowed inputs outlive the call.
- * Effects: mutates only explicit caller-owned source verification state.
- * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
- * Boundary: verified metadata is not transformed bytes or artifact support. */
-int yvex_source_checked_add_u64(unsigned long long *total, unsigned long long value) {
-    if (!total || ULLONG_MAX - *total < value)
-        return 0;
-    *total += value;
-    return 1;
-}
-
 /* Purpose: project verification add blocker facts while preserving the canonical source verification invariants.
  * Inputs: typed source verification arguments; borrowed inputs outlive the call.
  * Effects: mutates only explicit caller-owned source verification state.
@@ -184,35 +199,6 @@ int yvex_source_verification_has_blocker(const yvex_source_verification *out, co
             return 1;
     }
     return 0;
-}
-
-/* Purpose: reuses the source scanner for recursive checked metadata footprint facts.
- * Inputs: typed source verification arguments; borrowed inputs outlive the call.
- * Effects: reads bounded evidence and updates only caller-owned source verification state.
- * Failure: invalid, short, inconsistent, or I/O input yields typed refusal.
- * Boundary: verified metadata is not transformed bytes or artifact support. */
-static int
-source_verify_footprint(const char *source_path, yvex_source_verification *out, yvex_error *err) {
-    yvex_source_manifest_file_list files;
-    int rc;
-
-    yvex_source_manifest_file_list_init(&files);
-    rc = yvex_source_manifest_scan_files(source_path, 0, &files, err);
-    if (rc == YVEX_ERR_BOUNDS) {
-        out->footprint_overflow = 1;
-        yvex_source_verification_add_blocker(out, "source-footprint-overflow");
-        yvex_source_manifest_file_list_free(&files);
-        yvex_error_clear(err);
-        return YVEX_OK;
-    }
-    if (rc != YVEX_OK) {
-        yvex_source_manifest_file_list_free(&files);
-        return rc;
-    }
-    out->source_file_count = files.summary.file_count;
-    out->source_total_bytes = files.summary.total_size_bytes;
-    yvex_source_manifest_file_list_free(&files);
-    return YVEX_OK;
 }
 
 /* Purpose: project one sidecar kind into its immutable admission and refusal facts. */
@@ -281,7 +267,13 @@ static int source_promote_manifest(const yvex_source_verify_options *options,
              sizeof(out->verification_stage),
              "%s",
              "exact-source-metadata-header-verified");
-    rc = yvex_source_manifest_publish_verified(out->manifest_path, options, out, err);
+    rc = yvex_source_publish(&(yvex_source_publication_request){
+                                 .kind = YVEX_SOURCE_PUBLICATION_VERIFIED_MANIFEST,
+                                 .out_path = out->manifest_path,
+                                 .options = options,
+                                 .verification = out,
+                             },
+                             err);
     if (rc != YVEX_OK) {
         yvex_source_verification_add_blocker(out, "source-manifest-publish-failed");
         yvex_error_clear(err);
@@ -361,9 +353,6 @@ int yvex_source_verify_with_snapshot(const yvex_source_verify_options *options,
          out->eos_token_id != out->generation_eos_token_id)) {
         yvex_source_verification_add_blocker(out, "generation-config-token-mismatch");
     }
-    rc = source_verify_footprint(options->source_path, out, err);
-    if (rc != YVEX_OK)
-        goto cleanup;
     rc = yvex_source_inventory_verify(options, out, &derived, &candidate_snapshot, err);
     if (rc != YVEX_OK)
         goto cleanup;
@@ -380,8 +369,13 @@ int yvex_source_verify_with_snapshot(const yvex_source_verify_options *options,
         if (!options->derived_inventory_path) {
             yvex_source_verification_add_blocker(out, "missing-derived-inventory-output");
         } else {
-            rc = yvex_source_derived_inventory_publish(
-                options->derived_inventory_path, options, &derived, err);
+            rc = yvex_source_publish(&(yvex_source_publication_request){
+                                         .kind = YVEX_SOURCE_PUBLICATION_DERIVED_INVENTORY,
+                                         .out_path = options->derived_inventory_path,
+                                         .options = options,
+                                         .inventory = &derived,
+                                     },
+                                     err);
             if (rc != YVEX_OK) {
                 yvex_source_verification_add_blocker(out, "derived-inventory-publish-failed");
                 yvex_error_clear(err);
@@ -514,7 +508,12 @@ typedef enum {
     SOURCE_JSON_ARCHITECTURES,
     SOURCE_JSON_ROPE,
     SOURCE_JSON_QUANTIZATION,
-    SOURCE_JSON_BLOCK_PAIR
+    SOURCE_JSON_BLOCK_PAIR,
+    SOURCE_JSON_LITERAL,
+    SOURCE_JSON_TOKEN_ID,
+    SOURCE_JSON_TOKEN_VOCAB,
+    SOURCE_JSON_ADDED_TOKENS,
+    SOURCE_JSON_TOKEN_MODEL
 } source_json_kind;
 
 typedef struct {
@@ -529,6 +528,14 @@ typedef struct {
 
 static int source_parse_rope_scaling(yvex_json *json, yvex_source_verification *out);
 static int source_parse_quantization(yvex_json *json, yvex_source_verification *out);
+static int source_tokenizer_record_id(yvex_source_verification *out,
+                                      unsigned long long token_id);
+static int source_parse_tokenizer_vocab(yvex_json *json,
+                                        yvex_source_verification *out);
+static int source_parse_added_tokens(yvex_json *json,
+                                     yvex_source_verification *out);
+static int source_parse_tokenizer_model(yvex_json *json,
+                                        yvex_source_verification *out);
 
 static const source_json_field source_config_fields[] = {
     {"model_type", CONFIG_MODEL_TYPE, SOURCE_JSON_TEXT,
@@ -678,6 +685,27 @@ static const source_json_field source_generation_fields[] = {
      sizeof(((yvex_source_verification *)0)->generation_transformers_version), 0u, 0u},
 };
 
+static const source_json_field source_added_token_fields[] = {
+    {"id", 1u, SOURCE_JSON_TOKEN_ID, 0u, 0u, 0u, 0u},
+};
+
+static const source_json_field source_tokenizer_model_fields[] = {
+    {"type", 1u, SOURCE_JSON_TEXT,
+     offsetof(yvex_source_verification, tokenizer_model_type),
+     sizeof(((yvex_source_verification *)0)->tokenizer_model_type), 0u, 0u},
+    {"vocab", 2u, SOURCE_JSON_TOKEN_VOCAB, 0u, 0u, 0u, 0u},
+};
+
+static const source_json_field source_tokenizer_fields[] = {
+    {"version", 1u, SOURCE_JSON_LITERAL, 0u, 16u, 0u, 0u},
+    {"added_tokens", 2u, SOURCE_JSON_ADDED_TOKENS, 0u, 0u, 0u, 0u},
+    {"normalizer", 4u, SOURCE_JSON_SKIP, 0u, 0u, 0u, 0u},
+    {"pre_tokenizer", 8u, SOURCE_JSON_SKIP, 0u, 0u, 0u, 0u},
+    {"post_processor", 16u, SOURCE_JSON_SKIP, 0u, 0u, 0u, 0u},
+    {"decoder", 32u, SOURCE_JSON_SKIP, 0u, 0u, 0u, 0u},
+    {"model", 64u, SOURCE_JSON_TOKEN_MODEL, 0u, 0u, 0u, 0u},
+};
+
 /* Purpose: parses the architecture list and records the canonical identity match.
  * Inputs: typed source verification arguments; borrowed inputs outlive the call.
  * Effects: mutates only explicit caller-owned source verification state.
@@ -688,14 +716,12 @@ static int source_parse_architectures(yvex_json *json,
                                       yvex_source_verification *out,
                                       source_config_parse_state *state) {
     char architecture[128];
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    yvex_json_space(json);
-    if (json->cursor >= json->end || *json->cursor++ != '[')
+    if (!yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_ARRAY))
         return 0;
-    yvex_json_space(json);
-    if (json->cursor < json->end && *json->cursor == ']')
-        return 0;
-    for (;;) {
+    while ((item = yvex_json_array_value(&iter)) == YVEX_JSON_ITEM_READY) {
         if (!yvex_json_string(json, architecture, sizeof(architecture)))
             return 0;
         if (!out->architecture[0]) {
@@ -704,34 +730,8 @@ static int source_parse_architectures(yvex_json *json,
         if (strcmp(architecture, identity->config_architecture) == 0) {
             state->architecture_matches = 1;
         }
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == ']') {
-            json->cursor++;
-            return 1;
-        }
-        if (*json->cursor++ != ',')
-            return 0;
     }
-}
-
-/* Purpose: parses required raw RoPE scaling facts without runtime defaults.
- * Inputs: typed source verification arguments; borrowed inputs outlive the call.
- * Effects: mutates only explicit caller-owned source verification state.
- * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
- * Boundary: verified metadata is not transformed bytes or artifact support. */
-/* Purpose: resolve one immutable schema descriptor by exact JSON key. */
-static const source_json_field *source_json_field_find(const source_json_field *fields,
-                                                       size_t count,
-                                                       const char *key) {
-    size_t index;
-
-    for (index = 0u; index < count; ++index) {
-        if (strcmp(fields[index].key, key) == 0)
-            return &fields[index];
-    }
-    return NULL;
+    return item == YVEX_JSON_ITEM_END && !iter.trailing_separator && iter.count != 0u;
 }
 
 /* Purpose: decode one schema-selected value into its typed verification field.
@@ -769,6 +769,23 @@ static int source_json_field_apply(yvex_json *json,
         return source_parse_rope_scaling(json, out);
     case SOURCE_JSON_QUANTIZATION:
         return source_parse_quantization(json, out);
+    case SOURCE_JSON_LITERAL: {
+        char literal[32];
+
+        return field->size <= sizeof(literal) &&
+               yvex_json_string(json, literal, field->size) && strcmp(literal, "1.0") == 0;
+    }
+    case SOURCE_JSON_TOKEN_ID: {
+        unsigned long long token_id;
+
+        return yvex_json_u64(json, &token_id) && source_tokenizer_record_id(out, token_id);
+    }
+    case SOURCE_JSON_TOKEN_VOCAB:
+        return source_parse_tokenizer_vocab(json, out);
+    case SOURCE_JSON_ADDED_TOKENS:
+        return source_parse_added_tokens(json, out);
+    case SOURCE_JSON_TOKEN_MODEL:
+        return source_parse_tokenizer_model(json, out);
     case SOURCE_JSON_BLOCK_PAIR: {
         unsigned long long *rows = (unsigned long long *)(void *)(base + field->offset);
         unsigned long long *columns =
@@ -803,24 +820,17 @@ static int source_json_object_parse(yvex_json *json,
                                     source_config_parse_state *state,
                                     int require_document_end) {
     char key[YVEX_JSON_KEY_CAP];
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    yvex_json_space(json);
-    if (json->cursor >= json->end || *json->cursor++ != '{')
+    if (!yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_OBJECT))
         return 0;
-    for (;;) {
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
         const source_json_field *field;
 
-        yvex_json_space(json);
-        if (json->cursor < json->end && *json->cursor == '}') {
-            json->cursor++;
-            break;
-        }
-        if (!yvex_json_string(json, key, sizeof(key)))
-            return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end || *json->cursor++ != ':')
-            return 0;
-        field = source_json_field_find(fields, field_count, key);
+        field = yvex_core_keyed_row_find(
+            fields, field_count, sizeof(fields[0]), offsetof(source_json_field, key), key);
         if (!field) {
             if (!yvex_json_skip_value(json))
                 return 0;
@@ -828,15 +838,8 @@ static int source_json_object_parse(yvex_json *json,
                    !source_json_field_apply(json, field, identity, out, state)) {
             return 0;
         }
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == '}')
-            continue;
-        if (*json->cursor++ != ',')
-            return 0;
     }
-    return (state->seen & required) == required &&
+    return item == YVEX_JSON_ITEM_END && (state->seen & required) == required &&
            (!require_document_end || yvex_json_complete(json));
 }
 
@@ -978,11 +981,9 @@ source_parse_generation_config(const char *data, size_t length, yvex_source_veri
 static int source_tokenizer_record_id(yvex_source_verification *out, unsigned long long token_id) {
     if (!out || token_id == ULLONG_MAX)
         return 0;
-    if (out->tokenizer_base_vocab_count == 0u && out->tokenizer_added_token_count == 0u) {
+    if ((out->tokenizer_base_vocab_count == 0u && out->tokenizer_added_token_count == 0u) ||
+        token_id > out->tokenizer_max_token_id)
         out->tokenizer_max_token_id = token_id;
-    } else if (token_id > out->tokenizer_max_token_id) {
-        out->tokenizer_max_token_id = token_id;
-    }
     return 1;
 }
 
@@ -993,36 +994,21 @@ static int source_tokenizer_record_id(yvex_source_verification *out, unsigned lo
  * Boundary: verified metadata is not transformed bytes or artifact support. */
 static int source_parse_tokenizer_vocab(yvex_json *json, yvex_source_verification *out) {
     char token[YVEX_JSON_KEY_CAP];
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    yvex_json_space(json);
-    if (!json || !out || json->cursor >= json->end || *json->cursor++ != '{')
+    if (!json || !out || !yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_OBJECT))
         return 0;
-    yvex_json_space(json);
-    if (json->cursor < json->end && *json->cursor == '}') {
-        json->cursor++;
-        return 1;
-    }
-    for (;;) {
+    while ((item = yvex_json_object_member(&iter, token, sizeof(token))) ==
+           YVEX_JSON_ITEM_READY) {
         unsigned long long token_id;
 
-        if (!yvex_json_string(json, token, sizeof(token)))
-            return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end || *json->cursor++ != ':' ||
-            !yvex_json_u64(json, &token_id) || out->tokenizer_base_vocab_count == ULLONG_MAX ||
+        if (!yvex_json_u64(json, &token_id) || out->tokenizer_base_vocab_count == ULLONG_MAX ||
             !source_tokenizer_record_id(out, token_id))
             return 0;
         out->tokenizer_base_vocab_count++;
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == '}') {
-            json->cursor++;
-            return 1;
-        }
-        if (*json->cursor++ != ',')
-            return 0;
     }
+    return item == YVEX_JSON_ITEM_END && !iter.trailing_separator;
 }
 
 /* Purpose: parses one added-token object and requires exactly one numeric id.
@@ -1031,40 +1017,18 @@ static int source_parse_tokenizer_vocab(yvex_json *json, yvex_source_verificatio
  * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
  * Boundary: verified metadata is not transformed bytes or artifact support. */
 static int source_parse_added_token(yvex_json *json, yvex_source_verification *out) {
-    char key[YVEX_JSON_KEY_CAP];
-    int saw_id = 0;
+    source_config_parse_state state = {0};
 
-    yvex_json_space(json);
-    if (!json || !out || json->cursor >= json->end || *json->cursor++ != '{')
-        return 0;
-    for (;;) {
-        yvex_json_space(json);
-        if (json->cursor < json->end && *json->cursor == '}') {
-            json->cursor++;
-            return saw_id;
-        }
-        if (!yvex_json_string(json, key, sizeof(key)))
-            return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end || *json->cursor++ != ':')
-            return 0;
-        if (strcmp(key, "id") == 0) {
-            unsigned long long token_id;
-            if (saw_id || !yvex_json_u64(json, &token_id) ||
-                !source_tokenizer_record_id(out, token_id))
-                return 0;
-            saw_id = 1;
-        } else if (!yvex_json_skip_value(json)) {
-            return 0;
-        }
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == '}')
-            continue;
-        if (*json->cursor++ != ',')
-            return 0;
-    }
+    return json && out &&
+           source_json_object_parse(json,
+                                    source_added_token_fields,
+                                    sizeof(source_added_token_fields) /
+                                        sizeof(source_added_token_fields[0]),
+                                    1u,
+                                    NULL,
+                                    out,
+                                    &state,
+                                    0);
 }
 
 /* Purpose: parses the added-token array without materializing token strings.
@@ -1073,28 +1037,17 @@ static int source_parse_added_token(yvex_json *json, yvex_source_verification *o
  * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
  * Boundary: verified metadata is not transformed bytes or artifact support. */
 static int source_parse_added_tokens(yvex_json *json, yvex_source_verification *out) {
-    yvex_json_space(json);
-    if (!json || !out || json->cursor >= json->end || *json->cursor++ != '[')
+    yvex_json_iter iter;
+    yvex_json_item item;
+
+    if (!json || !out || !yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_ARRAY))
         return 0;
-    yvex_json_space(json);
-    if (json->cursor < json->end && *json->cursor == ']') {
-        json->cursor++;
-        return 1;
-    }
-    for (;;) {
+    while ((item = yvex_json_array_value(&iter)) == YVEX_JSON_ITEM_READY) {
         if (!source_parse_added_token(json, out) || out->tokenizer_added_token_count == ULLONG_MAX)
             return 0;
         out->tokenizer_added_token_count++;
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == ']') {
-            json->cursor++;
-            return 1;
-        }
-        if (*json->cursor++ != ',')
-            return 0;
     }
+    return item == YVEX_JSON_ITEM_END && !iter.trailing_separator;
 }
 
 /* Purpose: parses tokenizer model type and requires a structured vocabulary object.
@@ -1103,44 +1056,17 @@ static int source_parse_added_tokens(yvex_json *json, yvex_source_verification *
  * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
  * Boundary: verified metadata is not transformed bytes or artifact support. */
 static int source_parse_tokenizer_model(yvex_json *json, yvex_source_verification *out) {
-    char key[YVEX_JSON_KEY_CAP];
-    unsigned int seen = 0u;
+    source_config_parse_state state = {0};
 
-    yvex_json_space(json);
-    if (json->cursor >= json->end || *json->cursor++ != '{')
-        return 0;
-    for (;;) {
-        yvex_json_space(json);
-        if (json->cursor < json->end && *json->cursor == '}') {
-            json->cursor++;
-            return seen == 3u;
-        }
-        if (!yvex_json_string(json, key, sizeof(key)))
-            return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end || *json->cursor++ != ':')
-            return 0;
-        if (strcmp(key, "type") == 0) {
-            if ((seen & 1u) || !yvex_json_string(json,
-                                                 out->tokenizer_model_type,
-                                                 sizeof(out->tokenizer_model_type)))
-                return 0;
-            seen |= 1u;
-        } else if (strcmp(key, "vocab") == 0) {
-            if ((seen & 2u) || !source_parse_tokenizer_vocab(json, out))
-                return 0;
-            seen |= 2u;
-        } else if (!yvex_json_skip_value(json)) {
-            return 0;
-        }
-        yvex_json_space(json);
-        if (json->cursor >= json->end)
-            return 0;
-        if (*json->cursor == '}')
-            continue;
-        if (*json->cursor++ != ',')
-            return 0;
-    }
+    return source_json_object_parse(json,
+                                    source_tokenizer_model_fields,
+                                    sizeof(source_tokenizer_model_fields) /
+                                        sizeof(source_tokenizer_model_fields[0]),
+                                    3u,
+                                    NULL,
+                                    out,
+                                    &state,
+                                    0);
 }
 
 /* Purpose: validates required tokenizer JSON structure and preserves its model type.
@@ -1151,66 +1077,19 @@ static int source_parse_tokenizer_model(yvex_json *json, yvex_source_verificatio
 static int
 source_parse_tokenizer_json(const char *data, size_t length, yvex_source_verification *out) {
     yvex_json json;
-    char key[YVEX_JSON_KEY_CAP];
-    char version[16];
-    unsigned int seen = 0u;
+    source_config_parse_state state = {0};
 
     yvex_json_init(&json, data, length);
-    yvex_json_space(&json);
-    if (json.cursor >= json.end || *json.cursor++ != '{')
-        return 0;
-    for (;;) {
-        yvex_json_space(&json);
-        if (json.cursor < json.end && *json.cursor == '}') {
-            json.cursor++;
-            break;
-        }
-        if (!yvex_json_string(&json, key, sizeof(key)))
-            return 0;
-        yvex_json_space(&json);
-        if (json.cursor >= json.end || *json.cursor++ != ':')
-            return 0;
-        if (strcmp(key, "version") == 0) {
-            if ((seen & 1u) || !yvex_json_string(&json, version, sizeof(version)) ||
-                strcmp(version, "1.0") != 0)
-                return 0;
-            seen |= 1u;
-        } else if (strcmp(key, "added_tokens") == 0) {
-            if ((seen & 2u) || !source_parse_added_tokens(&json, out))
-                return 0;
-            seen |= 2u;
-        } else if (strcmp(key, "normalizer") == 0) {
-            if ((seen & 4u) || !yvex_json_skip_value(&json))
-                return 0;
-            seen |= 4u;
-        } else if (strcmp(key, "pre_tokenizer") == 0) {
-            if ((seen & 8u) || !yvex_json_skip_value(&json))
-                return 0;
-            seen |= 8u;
-        } else if (strcmp(key, "post_processor") == 0) {
-            if ((seen & 16u) || !yvex_json_skip_value(&json))
-                return 0;
-            seen |= 16u;
-        } else if (strcmp(key, "decoder") == 0) {
-            if ((seen & 32u) || !yvex_json_skip_value(&json))
-                return 0;
-            seen |= 32u;
-        } else if (strcmp(key, "model") == 0) {
-            if ((seen & 64u) || !source_parse_tokenizer_model(&json, out))
-                return 0;
-            seen |= 64u;
-        } else if (!yvex_json_skip_value(&json)) {
-            return 0;
-        }
-        yvex_json_space(&json);
-        if (json.cursor >= json.end)
-            return 0;
-        if (*json.cursor == '}')
-            continue;
-        if (*json.cursor++ != ',')
-            return 0;
-    }
-    if (!yvex_json_complete(&json) || seen != 127u || out->tokenizer_model_type[0] == '\0' ||
+    if (!source_json_object_parse(&json,
+                                  source_tokenizer_fields,
+                                  sizeof(source_tokenizer_fields) /
+                                      sizeof(source_tokenizer_fields[0]),
+                                  127u,
+                                  NULL,
+                                  out,
+                                  &state,
+                                  1) ||
+        out->tokenizer_model_type[0] == '\0' ||
         (out->tokenizer_base_vocab_count == 0u && out->tokenizer_added_token_count == 0u) ||
         out->tokenizer_max_token_id == ULLONG_MAX)
         return 0;
@@ -1228,26 +1107,17 @@ static int source_parse_sidecar(source_sidecar_kind kind,
                                 size_t length,
                                 const yvex_source_target_identity *identity,
                                 yvex_source_verification *out) {
+    size_t parser_index;
     int valid;
 
     if (!data || !identity || !out)
         return 0;
-    switch (kind) {
-    case SOURCE_SIDECAR_CONFIG:
+    if (kind == SOURCE_SIDECAR_CONFIG)
         return source_parse_config_json(data, length, identity, out);
-    case SOURCE_SIDECAR_TOKENIZER:
-        valid = source_parse_tokenizer_json(data, length, out);
-        out->tokenizer_json_valid = valid;
-        return valid;
-    case SOURCE_SIDECAR_TOKENIZER_CONFIG:
-        valid = source_parse_tokenizer_config(data, length, out);
-        out->tokenizer_config_valid = valid;
-        return valid;
-    case SOURCE_SIDECAR_GENERATION_CONFIG:
-        valid = source_parse_generation_config(data, length, out);
-        out->generation_config_valid = valid;
-        return valid;
-    default:
+    if (kind < SOURCE_SIDECAR_TOKENIZER || kind > SOURCE_SIDECAR_GENERATION_CONFIG)
         return 0;
-    }
+    parser_index = (size_t)kind - (size_t)SOURCE_SIDECAR_TOKENIZER;
+    valid = source_sidecar_parsers[parser_index](data, length, out);
+    *(int *)(void *)((unsigned char *)out + source_sidecar_valid_offsets[parser_index]) = valid;
+    return valid;
 }

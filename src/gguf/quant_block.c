@@ -14,6 +14,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
+#include <yvex/internal/gguf.h>
 #include <yvex/internal/quant_numeric.h>
 
 /* Pinned GGML stores the E2M1 codebook doubled and applies E8M0 / 2. */
@@ -51,36 +52,12 @@ static void quant_store_u16(unsigned char *out, unsigned short value) {
     out[1] = (unsigned char)(value >> 8);
 }
 
-/* Purpose: recover one unsigned 16-bit codec field from little-endian storage.
- * Inputs: two readable block bytes.
- * Effects: none.
- * Failure: none after exact-size block admission.
- * Boundary: field loading does not interpret the value as a scale. */
-static unsigned short quant_load_u16(const unsigned char *in) {
-    return (unsigned short)((unsigned short)in[0] | ((unsigned short)in[1] << 8));
-}
-
 /* Purpose: store one unsigned 32-bit value in canonical little-endian order. */
 static void quant_store_u32(unsigned char *out, unsigned int value) {
     out[0] = (unsigned char)(value & 0xffu);
     out[1] = (unsigned char)((value >> 8) & 0xffu);
     out[2] = (unsigned char)((value >> 16) & 0xffu);
     out[3] = (unsigned char)(value >> 24);
-}
-
-/* Purpose: recover one unsigned 32-bit codec field from little-endian storage.
- * Inputs: four readable block bytes.
- * Effects: none.
- * Failure: none after exact-size block admission.
- * Boundary: field loading does not classify scalar semantics. */
-static unsigned int quant_load_u32(const unsigned char *in) {
-    return (unsigned int)in[0] | ((unsigned int)in[1] << 8) | ((unsigned int)in[2] << 16) |
-           ((unsigned int)in[3] << 24);
-}
-
-/* Purpose: reconstruct a signed I32 codec lane from its portable unsigned bit pattern. */
-static int32_t quant_i32_from_u32(uint32_t value) {
-    return value <= (uint32_t)INT32_MAX ? (int32_t)value : -1 - (int32_t)(UINT32_MAX - value);
 }
 
 /* Purpose: round a bounded scalar to the nearest integer with ties resolved to even. */
@@ -164,7 +141,7 @@ static int quant_encode_q8_0(const float *source, unsigned char *encoded) {
     }
     scale = maximum / 127.0f;
     quant_store_u16(encoded, yvex_quant_f16_encode(scale));
-    scale = yvex_quant_f16_decode(quant_load_u16(encoded));
+    scale = yvex_quant_f16_decode(gguf_u16le_load(encoded));
     if (!isfinite(scale) || scale < 0.0f || (maximum > 0.0f && scale == 0.0f))
         return 0;
     inverse = scale != 0.0f ? 1.0f / scale : 0.0f;
@@ -330,8 +307,8 @@ static int quant_encode_q2_k(const float *source, unsigned char *encoded) {
     global_minimum = maximum_minimum / 15.0f;
     quant_store_u16(encoded + 80u, yvex_quant_f16_encode(global_scale));
     quant_store_u16(encoded + 82u, yvex_quant_f16_encode(global_minimum));
-    global_scale = yvex_quant_f16_decode(quant_load_u16(encoded + 80u));
-    global_minimum = yvex_quant_f16_decode(quant_load_u16(encoded + 82u));
+    global_scale = yvex_quant_f16_decode(gguf_u16le_load(encoded + 80u));
+    global_minimum = yvex_quant_f16_decode(gguf_u16le_load(encoded + 82u));
     if (!isfinite(global_scale) || !isfinite(global_minimum) || global_scale < 0.0f ||
         global_minimum < 0.0f || (maximum_scale > 0.0f && global_scale == 0.0f) ||
         (maximum_minimum > 0.0f && global_minimum == 0.0f))
@@ -495,8 +472,8 @@ int yvex_quant_encode_block(unsigned int qtype, const float *source, unsigned lo
  * Failure: none after caller-owned exact-size admission.
  * Boundary: this primitive shares no encoder search logic. */
 static void quant_decode_q2_k(const unsigned char *encoded, float *out) {
-    float global_scale = yvex_quant_f16_decode(quant_load_u16(encoded + 80u));
-    float global_minimum = yvex_quant_f16_decode(quant_load_u16(encoded + 82u));
+    float global_scale = yvex_quant_f16_decode(gguf_u16le_load(encoded + 80u));
+    float global_minimum = yvex_quant_f16_decode(gguf_u16le_load(encoded + 82u));
     const unsigned char *quants = encoded + 16u;
     unsigned int subblock = 0u;
     unsigned int half;
@@ -564,24 +541,24 @@ int yvex_quant_decode_block(unsigned int qtype, const unsigned char *encoded, si
     }
     switch (qtype) {
     case YVEX_GGUF_QTYPE_F32: {
-        unsigned int bits = quant_load_u32(encoded);
+        unsigned int bits = gguf_u32le_load(encoded);
         memcpy(out, &bits, sizeof(*out));
         break;
     }
     case YVEX_GGUF_QTYPE_F16:
-        out[0] = yvex_quant_f16_decode(quant_load_u16(encoded));
+        out[0] = yvex_quant_f16_decode(gguf_u16le_load(encoded));
         break;
     case YVEX_GGUF_QTYPE_BF16:
-        out[0] = yvex_quant_bf16_decode(quant_load_u16(encoded));
+        out[0] = yvex_quant_bf16_decode(gguf_u16le_load(encoded));
         break;
     case YVEX_GGUF_QTYPE_I32:
-        out[0] = (float)quant_i32_from_u32(quant_load_u32(encoded));
+        out[0] = (float)gguf_i32_from_u32(gguf_u32le_load(encoded));
         break;
     case YVEX_GGUF_QTYPE_Q8_0: {
-        float scale = yvex_quant_f16_decode(quant_load_u16(encoded));
+        float scale = yvex_quant_f16_decode(gguf_u16le_load(encoded));
         if (!isfinite(scale) || scale < 0.0f) {
             quant_block_fail(failure, YVEX_QUANT_FAILURE_Q8_0_BLOCK, qtype, 0u,
-                             quant_load_u16(encoded), err, YVEX_ERR_FORMAT,
+                             gguf_u16le_load(encoded), err, YVEX_ERR_FORMAT,
                              "Q8_0 encoded scale is negative or non-finite");
             return YVEX_ERR_FORMAT;
         }
@@ -611,8 +588,8 @@ int yvex_quant_decode_block(unsigned int qtype, const unsigned char *encoded, si
         break;
     }
     case YVEX_GGUF_QTYPE_Q2_K: {
-        float scale = yvex_quant_f16_decode(quant_load_u16(encoded + 80u));
-        float minimum = yvex_quant_f16_decode(quant_load_u16(encoded + 82u));
+        float scale = yvex_quant_f16_decode(gguf_u16le_load(encoded + 80u));
+        float minimum = yvex_quant_f16_decode(gguf_u16le_load(encoded + 82u));
         if (!isfinite(scale) || !isfinite(minimum) || scale < 0.0f || minimum < 0.0f) {
             quant_block_fail(failure, YVEX_QUANT_FAILURE_Q2_K_BLOCK, qtype, 0u, 1u, err,
                              YVEX_ERR_FORMAT, "Q2_K encoded affine scales are malformed");

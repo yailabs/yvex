@@ -154,7 +154,7 @@ static int payload_quant_sink_chunk(
     if (!state || !decision || !bytes || !byte_count) return 1;
     state->chunks++;
     if (state->cancellation && state->cancel_chunk == state->chunks)
-        yvex_quant_cancellation_request(state->cancellation);
+        atomic_store_explicit(&state->cancellation->requested, 1, memory_order_release);
     return state->fail_chunk && state->chunks == state->fail_chunk;
 }
 
@@ -749,8 +749,8 @@ static int test_payload_transform_binding(
         &execution, &quant_failure, &err);
     if (quant_rc != YVEX_OK)
         fprintf(stderr,
-                "odd-chunk execution failure=%s expected=%llu actual=%llu status=%s\n",
-                yvex_quant_failure_name(quant_failure.code),
+                "odd-chunk execution failure=%u expected=%llu actual=%llu status=%s\n",
+                (unsigned int)quant_failure.code,
                 quant_failure.expected, quant_failure.actual,
                 yvex_status_name(yvex_error_code(&err)));
     YVEX_TEST_ASSERT(quant_rc == YVEX_OK &&
@@ -810,7 +810,7 @@ static int test_payload_transform_binding(
                      "sink refusal aborts without publishing partial output");
 
     memset(&refusal_state, 0, sizeof(refusal_state));
-    yvex_quant_cancellation_init(&cancellation);
+    atomic_init(&cancellation.requested, 0);
     refusal_state.cancel_chunk = 1u;
     refusal_state.cancellation = &cancellation;
     memset(&output_sink, 0, sizeof(output_sink));
@@ -837,8 +837,8 @@ static int test_payload_transform_binding(
                          &quant_failure, &err) == YVEX_OK,
                      "cancellation digest sink opens");
     yvex_quant_digest_sink_adapter(digest_sink, &output_sink);
-    yvex_quant_cancellation_init(&cancellation);
-    yvex_quant_cancellation_request(&cancellation);
+    atomic_init(&cancellation.requested, 0);
+    atomic_store_explicit(&cancellation.requested, 1, memory_order_release);
     yvex_quant_executor_options_default(&executor_options);
     executor_options.source_chunk_bytes = 4096u;
     executor_options.output_chunk_bytes = 4096u;

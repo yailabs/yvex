@@ -5,11 +5,10 @@
  * Layer: test
  *
  * Purpose:
- *   Proves the operational file-backed GGUF artifact ABI for container,
- *   metadata, tensor_info, qtype, and addressable range facts.
+ *   Proves the operational file-backed GGUF reader and layout ABI directly.
  *
  * Covers:
- *   - yvex_gguf_artifact_abi_report_build
+ *   - yvex_gguf_open_ex and yvex_gguf_layout_validate
  *   - invalid magic refusal
  *   - unsupported version refusal
  *   - malformed metadata refusal
@@ -166,15 +165,9 @@ static int open_reader(const char *path,
     return yvex_gguf_open_ex(gguf, *artifact, reader_options, result, &err);
 }
 
-static int build_report(const char *path, yvex_gguf_abi_report *report)
-{
-    yvex_error err;
-    int rc;
-
-    yvex_error_clear(&err);
-    rc = yvex_gguf_artifact_abi_report_build(path, report, &err);
-    return rc;
-}
+static int expect_typed_refusal(const char *path,
+                                yvex_gguf_parse_code code,
+                                yvex_gguf_parse_section section);
 
 static int expect_layout_refusal(const char *path, yvex_gguf_layout_code code)
 {
@@ -197,102 +190,96 @@ static int expect_layout_refusal(const char *path, yvex_gguf_layout_code code)
 
 static int test_valid_fixture(void)
 {
-    yvex_gguf_abi_report report;
+    const char *path = "tests/fixtures/gguf/valid-metadata-tensors.gguf";
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    yvex_gguf_parse_result result;
+    yvex_gguf_layout_result layout;
+    const yvex_gguf_header *header;
+    const yvex_gguf_reader_stats *stats;
+    const yvex_gguf_tensor_info *tensor;
+    yvex_error err;
+    int rc = open_reader(path, NULL, &artifact, &gguf, &result);
 
-    YVEX_TEST_ASSERT(build_report("tests/fixtures/gguf/valid-metadata-tensors.gguf", &report) == YVEX_OK,
-                     "valid GGUF ABI fixture builds report");
-    YVEX_TEST_ASSERT(report.status == YVEX_GGUF_ABI_SECTION_OK,
-                     "valid GGUF ABI is operational");
-    YVEX_TEST_ASSERT(report.container.status == YVEX_GGUF_ABI_SECTION_OK,
-                     "container ABI accepted");
-    YVEX_TEST_ASSERT(report.container.version == 3u, "container version");
-    YVEX_TEST_ASSERT(report.metadata.status == YVEX_GGUF_ABI_SECTION_OK,
-                     "metadata ABI accepted");
-    YVEX_TEST_ASSERT(report.metadata.entry_count == 5ull, "metadata count");
-    YVEX_TEST_ASSERT(report.metadata.string_value_count >= 2ull, "metadata string count");
-    YVEX_TEST_ASSERT(report.tensor_info.status == YVEX_GGUF_ABI_SECTION_OK,
-                     "tensor_info ABI accepted");
-    YVEX_TEST_ASSERT(report.tensor_info.tensor_count == 1ull, "tensor count");
-    YVEX_TEST_ASSERT(report.tensor_info.max_rank == 2u, "tensor max rank");
-    YVEX_TEST_ASSERT(report.range.status == YVEX_GGUF_ABI_SECTION_OK,
-                     "range ABI accepted");
-    YVEX_TEST_ASSERT(report.range.checked_tensor_count == 1ull, "range checked tensor count");
-    YVEX_TEST_ASSERT(report.descriptor.status == YVEX_GGUF_ABI_SECTION_OK,
-                     "structural descriptor accepted");
-    YVEX_TEST_ASSERT(report.reader_stats.payload_bytes_read == 0ull,
-                     "report reader reads no payload bytes");
-    YVEX_TEST_ASSERT(report.reader_stats.structural_bytes_read > 0ull,
-                     "report reader records structural bytes");
-    YVEX_TEST_ASSERT_STREQ(report.next_row, "V010.CUDA.FAILCLOSED.0", "next row");
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "valid GGUF fixture opens");
+    header = yvex_gguf_header_view(gguf);
+    stats = yvex_gguf_reader_stats_view(gguf);
+    tensor = yvex_gguf_tensor_at(gguf, 0ull);
+    YVEX_TEST_ASSERT(header && header->version == 3u, "container version");
+    YVEX_TEST_ASSERT(header->metadata_count == 5ull, "metadata count");
+    YVEX_TEST_ASSERT(header->tensor_count == 1ull, "tensor count");
+    YVEX_TEST_ASSERT(tensor && tensor->rank == 2u, "tensor rank");
+    YVEX_TEST_ASSERT(stats && stats->payload_bytes_read == 0ull,
+                     "reader reads no payload bytes");
+    YVEX_TEST_ASSERT(stats->structural_bytes_read > 0ull,
+                     "reader records structural bytes");
+    yvex_error_clear(&err);
+    rc = yvex_gguf_layout_validate(artifact, gguf, &layout, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && layout.accepted,
+                     "canonical layout accepts valid fixture");
+    YVEX_TEST_ASSERT(layout.tensors_validated == 1ull,
+                     "layout validates every tensor");
+    yvex_gguf_close(gguf);
+    yvex_artifact_close(artifact);
     return 0;
 }
 
 static int test_invalid_magic(void)
 {
-    yvex_gguf_abi_report report;
-
-    YVEX_TEST_ASSERT(build_report("tests/fixtures/gguf/bad-magic.gguf", &report) != YVEX_OK,
-                     "bad magic report propagates refusal");
-    YVEX_TEST_ASSERT(report.container.status == YVEX_GGUF_ABI_SECTION_MALFORMED,
-                     "bad magic marks container malformed");
-    YVEX_TEST_ASSERT(report.parse_result.code == YVEX_GGUF_PARSE_INVALID_MAGIC,
-                     "bad magic has typed code");
+    YVEX_TEST_ASSERT(expect_typed_refusal("tests/fixtures/gguf/bad-magic.gguf",
+                                          YVEX_GGUF_PARSE_INVALID_MAGIC,
+                                          YVEX_GGUF_PARSE_SECTION_CONTAINER),
+                     "bad magic has typed refusal");
     return 0;
 }
 
 static int test_unsupported_version(void)
 {
-    yvex_gguf_abi_report report;
-
-    YVEX_TEST_ASSERT(build_report("tests/fixtures/gguf/unsupported-version.gguf", &report) != YVEX_OK,
-                     "unsupported version report propagates refusal");
-    YVEX_TEST_ASSERT(report.container.status == YVEX_GGUF_ABI_SECTION_UNSUPPORTED,
-                     "unsupported version marks container unsupported");
-    YVEX_TEST_ASSERT(report.container.version != 3u, "unsupported version is not parser version");
+    YVEX_TEST_ASSERT(expect_typed_refusal("tests/fixtures/gguf/unsupported-version.gguf",
+                                          YVEX_GGUF_PARSE_UNSUPPORTED_VERSION,
+                                          YVEX_GGUF_PARSE_SECTION_CONTAINER),
+                     "unsupported version has typed refusal");
     return 0;
 }
 
 static int test_malformed_metadata(void)
 {
-    yvex_gguf_abi_report report;
-
-    YVEX_TEST_ASSERT(build_report("tests/fixtures/gguf/metadata-unknown-type.gguf", &report) != YVEX_OK,
-                     "metadata malformed report propagates refusal");
-    YVEX_TEST_ASSERT(report.metadata.status == YVEX_GGUF_ABI_SECTION_UNSUPPORTED,
-                     "unknown metadata type is unsupported");
+    YVEX_TEST_ASSERT(expect_typed_refusal("tests/fixtures/gguf/metadata-unknown-type.gguf",
+                                          YVEX_GGUF_PARSE_UNSUPPORTED_METADATA_TYPE,
+                                          YVEX_GGUF_PARSE_SECTION_METADATA),
+                     "unknown metadata type has typed refusal");
     return 0;
 }
 
 static int test_tensor_info_refusal(void)
 {
-    yvex_gguf_abi_report report;
-
-    YVEX_TEST_ASSERT(build_report("tests/fixtures/gguf/tensor-rank-unsupported.gguf", &report) != YVEX_OK,
-                     "tensor_info malformed report propagates refusal");
-    YVEX_TEST_ASSERT(report.tensor_info.status == YVEX_GGUF_ABI_SECTION_MALFORMED,
-                     "unsupported rank marks tensor_info malformed");
+    YVEX_TEST_ASSERT(expect_typed_refusal("tests/fixtures/gguf/tensor-rank-unsupported.gguf",
+                                          YVEX_GGUF_PARSE_INVALID_RANK,
+                                          YVEX_GGUF_PARSE_SECTION_TENSOR_INFO),
+                     "unsupported rank has typed refusal");
     return 0;
 }
 
 static int test_range_refusal(void)
 {
-    yvex_gguf_abi_report report;
-
-    YVEX_TEST_ASSERT(build_report("tests/fixtures/gguf/tensor-offset-out-of-bounds.gguf", &report) != YVEX_OK,
-                     "range refusal report propagates refusal");
-    YVEX_TEST_ASSERT(report.range.status == YVEX_GGUF_ABI_SECTION_REFUSED,
-                     "out-of-bounds tensor offset marks range refused");
+    YVEX_TEST_ASSERT(expect_layout_refusal(
+                         "tests/fixtures/gguf/tensor-offset-out-of-bounds.gguf",
+                         YVEX_GGUF_LAYOUT_FIRST_OFFSET_NOT_ZERO),
+                     "out-of-bounds tensor offset has typed layout refusal");
     return 0;
 }
 
 static int test_missing_file(void)
 {
-    yvex_gguf_abi_report report;
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    yvex_gguf_parse_result result;
 
-    YVEX_TEST_ASSERT(build_report("tests/fixtures/gguf/missing.gguf", &report) != YVEX_OK,
-                     "missing file report propagates refusal");
-    YVEX_TEST_ASSERT(report.container.status == YVEX_GGUF_ABI_SECTION_NOT_PRESENT,
-                     "missing file is not-present");
+    YVEX_TEST_ASSERT(open_reader("tests/fixtures/gguf/missing.gguf", NULL,
+                                 &artifact, &gguf, &result) != YVEX_OK,
+                     "missing file refuses before parsing");
+    YVEX_TEST_ASSERT(artifact == NULL && gguf == NULL,
+                     "missing file leaves no reader ownership");
     return 0;
 }
 
@@ -824,20 +811,6 @@ static int test_view_lifetime_and_repeated_cleanup(void)
     return 0;
 }
 
-static int test_future_owned_boundaries(void)
-{
-    const char *reason = NULL;
-
-    YVEX_TEST_ASSERT(yvex_gguf_writer_supported(&reason) == 1,
-                     "writer plan capability is implemented");
-    YVEX_TEST_ASSERT(reason != NULL, "writer boundary reason");
-    YVEX_TEST_ASSERT(yvex_gguf_roundtrip_supported(&reason) == 1,
-                     "full native roundtrip capability is implemented");
-    YVEX_TEST_ASSERT(reason != NULL, "roundtrip boundary reason");
-    YVEX_TEST_ASSERT(yvex_gguf_qtype_geometry_count() > 0u, "qtype geometry table exists");
-    return 0;
-}
-
 int yvex_test_gguf_artifact_abi(void)
 {
     YVEX_TEST_ASSERT(prepare_test_dir(), "prepare GGUF reader test directory");
@@ -858,6 +831,5 @@ int yvex_test_gguf_artifact_abi(void)
     if (test_typed_truncation_boundaries() != 0) return 1;
     if (test_typed_tensor_and_range_refusals() != 0) return 1;
     if (test_view_lifetime_and_repeated_cleanup() != 0) return 1;
-    if (test_future_owned_boundaries() != 0) return 1;
     return 0;
 }

@@ -53,24 +53,6 @@ static int accounts_path_format(
     }
     return YVEX_OK;
 }
-/* Purpose: project timestamp facts while preserving the canonical provider account lifecycle invariants. */
-static void accounts_timestamp(char *out, size_t cap) {
-    time_t now;
-    struct tm tm_utc;
-
-    if (!out || cap == 0u)
-        return;
-    out[0] = '\0';
-    now = time(NULL);
-    if (now == (time_t)-1 || !gmtime_r(&now, &tm_utc)) {
-        snprintf(out, cap, "unknown");
-        return;
-    }
-    if (strftime(out, cap, "%Y-%m-%dT%H:%M:%SZ", &tm_utc) == 0) {
-        snprintf(out, cap, "unknown");
-    }
-}
-
 /* Purpose: project json field facts while preserving the canonical provider account lifecycle invariants. */
 static void
 accounts_json_field(FILE *fp, const char *indent, const char *key, const char *value, int comma) {
@@ -511,7 +493,7 @@ int yvex_account_observe(const yvex_account_observe_options *options,
     out->token_env_present = token_value && token_value[0];
     out->token_value_redacted = out->token_env_present ? 1 : 0;
     out->raw_token_stored_by_yvex = 0;
-    accounts_timestamp(out->last_checked_at, sizeof(out->last_checked_at));
+    yvex_core_timestamp_utc(out->last_checked_at, sizeof(out->last_checked_at));
     if (accounts_state_path(out->state_path, sizeof(out->state_path), err) != YVEX_OK) {
         return yvex_error_code(err);
     }

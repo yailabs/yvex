@@ -5,8 +5,9 @@ not record delivery progress or create capability.
 
 ## Files
 
-- `deepseek.md` records the exact v0.1.0 source and future full target, current
-  unsupported boundary, and safe filesystem checks.
+- `deepseek.md` records the exact v0.1.0 source, admitted artifact and runtime
+  binding, production attention commands, benchmark charts, unsupported
+  generation boundary, and safe filesystem checks.
 - `common.md` records repository validation, claim checks, artifact guardrails,
   and operator-local cleanup boundaries.
 

@@ -50,12 +50,6 @@ static const char *const transform_failure_names[] = {
     "gguf-lowering-divergence", "mapping-identity-mismatch", "cleanup-failure"
 };
 
-static const char *const transform_operation_names[] = {
-    "identity", "decode-scale-pair", "checked-cast", "reshape",
-    "transpose", "concatenate", "stack", "aggregate",
-    "expert-axis-aggregate"
-};
-
 static const yvex_transform_subsystem deepseek_subsystems[] = {
     YVEX_TRANSFORM_SUBSYSTEM_GLOBAL,
     YVEX_TRANSFORM_SUBSYSTEM_ATTENTION,
@@ -164,15 +158,11 @@ unsigned long long yvex_transform_hash_logical_key(
  * Boundary: performs no payload or artifact execution. */
 unsigned long long yvex_transform_index_capacity(unsigned long long count)
 {
-    unsigned long long capacity = 8u;
+    unsigned long long capacity;
 
-    if (count > ULLONG_MAX / 2u) return 0u;
-    count *= 2u;
-    while (capacity < count) {
-        if (capacity > ULLONG_MAX / 2u) return 0u;
-        capacity *= 2u;
-    }
-    return capacity;
+    return yvex_core_power_of_two_capacity(count, 8ull, 1ull, 2ull, &capacity)
+               ? capacity
+               : 0ull;
 }
 /* Purpose: register one index insert while preserving order and bounds.
  * Inputs: typed plan facts are borrowed.
@@ -511,15 +501,15 @@ int yvex_transform_builder_create(
     builder->allocator = allocator;
     builder->budget = budget;
     builder->header = *header;
-    (void)snprintf(builder->logical_model_identity,
-                   sizeof(builder->logical_model_identity), "%s",
-                   header->logical_model_identity);
-    (void)snprintf(builder->required_payload_identity,
-                   sizeof(builder->required_payload_identity), "%s",
-                   header->required_payload_identity);
-    (void)snprintf(builder->payload_trust_class,
-                   sizeof(builder->payload_trust_class), "%s",
-                   header->payload_trust_class);
+    yvex_core_text_copy(builder->logical_model_identity,
+                        sizeof(builder->logical_model_identity),
+                        header->logical_model_identity);
+    yvex_core_text_copy(builder->required_payload_identity,
+                        sizeof(builder->required_payload_identity),
+                        header->required_payload_identity);
+    yvex_core_text_copy(builder->payload_trust_class,
+                        sizeof(builder->payload_trust_class),
+                        header->payload_trust_class);
     builder->header.logical_model_identity = builder->logical_model_identity;
     builder->header.required_payload_identity =
         builder->required_payload_identity;
@@ -612,10 +602,8 @@ int yvex_transform_builder_add_source(
     source = &builder->sources[builder->source_count];
     memset(source, 0, sizeof(*source));
     source->value_id = id;
-    (void)snprintf(source->source_name, sizeof(source->source_name), "%s",
-                   spec->source_name);
-    (void)snprintf(source->shard_name, sizeof(source->shard_name), "%s",
-                   spec->shard_name);
+    yvex_core_text_copy(source->source_name, sizeof(source->source_name), spec->source_name);
+    yvex_core_text_copy(source->shard_name, sizeof(source->shard_name), spec->shard_name);
     source->source_tensor_index = spec->source_tensor_index;
     source->requirement_index = spec->requirement_index;
     source->source_snapshot_identity = spec->source_snapshot_identity;
@@ -844,6 +832,9 @@ int yvex_transform_builder_seal(
     rc = yvex_transform_ir_validate_and_seal(builder, out, failure, err);
     builder->state = rc == YVEX_OK ? YVEX_TRANSFORM_IR_STATE_SEALED
                                    : YVEX_TRANSFORM_IR_STATE_FAILED;
+    if (rc == YVEX_OK)
+        yvex_core_execution_observation_record(
+            YVEX_CORE_OBSERVE_TRANSFORM_PLAN, 1ull);
     return rc;
 }
 /* Purpose: release owned builder release resources in dependency order.
@@ -1070,18 +1061,6 @@ const char *yvex_transform_failure_name(yvex_transform_failure_code code)
                ? transform_failure_names[code]
                : "unknown-transform-failure";
 }
-/* Purpose: project typed operation name vocabulary without lost semantics.
- * Inputs: typed plan facts are borrowed.
- * Effects: mutates only owned builder or IR state.
- * Failure: publishes no partial plan on refusal.
- * Boundary: performs no payload or artifact execution. */
-const char *yvex_transform_operation_name(yvex_transform_operation_kind kind)
-{
-    return kind >= 0 && kind < YVEX_TRANSFORM_OP_COUNT
-               ? transform_operation_names[kind]
-               : "unknown-operation";
-}
-
 /* The family transform recipe registers semantics in the generic sealed IR. */
 typedef struct {
     yvex_transform_builder *builder;

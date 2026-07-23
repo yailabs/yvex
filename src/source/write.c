@@ -302,10 +302,8 @@ static int source_write_verified_manifest(FILE *fp, const void *opaque) {
  * Effects: writes only the explicit source publication destination through its transaction.
  * Failure: serialization or I/O failure publishes no partial source publication result.
  * Boundary: serialization records validated trust but never creates it. */
-int yvex_source_manifest_publish_verified(const char *out_path,
-                                          const yvex_source_verify_options *options,
-                                          const yvex_source_verification *verification,
-                                          yvex_error *err) {
+static int publish_verified(const char *out_path, const yvex_source_verify_options *options,
+                            const yvex_source_verification *verification, yvex_error *err) {
     source_verified_manifest_context context;
 
     if (!out_path || !options || !options->identity || !verification ||
@@ -454,10 +452,9 @@ static int source_write_payload_manifest(FILE *fp, const void *opaque) {
  * Effects: writes only the explicit source publication destination through its transaction.
  * Failure: serialization or I/O failure publishes no partial source publication result.
  * Boundary: serialization records validated trust but never creates it. */
-int yvex_source_manifest_publish_payload(const char *out_path,
-                                         const yvex_source_verification *verification,
-                                         const yvex_source_payload_session *session,
-                                         yvex_error *err) {
+static int publish_payload(const char *out_path,
+                           const yvex_source_verification *verification,
+                           const yvex_source_payload_session *session, yvex_error *err) {
     source_payload_manifest_context context;
 
     if (!out_path || !verification || !verification->verified || !session ||
@@ -518,10 +515,8 @@ static int source_write_derived_inventory(FILE *fp, const void *opaque) {
  * Effects: writes only the explicit source publication destination through its transaction.
  * Failure: serialization or I/O failure publishes no partial source publication result.
  * Boundary: serialization records validated trust but never creates it. */
-int yvex_source_derived_inventory_publish(const char *out_path,
-                                          const yvex_source_verify_options *options,
-                                          const yvex_source_derived_inventory *inventory,
-                                          yvex_error *err) {
+static int publish_inventory(const char *out_path, const yvex_source_verify_options *options,
+                             const yvex_source_derived_inventory *inventory, yvex_error *err) {
     source_derived_inventory_context context;
 
     if (!out_path || !options || !inventory || !inventory->rows || inventory->count == 0u ||
@@ -532,4 +527,27 @@ int yvex_source_derived_inventory_publish(const char *out_path,
     context.options = options;
     context.inventory = inventory;
     return source_publish_atomic(out_path, source_write_derived_inventory, &context, err);
+}
+
+/* Purpose: dispatch one typed source publication through its canonical serializer.
+ * Inputs: immutable publication request and caller-owned error state.
+ * Effects: atomically publishes only the request's explicit destination.
+ * Failure: invalid kinds or kind-specific facts refuse without replacing prior output.
+ * Boundary: serialization records admitted source truth and never creates it. */
+int yvex_source_publish(const yvex_source_publication_request *request, yvex_error *err) {
+    if (!request)
+        return publish_refuse(err, YVEX_ERR_INVALID_ARG, "source_publish",
+                              "publication request is required");
+    switch (request->kind) {
+    case YVEX_SOURCE_PUBLICATION_VERIFIED_MANIFEST:
+        return publish_verified(request->out_path, request->options, request->verification, err);
+    case YVEX_SOURCE_PUBLICATION_PAYLOAD_MANIFEST:
+        return publish_payload(request->out_path, request->verification,
+                               request->payload_session, err);
+    case YVEX_SOURCE_PUBLICATION_DERIVED_INVENTORY:
+        return publish_inventory(request->out_path, request->options, request->inventory, err);
+    default:
+        return publish_refuse(err, YVEX_ERR_INVALID_ARG, "source_publish",
+                              "publication kind is invalid");
+    }
 }

@@ -600,7 +600,8 @@ static int test_admission_identity_binds_bytes(void)
         goto cleanup;
     }
     memset(&admission_failure, 0, sizeof(admission_failure));
-    rc = yvex_artifact_admission_identity_verify(artifact, &admission, &admission_failure, &err);
+    rc = yvex_artifact_admission_identity_verify(
+        artifact, &admission, NULL, NULL, &admission_failure, &err);
     if (rc != YVEX_OK || !admission.artifact_identity_verified ||
         admission.artifact_bytes_hashed != sizeof(contents)) {
         failure = "exact admission bytes must verify";
@@ -630,7 +631,8 @@ static int test_admission_identity_binds_bytes(void)
     admission.artifact_identity_verified = 0;
     admission.artifact_bytes_hashed = 0ull;
     memset(&admission_failure, 0, sizeof(admission_failure));
-    rc = yvex_artifact_admission_identity_verify(artifact, &admission, &admission_failure, &err);
+    rc = yvex_artifact_admission_identity_verify(
+        artifact, &admission, NULL, NULL, &admission_failure, &err);
     if (rc != YVEX_ERR_FORMAT ||
         admission_failure.code != YVEX_ARTIFACT_ADMISSION_IDENTITY_MISMATCH ||
         strcmp(admission_failure.field, "artifact-byte-identity") != 0 ||

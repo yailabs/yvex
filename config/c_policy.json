@@ -114,7 +114,7 @@
   },
   "required_literals": [
     {"text": "e7706faf8d1c3b9f241e36860640ad1dac644ede", "roots": ["src"]},
-    {"text": "yvex_attention_execute_supported", "roots": ["src/graph"]},
+    {"text": "attention_core_ready", "roots": ["src/runtime"]},
     {"text": "yvex_attention_hadamard_cpu", "roots": ["src/graph"]},
     {"text": "yvex_attention_topk_select", "roots": ["src/graph"]},
     {"text": "yvex_graph_lower_deepseek_v4", "roots": ["src/graph"]},

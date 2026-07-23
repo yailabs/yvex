@@ -34,14 +34,6 @@
 #define RENAME_NOREPLACE (1u << 0)
 #endif
 
-static const char *const file_code_names[] = {
-    "ok", "invalid-argument", "unsafe-destination", "destination-exists", "directory-open",
-    "temp-create", "insufficient-space", "preallocate", "write", "terminal-protocol",
-    "terminal-abort", "incomplete", "execution-identity", "flush", "snapshot-drift",
-    "validation-required", "publication", "directory-flush", "cleanup", "allocation",
-    "cancelled",
-};
-
 typedef enum {
     FILE_TERMINAL_EMPTY = 0,
     FILE_TERMINAL_BEGINNING,
@@ -814,8 +806,7 @@ static int file_sink_prepare_digest(yvex_gguf_file_sink **sink_address,
     }
     sink->summary.peak_owned_bytes = own_bytes + digest_bytes;
     if (sink->temporary_path)
-        (void)snprintf(sink->summary.temporary_path, sizeof(sink->summary.temporary_path), "%s",
-                       sink->temporary_path);
+        yvex_core_text_copy(sink->summary.temporary_path, sizeof(sink->summary.temporary_path), sink->temporary_path);
     return YVEX_OK;
 }
 
@@ -1084,8 +1075,7 @@ int yvex_gguf_file_sink_publish(yvex_gguf_file_sink *sink,
     sink->published = 1;
     sink->summary.published = 1;
     file_stat_capture_published(&sink->summary, &published_stat);
-    (void)snprintf(sink->summary.published_path, sizeof(sink->summary.published_path), "%s",
-                   sink->destination_path);
+    yvex_core_text_copy(sink->summary.published_path, sizeof(sink->summary.published_path), sink->destination_path);
     *out = sink->summary;
     if (failure)
         memset(failure, 0, sizeof(*failure));
@@ -1181,16 +1171,4 @@ void yvex_gguf_file_sink_release(yvex_gguf_file_sink **sink_address) {
     free(sink->temporary_path);
     memset(sink, 0, sizeof(*sink));
     free(sink);
-}
-
-/* Purpose: project a file-sink result code to stable diagnostic text.
- * Inputs: typed transactional file code.
- * Effects: none.
- * Failure: unknown values map to an explicit unknown spelling.
- * Boundary: diagnostics never replace typed cleanup or recovery decisions. */
-const char *yvex_gguf_file_code_name(yvex_gguf_file_code code) {
-    return code >= YVEX_GGUF_FILE_OK &&
-                   (size_t)code < sizeof(file_code_names) / sizeof(file_code_names[0])
-               ? file_code_names[code]
-               : "unknown";
 }

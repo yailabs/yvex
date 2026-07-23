@@ -265,14 +265,25 @@ The following boundaries remain distinct:
   coverage, and family lowering composition;
 - graph owners under `src/graph/` own graph state, execution protocols,
   reusable numerical operations, and family graph recipes;
+- runtime owners under `src/runtime/` own the family-neutral immutable runtime
+  model, versioned runtime binding, mutable execution sessions, reusable
+  workspace, phase-aware dispatch, and process-lifetime reuse;
 - backend owners execute admitted operations but do not infer model policy;
-- generation owns prefill, persistent KV use, decode, logits, sampling, and
-  loop integration only after their dependencies are executable.
+- generation composes the separately owned prefill, persistent KV, decode,
+  logits, sampling, and loop contracts only after those dependencies are
+  executable.
 
 Source intake is not payload trust. Mapping is not transformation execution.
 Quantization is not a GGUF artifact. A complete artifact is not
 materialization. Materialization is not graph execution. A primitive is not a
 transformer. Transformer execution is not generation.
+
+Runtime execution consumes an admitted content-addressed runtime binding. It
+does not reopen source inventories, reconstruct Transformation IR, rebuild
+quantization or writer plans, or branch on family names. Family semantics enter
+through a typed adapter. Runtime benchmark baselines, CSV/JSON evidence, and
+generated charts are identity-bound external operator assets and are never
+tracked in the source repository or treated as release benchmark authority.
 
 ## 8. CLI, reports, and output
 
@@ -396,6 +407,21 @@ A closure that changes ownership reports:
 
 No implementation may be declared complete because a report says so. Project
 control changes only after executable evidence passes.
+
+### Commit format
+
+New commits use Conventional Commits:
+
+```text
+type(scope): imperative description
+```
+
+Use the narrow semantic owner as `scope` and one of `feat`, `fix`, `refactor`,
+`perf`, `test`, `docs`, `build`, `ci`, or `chore` as `type`. The subject states
+the implemented change in natural language; wave IDs and milestone names are
+not commit subjects. Use a `BREAKING CHANGE:` footer only for an intentional
+incompatible contract change. Do not amend or rewrite existing history merely
+to normalize older commit titles.
 
 ## 12. Final rule
 

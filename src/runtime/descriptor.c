@@ -1,6 +1,6 @@
 /* Owner: runtime.descriptor
  * Owns: immutable runtime descriptor construction from complete-artifact admission, committed materialization
- *   bindings, qtype/storage facts, and DeepSeek GGUF map facts.
+ *   bindings, qtype/storage facts, and typed family-projected map facts.
  * Does not own: backend allocation, graph binding, graph execution, attention, KV, prefill, decode, logits,
  *   sampling, generation, eval, benchmark, or release claims.
  * Invariants: descriptor identity binds artifact identity, materialization plan identity, tensor names, roles,
@@ -13,10 +13,13 @@
  * Failure: identity or binding refusal releases the descriptor and publishes no partial view. */
 #include <yvex/internal/runtime.h>
 
+#include <yvex/internal/graph_state.h>
+
+#include <yvex/internal/backend.h>
 #include <yvex/internal/core.h>
-#include <yvex/internal/families/deepseek_v4.h>
 
 #include <limits.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,18 +37,291 @@ struct yvex_runtime_descriptor {
     yvex_runtime_descriptor_summary summary;
 };
 
-/* Purpose: maintain deterministic bounded runtime index capacity lookup state. */
-static int runtime_index_capacity(unsigned long long count,
-                                  unsigned long long *out)
-{
-    unsigned long long capacity = 16ull;
-    if (!out) return 0;
-    while (capacity * 2ull < count * 3ull) {
-        if (capacity > ULLONG_MAX / 2ull) return 0;
-        capacity *= 2ull;
+typedef enum {
+    RUNTIME_EXECUTION_FIELD_TEXT,
+    RUNTIME_EXECUTION_FIELD_U64,
+    RUNTIME_EXECUTION_FIELD_UINT,
+    RUNTIME_EXECUTION_FIELD_INT
+} runtime_execution_field_kind;
+
+typedef struct {
+    runtime_execution_field_kind kind;
+    size_t offset;
+} runtime_execution_field;
+
+typedef yvex_runtime_execution_descriptor_facts runtime_execution_facts;
+
+/* Compile-time contract for the scalar runs projected with memcpy by the
+ * operator owner. Every run is padding-free in both source and destination;
+ * changing either ABI fails the build before a projection can corrupt facts. */
+#define FIELD_RUN_BYTES(type, first, last) \
+    (offsetof(type, last) + sizeof(((type *)0)->last) - offsetof(type, first))
+#define ASSERT_FIELD_RUN(type, first, last, count, field_type) \
+    _Static_assert(FIELD_RUN_BYTES(type, first, last) == (count) * sizeof(field_type), \
+                   "runtime projection field run contains padding")
+ASSERT_FIELD_RUN(yvex_artifact_physical_compatibility, physical_payload_compatible,
+                 payload_digest_equal, 8u, int);
+ASSERT_FIELD_RUN(yvex_graph_attention_operator_result, physical_payload_compatible,
+                 payload_digest_equal, 8u, int);
+ASSERT_FIELD_RUN(yvex_runtime_model_summary, runtime_model_builds,
+                 executable_graph_builds, 4u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_graph_attention_operator_result, runtime_model_builds,
+                 executable_graph_builds, 4u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_graph_attention_state_summary, layer_count,
+                 prepared_layer_count, 2u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_graph_attention_operator_result, state_layer_count,
+                 state_prepared_layer_count, 2u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_graph_attention_state_summary, commit_count,
+                 reset_count, 4u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_graph_attention_operator_result, state_commit_count,
+                 state_reset_count, 4u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_backend_cuda_attention_graph_summary, graph_count,
+                 replay_count, 5u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_graph_attention_operator_result, cuda_graph_count,
+                 cuda_graph_replay_count, 5u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_backend_cuda_attention_graph_summary, launch_count,
+                 memset_node_count, 5u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_graph_attention_operator_result, cuda_graph_launch_count,
+                 cuda_graph_memset_node_count, 5u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_backend_cuda_attention_graph_summary, update_count,
+                 update_pending_count, 2u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_graph_attention_operator_result, cuda_graph_update_count,
+                 cuda_graph_update_pending_count, 2u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_backend_cuda_attention_graph_summary, capture_elapsed_ns,
+                 last_replay_elapsed_ns, 4u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_graph_attention_operator_result, cuda_graph_capture_elapsed_ns,
+                 cuda_graph_last_replay_elapsed_ns, 4u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_runtime_session_summary, resident_binding_count,
+                 device_resident_bytes, 4u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_graph_attention_operator_result, resident_binding_count,
+                 device_resident_bytes, 4u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_runtime_session_summary, host_workspace_bytes,
+                 host_workspace_peak_bytes, 2u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_graph_attention_operator_result, pinned_host_bytes,
+                 pinned_host_peak_bytes, 2u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_runtime_session_summary, upload_bytes,
+                 upload_count, 2u, unsigned long long);
+ASSERT_FIELD_RUN(yvex_graph_attention_operator_result, upload_bytes,
+                 upload_count, 2u, unsigned long long);
+#undef ASSERT_FIELD_RUN
+#undef FIELD_RUN_BYTES
+
+static const runtime_execution_field runtime_execution_fields[] = {
+    {RUNTIME_EXECUTION_FIELD_UINT, offsetof(runtime_execution_facts, schema_version)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, runtime_model_identity)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, runtime_binding_identity)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, artifact_identity)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, runtime_numeric_identity)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, runtime_descriptor_identity)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, semantic_graph_identity)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, executable_graph_identity)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, family_adapter_id)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, family_adapter_version)},
+    {RUNTIME_EXECUTION_FIELD_UINT, offsetof(runtime_execution_facts, probe)},
+    {RUNTIME_EXECUTION_FIELD_UINT, offsetof(runtime_execution_facts, probe_scope)},
+    {RUNTIME_EXECUTION_FIELD_UINT, offsetof(runtime_execution_facts, operation_scope)},
+    {RUNTIME_EXECUTION_FIELD_UINT, offsetof(runtime_execution_facts, phase)},
+    {RUNTIME_EXECUTION_FIELD_UINT, offsetof(runtime_execution_facts, backend)},
+    {RUNTIME_EXECUTION_FIELD_UINT, offsetof(runtime_execution_facts, requested_mode)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, selected_mode)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, capture_bucket)},
+    {RUNTIME_EXECUTION_FIELD_INT, offsetof(runtime_execution_facts, compare_backends)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, token_count)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, request_count)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, start_position)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, layer_start)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, layer_count)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, selection_key)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, binding_count)},
+    {RUNTIME_EXECUTION_FIELD_U64,
+     offsetof(runtime_execution_facts, maximum_compression_ratio)},
+    {RUNTIME_EXECUTION_FIELD_U64,
+     offsetof(runtime_execution_facts, maximum_topk_capacity)},
+    {RUNTIME_EXECUTION_FIELD_UINT, offsetof(runtime_execution_facts, trace_policy)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, maximum_host_bytes)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, maximum_device_bytes)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, residency_identity)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, residency_generation)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, resident_binding_count)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, resident_encoded_bytes)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, workspace_identity)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, workspace_bytes)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, workspace_generation)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, capacity_plan_identity)},
+    {RUNTIME_EXECUTION_FIELD_TEXT, offsetof(runtime_execution_facts, state_layout_identity)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, prepared_state_layers)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, state_allocated_bytes)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, state_generation)},
+    {RUNTIME_EXECUTION_FIELD_UINT, offsetof(runtime_execution_facts, device_kind)},
+    {RUNTIME_EXECUTION_FIELD_INT, offsetof(runtime_execution_facts, device_index)},
+    {RUNTIME_EXECUTION_FIELD_INT, offsetof(runtime_execution_facts, compute_capability_major)},
+    {RUNTIME_EXECUTION_FIELD_INT, offsetof(runtime_execution_facts, compute_capability_minor)},
+    {RUNTIME_EXECUTION_FIELD_U64, offsetof(runtime_execution_facts, total_device_bytes)},
+};
+
+/* Purpose: serialize one descriptor field through its canonical typed SHA operation.
+ * Inputs: live hash, immutable facts, and one schema-owned field descriptor.
+ * Effects: appends one canonical text or u64 value without hashing native structure bytes.
+ * Failure: unknown field kinds or SHA update failure return false.
+ * Boundary: field order remains owned by the static execution-descriptor schema. */
+static int runtime_execution_field_hash(
+    yvex_sha256 *hash, const yvex_runtime_execution_descriptor_facts *facts,
+    const runtime_execution_field *field) {
+    const unsigned char *address = (const unsigned char *)facts + field->offset;
+
+    if (field->kind == RUNTIME_EXECUTION_FIELD_TEXT) {
+        const char *value;
+        memcpy(&value, address, sizeof(value));
+        return yvex_sha256_update_text(hash, value);
     }
-    *out = capacity;
-    return 1;
+    if (field->kind == RUNTIME_EXECUTION_FIELD_U64) {
+        unsigned long long value;
+        memcpy(&value, address, sizeof(value));
+        return yvex_sha256_update_u64(hash, value);
+    }
+    if (field->kind == RUNTIME_EXECUTION_FIELD_UINT) {
+        unsigned int value;
+        memcpy(&value, address, sizeof(value));
+        return yvex_sha256_update_u64(hash, value);
+    }
+    if (field->kind == RUNTIME_EXECUTION_FIELD_INT) {
+        int value;
+        memcpy(&value, address, sizeof(value));
+        return yvex_sha256_update_u64(hash, (unsigned long long)value);
+    }
+    return 0;
+}
+
+/* Purpose: compute one versioned pre-dispatch descriptor from explicit canonical facts.
+ * Inputs: complete compatibility fields and caller-owned SHA output.
+ * Effects: writes one deterministic identity without mutating runtime state.
+ * Failure: malformed identities, schema, or hash failure publishes no usable identity.
+ * Boundary: paths, pointers, timings, actions, repetitions, and result evidence are absent. */
+int yvex_runtime_execution_descriptor_identity_compute(
+    const yvex_runtime_execution_descriptor_facts *facts,
+    char output[YVEX_SHA256_HEX_CAP], yvex_error *err) {
+    const char *const identities[] = {
+        facts ? facts->runtime_model_identity : NULL,
+        facts ? facts->runtime_binding_identity : NULL,
+        facts ? facts->artifact_identity : NULL,
+        facts ? facts->runtime_numeric_identity : NULL,
+        facts ? facts->runtime_descriptor_identity : NULL,
+        facts ? facts->semantic_graph_identity : NULL,
+        facts ? facts->executable_graph_identity : NULL,
+        facts ? facts->residency_identity : NULL,
+        facts ? facts->workspace_identity : NULL,
+        facts ? facts->capacity_plan_identity : NULL,
+        facts ? facts->state_layout_identity : NULL,
+    };
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    unsigned int index;
+
+    if (output) output[0] = '\0';
+    if (!facts || !output ||
+        facts->schema_version != YVEX_RUNTIME_EXECUTION_DESCRIPTOR_SCHEMA_V2 ||
+        facts->probe != YVEX_ATTENTION_PROBE_CANONICAL_V2 ||
+        !facts->selected_mode || !facts->selected_mode[0] ||
+        !facts->capture_bucket || !facts->capture_bucket[0] ||
+        !facts->token_count || !facts->request_count || !facts->layer_count ||
+        !facts->residency_generation || !facts->workspace_generation ||
+        !facts->state_generation) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "runtime.attention.descriptor",
+                       "complete versioned execution descriptor facts are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    for (index = 0u; index < sizeof(identities) / sizeof(identities[0]); ++index) {
+        if (!yvex_sha256_hex_valid(identities[index])) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, "runtime.attention.descriptor",
+                           "execution descriptor identity fact is malformed");
+            return YVEX_ERR_FORMAT;
+        }
+    }
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(
+            &hash, "yvex.runtime.attention.execution-descriptor.v2")) {
+        yvex_error_set(err, YVEX_ERR_STATE, "runtime.attention.descriptor",
+                       "execution descriptor serialization failed");
+        return YVEX_ERR_STATE;
+    }
+    for (index = 0u; index < sizeof(runtime_execution_fields) /
+                                      sizeof(runtime_execution_fields[0]); ++index) {
+        if (!runtime_execution_field_hash(
+                &hash, facts, &runtime_execution_fields[index])) {
+            yvex_error_set(err, YVEX_ERR_STATE, "runtime.attention.descriptor",
+                           "execution descriptor serialization failed");
+            return YVEX_ERR_STATE;
+        }
+    }
+    for (index = 0u; index < YVEX_ATTENTION_STATE_BINDING_COUNT; ++index) {
+        if (facts->state_component_entries[index] >
+                facts->state_component_capacities[index] ||
+            !yvex_sha256_update_u64(
+                &hash, facts->state_component_entries[index]) ||
+            !yvex_sha256_update_u64(
+                &hash, facts->state_component_capacities[index])) {
+            yvex_error_set(err, YVEX_ERR_FORMAT,
+                           "runtime.attention.descriptor",
+                           "execution state component facts are malformed");
+            return YVEX_ERR_FORMAT;
+        }
+    }
+    for (index = 0u; index < YVEX_RUNTIME_DESCRIPTOR_QTYPE_CAP; ++index) {
+        if (!yvex_sha256_update_u64(&hash, facts->qtype_binding_counts[index]) ||
+            !yvex_sha256_update_u64(&hash, facts->qtype_bytes[index])) {
+            yvex_error_set(err, YVEX_ERR_STATE, "runtime.attention.descriptor",
+                           "execution qtype requirements could not be serialized");
+            return YVEX_ERR_STATE;
+        }
+    }
+    if (!yvex_sha256_final(&hash, digest)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "runtime.attention.descriptor",
+                       "execution descriptor identity finalization failed");
+        return YVEX_ERR_STATE;
+    }
+    yvex_sha256_hex(digest, output);
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/* Purpose: derive a stable workspace identity from explicit execution capacities.
+ * Inputs: model/backend identity, exact budgets, arena sizes, and optional capacity-plan identity.
+ * Effects: writes one canonical SHA-256 identity without allocating workspace storage.
+ * Failure: malformed identity input or hash failure leaves no usable output.
+ * Boundary: binds scalar compatibility facts and never hashes pointers or arena contents. */
+int yvex_runtime_workspace_identity_compute(
+    const char *runtime_model_identity, yvex_backend_kind backend,
+    unsigned long long maximum_host_bytes, unsigned long long maximum_device_bytes,
+    unsigned long long workspace_bytes, unsigned long long host_workspace_bytes,
+    const char *capacity_identity, char output[YVEX_SHA256_HEX_CAP], yvex_error *err) {
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+
+    if (output) output[0] = '\0';
+    if (!output || !yvex_sha256_hex_valid(runtime_model_identity) ||
+        (capacity_identity && capacity_identity[0] &&
+         !yvex_sha256_hex_valid(capacity_identity))) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "runtime.workspace.identity",
+                       "workspace identity facts are malformed");
+        return YVEX_ERR_FORMAT;
+    }
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(&hash, "yvex.runtime.workspace.v2") ||
+        !yvex_sha256_update_text(&hash, runtime_model_identity) ||
+        !yvex_sha256_update_u64(&hash, backend) ||
+        !yvex_sha256_update_u64(&hash, maximum_host_bytes) ||
+        !yvex_sha256_update_u64(&hash, maximum_device_bytes) ||
+        !yvex_sha256_update_u64(&hash, workspace_bytes) ||
+        !yvex_sha256_update_u64(&hash, host_workspace_bytes) ||
+        !yvex_sha256_update_text(&hash, capacity_identity ? capacity_identity : "") ||
+        !yvex_sha256_final(&hash, digest)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "runtime.workspace.identity",
+                       "workspace identity serialization failed");
+        return YVEX_ERR_STATE;
+    }
+    yvex_sha256_hex(digest, output);
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 /* Purpose: project typed runtime failure vocabulary without lost semantics. */
@@ -55,8 +331,7 @@ static void runtime_failure_set(yvex_runtime_descriptor_failure *failure,
                                 unsigned long long tensor_index,
                                 unsigned long long expected,
                                 unsigned long long actual,
-                                const char *reason)
-{
+                                const char *reason) {
     if (!failure) return;
     memset(failure, 0, sizeof(*failure));
     failure->code = code;
@@ -65,8 +340,7 @@ static void runtime_failure_set(yvex_runtime_descriptor_failure *failure,
     failure->actual = actual;
     failure->reason = reason;
     if (name)
-        (void)snprintf(failure->tensor_name,
-                       sizeof(failure->tensor_name), "%s", name);
+        yvex_core_text_copy(failure->tensor_name, sizeof(failure->tensor_name), name);
 }
 
 /* Purpose: enforce typed runtime reject invariants before publication. */
@@ -78,8 +352,7 @@ static int runtime_reject(yvex_runtime_descriptor_failure *failure,
                           unsigned long long actual,
                           yvex_error *err,
                           yvex_status status,
-                          const char *message)
-{
+                          const char *message) {
     runtime_failure_set(failure, code, name, tensor_index, expected, actual,
                         message);
     yvex_error_set(err, status, "runtime.descriptor", message);
@@ -93,8 +366,7 @@ static int runtime_reject(yvex_runtime_descriptor_failure *failure,
  * Boundary: executes no graph or generation path. */
 static int runtime_index_insert(yvex_runtime_descriptor *descriptor,
                                 const char *name,
-                                unsigned long long index)
-{
+                                unsigned long long index) {
     unsigned long long hash;
     unsigned long long slot;
     unsigned long long step = 0ull;
@@ -121,178 +393,12 @@ static int runtime_index_insert(yvex_runtime_descriptor *descriptor,
     return 0;
 }
 
-/* Purpose: resolve one runtime index find through the canonical index.
- * Inputs: admission and materialization are borrowed.
- * Effects: mutates only descriptor-owned output.
- * Failure: publishes no partial descriptor on refusal.
- * Boundary: executes no graph or generation path. */
-static const yvex_runtime_tensor_binding *runtime_index_find(
-    const yvex_runtime_descriptor *descriptor,
-    const char *name)
-{
-    unsigned long long hash;
-    unsigned long long slot;
-    unsigned long long step = 0ull;
-
-    if (!descriptor || !descriptor->name_index ||
-        !descriptor->name_index_capacity || !name)
-        return NULL;
-    hash = yvex_core_index_hash(name);
-    slot = hash & (descriptor->name_index_capacity - 1ull);
-    while (step < descriptor->name_index_capacity) {
-        const runtime_name_slot *candidate = &descriptor->name_index[slot];
-        if (!candidate->index_plus_one) return NULL;
-        if (candidate->hash == hash) {
-            const yvex_runtime_tensor_binding *binding =
-                &descriptor->bindings[candidate->index_plus_one - 1ull];
-            if (binding->binding &&
-                strcmp(binding->binding->name, name) == 0)
-                return binding;
-        }
-        slot = (slot + 1ull) & (descriptor->name_index_capacity - 1ull);
-        step++;
-    }
-    return NULL;
-}
-
-/* Purpose: encode runtime hash activation policy fields in canonical identity order.
- * Inputs: admission and materialization are borrowed.
- * Effects: mutates only descriptor-owned output.
- * Failure: publishes no partial descriptor on refusal.
- * Boundary: executes no graph or generation path. */
-static void runtime_hash_activation_policy(
-    yvex_sha256 *hash,
-    const yvex_attention_activation_policy *policy)
-{
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->required : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->stage : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->quantization : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->block_axis : 0ull);
-    yvex_sha256_update_u64(hash, policy ? policy->block_width : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->scale_format : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->scale_dtype : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->pre_transform : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->tail_policy : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->nonfinite_policy : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->fake_quant_inplace : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->zero_pad_hadamard_to_power_of_two : 0ull);
-}
-
-/* Purpose: encode runtime hash sparse topk policy fields in canonical identity order.
- * Inputs: admission and materialization are borrowed.
- * Effects: mutates only descriptor-owned output.
- * Failure: publishes no partial descriptor on refusal.
- * Boundary: executes no graph or generation path. */
-static void runtime_hash_sparse_topk_policy(
-    yvex_sha256 *hash,
-    const yvex_attention_topk_policy *policy)
-{
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->required : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->version : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->policy : 0ull);
-    yvex_sha256_update_u64(hash, policy ? policy->k : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->reject_nonfinite : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->score_descending : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->equal_score_ordinal_ascending : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->plus_zero_equals_minus_zero : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->duplicate_ordinal_refused : 0ull);
-    yvex_sha256_update_u64(hash, policy ? (unsigned long long)policy->output_ranked_order : 0ull);
-}
-
-/* Purpose: project the immutable bounded runtime fill deepseek numeric summary view.
- * Inputs: admission and materialization are borrowed.
- * Effects: mutates only descriptor-owned output.
- * Failure: publishes no partial descriptor on refusal.
- * Boundary: executes no graph or generation path. */
-static int runtime_fill_deepseek_numeric_summary(
-    yvex_runtime_descriptor *descriptor,
-    const yvex_deepseek_v4_ir *architecture_ir,
-    yvex_runtime_descriptor_failure *failure,
-    yvex_error *err)
-{
-    const yvex_deepseek_v4_model_spec *model;
-    yvex_sha256 hash;
-    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
-    unsigned long long i;
-    unsigned long long layer_count;
-
-    model = yvex_model_register_deepseek_v4()->ir.model(architecture_ir);
-    if (!descriptor || !model) {
-        return runtime_reject(
-            failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE,
-            NULL, YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, err,
-            YVEX_ERR_FORMAT,
-            "DeepSeek runtime descriptor requires architecture numeric contract");
-    }
-    if (model->runtime_numeric_schema_version != 2u ||
-        model->runtime_compute_policy_count != 1ull ||
-        model->runtime_activation_policy_count == 0ull ||
-        !model->hadamard_revision[0]) {
-        return runtime_reject(
-            failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE,
-            NULL, YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, err,
-            YVEX_ERR_FORMAT,
-            "DeepSeek architecture runtime numeric contract is incomplete");
-    }
-    if (!yvex_model_register_deepseek_v4()->transform.architecture_identity(
-            architecture_ir, descriptor->summary.logical_model_identity)) {
-        return runtime_reject(
-            failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE,
-            NULL, YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, err,
-            YVEX_ERR_FORMAT,
-            "DeepSeek logical-model identity encoding failed");
-    }
-    descriptor->summary.runtime_numeric_schema_version =
-        model->runtime_numeric_schema_version;
-    descriptor->summary.runtime_compute_policy_count = model->runtime_compute_policy_count;
-    descriptor->summary.runtime_activation_policy_count =
-        model->runtime_activation_policy_count;
-    descriptor->summary.runtime_sparse_topk_policy_count =
-        model->runtime_sparse_topk_policy_count;
-    (void)snprintf(descriptor->summary.runtime_hadamard_revision,
-                   sizeof(descriptor->summary.runtime_hadamard_revision),
-                   "%s", model->hadamard_revision);
-
-    yvex_sha256_init(&hash);
-    yvex_sha256_update_text(&hash, "yvex.runtime.numeric.deepseek-v4.v2");
-    yvex_sha256_update_text(&hash, model->hadamard_revision);
-    yvex_sha256_update_text(&hash, model->sglang_revision);
-    yvex_sha256_update_u64(&hash, model->runtime_numeric_schema_version);
-    yvex_sha256_update_u64(&hash, model->runtime_compute_policy_count);
-    yvex_sha256_update_u64(&hash, model->runtime_activation_policy_count);
-    yvex_sha256_update_u64(&hash, model->runtime_sparse_topk_policy_count);
-    layer_count = yvex_model_register_deepseek_v4()->ir.layer_count(architecture_ir);
-    yvex_sha256_update_u64(&hash, layer_count);
-    for (i = 0ull; i < layer_count; ++i) {
-        const yvex_deepseek_v4_layer_spec *layer =
-            yvex_model_register_deepseek_v4()->ir.layer_at(architecture_ir, i);
-        if (!layer) {
-            return runtime_reject(
-                failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE,
-                NULL, i, 1ull, 0ull, err, YVEX_ERR_FORMAT,
-                "DeepSeek architecture layer missing during numeric projection");
-        }
-        yvex_sha256_update_u64(&hash, layer->layer_index);
-        yvex_sha256_update_u64(&hash, (unsigned long long)layer->attention_class);
-        yvex_sha256_update_u64(&hash, (unsigned long long)layer->compute_contract);
-        runtime_hash_activation_policy(&hash, &layer->attention_kv_activation);
-        runtime_hash_activation_policy(&hash, &layer->compressor_activation);
-        runtime_hash_activation_policy(&hash, &layer->compressor_rotated_activation);
-        runtime_hash_activation_policy(&hash, &layer->indexer_query_activation);
-        runtime_hash_sparse_topk_policy(&hash, &layer->sparse_topk);
-    }
-    (void)yvex_sha256_final(&hash, digest);
-    yvex_sha256_hex(digest, descriptor->summary.runtime_numeric_identity);
-    return YVEX_OK;
-}
-
 /* Purpose: encode runtime compute identity fields in canonical identity order.
  * Inputs: admission and materialization are borrowed.
  * Effects: mutates only descriptor-owned output.
  * Failure: publishes no partial descriptor on refusal.
  * Boundary: executes no graph or generation path. */
-static void runtime_compute_identity(yvex_runtime_descriptor *descriptor)
-{
+static void runtime_compute_identity(yvex_runtime_descriptor *descriptor) {
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     unsigned long long i;
@@ -341,12 +447,11 @@ static void runtime_compute_identity(yvex_runtime_descriptor *descriptor)
 static yvex_runtime_descriptor *runtime_descriptor_alloc(
     unsigned long long count,
     yvex_runtime_descriptor_failure *failure,
-    yvex_error *err)
-{
+    yvex_error *err) {
     yvex_runtime_descriptor *descriptor;
     unsigned long long capacity;
 
-    if (!runtime_index_capacity(count, &capacity)) {
+    if (!yvex_core_power_of_two_capacity(count, 16ull, 2ull, 3ull, &capacity)) {
         runtime_reject(failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ALLOCATION,
                        NULL, YVEX_MATERIALIZATION_NO_INDEX, count, 0ull, err,
                        YVEX_ERR_NOMEM,
@@ -386,15 +491,12 @@ static yvex_runtime_descriptor *runtime_descriptor_alloc(
 static void runtime_fill_common_summary(
     yvex_runtime_descriptor *descriptor,
     const yvex_complete_artifact_admission *admission,
-    const yvex_materialization_summary *materialization)
-{
+    const yvex_materialization_summary *materialization) {
     descriptor->summary.status = YVEX_RUNTIME_DESCRIPTOR_STATUS_READY;
-    (void)snprintf(descriptor->summary.artifact_identity,
-                   sizeof(descriptor->summary.artifact_identity), "%s",
-                   admission->artifact_identity);
-    (void)snprintf(descriptor->summary.materialization_plan_identity,
-                   sizeof(descriptor->summary.materialization_plan_identity),
-                   "%s", materialization->plan_identity);
+    yvex_runtime_identity_copy(descriptor->summary.artifact_identity,
+                               admission->artifact_identity);
+    yvex_runtime_identity_copy(descriptor->summary.materialization_plan_identity,
+                               materialization->plan_identity);
     descriptor->summary.tensor_count = materialization->tensor_count;
     descriptor->summary.payload_bytes = materialization->payload_bytes;
     memcpy(descriptor->summary.qtype_tensor_counts,
@@ -409,28 +511,13 @@ static void runtime_fill_common_summary(
     descriptor->summary.generation_ready = 0;
 }
 
-/* Purpose: project typed descriptor status name vocabulary without lost semantics.
- * Inputs: admission and materialization are borrowed.
- * Effects: mutates only descriptor-owned output.
- * Failure: publishes no partial descriptor on refusal.
- * Boundary: executes no graph or generation path. */
-const char *yvex_runtime_descriptor_status_name(yvex_runtime_descriptor_status status)
-{
-    switch (status) {
-    case YVEX_RUNTIME_DESCRIPTOR_STATUS_REFUSED: return "refused";
-    case YVEX_RUNTIME_DESCRIPTOR_STATUS_READY: return "runtime-descriptor-ready";
-    }
-    return "refused";
-}
-
 /* Purpose: project typed descriptor failure name vocabulary without lost semantics.
  * Inputs: admission and materialization are borrowed.
  * Effects: mutates only descriptor-owned output.
  * Failure: publishes no partial descriptor on refusal.
  * Boundary: executes no graph or generation path. */
 const char *yvex_runtime_descriptor_failure_name(
-    yvex_runtime_descriptor_failure_code code)
-{
+    yvex_runtime_descriptor_failure_code code) {
     switch (code) {
     case YVEX_RUNTIME_DESCRIPTOR_FAILURE_NONE: return "none";
     case YVEX_RUNTIME_DESCRIPTOR_FAILURE_INVALID_ARGUMENT: return "invalid-argument";
@@ -454,9 +541,9 @@ int yvex_runtime_descriptor_build(
     yvex_runtime_descriptor **out,
     const yvex_complete_artifact_admission *admission,
     const yvex_materialization_session *session,
+    const yvex_runtime_descriptor_family_facts *family,
     yvex_runtime_descriptor_failure *failure,
-    yvex_error *err)
-{
+    yvex_error *err) {
     const yvex_materialization_summary *materialization;
     yvex_runtime_descriptor *descriptor;
     unsigned long long count;
@@ -494,6 +581,24 @@ int yvex_runtime_descriptor_build(
     descriptor = runtime_descriptor_alloc(count, failure, err);
     if (!descriptor) return yvex_error_code(err);
     runtime_fill_common_summary(descriptor, admission, materialization);
+    if (family) {
+        yvex_runtime_identity_copy(descriptor->summary.logical_model_identity,
+                                   family->logical_model_identity);
+        yvex_runtime_identity_copy(descriptor->summary.runtime_numeric_identity,
+                                   family->runtime_numeric_identity);
+        yvex_core_text_copy(descriptor->summary.runtime_hadamard_revision,
+                            sizeof(descriptor->summary.runtime_hadamard_revision),
+                            family->runtime_hadamard_revision);
+        descriptor->summary.runtime_numeric_schema_version = family->runtime_numeric_schema_version;
+        descriptor->summary.runtime_compute_policy_count = family->runtime_compute_policy_count;
+        descriptor->summary.runtime_activation_policy_count = family->runtime_activation_policy_count;
+        descriptor->summary.runtime_sparse_topk_policy_count = family->runtime_sparse_topk_policy_count;
+        descriptor->summary.layer_count = family->layer_count;
+        descriptor->summary.mtp_layer_count = family->mtp_layer_count;
+        descriptor->summary.routed_experts = family->routed_experts;
+        descriptor->summary.experts_per_token = family->experts_per_token;
+        descriptor->summary.vocabulary_size = family->vocabulary_size;
+    }
     for (i = 0ull; i < count; ++i) {
         const yvex_materialized_tensor_binding *source =
             yvex_materialization_session_tensor_at(session, i);
@@ -525,105 +630,6 @@ int yvex_runtime_descriptor_build(
         }
         if (source->role < YVEX_TENSOR_ROLE_COUNT)
             descriptor->summary.role_counts[source->role]++;
-    }
-    runtime_compute_identity(descriptor);
-    *out = descriptor;
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-/* Purpose: construct bounded descriptor build deepseek state from admitted inputs.
- * Inputs: admission and materialization are borrowed.
- * Effects: mutates only descriptor-owned output.
- * Failure: publishes no partial descriptor on refusal.
- * Boundary: executes no graph or generation path. */
-int yvex_runtime_descriptor_build_deepseek(
-    yvex_runtime_descriptor **out,
-    const yvex_complete_artifact_admission *admission,
-    const yvex_materialization_session *session,
-    const yvex_deepseek_gguf_map *deepseek_map,
-    const yvex_deepseek_v4_ir *architecture_ir,
-    yvex_runtime_descriptor_failure *failure,
-    yvex_error *err)
-{
-    const yvex_deepseek_gguf_map_summary *map_summary;
-    yvex_runtime_descriptor *descriptor = NULL;
-    unsigned long long i;
-    int rc;
-
-    if (out) *out = NULL;
-    if (!deepseek_map || !architecture_ir)
-        return runtime_reject(
-            failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_INVALID_ARGUMENT,
-            NULL, YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, err,
-            YVEX_ERR_INVALID_ARG,
-            "DeepSeek runtime descriptor requires canonical GGUF map and architecture IR");
-    map_summary = yvex_model_register_deepseek_v4()->lowering.summary(deepseek_map);
-    if (!map_summary || !map_summary->complete)
-        return runtime_reject(
-            failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE,
-            NULL, YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, err,
-            YVEX_ERR_FORMAT,
-            "DeepSeek GGUF map is not complete");
-    rc = yvex_runtime_descriptor_build(
-        &descriptor, admission, session, failure, err);
-    if (rc != YVEX_OK) return rc;
-    rc = runtime_fill_deepseek_numeric_summary(
-        descriptor, architecture_ir, failure, err);
-    if (rc != YVEX_OK) {
-        yvex_runtime_descriptor_close(descriptor);
-        return rc;
-    }
-    if (descriptor->count != map_summary->descriptor_count) {
-        yvex_runtime_descriptor_close(descriptor);
-        return runtime_reject(
-            failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_MATERIALIZATION,
-            NULL, YVEX_MATERIALIZATION_NO_INDEX,
-            map_summary->descriptor_count, descriptor->count, err,
-            YVEX_ERR_FORMAT,
-            "DeepSeek runtime descriptor count differs from map");
-    }
-    descriptor->summary.layer_count = 61ull;
-    descriptor->summary.mtp_layer_count = 1ull;
-    descriptor->summary.routed_experts = 256ull;
-    descriptor->summary.experts_per_token = 8ull;
-    descriptor->summary.vocabulary_size = 129280ull;
-    for (i = 0ull; i < map_summary->descriptor_count; ++i) {
-        const yvex_deepseek_gguf_descriptor *map_row =
-            yvex_model_register_deepseek_v4()->lowering.at(deepseek_map, i);
-        const yvex_runtime_tensor_binding *runtime_row;
-        if (!map_row) {
-            yvex_runtime_descriptor_close(descriptor);
-            return runtime_reject(
-                failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE,
-                NULL, i, 1ull, 0ull, err, YVEX_ERR_FORMAT,
-                "DeepSeek GGUF map row missing");
-        }
-        runtime_row = yvex_runtime_descriptor_find_name(
-            descriptor, map_row->emitted_name);
-        if (!runtime_row) {
-            descriptor->summary.missing_required_bindings++;
-            yvex_runtime_descriptor_close(descriptor);
-            return runtime_reject(
-                failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_MISSING_BINDING,
-                map_row->emitted_name, i, 1ull, 0ull, err,
-                YVEX_ERR_FORMAT,
-                "DeepSeek required tensor is missing from materialization");
-        }
-        if (runtime_row->role != map_row->role ||
-            runtime_row->scope != map_row->scope ||
-            runtime_row->layer_index != map_row->layer_index ||
-            runtime_row->predictor_index != map_row->predictor_index) {
-            yvex_runtime_descriptor_close(descriptor);
-            return runtime_reject(
-                failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE,
-                map_row->emitted_name, i, 1ull, 0ull, err,
-                YVEX_ERR_FORMAT,
-                "DeepSeek runtime binding coordinates differ from map");
-        }
-    }
-    for (i = 0ull; i < descriptor->count; ++i) {
-        const yvex_runtime_tensor_binding *row = &descriptor->bindings[i];
         if (row->scope == YVEX_TENSOR_SCOPE_GLOBAL)
             descriptor->summary.global_bindings++;
         else if (row->scope == YVEX_TENSOR_SCOPE_MAIN_LAYER)
@@ -641,13 +647,84 @@ int yvex_runtime_descriptor_build_deepseek(
     return YVEX_OK;
 }
 
+/* Purpose: restore an immutable runtime descriptor from authenticated runtime-binding facts.
+ * Inputs: canonical summary/rows and their imported committed materialization session.
+ * Effects: allocates descriptor rows and lookup state; reads no compiler or source objects.
+ * Failure: coordinate or identity disagreement releases all candidate state.
+ * Boundary: import links records to materialization; it does not execute a graph. */
+int yvex_runtime_descriptor_import(
+    yvex_runtime_descriptor **out, const yvex_runtime_descriptor_summary *summary,
+    const yvex_runtime_tensor_binding *bindings, unsigned long long binding_count,
+    const yvex_materialization_session *session, yvex_runtime_descriptor_failure *failure,
+    yvex_error *err) {
+    const yvex_materialization_summary *materialization;
+    yvex_runtime_descriptor *descriptor;
+    char expected_identity[YVEX_RUNTIME_DESCRIPTOR_IDENTITY_CAP];
+    unsigned long long i;
+
+    if (out) *out = NULL;
+    materialization = yvex_materialization_session_summary(session);
+    if (!out || !summary || !bindings || !session || !materialization ||
+        !materialization->committed || summary->status != YVEX_RUNTIME_DESCRIPTOR_STATUS_READY ||
+        binding_count != summary->tensor_count || binding_count != materialization->tensor_count ||
+        strcmp(summary->artifact_identity, materialization->artifact_identity) != 0 ||
+        strcmp(summary->materialization_plan_identity, materialization->plan_identity) != 0)
+        return runtime_reject(
+            failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_INVALID_ARGUMENT, NULL,
+            YVEX_MATERIALIZATION_NO_INDEX, summary ? summary->tensor_count : 0ull,
+            binding_count, err, YVEX_ERR_INVALID_ARG,
+            "runtime binding descriptor records are incomplete or stale");
+    descriptor = runtime_descriptor_alloc(binding_count, failure, err);
+    if (!descriptor) return yvex_error_code(err);
+    descriptor->summary = *summary;
+    yvex_core_text_copy(expected_identity, sizeof(expected_identity), summary->runtime_descriptor_identity);
+    for (i = 0ull; i < binding_count; ++i) {
+        const yvex_runtime_tensor_binding *record = &bindings[i];
+        const yvex_materialized_tensor_binding *source =
+            yvex_materialization_session_tensor_at(session, record->tensor_id);
+        yvex_runtime_tensor_binding *row = &descriptor->bindings[i];
+        if (!source || record->tensor_id != source->tensor_id ||
+            record->descriptor_index != source->descriptor_index ||
+            record->role != source->role || record->collection != source->collection ||
+            record->scope != source->scope || record->layer_index != source->layer_index ||
+            record->predictor_index != source->predictor_index ||
+            record->qtype != source->qtype || record->placement != source->placement ||
+            record->access_mode != source->access_mode) {
+            yvex_runtime_descriptor_close(descriptor);
+            return runtime_reject(
+                failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_MATERIALIZATION,
+                source ? source->name : NULL, i, 1ull, 0ull, err, YVEX_ERR_FORMAT,
+                "runtime binding descriptor row disagrees with materialization");
+        }
+        *row = *record;
+        row->binding = source;
+        if (!runtime_index_insert(descriptor, source->name, i)) {
+            yvex_runtime_descriptor_close(descriptor);
+            return runtime_reject(
+                failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_DUPLICATE_BINDING,
+                source->name, i, 1ull, 2ull, err, YVEX_ERR_FORMAT,
+                "runtime binding descriptor name is duplicated");
+        }
+    }
+    runtime_compute_identity(descriptor);
+    if (strcmp(descriptor->summary.runtime_descriptor_identity, expected_identity) != 0) {
+        yvex_runtime_descriptor_close(descriptor);
+        return runtime_reject(
+            failure, YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE, NULL,
+            YVEX_MATERIALIZATION_NO_INDEX, 1ull, 0ull, err, YVEX_ERR_FORMAT,
+            "runtime binding descriptor identity disagrees with its records");
+    }
+    *out = descriptor;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 /* Purpose: release owned descriptor close resources in dependency order.
  * Inputs: admission and materialization are borrowed.
  * Effects: mutates only descriptor-owned output.
  * Failure: publishes no partial descriptor on refusal.
  * Boundary: executes no graph or generation path. */
-void yvex_runtime_descriptor_close(yvex_runtime_descriptor *descriptor)
-{
+void yvex_runtime_descriptor_close(yvex_runtime_descriptor *descriptor) {
     if (!descriptor) return;
     free(descriptor->bindings);
     free(descriptor->name_index);
@@ -660,21 +737,18 @@ void yvex_runtime_descriptor_close(yvex_runtime_descriptor *descriptor)
  * Failure: publishes no partial descriptor on refusal.
  * Boundary: executes no graph or generation path. */
 const yvex_runtime_descriptor_summary *yvex_runtime_descriptor_summary_get(
-    const yvex_runtime_descriptor *descriptor)
-{
+    const yvex_runtime_descriptor *descriptor) {
     return descriptor ? &descriptor->summary : NULL;
 }
 
-/* Purpose: resolve one descriptor find name through the canonical index.
- * Inputs: admission and materialization are borrowed.
- * Effects: mutates only descriptor-owned output.
- * Failure: publishes no partial descriptor on refusal.
- * Boundary: executes no graph or generation path. */
-const yvex_runtime_tensor_binding *yvex_runtime_descriptor_find_name(
-    const yvex_runtime_descriptor *descriptor,
-    const char *name)
-{
-    return runtime_index_find(descriptor, name);
+/* Purpose: return one immutable runtime descriptor row at a checked canonical ordinal.
+ * Inputs: immutable descriptor and requested canonical index.
+ * Effects: returns a borrowed view and performs no mutation.
+ * Failure: null descriptor or out-of-range index returns null.
+ * Boundary: the row remains valid only for the descriptor lifetime. */
+const yvex_runtime_tensor_binding *yvex_runtime_descriptor_tensor_at(
+    const yvex_runtime_descriptor *descriptor, unsigned long long index) {
+    return descriptor && index < descriptor->count ? &descriptor->bindings[index] : NULL;
 }
 
 /* Purpose: resolve one descriptor find role through the canonical index.
@@ -687,8 +761,7 @@ const yvex_runtime_tensor_binding *yvex_runtime_descriptor_find_role(
     yvex_tensor_role role,
     yvex_tensor_scope scope,
     unsigned long long layer_index,
-    unsigned long long predictor_index)
-{
+    unsigned long long predictor_index) {
     unsigned long long i;
 
     if (!descriptor) return NULL;

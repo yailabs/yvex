@@ -11,6 +11,7 @@
  * Failure: formatting or I/O refusal cannot alter capability facts. */
 #include "src/cli/model_artifacts/private.h"
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -58,12 +59,6 @@ const char *fullmodel_family_from_arch(yvex_arch arch)
 
 static const char *const literal_pair_0[] = { "fullmodel: report",
     "status: fullmodel-report"};
-
-/* Purpose: Compute fullmodel name has for its CLI invariant (`fullmodel_name_has`). */
-static int fullmodel_name_has(const char *name, const char *needle)
-{
-    return name && needle && strstr(name, needle) != NULL;
-}
 
 /* Purpose: Compute fullmodel csv append for its CLI invariant (`fullmodel_csv_append`). */
 static void fullmodel_csv_append(char *buf,
@@ -205,6 +200,30 @@ static const descriptor_tensor_rule descriptor_tensor_rules[] = {
     DESCRIPTOR_RULE("unknown", YVEX_TENSOR_ROLE_UNKNOWN, NULL, NULL, 0, 0),
 };
 
+static const yvex_tensor_role materialize_typed_roles[] = {
+    YVEX_TENSOR_ROLE_TOKEN_EMBEDDING,
+    YVEX_TENSOR_ROLE_OUTPUT_NORM,
+    YVEX_TENSOR_ROLE_OUTPUT_HEAD,
+    YVEX_TENSOR_ROLE_ATTENTION_NORM,
+    YVEX_TENSOR_ROLE_ATTENTION_Q,
+    YVEX_TENSOR_ROLE_ATTENTION_K,
+    YVEX_TENSOR_ROLE_ATTENTION_V,
+    YVEX_TENSOR_ROLE_ATTENTION_OUT,
+    YVEX_TENSOR_ROLE_FFN_NORM,
+    YVEX_TENSOR_ROLE_FFN_GATE,
+    YVEX_TENSOR_ROLE_FFN_UP,
+    YVEX_TENSOR_ROLE_FFN_DOWN,
+};
+
+static const char *const materialize_name_fragments[] = {
+    "token_embd", "attn_norm", "ffn_norm", "attn_q", "attn_k", "attn_v",
+    "attn_output", "q_proj", "k_proj", "v_proj", "o_proj", "ffn_gate",
+    "ffn_up", "ffn_down", "gate_proj", "up_proj", "down_proj", "output_norm",
+    "lm_head",
+};
+
+static const char *const detectable_families[] = {"deepseek", "glm", "qwen"};
+
 #undef DESCRIPTOR_RULE
 
 #undef COLLECTION_RULE
@@ -215,8 +234,8 @@ static int tensor_collection_name_matches(const tensor_collection_rule *rule,
                                           const char *name)
 {
     int a = rule->name_a_must_equal ? strcmp(name, rule->name_a) == 0
-                                    : fullmodel_name_has(name, rule->name_a);
-    int b = rule->name_b && fullmodel_name_has(name, rule->name_b);
+                                    : model_download_name_contains(name, rule->name_a);
+    int b = rule->name_b && model_download_name_contains(name, rule->name_b);
 
     return rule->names_must_both_match ? a && b : a || b;
 }
@@ -233,8 +252,8 @@ static int descriptor_tensor_rule_matches(const descriptor_tensor_rule *rule,
     if (tensor->role == rule->typed_role) return 1;
     if (!rule->name_a) return 0;
     a = rule->name_a_must_equal ? strcmp(name, rule->name_a) == 0
-                                : fullmodel_name_has(name, rule->name_a);
-    b = rule->name_b && fullmodel_name_has(name, rule->name_b);
+                                : model_download_name_contains(name, rule->name_a);
+    b = rule->name_b && model_download_name_contains(name, rule->name_b);
     return rule->names_must_both_match ? a && b : a || b;
 }
 
@@ -434,14 +453,16 @@ const char *fullmodel_detect_family(const yvex_cli_fullmodel_options *options,
                                            const char *target_id)
 {
     const char *from_arch = fullmodel_family_from_arch(arch);
+    size_t index;
 
     if (from_arch && strcmp(from_arch, "unknown") != 0) return from_arch;
-    if (target_id && fullmodel_name_has(target_id, "deepseek")) return "deepseek";
-    if (options && options->model && fullmodel_name_has(options->model, "deepseek")) return "deepseek";
-    if (target_id && fullmodel_name_has(target_id, "glm")) return "glm";
-    if (options && options->model && fullmodel_name_has(options->model, "glm")) return "glm";
-    if (target_id && fullmodel_name_has(target_id, "qwen")) return "qwen";
-    if (options && options->model && fullmodel_name_has(options->model, "qwen")) return "qwen";
+    for (index = 0; index < sizeof(detectable_families) / sizeof(detectable_families[0]); ++index) {
+        const char *family = detectable_families[index];
+        if ((target_id && model_download_name_contains(target_id, family)) ||
+            (options && options->model && model_download_name_contains(options->model, family))) {
+            return family;
+        }
+    }
     return "unknown";
 }
 
@@ -609,46 +630,19 @@ int fullmodel_has_normalization_collection(const yvex_fullmodel_collections *col
 static int fullmodel_tensor_is_materialize_required(const yvex_tensor_info *tensor)
 {
     const char *name;
+    size_t index;
 
     if (!tensor) return 0;
     name = tensor->name ? tensor->name : "";
-    switch (tensor->role) {
-    case YVEX_TENSOR_ROLE_TOKEN_EMBEDDING:
-    case YVEX_TENSOR_ROLE_OUTPUT_NORM:
-    case YVEX_TENSOR_ROLE_OUTPUT_HEAD:
-    case YVEX_TENSOR_ROLE_ATTENTION_NORM:
-    case YVEX_TENSOR_ROLE_ATTENTION_Q:
-    case YVEX_TENSOR_ROLE_ATTENTION_K:
-    case YVEX_TENSOR_ROLE_ATTENTION_V:
-    case YVEX_TENSOR_ROLE_ATTENTION_OUT:
-    case YVEX_TENSOR_ROLE_FFN_NORM:
-    case YVEX_TENSOR_ROLE_FFN_GATE:
-    case YVEX_TENSOR_ROLE_FFN_UP:
-    case YVEX_TENSOR_ROLE_FFN_DOWN:
-        return 1;
-    default:
-        break;
+    for (index = 0; index < sizeof(materialize_typed_roles) / sizeof(materialize_typed_roles[0]); ++index) {
+        if (tensor->role == materialize_typed_roles[index]) return 1;
     }
-    return fullmodel_name_has(name, "token_embd") ||
-           fullmodel_name_has(name, "attn_norm") ||
-           fullmodel_name_has(name, "ffn_norm") ||
-           fullmodel_name_has(name, "attn_q") ||
-           fullmodel_name_has(name, "attn_k") ||
-           fullmodel_name_has(name, "attn_v") ||
-           fullmodel_name_has(name, "attn_output") ||
-           fullmodel_name_has(name, "q_proj") ||
-           fullmodel_name_has(name, "k_proj") ||
-           fullmodel_name_has(name, "v_proj") ||
-           fullmodel_name_has(name, "o_proj") ||
-           fullmodel_name_has(name, "ffn_gate") ||
-           fullmodel_name_has(name, "ffn_up") ||
-           fullmodel_name_has(name, "ffn_down") ||
-           fullmodel_name_has(name, "gate_proj") ||
-           fullmodel_name_has(name, "up_proj") ||
-           fullmodel_name_has(name, "down_proj") ||
-           fullmodel_name_has(name, "output_norm") ||
-           strcmp(name, "output.weight") == 0 ||
-           fullmodel_name_has(name, "lm_head");
+    if (strcmp(name, "output.weight") == 0) return 1;
+    for (index = 0; index < sizeof(materialize_name_fragments) /
+                                  sizeof(materialize_name_fragments[0]); ++index) {
+        if (model_download_name_contains(name, materialize_name_fragments[index])) return 1;
+    }
+    return 0;
 }
 
 /* Purpose: Compute fullmodel role present for its CLI invariant (`fullmodel_role_present`).
@@ -656,25 +650,77 @@ static int fullmodel_tensor_is_materialize_required(const yvex_tensor_info *tens
  * Effects: Mutates declared CLI state only.
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
+typedef struct {
+    const char *name;
+    size_t offset;
+} fullmodel_role_presence;
+
+#define ROLE_PRESENCE(name_, member_) {name_, offsetof(yvex_fullmodel_collections, member_)}
+
+static const fullmodel_role_presence fullmodel_role_presence_table[] = {
+    ROLE_PRESENCE("token-embedding", has_token_embedding),
+    ROLE_PRESENCE("attention-norm", has_attention_norm),
+    ROLE_PRESENCE("post-attention-norm", has_post_attention_norm),
+    ROLE_PRESENCE("attention-q-projection", has_attention_q),
+    ROLE_PRESENCE("attention-k-projection", has_attention_k),
+    ROLE_PRESENCE("attention-v-projection", has_attention_v),
+    ROLE_PRESENCE("attention-output-projection", has_attention_out),
+    ROLE_PRESENCE("mlp-gate", has_ffn_gate),
+    ROLE_PRESENCE("mlp-up", has_ffn_up),
+    ROLE_PRESENCE("mlp-down", has_ffn_down),
+    ROLE_PRESENCE("moe-router", has_moe_router),
+    ROLE_PRESENCE("moe-experts", has_moe_expert),
+    ROLE_PRESENCE("final-norm", has_output_norm),
+    ROLE_PRESENCE("output-head", has_output_head),
+    ROLE_PRESENCE("tokenizer-metadata", has_tokenizer_metadata),
+};
+
+static const char *const fullmodel_required_roles[] = {
+    "token-embedding", "attention-norm", "post-attention-norm",
+    "attention-q-projection", "attention-k-projection", "attention-v-projection",
+    "attention-output-projection", "mlp-gate", "mlp-up", "mlp-down", "final-norm",
+    "output-head", "tokenizer-metadata",
+};
+
+typedef enum {
+    FULLMODEL_COLLECTION_COUNT,
+    FULLMODEL_COLLECTION_ATTENTION,
+    FULLMODEL_COLLECTION_MLP,
+    FULLMODEL_COLLECTION_TOKENIZER,
+} fullmodel_collection_rule;
+
+typedef struct {
+    const char *name;
+    size_t offset;
+    fullmodel_collection_rule rule;
+} fullmodel_collection_presence;
+
+static const fullmodel_collection_presence fullmodel_collection_presence_table[] = {
+    {"embedding", offsetof(yvex_fullmodel_collections, embedding), FULLMODEL_COLLECTION_COUNT},
+    {"normalization", offsetof(yvex_fullmodel_collections, normalization), FULLMODEL_COLLECTION_COUNT},
+    {"attention", 0u, FULLMODEL_COLLECTION_ATTENTION},
+    {"mlp", 0u, FULLMODEL_COLLECTION_MLP},
+    {"moe", offsetof(yvex_fullmodel_collections, moe), FULLMODEL_COLLECTION_COUNT},
+    {"output", offsetof(yvex_fullmodel_collections, output), FULLMODEL_COLLECTION_COUNT},
+    {"tokenizer", 0u, FULLMODEL_COLLECTION_TOKENIZER},
+    {"tokenizer-runtime-input", 0u, FULLMODEL_COLLECTION_TOKENIZER},
+};
+
+#undef ROLE_PRESENCE
+
+/* Purpose: resolve one required-role flag through the canonical role-presence table. */
 static int fullmodel_role_present(const yvex_fullmodel_collections *collections,
                                   const char *role)
 {
+    size_t index;
+
     if (!collections || !role) return 0;
-    if (strcmp(role, "token-embedding") == 0) return collections->has_token_embedding;
-    if (strcmp(role, "attention-norm") == 0) return collections->has_attention_norm;
-    if (strcmp(role, "post-attention-norm") == 0) return collections->has_post_attention_norm;
-    if (strcmp(role, "attention-q-projection") == 0) return collections->has_attention_q;
-    if (strcmp(role, "attention-k-projection") == 0) return collections->has_attention_k;
-    if (strcmp(role, "attention-v-projection") == 0) return collections->has_attention_v;
-    if (strcmp(role, "attention-output-projection") == 0) return collections->has_attention_out;
-    if (strcmp(role, "mlp-gate") == 0) return collections->has_ffn_gate;
-    if (strcmp(role, "mlp-up") == 0) return collections->has_ffn_up;
-    if (strcmp(role, "mlp-down") == 0) return collections->has_ffn_down;
-    if (strcmp(role, "moe-router") == 0) return collections->has_moe_router;
-    if (strcmp(role, "moe-experts") == 0) return collections->has_moe_expert;
-    if (strcmp(role, "final-norm") == 0) return collections->has_output_norm;
-    if (strcmp(role, "output-head") == 0) return collections->has_output_head;
-    if (strcmp(role, "tokenizer-metadata") == 0) return collections->has_tokenizer_metadata;
+    for (index = 0; index < sizeof(fullmodel_role_presence_table) /
+                                  sizeof(fullmodel_role_presence_table[0]); ++index) {
+        if (strcmp(role, fullmodel_role_presence_table[index].name) == 0)
+            return *(const int *)((const unsigned char *)collections +
+                                  fullmodel_role_presence_table[index].offset);
+    }
     return 0;
 }
 
@@ -683,16 +729,20 @@ static int fullmodel_role_present(const yvex_fullmodel_collections *collections,
 static int fullmodel_collection_present_by_name(const yvex_fullmodel_collections *collections,
                                                 const char *collection)
 {
+    size_t index;
+
     if (!collections || !collection) return 0;
-    if (strcmp(collection, "embedding") == 0) return collections->embedding > 0ull;
-    if (strcmp(collection, "normalization") == 0) return collections->normalization > 0ull;
-    if (strcmp(collection, "attention") == 0) return fullmodel_has_attention_collection(collections);
-    if (strcmp(collection, "mlp") == 0) return fullmodel_has_mlp_collection(collections);
-    if (strcmp(collection, "moe") == 0) return collections->moe > 0ull;
-    if (strcmp(collection, "output") == 0) return collections->output > 0ull;
-    if (strcmp(collection, "tokenizer") == 0 ||
-        strcmp(collection, "tokenizer-runtime-input") == 0) {
-        return collections->has_tokenizer_metadata;
+    for (index = 0; index < sizeof(fullmodel_collection_presence_table) /
+                                  sizeof(fullmodel_collection_presence_table[0]); ++index) {
+        const fullmodel_collection_presence *spec = &fullmodel_collection_presence_table[index];
+        if (strcmp(collection, spec->name) != 0) continue;
+        if (spec->rule == FULLMODEL_COLLECTION_ATTENTION)
+            return fullmodel_has_attention_collection(collections);
+        if (spec->rule == FULLMODEL_COLLECTION_MLP)
+            return fullmodel_has_mlp_collection(collections);
+        if (spec->rule == FULLMODEL_COLLECTION_TOKENIZER)
+            return collections->has_tokenizer_metadata;
+        return *(const unsigned long long *)((const unsigned char *)collections + spec->offset) > 0ull;
     }
     return 0;
 }
@@ -707,27 +757,15 @@ static void fullmodel_materialize_missing_roles(const yvex_cli_fullmodel_options
                                                 char *out,
                                                 size_t out_cap)
 {
+    size_t index;
+
     if (!out || out_cap == 0u) return;
     out[0] = '\0';
-    if (!fullmodel_role_present(collections, "token-embedding")) fullmodel_csv_append(out, out_cap, "token-embedding");
-    if (!fullmodel_role_present(collections, "attention-norm")) fullmodel_csv_append(out, out_cap, "attention-norm");
-    if (!fullmodel_role_present(collections, "post-attention-norm")) fullmodel_csv_append(out, out_cap,
-        "post-attention-norm");
-    if (!fullmodel_role_present(collections, "attention-q-projection")) fullmodel_csv_append(out, out_cap,
-        "attention-q-projection");
-    if (!fullmodel_role_present(collections, "attention-k-projection")) fullmodel_csv_append(out, out_cap,
-        "attention-k-projection");
-    if (!fullmodel_role_present(collections, "attention-v-projection")) fullmodel_csv_append(out, out_cap,
-        "attention-v-projection");
-    if (!fullmodel_role_present(collections, "attention-output-projection")) fullmodel_csv_append(out,
-        out_cap, "attention-output-projection");
-    if (!fullmodel_role_present(collections, "mlp-gate")) fullmodel_csv_append(out, out_cap, "mlp-gate");
-    if (!fullmodel_role_present(collections, "mlp-up")) fullmodel_csv_append(out, out_cap, "mlp-up");
-    if (!fullmodel_role_present(collections, "mlp-down")) fullmodel_csv_append(out, out_cap, "mlp-down");
-    if (!fullmodel_role_present(collections, "final-norm")) fullmodel_csv_append(out, out_cap, "final-norm");
-    if (!fullmodel_role_present(collections, "output-head")) fullmodel_csv_append(out, out_cap, "output-head");
-    if (!fullmodel_role_present(collections, "tokenizer-metadata")) fullmodel_csv_append(out, out_cap,
-        "tokenizer-metadata");
+    for (index = 0; index < sizeof(fullmodel_required_roles) /
+                                  sizeof(fullmodel_required_roles[0]); ++index) {
+        if (!fullmodel_role_present(collections, fullmodel_required_roles[index]))
+            fullmodel_csv_append(out, out_cap, fullmodel_required_roles[index]);
+    }
     if (options && options->require_role &&
         !fullmodel_role_present(collections, options->require_role)) {
         fullmodel_csv_append(out, out_cap, options->require_role);
@@ -851,6 +889,31 @@ static int fullmodel_allocate_required_tensors(const yvex_cli_fullmodel_options 
     return rc;
 }
 
+static const fullmodel_materialize_report materialize_report_defaults = {
+    .status = "fullmodel-materialize-fail",
+    .tensor_inventory_status = "pass",
+    .unsupported_required_roles =
+        "runtime-family-adapter,real-transformer-prefill,real-attention-backed-KV,real-DeepSeek-decode,"
+        "real-output-head-logits,real-vocabulary-sampling",
+    .placement_plan_status = "pass",
+    .memory_budget_status = "pass",
+    .backend_preflight_status = "pass",
+    .materialization_mode = "controlled-fullmodel-proof",
+    .full_model_materialization = "controlled-tiny-proof",
+    .full_model_materialization_proof = "fail",
+    .phase = "failed",
+    .failed_phase = "none",
+    .failed_reason = "none",
+    .cleanup_attempted = "true",
+    .cleanup_status = "pass",
+    .cleanup_idempotent = "true",
+    .owned_state_released = "true",
+    .partial_materialization = "false",
+    .runtime_blockers =
+        "runtime family adapter not implemented; real transformer prefill unsupported; decode/logits/"
+        "sampling/generation remain unsupported-full-model",
+};
+
 /* Seed the transactional materialization report before any faultable phase. */
 /* Purpose: Construct the owned fullmodel materialize report init state (`fullmodel_materialize_report_init`).
  * Inputs: Borrowed typed facts.
@@ -869,35 +932,15 @@ static void fullmodel_materialize_report_init(fullmodel_materialize_report *repo
                                               int selected_target,
                                               int role_complete)
 {
-    static const char *unsupported =
-        "runtime-family-adapter,real-transformer-prefill,real-attention-backed-KV,real-DeepSeek-decode,"
-            "real-output-head-logits,real-vocabulary-sampling";
-
+    *report = materialize_report_defaults;
     report->options = options;
-    report->status = "fullmodel-materialize-fail";
     report->model_resolved_path = ref && ref->path ? ref->path : "";
     report->target_id = target_id;
     report->target_class = target_class;
     report->artifact_identity_status = fullmodel_identity_status(ref, artifact_bytes);
-    report->tensor_inventory_status = "pass";
     report->required_role_coverage = selected_target ? "partial" :
                                      role_complete ? "complete" : "partial";
     report->missing_required_roles = missing_roles;
-    report->unsupported_required_roles = unsupported;
-    report->placement_plan_status = "pass";
-    report->memory_budget_status = "pass";
-    report->backend_preflight_status = "pass";
-    report->materialization_mode = "controlled-fullmodel-proof";
-    report->full_model_materialization = "controlled-tiny-proof";
-    report->full_model_materialization_proof = "fail";
-    report->phase = "failed";
-    report->failed_phase = "none";
-    report->failed_reason = "none";
-    report->cleanup_attempted = "true";
-    report->cleanup_status = "pass";
-    report->cleanup_idempotent = "true";
-    report->owned_state_released = "true";
-    report->partial_materialization = "false";
     report->required_tensor_count = required_count;
     report->required_tensor_bytes = required_bytes;
     report->peak_planned_bytes = required_bytes;
@@ -906,9 +949,6 @@ static void fullmodel_materialize_report_init(fullmodel_materialize_report *repo
     report->residency_plan = strcmp(options->backend, "cuda") == 0
                                  ? "cuda-resident-controlled-proof"
                                  : "cpu-resident-controlled-proof";
-    report->runtime_blockers =
-        "runtime family adapter not implemented; real transformer prefill unsupported; decode/logits/"
-            "sampling/generation remain unsupported-full-model";
 }
 
 /* Apply the fault seam for phases completed before role admission. */
@@ -965,7 +1005,6 @@ static int fullmodel_materialize_command_run(const yvex_cli_fullmodel_options *o
     int rc;
 
     (void)total_tensor_bytes;
-    memset(&report, 0, sizeof(report));
     memset(materialize_missing_roles, 0, sizeof(materialize_missing_roles));
     fullmodel_materialize_missing_roles(options,
                                         collections,
@@ -1161,6 +1200,83 @@ typedef struct {
     unsigned int largest_count;
     int selected_target;
 } fullmodel_surface_view;
+
+#define SURFACE_TEXT(key_, type_, member_, fallback_) \
+    {key_, YVEX_CLI_FIELD_TEXT, offsetof(type_, member_), fallback_}
+#define SURFACE_U64(key_, type_, member_) \
+    {key_, YVEX_CLI_FIELD_U64, offsetof(type_, member_), NULL}
+
+static const yvex_cli_field_spec surface_identity_fields[] = {
+    SURFACE_TEXT("target_id", fullmodel_surface_view, target_id, "unknown"),
+    SURFACE_TEXT("target_class", fullmodel_surface_view, target_class, "unknown"),
+    SURFACE_TEXT("source_artifact_class", fullmodel_surface_view, source_artifact_class, "unknown"),
+    SURFACE_TEXT("target_artifact_class", fullmodel_surface_view, target_artifact_class, "unknown"),
+};
+
+static const yvex_cli_field_spec surface_model_fields[] = {
+    SURFACE_TEXT("model_class", fullmodel_surface_view, model_class, "unknown"),
+    SURFACE_TEXT("fullmodel_inventory", fullmodel_surface_view, inventory_status, "unknown"),
+};
+
+static const yvex_cli_field_spec surface_dtype_fields[] = {
+    SURFACE_TEXT("qtype_summary", fullmodel_surface_view, dtype_summary, "none"),
+    SURFACE_TEXT("dtype_summary", fullmodel_surface_view, dtype_summary, "none"),
+};
+
+static const yvex_cli_field_spec surface_memory_fields[] = {
+    SURFACE_U64("total_tensor_bytes", fullmodel_surface_view, total_tensor_bytes),
+    SURFACE_U64("estimated_cpu_resident_bytes", fullmodel_surface_view, total_tensor_bytes),
+    SURFACE_U64("estimated_cuda_resident_bytes", fullmodel_surface_view, total_tensor_bytes),
+};
+
+static const yvex_cli_field_spec surface_placement_fields[] = {
+    SURFACE_TEXT("backend_placement_status", fullmodel_surface_view, backend_placement_status, "unknown"),
+    SURFACE_TEXT("cpu_placement", fullmodel_surface_view, cpu_placement, "unknown"),
+    SURFACE_TEXT("cuda_placement", fullmodel_surface_view, cuda_placement, "unknown"),
+};
+
+static const yvex_cli_field_spec surface_attention_collection_fields[] = {
+    SURFACE_U64("embedding_tensors", yvex_fullmodel_collections, embedding),
+    SURFACE_U64("normalization_tensors", yvex_fullmodel_collections, normalization),
+    SURFACE_U64("attention_tensors", yvex_fullmodel_collections, attention),
+};
+
+static const yvex_cli_field_spec surface_remaining_collection_fields[] = {
+    SURFACE_U64("mlp_tensors", yvex_fullmodel_collections, mlp),
+    SURFACE_U64("moe_tensors", yvex_fullmodel_collections, moe),
+    SURFACE_U64("output_tensors", yvex_fullmodel_collections, output),
+    SURFACE_U64("tokenizer_tensors", yvex_fullmodel_collections, tokenizer),
+    SURFACE_U64("unknown_tensors", yvex_fullmodel_collections, unknown),
+};
+
+static const yvex_cli_field_spec surface_role_fields[] = {
+    SURFACE_TEXT("required_role_coverage", fullmodel_surface_view, role_coverage, "unknown"),
+    SURFACE_TEXT("missing_required_roles", fullmodel_surface_view, missing_roles, "unknown"),
+    SURFACE_TEXT("unsupported_required_roles", fullmodel_surface_view, unsupported_roles, "unknown"),
+};
+
+static const char *const surface_inventory_lines[] = {
+    "tensor_inventory_status: pass", "metadata_status: pass",
+};
+
+static const char *const surface_memory_boundary_lines[] = {
+    "estimated_kv_bytes: planned", "estimated_scratch_bytes: planned",
+    "estimated_total_runtime_bytes: unknown",
+};
+
+static const char *const surface_collection_boundary_lines[] = {
+    "collection_supported: partial", "runtime_consumer: unsupported",
+};
+
+static const char *const surface_runtime_blocker_lines[] = {
+    "runtime_blockers: full tensor set missing; attention projection tensors may be missing; MLP/MoE tensors "
+        "may be missing; output head may be missing; real transformer prefill unsupported; real DeepSeek decode "
+        "unsupported; real output-head logits unsupported; real vocabulary sampling unsupported; full model "
+        "materialization not implemented",
+};
+
+#undef SURFACE_U64
+#undef SURFACE_TEXT
 
 typedef struct {
     yvex_model_ref ref;
@@ -1452,67 +1568,56 @@ static int fullmodel_surface_render_audit(fullmodel_surface_view *view)
 {
     const yvex_cli_fullmodel_options *options = view->options;
     const yvex_fullmodel_collections *collections = view->collections;
+    int cuda_available = yvex_backend_cuda_context_available();
 
     yvex_cli_out_lines(stdout, literal_pair_0, sizeof(literal_pair_0) / sizeof(literal_pair_0[0]));
     yvex_cli_out_writef(stdout, "model: %s\n", options->model);
-    yvex_cli_out_writef(stdout, "model_resolved_path: %s\n",
-                        view->ref->path ? view->ref->path : "");
-    yvex_cli_out_writef(stdout, "target_id: %s\n", view->target_id);
-    yvex_cli_out_writef(stdout, "target_class: %s\n", view->target_class);
-    yvex_cli_out_writef(stdout, "source_artifact_class: %s\n", view->source_artifact_class);
-    yvex_cli_out_writef(stdout, "target_artifact_class: %s\n", view->target_artifact_class);
+    yvex_cli_out_writef(stdout, "model_resolved_path: %s\n", view->ref->path ? view->ref->path : "");
+    yvex_cli_out_fields(stdout, view, surface_identity_fields,
+                        sizeof(surface_identity_fields) / sizeof(surface_identity_fields[0]));
     yvex_cli_out_writef(stdout, "artifact_exists: true\n");
     yvex_cli_out_writef(stdout, "artifact_bytes: %llu\n", view->artifact_bytes);
     yvex_cli_out_writef(stdout, "artifact_identity_status: %s\n",
                         fullmodel_identity_status(view->ref, view->artifact_bytes));
     yvex_cli_out_writef(stdout, "tensor_count: %llu\n", view->tensor_count);
-    yvex_cli_out_writef(stdout, "tensor_inventory_status: pass\nmetadata_status: pass\n");
+    yvex_cli_out_lines(stdout, surface_inventory_lines,
+                       sizeof(surface_inventory_lines) / sizeof(surface_inventory_lines[0]));
     yvex_cli_out_writef(stdout, "architecture: %s\n", yvex_arch_name(view->arch));
     yvex_cli_out_writef(stdout, "family: %s\n", fullmodel_family_from_arch(view->arch));
-    yvex_cli_out_writef(stdout, "model_class: %s\n", view->model_class);
-    yvex_cli_out_writef(stdout, "fullmodel_inventory: %s\n", view->inventory_status);
+    yvex_cli_out_fields(stdout, view, surface_model_fields,
+                        sizeof(surface_model_fields) / sizeof(surface_model_fields[0]));
     yvex_cli_out_writef(stdout, "full_runtime_model: false\n");
-    yvex_cli_out_writef(stdout, "qtype_summary: %s\ndtype_summary: %s\n",
-                        view->dtype_summary, view->dtype_summary);
-    yvex_cli_out_writef(stdout, "total_tensor_bytes: %llu\n", view->total_tensor_bytes);
-    yvex_cli_out_writef(stdout, "estimated_cpu_resident_bytes: %llu\n",
-                        view->total_tensor_bytes);
-    yvex_cli_out_writef(stdout, "estimated_cuda_resident_bytes: %llu\n",
-                        view->total_tensor_bytes);
-    yvex_cli_out_writef(stdout,
-        "estimated_kv_bytes: planned\nestimated_scratch_bytes: planned\nestimated_total_runtime_bytes: unknown\n");
+    yvex_cli_out_fields(stdout, view, surface_dtype_fields,
+                        sizeof(surface_dtype_fields) / sizeof(surface_dtype_fields[0]));
+    yvex_cli_out_fields(stdout, view, surface_memory_fields,
+                        sizeof(surface_memory_fields) / sizeof(surface_memory_fields[0]));
+    yvex_cli_out_lines(stdout, surface_memory_boundary_lines,
+                       sizeof(surface_memory_boundary_lines) / sizeof(surface_memory_boundary_lines[0]));
     yvex_cli_out_writef(stdout, "backend: %s\n", options->backend);
-    yvex_cli_out_writef(stdout, "backend_placement_status: %s\n",
-                        view->backend_placement_status);
-    yvex_cli_out_writef(stdout, "cpu_placement: %s\ncuda_placement: %s\n",
-                        view->cpu_placement, view->cuda_placement);
-    yvex_cli_out_writef(stdout, "cuda_context_available: %s\n",
-                        yvex_backend_cuda_context_available() ? "true" : "false");
+    yvex_cli_out_fields(stdout, view, surface_placement_fields,
+                        sizeof(surface_placement_fields) / sizeof(surface_placement_fields[0]));
+    yvex_cli_out_writef(stdout, "cuda_context_available: %s\n", cuda_available ? "true" : "false");
     yvex_cli_out_writef(stdout, "cuda_memory_status: %s\n",
-        yvex_backend_cuda_context_available() ? "context-available-no-allocation" : "unavailable");
+                        cuda_available ? "context-available-no-allocation" : "unavailable");
     yvex_cli_out_writef(stdout, "residency_plan: report-only-no-allocation\n");
     yvex_cli_out_writef(stdout, "tensor_collections_status: %s\n", view->role_coverage);
     yvex_cli_out_writef(stdout, "collection_detected: %s\n",
                         view->tensor_count ? "yes" : "no");
-    yvex_cli_out_writef(stdout,
-                        "collection_supported: partial\nruntime_consumer: unsupported\n");
-    yvex_cli_out_writef(stdout, "embedding_tensors: %llu\n", collections->embedding);
-    yvex_cli_out_writef(stdout, "normalization_tensors: %llu\n", collections->normalization);
-    yvex_cli_out_writef(stdout, "attention_tensors: %llu\n", collections->attention);
+    yvex_cli_out_lines(stdout, surface_collection_boundary_lines,
+                       sizeof(surface_collection_boundary_lines) /
+                           sizeof(surface_collection_boundary_lines[0]));
+    yvex_cli_out_fields(stdout, collections, surface_attention_collection_fields,
+                        sizeof(surface_attention_collection_fields) /
+                            sizeof(surface_attention_collection_fields[0]));
     yvex_cli_out_writef(stdout, "kv_cache_requirements: planned\n");
-    yvex_cli_out_writef(stdout, "mlp_tensors: %llu\n", collections->mlp);
-    yvex_cli_out_writef(stdout, "moe_tensors: %llu\n", collections->moe);
-    yvex_cli_out_writef(stdout, "output_tensors: %llu\n", collections->output);
-    yvex_cli_out_writef(stdout, "tokenizer_tensors: %llu\n", collections->tokenizer);
-    yvex_cli_out_writef(stdout, "unknown_tensors: %llu\n", collections->unknown);
-    yvex_cli_out_writef(stdout, "required_role_coverage: %s\n", view->role_coverage);
-    yvex_cli_out_writef(stdout, "missing_required_roles: %s\n", view->missing_roles);
-    yvex_cli_out_writef(stdout, "unsupported_required_roles: %s\n", view->unsupported_roles);
-    yvex_cli_out_writef(stdout,
-        "runtime_blockers: full tensor set missing; attention projection tensors may be missing; MLP/MoE "
-            "tensors may be missing; output head may be missing; real transformer prefill unsupported; real "
-            "DeepSeek decode unsupported; real output-head logits unsupported; real vocabulary sampling "
-            "unsupported; full model materialization not implemented\n");
+    yvex_cli_out_fields(stdout, collections, surface_remaining_collection_fields,
+                        sizeof(surface_remaining_collection_fields) /
+                            sizeof(surface_remaining_collection_fields[0]));
+    yvex_cli_out_fields(stdout, view, surface_role_fields,
+                        sizeof(surface_role_fields) / sizeof(surface_role_fields[0]));
+    yvex_cli_out_lines(stdout, surface_runtime_blocker_lines,
+                       sizeof(surface_runtime_blocker_lines) /
+                           sizeof(surface_runtime_blocker_lines[0]));
     print_fullmodel_common_boundaries();
     yvex_cli_out_writef(stdout, "largest_tensor_report_limit: %llu\n", options->limit_tensors);
     fullmodel_print_largest(view->largest, view->largest_count);

@@ -11,6 +11,7 @@
  * Failure: invalid or ambiguous grammar leaves the request uncommitted. */
 #include "src/cli/input/private.h"
 
+#include <yvex/internal/core.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -19,18 +20,6 @@
 static int mt_starts_option(const char *s)
 {
     return s && s[0] == '-';
-}
-
-/* Purpose: Compute mt copy for its CLI invariant (`mt_copy`). */
-static void mt_copy(char *out, size_t cap, const char *value)
-{
-    if (!out || cap == 0u) {
-        return;
-    }
-    if (!value) {
-        value = "";
-    }
-    (void)snprintf(out, cap, "%s", value);
 }
 
 /* Purpose: Parse mt parse error into typed CLI state (`mt_parse_error`).
@@ -190,14 +179,14 @@ int yvex_model_target_args_parse(int argc,
     }
     if (mt_positional_target_kind(kind)) {
         if (argc > 3 && !mt_starts_option(argv[3])) {
-            mt_copy(out->request.target_id, sizeof(out->request.target_id), argv[3]);
+            yvex_core_text_copy(out->request.target_id, sizeof(out->request.target_id), argv[3]);
             i = 4;
         } else {
             i = 3;
         }
     } else if (kind == YVEX_MODEL_TARGET_COMMAND_QUANT_POLICY &&
                argc > 3 && !mt_starts_option(argv[3])) {
-        mt_copy(out->request.target_id, sizeof(out->request.target_id), argv[3]);
+        yvex_core_text_copy(out->request.target_id, sizeof(out->request.target_id), argv[3]);
         i = 4;
     } else {
         i = 3;
@@ -227,19 +216,19 @@ int yvex_model_target_args_parse(int argc,
             if (i + 1 >= argc || !argv[i + 1][0]) {
                 mt_parse_error(out, "model-target %s: --release requires VERSION", action);
             } else {
-                mt_copy(out->request.release, sizeof(out->request.release), argv[++i]);
+                yvex_core_text_copy(out->request.release, sizeof(out->request.release), argv[++i]);
             }
         } else if (strcmp(word, "--target") == 0) {
             if (i + 1 >= argc || !argv[i + 1][0]) {
                 mt_parse_error(out, "model-target %s: --target requires TARGET", action);
             } else {
-                mt_copy(out->request.target_id, sizeof(out->request.target_id), argv[++i]);
+                yvex_core_text_copy(out->request.target_id, sizeof(out->request.target_id), argv[++i]);
             }
         } else if (strcmp(word, "--candidate") == 0) {
             if (i + 1 >= argc || !argv[i + 1][0]) {
                 mt_parse_error(out, "model-target decision: --candidate requires TARGET");
             } else {
-                mt_copy(out->request.candidate_kind,
+                yvex_core_text_copy(out->request.candidate_kind,
                         sizeof(out->request.candidate_kind),
                         argv[++i]);
             }
@@ -247,13 +236,13 @@ int yvex_model_target_args_parse(int argc,
             if (i + 1 >= argc || !argv[i + 1][0]) {
                 mt_parse_error(out, "model-target %s: models-root requires DIR", action);
             } else {
-                mt_copy(out->request.models_root, sizeof(out->request.models_root), argv[++i]);
+                yvex_core_text_copy(out->request.models_root, sizeof(out->request.models_root), argv[++i]);
             }
         } else if (strcmp(word, "--source") == 0) {
             if (i + 1 >= argc || !argv[i + 1][0]) {
                 mt_parse_error(out, "model-target %s: source requires DIR", action);
             } else {
-                mt_copy(out->request.source_path, sizeof(out->request.source_path), argv[++i]);
+                yvex_core_text_copy(out->request.source_path, sizeof(out->request.source_path), argv[++i]);
             }
         } else if (strcmp(word, "--role") == 0) {
             if (i + 1 >= argc || !argv[i + 1][0]) {
@@ -265,21 +254,21 @@ int yvex_model_target_args_parse(int argc,
                                action, argv[i + 1]);
                 i++;
             } else {
-                mt_copy(out->request.role, sizeof(out->request.role), argv[++i]);
+                yvex_core_text_copy(out->request.role, sizeof(out->request.role), argv[++i]);
             }
         } else if (strcmp(word, "--gate") == 0) {
             if (i + 1 >= argc || !argv[i + 1][0]) {
                 mt_parse_error(out, "model-target %s: gate requires v0.1.0", action);
             } else {
-                mt_copy(out->request.gate, sizeof(out->request.gate), argv[++i]);
+                yvex_core_text_copy(out->request.gate, sizeof(out->request.gate), argv[++i]);
             }
         } else if (strcmp(word, "--check-output-contract") == 0) {
             if (i + 1 >= argc || !argv[i + 1][0]) {
-                mt_copy(out->request.output_contract,
+                yvex_core_text_copy(out->request.output_contract,
                         sizeof(out->request.output_contract),
                         "missing");
             } else {
-                mt_copy(out->request.output_contract,
+                yvex_core_text_copy(out->request.output_contract,
                         sizeof(out->request.output_contract),
                         argv[++i]);
             }

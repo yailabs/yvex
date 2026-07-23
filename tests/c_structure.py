@@ -383,15 +383,21 @@ def contract_fields(text: str) -> dict[str, str]:
     for raw in text.splitlines():
         line = re.sub(r"^\s*(?:/\*+|\*+|//+)\s?", "", raw)
         line = re.sub(r"\s*\*/\s*$", "", line).strip()
-        match = re.match(
-            r"(Owner|Owns|Does not own|Invariants|Boundary|Purpose|Inputs|Effects|Failure)"
-            r"\s*:\s*(.*)$",
-            line,
+        matches = list(
+            re.finditer(
+                r"(Owner|Owns|Does not own|Invariants|Boundary|Purpose|Inputs|Effects|Failure)"
+                r"\s*:\s*",
+                line,
+            )
         )
-        if match and match.group(1) in names:
+        if matches:
             publish()
-            current = match.group(1)
-            values = [match.group(2).strip()]
+            for index, match in enumerate(matches):
+                current = match.group(1)
+                end = matches[index + 1].start() if index + 1 < len(matches) else len(line)
+                values = [line[match.end() : end].strip()]
+                if index + 1 < len(matches):
+                    publish()
         elif current is not None and line:
             values.append(line)
     publish()
@@ -800,6 +806,28 @@ class Audit:
                 foreign.append(symbol)
         return dict(definitions), sorted(set(foreign))
 
+    def nm_undefined_consumers(self) -> dict[str, list[str]]:
+        """Return production object consumers after preprocessing and macro expansion."""
+        archive = ROOT / self.policy["archive"]["path"]
+        if not archive.is_file():
+            return {}
+        result = subprocess.run(
+            ["nm", "-A", "-u", str(archive)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        consumers: dict[str, set[str]] = defaultdict(set)
+        namespace = self.policy["symbols"]["namespace"]
+        for line in result.stdout.splitlines():
+            match = re.match(r"^(.*?):\s+U\s+(\S+)$", line)
+            if not match:
+                continue
+            owner, symbol = match.groups()
+            if symbol.startswith(namespace):
+                consumers[symbol].add(owner)
+        return {symbol: sorted(owners) for symbol, owners in consumers.items()}
+
     def public_declarations(self) -> set[str]:
         return {
             symbol
@@ -1081,7 +1109,7 @@ class Audit:
 
         errors.extend(self.make_layout_violations())
         errors.extend(self.archive_violations())
-        errors.extend(self.public_header_compile_violations())
+        errors.extend(self.header_compile_violations())
         errors.extend(self.stale_path_violations())
         return errors
 
@@ -1141,7 +1169,7 @@ class Audit:
             errors.append("source-relative object collision")
         return errors
 
-    def public_header_compile_violations(self) -> list[str]:
+    def header_compile_violations(self) -> list[str]:
         errors: list[str] = []
         compilers = (
             ("C", shlex.split(os.environ.get("CC", "cc")), "c11", "c"),
@@ -1156,11 +1184,16 @@ class Audit:
             "-",
         ]
         for name in sorted(self.headers):
-            if self.header_tier(name) != "public":
-                continue
+            tier = self.header_tier(name)
             include = name.removeprefix("include/")
-            source = f"#include <{include}>\n"
+            source = (
+                f"#include <{include}>\n"
+                if name.startswith("include/")
+                else f'#include "{name}"\n'
+            )
             for language, compiler, standard, input_kind in compilers:
+                if language == "C++" and tier != "public":
+                    continue
                 flags = [f"-std={standard}", "-x", input_kind, *common_flags]
                 try:
                     result = subprocess.run(
@@ -1173,11 +1206,11 @@ class Audit:
                         check=False,
                     )
                 except OSError as failure:
-                    return [f"public-header {language} compiler cannot start: {failure}"]
+                    return [f"header {language} compiler cannot start: {failure}"]
                 if result.returncode:
                     diagnostic = " ".join(result.stderr.strip().splitlines()[:3])
                     errors.append(
-                        f"public header is not {language} self-contained: {name}: {diagnostic}"
+                        f"{tier} header is not {language} self-contained: {name}: {diagnostic}"
                     )
         return errors
 
@@ -1349,8 +1382,10 @@ class Audit:
         for name, unit in consumer_units.items():
             for symbol in set(re.findall(r"\byvex_[A-Za-z0-9_]+\b", unit.masked)):
                 symbol_consumers[symbol].append(name)
+        for symbol, owners in self.nm_undefined_consumers().items():
+            symbol_consumers[symbol].extend(owners)
         for symbol in sorted(nonpublic & private):
-            consumers = symbol_consumers.get(symbol, [])
+            consumers = sorted(set(symbol_consumers.get(symbol, [])))
             if len(consumers) < 2:
                 errors.append(f"non-public global lacks cross-TU consumer: {symbol}: {consumers}")
 

@@ -2,7 +2,6 @@
 set -eu
 
 cd "$(dirname "$0")/.."
-python3 tests/c_structure.py check architecture
 
 if rg -n '#include[[:space:]]+"src/graph/private\.h"' src/cli; then
     echo "architecture: CLI depends on graph-private ABI" >&2
@@ -17,6 +16,270 @@ printf '%s\n' '#include <yvex/internal/graph.h>' 'int main(void) { return 0; }' 
 fail() {
     printf 'architecture: %s\n' "$1" >&2
     exit 1
+}
+
+family_compare_pattern='(strcmp|strncmp|strcasecmp|strncasecmp|strstr|strcasestr)'
+family_name_pattern='(deepseek|qwen|gemma|llama|kimi|mamba)'
+family_branch_pattern="(${family_compare_pattern}[^;]*${family_name_pattern}|${family_name_pattern}[^;]*${family_compare_pattern})"
+runtime_planning_include_pattern='#include[[:space:]]+[<"]yvex/internal/(compilation|source|source_payload|gguf_writer)[.]h[>"]'
+runtime_planning_call_pattern='yvex_(source_payload_[A-Za-z0-9_]*|transform_[A-Za-z0-9_]*|quant_plan_[A-Za-z0-9_]*|gguf_writer_[A-Za-z0-9_]*)[[:space:]]*\('
+runtime_planning_symbol_pattern='^yvex_(source_payload_[A-Za-z0-9_]*|transform_[A-Za-z0-9_]*|quant_plan_[A-Za-z0-9_]*|gguf_writer_[A-Za-z0-9_]*)$'
+fallback_ptx_pattern='(fallback_ptx|ptx_fallback|"[[:space:]]*[.]version[[:space:]]+[0-9])'
+cuda_cpu_fallback_pattern='(cpu_chunk_execute|rolling_state_step_cpu|yvex_backend_open_cpu(_impl)?|yvex_quant_cpu_[A-Za-z0-9_]*|yvex_attention_[A-Za-z0-9_]*_cpu)[[:space:]]*\('
+deprecated_digest_hash_pattern='yvex_sha256_[A-Za-z0-9_]*[[:space:]]*\([^;]*\boutput_digest\b'
+backend_digest_alias_pattern='\boutput_digest\b[^;]*\b(cpu_output_digest|cuda_output_digest)\b|\b(cpu_output_digest|cuda_output_digest)\b[^;]*\boutput_digest\b'
+cli_family_helper_pattern='yvex_(source_is_release_target|model_register_deepseek_v4)[[:space:]]*\('
+cli_family_abi_pattern='(#include[[:space:]]+[<"]yvex/internal/families/|yvex_[A-Za-z0-9_]*(deepseek|qwen|gemma|llama|kimi|mamba)[A-Za-z0-9_]*|YVEX_[A-Z0-9_]*(DEEPSEEK|QWEN|GEMMA|LLAMA|KIMI|MAMBA)[A-Z0-9_]*)'
+cli_preparation_call_pattern='yvex_(source_payload_[A-Za-z0-9_]*|transform_[A-Za-z0-9_]*|quant_plan_[A-Za-z0-9_]*|gguf_writer_[A-Za-z0-9_]*|materialization_(plan|session)_[A-Za-z0-9_]*|runtime_descriptor_build[A-Za-z0-9_]*|artifact_physical_compatibility_[A-Za-z0-9_]*)[[:space:]]*\('
+family_preparation_callback_pattern='^static[[:space:]]+int[[:space:]]+prepare_deepseek_runtime_binding[[:space:]]*\('
+family_preparation_leak_pattern='(yvex_(model_register_deepseek_v4|graph_lower_deepseek_v4|artifact_admit_deepseek|runtime_descriptor_build_deepseek|quant_plan_build_deepseek_profile)[[:space:]]*\(|YVEX_SELECTED_DEEPSEEK_ARTIFACT_FILENAME)'
+cli_runtime_lifecycle_pattern='yvex_runtime_(model_(open|close|summary_copy|view_get)|session_(open|close|summary_copy|view_get)|residency_(prepare|close|snapshot|invalidate))[[:space:]]*\('
+recursive_cleanup_pattern='(^|[;&|()[:space:]])(command[[:space:]]+)?r'\
+'m[[:space:]]+([^#;]*[[:space:]])?(-[[:alpha:]]*[rR][[:alpha:]]*|--recursive)([[:space:]]|$)'
+recursive_cleanup_call_pattern='(system|popen)[[:space:]]*\([^;]*(rm[[:space:]]+-[[:alpha:]]*[rR]|rm[[:space:]]+--recursive)'
+
+# Every expression used as a hard gate carries positive and negative probes.
+# This catches regex drift before a repository scan can produce false comfort.
+printf '%s\n' 'if (strcmp(target, "deepseek") == 0) dispatch();' |
+    rg -i "$family_branch_pattern" >/dev/null ||
+    fail "family-string branch guard misses a direct target comparison"
+if printf '%s\n' 'if (adapter->family_id == request->family_id) dispatch();' |
+    rg -i "$family_branch_pattern" >/dev/null; then
+    fail "family-string branch guard rejects typed adapter dispatch"
+fi
+printf '%s\n' 'yvex_source_is_release_target(target);' |
+    rg "$cli_family_helper_pattern" >/dev/null ||
+    fail "CLI family-helper guard misses source release-target policy"
+printf '%s\n' 'yvex_model_register_deepseek_v4();' |
+    rg "$cli_family_helper_pattern" >/dev/null ||
+    fail "CLI family-helper guard misses direct family-model registration"
+if printf '%s\n' 'adapter->preparation_model();' |
+    rg "$cli_family_helper_pattern" >/dev/null; then
+    fail "CLI family-helper guard rejects typed adapter preparation"
+fi
+printf '%s\n' '#include <yvex/internal/families/deepseek_v4.h>' |
+    rg -i "$cli_family_abi_pattern" >/dev/null ||
+    fail "CLI family-ABI guard misses a direct family header"
+printf '%s\n' 'yvex_runtime_descriptor_build_deepseek(&descriptor);' |
+    rg "$cli_preparation_call_pattern" >/dev/null ||
+    fail "CLI preparation guard misses direct family/compiler planning"
+if printf '%s\n' 'preparation->prepare_runtime_binding(&request, &result, &err);' |
+    rg -i "$cli_family_abi_pattern|$cli_preparation_call_pattern" >/dev/null; then
+    fail "CLI preparation guard rejects typed family preparation dispatch"
+fi
+printf '%s\n' 'yvex_runtime_model_open(&model, &request, &failure, &err);' |
+    rg "$cli_runtime_lifecycle_pattern" >/dev/null ||
+    fail "CLI lifecycle guard misses direct runtime-model ownership"
+if printf '%s\n' 'yvex_graph_attention_operator_execute(&request, &result, &cleanup, &err);' |
+    rg "$cli_runtime_lifecycle_pattern" >/dev/null; then
+    fail "CLI lifecycle guard rejects the canonical production operator"
+fi
+printf '%s\n' '#include <yvex/internal/source_payload.h>' |
+    rg "$runtime_planning_include_pattern" >/dev/null ||
+    fail "runtime planning-dependency guard misses source payload ownership"
+printf '%s\n' 'yvex_quant_plan_build_explicit();' |
+    rg "$runtime_planning_call_pattern" >/dev/null ||
+    fail "runtime planning-dependency guard misses quant-plan construction"
+if printf '%s\n' 'yvex_quant_f16_decode(bits);' |
+    rg "$runtime_planning_call_pattern" >/dev/null; then
+    fail "runtime planning-dependency guard rejects the canonical scalar codec"
+fi
+printf '%s\n' 'yvex_gguf_writer_plan_release' |
+    rg "$runtime_planning_symbol_pattern" >/dev/null ||
+    fail "runtime link-dependency guard misses a writer-planning symbol"
+if printf '%s\n' 'yvex_quant_f16_decode' |
+    rg "$runtime_planning_symbol_pattern" >/dev/null; then
+    fail "runtime link-dependency guard rejects the canonical scalar codec"
+fi
+printf '%s\n' 'static const char fallback_ptx[] = ".version 8.0";' |
+    rg -i "$fallback_ptx_pattern" >/dev/null ||
+    fail "fallback-PTX guard misses an embedded production blob"
+printf '%s\n' 'family->cpu_chunk_execute(plan);' |
+    rg "$cuda_cpu_fallback_pattern" >/dev/null ||
+    fail "CUDA fallback guard misses CPU attention dispatch"
+if printf '%s\n' 'cuda_kernel_launch(plan);' |
+    rg "$cuda_cpu_fallback_pattern" >/dev/null; then
+    fail "CUDA fallback guard rejects device-only dispatch"
+fi
+printf '%s\n' 'yvex_sha256_update_text(&hash, result->output_digest);' |
+    rg "$deprecated_digest_hash_pattern" >/dev/null ||
+    fail "digest guard misses legacy output_digest identity input"
+if printf '%s\n' 'yvex_sha256_update_text(&hash, result->tensor_output_digest);' |
+    rg "$deprecated_digest_hash_pattern" >/dev/null; then
+    fail "digest guard rejects canonical tensor_output_digest"
+fi
+printf '%s\n' 'copy(output_digest, cuda_output_digest);' |
+    rg "$backend_digest_alias_pattern" >/dev/null ||
+    fail "digest guard misses backend-specific legacy semantics"
+for unsafe_flags in '-rf unsafe' '-fr unsafe' '-f -r unsafe' '--recursive unsafe'; do
+    printf '%s%s\n' 'rm ' "$unsafe_flags" | rg "$recursive_cleanup_pattern" >/dev/null ||
+        fail "destructive-cleanup guard misses recursive flags: $unsafe_flags"
+done
+if printf '%s%s\n' 'rm ' '-f owned-file' | rg "$recursive_cleanup_pattern" >/dev/null; then
+    fail "destructive-cleanup guard rejects non-recursive file removal"
+fi
+printf '%s\n' 'system("rm -rf /tmp/fixture");' |
+    rg "$recursive_cleanup_call_pattern" >/dev/null ||
+    fail "destructive-cleanup guard misses a C shell deletion"
+if printf '%s\n' 'unlink(owned_path);' |
+    rg "$recursive_cleanup_call_pattern" >/dev/null; then
+    fail "destructive-cleanup guard rejects narrow owned cleanup"
+fi
+
+# Common runtime and operator owners dispatch through typed family adapters.
+# Family names may occur in recipes, evidence, and rendered facts, but never as
+# string-comparison control flow in the family-neutral execution plane.
+
+family_neutral_sources=$(
+    {
+        find src/runtime -maxdepth 1 -type f \( -name '*.c' -o -name '*.h' \)
+        find src/backend -maxdepth 1 -type f \( -name '*.c' -o -name '*.h' \)
+        find src/backend/cuda -maxdepth 1 -type f \( -name '*.c' -o -name '*.h' -o -name '*.cu' \)
+        printf '%s\n' src/artifact/materialize.c src/cli/commands/graph.c src/cli/input/graph.c
+    } | LC_ALL=C sort -u
+)
+while IFS= read -r source; do
+    [ -f "$source" ] || fail "family-neutral scan input is missing: $source"
+    if rg -n -i "$family_branch_pattern" "$source"; then
+        fail "family-neutral owner branches on a family or target name: $source"
+    fi
+done <<EOF
+$family_neutral_sources
+EOF
+if rg -n "$cli_family_helper_pattern" src/cli/commands/graph.c; then
+    fail "common graph CLI bypasses typed runtime-family preparation facts"
+fi
+if rg -n -i "$cli_family_abi_pattern" src/cli/commands/graph.c; then
+    fail "common graph CLI imports or names a concrete family ABI"
+fi
+if rg -n "$cli_preparation_call_pattern" src/cli/commands/graph.c; then
+    fail "common graph CLI directly constructs compiler preparation truth"
+fi
+if rg -n "$cli_runtime_lifecycle_pattern" src/cli/commands/graph.c; then
+    fail "common graph CLI owns runtime model, session, or residency lifecycle"
+fi
+
+# Generic attention state iterates sealed family-projected components. Class
+# names, family constants, and runtime dependencies would recreate policy in
+# the lifecycle owner and make the next state consumer unsafe.
+[ ! -e src/runtime/state.c ] ||
+    fail "attention state lifecycle remains under the runtime owner"
+if rg -n '(YVEX_DEEPSEEK|YVEX_ATTENTION_CLASS_(SWA|CSA|HCA)|families/deepseek)' \
+    src/graph/state.c include/yvex/internal/graph_state.h; then
+    fail "generic attention state contains concrete family policy"
+fi
+if rg -n '#include[[:space:]]+[<"]yvex/internal/runtime[.]h[>"]' \
+    include/yvex/internal/graph_state.h src/graph/state.c; then
+    fail "graph state ABI depends on the downstream runtime owner"
+fi
+if rg -n 'yvex_runtime_attention_(state|capacity)' \
+    src/graph/state.c include/yvex/internal/graph_state.h; then
+    fail "generic attention state retains the obsolete runtime-owned ABI"
+fi
+
+# DeepSeek cold preparation is intentionally composed by the admitted model
+# artifact gate.  Its callback remains file-local; common runtime and CLI code
+# can reach it only through the typed family-preparation registry.
+if [ "$(rg -c "$family_preparation_callback_pattern" src/model/artifacts/gate.c)" -ne 1 ]; then
+    fail "DeepSeek cold preparation callback is missing or no longer file-local"
+fi
+if rg -n "$family_preparation_leak_pattern" src/runtime src/cli/commands/graph.c; then
+    fail "family-specific cold preparation leaked into common runtime/CLI owners"
+fi
+preparation_callback_owners=$(
+    rg -l 'prepare_deepseek_runtime_binding' src include | LC_ALL=C sort
+)
+if [ "$preparation_callback_owners" != 'src/model/artifacts/gate.c' ]; then
+    printf '%s\n' "$preparation_callback_owners" >&2
+    fail "DeepSeek cold preparation callback escaped its admitted composition owner"
+fi
+
+# Runtime consumes an immutable runtime binding. Source verification,
+# Transformation-IR construction, quant planning, and writer planning belong
+# to the preparation plane and may not re-enter a runtime translation unit.
+if rg -n "$runtime_planning_include_pattern" src/runtime; then
+    fail "runtime translation unit includes a source/compiler planning owner"
+fi
+if rg -n "$runtime_planning_call_pattern" src/runtime; then
+    fail "runtime translation unit calls a source/compiler planning owner"
+fi
+runtime_objects=$(find build/obj/src/runtime -type f -name '*.o' 2>/dev/null | LC_ALL=C sort)
+[ -n "$runtime_objects" ] || fail "runtime object inventory is unavailable"
+runtime_planning_symbols=$(
+    nm -u $runtime_objects | awk '{ print $NF }' |
+        rg "$runtime_planning_symbol_pattern" || true
+)
+if [ -n "$runtime_planning_symbols" ]; then
+    printf '%s\n' "$runtime_planning_symbols" >&2
+    fail "runtime objects link source/compiler planning symbols"
+fi
+rg -n '^test-runtime-attention-live:' Makefile >/dev/null ||
+    fail "runtime attention session/oracle evidence has no canonical target"
+rg -nF 'YVEX_ATTENTION_RUNTIME_BINDING="$$binding" $(ATTENTION_LIVE_RUNNER)' Makefile >/dev/null ||
+    fail "runtime attention evidence may silently omit its immutable binding"
+
+# CUDA production accepts only the generated kernels.cu bundle. A local PTX
+# blob or call into a CPU numerical owner is a fallback even when hidden behind
+# an otherwise successful CUDA dispatch.
+if rg -n -i "$fallback_ptx_pattern" src/backend/cuda; then
+    fail "CUDA backend contains fallback or embedded PTX"
+fi
+if rg -n "$cuda_cpu_fallback_pattern" src/backend/cuda; then
+    fail "CUDA backend calls a CPU numerical owner"
+fi
+
+# The split digest contract has one owner per fact. Tensor/state bytes belong to
+# the embedded graph probe result; runtime owns only path evidence and the full
+# execution identity. The runtime result must embed that probe instead of
+# duplicating its fields.
+for digest_field in tensor_output_digest state_delta_digest; do
+    rg -w "$digest_field" include/yvex/internal/graph.h >/dev/null ||
+        fail "graph probe lacks canonical digest field: $digest_field"
+done
+rg -w 'yvex_attention_probe_result[[:space:]]+probe' include/yvex/internal/runtime.h >/dev/null ||
+    fail "runtime result does not embed the canonical graph probe result"
+for digest_field in execution_evidence_digest execution_identity; do
+    rg -w "$digest_field" include/yvex/internal/runtime.h >/dev/null ||
+        fail "runtime result lacks canonical digest field: $digest_field"
+done
+if rg -n "$deprecated_digest_hash_pattern" src/runtime src/cli; then
+    fail "deprecated output_digest contributes to a semantic identity"
+fi
+if rg -n "$backend_digest_alias_pattern" src/runtime src/cli; then
+    fail "deprecated output_digest acquired backend-specific semantics"
+fi
+if rg -n '"output_digest"|^[[:space:]]*output_digest[[:space:]]*$' \
+    src/cli/render/graph.c src/cli/catalog/graph_fields.def; then
+    fail "deprecated output_digest remains exposed by the operator surface"
+fi
+if rg -w output_digest include/yvex/internal/runtime.h src/runtime/graph.c >/dev/null; then
+    fail "deprecated output_digest remains in the runtime result contract"
+fi
+
+# Every typed attention renderer key is registered exactly once in the
+# machine-readable graph field catalog. The catalog may retain fields owned by
+# other graph reports, but it cannot omit or duplicate an operator fact.
+attention_render_fields=$(
+    sed -nE 's/.*ATTENTION_(FIELD|TIMING|BENCHMARK_FIELD)\("([^"]+)".*/\2/p' \
+        src/cli/render/graph.c | LC_ALL=C sort -u
+)
+attention_catalog_duplicates=$(
+    LC_ALL=C sort src/cli/catalog/graph_fields.def | uniq -d
+)
+[ -z "$attention_catalog_duplicates" ] || {
+    printf '%s\n' "$attention_catalog_duplicates" >&2
+    fail "graph field catalog contains duplicate keys"
+}
+attention_catalog_missing=$(
+    printf '%s\n' "$attention_render_fields" |
+        while IFS= read -r field; do
+            rg -x -F "$field" src/cli/catalog/graph_fields.def >/dev/null ||
+                printf '%s\n' "$field"
+        done
+)
+[ -z "$attention_catalog_missing" ] || {
+    printf '%s\n' "$attention_catalog_missing" >&2
+    fail "attention renderer field is absent from the graph field catalog"
 }
 
 for reachability_contract in \
@@ -35,25 +298,36 @@ if rg -n "$pending_identity_pattern" src include; then
     fail "selected artifact admission retains a placeholder payload identity"
 fi
 
-recursive_cleanup_pattern='(^|[;&|()[:space:]])(command[[:space:]]+)?r'\
-'m[[:space:]]+([^#;]*[[:space:]])?(-[[:alpha:]]*[rR][[:alpha:]]*|--recursive)([[:space:]]|$)'
-for unsafe_flags in '-rf unsafe' '-fr unsafe' '-f -r unsafe' '--recursive unsafe'; do
-    printf '%s%s\n' 'rm ' "$unsafe_flags" | rg "$recursive_cleanup_pattern" >/dev/null ||
-        fail "destructive-cleanup guard misses recursive flags: $unsafe_flags"
-done
-if printf '%s%s\n' 'rm ' '-f owned-file' | rg "$recursive_cleanup_pattern" >/dev/null; then
-    fail "destructive-cleanup guard rejects non-recursive file removal"
-fi
+# C owners must never hide broad deletion behind a shell call. The runtime,
+# attention, CUDA, live, and reference test surfaces are included explicitly so
+# lifecycle evidence cannot escape the same ownership rule as production.
+cleanup_c_sources=$(
+    {
+        find src include tests/reference tests/live tests/cli tests/unit/cuda \
+            -type f \( -name '*.c' -o -name '*.h' -o -name '*.cu' \)
+        find tests/unit -maxdepth 1 -type f \
+            \( -name '*runtime*.c' -o -name '*attention*.c' -o -name '*graph*.c' \)
+    } | LC_ALL=C sort -u
+)
+while IFS= read -r source; do
+    [ -f "$source" ] || fail "cleanup scan input is missing: $source"
+    if rg -n "$recursive_cleanup_call_pattern" "$source"; then
+        fail "production/runtime evidence contains broad shell cleanup: $source"
+    fi
+done <<EOF
+$cleanup_c_sources
+EOF
 
 maintained_scripts=$(
     {
         git ls-files '*.sh'
         git ls-files --others --exclude-standard '*.sh'
-    } | LC_ALL=C sort -u
+    } | LC_ALL=C sort -u | while IFS= read -r script; do
+        [ -f "$script" ] && printf '%s\n' "$script"
+    done
 )
 [ -n "$maintained_scripts" ] || fail "maintained-script inventory is empty"
 while IFS= read -r script; do
-    [ -f "$script" ] || fail "maintained-script scan input is missing: $script"
     if rg -n "$recursive_cleanup_pattern" "$script"; then
         fail "maintained script contains recursive rm cleanup: $script"
     fi
@@ -122,8 +396,8 @@ for product in "${YVEX_LIB:-build/lib/libyvex.a}" "${YVEX_BIN:-./yvex}"; do
     fi
 done
 
-# Link-time dependency admission keeps the independent oracle limited to
-# immutable family facts, payload reads, descriptor lookup, and digest helpers.
+# Link-time dependency admission keeps the independent oracle limited to checked
+# allocation, immutable family facts, payload reads, descriptor lookup, and digests.
 reference_objects=${YVEX_REFERENCE_OBJS:-build/obj/tests/reference/deepseek_attention.o}
 for object in $reference_objects; do
     [ -f "$object" ] || fail "attention oracle object is missing: $object"
@@ -131,6 +405,7 @@ for object in $reference_objects; do
         nm -u "$object" | awk '{ print $NF }' |
         while IFS= read -r symbol; do
             case "$symbol" in
+                yvex_core_allocate|\
                 yvex_error_clear|yvex_graph_lower_deepseek_v4|\
                 yvex_materialization_session_read|yvex_model_register_deepseek_v4|\
                 yvex_runtime_descriptor_find_role|yvex_sha256_*)
@@ -146,3 +421,5 @@ for object in $reference_objects; do
         fail "attention oracle gained a production algorithm dependency: $object"
     fi
 done
+
+python3 tests/c_structure.py check architecture

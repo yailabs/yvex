@@ -12,7 +12,6 @@
  *   - yvex_plan_create
  *   - yvex_plan_graph
  *   - yvex_plan_memory
- *   - yvex_plan_dump
  *
  * Commands:
  *   - make test-core
@@ -72,23 +71,6 @@ static void close_fixture(planner_fixture *fixture)
     yvex_artifact_close(fixture->artifact);
 }
 
-static int file_contains(const char *path, const char *needle)
-{
-    FILE *fp = fopen(path, "rb");
-    char buf[8192];
-    size_t n;
-    int found;
-
-    if (!fp) {
-        return 0;
-    }
-    n = fread(buf, 1, sizeof(buf) - 1u, fp);
-    buf[n] = '\0';
-    fclose(fp);
-    found = strstr(buf, needle) != NULL;
-    return found;
-}
-
 static int test_plan_cpu(void)
 {
     planner_fixture fixture;
@@ -109,75 +91,6 @@ static int test_plan_cpu(void)
                      "plan graph partial");
     YVEX_TEST_ASSERT(yvex_memory_plan_status_of(yvex_plan_memory(plan)) == YVEX_MEMORY_PLAN_PARTIAL,
                      "plan memory partial");
-
-    yvex_plan_close(plan);
-    close_fixture(&fixture);
-    return 0;
-}
-
-static int test_plan_cuda_label_and_dump(void)
-{
-    planner_fixture fixture;
-    yvex_plan *plan = NULL;
-    yvex_plan_options options;
-    yvex_error err;
-    FILE *fp;
-    int rc;
-
-    memset(&options, 0, sizeof(options));
-    options.backend_name = "cuda";
-
-    YVEX_TEST_ASSERT(open_fixture(&fixture) == 0, "open planner fixture cuda");
-    rc = yvex_plan_create(&plan, fixture.model, fixture.table, &options, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda label plan builds");
-
-    fp = fopen("build/tests/test_plan_dump.out", "wb");
-    YVEX_TEST_ASSERT(fp != NULL, "open plan dump");
-    rc = yvex_plan_dump(plan, fp, &err);
-    fclose(fp);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "plan dump succeeds");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "backend: cuda"),
-                     "plan dump backend");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "backend_status:"),
-                     "plan dump cuda status");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "execution_ready: false"),
-                     "plan dump execution false");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "status: plan-only"),
-                     "plan dump plan-only");
-
-    yvex_plan_close(plan);
-    close_fixture(&fixture);
-    return 0;
-}
-
-static int test_plan_cpu_dump_reports_backend_available(void)
-{
-    planner_fixture fixture;
-    yvex_plan *plan = NULL;
-    yvex_plan_options options;
-    yvex_error err;
-    FILE *fp;
-    int rc;
-
-    memset(&options, 0, sizeof(options));
-    options.backend_name = "cpu";
-
-    YVEX_TEST_ASSERT(open_fixture(&fixture) == 0, "open planner fixture cpu dump");
-    rc = yvex_plan_create(&plan, fixture.model, fixture.table, &options, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "cpu plan builds for dump");
-
-    fp = fopen("build/tests/test_plan_cpu_dump.out", "wb");
-    YVEX_TEST_ASSERT(fp != NULL, "open cpu plan dump");
-    rc = yvex_plan_dump(plan, fp, &err);
-    fclose(fp);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "cpu plan dump succeeds");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_cpu_dump.out", "backend_status: available"),
-                     "cpu backend available");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_cpu_dump.out", "op_embed: yes"),
-                     "cpu op embed capability");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_cpu_dump.out",
-                                   "graph partial; missing output_norm, output_head; backend lacks full graph ops"),
-                     "cpu plan reason");
 
     yvex_plan_close(plan);
     close_fixture(&fixture);
@@ -207,8 +120,6 @@ static int test_unknown_backend_rejected(void)
 int yvex_test_planner(void)
 {
     if (test_plan_cpu() != 0) return 1;
-    if (test_plan_cpu_dump_reports_backend_available() != 0) return 1;
-    if (test_plan_cuda_label_and_dump() != 0) return 1;
     if (test_unknown_backend_rejected() != 0) return 1;
     return 0;
 }

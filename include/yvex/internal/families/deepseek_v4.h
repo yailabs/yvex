@@ -35,9 +35,6 @@ typedef struct yvex_materialization_failure yvex_materialization_failure;
 typedef struct yvex_materialization_options yvex_materialization_options;
 typedef struct yvex_materialization_plan yvex_materialization_plan;
 typedef struct yvex_materialization_session yvex_materialization_session;
-typedef struct yvex_gguf_writer_failure yvex_gguf_writer_failure;
-typedef struct yvex_gguf_writer_plan yvex_gguf_writer_plan;
-typedef struct yvex_gguf_writer_plan_options yvex_gguf_writer_plan_options;
 typedef struct yvex_quant_failure yvex_quant_failure;
 typedef struct yvex_quant_plan yvex_quant_plan;
 typedef struct yvex_quant_plan_options yvex_quant_plan_options;
@@ -537,7 +534,7 @@ typedef struct {
     const yvex_source_payload_plan *(*plan)(const yvex_deepseek_payload_handoff *handoff);
     const char *(*failure_name)(yvex_deepseek_payload_failure_code code);
 } yvex_model_family_payload_api;
-typedef struct {
+typedef struct yvex_model_family_api {
     unsigned int schema_version;
     const char *family_key;
     yvex_model_family_ir_api ir;
@@ -562,12 +559,6 @@ int yvex_quant_plan_build_deepseek_profile(
     yvex_quant_failure *failure, yvex_error *err);
 const yvex_deepseek_gguf_map *yvex_quant_plan_lowering(
     const yvex_quant_plan *plan);
-int yvex_gguf_writer_build_deepseek(
-    yvex_gguf_writer_plan **out, const yvex_quant_plan *quant_plan,
-    const yvex_deepseek_gguf_map *map,
-    const yvex_source_verification *verification,
-    const yvex_gguf_writer_plan_options *options,
-    yvex_gguf_writer_failure *failure, yvex_error *err);
 int yvex_artifact_admit_deepseek(
     const yvex_artifact *artifact, yvex_complete_artifact_admission *out,
     yvex_artifact_admission_failure *failure, yvex_error *err);
@@ -587,10 +578,6 @@ int yvex_runtime_descriptor_build_deepseek(
 int yvex_model_mapping_report_deepseek(
     const yvex_model_target_request *request, yvex_model_target_report *report,
     yvex_error *err);
-int yvex_model_class_profile_deepseek_from_verification(
-    const yvex_model_target_request *request,
-    const yvex_source_verification *verification,
-    yvex_model_target_report *report, yvex_error *err);
 const yvex_model_family_api *yvex_model_register_deepseek_v4(void);
 const yvex_graph_family_api *yvex_graph_lower_deepseek_v4(void);
 #endif

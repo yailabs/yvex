@@ -16,6 +16,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <yvex/internal/core.h>
 #include <yvex/internal/source_payload.h>
 
 #define YVEX_SOURCE_MANIFEST_PROBE_CAP 8192u
@@ -200,6 +201,27 @@ static const source_sidecar_fact source_sidecars[] = {
      offsetof(yvex_source_report, tokenizer_map_exists), 0},
 };
 
+static const source_u64_projection native_report_projections[] = {
+    {offsetof(yvex_native_weight_table, header_read_count),
+     {offsetof(yvex_source_report, native_safetensors_header_read_count), SIZE_MAX, SIZE_MAX,
+      SIZE_MAX}},
+    {offsetof(yvex_native_weight_table, header_error_count),
+     {offsetof(yvex_source_report, native_safetensors_header_error_count),
+      offsetof(yvex_source_report, native_invalid_file_count),
+      offsetof(yvex_source_report, native_inventory_error_count),
+      offsetof(yvex_source_report, source_tensor_metadata_error_count)}},
+    {offsetof(yvex_native_weight_table, header_bytes),
+     {offsetof(yvex_source_report, native_safetensors_header_bytes), SIZE_MAX, SIZE_MAX, SIZE_MAX}},
+    {offsetof(yvex_native_weight_table, count),
+     {offsetof(yvex_source_report, native_tensor_count),
+      offsetof(yvex_source_report, source_tensor_count),
+      offsetof(yvex_source_report, source_tensor_name_count), SIZE_MAX}},
+    {offsetof(yvex_native_weight_table, summary) +
+         offsetof(yvex_native_weight_summary, total_tensor_bytes),
+     {offsetof(yvex_source_report, native_declared_tensor_bytes),
+      offsetof(yvex_source_report, source_tensor_declared_tensor_bytes), SIZE_MAX, SIZE_MAX}},
+};
+
 static const source_u64_projection deepseek_report_projections[] = {
     {offsetof(yvex_source_verification, source_file_count),
      {offsetof(yvex_source_report, source_file_count),
@@ -295,121 +317,25 @@ static int source_report_target_is_supported(const yvex_source_family_profile *p
         (strcmp(profile->family_key, "gemma") == 0 && strncmp(target, "gemma", 5) == 0)) {
         return 1;
     }
-    if (strcmp(profile->family_key, "qwen") == 0) {
-        return strcmp(target, "qwen3-8b") == 0 || strcmp(target, "qwen-small") == 0 ||
-               strcmp(target, "qwen-medium") == 0;
-    }
     return strcmp(target, profile->target_id) == 0;
 }
 
-/* Purpose: project report path format facts while preserving the canonical source report invariants.
+/* Purpose: join one report-owned path without truncating either component.
  * Inputs: typed source reporting arguments; borrowed inputs outlive the call.
  * Effects: mutates only explicit caller-owned source reporting state.
  * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
  * Boundary: reports project evidence and never promote capability. */
-static int
-source_report_path_format(char *out, size_t cap, const char *fmt, const char *a, const char *b) {
+static int source_report_path_join(char *out, size_t cap, const char *left, const char *right) {
     int n;
 
-    if (!out || cap == 0 || !fmt) {
+    if (!out || cap == 0u || !left || !right) {
         return 0;
     }
-    if (b && strcmp(fmt, "%s/%s") == 0)
-        n = snprintf(out, cap, "%s/%s", a ? a : "", b);
-    else if (b && strcmp(fmt, "%s.%s") == 0)
-        n = snprintf(out, cap, "%s.%s", a ? a : "", b);
-    else if (!b && strcmp(fmt, "%s") == 0)
-        n = snprintf(out, cap, "%s", a ? a : "");
-    else
-        return 0;
+    n = snprintf(out, cap, "%s/%s", left, right);
     if (n < 0 || (size_t)n >= cap) {
         out[cap - 1] = '\0';
         return 0;
     }
-    return 1;
-}
-
-/* Purpose: project report path basename facts while preserving the canonical source report invariants. */
-static const char *source_report_path_basename(const char *path) {
-    const char *slash;
-
-    if (!path || !path[0])
-        return NULL;
-    slash = strrchr(path, '/');
-    return slash && slash[1] ? slash + 1 : path;
-}
-
-/* Purpose: test whether a target label names the selected family profile. */
-static int source_report_target_matches_family_name(const char *family, const char *target) {
-    if (!family || !target)
-        return 0;
-    if (strcmp(family, "qwen") == 0) {
-        return strncmp(target, "qwen", 4) == 0;
-    }
-    if (strcmp(family, "gemma") == 0) {
-        return strncmp(target, "gemma", 5) == 0;
-    }
-    return 0;
-}
-
-/* Purpose: project report read small file facts while preserving the canonical source report invariants.
- * Inputs: typed source reporting arguments; borrowed inputs outlive the call.
- * Effects: reads bounded evidence and updates only caller-owned source reporting state.
- * Failure: invalid, short, inconsistent, or I/O input yields typed refusal.
- * Boundary: reports project evidence and never promote capability. */
-static int source_report_read_small_file(const char *path, char *buf, size_t cap) {
-    FILE *fp;
-    size_t got;
-
-    if (!path || !buf || cap == 0u)
-        return 0;
-    buf[0] = '\0';
-    fp = fopen(path, "rb");
-    if (!fp)
-        return 0;
-    got = fread(buf, 1u, cap - 1u, fp);
-    buf[got] = '\0';
-    fclose(fp);
-    return 1;
-}
-
-/* Purpose: project report json string field facts while preserving the canonical source report invariants.
- * Inputs: typed source reporting arguments; borrowed inputs outlive the call.
- * Effects: mutates only explicit caller-owned source reporting state.
- * Failure: invalid, bounds, allocation, or I/O failure publishes no partial result.
- * Boundary: reports project evidence and never promote capability. */
-static int
-source_report_json_string_field(const char *text, const char *key, char *out, size_t cap) {
-    char needle[96];
-    const char *p;
-    const char *q;
-    size_t len;
-
-    if (out && cap > 0u)
-        out[0] = '\0';
-    if (!text || !key || !out || cap == 0u)
-        return 0;
-    snprintf(needle, sizeof(needle), "\"%s\"", key);
-    p = strstr(text, needle);
-    if (!p)
-        return 0;
-    p = strchr(p, ':');
-    if (!p)
-        return 0;
-    p++;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    if (*p != '"')
-        return 0;
-    p++;
-    q = strchr(p, '"');
-    if (!q)
-        return 0;
-    len = (size_t)(q - p);
-    if (len >= cap)
-        len = cap - 1u;
-    memcpy(out, p, len);
-    out[len] = '\0';
     return 1;
 }
 
@@ -420,7 +346,6 @@ source_report_json_string_field(const char *text, const char *key, char *out, si
  * Boundary: reports project evidence and never promote capability. */
 static int
 source_report_json_u64_field(const char *text, const char *key, unsigned long long *out) {
-    char needle[96];
     const char *p;
     unsigned long long value = 0;
     int seen = 0;
@@ -429,16 +354,9 @@ source_report_json_u64_field(const char *text, const char *key, unsigned long lo
         *out = 0;
     if (!text || !key || !out)
         return 0;
-    snprintf(needle, sizeof(needle), "\"%s\"", key);
-    p = strstr(text, needle);
+    p = yvex_json_probe_field_value(text, key);
     if (!p)
         return 0;
-    p = strchr(p, ':');
-    if (!p)
-        return 0;
-    p++;
-    while (*p && isspace((unsigned char)*p))
-        p++;
     while (*p && isdigit((unsigned char)*p)) {
         value = value * 10ull + (unsigned long long)(*p - '0');
         seen = 1;
@@ -448,12 +366,6 @@ source_report_json_u64_field(const char *text, const char *key, unsigned long lo
         return 0;
     *out = value;
     return 1;
-}
-
-/* Purpose: project report repo basename facts while preserving the canonical source report invariants. */
-static const char *source_report_repo_basename(const char *repo) {
-    const char *slash = repo ? strrchr(repo, '/') : NULL;
-    return slash && slash[1] ? slash + 1 : repo;
 }
 
 /* Purpose: project report copy model display facts while preserving the canonical source report invariants. */
@@ -466,7 +378,7 @@ static void source_report_copy_model_display(char *out,
     out[0] = '\0';
     if (!model_name || !model_name[0])
         return;
-    snprintf(out, cap, "%s", model_name);
+    yvex_core_text_copy(out, cap, model_name);
     if (family && strcmp(family, "gemma") == 0 && strncmp(out, "gemma-", 6) == 0) {
         out[0] = 'G';
     }
@@ -482,64 +394,44 @@ static int source_report_probe_download_identity_file(const char *path,
                                                       const char *family,
                                                       yvex_source_report *report) {
     char buf[YVEX_SOURCE_MANIFEST_PROBE_CAP + 1u];
-    char parsed_target[128];
-    char parsed_family[32];
-    char repo_id[256];
-    char revision[128];
-    char source_dir[YVEX_PATH_CAP];
+    char parsed_target[128] = {0};
+    char parsed_family[32] = {0};
+    char repo_id[256] = {0};
+    char revision[128] = {0};
+    char source_dir[YVEX_PATH_CAP] = {0};
     const char *model_name;
 
     if (!path || !path[0] || !target || !family || !report)
         return 0;
-    if (access(path, F_OK) != 0)
-        return 0;
-    if (!source_report_read_small_file(path, buf, sizeof(buf)))
+    if (!yvex_core_file_read_text_prefix(path, buf, sizeof(buf)))
         return 0;
 
-    memset(parsed_target, 0, sizeof(parsed_target));
-    memset(parsed_family, 0, sizeof(parsed_family));
-    memset(repo_id, 0, sizeof(repo_id));
-    memset(revision, 0, sizeof(revision));
-    memset(source_dir, 0, sizeof(source_dir));
-    source_report_json_string_field(buf, "target_id", parsed_target, sizeof(parsed_target));
+    yvex_json_probe_string_field(buf, "target_id", parsed_target, sizeof(parsed_target));
     if (parsed_target[0] && strcmp(parsed_target, target) != 0)
         return 0;
-    source_report_json_string_field(buf, "family", parsed_family, sizeof(parsed_family));
+    yvex_json_probe_string_field(buf, "family", parsed_family, sizeof(parsed_family));
     if (parsed_family[0] && strcmp(parsed_family, family) != 0)
         return 0;
-    source_report_json_string_field(buf, "repo_id", repo_id, sizeof(repo_id));
-    if (!repo_id[0]) {
-        source_report_json_string_field(buf, "repo", repo_id, sizeof(repo_id));
-    }
-    source_report_json_string_field(buf, "revision", revision, sizeof(revision));
-    source_report_json_string_field(buf, "local_source_dir", source_dir, sizeof(source_dir));
-    if (!source_dir[0]) {
-        source_report_json_string_field(buf, "path", source_dir, sizeof(source_dir));
-    }
+    if (!yvex_json_probe_string_field(buf, "repo_id", repo_id, sizeof(repo_id)) || !repo_id[0])
+        yvex_json_probe_string_field(buf, "repo", repo_id, sizeof(repo_id));
+    yvex_json_probe_string_field(buf, "revision", revision, sizeof(revision));
+    if (!yvex_json_probe_string_field(
+            buf, "local_source_dir", source_dir, sizeof(source_dir)) ||
+        !source_dir[0])
+        yvex_json_probe_string_field(buf, "path", source_dir, sizeof(source_dir));
 
-    snprintf(report->identity_target_id,
-             sizeof(report->identity_target_id),
-             "%s",
-             parsed_target[0] ? parsed_target : target);
-    snprintf(report->identity_family,
-             sizeof(report->identity_family),
-             "%s",
-             parsed_family[0] ? parsed_family : family);
-    snprintf(report->identity_repo_id,
-             sizeof(report->identity_repo_id),
-             "%s",
-             repo_id[0] ? repo_id : "unknown");
-    snprintf(report->identity_revision,
-             sizeof(report->identity_revision),
-             "%s",
-             revision[0] ? revision : "main");
-    if (source_dir[0]) {
-        snprintf(report->identity_local_source_dir,
-                 sizeof(report->identity_local_source_dir),
-                 "%s",
-                 source_dir);
-    }
-    model_name = source_report_repo_basename(repo_id);
+    yvex_core_text_copy(report->identity_target_id, sizeof(report->identity_target_id),
+                        parsed_target[0] ? parsed_target : target);
+    yvex_core_text_copy(report->identity_family, sizeof(report->identity_family),
+                        parsed_family[0] ? parsed_family : family);
+    yvex_core_text_copy(report->identity_repo_id, sizeof(report->identity_repo_id),
+                        repo_id[0] ? repo_id : "unknown");
+    yvex_core_text_copy(report->identity_revision, sizeof(report->identity_revision),
+                        revision[0] ? revision : "main");
+    if (source_dir[0])
+        yvex_core_text_copy(report->identity_local_source_dir,
+                            sizeof(report->identity_local_source_dir), source_dir);
+    model_name = yvex_source_path_basename(repo_id);
     if (model_name && model_name[0]) {
         source_report_copy_model_display(
             report->identity_model, sizeof(report->identity_model), family, model_name);
@@ -562,8 +454,8 @@ static void source_report_probe_map_sidecars(yvex_source_report *report) {
     if (!report)
         return;
     if (report->tensor_map_exists &&
-        source_report_read_small_file(report->tensor_map_path, buf, sizeof(buf))) {
-        if (source_report_json_string_field(
+        yvex_core_file_read_text_prefix(report->tensor_map_path, buf, sizeof(buf))) {
+        if (yvex_json_probe_string_field(
                 buf, "required_role_coverage_status", coverage, sizeof(coverage))) {
             if (strcmp(coverage, "required-groups-present") != 0) {
                 report->tensor_map_incomplete = 1;
@@ -574,8 +466,8 @@ static void source_report_probe_map_sidecars(yvex_source_report *report) {
         }
     }
     if (report->output_head_map_exists &&
-        source_report_read_small_file(report->output_head_map_path, buf, sizeof(buf)) &&
-        source_report_json_string_field(buf, "output_head_status", status, sizeof(status)) &&
+        yvex_core_file_read_text_prefix(report->output_head_map_path, buf, sizeof(buf)) &&
+        yvex_json_probe_string_field(buf, "output_head_status", status, sizeof(status)) &&
         strcmp(status, "present") != 0) {
         report->output_head_map_missing = 1;
     }
@@ -595,60 +487,27 @@ static int source_report_stat_kind(const char *path, int want_dir) {
 }
 
 /* Purpose: project report manifest file exists facts while preserving the canonical source report invariants. */
-static int
-source_report_manifest_file_exists(char *out, size_t cap, const char *dir, const char *name) {
+static int source_report_manifest_file_exists(char *out, size_t cap, const char *dir,
+                                              const char *name) {
     char candidate[YVEX_PATH_CAP];
 
     if (!out || cap == 0 || !dir || dir[0] == '\0' || !name) {
         return 0;
     }
-    if (!source_report_path_format(candidate, sizeof(candidate), "%s/%s", dir, name)) {
+    if (!source_report_path_join(candidate, sizeof(candidate), dir, name)) {
         return 0;
     }
     if (!source_report_stat_kind(candidate, 0)) {
         return 0;
     }
-    snprintf(out, cap, "%s", candidate);
+    yvex_core_text_copy(out, cap, candidate);
     return 1;
 }
 
 /* Purpose: project report check file facts while preserving the canonical source report invariants. */
 static int source_report_check_file(const char *dir, const char *name) {
     char path[YVEX_PATH_CAP];
-
-    if (!source_report_path_format(path, sizeof(path), "%s/%s", dir, name)) {
-        return 0;
-    }
-    return source_report_stat_kind(path, 0);
-}
-
-/* Purpose: project report is config file facts while preserving the canonical source report invariants. */
-static int source_report_is_config_file(const char *name) {
-    return name &&
-           (strcmp(name, "config.json") == 0 || strcmp(name, "generation_config.json") == 0);
-}
-
-/* Purpose: project report is tokenizer file facts while preserving the canonical source report invariants. */
-static int source_report_is_tokenizer_file(const char *name) {
-    return name &&
-           (strcmp(name, "tokenizer.json") == 0 || strcmp(name, "tokenizer_config.json") == 0);
-}
-
-/* Purpose: project report is sidecar file facts while preserving the canonical source report invariants. */
-static int source_report_is_sidecar_file(const char *name) {
-    if (!name) {
-        return 0;
-    }
-    return source_report_is_config_file(name) || source_report_is_tokenizer_file(name) ||
-           strcmp(name, "README.md") == 0 || yvex_source_ends_with(name, ".json");
-}
-
-/* Purpose: project report stat size bytes facts while preserving the canonical source report invariants. */
-static unsigned long long source_report_stat_size_bytes(const struct stat *st) {
-    if (!st || st->st_size <= 0) {
-        return 0;
-    }
-    return (unsigned long long)st->st_size;
+    return source_report_manifest_file_exists(path, sizeof(path), dir, name);
 }
 
 static void source_report_native_collect_table(yvex_source_report *report,
@@ -681,52 +540,45 @@ static int source_report_scan_local(const char *dir, yvex_source_report *report)
         char path[YVEX_PATH_CAP];
         struct stat st;
         unsigned long long size_bytes;
+        unsigned long long *size_total;
         yvex_error header_error;
         int is_safetensors;
         int is_sidecar;
+        int is_config;
+        int is_tokenizer;
         int rc;
 
         if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
             continue;
-        if (!source_report_path_format(path, sizeof(path), "%s/%s", dir, ent->d_name))
+        if (!source_report_path_join(path, sizeof(path), dir, ent->d_name))
             continue;
         if (stat(path, &st) != 0 || !S_ISREG(st.st_mode))
             continue;
-        size_bytes = source_report_stat_size_bytes(&st);
+        size_bytes = st.st_size > 0 ? (unsigned long long)st.st_size : 0ull;
         is_safetensors = yvex_source_ends_with(ent->d_name, ".safetensors");
-        is_sidecar = source_report_is_sidecar_file(ent->d_name);
+        is_config = strcmp(ent->d_name, "config.json") == 0 ||
+                    strcmp(ent->d_name, "generation_config.json") == 0;
+        is_tokenizer = strcmp(ent->d_name, "tokenizer.json") == 0 ||
+                       strcmp(ent->d_name, "tokenizer_config.json") == 0;
+        is_sidecar = is_config || is_tokenizer || strcmp(ent->d_name, "README.md") == 0 ||
+                     yvex_source_ends_with(ent->d_name, ".json");
         report->source_file_count++;
         report->source_regular_file_count++;
         report->total_size_bytes += size_bytes;
-        if (is_safetensors) {
-            report->safetensors_count++;
-            report->safetensors_size_bytes += size_bytes;
-        } else if (is_sidecar) {
-            report->sidecar_size_bytes += size_bytes;
-        } else {
-            report->other_size_bytes += size_bytes;
-        }
-        if (yvex_source_ends_with(ent->d_name, ".bin")) {
-            report->bin_count++;
-        }
-        if (yvex_source_ends_with(ent->d_name, ".dat")) {
-            report->dat_count++;
-        }
-        if (yvex_source_ends_with(ent->d_name, ".json")) {
-            report->json_count++;
-        }
-        if (source_report_is_tokenizer_file(ent->d_name)) {
-            report->tokenizer_file_count++;
-        }
-        if (source_report_is_config_file(ent->d_name)) {
-            report->config_file_count++;
-        }
+        size_total = is_safetensors ? &report->safetensors_size_bytes
+                     : is_sidecar   ? &report->sidecar_size_bytes
+                                    : &report->other_size_bytes;
+        *size_total += size_bytes;
+        report->safetensors_count += (unsigned long long)is_safetensors;
+        report->bin_count += (unsigned long long)yvex_source_ends_with(ent->d_name, ".bin");
+        report->dat_count += (unsigned long long)yvex_source_ends_with(ent->d_name, ".dat");
+        report->json_count += (unsigned long long)yvex_source_ends_with(ent->d_name, ".json");
+        report->tokenizer_file_count += (unsigned long long)is_tokenizer;
+        report->config_file_count += (unsigned long long)is_config;
         if (size_bytes > report->largest_source_file_bytes) {
             report->largest_source_file_bytes = size_bytes;
-            snprintf(report->largest_source_file_name,
-                     sizeof(report->largest_source_file_name),
-                     "%s",
-                     ent->d_name);
+            yvex_core_text_copy(report->largest_source_file_name,
+                                sizeof(report->largest_source_file_name), ent->d_name);
         }
         if (!is_safetensors || fatal != YVEX_OK)
             continue;
@@ -749,11 +601,8 @@ static int source_report_scan_local(const char *dir, yvex_source_report *report)
             fatal = rc;
     }
     closedir(dp);
+    table->header_error_count += scan_errors;
     source_report_native_collect_table(report, table);
-    report->native_safetensors_header_error_count += scan_errors;
-    report->native_invalid_file_count += scan_errors;
-    report->native_inventory_error_count += scan_errors;
-    report->source_tensor_metadata_error_count += scan_errors;
     yvex_native_weight_table_close(table);
     return fatal;
 }
@@ -771,12 +620,17 @@ source_report_native_tensor_elements(const yvex_native_weight_info *info) {
         if (info->dims[i] == 0) {
             return 0;
         }
-        if (elements > ULLONG_MAX / info->dims[i]) {
+        if (!yvex_core_u64_mul(elements, info->dims[i], &elements)) {
             return ULLONG_MAX;
         }
-        elements *= info->dims[i];
     }
     return elements;
+}
+
+/* Purpose: retain the greater unsigned report fact without duplicating max branches. */
+static unsigned long long source_report_u64_max(unsigned long long left,
+                                                unsigned long long right) {
+    return left > right ? left : right;
 }
 
 /* Purpose: project report tensor shape string facts while preserving the canonical source report invariants.
@@ -878,13 +732,9 @@ static int source_report_name_contains_ci(const char *name, const char *needle) 
 
 /* Purpose: project report file label facts while preserving the canonical source report invariants. */
 static const char *source_report_file_label(const char *path) {
-    const char *slash;
+    const char *label = yvex_source_path_basename(path);
 
-    if (!path || path[0] == '\0') {
-        return "unknown";
-    }
-    slash = strrchr(path, '/');
-    return slash && slash[1] != '\0' ? slash + 1 : path;
+    return label ? label : "unknown";
 }
 
 /* Purpose: increment both report projections selected by one canonical dtype lookup. */
@@ -970,9 +820,12 @@ static void source_report_metadata_add_sample(yvex_source_report *report,
         return;
     }
     sample = &report->source_tensor_samples[report->source_tensor_sample_count++];
-    snprintf(sample->name, sizeof(sample->name), "%s", info->name ? info->name : "unknown");
-    snprintf(sample->file, sizeof(sample->file), "%s", source_report_file_label(info->shard_path));
-    snprintf(sample->dtype, sizeof(sample->dtype), "%s", yvex_native_dtype_name(info->dtype));
+    yvex_core_text_copy(sample->name, sizeof(sample->name),
+                        info->name ? info->name : "unknown");
+    yvex_core_text_copy(sample->file, sizeof(sample->file),
+                        source_report_file_label(info->shard_path));
+    yvex_core_text_copy(sample->dtype, sizeof(sample->dtype),
+                        yvex_native_dtype_name(info->dtype));
     source_report_tensor_shape_string(info, sample->shape, sizeof(sample->shape));
     sample->rank = info->rank;
     sample->elements = elements;
@@ -993,17 +846,11 @@ static void source_report_native_collect_table(yvex_source_report *report,
     if (!report || !table) {
         return;
     }
-    report->native_safetensors_header_read_count = table->header_read_count;
-    report->native_safetensors_header_error_count = table->header_error_count;
-    report->native_safetensors_header_bytes = table->header_bytes;
-    report->native_tensor_count = table->count;
-    report->native_declared_tensor_bytes = table->summary.total_tensor_bytes;
-    report->native_invalid_file_count = table->header_error_count;
-    report->native_inventory_error_count = table->header_error_count;
-    report->source_tensor_count = table->count;
-    report->source_tensor_name_count = table->count;
-    report->source_tensor_declared_tensor_bytes = table->summary.total_tensor_bytes;
-    report->source_tensor_metadata_error_count = table->header_error_count;
+    source_report_project_u64(report,
+                              table,
+                              native_report_projections,
+                              sizeof(native_report_projections) /
+                                  sizeof(native_report_projections[0]));
 
     for (i = 0; i < table->count; ++i) {
         const yvex_native_weight_info *info = &table->items[i];
@@ -1024,56 +871,43 @@ static void source_report_native_collect_table(yvex_source_report *report,
         }
         if (info->data_end > active_shard_end)
             active_shard_end = info->data_end;
-        if (elements != ULLONG_MAX &&
-            report->source_tensor_total_elements <= ULLONG_MAX - elements) {
-            report->source_tensor_total_elements += elements;
-        } else {
+        if (elements == ULLONG_MAX ||
+            !yvex_core_u64_add(report->source_tensor_total_elements, elements, &report->source_tensor_total_elements)) {
             report->source_tensor_total_elements = ULLONG_MAX;
         }
-        if (info->rank > report->native_max_rank) {
-            report->native_max_rank = info->rank;
-        }
-        if (info->rank > report->source_tensor_max_rank) {
-            report->source_tensor_max_rank = info->rank;
-        }
-        if (elements > report->native_max_tensor_elements) {
-            report->native_max_tensor_elements = elements;
-        }
-        if (elements > report->source_tensor_max_elements) {
-            report->source_tensor_max_elements = elements;
-        }
+        report->native_max_rank = source_report_u64_max(report->native_max_rank, info->rank);
+        report->source_tensor_max_rank =
+            source_report_u64_max(report->source_tensor_max_rank, info->rank);
+        report->native_max_tensor_elements =
+            source_report_u64_max(report->native_max_tensor_elements, elements);
+        report->source_tensor_max_elements =
+            source_report_u64_max(report->source_tensor_max_elements, elements);
         if (source_report_tensor_shape_first_seen(table, i)) {
             report->source_tensor_shape_count++;
         }
         source_report_metadata_add_sample(report, info, elements);
         if (info->data_bytes > report->native_largest_tensor_bytes) {
             report->native_largest_tensor_bytes = info->data_bytes;
-            snprintf(report->native_largest_tensor_name,
-                     sizeof(report->native_largest_tensor_name),
-                     "%s",
-                     info->name ? info->name : "unknown");
+            yvex_core_text_copy(report->native_largest_tensor_name,
+                                sizeof(report->native_largest_tensor_name),
+                                info->name ? info->name : "unknown");
         }
         if (info->data_bytes > report->source_tensor_largest_declared_bytes) {
             source_report_tensor_shape_string(info, shape, sizeof(shape));
             report->source_tensor_largest_declared_bytes = info->data_bytes;
             report->source_tensor_largest_rank = info->rank;
             report->source_tensor_largest_elements = elements;
-            snprintf(report->source_tensor_largest_name,
-                     sizeof(report->source_tensor_largest_name),
-                     "%s",
-                     info->name ? info->name : "unknown");
-            snprintf(report->source_tensor_largest_file,
-                     sizeof(report->source_tensor_largest_file),
-                     "%s",
-                     source_report_file_label(info->shard_path));
-            snprintf(report->source_tensor_largest_dtype,
-                     sizeof(report->source_tensor_largest_dtype),
-                     "%s",
-                     yvex_native_dtype_name(info->dtype));
-            snprintf(report->source_tensor_largest_shape,
-                     sizeof(report->source_tensor_largest_shape),
-                     "%s",
-                     shape);
+            yvex_core_text_copy(report->source_tensor_largest_name,
+                                sizeof(report->source_tensor_largest_name),
+                                info->name ? info->name : "unknown");
+            yvex_core_text_copy(report->source_tensor_largest_file,
+                                sizeof(report->source_tensor_largest_file),
+                                source_report_file_label(info->shard_path));
+            yvex_core_text_copy(report->source_tensor_largest_dtype,
+                                sizeof(report->source_tensor_largest_dtype),
+                                yvex_native_dtype_name(info->dtype));
+            yvex_core_text_copy(report->source_tensor_largest_shape,
+                                sizeof(report->source_tensor_largest_shape), shape);
         }
     }
     if (active_shard) {
@@ -1099,9 +933,10 @@ static void source_report_choose_report_file(char *out,
                                              const char *kind,
                                              int *out_exists) {
     char family_dir[YVEX_PATH_CAP];
-    char file_name[192];
+    char target_name[192];
+    char family_name[192];
     const char *suffix;
-    int n;
+    int manifest, target_valid, family_valid;
 
     if (out_exists) {
         *out_exists = 0;
@@ -1111,32 +946,26 @@ static void source_report_choose_report_file(char *out,
     }
     out[0] = '\0';
 
-    suffix = strcmp(kind, "manifest") == 0 ? "source-manifest.json" : "native-inventory.json";
+    manifest = strcmp(kind, "manifest") == 0;
+    suffix = manifest ? "source-manifest.json" : "native-inventory.json";
     if (source_path && source_path[0] &&
-        (source_report_manifest_file_exists(out,
-                                            cap,
-                                            source_path,
-                                            strcmp(kind, "manifest") == 0
-                                                ? "source_manifest.json"
-                                                : suffix) ||
-         (strcmp(kind, "manifest") == 0 &&
+        (source_report_manifest_file_exists(
+             out, cap, source_path, manifest ? "source_manifest.json" : suffix) ||
+         (manifest &&
           source_report_manifest_file_exists(out, cap, source_path, suffix))))
         goto found;
     if (!reports_root || !reports_root[0] ||
-        !source_report_path_format(
-            family_dir, sizeof(family_dir), "%s/%s", reports_root, profile->family_key))
+        !source_report_path_join(family_dir, sizeof(family_dir), reports_root, profile->family_key))
         return;
-    n = snprintf(file_name, sizeof(file_name), "%s.%s", target, suffix);
-    if (n >= 0 && (size_t)n < sizeof(file_name) &&
-        source_report_manifest_file_exists(out, cap, family_dir, file_name))
+    target_valid = snprintf(target_name, sizeof(target_name), "%s.%s", target, suffix);
+    family_valid = snprintf(family_name, sizeof(family_name), "%s-%s", profile->family_key, suffix);
+    target_valid = target_valid >= 0 && (size_t)target_valid < sizeof(target_name);
+    family_valid = family_valid >= 0 && (size_t)family_valid < sizeof(family_name);
+    if (target_valid && source_report_manifest_file_exists(out, cap, family_dir, target_name))
         goto found;
-    n = snprintf(file_name, sizeof(file_name), "%s-%s", profile->family_key, suffix);
-    if (n >= 0 && (size_t)n < sizeof(file_name) &&
-        source_report_manifest_file_exists(out, cap, family_dir, file_name))
+    if (family_valid && source_report_manifest_file_exists(out, cap, family_dir, family_name))
         goto found;
-    n = snprintf(file_name, sizeof(file_name), "%s.%s", target, suffix);
-    if (n < 0 || (size_t)n >= sizeof(file_name) ||
-        !source_report_path_format(out, cap, "%s/%s", family_dir, file_name))
+    if (!target_valid || !source_report_path_join(out, cap, family_dir, target_name))
         out[0] = '\0';
     return;
 
@@ -1198,10 +1027,9 @@ static void source_report_probe_manifest(yvex_source_report *report,
     report->manifest_has_schema = source_report_manifest_blob_has_field(buf, "schema");
     report->manifest_schema_matches =
         source_report_manifest_blob_has_value(buf, "yvex.source_manifest.v1");
-    snprintf(report->manifest_schema_version,
-             sizeof(report->manifest_schema_version),
-             "%s",
-             report->manifest_schema_matches ? "yvex.source_manifest.v1" : "unknown");
+    yvex_core_text_copy(report->manifest_schema_version,
+                        sizeof(report->manifest_schema_version),
+                        report->manifest_schema_matches ? "yvex.source_manifest.v1" : "unknown");
     report->manifest_has_family =
         source_report_manifest_blob_has_field(buf, "family") ||
         source_report_manifest_blob_has_value(buf, profile->family_key) ||
@@ -1251,23 +1079,18 @@ static void source_report_apply_deepseek_verification(yvex_source_report *report
     const yvex_source_verification *verification = &report->verification;
 
     if (verification->repository_id[0]) {
-        snprintf(report->identity_repo_id,
-                 sizeof(report->identity_repo_id),
-                 "%s",
-                 verification->repository_id);
+        yvex_core_text_copy(report->identity_repo_id, sizeof(report->identity_repo_id),
+                            verification->repository_id);
     }
     if (verification->revision[0]) {
-        snprintf(report->identity_revision,
-                 sizeof(report->identity_revision),
-                 "%s",
-                 verification->revision);
+        yvex_core_text_copy(report->identity_revision, sizeof(report->identity_revision),
+                            verification->revision);
     }
-    snprintf(report->identity_local_source_dir,
-             sizeof(report->identity_local_source_dir),
-             "%s",
-             verification->resolved_source_path);
-    snprintf(
-        report->manifest_path, sizeof(report->manifest_path), "%s", verification->manifest_path);
+    yvex_core_text_copy(report->identity_local_source_dir,
+                        sizeof(report->identity_local_source_dir),
+                        verification->resolved_source_path);
+    yvex_core_text_copy(report->manifest_path, sizeof(report->manifest_path),
+                        verification->manifest_path);
     report->manifest_exists = verification->manifest_path[0] != '\0';
     report->source_identity_from_path = verification->path_verified;
     report->config_exists = verification->config_valid;
@@ -1304,6 +1127,40 @@ static const char *source_report_presence(int present) {
     return present ? "present" : "missing";
 }
 
+/* Purpose: classify one release-verification fact without duplicating release gating. */
+static const char *source_report_verification_state(int release,
+                                                    int verified,
+                                                    const char *other) {
+    return release ? verified ? "verified" : "blocked" : other;
+}
+
+/* Purpose: classify header-derived inventory evidence through one shared state machine. */
+static const char *source_report_header_status(int source_exists,
+                                               unsigned long long shard_count,
+                                               unsigned long long error_count,
+                                               unsigned long long evidence_count) {
+    if (!source_exists)
+        return "missing";
+    if (!shard_count)
+        return "no-safetensors";
+    if (error_count)
+        return "header-error";
+    return evidence_count ? "header-only" : "unknown";
+}
+
+/* Purpose: derive tensor-metadata availability from the canonical header inventory state. */
+static const char *source_report_native_metadata_status(const char *inventory_status,
+                                                        unsigned long long tensor_count) {
+    if (strcmp(inventory_status, "header-only") == 0)
+        return "header-only";
+    if (strcmp(inventory_status, "header-error") == 0)
+        return tensor_count ? "partial-header-only" : "header-error";
+    if (strcmp(inventory_status, "missing") == 0 ||
+        strcmp(inventory_status, "no-safetensors") == 0)
+        return "not-present";
+    return "unknown";
+}
+
 /* Purpose: project report manifest match facts while preserving the canonical source report invariants. */
 static const char *
 source_report_manifest_match(const yvex_source_report *report, int has_field, int matches) {
@@ -1336,24 +1193,18 @@ static void source_report_finalize_identity(yvex_source_report *report,
                                             int has_tokenizer) {
     facts->verification_status =
         deepseek ? yvex_source_verification_status(&report->verification) : "not-verified";
-    facts->repository_status =
-        deepseek ? report->verification.repository_verified ? "verified" : "blocked"
-                 : "not-verified";
-    facts->revision_status =
-        deepseek ? report->verification.revision_verified ? "verified" : "blocked" : "unknown";
-    facts->config_identity_status =
-        deepseek ? report->verification.config_valid ? "verified" : "blocked" : "not-verified";
-    facts->tokenizer_verification_status = deepseek
-                                               ? report->verification.tokenizer_json_valid &&
-                                                         report->verification.tokenizer_config_valid
-                                                     ? "verified"
-                                                     : "blocked"
-                                               : "not-verified";
+    facts->repository_status = source_report_verification_state(
+        deepseek, report->verification.repository_verified, "not-verified");
+    facts->revision_status = source_report_verification_state(
+        deepseek, report->verification.revision_verified, "unknown");
+    facts->config_identity_status = source_report_verification_state(
+        deepseek, report->verification.config_valid, "not-verified");
     facts->tokenizer_verified = deepseek && report->verification.tokenizer_json_valid &&
                                 report->verification.tokenizer_config_valid;
-    facts->generation_config_status =
-        deepseek ? report->verification.generation_config_valid ? "verified" : "blocked"
-                 : "not-verified";
+    facts->tokenizer_verification_status = source_report_verification_state(
+        deepseek, facts->tokenizer_verified, "not-verified");
+    facts->generation_config_status = source_report_verification_state(
+        deepseek, report->verification.generation_config_valid, "not-verified");
     facts->shard_index_status = !deepseek                                  ? "not-verified"
                                 : report->verification.shard_index_valid   ? "verified"
                                 : report->verification.shard_index_present ? "malformed"
@@ -1406,41 +1257,21 @@ static void source_report_finalize_inventory(yvex_source_report *report,
     const unsigned long long mib = 1024ull * 1024ull;
     const unsigned long long gib = 1024ull * mib;
 
-    if (!report->source_exists) {
-        facts->native_inventory_status = "missing";
-    } else if (!report->native_safetensors_count) {
-        facts->native_inventory_status = "no-safetensors";
-    } else if (report->native_safetensors_header_error_count) {
-        facts->native_inventory_status = "header-error";
-    } else if (report->native_safetensors_header_read_count) {
-        facts->native_inventory_status = "header-only";
-    } else {
-        facts->native_inventory_status = "unknown";
-    }
+    facts->native_inventory_status =
+        source_report_header_status(report->source_exists,
+                                    report->native_safetensors_count,
+                                    report->native_safetensors_header_error_count,
+                                    report->native_safetensors_header_read_count);
     facts->native_inventory_source = report->source_exists ? "source-path" : "not-present";
-    if (!report->source_exists) {
-        facts->tensor_metadata_status = "missing";
-    } else if (!report->native_safetensors_count) {
-        facts->tensor_metadata_status = "no-safetensors";
-    } else if (report->source_tensor_metadata_error_count) {
-        facts->tensor_metadata_status = "header-error";
-    } else if (report->source_tensor_count || report->native_safetensors_header_read_count) {
-        facts->tensor_metadata_status = "header-only";
-    } else {
-        facts->tensor_metadata_status = "unknown";
-    }
+    facts->tensor_metadata_status =
+        source_report_header_status(report->source_exists,
+                                    report->native_safetensors_count,
+                                    report->source_tensor_metadata_error_count,
+                                    report->source_tensor_count ||
+                                        report->native_safetensors_header_read_count);
     facts->tensor_metadata_source = report->source_exists ? "source-path" : "not-present";
-    if (strcmp(facts->native_inventory_status, "header-only") == 0) {
-        facts->native_tensor_metadata_status = "header-only";
-    } else if (strcmp(facts->native_inventory_status, "header-error") == 0) {
-        facts->native_tensor_metadata_status =
-            report->native_tensor_count ? "partial-header-only" : "header-error";
-    } else if (strcmp(facts->native_inventory_status, "missing") == 0 ||
-               strcmp(facts->native_inventory_status, "no-safetensors") == 0) {
-        facts->native_tensor_metadata_status = "not-present";
-    } else {
-        facts->native_tensor_metadata_status = "unknown";
-    }
+    facts->native_tensor_metadata_status = source_report_native_metadata_status(
+        facts->native_inventory_status, report->native_tensor_count);
     facts->native_tensor_payload_status =
         strcmp(facts->native_inventory_status, "missing") == 0 ||
                 strcmp(facts->native_inventory_status, "no-safetensors") == 0
@@ -1588,16 +1419,14 @@ static void source_report_probe_sidecars(const yvex_source_report_request *optio
     char file_name[192];
     size_t index;
 
-    if (!source_report_path_format(registry_family_dir,
-                                   sizeof(registry_family_dir),
-                                   "%s/%s",
-                                   paths->registry_root,
-                                   options->profile->family_key) ||
-        !source_report_path_format(reports_family_dir,
-                                   sizeof(reports_family_dir),
-                                   "%s/%s",
-                                   paths->reports_root,
-                                   options->profile->family_key))
+    if (!source_report_path_join(registry_family_dir,
+                                 sizeof(registry_family_dir),
+                                 paths->registry_root,
+                                 options->profile->family_key) ||
+        !source_report_path_join(reports_family_dir,
+                                 sizeof(reports_family_dir),
+                                 paths->reports_root,
+                                 options->profile->family_key))
         return;
     for (index = 0u; index < sizeof(source_sidecars) / sizeof(source_sidecars[0]); ++index) {
         const source_sidecar_fact *fact = &source_sidecars[index];
@@ -1605,12 +1434,11 @@ static void source_report_probe_sidecars(const yvex_source_report_request *optio
         int *exists = (int *)(void *)((unsigned char *)report + fact->exists_offset);
 
         snprintf(file_name, sizeof(file_name), "%s%s", options->target, fact->suffix);
-        (void)source_report_path_format(path,
-                                        YVEX_PATH_CAP,
-                                        "%s/%s",
-                                        fact->registry_root ? registry_family_dir
-                                                            : reports_family_dir,
-                                        file_name);
+        (void)source_report_path_join(path,
+                                      YVEX_PATH_CAP,
+                                      fact->registry_root ? registry_family_dir
+                                                          : reports_family_dir,
+                                      file_name);
         *exists = path[0] && access(path, F_OK) == 0;
     }
     source_report_probe_map_sidecars(report);
@@ -1716,15 +1544,13 @@ int yvex_source_report_build(const yvex_source_report_request *request,
     }
 
     if (options->source) {
-        if (!source_report_path_format(
-                report->source_path, sizeof(report->source_path), "%s", options->source, NULL)) {
+        if (strlen(options->source) >= sizeof(report->source_path)) {
             yvex_error_set(err, YVEX_ERR_BOUNDS, "source_report_build", "source path is too long");
             return YVEX_ERR_BOUNDS;
         }
-        snprintf(report->source_path_source,
-                 sizeof(report->source_path_source),
-                 "%s",
-                 "explicit-source");
+        yvex_core_text_copy(report->source_path, sizeof(report->source_path), options->source);
+        yvex_core_text_copy(report->source_path_source,
+                            sizeof(report->source_path_source), "explicit-source");
     } else {
         if (deepseek) {
             n = yvex_source_target_path(report->source_path,
@@ -1745,35 +1571,31 @@ int yvex_source_report_build(const yvex_source_report_request *request,
             yvex_error_set(err, YVEX_ERR_BOUNDS, "source_report_build", "source path is too long");
             return YVEX_ERR_BOUNDS;
         }
-        snprintf(report->source_path_source,
-                 sizeof(report->source_path_source),
-                 "%s",
-                 operator_paths.models_root_source);
+        yvex_core_text_copy(report->source_path_source,
+                            sizeof(report->source_path_source),
+                            operator_paths.models_root_source);
     }
-    snprintf(report->identity_target_id, sizeof(report->identity_target_id), "%s", options->target);
-    snprintf(report->identity_family,
-             sizeof(report->identity_family),
-             "%s",
-             options->profile->family_key);
+    yvex_core_text_copy(report->identity_target_id, sizeof(report->identity_target_id),
+                        options->target);
+    yvex_core_text_copy(report->identity_family, sizeof(report->identity_family),
+                        options->profile->family_key);
     if (deepseek) {
         const yvex_source_target_identity *identity = yvex_source_release_identity();
 
-        snprintf(
-            report->identity_model, sizeof(report->identity_model), "%s", identity->model_name);
-        snprintf(report->identity_repo_id,
-                 sizeof(report->identity_repo_id),
-                 "%s",
-                 identity->upstream_repo_id);
+        yvex_core_text_copy(report->identity_model, sizeof(report->identity_model),
+                            identity->model_name);
+        yvex_core_text_copy(report->identity_repo_id, sizeof(report->identity_repo_id),
+                            identity->upstream_repo_id);
     }
     if (options->source) {
-        const char *base = source_report_path_basename(report->source_path);
+        const char *base = yvex_source_path_basename(report->source_path);
         if (base && strcmp(base, options->target) == 0 &&
-            source_report_target_matches_family_name(options->profile->family_key, base)) {
+            yvex_source_target_matches_family_name(options->profile->family_key, base)) {
             report->source_identity_from_path = 1;
         }
     }
     if (!report->identity_model[0] && strcmp(options->target, options->profile->target_id) != 0) {
-        snprintf(report->identity_model, sizeof(report->identity_model), "%s", options->target);
+        yvex_core_text_copy(report->identity_model, sizeof(report->identity_model), options->target);
     }
     source_report_probe_sidecars(options, &operator_paths, deepseek, report);
     rc = source_report_scan_source(options, &operator_paths, deepseek, report, err);
@@ -1819,42 +1641,30 @@ int yvex_source_report_build(const yvex_source_report_request *request,
         yvex_error_clear(err);
         return YVEX_OK;
     }
-    if (!report->source_exists) {
-        report->status = "source-target-profiled";
-        report->top_blocker = options->profile->source_manifest_blocker;
-        report->next_row = options->profile->model_class_next;
-    } else if (!report->manifest_exists) {
-        report->status = "source-present-report-only";
-        report->top_blocker = options->profile->source_manifest_blocker;
-        report->next_row = options->profile->model_class_next;
-    } else {
-        report->status = "source-profile-incomplete";
-        report->top_blocker = options->profile->model_class_blocker;
-        report->next_row = options->profile->model_class_next;
-    }
+    report->status = !report->source_exists    ? "source-target-profiled"
+                     : !report->manifest_exists ? "source-present-report-only"
+                                                : "source-profile-incomplete";
+    report->top_blocker = report->manifest_exists ? options->profile->model_class_blocker
+                                                   : options->profile->source_manifest_blocker;
+    report->next_row = options->profile->model_class_next;
     if (report->source_exists && report->tensor_map_exists && !report->tensor_map_incomplete &&
         report->output_head_map_exists && !report->output_head_map_missing) {
-        if (report->tokenizer_map_exists) {
-            report->top_blocker = "quant-policy-or-artifact-emitter";
-            report->next_row = "V010.QUANT.1";
-        } else {
-            report->top_blocker = options->profile->tokenizer_blocker;
-            report->next_row = "V010.MAP.7";
-        }
+        report->top_blocker = report->tokenizer_map_exists
+                                  ? "quant-policy-or-artifact-emitter"
+                                  : options->profile->tokenizer_blocker;
+        report->next_row = report->tokenizer_map_exists ? "V010.QUANT.1" : "V010.MAP.7";
     }
 
-    if (!report->source_exists) {
-        source_report_add_blocker(report, options->profile->source_path_blocker);
-    }
-    if (!report->manifest_exists) {
-        source_report_add_blocker(report, options->profile->source_manifest_blocker);
-    }
-    if (!report->config_exists) {
-        source_report_add_blocker(report, options->profile->source_config_blocker);
-    }
-    if (!(report->tokenizer_json_exists || report->tokenizer_config_exists)) {
-        source_report_add_blocker(report, options->profile->tokenizer_blocker);
-    }
+    source_report_add_blocker(
+        report, report->source_exists ? NULL : options->profile->source_path_blocker);
+    source_report_add_blocker(
+        report, report->manifest_exists ? NULL : options->profile->source_manifest_blocker);
+    source_report_add_blocker(
+        report, report->config_exists ? NULL : options->profile->source_config_blocker);
+    source_report_add_blocker(report,
+                              report->tokenizer_json_exists || report->tokenizer_config_exists
+                                  ? NULL
+                                  : options->profile->tokenizer_blocker);
     for (i = 0; i < options->profile->tail_blocker_count; ++i) {
         if (report->source_exists && report->tensor_map_exists && !report->tensor_map_incomplete &&
             source_report_tail_blocker_is_tensor_map(options->profile->tail_blockers[i])) {

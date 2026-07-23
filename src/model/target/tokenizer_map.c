@@ -288,8 +288,9 @@ static void tokenizer_write_sidecar(const yvex_model_target_request *request,
     if (!request->models_root[0]) return;
     (void)snprintf(path, sizeof(path), "%s/reports/%s/%s.tokenizer-map.json",
                    request->models_root, family, request->target_id);
-    (void)yvex_model_target_write_tokenizer_sidecar(path, request->target_id,
-                                                    family, "present-report-only");
+    (void)yvex_model_target_write_sidecar(YVEX_MODEL_TARGET_SIDECAR_TOKENIZER, path,
+                                          request->target_id, family,
+                                          "present-report-only", NULL);
 }
 
 /* Purpose: project tokenizer json report from typed facts without capability drift. */

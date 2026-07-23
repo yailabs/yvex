@@ -1,5 +1,5 @@
 /* Owner: src/cli/commands
- * Owns: public command symbols for models/fullmodel/attention/context/moe and tensor-collection dispatch.
+ * Owns: public command symbols for models/fullmodel/context/moe and tensor-collection dispatch.
  * Does not own: model registry facts, model reference construction, gate execution, artifact inspection,
  *   source/native-weight inspection, output formatting, JSON/table formatting, direct stdout/stderr
  *   writing, artifact emission, runtime generation, eval, benchmark, or release decisions.
@@ -7,7 +7,7 @@
  *   surface implementation.
  * Boundary: command dispatch does not imply quantization, artifact emission, runtime generation, benchmark
  *   evidence, or release readiness.
- * Purpose: provide public command symbols for models/fullmodel/attention/context/moe and tensor-collection
+ * Purpose: provide public command symbols for models/fullmodel/context/moe and tensor-collection
  *   dispatch.
  * Inputs: typed command arguments and borrowed domain APIs.
  * Effects: dispatches domain calls and routes operator bytes only through CLI I/O.
@@ -74,9 +74,6 @@ static int download_paths_prepare(const yvex_cli_models_download_options *option
  * Boundary: No capability policy. */
 int yvex_models_command(int arg_count, char **args)
 {
-    (void)yvex_model_artifacts_args_parse;
-    (void)yvex_model_artifact_report_build;
-    (void)yvex_model_artifacts_render;
     return yvex_model_artifacts_surface_models_command(arg_count, args);
 }
 
@@ -108,26 +105,6 @@ int yvex_fullmodel_command(int arg_count, char **args)
 void yvex_fullmodel_help(FILE *fp)
 {
     yvex_model_artifacts_surface_fullmodel_help(fp);
-}
-
-/* Purpose: Orchestrate the typed attention command request (`yvex_attention_command`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-int yvex_attention_command(int arg_count, char **args)
-{
-    return yvex_model_artifacts_surface_attention_command(arg_count, args);
-}
-
-/* Purpose: Render attention help from typed facts (`yvex_attention_help`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-void yvex_attention_help(FILE *fp)
-{
-    yvex_model_artifacts_surface_attention_help(fp);
 }
 
 /* Purpose: Orchestrate the typed context command request (`yvex_context_command`).
@@ -200,8 +177,8 @@ static int model_download_read_receipt_status(const char *path, char *status, si
     char buf[8192];
 
     if (status && status_cap > 0u) status[0] = '\0';
-    if (!model_download_read_small_file(path, buf, sizeof(buf))) return 0;
-    if (!model_download_json_string_field(buf, "status", status, status_cap)) {
+    if (!yvex_core_file_read_text_prefix(path, buf, sizeof(buf))) return 0;
+    if (!yvex_json_probe_string_field(buf, "status", status, status_cap)) {
         if (status && status_cap > 0u) snprintf(status, status_cap, "unknown");
     }
     return 1;
@@ -221,7 +198,7 @@ static int model_download_read_active_process(const char *active_path, pid_t *pi
 
     if (pid_out) *pid_out = -1;
     if (pgid_out) *pgid_out = -1;
-    if (!model_download_read_small_file(active_path, buf, sizeof(buf))) return 0;
+    if (!yvex_core_file_read_text_prefix(active_path, buf, sizeof(buf))) return 0;
     pid = model_download_json_i64_field(buf, "provider_pid");
     pgid = model_download_json_i64_field(buf, "provider_pgid");
     if (pid_out) *pid_out = (pid_t)pid;
@@ -304,7 +281,7 @@ static int model_download_resolve_for_control(int arg_count, char **args, int st
     rc = parse_models_download_options_from(arg_count, args, start_index, options);
     if (rc != 0) return rc;
     model_download_report_init(report);
-    model_download_timestamp(report->created_at, sizeof(report->created_at));
+    yvex_core_timestamp_utc(report->created_at, sizeof(report->created_at));
     rc = download_identity_resolve(options, report, operator_paths, provider_kind,
                                    &identity, err, 1);
     if (rc != YVEX_OK) return rc;
@@ -1240,7 +1217,7 @@ static int command_models_download_execute(int arg_count, char **args, int start
     model_download_report_init(&report);
     yvex_error_clear(&err);
     memset(&account_obs, 0, sizeof(account_obs));
-    model_download_timestamp(report.created_at, sizeof(report.created_at));
+    yvex_core_timestamp_utc(report.created_at, sizeof(report.created_at));
 
     rc = download_identity_resolve(&options, &report, &operator_paths,
                                    &provider_kind, &identity, &err, 0);

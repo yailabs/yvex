@@ -91,10 +91,123 @@ void yvex_model_target_report_prepare(
         const char *value = *(const char *const *)(source + field->profile_offset);
 
         if (value) {
-            (void)snprintf((char *)(destination + field->report_offset),
-                           field->capacity, "%s", value);
+            yvex_core_text_copy((char *)(destination + field->report_offset), field->capacity, value);
         }
     }
+}
+
+/* Purpose: open one verified DeepSeek coverage owner and prepare its report envelope.
+ * Inputs: request and diagnostic/profile strings are borrowed; report receives coverage.
+ * Effects: verifies source metadata and transfers the owned coverage object to report.
+ * Failure: bounds failures propagate; coverage refusals become the established blocked report.
+ * Boundary: verified coverage reads no tensor payload and admits no artifact or runtime path. */
+int yvex_model_target_report_release_coverage(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    const char *operation,
+    const char *error_where,
+    const char *success_status,
+    const char *success_boundary,
+    yvex_error *err)
+{
+    const yvex_model_family_api *family = yvex_model_register_deepseek_v4();
+    yvex_source_verification verification;
+    yvex_deepseek_tensor_coverage *coverage = NULL;
+    yvex_deepseek_tensor_coverage_failure failure;
+    char models_root[512];
+    char source_path[512];
+    int rc;
+
+    if (!request || !report || !operation || !error_where || !success_status ||
+        !success_boundary || !family) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_target_report",
+                       "DeepSeek coverage report arguments are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!yvex_model_target_release_source_paths(
+            request, models_root, sizeof(models_root), source_path,
+            sizeof(source_path))) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, error_where,
+                       "DeepSeek source path exceeds report bounds");
+        return YVEX_ERR_BOUNDS;
+    }
+    rc = family->coverage.open_verified_source(
+        &coverage, &verification, source_path, models_root, &failure, err);
+    if (rc != YVEX_OK) {
+        report->status = "tensor-coverage-blocked";
+        report->exit_code = 5;
+        yvex_model_target_report_add_error(
+            report,
+            "model-target %s: DeepSeek coverage refused: %s tensor=%s",
+            operation, family->coverage.failure_name(failure.code),
+            failure.tensor_name[0] ? failure.tensor_name : "none");
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    report->family_coverage = coverage;
+    {
+        const yvex_model_target_report_profile profile = {
+            .status = success_status, .target_id = request->target_id,
+            .family = "deepseek", .stage = "header-only",
+            .tensor_map_status = "blocked", .runtime_status = "unsupported",
+            .generation_status = "unsupported",
+            .next_row = "V010.SOURCE.PAYLOAD.STREAM.0",
+            .boundary = success_boundary
+        };
+
+        yvex_model_target_report_prepare(report, request, &profile);
+    }
+    return YVEX_OK;
+}
+
+/* Purpose: publish one shared request-shape refusal without policy-specific rows. */
+static int model_target_report_refuse(yvex_model_target_report *report,
+                                      const char *status,
+                                      const char *message)
+{
+    report->status = status;
+    report->exit_code = 2;
+    yvex_model_target_report_add_error(report, "%s", message);
+    return 0;
+}
+
+/* Purpose: enforce shared command, target, release, and output-shape rules.
+ * Inputs: request/rules/release are borrowed; report receives legacy refusal facts.
+ * Effects: mutates only report refusal state and rows.
+ * Failure: returns false after the first deterministic shape refusal.
+ * Boundary: request-shape admission performs no source or capability discovery. */
+int yvex_model_target_validate_request_shape(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    const yvex_model_target_request_rules *rules,
+    const char *release)
+{
+    if (!request || !report || !rules) return 0;
+    if (request->kind != rules->expected_kind) {
+        return model_target_report_refuse(report, rules->kind_failure_status, rules->kind_failure_message);
+    }
+    if (rules->required_target_operation && !request->target_id[0]) {
+        report->status = "parser-error";
+        report->exit_code = 2;
+        yvex_model_target_report_add_error(
+            report, "model-target %s: requires TARGET",
+            rules->required_target_operation);
+        return 0;
+    }
+    if (release && release[0] && strcmp(release, "v0.1.0") != 0) {
+        report->status = "unsupported-release";
+        report->exit_code = 2;
+        yvex_model_target_report_add_row(report, "status: unsupported-release");
+        yvex_model_target_report_add_row(report, "release: %s", release);
+        yvex_model_target_report_add_error(report, "unsupported release: %s",
+                                           release);
+        return 0;
+    }
+    if (rules->reject_json &&
+        request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
+        return model_target_report_refuse(report, "unsupported-output-mode", "JSON output is unsupported");
+    }
+    return 1;
 }
 
 /* Purpose: project model target report store from typed facts without capability drift. */
@@ -377,6 +490,82 @@ int yvex_model_target_probe_header(const char *path, char **out)
     header[header_length] = '\0';
     *out = header;
     return 1;
+}
+
+static const char *const source_profile_metadata[] = {
+    "tokenizer.json",
+    "config.json",
+    "generation_config.json",
+    "special_tokens_map.json"
+};
+
+/* Purpose: count exact lexical dtype markers in one bounded header. */
+static unsigned long source_profile_count(const char *text, const char *needle)
+{
+    unsigned long count = 0u;
+    const char *cursor = text;
+
+    while (cursor && needle && needle[0] &&
+           (cursor = strstr(cursor, needle)) != NULL) {
+        ++count;
+        cursor += strlen(needle);
+    }
+    return count;
+}
+
+/* Purpose: gather the shared source/header profile consumed by target reports.
+ * Inputs: request/family are borrowed; profile receives value-only lexical evidence.
+ * Effects: probes one bounded header and four metadata sidecars; payload is untouched.
+ * Failure: absent or malformed inputs remain deterministic false/zero facts.
+ * Boundary: lexical source evidence does not admit mapping, quantization, or runtime. */
+void yvex_model_target_probe_source_profile(
+    const yvex_model_target_request *request,
+    const char *family,
+    yvex_model_target_source_profile *profile)
+{
+    char directory[1024];
+    char path[1200];
+    char *header = NULL;
+    unsigned long known;
+    unsigned long all;
+    size_t index;
+
+    if (!profile) return;
+    memset(profile, 0, sizeof(*profile));
+    if (!request || !family) return;
+    (void)yvex_model_target_probe_source_path(
+        request, family, NULL, directory, sizeof(directory));
+    profile->source_requested = directory[0] != '\0';
+    if (!profile->source_requested) return;
+    profile->source_directory_present =
+        yvex_model_target_probe_directory(directory);
+    (void)snprintf(path, sizeof(path), "%s/model.safetensors", directory);
+    profile->header_present = yvex_model_target_probe_header(path, &header);
+    if (header) {
+        profile->f32_count = source_profile_count(header, "\"dtype\":\"F32\"");
+        profile->f16_count = source_profile_count(header, "\"dtype\":\"F16\"");
+        profile->bf16_count = source_profile_count(header, "\"dtype\":\"BF16\"");
+        known = profile->f32_count + profile->f16_count + profile->bf16_count;
+        all = source_profile_count(header, "\"dtype\":");
+        profile->tensor_count = known;
+        profile->other_count = all >= known ? all - known : 0u;
+        profile->attention_k_present = strstr(header, "k_proj.weight") != NULL;
+        profile->output_head_present = strstr(header, "lm_head.weight") != NULL ||
+                                       strstr(header, "output.weight") != NULL;
+        profile->output_head_ambiguous = strstr(header, "lm_head.weight") != NULL &&
+                                         strstr(header, "output.weight") != NULL;
+        free(header);
+    }
+    profile->metadata_present = 1;
+    for (index = 0u; index < sizeof(source_profile_metadata) /
+                                sizeof(source_profile_metadata[0]); ++index) {
+        (void)snprintf(path, sizeof(path), "%s/%s", directory,
+                       source_profile_metadata[index]);
+        if (!yvex_model_target_probe_file(path)) {
+            profile->metadata_present = 0;
+            break;
+        }
+    }
 }
 
 /* Purpose: test one lexical role marker without owning model semantics. */

@@ -115,10 +115,6 @@ static const char *const identity_status_names[] = {
     "admitted", "removed", "reserved", "outside-baseline", "unknown",
 };
 
-static const char *const storage_class_names[] = {
-    "unknown", "scalar-floating", "scalar-integer", "block-quantized",
-};
-
 /* Purpose: expose the complete pinned qtype identity-table cardinality.
  * Inputs: none.
  * Effects: none.
@@ -187,18 +183,6 @@ const char *yvex_gguf_qtype_identity_status_name(yvex_gguf_qtype_identity_status
     return status >= YVEX_GGUF_QTYPE_IDENTITY_ADMITTED && status <= YVEX_GGUF_QTYPE_IDENTITY_UNKNOWN
                ? identity_status_names[status]
                : identity_status_names[YVEX_GGUF_QTYPE_IDENTITY_UNKNOWN];
-}
-
-/* Purpose: render one structural qtype storage class.
- * Inputs: storage-class enum.
- * Effects: none.
- * Failure: out-of-range values yield unknown.
- * Boundary: storage class makes no decoder or compute claim. */
-const char *yvex_gguf_qtype_storage_class_name(yvex_gguf_qtype_storage_class storage_class) {
-    return storage_class >= YVEX_GGUF_QTYPE_STORAGE_UNKNOWN &&
-                   storage_class <= YVEX_GGUF_QTYPE_STORAGE_BLOCK_QUANTIZED
-               ? storage_class_names[storage_class]
-               : storage_class_names[YVEX_GGUF_QTYPE_STORAGE_UNKNOWN];
 }
 
 typedef struct {
@@ -380,29 +364,6 @@ int yvex_gguf_qtype_supported_for_storage(unsigned int qtype, const char **reaso
     return status == YVEX_GGUF_QTYPE_STORAGE_OK;
 }
 
-/* Purpose: project reference-decoder availability from the canonical numeric registry.
- * Inputs: qtype ID.
- * Effects: none.
- * Failure: unknown or decoderless qtypes return false.
- * Boundary: decoder availability does not imply artifact or runtime support. */
-int yvex_gguf_qtype_reference_dequantization_supported(unsigned int qtype) {
-    const yvex_quant_numeric_capability *capability = yvex_quant_numeric_capability_at(qtype);
-
-    return capability && capability->reference_decoder_available;
-}
-
-/* Purpose: return the canonical structural refusal reason for one qtype identity.
- * Inputs: qtype ID.
- * Effects: none.
- * Failure: unknown identities yield the unknown-ID reason.
- * Boundary: this diagnostic performs no tensor calculation. */
-const char *yvex_gguf_qtype_refusal_reason(unsigned int qtype) {
-    yvex_gguf_qtype_storage_status status =
-        qtype_admission_status(yvex_gguf_qtype_geometry_find(qtype));
-
-    return storage_status_reason(status);
-}
-
 /* Purpose: calculate exact encoded bytes for one logical row through the compatibility ABI.
  * Inputs: qtype, row element count, writable byte count, and optional reason.
  * Effects: clears then publishes byte count only for admitted block-divisible geometry.
@@ -426,120 +387,4 @@ int yvex_gguf_qtype_storage_bytes(unsigned int qtype, unsigned long long row_ele
         return 0;
     *out = result.total_bytes;
     return 1;
-}
-
-/* Purpose: initialize fail-closed qtype ABI aggregation state.
- * Inputs: optional writable ABI record.
- * Effects: clears counters and installs the not-evaluated boundary.
- * Failure: none; a null record is a no-op.
- * Boundary: initialization does not inspect a GGUF directory. */
-void yvex_gguf_qtype_abi_init(yvex_gguf_qtype_abi *abi) {
-    if (!abi)
-        return;
-    abi->status = YVEX_GGUF_ABI_SECTION_NOT_EVALUATED;
-    abi->checked_tensor_count = 0ull;
-    abi->known_tensor_count = 0ull;
-    abi->refused_tensor_count = 0ull;
-    abi->total_storage_bytes = 0ull;
-    abi->first_refused_qtype = 0u;
-    abi->reason = "GGUF qtype ABI not evaluated";
-    abi->next_row = YVEX_GGUF_QTYPE_ABI_NEXT_ROW;
-}
-
-/* Purpose: aggregate exact qtype storage facts over every parsed tensor directory row.
- * Inputs: immutable parsed GGUF view, writable ABI result, and optional reason.
- * Effects: replaces ABI counters after a linear geometry-only traversal.
- * Failure: missing rows, storage refusal, or aggregate overflow leaves fail-closed status.
- * Boundary: aggregation reads directory facts only, never tensor payload. */
-int yvex_gguf_qtype_abi_from_gguf(const yvex_gguf *gguf, yvex_gguf_qtype_abi *abi,
-                                  const char **reason) {
-    unsigned long long i;
-    unsigned long long count;
-
-    yvex_gguf_qtype_abi_init(abi);
-    if (!gguf || !abi) {
-        if (reason)
-            *reason = "GGUF qtype ABI requires a parsed GGUF view";
-        return 0;
-    }
-
-    count = yvex_gguf_tensor_count(gguf);
-    for (i = 0ull; i < count; ++i) {
-        const yvex_gguf_tensor_info *tensor = yvex_gguf_tensor_at(gguf, i);
-        yvex_gguf_qtype_storage_result storage;
-
-        if (!tensor) {
-            abi->status = YVEX_GGUF_ABI_SECTION_MALFORMED;
-            abi->reason = "GGUF tensor_info row is missing";
-            if (reason)
-                *reason = abi->reason;
-            return 0;
-        }
-        abi->checked_tensor_count += 1ull;
-        if (yvex_gguf_qtype_tensor_storage(tensor->ggml_type, tensor->dims, tensor->rank,
-                                           &storage) != YVEX_GGUF_QTYPE_STORAGE_OK) {
-            abi->refused_tensor_count += 1ull;
-            if (abi->refused_tensor_count == 1ull) {
-                abi->first_refused_qtype = tensor->ggml_type;
-            }
-            abi->status = YVEX_GGUF_ABI_SECTION_REFUSED;
-            abi->reason = storage.reason;
-            if (reason)
-                *reason = abi->reason;
-            return 0;
-        }
-        if (abi->total_storage_bytes > ULLONG_MAX - storage.total_bytes) {
-            abi->status = YVEX_GGUF_ABI_SECTION_REFUSED;
-            abi->reason = "GGUF aggregate qtype storage bytes overflow";
-            if (reason)
-                *reason = abi->reason;
-            return 0;
-        }
-        abi->total_storage_bytes += storage.total_bytes;
-        abi->known_tensor_count += 1ull;
-    }
-
-    abi->status = YVEX_GGUF_ABI_SECTION_OK;
-    abi->reason = "GGUF qtype row-aware storage ABI accepted";
-    if (reason)
-        *reason = abi->reason;
-    return 1;
-}
-
-/* Purpose: project one geometry row and optional shape into a pointer-free report record.
- * Inputs: optional geometry, borrowed dimensions/rank, and writable row.
- * Effects: replaces the report row with canonical identity, storage, and decoder facts.
- * Failure: missing geometry or invalid shape is represented in the row rather than returned.
- * Boundary: report projection cannot change qtype admission. */
-void yvex_gguf_qtype_report_row_from_geometry(const yvex_gguf_qtype_geometry *geometry,
-                                              const unsigned long long *dims, unsigned int rank,
-                                              yvex_gguf_qtype_report_row *row) {
-    yvex_gguf_qtype_storage_result storage;
-
-    if (!row)
-        return;
-    memset(row, 0, sizeof(*row));
-    row->qtype = geometry ? geometry->qtype : 0u;
-    row->name = geometry ? geometry->name : "UNKNOWN";
-    row->identity_status =
-        geometry ? yvex_gguf_qtype_identity_status_name(geometry->identity_status) : "unknown";
-    row->storage_class =
-        geometry ? yvex_gguf_qtype_storage_class_name(geometry->storage_class) : "unknown";
-    row->block_size = geometry ? geometry->block_size : 0u;
-    row->bytes_per_block = geometry ? geometry->bytes_per_block : 0u;
-    row->scalar_width = geometry ? geometry->scalar_width : 0u;
-    row->reference_dequantization =
-        geometry && yvex_gguf_qtype_reference_dequantization_supported(geometry->qtype)
-            ? "available"
-            : "unavailable";
-    if (!geometry) {
-        row->storage_status = "unknown-qtype-id";
-        row->reason = storage_status_reason(YVEX_GGUF_QTYPE_STORAGE_UNKNOWN_ID);
-    } else {
-        (void)yvex_gguf_qtype_tensor_storage(geometry->qtype, dims, rank, &storage);
-        row->storage_status = yvex_gguf_qtype_storage_status_name(storage.status);
-        row->expected_storage_bytes = storage.total_bytes;
-        row->reason = storage.reason;
-    }
-    row->next_row = YVEX_GGUF_QTYPE_ABI_NEXT_ROW;
 }

@@ -25,64 +25,37 @@ static int graph_arg_errorf(yvex_error *err, const char *fmt, const char *value)
     return YVEX_ERR_INVALID_ARG;
 }
 
-/* Format a graph refusal that names both the selected mode and conflicting options. */
-/* Purpose: Compute graph arg error2 for its CLI invariant (`graph_arg_error2`). */
-static int graph_arg_error2(yvex_error *err, const char *fmt, const char *first,
-                            const char *second) {
-    yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "graph", fmt, first ? first : "",
-                    second ? second : "");
-    return YVEX_ERR_INVALID_ARG;
-}
-
-/* Purpose: Compute graph mode count for its CLI invariant (`graph_mode_count`). */
-static int graph_mode_count(const yvex_graph_report_request *req) {
-    return (req->execute_fixture ? 1 : 0) + (req->execute_partial ? 1 : 0) +
-           (req->execute_segment ? 1 : 0) + (req->execute_op ? 1 : 0) +
-           (req->execute_block ? 1 : 0) + (req->execute_layers ? 1 : 0);
-}
-
-/* Purpose: Compute graph args defaults for its CLI invariant (`graph_args_defaults`). */
+/* Purpose: initialize canonical graph CLI defaults.
+ * Inputs: caller-owned argument storage.
+ * Effects: replaces it with deterministic defaults.
+ * Failure: none.
+ * Boundary: defaults neither resolve paths nor admit capabilities. */
 static void graph_args_defaults(yvex_graph_args *out) {
     memset(out, 0, sizeof(*out));
-    out->request.kind = YVEX_GRAPH_REPORT_KIND_GRAPH;
-    out->request.action = YVEX_GRAPH_ACTION_DUMP;
-    out->request.mode = YVEX_GRAPH_REPORT_MODE_NORMAL;
-    out->request.backend = "cpu";
-    out->request.sequence_length = 1ull;
-    out->request.suite = "all";
-    out->request.layers = 2ull;
     out->render_mode = YVEX_GRAPH_REPORT_MODE_NORMAL;
+    out->attention.probe = "canonical";
+    out->attention.coverage = "quick";
+    out->attention.phase = "decode";
+    out->attention.mode = "eager";
+    out->attention.operation_scope = "core";
+    out->attention.trace_level = "none";
+    out->attention.progress = "auto";
+    out->attention.token_count = 1ull;
+    out->attention.warmup = 0ull;
+    out->attention.repeat = 1ull;
 }
 
 typedef enum {
     GRAPH_OPTION_TEXT,
     GRAPH_OPTION_POSITIVE,
     GRAPH_OPTION_NONNEGATIVE,
-    GRAPH_OPTION_UINT,
     GRAPH_OPTION_FLAG,
     GRAPH_OPTION_OUTPUT,
     GRAPH_OPTION_AUDIT,
     GRAPH_OPTION_JSON
 } graph_option_kind;
 
-enum { GRAPH_PARSE_MAIN = 1u, GRAPH_PARSE_CHECK = 2u, GRAPH_PARSE_ATTENTION = 4u };
-
-enum {
-    GRAPH_SEEN_BLOCK = 1u << 0,
-    GRAPH_SEEN_TOKEN_INDEX = 1u << 1,
-    GRAPH_SEEN_ROPE_POSITION = 1u << 2,
-    GRAPH_SEEN_ROPE_HEAD_DIM = 1u << 3,
-    GRAPH_SEEN_ATTENTION_SEQ = 1u << 4,
-    GRAPH_SEEN_MATMUL_M = 1u << 5,
-    GRAPH_SEEN_MATMUL_K = 1u << 6,
-    GRAPH_SEEN_MATMUL_N = 1u << 7,
-    GRAPH_SEEN_MLP_HIDDEN = 1u << 8,
-    GRAPH_SEEN_MLP_FFN = 1u << 9,
-    GRAPH_SEEN_MLP_ACTIVATION = 1u << 10,
-    GRAPH_SEEN_MLP_EXPERTS = 1u << 11,
-    GRAPH_SEEN_MLP_EXPERT_ID = 1u << 12,
-    GRAPH_SEEN_LAYERS = 1u << 13
-};
+enum { GRAPH_PARSE_ATTENTION = 1u };
 
 typedef struct {
     unsigned int seen;
@@ -100,104 +73,97 @@ typedef struct {
 } graph_option_spec;
 
 #define GRAPH_ARG(member) offsetof(yvex_graph_args, member)
-#define GRAPH_REQ(member) GRAPH_ARG(request.member)
 #define GRAPH_ATTN(member) GRAPH_ARG(attention.member)
 #define NO_FIELD ((size_t) - 1)
 
 static const graph_option_spec graph_options[] = {
-    {"--model", GRAPH_OPTION_TEXT, GRAPH_REQ(model), NO_FIELD, 0, GRAPH_PARSE_MAIN, 0,
-     "yvex: --model requires FILE_OR_ALIAS"},
-    {"--seq", GRAPH_OPTION_POSITIVE, GRAPH_REQ(sequence_length), NO_FIELD, 0, GRAPH_PARSE_MAIN, 0,
-     "yvex: --seq requires a positive integer"},
-    {"--ctx", GRAPH_OPTION_POSITIVE, GRAPH_REQ(context_length), NO_FIELD, 0, GRAPH_PARSE_MAIN, 0,
-     "yvex: --ctx requires a positive integer"},
-    {"--backend", GRAPH_OPTION_TEXT, GRAPH_REQ(backend), NO_FIELD, 0, GRAPH_PARSE_MAIN, 0,
-     "yvex: --backend requires cpu|cuda"},
-    {"--execute-fixture", GRAPH_OPTION_FLAG, GRAPH_REQ(execute_fixture), NO_FIELD, 0,
-     GRAPH_PARSE_MAIN, 0, NULL},
-    {"--fixture-token", GRAPH_OPTION_UINT, GRAPH_REQ(fixture_token), GRAPH_REQ(fixture_token_seen),
-     0, GRAPH_PARSE_MAIN, 0, "yvex: --fixture-token requires a non-negative integer"},
-    {"--execute-partial", GRAPH_OPTION_FLAG, GRAPH_REQ(execute_partial), NO_FIELD, 0,
-     GRAPH_PARSE_MAIN, 0, NULL},
-    {"--execute-segment", GRAPH_OPTION_FLAG, GRAPH_REQ(execute_segment), NO_FIELD, 0,
-     GRAPH_PARSE_MAIN, 0, NULL},
-    {"--execute-op", GRAPH_OPTION_FLAG, GRAPH_REQ(execute_op), NO_FIELD, 0, GRAPH_PARSE_MAIN, 0,
-     NULL},
-    {"--execute-block", GRAPH_OPTION_FLAG, GRAPH_REQ(execute_block), NO_FIELD, 0, GRAPH_PARSE_MAIN,
-     0, NULL},
-    {"--execute-layers", GRAPH_OPTION_FLAG, GRAPH_REQ(execute_layers), NO_FIELD, 0,
-     GRAPH_PARSE_MAIN, 0, NULL},
-    {"--op", GRAPH_OPTION_TEXT, GRAPH_REQ(op), NO_FIELD, 0, GRAPH_PARSE_MAIN, 0,
-     "yvex: --op requires rope, attention, matmul, or mlp"},
-    {"--block", GRAPH_OPTION_TEXT, GRAPH_REQ(block), NO_FIELD, GRAPH_SEEN_BLOCK, GRAPH_PARSE_MAIN,
-     0, "yvex: --block requires fixture"},
-    {"--m", GRAPH_OPTION_POSITIVE, GRAPH_REQ(m), NO_FIELD, GRAPH_SEEN_MATMUL_M, GRAPH_PARSE_MAIN, 0,
-     "yvex: --m requires a positive integer"},
-    {"--k", GRAPH_OPTION_POSITIVE, GRAPH_REQ(k), NO_FIELD, GRAPH_SEEN_MATMUL_K, GRAPH_PARSE_MAIN, 0,
-     "yvex: --k requires a positive integer"},
-    {"--n", GRAPH_OPTION_POSITIVE, GRAPH_REQ(n), NO_FIELD, GRAPH_SEEN_MATMUL_N, GRAPH_PARSE_MAIN, 0,
-     "yvex: --n requires a positive integer"},
-    {"--hidden-dim", GRAPH_OPTION_POSITIVE, GRAPH_REQ(hidden_dim), NO_FIELD, GRAPH_SEEN_MLP_HIDDEN,
-     GRAPH_PARSE_MAIN, 0, "yvex: --hidden-dim requires a positive integer"},
-    {"--ffn-dim", GRAPH_OPTION_POSITIVE, GRAPH_REQ(ffn_dim), NO_FIELD, GRAPH_SEEN_MLP_FFN,
-     GRAPH_PARSE_MAIN, 0, "yvex: --ffn-dim requires a positive integer"},
-    {"--activation", GRAPH_OPTION_TEXT, GRAPH_REQ(activation), NO_FIELD, GRAPH_SEEN_MLP_ACTIVATION,
-     GRAPH_PARSE_MAIN, 0, "yvex: --activation requires silu"},
-    {"--gated", GRAPH_OPTION_FLAG, GRAPH_REQ(gated), NO_FIELD, 0, GRAPH_PARSE_MAIN, 0, NULL},
-    {"--experts", GRAPH_OPTION_POSITIVE, GRAPH_REQ(experts), NO_FIELD, GRAPH_SEEN_MLP_EXPERTS,
-     GRAPH_PARSE_MAIN, 0, "yvex: --experts requires a positive integer"},
-    {"--expert-id", GRAPH_OPTION_NONNEGATIVE, GRAPH_REQ(expert_id), GRAPH_REQ(use_expert),
-     GRAPH_SEEN_MLP_EXPERT_ID, GRAPH_PARSE_MAIN, 0,
-     "yvex: --expert-id requires a non-negative integer"},
-    {"--layers", GRAPH_OPTION_POSITIVE, GRAPH_REQ(layers), NO_FIELD, GRAPH_SEEN_LAYERS,
-     GRAPH_PARSE_MAIN, 16, "yvex: --layers requires a positive integer"},
-    {"--seq-len", GRAPH_OPTION_POSITIVE, GRAPH_REQ(seq_len), NO_FIELD, GRAPH_SEEN_ATTENTION_SEQ,
-     GRAPH_PARSE_MAIN, 0, "yvex: --seq-len requires a positive integer"},
-    {"--position", GRAPH_OPTION_NONNEGATIVE, GRAPH_REQ(position), NO_FIELD,
-     GRAPH_SEEN_ROPE_POSITION, GRAPH_PARSE_MAIN, 0,
-     "yvex: --position requires a non-negative integer"},
-    {"--head-dim", GRAPH_OPTION_POSITIVE, GRAPH_REQ(head_dim), NO_FIELD, GRAPH_SEEN_ROPE_HEAD_DIM,
-     GRAPH_PARSE_MAIN, 0, "yvex: --head-dim requires a positive integer"},
-    {"--causal", GRAPH_OPTION_FLAG, GRAPH_REQ(causal), NO_FIELD, 0, GRAPH_PARSE_MAIN, 0, NULL},
-    {"--segment", GRAPH_OPTION_TEXT, GRAPH_REQ(segment), NO_FIELD, 0, GRAPH_PARSE_MAIN, 0,
-     "yvex: --segment requires embedding-rmsnorm"},
-    {"--partial-token", GRAPH_OPTION_UINT, GRAPH_REQ(partial_token), GRAPH_REQ(partial_token_seen),
-     0, GRAPH_PARSE_MAIN, 0, "yvex: --partial-token requires a non-negative integer"},
-    {"--tokens", GRAPH_OPTION_TEXT, GRAPH_REQ(tokens_text), GRAPH_REQ(tokens_seen), 0,
-     GRAPH_PARSE_MAIN, 0, "yvex: --tokens requires comma-separated token IDs"},
-    {"--token-index", GRAPH_OPTION_NONNEGATIVE, GRAPH_REQ(token_index), GRAPH_REQ(token_index_seen),
-     GRAPH_SEEN_TOKEN_INDEX, GRAPH_PARSE_MAIN, 0,
-     "yvex: --token-index requires a non-negative integer"},
-    {"--backend", GRAPH_OPTION_TEXT, GRAPH_REQ(backend), NO_FIELD, 0, GRAPH_PARSE_CHECK, 0,
-     "yvex: graph check --backend requires cpu|cuda"},
-    {"--suite", GRAPH_OPTION_TEXT, GRAPH_REQ(suite), NO_FIELD, 0, GRAPH_PARSE_CHECK, 0,
-     "yvex: graph check --suite requires primitives, block, layers, or all"},
-    {"--layers", GRAPH_OPTION_POSITIVE, GRAPH_REQ(layers), NO_FIELD, 0, GRAPH_PARSE_CHECK, 16,
-     "yvex: graph check --layers requires a positive integer"},
     {"--target", GRAPH_OPTION_TEXT, GRAPH_ATTN(target), NO_FIELD, 0, GRAPH_PARSE_ATTENTION, 0,
      "yvex: graph attention option requires a value"},
     {"--artifact", GRAPH_OPTION_TEXT, GRAPH_ATTN(artifact_path), NO_FIELD, 0, GRAPH_PARSE_ATTENTION,
      0, "yvex: graph attention option requires a value"},
+    {"--runtime-binding", GRAPH_OPTION_TEXT, GRAPH_ATTN(runtime_binding_path), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: graph attention option requires a value"},
+    {"--runtime-binding-dir", GRAPH_OPTION_TEXT, GRAPH_ATTN(runtime_binding_dir), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: graph attention option requires a value"},
     {"--models-root", GRAPH_OPTION_TEXT, GRAPH_ATTN(models_root), NO_FIELD, 0,
      GRAPH_PARSE_ATTENTION, 0, "yvex: graph attention option requires a value"},
     {"--backend", GRAPH_OPTION_TEXT, GRAPH_ATTN(backend), NO_FIELD, 0, GRAPH_PARSE_ATTENTION, 0,
      "yvex: graph attention option requires a value"},
     {"--probe", GRAPH_OPTION_TEXT, GRAPH_ATTN(probe), NO_FIELD, 0, GRAPH_PARSE_ATTENTION, 0,
      "yvex: graph attention option requires a value"},
-    {"--scope", GRAPH_OPTION_TEXT, GRAPH_ATTN(scope), NO_FIELD, 0, GRAPH_PARSE_ATTENTION, 0,
+    {"--scope", GRAPH_OPTION_TEXT, GRAPH_ATTN(coverage), NO_FIELD, 0, GRAPH_PARSE_ATTENTION, 0,
      "yvex: graph attention option requires a value"},
+    {"--phase", GRAPH_OPTION_TEXT, GRAPH_ATTN(phase), GRAPH_ATTN(phase_seen), 0,
+     GRAPH_PARSE_ATTENTION, 0,
+     "yvex: graph attention option requires a value"},
+    {"--mode", GRAPH_OPTION_TEXT, GRAPH_ATTN(mode), GRAPH_ATTN(mode_seen), 0,
+     GRAPH_PARSE_ATTENTION, 0,
+     "yvex: graph attention option requires a value"},
+    {"--operation-scope", GRAPH_OPTION_TEXT, GRAPH_ATTN(operation_scope), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: graph attention option requires a value"},
+    {"--trace-level", GRAPH_OPTION_TEXT, GRAPH_ATTN(trace_level), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: graph attention option requires a value"},
+    {"--progress", GRAPH_OPTION_TEXT, GRAPH_ATTN(progress), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: graph attention option requires a value"},
+    {"--input", GRAPH_OPTION_TEXT, GRAPH_ATTN(input_class), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: --input requires tensor-file"},
+    {"--layer", GRAPH_OPTION_NONNEGATIVE, GRAPH_ATTN(layer), GRAPH_ATTN(layer_seen), 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: --layer requires a non-negative integer"},
+    {"--layer-start", GRAPH_OPTION_NONNEGATIVE, GRAPH_ATTN(layer_start),
+     GRAPH_ATTN(layer_start_seen), 0, GRAPH_PARSE_ATTENTION, 0,
+     "yvex: --layer-start requires a non-negative integer"},
+    {"--layer-count", GRAPH_OPTION_POSITIVE, GRAPH_ATTN(layer_count),
+     GRAPH_ATTN(layer_count_seen), 0, GRAPH_PARSE_ATTENTION, 0,
+     "yvex: --layer-count requires a positive integer"},
+    {"--class", GRAPH_OPTION_TEXT, GRAPH_ATTN(attention_class), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: --class requires a family selection token"},
+    {"--position", GRAPH_OPTION_NONNEGATIVE, GRAPH_ATTN(position),
+     GRAPH_ATTN(position_seen), 0, GRAPH_PARSE_ATTENTION, 0,
+     "yvex: --position requires a non-negative integer"},
+    {"--history-tokens", GRAPH_OPTION_NONNEGATIVE, GRAPH_ATTN(history_tokens),
+     GRAPH_ATTN(history_tokens_seen), 0, GRAPH_PARSE_ATTENTION, 0,
+     "yvex: --history-tokens requires a non-negative integer"},
+    {"--local-capacity", GRAPH_OPTION_NONNEGATIVE, GRAPH_ATTN(local_capacity),
+     GRAPH_ATTN(local_capacity_seen), 0, GRAPH_PARSE_ATTENTION, 0,
+     "yvex: --local-capacity requires a non-negative integer"},
+    {"--compressed-capacity", GRAPH_OPTION_NONNEGATIVE, GRAPH_ATTN(compressed_capacity),
+     GRAPH_ATTN(compressed_capacity_seen), 0, GRAPH_PARSE_ATTENTION, 0,
+     "yvex: --compressed-capacity requires a non-negative integer"},
+    {"--indexer-capacity", GRAPH_OPTION_NONNEGATIVE, GRAPH_ATTN(indexer_capacity),
+     GRAPH_ATTN(indexer_capacity_seen), 0, GRAPH_PARSE_ATTENTION, 0,
+     "yvex: --indexer-capacity requires a non-negative integer"},
+    {"--capture-bucket", GRAPH_OPTION_TEXT, GRAPH_ATTN(capture_bucket), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: --capture-bucket requires a bucket identifier"},
+    {"--max-host-bytes", GRAPH_OPTION_POSITIVE, GRAPH_ATTN(maximum_host_bytes), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: --max-host-bytes requires a positive integer"},
+    {"--max-device-bytes", GRAPH_OPTION_POSITIVE, GRAPH_ATTN(maximum_device_bytes), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: --max-device-bytes requires a positive integer"},
+    {"--require-mode", GRAPH_OPTION_FLAG, GRAPH_ATTN(require_mode), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, NULL},
+    {"--baseline", GRAPH_OPTION_TEXT, GRAPH_ATTN(baseline_path), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: --baseline requires a file path"},
+    {"--write-baseline", GRAPH_OPTION_FLAG, GRAPH_ATTN(write_baseline), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, NULL},
+    {"--chart", GRAPH_OPTION_TEXT, GRAPH_ATTN(chart_path), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: --chart requires an external SVG path"},
+    {"--tokens", GRAPH_OPTION_POSITIVE, GRAPH_ATTN(token_count),
+     GRAPH_ATTN(token_count_seen), 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: --tokens requires a positive integer"},
+    {"--warmup", GRAPH_OPTION_NONNEGATIVE, GRAPH_ATTN(warmup), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: --warmup requires a non-negative integer"},
+    {"--repeat", GRAPH_OPTION_POSITIVE, GRAPH_ATTN(repeat), NO_FIELD, 0,
+     GRAPH_PARSE_ATTENTION, 0, "yvex: --repeat requires a positive integer"},
     {"--compare-backends", GRAPH_OPTION_FLAG, GRAPH_ATTN(compare_backends), NO_FIELD, 0,
      GRAPH_PARSE_ATTENTION, 0, NULL},
     {"--output", GRAPH_OPTION_OUTPUT, NO_FIELD, NO_FIELD, 0,
-     GRAPH_PARSE_MAIN | GRAPH_PARSE_CHECK | GRAPH_PARSE_ATTENTION, 0,
-     "yvex: --output requires normal|table|audit"},
+     GRAPH_PARSE_ATTENTION, 0,
+     "yvex: --output requires normal|table|audit|json|csv for attention"},
     {"--audit", GRAPH_OPTION_AUDIT, NO_FIELD, NO_FIELD, 0,
-     GRAPH_PARSE_MAIN | GRAPH_PARSE_CHECK | GRAPH_PARSE_ATTENTION, 0, NULL},
+     GRAPH_PARSE_ATTENTION, 0, NULL},
     {"--json", GRAPH_OPTION_JSON, NO_FIELD, NO_FIELD, 0, GRAPH_PARSE_ATTENTION, 0, NULL},
 };
 
 #undef GRAPH_ATTN
-#undef GRAPH_REQ
 #undef GRAPH_ARG
 
 /* Purpose: resolve one option in the immutable grammar for the selected command mode. */
@@ -217,10 +183,11 @@ static const graph_option_spec *graph_option_find(const char *flag, unsigned int
  * Failure: returns false.
  * Boundary: CLI grammar. */
 static int graph_parse_output_mode(const char *text, int allow_json, yvex_graph_report_mode *mode) {
-    static const char *const names[] = {"normal", "table", "audit", "json"};
+    static const char *const names[] = {"normal", "table", "audit", "json", "csv"};
     yvex_graph_report_mode modes[] = {YVEX_GRAPH_REPORT_MODE_NORMAL, YVEX_GRAPH_REPORT_MODE_TABLE,
-                                      YVEX_GRAPH_REPORT_MODE_AUDIT, YVEX_GRAPH_REPORT_MODE_JSON};
-    size_t count = allow_json ? 4u : 3u;
+                                      YVEX_GRAPH_REPORT_MODE_AUDIT, YVEX_GRAPH_REPORT_MODE_JSON,
+                                      YVEX_GRAPH_REPORT_MODE_CSV};
+    size_t count = allow_json ? 5u : 3u;
     size_t index;
 
     if (!text || !mode)
@@ -263,11 +230,6 @@ static int graph_option_bind(const graph_option_spec *spec, unsigned int mode, i
                 graph_arg_errorf(err, "yvex: unsupported graph output mode: %s", value);
                 return 0;
             }
-        } else if (spec->kind == GRAPH_OPTION_UINT) {
-            if (!parse_uint_allow_zero(value, (unsigned int *)field)) {
-                graph_arg_error(err, spec->error);
-                return 0;
-            }
         } else if (!(spec->kind == GRAPH_OPTION_POSITIVE
                          ? parse_positive_ull(value, (unsigned long long *)field)
                          : parse_ull_allow_zero(value, (unsigned long long *)field))) {
@@ -282,7 +244,6 @@ static int graph_option_bind(const graph_option_spec *spec, unsigned int mode, i
     if (spec->companion_offset != NO_FIELD)
         *(int *)((unsigned char *)out + spec->companion_offset) = 1;
     state->seen |= spec->seen;
-    out->request.mode = out->render_mode;
     return 1;
 }
 
@@ -291,15 +252,210 @@ static int graph_option_bind(const graph_option_spec *spec, unsigned int mode, i
  * Effects: publishes options.
  * Failure: typed refusal.
  * Boundary: no artifact or graph execution. */
-static int graph_parse_attention_execute(int argc, char **argv, yvex_graph_args *out,
-                                         yvex_error *err) {
-    graph_parse_state state = {0};
-    int i;
+static int graph_attention_value_valid(const char *value, const char *const *values,
+                                       size_t count) {
+    size_t index;
 
-    out->attention.execute = 1;
-    out->attention.probe = "canonical";
-    out->attention.scope = "quick";
-    for (i = 4; i < argc; ++i) {
+    for (index = 0; value && index < count; ++index)
+        if (strcmp(value, values[index]) == 0)
+            return 1;
+    return 0;
+}
+
+static int graph_attention_action_executes(yvex_graph_attention_action action);
+
+/* Purpose: reject a parsed control whose production descriptor has no owner yet. */
+static int graph_attention_control_refuse(yvex_error *err, const char *control,
+                                          const char *boundary) {
+    yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "graph",
+                    "yvex: %s is unavailable until %s owns it", control, boundary);
+    return YVEX_ERR_UNSUPPORTED;
+}
+
+/* Purpose: prevent accepted operator controls from becoming silently ignored state.
+ * Inputs: fully parsed attention request.
+ * Effects: none.
+ * Failure: names the exact missing production boundary.
+ * Boundary: parser refusal never fabricates a runtime descriptor field. */
+static int graph_attention_controls_validate(const yvex_graph_args *out, yvex_error *err) {
+    const int executes = graph_attention_action_executes(out->attention.action);
+
+    if (out->attention.input_class && strcmp(out->attention.input_class, "tensor-file") != 0)
+        return graph_arg_errorf(err, "yvex: unsupported attention input class: %s",
+                                out->attention.input_class);
+    if (out->attention.input_class)
+        return graph_attention_control_refuse(err, "--input tensor-file",
+                                              "the typed activation-input adapter");
+    if (out->attention.layer_seen && (out->attention.layer_start_seen ||
+                                     out->attention.layer_count_seen))
+        return graph_arg_error(err, "yvex: --layer conflicts with --layer-start/--layer-count");
+    if (out->attention.layer_start_seen != out->attention.layer_count_seen)
+        return graph_arg_error(err, "yvex: --layer-start and --layer-count are required together");
+    if (out->attention.layer_count_seen && out->attention.layer_count != 1ull)
+        return graph_attention_control_refuse(err, "multi-layer ranges",
+                                              "range-aware graph publication");
+    if ((out->attention.layer_seen || out->attention.layer_start_seen) && !executes &&
+        out->attention.action != YVEX_GRAPH_ATTENTION_ACTION_PLAN)
+        return graph_attention_control_refuse(err, "layer selection",
+                                              "an executable attention request");
+    if (out->attention.attention_class &&
+        (out->attention.layer_seen || out->attention.layer_start_seen))
+        return graph_arg_error(err, "yvex: --class conflicts with explicit layer selection");
+    if (out->attention.attention_class &&
+        out->attention.action != YVEX_GRAPH_ATTENTION_ACTION_STATE_EXERCISE)
+        return graph_attention_control_refuse(err, "--class",
+                                              "graph attention state exercise");
+    if ((out->attention.position_seen || out->attention.history_tokens_seen) &&
+        out->attention.action != YVEX_GRAPH_ATTENTION_ACTION_STATE_EXERCISE)
+        return graph_attention_control_refuse(err, "explicit history geometry",
+                                              "graph attention state exercise");
+    if (out->attention.position_seen && out->attention.history_tokens_seen &&
+        out->attention.position != out->attention.history_tokens)
+        return graph_arg_error(err, "yvex: --position and --history-tokens must agree");
+    if (out->attention.local_capacity_seen || out->attention.compressed_capacity_seen ||
+        out->attention.indexer_capacity_seen)
+        return graph_attention_control_refuse(err, "explicit state capacity",
+                                              "the persistent attention-state provider");
+    if ((out->attention.baseline_path || out->attention.write_baseline ||
+         out->attention.chart_path) &&
+        out->attention.action != YVEX_GRAPH_ATTENTION_ACTION_BENCHMARK &&
+        out->attention.action != YVEX_GRAPH_ATTENTION_ACTION_PROFILE)
+        return graph_arg_error(err,
+                               "yvex: --baseline, --write-baseline, and --chart require "
+                               "graph attention benchmark or profile");
+    if (out->attention.write_baseline && !out->attention.baseline_path)
+        return graph_arg_error(err, "yvex: --write-baseline requires --baseline FILE");
+    if (out->attention.chart_path) {
+        size_t length = strlen(out->attention.chart_path);
+        if (length < 5u || strcmp(out->attention.chart_path + length - 4u, ".svg") != 0)
+            return graph_arg_error(err, "yvex: --chart path must end in .svg");
+    }
+    if (strcmp(out->attention.trace_level, "none") != 0 && !executes)
+        return graph_attention_control_refuse(err, "--trace-level",
+                                              "an executable attention request");
+    if (out->attention.maximum_device_bytes && out->attention.backend &&
+        strcmp(out->attention.backend, "cpu") == 0)
+        return graph_arg_error(err, "yvex: --max-device-bytes requires a CUDA execution path");
+    if (out->attention.capture_bucket &&
+        (!out->attention.backend || strcmp(out->attention.backend, "cuda") != 0 ||
+         strcmp(out->attention.mode, "eager") == 0))
+        return graph_arg_error(
+            err, "yvex: --capture-bucket requires CUDA piecewise, full, or auto mode");
+    if (out->attention.maximum_device_bytes && !executes)
+        return graph_attention_control_refuse(err, "--max-device-bytes",
+                                              "an executing backend session");
+    if (out->attention.maximum_host_bytes &&
+        (out->attention.action == YVEX_GRAPH_ATTENTION_ACTION_PREPARE ||
+         out->attention.action == YVEX_GRAPH_ATTENTION_ACTION_DESCRIBE))
+        return graph_attention_control_refuse(err, "--max-host-bytes",
+                                              "a runtime model or execution session");
+    if (out->attention.require_mode && !executes)
+        return graph_attention_control_refuse(err, "--require-mode",
+                                              "an executable attention request");
+    return YVEX_OK;
+}
+
+/* Purpose: validate the typed attention action without opening runtime assets.
+ * Inputs: action text and caller-owned enum output.
+ * Effects: writes one recognized action value.
+ * Failure: unknown or null text returns false without modifying runtime state.
+ * Boundary: grammar recognition performs no path resolution or capability admission. */
+static int graph_attention_action_parse(int argc, char **argv,
+                                        yvex_graph_attention_action *action,
+                                        int *option_start)
+{
+    static const struct {
+        const char *owner, *operation;
+        yvex_graph_attention_action action;
+    } actions[] = {
+        {"prepare", NULL, YVEX_GRAPH_ATTENTION_ACTION_PREPARE},
+        {"describe", NULL, YVEX_GRAPH_ATTENTION_ACTION_DESCRIBE},
+        {"capabilities", NULL, YVEX_GRAPH_ATTENTION_ACTION_CAPABILITIES},
+        {"plan", NULL, YVEX_GRAPH_ATTENTION_ACTION_PLAN},
+        {"execute", NULL, YVEX_GRAPH_ATTENTION_ACTION_EXECUTE},
+        {"compare", NULL, YVEX_GRAPH_ATTENTION_ACTION_COMPARE},
+        {"state", "inspect", YVEX_GRAPH_ATTENTION_ACTION_STATE_INSPECT},
+        {"state", "validate", YVEX_GRAPH_ATTENTION_ACTION_STATE_VALIDATE},
+        {"state", "exercise", YVEX_GRAPH_ATTENTION_ACTION_STATE_EXERCISE},
+        {"residency", "inspect", YVEX_GRAPH_ATTENTION_ACTION_RESIDENCY_INSPECT},
+        {"capture", NULL, YVEX_GRAPH_ATTENTION_ACTION_CAPTURE},
+        {"replay", NULL, YVEX_GRAPH_ATTENTION_ACTION_REPLAY},
+        {"cuda-graph", "list", YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_LIST},
+        {"cuda-graph", "inspect", YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_INSPECT},
+        {"cuda-graph", "warmup", YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_WARMUP},
+        {"cuda-graph", "update", YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_UPDATE},
+        {"cuda-graph", "invalidate", YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_INVALIDATE},
+        {"cuda-graph", "release", YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_RELEASE},
+        {"trace", NULL, YVEX_GRAPH_ATTENTION_ACTION_TRACE},
+        {"profile", NULL, YVEX_GRAPH_ATTENTION_ACTION_PROFILE},
+        {"benchmark", NULL, YVEX_GRAPH_ATTENTION_ACTION_BENCHMARK}
+    };
+    size_t index;
+
+    for (index = 0; argc > 3 && index < sizeof(actions) / sizeof(actions[0]); ++index) {
+        if (strcmp(argv[3], actions[index].owner) == 0 &&
+            ((!actions[index].operation && (argc == 4 || argv[4][0] == '-')) ||
+             (actions[index].operation && argc > 4 &&
+              strcmp(argv[4], actions[index].operation) == 0))) {
+            *action = actions[index].action;
+            *option_start = actions[index].operation ? 5 : 4;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Purpose: classify actions that invoke production execution.
+ * Inputs: typed CLI action.
+ * Effects: none.
+ * Failure: unknown actions return false.
+ * Boundary: classification neither opens a session nor executes graph work. */
+static int graph_attention_action_executes(yvex_graph_attention_action action)
+{
+    return action == YVEX_GRAPH_ATTENTION_ACTION_EXECUTE ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_COMPARE ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_STATE_EXERCISE ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_CAPTURE ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_REPLAY ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_LIST ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_INSPECT ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_WARMUP ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_UPDATE ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_INVALIDATE ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_RELEASE ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_TRACE ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_PROFILE ||
+           action == YVEX_GRAPH_ATTENTION_ACTION_BENCHMARK;
+}
+
+/* Purpose: classify actions whose production contract requires a CUDA session. */
+static int graph_attention_action_cuda(yvex_graph_attention_action action)
+{
+    return action >= YVEX_GRAPH_ATTENTION_ACTION_CAPTURE &&
+           action <= YVEX_GRAPH_ATTENTION_ACTION_CUDA_GRAPH_RELEASE;
+}
+
+/* Purpose: Parse one runtime-attention operator action.
+ * Inputs: argv, selected action, and caller-owned output.
+ * Effects: publishes typed options only.
+ * Failure: unsupported or contradictory grammar returns a typed refusal.
+ * Boundary: no source, artifact, binding, or backend access. */
+static int graph_parse_attention(int argc, char **argv, yvex_graph_args *out,
+                                 yvex_error *err) {
+    static const char *const phases[] = {"prefill", "decode", "mixed", "verify"};
+    static const char *const modes[] = {"eager", "piecewise", "full", "auto"};
+    static const char *const scopes[] = {"core", "envelope", "release-attention-set"};
+    static const char *const traces[] = {"none", "summary", "stages", "full"};
+    static const char *const progress_modes[] = {"auto", "plain", "off"};
+    graph_parse_state state = {0};
+    int i, option_start = 4;
+
+    out->attention.active = 1;
+    if (!graph_attention_action_parse(argc, argv, &out->attention.action, &option_start))
+        return graph_arg_errorf(err, "yvex: unknown graph attention action: %s", argv[3]);
+    if (out->attention.action == YVEX_GRAPH_ATTENTION_ACTION_COMPARE)
+        out->attention.compare_backends = 1;
+    for (i = option_start; i < argc; ++i) {
         const graph_option_spec *spec;
 
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
@@ -314,16 +470,51 @@ static int graph_parse_attention_execute(int argc, char **argv, yvex_graph_args 
         if (!graph_option_bind(spec, GRAPH_PARSE_ATTENTION, argc, argv, &i, out, &state, err))
             return YVEX_ERR_INVALID_ARG;
     }
+    if (graph_attention_action_cuda(out->attention.action)) {
+        if (out->attention.backend && strcmp(out->attention.backend, "cuda") != 0)
+            return graph_arg_error(err, "yvex: CUDA graph actions require --backend cuda");
+        out->attention.backend = "cuda";
+        if (!out->attention.mode_seen) out->attention.mode = "full";
+        if (strcmp(out->attention.mode, "eager") == 0)
+            return graph_arg_error(
+                err, "yvex: CUDA graph actions require piecewise, full, or auto mode");
+    }
+    if ((out->attention.action == YVEX_GRAPH_ATTENTION_ACTION_STATE_INSPECT ||
+         out->attention.action == YVEX_GRAPH_ATTENTION_ACTION_STATE_VALIDATE ||
+         out->attention.action == YVEX_GRAPH_ATTENTION_ACTION_STATE_EXERCISE) &&
+        !out->attention.backend)
+        out->attention.backend = "cpu";
+    if (out->attention.action == YVEX_GRAPH_ATTENTION_ACTION_STATE_EXERCISE) {
+        if (!out->attention.phase_seen)
+            out->attention.phase = "prefill";
+        if (!out->attention.token_count_seen)
+            out->attention.token_count = 4ull;
+    }
+    if (out->attention.action == YVEX_GRAPH_ATTENTION_ACTION_TRACE &&
+        strcmp(out->attention.trace_level, "none") == 0)
+        out->attention.trace_level = "summary";
     if (!out->attention.target) {
-        graph_arg_error(err, "yvex: graph attention execute requires --target TARGET");
+        graph_arg_error(err, "yvex: graph attention action requires --target TARGET");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (out->attention.compare_backends == (out->attention.backend != NULL)) {
+    if (graph_attention_action_executes(out->attention.action) &&
+        out->attention.action != YVEX_GRAPH_ATTENTION_ACTION_COMPARE &&
+        out->attention.compare_backends == (out->attention.backend != NULL)) {
         graph_arg_error(err, out->attention.compare_backends
                                  ? "yvex: --compare-backends cannot be combined with --backend"
                                  : "yvex: graph attention execute requires --backend cpu|cuda or "
                                    "--compare-backends");
         return YVEX_ERR_INVALID_ARG;
+    }
+    if (out->attention.action == YVEX_GRAPH_ATTENTION_ACTION_COMPARE &&
+        out->attention.backend) {
+        return graph_arg_error(err, "yvex: graph attention compare does not accept --backend");
+    }
+    if ((out->attention.action == YVEX_GRAPH_ATTENTION_ACTION_CAPABILITIES ||
+         out->attention.action == YVEX_GRAPH_ATTENTION_ACTION_PLAN ||
+         out->attention.action == YVEX_GRAPH_ATTENTION_ACTION_RESIDENCY_INSPECT) &&
+        !out->attention.backend) {
+        return graph_arg_error(err, "yvex: graph attention action requires --backend cpu|cuda");
     }
     if (out->attention.backend && !cli_backend_name_valid(out->attention.backend)) {
         graph_arg_errorf(err, "yvex: unknown backend kind: %s", out->attention.backend);
@@ -333,266 +524,51 @@ static int graph_parse_attention_execute(int argc, char **argv, yvex_graph_args 
         graph_arg_errorf(err, "yvex: unsupported attention probe: %s", out->attention.probe);
         return YVEX_ERR_INVALID_ARG;
     }
-    if (strcmp(out->attention.scope, "quick") != 0 && strcmp(out->attention.scope, "full") != 0) {
-        graph_arg_errorf(err, "yvex: unsupported attention scope: %s", out->attention.scope);
+    if (strcmp(out->attention.coverage, "quick") != 0 &&
+        strcmp(out->attention.coverage, "full") != 0) {
+        graph_arg_errorf(err, "yvex: unsupported attention scope: %s", out->attention.coverage);
         return YVEX_ERR_INVALID_ARG;
     }
+    if (!graph_attention_value_valid(out->attention.phase, phases,
+                                     sizeof(phases) / sizeof(phases[0])))
+        return graph_arg_errorf(err, "yvex: unsupported attention phase: %s",
+                                out->attention.phase);
+    if (!graph_attention_value_valid(out->attention.mode, modes,
+                                     sizeof(modes) / sizeof(modes[0])))
+        return graph_arg_errorf(err, "yvex: unsupported attention mode: %s",
+                                out->attention.mode);
+    if (!graph_attention_value_valid(out->attention.operation_scope, scopes,
+                                     sizeof(scopes) / sizeof(scopes[0])))
+        return graph_arg_errorf(err, "yvex: unsupported attention operation scope: %s",
+                                out->attention.operation_scope);
+    if (!graph_attention_value_valid(out->attention.trace_level, traces,
+                                     sizeof(traces) / sizeof(traces[0])))
+        return graph_arg_errorf(err, "yvex: unsupported attention trace level: %s",
+                                out->attention.trace_level);
+    if (!graph_attention_value_valid(out->attention.progress, progress_modes,
+                                     sizeof(progress_modes) / sizeof(progress_modes[0])))
+        return graph_arg_errorf(err, "yvex: unsupported attention progress mode: %s",
+                                out->attention.progress);
+    if (out->attention.runtime_binding_path && out->attention.runtime_binding_dir)
+        return graph_arg_error(err,
+                               "yvex: --runtime-binding conflicts with --runtime-binding-dir");
+    if (graph_attention_controls_validate(out, err) != YVEX_OK)
+        return yvex_error_code(err);
     yvex_error_clear(err);
     return YVEX_OK;
 }
 
-/* Purpose: Validate check syntax.
- * Inputs: request.
- * Effects: none.
- * Failure: typed refusal.
- * Boundary: CLI grammar. */
-static int graph_validate_check(yvex_graph_report_request *req, yvex_error *err) {
-    if (!cli_backend_name_valid(req->backend))
-        return graph_arg_errorf(err, "yvex: unknown backend kind: %s", req->backend);
-    if (strcmp(req->suite, "primitives") != 0 && strcmp(req->suite, "block") != 0 &&
-        strcmp(req->suite, "layers") != 0 && strcmp(req->suite, "all") != 0)
-        return graph_arg_error(
-            err, "yvex: graph check --suite requires primitives, block, layers, or all");
-    if (req->layers == 0ull || req->layers > 16ull)
-        return graph_arg_error(err, "yvex: requires 1 <= --layers <= 16");
-    return YVEX_OK;
-}
-
-/* Purpose: Validate block or layer syntax.
- * Inputs: request and seen state.
- * Effects: none.
- * Failure: typed refusal.
- * Boundary: CLI grammar. */
-static int graph_validate_block_mode(yvex_graph_report_request *req, const graph_parse_state *state,
-                                     int layers_mode, yvex_error *err) {
-    const unsigned int required = GRAPH_SEEN_ATTENTION_SEQ | GRAPH_SEEN_ROPE_POSITION |
-                                  GRAPH_SEEN_MLP_HIDDEN | GRAPH_SEEN_ROPE_HEAD_DIM |
-                                  GRAPH_SEEN_MLP_FFN;
-    const unsigned int standalone = GRAPH_SEEN_MATMUL_M | GRAPH_SEEN_MATMUL_K |
-                                    GRAPH_SEEN_MATMUL_N | GRAPH_SEEN_MLP_ACTIVATION |
-                                    GRAPH_SEEN_MLP_EXPERTS | GRAPH_SEEN_MLP_EXPERT_ID |
-                                    GRAPH_SEEN_TOKEN_INDEX;
-    const char *mode = layers_mode ? "--execute-layers" : "--execute-block";
-
-    if (req->model)
-        return graph_arg_errorf(err, "yvex: %s does not take a model artifact", mode);
-    if (!(state->seen & GRAPH_SEEN_BLOCK))
-        return graph_arg_errorf(err, "yvex: %s requires --block fixture", mode);
-    if (strcmp(req->block, "fixture") != 0)
-        return graph_arg_errorf(err, "yvex: unsupported block: %s", req->block);
-    if (layers_mode && !(state->seen & GRAPH_SEEN_LAYERS))
-        return graph_arg_error(err, "yvex: --execute-layers requires --layers N");
-    if ((state->seen & required) != required)
-        return graph_arg_errorf(
-            err,
-            "yvex: %s requires --seq-len N --position N --hidden-dim N --head-dim N --ffn-dim N",
-            mode);
-    if (req->position >= req->seq_len)
-        return graph_arg_error(err, "yvex: position must be less than seq-len");
-    if (req->hidden_dim % req->head_dim != 0ull)
-        return graph_arg_error(err, "yvex: hidden-dim must be divisible by head-dim");
-    if (req->op || (state->seen & standalone) || req->fixture_token_seen ||
-        req->partial_token_seen || req->tokens_seen || req->segment)
-        return graph_arg_error2(err, "yvex: %s cannot be combined with %s", mode,
-                                layers_mode
-                                    ? "model graph, segment, token, or standalone op options"
-                                    : "model graph, segment, or standalone op options");
-    return YVEX_OK;
-}
-
-/* Purpose: Validate primitive syntax.
- * Inputs: request and seen state.
- * Effects: none.
- * Failure: typed refusal.
- * Boundary: CLI grammar. */
-static int graph_validate_op_mode(yvex_graph_report_request *req, const graph_parse_state *state,
-                                  yvex_error *err) {
-    const unsigned int matmul = GRAPH_SEEN_MATMUL_M | GRAPH_SEEN_MATMUL_K | GRAPH_SEEN_MATMUL_N;
-    const unsigned int position = GRAPH_SEEN_ROPE_POSITION | GRAPH_SEEN_ROPE_HEAD_DIM;
-    const unsigned int mlp = GRAPH_SEEN_MLP_HIDDEN | GRAPH_SEEN_MLP_FFN |
-                             GRAPH_SEEN_MLP_ACTIVATION | GRAPH_SEEN_MLP_EXPERTS |
-                             GRAPH_SEEN_MLP_EXPERT_ID;
-    const unsigned int mlp_required =
-        GRAPH_SEEN_MLP_HIDDEN | GRAPH_SEEN_MLP_FFN | GRAPH_SEEN_MLP_ACTIVATION;
-    unsigned int seen = state->seen;
-
-    if (req->model)
-        return graph_arg_error(err, "yvex: --execute-op does not take a model artifact");
-    if (!req->op || (strcmp(req->op, "rope") != 0 && strcmp(req->op, "attention") != 0 &&
-                     strcmp(req->op, "matmul") != 0 && strcmp(req->op, "mlp") != 0))
-        return graph_arg_error(
-            err, "yvex: --execute-op requires --op rope, --op attention, --op matmul, or --op mlp");
-    if (strcmp(req->op, "matmul") == 0) {
-        if ((seen & matmul) != matmul)
-            return graph_arg_error(err,
-                                   "yvex: --execute-op --op matmul requires --m M --k K --n N");
-        if ((seen & (position | GRAPH_SEEN_ATTENTION_SEQ)) || req->causal)
-            return graph_arg_error(err, "yvex: --position, --head-dim, --seq-len, and --causal "
-                                        "require --op rope or --op attention");
-    } else if (strcmp(req->op, "mlp") == 0) {
-        if ((seen & mlp_required) != mlp_required || !req->gated)
-            return graph_arg_error(err, "yvex: --execute-op --op mlp requires --hidden-dim N "
-                                        "--ffn-dim N --activation silu --gated");
-        if ((seen & (position | GRAPH_SEEN_ATTENTION_SEQ | matmul)) || req->causal)
-            return graph_arg_error(err, "yvex: --op mlp cannot use --position, --head-dim, "
-                                        "--seq-len, --causal, --m, --k, or --n");
-        if (!!(seen & GRAPH_SEEN_MLP_EXPERTS) != !!(seen & GRAPH_SEEN_MLP_EXPERT_ID))
-            return graph_arg_error(err,
-                                   "yvex: --experts and --expert-id must be provided together");
-    } else if (!(seen & GRAPH_SEEN_ROPE_POSITION))
-        return graph_arg_error(err, "yvex: --execute-op requires --position N");
-    if (strcmp(req->op, "matmul") != 0 && strcmp(req->op, "mlp") != 0 &&
-        !(seen & GRAPH_SEEN_ROPE_HEAD_DIM))
-        return graph_arg_error(err, "yvex: --execute-op requires --head-dim N");
-    if (strcmp(req->op, "attention") == 0 && !(seen & GRAPH_SEEN_ATTENTION_SEQ))
-        return graph_arg_error(err, "yvex: --execute-op --op attention requires --seq-len N");
-    if (strcmp(req->op, "rope") == 0 && ((seen & GRAPH_SEEN_ATTENTION_SEQ) || req->causal))
-        return graph_arg_error(err, "yvex: --seq-len and --causal require --op attention");
-    if (strcmp(req->op, "rope") != 0 && strcmp(req->op, "attention") != 0 && (seen & position))
-        return graph_arg_error(
-            err, "yvex: --position and --head-dim require --op rope or --op attention");
-    if (strcmp(req->op, "matmul") != 0 && (seen & matmul))
-        return graph_arg_error(err, "yvex: --m, --k, and --n require --op matmul");
-    if (strcmp(req->op, "mlp") != 0 && ((seen & mlp) || req->gated))
-        return graph_arg_error(err, "yvex: --hidden-dim, --ffn-dim, --activation, --gated, "
-                                    "--experts, and --expert-id require --op mlp");
-    if (req->fixture_token_seen || req->partial_token_seen || req->tokens_seen ||
-        (seen & GRAPH_SEEN_TOKEN_INDEX) || req->segment)
-        return graph_arg_error(
-            err, "yvex: --execute-op cannot be combined with model graph token or segment options");
-    return YVEX_OK;
-}
-
-/* Purpose: Validate model syntax.
- * Inputs: request and seen state.
- * Effects: selects the action.
- * Failure: typed refusal.
- * Boundary: CLI grammar. */
-static int graph_validate_model_mode(yvex_graph_report_request *req, const graph_parse_state *state,
-                                     yvex_error *err) {
-    const unsigned int standalone =
-        GRAPH_SEEN_ROPE_POSITION | GRAPH_SEEN_ROPE_HEAD_DIM | GRAPH_SEEN_ATTENTION_SEQ |
-        GRAPH_SEEN_MATMUL_M | GRAPH_SEEN_MATMUL_K | GRAPH_SEEN_MATMUL_N | GRAPH_SEEN_MLP_HIDDEN |
-        GRAPH_SEEN_MLP_FFN | GRAPH_SEEN_MLP_ACTIVATION | GRAPH_SEEN_MLP_EXPERTS |
-        GRAPH_SEEN_MLP_EXPERT_ID | GRAPH_SEEN_LAYERS;
-
-    if (state->seen & GRAPH_SEEN_BLOCK)
-        return graph_arg_error(err, "yvex: --block requires --execute-block or --execute-layers");
-    if (req->op || (state->seen & standalone) || req->causal || req->gated)
-        return graph_arg_error(err, "yvex: --op and standalone op options require --execute-op");
-    if (req->execute_segment) {
-        if (!req->segment)
-            return graph_arg_error(err,
-                                   "yvex: --execute-segment requires --segment embedding-rmsnorm");
-        if (strcmp(req->segment, "embedding-rmsnorm") != 0)
-            return graph_arg_errorf(err, "yvex: unsupported segment: %s", req->segment);
-    } else if (req->segment)
-        return graph_arg_error(err, "yvex: --segment requires --execute-segment");
-    if ((state->seen & GRAPH_SEEN_TOKEN_INDEX) && !req->tokens_seen)
-        return graph_arg_error(err, "yvex: --token-index requires --tokens");
-    if (req->tokens_seen && !(req->execute_fixture || req->execute_partial || req->execute_segment))
-        return graph_arg_error(err, "yvex: --tokens is only supported with graph execution flags");
-    if (req->tokens_seen && (req->partial_token_seen || req->fixture_token_seen))
-        return graph_arg_error(
-            err, "yvex: --tokens cannot be combined with --partial-token or --fixture-token");
-    if (req->execute_fixture)
-        req->action = YVEX_GRAPH_ACTION_EXECUTE_FIXTURE;
-    else if (req->execute_segment)
-        req->action = YVEX_GRAPH_ACTION_EXECUTE_SEGMENT;
-    else if (req->execute_partial)
-        req->action = YVEX_GRAPH_ACTION_EXECUTE_PARTIAL;
-    return YVEX_OK;
-}
-
-/* Purpose: Validate selected graph mode.
- * Inputs: request and state.
- * Effects: none.
- * Failure: typed refusal.
- * Boundary: CLI grammar. */
-static int graph_validate_modes(yvex_graph_report_request *req, const graph_parse_state *state,
-                                yvex_error *err) {
-    if (!req->model && !req->execute_op && !req->execute_block && !req->execute_layers)
-        return graph_arg_error(err, "yvex: graph requires FILE_OR_ALIAS");
-    if (!cli_backend_name_valid(req->backend))
-        return graph_arg_errorf(err, "yvex: unknown backend kind: %s", req->backend);
-    if (graph_mode_count(req) > 1)
-        return graph_arg_error(err, "yvex: graph execution flags are mutually exclusive");
-    if (req->execute_layers)
-        return graph_validate_block_mode(req, state, 1, err);
-    if (req->execute_block)
-        return graph_validate_block_mode(req, state, 0, err);
-    if (req->execute_op)
-        return graph_validate_op_mode(req, state, err);
-    return graph_validate_model_mode(req, state, err);
-}
-
-/* Purpose: Parse graph check.
- * Inputs: argv and output.
- * Effects: builds request.
- * Failure: typed refusal.
- * Boundary: CLI grammar. */
-static int graph_parse_check(int argc, char **argv, yvex_graph_args *out, yvex_error *err) {
-    yvex_graph_report_request *req = &out->request;
-    graph_parse_state state = {0};
-    int i;
-
-    req->kind = YVEX_GRAPH_REPORT_KIND_PRIMITIVE;
-    req->action = YVEX_GRAPH_ACTION_CHECK;
-    req->suite = "all";
-    req->layers = 2ull;
-    for (i = 3; i < argc; ++i) {
-        const graph_option_spec *spec = graph_option_find(argv[i], GRAPH_PARSE_CHECK);
-
-        if (spec) {
-            if (!graph_option_bind(spec, GRAPH_PARSE_CHECK, argc, argv, &i, out, &state, err))
-                return YVEX_ERR_INVALID_ARG;
-        } else if (argv[i][0] == '-' && strcmp(argv[i], "--model") != 0) {
-            graph_arg_errorf(err, "yvex: unknown graph check option: %s", argv[i]);
-            return YVEX_ERR_INVALID_ARG;
-        } else {
-            graph_arg_error(err, "yvex: graph check preset is fixture-only in GRAPH.CHECK.0");
-            return YVEX_ERR_INVALID_ARG;
-        }
-    }
-    return graph_validate_check(req, err);
-}
-
-/* Purpose: Parse a legacy option.
- * Inputs: argv and cursor.
- * Effects: updates request.
- * Failure: typed refusal.
- * Boundary: CLI grammar. */
-static int graph_parse_main_option(int argc, char **argv, int *index, yvex_graph_args *out,
-                                   graph_parse_state *state, yvex_error *err) {
-    const graph_option_spec *spec = graph_option_find(argv[*index], GRAPH_PARSE_MAIN);
-
-    if (spec)
-        return graph_option_bind(spec, GRAPH_PARSE_MAIN, argc, argv, index, out, state, err);
-    if (!out->request.model) {
-        out->request.model = argv[*index];
-        return 1;
-    }
-    graph_arg_errorf(err, "yvex: unknown graph option: %s", argv[*index]);
-    return 0;
-}
 /* Purpose: Parse graph argv.
  * Inputs: argv and output.
  * Effects: publishes request.
  * Failure: typed refusal.
  * Boundary: CLI grammar. */
 int yvex_graph_args_parse(int argc, char **argv, yvex_graph_args *out, yvex_error *err) {
-    yvex_graph_report_request *req;
-    graph_parse_state state;
-    int i;
-
     if (!out) {
         graph_arg_error(err, "graph parser requires output");
         return YVEX_ERR_INVALID_ARG;
     }
     graph_args_defaults(out);
-    memset(&state, 0, sizeof(state));
-    req = &out->request;
-
     if (argc < 3) {
         out->help_requested = 1;
         out->help_exit_code = 2;
@@ -604,33 +580,18 @@ int yvex_graph_args_parse(int argc, char **argv, yvex_graph_args *out, yvex_erro
         yvex_error_clear(err);
         return YVEX_OK;
     }
-    if (strcmp(argv[2], "check") == 0) {
-        return graph_parse_check(argc, argv, out, err);
-    }
     if (strcmp(argv[2], "attention") == 0) {
         if (argc == 4 && (strcmp(argv[3], "--help") == 0 || strcmp(argv[3], "-h") == 0)) {
             out->help_requested = 1;
             yvex_error_clear(err);
             return YVEX_OK;
         }
-        if (argc < 4 || strcmp(argv[3], "execute") != 0) {
-            graph_arg_error(err, "yvex: graph attention requires the execute action");
+        if (argc < 4) {
+            graph_arg_error(err, "yvex: graph attention requires an action");
             return YVEX_ERR_INVALID_ARG;
         }
-        return graph_parse_attention_execute(argc, argv, out, err);
+        return graph_parse_attention(argc, argv, out, err);
     }
 
-    for (i = 2; i < argc; ++i) {
-        if (!graph_parse_main_option(argc, argv, &i, out, &state, err))
-            return YVEX_ERR_INVALID_ARG;
-    }
-    if (req->execute_op)
-        req->action = YVEX_GRAPH_ACTION_EXECUTE_OP;
-    else if (req->execute_block)
-        req->action = YVEX_GRAPH_ACTION_EXECUTE_BLOCK;
-    else if (req->execute_layers)
-        req->action = YVEX_GRAPH_ACTION_EXECUTE_LAYERS;
-    if (req->execute_op || req->execute_block || req->execute_layers)
-        req->kind = YVEX_GRAPH_REPORT_KIND_PRIMITIVE;
-    return graph_validate_modes(req, &state, err);
+    return graph_arg_errorf(err, "yvex: unknown graph namespace: %s", argv[2]);
 }

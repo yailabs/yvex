@@ -24,6 +24,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <yvex/internal/artifact.h>
+#include <yvex/internal/backend.h>
 #include "src/graph/private.h"
 #include <yvex/internal/families/deepseek_v4.h>
 #include <yvex/internal/runtime.h>
@@ -32,6 +33,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <limits.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -73,6 +75,85 @@ typedef struct {
     char history_identity[YVEX_SHA256_HEX_CAP];
     char comparison_contract_identity[YVEX_SHA256_HEX_CAP];
 } attention_live_evidence;
+
+typedef struct {
+    const yvex_attention_plan *plan;
+    const yvex_deepseek_v4_ir *ir;
+    yvex_materialization_session *materialization;
+    const yvex_runtime_descriptor *descriptor;
+    const yvex_attention_history_view *history;
+    yvex_sha256 output_hash;
+    yvex_sha256 state_hash;
+    unsigned long long publications;
+    unsigned long long compared_values;
+    double squared_error;
+    double maximum_absolute_error;
+    double maximum_relative_error;
+} runtime_oracle_evidence;
+
+typedef struct {
+    runtime_oracle_evidence oracle;
+    yvex_backend_cuda_attention_graph_summary graph;
+    char output_identity[YVEX_SHA256_HEX_CAP];
+    char state_identity[YVEX_SHA256_HEX_CAP];
+} runtime_oracle_mode_result;
+
+typedef struct {
+    unsigned int opens;
+    unsigned int discards;
+} runtime_oracle_state_factory_control;
+
+/* Purpose: independently publish one finite F32 value through BF16 RNE for live evidence. */
+static float runtime_oracle_bf16_round(float value)
+{
+    uint32_t bits;
+
+    memcpy(&bits, &value, sizeof(bits));
+    bits += 0x7fffu + ((bits >> 16u) & 1u);
+    bits &= 0xffff0000u;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+/* Purpose: delegate state ownership to the canonical provider while proving factory injection. */
+static int runtime_oracle_state_factory_open(
+    void *context, const yvex_graph_family_api *family,
+    const yvex_attention_plan *plan, unsigned long long maximum_host_bytes,
+    yvex_attention_state_provider *out, yvex_attention_failure *failure,
+    yvex_error *err)
+{
+    runtime_oracle_state_factory_control *control =
+        (runtime_oracle_state_factory_control *)context;
+    int rc;
+
+    if (!control) return YVEX_ERR_INVALID_ARG;
+    rc = yvex_attention_state_provider_open_ephemeral(
+        family, plan, maximum_host_bytes, out, failure, err);
+    if (rc == YVEX_OK) control->opens++;
+    return rc;
+}
+
+/* Purpose: release only a failed factory candidate; successful sessions own their provider. */
+static int runtime_oracle_state_factory_discard(
+    void *context, yvex_attention_state_provider *candidate, yvex_error *err)
+{
+    runtime_oracle_state_factory_control *control =
+        (runtime_oracle_state_factory_control *)context;
+    int rc;
+
+    if (!control || !candidate)
+        return YVEX_ERR_INVALID_ARG;
+    control->discards++;
+    if (!candidate->context) {
+        memset(candidate, 0, sizeof(*candidate));
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    if (!candidate->release) return YVEX_ERR_INVALID_ARG;
+    rc = candidate->release(&candidate->context, err);
+    if (rc == YVEX_OK) memset(candidate, 0, sizeof(*candidate));
+    return rc;
+}
 
 static int attention_reference_contract_init(
     yvex_test_attention_reference_contract *contract,
@@ -150,6 +231,109 @@ static int reference_metrics_merge(
     if (metrics->maximum_relative_error > *maximum_relative_error)
         *maximum_relative_error = metrics->maximum_relative_error;
     return 1;
+}
+
+/* Purpose: compare one still-live runtime CUDA publication with the separately linked oracle.
+ * Inputs: exact runtime-imported plan/materialization/descriptor, canonical publication, and IR.
+ * Effects: accumulates bounded test evidence before production releases the publication.
+ * Failure: any fixture, oracle, discrete-state, or numeric mismatch aborts the runtime probe.
+ * Boundary: test-only observation; it neither configures nor reimplements a production mode. */
+static int runtime_oracle_compare_publication(
+    void *context, yvex_backend_kind backend,
+    const yvex_attention_publication *production, yvex_error *err)
+{
+    runtime_oracle_evidence *evidence = (runtime_oracle_evidence *)context;
+    const yvex_attention_summary *summary;
+    const yvex_attention_layer_plan *layer;
+    yvex_attention_cpu_options options;
+    yvex_attention_execution_trace reference;
+    yvex_test_attention_reference_contract contract;
+    yvex_test_attention_reference_metrics metrics;
+    char reason[YVEX_TEST_ATTENTION_REFERENCE_REASON_CAP];
+    int rc = YVEX_ERR_FORMAT;
+
+    memset(&reference, 0, sizeof(reference));
+    memset(&metrics, 0, sizeof(metrics));
+    if (!evidence || backend != YVEX_BACKEND_KIND_CUDA || !production ||
+        !production->complete || !production->input || !production->output) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_oracle",
+                       "one complete CUDA publication is required");
+        return YVEX_ERR_STATE;
+    }
+    {
+        unsigned long long seed = production->layer_index +
+                                  production->token_position + 1009ull;
+        unsigned long long code = (seed * 19ull + 11ull) % 257ull;
+        float raw = (float)((long long)code - 128ll) / 257.0f;
+        float rounded = runtime_oracle_bf16_round(raw);
+
+        if (memcmp(&raw, &rounded, sizeof(raw)) == 0 ||
+            memcmp(production->input, &rounded, sizeof(rounded)) != 0) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, "attention.runtime_oracle.bf16",
+                           "canonical V2 ingress did not publish independent BF16 RNE");
+            return YVEX_ERR_FORMAT;
+        }
+    }
+    summary = yvex_attention_plan_summary(evidence->plan);
+    layer = yvex_attention_plan_layer_at(evidence->plan, production->layer_index);
+    if (!summary || !layer || layer->layer_index != production->layer_index ||
+        !attention_reference_contract_init(
+            &contract, summary, "runtime-cuda-graph-reference",
+            ATTENTION_CUDA_ABSOLUTE_TOLERANCE,
+            ATTENTION_CUDA_RELATIVE_TOLERANCE)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_oracle",
+                       "runtime publication plan facts are inconsistent");
+        return YVEX_ERR_STATE;
+    }
+    if (!evidence->history ||
+        evidence->history->token_count != production->token_position) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_oracle.history",
+                       "independent reference lost the exact immutable prior state");
+        return YVEX_ERR_STATE;
+    }
+    yvex_graph_lower_deepseek_v4()->cpu_options_default(&options);
+    options.operation_scope = YVEX_ATTENTION_OPERATION_CORE;
+    options.layer_index = production->layer_index;
+    options.token_position = production->token_position;
+    options.token_count = production->token_count;
+    options.input = production->input;
+    options.input_stride = layer->hidden_dimension;
+    options.history = evidence->history;
+    if (!yvex_test_attention_reference_execute(
+            evidence->plan, evidence->ir, evidence->materialization,
+            evidence->descriptor, &options, &reference, reason)) {
+        yvex_error_setf(err, YVEX_ERR_FORMAT, "attention.runtime_oracle",
+                        "independent runtime publication reference failed: %s",
+                        reason);
+        goto cleanup;
+    }
+    if (!yvex_test_attention_reference_compare_contract(
+            production, &reference, &contract, &metrics)) {
+        yvex_error_setf(
+            err, YVEX_ERR_FORMAT, "attention.runtime_oracle",
+            "runtime CUDA graph diverged at %s[%llu]: max_abs=%.17g max_rel=%.17g",
+            metrics.first_failed_stage ? metrics.first_failed_stage : "unknown",
+            metrics.first_failed_index, metrics.maximum_absolute_error,
+            metrics.maximum_relative_error);
+        goto cleanup;
+    }
+    if (!yvex_attention_publication_hash_update(
+            &evidence->output_hash, &evidence->state_hash, &reference) ||
+        !reference_metrics_merge(
+            &evidence->compared_values, &evidence->squared_error,
+            &evidence->maximum_absolute_error,
+            &evidence->maximum_relative_error, &metrics) ||
+        !yvex_core_u64_add(
+            evidence->publications, 1ull, &evidence->publications)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "attention.runtime_oracle",
+                       "runtime oracle evidence accounting overflowed");
+        goto cleanup;
+    }
+    rc = YVEX_OK;
+
+cleanup:
+    yvex_graph_lower_deepseek_v4()->execution_trace_release(&reference);
+    return rc;
 }
 
 static int attention_evidence_init(
@@ -465,7 +649,7 @@ static int run_topk_contract_cases(void)
     yvex_error_clear(&err);
     rc = yvex_attention_topk_select(
         scores, positions, 3ull, 0ull, production, &production_count,
-        &failure, &err);
+        NULL, &failure, &err);
     if (rc != YVEX_OK || production_count != 0ull ||
         !yvex_test_attention_reference_topk(
             scores, positions, 3ull, 0ull, reference, &reference_count) ||
@@ -473,7 +657,7 @@ static int run_topk_contract_cases(void)
         return 0;
     rc = yvex_attention_topk_select(
         scores, positions, 3ull, 4ull, production, &production_count,
-        &failure, &err);
+        NULL, &failure, &err);
     if (rc != YVEX_OK || production_count != 3ull ||
         !yvex_test_attention_reference_topk(
             scores, positions, 3ull, 4ull, reference, &reference_count) ||
@@ -485,7 +669,7 @@ static int run_topk_contract_cases(void)
     scores[1] = INFINITY;
     rc = yvex_attention_topk_select(
         scores, positions, 3ull, 1ull, production, &production_count,
-        &failure, &err);
+        NULL, &failure, &err);
     if (rc == YVEX_OK ||
         failure.code != YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC ||
         yvex_test_attention_reference_topk(
@@ -496,7 +680,7 @@ static int run_topk_contract_cases(void)
     yvex_error_clear(&err);
     rc = yvex_attention_topk_select(
         scores, duplicate_positions, 3ull, 1ull, production,
-        &production_count, &failure, &err);
+        &production_count, NULL, &failure, &err);
     if (rc == YVEX_OK ||
         failure.code != YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC ||
         yvex_test_attention_reference_topk(
@@ -942,6 +1126,39 @@ typedef struct {
     unsigned long long cancel_on_call;
 } attention_live_cancellation;
 
+typedef struct {
+    unsigned long long capacity;
+    unsigned long long peak;
+    unsigned long long allocation_count;
+    unsigned long long cold_executions;
+    unsigned long long warm_executions;
+} attention_cuda_workspace_evidence;
+
+/* Purpose: admit exact CUDA host-workspace facts without treating per-run bytes as allocations. */
+static int attention_cuda_workspace_add(
+    attention_cuda_workspace_evidence *evidence,
+    const yvex_attention_cpu_result *result)
+{
+    if (!evidence || !result || !result->cuda_executed ||
+        !result->cuda_host_workspace_capacity ||
+        !result->cuda_host_workspace_used ||
+        result->cuda_host_workspace_used > result->cuda_host_workspace_capacity ||
+        result->cuda_host_workspace_peak < result->cuda_host_workspace_used ||
+        result->cuda_host_workspace_allocations != 1ull)
+        return 0;
+    if (result->cuda_host_workspace_capacity > evidence->capacity)
+        evidence->capacity = result->cuda_host_workspace_capacity;
+    if (result->cuda_host_workspace_peak > evidence->peak)
+        evidence->peak = result->cuda_host_workspace_peak;
+    if (result->cuda_host_workspace_allocations > evidence->allocation_count)
+        evidence->allocation_count = result->cuda_host_workspace_allocations;
+    if (result->cuda_host_workspace_reused)
+        evidence->warm_executions++;
+    else
+        evidence->cold_executions++;
+    return 1;
+}
+
 static int attention_live_cancel_requested(void *context)
 {
     attention_live_cancellation *cancellation =
@@ -950,6 +1167,52 @@ static int attention_live_cancel_requested(void *context)
     if (!cancellation) return 0;
     cancellation->calls++;
     return cancellation->calls >= cancellation->cancel_on_call;
+}
+
+#define ATTENTION_LIVE_MAX_STATE_POSITION 2056ull
+
+/* Purpose: prepare one pinned high-water staging arena through the canonical
+ * backend planner before a direct graph live proof uses CUDA. */
+static int attention_cuda_workspace_prepare(
+    yvex_backend *backend, const yvex_attention_plan *plan, yvex_error *err)
+{
+    const yvex_graph_family_api *family = yvex_graph_lower_deepseek_v4();
+    const yvex_attention_layer_plan *layer;
+    yvex_attention_state_recipe_request state_request;
+    yvex_attention_state_recipe state;
+    yvex_attention_workspace_recipe workspace;
+    yvex_attention_failure failure;
+    unsigned long long count, index, required = 0ull, layer_bytes;
+    int rc;
+
+    if (!backend || !plan || !family->state_recipe || !family->workspace_recipe)
+        return 0;
+    count = family->plan_layer_count(plan);
+    for (index = 0ull; index < count; ++index) {
+        layer = family->plan_layer_at(plan, index);
+        if (!layer) return 0;
+        memset(&state_request, 0, sizeof(state_request));
+        memset(&failure, 0, sizeof(failure));
+        state_request.layer_ordinal = index;
+        state_request.final_position = ATTENTION_LIVE_MAX_STATE_POSITION;
+        state_request.attention_plan_identity =
+            yvex_attention_plan_summary(plan)->attention_plan_identity;
+        rc = family->state_recipe(layer, &state_request, &state, &failure, err);
+        if (rc == YVEX_OK)
+            rc = family->workspace_recipe(
+                layer, &state, YVEX_ATTENTION_EXECUTION_EAGER,
+                YVEX_ATTENTION_OPERATION_ENVELOPE,
+                YVEX_ATTENTION_EVIDENCE_FULL, 4ull, &workspace,
+                &failure, err);
+        if (rc == YVEX_OK)
+            rc = yvex_backend_attention_workspace_required_from_recipe(
+                &workspace, &layer_bytes, err);
+        if (rc != YVEX_OK) return 0;
+        if (layer_bytes > required) required = layer_bytes;
+    }
+    return required &&
+           yvex_backend_host_workspace_prepare_owned(backend, required, err) ==
+               YVEX_OK;
 }
 
 /* Contract: runs one failure seam on a fresh backend and proves no result or
@@ -986,6 +1249,10 @@ static int run_cuda_fault_case(
     backend_options.kind = YVEX_BACKEND_KIND_CUDA;
     rc = yvex_backend_open(&backend, &backend_options, err);
     if (rc != YVEX_OK) return 0;
+    if (!attention_cuda_workspace_prepare(backend, plan, err)) {
+        (void)yvex_backend_close_checked(&backend, err);
+        return 0;
+    }
     options = *base_options;
     options.trace = &trace;
     if (cancel_on_call) {
@@ -995,7 +1262,7 @@ static int run_cuda_fault_case(
         options.cancellation = &cancellation;
     }
     if (environment && setenv(environment, value, 1) != 0) {
-        yvex_backend_close(backend);
+        (void)yvex_backend_close_checked(&backend, err);
         return 0;
     }
     rc = yvex_graph_lower_deepseek_v4()->cuda_token_execute(
@@ -1004,9 +1271,53 @@ static int run_cuda_fault_case(
     if (environment) (void)unsetenv(environment);
     passed = rc != YVEX_OK && !result.executed && !trace.owned &&
              failure.code == expected_failure;
+    if (!passed)
+        fprintf(stderr,
+                "attention_cuda_fault_case_failed environment=%s value=%s "
+                "cancel=%llu rc=%d executed=%d trace_owned=%d failure=%u "
+                "expected=%u where=%s message=%s\n",
+                environment ? environment : "", value ? value : "",
+                cancel_on_call, rc, result.executed, trace.owned,
+                (unsigned int)failure.code, (unsigned int)expected_failure,
+                yvex_error_where(err), yvex_error_message(err));
     yvex_graph_lower_deepseek_v4()->execution_trace_release(&trace);
-    yvex_backend_close(backend);
-    return passed;
+    rc = yvex_backend_close_checked(&backend, err);
+    if (rc != YVEX_OK)
+        fprintf(stderr,
+                "attention_cuda_fault_close_failed environment=%s value=%s "
+                "rc=%d where=%s message=%s\n",
+                environment ? environment : "", value ? value : "", rc,
+                yvex_error_where(err), yvex_error_message(err));
+    return passed && rc == YVEX_OK;
+}
+
+/* Purpose: prove page-locked staging cleanup failure remains observable after ownership discharge. */
+static int run_cuda_workspace_cleanup_fault(
+    const yvex_attention_plan *plan, yvex_error *err)
+{
+    yvex_backend_options options = {0};
+    yvex_backend *backend = NULL;
+    int close_rc;
+
+    options.kind = YVEX_BACKEND_KIND_CUDA;
+    if (yvex_backend_open(&backend, &options, err) != YVEX_OK ||
+        !attention_cuda_workspace_prepare(backend, plan, err)) {
+        (void)yvex_backend_close_checked(&backend, err);
+        return 0;
+    }
+    if (setenv("YVEX_TEST_CUDA_CLEANUP_FAILURE", "host-workspace", 1) != 0) {
+        (void)yvex_backend_close_checked(&backend, err);
+        return 0;
+    }
+    close_rc = yvex_backend_close_checked(&backend, err);
+    (void)unsetenv("YVEX_TEST_CUDA_CLEANUP_FAILURE");
+    if (close_rc != YVEX_ERR_BACKEND || backend)
+        fprintf(stderr,
+                "attention_cuda_workspace_cleanup_fault_failed rc=%d "
+                "backend_live=%d where=%s message=%s\n",
+                close_rc, backend != NULL, yvex_error_where(err),
+                yvex_error_message(err));
+    return close_rc == YVEX_ERR_BACKEND && !backend;
 }
 
 /* Contract: one missing exact encoded-attention symbol rejects the entire
@@ -1028,7 +1339,7 @@ static int run_cuda_bundle_refusal(yvex_error *err)
     rc = yvex_backend_open(&backend, &options, err);
     (void)unsetenv("YVEX_TEST_CUDA_BUNDLE_FAILURE");
     if (rc != YVEX_OK || !backend) {
-        yvex_backend_close(backend);
+        (void)yvex_backend_close_checked(&backend, err);
         return 0;
     }
     rc = yvex_backend_query_capability(
@@ -1039,8 +1350,15 @@ static int run_cuda_bundle_refusal(yvex_error *err)
                  YVEX_BACKEND_CAPABILITY_REASON_FUNCTION_MISSING &&
              !capability.kernel_bundle_available &&
              !capability.function_available;
-    yvex_backend_close(backend);
-    return passed;
+    rc = yvex_backend_close_checked(&backend, err);
+    if (!passed || rc != YVEX_OK)
+        fprintf(stderr,
+                "attention_cuda_bundle_refusal_failed passed=%d close_rc=%d "
+                "state=%u reason=%u where=%s message=%s\n",
+                passed, rc, (unsigned int)capability.state,
+                (unsigned int)capability.reason, yvex_error_where(err),
+                yvex_error_message(err));
+    return passed && rc == YVEX_OK;
 }
 
 typedef struct {
@@ -1326,6 +1644,716 @@ static void live_history_bind_next_state(
     }
 }
 
+/* Contract: an envelope with non-identity mHC/norm must feed the transformed core input to
+ * both CUDA rolling recipes and the CSA index projection. CPU production is the direct parity
+ * owner here; the separately linked envelope oracle covers the transformation itself. */
+static int run_cuda_core_input_regression(
+    const yvex_attention_plan *plan, const yvex_deepseek_v4_ir *ir,
+    yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
+    yvex_backend *backend, const yvex_attention_summary *summary,
+    unsigned long long csa_layer, yvex_attention_failure *failure, yvex_error *err)
+{
+    const yvex_attention_layer_plan *layer =
+        yvex_graph_lower_deepseek_v4()->plan_layer_at(plan, csa_layer);
+    yvex_attention_cpu_options options;
+    yvex_attention_cpu_result cpu_result, cuda_result;
+    yvex_attention_execution_trace cpu_trace, cuda_trace;
+    yvex_graph_f32_comparison input_comparison, index_comparison;
+    yvex_attention_state_comparison state_comparison;
+    live_attention_history history;
+    float *residual = NULL;
+    unsigned long long lane;
+    int transformed = 0;
+    int rc = YVEX_ERR_STATE;
+
+    memset(&cpu_trace, 0, sizeof(cpu_trace));
+    memset(&cuda_trace, 0, sizeof(cuda_trace));
+    memset(&history, 0, sizeof(history));
+    if (!layer || layer->attention_class != YVEX_ATTENTION_CLASS_CSA ||
+        !layer->mhc_attention_pre_and_post || !layer->residual_expanded_width ||
+        layer->residual_expanded_width > SIZE_MAX / sizeof(*residual))
+        goto cleanup;
+    residual = (float *)malloc((size_t)layer->residual_expanded_width * sizeof(*residual));
+    if (!residual || !live_history_init(&history, layer, summary, 0ull)) {
+        rc = YVEX_ERR_NOMEM;
+        goto cleanup;
+    }
+    fill_history_values(residual, layer->residual_expanded_width, 9107ull);
+    yvex_graph_lower_deepseek_v4()->cpu_options_default(&options);
+    options.operation_scope = YVEX_ATTENTION_OPERATION_ENVELOPE;
+    options.layer_index = csa_layer;
+    options.token_count = 1ull;
+    options.input = residual;
+    options.input_stride = layer->residual_expanded_width;
+    options.history = &history.view;
+    options.publication = &cpu_trace;
+    rc = yvex_graph_lower_deepseek_v4()->cpu_chunk_execute(
+        plan, ir, session, descriptor, &options, &cpu_result, failure, err);
+    if (rc != YVEX_OK) goto cleanup;
+    options.publication = &cuda_trace;
+    rc = yvex_graph_lower_deepseek_v4()->cuda_token_execute(
+        plan, ir, session, descriptor, backend, &options, &cuda_result, failure, err);
+    if (rc != YVEX_OK) goto cleanup;
+    if (!cpu_trace.complete || !cuda_trace.complete || !cpu_trace.input || !cuda_trace.input ||
+        !cpu_trace.index_weights || !cuda_trace.index_weights ||
+        !cpu_trace.next_main_rolling_state.present ||
+        !cuda_trace.next_main_rolling_state.present ||
+        !cpu_trace.next_indexer_rolling_state.present ||
+        !cuda_trace.next_indexer_rolling_state.present)
+        goto mismatch;
+    for (lane = 0ull; lane < layer->hidden_dimension; ++lane) {
+        double scale = fmax(fabs((double)cpu_trace.input[lane]),
+                            fabs((double)residual[lane]));
+        double difference = fabs((double)cpu_trace.input[lane] -
+                                 (double)residual[lane]);
+        if (difference > ATTENTION_CUDA_ABSOLUTE_TOLERANCE +
+                             ATTENTION_CUDA_RELATIVE_TOLERANCE * scale) {
+            transformed = 1;
+            break;
+        }
+    }
+    if (!transformed) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "attention.cuda.core_input.transform",
+                       "attention envelope did not transform its core input");
+        goto mismatch;
+    }
+    if (yvex_graph_f32_compare(
+            cpu_trace.input, cuda_trace.input, layer->hidden_dimension,
+            ATTENTION_CUDA_ABSOLUTE_TOLERANCE, ATTENTION_CUDA_RELATIVE_TOLERANCE,
+            &input_comparison, err) != YVEX_OK || !input_comparison.within_tolerance) {
+        fprintf(stderr,
+                "attention_cuda_core_input_mismatch coordinate=%llu max_abs=%.17g "
+                "max_rel=%.17g\n",
+                input_comparison.first_failing_coordinate,
+                input_comparison.maximum_absolute_error,
+                input_comparison.maximum_relative_error);
+        goto mismatch;
+    }
+    if (yvex_graph_f32_compare(
+            cpu_trace.index_weights, cuda_trace.index_weights, layer->indexer_heads,
+            ATTENTION_CUDA_ABSOLUTE_TOLERANCE, ATTENTION_CUDA_RELATIVE_TOLERANCE,
+            &index_comparison, err) != YVEX_OK || !index_comparison.within_tolerance) {
+        fprintf(stderr,
+                "attention_cuda_index_weight_mismatch coordinate=%llu max_abs=%.17g "
+                "max_rel=%.17g\n",
+                index_comparison.first_failing_coordinate,
+                index_comparison.maximum_absolute_error,
+                index_comparison.maximum_relative_error);
+        goto mismatch;
+    }
+    if (yvex_attention_state_compare(
+            &cpu_trace, &cuda_trace, ATTENTION_CUDA_ABSOLUTE_TOLERANCE,
+            ATTENTION_CUDA_RELATIVE_TOLERANCE, &state_comparison, err) != YVEX_OK ||
+        !state_comparison.geometry_equal || !state_comparison.numeric.within_tolerance) {
+        fprintf(stderr,
+                "attention_cuda_core_state_mismatch geometry=%d coordinate=%llu "
+                "max_abs=%.17g max_rel=%.17g\n",
+                state_comparison.geometry_equal,
+                state_comparison.numeric.first_failing_coordinate,
+                state_comparison.numeric.maximum_absolute_error,
+                state_comparison.numeric.maximum_relative_error);
+        goto mismatch;
+    }
+    rc = YVEX_OK;
+    goto cleanup;
+
+mismatch:
+    if (!yvex_error_is_set(err))
+        yvex_error_set(err, YVEX_ERR_FORMAT, "attention.cuda.core_input",
+                       "CUDA rolling and index projections diverged from transformed core input");
+    rc = YVEX_ERR_FORMAT;
+cleanup:
+    free(residual);
+    live_history_release(&history);
+    yvex_graph_lower_deepseek_v4()->publication_release(&cpu_trace);
+    yvex_graph_lower_deepseek_v4()->publication_release(&cuda_trace);
+    return rc;
+}
+
+/* Purpose: retain the backend registry reason when a live graph execution refuses. */
+static void runtime_oracle_graph_failure_report(
+    const yvex_backend *backend, yvex_runtime_execution_mode mode,
+    unsigned long long layer, unsigned int repeat,
+    const yvex_attention_failure *failure)
+{
+    yvex_backend_cuda_attention_graph_entry entry;
+    yvex_error inspect_error;
+    unsigned long long count = 0ull, index;
+
+    fprintf(stderr,
+            "attention_runtime_oracle_dispatch_failed mode=%u layer=%llu "
+            "repeat=%u failure=%u expected=%llu actual=%llu reason=%s\n",
+            (unsigned int)mode, layer, repeat,
+            failure ? (unsigned int)failure->code : 0u,
+            failure ? failure->expected : 0ull,
+            failure ? failure->actual : 0ull,
+            failure && failure->reason ? failure->reason : "");
+    yvex_error_clear(&inspect_error);
+    if (yvex_backend_cuda_attention_graph_registry_count(
+            backend, &count, &inspect_error) != YVEX_OK) {
+        fprintf(stderr,
+                "attention_runtime_oracle_registry_failed where=%s message=%s\n",
+                yvex_error_where(&inspect_error),
+                yvex_error_message(&inspect_error));
+        return;
+    }
+    fprintf(stderr, "attention_runtime_oracle_registry_count=%llu\n", count);
+    for (index = 0ull; index < count; ++index) {
+        yvex_error_clear(&inspect_error);
+        if (yvex_backend_cuda_attention_graph_registry_get(
+                backend, index, &entry, &inspect_error) != YVEX_OK) {
+            fprintf(stderr,
+                    "attention_runtime_oracle_registry_entry_failed index=%llu "
+                    "where=%s message=%s\n",
+                    index, yvex_error_where(&inspect_error),
+                    yvex_error_message(&inspect_error));
+            continue;
+        }
+        fprintf(stderr,
+                "attention_runtime_oracle_registry_entry index=%llu state=%u "
+                "reason=%u captures=%llu instantiates=%llu launches=%llu "
+                "replays=%llu kernels=%llu key=%s\n",
+                index, (unsigned int)entry.graph.state,
+                (unsigned int)entry.graph.reason, entry.graph.capture_count,
+                entry.graph.instantiate_count, entry.graph.launch_count,
+                entry.graph.replay_count, entry.graph.inventory.kernel_node_count,
+                entry.compatibility_identity);
+    }
+}
+
+/* Purpose: execute the canonical SWA/CSA/HCA fixture twice through one resident CUDA mode.
+ * Inputs: sealed runtime model/session, independent family IR, and representative layer ordinals.
+ * Effects: captures/replays production graphs and returns oracle comparison plus graph evidence.
+ * Failure: lifecycle, capture, publication, oracle, or cleanup disagreement refuses the mode.
+ * Boundary: test-only admission over runtime-owned residency and workspace. */
+static int run_runtime_oracle_mode(
+    yvex_runtime_model *model, yvex_runtime_execution_session *runtime_session,
+    const yvex_graph_attention_capacity_plan *capacity,
+    const yvex_deepseek_v4_ir *ir, yvex_runtime_execution_mode mode,
+    unsigned long long swa_layer, unsigned long long csa_layer,
+    unsigned long long hca_layer, runtime_oracle_mode_result *result,
+    yvex_error *err)
+{
+    const yvex_runtime_model_view *model_view = yvex_runtime_model_view_get(model);
+    const yvex_runtime_session_view *session_view =
+        yvex_runtime_session_view_get(runtime_session);
+    const yvex_attention_plan *plan = model_view ? model_view->attention : NULL;
+    const yvex_attention_summary *summary = yvex_attention_plan_summary(plan);
+    const yvex_graph_attention_capacity_summary *capacity_summary =
+        yvex_graph_attention_capacity_plan_summary(capacity);
+    const unsigned long long layers[] = {swa_layer, csa_layer, hca_layer};
+    yvex_runtime_model_failure model_failure;
+    yvex_attention_probe_request request;
+    yvex_attention_probe_result probe;
+    yvex_runtime_session_summary session_summary;
+    yvex_graph_attention_state_summary state_summary;
+    yvex_backend_cuda_attention_mode backend_mode;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    unsigned long long layer_index;
+    unsigned int repeat;
+    int rc;
+
+    if (!result || !model_view || !session_view || !plan || !summary ||
+        !capacity_summary || !ir ||
+        !model_view->materialization || !model_view->descriptor ||
+        !model_view->binding || !model_view->adapter ||
+        !model_view->adapter->graph || !session_view->backend ||
+        !session_view->attention_workspace ||
+        capacity_summary->selected_layer_count != 3ull ||
+        strcmp(capacity_summary->attention_plan_identity,
+               summary->attention_plan_identity) != 0 ||
+        (mode != YVEX_RUNTIME_MODE_PIECEWISE && mode != YVEX_RUNTIME_MODE_FULL)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "attention.runtime_oracle",
+                       "sealed resident CUDA graph owners are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(result, 0, sizeof(*result));
+    result->oracle.plan = plan;
+    result->oracle.ir = ir;
+    result->oracle.materialization = model_view->materialization;
+    result->oracle.descriptor = model_view->descriptor;
+    yvex_sha256_init(&result->oracle.output_hash);
+    yvex_sha256_init(&result->oracle.state_hash);
+    if (!yvex_sha256_update_text(
+            &result->oracle.output_hash,
+            "yvex.test.runtime-graph.oracle-output-set.v1") ||
+        !yvex_sha256_update_text(
+            &result->oracle.state_hash,
+            "yvex.test.runtime-graph.oracle-state-set.v1")) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_oracle",
+                       "runtime oracle identity initialization failed");
+        return YVEX_ERR_STATE;
+    }
+    rc = YVEX_OK;
+    backend_mode = mode == YVEX_RUNTIME_MODE_FULL
+        ? YVEX_BACKEND_CUDA_ATTENTION_FULL
+        : YVEX_BACKEND_CUDA_ATTENTION_PIECEWISE;
+    if (rc == YVEX_OK)
+        rc = yvex_backend_cuda_attention_configure(
+            session_view->backend, backend_mode,
+            model_view->binding->executable_graph_identity,
+            "decode-1",
+            capacity_summary->components[
+                YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY].maximum_capacity,
+            capacity_summary->components[
+                YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY].maximum_capacity,
+            capacity_summary->components[
+                YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY].maximum_capacity,
+            err);
+    for (layer_index = 0ull; rc == YVEX_OK && layer_index < 3ull;
+         ++layer_index) {
+        const yvex_attention_layer_plan *layer =
+            yvex_attention_plan_layer_at(plan, layers[layer_index]);
+
+        if (!layer || layer->layer_index != layers[layer_index]) {
+            yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_oracle",
+                           "representative runtime layer is unavailable");
+            rc = YVEX_ERR_STATE;
+            break;
+        }
+        for (repeat = 0u; rc == YVEX_OK && repeat < 2u; ++repeat) {
+            unsigned long long position = 0ull;
+
+            memset(&request, 0, sizeof(request));
+            memset(&probe, 0, sizeof(probe));
+            memset(&model_failure, 0, sizeof(model_failure));
+            request.backend = YVEX_BACKEND_KIND_CUDA;
+            request.probe = YVEX_ATTENTION_PROBE_CANONICAL_V2;
+            request.scope = YVEX_ATTENTION_PROBE_SCOPE_QUICK;
+            request.operation_scope = YVEX_ATTENTION_OPERATION_CORE;
+            request.evidence_level = YVEX_ATTENTION_EVIDENCE_FULL;
+            request.token_count = 1ull;
+            request.layer_ordinal = layer->layer_index;
+            rc = yvex_attention_probe_position_resolve(
+                layer, 0, (unsigned long long)repeat, &position, err);
+            request.token_position = position;
+            request.select_layer = 1;
+            request.select_position = 1;
+            request.evidence = runtime_oracle_compare_publication;
+            request.evidence_context = &result->oracle;
+            result->oracle.history =
+                session_view->attention_state_provider->view
+                    ? session_view->attention_state_provider->view(
+                          session_view->attention_state_provider->context,
+                          layer->layer_index,
+                          YVEX_ATTENTION_STATE_VIEW_COMMITTED)
+                    : NULL;
+            if (!result->oracle.history ||
+                result->oracle.history->token_count != position) {
+                yvex_error_set(err, YVEX_ERR_STATE,
+                               "attention.runtime_oracle.history",
+                               "committed runtime history is not contiguous");
+                rc = YVEX_ERR_STATE;
+            }
+            if (rc == YVEX_OK)
+                rc = yvex_runtime_attention_probe_execute(
+                    runtime_session, model, &request, &probe, &model_failure, err);
+            result->oracle.history = NULL;
+            if (rc != YVEX_OK)
+                runtime_oracle_graph_failure_report(
+                    session_view->backend, mode, layer->layer_index, repeat, NULL);
+            if (rc == YVEX_OK &&
+                (probe.layers_executed != 1ull ||
+                 probe.bindings_executed != layer->required_binding_count ||
+                 probe.swa_layers_executed !=
+                     (layer->attention_class == YVEX_ATTENTION_CLASS_SWA) ||
+                 probe.csa_layers_executed !=
+                     (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) ||
+                 probe.hca_layers_executed !=
+                     (layer->attention_class == YVEX_ATTENTION_CLASS_HCA))) {
+                yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_oracle",
+                               "runtime mode published incomplete layer evidence");
+                rc = YVEX_ERR_STATE;
+            }
+        }
+    }
+    memset(&session_summary, 0, sizeof(session_summary));
+    memset(&state_summary, 0, sizeof(state_summary));
+    if (rc == YVEX_OK &&
+        (yvex_runtime_session_summary_copy(
+             runtime_session, &session_summary, err) != YVEX_OK ||
+         !session_view->attention_state_provider ||
+         session_view->attention_state_provider->summary(
+             session_view->attention_state_provider->context,
+             &state_summary, err) != YVEX_OK ||
+         session_summary.execution_count != 6ull ||
+         state_summary.commit_count != 6ull ||
+         state_summary.transaction_active || state_summary.candidate_active ||
+         state_summary.staged_layer_count)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_oracle",
+                       "session-scoped runtime execution did not commit six state batches");
+        rc = YVEX_ERR_STATE;
+    }
+    if (rc == YVEX_OK)
+        rc = yvex_backend_cuda_attention_graph_summary_get(
+            session_view->backend, &result->graph, err);
+    if (rc == YVEX_OK &&
+        (!result->graph.configured ||
+         result->graph.selected_mode != backend_mode ||
+         !result->graph.graph_count || !result->graph.capture_count ||
+         !result->graph.instantiate_count ||
+         result->graph.capture_count != result->graph.graph_count ||
+         result->graph.instantiate_count != result->graph.graph_count ||
+         result->graph.replay_count <= result->graph.graph_count ||
+         !result->graph.kernel_node_count ||
+         (mode == YVEX_RUNTIME_MODE_PIECEWISE &&
+          result->graph.piece_count < 2ull))) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_oracle",
+                       "runtime CUDA graph lifecycle evidence is incomplete");
+        rc = YVEX_ERR_STATE;
+    }
+    if (rc == YVEX_OK &&
+        (result->oracle.publications != 6ull ||
+         !result->oracle.compared_values ||
+         !yvex_sha256_final(&result->oracle.output_hash, digest))) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_oracle",
+                       "runtime oracle comparison set is incomplete");
+        rc = YVEX_ERR_STATE;
+    }
+    if (rc == YVEX_OK) {
+        yvex_sha256_hex(digest, result->output_identity);
+        if (!yvex_sha256_final(&result->oracle.state_hash, digest)) {
+            yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_oracle",
+                           "runtime oracle state identity finalization failed");
+            rc = YVEX_ERR_STATE;
+        } else {
+            yvex_sha256_hex(digest, result->state_identity);
+        }
+    }
+    return rc;
+}
+
+/* Purpose: prove live runtime residency admits teardown before releasing its shared device pack.
+ * Inputs: sealed model with one still-live CUDA execution session.
+ * Effects: marks the model-owned CUDA backend closing through an intentionally refused close.
+ * Failure: any early weight release, changed residency fact, or unsafe cleanup ordering is typed.
+ * Boundary: live lifecycle evidence only; the caller closes the child session and model afterward. */
+static int run_runtime_residency_close_order(yvex_runtime_model *model,
+                                             yvex_error *err)
+{
+    const yvex_runtime_model_view *view = yvex_runtime_model_view_get(model);
+    yvex_runtime_residency *borrowed;
+    yvex_runtime_residency_summary before, after;
+    yvex_error refusal;
+    int rc, unset_rc;
+
+    memset(&before, 0, sizeof(before));
+    memset(&after, 0, sizeof(after));
+    if (!view || !view->residency ||
+        yvex_runtime_residency_snapshot(
+            view->residency, &before, NULL, NULL, err) != YVEX_OK ||
+        !before.cuda_ready || !before.binding_count ||
+        !before.device_resident_bytes || !before.cuda_upload_count) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_residency.close_order",
+                       "one populated live CUDA residency is required");
+        return YVEX_ERR_STATE;
+    }
+    borrowed = (yvex_runtime_residency *)view->residency;
+    if (setenv("YVEX_TEST_CUDA_CLEANUP_FAILURE", "tensor-alloc", 1) != 0) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_residency.close_order",
+                       "CUDA tensor cleanup seam could not be installed");
+        return YVEX_ERR_STATE;
+    }
+    yvex_error_clear(&refusal);
+    rc = yvex_runtime_residency_close(&borrowed, &refusal);
+    unset_rc = unsetenv("YVEX_TEST_CUDA_CLEANUP_FAILURE");
+    if (unset_rc != 0) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_residency.close_order",
+                       "CUDA tensor cleanup seam could not be cleared");
+        return YVEX_ERR_STATE;
+    }
+    if (rc != YVEX_ERR_STATE ||
+        strcmp(yvex_error_where(&refusal), "backend.close.admit") != 0 ||
+        borrowed != view->residency ||
+        yvex_runtime_residency_snapshot(
+            borrowed, &after, NULL, NULL, err) != YVEX_OK) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_residency.close_order",
+                       "live child lease did not refuse residency teardown first");
+        return YVEX_ERR_STATE;
+    }
+    if (after.schema_version != before.schema_version ||
+        after.sealed != before.sealed || after.attached != before.attached ||
+        after.host_ready != before.host_ready ||
+        after.cuda_ready != before.cuda_ready ||
+        after.invalidated != before.invalidated ||
+        after.generation != before.generation ||
+        after.core_binding_count != before.core_binding_count ||
+        after.envelope_binding_count != before.envelope_binding_count ||
+        after.binding_count != before.binding_count ||
+        after.encoded_bytes != before.encoded_bytes ||
+        after.host_resident_bytes != before.host_resident_bytes ||
+        after.device_resident_bytes != before.device_resident_bytes ||
+        after.cuda_upload_bytes != before.cuda_upload_bytes ||
+        after.cuda_upload_count != before.cuda_upload_count ||
+        memcmp(after.qtype_binding_counts, before.qtype_binding_counts,
+               sizeof(before.qtype_binding_counts)) != 0 ||
+        memcmp(after.qtype_bytes, before.qtype_bytes,
+               sizeof(before.qtype_bytes)) != 0 ||
+        strcmp(after.payload_digest, before.payload_digest) != 0 ||
+        strcmp(after.residency_identity, before.residency_identity) != 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "attention.runtime_residency.close_order",
+                       "refused residency teardown changed admitted resident bytes or identity");
+        return YVEX_ERR_FORMAT;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/* Purpose: prove operator phase cleanup retains its complete owner and succeeds on retry.
+ * Inputs: admitted artifact/binding and one real SWA layer.
+ * Effects: runs the production state-exercise path under one cleanup-only fault.
+ * Failure: missing retained ownership, wrong failure typing, or retry disagreement refuses.
+ * Boundary: test-only fault injection; the admitted artifact remains read-only. */
+static int run_runtime_phase_cleanup_retry(
+    const char *artifact_path, const char *runtime_binding_path,
+    unsigned long long swa_layer, yvex_error *err)
+{
+    yvex_graph_attention_operator_request request;
+    yvex_graph_attention_operator_result result;
+    yvex_runtime_cleanup_lease *cleanup = NULL;
+    yvex_error cleanup_error;
+    int rc, close_rc, expected, unset_rc;
+
+    memset(&request, 0, sizeof(request));
+    memset(&result, 0, sizeof(result));
+    request.target = "deepseek4-v4-flash";
+    request.artifact_path = artifact_path;
+    request.runtime_binding_path = runtime_binding_path;
+    request.backend = YVEX_BACKEND_KIND_CPU;
+    request.probe = YVEX_ATTENTION_PROBE_CANONICAL_V2;
+    request.scope = YVEX_ATTENTION_PROBE_SCOPE_QUICK;
+    request.phase = YVEX_RUNTIME_PHASE_ATTENTION_PREFILL;
+    request.mode = YVEX_RUNTIME_MODE_EAGER;
+    request.operation_scope = YVEX_RUNTIME_SCOPE_ATTENTION_CORE;
+    request.operator_action = YVEX_RUNTIME_OPERATOR_STATE_EXERCISE;
+    request.token_count = 2ull;
+    request.repeat = 1ull;
+    request.select_layer = 1;
+    request.layer_start = swa_layer;
+    request.layer_count = 1ull;
+    if (setenv("YVEX_TEST_RUNTIME_PHASE_CLEANUP_FAILURE", "1", 1) != 0) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_phase_cleanup",
+                       "phase cleanup fault could not be installed");
+        return YVEX_ERR_STATE;
+    }
+    rc = yvex_graph_attention_operator_execute(
+        &request, &result, &cleanup, err);
+    unset_rc = unsetenv("YVEX_TEST_RUNTIME_PHASE_CLEANUP_FAILURE");
+    expected = rc == YVEX_ERR_STATE && cleanup && !result.completed &&
+               strcmp(result.status, "refused") == 0 &&
+               strcmp(yvex_error_where(err),
+                      "runtime.attention.phase.cleanup") == 0 &&
+               strcmp(result.failure_where,
+                      "runtime.attention.phase.cleanup") == 0;
+    yvex_error_clear(&cleanup_error);
+    close_rc = yvex_runtime_cleanup_lease_close(&cleanup, &cleanup_error);
+    if (unset_rc != 0 || close_rc != YVEX_OK || cleanup ||
+        yvex_runtime_cleanup_lease_close(&cleanup, &cleanup_error) != YVEX_OK) {
+        *err = cleanup_error;
+        if (!yvex_error_is_set(err))
+            yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_phase_cleanup",
+                           "retained phase cleanup could not be retried");
+        return YVEX_ERR_STATE;
+    }
+    if (!expected) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_phase_cleanup",
+                       "phase cleanup fault did not retain one typed retry owner");
+        return YVEX_ERR_STATE;
+    }
+    printf("attention_runtime_phase_cleanup_retry=1\n");
+    return YVEX_OK;
+}
+
+/* Purpose: prove piecewise and full runtime-resident CUDA graphs against one oracle fixture set.
+ * Inputs: external immutable runtime binding, selected artifact, current IR, and class layers.
+ * Effects: authenticates one runtime model, reuses one resident session, and reports parity facts.
+ * Failure: preserves the external binding/artifact and closes every runtime-owned resource.
+ * Boundary: live evidence only; it creates no runtime binding and claims no persistent KV. */
+static int run_runtime_graph_oracle_suite(
+    const char *artifact_path, const char *runtime_binding_path,
+    const char *attention_plan_identity, const char *runtime_descriptor_identity,
+    const yvex_deepseek_v4_ir *ir, unsigned long long swa_layer,
+    unsigned long long csa_layer, unsigned long long hca_layer,
+    yvex_error *err)
+{
+    yvex_runtime_model_open_request model_request;
+    yvex_runtime_session_open_request session_request;
+    yvex_runtime_model_failure failure;
+    yvex_runtime_model *model = NULL;
+    yvex_runtime_execution_session *runtime_session = NULL;
+    yvex_graph_attention_capacity_plan *capacity = NULL;
+    yvex_graph_attention_capacity_request capacity_request;
+    yvex_attention_state_provider_factory state_factory;
+    runtime_oracle_state_factory_control state_factory_control;
+    yvex_attention_failure attention_failure;
+    runtime_oracle_mode_result piecewise, full;
+    int rc;
+
+    memset(&model_request, 0, sizeof(model_request));
+    memset(&session_request, 0, sizeof(session_request));
+    memset(&failure, 0, sizeof(failure));
+    memset(&capacity_request, 0, sizeof(capacity_request));
+    memset(&state_factory_control, 0, sizeof(state_factory_control));
+    memset(&attention_failure, 0, sizeof(attention_failure));
+    memset(&piecewise, 0, sizeof(piecewise));
+    memset(&full, 0, sizeof(full));
+    state_factory = (yvex_attention_state_provider_factory){
+        .context = &state_factory_control,
+        .open = runtime_oracle_state_factory_open,
+        .discard = runtime_oracle_state_factory_discard,
+    };
+    model_request.artifact_path = artifact_path;
+    model_request.runtime_binding_path = runtime_binding_path;
+    model_request.target_id = "deepseek4-v4-flash";
+    rc = yvex_runtime_model_open(&model, &model_request, &failure, err);
+    session_request.backend = YVEX_BACKEND_KIND_CUDA;
+    session_request.attention_state_factory = &state_factory;
+    if (rc == YVEX_OK) {
+        const yvex_runtime_model_view *view = yvex_runtime_model_view_get(model);
+
+        if (!view || !view->binding ||
+            strcmp(view->binding->attention_plan_identity,
+                   attention_plan_identity) != 0 ||
+            strcmp(view->binding->runtime_descriptor_identity,
+                   runtime_descriptor_identity) != 0) {
+            yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_oracle",
+                           "external runtime binding does not match the live oracle fixture");
+            rc = YVEX_ERR_STATE;
+        }
+    }
+    capacity_request.scope = YVEX_ATTENTION_PROBE_SCOPE_QUICK;
+    capacity_request.token_count = 1ull;
+    capacity_request.execution_count = 2ull;
+    if (rc == YVEX_OK) {
+        const yvex_runtime_model_view *view = yvex_runtime_model_view_get(model);
+
+        rc = yvex_graph_attention_capacity_plan_build(
+            &capacity,
+            view && view->adapter ? view->adapter->graph() : NULL,
+            view ? view->attention : NULL, &capacity_request, err);
+    }
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_session_open(
+            &runtime_session, model, &session_request, &failure, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_session_prepare_attention_workspace(
+            runtime_session, YVEX_RUNTIME_MODE_PIECEWISE,
+            YVEX_RUNTIME_SCOPE_ATTENTION_CORE, YVEX_ATTENTION_EVIDENCE_FULL,
+            capacity, &failure, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_session_prepare_attention_probe_state(
+            runtime_session, model, capacity, &attention_failure, err);
+    if (rc == YVEX_OK)
+        rc = run_runtime_oracle_mode(
+            model, runtime_session, capacity, ir, YVEX_RUNTIME_MODE_PIECEWISE,
+            swa_layer, csa_layer, hca_layer, &piecewise, err);
+    if (rc == YVEX_OK) {
+        yvex_error cleanup;
+        int close_rc;
+
+        yvex_error_clear(&cleanup);
+        close_rc = yvex_runtime_session_close(&runtime_session, &cleanup);
+        if (close_rc != YVEX_OK) {
+            rc = close_rc;
+            *err = cleanup;
+        }
+    }
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_session_open(
+            &runtime_session, model, &session_request, &failure, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_session_prepare_attention_workspace(
+            runtime_session, YVEX_RUNTIME_MODE_FULL,
+            YVEX_RUNTIME_SCOPE_ATTENTION_CORE, YVEX_ATTENTION_EVIDENCE_FULL,
+            capacity, &failure, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_session_prepare_attention_probe_state(
+            runtime_session, model, capacity, &attention_failure, err);
+    if (rc == YVEX_OK)
+        rc = run_runtime_oracle_mode(
+            model, runtime_session, capacity, ir, YVEX_RUNTIME_MODE_FULL,
+            swa_layer, csa_layer, hca_layer, &full, err);
+    if (rc == YVEX_OK &&
+        (state_factory_control.opens != 2u ||
+         state_factory_control.discards != 0u)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_oracle.factory",
+                       "injected state factory did not own both production sessions");
+        rc = YVEX_ERR_STATE;
+    }
+    if (rc == YVEX_OK &&
+        (strcmp(piecewise.output_identity, full.output_identity) != 0 ||
+         strcmp(piecewise.state_identity, full.state_identity) != 0)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "attention.runtime_oracle",
+                       "piecewise and full modes did not consume the same oracle fixture set");
+        rc = YVEX_ERR_FORMAT;
+    }
+    if (rc == YVEX_OK)
+        rc = run_runtime_residency_close_order(model, err);
+    if (rc == YVEX_OK) {
+        printf("attention_runtime_oracle_modes=piecewise,full\n");
+        printf("attention_runtime_oracle_classes=swa,csa,hca\n");
+        printf("attention_runtime_oracle_publications=%llu\n",
+               piecewise.oracle.publications + full.oracle.publications);
+        printf("attention_runtime_piecewise_reference_values=%llu\n",
+               piecewise.oracle.compared_values);
+        printf("attention_runtime_piecewise_reference_max_abs=%.17g\n",
+               piecewise.oracle.maximum_absolute_error);
+        printf("attention_runtime_piecewise_reference_max_rel=%.17g\n",
+               piecewise.oracle.maximum_relative_error);
+        printf("attention_runtime_piecewise_reference_rmse=%.17g\n",
+               reference_metrics_rmse(&(yvex_test_attention_reference_metrics){
+                   .compared_values = piecewise.oracle.compared_values,
+                   .squared_error_sum = piecewise.oracle.squared_error}));
+        printf("attention_runtime_full_reference_values=%llu\n",
+               full.oracle.compared_values);
+        printf("attention_runtime_full_reference_max_abs=%.17g\n",
+               full.oracle.maximum_absolute_error);
+        printf("attention_runtime_full_reference_max_rel=%.17g\n",
+               full.oracle.maximum_relative_error);
+        printf("attention_runtime_full_reference_rmse=%.17g\n",
+               reference_metrics_rmse(&(yvex_test_attention_reference_metrics){
+                   .compared_values = full.oracle.compared_values,
+                   .squared_error_sum = full.oracle.squared_error}));
+        printf("attention_runtime_oracle_output_identity=%s\n",
+               full.output_identity);
+        printf("attention_runtime_oracle_state_identity=%s\n",
+               full.state_identity);
+        printf("attention_runtime_piecewise_graphs=%llu\n",
+               piecewise.graph.graph_count);
+        printf("attention_runtime_piecewise_pieces=%llu\n",
+               piecewise.graph.piece_count);
+        printf("attention_runtime_full_graphs=%llu\n", full.graph.graph_count);
+        printf("attention_runtime_graph_replay_proven=1\n");
+        printf("attention_runtime_injected_state_factory_opens=%u\n",
+               state_factory_control.opens);
+        printf("attention_runtime_session_scoped_api=1\n");
+    }
+    {
+        yvex_error cleanup;
+        int close_rc;
+
+        yvex_error_clear(&cleanup);
+        close_rc = yvex_runtime_session_close(&runtime_session, &cleanup);
+        if (rc == YVEX_OK && close_rc != YVEX_OK) {
+            rc = close_rc;
+            *err = cleanup;
+        }
+    }
+    yvex_graph_attention_capacity_plan_close(&capacity);
+    yvex_runtime_model_close(&model);
+    if (rc == YVEX_OK && model) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.runtime_residency.close_order",
+                       "model residency did not complete checked teardown");
+        rc = YVEX_ERR_STATE;
+    }
+    if (rc == YVEX_OK)
+        printf("attention_runtime_residency_close_order=1\n");
+    if (rc == YVEX_OK)
+        rc = run_runtime_phase_cleanup_retry(
+            artifact_path, runtime_binding_path, swa_layer, err);
+    return rc;
+}
+
 /* Contract: proves every release layer on generated PTX against both CPU and
  * the independent oracle, then exercises deep CSA/HCA state boundaries. */
 static int run_cuda_live_suite(
@@ -1365,6 +2393,7 @@ static int run_cuda_live_suite(
     unsigned long long configured_host_scratch_bytes = 0ull;
     unsigned long long peak_total_host_owned_bytes = 0ull;
     unsigned long long mutation_detected = 0ull;
+    attention_cuda_workspace_evidence workspace_evidence = {0};
     char repeat_identity[YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP];
     char evidence_identity[YVEX_SHA256_HEX_CAP];
     static const struct {
@@ -1403,6 +2432,10 @@ static int run_cuda_live_suite(
                            "device-complete DeepSeek attention is not admitted");
             rc = YVEX_ERR_UNSUPPORTED;
         }
+        goto cleanup;
+    }
+    if (!attention_cuda_workspace_prepare(backend, plan, err)) {
+        rc = yvex_error_is_set(err) ? yvex_error_code(err) : YVEX_ERR_STATE;
         goto cleanup;
     }
     layer = yvex_graph_lower_deepseek_v4()->plan_layer_at(plan, swa_layer);
@@ -1449,11 +2482,36 @@ static int run_cuda_live_suite(
             plan, ir, session, descriptor, backend, &options, &cpu_result,
             &cuda_result, &cpu_reference, &cuda_reference, &cpu_cuda,
             &cpu_oracle, &cuda_oracle, failure, err);
-        if (rc != YVEX_OK ||
-            !attention_evidence_add(
+        if (rc != YVEX_OK) {
+            fprintf(stderr,
+                    "attention_cuda_layer_execution_failed layer=%llu rc=%d "
+                    "failure=%u where=%s message=%s\n",
+                    layer_index, rc, (unsigned int)failure->code,
+                    yvex_error_where(err), yvex_error_message(err));
+            live_history_release(&history);
+            goto cleanup;
+        }
+        if (!attention_evidence_add(
                 &evidence, &cpu_result, &cuda_result, &cpu_reference,
                 &cuda_reference, &cpu_cuda, &cpu_oracle, &cuda_oracle)) {
+            fprintf(stderr,
+                    "attention_cuda_layer_evidence_failed layer=%llu\n",
+                    layer_index);
             live_history_release(&history);
+            rc = YVEX_ERR_STATE;
+            goto cleanup;
+        }
+        if (!attention_cuda_workspace_add(&workspace_evidence, &cuda_result)) {
+            fprintf(stderr,
+                    "attention_cuda_layer_workspace_failed layer=%llu capacity=%llu "
+                    "used=%llu peak=%llu allocations=%llu reused=%d\n",
+                    layer_index, cuda_result.cuda_host_workspace_capacity,
+                    cuda_result.cuda_host_workspace_used,
+                    cuda_result.cuda_host_workspace_peak,
+                    cuda_result.cuda_host_workspace_allocations,
+                    cuda_result.cuda_host_workspace_reused);
+            live_history_release(&history);
+            rc = YVEX_ERR_STATE;
             goto cleanup;
         }
         live_history_release(&history);
@@ -1474,6 +2532,18 @@ static int run_cuda_live_suite(
             peak_encoded_weight_staging_bytes =
                 cuda_result.payload_bytes_read;
     }
+
+    rc = run_cuda_core_input_regression(
+        plan, ir, session, descriptor, backend, summary, csa_layer, failure, err);
+    if (rc != YVEX_OK) {
+        fprintf(stderr,
+                "attention_cuda_core_input_regression_failed rc=%d failure=%u "
+                "where=%s message=%s\n",
+                rc, (unsigned int)failure->code, yvex_error_where(err),
+                yvex_error_message(err));
+        goto cleanup;
+    }
+    printf("attention_cuda_envelope_core_input_regression=1\n");
 
     fill_history_values(input, input_extent, 401ull + swa_layer);
     yvex_graph_lower_deepseek_v4()->cpu_options_default(&options);
@@ -1517,6 +2587,33 @@ static int run_cuda_live_suite(
     printf("attention_explicit_input_refusal=1\n");
     printf("attention_missing_history_refusal=1\n");
 
+    {
+        float finite_input = input[0];
+
+        input[0] = NAN;
+        memset(&failed_trace, 0, sizeof(failed_trace));
+        options.trace = &failed_trace;
+        rc = yvex_graph_lower_deepseek_v4()->cuda_token_execute(
+            plan, ir, session, descriptor, backend, &options, &cuda_result,
+            failure, err);
+        options.trace = NULL;
+        input[0] = finite_input;
+        if (rc != YVEX_ERR_FORMAT || failed_trace.owned ||
+            cuda_result.executed ||
+            failure->code != YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC) {
+            fprintf(stderr,
+                    "attention_cuda_nonfinite_ingress_not_refused rc=%d "
+                    "failure=%u owned=%d executed=%d\n",
+                    rc, (unsigned int)failure->code, failed_trace.owned,
+                    cuda_result.executed);
+            rc = YVEX_ERR_STATE;
+            goto cleanup;
+        }
+        yvex_error_clear(err);
+        memset(failure, 0, sizeof(*failure));
+        printf("attention_cuda_nonfinite_ingress_refused=1\n");
+    }
+
     for (fault_index = 0u;
          fault_index < sizeof(fault_cases) / sizeof(fault_cases[0]);
          ++fault_index) {
@@ -1541,7 +2638,8 @@ static int run_cuda_live_suite(
         plan, ir, session, descriptor, backend, &options, &cuda_result,
         &cuda_reference, NULL, NULL, failure, err);
     if (rc != YVEX_OK ||
-        strcmp(repeat_identity, cuda_result.output_identity) != 0)
+        strcmp(repeat_identity, cuda_result.output_identity) != 0 ||
+        !attention_cuda_workspace_add(&workspace_evidence, &cuda_result))
         goto cleanup;
     if (!yvex_core_u64_add(
             launches, cuda_result.cuda_kernel_launches, &launches)) {
@@ -1566,9 +2664,11 @@ static int run_cuda_live_suite(
             plan, ir, session, descriptor, &options, NULL, NULL, 1ull,
             YVEX_DEEPSEEK_ATTENTION_FAILURE_CANCELLED, err) ||
         !run_cuda_fault_case(
-            plan, ir, session, descriptor, &options, NULL, NULL, 9ull,
+            plan, ir, session, descriptor, &options, NULL, NULL, 6ull,
             YVEX_DEEPSEEK_ATTENTION_FAILURE_CANCELLED, err) ||
-        !run_cuda_bundle_refusal(err)) {
+        !run_cuda_bundle_refusal(err) ||
+        !run_cuda_workspace_cleanup_fault(plan, err)) {
+        fprintf(stderr, "attention_cuda_fault_matrix_failed=1\n");
         rc = YVEX_ERR_STATE;
         goto cleanup;
     }
@@ -1626,7 +2726,8 @@ static int run_cuda_live_suite(
         &cuda_result, &cpu_reference, &cuda_reference, &cpu_cuda,
         &cpu_oracle, &cuda_oracle, failure, err);
     if (rc != YVEX_OK || cuda_result.topk_candidates != 513ull ||
-        cuda_result.topk_selected != 512ull)
+        cuda_result.topk_selected != 512ull ||
+        !attention_cuda_workspace_add(&workspace_evidence, &cuda_result))
         goto cleanup;
     if (!attention_evidence_add_case(
             &evidence, "csa-topk-513", &cpu_result, &cuda_result,
@@ -1670,7 +2771,8 @@ static int run_cuda_live_suite(
         plan, ir, session, descriptor, backend, &options, &cpu_result,
         &cuda_result, &cpu_reference, &cuda_reference, &cpu_cuda,
         &cpu_oracle, &cuda_oracle, failure, err);
-    if (rc != YVEX_OK || cuda_result.compressed_entries != 1ull)
+    if (rc != YVEX_OK || cuda_result.compressed_entries != 1ull ||
+        !attention_cuda_workspace_add(&workspace_evidence, &cuda_result))
         goto cleanup;
     if (!attention_evidence_add_case(
             &evidence, "hca-ratio-128", &cpu_result, &cuda_result,
@@ -1701,6 +2803,24 @@ static int run_cuda_live_suite(
         evidence.csa_count != summary->csa_layer_count ||
         evidence.hca_count != summary->hca_layer_count ||
         !attention_evidence_final(&evidence, evidence_identity)) {
+        fprintf(stderr,
+                "attention_cuda_evidence_incomplete layers=%llu swa=%llu "
+                "csa=%llu hca=%llu\n",
+                evidence.layer_count, evidence.swa_count, evidence.csa_count,
+                evidence.hca_count);
+        rc = YVEX_ERR_STATE;
+        goto cleanup;
+    }
+    if (workspace_evidence.cold_executions != 1ull ||
+        workspace_evidence.warm_executions < 2ull ||
+        workspace_evidence.allocation_count != 1ull) {
+        fprintf(stderr,
+                "attention_cuda_workspace_evidence_invalid cold=%llu warm=%llu "
+                "allocations=%llu capacity=%llu peak=%llu\n",
+                workspace_evidence.cold_executions,
+                workspace_evidence.warm_executions,
+                workspace_evidence.allocation_count,
+                workspace_evidence.capacity, workspace_evidence.peak);
         rc = YVEX_ERR_STATE;
         goto cleanup;
     }
@@ -1710,6 +2830,8 @@ static int run_cuda_live_suite(
         rc = YVEX_ERR_FORMAT;
         goto cleanup;
     }
+    rc = yvex_backend_close_checked(&backend, err);
+    if (rc != YVEX_OK) goto cleanup;
     printf("attention_cuda_layers_executed=%llu\n", evidence.layer_count);
     printf("attention_publication_abi_consumed=1\n");
     printf("attention_real_stage_mutations_detected=%llu\n",
@@ -1727,6 +2849,17 @@ static int run_cuda_live_suite(
            peak_total_host_owned_bytes);
     printf("attention_cuda_configured_host_scratch_bytes=%llu\n",
            configured_host_scratch_bytes);
+    printf("attention_cuda_host_workspace_capacity=%llu\n",
+           workspace_evidence.capacity);
+    printf("attention_cuda_host_workspace_peak=%llu\n",
+           workspace_evidence.peak);
+    printf("attention_cuda_host_workspace_allocations=%llu\n",
+           workspace_evidence.allocation_count);
+    printf("attention_cuda_host_workspace_cold_executions=%llu\n",
+           workspace_evidence.cold_executions);
+    printf("attention_cuda_host_workspace_warm_executions=%llu\n",
+           workspace_evidence.warm_executions);
+    printf("attention_cuda_warm_host_allocation_delta=0\n");
     printf("attention_required_bindings_executed=%llu\n",
            summary->required_binding_count);
     printf("attention_qtype_compute_refusals=%llu\n",
@@ -1784,7 +2917,7 @@ static int run_cuda_live_suite(
            evidence.exact_topk_positions);
     printf("attention_cuda_swa_repeat_deterministic=1\n");
     printf("attention_cuda_fault_cases=%zu\n",
-           sizeof(fault_cases) / sizeof(fault_cases[0]) + 5u);
+           sizeof(fault_cases) / sizeof(fault_cases[0]) + 7u);
     printf("attention_cuda_fault_cleanup=1\n");
     printf("attention_cuda_cancel_before_dispatch=1\n");
     printf("attention_cuda_cancel_before_publish=1\n");
@@ -1799,7 +2932,10 @@ cleanup:
     yvex_graph_lower_deepseek_v4()->execution_trace_release(&failed_trace);
     live_history_release(&history);
     free(input);
-    yvex_backend_close(backend);
+    {
+        int close_rc = yvex_backend_close_checked(&backend, err);
+        if (rc == YVEX_OK && close_rc != YVEX_OK) rc = close_rc;
+    }
     return rc;
 }
 
@@ -1808,6 +2944,7 @@ int main(int argc, char **argv)
     const char *source_path;
     const char *models_root;
     const char *manifest_path;
+    const char *runtime_binding_path = getenv("YVEX_ATTENTION_RUNTIME_BINDING");
     int plan_only = 0;
     char artifact_path[YVEX_ARTIFACT_PATH_CAP];
     yvex_deepseek_payload_handoff_options handoff_options;
@@ -1832,7 +2969,6 @@ int main(int argc, char **argv)
     const yvex_materialization_summary *materialization_summary;
     const yvex_runtime_descriptor_summary *descriptor_summary;
     const yvex_attention_summary *attention_summary;
-    const char *execution_reason = NULL;
     yvex_error err;
     int rc;
 
@@ -2085,7 +3221,6 @@ identity_mutation_done:
         yvex_materialization_session_summary(session);
     descriptor_summary = yvex_runtime_descriptor_summary_get(descriptor);
     attention_summary = yvex_graph_lower_deepseek_v4()->plan_summary(attention_plan);
-    (void)yvex_attention_execute_supported(&execution_reason);
 
     printf("mode=%s\n",
            plan_only ? "plan-only" :
@@ -2126,9 +3261,8 @@ identity_mutation_done:
     printf("attention_full_execution_ready=%d\n",
            attention_summary->full_execution_ready);
     printf("attention_execution_supported=%d\n",
-           yvex_attention_execute_supported(NULL));
-    printf("attention_execution_refusal=%s\n",
-           execution_reason ? execution_reason : "");
+           attention_summary->full_execution_ready);
+    printf("attention_execution_refusal=\n");
     printf("runtime_generation_ready=%d\n",
            descriptor_summary->generation_ready);
     printf("payload_bytes_accessed=%llu\n",
@@ -2818,6 +3952,20 @@ identity_mutation_done:
             goto cleanup_fail;
         }
         printf("attention_cuda_evidence_exercised=1\n");
+        if (runtime_binding_path && runtime_binding_path[0]) {
+            rc = run_runtime_graph_oracle_suite(
+                artifact_path, runtime_binding_path,
+                attention_summary->attention_plan_identity,
+                descriptor_summary->runtime_descriptor_identity,
+                architecture_ir,
+                first_swa, first_csa, first_hca, &err);
+            if (rc != YVEX_OK) {
+                fprintf(stderr,
+                        "attention_runtime_oracle_failure where=%s message=%s\n",
+                        yvex_error_where(&err), yvex_error_message(&err));
+                goto cleanup_fail;
+            }
+        }
     }
 
     yvex_graph_lower_deepseek_v4()->plan_close(attention_plan);

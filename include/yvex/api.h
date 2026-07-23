@@ -1,7 +1,7 @@
 /* Owner: abi.public umbrella.
  * Owns: one convenience include for the complete installed YVEX C ABI.
  * Does not own: declarations, internal contracts, implementation policy, or capability truth.
- * Invariants: includes only the fifteen canonical domain headers; production never imports it.
+ * Invariants: includes only canonical domain headers; production never imports it.
  * Boundary: external convenience surface over independently includable domain contracts.
  * Purpose: Provide one opt-in include for external consumers of the installed ABI.
  * Inputs: Canonical public domain headers.
@@ -13,15 +13,12 @@
 #include <yvex/artifact.h>
 #include <yvex/backend.h>
 #include <yvex/core.h>
-#include <yvex/generation.h>
 #include <yvex/gguf.h>
 #include <yvex/graph.h>
-#include <yvex/metrics.h>
 #include <yvex/model.h>
 #include <yvex/qtype.h>
 #include <yvex/quant.h>
 #include <yvex/registry.h>
-#include <yvex/runtime.h>
 #include <yvex/server.h>
 #include <yvex/source.h>
 #include <yvex/tokenizer.h>

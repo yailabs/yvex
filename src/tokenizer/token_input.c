@@ -8,7 +8,7 @@
  * Effects: mutates only caller-owned fixed-capacity token-input structures.
  * Failure: rejects empty, malformed, overflowing, excess, or out-of-vocabulary inputs. */
 
-#include <yvex/generation.h>
+#include <yvex/tokenizer.h>
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>

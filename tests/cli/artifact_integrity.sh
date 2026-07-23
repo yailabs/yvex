@@ -157,9 +157,4 @@ contains "$OUT_DIR/token-range.out" "error_0_code: token-out-of-range"
 contains "$OUT_DIR/materialize-range.err" "first-offset-not-zero"
 not_contains "$OUT_DIR/materialize-range.out" "status: weights-materialized"
 
-"$YVEX_BIN" graph --model tests/fixtures/gguf/tensor-offset-out-of-bounds.gguf --backend cpu --execute-partial --partial-token 0 \
-  >"$OUT_DIR/graph-range.out" 2>"$OUT_DIR/graph-range.err" && fail "graph corrupt range passed" || true
-contains "$OUT_DIR/graph-range.err" "first-offset-not-zero"
-not_contains "$OUT_DIR/graph-range.out" "status: real-partial-graph-executed"
-
 echo "cli artifact integrity: ok"

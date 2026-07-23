@@ -1,577 +1,265 @@
 # YVEX API
 
-This document describes the public C API surface of YVEX.
+This document maps the installed C ABI and the non-installed contracts used by
+the YVEX operator binary. It describes ownership and lifetime; it does not turn
+an internal runtime boundary into a public compatibility promise.
 
-The API mirrors the runtime structure of the project: local artifacts, tensor
-facts, backend-owned memory, engine/session lifetime, graph execution, token
-input, prefill state summaries, integrity reports, and server-facing
-diagnostics. It is written for C consumers that need to understand what they can
-include, which objects they own, which reports are copied, and which runtime
-boundary a function belongs to.
+Runtime behavior is governed by [the runtime contract](contract.md). Project
+state and decommission obligations in `PROJECT.md` remain authoritative.
 
-YVEX exposes a staged local inference engine. A caller should be able to move
-from artifact evidence to descriptors, from descriptors to selected backend
-residency, from residency to engine-owned state, from engine-owned state to
-graph execution, and from token input to prefill summaries, minimal
-session-owned KV state, and minimal KV-backed prefill binding. Later layers
-such as full transformer prefill, decode, logits, sampling, generation, and
-provider serving extend the same chain as their runtime contracts mature.
+## Header Tiers
 
-This file is the API map. Runtime behavior is governed by
-[docs/contract.md](contract.md). Operator command transcripts live in
-[docs/operator-runbook.md](operator-runbook.md). The public project overview
-lives in [README.md](../README.md).
-
-## Include Surface
-
-Most consumers should include the umbrella header:
+External consumers may include the convenience umbrella:
 
 ```c
 #include <yvex/api.h>
 ```
 
-The umbrella header collects the supported public header groups.
+Production YVEX code includes the exact domain header it consumes. The umbrella
+contains these twelve installed domain headers:
 
-| Area | Headers | Purpose |
-| --- | --- | --- |
-| Core | `version.h`, `status.h`, `error.h`, `log.h` | Version values, status codes, bounded error reports, and logging contracts. |
-| Artifacts and GGUF | `artifact.h`, `artifact_identity.h`, `artifact_integrity.h`, `artifact_naming.h`, `gguf.h`, `gguf_layout.h`, `gguf_qtype.h`, `gguf_emit.h`, `gguf_template.h` | Local artifact handling, GGUF parsing, canonical global layout and qtype storage geometry, controlled emission, identity evidence, and integrity reports. |
-| Model and tensors | `dtype.h`, `tensor.h`, `model.h`, `weights.h` | Dtype facts, tensor descriptors, model descriptors, selected weights, and backend-resident weight tables. |
-| Tokenizer and input | `tokenizer.h`, `token_input.h`, `prompt.h` | Tokenizer diagnostics, explicit token input objects, prompt rendering, and input normalization boundaries. |
-| Graph and planning | `graph.h`, `op.h`, `planner.h`, `memory_plan.h` | Graph reports, operation boundaries, planning structures, and memory planning summaries. |
-| Backend | `backend.h` | Backend discovery, capability reports, tensor allocation, transfer, and backend operation calls. |
-| Runtime and session | `engine.h`, `session.h`, `kv.h`, `logits.h` | Engine ownership, session visibility, minimal KV ownership, KV/logits boundary types, and runtime-state integration points. |
-| Metrics and traces | `metrics.h`, `trace.h`, `profile.h` | Runtime summaries, trace records, profiles, and measurement/reporting structures. |
-| Server | `server.h` | Daemon/status structures and server-facing runtime reports. |
-| Tooling APIs | `source_manifest.h`, `native_weights.h`, `conversion.h`, `weight_mapping.h`, `qtype_support.h`, `quant_policy.h`, `quant_job.h`, `imatrix.h`, `model_registry.h`, `model_ref.h`, `model_gate.h`, `materialize_gate.h` | Source provenance, native tensor inventory, conversion planning, tensor mapping, qtype policy, quantization evidence, local registry, model references, and gate reports. |
-| Filesystem | `fs.h` | Runtime filesystem helpers and local path handling. |
-
-The header groups are broad because the engine makes several layers visible
-instead of folding them into a single "load model" operation. A consumer can use
-only the slice it needs: artifact inspection, registry resolution,
-materialization, graph execution, token input, or reporting.
-
-## Status and Error Model
-
-Public functions return integer status codes. `YVEX_OK` represents success.
-Other status values identify the boundary that rejected or failed the
-operation.
-
-APIs that accept a `yvex_error` write a bounded explanation into the
-caller-provided object. Error reports are copied data. They should be readable
-after the callee returns and should never depend on a hidden backend pointer or
-temporary parser object.
-
-The error model is operational. A caller should be able to distinguish invalid
-arguments, missing files, parse failures, artifact-integrity failures, digest
-drift, unsupported storage or compute paths, backend discovery failures,
-allocation failures, transfer failures, graph admission failures, dispatch
-failures, reference-read failures, and cleanup failures.
-
-The purpose of the error model is to keep runtime boundaries visible. A failure
-before parsing is different from a failure during materialization, and both are
-different from a graph guard refusing dispatch.
-
-## Ownership and Lifetime
-
-YVEX uses explicit ownership.
-
-Public option structs borrow caller-provided pointers for the duration of the
-call. Returned opaque handles are owned by the caller and must be released with
-the matching close or free function. Registry and resolver objects own copied
-strings until they are cleared or closed. Backend tensors have a checked
-`yvex_backend_tensor_release` path; failed release leaves the caller's pointer,
-ownership, and allocation accounting intact. The legacy void free is a
-best-effort compatibility projection. Engine-attached weights are released by
-engine close. Sessions observe engine state through defined session reports.
-
-The runtime path has distinct ownership layers:
-
-```text
-artifact path
-  -> parsed artifact and tensor facts
-  -> bounded proof descriptor
-  -> backend tensor proof
-  -> engine-attached proof weight table
-  -> session-visible diagnostic state
-  -> primitive result or proof summary
-```
-
-Each layer has its own lifetime. The API should preserve that structure. A
-descriptor does not own backend memory. A session observing engine-attached
-weights does not free them. A copied report does not keep the graph alive. A
-materialization summary does not transfer backend tensor ownership to the
-caller.
-
-`yvex_artifact_open` owns a read-only file descriptor until
-`yvex_artifact_close`. `map=0` leaves `yvex_artifact_data` null and supports
-bounded `yvex_artifact_read_at`; `map=1` exposes a read-only mapping valid only
-until artifact close. `yvex_gguf_open_ex` borrows the artifact during the open
-call and owns its decoded metadata, names, arrays, tensor directory, indexes,
-and reader metrics afterward. All borrowed GGUF accessor results remain valid
-until `yvex_gguf_close`.
-
-The structural reader accepts configurable count, string, array, depth,
-owned-memory, and structural-byte budgets. Its typed result identifies code,
-section, byte offset, and record index. A successful structural parse reads no
-tensor payload bytes. `yvex_gguf_layout_validate` then borrows the same opened
-artifact and parsed view to validate power-of-two alignment, exact
-directory-order padded offsets, zero padding, aggregate file span, canonical
-tail policy, and file snapshot stability. It reads zero tensor payload bytes.
-Neither parse nor layout acceptance proves complete model-artifact support.
-
-Complete model artifacts remain operator-local. The API can open, identify,
-register, validate, and report on local artifact files, while model weights stay
-outside the repository. A one-tensor or bounded-subset file is a tensor proof
-artifact, not a complete or supported model artifact.
-
-## Public Surface Map
-
-The public API is organized by ownership boundary rather than by delivery
-milestone. Several current surfaces are legacy bounded proofs governed by the
-decommission obligations in `PROJECT.md`; they are API facts, not product
-runtime capability.
-
-| Boundary | Public surface |
+| Header | Stable domain |
 | --- | --- |
-| Artifact facts | Read-only file handles, optional explicit payload mapping, exact positioned reads, file-backed GGUF v3 metadata/tensor parsing, typed refusal, naming, identity, and integrity reports. |
-| Tensor interpretation | Dtype facts, tensor descriptors, shape accounting, range validation, bounded embedding facts, and proof descriptors. |
-| Model references | Local registry entries, alias-or-path resolution, model references, model gates, and materialization gates. |
-| Backend transfer proof | Driver/device/context discovery, exact typed capability queries, bounded tensor allocation/transfer/checked release, generated CUDA bundle admission, and materialization summaries. |
-| Engine ownership proof | Engine creation, bounded weight attachment, engine-owned lifetime, and graph proof entry points. |
-| Session visibility | Session reports over engine-attached runtime state and minimal session-owned KV state. |
-| Graph proofs | Controlled fixture results, bounded embedding/segment results, standalone RoPE, attention, matmul/projection, and MLP/feed-forward comparisons, graph guards, checksums, and max-diff reports. Production DeepSeek attention uses the non-installed operator ABI described below. |
-| Token input | Bounded explicit token lists, token validation, token selection, and prompt-to-token boundaries through tokenizer paths. |
-| Diagnostic sequence state | Segment-summary reports over validated token sequences, with optional minimal session-owned KV storage. |
-| Runtime reporting | Metrics, traces, profiles, integrity reports, materialization reports, graph reports, and failure phases. |
-| Server status | Daemon health, metrics, model listing, model reference resolution, and generation availability reports. |
+| `<yvex/core.h>` | status, bounded errors, paths, logging, version identity |
+| `<yvex/source.h>` | source provenance, accounts, manifests, native tensor inventory |
+| `<yvex/gguf.h>` | bounded GGUF v3 parsing, metadata, tensor directory, layout facts |
+| `<yvex/artifact.h>` | immutable file snapshots, identity, integrity and admission |
+| `<yvex/model.h>` | dtypes, tensor roles, descriptors, materialized-weight views |
+| `<yvex/qtype.h>` | canonical GGUF qtype identity and storage geometry |
+| `<yvex/quant.h>` | quantization policy, job and calibration manifests |
+| `<yvex/graph.h>` | generic graph, planning and memory-plan contracts |
+| `<yvex/backend.h>` | backend admission, device tensors and primitive dispatch |
+| `<yvex/tokenizer.h>` | tokenizer views, tokenization and prompt rendering |
+| `<yvex/registry.h>` | local model registry and typed reference resolution |
+| `<yvex/server.h>` | bounded HTTP parsing and server lifecycle |
 
-This map is the public shape of the API. It describes where a consumer can
-connect to YVEX and how those surfaces relate to the larger inference runtime.
+Headers below `include/yvex/internal/` are non-installed cross-subsystem ABI.
+They are available to repository production owners and focused tests only;
+`<yvex/api.h>` never includes them. No source-local header is part of either
+surface.
 
-## Artifact Identity
+The common-runtime cutover intentionally retires the former installed
+`runtime.h`, `generation.h`, and `metrics.h` diagnostic contracts. Those
+headers exposed a bounded proof engine, flat F32 KV, fixture logits/sampling,
+and report-only metrics; they were not a model-backed runtime ABI. Retaining
+them would preserve a second lifecycle beside the sealed runtime model and
+session. This is an incompatible pre-release ABI cutover, not a compatibility
+alias: future KV, generation, and observability surfaces must be admitted by
+their owning milestones over the common runtime.
 
-`yvex_artifact_identity_read` and `yvex_artifact_compute_sha256` provide local
-file identity evidence.
+All public headers are independently includable in C and C++. Public option
+structures borrow pointer fields for the duration of a call. An opaque object
+returned through an output pointer is caller-owned until its matching close or
+release function runs.
 
-The identity surface reports current file size and lowercase SHA-256 digest.
-The hashing path streams the file, so large artifacts can be identified without
-loading the whole artifact into memory.
+## Status, Failure, And Publication
 
-A digest match means the current local bytes match a recorded or expected local
-value. This is useful for registry drift detection, repeatable local runs, and
-gate checks.
+Public functions return `YVEX_OK` on success and a typed status otherwise.
+Functions accepting `yvex_error *` write bounded copied context; the message
+does not borrow parser, backend or stack storage.
 
-Registry entries may carry bounded metadata summaries: legacy support field, format,
-architecture, tensor count, known tensor bytes, primary tensor name, role,
-dtype, rank, dimensions, byte count, and bounded embedding proof facts. These
-fields do not establish model support.
+Failure remains attached to its owning boundary. Parse refusal, artifact drift,
+materialization failure, backend refusal, execution failure and cleanup failure
+are not interchangeable. A renderer may project the code and context, but it
+does not classify capability from error text.
 
-`yvex_model_registry_compare_metadata` compares a registered summary with
-current artifact facts and fills a caller-owned
-`yvex_model_metadata_drift_report`. The report contains copied status fields and
-a bounded issue list.
+Transactional owners publish only complete state. Artifact and manifest
+writers use no-replace atomic publication. Graph and runtime execution produce
+candidate output and state first, then commit them together. Cancellation or
+failure leaves the previous committed state unchanged.
 
-The registry comparison borrows artifact facts and writes report data. It does
-not own artifact objects.
+## Artifact And GGUF Ownership
 
-## Artifact Integrity
+`yvex_artifact_open` retains one read-only file handle and immutable snapshot
+until `yvex_artifact_close`. With mapping disabled, callers use bounded
+positioned reads; an optional read-only mapping is valid only for the handle
+lifetime.
 
-`yvex_artifact_integrity_check_path` opens a local artifact path and returns a
-caller-owned `yvex_artifact_integrity_report`.
+`yvex_gguf_open_ex` borrows an artifact during construction and then owns its
+decoded metadata, names, arrays, tensor directory and indexes. Structural parse
+does not read tensor payload bytes. `yvex_gguf_layout_validate` checks canonical
+directory order, qtype-sized ranges, alignment, zero padding, total span and
+snapshot stability without promoting the file to a complete artifact.
 
-`yvex_artifact_integrity_validate` borrows an already opened artifact, parsed
-GGUF object, and tensor table. It writes a report without taking ownership of
-those objects.
+Qtype geometry comes only from `<yvex/qtype.h>`. Storage admission uses
+`dims[0]` as row width and checks block divisibility and every multiplication.
+Storage geometry, decoding, encoding, CPU compute, CUDA compute and runtime
+support remain separate facts.
 
-The integrity report contains structural status, local identity and digest
-status for path checks, selected-readiness facts where requested, and a bounded
-copied issue list.
+Complete-artifact admission under `<yvex/artifact.h>` binds physical structure,
+required metadata, tokenizer evidence, tensor inventory and exact file
+identity. The admitted file remains external operator data. A complete model
+artifact is still not a supported generation artifact.
 
-The integrity surface covers the local artifact facts required before
-materialization and graph execution: GGUF structure, tensor directory
-consistency, shape and dtype accounting, byte ranges, selected token slices, and
-optional expected or registered SHA-256 matching.
+## Model, Materialization, And Backend
 
-The tiny corrupt GGUF fixtures in the test suite exercise parser-to-integrity
-error mapping and bounded issue reporting. They provide structural regression
-coverage for the parser and validator paths.
+`<yvex/model.h>` exposes canonical dtype, tensor-role and model-descriptor
+facts. Materialized-weight objects describe bounded backend-owned storage; their
+presence does not imply complete model residency.
 
-Integrity acts as an admission layer. It lets the runtime stop before a later
-stage trusts inconsistent artifact facts.
+`<yvex/backend.h>` exposes backend discovery, capability facts, device tensor
+lifecycle and admitted primitives. Backend code consumes typed operations and
+does not infer family topology. `yvex_backend_close_checked` nulls its owner
+only after complete discharge and retains it when cleanup must be retried;
+`yvex_backend_close` remains the best-effort compatibility projection for
+callers without a failure channel.
 
-## Tensor Accounting and Range Validation
+The generated CUDA bundle, Driver API module/function resolution and CUDA Graph
+objects are repository-internal backend contracts. They are not installed C
+ABI and they do not imply a model-generation path.
 
-`yvex_gguf_qtype_tensor_storage` is the canonical GGUF qtype storage-accounting
-step. It uses `dims[0]` as the logical row width, requires exact block
-divisibility for block qtypes, derives row count from the remaining dimensions,
-and reports typed admission and overflow failures. Storage admission and
-reference-decoder availability are separate facts; neither implies
-quantization, emission, materialization, or backend compute support.
+## Common Internal Runtime
 
-`yvex_tensor_shape_accounting_validate` projects that canonical geometry into
-the existing tensor accounting report. It reports rank, dimensions, element
-count, row-aware storage bytes, storage support, and the narrow compute-support
-flags used by current graph paths.
+The common runtime model and execution session are deliberately non-installed
+contracts consumed through `<yvex/internal/runtime.h>` by the operator binary.
+The internal runtime is family-neutral. Its main objects are:
 
-`yvex_tensor_range_validate` is the canonical byte-range calculation for a
-parsed tensor directory row. It consumes the row-aware qtype result, then
-computes `tensor_data_offset + tensor_relative_offset`, absolute start,
-absolute end, file bounds, and alignment status before payload-reading paths
-access tensor bytes. A flattened element count cannot admit a multidimensional
-block-quantized tensor.
+| Object | Ownership |
+| --- | --- |
+| `yvex_runtime_binding` | immutable content-addressed bridge from an admitted artifact to runtime identities and executable requirements |
+| `yvex_runtime_family_adapter` | typed family projection; DeepSeek is the first admitted adapter, not a separate runtime |
+| `yvex_runtime_model` | immutable verified artifact handle, binding, imported descriptor/plan and read-only resident weights |
+| `yvex_runtime_execution_session` | mutable backend context, reusable workspace, attention-local state, cancellation and CUDA Graph registry |
+| execution descriptor | canonical pointer-free identity over phase, mode, scope, geometry, residency, workspace, state and device facts |
 
-`yvex_gguf_layout_validate` is the canonical global admission step. It validates
-directory order without sorting, exact padded continuation, required zero
-padding, aggregate raw and padded spans, truncation, noncanonical trailing
-bytes, and artifact snapshot drift in one linear pass. Its owned result remains
-valid after the borrowed artifact and GGUF view are closed.
+The binding is generated transactionally outside the repository, named by its
+content identity and independently reopened. Runtime open validates it against
+the exact admitted artifact. Runtime execution does not read source headers or
+payloads and does not rebuild Transformation IR, quantization plans or GGUF
+writer plans.
 
-`yvex_selected_embedding_shape_validate` interprets `token_embd.weight` as
-`dims[0] = hidden_size` and `dims[1] = vocab_size`. It validates a token id and
-reports output count, output bytes, and selected-token slice bytes for the
-selected embedding graph path.
+One runtime model performs one complete artifact hash and one GGUF directory
+admission. Warm operations reuse the same verified handle, immutable descriptor,
+attention graph and resident weight pack. Before and after execution, snapshot
+drift invalidates the model, sessions, residency, workspace, graph executables
+and candidate state.
 
-`yvex_tensor_embedding_slice_range_validate` narrows the validated tensor range
-to the selected token slice used by the selected embedding graph path.
-
-These helpers give graph and materialization code bounded tensor facts before
-memory is read, copied, or compared.
-
-## Materialization
-
-Current materialization APIs move bounded tensor proof bytes from artifact
-storage into backend-owned storage.
-
-The public materialization reports include gate status, failure phase, integrity
-status, shape and range status, backend status, allocation attempt, transfer
-attempt, cleanup attempt, cleanup result, and planned or transferred byte counts
-where available.
-
-These fields are copied report facts. Backend tensor lifetime remains
-controlled by backend tensor objects, selected-weight tables, and engine close
-paths.
-
-This is a transfer and ownership proof. It tells a caller that the named bytes
-reached backend-owned memory with visible accounting and lifecycle behavior; it
-does not establish full model residency.
-
-## Backend Capability Queries
-
-`yvex_backend_query_capability` is the operational capability authority. It
-returns an exact variant, dtype projection, state, refusal reason, context fact,
-kernel-bundle fact, and resolved-function fact. `yvex_backend_supports` remains a
-coarse compatibility projection over those exact results; it does not define
-support independently.
-
-`yvex_backend_cuda_context_available` reports context discovery only. The legacy
-`yvex_backend_cuda_available` name projects the same narrow fact and must not be
-used as operation or model-runtime readiness. Launch or synchronization failure
-demotes the affected exact variant, and `yvex_device_tensor_is_written` remains
-false until its final synchronization succeeds.
-
-## Engine and Session
-
-The engine owns attached selected materialized weights. Engine close releases
-attached engine state.
-
-Sessions observe engine state through session reports. A session can report
-that selected weights are attached and visible while the engine retains
-ownership. This keeps the lifetime model clear: the engine owns the weight
-table, and the session observes the runtime state it is attached to.
-
-The persistent ownership rule is that the object owning memory owns cleanup,
-copied reports do not own runtime storage, and session relationships remain
-visible. Future product APIs must satisfy that rule before they are documented
-here as implemented surfaces.
-
-## Minimal KV Ownership
-
-`kv.h` exposes the minimal session-owned KV boundary. It is an F32 storage and
-lifecycle surface, not attention execution and not decode state.
-
-`yvex_kv_shape` defines the bounded storage shape: layer count, KV head count,
-head dimension, and capacity. `yvex_kv_cache_create_shape` allocates a
-session-owned F32 KV store from that shape and rejects zero dimensions, value
-count overflow, byte-count overflow, and host allocation sizes that cannot be
-represented.
-
-`yvex_kv_cache_position_value_count` reports the exact number of F32 values in
-one position: `layers * heads * head_dim * 2`. The `2` is the key/value pair
-accounting. `yvex_kv_cache_append_position_f32` appends one complete position
-at the next writable slot. `yvex_kv_cache_read_position_f32` reads one written
-position by index. `yvex_kv_cache_clear` resets written positions and counters
-while preserving the allocated shape.
-
-`yvex_kv_summary` is copied report data. It reports owner, dtype, context
-length/capacity, layer/head/head-dim shape, values per position, bytes per
-position, planned and allocated bytes, written positions, append/read counts,
-last read position, overflow status, cleanup status, and false readiness flags
-for decode, logits, and generation.
-
-Sessions can create and own this minimal KV store by setting
-`yvex_session_options.create_kv` and `yvex_session_options.kv_shape`.
-`yvex_session_kv_append_position_f32`, `yvex_session_kv_read_position_f32`, and
-`yvex_session_kv_clear` delegate to the session-owned KV store while preserving
-session lifecycle checks. The session summary mirrors the copied KV facts.
-
-This boundary gives diagnostic sequence code an owned storage target. The store
-does not run attention, does not contain model K/V projections, and does not
-promote prefill, decode, logits, sampling, generation, or provider state.
-
-## Graph Execution
-
-`yvex_engine_execute_partial_graph` borrows engine-attached weights owned by
-`yvex_engine` and returns a copied output summary. Backend pointers remain
-inside the engine/backend path.
-
-The partial graph surface is a tensor proof over
-`token_embd.weight`. The result reports graph guard status, selected tensor
-facts, backend status, output shape, output checksum, reference checksum, max
-diff, sample values, and boundary readiness fields.
-
-`yvex_engine_execute_segment_graph` borrows the same engine-attached weight
-state and executes the selected segment kind `embedding-rmsnorm`. The result
-reports the selected embedding tensor, the RMSNorm tensor, epsilon metadata,
-memory planning for intermediate, output, scratch, and reference buffers, output
-and reference checksums, sample values, and max absolute difference against an
-independent raw-artifact reference.
-
-The segment accepts a selected token id. Prompt and token input normalization
-happen before this call.
-
-`yvex_backend_op_rms_norm` is the backend RMSNorm operation used by the selected
-segment. It supports the current RMSNorm boundary: F32 input/output, F16 or F32
-RMSNorm weights, and explicit epsilon.
-
-`yvex_backend_op_rope` is the backend RoPE operation used by the standalone
-position-op proof path. It accepts F32 input/output tensors, a non-negative
-position, a rope base greater than one, and an even positive `head_dim` expressed
-as rank 1 or `[1, head_dim]`. The CLI report compares backend output against an
-independent CPU reference and reports input/output/reference bytes, checksums,
-max absolute diff, dispatch, reference, allocation, and cleanup fields. This API
-surface is a position operation boundary only; it is not attention, a
-transformer block, decode, logits, sampling, or generation.
-
-`yvex_backend_op_matmul` is the backend matmul/projection primitive used by the
-standalone matmul proof path. It accepts explicit F32 rank-2 tensors with
-row-major shapes `input=[m,k]`, `weight=[k,n]`, and `output=[m,n]`. The CLI
-path proves projection shape `m=1` and non-projection matrix shape `m>1`,
-compares backend output against an independent reference, and reports input,
-weight, output, reference, dispatch, allocation, cleanup, checksum, and
-max-diff fields. This API surface does not read model projection weights,
-produce Q/K/V tensors for attention, execute a transformer block, schedule
-layers, run prefill/decode, produce logits, sample, or generate text.
-
-`yvex_backend_op_mlp` is the backend feed-forward primitive used by the
-standalone MLP proof path. It accepts explicit F32 tensors for input,
-gate/up/down weights, an intermediate activation buffer, and output. Dense mode
-uses `input=[batch,hidden_dim]`, `gate/up=[hidden_dim,ffn_dim]`,
-`down=[ffn_dim,hidden_dim]`, `intermediate=[batch,ffn_dim]`, and
-`output=[batch,hidden_dim]`. Routed-expert slice mode uses rank-3 expert weight
-sets and an explicit `expert_id`; it selects one deterministic expert and runs
-the same feed-forward computation. The operation supports the current `silu`
-gated path only. This API surface does not compute router logits, top-k routing,
-real model expert selection, a transformer block, full transformer prefill,
-decode, logits, sampling, or generation.
-
-`yvex_backend_op_attention` is the backend attention primitive used by the
-standalone attention proof path. It accepts explicit F32 query, key, and value
-tensors, a bounded `seq_len`, `position`, positive scale, a causal-mask flag,
-F32 score/probability scratch tensors, and an F32 output tensor. The operation
-computes scaled dot-product attention for one query over the admitted key/value
-prefix, writes score and probability scratch, and writes one F32 output vector.
-The CLI report compares backend output and softmax probabilities against an
-independent reference and reports input, scratch, output, reference,
-dispatch, allocation, cleanup, checksum, and max-diff fields. This API surface
-does not project Q/K/V from model tensors, execute a transformer block, schedule
-layers, run prefill/decode, produce logits, sample, or generate text.
-
-These public graph APIs remain bounded proof contracts. They do not expose
-full-layer execution, prefill, decode, logits, or generation as installed C
-ABI.
+Sessions own mutable state. Prepared steady-state execution performs no host or
+device allocation, weight read, upload, workspace resize or graph capture. The
+runtime refuses requests outside the prepared capacities instead of resizing a
+captured execution implicitly.
 
 ### Internal DeepSeek Attention Operator Boundary
 
-The main CLI reaches production DeepSeek attention through the non-installed
-`<yvex/internal/graph.h>` contract. It is intentionally separate from the
-public umbrella while persistent KV and transformer composition remain active
-boundaries.
+`yvex_graph_attention_operator_execute` is the non-installed typed adapter used
+by `yvex graph attention ...`. It consumes a runtime binding, common runtime
+model/session, admitted external artifact and canonical probe activation. It
+never calls Make, a test executable, another process or the test-only oracle.
 
-`yvex_graph_attention_operator_execute` accepts caller-borrowed canonical
-source, model-root, manifest, and artifact paths plus a typed target, backend,
-probe, scope, cancellation callback, and comparison request. It owns the
-temporary artifact, compilation, materialization, descriptor, attention-plan,
-backend, and probe lifecycle for the duration of the call. The caller owns the
-request, result, and error storage; the function publishes copied result facts
-and releases all temporary state before returning.
+The operator distinguishes:
 
-The operator adapter validates physical artifact compatibility before calling
-`yvex_attention_probe_execute`. That admission keeps three facts separate: the
-zero-read payload recipe identity
-`6c6289c096b5502eba98498bf498c80d9ca9c13ab06f5dcb62075e372274e97b`,
-the independently read aggregate payload-byte identity
-`249277b42eb1aa231bddcb33b33ae3d805f3aa5991eaa99ae091f2ea9b928eb0`,
-and the exact whole-file hash plus immutable snapshot validation. Structural
-layout and recipe comparison read no tensor bytes and therefore are not
-payload-digest evidence. Quick scope executes one representative SWA, CSA, and
-HCA layer. Full scope executes all 43 main layers and 634 bindings. The result
-contains the consumed identities, execution counts, qtype payload reads,
-output digests, CUDA facts, compatibility facts, readiness flags, and a typed
-refusal boundary. Failure never commits partial attention output or state and
-never mutates the external artifact.
+- attention `prefill`: a multi-token activation chunk with an immutable prior
+  attention-state view;
+- attention `decode`: one activation token with an immutable prior state view;
+- mixed and speculative phases: represented but refused;
+- attention core, attention envelope and complete release-attention-set scopes.
 
-Comparison mode runs the production CPU and CUDA paths independently. Its
-versioned schema-v2 contract admits each finite pair when
-`abs(a - b) <= 5e-4 + 5e-4 * max(abs(a), abs(b))`, refuses non-finite pairs,
-and computes RMSE over finite pairs only. It reports maximum absolute error,
-maximum relative error, RMSE, first failing coordinate, and separate output
-digests. A raw object-byte comparison additionally records
-`bitwise_equality_observed`; current admitted probes observe equality, but
-`bitwise_equality_required` remains false. That observation is not used as a
-causal explanation or a general backend promise.
+These phase names do not mean tokenizer-backed prompt prefill or model decode.
+Persistent KV, embedding, MoE, transformer composition, logits, sampling and
+generation remain outside this API.
 
-The independent full-equation oracle is linked only into tests and does not
-enter this ABI or the `yvex` binary. Operator comparison therefore cannot use
-the oracle as a production dependency or duplicate graph mathematics in the
-CLI. This internal API consumes a canonical attention probe, not prompt input,
-and does not provide persistent KV, prefill, decode, logits, sampling, or
-generation.
+CPU admits eager execution. CUDA admits eager, piecewise CUDA Graph and full
+CUDA Graph execution plus an `auto` dispatcher. Explicit mode requests either
+run that mode or refuse; only `auto` may select another admitted mode and must
+report why. CUDA execution does not fall back to CPU numerical work.
 
-## Token Input
+The runtime returns four different identities:
 
-`yvex_token_input_parse_explicit`, `yvex_token_input_validate_bounds`, and
-`yvex_token_input_select` define the public token input boundary.
+| Field | Hashes |
+| --- | --- |
+| `tensor_output_digest` | canonical output tensor geometry and bytes |
+| `state_delta_digest` | canonical candidate attention-state delta |
+| `execution_evidence_digest` | backend/mode-specific stages, graph facts and counters |
+| `execution_identity` | complete request/result compatibility contract |
 
-The token input object owns a bounded copied token list. It can be validated
-against vocabulary facts and selected by index before graph execution.
+CPU and CUDA expose separate exact output and state-delta digests. Equal bytes
+produce a common digest; when exact bytes differ, the common field is
+unavailable even if the versioned numerical comparison passes. The comparison
+reports output/state value counts, finite and non-finite counts, first failing
+stage and coordinate, maximum absolute/relative error, RMSE, and separate
+byte-equality facts. Its state lane covers raw KV, compressed/indexer emissions
+and positions, and both rolling-state components. Evidence digests remain
+backend and execution-mode specific.
 
-Prompt text becomes token input through tokenizer APIs when the artifact has
-executable tokenizer metadata and the runtime path supports that conversion.
+## Runtime Binding And Operator Actions
 
-Token input is the first API layer where caller-provided token sequences become
-structured runtime input. It sits above artifact and tensor readiness and below
-prefill state.
-
-## Prefill State Summary
-
-`yvex_engine_create_prefill_state` consumes a validated `yvex_token_input` and
-returns a copied `yvex_prefill_state_summary`.
-
-The diagnostic summary is built by running the bounded `embedding-rmsnorm` segment
-independently for each token in order. It reports token count, processed
-positions, segment execution count, output bytes, scratch bytes, aggregate
-checksum, final-token checksum, max diff, cleanup status, and readiness fields
-for the next runtime layers.
-
-When `yvex_prefill_state_options.attach_kv` is set, the options carry a
-`yvex_kv_shape` for a minimal session-owned KV store. The prefill path allocates
-that store, writes one deterministic diagnostic KV position per processed
-token, reads back position zero, and copies KV binding facts into
-`yvex_prefill_state_summary`: owner, dtype, shape, byte counts, positions
-written, append/read counts, readback checksum, sample values, overflow status,
-and cleanup status.
-
-This is a diagnostic sequence-state surface, not transformer prefill. Processed
-positions can be attached to session-owned proof storage, but the values are
-deterministic derivatives of the bounded segment rather than model attention
-keys and values. No runtime generation capability follows from this API.
-
-## Operator Integrity Report
-
-The operator integrity report is a CLI aggregation of public report facts. It
-introduces no new ownership surface.
-
-It summarizes artifact integrity, local digest identity, registry metadata
-drift, shape and dtype accounting, tensor range validation, selected embedding
-readiness, materialization preflight, and graph-entry guard status for current
-graph paths.
-
-A passing report is local operator evidence for the checked artifact and
-runtime path.
-
-Together, artifact identity reports, artifact integrity reports, tensor range
-reports, shape accounting, registry metadata drift reports, materialization gate
-summaries, graph guard summaries, and operator integrity reports form the
-artifact-integrity reporting surface. They are caller-owned reports with copied
-scalar or string fields.
-
-## Server Status Surface
-
-`server.h` describes the public server/status boundary.
-
-The daemon surface is useful for process health, metrics, model listing, direct
-path or alias resolution, and generation availability reporting. It gives
-provider-shaped code a way to observe runtime state.
-
-Server generation, OpenAI-compatible generation, Anthropic-compatible
-generation, streaming responses, tool-call handling, and provider-level session
-behavior join this API documentation when the runtime generation path underneath
-them exists.
-
-## Metrics, Traces, and Profiles
-
-The metrics, trace, and profile headers describe the reporting layer for
-runtime behavior.
-
-YVEX currently uses command-visible reports, summaries, checksums, max-diff
-fields, cleanup fields, and failure phases as its main observability path. As
-the engine grows into KV, decode, logits, sampling, and generation, these
-headers should carry the runtime evidence needed to debug longer executions:
-artifact identity, backend, memory pressure, graph phase, token range, KV state,
-logits state, sampling parameters, and server request context.
-
-The reporting model stays tied to runtime boundaries. A metric is useful when it
-says which state was measured and which command or API path produced it.
-
-## API Extension Model
-
-Public API growth follows runtime proof.
-
-A new public type, function, or report field should land with runtime behavior,
-tests, failure behavior, ownership rules, and documentation.
-
-The extension path is:
+The main CLI provides the production consumer for the internal ABI:
 
 ```text
-artifact facts
-  -> descriptor
-  -> materialization
-  -> engine/session attachment
-  -> graph execution
-  -> token input
-  -> prefill state
-  -> KV ownership
-  -> decode
-  -> logits
-  -> sampling
-  -> generation
-  -> server/provider generation
-  -> evaluation and benchmarks
+yvex graph attention prepare
+yvex graph attention describe
+yvex graph attention capabilities
+yvex graph attention plan
+yvex graph attention execute
+yvex graph attention compare
+yvex graph attention state inspect|validate|exercise
+yvex graph attention residency inspect
+yvex graph attention capture|replay
+yvex graph attention cuda-graph list|inspect|warmup|update|invalidate|release
+yvex graph attention trace|profile|benchmark
 ```
 
-The API keeps these stages separate. Materialization has its own ownership and
-reports. Graph execution has its own ownership and reports. Logits, sampling,
-generation, and provider serving get their own surfaces as the runtime reaches
-them.
+`prepare` is the compiler-side producer for an external runtime binding.
+Execution actions require the binding and do not regenerate it. `plan` seals a
+request descriptor without numerical dispatch. State and graph-registry actions
+operate on real process-local session state rather than report-only labels.
+Registry inspection reports captured kernel, copy and memset nodes plus capture,
+instantiation, update and replay timings. It is not a persistent cross-process
+graph cache.
 
-## Validation Expectations
+The canonical probe preserves real model width, heads, bindings, qtypes,
+position policy and attention history geometry. It is deterministic activation
+input, not prompt text.
 
-API changes should be validated through the normal runtime gate:
+## Benchmark And Chart Contract
 
-```sh
-git diff --check
-make check
-make smoke
-sh tests/test_docs_surface.sh
-sh tests/test_surface.sh
-make check-cuda
-```
+`profile` and `benchmark` use the production runtime path. Benchmark samples
+separate cold model preparation from warm execution and report minimum, mean,
+dispersion, p50, p90, p99 and maximum together with allocation, transfer,
+launch, residency and workspace counters.
 
-When an API change affects artifact identity, integrity, materialization, graph
-execution, token input, or prefill state, the corresponding CLI and regression
-tests should prove report fields, ownership behavior, cleanup behavior, and
-failure phases.
+`--write-baseline --baseline FILE` writes a versioned identity-bound external
+baseline. A later compatible run may compare against it. The key binds the
+build commit, artifact, runtime binding, runtime and execution descriptors,
+device, driver, CUDA build, phase, scope, mode, capture bucket and iteration
+count. Compatibility comparison retains both commits as provenance while
+excluding the commit alone from the workload-equivalence key.
 
-Public headers are part of the contract. A header change should be treated as a
-runtime surface change, not as an internal refactor.
+`--chart PATH.svg` writes a deterministic SVG containing cold preparation,
+warm latency distributions, resident/workspace bytes, resident H2D bytes, and
+kernel/graph launch, capture, replay, and node counters, optionally against a
+compatible baseline. The schema-four baseline seals those structural counters,
+timings, and build provenance. Schemas one through three require regeneration.
+Baseline and SVG publication are independently atomic and
+no-replace; an SVG failure never withdraws an already admitted baseline. JSON,
+CSV, baseline and SVG outputs are external operator assets. They are never
+tracked and they are not full-model benchmark or release evidence.
+
+## Capability And Claim Boundary
+
+The common runtime publishes granular facts for semantics, core/envelope,
+CPU/CUDA phase and mode, residency, workspace, state delta, trace, profile and
+benchmark readiness. Compatibility booleans may be derived from that lattice;
+they are not independent capability authorities.
+
+The current runtime supports production DeepSeek attention over admitted
+weights. It does not provide persistent KV, tokenizer-backed prompt prefill,
+MoE, a complete transformer, model decode, logits, sampling, text generation,
+evaluation, a full-model benchmark or release readiness.
+
+## Extension Rules
+
+New installed declarations require a stable external lifecycle and tests.
+Internal implementation convenience is not a public ABI reason. A future model
+family registers typed facts and sequence-mixer lowering against the common
+runtime; it does not receive its own model/session implementation.
+
+Every API extension must define:
+
+1. owner and header tier;
+2. borrowed and owned inputs;
+3. success publication and failure rollback;
+4. identity and invalidation dependencies;
+5. cleanup behavior;
+6. focused positive, refusal and lifecycle tests;
+7. the exact capability boundary it does and does not promote.

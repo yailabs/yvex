@@ -24,12 +24,96 @@
  *   - exits 0 on success
  *   - prints concise failure to stderr
  */
+#include <fcntl.h>
 #include <limits.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <yvex/artifact.h>
+#include <yvex/internal/artifact.h>
 
 #include "tests/test.h"
+
+/* Purpose: prove artifact admission and snapshot validation never traverse path symlinks. */
+static int test_artifact_symlink_refusal(void)
+{
+    char root[] = "/tmp/yvex-artifact-XXXXXX";
+    char real_dir[YVEX_ARTIFACT_PATH_CAP], held_dir[YVEX_ARTIFACT_PATH_CAP];
+    char real_path[YVEX_ARTIFACT_PATH_CAP], held_path[YVEX_ARTIFACT_PATH_CAP];
+    char moved_path[YVEX_ARTIFACT_PATH_CAP];
+    char final_link[YVEX_ARTIFACT_PATH_CAP], parent_link[YVEX_ARTIFACT_PATH_CAP];
+    char linked_path[YVEX_ARTIFACT_PATH_CAP];
+    yvex_artifact_options options;
+    yvex_artifact *artifact = NULL;
+    yvex_error err;
+    int fd, rc;
+
+    YVEX_TEST_ASSERT(mkdtemp(root) != NULL, "artifact symlink root created");
+    YVEX_TEST_ASSERT(snprintf(real_dir, sizeof(real_dir), "%s/real", root) <
+                             (int)sizeof(real_dir) &&
+                         snprintf(held_dir, sizeof(held_dir), "%s/held", root) <
+                             (int)sizeof(held_dir) &&
+                         snprintf(real_path, sizeof(real_path), "%s/model.gguf", real_dir) <
+                             (int)sizeof(real_path) &&
+                         snprintf(held_path, sizeof(held_path), "%s/held.gguf", real_dir) <
+                             (int)sizeof(held_path) &&
+                         snprintf(moved_path, sizeof(moved_path), "%s/model.gguf", held_dir) <
+                             (int)sizeof(moved_path) &&
+                         snprintf(final_link, sizeof(final_link), "%s/final.gguf", root) <
+                             (int)sizeof(final_link) &&
+                         snprintf(parent_link, sizeof(parent_link), "%s/linked", root) <
+                             (int)sizeof(parent_link) &&
+                         snprintf(linked_path, sizeof(linked_path), "%s/model.gguf", parent_link) <
+                             (int)sizeof(linked_path),
+                     "artifact symlink paths fit");
+    YVEX_TEST_ASSERT(mkdir(real_dir, 0700) == 0, "artifact real directory created");
+    fd = open(real_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    YVEX_TEST_ASSERT(fd >= 0 && write(fd, "GGUF", 4u) == 4 && close(fd) == 0,
+                     "artifact regular fixture created");
+    YVEX_TEST_ASSERT(symlink("real/model.gguf", final_link) == 0 &&
+                         symlink("real", parent_link) == 0,
+                     "artifact symlink fixtures created");
+
+    memset(&options, 0, sizeof(options));
+    options.readonly = 1;
+    options.path = final_link;
+    rc = yvex_artifact_open(&artifact, &options, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_IO && artifact == NULL, "final artifact symlink refused");
+    options.path = linked_path;
+    rc = yvex_artifact_open(&artifact, &options, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_IO && artifact == NULL,
+                     "intermediate artifact symlink refused");
+    YVEX_TEST_ASSERT(unlink(final_link) == 0 && unlink(parent_link) == 0,
+                     "opening symlink fixtures removed");
+
+    options.path = real_path;
+    YVEX_TEST_ASSERT(yvex_artifact_open(&artifact, &options, &err) == YVEX_OK,
+                     "regular artifact snapshot opened");
+    YVEX_TEST_ASSERT(yvex_artifact_snapshot_validate(artifact, NULL, &err) == YVEX_OK,
+                     "regular artifact snapshot validates");
+    YVEX_TEST_ASSERT(rename(real_path, held_path) == 0 && symlink("held.gguf", real_path) == 0,
+                     "final snapshot path replaced by symlink");
+    YVEX_TEST_ASSERT(yvex_artifact_snapshot_validate(artifact, NULL, &err) == YVEX_ERR_FORMAT,
+                     "snapshot validation refuses final symlink");
+    YVEX_TEST_ASSERT(unlink(real_path) == 0 && rename(held_path, real_path) == 0,
+                     "final snapshot path restored");
+    yvex_artifact_close(artifact);
+    artifact = NULL;
+
+    YVEX_TEST_ASSERT(yvex_artifact_open(&artifact, &options, &err) == YVEX_OK,
+                     "artifact reopened for parent drift");
+    YVEX_TEST_ASSERT(rename(real_dir, held_dir) == 0 && symlink("held", real_dir) == 0,
+                     "snapshot parent replaced by symlink");
+    YVEX_TEST_ASSERT(yvex_artifact_snapshot_validate(artifact, NULL, &err) == YVEX_ERR_FORMAT,
+                     "snapshot validation refuses intermediate symlink");
+    yvex_artifact_close(artifact);
+    YVEX_TEST_ASSERT(unlink(real_dir) == 0 && unlink(moved_path) == 0 &&
+                         rmdir(held_dir) == 0 && rmdir(root) == 0,
+                     "artifact symlink fixtures cleaned narrowly");
+    return 0;
+}
 
 int yvex_test_artifact(void)
 {
@@ -38,6 +122,9 @@ int yvex_test_artifact(void)
     yvex_artifact *artifact;
     yvex_error err;
     int rc;
+
+    YVEX_TEST_ASSERT(test_artifact_symlink_refusal() == 0,
+                     "artifact symlink lifecycle refuses unsafe paths");
 
     memset(&options, 0, sizeof(options));
     options.path = fixture;
@@ -66,7 +153,13 @@ int yvex_test_artifact(void)
         YVEX_TEST_ASSERT(rc == YVEX_OK, "positioned artifact read");
         YVEX_TEST_ASSERT(memcmp(magic, "GGUF", sizeof(magic)) == 0, "positioned bytes");
     }
+    rc = yvex_artifact_cache_release(artifact, 0ull, yvex_artifact_size(artifact), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "verified artifact cache range released");
+    rc = yvex_artifact_cache_release(artifact, yvex_artifact_size(artifact), 1ull, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS, "out-of-range cache release refused");
     yvex_artifact_close(artifact);
+    rc = yvex_artifact_cache_release(NULL, 0ull, 0ull, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG, "missing artifact cache release refused");
 
     artifact = NULL;
     options.readonly = 0;

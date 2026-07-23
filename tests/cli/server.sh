@@ -13,13 +13,8 @@ set -eu
 
 . tests/support/cleanup.sh
 
-YVEX_BIN=${YVEX_BIN:-./yvex}
 YVEXD_BIN=${YVEXD_BIN:-./yvexd}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/cli-server}
-FIXTURE=tests/fixtures/gguf/valid-tokenizer-simple.gguf
-ALIAS_MODEL="$OUT_DIR/deepseek4-v4-flash-selected-embed-F32-noimatrix-yvex-v1.gguf"
-ALIAS_REGISTRY="$OUT_DIR/models.local.json"
-ALIAS="deepseek4-v4-flash-selected-embed"
 
 yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$OUT_DIR"
@@ -85,7 +80,6 @@ serve_one() {
 
 "$YVEXD_BIN" --help >"$OUT_DIR/help.out" 2>"$OUT_DIR/help.err"
 contains "$OUT_DIR/help.out" "usage: yvexd"
-contains "$OUT_DIR/help.out" "--model FILE_OR_ALIAS"
 "$YVEXD_BIN" --version >"$OUT_DIR/version.out" 2>"$OUT_DIR/version.err"
 contains "$OUT_DIR/version.out" "0.1.0"
 
@@ -102,42 +96,18 @@ wait "$server_pid" || fail "metrics server failed"
 contains "$OUT_DIR/metrics.http" "\"schema\": \"yvex.server_metrics.v1\""
 contains "$OUT_DIR/metrics.http" "\"request_count\": 1"
 
-serve_one 18182 models --model "$FIXTURE" --backend cpu
+serve_one 18182 models
 http_request 18182 GET /v1/models "$OUT_DIR/models.http"
 wait "$server_pid" || fail "models server failed"
 contains "$OUT_DIR/models.http" "\"schema\": \"yvex.models.v1\""
-contains "$OUT_DIR/models.http" "\"id\": \"yvex-tokenizer-test\""
 contains "$OUT_DIR/models.http" "\"generation_available\": false"
-contains "$OUT_DIR/models.http" "\"inference\": \"not_implemented\""
+contains "$OUT_DIR/models.http" "\"data\": []"
 
-"$YVEX_BIN" gguf-emit controlled \
-  --out "$ALIAS_MODEL" \
-  --model-name yvexd-alias-fixture \
-  --arch llama \
-  --overwrite >"$OUT_DIR/alias-emit.out" 2>"$OUT_DIR/alias-emit.err"
-
-"$YVEX_BIN" models add \
-  --path "$ALIAS_MODEL" \
-  --alias "$ALIAS" \
-  --registry "$ALIAS_REGISTRY" >"$OUT_DIR/alias-add.out" 2>"$OUT_DIR/alias-add.err"
-
-export YVEX_MODELS_REGISTRY="$ALIAS_REGISTRY"
-serve_one 18184 models_alias --model "$ALIAS" --backend cpu
-http_request 18184 GET /v1/models "$OUT_DIR/models-alias.http"
-wait "$server_pid" || fail "models alias server failed"
-unset YVEX_MODELS_REGISTRY
-contains "$OUT_DIR/models-alias.http" "\"schema\": \"yvex.models.v1\""
-contains "$OUT_DIR/models-alias.http" "\"id\": \"yvexd-alias-fixture\""
-contains "$OUT_DIR/models-alias.http" "\"generation_available\": false"
-
-if YVEX_MODELS_REGISTRY="$ALIAS_REGISTRY" \
-  "$YVEXD_BIN" --host 127.0.0.1 --port 18185 --one-request --model missing-alias \
-  >"$OUT_DIR/missing-alias.stdout" 2>"$OUT_DIR/missing-alias.stderr"; then
-    fail "missing alias should fail before serving"
+if "$YVEXD_BIN" --model tests/fixtures/gguf/valid-tokenizer-simple.gguf \
+  >"$OUT_DIR/model-refused.out" 2>"$OUT_DIR/model-refused.err"; then
+    fail "retired server runtime attachment unexpectedly passed"
 fi
-contains "$OUT_DIR/missing-alias.stderr" "model reference not found"
-contains "$OUT_DIR/missing-alias.stderr" "models list"
-contains "$OUT_DIR/missing-alias.stderr" "$ALIAS"
+contains "$OUT_DIR/model-refused.err" "server runtime attachment is not implemented"
 
 serve_one 18183 unsupported
 http_request 18183 POST /v1/completions "$OUT_DIR/unsupported.http"

@@ -9,18 +9,27 @@ trap 'rm -f "$out"' EXIT
 build/tests/test >"$out" 2>&1
 grep -nF 'test: gguf_layout_integrity' "$out" >/dev/null
 
-# One domain owner validates ordered padded layout. Reports and consumers must
-# project it instead of reconstructing range policy or hashing by default.
+# One domain owner validates ordered padded layout. Consumers call it directly
+# instead of reconstructing range policy or routing through a report projection.
 test -f include/yvex/gguf.h
 test -f src/gguf/layout_integrity.c
 grep -nF 'int yvex_gguf_layout_validate(' include/yvex/gguf.h >/dev/null
 grep -nF 'yvex_gguf_layout_validate(artifact, gguf' \
   src/artifact/integrity.c >/dev/null
+test ! -e src/gguf/report.c
 grep -nF 'yvex_gguf_layout_validate(artifact, gguf' \
-  src/gguf/report.c >/dev/null
-grep -nF 'yvex_gguf_range_fact_from_layout' src/gguf/descriptor.c >/dev/null
-grep -nF 'yvex_artifact_integrity_validate' src/graph/guard.c >/dev/null
-grep -nF 'yvex_artifact_integrity_validate' src/runtime/core.c >/dev/null
+  tests/unit/gguf_artifact_abi.c >/dev/null
+# Runtime stays compilation-free: the binding carries the sealed complete
+# admission, then runtime authenticates that admission on its retained handle
+# before constructing the GGUF and tensor views. Family-specific admission
+# remains in the preparation plane checked immediately below.
+grep -nF '&model->admission, &binding_failure, err)' \
+  src/runtime/core.c >/dev/null
+grep -nF 'yvex_artifact_admission_identity_verify(' src/runtime/core.c >/dev/null
+grep -nF 'yvex_gguf_open(&model->gguf, model->artifact' \
+  src/runtime/core.c >/dev/null
+grep -nF 'yvex_tensor_table_from_gguf(&model->tensors, model->gguf' \
+  src/runtime/core.c >/dev/null
 grep -nF 'yvex_artifact_integrity_validate' \
   src/model/artifacts/gate.c >/dev/null
 grep -nF 'yvex_gguf_layout_validate(artifact, gguf' \

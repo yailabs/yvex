@@ -10,7 +10,6 @@
 #ifndef YVEX_GRAPH_H
 #define YVEX_GRAPH_H
 
-#include <stdio.h>
 #include <yvex/model.h>
 
 #ifdef __cplusplus
@@ -50,7 +49,6 @@ int yvex_graph_build_for_model(yvex_graph **out,
 void yvex_graph_close(yvex_graph *graph);
 
 yvex_graph_status yvex_graph_status_of(const yvex_graph *graph);
-const char *yvex_graph_status_name(yvex_graph_status status);
 
 unsigned long long yvex_graph_value_count(const yvex_graph *graph);
 unsigned long long yvex_graph_op_count(const yvex_graph *graph);
@@ -62,8 +60,6 @@ const yvex_graph_op_info *yvex_graph_op_at(const yvex_graph *graph,
                                            unsigned long long index);
 const yvex_graph_missing_required *yvex_graph_missing_required_at(const yvex_graph *graph,
                                                                   unsigned long long index);
-
-int yvex_graph_dump(const yvex_graph *graph, FILE *fp, yvex_error *err);
 
 int yvex_shape_product(const unsigned long long *dims,
                        unsigned int rank,
@@ -106,15 +102,10 @@ int yvex_memory_plan_from_graph(yvex_memory_plan **out,
 void yvex_memory_plan_close(yvex_memory_plan *plan);
 
 yvex_memory_plan_status yvex_memory_plan_status_of(const yvex_memory_plan *plan);
-const char *yvex_memory_plan_status_name(yvex_memory_plan_status status);
 
 int yvex_memory_plan_get_summary(const yvex_memory_plan *plan,
                                  yvex_memory_plan_summary *out,
                                  yvex_error *err);
-
-int yvex_memory_plan_dump(const yvex_memory_plan *plan,
-                          FILE *fp,
-                          yvex_error *err);
 
 /* Execution planning. */
 typedef struct yvex_plan yvex_plan;
@@ -135,8 +126,6 @@ void yvex_plan_close(yvex_plan *plan);
 
 const yvex_graph *yvex_plan_graph(const yvex_plan *plan);
 const yvex_memory_plan *yvex_plan_memory(const yvex_plan *plan);
-
-int yvex_plan_dump(const yvex_plan *plan, FILE *fp, yvex_error *err);
 
 #ifdef __cplusplus
 }

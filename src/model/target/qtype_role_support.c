@@ -31,6 +31,78 @@ typedef struct {
     const char *next_row;
 } qtype_gate_family_fact;
 
+typedef struct {
+    const char *target;
+    const char *family;
+    const char *source_dtype;
+    const char *top_blocker;
+    const char *next_row;
+    unsigned long role_count;
+} qtype_role_summary;
+
+#define QTYPE_ROLE_LITERAL(text) \
+    { YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u }
+#define QTYPE_ROLE_STRING(field, format) \
+    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(qtype_role_summary, field) }
+#define QTYPE_ROLE_ULONG(field, format) \
+    { YVEX_MODEL_TARGET_ROW_ULONG, (format), offsetof(qtype_role_summary, field) }
+
+static const yvex_model_target_row_spec qtype_role_summary_rows[] = {
+    QTYPE_ROLE_STRING(target, "qtype-role-support: %s"),
+    QTYPE_ROLE_LITERAL("status: blocked"),
+    QTYPE_ROLE_STRING(family, "family: %s"),
+    QTYPE_ROLE_STRING(source_dtype, "source_dtype: %s"),
+    QTYPE_ROLE_LITERAL("preferred_artifact_qtype: unresolved"),
+    QTYPE_ROLE_ULONG(role_count, "supported_roles: %lu"),
+    QTYPE_ROLE_ULONG(role_count, "blocked_roles: %lu"),
+    QTYPE_ROLE_STRING(top_blocker, "top_blocker: %s"),
+    QTYPE_ROLE_STRING(next_row, "next: %s"),
+    QTYPE_ROLE_LITERAL(
+        "boundary: qtype role report only; no quantization/GGUF/runtime/generation")
+};
+
+static const char *const qtype_gate_normal_rows[] = {
+    "qtype-role-support-gate: v0.1.0",
+    "status: qtype-role-support-gate-blocked",
+    "family_count: 3",
+    "top_blocker: artifact-materialization-unimplemented",
+    "next: V010.ARTIFACT.MATERIALIZE.0"
+};
+
+static const char *const qtype_gate_audit_prefix[] = {
+    "report: qtype-role-support-gate",
+    "status: qtype-role-support-gate-blocked",
+    "release: v0.1.0"
+};
+
+static const char *const qtype_role_table_prefix[] = {
+    "QTYPE ROLE SUPPORT",
+    "ROLE  SRC_DTYPE  ARTIFACT_QTYPE  STORAGE  COMPUTE  CALIBRATION  STATUS"
+};
+
+static const char *const qtype_role_audit_suffix[] = {
+    "payload_bytes_read: false",
+    "quantization_performed: false",
+    "gguf_emitted: false"
+};
+
+static const char *const qtype_role_selected_rows[] = {
+    "selected_slice_evidence_only: true",
+    "full_family_artifact_status: missing"
+};
+
+static const yvex_model_target_request_rules qtype_role_rules = {
+    YVEX_MODEL_TARGET_COMMAND_QUANT_POLICY,
+    "qtype-role-support-fail",
+    "qtype role-support report requires quant-policy command kind",
+    NULL,
+    1
+};
+
+#undef QTYPE_ROLE_LITERAL
+#undef QTYPE_ROLE_STRING
+#undef QTYPE_ROLE_ULONG
+
 static const qtype_role_fact qwen_role_facts[] = {
     {"token_embedding", "BF16", "source-native", "family-quantization-plan-unimplemented"},
     {"attention_q", "BF16", "source-native", "family-quantization-plan-unimplemented"},
@@ -178,26 +250,8 @@ static void qtype_role_prepare(const yvex_model_target_request *request,
 static int qtype_role_validate(const yvex_model_target_request *request,
                                yvex_model_target_report *report)
 {
-    if (request->kind != YVEX_MODEL_TARGET_COMMAND_QUANT_POLICY) {
-        report->status = "qtype-role-support-fail";
-        report->exit_code = 2;
-        yvex_model_target_report_add_error(report,
-                                           "qtype role-support report requires quant-policy command kind");
-        return 1;
-    }
-    if (request->gate[0] && strcmp(request->gate, "v0.1.0") != 0) {
-        report->status = "unsupported-release";
-        report->exit_code = 2;
-        yvex_model_target_report_add_row(report, "status: unsupported-release");
-        yvex_model_target_report_add_row(report, "release: %s", request->gate);
-        yvex_model_target_report_add_error(report, "unsupported release: %s",
-                                           request->gate);
-        return 1;
-    }
-    if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
-        report->status = "unsupported-output-mode";
-        report->exit_code = 2;
-        yvex_model_target_report_add_error(report, "JSON output is unsupported");
+    if (!yvex_model_target_validate_request_shape(
+            request, report, &qtype_role_rules, request->gate)) {
         return 1;
     }
     return 0;
@@ -261,9 +315,9 @@ static void qtype_gate_add_audit(yvex_model_target_report *report)
 {
     unsigned long i;
 
-    yvex_model_target_report_add_row(report, "report: qtype-role-support-gate");
-    yvex_model_target_report_add_row(report, "status: qtype-role-support-gate-blocked");
-    yvex_model_target_report_add_row(report, "release: v0.1.0");
+    yvex_model_target_report_add_rows(
+        report, qtype_gate_audit_prefix,
+        sizeof(qtype_gate_audit_prefix) / sizeof(qtype_gate_audit_prefix[0]));
     for (i = 0; i < sizeof(qtype_gate_rows) / sizeof(qtype_gate_rows[0]); ++i) {
         yvex_model_target_report_add_row(report, "family.%lu.name: %s", i,
                                          qtype_gate_rows[i].family);
@@ -303,9 +357,9 @@ static void qtype_role_add_table(const char *family,
     unsigned long count;
     unsigned long i;
 
-    yvex_model_target_report_add_row(report, "QTYPE ROLE SUPPORT");
-    yvex_model_target_report_add_row(report,
-                                     "ROLE  SRC_DTYPE  ARTIFACT_QTYPE  STORAGE  COMPUTE  CALIBRATION  STATUS");
+    yvex_model_target_report_add_rows(
+        report, qtype_role_table_prefix,
+        sizeof(qtype_role_table_prefix) / sizeof(qtype_role_table_prefix[0]));
     rows = qtype_role_rows(family, &count);
     for (i = 0; i < count; ++i) {
         yvex_model_target_report_add_row(report,
@@ -349,10 +403,7 @@ static void qtype_role_add_audit(const char *family,
     yvex_model_target_report_add_row(report, "source_dtype: %s",
                                      selected_slice ? "selected-slice" : "BF16");
     if (selected_slice) {
-        yvex_model_target_report_add_row(report,
-                                         "selected_slice_evidence_only: true");
-        yvex_model_target_report_add_row(report,
-                                         "full_family_artifact_status: missing");
+        yvex_model_target_report_add_rows(report, qtype_role_selected_rows, 2u);
     }
     rows = qtype_role_rows(family, &count);
     for (i = 0; i < count; ++i) {
@@ -378,9 +429,9 @@ static void qtype_role_add_audit(const char *family,
                                              ? "complete-artifact-admission-required"
                                              : rows[i].blocker);
     }
-    yvex_model_target_report_add_row(report, "payload_bytes_read: false");
-    yvex_model_target_report_add_row(report, "quantization_performed: false");
-    yvex_model_target_report_add_row(report, "gguf_emitted: false");
+    yvex_model_target_report_add_rows(
+        report, qtype_role_audit_suffix,
+        sizeof(qtype_role_audit_suffix) / sizeof(qtype_role_audit_suffix[0]));
     yvex_model_target_report_common_tail(report);
 }
 
@@ -428,12 +479,9 @@ int yvex_qtype_role_support_report_build(const yvex_model_target_request *reques
         } else if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
             qtype_gate_add_audit(report);
         } else {
-            yvex_model_target_report_add_row(report, "qtype-role-support-gate: v0.1.0");
-            yvex_model_target_report_add_row(report, "status: qtype-role-support-gate-blocked");
-            yvex_model_target_report_add_row(report, "family_count: 3");
-            yvex_model_target_report_add_row(report,
-                                             "top_blocker: artifact-materialization-unimplemented");
-            yvex_model_target_report_add_row(report, "next: V010.ARTIFACT.MATERIALIZE.0");
+            yvex_model_target_report_add_rows(
+                report, qtype_gate_normal_rows,
+                sizeof(qtype_gate_normal_rows) / sizeof(qtype_gate_normal_rows[0]));
             yvex_model_target_report_common_tail(report);
         }
         return YVEX_OK;
@@ -446,26 +494,20 @@ int yvex_qtype_role_support_report_build(const yvex_model_target_request *reques
         qtype_role_add_audit(family, report);
         return YVEX_OK;
     }
-    yvex_model_target_report_add_row(report, "qtype-role-support: %s", report->target_id);
-    yvex_model_target_report_add_row(report, "status: blocked");
-    yvex_model_target_report_add_row(report, "family: %s", family);
-    yvex_model_target_report_add_row(report, "source_dtype: %s",
-                                     strcmp(family, "deepseek") == 0
-                                         ? "selected-slice"
-                                         : "BF16");
-    yvex_model_target_report_add_row(report, "preferred_artifact_qtype: unresolved");
-    yvex_model_target_report_add_row(report, "supported_roles: %lu", role_count);
-    yvex_model_target_report_add_row(report, "blocked_roles: %lu", role_count);
-    yvex_model_target_report_add_row(
-        report,
-        "top_blocker: %s",
-        strcmp(family, "deepseek") == 0
-            ? "complete-artifact-admission-required"
-            : "family-quantization-plan-unimplemented");
-    yvex_model_target_report_add_row(
-        report, "next: %s", strcmp(family, "deepseek") == 0
-            ? "V010.ARTIFACT.MATERIALIZE.0" : "not-scheduled");
-    yvex_model_target_report_add_row(report,
-                                     "boundary: qtype role report only; no quantization/GGUF/runtime/generation");
+    {
+        int deepseek = strcmp(family, "deepseek") == 0;
+        const qtype_role_summary summary = {
+            report->target_id, family, deepseek ? "selected-slice" : "BF16",
+            deepseek ? "complete-artifact-admission-required"
+                     : "family-quantization-plan-unimplemented",
+            deepseek ? "V010.ARTIFACT.MATERIALIZE.0" : "not-scheduled",
+            role_count
+        };
+
+        yvex_model_target_report_project_rows(
+            report, qtype_role_summary_rows,
+            sizeof(qtype_role_summary_rows) / sizeof(qtype_role_summary_rows[0]),
+            &summary);
+    }
     return YVEX_OK;
 }

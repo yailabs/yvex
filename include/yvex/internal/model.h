@@ -14,6 +14,7 @@
 #define INCLUDE_YVEX_INTERNAL_MODEL_H_INCLUDED
 
 #include <yvex/model.h>
+#include <yvex/source.h>
 
 typedef enum {
     YVEX_ATTENTION_CLASS_SWA = 0,

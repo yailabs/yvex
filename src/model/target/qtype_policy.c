@@ -15,22 +15,10 @@
 #include <yvex/internal/quant_numeric.h>
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 typedef struct {
-    int source_requested;
-    int source_dir_exists;
-    int header_exists;
-    unsigned long f32_count;
-    unsigned long f16_count;
-    unsigned long bf16_count;
-    unsigned long other_count;
-    unsigned long tensor_count;
-    int attention_k_present;
-    int output_head_present;
-    int output_head_ambiguous;
-    int metadata_present;
+    yvex_model_target_source_profile source;
     const char *mapping_gate_status;
     const char *top_blocker;
     const char *next_row;
@@ -67,20 +55,24 @@ static const char *const policy_downstream_rows[] = {
     "backend_residency=missing generation_runtime=missing eval_benchmark=missing"
 };
 
-/* Purpose: project the immutable bounded qtype policy count substr view. */
-static unsigned long qtype_policy_count_substr(const char *text, const char *needle)
-{
-    unsigned long count = 0;
-    const char *p = text;
+static const yvex_model_target_request_rules qtype_policy_rules = {
+    YVEX_MODEL_TARGET_COMMAND_QUANT_POLICY,
+    "qtype-policy-fail",
+    "qtype policy report requires quant-policy command kind",
+    "quant-policy",
+    1
+};
 
-    if (!text || !needle || !needle[0]) {
-        return 0;
-    }
-    while ((p = strstr(p, needle)) != NULL) {
-        count++;
-        p += strlen(needle);
-    }
-    return count;
+/* Purpose: apply one qtype-policy blocker through the shared lifecycle fields. */
+static void qtype_policy_block(qtype_policy_state *state,
+                               const char *mapping_status,
+                               const char *blocker)
+{
+    state->mapping_gate_status = mapping_status;
+    state->top_blocker = blocker;
+    state->next_row = "V010.MAP.9";
+    state->status = "blocked";
+    state->bracket = "blocked";
 }
 
 /*
@@ -105,10 +97,6 @@ static void qtype_policy_build_state(const yvex_model_target_request *request,
                                      const char *family,
                                      qtype_policy_state *state)
 {
-    char dir[1024];
-    char path[1200];
-    char *header = NULL;
-
     memset(state, 0, sizeof(*state));
     state->mapping_gate_status = "passed-for-artifact-planning";
     state->top_blocker = "family-quantization-plan-unimplemented";
@@ -116,85 +104,38 @@ static void qtype_policy_build_state(const yvex_model_target_request *request,
     state->status = "policy-reported";
     state->bracket = "reported";
 
-    (void)yvex_model_target_probe_source_path(
-        request, family, NULL, dir, sizeof(dir));
-    state->source_requested = dir[0] != '\0';
-    if (!state->source_requested) {
+    yvex_model_target_probe_source_profile(request, family, &state->source);
+    if (!state->source.source_requested) {
         return;
     }
-    state->source_dir_exists = yvex_model_target_probe_directory(dir);
-    if (!state->source_dir_exists) {
-        state->mapping_gate_status = "blocked-missing-source";
-        state->top_blocker = strcmp(family, "gemma") == 0
-                                 ? "missing-gemma-source-path"
-                                 : "missing-qwen-source-path";
-        state->next_row = "V010.MAP.9";
-        state->status = "blocked";
-        state->bracket = "blocked";
+    if (!state->source.source_directory_present) {
+        qtype_policy_block(
+            state, "blocked-missing-source",
+            strcmp(family, "gemma") == 0
+                ? "missing-gemma-source-path" : "missing-qwen-source-path");
         return;
     }
 
-    (void)snprintf(path, sizeof(path), "%s/model.safetensors", dir);
-    state->header_exists = yvex_model_target_probe_header(path, &header);
-    if (!state->header_exists) {
-        state->mapping_gate_status = "blocked-missing-dtype";
-        state->top_blocker = "missing-source-dtype-profile";
-        state->next_row = "V010.MAP.9";
-        state->status = "blocked";
-        state->bracket = "blocked";
+    if (!state->source.header_present) {
+        qtype_policy_block(state, "blocked-missing-dtype",
+                           "missing-source-dtype-profile");
     } else {
-        state->f32_count = qtype_policy_count_substr(header, "\"dtype\":\"F32\"");
-        state->f16_count = qtype_policy_count_substr(header, "\"dtype\":\"F16\"");
-        state->bf16_count = qtype_policy_count_substr(header, "\"dtype\":\"BF16\"");
-        state->tensor_count = state->f32_count + state->f16_count +
-                              state->bf16_count;
-        state->other_count = qtype_policy_count_substr(header, "\"dtype\":") -
-                             state->tensor_count;
-        state->attention_k_present = strstr(header, "k_proj.weight") != NULL;
-        state->output_head_present = strstr(header, "lm_head.weight") != NULL ||
-                                     strstr(header, "output.weight") != NULL;
-        state->output_head_ambiguous = strstr(header, "lm_head.weight") != NULL &&
-                                       strstr(header, "output.weight") != NULL;
-        free(header);
-        if (!state->attention_k_present) {
-            state->mapping_gate_status = "blocked-missing-runtime-roles";
-            state->top_blocker = "missing-source-role-attention-k";
-            state->next_row = "V010.MAP.9";
-            state->status = "blocked";
-            state->bracket = "blocked";
-        } else if (!state->output_head_present) {
-            state->mapping_gate_status = "blocked-missing-runtime-roles";
-            state->top_blocker = "missing-output-head-tensor";
-            state->next_row = "V010.MAP.9";
-            state->status = "blocked";
-            state->bracket = "blocked";
-        } else if (state->output_head_ambiguous) {
-            state->mapping_gate_status = "blocked-missing-runtime-roles";
-            state->top_blocker = "ambiguous-output-head-tensor";
-            state->next_row = "V010.MAP.9";
-            state->status = "blocked";
-            state->bracket = "blocked";
+        if (!state->source.attention_k_present) {
+            qtype_policy_block(state, "blocked-missing-runtime-roles",
+                               "missing-source-role-attention-k");
+        } else if (!state->source.output_head_present) {
+            qtype_policy_block(state, "blocked-missing-runtime-roles",
+                               "missing-output-head-tensor");
+        } else if (state->source.output_head_ambiguous) {
+            qtype_policy_block(state, "blocked-missing-runtime-roles",
+                               "ambiguous-output-head-tensor");
         }
     }
 
-    (void)snprintf(path, sizeof(path), "%s/tokenizer.json", dir);
-    state->metadata_present = yvex_model_target_probe_file(path);
-    (void)snprintf(path, sizeof(path), "%s/config.json", dir);
-    state->metadata_present = state->metadata_present &&
-                              yvex_model_target_probe_file(path);
-    (void)snprintf(path, sizeof(path), "%s/generation_config.json", dir);
-    state->metadata_present = state->metadata_present &&
-                              yvex_model_target_probe_file(path);
-    (void)snprintf(path, sizeof(path), "%s/special_tokens_map.json", dir);
-    state->metadata_present = state->metadata_present &&
-                              yvex_model_target_probe_file(path);
-    if (state->header_exists && !state->metadata_present &&
+    if (state->source.header_present && !state->source.metadata_present &&
         strcmp(state->status, "policy-reported") == 0) {
-        state->mapping_gate_status = "blocked-missing-runtime-roles";
-        state->top_blocker = "missing-tokenizer-sidecars";
-        state->next_row = "V010.MAP.9";
-        state->status = "blocked";
-        state->bracket = "blocked";
+        qtype_policy_block(state, "blocked-missing-runtime-roles",
+                           "missing-tokenizer-sidecars");
     }
 }
 
@@ -257,33 +198,8 @@ static int qtype_policy_validate(const yvex_model_target_request *request,
     const char *target = request->target_id;
     const char *family;
 
-    if (request->kind != YVEX_MODEL_TARGET_COMMAND_QUANT_POLICY) {
-        report->status = "qtype-policy-fail";
-        report->exit_code = 2;
-        yvex_model_target_report_add_error(report,
-                                           "qtype policy report requires quant-policy command kind");
-        return 1;
-    }
-    if (!target[0]) {
-        report->status = "parser-error";
-        report->exit_code = 2;
-        yvex_model_target_report_add_error(report,
-                                           "model-target quant-policy: requires TARGET");
-        return 1;
-    }
-    if (request->release[0] && strcmp(request->release, "v0.1.0") != 0) {
-        report->status = "unsupported-release";
-        report->exit_code = 2;
-        yvex_model_target_report_add_row(report, "status: unsupported-release");
-        yvex_model_target_report_add_row(report, "release: %s", request->release);
-        yvex_model_target_report_add_error(report, "unsupported release: %s",
-                                           request->release);
-        return 1;
-    }
-    if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
-        report->status = "unsupported-output-mode";
-        report->exit_code = 2;
-        yvex_model_target_report_add_error(report, "JSON output is unsupported");
+    if (!yvex_model_target_validate_request_shape(
+            request, report, &qtype_policy_rules, request->release)) {
         return 1;
     }
 
@@ -397,8 +313,9 @@ static void qtype_policy_add_table(const qtype_policy_state *state,
     yvex_model_target_report_add_row(
         report,
         "%s  %s  F32=%lu F16=%lu BF16=%lu other=%lu  artifact-planning-storage-policy  F16  %s  %s  %s  %s",
-        report->target_id, report->family, state->f32_count, state->f16_count,
-        state->bf16_count, state->other_count, candidates, refused,
+        report->target_id, report->family, state->source.f32_count,
+        state->source.f16_count, state->source.bf16_count,
+        state->source.other_count, candidates, refused,
         state->status, state->next_row);
 }
 
@@ -415,12 +332,12 @@ static void qtype_policy_add_audit(const qtype_policy_state *state,
     const yvex_quant_numeric_capability *q2 =
         yvex_quant_numeric_capability_at(YVEX_GGUF_QTYPE_Q2_K);
     yvex_model_target_report_add_row(report, "source_dtype_profile_status: %s",
-                                     state->header_exists ? "profiled" : "missing");
+                                     state->source.header_present ? "profiled" : "missing");
     yvex_model_target_report_add_row(report, "source_dtype_counts: F32=%lu,F16=%lu,BF16=%lu",
-                                     state->f32_count, state->f16_count,
-                                     state->bf16_count);
+                                     state->source.f32_count, state->source.f16_count,
+                                     state->source.bf16_count);
     yvex_model_target_report_add_row(report, "source_tensor_count: %lu",
-                                     state->tensor_count);
+                                     state->source.tensor_count);
     yvex_model_target_report_add_row(report, "mapping_gate_status: %s",
                                      state->mapping_gate_status);
     yvex_model_target_report_add_rows(
@@ -428,7 +345,7 @@ static void qtype_policy_add_audit(const qtype_policy_state *state,
         sizeof(policy_prefix_rows) / sizeof(policy_prefix_rows[0]));
     yvex_model_target_report_add_row(
         report, "tokenizer_metadata_map_status: %s",
-        state->metadata_present ? "present-report-only" : "missing");
+        state->source.metadata_present ? "present-report-only" : "missing");
     yvex_model_target_report_add_rows(
         report, policy_suffix_rows,
         sizeof(policy_suffix_rows) / sizeof(policy_suffix_rows[0]));
@@ -515,7 +432,8 @@ int yvex_qtype_policy_report_build(const yvex_model_target_request *request,
                                      report->family, state.mapping_gate_status);
     yvex_model_target_report_add_row(
         report, "source_dtype: F32=%lu F16=%lu BF16=%lu other=%lu",
-        state.f32_count, state.f16_count, state.bf16_count, state.other_count);
+        state.source.f32_count, state.source.f16_count,
+        state.source.bf16_count, state.source.other_count);
     if (strcmp(state.status, "policy-reported") == 0) {
         qtype_policy_numeric_lists(candidates, refused);
         yvex_model_target_report_add_row(report,

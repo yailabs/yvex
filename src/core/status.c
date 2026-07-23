@@ -10,6 +10,7 @@
  * Effects: mutates only declared core state or caller-owned outputs.
  * Failure: returns typed refusal or null allocation with caller-owned state defined. */
 
+#define YVEX_CORE_ALLOCATION_IMPLEMENTATION 1
 #include <yvex/internal/core.h>
 #include <limits.h>
 #include <stdarg.h>
@@ -17,11 +18,146 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static const char yvex_empty_string[] = "";
+static _Thread_local yvex_core_allocation_epoch allocation_epoch;
+static _Thread_local yvex_core_execution_observation execution_observation;
 
-/* Purpose: Compute copy text for its core invariant (`copy_text`). */
-static void copy_text(char *dst, size_t cap, const char *src)
+/* Purpose: account one thread-local allocation event without wrapping the counter.
+ * Inputs: epoch-owned counter.
+ * Effects: increments the counter or latches overflow.
+ * Failure: cannot fail; overflow remains observable in the epoch.
+ * Boundary: records YVEX-owned allocator activity without changing allocation policy. */
+static void allocation_epoch_advance(unsigned long long *counter)
+{
+    if (*counter == ULLONG_MAX)
+        allocation_epoch.overflowed = 1;
+    else
+        ++*counter;
+}
+
+/* Purpose: snapshot exact YVEX allocator events on the current execution thread.
+ * Inputs: optional caller-owned output.
+ * Effects: copies thread-local facts when an output is present.
+ * Failure: a null output is a harmless no-op.
+ * Boundary: does not allocate, reset, or aggregate across threads. */
+void yvex_core_allocation_epoch_snapshot(yvex_core_allocation_epoch *out)
+{
+    if (out) *out = allocation_epoch;
+}
+
+/* Purpose: execute one libc allocation operation through the observed YVEX owner.
+ * Inputs: typed operation, optional owned pointer, and exact element geometry.
+ * Effects: allocates, resizes, or releases storage and advances the matching TLS counter.
+ * Failure: invalid operations or allocator failure return null without a success event.
+ * Boundary: this is the sole non-public allocation symbol consumed by YVEX-owned code. */
+void *yvex_core_allocate(yvex_core_allocation_operation operation,
+                         void *pointer, size_t count, size_t size)
+{
+    void *result = NULL;
+    switch (operation) {
+    case YVEX_CORE_ALLOCATE_MALLOC:
+        result = malloc(size);
+        if (result) allocation_epoch_advance(&allocation_epoch.allocation_events);
+        break;
+    case YVEX_CORE_ALLOCATE_CALLOC:
+        result = calloc(count, size);
+        if (result) allocation_epoch_advance(&allocation_epoch.allocation_events);
+        break;
+    case YVEX_CORE_ALLOCATE_REALLOC:
+        result = realloc(pointer, size);
+        if (result) allocation_epoch_advance(&allocation_epoch.reallocation_events);
+        else if (pointer && !size) allocation_epoch_advance(&allocation_epoch.release_events);
+        break;
+    case YVEX_CORE_ALLOCATE_FREE:
+        if (pointer) allocation_epoch_advance(&allocation_epoch.release_events);
+        free(pointer);
+        break;
+    }
+    return result;
+}
+
+/* Purpose: record one observed upstream execution-planning event on the current thread.
+ * Inputs: typed event and exact count.
+ * Effects: advances one fact or latches observation overflow.
+ * Failure: an invalid event kind fails closed by latching overflow.
+ * Boundary: observation never changes the behavior of the observed owner. */
+void yvex_core_execution_observation_record(
+    yvex_core_execution_observation_kind kind, unsigned long long amount)
+{
+    unsigned long long *counter = NULL;
+    switch (kind) {
+    case YVEX_CORE_OBSERVE_SOURCE_HEADER:
+        counter = &execution_observation.source_headers_read;
+        break;
+    case YVEX_CORE_OBSERVE_SOURCE_PAYLOAD_BYTES:
+        counter = &execution_observation.source_payload_bytes_read;
+        break;
+    case YVEX_CORE_OBSERVE_TRANSFORM_PLAN:
+        counter = &execution_observation.transform_plans_built;
+        break;
+    case YVEX_CORE_OBSERVE_QUANT_PLAN:
+        counter = &execution_observation.quant_plans_built;
+        break;
+    case YVEX_CORE_OBSERVE_WRITER_PLAN:
+        counter = &execution_observation.writer_plans_built;
+        break;
+    case YVEX_CORE_OBSERVE_COUNT:
+        break;
+    }
+    if (!counter || *counter > ULLONG_MAX - amount)
+        execution_observation.overflowed = 1;
+    else
+        *counter += amount;
+}
+
+/* Purpose: snapshot upstream execution-planning activity on the current thread.
+ * Inputs: optional caller-owned output.
+ * Effects: copies the current thread-local observation facts.
+ * Failure: a null output is a harmless no-op.
+ * Boundary: does not reset counters or inspect subsystem state. */
+void yvex_core_execution_observation_snapshot(
+    yvex_core_execution_observation *out)
+{
+    if (out) *out = execution_observation;
+}
+
+/* Purpose: derive monotonic observed work between two snapshots.
+ * Inputs: before/after facts and required caller-owned output.
+ * Effects: writes the exact field-wise delta on success.
+ * Failure: null, overflowed, or regressed facts return false.
+ * Boundary: compares observation counters without inspecting subsystem state. */
+int yvex_core_execution_observation_delta(
+    const yvex_core_execution_observation *before,
+    const yvex_core_execution_observation *after,
+    yvex_core_execution_observation *out)
+{
+    if (!before || !after || !out || before->overflowed || after->overflowed)
+        return 0;
+    if (after->source_headers_read < before->source_headers_read ||
+        after->source_payload_bytes_read < before->source_payload_bytes_read ||
+        after->transform_plans_built < before->transform_plans_built ||
+        after->quant_plans_built < before->quant_plans_built ||
+        after->writer_plans_built < before->writer_plans_built)
+        return 0;
+    memset(out, 0, sizeof(*out));
+    out->source_headers_read = after->source_headers_read - before->source_headers_read;
+    out->source_payload_bytes_read =
+        after->source_payload_bytes_read - before->source_payload_bytes_read;
+    out->transform_plans_built =
+        after->transform_plans_built - before->transform_plans_built;
+    out->quant_plans_built = after->quant_plans_built - before->quant_plans_built;
+    out->writer_plans_built = after->writer_plans_built - before->writer_plans_built;
+    return 1;
+}
+
+/* Purpose: copy borrowed text into one bounded terminated destination.
+ * Inputs: optional source plus caller-owned destination and capacity.
+ * Effects: writes a truncated copy and one terminating null byte when capacity permits.
+ * Failure: null destination or zero capacity is a harmless no-op.
+ * Boundary: copies bytes without parsing or assigning domain semantics. */
+void yvex_core_text_copy(char *dst, size_t cap, const char *src)
 {
     if (!dst || cap == 0) {
         return;
@@ -33,20 +169,6 @@ static void copy_text(char *dst, size_t cap, const char *src)
 
     snprintf(dst, cap, "%s", src);
     dst[cap - 1] = '\0';
-}
-
-/* Reads a test-only process flag without allowing domain owners to duplicate
- * environment parsing or reinterpret false values. */
-/* Purpose: Compute core test flag for its core invariant (`yvex_core_test_flag`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: Core mechanism only. */
-int yvex_core_test_flag(const char *name)
-{
-    const char *value = name ? getenv(name) : NULL;
-
-    return value && value[0] != '\0' && strcmp(value, "0") != 0;
 }
 
 /* Purpose: duplicate nullable text through one checked ownership mechanism.
@@ -66,64 +188,11 @@ char *yvex_core_strdup(const char *text)
     if (length == SIZE_MAX) {
         return NULL;
     }
-    copy = (char *)malloc(length + 1u);
+    copy = (char *)yvex_core_malloc(length + 1u);
     if (copy) {
         memcpy(copy, text, length + 1u);
     }
     return copy;
-}
-
-/* Purpose: mix an ordered byte range into a non-authoritative FNV-1a index hash.
- * Inputs: current hash plus a borrowed range; null is admitted only for zero length.
- * Effects: none.
- * Failure: invalid nonempty input preserves the incoming hash.
- * Boundary: lookup hashing only; semantic cryptographic identities use SHA-256. */
-unsigned long long yvex_core_hash_mix_bytes(unsigned long long hash,
-                                            const void *data,
-                                            size_t length)
-{
-    const unsigned char *bytes = (const unsigned char *)data;
-    size_t index;
-
-    if (!bytes && length != 0u) {
-        return hash;
-    }
-    for (index = 0u; index < length; ++index) {
-        hash ^= (unsigned long long)bytes[index];
-        hash *= 1099511628211ull;
-    }
-    return hash;
-}
-
-/* Purpose: mix one explicit-width integer in canonical little-endian byte order.
- * Inputs: current non-authoritative hash and one unsigned 64-bit value.
- * Effects: none.
- * Failure: all inputs have a deterministic result.
- * Boundary: lookup hashing only; semantic cryptographic identities use SHA-256. */
-unsigned long long yvex_core_hash_mix_u64(unsigned long long hash,
-                                          unsigned long long value)
-{
-    unsigned char bytes[8];
-    unsigned int index;
-
-    for (index = 0u; index < sizeof(bytes); ++index) {
-        bytes[index] = (unsigned char)((value >> (index * 8u)) & 0xffull);
-    }
-    return yvex_core_hash_mix_bytes(hash, bytes, sizeof(bytes));
-}
-
-/* Purpose: hash one nullable key for deterministic process-local indexes.
- * Inputs: borrowed UTF-8/byte text, with null equivalent to an empty key.
- * Effects: none.
- * Failure: all inputs produce a nonzero deterministic index hash.
- * Boundary: index placement only; this value is never a semantic identity. */
-unsigned long long yvex_core_index_hash(const char *text)
-{
-    const char *key = text ? text : "";
-    unsigned long long hash = yvex_core_hash_mix_bytes(
-        1469598103934665603ull, key, strlen(key));
-
-    return hash ? hash : 1ull;
 }
 
 /* Purpose: add two 64-bit geometry facts without wraparound.
@@ -158,6 +227,20 @@ int yvex_core_u64_mul(unsigned long long left,
     return 1;
 }
 
+/* Purpose: read one monotonic timestamp for lifecycle and benchmark evidence.
+ * Inputs: process monotonic clock.
+ * Effects: none beyond reading the operating-system clock.
+ * Failure: unavailable clock returns zero without changing caller state.
+ * Boundary: time is operational evidence and never enters semantic identities. */
+unsigned long long yvex_core_monotonic_ns(void)
+{
+    struct timespec value;
+    return clock_gettime(CLOCK_MONOTONIC, &value) == 0
+               ? (unsigned long long)value.tv_sec * 1000000000ull +
+                     (unsigned long long)value.tv_nsec
+               : 0ull;
+}
+
 /* Purpose: Release or reset owned error clear state (`yvex_error_clear`).
  * Inputs: Borrowed typed facts.
  * Effects: Mutates declared CLI state only.
@@ -186,8 +269,8 @@ void yvex_error_set(yvex_error *err, yvex_status code, const char *where, const 
     }
 
     err->code = code;
-    copy_text(err->where, YVEX_ERROR_WHERE_CAP, where ? where : "unknown");
-    copy_text(err->message, YVEX_ERROR_MESSAGE_CAP, message);
+    yvex_core_text_copy(err->where, YVEX_ERROR_WHERE_CAP, where ? where : "unknown");
+    yvex_core_text_copy(err->message, YVEX_ERROR_MESSAGE_CAP, message);
 }
 
 /* Purpose: Compute error setf for its core invariant (`yvex_error_setf`).
@@ -204,7 +287,7 @@ void yvex_error_setf(yvex_error *err, yvex_status code, const char *where, const
     }
 
     err->code = code;
-    copy_text(err->where, YVEX_ERROR_WHERE_CAP, where ? where : "unknown");
+    yvex_core_text_copy(err->where, YVEX_ERROR_WHERE_CAP, where ? where : "unknown");
 
     if (!fmt) {
         err->message[0] = '\0';

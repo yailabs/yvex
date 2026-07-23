@@ -15,12 +15,83 @@
 #include <yvex/internal/families/deepseek_v4.h>
 #include <yvex/internal/runtime.h>
 
+#include <limits.h>
+#include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <yvex/api.h>
 
 #include "tests/test.h"
+
+typedef struct {
+    unsigned long long tensor_id, bytes;
+    const unsigned char *data;
+    unsigned long long note_calls, note_bytes, detach_calls;
+} fixture_resident_span;
+typedef struct {
+    yvex_materialization_session *session;
+    const yvex_materialized_tensor_binding *binding;
+    unsigned long long iterations;
+    int failed;
+} fixture_resident_read_thread;
+
+/* Purpose: resolve the single fixture tensor from a borrowed immutable byte span. */
+static int fixture_resident_resolve(const void *context,
+                                    const yvex_materialized_tensor_binding *binding,
+                                    const unsigned char **data, unsigned long long *bytes)
+{
+    const fixture_resident_span *span = (const fixture_resident_span *)context;
+
+    if (!span || !binding || binding->tensor_id != span->tensor_id)
+        return YVEX_MATERIALIZATION_READ_MISS;
+    *data = span->data;
+    *bytes = span->bytes;
+    return YVEX_MATERIALIZATION_READ_HIT;
+}
+
+/* Purpose: account one provider access; the materialization owner serializes this callback. */
+static int fixture_resident_note(const void *context, unsigned long long bytes)
+{
+    fixture_resident_span *span = (fixture_resident_span *)context;
+
+    if (!span || span->note_calls == ULLONG_MAX || span->note_bytes > ULLONG_MAX - bytes)
+        return 0;
+    span->note_calls++;
+    span->note_bytes += bytes;
+    return 1;
+}
+
+/* Purpose: record the exact synchronous provider-detach notification. */
+static void fixture_resident_detached(const void *context)
+{
+    fixture_resident_span *span = (fixture_resident_span *)context;
+
+    if (span) span->detach_calls++;
+}
+
+/* Purpose: exercise actual concurrent resident reads through one synchronized materialization owner. */
+static void *fixture_resident_read_worker(void *context)
+{
+    fixture_resident_read_thread *thread = (fixture_resident_read_thread *)context;
+    unsigned char output[16];
+    unsigned long long index;
+
+    for (index = 0ull; index < thread->iterations; ++index) {
+        yvex_materialization_failure failure;
+        yvex_error err;
+        unsigned long long offset = index % (thread->binding->encoded_bytes - sizeof(output) + 1ull);
+
+        if (yvex_materialization_session_read(thread->session, thread->binding, offset,
+                                              output, sizeof(output), &failure, &err) != YVEX_OK ||
+            output[0] != 0x5a || output[sizeof(output) - 1u] != 0x5a) {
+            thread->failed = 1;
+            break;
+        }
+    }
+    return NULL;
+}
 
 static void fill_fixture_admission(const yvex_artifact *artifact,
                                    const yvex_tensor_table *tensors,
@@ -89,6 +160,7 @@ static int test_materialization_fixture(void)
     yvex_materialization_failure failure;
     yvex_runtime_descriptor *descriptor = NULL;
     yvex_runtime_descriptor_failure descriptor_failure;
+    yvex_runtime_descriptor_family_facts family;
     const yvex_materialization_summary *summary;
     const yvex_runtime_descriptor_summary *descriptor_summary;
     const yvex_materialized_tensor_binding *binding;
@@ -118,16 +190,17 @@ static int test_materialization_fixture(void)
     YVEX_TEST_ASSERT(strlen(summary->plan_identity) == 64u,
                      "plan identity");
 
-    binding = yvex_materialization_plan_find_name(plan, "token_embd.weight");
-    YVEX_TEST_ASSERT(binding != NULL, "find binding");
-    YVEX_TEST_ASSERT(binding->encoded_bytes == 128ull, "binding bytes");
-    YVEX_TEST_ASSERT(binding->access_mode == YVEX_MATERIALIZATION_ACCESS_FILE_RANGE ||
-                     binding->access_mode == YVEX_MATERIALIZATION_ACCESS_BACKEND_CANDIDATE_FILE_RANGE,
-                     "binding access");
-
     rc = yvex_materialization_session_open(
         &session, plan, artifact, &options, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "session open");
+    binding = yvex_materialization_session_tensor_at(session, 0ull);
+    YVEX_TEST_ASSERT(binding != NULL && strcmp(binding->name, "token_embd.weight") == 0,
+                     "session preserves the canonical binding order");
+    YVEX_TEST_ASSERT(binding->encoded_bytes == 128ull, "binding bytes");
+    YVEX_TEST_ASSERT(binding->access_mode == YVEX_MATERIALIZATION_ACCESS_FILE_RANGE ||
+                         binding->access_mode ==
+                             YVEX_MATERIALIZATION_ACCESS_BACKEND_CANDIDATE_FILE_RANGE,
+                     "binding access");
     rc = yvex_materialization_session_commit(session, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "session commit");
     rc = yvex_materialization_session_read(
@@ -142,8 +215,16 @@ static int test_materialization_fixture(void)
     YVEX_TEST_ASSERT(summary->peak_executor_owned_bytes == 16ull,
                      "bounded staging peak");
 
+    memset(&family, 0, sizeof(family));
+    family.logical_model_identity =
+        "1111111111111111111111111111111111111111111111111111111111111111";
+    family.runtime_numeric_identity =
+        "2222222222222222222222222222222222222222222222222222222222222222";
+    family.runtime_hadamard_revision =
+        "Dao-AILab/fast-hadamard-transform:v1.1.0.post2:"
+        "e7706faf8d1c3b9f241e36860640ad1dac644ede";
     rc = yvex_runtime_descriptor_build(
-        &descriptor, &admission, session, &descriptor_failure, &err);
+        &descriptor, &admission, session, &family, &descriptor_failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "runtime descriptor builds");
     descriptor_summary = yvex_runtime_descriptor_summary_get(descriptor);
     YVEX_TEST_ASSERT(descriptor_summary != NULL, "descriptor summary");
@@ -155,9 +236,14 @@ static int test_materialization_fixture(void)
                      "graph not ready");
     YVEX_TEST_ASSERT(descriptor_summary->generation_ready == 0,
                      "generation not ready");
-    YVEX_TEST_ASSERT(yvex_runtime_descriptor_find_name(
-                         descriptor, "token_embd.weight") != NULL,
-                     "descriptor find by name");
+    YVEX_TEST_ASSERT(
+        strcmp(descriptor_summary->runtime_hadamard_revision,
+               family.runtime_hadamard_revision) == 0,
+        "runtime descriptor preserves the complete Hadamard authority commit");
+    YVEX_TEST_ASSERT(yvex_runtime_descriptor_tensor_at(descriptor, 0ull) != NULL &&
+                         strcmp(yvex_runtime_descriptor_tensor_at(descriptor, 0ull)->binding->name,
+                                "token_embd.weight") == 0,
+                     "descriptor preserves canonical tensor order");
 
     yvex_runtime_descriptor_close(descriptor);
     yvex_materialization_session_close(session);
@@ -226,9 +312,163 @@ static int test_materialization_refusals(void)
     return 0;
 }
 
+/* Purpose: prove a sealed resident provider replaces only its exact tensor's physical reads. */
+static int test_materialization_resident_provider(void)
+{
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    yvex_tensor_table *tensors = NULL;
+    yvex_complete_artifact_admission admission;
+    yvex_materialization_options options;
+    yvex_materialization_plan *plan = NULL;
+    yvex_materialization_session *session = NULL;
+    yvex_materialization_failure failure;
+    const yvex_materialized_tensor_binding *binding;
+    yvex_materialization_access_summary before, after;
+    yvex_materialization_read_provider provider;
+    fixture_resident_span span;
+    fixture_resident_read_thread thread_contexts[4];
+    pthread_t threads[4];
+    unsigned char resident[128], output[16];
+    const unsigned char *borrowed = NULL;
+    unsigned int created = 0u, index;
+    yvex_error err;
+    int wrong_owner;
+    int rc;
+
+    YVEX_TEST_ASSERT(open_fixture(&artifact, &gguf, &tensors) == 0,
+                     "open resident provider fixture");
+    fill_fixture_admission(artifact, tensors, &admission);
+    yvex_materialization_options_default(&options);
+    rc = yvex_materialization_plan_build(&plan, &admission, artifact, gguf, tensors,
+                                         NULL, &options, &failure, &err);
+    if (rc == YVEX_OK)
+        rc = yvex_materialization_session_open(&session, plan, artifact, &options,
+                                               &failure, &err);
+    if (rc == YVEX_OK)
+        rc = yvex_materialization_session_commit(session, &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "resident provider materialization committed");
+    binding = yvex_materialization_session_tensor_at(session, 0ull);
+    YVEX_TEST_ASSERT(binding && binding->encoded_bytes == sizeof(resident),
+                     "resident provider binding geometry");
+    memset(resident, 0x5a, sizeof(resident));
+    memset(&span, 0, sizeof(span));
+    span.tensor_id = binding->tensor_id;
+    span.bytes = binding->encoded_bytes;
+    span.data = resident;
+    provider.context = &span;
+    provider.resolve = fixture_resident_resolve;
+    provider.note_access = fixture_resident_note;
+    provider.detached = fixture_resident_detached;
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_access_summary(session, &before, &err) == YVEX_OK,
+        "initial access summary");
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_attach_read_provider(session, &provider, &failure, &err) ==
+            YVEX_OK,
+        "resident provider attached");
+    memset(output, 0, sizeof(output));
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_read(session, binding, 7ull, output, sizeof(output),
+                                          &failure, &err) == YVEX_OK,
+        "resident provider read");
+    YVEX_TEST_ASSERT(output[0] == 0x5a && output[sizeof(output) - 1u] == 0x5a,
+                     "resident bytes returned");
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_borrow(session, binding, 11ull, sizeof(output),
+                                            &borrowed, &failure, &err) == YVEX_OK &&
+            borrowed == resident + 11u,
+        "resident subrange borrowed without copy");
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_access_summary(session, &after, &err) == YVEX_OK,
+        "resident access summary");
+    YVEX_TEST_ASSERT(after.artifact_read_calls == before.artifact_read_calls &&
+                         after.artifact_bytes_read == before.artifact_bytes_read,
+                     "resident hit performs zero artifact reads");
+    YVEX_TEST_ASSERT(after.resident_read_calls == before.resident_read_calls + 2ull &&
+                         after.resident_bytes_read ==
+                             before.resident_bytes_read + 2ull * sizeof(output),
+                     "resident hit accounted exactly");
+    before = after;
+    memset(thread_contexts, 0, sizeof(thread_contexts));
+    for (index = 0u; index < 4u; ++index) {
+        thread_contexts[index].session = session;
+        thread_contexts[index].binding = binding;
+        thread_contexts[index].iterations = 32ull;
+        if (pthread_create(&threads[index], NULL, fixture_resident_read_worker,
+                           &thread_contexts[index]) != 0)
+            break;
+        created++;
+    }
+    for (index = 0u; index < created; ++index)
+        (void)pthread_join(threads[index], NULL);
+    YVEX_TEST_ASSERT(created == 4u, "concurrent resident reader threads created");
+    for (index = 0u; index < created; ++index)
+        YVEX_TEST_ASSERT(!thread_contexts[index].failed,
+                         "concurrent resident reader completed exactly");
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_access_summary(session, &after, &err) == YVEX_OK &&
+            after.resident_read_calls == before.resident_read_calls + 128ull &&
+            after.resident_bytes_read == before.resident_bytes_read + 2048ull &&
+            after.artifact_read_calls == before.artifact_read_calls &&
+            span.note_calls == 130ull && span.note_bytes == 2080ull,
+        "concurrent resident reads and provider callbacks are synchronized without loss");
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_attach_read_provider(session, &provider, &failure, &err) !=
+            YVEX_OK,
+        "provider replacement refused");
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_detach_read_provider(session, &wrong_owner, &failure, &err) !=
+            YVEX_OK,
+        "foreign provider detach refused");
+    YVEX_TEST_ASSERT(
+        setenv("YVEX_TEST_MATERIALIZATION_CLEANUP_FAILURE", "provider-detach-lock", 1) == 0,
+        "provider detach synchronization failure injected");
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_detach_read_provider(session, &span, &failure, &err) ==
+                YVEX_ERR_STATE &&
+            failure.code == YVEX_MATERIALIZATION_FAILURE_LIFECYCLE &&
+            span.detach_calls == 0ull,
+        "failed provider detach retains ownership without callback");
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_read(session, binding, 0ull, output, sizeof(output),
+                                          &failure, &err) == YVEX_OK &&
+            output[0] == 0x5a,
+        "failed provider detach keeps the resident reader usable");
+    YVEX_TEST_ASSERT(
+        unsetenv("YVEX_TEST_MATERIALIZATION_CLEANUP_FAILURE") == 0,
+        "provider detach synchronization failure cleared");
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_detach_read_provider(session, &span, &failure, &err) ==
+                YVEX_OK &&
+            span.detach_calls == 1ull,
+        "owned provider detach retry notifies exactly once");
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_read(session, binding, 0ull, output, sizeof(output),
+                                          &failure, &err) == YVEX_OK,
+        "physical read resumes after detach");
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_access_summary(session, &after, &err) == YVEX_OK &&
+            after.artifact_read_calls == before.artifact_read_calls + 1ull,
+        "post-detach physical read accounted");
+    YVEX_TEST_ASSERT(
+        yvex_materialization_session_attach_read_provider(session, &provider, &failure, &err) ==
+            YVEX_OK,
+        "resident provider reattaches before exclusive session teardown");
+    yvex_materialization_session_close(session);
+    YVEX_TEST_ASSERT(span.detach_calls == 2ull,
+                     "exclusive session teardown notifies the reattached provider once");
+    yvex_materialization_plan_close(plan);
+    yvex_tensor_table_close(tensors);
+    yvex_gguf_close(gguf);
+    yvex_artifact_close(artifact);
+    return 0;
+}
+
 int yvex_test_materialization_runtime(void)
 {
     if (test_materialization_fixture() != 0) return 1;
     if (test_materialization_refusals() != 0) return 1;
+    if (test_materialization_resident_provider() != 0) return 1;
     return 0;
 }

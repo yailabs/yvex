@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -59,6 +60,7 @@ static void model_download_mark_provider_interrupted(
     int signo,
     pid_t pgid);
 static void model_download_orphan_check(yvex_model_download_report *report);
+static const char *model_download_safetensors_file_status(const char *path);
 
 static const yvex_model_download_catalog_row model_download_catalog[] = {
     { "gemma-4-e2b", "gemma", "hf", "google/gemma-4-E2B", "gemma-4-e2b", "main",
@@ -178,17 +180,6 @@ int model_download_repo_valid(const char *repo)
     return slash_count == 1;
 }
 
-/* Purpose: Transfer bounded model download repo basename data (`model_download_repo_basename`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-const char *model_download_repo_basename(const char *repo)
-{
-    const char *slash = repo ? strrchr(repo, '/') : NULL;
-    return slash && slash[1] ? slash + 1 : NULL;
-}
-
 /* Purpose: Transfer bounded model download effective include count data (`model_download_effective_include_count`).
  * Inputs: Borrowed typed facts.
  * Effects: Mutates declared CLI state only.
@@ -265,28 +256,6 @@ void model_download_report_init(yvex_model_download_report *report)
     *report = model_download_report_defaults;
 }
 
-/* Purpose: Transfer bounded model download timestamp data (`model_download_timestamp`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-void model_download_timestamp(char *out, size_t cap)
-{
-    time_t now;
-    struct tm tm_utc;
-
-    if (!out || cap == 0u) return;
-    out[0] = '\0';
-    now = time(NULL);
-    if (now == (time_t)-1 || !gmtime_r(&now, &tm_utc)) {
-        snprintf(out, cap, "unknown");
-        return;
-    }
-    if (strftime(out, cap, "%Y-%m-%dT%H:%M:%SZ", &tm_utc) == 0) {
-        snprintf(out, cap, "unknown");
-    }
-}
-
 /* Purpose: Transfer bounded model download path under data (`model_download_path_under`).
  * Inputs: Borrowed typed facts.
  * Effects: Mutates declared CLI state only.
@@ -336,22 +305,6 @@ int model_download_source_path_allowed(const yvex_operator_paths *operator_paths
     return 1;
 }
 
-/* Purpose: Transfer bounded model download file name ends with data (`model_download_file_name_ends_with`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-int model_download_file_name_ends_with(const char *path, const char *suffix)
-{
-    size_t path_len;
-    size_t suffix_len;
-
-    if (!path || !suffix) return 0;
-    path_len = strlen(path);
-    suffix_len = strlen(suffix);
-    return suffix_len <= path_len && strcmp(path + path_len - suffix_len, suffix) == 0;
-}
-
 /* Purpose: Transfer bounded model download name starts with data (`model_download_name_starts_with`).
  * Inputs: Borrowed typed facts.
  * Effects: Mutates declared CLI state only.
@@ -391,15 +344,40 @@ static unsigned long long model_download_lock_age_seconds(const struct stat *st)
     return (unsigned long long)(now - st->st_mtime);
 }
 
-/* Purpose: Transfer bounded model download scan dir data (`model_download_scan_dir`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int model_download_scan_dir(const char *root,
-                                   const char *rel_dir,
-                                   yvex_model_download_source_scan *scan,
-                                   yvex_error *err)
+typedef struct {
+    yvex_model_download_source_scan *scan;
+    yvex_model_download_safetensors_check *safetensors;
+    const char *owner;
+    int strict_io;
+} model_download_tree_walk;
+
+/* Purpose: Copy one observed path component under the caller's existing diagnostic owner.
+ * Inputs: Borrowed text, bounded destination, and exact error wording.
+ * Effects: Writes only the destination path.
+ * Failure: A path exceeding the destination produces the requested bounds diagnostic.
+ * Boundary: Path projection does not inspect or trust payload bytes. */
+static int model_download_copy_path(char *out,
+                                    size_t cap,
+                                    const char *value,
+                                    const char *owner,
+                                    const char *message,
+                                    yvex_error *err)
+{
+    int written = snprintf(out, cap, "%s", value);
+    if (written >= 0 && (size_t)written < cap) return YVEX_OK;
+    yvex_error_set(err, YVEX_ERR_BOUNDS, owner, message);
+    return YVEX_ERR_BOUNDS;
+}
+
+/* Purpose: Walk one source tree once for either progress facts or safetensors admission facts.
+ * Inputs: Borrowed root/path and one caller-owned typed fact sink.
+ * Effects: Reads directory metadata and mutates only the selected sink.
+ * Failure: Strict scans surface I/O; status probes tolerate paths that disappear concurrently.
+ * Boundary: Source observation does not establish payload trust. */
+static int model_download_walk_tree(const char *root,
+                                    const char *rel_dir,
+                                    model_download_tree_walk *walk,
+                                    yvex_error *err)
 {
     char abs_dir[YVEX_PATH_CAP];
     DIR *dir;
@@ -407,20 +385,22 @@ static int model_download_scan_dir(const char *root,
     int rc = YVEX_OK;
 
     if (rel_dir && rel_dir[0]) {
-        rc = path_join2(abs_dir, sizeof(abs_dir), root, rel_dir, err, "models_download");
+        rc = path_join2(abs_dir, sizeof(abs_dir), root, rel_dir, err, walk->owner);
         if (rc != YVEX_OK) return rc;
     } else {
-        int n = snprintf(abs_dir, sizeof(abs_dir), "%s", root);
-        if (n < 0 || (size_t)n >= sizeof(abs_dir)) {
-            yvex_error_set(err, YVEX_ERR_BOUNDS, "models_download", "source path is too long");
-            return YVEX_ERR_BOUNDS;
-        }
+        rc = model_download_copy_path(abs_dir, sizeof(abs_dir), root, walk->owner,
+                                      "source path is too long", err);
+        if (rc != YVEX_OK) return rc;
     }
 
     dir = opendir(abs_dir);
     if (!dir) {
-        yvex_error_setf(err, YVEX_ERR_IO, "models_download", "cannot open source directory: %s", abs_dir);
-        return YVEX_ERR_IO;
+        if (walk->strict_io) {
+            yvex_error_setf(err, YVEX_ERR_IO, walk->owner,
+                            "cannot open source directory: %s", abs_dir);
+            return YVEX_ERR_IO;
+        }
+        return YVEX_OK;
     }
 
     while ((ent = readdir(dir)) != NULL) {
@@ -433,62 +413,69 @@ static int model_download_scan_dir(const char *root,
             continue;
         }
         if (rel_dir && rel_dir[0]) {
-            rc = path_join2(rel_path, sizeof(rel_path), rel_dir, base, err, "models_download");
+            rc = path_join2(rel_path, sizeof(rel_path), rel_dir, base, err, walk->owner);
         } else {
-            int n = snprintf(rel_path, sizeof(rel_path), "%s", base);
-            rc = (n < 0 || (size_t)n >= sizeof(rel_path)) ? YVEX_ERR_BOUNDS : YVEX_OK;
-            if (rc != YVEX_OK) {
-                yvex_error_set(err, rc, "models_download", "relative source path is too long");
-            }
+            rc = model_download_copy_path(rel_path, sizeof(rel_path), base, walk->owner,
+                                          "relative source path is too long", err);
         }
         if (rc != YVEX_OK) break;
-        rc = path_join2(abs_path, sizeof(abs_path), root, rel_path, err, "models_download");
+        rc = path_join2(abs_path, sizeof(abs_path), root, rel_path, err, walk->owner);
         if (rc != YVEX_OK) break;
         if (lstat(abs_path, &st) != 0) {
-            yvex_error_setf(err, YVEX_ERR_IO, "models_download", "cannot stat source path: %s", abs_path);
+            if (!walk->strict_io) continue;
+            yvex_error_setf(err, YVEX_ERR_IO, walk->owner,
+                            "cannot stat source path: %s", abs_path);
             rc = YVEX_ERR_IO;
             break;
         }
         if (S_ISDIR(st.st_mode)) {
-            rc = model_download_scan_dir(root, rel_path, scan, err);
+            rc = model_download_walk_tree(root, rel_path, walk, err);
             if (rc != YVEX_OK) break;
         } else if (S_ISREG(st.st_mode)) {
             unsigned long long bytes = st.st_size > 0 ? (unsigned long long)st.st_size : 0ull;
-            scan->file_count++;
-            scan->total_regular_file_bytes += bytes;
-            if (model_download_file_name_ends_with(rel_path, ".safetensors")) {
-                scan->safetensors_count++;
-            }
-            if (model_download_file_name_ends_with(rel_path, ".lock")) {
-                unsigned long long idx = scan->lock_count;
-                if (idx < YVEX_MODEL_DOWNLOAD_PATTERN_CAP) {
-                    snprintf(scan->lock_paths[idx], sizeof(scan->lock_paths[idx]), "%s", rel_path);
-                    scan->lock_age_seconds[idx] = model_download_lock_age_seconds(&st);
+            if (walk->scan) {
+                yvex_model_download_source_scan *scan = walk->scan;
+
+                scan->file_count++;
+                scan->total_regular_file_bytes += bytes;
+                if (yvex_source_ends_with(rel_path, ".safetensors")) scan->safetensors_count++;
+                if (yvex_source_ends_with(rel_path, ".lock")) {
+                    unsigned long long idx = scan->lock_count;
+                    if (idx < YVEX_MODEL_DOWNLOAD_PATTERN_CAP) {
+                        snprintf(scan->lock_paths[idx], sizeof(scan->lock_paths[idx]), "%s",
+                                 rel_path);
+                        scan->lock_age_seconds[idx] = model_download_lock_age_seconds(&st);
+                    }
+                    scan->lock_count++;
                 }
-                scan->lock_count++;
+                if (yvex_source_ends_with(rel_path, ".partial") ||
+                    yvex_source_ends_with(rel_path, ".incomplete") ||
+                    yvex_source_ends_with(rel_path, ".tmp") ||
+                    model_download_name_contains(rel_path, ".part"))
+                    scan->partial_file_count++;
+                if (model_download_name_starts_with(rel_path, ".cache/") ||
+                    model_download_name_contains(rel_path, "/.cache/"))
+                    scan->cache_file_count++;
+                if (strcmp(base, "config.json") == 0) scan->config_present = 1;
+                if (strcmp(base, "tokenizer.json") == 0 ||
+                    strcmp(base, "tokenizer.model") == 0 ||
+                    strcmp(base, "tokenizer_config.json") == 0 ||
+                    model_download_name_starts_with(base, "tokenizer."))
+                    scan->tokenizer_present = 1;
+                if (bytes > scan->largest_file_bytes) {
+                    scan->largest_file_bytes = bytes;
+                    snprintf(scan->largest_file_name, sizeof(scan->largest_file_name), "%s",
+                             rel_path);
+                }
             }
-            if (model_download_file_name_ends_with(rel_path, ".partial") ||
-                model_download_file_name_ends_with(rel_path, ".incomplete") ||
-                model_download_file_name_ends_with(rel_path, ".tmp") ||
-                model_download_name_contains(rel_path, ".part")) {
-                scan->partial_file_count++;
-            }
-            if (model_download_name_starts_with(rel_path, ".cache/") ||
-                model_download_name_contains(rel_path, "/.cache/")) {
-                scan->cache_file_count++;
-            }
-            if (strcmp(base, "config.json") == 0) {
-                scan->config_present = 1;
-            }
-            if (strcmp(base, "tokenizer.json") == 0 ||
-                strcmp(base, "tokenizer.model") == 0 ||
-                strcmp(base, "tokenizer_config.json") == 0 ||
-                model_download_name_starts_with(base, "tokenizer.")) {
-                scan->tokenizer_present = 1;
-            }
-            if (bytes > scan->largest_file_bytes) {
-                scan->largest_file_bytes = bytes;
-                snprintf(scan->largest_file_name, sizeof(scan->largest_file_name), "%s", rel_path);
+            if (walk->safetensors && yvex_source_ends_with(rel_path, ".safetensors")) {
+                const char *status = model_download_safetensors_file_status(abs_path);
+                yvex_model_download_safetensors_check *check = walk->safetensors;
+
+                check->checked = 1;
+                if (strcmp(status, "ok") == 0) check->ok_count++;
+                else if (strcmp(status, "truncated") == 0) check->truncated_count++;
+                else check->invalid_count++;
             }
         }
     }
@@ -506,12 +493,14 @@ int model_download_scan_source(const char *root,
                                       yvex_model_download_source_scan *scan,
                                       yvex_error *err)
 {
+    model_download_tree_walk walk = {scan, NULL, "models_download", 1};
+
     if (!root || !scan) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "models_download", "source root and scan output are required");
         return YVEX_ERR_INVALID_ARG;
     }
     memset(scan, 0, sizeof(*scan));
-    return model_download_scan_dir(root, "", scan, err);
+    return model_download_walk_tree(root, "", &walk, err);
 }
 
 /* Purpose: Transfer bounded model download read u64 le data (`model_download_read_u64_le`).
@@ -593,24 +582,20 @@ static const char *model_download_safetensors_file_status(const char *path)
     fp = fopen(path, "rb");
     if (!fp) return "unknown";
     if (!model_download_read_u64_le(fp, &header_len)) {
-        fclose(fp);
-        return "invalid-header";
+        status = "invalid-header";
+        goto done;
     }
     if (header_len == 0ull || header_len > 128ull * 1024ull * 1024ull ||
         header_len > (unsigned long long)SIZE_MAX - 1ull) {
-        fclose(fp);
-        return "invalid-header";
+        status = "invalid-header";
+        goto done;
     }
     header_size = (size_t)header_len;
     header = (char *)malloc(header_size + 1u);
-    if (!header) {
-        fclose(fp);
-        return "unknown";
-    }
+    if (!header) goto done;
     if (fread(header, 1u, header_size, fp) != header_size) {
-        free(header);
-        fclose(fp);
-        return "invalid-header";
+        status = "invalid-header";
+        goto done;
     }
     header[header_size] = '\0';
     if (!model_download_parse_data_offsets(header, &max_end, &tensor_count)) {
@@ -619,73 +604,10 @@ static const char *model_download_safetensors_file_status(const char *path)
         required_size = 8ull + header_len + max_end;
         status = (unsigned long long)st.st_size >= required_size ? "ok" : "truncated";
     }
+done:
     free(header);
     fclose(fp);
     return status;
-}
-
-/* Purpose: Validate model download check safetensors dir before downstream use
- * (`model_download_check_safetensors_dir`).
- * Inputs: Borrowed typed facts.
- * Effects: Mutates declared CLI state only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static int model_download_check_safetensors_dir(const char *root,
-                                                const char *rel_dir,
-                                                yvex_model_download_safetensors_check *check,
-                                                yvex_error *err)
-{
-    char abs_dir[YVEX_PATH_CAP];
-    DIR *dir;
-    struct dirent *ent;
-    int rc = YVEX_OK;
-
-    if (rel_dir && rel_dir[0]) {
-        rc = path_join2(abs_dir, sizeof(abs_dir), root, rel_dir, err, "models_download_status");
-        if (rc != YVEX_OK) return rc;
-    } else {
-        int n = snprintf(abs_dir, sizeof(abs_dir), "%s", root);
-        if (n < 0 || (size_t)n >= sizeof(abs_dir)) {
-            yvex_error_set(err, YVEX_ERR_BOUNDS, "models_download_status", "source path is too long");
-            return YVEX_ERR_BOUNDS;
-        }
-    }
-    dir = opendir(abs_dir);
-    if (!dir) return YVEX_OK;
-    while ((ent = readdir(dir)) != NULL) {
-        char rel_path[YVEX_PATH_CAP];
-        char abs_path[YVEX_PATH_CAP];
-        struct stat st;
-        const char *base = ent->d_name;
-
-        if (strcmp(base, ".") == 0 || strcmp(base, "..") == 0) continue;
-        if (rel_dir && rel_dir[0]) {
-            rc = path_join2(rel_path, sizeof(rel_path), rel_dir, base, err, "models_download_status");
-        } else {
-            int n = snprintf(rel_path, sizeof(rel_path), "%s", base);
-            rc = (n < 0 || (size_t)n >= sizeof(rel_path)) ? YVEX_ERR_BOUNDS : YVEX_OK;
-            if (rc != YVEX_OK) {
-                yvex_error_set(err, rc, "models_download_status", "relative source path is too long");
-            }
-        }
-        if (rc != YVEX_OK) break;
-        rc = path_join2(abs_path, sizeof(abs_path), root, rel_path, err, "models_download_status");
-        if (rc != YVEX_OK) break;
-        if (lstat(abs_path, &st) != 0) continue;
-        if (S_ISDIR(st.st_mode)) {
-            rc = model_download_check_safetensors_dir(root, rel_path, check, err);
-            if (rc != YVEX_OK) break;
-        } else if (S_ISREG(st.st_mode) &&
-                   model_download_file_name_ends_with(rel_path, ".safetensors")) {
-            const char *status = model_download_safetensors_file_status(abs_path);
-            check->checked = 1;
-            if (strcmp(status, "ok") == 0) check->ok_count++;
-            else if (strcmp(status, "truncated") == 0) check->truncated_count++;
-            else check->invalid_count++;
-        }
-    }
-    closedir(dir);
-    return rc;
 }
 
 /* Purpose: Validate model download check safetensors source before downstream use
@@ -698,23 +620,21 @@ int model_download_check_safetensors_source(const char *root,
                                                    yvex_model_download_safetensors_check *check,
                                                    yvex_error *err)
 {
+    model_download_tree_walk walk = {NULL, check, "models_download_status", 0};
+    const char *status;
     int rc;
 
     if (!check) return YVEX_ERR_INVALID_ARG;
     memset(check, 0, sizeof(*check));
     snprintf(check->status, sizeof(check->status), "not-checked");
     if (!root || access(root, F_OK) != 0) return YVEX_OK;
-    rc = model_download_check_safetensors_dir(root, "", check, err);
+    rc = model_download_walk_tree(root, "", &walk, err);
     if (rc != YVEX_OK) return rc;
-    if (!check->checked) {
-        snprintf(check->status, sizeof(check->status), "not-checked");
-    } else if (check->truncated_count > 0) {
-        snprintf(check->status, sizeof(check->status), "truncated");
-    } else if (check->invalid_count > 0) {
-        snprintf(check->status, sizeof(check->status), "invalid-header");
-    } else {
-        snprintf(check->status, sizeof(check->status), "ok");
-    }
+    status = !check->checked          ? "not-checked"
+             : check->truncated_count ? "truncated"
+             : check->invalid_count   ? "invalid-header"
+                                      : "ok";
+    snprintf(check->status, sizeof(check->status), "%s", status);
     return YVEX_OK;
 }
 typedef struct {
@@ -746,6 +666,26 @@ typedef struct {
     yvex_error *err;
 } provider_stream_state;
 
+static const provider_stream_state provider_stream_initial = {
+    .stdout_pipe = {-1, -1},
+    .stderr_pipe = {-1, -1},
+    .stdout_log_fd = -1,
+    .stderr_log_fd = -1,
+    .stdout_open = 1,
+    .stderr_open = 1,
+    .shutdown_deadline = (time_t)-1,
+    .pgid = -1,
+};
+
+static const size_t provider_stream_fd_offsets[] = {
+    offsetof(provider_stream_state, stdout_pipe[0]),
+    offsetof(provider_stream_state, stdout_pipe[1]),
+    offsetof(provider_stream_state, stderr_pipe[0]),
+    offsetof(provider_stream_state, stderr_pipe[1]),
+    offsetof(provider_stream_state, stdout_log_fd),
+    offsetof(provider_stream_state, stderr_log_fd),
+};
+
 /* Close only descriptors owned by this provider stream and restore signal handlers once. */
 /* Purpose: Release or reset owned provider stream close state (`provider_stream_close`).
  * Inputs: Borrowed typed facts.
@@ -756,20 +696,30 @@ static void provider_stream_close(provider_stream_state *state)
 {
     unsigned int i;
 
-    for (i = 0; i < 2u; ++i) {
-        if (state->stdout_pipe[i] >= 0) close(state->stdout_pipe[i]);
-        if (state->stderr_pipe[i] >= 0) close(state->stderr_pipe[i]);
-        state->stdout_pipe[i] = -1;
-        state->stderr_pipe[i] = -1;
+    for (i = 0; i < sizeof(provider_stream_fd_offsets) / sizeof(provider_stream_fd_offsets[0]);
+         ++i) {
+        int *fd = (int *)((unsigned char *)state + provider_stream_fd_offsets[i]);
+        if (*fd >= 0) close(*fd);
+        *fd = -1;
     }
-    if (state->stdout_log_fd >= 0) close(state->stdout_log_fd);
-    if (state->stderr_log_fd >= 0) close(state->stderr_log_fd);
-    state->stdout_log_fd = -1;
-    state->stderr_log_fd = -1;
     if (state->signal_handlers_installed) {
         model_download_restore_provider_signal_handlers(&state->old_int, &state->old_term);
         state->signal_handlers_installed = 0;
     }
+}
+
+/* Purpose: Close one partially prepared provider and preserve its exact typed I/O reason.
+ * Inputs: Owned provider state plus borrowed reason fragments.
+ * Effects: Releases only provider-owned descriptors and records the caller's failure.
+ * Failure: Always returns the provider failure sentinel.
+ * Boundary: Cleanup cannot classify source or artifact capability. */
+static int provider_stream_fail(provider_stream_state *state,
+                                const char *message,
+                                const char *detail)
+{
+    provider_stream_close(state);
+    yvex_error_setf(state->err, YVEX_ERR_IO, "provider_process", "%s: %s", message, detail);
+    return -1;
 }
 
 /* Terminate and reap a provider after poll failure without orphaning its process group. */
@@ -837,35 +787,31 @@ static void provider_stream_drain(provider_stream_state *state,
         int read_fd = stream_kind == 1 ? state->stdout_pipe[0] : state->stderr_pipe[0];
         int log_fd = stream_kind == 1 ? state->stdout_log_fd : state->stderr_log_fd;
         int mirror_fd = stream_kind == 1 ? STDOUT_FILENO : STDERR_FILENO;
+        int *open = stream_kind == 1 ? &state->stdout_open : &state->stderr_open;
+        int *streamed = stream_kind == 1 ? &state->report->stdout_streamed
+                                         : &state->report->stderr_streamed;
+        unsigned long long *bytes = stream_kind == 1 ? &state->report->stdout_bytes
+                                                     : &state->report->stderr_bytes;
         ssize_t got;
 
         if ((fds[i].revents & (POLLIN | POLLHUP | POLLERR)) == 0) continue;
         got = read(read_fd, buf, sizeof(buf));
         if (got > 0) {
             (void)model_download_write_all_fd(log_fd, buf, (size_t)got);
-            if (stream_kind == 1) {
-                state->report->stdout_bytes += (unsigned long long)got;
-                state->report->stdout_streamed = 1;
-            } else {
-                state->report->stderr_bytes += (unsigned long long)got;
-                state->report->stderr_streamed = 1;
-            }
+            *bytes += (unsigned long long)got;
+            *streamed = 1;
             if (state->mirror_provider) {
                 model_download_mirror_provider_bytes(mirror_fd, buf, (size_t)got,
                                                      state->normalize_cr);
-                if (stream_kind == 1) fflush(stdout);
-                else fflush(stderr);
+                fflush(stream_kind == 1 ? stdout : stderr);
             }
         } else if (got == 0 ||
                    (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) {
-            if (stream_kind == 1 && state->stdout_open) {
-                close(state->stdout_pipe[0]);
-                state->stdout_pipe[0] = -1;
-                state->stdout_open = 0;
-            } else if (stream_kind == 2 && state->stderr_open) {
-                close(state->stderr_pipe[0]);
-                state->stderr_pipe[0] = -1;
-                state->stderr_open = 0;
+            if (*open) {
+                close(read_fd);
+                if (stream_kind == 1) state->stdout_pipe[0] = -1;
+                else state->stderr_pipe[0] = -1;
+                *open = 0;
             }
         }
     }
@@ -981,15 +927,7 @@ static int provider_process_run_streaming(const char *const *args,
 {
     provider_stream_state state;
 
-    memset(&state, 0, sizeof(state));
-    state.stdout_pipe[0] = state.stdout_pipe[1] = -1;
-    state.stderr_pipe[0] = state.stderr_pipe[1] = -1;
-    state.stdout_log_fd = -1;
-    state.stderr_log_fd = -1;
-    state.stdout_open = 1;
-    state.stderr_open = 1;
-    state.shutdown_deadline = (time_t)-1;
-    state.pgid = -1;
+    state = provider_stream_initial;
     state.effective_mode = effective_mode;
     state.tick_seconds = tick_seconds;
     state.local_source_dir = local_source_dir;
@@ -1006,32 +944,17 @@ static int provider_process_run_streaming(const char *const *args,
         : (unsigned long long)YVEX_MODEL_DOWNLOAD_INTERRUPT_TIMEOUT_SECONDS;
 
     state.stdout_log_fd = open(stdout_log_path, O_WRONLY | O_CREAT | O_TRUNC, 0664);
-    if (state.stdout_log_fd < 0) {
-        yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
-                        "cannot open stdout log: %s", stdout_log_path);
-        return -1;
-    }
+    if (state.stdout_log_fd < 0)
+        return provider_stream_fail(&state, "cannot open stdout log", stdout_log_path);
     state.stderr_log_fd = open(stderr_log_path, O_WRONLY | O_CREAT | O_TRUNC, 0664);
-    if (state.stderr_log_fd < 0) {
-        provider_stream_close(&state);
-        yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
-                        "cannot open stderr log: %s", stderr_log_path);
-        return -1;
-    }
-    if (pipe(state.stdout_pipe) != 0 || pipe(state.stderr_pipe) != 0) {
-        provider_stream_close(&state);
-        yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
-                        "pipe failed: %s", strerror(errno));
-        return -1;
-    }
+    if (state.stderr_log_fd < 0)
+        return provider_stream_fail(&state, "cannot open stderr log", stderr_log_path);
+    if (pipe(state.stdout_pipe) != 0 || pipe(state.stderr_pipe) != 0)
+        return provider_stream_fail(&state, "pipe failed", strerror(errno));
     if (!model_download_set_nonblocking(state.stdout_pipe[0]) ||
-        !model_download_set_nonblocking(state.stderr_pipe[0])) {
-        provider_stream_close(&state);
-        yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
-                        "cannot make provider pipes nonblocking: %s",
-                        strerror(errno));
-        return -1;
-    }
+        !model_download_set_nonblocking(state.stderr_pipe[0]))
+        return provider_stream_fail(&state, "cannot make provider pipes nonblocking",
+                                    strerror(errno));
 
     state.mirror_provider = effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_OFF &&
                             effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_LOG;
@@ -1048,12 +971,7 @@ static int provider_process_run_streaming(const char *const *args,
     state.signal_handlers_installed = 1;
 
     state.pid = fork();
-    if (state.pid < 0) {
-        provider_stream_close(&state);
-        yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
-                        "fork failed: %s", strerror(errno));
-        return -1;
-    }
+    if (state.pid < 0) return provider_stream_fail(&state, "fork failed", strerror(errno));
     if (state.pid == 0) {
         model_download_reset_child_signal_handlers();
         if (setpgid(0, 0) != 0) _exit(127);
@@ -1093,10 +1011,7 @@ static int provider_process_run_streaming(const char *const *args,
     if (!state.child_exited) {
         while (waitpid(state.pid, &state.child_status, 0) < 0) {
             if (errno == EINTR) continue;
-            provider_stream_close(&state);
-            yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
-                            "waitpid failed: %s", strerror(errno));
-            return -1;
+            return provider_stream_fail(&state, "waitpid failed", strerror(errno));
         }
         model_download_record_child_exit_status(report, state.child_status);
     }
@@ -1351,37 +1266,28 @@ static int model_download_set_nonblocking(int fd)
 static void model_download_record_child_exit_status(yvex_model_download_report *report,
                                                     int child_status)
 {
-    int code;
-    int sig;
+    const char *status = "unknown";
 
     if (!report) return;
     report->child_terminated = 1;
     if (WIFEXITED(child_status)) {
-        code = WEXITSTATUS(child_status);
+        int code = WEXITSTATUS(child_status);
+
         if (report->interrupted &&
             (code == 0 ||
-             (report->interrupt_signal > 0 && code == 128 + report->interrupt_signal))) {
-            snprintf(report->child_exit_status, sizeof(report->child_exit_status),
-                     "interrupted");
-        } else if (code == 0) {
-            snprintf(report->child_exit_status, sizeof(report->child_exit_status),
-                     "exited");
-        } else {
-            snprintf(report->child_exit_status, sizeof(report->child_exit_status),
-                     "terminated");
-        }
-        return;
+             (report->interrupt_signal > 0 && code == 128 + report->interrupt_signal)))
+            status = "interrupted";
+        else
+            status = code == 0 ? "exited" : "terminated";
+    } else if (WIFSIGNALED(child_status)) {
+        int sig = WTERMSIG(child_status);
+
+        status = report->interrupted &&
+                         (sig == report->interrupt_signal || sig == SIGINT || sig == SIGTERM)
+                     ? "interrupted"
+                     : "terminated";
     }
-    if (WIFSIGNALED(child_status)) {
-        sig = WTERMSIG(child_status);
-        snprintf(report->child_exit_status, sizeof(report->child_exit_status), "%s",
-                 report->interrupted &&
-                 (sig == report->interrupt_signal || sig == SIGINT || sig == SIGTERM)
-                 ? "interrupted"
-                 : "terminated");
-        return;
-    }
-    snprintf(report->child_exit_status, sizeof(report->child_exit_status), "unknown");
+    snprintf(report->child_exit_status, sizeof(report->child_exit_status), "%s", status);
 }
 
 /* Purpose: Transfer bounded model download mark provider interrupted data (`model_download_mark_provider_interrupted`).
@@ -1415,23 +1321,17 @@ static void model_download_mark_provider_interrupted(yvex_model_download_report 
  * Boundary: No capability policy. */
 static void model_download_orphan_check(yvex_model_download_report *report)
 {
+    const char *status;
     pid_t pgid;
 
     if (!report) return;
     report->orphan_check_performed = 1;
     pgid = report->provider_process_group;
-    if (pgid <= 0) {
-        snprintf(report->orphan_check_status, sizeof(report->orphan_check_status),
-                 "unknown");
-        return;
-    }
-    if (kill(-pgid, 0) == 0) {
-        snprintf(report->orphan_check_status, sizeof(report->orphan_check_status),
-                 "fail");
-        return;
-    }
-    snprintf(report->orphan_check_status, sizeof(report->orphan_check_status), "%s",
-             errno == ESRCH ? "pass" : "unknown");
+    status = pgid <= 0        ? "unknown"
+             : kill(-pgid, 0) == 0 ? "fail"
+             : errno == ESRCH      ? "pass"
+                                  : "unknown";
+    snprintf(report->orphan_check_status, sizeof(report->orphan_check_status), "%s", status);
 }
 
 /* Purpose: Transfer bounded model download pid alive data (`model_download_pid_alive`).
@@ -1581,17 +1481,23 @@ void model_download_short_file_name(char *out,
  * Effects: Mutates declared CLI state only.
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
-static int model_download_tick_scan_changed(const yvex_model_download_report *report,
-                                            const yvex_model_download_source_scan *scan)
+static int model_download_tick_scan_sync(yvex_model_download_report *report,
+                                         const yvex_model_download_source_scan *scan,
+                                         int store)
 {
-    if (!report || !scan || report->tick_count == 0ull) return 1;
-    return report->tick_last_file_count != scan->file_count ||
-           report->tick_last_safetensors_count != scan->safetensors_count ||
-           report->tick_last_partial_file_count != scan->partial_file_count ||
-           report->tick_last_cache_file_count != scan->cache_file_count ||
-           report->tick_last_total_regular_file_bytes != scan->total_regular_file_bytes ||
-           report->tick_last_largest_file_bytes != scan->largest_file_bytes ||
-           strcmp(report->tick_last_largest_file_name, scan->largest_file_name) != 0;
+    unsigned long long facts[6] = {
+        scan->file_count, scan->safetensors_count, scan->partial_file_count,
+        scan->cache_file_count, scan->total_regular_file_bytes, scan->largest_file_bytes};
+    int changed = report->tick_count == 0ull ||
+                  memcmp(&report->tick_last_file_count, facts, sizeof(facts)) != 0 ||
+                  strcmp(report->tick_last_largest_file_name, scan->largest_file_name) != 0;
+
+    if (store) {
+        memcpy(&report->tick_last_file_count, facts, sizeof(facts));
+        snprintf(report->tick_last_largest_file_name,
+                 sizeof(report->tick_last_largest_file_name), "%s", scan->largest_file_name);
+    }
+    return changed;
 }
 
 /* Purpose: Render model download print tick progress from typed facts (`model_download_print_tick_progress`).
@@ -1626,7 +1532,7 @@ static void model_download_print_tick_progress(const char *source_dir,
     if (now != (time_t)-1 && started_at != (time_t)-1 && now >= started_at) {
         elapsed = (unsigned long long)(now - started_at);
     }
-    if (!model_download_tick_scan_changed(report, &scan) &&
+    if (!model_download_tick_scan_sync(report, &scan, 0) &&
         elapsed < report->tick_last_elapsed_seconds + 60ull) {
         return;
     }
@@ -1657,15 +1563,7 @@ static void model_download_print_tick_progress(const char *source_dir,
            largest_text);
     fflush(stdout);
     report->tick_last_elapsed_seconds = elapsed;
-    report->tick_last_file_count = scan.file_count;
-    report->tick_last_safetensors_count = scan.safetensors_count;
-    report->tick_last_partial_file_count = scan.partial_file_count;
-    report->tick_last_cache_file_count = scan.cache_file_count;
-    report->tick_last_total_regular_file_bytes = scan.total_regular_file_bytes;
-    report->tick_last_largest_file_bytes = scan.largest_file_bytes;
-    snprintf(report->tick_last_largest_file_name,
-             sizeof(report->tick_last_largest_file_name),
-             "%s", scan.largest_file_name);
+    (void)model_download_tick_scan_sync(report, &scan, 1);
     report->tick_count++;
 }
 

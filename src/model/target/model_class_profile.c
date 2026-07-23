@@ -180,7 +180,7 @@ static void class_profile_deepseek_ir_refusal(
  * Failure: preserves typed refusal and cleanup.
  * Boundary: never promotes payload or runtime execution. */
 
-int yvex_model_class_profile_deepseek_from_verification(
+static int class_profile_deepseek_from_verification(
     const yvex_model_target_request *request,
     const struct yvex_source_verification *verification,
     yvex_model_target_report *report,
@@ -255,7 +255,6 @@ static int class_profile_deepseek_report_build(
     options.identity = yvex_source_release_identity();
     options.source_path = source_path;
     options.models_root = models_root;
-    options.promote_manifest = 0;
     rc = yvex_source_verify(&options, &verification, err);
     if (rc != YVEX_OK) return rc;
     if (!verification.verified) {
@@ -305,7 +304,7 @@ static int class_profile_deepseek_report_build(
         }
         return YVEX_OK;
     }
-    return yvex_model_class_profile_deepseek_from_verification(
+    return class_profile_deepseek_from_verification(
         request, &verification, report, err);
 }
 

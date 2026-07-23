@@ -126,15 +126,6 @@ void yvex_cli_json_field_bool(FILE *fp, const char *key, int value, int comma) {
     (void)json_field(fp, key, YVEX_CLI_FIELD_BOOL, &value, comma);
 }
 
-/* Purpose: Emit a JSON number.
- * Inputs: stream, key, value.
- * Effects: writes a member.
- * Failure: stream state.
- * Boundary: CLI I/O. */
-void yvex_cli_json_field_double(FILE *fp, const char *key, double value, int comma) {
-    (void)json_field(fp, key, YVEX_CLI_FIELD_DOUBLE, &value, comma);
-}
-
 /* Purpose: Project JSON fields.
  * Inputs: stream, object, and schema.
  * Effects: writes ordered members.

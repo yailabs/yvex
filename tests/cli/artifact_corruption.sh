@@ -91,7 +91,7 @@ exercise_structural_case() {
     path=$2
     codes=$3
 
-    printf '%s|fail|fail|fail|fail|fail\n' "$name" >>"$OUT_DIR/refusal-matrix.txt"
+    printf '%s|fail|fail|fail|fail\n' "$name" >>"$OUT_DIR/refusal-matrix.txt"
     expect_integrity_failure "$name" "$path" "$codes"
     run_reject "$name" inspect "status: descriptor-only" \
         "$YVEX_BIN" inspect "$path"
@@ -99,8 +99,6 @@ exercise_structural_case() {
         "$YVEX_BIN" tensors "$path"
     run_reject "$name" materialize "status: weights-materialized" \
         "$YVEX_BIN" materialize --model "$path" --backend cpu
-    run_reject "$name" graph-partial "status: real-partial-graph-executed" \
-        "$YVEX_BIN" graph --model "$path" --backend cpu --execute-partial --partial-token 0
 }
 
 yvex_test_cleanup "$OUT_DIR"
@@ -225,7 +223,7 @@ write(
 )
 PY
 
-printf 'case|integrity|inspect|tensors|materialize|graph_partial\n' >"$OUT_DIR/refusal-matrix.txt"
+printf 'case|integrity|inspect|tensors|materialize\n' >"$OUT_DIR/refusal-matrix.txt"
 
 exercise_structural_case bad-magic \
     tests/fixtures/gguf/bad-magic.gguf bad-magic
@@ -268,7 +266,7 @@ exercise_structural_case tensor-absolute-offset-overflow \
 exercise_structural_case misaligned-tensor-offset \
     tests/fixtures/gguf/tensor-offset-misaligned.gguf tensor-alignment-invalid
 
-printf 'missing-token-embd-weight|fail-when-required|pass|pass|pass|fail\n' >>"$OUT_DIR/refusal-matrix.txt"
+printf 'missing-token-embd-weight|fail-when-required|pass|pass|pass\n' >>"$OUT_DIR/refusal-matrix.txt"
 expect_integrity_failure missing-token-embd-weight \
     tests/fixtures/gguf/valid-minimal.gguf required-tensor-missing --require-token-embedding --partial-token 0
 run_accept missing-token-embd-weight inspect "status: descriptor-only" \
@@ -277,7 +275,4 @@ run_accept missing-token-embd-weight tensors "tensor_count: 0" \
     "$YVEX_BIN" tensors tests/fixtures/gguf/valid-minimal.gguf
 run_accept missing-token-embd-weight materialize "status: weights-partial" \
     "$YVEX_BIN" materialize --model tests/fixtures/gguf/valid-minimal.gguf --backend cpu
-run_reject missing-token-embd-weight graph-partial "status: real-partial-graph-executed" \
-    "$YVEX_BIN" graph --model tests/fixtures/gguf/valid-minimal.gguf --backend cpu --execute-partial --partial-token 0
-
 echo "cli artifact corruption: ok"

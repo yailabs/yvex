@@ -399,7 +399,6 @@ int yvex_transform_shape_element_count(
     yvex_transform_failure *failure,
     yvex_error *err);
 const char *yvex_transform_failure_name(yvex_transform_failure_code code);
-const char *yvex_transform_operation_name(yvex_transform_operation_kind kind);
 
 /* Binding contract. */
 typedef struct yvex_transform_binding yvex_transform_binding;
@@ -458,6 +457,23 @@ int yvex_transform_binding_readable_validate(
     const yvex_transform_binding *binding,
     yvex_transform_failure *failure,
     yvex_error *err);
+
+/* Runtime-binding publication is a preparation-plane operation.  The CLI
+ * supplies resolved paths and adapter identity, then receives only the
+ * content-addressed path; runtime admission independently reopens the file. */
+typedef struct yvex_compilation_runtime_binding_request {
+    const char *source_path;
+    const char *models_root;
+    const char *source_manifest_path;
+    const char *artifact_path;
+    const char *directory;
+    unsigned long long family_adapter_id;
+    unsigned long long family_adapter_version;
+} yvex_compilation_runtime_binding_request;
+typedef struct yvex_compilation_runtime_binding_result {
+    char path[YVEX_PATH_CAP];
+    int published;
+} yvex_compilation_runtime_binding_result;
 
 /* Private contract. */
 typedef struct {

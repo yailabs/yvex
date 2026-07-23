@@ -85,6 +85,92 @@ char *yvex_read_bounded_file(const char *path,
     return data;
 }
 
+/* Purpose: locate the first value assigned to one exact quoted JSON key.
+ * Inputs: immutable text and key.
+ * Effects: none; the result aliases the input text after leading whitespace.
+ * Failure: absent key or colon returns null.
+ * Boundary: this sidecar probe does not establish structural JSON validity. */
+const char *yvex_json_probe_field_value(const char *text, const char *key)
+{
+    char needle[96];
+    const char *cursor;
+
+    if (!text || !key)
+        return NULL;
+    snprintf(needle, sizeof(needle), "\"%s\"", key);
+    cursor = strstr(text, needle);
+    if (!cursor)
+        return NULL;
+    cursor = strchr(cursor, ':');
+    if (!cursor)
+        return NULL;
+    cursor++;
+    while (*cursor && isspace((unsigned char)*cursor))
+        cursor++;
+    return cursor;
+}
+
+/* Purpose: project the first quoted string assigned to one exact JSON key.
+ * Inputs: immutable text and key plus a caller-owned non-empty output buffer.
+ * Effects: copies a bounded prefix of the matched string and terminates it.
+ * Failure: absent or malformed probe syntax clears output and returns false.
+ * Boundary: this bounded sidecar probe is not a structural JSON document parser. */
+int yvex_json_probe_string_field(const char *text,
+                                 const char *key,
+                                 char *out,
+                                 size_t capacity)
+{
+    const char *cursor;
+    const char *end;
+    size_t length;
+
+    if (out && capacity > 0u)
+        out[0] = '\0';
+    if (!text || !key || !out || capacity == 0u)
+        return 0;
+    cursor = yvex_json_probe_field_value(text, key);
+    if (!cursor)
+        return 0;
+    if (*cursor != '"')
+        return 0;
+    cursor++;
+    end = strchr(cursor, '"');
+    if (!end)
+        return 0;
+    length = (size_t)(end - cursor);
+    if (length >= capacity)
+        length = capacity - 1u;
+    memcpy(out, cursor, length);
+    out[length] = '\0';
+    return 1;
+}
+
+/* Purpose: locate one exact-key row in a fixed-stride immutable schema table.
+ * Inputs: row bytes, row geometry, key-member offset, and exact key text.
+ * Effects: none.
+ * Failure: invalid geometry or an absent key returns null.
+ * Boundary: lookup does not interpret any field beyond the key pointer. */
+const void *yvex_core_keyed_row_find(const void *rows,
+                                     size_t count,
+                                     size_t stride,
+                                     size_t key_offset,
+                                     const char *key)
+{
+    const unsigned char *row = (const unsigned char *)rows;
+    size_t index;
+
+    if (!row || !key || stride < key_offset || stride - key_offset < sizeof(key))
+        return NULL;
+    for (index = 0u; index < count; ++index, row += stride) {
+        const char *row_key;
+
+        memcpy(&row_key, row + key_offset, sizeof(row_key));
+        if (row_key && strcmp(row_key, key) == 0)
+            return row;
+    }
+    return NULL;
+}
+
 /* Purpose: Compute json space for its core invariant (`yvex_json_space`).
  * Inputs: Borrowed typed facts.
  * Effects: Mutates declared CLI state only.
@@ -96,6 +182,108 @@ void yvex_json_space(yvex_json *json)
            isspace((unsigned char)*json->cursor)) {
         json->cursor++;
     }
+}
+
+/* Purpose: initialize one typed structural collection iterator.
+ * Inputs: mutable JSON cursor, writable iterator, and admitted collection kind.
+ * Effects: consumes whitespace and the opening delimiter, then initializes iteration state.
+ * Failure: invalid collection kind or malformed input returns false without publication.
+ * Boundary: the iterator owns separators only; consumers retain value and schema semantics. */
+int yvex_json_iter_begin(yvex_json *json,
+                         yvex_json_iter *iter,
+                         yvex_json_collection collection)
+{
+    char opening;
+    char closing;
+
+    if (collection == YVEX_JSON_COLLECTION_OBJECT) {
+        opening = '{';
+        closing = '}';
+    } else if (collection == YVEX_JSON_COLLECTION_ARRAY) {
+        opening = '[';
+        closing = ']';
+    } else {
+        return 0;
+    }
+    yvex_json_space(json);
+    if (!json || !iter || json->cursor >= json->end || *json->cursor++ != opening)
+        return 0;
+    iter->json = json;
+    iter->count = 0u;
+    iter->closing = closing;
+    iter->complete = 0;
+    iter->trailing_separator = 0;
+    return 1;
+}
+
+/* Purpose: advance one collection across its separator or closing delimiter.
+ * Inputs: initialized iterator whose preceding value, when any, is fully consumed.
+ * Effects: consumes one comma or closing delimiter and increments ready-value count.
+ * Failure: malformed separators or truncated input return a typed error item.
+ * Boundary: trailing commas retain the bounded parser's existing acceptance semantics. */
+static yvex_json_item json_iter_advance(yvex_json_iter *iter)
+{
+    yvex_json *json;
+
+    if (!iter || !iter->json || iter->complete)
+        return YVEX_JSON_ITEM_ERROR;
+    json = iter->json;
+    yvex_json_space(json);
+    if (json->cursor >= json->end)
+        return YVEX_JSON_ITEM_ERROR;
+    if (*json->cursor == iter->closing) {
+        json->cursor++;
+        iter->complete = 1;
+        return YVEX_JSON_ITEM_END;
+    }
+    if (iter->count != 0u) {
+        if (*json->cursor++ != ',')
+            return YVEX_JSON_ITEM_ERROR;
+        yvex_json_space(json);
+        if (json->cursor >= json->end)
+            return YVEX_JSON_ITEM_ERROR;
+        if (*json->cursor == iter->closing) {
+            json->cursor++;
+            iter->complete = 1;
+            iter->trailing_separator = 1;
+            return YVEX_JSON_ITEM_END;
+        }
+    }
+    iter->count++;
+    return YVEX_JSON_ITEM_READY;
+}
+
+/* Purpose: advance to and decode the next bounded JSON object key.
+ * Inputs: active object iterator and caller-owned key buffer.
+ * Effects: consumes separators, key syntax, and the required colon.
+ * Failure: malformed syntax or an undersized key buffer returns a typed error item.
+ * Boundary: the returned ready item leaves its associated value unconsumed. */
+yvex_json_item yvex_json_object_member(yvex_json_iter *iter,
+                                       char *key,
+                                       size_t capacity)
+{
+    yvex_json_item item = json_iter_advance(iter);
+    yvex_json *json;
+
+    if (item != YVEX_JSON_ITEM_READY)
+        return item;
+    json = iter->json;
+    if (!yvex_json_string(json, key, capacity))
+        return YVEX_JSON_ITEM_ERROR;
+    yvex_json_space(json);
+    if (json->cursor >= json->end || *json->cursor++ != ':')
+        return YVEX_JSON_ITEM_ERROR;
+    return YVEX_JSON_ITEM_READY;
+}
+
+/* Purpose: advance to the next bounded JSON array value.
+ * Inputs: active array iterator whose preceding value, when any, is consumed.
+ * Effects: consumes only array separators and leaves a ready value unconsumed.
+ * Failure: malformed separators or truncated input return a typed error item.
+ * Boundary: consumers remain responsible for the value grammar and schema. */
+yvex_json_item yvex_json_array_value(yvex_json_iter *iter)
+{
+    return json_iter_advance(iter);
 }
 
 /* Purpose: Compute source json hex for its core invariant (`source_json_hex`). */
@@ -195,27 +383,18 @@ char *yvex_json_string_dup(yvex_json *json, size_t cap)
  * Boundary: Core mechanism only. */
 static int json_skip_array(yvex_json *json)
 {
-    yvex_json_space(json);
-    if (!json || json->cursor >= json->end || *json->cursor++ != '[' ||
-        json->depth >= YVEX_JSON_DEPTH_CAP) return 0;
+    yvex_json_iter iter;
+    yvex_json_item item;
+
+    if (!json || json->depth >= YVEX_JSON_DEPTH_CAP ||
+        !yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_ARRAY)) return 0;
     json->depth++;
-    yvex_json_space(json);
-    if (json->cursor < json->end && *json->cursor == ']') {
-        json->cursor++;
-        json->depth--;
-        return 1;
-    }
-    for (;;) {
+    while ((item = yvex_json_array_value(&iter)) == YVEX_JSON_ITEM_READY) {
         if (!yvex_json_skip_value(json)) return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end) return 0;
-        if (*json->cursor == ']') {
-            json->cursor++;
-            json->depth--;
-            return 1;
-        }
-        if (*json->cursor++ != ',') return 0;
     }
+    if (item != YVEX_JSON_ITEM_END || iter.trailing_separator) return 0;
+    json->depth--;
+    return 1;
 }
 
 /* Skips one recursively bounded object and rejects malformed member syntax. */
@@ -227,31 +406,19 @@ static int json_skip_array(yvex_json *json)
 static int json_skip_object(yvex_json *json)
 {
     char key[YVEX_JSON_KEY_CAP];
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    yvex_json_space(json);
-    if (!json || json->cursor >= json->end || *json->cursor++ != '{' ||
-        json->depth >= YVEX_JSON_DEPTH_CAP) return 0;
+    if (!json || json->depth >= YVEX_JSON_DEPTH_CAP ||
+        !yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_OBJECT)) return 0;
     json->depth++;
-    yvex_json_space(json);
-    if (json->cursor < json->end && *json->cursor == '}') {
-        json->cursor++;
-        json->depth--;
-        return 1;
-    }
-    for (;;) {
-        if (!yvex_json_string(json, key, sizeof(key))) return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end || *json->cursor++ != ':') return 0;
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
         if (!yvex_json_skip_value(json)) return 0;
-        yvex_json_space(json);
-        if (json->cursor >= json->end) return 0;
-        if (*json->cursor == '}') {
-            json->cursor++;
-            json->depth--;
-            return 1;
-        }
-        if (*json->cursor++ != ',') return 0;
     }
+    if (item != YVEX_JSON_ITEM_END || iter.trailing_separator) return 0;
+    json->depth--;
+    return 1;
 }
 
 /* Consumes one JSON number grammar without converting its value. */
@@ -415,23 +582,17 @@ int yvex_json_u64_array(yvex_json *json,
                                unsigned long long *count)
 {
     unsigned long long used = 0u;
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    if (!json || !values || !count || cap == 0u) return 0;
-    yvex_json_space(json);
-    if (json->cursor >= json->end || *json->cursor++ != '[') return 0;
-    yvex_json_space(json);
-    if (json->cursor < json->end && *json->cursor == ']') return 0;
-    for (;;) {
+    if (!json || !values || !count || cap == 0u ||
+        !yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_ARRAY)) return 0;
+    while ((item = yvex_json_array_value(&iter)) == YVEX_JSON_ITEM_READY) {
         if (used >= (unsigned long long)cap ||
             !yvex_json_u64(json, &values[used])) return 0;
         used++;
-        yvex_json_space(json);
-        if (json->cursor >= json->end) return 0;
-        if (*json->cursor == ']') {
-            json->cursor++;
-            *count = used;
-            return 1;
-        }
-        if (*json->cursor++ != ',') return 0;
     }
+    if (item != YVEX_JSON_ITEM_END || iter.trailing_separator || used == 0u) return 0;
+    *count = used;
+    return 1;
 }

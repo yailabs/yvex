@@ -174,13 +174,6 @@ static int deepseek_v4_parse_double(const char *text, double *out)
     return 1;
 }
 
-/* Purpose: copy one nullable family label into fixed terminated storage. */
-static void deepseek_v4_copy(char *out, size_t cap, const char *value)
-{
-    if (!out || cap == 0u) return;
-    (void)snprintf(out, cap, "%s", value ? value : "");
-}
-
 /* Purpose: require complete strict-source admission without reopening source owners.
  * Inputs: immutable verification, optional family failure, and generic error output.
  * Effects: reads retained facts only and publishes no state.
@@ -954,26 +947,26 @@ static void deepseek_v4_fill_model(
         yvex_source_release_identity();
     yvex_deepseek_v4_model_spec *model = &ir->model;
 
-    deepseek_v4_copy(model->target_id, sizeof(model->target_id),
+    yvex_core_text_copy(model->target_id, sizeof(model->target_id),
                      identity->target_id);
-    deepseek_v4_copy(model->family, sizeof(model->family),
+    yvex_core_text_copy(model->family, sizeof(model->family),
                      identity->family_key);
-    deepseek_v4_copy(model->architecture, sizeof(model->architecture),
+    yvex_core_text_copy(model->architecture, sizeof(model->architecture),
                      source->architecture);
-    deepseek_v4_copy(model->repository, sizeof(model->repository),
+    yvex_core_text_copy(model->repository, sizeof(model->repository),
                      source->repository_id);
-    deepseek_v4_copy(model->revision, sizeof(model->revision),
+    yvex_core_text_copy(model->revision, sizeof(model->revision),
                      source->revision);
-    deepseek_v4_copy(model->verification_stage,
+    yvex_core_text_copy(model->verification_stage,
                      sizeof(model->verification_stage),
                      source->verification_stage);
-    deepseek_v4_copy(model->paper_revision, sizeof(model->paper_revision),
+    yvex_core_text_copy(model->paper_revision, sizeof(model->paper_revision),
                      deepseek_v4_paper_revision);
-    deepseek_v4_copy(model->sglang_revision, sizeof(model->sglang_revision),
+    yvex_core_text_copy(model->sglang_revision, sizeof(model->sglang_revision),
                      deepseek_v4_sglang_revision);
-    deepseek_v4_copy(model->vllm_revision, sizeof(model->vllm_revision),
+    yvex_core_text_copy(model->vllm_revision, sizeof(model->vllm_revision),
                      deepseek_v4_vllm_revision);
-    deepseek_v4_copy(model->hadamard_revision,
+    yvex_core_text_copy(model->hadamard_revision,
                      sizeof(model->hadamard_revision),
                      deepseek_v4_hadamard_revision);
     model->runtime_numeric_schema_version =
@@ -996,10 +989,10 @@ static void deepseek_v4_fill_model(
     model->output.tied_to_embedding = source->tie_word_embeddings;
     model->output.input_width = source->hidden_size;
     model->output.vocabulary_size = source->vocab_size;
-    deepseek_v4_copy(model->tokenizer.tokenizer_class,
+    yvex_core_text_copy(model->tokenizer.tokenizer_class,
                      sizeof(model->tokenizer.tokenizer_class),
                      source->tokenizer_class);
-    deepseek_v4_copy(model->tokenizer.model_type,
+    yvex_core_text_copy(model->tokenizer.model_type,
                      sizeof(model->tokenizer.model_type),
                      source->tokenizer_model_type);
     model->tokenizer.vocabulary_size = source->tokenizer_effective_vocab_size;

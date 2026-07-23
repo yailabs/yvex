@@ -1,0 +1,225 @@
+/* Owner: graph attention state.
+ * Owns: family-projected capacity recipes and transactional attention-local state.
+ * Does not own: persistent KV, family geometry policy, graph equations, runtime sessions, or backends.
+ * Invariants: state storage is derived only from sealed component recipes; commits are all-or-none.
+ * Boundary: runtime retains an opaque handle while graph owns layout, mutation, identity, and cleanup.
+ * Purpose: expose one bounded family-neutral state lifecycle to runtime and graph execution owners.
+ * Inputs: sealed attention plans, family recipes, immutable history, and production publications.
+ * Effects: allocates reusable component banks and publishes candidate deltas transactionally.
+ * Failure: malformed recipes, bounds, cancellation, or cleanup preserve committed state exactly. */
+#ifndef INCLUDE_YVEX_INTERNAL_GRAPH_STATE_H_INCLUDED
+#define INCLUDE_YVEX_INTERNAL_GRAPH_STATE_H_INCLUDED
+
+#include <yvex/internal/graph.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define YVEX_GRAPH_ATTENTION_CAPACITY_SCHEMA_V1 1u
+#define YVEX_GRAPH_ATTENTION_STATE_SCHEMA_V1 1u
+#define YVEX_ATTENTION_STATE_RECIPE_SCHEMA_V1 1u
+#define YVEX_ATTENTION_STATE_COMPONENT_CAP 8u
+#define YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1 1u
+#define YVEX_ATTENTION_WORKSPACE_COMPONENT_CAP 33u
+
+typedef enum {
+    YVEX_ATTENTION_STATE_COMPONENT_HISTORY = 0,
+    YVEX_ATTENTION_STATE_COMPONENT_ROLLING
+} yvex_attention_state_component_kind;
+typedef enum {
+    YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY = 0,
+    YVEX_ATTENTION_STATE_BINDING_COMPRESSED_HISTORY,
+    YVEX_ATTENTION_STATE_BINDING_INDEXER_HISTORY,
+    YVEX_ATTENTION_STATE_BINDING_MAIN_ROLLING,
+    YVEX_ATTENTION_STATE_BINDING_INDEXER_ROLLING,
+    YVEX_ATTENTION_STATE_BINDING_COUNT
+} yvex_attention_state_binding;
+typedef struct {
+    unsigned int schema_version, ordinal;
+    yvex_attention_state_component_kind kind;
+    yvex_attention_state_binding binding;
+    unsigned long long capacity, value_width;
+    yvex_attention_rolling_state_view rolling;
+} yvex_attention_state_component_recipe;
+struct yvex_attention_state_recipe {
+    unsigned int schema_version;
+    unsigned long long layer_index, selection_key, initial_position, final_position;
+    unsigned int component_count;
+    yvex_attention_state_component_recipe components[YVEX_ATTENTION_STATE_COMPONENT_CAP];
+    char attention_plan_identity[YVEX_ATTENTION_IDENTITY_CAP];
+    char identity[YVEX_ATTENTION_IDENTITY_CAP];
+};
+struct yvex_attention_state_recipe_request {
+    unsigned long long layer_ordinal, initial_position, final_position;
+    const char *attention_plan_identity;
+};
+
+typedef enum {
+    YVEX_ATTENTION_WORKSPACE_INGRESS = 0,
+    YVEX_ATTENTION_WORKSPACE_LOCAL_VALUES,
+    YVEX_ATTENTION_WORKSPACE_LOCAL_POSITIONS,
+    YVEX_ATTENTION_WORKSPACE_COMPRESSED_VALUES,
+    YVEX_ATTENTION_WORKSPACE_COMPRESSED_POSITIONS,
+    YVEX_ATTENTION_WORKSPACE_INDEXER_VALUES,
+    YVEX_ATTENTION_WORKSPACE_INDEXER_POSITIONS,
+    YVEX_ATTENTION_WORKSPACE_MAIN_ROLLING_VALUES,
+    YVEX_ATTENTION_WORKSPACE_MAIN_ROLLING_SCORES,
+    YVEX_ATTENTION_WORKSPACE_INDEXER_ROLLING_VALUES,
+    YVEX_ATTENTION_WORKSPACE_INDEXER_ROLLING_SCORES,
+    YVEX_ATTENTION_WORKSPACE_STATE_COUNTER,
+    YVEX_ATTENTION_WORKSPACE_STATUS,
+    YVEX_ATTENTION_WORKSPACE_SELECTION_COUNTER,
+    YVEX_ATTENTION_WORKSPACE_ENVELOPE_OUTPUT,
+    YVEX_ATTENTION_WORKSPACE_Q_LOW,
+    YVEX_ATTENTION_WORKSPACE_QUERY,
+    YVEX_ATTENTION_WORKSPACE_RAW_KV,
+    YVEX_ATTENTION_WORKSPACE_ATTENTION_VALUES,
+    YVEX_ATTENTION_WORKSPACE_OUTPUT,
+    YVEX_ATTENTION_WORKSPACE_ENVELOPE_STAGING,
+    YVEX_ATTENTION_WORKSPACE_COMPRESSED_EMISSION,
+    YVEX_ATTENTION_WORKSPACE_COMPRESSED_EMISSION_POSITION,
+    YVEX_ATTENTION_WORKSPACE_INDEXER_EMISSION,
+    YVEX_ATTENTION_WORKSPACE_INDEXER_EMISSION_POSITION,
+    YVEX_ATTENTION_WORKSPACE_INDEX_QUERY,
+    YVEX_ATTENTION_WORKSPACE_INDEX_WEIGHTS,
+    YVEX_ATTENTION_WORKSPACE_TOPK_INDICES,
+    YVEX_ATTENTION_WORKSPACE_MAIN_ROLLING_CANDIDATE_VALUES,
+    YVEX_ATTENTION_WORKSPACE_MAIN_ROLLING_CANDIDATE_SCORES,
+    YVEX_ATTENTION_WORKSPACE_INDEXER_ROLLING_CANDIDATE_VALUES,
+    YVEX_ATTENTION_WORKSPACE_INDEXER_ROLLING_CANDIDATE_SCORES,
+    YVEX_ATTENTION_WORKSPACE_CORE_INPUT_EVIDENCE
+} yvex_attention_workspace_component_kind;
+typedef enum {
+    YVEX_ATTENTION_WORKSPACE_EXECUTION = 0,
+    YVEX_ATTENTION_WORKSPACE_STATE_DELTA,
+    YVEX_ATTENTION_WORKSPACE_GRAPH_STABLE
+} yvex_attention_workspace_lifetime;
+typedef struct {
+    unsigned int schema_version, ordinal;
+    yvex_attention_workspace_component_kind kind;
+    yvex_attention_workspace_lifetime lifetime;
+    unsigned long long element_count, element_width, alignment;
+    int scales_with_tokens;
+} yvex_attention_workspace_component;
+struct yvex_attention_workspace_recipe {
+    unsigned int schema_version;
+    unsigned long long layer_index, token_capacity;
+    yvex_attention_execution_mode mode;
+    yvex_attention_operation_scope scope;
+    yvex_attention_evidence_level evidence_level;
+    unsigned int component_count;
+    yvex_attention_workspace_component components[YVEX_ATTENTION_WORKSPACE_COMPONENT_CAP];
+    char state_recipe_identity[YVEX_ATTENTION_IDENTITY_CAP];
+    char identity[YVEX_ATTENTION_IDENTITY_CAP];
+};
+int yvex_attention_workspace_recipe_seal(yvex_attention_workspace_recipe *recipe,
+                                         yvex_error *err);
+
+typedef struct {
+    yvex_attention_probe_scope scope;
+    unsigned long long history_tokens, start_position, token_count, execution_count;
+    unsigned long long layer_start, selection_key;
+    int select_layer, select_selection_key;
+} yvex_graph_attention_capacity_request;
+
+typedef struct {
+    unsigned long long capacity, maximum_capacity;
+    unsigned long long value_extent, maximum_value_extent;
+} yvex_graph_attention_component_capacity;
+
+typedef struct {
+    unsigned int schema_version;
+    unsigned long long layer_count, selected_layer_count, selected_binding_count, first_layer;
+    unsigned long long maximum_token_count, maximum_compression_ratio;
+    unsigned long long maximum_topk_capacity;
+    yvex_graph_attention_component_capacity components[YVEX_ATTENTION_STATE_BINDING_COUNT];
+    char attention_plan_identity[YVEX_SHA256_HEX_CAP], identity[YVEX_SHA256_HEX_CAP];
+} yvex_graph_attention_capacity_summary;
+
+typedef struct {
+    unsigned long long layer_ordinal;
+    int selected;
+    yvex_attention_state_recipe recipe;
+} yvex_graph_attention_capacity_layer;
+
+typedef struct yvex_graph_attention_capacity_plan yvex_graph_attention_capacity_plan;
+int yvex_graph_attention_capacity_plan_build(
+    yvex_graph_attention_capacity_plan **out, const yvex_graph_family_api *family,
+    const yvex_attention_plan *attention,
+    const yvex_graph_attention_capacity_request *request, yvex_error *err);
+const yvex_graph_attention_capacity_summary *yvex_graph_attention_capacity_plan_summary(
+    const yvex_graph_attention_capacity_plan *plan);
+const yvex_graph_attention_capacity_layer *yvex_graph_attention_capacity_plan_layer(
+    const yvex_graph_attention_capacity_plan *plan, unsigned long long layer_ordinal);
+void yvex_graph_attention_capacity_plan_close(yvex_graph_attention_capacity_plan **plan);
+
+typedef struct {
+    unsigned long long entry_count, capacity, maximum_capacity;
+} yvex_graph_attention_state_component_summary;
+typedef struct {
+    unsigned int schema_version;
+    int sealed, cancelled, invalidated, transaction_active, candidate_active, abort_required;
+    unsigned long long layer_count, prepared_layer_count, staged_layer_count, allocated_bytes;
+    unsigned long long commit_count, abort_count, cancellation_count, reset_count, generation;
+    yvex_graph_attention_state_component_summary components[YVEX_ATTENTION_STATE_BINDING_COUNT];
+    char state_layout_identity[YVEX_SHA256_HEX_CAP];
+} yvex_graph_attention_state_summary;
+typedef enum {
+    YVEX_ATTENTION_STATE_VIEW_COMMITTED = 0,
+    YVEX_ATTENTION_STATE_VIEW_CANDIDATE
+} yvex_attention_state_view_kind;
+
+#define YVEX_ATTENTION_STATE_PROVIDER_SCHEMA_V1 1u
+typedef struct yvex_attention_state_provider {
+    unsigned int schema_version;
+    void *context;
+    int (*prepare)(void *context, unsigned long long layer_index,
+                   const yvex_attention_state_recipe *recipe,
+                   const yvex_attention_history_view *initial_history,
+                   yvex_attention_failure *failure, yvex_error *err);
+    int (*summary)(void *context, yvex_graph_attention_state_summary *out,
+                   yvex_error *err);
+    const yvex_attention_history_view *(*view)(
+        void *context, unsigned long long layer_index,
+        yvex_attention_state_view_kind kind);
+    int (*identity)(void *context, unsigned long long layer_index,
+                    char output[YVEX_SHA256_HEX_CAP], yvex_error *err);
+    int (*begin)(void *context, unsigned long long layer_ordinal,
+                 const yvex_attention_layer_plan *layer,
+                 const yvex_attention_history_view *initial_history,
+                 unsigned long long token_position, unsigned long long token_count,
+                 const yvex_attention_cancellation *cancellation,
+                 const yvex_attention_history_view **history,
+                 yvex_attention_failure *failure, yvex_error *err);
+    int (*stage)(void *context, const yvex_attention_publication *publication,
+                 const yvex_attention_cancellation *cancellation,
+                 char state_delta_identity[YVEX_SHA256_HEX_CAP],
+                 yvex_attention_failure *failure, yvex_error *err);
+    int (*commit)(void *context, yvex_attention_failure *failure, yvex_error *err);
+    int (*abort)(void *context, yvex_attention_failure *failure, yvex_error *err);
+    int (*reset)(void *context, yvex_attention_failure *failure, yvex_error *err);
+    int (*invalidate)(void *context, yvex_error *err);
+    int (*release)(void **context, yvex_error *err);
+} yvex_attention_state_provider;
+typedef struct {
+    void *context;
+    int (*open)(void *context, const yvex_graph_family_api *family,
+                const yvex_attention_plan *plan, unsigned long long maximum_host_bytes,
+                yvex_attention_state_provider *out,
+                yvex_attention_failure *failure, yvex_error *err);
+    /* Owns every candidate returned by a failed or malformed open. On success it
+     * must clear candidate->context; on failure it must preserve ownership for retry. */
+    int (*discard)(void *context, yvex_attention_state_provider *candidate,
+                   yvex_error *err);
+} yvex_attention_state_provider_factory;
+
+int yvex_attention_state_provider_open_ephemeral(
+    const yvex_graph_family_api *family, const yvex_attention_plan *plan,
+    unsigned long long maximum_host_bytes, yvex_attention_state_provider *out,
+    yvex_attention_failure *failure, yvex_error *err);
+
+#ifdef __cplusplus
+}
+#endif
+#endif

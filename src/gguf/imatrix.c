@@ -13,6 +13,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <yvex/internal/core.h>
+#include <yvex/internal/gguf.h>
 #include <yvex/internal/io.h>
 #include <yvex/quant.h>
 
@@ -462,97 +463,29 @@ static void manifest_refresh_summary(const yvex_imatrix_manifest *manifest,
     }
 }
 
-typedef struct {
-    yvex_json cursor;
-    const char *path;
-    const char *context;
-    yvex_error *err;
-} imatrix_json;
-
-/* Purpose: advance one document cursor past insignificant JSON whitespace. */
-static void imatrix_json_space(imatrix_json *json) {
-    yvex_json_space(&json->cursor);
-}
-
-/* Purpose: report one document-specific JSON refusal without publishing state. */
-static int imatrix_json_fail(imatrix_json *json, const char *message) {
-    yvex_error_setf(json->err, YVEX_ERR_FORMAT, json->context, "%s in %s", message, json->path);
-    return YVEX_ERR_FORMAT;
-}
-
-/* Purpose: consume whitespace followed by one required structural byte. */
-static int imatrix_json_expect(imatrix_json *json, char expected) {
-    yvex_json_space(&json->cursor);
-    if (json->cursor.cursor >= json->cursor.end || *json->cursor.cursor != expected) {
-        return imatrix_json_fail(json, "unexpected JSON token");
-    }
-    json->cursor.cursor++;
-    return YVEX_OK;
-}
-
-/* Purpose: allocate one bounded decoded string from the shared JSON cursor. */
-static char *imatrix_json_string(imatrix_json *json) {
-    char *value = yvex_json_string_dup(&json->cursor, 16u * 1024u * 1024u);
-
-    if (!value) {
-        imatrix_json_fail(json, "expected bounded JSON string");
-    }
-    return value;
-}
-
-/* Purpose: skip one complete value using the shared bounded JSON grammar. */
-static int imatrix_json_skip(imatrix_json *json) {
-    return yvex_json_skip_value(&json->cursor) ? YVEX_OK
-                                               : imatrix_json_fail(json, "malformed JSON value");
-}
-
-/* Purpose: read one regular JSON document below the canonical metadata cap.
- * Inputs: path, output buffer and length slots, diagnostic context, and error sink.
- * Effects: allocates one bounded file buffer owned by the caller.
- * Failure: typed I/O or size refusal leaves the output null.
- * Boundary: this helper reads document metadata, never model payload. */
-static int imatrix_json_read(const char *path, char **out, size_t *length, const char *context,
-                             yvex_error *err) {
-    *out = yvex_read_bounded_file(path, 16u * 1024u * 1024u, length, err);
-    if (*out)
-        return YVEX_OK;
-    if (yvex_error_code(err) == YVEX_OK) {
-        yvex_error_setf(err, YVEX_ERR_IO, context, "cannot read JSON document: %s", path);
-    }
-    return yvex_error_code(err);
-}
-
 /* Purpose: parse one known nested imatrix or calibration object.
  * Inputs: bounded cursor, manifest under construction, and admitted object name.
  * Effects: replaces owned manifest strings and skips unknown fields structurally.
  * Failure: malformed JSON or allocation failure leaves typed error context.
  * Boundary: parsing records paths and provenance but does not open referenced payloads. */
-static int ij_parse_named_object(imatrix_json *j, yvex_imatrix_manifest *manifest,
+static int ij_parse_named_object(yvex_gguf_json *j, yvex_imatrix_manifest *manifest,
                                  const char *object_name) {
     size_t begin = strcmp(object_name, "imatrix") == 0 ? 4u : 5u;
     size_t end = begin == 4u ? 5u : 8u;
-    int rc = imatrix_json_expect(j, '{');
+    int rc = yvex_gguf_json_expect(j, '{');
     if (rc != YVEX_OK)
         return rc;
     while (j->cursor.cursor < j->cursor.end) {
-        char *key;
-        imatrix_json_space(j);
-        if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == '}') {
-            j->cursor.cursor++;
-            return YVEX_OK;
-        }
-        key = imatrix_json_string(j);
-        if (!key)
-            return yvex_error_code(j->err);
-        rc = imatrix_json_expect(j, ':');
-        if (rc != YVEX_OK) {
-            free(key);
-            return rc;
-        }
+        char *key = NULL;
+        int complete = 0;
+
+        rc = yvex_gguf_json_member(j, &key, &complete);
+        if (rc != YVEX_OK) return rc;
+        if (complete) return YVEX_OK;
         {
             char **target = manifest_text_find(manifest, key, begin, end);
             if (target) {
-                char *value = imatrix_json_string(j);
+                char *value = yvex_gguf_json_string(j);
                 if (!value)
                     rc = yvex_error_code(j->err);
                 else {
@@ -560,17 +493,15 @@ static int ij_parse_named_object(imatrix_json *j, yvex_imatrix_manifest *manifes
                     *target = value;
                 }
             } else {
-                rc = imatrix_json_skip(j);
+                rc = yvex_gguf_json_skip(j);
             }
         }
         free(key);
         if (rc != YVEX_OK)
             return rc;
-        imatrix_json_space(j);
-        if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == ',')
-            j->cursor.cursor++;
+        yvex_gguf_json_optional_comma(j);
     }
-    return imatrix_json_fail(j, "unterminated nested object");
+    return yvex_gguf_json_fail(j, "unterminated nested object");
 }
 
 /* Purpose: parse and append one calibration coverage declaration.
@@ -578,45 +509,34 @@ static int ij_parse_named_object(imatrix_json *j, yvex_imatrix_manifest *manifes
  * Effects: allocates temporary fields and one owned manifest coverage row.
  * Failure: malformed rows or allocation failure append no partial row.
  * Boundary: declared coverage remains distinct from measured calibration evidence. */
-static int ij_parse_coverage_row(imatrix_json *j, yvex_imatrix_manifest *manifest) {
+static int ij_parse_coverage_row(yvex_gguf_json *j, void *context) {
+    yvex_imatrix_manifest *manifest = context;
     char *kind = NULL;
     char *selector = NULL;
     char *purpose = NULL;
-    int rc = imatrix_json_expect(j, '{');
+    int rc = yvex_gguf_json_expect(j, '{');
 
     if (rc != YVEX_OK)
         return rc;
     while (j->cursor.cursor < j->cursor.end) {
-        char *key;
-        imatrix_json_space(j);
-        if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == '}') {
-            j->cursor.cursor++;
-            break;
-        }
-        key = imatrix_json_string(j);
-        if (!key) {
-            rc = yvex_error_code(j->err);
-            goto done;
-        }
-        rc = imatrix_json_expect(j, ':');
-        if (rc != YVEX_OK) {
-            free(key);
-            goto done;
-        }
+        char *key = NULL;
+        int complete = 0;
+
+        rc = yvex_gguf_json_member(j, &key, &complete);
+        if (rc != YVEX_OK) goto done;
+        if (complete) break;
         if (strcmp(key, "kind") == 0)
-            kind = imatrix_json_string(j);
+            kind = yvex_gguf_json_string(j);
         else if (strcmp(key, "selector") == 0)
-            selector = imatrix_json_string(j);
+            selector = yvex_gguf_json_string(j);
         else if (strcmp(key, "purpose") == 0)
-            purpose = imatrix_json_string(j);
+            purpose = yvex_gguf_json_string(j);
         else
-            rc = imatrix_json_skip(j);
+            rc = yvex_gguf_json_skip(j);
         free(key);
         if (rc != YVEX_OK)
             goto done;
-        imatrix_json_space(j);
-        if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == ',')
-            j->cursor.cursor++;
+        yvex_gguf_json_optional_comma(j);
     }
     rc = manifest_add_coverage(manifest, yvex_imatrix_coverage_kind_from_name(kind),
                                selector ? selector : "", purpose ? purpose : "", j->err);
@@ -627,38 +547,6 @@ done:
     return rc;
 }
 
-/* Purpose: parse the ordered array of calibration coverage declarations.
- * Inputs: bounded cursor and manifest under construction.
- * Effects: appends each complete row in source order.
- * Failure: malformed delimiters or rows stop parsing with typed refusal.
- * Boundary: array ordering is document identity, not tensor execution order. */
-static int ij_parse_coverage(imatrix_json *j, yvex_imatrix_manifest *manifest) {
-    int rc = imatrix_json_expect(j, '[');
-    if (rc != YVEX_OK)
-        return rc;
-    imatrix_json_space(j);
-    if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == ']') {
-        j->cursor.cursor++;
-        return YVEX_OK;
-    }
-    while (j->cursor.cursor < j->cursor.end) {
-        rc = ij_parse_coverage_row(j, manifest);
-        if (rc != YVEX_OK)
-            return rc;
-        imatrix_json_space(j);
-        if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == ',') {
-            j->cursor.cursor++;
-            continue;
-        }
-        if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == ']') {
-            j->cursor.cursor++;
-            return YVEX_OK;
-        }
-        return imatrix_json_fail(j, "malformed coverage array");
-    }
-    return imatrix_json_fail(j, "unterminated coverage array");
-}
-
 /* Purpose: parse one complete bounded JSON document into an owned manifest.
  * Inputs: output slot, source path, and typed error sink.
  * Effects: reads metadata bytes, allocates manifest state, and refreshes its summary.
@@ -666,9 +554,7 @@ static int ij_parse_coverage(imatrix_json *j, yvex_imatrix_manifest *manifest) {
  * Boundary: document parsing performs zero reads from the referenced imatrix payload. */
 static int manifest_parse_json(yvex_imatrix_manifest **out, const char *path, yvex_error *err) {
     yvex_imatrix_manifest *manifest;
-    imatrix_json j;
-    char *buf = NULL;
-    size_t len = 0u;
+    yvex_gguf_json j;
     int rc;
 
     if (!out || !path) {
@@ -676,41 +562,27 @@ static int manifest_parse_json(yvex_imatrix_manifest **out, const char *path, yv
         return YVEX_ERR_INVALID_ARG;
     }
     *out = NULL;
-    rc = imatrix_json_read(path, &buf, &len, "imatrix_json", err);
+    rc = yvex_gguf_json_open(&j, path, "imatrix_json", err);
     if (rc != YVEX_OK)
         return rc;
     manifest = (yvex_imatrix_manifest *)calloc(1, sizeof(*manifest));
     if (!manifest) {
-        free(buf);
+        yvex_gguf_json_close(&j);
         yvex_error_set(err, YVEX_ERR_NOMEM, "imatrix_json", "manifest allocation failed");
         return YVEX_ERR_NOMEM;
     }
-    yvex_json_init(&j.cursor, buf, len);
-    j.path = path;
-    j.context = "imatrix_json";
-    j.err = err;
-    rc = imatrix_json_expect(&j, '{');
+    rc = yvex_gguf_json_expect(&j, '{');
     if (rc != YVEX_OK)
         goto fail;
     while (j.cursor.cursor < j.cursor.end) {
-        char *key;
-        imatrix_json_space(&j);
-        if (j.cursor.cursor < j.cursor.end && *j.cursor.cursor == '}') {
-            j.cursor.cursor++;
-            break;
-        }
-        key = imatrix_json_string(&j);
-        if (!key) {
-            rc = yvex_error_code(err);
-            goto fail;
-        }
-        rc = imatrix_json_expect(&j, ':');
-        if (rc != YVEX_OK) {
-            free(key);
-            goto fail;
-        }
+        char *key = NULL;
+        int complete = 0;
+
+        rc = yvex_gguf_json_member(&j, &key, &complete);
+        if (rc != YVEX_OK) goto fail;
+        if (complete) break;
         if (strcmp(key, "schema") == 0) {
-            char *schema = imatrix_json_string(&j);
+            char *schema = yvex_gguf_json_string(&j);
             if (!schema) {
                 free(key);
                 rc = yvex_error_code(err);
@@ -719,13 +591,13 @@ static int manifest_parse_json(yvex_imatrix_manifest **out, const char *path, yv
             if (strcmp(schema, "yvex.imatrix_manifest.v1") != 0) {
                 free(schema);
                 free(key);
-                rc = imatrix_json_fail(&j, "unsupported imatrix schema");
+                rc = yvex_gguf_json_fail(&j, "unsupported imatrix schema");
                 goto fail;
             }
             free(schema);
         } else if (manifest_text_find(manifest, key, 0u, 4u)) {
             char **target = manifest_text_find(manifest, key, 0u, 4u);
-            char *value = imatrix_json_string(&j);
+            char *value = yvex_gguf_json_string(&j);
             if (!value)
                 rc = yvex_error_code(err);
             else {
@@ -733,7 +605,7 @@ static int manifest_parse_json(yvex_imatrix_manifest **out, const char *path, yv
                 *target = value;
             }
         } else if (strcmp(key, "status") == 0) {
-            char *status = imatrix_json_string(&j);
+            char *status = yvex_gguf_json_string(&j);
             if (!status)
                 rc = yvex_error_code(err);
             else {
@@ -741,7 +613,7 @@ static int manifest_parse_json(yvex_imatrix_manifest **out, const char *path, yv
                 free(status);
             }
         } else if (strcmp(key, "format") == 0) {
-            char *format = imatrix_json_string(&j);
+            char *format = yvex_gguf_json_string(&j);
             if (!format)
                 rc = yvex_error_code(err);
             else {
@@ -753,16 +625,16 @@ static int manifest_parse_json(yvex_imatrix_manifest **out, const char *path, yv
         } else if (strcmp(key, "calibration") == 0) {
             rc = ij_parse_named_object(&j, manifest, "calibration");
         } else if (strcmp(key, "coverage") == 0) {
-            rc = ij_parse_coverage(&j, manifest);
+            rc = yvex_gguf_json_array(&j, ij_parse_coverage_row, manifest,
+                                      "malformed coverage array",
+                                      "unterminated coverage array");
         } else {
-            rc = imatrix_json_skip(&j);
+            rc = yvex_gguf_json_skip(&j);
         }
         free(key);
         if (rc != YVEX_OK)
             goto fail;
-        imatrix_json_space(&j);
-        if (j.cursor.cursor < j.cursor.end && *j.cursor.cursor == ',')
-            j.cursor.cursor++;
+        yvex_gguf_json_optional_comma(&j);
     }
     {
         size_t index;
@@ -780,11 +652,11 @@ static int manifest_parse_json(yvex_imatrix_manifest **out, const char *path, yv
     }
     manifest_refresh_summary(manifest, &manifest->summary);
     *out = manifest;
-    free(buf);
+    yvex_gguf_json_close(&j);
     return YVEX_OK;
 fail:
     yvex_imatrix_manifest_close(manifest);
-    free(buf);
+    yvex_gguf_json_close(&j);
     return rc;
 }
 

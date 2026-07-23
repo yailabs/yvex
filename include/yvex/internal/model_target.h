@@ -126,6 +126,20 @@ typedef struct {
     unsigned long long moe;
     unsigned long long layers;
 } yvex_model_target_source_scan;
+typedef struct {
+    int source_requested;
+    int source_directory_present;
+    int header_present;
+    int metadata_present;
+    int attention_k_present;
+    int output_head_present;
+    int output_head_ambiguous;
+    unsigned long f32_count;
+    unsigned long f16_count;
+    unsigned long bf16_count;
+    unsigned long other_count;
+    unsigned long tensor_count;
+} yvex_model_target_source_profile;
 typedef enum {
     YVEX_MODEL_TARGET_ROW_LITERAL = 0,
     YVEX_MODEL_TARGET_ROW_STRING,
@@ -157,6 +171,13 @@ typedef struct {
     const char *boundary;
     const char *reason;
 } yvex_model_target_report_profile;
+typedef struct {
+    yvex_model_target_command_kind expected_kind;
+    const char *kind_failure_status;
+    const char *kind_failure_message;
+    const char *required_target_operation;
+    int reject_json;
+} yvex_model_target_request_rules;
 void yvex_model_target_report_prepare(
     yvex_model_target_report *report,
     const yvex_model_target_request *request,
@@ -186,6 +207,23 @@ void yvex_model_target_scan_source(
     const yvex_model_target_request *request,
     const char *family,
     yvex_model_target_source_scan *scan);
+void yvex_model_target_probe_source_profile(
+    const yvex_model_target_request *request,
+    const char *family,
+    yvex_model_target_source_profile *profile);
+int yvex_model_target_report_release_coverage(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    const char *operation,
+    const char *error_where,
+    const char *success_status,
+    const char *success_boundary,
+    yvex_error *err);
+int yvex_model_target_validate_request_shape(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    const yvex_model_target_request_rules *rules,
+    const char *release);
 int yvex_model_target_validate_supported(
     const yvex_model_target_request *request,
     yvex_model_target_report *report,
@@ -308,19 +346,17 @@ int yvex_qtype_role_support_report_build(
     yvex_error *err);
 
 /* Sidecar Write contract. */
-int yvex_model_target_write_tensor_map_sidecar(const char *path,
-                                               const char *target_id,
-                                               const char *family,
-                                               const char *status,
-                                               const char *coverage);
-int yvex_model_target_write_output_head_sidecar(const char *path,
-                                                const char *target_id,
-                                                const char *family,
-                                                const char *status);
-int yvex_model_target_write_tokenizer_sidecar(const char *path,
-                                              const char *target_id,
-                                              const char *family,
-                                              const char *status);
+typedef enum {
+    YVEX_MODEL_TARGET_SIDECAR_TENSOR_MAP = 0,
+    YVEX_MODEL_TARGET_SIDECAR_OUTPUT_HEAD = 1,
+    YVEX_MODEL_TARGET_SIDECAR_TOKENIZER = 2
+} yvex_model_target_sidecar_kind;
+int yvex_model_target_write_sidecar(yvex_model_target_sidecar_kind kind,
+                                    const char *path,
+                                    const char *target_id,
+                                    const char *family,
+                                    const char *status,
+                                    const char *coverage);
 
 /* Tensor Collection contract. */
 int yvex_tensor_collection_report_build(

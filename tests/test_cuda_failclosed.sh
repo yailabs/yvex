@@ -71,15 +71,27 @@ contains "$OUT_DIR/backend.out" "encoded-attention: unsupported (kernel-bundle-a
 contains "$OUT_DIR/backend.out" "status: backend-capabilities"
 
 set +e
-"$YVEX_BIN" graph --backend cuda --execute-op --op rope \
-    --position 7 --head-dim 8 >"$OUT_DIR/graph.out" 2>"$OUT_DIR/graph.err"
+"$YVEX_BIN" graph attention execute --target deepseek4-v4-flash --backend cuda \
+    --runtime-binding "$OUT_DIR/missing.yvex-runtime-binding" \
+    --artifact "$OUT_DIR/missing.gguf" --output json \
+    >"$OUT_DIR/graph.out" 2>"$OUT_DIR/graph.err"
 rc=$?
 set -e
-[ "$rc" -eq 5 ] || fail "bundle-less CUDA graph returned $rc"
-contains "$OUT_DIR/graph.out" "graph_integrity_guard: refused"
-contains "$OUT_DIR/graph.out" "graph_execution_phase: admission"
-contains "$OUT_DIR/graph.out" "execution_ready: false"
-contains "$OUT_DIR/graph.out" "reason: production-fixtures-are-test-owned"
-contains "$OUT_DIR/graph.out" "status: graph-proof-retired"
+[ "$rc" -ne 0 ] || fail "bundle-less CUDA attention unexpectedly succeeded"
+python3 - "$OUT_DIR/graph.out" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    result = json.load(stream)
+assert result["status"] == "refused"
+assert result["backend"] == "cuda"
+assert result["persistent_kv_ready"] is False
+assert result["transformer_ready"] is False
+assert result["runtime_generation_ready"] is False
+assert result["failure_where"] == "runtime.model"
+assert "runtime binding" in result["reason"]
+PY
+contains "$OUT_DIR/graph.err" "runtime binding"
 
 echo "cuda no-nvcc fail-closed: ok"

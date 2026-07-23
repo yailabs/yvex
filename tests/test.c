@@ -6,10 +6,72 @@
 
 #include "tests/test.h"
 
+#include <stdlib.h>
+
+static const char *test_filter;
+static unsigned int test_filter_count;
+static unsigned int selected_test_count;
+
+static int filter_token_equal(const char *token, size_t length, const char *name)
+{
+    return strlen(name) == length && memcmp(token, name, length) == 0;
+}
+
+static int filter_validate(void)
+{
+    const char *cursor = test_filter;
+
+    while (*cursor) {
+        const char *end = strchr(cursor, ',');
+        const char *prior = test_filter;
+        size_t length = end ? (size_t)(end - cursor) : strlen(cursor);
+
+        if (length == 0u) {
+            fprintf(stderr, "FAIL: malformed YVEX_TEST_FILTER\n");
+            return 0;
+        }
+        if (end && !end[1]) {
+            fprintf(stderr, "FAIL: malformed YVEX_TEST_FILTER\n");
+            return 0;
+        }
+        while (prior < cursor) {
+            const char *prior_end = strchr(prior, ',');
+            size_t prior_length = (size_t)(prior_end - prior);
+
+            if (prior_length == length && memcmp(prior, cursor, length) == 0) {
+                fprintf(stderr, "FAIL: duplicate YVEX_TEST_FILTER entry\n");
+                return 0;
+            }
+            prior = prior_end + 1;
+        }
+        ++test_filter_count;
+        if (!end) break;
+        cursor = end + 1;
+    }
+    return test_filter_count != 0u;
+}
+
+static int filter_selects(const char *name)
+{
+    const char *cursor = test_filter;
+
+    while (*cursor) {
+        const char *end = strchr(cursor, ',');
+        size_t length = end ? (size_t)(end - cursor) : strlen(cursor);
+
+        if (filter_token_equal(cursor, length, name)) return 1;
+        if (!end) break;
+        cursor = end + 1;
+    }
+    return 0;
+}
+
 static int run_test(const char *name, int (*fn)(void))
 {
     int rc;
 
+    if (test_filter && !filter_selects(name)) return 0;
+    ++selected_test_count;
     fprintf(stderr, "test: %s\n", name);
     rc = fn();
     if (rc != 0) {
@@ -101,23 +163,9 @@ static int run_cpu_backend(void)
 /* Runtime and console */
 static int run_runtime_console(void)
 {
-    if (run_test("engine", yvex_test_engine) != 0) return 1;
-    if (run_test("session", yvex_test_session) != 0) return 1;
-    if (run_test("kv", yvex_test_kv) != 0) return 1;
-    if (run_test("logits", yvex_test_logits) != 0) return 1;
-    if (run_test("runtime_diagnostics", yvex_test_runtime_diagnostics) != 0) return 1;
-    if (run_test("chat_runtime", yvex_test_chat_runtime) != 0) return 1;
-    if (run_test("slash_commands", yvex_test_slash_commands) != 0) return 1;
-    if (run_test("run_artifacts", yvex_test_run_artifacts) != 0) return 1;
-    return 0;
-}
-
-/* Observability */
-static int run_observability(void)
-{
-    if (run_test("metrics", yvex_test_metrics) != 0) return 1;
-    if (run_test("trace", yvex_test_trace) != 0) return 1;
-    if (run_test("profile", yvex_test_profile) != 0) return 1;
+    if (run_test("runtime_benchmark", yvex_test_runtime_benchmark) != 0) return 1;
+    if (run_test("runtime_binding", yvex_test_runtime_binding) != 0) return 1;
+    if (run_test("runtime_state", yvex_test_runtime_state) != 0) return 1;
     return 0;
 }
 
@@ -148,6 +196,9 @@ static int run_gguf_model_artifact_tools(void)
 
 int main(void)
 {
+    test_filter = getenv("YVEX_TEST_FILTER");
+    if (test_filter && !test_filter[0]) test_filter = NULL;
+    if (test_filter && !filter_validate()) return 1;
     if (run_core() != 0) return 1;
     if (run_filesystem_artifacts_gguf() != 0) return 1;
     if (run_model_weights() != 0) return 1;
@@ -155,8 +206,12 @@ int main(void)
     if (run_graph_planner() != 0) return 1;
     if (run_cpu_backend() != 0) return 1;
     if (run_runtime_console() != 0) return 1;
-    if (run_observability() != 0) return 1;
     if (run_server() != 0) return 1;
     if (run_gguf_model_artifact_tools() != 0) return 1;
+    if (test_filter && selected_test_count != test_filter_count) {
+        fprintf(stderr, "FAIL: unknown or duplicate registered YVEX_TEST_FILTER: %s\n",
+                test_filter);
+        return 1;
+    }
     return 0;
 }

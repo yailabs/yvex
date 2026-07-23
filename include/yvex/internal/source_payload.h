@@ -130,8 +130,6 @@ typedef struct {
 void yvex_source_payload_budget_default(yvex_source_payload_budget *budget);
 const char *yvex_source_payload_trust_class_name(
     yvex_source_payload_trust_class trust_class);
-const char *yvex_source_payload_failure_name(
-    yvex_source_payload_failure_code code);
 int yvex_source_payload_session_open(
     yvex_source_payload_session **out,
     const yvex_source_payload_open_options *options,

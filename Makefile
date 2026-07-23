@@ -13,6 +13,12 @@
 #   make check-cuda
 #   make test
 #   make test-core
+#   make test-runtime
+#   make test-runtime-benchmark-chart
+#   make test-runtime-benchmark-chart-live YVEX_RUNTIME_BENCHMARK_DIR=/absolute/path \
+#       YVEX_RUNTIME_BINDING=/absolute/file.yvex-runtime-binding
+#   make test-runtime-sanitizers
+#   make test-runtime-sanitizers-live
 #   make test-cli
 #   make smoke
 #   make check
@@ -24,7 +30,26 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-materialize test-runtime-descriptor test-materialize-live-plan test-materialize-live test-attention test-attention-fixture-isolation test-attention-live-plan test-attention-live test-attention-cli-live test-attention-cuda test-quant test-quant-live-plan test-quant-live test-artifact-writer test-artifact-writer-fault test-artifact-live-plan test-artifact-live-structure test-artifact-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface test-source-ownership test-repository-layout test-architecture-boundaries smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-graph \
+	test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-materialize \
+	test-runtime-descriptor test-runtime-binding test-runtime-model-session \
+	test-runtime-residency test-runtime-phases test-runtime-envelope \
+	test-runtime-operator test-runtime-digests test-runtime-family-neutrality \
+	test-runtime-state test-runtime-benchmark test-runtime-benchmark-chart \
+	test-runtime-benchmark-chart-live test-runtime-attention-live \
+	test-runtime test-runtime-asan test-runtime-asan-live \
+	test-runtime-ubsan test-runtime-ubsan-live test-runtime-sanitizers \
+	test-runtime-sanitizers-live test-materialize-live-plan \
+	test-materialize-live test-attention test-attention-fixture-isolation \
+	test-attention-live-plan test-attention-live test-attention-cli-live \
+	test-attention-cuda test-quant test-quant-live-plan test-quant-live \
+	test-artifact-writer test-artifact-writer-fault test-artifact-live-plan \
+	test-artifact-live-structure test-artifact-live test-transform-ir-live-plan \
+	test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi \
+	test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural \
+	test-project-ledger test-docs-surface test-surface test-source-ownership \
+	test-repository-layout test-architecture-boundaries smoke check check-docs \
+	check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -36,6 +61,28 @@ YVEX_CUDA_ARCH ?= auto
 NVCC_AVAILABLE := $(shell command -v $(NVCC) >/dev/null 2>&1 && echo yes || echo no)
 
 CPPFLAGS ?= -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L -Iinclude -I.
+YVEX_BUILD_COMMIT ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf unknown)
+YVEX_BUILD_SOURCE_DELTA_IDENTITY ?= $(shell { \
+	git diff --binary --no-ext-diff HEAD -- . 2>/dev/null; \
+	git ls-files --others --exclude-standard 2>/dev/null | LC_ALL=C sort | \
+		grep -v '__pycache__/' | grep -v '[.]pyc$$' | \
+		while IFS= read -r path; do \
+			printf 'untracked\t%s\t' "$$path"; stat -c 'mode=%a' "$$path"; \
+			sha256sum "$$path"; \
+			done; \
+	} | sha256sum | cut -d' ' -f1)
+YVEX_BUILD_SOURCE_STATE ?= $(if $(filter \
+	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855,\
+	$(YVEX_BUILD_SOURCE_DELTA_IDENTITY)),clean,dirty)
+YVEX_BUILD_IDENTITY ?= $(shell printf '%s\n' \
+	'cc=$(CC)' 'cc-version=$(shell $(CC) --version 2>/dev/null | head -1)' \
+	'cc-target=$(shell $(CC) -dumpmachine 2>/dev/null)' \
+	'cppflags=$(CPPFLAGS)' 'cflags=$(CFLAGS)' 'ldflags=$(LDFLAGS)' 'ldlibs=$(LDLIBS)' \
+	'linker-version=$(shell $(CC) -Wl,--version 2>/dev/null | head -1)' \
+	'nvcc=$(NVCC)' 'nvcc-version=$(shell $(NVCC) --version 2>/dev/null | tail -1)' \
+	'nvccflags=$(NVCCFLAGS)' 'cuda-ldflags=$(CUDA_LDFLAGS)' 'cuda-arch=$(YVEX_CUDA_ARCH)' | \
+	sha256sum | cut -d' ' -f1)
+YVEX_BUILD_SOURCE_ROOT ?= $(shell pwd -P)
 CFLAGS ?= -std=c11 -Wall -Wextra -pedantic -Wstrict-prototypes \
 	-Wmissing-prototypes -Wmissing-declarations -Wshadow -Wformat=2 \
 	-Wundef -Wvla -pthread
@@ -48,11 +95,14 @@ BUILD_DIR ?= build
 OBJ_DIR ?= $(BUILD_DIR)/obj
 LIB_DIR ?= $(BUILD_DIR)/lib
 TEST_DIR ?= $(BUILD_DIR)/tests
+BUILD_COMMIT_HEADER := $(BUILD_DIR)/generated/build_commit.h
 DEEPSEEK_SOURCE ?= $(HOME)/lab/models/hf/deepseek/DeepSeek-V4-Flash
 DEEPSEEK_MODELS_ROOT ?= $(HOME)/lab/models/gguf
 DEEPSEEK_SOURCE_MANIFEST ?= $(DEEPSEEK_MODELS_ROOT)/deepseek/deepseek-source-manifest.json
 DEEPSEEK_OPERATOR_MODELS_ROOT ?= $(HOME)/lab/models
 DEEPSEEK_SELECTED_ARTIFACT ?= $(DEEPSEEK_MODELS_ROOT)/deepseek/deepseek-v4-flash-q8_0-q2_k-v1.gguf
+YVEX_RUNTIME_BENCHMARK_DIR ?=
+YVEX_RUNTIME_BINDING ?=
 PINNED_GGML_ROOT ?= /tmp/yvex-ggml-af97976
 PINNED_GGML_BUILD ?= $(PINNED_GGML_ROOT)/build-yvex
 
@@ -86,28 +136,18 @@ trap 'exit 130' INT; \
 trap 'exit 143' TERM;
 endef
 
-CLI_COMMAND_SRCS := src/cli/commands/generate.c \
-	src/cli/commands/graph.c \
-	src/cli/commands/kv.c \
+CLI_COMMAND_SRCS := src/cli/commands/graph.c \
 	src/cli/commands/model_artifacts.c \
 	src/cli/commands/model_target.c \
-	src/cli/commands/sampling.c \
-	$(sort $(filter-out src/cli/commands/generate.c src/cli/commands/graph.c src/cli/commands/kv.c src/cli/commands/model_artifacts.c src/cli/commands/model_target.c src/cli/commands/sampling.c,$(wildcard src/cli/commands/*.c)))
-CLI_INPUT_SRCS := src/cli/input/generate.c \
-	src/cli/input/graph.c \
-	src/cli/input/kv.c \
+	$(sort $(filter-out src/cli/commands/graph.c src/cli/commands/model_artifacts.c src/cli/commands/model_target.c,$(wildcard src/cli/commands/*.c)))
+CLI_INPUT_SRCS := src/cli/input/graph.c \
 	src/cli/input/model_artifacts.c \
 	src/cli/input/model_target.c \
-	src/cli/input/sampling.c \
-	$(sort $(filter-out src/cli/input/generate.c src/cli/input/graph.c src/cli/input/kv.c src/cli/input/model_artifacts.c src/cli/input/model_target.c src/cli/input/sampling.c,$(wildcard src/cli/input/*.c)))
-CLI_RENDER_SRCS := src/cli/render/generate.c \
-	src/cli/render/generate_trace.c \
-	src/cli/render/graph.c \
-	src/cli/render/kv.c \
+	$(sort $(filter-out src/cli/input/graph.c src/cli/input/model_artifacts.c src/cli/input/model_target.c,$(wildcard src/cli/input/*.c)))
+CLI_RENDER_SRCS := src/cli/render/graph.c \
 	src/cli/render/model_artifacts.c \
 	src/cli/render/model_target.c \
-	src/cli/render/sampling.c \
-	$(sort $(filter-out src/cli/render/generate.c src/cli/render/generate_trace.c src/cli/render/graph.c src/cli/render/kv.c src/cli/render/model_artifacts.c src/cli/render/model_target.c src/cli/render/sampling.c,$(wildcard src/cli/render/*.c)))
+	$(sort $(filter-out src/cli/render/graph.c src/cli/render/model_artifacts.c src/cli/render/model_target.c,$(wildcard src/cli/render/*.c)))
 CLI_MODEL_ARTIFACT_SRCS := $(sort $(wildcard src/cli/model_artifacts/*.c))
 CLI_IO_SRCS := $(sort $(wildcard src/cli/io/*.c))
 
@@ -126,29 +166,22 @@ CORE_SRCS := \
 	src/backend/core.c \
 	src/backend/cpu.c \
 	src/backend/report.c \
-	src/generation/decode.c \
-	src/generation/core.c \
-	src/generation/report.c \
-	src/generation/trace.c \
-	src/generation/kv.c \
-	src/generation/kv_report.c \
-	src/generation/logits.c \
-	src/generation/sampling.c \
 	src/runtime/graph.c \
-	src/generation/sampling_report.c \
+	src/runtime/benchmark.c \
+	src/runtime/binding.c \
+	src/runtime/residency.c \
+	src/graph/state.c \
 	src/gguf/core.c \
 	src/gguf/conversion.c \
 	src/gguf/imatrix.c \
 	src/gguf/quant_job.c \
 	src/gguf/quant_policy.c \
 	src/gguf/tools.c \
-	src/gguf/container.c \
 	src/gguf/descriptor.c \
 	src/gguf/file_sink.c \
 	src/gguf/layout_integrity.c \
 	src/gguf/qtype.c \
 	src/gguf/reader.c \
-	src/gguf/report.c \
 	src/gguf/tokenizer_metadata.c \
 	src/gguf/writer.c \
 	src/gguf/quant_registry.c \
@@ -162,12 +195,9 @@ CORE_SRCS := \
 	src/graph/numeric.c \
 	src/graph/families/deepseek_v4.c \
 	src/graph/core.c \
-	src/graph/guard.c \
 	src/graph/plan.c \
-	src/graph/report.c \
 	src/graph/memory_plan.c \
 	src/io/writer.c \
-	src/metrics/core.c \
 	src/model/core.c \
 	src/model/families/deepseek_v4.c \
 	src/model/compilation/ir.c \
@@ -178,7 +208,6 @@ CORE_SRCS := \
 	src/model/artifacts/gate.c \
 	src/model/artifacts/ref.c \
 	src/model/artifacts/registry.c \
-	src/model/artifacts/report.c \
 	src/model/artifacts/write.c \
 	src/model/target/mapping_gate.c \
 	src/model/target/missing_role.c \
@@ -194,7 +223,6 @@ CORE_SRCS := \
 	src/model/target/tensor_collection.c \
 	src/model/target/tensor_naming.c \
 	src/model/target/tokenizer_map.c \
-	src/runtime/chat.c \
 	src/runtime/core.c \
 	src/source/native_weights.c \
 	src/source/safetensors_header.c \
@@ -210,7 +238,6 @@ CORE_SRCS := \
 	src/source/scan.c \
 	src/source/verify.c \
 	src/source/write.c \
-	src/generation/prefill.c \
 	src/tokenizer/token_input.c \
 	src/tokenizer/core.c \
 	src/server/core.c
@@ -229,6 +256,7 @@ DAEMON_OBJ := $(OBJ_DIR)/src/daemon/yvexd.o
 CUDA_SRCS := \
 	src/backend/cuda/backend.c \
 	src/backend/cuda/capability.c \
+	src/backend/cuda/graph.c \
 	src/backend/cuda/tensor.c \
 	src/backend/cuda/ops.c \
 	src/backend/cuda/info.c \
@@ -252,6 +280,11 @@ CPPFLAGS += -DYVEX_HAVE_CUDA_KERNEL_PTX=1
 $(OBJ_DIR)/src/backend/cuda/capability.o: CPPFLAGS += -I$(OBJ_DIR)/generated
 $(OBJ_DIR)/src/backend/cuda/capability.o: $(CUDA_PTX_INC)
 endif
+
+$(OBJ_DIR)/src/cli/commands/graph.o: CPPFLAGS += -D_XOPEN_SOURCE=700 -I$(BUILD_DIR)/generated
+$(OBJ_DIR)/src/cli/commands/graph.o: $(BUILD_COMMIT_HEADER)
+$(OBJ_DIR)/src/runtime/benchmark.o: CPPFLAGS += -I$(BUILD_DIR)/generated
+$(OBJ_DIR)/src/runtime/benchmark.o: $(BUILD_COMMIT_HEADER)
 
 TEST_RUNNER := $(TEST_DIR)/test
 QUANT_TEST_RUNNER := $(TEST_DIR)/test_quant
@@ -311,54 +344,18 @@ CURRENT_DOCS := README.md AGENTS.md PROJECT.md MODEL_ARTIFACTS.md NOTICE.md \
 	docs/topology-closure-audit.md docs/system-target.md
 
 info:
-	@echo "yvex: C local inference engine"
-	@echo "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, prefill state foundation, minimal KV binding, decode/logits/sampling diagnostics, and bounded diagnostic generation loop with explicit append accounting"
-	@echo "interface: CLI-only"
+	@echo "yvex: native C/CUDA verified-artifact inference system"
+	@echo "project_control: PROJECT.md"
+	@echo "interface: operator CLI plus C library ABI"
 	@echo "library: libyvex.a"
-	@echo "filesystem: implemented"
-	@echo "artifact: open/read implemented"
-	@echo "gguf: metadata/tensor directory parsing implemented"
-	@echo "model: descriptor-only implemented"
-	@echo "tokenizer: fixture encode/decode implemented"
-	@echo "token_input: explicit token boundary implemented"
-	@echo "prefill_state: segment-summary foundation and minimal KV binding implemented"
-	@echo "prompt: default renderer implemented"
-	@echo "graph: complete DeepSeek SWA/CSA/HCA attention execution admitted; other graph composition remains partial"
-	@echo "planner: estimate-only implemented"
-	@echo "backend: CPU reference implemented"
-	@echo "backend_cuda: CUDA backend dynamic driver attachment implemented"
-	@echo "weights: fixture materialization implemented"
-	@echo "engine: runtime object skeleton implemented"
-	@echo "session: lifecycle diagnostics, engine attachment observer, and KV ownership implemented"
-	@echo "run: accepted-only runtime shell implemented"
-	@echo "chat: accepted-only REPL shell implemented"
-	@echo "metrics: runtime collector implemented"
-	@echo "trace: JSONL writer implemented"
-	@echo "profile: JSON writer implemented"
-	@echo "run_artifacts: metrics/trace/profile files implemented"
-	@echo "source_manifest: provenance JSON writer implemented"
-	@echo "native_weights: safetensors header inventory implemented"
-	@echo "gguf_template: contract validator implemented"
-	@echo "gguf_emit: controlled GGUF writer implemented"
-	@echo "conversion: open-weight selected tensor bridge implemented"
-	@echo "model_ref: alias-or-path resolver implemented"
-	@echo "model_registry: local model alias registry implemented"
-	@echo "quant_job: external quantization job manifest implemented"
-	@echo "qtype_support: conversion support matrix implemented"
-	@echo "weight_mapping: tensor adapter contract implemented"
-	@echo "quant_policy: manifest validator implemented"
-	@echo "imatrix: calibration artifact manifest implemented"
-	@echo "server_binary: yvexd shell implemented"
-	@echo "server_endpoints: health/metrics/models status implemented"
-	@echo "server_generation: not implemented"
-	@echo "kv: minimal session-owned append/read boundary implemented"
-	@echo "decode: bounded diagnostic state step implemented"
-	@echo "logits: bounded diagnostic buffer implemented"
-	@echo "sampling: bounded greedy sampler implemented"
-	@echo "generation: bounded diagnostic loop available; full model unsupported"
-	@echo "inference: not implemented"
-	@echo "cuda: complete DeepSeek attention and admitted primitives implemented when the generated bundle and device are available"
-	@echo "server: yvexd status shell implemented"
+	@echo "operator: ./yvex graph attention"
+	@echo "daemon: ./yvexd bounded status shell"
+	@echo "runtime_attention: CPU eager and admitted GB10 CUDA eager/piecewise/full implemented"
+	@echo "benchmark_attention: identity-bound baseline, JSON/CSV, and external SVG capability implemented"
+	@echo "persistent_kv: not implemented"
+	@echo "full_model_inference: not implemented"
+	@echo "generation: not implemented"
+	@echo "release: blocked"
 
 all: lib cli server
 
@@ -384,6 +381,9 @@ test-cuda: cuda
 	$(YVEX_BIN) cuda-info >/dev/null
 	$(CUDA_TEST_RUNNER)
 
+test-cuda-graph: cuda
+	YVEX_CUDA_TEST_FILTER=graph $(CUDA_TEST_RUNNER)
+
 smoke-cuda: cuda
 	YVEX_BIN=$(YVEX_BIN) YVEXD_BIN=$(YVEXD_BIN) sh $(CLI_TEST) --cuda
 
@@ -407,7 +407,202 @@ test-materialize: $(TEST_RUNNER)
 	$(TEST_RUNNER)
 
 test-runtime-descriptor: $(TEST_RUNNER)
-	$(TEST_RUNNER)
+	YVEX_TEST_FILTER=materialization_runtime $(TEST_RUNNER)
+
+test-runtime-binding: $(TEST_RUNNER)
+	YVEX_TEST_FILTER=runtime_binding $(TEST_RUNNER)
+
+# Runtime model/session lifecycle is exercised by the binding owner because the
+# sealed model consumes one independently reopened binding.
+test-runtime-model-session: $(TEST_RUNNER)
+	YVEX_TEST_FILTER=runtime_binding $(TEST_RUNNER)
+
+test-runtime-residency: $(TEST_RUNNER)
+	YVEX_TEST_FILTER=runtime_binding $(TEST_RUNNER)
+
+test-runtime-phases: $(TEST_RUNNER)
+	YVEX_TEST_FILTER=runtime_state,deepseek_attention $(TEST_RUNNER)
+
+test-runtime-envelope: $(TEST_RUNNER)
+	YVEX_TEST_FILTER=deepseek_attention $(TEST_RUNNER)
+
+test-runtime-operator: $(YVEX_BIN) tests/cli/attention_graph.sh
+	YVEX_BIN=$(YVEX_BIN) sh tests/cli/attention_graph.sh
+
+test-runtime-digests: $(TEST_RUNNER)
+	YVEX_TEST_FILTER=runtime_state,runtime_benchmark,deepseek_attention $(TEST_RUNNER)
+
+test-runtime-family-neutrality: $(TEST_RUNNER) test-architecture-boundaries
+	YVEX_TEST_FILTER=runtime_binding $(TEST_RUNNER)
+
+test-runtime-state: $(TEST_RUNNER)
+	YVEX_TEST_FILTER=runtime_state $(TEST_RUNNER)
+
+test-runtime-benchmark: $(TEST_RUNNER)
+	YVEX_TEST_FILTER=runtime_benchmark $(TEST_RUNNER)
+
+# The benchmark owner generates and authenticates the bounded SVG chart as part
+# of its transactional evidence lifecycle.
+test-runtime-benchmark-chart: $(TEST_RUNNER)
+	YVEX_TEST_FILTER=runtime_benchmark $(TEST_RUNNER)
+
+# This target retains identity-bound target-scale benchmark evidence in one
+# caller-owned external directory. It never deletes, replaces, or tracks the
+# baseline, reports, or SVG charts that it produces.
+test-runtime-benchmark-chart-live: cuda
+	@set -eu; \
+	evidence_dir='$(YVEX_RUNTIME_BENCHMARK_DIR)'; \
+	case "$$evidence_dir" in /*) ;; *) \
+		echo "YVEX_RUNTIME_BENCHMARK_DIR must be an absolute directory" >&2; exit 2;; \
+	esac; \
+	test -d "$$evidence_dir" && test ! -L "$$evidence_dir" || { \
+		echo "benchmark evidence directory must exist and must not be a symlink" >&2; exit 2; }; \
+	evidence_dir=$$(cd "$$evidence_dir" && pwd -P); \
+	repository_root=$$(pwd -P); \
+	case "$$evidence_dir" in /|"$$repository_root"|"$$repository_root"/*) \
+		echo "benchmark evidence directory must be outside the source repository" >&2; exit 2;; \
+	esac; \
+	test -z "$$(find "$$evidence_dir" -mindepth 1 -print -quit)" || { \
+		echo "benchmark evidence directory must be empty" >&2; exit 2; }; \
+	binding='$(YVEX_RUNTIME_BINDING)'; \
+	case "$$binding" in /*) ;; *) \
+		echo "YVEX_RUNTIME_BINDING must be an absolute file" >&2; exit 2;; \
+	esac; \
+	test -f "$$binding" && test ! -L "$$binding" || { \
+		echo "runtime binding must be a regular non-symlink file" >&2; exit 2; }; \
+	binding=$$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve(strict=True))' \
+		"$$binding"); \
+	case "$$binding" in /|"$$repository_root"|"$$repository_root"/*) \
+		echo "runtime binding must be outside the source repository" >&2; exit 2;; \
+	esac; \
+	for mode in eager piecewise full; do \
+		$(YVEX_BIN) graph attention benchmark --target deepseek4-v4-flash \
+			--models-root "$(DEEPSEEK_OPERATOR_MODELS_ROOT)" \
+			--artifact "$(DEEPSEEK_SELECTED_ARTIFACT)" --runtime-binding "$$binding" \
+			--backend cuda --phase decode --mode "$$mode" --scope full \
+			--operation-scope release-attention-set --probe canonical \
+			--warmup 3 --repeat 20 --progress off \
+			--baseline "$$evidence_dir/$$mode.yvex-benchmark" --write-baseline \
+			--chart "$$evidence_dir/$$mode.svg" --output json \
+			>"$$evidence_dir/$$mode.json"; \
+		$(YVEX_BIN) graph attention benchmark --target deepseek4-v4-flash \
+			--models-root "$(DEEPSEEK_OPERATOR_MODELS_ROOT)" \
+			--artifact "$(DEEPSEEK_SELECTED_ARTIFACT)" --runtime-binding "$$binding" \
+			--backend cuda --phase decode --mode "$$mode" --scope full \
+			--operation-scope release-attention-set --probe canonical \
+			--warmup 3 --repeat 20 --progress off \
+			--baseline "$$evidence_dir/$$mode.yvex-benchmark" \
+			--chart "$$evidence_dir/$$mode-comparison.svg" --output csv \
+			>"$$evidence_dir/$$mode-comparison.csv"; \
+		test -s "$$evidence_dir/$$mode.yvex-benchmark"; \
+		test -s "$$evidence_dir/$$mode.json"; \
+		test -s "$$evidence_dir/$$mode-comparison.csv"; \
+		test -s "$$evidence_dir/$$mode.svg"; \
+		test -s "$$evidence_dir/$$mode-comparison.svg"; \
+	done; \
+	python3 tests/support/validate_runtime_benchmark.py "$$evidence_dir" "$$binding"; \
+	printf 'runtime benchmark evidence retained: %s\n' "$$evidence_dir"
+
+# Keep focused harness invocations serial even when the outer make uses -j.
+test-runtime: $(TEST_RUNNER)
+	YVEX_TEST_FILTER=runtime_binding $(TEST_RUNNER)
+	YVEX_TEST_FILTER=runtime_state $(TEST_RUNNER)
+	YVEX_TEST_FILTER=runtime_benchmark $(TEST_RUNNER)
+	@! YVEX_TEST_FILTER=__unknown_runtime_test__ $(TEST_RUNNER) >/dev/null 2>&1
+	@! YVEX_TEST_FILTER=runtime_benchmark,runtime_benchmark \
+		$(TEST_RUNNER) >/dev/null 2>&1
+
+test-runtime-asan:
+	@set -eu; \
+	tmp_tag=runtime-asan; \
+	$(ATTENTION_OWNED_TMP_BEGIN) \
+	build_dir="$$tmp_dir/build"; \
+	ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:strict_string_checks=1 \
+	$(MAKE) BUILD_DIR="$$build_dir" \
+		NVCC=__yvex_nvcc_unavailable__ \
+		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=address,leak' \
+		LDFLAGS='$(LDFLAGS) -fsanitize=address,leak' test-runtime; \
+	ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:strict_string_checks=1 \
+		YVEX_TEST_FILTER=deepseek_attention \
+		"$$build_dir/tests/test"
+
+# The live sanitizer lane uses the admitted artifact but only one bounded CPU
+# quick execution. It proves the main CLI reaches the instrumented production
+# executor without pulling the target-scale CUDA/full validation into ASan.
+test-runtime-asan-live: tests/cli/attention_graph.sh
+	@set -eu; \
+	tmp_tag=runtime-asan-live; \
+	$(ATTENTION_OWNED_TMP_BEGIN) \
+	build_dir="$$tmp_dir/build"; \
+	ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:strict_string_checks=1 \
+	$(MAKE) BUILD_DIR="$$build_dir" \
+		NVCC=__yvex_nvcc_unavailable__ \
+		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=address,leak' \
+		LDFLAGS='$(LDFLAGS) -fsanitize=address,leak' test-runtime; \
+	ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:strict_string_checks=1 \
+		YVEX_TEST_FILTER=deepseek_attention \
+		"$$build_dir/tests/test"; \
+	ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:strict_string_checks=1 \
+	$(MAKE) BUILD_DIR="$$build_dir" YVEX_BIN="$$build_dir/yvex" \
+		NVCC=__yvex_nvcc_unavailable__ \
+		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=address,leak' \
+		LDFLAGS='$(LDFLAGS) -fsanitize=address,leak' cli; \
+	ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:strict_string_checks=1 \
+		YVEX_BIN="$$build_dir/yvex" YVEX_TEST_OUT_DIR="$$tmp_dir/output" \
+		YVEX_ATTENTION_LIVE=1 YVEX_ATTENTION_CPU_QUICK_ONLY=1 \
+		YVEX_ATTENTION_MODELS_ROOT="$(DEEPSEEK_OPERATOR_MODELS_ROOT)" \
+		YVEX_ATTENTION_ARTIFACT="$(DEEPSEEK_SELECTED_ARTIFACT)" \
+		sh tests/cli/attention_graph.sh
+
+test-runtime-ubsan:
+	@set -eu; \
+	tmp_tag=runtime-ubsan; \
+	$(ATTENTION_OWNED_TMP_BEGIN) \
+	build_dir="$$tmp_dir/build"; \
+	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+	$(MAKE) BUILD_DIR="$$build_dir" \
+		NVCC=__yvex_nvcc_unavailable__ \
+		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined \
+			-fno-sanitize-recover=undefined' \
+		LDFLAGS='$(LDFLAGS) -fsanitize=undefined' test-runtime; \
+	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+		YVEX_TEST_FILTER=deepseek_attention \
+		"$$build_dir/tests/test"
+
+test-runtime-ubsan-live: tests/cli/attention_graph.sh
+	@set -eu; \
+	tmp_tag=runtime-ubsan-live; \
+	$(ATTENTION_OWNED_TMP_BEGIN) \
+	build_dir="$$tmp_dir/build"; \
+	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+	$(MAKE) BUILD_DIR="$$build_dir" \
+		NVCC=__yvex_nvcc_unavailable__ \
+		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined \
+			-fno-sanitize-recover=undefined' \
+		LDFLAGS='$(LDFLAGS) -fsanitize=undefined' test-runtime; \
+	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+		YVEX_TEST_FILTER=deepseek_attention \
+		"$$build_dir/tests/test"; \
+	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+	$(MAKE) BUILD_DIR="$$build_dir" YVEX_BIN="$$build_dir/yvex" \
+		NVCC=__yvex_nvcc_unavailable__ \
+		CFLAGS='$(CFLAGS) -O1 -g -fno-omit-frame-pointer -fsanitize=undefined \
+			-fno-sanitize-recover=undefined' \
+		LDFLAGS='$(LDFLAGS) -fsanitize=undefined' cli; \
+	UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+		YVEX_BIN="$$build_dir/yvex" YVEX_TEST_OUT_DIR="$$tmp_dir/output" \
+		YVEX_ATTENTION_LIVE=1 YVEX_ATTENTION_CPU_QUICK_ONLY=1 \
+		YVEX_ATTENTION_MODELS_ROOT="$(DEEPSEEK_OPERATOR_MODELS_ROOT)" \
+		YVEX_ATTENTION_ARTIFACT="$(DEEPSEEK_SELECTED_ARTIFACT)" \
+		sh tests/cli/attention_graph.sh
+
+test-runtime-sanitizers:
+	$(MAKE) test-runtime-asan
+	$(MAKE) test-runtime-ubsan
+
+test-runtime-sanitizers-live:
+	$(MAKE) test-runtime-asan-live
+	$(MAKE) test-runtime-ubsan-live
 
 test-materialize-live-plan: $(MATERIALIZE_LIVE_RUNNER)
 	$(MATERIALIZE_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
@@ -444,6 +639,28 @@ test-attention-live-plan: $(ATTENTION_LIVE_RUNNER)
 
 test-attention-live: $(ATTENTION_LIVE_RUNNER)
 	$(ATTENTION_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
+# This focused session/oracle lane refuses an absent binding rather than
+# silently skipping the compilation-free runtime consumer.
+test-runtime-attention-live: $(ATTENTION_LIVE_RUNNER)
+	@set -eu; \
+	tmp_tag=runtime-attention-live; \
+	$(ATTENTION_OWNED_TMP_BEGIN) \
+	binding='$(YVEX_RUNTIME_BINDING)'; \
+	case "$$binding" in /*) ;; *) \
+		echo "YVEX_RUNTIME_BINDING must be an absolute file" >&2; exit 2;; \
+	esac; \
+	test -f "$$binding" && test ! -L "$$binding" || { \
+		echo "runtime binding must be a regular non-symlink file" >&2; exit 2; }; \
+	YVEX_ATTENTION_RUNTIME_BINDING="$$binding" $(ATTENTION_LIVE_RUNNER) \
+		"$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" \
+		"$(DEEPSEEK_SOURCE_MANIFEST)" >"$$tmp_dir/first.out"; \
+	YVEX_ATTENTION_RUNTIME_BINDING="$$binding" $(ATTENTION_LIVE_RUNNER) \
+		"$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" \
+		"$(DEEPSEEK_SOURCE_MANIFEST)" >"$$tmp_dir/second.out"; \
+	cmp "$$tmp_dir/first.out" "$$tmp_dir/second.out"; \
+	cat "$$tmp_dir/first.out"; \
+	echo "runtime attention live repeat: byte-identical"
 
 test-attention-cli-live: $(YVEX_BIN) tests/cli/attention_graph.sh
 	@set -eu; \
@@ -553,6 +770,21 @@ $(LIBYVEX): $(CORE_OBJS)
 $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
+
+.PHONY: FORCE
+FORCE:
+
+# Revalidate commit and source cleanliness on every invocation; replace the
+# generated header only when exact provenance changes.
+$(BUILD_COMMIT_HEADER): FORCE
+	@mkdir -p $(@D)
+	@tmp="$@.tmp"; \
+	printf '#ifndef YVEX_BUILD_PROVENANCE_INCLUDED\n#define YVEX_BUILD_PROVENANCE_INCLUDED\n#define YVEX_BUILD_COMMIT "%s"\n#define YVEX_BUILD_SOURCE_STATE "%s"\n#define YVEX_BUILD_SOURCE_DELTA_IDENTITY "%s"\n#define YVEX_BUILD_IDENTITY "%s"\n#define YVEX_BUILD_SOURCE_ROOT "%s"\n#endif\n' \
+		'$(YVEX_BUILD_COMMIT)' '$(YVEX_BUILD_SOURCE_STATE)' \
+		'$(YVEX_BUILD_SOURCE_DELTA_IDENTITY)' '$(YVEX_BUILD_IDENTITY)' \
+		'$(YVEX_BUILD_SOURCE_ROOT)' >"$$tmp"; \
+	if test -r "$@" && cmp -s "$$tmp" "$@"; then rm -f "$$tmp"; \
+	else mv "$$tmp" "$@"; fi
 
 $(OBJ_DIR)/tests/unit/%.o: tests/unit/%.c tests/test.h
 	@mkdir -p $(@D)
@@ -667,7 +899,8 @@ check-docs:
 	@grep -F "PROJECT.md" README.md >/dev/null
 	@sh tests/test_project_ledger.sh >/dev/null
 	@grep -F "YVEX System Target" docs/system-target.md >/dev/null
-	@grep -F "YVEX Reference Architecture Map" docs/reference-architecture.md >/dev/null
+	@grep -F "Reference Architecture for Verified Transformer Inference" \
+		docs/reference-architecture.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Runtime Contract" docs/contract.md >/dev/null
 	@grep -F "YVEX Operator Runbook" docs/operator-runbook.md >/dev/null
@@ -713,9 +946,9 @@ check-guardrails: $(LIBYVEX) $(YVEX_BIN) $(TEST_REFERENCE_OBJS)
 	@test -d src/model
 	@test -d src/tokenizer
 	@test -d src/runtime
-	@test -d src/generation
-	@test -d src/eval
-	@test -d src/bench
+	@test ! -d src/generation
+	@test ! -d src/eval
+	@test ! -d src/bench
 	@test ! -d cuda
 	@test ! -d gguf
 	@test ! -d models
@@ -742,4 +975,19 @@ check-guardrails: $(LIBYVEX) $(YVEX_BIN) $(TEST_REFERENCE_OBJS)
 -include $(DEPENDENCY_FILES)
 
 clean:
-	@rm -rf $(BUILD_DIR) ./yvex ./yvexd ./*.o
+	@set -eu; \
+	build_dir='$(BUILD_DIR)'; \
+	case "$$build_dir" in \
+		build|build/*|/tmp/yvex-*/build|/tmp/yvex.*/build) ;; \
+		*) printf 'clean: refusing unowned BUILD_DIR: %s\n' "$$build_dir" >&2; exit 1 ;; \
+	esac; \
+	if [ -L "$$build_dir" ]; then \
+		printf 'clean: refusing symlink BUILD_DIR: %s\n' "$$build_dir" >&2; exit 1; \
+	fi; \
+	if [ -d "$$build_dir" ]; then \
+		find "$$build_dir" -depth -mindepth 1 -delete; \
+		rmdir "$$build_dir"; \
+	elif [ -e "$$build_dir" ]; then \
+		printf 'clean: refusing non-directory BUILD_DIR: %s\n' "$$build_dir" >&2; exit 1; \
+	fi; \
+	rm -f -- ./yvex ./yvexd ./*.o

@@ -43,6 +43,19 @@ typedef struct {
     atomic_int stop;
 } artifact_progress_context;
 
+static const char *artifact_class_name(yvex_artifact_class artifact_class) {
+    switch (artifact_class) {
+    case YVEX_ARTIFACT_CLASS_TENSOR_PROOF:
+        return "tensor-proof-artifact";
+    case YVEX_ARTIFACT_CLASS_EXTERNAL_UNADMITTED:
+        return "external-unadmitted-artifact";
+    case YVEX_ARTIFACT_CLASS_COMPLETE_YVEX:
+        return "complete-yvex-artifact";
+    default:
+        return "refused";
+    }
+}
+
 typedef struct {
     struct timespec begin;
     unsigned long long last_reported_bytes;
@@ -80,6 +93,27 @@ static unsigned long long artifact_elapsed_ns(const struct timespec *begin,
     return (unsigned long long)(end->tv_sec - begin->tv_sec - 1) *
                1000000000ull + 1000000000ull -
            (unsigned long long)(begin->tv_nsec - end->tv_nsec);
+}
+
+/* Builds a complete writer plan through the sole tagged production boundary. */
+static int artifact_writer_plan_build(
+    yvex_gguf_writer_plan **out, const yvex_quant_plan *quant,
+    const yvex_deepseek_payload_handoff *handoff,
+    const yvex_gguf_writer_plan_options *options,
+    yvex_gguf_writer_failure *failure, yvex_error *error)
+{
+    yvex_gguf_writer_plan_request request;
+
+    memset(&request, 0, sizeof(request));
+    request.input_class = YVEX_GGUF_WRITER_INPUT_COMPLETE_ARTIFACT;
+    request.quant_plan = quant;
+    request.options = options;
+    request.input.complete.family_adapter = yvex_model_register_deepseek_v4();
+    request.input.complete.lowering =
+        yvex_model_register_deepseek_v4()->payload.map(handoff);
+    request.input.complete.verification =
+        yvex_model_register_deepseek_v4()->payload.verification(handoff);
+    return yvex_gguf_writer_plan_build(out, &request, failure, error);
 }
 
 /* Builds one bounded external artifact path and refuses truncation. */
@@ -172,8 +206,8 @@ static void artifact_print_quant_failure(const char *phase,
                                          const yvex_error *error)
 {
     fprintf(stderr,
-            "%s_failure=%s terminal=%llu source=%llu row=%llu block=%llu expected=%llu actual=%llu qtype=%u operation=%u status=%s where=%s message=%s\n",
-            phase, yvex_quant_failure_name(failure->code),
+            "%s_failure=%u terminal=%llu source=%llu row=%llu block=%llu expected=%llu actual=%llu qtype=%u operation=%u status=%s where=%s message=%s\n",
+            phase, (unsigned int)failure->code,
             failure->terminal_ordinal, failure->source_index,
             failure->row_index, failure->block_index, failure->expected,
             failure->actual, failure->qtype,
@@ -210,7 +244,7 @@ static int artifact_plan_compatibility(
             artifact, &admission, &admission_failure, &error);
     if (rc == YVEX_OK)
         rc = yvex_artifact_admission_identity_verify(
-            artifact, &admission, &admission_failure, &error);
+            artifact, &admission, NULL, NULL, &admission_failure, &error);
     if (rc == YVEX_OK)
         rc = yvex_artifact_physical_compatibility_validate(
             writer, &admission, artifact, gguf, &compatibility, &failure,
@@ -286,14 +320,12 @@ static int artifact_plan_one(
     }
     yvex_gguf_writer_plan_options_default(&writer_options);
     writer_options.required_execution_identity = execution_identity;
-    rc = yvex_gguf_writer_build_deepseek(
-        &writer, quant, yvex_model_register_deepseek_v4()->payload.map(handoff),
-        yvex_model_register_deepseek_v4()->payload.verification(handoff),
-        &writer_options, &writer_failure, &error);
+    rc = artifact_writer_plan_build(
+        &writer, quant, handoff, &writer_options, &writer_failure, &error);
     if (rc != YVEX_OK) {
         fprintf(stderr,
-                "writer_plan_failure=%s metadata=%llu tensor=%llu name=%s expected=%llu actual=%llu status=%s where=%s message=%s\n",
-                yvex_gguf_writer_code_name(writer_failure.code),
+                "writer_plan_failure=%u metadata=%llu tensor=%llu name=%s expected=%llu actual=%llu status=%s where=%s message=%s\n",
+                (unsigned int)writer_failure.code,
                 writer_failure.metadata_index, writer_failure.tensor_index,
                 writer_failure.name, writer_failure.expected,
                 writer_failure.actual,
@@ -304,11 +336,8 @@ static int artifact_plan_one(
     }
     quant_summary = yvex_quant_plan_summary_get(quant);
     writer_summary = yvex_gguf_writer_plan_summary_get(writer);
-    rc = yvex_gguf_writer_build_deepseek(
-        &repeat_writer, quant,
-        yvex_model_register_deepseek_v4()->payload.map(handoff),
-        yvex_model_register_deepseek_v4()->payload.verification(handoff),
-        &writer_options, &writer_failure, &error);
+    rc = artifact_writer_plan_build(
+        &repeat_writer, quant, handoff, &writer_options, &writer_failure, &error);
     repeat_summary = yvex_gguf_writer_plan_summary_get(repeat_writer);
     prefix = yvex_gguf_writer_plan_prefix(writer, &prefix_bytes);
     repeat_prefix = yvex_gguf_writer_plan_prefix(
@@ -467,10 +496,8 @@ static int artifact_structure_one(
     if (rc != YVEX_OK) goto cleanup;
     yvex_gguf_writer_plan_options_default(&writer_options);
     writer_options.required_execution_identity = execution_identity;
-    rc = yvex_gguf_writer_build_deepseek(
-        &writer, quant, yvex_model_register_deepseek_v4()->payload.map(handoff),
-        yvex_model_register_deepseek_v4()->payload.verification(handoff),
-        &writer_options, &writer_failure, &error);
+    rc = artifact_writer_plan_build(
+        &writer, quant, handoff, &writer_options, &writer_failure, &error);
     if (rc != YVEX_OK) goto cleanup;
     summary = yvex_gguf_writer_plan_summary_get(writer);
     prefix = yvex_gguf_writer_plan_prefix(writer, &prefix_bytes);
@@ -581,13 +608,11 @@ static int artifact_execute_one(
     quant_summary = yvex_quant_plan_summary_get(quant);
     yvex_gguf_writer_plan_options_default(&writer_options);
     writer_options.required_execution_identity = required_execution_identity;
-    rc = yvex_gguf_writer_build_deepseek(
-        &writer, quant, yvex_model_register_deepseek_v4()->payload.map(handoff),
-        yvex_model_register_deepseek_v4()->payload.verification(handoff),
-        &writer_options, &writer_failure, &error);
+    rc = artifact_writer_plan_build(
+        &writer, quant, handoff, &writer_options, &writer_failure, &error);
     if (rc != YVEX_OK) {
-        fprintf(stderr, "writer_plan_failure=%s tensor=%llu message=%s\n",
-                yvex_gguf_writer_code_name(writer_failure.code),
+        fprintf(stderr, "writer_plan_failure=%u tensor=%llu message=%s\n",
+                (unsigned int)writer_failure.code,
                 writer_failure.tensor_index, yvex_error_message(&error));
         goto cleanup;
     }
@@ -603,8 +628,8 @@ static int artifact_execute_one(
         &file_sink, writer, quant, &file_options, &file_failure, &error);
     if (rc != YVEX_OK) {
         fprintf(stderr,
-                "file_sink_create_failure=%s system=%d expected=%llu actual=%llu message=%s\n",
-                yvex_gguf_file_code_name(file_failure.code),
+                "file_sink_create_failure=%u system=%d expected=%llu actual=%llu message=%s\n",
+                (unsigned int)file_failure.code,
                 file_failure.system_error, file_failure.expected,
                 file_failure.actual, yvex_error_message(&error));
         goto cleanup;
@@ -653,8 +678,8 @@ static int artifact_execute_one(
         &phase_begin, &phase_end);
     if (rc != YVEX_OK) {
         fprintf(stderr,
-                "file_finalize_failure=%s terminal=%llu expected=%llu actual=%llu message=%s\n",
-                yvex_gguf_file_code_name(file_failure.code),
+                "file_finalize_failure=%u terminal=%llu expected=%llu actual=%llu message=%s\n",
+                (unsigned int)file_failure.code,
                 file_failure.terminal_ordinal, file_failure.expected,
                 file_failure.actual, yvex_error_message(&error));
         goto cleanup;
@@ -673,8 +698,8 @@ static int artifact_execute_one(
         &phase_begin, &phase_end);
     if (rc != YVEX_OK) {
         fprintf(stderr,
-                "native_roundtrip_failure=%s tensor=%llu offset=%llu expected=%llu actual=%llu message=%s\n",
-                yvex_gguf_roundtrip_code_name(roundtrip_failure.code),
+                "native_roundtrip_failure=%u tensor=%llu offset=%llu expected=%llu actual=%llu message=%s\n",
+                (unsigned int)roundtrip_failure.code,
                 roundtrip_failure.tensor_index,
                 roundtrip_failure.file_offset, roundtrip_failure.expected,
                 roundtrip_failure.actual, yvex_error_message(&error));
@@ -699,8 +724,8 @@ static int artifact_execute_one(
             file_sink, &result->roundtrip, &result->emission,
             &file_failure, &error);
         if (rc != YVEX_OK) {
-            fprintf(stderr, "file_publish_failure=%s message=%s\n",
-                    yvex_gguf_file_code_name(file_failure.code),
+            fprintf(stderr, "file_publish_failure=%u message=%s\n",
+                    (unsigned int)file_failure.code,
                     yvex_error_message(&error));
             goto cleanup;
         }
@@ -721,15 +746,14 @@ static int artifact_execute_one(
                     admission_failure.actual, yvex_error_message(&error));
             if (yvex_gguf_file_sink_withdraw(
                     file_sink, &file_failure, &error) != YVEX_OK)
-                fprintf(stderr, "artifact_withdraw_failure=%s message=%s\n",
-                        yvex_gguf_file_code_name(file_failure.code),
+                fprintf(stderr, "artifact_withdraw_failure=%u message=%s\n",
+                        (unsigned int)file_failure.code,
                         yvex_error_message(&error));
             goto cleanup;
         }
         {
             yvex_artifact_descriptor_fact descriptor;
             yvex_model_complete_artifact_gate_fact model_gate;
-            yvex_model_artifact_report model_report;
             if (!yvex_artifact_descriptor_from_admission(
                     &result->admission, &descriptor) ||
                 !descriptor.materialization_input_ready ||
@@ -737,12 +761,7 @@ static int artifact_execute_one(
                 yvex_model_artifact_gate_from_admission(
                     &result->admission, &model_gate, &error) != YVEX_OK ||
                 !model_gate.complete_artifact_admitted ||
-                model_gate.execution_ready ||
-                yvex_model_artifact_report_from_admission(
-                    &result->admission, &model_report, &error) != YVEX_OK ||
-                strcmp(model_report.status,
-                       "complete-artifact-admitted") != 0 ||
-                model_report.execution_ready) {
+                model_gate.execution_ready) {
                 fprintf(stderr,
                         "artifact_descriptor_cutover=refused\n");
                 (void)yvex_gguf_file_sink_withdraw(
@@ -814,7 +833,7 @@ static int artifact_execute_one(
     printf("artifact_official_roundtrip=%s\n",
            publish ? "accepted" : "not-required");
     printf("artifact_admission=%s\n",
-           publish ? yvex_artifact_class_name(
+           publish ? artifact_class_name(
                          result->admission.artifact_class)
                    : "not-published");
     fflush(stdout);

@@ -86,14 +86,11 @@ static int test_cpu_resource_guards(void)
     yvex_attention_history_view history;
     yvex_attention_execution_trace trace;
     yvex_attention_scratch_budget scratch;
-    yvex_materialized_tensor_binding binding;
-    yvex_attention_cpu_result result;
     yvex_attention_failure failure;
+    yvex_attention_workspace *workspace = NULL;
     yvex_error err;
     unsigned long long row_bytes = 0ull;
-    unsigned long long row_count = 0ull;
     unsigned long long trace_bytes = 0ull;
-    float input[4096] = {0.0f};
     size_t reserved = 0u;
     int rc;
 
@@ -111,71 +108,56 @@ static int test_cpu_resource_guards(void)
             reserved == 32u && scratch.live_bytes == 32u &&
             scratch.peak_bytes == 32u,
         "scratch budget admits the exact limit");
-    yvex_attention_scratch_release(&scratch, reserved);
+    attention_scratch_release(&scratch, reserved);
     YVEX_TEST_ASSERT(scratch.live_bytes == 0u && scratch.peak_bytes == 32u,
                      "scratch release preserves peak accounting");
 
     memset(&history, 0, sizeof(history));
-    rc = yvex_attention_cuda_trace_allocate(
-        &trace, &layer, &history, 0ull, input, ULLONG_MAX, &trace_bytes,
-        &failure, &err);
+    rc = yvex_attention_cuda_trace_open(
+        &trace, &layer, YVEX_ATTENTION_OPERATION_CORE, &history, 0ull, 1ull,
+        YVEX_ATTENTION_EVIDENCE_FULL, NULL, ULLONG_MAX, &trace_bytes, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && trace_bytes != 0ull,
                      "CUDA trace reports its complete owned bytes");
     yvex_graph_lower_deepseek_v4()->publication_release(&trace);
     yvex_graph_lower_deepseek_v4()->publication_release(&trace);
     YVEX_TEST_ASSERT(!trace.owned && !trace.complete && !trace.output,
                      "attention publication release is idempotent");
-    rc = yvex_attention_cuda_trace_allocate(
-        &trace, &layer, &history, 0ull, input, trace_bytes - 1ull,
+    rc = yvex_attention_cuda_trace_open(
+        &trace, &layer, YVEX_ATTENTION_OPERATION_CORE, &history, 0ull, 1ull,
+        YVEX_ATTENTION_EVIDENCE_FULL, NULL, trace_bytes - 1ull,
         &row_bytes, &failure, &err);
     YVEX_TEST_ASSERT(
         rc == YVEX_ERR_BOUNDS && row_bytes == 0ull && !trace.owned &&
             failure.code == YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH,
         "CUDA trace refuses budget minus one before allocation");
-    rc = yvex_attention_cuda_trace_allocate(
-        &trace, &layer, &history, 0ull, input, trace_bytes, &row_bytes,
-        &failure, &err);
+    rc = yvex_attention_cuda_trace_open(
+        &trace, &layer, YVEX_ATTENTION_OPERATION_CORE, &history, 0ull, 1ull,
+        YVEX_ATTENTION_EVIDENCE_FULL, NULL, trace_bytes, &row_bytes, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && row_bytes == trace_bytes && trace.owned,
                      "CUDA trace admits its exact host budget");
     yvex_graph_lower_deepseek_v4()->publication_release(&trace);
 
-    memset(&binding, 0, sizeof(binding));
-    binding.role = YVEX_TENSOR_ROLE_ATTENTION_Q_A;
-    binding.layer_index = 1ull;
-    binding.row_width = 32ull;
-    binding.row_count = 2ull;
-    binding.block_size = 32ull;
-    binding.bytes_per_block = 34ull;
-    binding.encoded_bytes = 68ull;
-    yvex_error_clear(&err);
-    rc = yvex_attention_row_geometry(
-        &binding, &row_bytes, &row_count, &failure, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK && row_bytes == 34ull && row_count == 2ull,
-                     "exact encoded row geometry is admitted");
-    binding.encoded_bytes++;
-    rc = yvex_attention_row_geometry(
-        &binding, &row_bytes, &row_count, &failure, &err);
     YVEX_TEST_ASSERT(
-        rc == YVEX_ERR_BOUNDS &&
-            failure.code == YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION,
-        "trailing encoded tensor bytes refuse");
-    binding.row_width = 1ull;
-    binding.row_count = ULLONG_MAX;
-    binding.block_size = 1ull;
-    binding.bytes_per_block = 2ull;
-    binding.encoded_bytes = 0ull;
-    rc = yvex_attention_row_geometry(
-        &binding, &row_bytes, &row_count, &failure, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS,
-                     "encoded tensor byte multiplication overflow refuses");
+        yvex_attention_workspace_open(&workspace, trace_bytes, &err) == YVEX_OK &&
+            yvex_attention_workspace_begin(workspace, &err) == YVEX_OK,
+        "FAST CUDA publication borrows one prepared graph workspace");
+    rc = yvex_attention_cuda_trace_open(
+        &trace, &layer, YVEX_ATTENTION_OPERATION_CORE, &history, 0ull, 1ull,
+        YVEX_ATTENTION_EVIDENCE_NONE, workspace, trace_bytes, &row_bytes, &failure, &err);
+    YVEX_TEST_ASSERT(
+        rc == YVEX_OK && trace.workspace == workspace && !trace.input &&
+            !trace.q_low && !trace.query && !trace.index_query &&
+            !trace.index_weights && !trace.attention_values &&
+            !trace.topk_counts && !trace.topk_positions && trace.raw_kv &&
+            trace.output,
+        "FAST CUDA publication retains production output/state and omits evidence-only spans");
+    yvex_graph_lower_deepseek_v4()->publication_release(&trace);
+    YVEX_TEST_ASSERT(
+        yvex_attention_workspace_rewind(workspace, 0ull, &err) == YVEX_OK &&
+            yvex_attention_workspace_finish(workspace, &err) == YVEX_OK,
+        "FAST CUDA publication release leaves arena lifetime with its workspace owner");
+    yvex_attention_workspace_close(&workspace);
 
-    memset(&result, 0, sizeof(result));
-    result.payload_bytes_read = ULLONG_MAX;
-    rc = yvex_attention_payload_account(
-        &result, 1ull, NULL, &failure, &err);
-    YVEX_TEST_ASSERT(
-        rc == YVEX_ERR_BOUNDS && result.payload_bytes_read == ULLONG_MAX,
-        "payload evidence overflow refuses without counter mutation");
     return 0;
 }
 
@@ -357,14 +339,8 @@ static int compare_float_ranges(const float *left,
                                 unsigned long long count,
                                 const char *label);
 
-static int test_execution_gate_is_admitted(void)
+static int test_execution_status_names(void)
 {
-    const char *reason = NULL;
-
-    YVEX_TEST_ASSERT(yvex_attention_execute_supported(&reason) == 1,
-                     "attention executor is admitted");
-    YVEX_TEST_ASSERT(reason == NULL,
-                     "admitted attention has no refusal reason");
     YVEX_TEST_ASSERT_STREQ(
         yvex_test_attention_status_name(
             YVEX_DEEPSEEK_ATTENTION_STATUS_EXECUTION_READY),
@@ -697,8 +673,9 @@ static int test_transactional_memory_sink(void)
     rc = yvex_attention_memory_sink_init(
         &sink, NULL, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "memory sink initializes");
-    rc = yvex_attention_state_transaction_begin(
-        &sink, &swa, &history, 0ull, 1ull, &transaction, &failure, &err);
+    rc = yvex_attention_state_transaction_begin_scope(
+        &sink, &swa, &history, YVEX_ATTENTION_OPERATION_CORE, 0ull, 1ull,
+        &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "memory sink transaction begins");
     YVEX_TEST_ASSERT(
         yvex_attention_memory_sink_committed_component(
@@ -773,8 +750,9 @@ static int test_transactional_memory_sink(void)
     history.local_kv = local_kv;
     history.local_kv_stride = 512ull;
     history.local_positions = &local_position;
-    rc = yvex_attention_state_transaction_begin(
-        &sink, &swa, &history, 1ull, 1ull, &transaction, &failure, &err);
+    rc = yvex_attention_state_transaction_begin_scope(
+        &sink, &swa, &history, YVEX_ATTENTION_OPERATION_CORE, 1ull, 1ull,
+        &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "second transaction begins");
     rc = yvex_attention_state_transaction_acquire(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT,
@@ -813,8 +791,9 @@ static int test_transactional_memory_sink(void)
     history.local_tail_count = 0ull;
     history.local_kv = NULL;
     history.local_positions = NULL;
-    rc = yvex_attention_state_transaction_begin(
-        &sink, &swa, &history, 0ull, 1ull, &transaction, &failure, &err);
+    rc = yvex_attention_state_transaction_begin_scope(
+        &sink, &swa, &history, YVEX_ATTENTION_OPERATION_CORE, 0ull, 1ull,
+        &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "failure-injection transaction begins");
     rc = yvex_attention_state_transaction_acquire(
         &transaction, YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV,
@@ -832,8 +811,9 @@ static int test_transactional_memory_sink(void)
     rc = yvex_attention_memory_sink_init(
         &sink, &options, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "commit-failure sink initializes");
-    rc = yvex_attention_state_transaction_begin(
-        &sink, &swa, &history, 0ull, 1ull, &transaction, &failure, &err);
+    rc = yvex_attention_state_transaction_begin_scope(
+        &sink, &swa, &history, YVEX_ATTENTION_OPERATION_CORE, 0ull, 1ull,
+        &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "commit-failure transaction begins");
     YVEX_TEST_ASSERT(
         seal_zero_component(
@@ -871,8 +851,9 @@ static int test_transactional_memory_sink(void)
     YVEX_TEST_ASSERT(rc == YVEX_OK,
                      "determinism sink initializes");
     history.token_count = 0ull;
-    rc = yvex_attention_state_transaction_begin(
-        &sink2, &swa, &history, 0ull, 1ull, &transaction, &failure, &err);
+    rc = yvex_attention_state_transaction_begin_scope(
+        &sink2, &swa, &history, YVEX_ATTENTION_OPERATION_CORE, 0ull, 1ull,
+        &transaction, &failure, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK,
                      "determinism transaction begins");
     rc = yvex_attention_state_transaction_acquire(
@@ -1050,9 +1031,9 @@ static int run_rolling_sequence(
             if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA)
                 history.indexer_rolling_state = index_before;
             yvex_error_clear(&err);
-            if (yvex_attention_state_transaction_begin(
-                    &sink, layer, &history, token, 1ull, &transaction,
-                    &failure, &err) != YVEX_OK)
+            if (yvex_attention_state_transaction_begin_scope(
+                    &sink, layer, &history, YVEX_ATTENTION_OPERATION_CORE,
+                    token, 1ull, &transaction, &failure, &err) != YVEX_OK)
                 goto cleanup;
             if (!seal_zero_component(
                     &transaction,
@@ -1280,6 +1261,143 @@ static int test_rolling_state_chunk_invariance(void)
     return 0;
 }
 
+/* Purpose: compare pinned external literals, the independent oracle, and production primitives. */
+static int test_external_semantic_conformance(void)
+{
+    const yvex_test_attention_external_vectors *vectors =
+        yvex_test_attention_external_vectors_get();
+    yvex_test_attention_external_summary summary;
+    yvex_attention_position_policy position = {0};
+    yvex_attention_layer_plan hca =
+        layer_fixture(3ull, YVEX_ATTENTION_CLASS_HCA, 128ull);
+    yvex_attention_failure failure;
+    yvex_attention_scratch_budget scratch = {0};
+    yvex_error error;
+    float actual[8];
+    unsigned char codes[8], scale;
+    unsigned long long selected[6], selected_count = 0ull, index;
+    yvex_attention_mhc_post_args post;
+
+    YVEX_TEST_ASSERT(
+        vectors && yvex_test_attention_external_conformance_validate(&summary) &&
+            summary.schema_version == YVEX_TEST_ATTENTION_EXTERNAL_SCHEMA_V1 &&
+            summary.vector_count == 11ull && summary.provenance_complete &&
+            summary.position_policy_exact && summary.bf16_publication_exact &&
+            summary.fp8_fake_quant_exact && summary.fp4_fake_quant_exact &&
+            summary.compressor_transition_exact && summary.csa_topk_order_exact &&
+            summary.hca_ratio_exact && summary.local_compressed_reduction_exact &&
+            summary.envelope_mhc_exact && summary.hadamard_exact &&
+            yvex_sha256_hex_valid(summary.vector_identity) &&
+            strcmp(summary.vector_identity,
+                   "5f816a11f2ccab107a82523eddefc0a5b045f86cc57c495d81f7256a584324ef") == 0,
+        "pinned external literals independently validate before production comparison");
+    YVEX_TEST_ASSERT(
+        strcmp(vectors->paper_revision, "arXiv:2606.19348v1") == 0 &&
+            strcmp(vectors->sglang_revision,
+                   "96a04cb13f9c3ed86028e090784a9eb059cf5318") == 0 &&
+            strcmp(vectors->vllm_revision,
+                   "8df14cfc8c8a09b4e57f082e59593a3abce4ffb3") == 0 &&
+            strcmp(vectors->hadamard_revision,
+                   "e7706faf8d1c3b9f241e36860640ad1dac644ede") == 0,
+        "external vector provenance retains every complete pinned revision");
+
+    scratch.limit_bytes = 16ull;
+    yvex_error_clear(&error);
+    YVEX_TEST_ASSERT(
+        yvex_attention_hadamard_cpu(
+            vectors->hadamard_input, 3ull, vectors->hadamard_scale, 1,
+            actual, &scratch, &failure, &error) == YVEX_OK &&
+            memcmp(actual, vectors->hadamard_expected,
+                   3u * sizeof(float)) == 0,
+        "production zero-padded Hadamard matches the pinned Dao literal");
+    position.rope_dimension = 2ull;
+    position.theta = 10000ull;
+    position.partial_rope = 1;
+    position.inverse_output_rotation = 1;
+    memcpy(actual, vectors->position_input, 6u * sizeof(float));
+    YVEX_TEST_ASSERT(
+        yvex_attention_rope_apply(actual, 6ull, 2ull, vectors->position,
+                                  &position, 0),
+        "production partial position rotation accepts the external case");
+    for (index = 0ull; index < 6ull; ++index)
+        YVEX_TEST_ASSERT(
+            fabsf(actual[index] - vectors->position_forward_expected[index]) <=
+                1.0e-6f,
+            "production partial position rotation matches the external literal");
+    memcpy(actual, vectors->position_input, 6u * sizeof(float));
+    YVEX_TEST_ASSERT(
+        yvex_attention_rope_apply(actual, 6ull, 2ull, vectors->position,
+                                  &position, 1),
+        "production inverse output rotation accepts the external case");
+    for (index = 0ull; index < 6ull; ++index)
+        YVEX_TEST_ASSERT(
+            fabsf(actual[index] - vectors->position_inverse_expected[index]) <=
+                1.0e-6f,
+            "production inverse output rotation matches the external literal");
+
+    memcpy(actual, vectors->bf16_input, 3u * sizeof(float));
+    YVEX_TEST_ASSERT(
+        yvex_attention_compute_round(
+            YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1, actual, 3ull) &&
+            memcmp(actual, vectors->bf16_expected, 3u * sizeof(float)) == 0,
+        "production BF16 publication matches the pinned precision literal");
+    YVEX_TEST_ASSERT(
+        yvex_attention_fp4_fake_quant_block(
+            vectors->fp4_input, 6ull, actual, codes, &scale, &failure,
+            &error) == YVEX_OK && scale == vectors->fp4_expected_scale &&
+            memcmp(codes, vectors->fp4_expected_codes, 6u) == 0 &&
+            memcmp(actual, vectors->fp4_expected, 6u * sizeof(float)) == 0,
+        "production FP4 fake quant matches the external numeric literal");
+    YVEX_TEST_ASSERT(
+        yvex_attention_fp8_fake_quant_block(
+            vectors->fp8_input, 5ull, actual, codes, &scale, &failure,
+            &error) == YVEX_OK && scale == vectors->fp8_expected_scale &&
+            memcmp(codes, vectors->fp8_expected_codes, 5u) == 0 &&
+            memcmp(actual, vectors->fp8_expected, 5u * sizeof(float)) == 0,
+        "production FP8 fake quant matches the external numeric literal");
+    YVEX_TEST_ASSERT(
+        yvex_attention_topk_select(
+            vectors->topk_scores, vectors->topk_positions, 6ull, 4ull,
+            selected, &selected_count, NULL, &failure, &error) == YVEX_OK &&
+            selected_count == 4ull &&
+            memcmp(selected, vectors->topk_expected,
+                   4u * sizeof(*selected)) == 0,
+        "production CSA ordering matches the unique-score external literal");
+    YVEX_TEST_ASSERT(
+        yvex_attention_class_geometry_validate(
+            &hca, 4ull, vectors->hca_ratio, &failure, &error) == YVEX_OK,
+        "production HCA geometry admits the externally pinned ratio 128");
+    hca.compression_ratio = 127ull;
+    YVEX_TEST_ASSERT(
+        yvex_attention_class_geometry_validate(
+            &hca, 4ull, vectors->hca_ratio, &failure, &error) != YVEX_OK,
+        "production HCA geometry refuses a ratio mutation");
+
+    memset(&hca, 0, sizeof(hca));
+    hca.compute_contract = YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1;
+    hca.residual_stream_count = 2ull;
+    hca.residual_stream_width = 2ull;
+    hca.residual_expanded_width = 4ull;
+    hca.mhc_mixing_rows = 8ull;
+    hca.mhc_mixing_columns = 4ull;
+    hca.mhc_base_width = 8ull;
+    hca.mhc_scale_width = 3ull;
+    hca.mhc_sinkhorn_iterations = 20ull;
+    hca.rms_norm_epsilon = 1.0e-6;
+    hca.mhc_epsilon = 1.0e-6;
+    hca.mhc_residual_post_multiplier = 2.0;
+    hca.mhc_attention_pre_and_post = 1;
+    post = (yvex_attention_mhc_post_args){
+        &hca, vectors->mhc_core, vectors->mhc_residual, vectors->mhc_post,
+        vectors->mhc_combination, 1ull, 2ull, 4ull, 2ull, 4ull,
+        actual, 4ull};
+    YVEX_TEST_ASSERT(
+        yvex_attention_mhc_post(&post, &failure, &error) == YVEX_OK &&
+            memcmp(actual, vectors->mhc_expected, 4u * sizeof(float)) == 0,
+        "production mHC source-to-target residual orientation matches vLLM and SGLang");
+    return 0;
+}
+
 static int test_runtime_hadamard_policy(void)
 {
     const float input[] = {1.0f, -2.0f, 0.5f};
@@ -1403,7 +1521,7 @@ static int test_runtime_topk_policy(void)
     YVEX_TEST_ASSERT(
         yvex_attention_topk_select(
             scores, ordinals, 6ull, 4ull, selected, &selected_count,
-            &failure, &err) == YVEX_OK,
+            NULL, &failure, &err) == YVEX_OK,
         "top-k deterministic selection succeeds");
     YVEX_TEST_ASSERT(selected_count == 4ull &&
                      selected[0] == 5ull &&
@@ -1415,12 +1533,12 @@ static int test_runtime_topk_policy(void)
     YVEX_TEST_ASSERT(
         yvex_attention_topk_select(
             scores, ordinals, 6ull, 0ull, selected, &selected_count,
-            &failure, &err) == YVEX_OK && selected_count == 0ull,
+            NULL, &failure, &err) == YVEX_OK && selected_count == 0ull,
         "top-k zero selects no candidate");
     YVEX_TEST_ASSERT(
         yvex_attention_topk_select(
             scores, ordinals, 6ull, 9ull, selected, &selected_count,
-            &failure, &err) == YVEX_OK && selected_count == 6ull,
+            NULL, &failure, &err) == YVEX_OK && selected_count == 6ull,
         "top-k above the available count selects every candidate");
 
     {
@@ -1430,7 +1548,7 @@ static int test_runtime_topk_policy(void)
         YVEX_TEST_ASSERT(
             yvex_attention_topk_select(
                 zero_scores, zero_ordinals, 2ull, 2ull, selected,
-                &selected_count, &failure, &err) == YVEX_OK,
+                &selected_count, NULL, &failure, &err) == YVEX_OK,
             "top-k accepts signed zeros");
         YVEX_TEST_ASSERT(selected_count == 2ull &&
                          selected[0] == 1ull &&
@@ -1443,7 +1561,7 @@ static int test_runtime_topk_policy(void)
         YVEX_TEST_ASSERT(
             yvex_attention_topk_select(
                 bad_scores, bad_ordinals, 2ull, 1ull, selected,
-                &selected_count, &failure, &err) != YVEX_OK,
+                &selected_count, NULL, &failure, &err) != YVEX_OK,
             "top-k refuses non-finite scores");
     }
     {
@@ -1452,7 +1570,7 @@ static int test_runtime_topk_policy(void)
         YVEX_TEST_ASSERT(
             yvex_attention_topk_select(
                 dup_scores, dup_ordinals, 2ull, 1ull, selected,
-                &selected_count, &failure, &err) != YVEX_OK,
+                &selected_count, NULL, &failure, &err) != YVEX_OK,
             "top-k refuses duplicate ordinals");
     }
     return 0;
@@ -1468,15 +1586,6 @@ static int test_runtime_fp4_fake_quant_policy(void)
     yvex_error err;
 
     yvex_error_clear(&err);
-    YVEX_TEST_ASSERT(
-        yvex_attention_fp4_e2m1_encode(0.0f) == 0u &&
-        yvex_attention_fp4_e2m1_encode(0.6f) == 1u &&
-        yvex_attention_fp4_e2m1_encode(1.75f) == 4u &&
-        yvex_attention_fp4_e2m1_encode(-6.5f) == 15u,
-        "FP4 E2M1 uses the pinned codebook and ties-to-even");
-    YVEX_TEST_ASSERT(
-        yvex_attention_fp4_e2m1_decode(15u) == -6.0f,
-        "FP4 E2M1 decode table exposes signed max value");
     YVEX_TEST_ASSERT(
         yvex_attention_fp4_fake_quant_block(
             input, 6ull, dequant, codes, &scale_code, &failure, &err) ==
@@ -1527,10 +1636,6 @@ static int test_runtime_fp8_fake_quant_policy(void)
     yvex_error err;
 
     yvex_error_clear(&err);
-    YVEX_TEST_ASSERT(
-        yvex_attention_fp8_e4m3fn_decode(
-            yvex_attention_fp8_e4m3fn_encode(448.0f)) == 448.0f,
-        "FP8 E4M3FN exposes finite max 448");
     YVEX_TEST_ASSERT(
         yvex_attention_fp8_fake_quant_block(
             input, 5ull, dequant, codes, &scale_code, &failure, &err) ==
@@ -1588,59 +1693,12 @@ static int test_runtime_activation_codec_edges(void)
             YVEX_TEST_ASSERT(isfinite(scale) && scale > 0.0f,
                              "every admitted UE8M0 code is positive finite");
     }
-    for (code = 0u; code <= 0xffu; ++code) {
-        float value = yvex_attention_fp8_e4m3fn_decode(
-            (unsigned char)code);
-        if ((code & 0x7fu) == 0x7fu) {
-            YVEX_TEST_ASSERT(isnan(value),
-                             "E4M3FN special magnitudes decode as NaN");
-        } else {
-            YVEX_TEST_ASSERT(isfinite(value) &&
-                                 yvex_attention_fp8_e4m3fn_encode(value) ==
-                                     (unsigned char)code,
-                             "every finite E4M3FN code roundtrips exactly");
-        }
-    }
-    for (code = 0u; code < 0x7eu; ++code) {
-        float lower = yvex_attention_fp8_e4m3fn_decode(
-            (unsigned char)code);
-        float upper = yvex_attention_fp8_e4m3fn_decode(
-            (unsigned char)(code + 1u));
-        float midpoint = (lower + upper) * 0.5f;
-        unsigned char expected = (unsigned char)((code & 1u)
-            ? code + 1u : code);
-        YVEX_TEST_ASSERT(
-            yvex_attention_fp8_e4m3fn_encode(midpoint) == expected &&
-                yvex_attention_fp8_e4m3fn_encode(-midpoint) ==
-                    (unsigned char)(expected | 0x80u),
-            "E4M3FN midpoint encoding rounds to the even code");
-    }
     YVEX_TEST_ASSERT(
-        yvex_attention_fp8_e4m3fn_encode(1.1875f) == 0x3au &&
-            yvex_attention_fp8_e4m3fn_encode(-0.0f) == 0x80u &&
-            yvex_quant_bf16_decode(yvex_quant_bf16_encode(1.00390625f)) ==
+        yvex_quant_bf16_decode(yvex_quant_bf16_encode(1.00390625f)) ==
                 1.0f &&
             yvex_quant_bf16_decode(yvex_quant_bf16_encode(1.01171875f)) ==
                 1.015625f,
-        "E4M3FN and BF16 explicit midpoint cases are canonical");
-    for (code = 0u; code < 16u; ++code)
-        YVEX_TEST_ASSERT(
-            yvex_attention_fp4_e2m1_encode(
-                yvex_attention_fp4_e2m1_decode((unsigned char)code)) == code,
-            "every E2M1 code roundtrips exactly");
-    for (code = 0u; code < 7u; ++code) {
-        float lower = yvex_attention_fp4_e2m1_decode((unsigned char)code);
-        float upper = yvex_attention_fp4_e2m1_decode(
-            (unsigned char)(code + 1u));
-        float midpoint = (lower + upper) * 0.5f;
-        unsigned char expected = (unsigned char)((code & 1u)
-            ? code + 1u : code);
-        YVEX_TEST_ASSERT(
-            yvex_attention_fp4_e2m1_encode(midpoint) == expected &&
-                yvex_attention_fp4_e2m1_encode(-midpoint) ==
-                    (unsigned char)(expected | 0x8u),
-            "E2M1 midpoint encoding rounds to the even code");
-    }
+        "BF16 explicit midpoint cases are canonical");
     YVEX_TEST_ASSERT(yvex_test_attention_reference_codec_selftest(),
                      "independent oracle proves its own codec edge contract");
     return 0;
@@ -1915,9 +1973,491 @@ static int test_f32_comparison_contract(void)
     return 0;
 }
 
+typedef struct {
+    yvex_attention_publication left, right;
+    float left_raw[2], right_raw[2];
+    float left_compressed[2], right_compressed[2];
+    float left_indexer[2], right_indexer[2];
+    float left_main_kv[2], right_main_kv[2];
+    float left_main_score[1], right_main_score[1];
+    float left_indexer_kv[1], right_indexer_kv[1];
+    float left_indexer_score[1], right_indexer_score[1];
+    unsigned long long left_compressed_position[1], right_compressed_position[1];
+    unsigned long long left_indexer_position[1], right_indexer_position[1];
+} attention_state_comparison_fixture;
+
+/* Purpose: initialize one exact rolling-state publication for state-delta comparison. */
+static void state_comparison_rolling_init(
+    yvex_attention_rolling_state_output *state, yvex_attention_rolling_kind kind,
+    float *kv_state, unsigned long long kv_extent, float *score_state,
+    unsigned long long score_extent)
+{
+    memset(state, 0, sizeof(*state));
+    state->present = 1;
+    state->schema_version = YVEX_DEEPSEEK_ATTENTION_ROLLING_STATE_SCHEMA_V1;
+    state->kind = kind;
+    state->attention_class = YVEX_ATTENTION_CLASS_CSA;
+    state->layer_index = 7ull;
+    state->next_token_position = 3ull;
+    state->ratio = 4ull;
+    state->head_dimension = 1ull;
+    state->state_width = 1ull;
+    state->state_slots = 1ull;
+    state->current_fill = 3ull;
+    state->cursor = 3ull;
+    state->kv_state_stride = kv_extent;
+    state->score_state_stride = score_extent;
+    state->kv_state_extent = kv_extent;
+    state->score_state_extent = score_extent;
+    state->kv_state = kv_state;
+    state->score_state = score_state;
+    state->overlap = 1;
+    (void)snprintf(state->attention_plan_identity,
+                   sizeof(state->attention_plan_identity), "%s",
+                   "state-comparison-plan");
+}
+
+/* Purpose: construct independent but semantically identical complete candidate state deltas. */
+static void state_comparison_fixture_init(attention_state_comparison_fixture *fixture)
+{
+    memset(fixture, 0, sizeof(*fixture));
+    fixture->left_raw[1] = fixture->right_raw[1] = 1.0f;
+    fixture->left_compressed[0] = fixture->right_compressed[0] = 0.25f;
+    fixture->left_compressed[1] = fixture->right_compressed[1] = -0.5f;
+    fixture->left_indexer[0] = fixture->right_indexer[0] = 0.75f;
+    fixture->left_indexer[1] = fixture->right_indexer[1] = -1.0f;
+    fixture->left_main_kv[1] = fixture->right_main_kv[1] = -2.0f;
+    fixture->left_main_score[0] = fixture->right_main_score[0] = 0.5f;
+    fixture->left_indexer_kv[0] = fixture->right_indexer_kv[0] = 1.5f;
+    fixture->left_indexer_score[0] = fixture->right_indexer_score[0] = -0.75f;
+    fixture->left_compressed_position[0] = fixture->right_compressed_position[0] = 0ull;
+    fixture->left_indexer_position[0] = fixture->right_indexer_position[0] = 0ull;
+    fixture->left.owned = fixture->left.complete = 1;
+    fixture->left.layer_index = 7ull;
+    fixture->left.attention_class = YVEX_ATTENTION_CLASS_CSA;
+    fixture->left.token_position = 2ull;
+    fixture->left.token_count = 1ull;
+    fixture->left.kv_width = 2ull;
+    fixture->left.raw_kv = fixture->left_raw;
+    fixture->left.compressed_count = 1ull;
+    fixture->left.compressed_stride = 2ull;
+    fixture->left.compressed_kv = fixture->left_compressed;
+    fixture->left.compressed_positions = fixture->left_compressed_position;
+    fixture->left.indexer_count = 1ull;
+    fixture->left.indexer_stride = 2ull;
+    fixture->left.indexer_kv = fixture->left_indexer;
+    fixture->left.indexer_positions = fixture->left_indexer_position;
+    state_comparison_rolling_init(
+        &fixture->left.next_main_rolling_state,
+        YVEX_DEEPSEEK_ATTENTION_ROLLING_MAIN, fixture->left_main_kv, 2ull,
+        fixture->left_main_score, 1ull);
+    state_comparison_rolling_init(
+        &fixture->left.next_indexer_rolling_state,
+        YVEX_DEEPSEEK_ATTENTION_ROLLING_INDEXER, fixture->left_indexer_kv,
+        1ull, fixture->left_indexer_score, 1ull);
+    fixture->right = fixture->left;
+    fixture->right.raw_kv = fixture->right_raw;
+    fixture->right.compressed_kv = fixture->right_compressed;
+    fixture->right.compressed_positions = fixture->right_compressed_position;
+    fixture->right.indexer_kv = fixture->right_indexer;
+    fixture->right.indexer_positions = fixture->right_indexer_position;
+    fixture->right.next_main_rolling_state.kv_state = fixture->right_main_kv;
+    fixture->right.next_main_rolling_state.score_state = fixture->right_main_score;
+    fixture->right.next_indexer_rolling_state.kv_state = fixture->right_indexer_kv;
+    fixture->right.next_indexer_rolling_state.score_state = fixture->right_indexer_score;
+}
+
+/* Purpose: prove state-delta comparison separates exact geometry, numeric admission, and bytes. */
+static int test_attention_state_comparison_contract(void)
+{
+    attention_state_comparison_fixture fixture;
+    yvex_attention_state_comparison comparison;
+    yvex_error error;
+
+    yvex_error_clear(&error);
+    state_comparison_fixture_init(&fixture);
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_compare(&fixture.left, &fixture.right, 0.0, 0.0,
+                                     &comparison, &error) == YVEX_OK &&
+            comparison.geometry_equal && comparison.numeric.within_tolerance &&
+            comparison.numeric.bitwise_equal && comparison.numeric.value_count == 11ull &&
+            comparison.numeric.finite_value_count == 11ull &&
+            comparison.first_failing_stage == YVEX_ATTENTION_COMPARISON_STAGE_NONE,
+        "identical raw, emitted, and rolling state deltas compare exactly");
+
+    state_comparison_fixture_init(&fixture);
+    fixture.left_main_score[0] = fixture.right_main_score[0] = -INFINITY;
+    fixture.left_indexer_score[0] = fixture.right_indexer_score[0] = -INFINITY;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_compare(&fixture.left, &fixture.right, 0.0, 0.0,
+                                     &comparison, &error) == YVEX_OK &&
+            comparison.geometry_equal && comparison.numeric.within_tolerance &&
+            comparison.numeric.bitwise_equal && comparison.numeric.value_count == 9ull &&
+            comparison.numeric.finite_value_count == 9ull &&
+            comparison.numeric.nonfinite_value_count == 0ull,
+        "matching fail-closed rolling score sentinels are excluded from numeric values");
+    fixture.right_main_score[0] = 0.0f;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_compare(&fixture.left, &fixture.right, 0.0, 0.0,
+                                     &comparison, &error) == YVEX_OK &&
+            !comparison.numeric.within_tolerance &&
+            comparison.numeric.nonfinite_value_count == 1ull &&
+            comparison.first_failing_stage == YVEX_ATTENTION_COMPARISON_STAGE_MAIN_SCORE &&
+            comparison.numeric.first_failing_coordinate == 0ull,
+        "a mismatched rolling score sentinel fails at its exact semantic stage");
+
+    state_comparison_fixture_init(&fixture);
+    fixture.left_indexer_score[0] = -INFINITY;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_compare(&fixture.left, &fixture.right, 0.0, 0.0,
+                                     &comparison, &error) == YVEX_OK &&
+            !comparison.numeric.within_tolerance &&
+            comparison.numeric.nonfinite_value_count == 1ull &&
+            comparison.first_failing_stage ==
+                YVEX_ATTENTION_COMPARISON_STAGE_INDEXER_ROLLING_SCORE &&
+            comparison.numeric.first_failing_coordinate == 0ull,
+        "a mismatched indexer score sentinel fails at the indexer semantic stage");
+
+    state_comparison_fixture_init(&fixture);
+    fixture.left_main_score[0] = fixture.right_main_score[0] = INFINITY;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_compare(&fixture.left, &fixture.right, 0.0, 0.0,
+                                     &comparison, &error) == YVEX_OK &&
+            !comparison.numeric.within_tolerance &&
+            comparison.numeric.nonfinite_value_count == 1ull &&
+            comparison.first_failing_stage == YVEX_ATTENTION_COMPARISON_STAGE_MAIN_SCORE &&
+            comparison.numeric.first_failing_coordinate == 0ull,
+        "positive infinity is never admitted as a rolling score sentinel");
+
+    state_comparison_fixture_init(&fixture);
+    fixture.left_indexer_score[0] = fixture.right_indexer_score[0] = NAN;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_compare(&fixture.left, &fixture.right, 0.0, 0.0,
+                                     &comparison, &error) == YVEX_OK &&
+            !comparison.numeric.within_tolerance &&
+            comparison.numeric.nonfinite_value_count == 1ull &&
+            comparison.first_failing_stage ==
+                YVEX_ATTENTION_COMPARISON_STAGE_INDEXER_ROLLING_SCORE &&
+            comparison.numeric.first_failing_coordinate == 0ull,
+        "NaN is never admitted as an indexer rolling score sentinel");
+
+    state_comparison_fixture_init(&fixture);
+    fixture.right_main_kv[0] = -0.0f;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_compare(&fixture.left, &fixture.right, 0.0, 0.0,
+                                     &comparison, &error) == YVEX_OK &&
+            comparison.geometry_equal && comparison.numeric.within_tolerance &&
+            !comparison.numeric.bitwise_equal &&
+            comparison.first_failing_stage == YVEX_ATTENTION_COMPARISON_STAGE_NONE,
+        "signed zero state is numerically equal while preserving byte-level evidence");
+
+    state_comparison_fixture_init(&fixture);
+    fixture.right_main_kv[1] = -1.0f;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_compare(&fixture.left, &fixture.right, 0.0, 0.0,
+                                     &comparison, &error) == YVEX_OK &&
+            comparison.geometry_equal && !comparison.numeric.within_tolerance &&
+            comparison.first_failing_stage == YVEX_ATTENTION_COMPARISON_STAGE_MAIN_KV &&
+            comparison.numeric.first_failing_coordinate == 1ull,
+        "over-tolerance rolling state identifies its first stage and local coordinate");
+
+    state_comparison_fixture_init(&fixture);
+    fixture.right_compressed_position[0] = 4ull;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_compare(&fixture.left, &fixture.right, 0.0, 0.0,
+                                     &comparison, &error) == YVEX_OK &&
+            comparison.geometry_equal && !comparison.numeric.within_tolerance &&
+            comparison.first_failing_stage ==
+                YVEX_ATTENTION_COMPARISON_STAGE_COMPRESSED_POSITIONS &&
+            comparison.numeric.first_failing_coordinate == 0ull,
+        "ordered compressed positions participate in the candidate state verdict");
+
+    state_comparison_fixture_init(&fixture);
+    fixture.right.indexer_stride = 3ull;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_compare(&fixture.left, &fixture.right, 0.0, 0.0,
+                                     &comparison, &error) == YVEX_OK &&
+            !comparison.geometry_equal && !comparison.numeric.within_tolerance &&
+            comparison.first_failing_stage ==
+                YVEX_ATTENTION_COMPARISON_STAGE_INDEXER_EMISSION_GEOMETRY &&
+            comparison.numeric.first_failing_coordinate == ULLONG_MAX,
+        "incompatible emission geometry refuses unsafe numeric comparison");
+
+    state_comparison_fixture_init(&fixture);
+    fixture.left_raw[1] = fixture.right_raw[1] = NAN;
+    YVEX_TEST_ASSERT(
+        yvex_attention_state_compare(&fixture.left, &fixture.right, 0.0, 0.0,
+                                     &comparison, &error) == YVEX_OK &&
+            comparison.geometry_equal && !comparison.numeric.within_tolerance &&
+            comparison.numeric.nonfinite_value_count == 1ull &&
+            comparison.first_failing_stage == YVEX_ATTENTION_COMPARISON_STAGE_RAW_KV &&
+            comparison.numeric.first_failing_coordinate == 1ull,
+        "matching non-finite state bytes still fail numeric admission at the exact coordinate");
+    return 0;
+}
+
+/* Proves generic mHC attention ingress/egress against an independently linked oracle. */
+static int test_attention_envelope_numeric_contract(void)
+{
+    yvex_attention_layer_plan layer;
+    const float residual[] = {1.0f, -2.0f, 3.0f, 4.0f};
+    const float mixes[] = {0.25f, -0.5f, 0.75f, -1.0f,
+                            0.125f, -0.25f, 0.5f, -0.75f};
+    const float scale[] = {0.5f, -0.25f, 0.75f};
+    const float base[] = {0.1f, -0.2f, 0.3f, -0.4f,
+                          0.5f, -0.6f, 0.7f, -0.8f};
+    const float norm[] = {1.25f, 0.75f};
+    const float core_output[] = {0.5f, -0.25f};
+    const float orientation_residual[] = {1.0f, 2.0f, 3.0f, 4.0f};
+    const float orientation_post[] = {0.0f, 0.0f};
+    const float orientation_combination[] = {1.0f, 2.0f, 3.0f, 4.0f};
+    const float orientation_expected[] = {10.0f, 14.0f, 14.0f, 20.0f};
+    float core[2] = {0.0f}, post[2] = {0.0f}, combination[4] = {0.0f};
+    float envelope[4] = {0.0f};
+    float orientation_output[4] = {0.0f};
+    float ref_core[2] = {0.0f}, ref_post[2] = {0.0f}, ref_combination[4] = {0.0f};
+    float ref_envelope[4] = {0.0f};
+    yvex_attention_mhc_pre_args pre;
+    yvex_attention_mhc_post_args finish;
+    yvex_attention_mhc_post_args orientation;
+    yvex_test_attention_envelope_case oracle;
+    yvex_graph_f32_comparison comparison;
+    yvex_attention_failure failure;
+    yvex_error error;
+    int rc;
+
+    memset(&layer, 0, sizeof(layer));
+    layer.layer_index = 7ull;
+    layer.compute_contract = YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1;
+    layer.rms_norm_epsilon = 1.0e-6;
+    layer.residual_stream_count = 2ull;
+    layer.residual_stream_width = 2ull;
+    layer.residual_expanded_width = 4ull;
+    layer.mhc_mixing_rows = 8ull;
+    layer.mhc_mixing_columns = 4ull;
+    layer.mhc_base_width = 8ull;
+    layer.mhc_scale_width = 3ull;
+    layer.mhc_sinkhorn_iterations = 3ull;
+    layer.mhc_epsilon = 1.0e-6;
+    layer.mhc_residual_post_multiplier = 2.0;
+    layer.mhc_attention_pre_and_post = 1;
+    layer.attention_input_norm_width = 2ull;
+    layer.attention_input_norm_role = YVEX_TENSOR_ROLE_ATTENTION_NORM;
+    layer.mhc_function_role = YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION;
+    layer.mhc_base_role = YVEX_TENSOR_ROLE_HC_ATTENTION_BASE;
+    layer.mhc_scale_role = YVEX_TENSOR_ROLE_HC_ATTENTION_SCALE;
+    orientation = (yvex_attention_mhc_post_args){
+        &layer, core_output, orientation_residual, orientation_post,
+        orientation_combination, 1ull, 2ull, 4ull, 2ull, 4ull,
+        orientation_output, 4ull};
+    YVEX_TEST_ASSERT(
+        yvex_attention_mhc_post(&orientation, &failure, &error) == YVEX_OK &&
+            memcmp(orientation_output, orientation_expected,
+                   sizeof(orientation_output)) == 0,
+        "mHC egress contracts combination rows as sources and columns as targets");
+    pre = (yvex_attention_mhc_pre_args){
+        &layer, residual, mixes, scale, base, 1ull, 4ull, 8ull,
+        core, post, combination, 2ull, 2ull, 4ull};
+    yvex_error_clear(&error);
+    rc = yvex_attention_mhc_pre(&pre, &failure, &error);
+    YVEX_TEST_ASSERT(rc == YVEX_OK &&
+                         yvex_attention_rms_norm(core, 2ull, norm, 1.0e-6) &&
+                         yvex_attention_compute_round(layer.compute_contract, core, 2ull),
+                     "attention envelope ingress and RMS boundary execute");
+    finish = (yvex_attention_mhc_post_args){
+        &layer, core_output, residual, post, combination, 1ull, 2ull, 4ull,
+        2ull, 4ull, envelope, 4ull};
+    YVEX_TEST_ASSERT(yvex_attention_mhc_post(&finish, &failure, &error) == YVEX_OK,
+                     "attention envelope immediate residual egress executes");
+    oracle = (yvex_test_attention_envelope_case){
+        &layer, residual, mixes, scale, base, norm, core_output,
+        1ull, 4ull, 8ull, 2ull, ref_core, ref_post, ref_combination,
+        ref_envelope, 2ull, 2ull, 4ull, 4ull};
+    YVEX_TEST_ASSERT(yvex_test_attention_reference_envelope(&oracle),
+                     "independent attention envelope oracle executes");
+    YVEX_TEST_ASSERT(
+        yvex_graph_f32_compare(core, ref_core, 2ull, 1.0e-6, 1.0e-6,
+                               &comparison, &error) == YVEX_OK &&
+            comparison.within_tolerance &&
+        yvex_graph_f32_compare(post, ref_post, 2ull, 1.0e-6, 1.0e-6,
+                               &comparison, &error) == YVEX_OK &&
+            comparison.within_tolerance &&
+        yvex_graph_f32_compare(combination, ref_combination, 4ull, 1.0e-6, 1.0e-6,
+                               &comparison, &error) == YVEX_OK &&
+            comparison.within_tolerance &&
+        yvex_graph_f32_compare(envelope, ref_envelope, 4ull, 1.0e-6, 1.0e-6,
+                               &comparison, &error) == YVEX_OK && comparison.within_tolerance,
+        "production ingress, Sinkhorn, normalization, and egress match the oracle");
+    YVEX_TEST_ASSERT(envelope[0] != core_output[0] && envelope[2] != core_output[0],
+                     "expanded envelope output is distinct from the attention core output");
+    envelope[0] += 0.5f;
+    YVEX_TEST_ASSERT(
+        yvex_graph_f32_compare(envelope, ref_envelope, 4ull, 0.0, 0.0,
+                               &comparison, &error) == YVEX_OK &&
+            !comparison.within_tolerance && comparison.first_failing_coordinate == 0ull,
+        "independent oracle detects an attention residual-stage mutation");
+    layer.mhc_scale_width = 2ull;
+    YVEX_TEST_ASSERT(
+        yvex_attention_mhc_pre(&pre, &failure, &error) == YVEX_ERR_BOUNDS &&
+            failure.code == YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION,
+        "malformed mHC geometry refuses before arithmetic");
+    YVEX_TEST_ASSERT(layer.mhc_function_role == YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION,
+                     "attention envelope owns no FFN or MoE binding");
+    return 0;
+}
+
+/* Purpose: prove reusable graph arenas refuse capacity and isolate concurrent sessions. */
+static int test_attention_workspace_lifecycle(void)
+{
+    yvex_attention_workspace *first = NULL, *second = NULL;
+    const yvex_attention_workspace_summary *summary;
+    yvex_error error;
+    float *first_values, *replayed_values, *second_values;
+    unsigned long long mark;
+
+    yvex_error_clear(&error);
+    YVEX_TEST_ASSERT(
+        yvex_attention_workspace_open(&first, 256ull, &error) == YVEX_OK &&
+            yvex_attention_workspace_open(&second, 256ull, &error) == YVEX_OK,
+        "independent attention workspaces allocate during cold preparation");
+    YVEX_TEST_ASSERT(
+        yvex_attention_workspace_begin(first, &error) == YVEX_OK &&
+            yvex_attention_workspace_begin(second, &error) == YVEX_OK,
+        "different sessions may activate independent workspaces concurrently");
+    mark = yvex_attention_workspace_mark(first);
+    first_values = yvex_attention_workspace_calloc(first, 16ull, sizeof(float));
+    second_values = yvex_attention_workspace_calloc(second, 16ull, sizeof(float));
+    YVEX_TEST_ASSERT(first_values && second_values && first_values != second_values,
+                     "concurrent session workspaces return disjoint storage");
+    first_values[0] = 7.0f;
+    second_values[0] = -3.0f;
+    YVEX_TEST_ASSERT(
+        !yvex_attention_workspace_calloc(first, 1024ull, sizeof(float)),
+        "workspace capacity exhaustion refuses without heap fallback");
+    summary = yvex_attention_workspace_summary_get(first);
+    YVEX_TEST_ASSERT(
+        summary && summary->capacity_failure_count == 1ull &&
+            summary->used_bytes <= summary->capacity_bytes && first_values[0] == 7.0f &&
+            second_values[0] == -3.0f,
+        "capacity refusal preserves both sessions' live ranges");
+    YVEX_TEST_ASSERT(
+        yvex_attention_workspace_rewind(first, mark, &error) == YVEX_OK &&
+            yvex_attention_workspace_rewind(second, 0ull, &error) == YVEX_OK &&
+            yvex_attention_workspace_finish(first, &error) == YVEX_OK &&
+            yvex_attention_workspace_finish(second, &error) == YVEX_OK,
+        "workspace publication boundaries retire all borrowed ranges");
+    YVEX_TEST_ASSERT(yvex_attention_workspace_begin(first, &error) == YVEX_OK,
+                     "prepared workspace begins a second warm replay");
+    replayed_values = yvex_attention_workspace_calloc(first, 16ull, sizeof(float));
+    YVEX_TEST_ASSERT(replayed_values == first_values && replayed_values[0] == 0.0f,
+                     "warm replay reuses the stable zeroed arena address");
+    YVEX_TEST_ASSERT(
+        yvex_attention_workspace_rewind(first, 0ull, &error) == YVEX_OK &&
+            yvex_attention_workspace_finish(first, &error) == YVEX_OK,
+        "warm replay retires without resizing or heap ownership");
+    yvex_attention_workspace_close(&second);
+    yvex_attention_workspace_close(&first);
+    yvex_attention_workspace_close(&first);
+    YVEX_TEST_ASSERT(!first && !second, "workspace cleanup is idempotent");
+    return 0;
+}
+
+/* Purpose: prove quick probes seed real SWA rollover, CSA 513-to-512, and HCA emission geometry. */
+static int test_probe_seed_contract(void)
+{
+    yvex_attention_layer_plan swa = layer_fixture(0ull, YVEX_ATTENTION_CLASS_SWA, 0ull);
+    yvex_attention_layer_plan csa = layer_fixture(1ull, YVEX_ATTENTION_CLASS_CSA, 4ull);
+    yvex_attention_layer_plan hca = layer_fixture(2ull, YVEX_ATTENTION_CLASS_HCA, 128ull);
+    yvex_attention_summary summary = {0};
+    yvex_attention_probe_history *history = NULL;
+    const yvex_attention_history_view *view = NULL;
+    yvex_error error;
+    unsigned long long position;
+
+    (void)snprintf(summary.attention_plan_identity,
+                   sizeof(summary.attention_plan_identity), "%064x", 1u);
+    YVEX_TEST_ASSERT(
+        yvex_attention_probe_position_resolve(&swa, 0, 0ull, &position, &error) == YVEX_OK &&
+            position == 128ull &&
+        yvex_attention_probe_position_resolve(&csa, 0, 0ull, &position, &error) == YVEX_OK &&
+            position == 2052ull &&
+        yvex_attention_probe_position_resolve(&hca, 0, 0ull, &position, &error) == YVEX_OK &&
+            position == 127ull &&
+        yvex_attention_probe_position_resolve(&csa, 0, 2ull, &position, &error) == YVEX_OK &&
+            position == 2054ull,
+        "quick position policy reaches each architecture boundary and advances by repeat offset");
+    YVEX_TEST_ASSERT(
+        yvex_attention_probe_history_open(
+            &history, &csa, &summary, 2052ull, &view, &error) == YVEX_OK &&
+            history && view && view->immutable && view->token_count == 2052ull &&
+            view->local_tail_count == 127ull && view->compressed_entry_count == 513ull &&
+            view->indexer_entry_count == 513ull &&
+            view->compressed_positions[512] == 2048ull,
+        "canonical CSA seed exposes 513 real ordered candidates for top-k 512");
+    yvex_attention_probe_history_close(&history);
+    yvex_attention_probe_history_close(&history);
+    YVEX_TEST_ASSERT(!history, "canonical probe seed cleanup is idempotent");
+    return 0;
+}
+
+/* Purpose: prove direct graph execution rejects stale and unknown probe schemas before owners. */
+static int test_probe_version_refusal(void)
+{
+    yvex_attention_probe_request request = {0};
+    yvex_attention_probe_result result = {0};
+    yvex_error error;
+
+    request.backend = YVEX_BACKEND_KIND_CPU;
+    request.scope = YVEX_ATTENTION_PROBE_SCOPE_QUICK;
+    request.operation_scope = YVEX_ATTENTION_OPERATION_CORE;
+    yvex_error_clear(&error);
+    request.probe = YVEX_ATTENTION_PROBE_UNSPECIFIED;
+    YVEX_TEST_ASSERT(
+        yvex_attention_probe_execute(
+            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            YVEX_ERR_INVALID_ARG &&
+            strcmp(yvex_error_where(&error), "attention.probe") == 0 &&
+            result.layers_executed == 0ull,
+        "direct graph API refuses legacy numeric zero probe");
+    yvex_error_clear(&error);
+    request.probe = (yvex_attention_probe_kind)(YVEX_ATTENTION_PROBE_CANONICAL_V2 + 1u);
+    YVEX_TEST_ASSERT(
+        yvex_attention_probe_execute(
+            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            YVEX_ERR_INVALID_ARG &&
+            strcmp(yvex_error_where(&error), "attention.probe") == 0 &&
+            result.layers_executed == 0ull,
+        "direct graph API refuses unknown future probe under current schema");
+    request.probe = YVEX_ATTENTION_PROBE_CANONICAL_V2;
+    request.backend = (yvex_backend_kind)99;
+    yvex_error_clear(&error);
+    YVEX_TEST_ASSERT(
+        yvex_attention_probe_execute(
+            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            YVEX_ERR_INVALID_ARG && result.layers_executed == 0ull,
+        "direct graph API refuses unknown backend before publication");
+    request.backend = YVEX_BACKEND_KIND_CPU;
+    request.scope = (yvex_attention_probe_scope)99;
+    yvex_error_clear(&error);
+    YVEX_TEST_ASSERT(
+        yvex_attention_probe_execute(
+            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            YVEX_ERR_INVALID_ARG && result.layers_executed == 0ull,
+        "direct graph API refuses unknown scope before publication");
+    request.scope = YVEX_ATTENTION_PROBE_SCOPE_QUICK;
+    request.operation_scope = (yvex_attention_operation_scope)99;
+    yvex_error_clear(&error);
+    YVEX_TEST_ASSERT(
+        yvex_attention_probe_execute(
+            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            YVEX_ERR_INVALID_ARG && result.layers_executed == 0ull,
+        "direct graph API refuses unknown operation scope before publication");
+    return 0;
+}
+
 int yvex_test_deepseek_attention(void)
 {
-    if (test_execution_gate_is_admitted() != 0) return 1;
+    if (test_execution_status_names() != 0) return 1;
     if (test_cpu_resource_guards() != 0) return 1;
     if (test_execution_geometry_and_cancellation() != 0) return 1;
     if (test_plan_requires_committed_inputs() != 0) return 1;
@@ -1925,13 +2465,19 @@ int yvex_test_deepseek_attention(void)
     if (test_csa_selection_scratch_budget() != 0) return 1;
     if (test_transactional_memory_sink() != 0) return 1;
     if (test_rolling_state_chunk_invariance() != 0) return 1;
+    if (test_external_semantic_conformance() != 0) return 1;
     if (test_runtime_hadamard_policy() != 0) return 1;
     if (test_runtime_activation_scratch_budget() != 0) return 1;
     if (test_runtime_topk_policy() != 0) return 1;
     if (test_runtime_fp4_fake_quant_policy() != 0) return 1;
     if (test_runtime_fp8_fake_quant_policy() != 0) return 1;
     if (test_runtime_activation_codec_edges() != 0) return 1;
+    if (test_attention_envelope_numeric_contract() != 0) return 1;
+    if (test_attention_workspace_lifecycle() != 0) return 1;
+    if (test_probe_seed_contract() != 0) return 1;
+    if (test_probe_version_refusal() != 0) return 1;
     if (test_f32_comparison_contract() != 0) return 1;
+    if (test_attention_state_comparison_contract() != 0) return 1;
     if (test_independent_reference_detects_stage_mutations() != 0) return 1;
     return 0;
 }

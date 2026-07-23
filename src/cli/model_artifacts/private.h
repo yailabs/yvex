@@ -24,9 +24,10 @@
 #include <yvex/gguf.h>
 #include <yvex/core.h>
 #include <yvex/internal/core.h>
+#include <yvex/internal/source.h>
 #include <yvex/registry.h>
 #include <yvex/source.h>
-#include <yvex/generation.h>
+#include <yvex/tokenizer.h>
 
 int parse_models_download_options_from(int arg_count,
                                        char **args,
@@ -183,7 +184,7 @@ int model_download_finish(const yvex_cli_models_download_options *options,
 
 int path_exists(const char *path);
 int is_path_like_reference(const char *input);
-int set_path_ref(yvex_model_ref *out, const char *input, yvex_error *err);
+void model_artifact_append_role(char *out, size_t out_cap, const char *role);
 
 int parse_models_output_mode(const char *value, yvex_models_output_mode *mode);
 int parse_models_bound_option(const char *command,
@@ -248,8 +249,6 @@ int yvex_model_artifacts_surface_models_command(int arg_count, char **args);
 void yvex_model_artifacts_surface_models_help(FILE *fp);
 int yvex_model_artifacts_surface_fullmodel_command(int arg_count, char **args);
 void yvex_model_artifacts_surface_fullmodel_help(FILE *fp);
-int yvex_model_artifacts_surface_attention_command(int arg_count, char **args);
-void yvex_model_artifacts_surface_attention_help(FILE *fp);
 int yvex_model_artifacts_surface_context_command(int arg_count, char **args);
 void yvex_model_artifacts_surface_context_help(FILE *fp);
 int yvex_model_artifacts_surface_moe_command(int arg_count, char **args);
@@ -257,13 +256,7 @@ void yvex_model_artifacts_surface_moe_help(FILE *fp);
 int yvex_model_artifacts_surface_tensor_collection_command(int arg_count, char **args);
 void yvex_model_artifacts_surface_tensor_collection_help(FILE *fp);
 
-int model_download_file_name_ends_with(const char *path, const char *suffix);
-int model_download_read_small_file(const char *path, char *buf, size_t cap);
 long long model_download_json_i64_field(const char *text, const char *key);
-int model_download_json_string_field(const char *text,
-                                     const char *key,
-                                     char *out,
-                                     size_t out_cap);
 int model_download_identity_paths(const char *target,
                                   const char *family,
                                   const yvex_operator_paths *operator_paths,
@@ -281,7 +274,6 @@ const yvex_model_download_catalog_row *model_download_find_catalog(const char *t
 int model_download_family_valid(const char *family);
 int model_download_local_name_valid(const char *name);
 int model_download_repo_valid(const char *repo);
-const char *model_download_repo_basename(const char *repo);
 unsigned int model_download_effective_include_count(
     const yvex_cli_models_download_options *options);
 unsigned int model_download_effective_exclude_count(
@@ -291,7 +283,6 @@ const char *model_download_effective_include_at(
 const char *model_download_effective_exclude_at(
     const yvex_cli_models_download_options *options, unsigned int index);
 void model_download_report_init(yvex_model_download_report *report);
-void model_download_timestamp(char *out, size_t cap);
 int model_download_source_path_allowed(const yvex_operator_paths *paths,
                                        const char *source_dir,
                                        yvex_model_download_report *report);

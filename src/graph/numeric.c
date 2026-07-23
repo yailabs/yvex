@@ -12,6 +12,349 @@
 static const double attention_pi =
     3.14159265358979323846264338327950288;
 
+typedef enum {
+    ATTENTION_COMPARE_INT,
+    ATTENTION_COMPARE_UINT,
+    ATTENTION_COMPARE_U64,
+    ATTENTION_COMPARE_CLASS,
+    ATTENTION_COMPARE_ROLLING_KIND,
+    ATTENTION_COMPARE_TEXT
+} attention_compare_field_kind;
+
+typedef struct {
+    size_t offset, extent;
+    attention_compare_field_kind kind;
+} attention_compare_field;
+
+typedef enum {
+    ATTENTION_COMPARE_GEOMETRY,
+    ATTENTION_COMPARE_F32,
+    ATTENTION_COMPARE_POSITIONS
+} attention_compare_step_kind;
+
+enum {
+    ATTENTION_COMPARE_PRODUCT = 1u,
+    ATTENTION_COMPARE_SKIP_EMPTY = 2u,
+    ATTENTION_COMPARE_REQUIRE_STRIDE = 4u,
+    ATTENTION_COMPARE_REQUIRE_PRESENT = 8u,
+    ATTENTION_COMPARE_STOP_ON_MISMATCH = 16u,
+    ATTENTION_COMPARE_NEGATIVE_INFINITY_SENTINEL = 32u,
+    ATTENTION_COMPARE_GROUPS = 5u
+};
+
+typedef struct {
+    attention_compare_step_kind kind;
+    yvex_attention_comparison_stage stage;
+    unsigned int group, flags;
+    size_t base_offset, data_offset, count_offset, stride_offset;
+    const attention_compare_field *fields;
+    size_t field_count;
+    const char *overflow_message;
+} attention_compare_step;
+
+typedef struct {
+    yvex_attention_state_comparison result;
+    unsigned char compatible[ATTENTION_COMPARE_GROUPS];
+} attention_compare_cursor;
+
+static const attention_compare_field attention_publication_fields[] = {
+    {offsetof(yvex_attention_publication, complete),
+     sizeof(((yvex_attention_publication *)0)->complete), ATTENTION_COMPARE_INT},
+    {offsetof(yvex_attention_publication, layer_index),
+     sizeof(((yvex_attention_publication *)0)->layer_index), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_publication, attention_class),
+     sizeof(((yvex_attention_publication *)0)->attention_class), ATTENTION_COMPARE_CLASS},
+    {offsetof(yvex_attention_publication, token_position),
+     sizeof(((yvex_attention_publication *)0)->token_position), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_publication, token_count),
+     sizeof(((yvex_attention_publication *)0)->token_count), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_publication, kv_width),
+     sizeof(((yvex_attention_publication *)0)->kv_width), ATTENTION_COMPARE_U64},
+};
+static const attention_compare_field attention_compressed_fields[] = {
+    {offsetof(yvex_attention_publication, compressed_count),
+     sizeof(((yvex_attention_publication *)0)->compressed_count), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_publication, compressed_stride),
+     sizeof(((yvex_attention_publication *)0)->compressed_stride), ATTENTION_COMPARE_U64},
+};
+static const attention_compare_field attention_indexer_fields[] = {
+    {offsetof(yvex_attention_publication, indexer_count),
+     sizeof(((yvex_attention_publication *)0)->indexer_count), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_publication, indexer_stride),
+     sizeof(((yvex_attention_publication *)0)->indexer_stride), ATTENTION_COMPARE_U64},
+};
+static const attention_compare_field attention_rolling_fields[] = {
+    {offsetof(yvex_attention_rolling_state_output, present),
+     sizeof(((yvex_attention_rolling_state_output *)0)->present), ATTENTION_COMPARE_INT},
+    {offsetof(yvex_attention_rolling_state_output, schema_version),
+     sizeof(((yvex_attention_rolling_state_output *)0)->schema_version), ATTENTION_COMPARE_UINT},
+    {offsetof(yvex_attention_rolling_state_output, kind),
+     sizeof(((yvex_attention_rolling_state_output *)0)->kind), ATTENTION_COMPARE_ROLLING_KIND},
+    {offsetof(yvex_attention_rolling_state_output, attention_class),
+     sizeof(((yvex_attention_rolling_state_output *)0)->attention_class),
+     ATTENTION_COMPARE_CLASS},
+    {offsetof(yvex_attention_rolling_state_output, layer_index),
+     sizeof(((yvex_attention_rolling_state_output *)0)->layer_index), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, next_token_position),
+     sizeof(((yvex_attention_rolling_state_output *)0)->next_token_position),
+     ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, ratio),
+     sizeof(((yvex_attention_rolling_state_output *)0)->ratio), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, head_dimension),
+     sizeof(((yvex_attention_rolling_state_output *)0)->head_dimension), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, state_width),
+     sizeof(((yvex_attention_rolling_state_output *)0)->state_width), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, state_slots),
+     sizeof(((yvex_attention_rolling_state_output *)0)->state_slots), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, kv_state_stride),
+     sizeof(((yvex_attention_rolling_state_output *)0)->kv_state_stride), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, score_state_stride),
+     sizeof(((yvex_attention_rolling_state_output *)0)->score_state_stride),
+     ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, kv_state_extent),
+     sizeof(((yvex_attention_rolling_state_output *)0)->kv_state_extent), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, score_state_extent),
+     sizeof(((yvex_attention_rolling_state_output *)0)->score_state_extent),
+     ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, previous_fill),
+     sizeof(((yvex_attention_rolling_state_output *)0)->previous_fill), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, current_fill),
+     sizeof(((yvex_attention_rolling_state_output *)0)->current_fill), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, cursor),
+     sizeof(((yvex_attention_rolling_state_output *)0)->cursor), ATTENTION_COMPARE_U64},
+    {offsetof(yvex_attention_rolling_state_output, overlap),
+     sizeof(((yvex_attention_rolling_state_output *)0)->overlap), ATTENTION_COMPARE_INT},
+    {offsetof(yvex_attention_rolling_state_output, rotated),
+     sizeof(((yvex_attention_rolling_state_output *)0)->rotated), ATTENTION_COMPARE_INT},
+    {offsetof(yvex_attention_rolling_state_output, attention_plan_identity),
+     sizeof(((yvex_attention_rolling_state_output *)0)->attention_plan_identity),
+     ATTENTION_COMPARE_TEXT},
+};
+
+static const attention_compare_step attention_state_steps[] = {
+    {ATTENTION_COMPARE_GEOMETRY, YVEX_ATTENTION_COMPARISON_STAGE_PUBLICATION, 0u,
+     ATTENTION_COMPARE_STOP_ON_MISMATCH, 0u, 0u, 0u, 0u, attention_publication_fields,
+     sizeof(attention_publication_fields) / sizeof(attention_publication_fields[0]), NULL},
+    {ATTENTION_COMPARE_F32, YVEX_ATTENTION_COMPARISON_STAGE_RAW_KV, 0u,
+     ATTENTION_COMPARE_PRODUCT, 0u, offsetof(yvex_attention_publication, raw_kv),
+     offsetof(yvex_attention_publication, token_count),
+     offsetof(yvex_attention_publication, kv_width), NULL, 0u,
+     "attention state raw KV geometry overflowed"},
+    {ATTENTION_COMPARE_GEOMETRY, YVEX_ATTENTION_COMPARISON_STAGE_COMPRESSED_GEOMETRY, 1u, 0u,
+     0u, 0u, 0u, 0u, attention_compressed_fields,
+     sizeof(attention_compressed_fields) / sizeof(attention_compressed_fields[0]), NULL},
+    {ATTENTION_COMPARE_F32, YVEX_ATTENTION_COMPARISON_STAGE_COMPRESSED_KV, 1u,
+     ATTENTION_COMPARE_PRODUCT | ATTENTION_COMPARE_SKIP_EMPTY |
+         ATTENTION_COMPARE_REQUIRE_STRIDE,
+     0u, offsetof(yvex_attention_publication, compressed_kv),
+     offsetof(yvex_attention_publication, compressed_count),
+     offsetof(yvex_attention_publication, compressed_stride), NULL, 0u,
+     "attention state emission geometry overflowed"},
+    {ATTENTION_COMPARE_POSITIONS, YVEX_ATTENTION_COMPARISON_STAGE_COMPRESSED_POSITIONS, 1u,
+     ATTENTION_COMPARE_SKIP_EMPTY, 0u,
+     offsetof(yvex_attention_publication, compressed_positions),
+     offsetof(yvex_attention_publication, compressed_count), 0u, NULL, 0u, NULL},
+    {ATTENTION_COMPARE_GEOMETRY, YVEX_ATTENTION_COMPARISON_STAGE_INDEXER_EMISSION_GEOMETRY, 2u,
+     0u, 0u, 0u, 0u, 0u, attention_indexer_fields,
+     sizeof(attention_indexer_fields) / sizeof(attention_indexer_fields[0]), NULL},
+    {ATTENTION_COMPARE_F32, YVEX_ATTENTION_COMPARISON_STAGE_INDEXER_EMISSION_KV, 2u,
+     ATTENTION_COMPARE_PRODUCT | ATTENTION_COMPARE_SKIP_EMPTY |
+         ATTENTION_COMPARE_REQUIRE_STRIDE,
+     0u, offsetof(yvex_attention_publication, indexer_kv),
+     offsetof(yvex_attention_publication, indexer_count),
+     offsetof(yvex_attention_publication, indexer_stride), NULL, 0u,
+     "attention state emission geometry overflowed"},
+    {ATTENTION_COMPARE_POSITIONS, YVEX_ATTENTION_COMPARISON_STAGE_INDEXER_EMISSION_POSITIONS, 2u,
+     ATTENTION_COMPARE_SKIP_EMPTY, 0u, offsetof(yvex_attention_publication, indexer_positions),
+     offsetof(yvex_attention_publication, indexer_count), 0u, NULL, 0u, NULL},
+    {ATTENTION_COMPARE_GEOMETRY, YVEX_ATTENTION_COMPARISON_STAGE_MAIN_GEOMETRY, 3u, 0u,
+     offsetof(yvex_attention_publication, next_main_rolling_state), 0u, 0u, 0u,
+     attention_rolling_fields,
+     sizeof(attention_rolling_fields) / sizeof(attention_rolling_fields[0]), NULL},
+    {ATTENTION_COMPARE_F32, YVEX_ATTENTION_COMPARISON_STAGE_MAIN_KV, 3u,
+     ATTENTION_COMPARE_REQUIRE_PRESENT,
+     offsetof(yvex_attention_publication, next_main_rolling_state),
+     offsetof(yvex_attention_rolling_state_output, kv_state),
+     offsetof(yvex_attention_rolling_state_output, kv_state_extent), 0u, NULL, 0u, NULL},
+    {ATTENTION_COMPARE_F32, YVEX_ATTENTION_COMPARISON_STAGE_MAIN_SCORE, 3u,
+     ATTENTION_COMPARE_REQUIRE_PRESENT | ATTENTION_COMPARE_NEGATIVE_INFINITY_SENTINEL,
+     offsetof(yvex_attention_publication, next_main_rolling_state),
+     offsetof(yvex_attention_rolling_state_output, score_state),
+     offsetof(yvex_attention_rolling_state_output, score_state_extent), 0u, NULL, 0u, NULL},
+    {ATTENTION_COMPARE_GEOMETRY, YVEX_ATTENTION_COMPARISON_STAGE_INDEXER_ROLLING_GEOMETRY, 4u,
+     0u, offsetof(yvex_attention_publication, next_indexer_rolling_state), 0u, 0u, 0u,
+     attention_rolling_fields,
+     sizeof(attention_rolling_fields) / sizeof(attention_rolling_fields[0]), NULL},
+    {ATTENTION_COMPARE_F32, YVEX_ATTENTION_COMPARISON_STAGE_INDEXER_ROLLING_KV, 4u,
+     ATTENTION_COMPARE_REQUIRE_PRESENT,
+     offsetof(yvex_attention_publication, next_indexer_rolling_state),
+     offsetof(yvex_attention_rolling_state_output, kv_state),
+     offsetof(yvex_attention_rolling_state_output, kv_state_extent), 0u, NULL, 0u, NULL},
+    {ATTENTION_COMPARE_F32, YVEX_ATTENTION_COMPARISON_STAGE_INDEXER_ROLLING_SCORE, 4u,
+     ATTENTION_COMPARE_REQUIRE_PRESENT | ATTENTION_COMPARE_NEGATIVE_INFINITY_SENTINEL,
+     offsetof(yvex_attention_publication, next_indexer_rolling_state),
+     offsetof(yvex_attention_rolling_state_output, score_state),
+     offsetof(yvex_attention_rolling_state_output, score_state_extent), 0u, NULL, 0u, NULL},
+};
+
+/* Purpose: compare one typed exact field without comparing structure padding. */
+static int attention_compare_field_equal(const unsigned char *left, const unsigned char *right,
+                                         const attention_compare_field *field)
+{
+    left += field->offset;
+    right += field->offset;
+    if (field->kind == ATTENTION_COMPARE_TEXT)
+        return strncmp((const char *)left, (const char *)right, field->extent) == 0;
+    return memcmp(left, right, field->extent) == 0;
+}
+
+/* Purpose: record the first ordered comparison failure in one aggregate verdict. */
+static void attention_compare_fail(attention_compare_cursor *cursor,
+                                   yvex_attention_comparison_stage stage,
+                                   unsigned long long coordinate, int exact_failure)
+{
+    cursor->result.numeric.within_tolerance = 0;
+    if (exact_failure) cursor->result.numeric.bitwise_equal = 0;
+    if (exact_failure > 1) cursor->result.geometry_equal = 0;
+    if (cursor->result.first_failing_stage == YVEX_ATTENTION_COMPARISON_STAGE_NONE &&
+        cursor->result.numeric.first_failing_coordinate == ULLONG_MAX) {
+        cursor->result.first_failing_stage = stage;
+        cursor->result.numeric.first_failing_coordinate = coordinate;
+    }
+}
+
+/* Purpose: accumulate one F32 span under the canonical finite/tolerance contract.
+ * Inputs: two equally sized spans, finite tolerances, typed stage, cursor, and error sink.
+ * Effects: advances exact counts, extrema, squared error, bitwise evidence, and first failure.
+ * Failure: malformed storage or aggregate-count overflow returns a typed failure.
+ * Boundary: scans one span and neither allocates nor publishes attention state. */
+static int attention_compare_f32(const float *left, const float *right,
+                                 unsigned long long count, double absolute_tolerance,
+                                 double relative_tolerance, unsigned int flags,
+                                 yvex_attention_comparison_stage stage,
+                                 attention_compare_cursor *cursor, yvex_error *err)
+{
+    unsigned long long index, total, sentinel_count = 0ull;
+
+    if (!left || !right || !count || count > SIZE_MAX / sizeof(*left)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "graph.f32.compare",
+                       "finite tolerances and representable non-empty F32 ranges are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    cursor->result.numeric.bitwise_equal &=
+        memcmp(left, right, (size_t)count * sizeof(*left)) == 0;
+    for (index = 0ull; index < count; ++index) {
+        double left_value = left[index], right_value = right[index];
+        double absolute = fabs(left_value - right_value);
+        double scale = fmax(fabs(left_value), fabs(right_value));
+        double relative = scale > 0.0 ? absolute / scale : 0.0;
+
+        if (!isfinite(left_value) || !isfinite(right_value)) {
+            if ((flags & ATTENTION_COMPARE_NEGATIVE_INFINITY_SENTINEL) &&
+                isinf(left_value) && signbit(left_value) &&
+                isinf(right_value) && signbit(right_value)) {
+                sentinel_count++;
+                continue;
+            }
+            cursor->result.numeric.nonfinite_value_count++;
+            attention_compare_fail(cursor, stage, index, 0);
+            continue;
+        }
+        cursor->result.numeric.finite_value_count++;
+        cursor->result.numeric.maximum_absolute_error =
+            fmax(cursor->result.numeric.maximum_absolute_error, absolute);
+        cursor->result.numeric.maximum_relative_error =
+            fmax(cursor->result.numeric.maximum_relative_error, relative);
+        cursor->result.numeric.squared_error_sum += absolute * absolute;
+        if (!isfinite(absolute_tolerance + relative_tolerance * scale) ||
+            absolute > absolute_tolerance + relative_tolerance * scale)
+            attention_compare_fail(cursor, stage, index, 0);
+    }
+    if (!yvex_core_u64_add(cursor->result.numeric.value_count,
+                           count - sentinel_count, &total)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "attention.state.compare",
+                       "aggregate attention state comparison counts overflowed");
+        return YVEX_ERR_BOUNDS;
+    }
+    cursor->result.numeric.value_count = total;
+    return YVEX_OK;
+}
+
+/* Purpose: execute the canonical ordered state-comparison descriptor table.
+ * Inputs: two immutable publications, finite tolerances, initialized cursor, and error sink.
+ * Effects: visits each admitted geometry, numeric, and position step exactly once in order.
+ * Failure: malformed storage or arithmetic overflow stops before publishing caller output.
+ * Boundary: compares candidate attention state only and never commits persistent state. */
+static int attention_compare_state(const yvex_attention_publication *left,
+                                   const yvex_attention_publication *right,
+                                   double absolute_tolerance, double relative_tolerance,
+                                   attention_compare_cursor *cursor, yvex_error *err)
+{
+    size_t index;
+
+    for (index = 0u; index < sizeof(attention_state_steps) / sizeof(attention_state_steps[0]);
+         ++index) {
+        const attention_compare_step *step = &attention_state_steps[index];
+        const unsigned char *left_base = (const unsigned char *)left + step->base_offset;
+        const unsigned char *right_base = (const unsigned char *)right + step->base_offset;
+        unsigned long long count = 0ull, item;
+        size_t field;
+        int rc;
+
+        if (!cursor->compatible[step->group]) continue;
+        if (step->kind == ATTENTION_COMPARE_GEOMETRY) {
+            for (field = 0u; field < step->field_count; ++field)
+                if (!attention_compare_field_equal(left_base, right_base, &step->fields[field]))
+                    break;
+            if (field != step->field_count) {
+                cursor->compatible[step->group] = 0u;
+                attention_compare_fail(cursor, step->stage, ULLONG_MAX, 2);
+                if (step->flags & ATTENTION_COMPARE_STOP_ON_MISMATCH) break;
+            }
+            continue;
+        }
+        if ((step->flags & ATTENTION_COMPARE_REQUIRE_PRESENT) &&
+            !*(const int *)(left_base + offsetof(yvex_attention_rolling_state_output, present)))
+            continue;
+        count = *(const unsigned long long *)(left_base + step->count_offset);
+        if ((step->flags & ATTENTION_COMPARE_SKIP_EMPTY) && !count) continue;
+        if (step->flags & ATTENTION_COMPARE_PRODUCT) {
+            item = *(const unsigned long long *)(left_base + step->stride_offset);
+            if (((step->flags & ATTENTION_COMPARE_REQUIRE_STRIDE) && !item) ||
+                !yvex_core_u64_mul(count, item, &count)) {
+                yvex_error_set(err, YVEX_ERR_BOUNDS, "attention.state.compare",
+                               step->overflow_message);
+                return YVEX_ERR_BOUNDS;
+            }
+        }
+        if (step->kind == ATTENTION_COMPARE_F32) {
+            const float *left_values =
+                *(float *const *)(left_base + step->data_offset);
+            const float *right_values =
+                *(float *const *)(right_base + step->data_offset);
+            rc = attention_compare_f32(left_values, right_values, count, absolute_tolerance,
+                                       relative_tolerance, step->flags, step->stage, cursor, err);
+            if (rc != YVEX_OK) return rc;
+        } else {
+            const unsigned long long *left_values =
+                *(unsigned long long *const *)(left_base + step->data_offset);
+            const unsigned long long *right_values =
+                *(unsigned long long *const *)(right_base + step->data_offset);
+            if (!left_values || !right_values) {
+                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "attention.state.compare",
+                               "non-empty attention state positions require two ranges");
+                return YVEX_ERR_INVALID_ARG;
+            }
+            for (item = 0ull; item < count; ++item)
+                if (left_values[item] != right_values[item]) {
+                    attention_compare_fail(cursor, step->stage, item, 1);
+                    break;
+                }
+        }
+    }
+    return YVEX_OK;
+}
+
 /* Purpose: compare two finite F32 ranges under one deterministic numeric contract.
  * Inputs: equally sized arrays plus finite non-negative absolute and relative tolerances.
  * Effects: replaces caller-owned metrics; performs no allocation or I/O.
@@ -22,56 +365,192 @@ int yvex_graph_f32_compare(const float *left, const float *right,
                            double relative_tolerance, yvex_graph_f32_comparison *out,
                            yvex_error *err)
 {
-    yvex_graph_f32_comparison next = {0};
-    unsigned long long index;
-    size_t bytes;
+    attention_compare_cursor cursor = {.result = {.geometry_equal = 1}};
+    int rc;
 
-    next.first_failing_coordinate = ULLONG_MAX;
-    if (!left || !right || !count || !out || !isfinite(absolute_tolerance) ||
-        !isfinite(relative_tolerance) || absolute_tolerance < 0.0 ||
-        relative_tolerance < 0.0 || count > SIZE_MAX / sizeof(*left)) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "graph.f32.compare",
-                       "finite tolerances and representable non-empty F32 ranges are required");
+    if (!out || !isfinite(absolute_tolerance) || !isfinite(relative_tolerance) ||
+        absolute_tolerance < 0.0 || relative_tolerance < 0.0)
+        return attention_compare_f32(NULL, NULL, 0ull, 0.0, 0.0, 0u,
+                                     YVEX_ATTENTION_COMPARISON_STAGE_NONE, &cursor, err);
+    cursor.result.numeric.within_tolerance = cursor.result.numeric.bitwise_equal = 1;
+    cursor.result.numeric.first_failing_coordinate = ULLONG_MAX;
+    rc = attention_compare_f32(left, right, count, absolute_tolerance, relative_tolerance, 0u,
+                               YVEX_ATTENTION_COMPARISON_STAGE_NONE, &cursor, err);
+    if (rc == YVEX_OK) *out = cursor.result.numeric;
+    if (rc == YVEX_OK) yvex_error_clear(err);
+    return rc;
+}
+
+/* Purpose: compare the complete attention-owned candidate state delta across production paths.
+ * Inputs: two publications plus finite non-negative absolute and relative tolerances.
+ * Effects: replaces caller-owned aggregate metrics; performs no allocation or publication.
+ * Failure: malformed ranges or overflow preserve caller output and return typed failure.
+ * Boundary: compares emitted and rolling state only, never output tensors or persistent KV. */
+int yvex_attention_state_compare(const yvex_attention_publication *left,
+                                 const yvex_attention_publication *right,
+                                 double absolute_tolerance, double relative_tolerance,
+                                 yvex_attention_state_comparison *out, yvex_error *err)
+{
+    attention_compare_cursor cursor = {.result = {.geometry_equal = 1},
+                                       .compatible = {1u, 1u, 1u, 1u, 1u}};
+    int rc;
+
+    if (!left || !right || !out || !isfinite(absolute_tolerance) ||
+        !isfinite(relative_tolerance) || absolute_tolerance < 0.0 || relative_tolerance < 0.0) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "attention.state.compare",
+                       "two publications and finite non-negative tolerances are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    bytes = (size_t)count * sizeof(*left);
-    next.value_count = count;
-    next.within_tolerance = 1;
-    next.bitwise_equal = memcmp(left, right, bytes) == 0;
-    for (index = 0ull; index < count; ++index) {
-        double left_value = left[index];
-        double right_value = right[index];
-        double absolute;
-        double scale;
-        double relative;
-        double allowed;
+    cursor.result.numeric.within_tolerance = cursor.result.numeric.bitwise_equal = 1;
+    cursor.result.numeric.first_failing_coordinate = ULLONG_MAX;
+    rc = attention_compare_state(left, right, absolute_tolerance, relative_tolerance, &cursor, err);
+    if (rc == YVEX_OK) *out = cursor.result;
+    if (rc == YVEX_OK) yvex_error_clear(err);
+    return rc;
+}
 
-        if (!isfinite(left_value) || !isfinite(right_value)) {
-            next.nonfinite_value_count++;
-            next.within_tolerance = 0;
-            if (next.first_failing_coordinate == ULLONG_MAX)
-                next.first_failing_coordinate = index;
+/* Purpose: select the publication's exact committed output span.
+ * Inputs: immutable publication and caller-owned width slot.
+ * Effects: writes the selected core or envelope width and returns borrowed values.
+ * Failure: missing arguments return null without changing publication state.
+ * Boundary: selection follows publication scope and performs no hashing itself. */
+static const float *attention_hash_output_values(
+    const yvex_attention_publication *publication, unsigned long long *width)
+{
+    if (!publication || !width) return NULL;
+    if (publication->envelope_output_width) {
+        *width = publication->envelope_output_width;
+        return publication->envelope_output;
+    }
+    *width = publication->hidden_width;
+    return publication->output;
+}
+
+/* Purpose: hash exact IEEE-754 values in canonical logical order.
+ * Inputs: initialized hash plus one optional, explicitly counted F32 range.
+ * Effects: advances the hash with count framing and canonical U64 bit fields.
+ * Failure: missing non-empty storage or SHA-256 update failure returns false.
+ * Boundary: preserves signed zero and NaN payload bytes as execution evidence. */
+static int attention_hash_floats(yvex_sha256 *hash, const float *values,
+                                 unsigned long long count)
+{
+    unsigned long long index;
+
+    if ((count && !values) || !yvex_sha256_update_u64(hash, count)) return 0;
+    for (index = 0ull; index < count; ++index) {
+        uint32_t bits;
+        memcpy(&bits, values + index, sizeof(bits));
+        if (!yvex_sha256_update_u64(hash, (unsigned long long)bits)) return 0;
+    }
+    return 1;
+}
+
+/* Purpose: hash exact ordinal or position values in canonical logical order.
+ * Inputs: initialized hash plus one optional, explicitly counted U64 range.
+ * Effects: advances the hash with count framing and each ordered value.
+ * Failure: missing non-empty storage or SHA-256 update failure returns false.
+ * Boundary: discrete positions are never folded into numeric tolerance evidence. */
+static int attention_hash_u64s(yvex_sha256 *hash, const unsigned long long *values,
+                               unsigned long long count)
+{
+    unsigned long long index;
+
+    if ((count && !values) || !yvex_sha256_update_u64(hash, count)) return 0;
+    for (index = 0ull; index < count; ++index)
+        if (!yvex_sha256_update_u64(hash, values[index])) return 0;
+    return 1;
+}
+
+/* Purpose: hash ordered typed scalar fields without serializing object padding.
+ * Inputs: initialized digest, immutable object, and its canonical field schema.
+ * Effects: advances only the caller-owned digest in schema order.
+ * Failure: malformed field kinds or digest-update failure return false.
+ * Boundary: numeric identity hashes declared values, never native object representation. */
+static int attention_hash_fields(yvex_sha256 *hash, const void *object,
+                                 const attention_compare_field *fields, size_t count)
+{
+    const unsigned char *bytes = (const unsigned char *)object;
+    size_t index;
+
+    for (index = 0u; index < count; ++index) {
+        unsigned long long value = 0ull;
+        if (fields[index].kind == ATTENTION_COMPARE_TEXT) {
+            if (!yvex_sha256_update_text(hash, (const char *)bytes + fields[index].offset))
+                return 0;
             continue;
         }
-        absolute = fabs(left_value - right_value);
-        scale = fmax(fabs(left_value), fabs(right_value));
-        relative = scale > 0.0 ? absolute / scale : 0.0;
-        allowed = absolute_tolerance + relative_tolerance * scale;
-        next.finite_value_count++;
-        if (absolute > next.maximum_absolute_error)
-            next.maximum_absolute_error = absolute;
-        if (relative > next.maximum_relative_error)
-            next.maximum_relative_error = relative;
-        next.squared_error_sum += absolute * absolute;
-        if ((!isfinite(allowed) || absolute > allowed) &&
-            next.first_failing_coordinate == ULLONG_MAX) {
-            next.first_failing_coordinate = index;
-            next.within_tolerance = 0;
+        if (fields[index].kind == ATTENTION_COMPARE_U64)
+            memcpy(&value, bytes + fields[index].offset, sizeof(value));
+        else if (fields[index].kind == ATTENTION_COMPARE_UINT) {
+            unsigned int narrow;
+            memcpy(&narrow, bytes + fields[index].offset, sizeof(narrow));
+            value = narrow;
+        } else {
+            int narrow;
+            memcpy(&narrow, bytes + fields[index].offset, sizeof(narrow));
+            value = (unsigned long long)narrow;
         }
+        if (!yvex_sha256_update_u64(hash, value)) return 0;
     }
-    *out = next;
-    yvex_error_clear(err);
-    return YVEX_OK;
+    return 1;
+}
+
+/* Purpose: hash one complete rolling-state delta using explicit geometry and exact values.
+ * Inputs: initialized hash and one immutable main or indexer rolling publication.
+ * Effects: advances the hash with presence, metadata, extents, and numeric spans.
+ * Failure: malformed present storage or SHA-256 update failure returns false.
+ * Boundary: hashes candidate state only and never commits persistent KV. */
+static int attention_hash_rolling(yvex_sha256 *hash,
+                                  const yvex_attention_rolling_state_output *state)
+{
+    if (!state || !yvex_sha256_update_u64(hash, (unsigned long long)state->present)) return 0;
+    if (!state->present) return 1;
+    return state->kv_state && state->score_state &&
+           attention_hash_fields(
+               hash, state, attention_rolling_fields + 1u,
+               sizeof(attention_rolling_fields) / sizeof(attention_rolling_fields[0]) - 1u) &&
+           attention_hash_floats(hash, state->kv_state, state->kv_state_extent) &&
+           attention_hash_floats(hash, state->score_state, state->score_state_extent);
+}
+
+/* Purpose: append one complete publication to distinct output and state evidence digests.
+ * Inputs: caller-owned output/state hashes and one immutable complete publication.
+ * Effects: advances output geometry plus exact raw, emitted, position, and rolling state fields.
+ * Failure: incomplete geometry, missing storage, overflow, or hash refusal returns false.
+ * Boundary: keeps output and candidate-state domains separate and never commits persistent KV. */
+int yvex_attention_publication_hash_update(
+    yvex_sha256 *output_hash, yvex_sha256 *state_hash,
+    const yvex_attention_publication *publication)
+{
+    unsigned long long output_count, output_width, raw_count, compressed_count, indexer_count;
+    const float *output_values = attention_hash_output_values(publication, &output_width);
+
+    if (!output_hash || !state_hash || !publication || !publication->complete ||
+        !output_values || !publication->raw_kv ||
+        !yvex_core_u64_mul(publication->token_count, output_width, &output_count) ||
+        !yvex_core_u64_mul(publication->token_count, publication->kv_width, &raw_count) ||
+        !yvex_core_u64_mul(publication->compressed_count, publication->compressed_stride,
+                           &compressed_count) ||
+        !yvex_core_u64_mul(publication->indexer_count, publication->indexer_stride,
+                           &indexer_count))
+        return 0;
+    return attention_hash_fields(output_hash, publication,
+                                 attention_publication_fields + 1u, 4u) &&
+           yvex_sha256_update_u64(output_hash, output_width) &&
+           attention_hash_floats(output_hash, output_values, output_count) &&
+           attention_hash_fields(state_hash, publication,
+                                 attention_publication_fields + 1u, 5u) &&
+           attention_hash_floats(state_hash, publication->raw_kv, raw_count) &&
+           yvex_sha256_update_u64(state_hash, publication->compressed_stride) &&
+           attention_hash_floats(state_hash, publication->compressed_kv, compressed_count) &&
+           attention_hash_u64s(state_hash, publication->compressed_positions,
+                               publication->compressed_count) &&
+           yvex_sha256_update_u64(state_hash, publication->indexer_stride) &&
+           attention_hash_floats(state_hash, publication->indexer_kv, indexer_count) &&
+           attention_hash_u64s(state_hash, publication->indexer_positions,
+                               publication->indexer_count) &&
+           attention_hash_rolling(state_hash, &publication->next_main_rolling_state) &&
+           attention_hash_rolling(state_hash, &publication->next_indexer_rolling_state);
 }
 
 /* Purpose: apply the identity-bearing DeepSeek activation storage boundary.
@@ -95,37 +574,46 @@ int yvex_attention_compute_round(yvex_attention_compute_contract contract,
     return 1;
 }
 
-// Purpose: Return the admitted rms norm fact without transferring ownership.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-int yvex_attention_rms_norm(float *values,
-                                    unsigned long long count,
-                                    const float *weights,
-                                    double epsilon)
+/* Purpose: apply the shared RMS normalization equation with optional learned weights.
+ * Inputs: finite values, optional finite weights, positive count, and positive epsilon.
+ * Effects: replaces values with their normalized projection.
+ * Failure: invalid or non-finite input returns false without claiming a valid result.
+ * Boundary: the caller selects whether the equation has learned or unit weights. */
+static int attention_rms_norm_apply(float *values, unsigned long long count,
+                                    const float *weights, double epsilon)
 {
     unsigned long long i;
     double mean = 0.0;
     double inv;
 
-    if (!values || !weights || count == 0ull || !isfinite(epsilon) ||
-        epsilon <= 0.0)
+    if (!values || count == 0ull || !isfinite(epsilon) || epsilon <= 0.0)
         return 0;
     for (i = 0ull; i < count; ++i) {
         double v = values[i];
-        if (!isfinite(v) || !isfinite(weights[i])) return 0;
+        if (!isfinite(v) || (weights && !isfinite(weights[i]))) return 0;
         mean += v * v;
     }
     mean /= (double)count;
     inv = 1.0 / sqrt(mean + epsilon);
     if (!isfinite(inv)) return 0;
     for (i = 0ull; i < count; ++i) {
-        double v = (double)values[i] * inv * (double)weights[i];
+        double v = (double)values[i] * inv;
+        if (weights) v *= (double)weights[i];
         if (!isfinite(v)) return 0;
         values[i] = (float)v;
     }
     return 1;
+}
+
+/* Purpose: apply RMS normalization with one learned weight per value.
+ * Inputs: finite value and weight arrays, positive count, and positive epsilon.
+ * Effects: replaces values with their weighted normalized projection.
+ * Failure: malformed or non-finite input returns false without a valid result.
+ * Boundary: weight ownership and attention composition remain with the caller. */
+int yvex_attention_rms_norm(float *values, unsigned long long count,
+                            const float *weights, double epsilon)
+{
+    return weights && attention_rms_norm_apply(values, count, weights, epsilon);
 }
 
 // Purpose: Return the admitted unit rms norm fact without transferring ownership.
@@ -135,28 +623,234 @@ int yvex_attention_rms_norm(float *values,
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 
 int yvex_attention_unit_rms_norm(float *values,
-                                         unsigned long long count,
-                                         double epsilon)
+                                 unsigned long long count,
+                                 double epsilon)
 {
-    unsigned long long i;
-    double mean = 0.0;
-    double inverse;
+    return attention_rms_norm_apply(values, count, NULL, epsilon);
+}
 
-    if (!values || count == 0ull || !isfinite(epsilon) || epsilon <= 0.0)
-        return 0;
-    for (i = 0ull; i < count; ++i) {
-        double value = values[i];
-        if (!isfinite(value)) return 0;
-        mean += value * value;
+/* Purpose: validate the generic hyper-connection geometry before numeric work.
+ * Inputs: one immutable attention layer plan.
+ * Effects: none.
+ * Failure: returns false for incomplete, overflowing, or non-finite geometry.
+ * Boundary: validates reusable mHC math without selecting a model family. */
+static int attention_mhc_geometry(const yvex_attention_layer_plan *layer)
+{
+    unsigned long long expanded;
+    unsigned long long rows;
+
+    return layer && layer->mhc_attention_pre_and_post &&
+           layer->residual_stream_count > 0ull && layer->residual_stream_width > 0ull &&
+           yvex_core_u64_mul(layer->residual_stream_count, layer->residual_stream_width,
+                             &expanded) &&
+           expanded == layer->residual_expanded_width &&
+           yvex_core_u64_add(layer->residual_stream_count, 2ull, &rows) &&
+           yvex_core_u64_mul(rows, layer->residual_stream_count, &rows) &&
+           rows == layer->mhc_mixing_rows &&
+           layer->mhc_mixing_columns == expanded && layer->mhc_base_width == rows &&
+           layer->mhc_scale_width == 3ull && layer->mhc_sinkhorn_iterations > 0ull &&
+           isfinite(layer->rms_norm_epsilon) && layer->rms_norm_epsilon > 0.0 &&
+           isfinite(layer->mhc_epsilon) && layer->mhc_epsilon > 0.0 &&
+           isfinite(layer->mhc_residual_post_multiplier) &&
+           layer->mhc_residual_post_multiplier > 0.0;
+}
+
+/* Purpose: evaluate one stable sigmoid without overflowing exponential range. */
+static double attention_sigmoid(double value)
+{
+    if (value >= 0.0) {
+        double inverse = exp(-value);
+        return 1.0 / (1.0 + inverse);
     }
-    inverse = 1.0 / sqrt(mean / (double)count + epsilon);
-    if (!isfinite(inverse)) return 0;
-    for (i = 0ull; i < count; ++i) {
-        double value = (double)values[i] * inverse;
-        if (!isfinite(value)) return 0;
-        values[i] = (float)value;
+    {
+        double direct = exp(value);
+        return direct / (1.0 + direct);
+    }
+}
+
+/* Purpose: normalize one mHC combination matrix through the versioned Sinkhorn schedule.
+ * Inputs: finite row-major square matrix, stream count, iteration count, and epsilon.
+ * Effects: replaces the caller-owned matrix with its balanced form.
+ * Failure: returns false on non-finite or degenerate normalization.
+ * Boundary: implements only reusable Sinkhorn arithmetic, not family composition. */
+static int attention_mhc_sinkhorn(float *matrix, unsigned long long streams,
+                                  unsigned long long iterations, double epsilon)
+{
+    unsigned long long row, column, iteration;
+
+    for (row = 0ull; row < streams; ++row) {
+        double maximum = -(double)INFINITY;
+        double total = 0.0;
+        for (column = 0ull; column < streams; ++column)
+            maximum = fmax(maximum, matrix[row * streams + column]);
+        for (column = 0ull; column < streams; ++column) {
+            double value = exp((double)matrix[row * streams + column] - maximum);
+            matrix[row * streams + column] = (float)value;
+            total += value;
+        }
+        if (!isfinite(total) || total <= 0.0) return 0;
+        for (column = 0ull; column < streams; ++column)
+            matrix[row * streams + column] =
+                (float)((double)matrix[row * streams + column] / total + epsilon);
+    }
+    for (iteration = 0ull; iteration < iterations; ++iteration) {
+        if (iteration != 0ull) {
+            for (row = 0ull; row < streams; ++row) {
+                double total = 0.0;
+                for (column = 0ull; column < streams; ++column)
+                    total += matrix[row * streams + column];
+                if (!isfinite(total)) return 0;
+                for (column = 0ull; column < streams; ++column)
+                    matrix[row * streams + column] =
+                        (float)((double)matrix[row * streams + column] / (total + epsilon));
+            }
+        }
+        for (column = 0ull; column < streams; ++column) {
+            double total = 0.0;
+            for (row = 0ull; row < streams; ++row)
+                total += matrix[row * streams + column];
+            if (!isfinite(total)) return 0;
+            for (row = 0ull; row < streams; ++row)
+                matrix[row * streams + column] =
+                    (float)((double)matrix[row * streams + column] / (total + epsilon));
+        }
     }
     return 1;
+}
+
+/* Purpose: execute mHC attention ingress from expanded residual streams to one core activation.
+ * Inputs: admitted layer geometry, raw linear mixes, exact scale/base tensors, and finite residuals.
+ * Effects: writes collapsed BF16-visible activation plus F32 post and combination coefficients.
+ * Failure: malformed geometry or non-finite arithmetic publishes a typed numeric refusal.
+ * Boundary: owns generic mHC arithmetic; the family adapter owns role binding and invocation. */
+int yvex_attention_mhc_pre(const yvex_attention_mhc_pre_args *args,
+                           yvex_attention_failure *failure, yvex_error *err)
+{
+    const yvex_attention_layer_plan *layer = args ? args->layer : NULL;
+    unsigned long long token, stream, lane;
+
+    if (!args || !attention_mhc_geometry(layer) || !args->residual ||
+        !args->linear_mixes || !args->scale || !args->base || !args->collapsed ||
+        !args->post || !args->combination || !args->token_count ||
+        args->residual_stride < layer->residual_expanded_width ||
+        args->mix_stride < layer->mhc_mixing_rows ||
+        args->collapsed_stride < layer->residual_stream_width ||
+        args->post_stride < layer->residual_stream_count ||
+        args->combination_stride <
+            layer->residual_stream_count * layer->residual_stream_count)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION, NULL,
+            layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER,
+            YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION, 1ull, 0ull, err, YVEX_ERR_BOUNDS,
+            "attention mHC ingress geometry is invalid");
+    for (lane = 0ull; lane < layer->mhc_scale_width; ++lane)
+        if (!isfinite(args->scale[lane])) goto numeric;
+    for (lane = 0ull; lane < layer->mhc_base_width; ++lane)
+        if (!isfinite(args->base[lane])) goto numeric;
+    for (token = 0ull; token < args->token_count; ++token) {
+        const float *residual = args->residual + token * args->residual_stride;
+        const float *mix = args->linear_mixes + token * args->mix_stride;
+        float *collapsed = args->collapsed + token * args->collapsed_stride;
+        float *post = args->post + token * args->post_stride;
+        float *combination = args->combination + token * args->combination_stride;
+        double squares = 0.0;
+        double inverse;
+
+        memset(collapsed, 0, (size_t)layer->residual_stream_width * sizeof(*collapsed));
+        for (lane = 0ull; lane < layer->residual_expanded_width; ++lane) {
+            if (!isfinite(residual[lane])) goto numeric;
+            squares += (double)residual[lane] * (double)residual[lane];
+        }
+        inverse = 1.0 / sqrt(squares / (double)layer->residual_expanded_width +
+                             layer->rms_norm_epsilon);
+        if (!isfinite(inverse)) goto numeric;
+        for (stream = 0ull; stream < layer->residual_stream_count; ++stream) {
+            unsigned long long target;
+            double pre_value = attention_sigmoid(
+                (double)mix[stream] * inverse * (double)args->scale[0] +
+                (double)args->base[stream]);
+            post[stream] = (float)(layer->mhc_residual_post_multiplier * attention_sigmoid(
+                (double)mix[layer->residual_stream_count + stream] * inverse *
+                    (double)args->scale[1] +
+                (double)args->base[layer->residual_stream_count + stream]));
+            for (target = 0ull; target < layer->residual_stream_count; ++target) {
+                unsigned long long index = 2ull * layer->residual_stream_count +
+                                           stream * layer->residual_stream_count + target;
+                combination[stream * layer->residual_stream_count + target] =
+                    (float)((double)mix[index] * inverse * (double)args->scale[2] +
+                            (double)args->base[index]);
+            }
+            for (lane = 0ull; lane < layer->residual_stream_width; ++lane)
+                collapsed[lane] += (float)((pre_value + layer->mhc_epsilon) *
+                    (double)residual[stream * layer->residual_stream_width + lane]);
+        }
+        if (!attention_mhc_sinkhorn(combination, layer->residual_stream_count,
+                                    layer->mhc_sinkhorn_iterations, layer->mhc_epsilon) ||
+            !yvex_attention_compute_round(layer->compute_contract, collapsed,
+                                          layer->residual_stream_width))
+            goto numeric;
+    }
+    return yvex_attention_accept(failure, err);
+numeric:
+    return yvex_attention_reject(
+        failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
+        layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER,
+        YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION, 1ull, 0ull, err, YVEX_ERR_FORMAT,
+        "attention mHC ingress produced non-finite values");
+}
+
+/* Purpose: execute mHC attention egress from core output and immutable residual streams.
+ * Inputs: admitted coefficients, core output, residual input, and explicit strides.
+ * Effects: writes one BF16-visible expanded attention-envelope output.
+ * Failure: malformed geometry or non-finite arithmetic publishes a typed refusal.
+ * Boundary: completes the immediate attention residual only; it never executes FFN/MoE work. */
+int yvex_attention_mhc_post(const yvex_attention_mhc_post_args *args,
+                            yvex_attention_failure *failure, yvex_error *err)
+{
+    const yvex_attention_layer_plan *layer = args ? args->layer : NULL;
+    unsigned long long token, target, lane;
+
+    if (!args || !attention_mhc_geometry(layer) || !args->core_output || !args->residual ||
+        !args->post || !args->combination || !args->envelope_output || !args->token_count ||
+        args->core_stride < layer->residual_stream_width ||
+        args->residual_stride < layer->residual_expanded_width ||
+        args->post_stride < layer->residual_stream_count ||
+        args->combination_stride <
+            layer->residual_stream_count * layer->residual_stream_count ||
+        args->envelope_stride < layer->residual_expanded_width)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION, NULL,
+            layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER,
+            YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION, 1ull, 0ull, err, YVEX_ERR_BOUNDS,
+            "attention mHC egress geometry is invalid");
+    for (token = 0ull; token < args->token_count; ++token) {
+        const float *core = args->core_output + token * args->core_stride;
+        const float *residual = args->residual + token * args->residual_stride;
+        const float *post = args->post + token * args->post_stride;
+        const float *combination = args->combination + token * args->combination_stride;
+        float *output = args->envelope_output + token * args->envelope_stride;
+        for (target = 0ull; target < layer->residual_stream_count; ++target) {
+            for (lane = 0ull; lane < layer->residual_stream_width; ++lane) {
+                unsigned long long source;
+                double value = (double)post[target] * (double)core[lane];
+                for (source = 0ull; source < layer->residual_stream_count; ++source)
+                    value += (double)combination[source * layer->residual_stream_count + target] *
+                             (double)residual[source * layer->residual_stream_width + lane];
+                if (!isfinite(value)) goto numeric;
+                output[target * layer->residual_stream_width + lane] = (float)value;
+            }
+        }
+        if (!yvex_attention_compute_round(layer->compute_contract, output,
+                                          layer->residual_expanded_width))
+            goto numeric;
+    }
+    return yvex_attention_accept(failure, err);
+numeric:
+    return yvex_attention_reject(
+        failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
+        layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER,
+        YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION, 1ull, 0ull, err, YVEX_ERR_FORMAT,
+        "attention mHC egress produced non-finite values");
 }
 
 // Purpose: Implement the graph-local yarn frequency semantic operation.
@@ -250,21 +944,6 @@ typedef struct {
     unsigned long long index;
 } attention_topk_candidate;
 
-// Purpose: Return the admitted next power of two fact without transferring ownership.
-static int attention_next_power_of_two(unsigned long long value,
-                                       unsigned long long *out)
-{
-    unsigned long long power = 1ull;
-
-    if (!out || value == 0ull) return 0;
-    while (power < value) {
-        if (power > ULLONG_MAX / 2ull) return 0;
-        power *= 2ull;
-    }
-    *out = power;
-    return 1;
-}
-
 // Purpose: Apply the checked graph-local score equal invariant.
 static int attention_score_equal(float left, float right)
 {
@@ -345,7 +1024,7 @@ int yvex_attention_hadamard_cpu(
     int rc;
 
     if (!input || !output || length == 0ull ||
-        !attention_next_power_of_two(length, &padded_length)) {
+        !yvex_core_power_of_two_capacity(length, 1ull, 1ull, 1ull, &padded_length)) {
         return yvex_attention_reject(
             failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
             YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
@@ -361,7 +1040,8 @@ int yvex_attention_hadamard_cpu(
             budget ? (unsigned long long)budget->live_bytes : 0ull,
             err, YVEX_ERR_BOUNDS,
             "Hadamard CPU scratch budget exceeded");
-    scratch = (float *)yvex_attention_calloc_array(padded_length, sizeof(*scratch));
+    scratch = (float *)yvex_attention_scratch_calloc(
+        budget, padded_length, sizeof(*scratch));
     if (!scratch)
         rc = yvex_attention_reject(
             failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
@@ -369,13 +1049,13 @@ int yvex_attention_hadamard_cpu(
             padded_length, 0ull, err, YVEX_ERR_NOMEM,
             "Hadamard CPU scratch allocation failed");
     if (!scratch) {
-        yvex_attention_scratch_release(budget, scratch_bytes);
+        attention_scratch_release(budget, scratch_bytes);
         return rc;
     }
     for (i = 0ull; i < length; ++i) {
         if (reject_nonfinite && !isfinite(input[i])) {
-            free(scratch);
-            yvex_attention_scratch_release(budget, scratch_bytes);
+            yvex_attention_scratch_free(budget, scratch);
+            attention_scratch_release(budget, scratch_bytes);
             return yvex_attention_reject(
                 failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
                 YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
@@ -398,8 +1078,8 @@ int yvex_attention_hadamard_cpu(
     }
     for (i = 0ull; i < length; ++i)
         output[i] = scratch[i] * scale;
-    free(scratch);
-    yvex_attention_scratch_release(budget, scratch_bytes);
+    yvex_attention_scratch_free(budget, scratch);
+    attention_scratch_release(budget, scratch_bytes);
     yvex_error_clear(err);
     return YVEX_OK;
 }
@@ -422,6 +1102,7 @@ int yvex_attention_topk_select(
     unsigned long long k,
     unsigned long long *selected_indices,
     unsigned long long *selected_count,
+    yvex_attention_scratch_budget *scratch,
     yvex_attention_failure *failure,
     yvex_error *err)
 {
@@ -441,8 +1122,8 @@ int yvex_attention_topk_select(
         yvex_error_clear(err);
         return YVEX_OK;
     }
-    candidates = (attention_topk_candidate *)yvex_attention_calloc_array(
-        candidate_count, sizeof(*candidates));
+    candidates = (attention_topk_candidate *)yvex_attention_scratch_calloc(
+        scratch, candidate_count, sizeof(*candidates));
     if (!candidates)
         return yvex_attention_reject(
             failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
@@ -451,7 +1132,7 @@ int yvex_attention_topk_select(
             "top-k candidate allocation failed");
     for (i = 0ull; i < candidate_count; ++i) {
         if (!isfinite(scores[i])) {
-            free(candidates);
+            yvex_attention_scratch_free(scratch, candidates);
             return yvex_attention_reject(
                 failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
                 YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
@@ -466,7 +1147,7 @@ int yvex_attention_topk_select(
           attention_candidate_ordinal_compare);
     for (i = 1ull; i < candidate_count; ++i) {
         if (candidates[i - 1ull].ordinal == candidates[i].ordinal) {
-            free(candidates);
+            yvex_attention_scratch_free(scratch, candidates);
             return yvex_attention_reject(
                 failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
                 YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
@@ -476,11 +1157,11 @@ int yvex_attention_topk_select(
     }
     qsort(candidates, (size_t)candidate_count, sizeof(*candidates),
           attention_candidate_rank_compare);
-    out_count = yvex_attention_min_u64(candidate_count, k);
+    out_count = attention_min_u64(candidate_count, k);
     for (i = 0ull; i < out_count; ++i)
         selected_indices[i] = candidates[i].index;
     *selected_count = out_count;
-    free(candidates);
+    yvex_attention_scratch_free(scratch, candidates);
     yvex_error_clear(err);
     return YVEX_OK;
 }
@@ -514,12 +1195,14 @@ static float attention_ue8m0_decode_scale(unsigned char code)
     return yvex_quant_e8m0_decode(code);
 }
 
+static float attention_fp8_e4m3fn_decode(unsigned char code);
+
 // Purpose: Return the admitted fp8 e4m3fn encode fact without transferring ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
 // Failure: returns a typed refusal or neutral result without partial capability publication.
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-unsigned char yvex_attention_fp8_e4m3fn_encode(float value)
+static unsigned char attention_fp8_e4m3fn_encode(float value)
 {
     static const float finite_max = 448.0f;
     float magnitude = fabsf(value);
@@ -531,7 +1214,7 @@ unsigned char yvex_attention_fp8_e4m3fn_encode(float value)
     if (!isfinite(value)) return negative ? 0xffu : 0x7fu;
     if (magnitude > finite_max) magnitude = finite_max;
     for (code = 0u; code < 0x7fu; ++code) {
-        float decoded = yvex_attention_fp8_e4m3fn_decode(
+        float decoded = attention_fp8_e4m3fn_decode(
             (unsigned char)code);
         float error = fabsf(decoded - magnitude);
         if (error < best_error ||
@@ -548,9 +1231,67 @@ unsigned char yvex_attention_fp8_e4m3fn_encode(float value)
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
 // Failure: returns a typed refusal or neutral result without partial capability publication.
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-float yvex_attention_fp8_e4m3fn_decode(unsigned char code)
+static float attention_fp8_e4m3fn_decode(unsigned char code)
 {
     return yvex_quant_fp8_e4m3fn_decode(code);
+}
+
+typedef unsigned char (*attention_fake_encode_fn)(float value);
+typedef float (*attention_fake_decode_fn)(unsigned char code);
+
+/* Purpose: apply the shared UE8M0 block-scale fake-quantization lifecycle.
+ * Inputs: finite activations, output buffers, codec range/floor, and scalar codec functions.
+ * Effects: publishes one scale code, encoded values, and BF16-rounded decoded values.
+ * Failure: invalid input, non-finite activation, or invalid scale returns a typed refusal.
+ * Boundary: codec-specific scalar rounding remains owned by the supplied FP8 or FP4 codec. */
+static int attention_fake_quant_block(
+    const float *input, unsigned long long count, float *dequantized,
+    unsigned char *codes, unsigned char *scale_code, float finite_max,
+    float minimum_amax, int clamp_normalized, int clear_scale_first,
+    attention_fake_encode_fn encode, attention_fake_decode_fn decode,
+    const char *argument_reason, const char *nonfinite_reason,
+    const char *scale_reason, yvex_attention_failure *failure,
+    yvex_error *err)
+{
+    unsigned long long i;
+    float amax = minimum_amax;
+    float scale;
+
+    if (!input || !dequantized || !codes || !scale_code || !count ||
+        !encode || !decode)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
+            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
+            err, YVEX_ERR_INVALID_ARG, argument_reason);
+    if (clear_scale_first) *scale_code = 0u;
+    for (i = 0ull; i < count; ++i) {
+        float magnitude;
+        if (!isfinite(input[i]))
+            return yvex_attention_reject(
+                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
+                YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, count, i,
+                err, YVEX_ERR_FORMAT, nonfinite_reason);
+        magnitude = fabsf(input[i]);
+        if (magnitude > amax) amax = magnitude;
+    }
+    *scale_code = attention_ue8m0_encode_scale(
+        attention_power_of_two_ceil(amax / finite_max));
+    scale = attention_ue8m0_decode_scale(*scale_code);
+    if (!isfinite(scale) || scale <= 0.0f)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
+            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, count, 0ull,
+            err, YVEX_ERR_FORMAT, scale_reason);
+    for (i = 0ull; i < count; ++i) {
+        float normalized = input[i] / scale;
+        if (clamp_normalized && normalized > finite_max) normalized = finite_max;
+        if (clamp_normalized && normalized < -finite_max) normalized = -finite_max;
+        codes[i] = encode(normalized);
+        dequantized[i] = yvex_quant_bf16_decode(
+            yvex_quant_bf16_encode(decode(codes[i]) * scale));
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 // Purpose: Return the admitted fp8 fake quant block fact without transferring ownership.
@@ -568,49 +1309,12 @@ int yvex_attention_fp8_fake_quant_block(
     yvex_attention_failure *failure,
     yvex_error *err)
 {
-    unsigned long long i;
-    float amax = 1.0e-4f;
-    float scale;
-
-    if (!input || !dequantized || !codes || !scale_code || count == 0ull) {
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
-            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
-            0ull, err, YVEX_ERR_INVALID_ARG,
-            "FP8 fake quant requires input, output, code, and scale buffers");
-    }
-    for (i = 0ull; i < count; ++i) {
-        float magnitude;
-        if (!isfinite(input[i])) {
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
-                YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
-                count, i, err, YVEX_ERR_FORMAT,
-                "FP8 fake quant refuses non-finite activation");
-        }
-        magnitude = fabsf(input[i]);
-        if (magnitude > amax) amax = magnitude;
-    }
-    scale = attention_power_of_two_ceil(amax / 448.0f);
-    *scale_code = attention_ue8m0_encode_scale(scale);
-    scale = attention_ue8m0_decode_scale(*scale_code);
-    if (!isfinite(scale) || scale <= 0.0f) {
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
-            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
-            count, 0ull, err, YVEX_ERR_FORMAT,
-            "FP8 fake quant produced invalid UE8M0 scale");
-    }
-    for (i = 0ull; i < count; ++i) {
-        float normalized = input[i] / scale;
-        if (normalized > 448.0f) normalized = 448.0f;
-        if (normalized < -448.0f) normalized = -448.0f;
-        codes[i] = yvex_attention_fp8_e4m3fn_encode(normalized);
-        dequantized[i] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(
-            yvex_attention_fp8_e4m3fn_decode(codes[i]) * scale));
-    }
-    yvex_error_clear(err);
-    return YVEX_OK;
+    return attention_fake_quant_block(
+        input, count, dequantized, codes, scale_code, 448.0f, 1.0e-4f,
+        1, 0, attention_fp8_e4m3fn_encode, attention_fp8_e4m3fn_decode,
+        "FP8 fake quant requires input, output, code, and scale buffers",
+        "FP8 fake quant refuses non-finite activation",
+        "FP8 fake quant produced invalid UE8M0 scale", failure, err);
 }
 
 // Purpose: Return the admitted fp4 e2m1 encode fact without transferring ownership.
@@ -618,7 +1322,7 @@ int yvex_attention_fp8_fake_quant_block(
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
 // Failure: returns a typed refusal or neutral result without partial capability publication.
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-unsigned char yvex_attention_fp4_e2m1_encode(float value)
+static unsigned char attention_fp4_e2m1_encode(float value)
 {
     static const float values[] = {
         0.0f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 6.0f
@@ -647,7 +1351,7 @@ unsigned char yvex_attention_fp4_e2m1_encode(float value)
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
 // Failure: returns a typed refusal or neutral result without partial capability publication.
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-float yvex_attention_fp4_e2m1_decode(unsigned char code)
+static float attention_fp4_e2m1_decode(unsigned char code)
 {
     static const float values[] = {
         0.0f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 6.0f
@@ -673,48 +1377,11 @@ int yvex_attention_fp4_fake_quant_block(
     yvex_attention_failure *failure,
     yvex_error *err)
 {
-    unsigned long long i;
-    float amax = 0.0f;
-    float scale;
-
-    if (!input || !dequantized || !codes || !scale_code || count == 0ull) {
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
-            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
-            0ull, err, YVEX_ERR_INVALID_ARG,
-            "FP4 fake quant requires input, output, code, and scale buffers");
-    }
-    *scale_code = 0u;
-    for (i = 0ull; i < count; ++i) {
-        float magnitude;
-        if (!isfinite(input[i])) {
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
-                YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
-                count, i, err, YVEX_ERR_FORMAT,
-                "FP4 fake quant refuses non-finite activation");
-        }
-        magnitude = fabsf(input[i]);
-        if (magnitude > amax) amax = magnitude;
-    }
-    if (amax < 6.0f * ldexpf(1.0f, -126)) {
-        amax = 6.0f * ldexpf(1.0f, -126);
-    }
-    *scale_code = attention_ue8m0_encode_scale(
-        attention_power_of_two_ceil(amax / 6.0f));
-    scale = attention_ue8m0_decode_scale(*scale_code);
-    if (!isfinite(scale) || scale <= 0.0f) {
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL,
-            YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN,
-            count, 0ull, err, YVEX_ERR_FORMAT,
-            "FP4 fake quant produced invalid UE8M0 scale");
-    }
-    for (i = 0ull; i < count; ++i) {
-        codes[i] = yvex_attention_fp4_e2m1_encode(input[i] / scale);
-        dequantized[i] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(
-            yvex_attention_fp4_e2m1_decode(codes[i]) * scale));
-    }
-    yvex_error_clear(err);
-    return YVEX_OK;
+    return attention_fake_quant_block(
+        input, count, dequantized, codes, scale_code, 6.0f,
+        6.0f * ldexpf(1.0f, -126), 0, 1,
+        attention_fp4_e2m1_encode, attention_fp4_e2m1_decode,
+        "FP4 fake quant requires input, output, code, and scale buffers",
+        "FP4 fake quant refuses non-finite activation",
+        "FP4 fake quant produced invalid UE8M0 scale", failure, err);
 }

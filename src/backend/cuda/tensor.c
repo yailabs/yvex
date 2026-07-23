@@ -15,33 +15,7 @@
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
-
-/* Contract: releases an unpublished allocation and gives cleanup failure precedence. */
-/* Purpose: Reserve budgeted storage for failed allocation cleanup with checked size accounting.
- * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
- * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
- * Failure: Returns a typed CUDA refusal and publishes no partial success state.
- * Boundary: CUDA execution; does not infer model topology, profile policy, or runtime support. */
-static int cuda_failed_allocation_cleanup(yvex_backend *backend,
-                                          CUdeviceptr ptr,
-                                          int primary_rc,
-                                          yvex_error *err)
-{
-    yvex_error cleanup_error;
-    int cleanup_rc;
-
-    yvex_error_clear(&cleanup_error);
-    cleanup_rc = yvex_cuda_temporary_free(backend, YVEX_BACKEND_VARIANT_TENSOR_ALLOC,
-                                          ptr, "cuda.tensor_alloc.cleanup",
-                                          &cleanup_error);
-    if (cleanup_rc != YVEX_OK) {
-        if (err) {
-            *err = cleanup_error;
-        }
-        return cleanup_rc;
-    }
-    return primary_rc;
-}
+#include <string.h>
 
 /* Purpose: Reserve budgeted storage for tensor alloc with checked size accounting.
  * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
@@ -54,11 +28,15 @@ int yvex_cuda_tensor_alloc(yvex_backend *backend,
                            yvex_error *err)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_cuda_work work;
     yvex_device_tensor *tensor = NULL;
+    yvex_error cleanup_error, primary_error;
     CUdeviceptr ptr = 0;
     unsigned int i;
+    int cleanup_rc;
     int rc;
 
+    memset(&work, 0, sizeof(work));
     if (!backend || !state || !out) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cuda.tensor_alloc",
                        "backend and out are required");
@@ -66,6 +44,9 @@ int yvex_cuda_tensor_alloc(yvex_backend *backend,
     }
     *out = NULL;
 
+    rc = yvex_cuda_deferred_release_drain(backend, err);
+    if (rc != YVEX_OK)
+        return rc;
     rc = yvex_cuda_require_capability(backend, YVEX_BACKEND_VARIANT_TENSOR_ALLOC,
                                       "cuda.tensor_alloc", err);
     if (rc == YVEX_OK) {
@@ -75,44 +56,36 @@ int yvex_cuda_tensor_alloc(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
-    rc = yvex_backend_memory_can_add(backend, desc->bytes, "CUDA", "cuda.tensor_alloc", err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
     rc = yvex_cuda_set_current(backend, "cuda.tensor_alloc", err);
-    if (rc != YVEX_OK) {
+    if (rc != YVEX_OK)
         return rc;
-    }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuMemAlloc_v2(&ptr, (size_t)desc->bytes),
-                          "cuda.tensor_alloc", err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuMemsetD8_v2(ptr, 0, (size_t)desc->bytes),
-                          "cuda.tensor_alloc", err);
-    if (rc != YVEX_OK) {
-        return cuda_failed_allocation_cleanup(backend, ptr, rc, err);
-    }
+    work.backend = backend;
+    work.state = state;
+    work.variant = YVEX_BACKEND_VARIANT_TENSOR_ALLOC;
+    work.raw_only = 1;
+    rc = yvex_cuda_work_allocate(&work, &ptr, (size_t)desc->bytes, NULL, 1,
+                                 "cuda.tensor_alloc", NULL, err);
+    if (rc != YVEX_OK)
+        goto allocation_failure;
     rc = yvex_cuda_synchronize(backend, YVEX_BACKEND_VARIANT_TENSOR_ZERO,
                                "cuda.tensor_alloc.zero_sync", err);
-    if (rc != YVEX_OK) {
-        return cuda_failed_allocation_cleanup(backend, ptr, rc, err);
-    }
+    if (rc != YVEX_OK)
+        goto allocation_failure;
 
     tensor = (yvex_device_tensor *)calloc(1, sizeof(*tensor));
     if (!tensor) {
         yvex_error_set(err, YVEX_ERR_NOMEM, "cuda.tensor_alloc",
                        "failed to allocate CUDA tensor object");
-        return cuda_failed_allocation_cleanup(backend, ptr, YVEX_ERR_NOMEM, err);
+        rc = YVEX_ERR_NOMEM;
+        goto allocation_failure;
     }
     tensor->name = yvex_core_strdup(desc->name);
     if (!tensor->name) {
         free(tensor);
         yvex_error_set(err, YVEX_ERR_NOMEM, "cuda.tensor_alloc",
                        "failed to copy CUDA tensor name");
-        return cuda_failed_allocation_cleanup(backend, ptr, YVEX_ERR_NOMEM, err);
+        rc = YVEX_ERR_NOMEM;
+        goto allocation_failure;
     }
 
     tensor->owner = backend;
@@ -124,13 +97,25 @@ int yvex_cuda_tensor_alloc(yvex_backend *backend,
     }
     tensor->bytes = desc->bytes;
     tensor->data = (unsigned char *)(uintptr_t)ptr;
+    work.count = 0u;
+    work.current_bytes = 0ull;
 
-    yvex_backend_memory_acquire(backend, desc->bytes);
     (void)yvex_cuda_refresh_memory_info(backend, err);
 
     *out = tensor;
     yvex_error_clear(err);
     return YVEX_OK;
+
+allocation_failure:
+    if (err)
+        primary_error = *err;
+    else
+        yvex_error_clear(&primary_error);
+    cleanup_rc = yvex_cuda_work_cleanup(&work, &cleanup_error);
+    (void)cleanup_rc;
+    if (err)
+        *err = primary_error;
+    return rc;
 }
 
 /* Purpose: Release the resources owned by tensor free without changing borrowed inputs.
@@ -143,9 +128,10 @@ int yvex_cuda_tensor_free(yvex_backend *backend,
                           yvex_error *err)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    CUdeviceptr pointer;
     int rc;
 
-    if (!backend || !state || !tensor || !yvex_backend_tensor_owner_is(backend, tensor)) {
+    if (!backend || !state || !tensor || !backend_tensor_owner_is(backend, tensor)) {
         yvex_error_set(err, YVEX_ERR_STATE, "cuda.tensor_free",
                        "tensor does not belong to this backend");
         return YVEX_ERR_STATE;
@@ -154,13 +140,13 @@ int yvex_cuda_tensor_free(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
+    pointer = yvex_cuda_tensor_ptr(tensor);
     rc = yvex_cuda_temporary_free(backend, YVEX_BACKEND_VARIANT_TENSOR_ALLOC,
-                                  yvex_cuda_tensor_ptr(tensor),
+                                  &pointer, tensor->bytes, 0,
                                   "cuda.tensor_free", err);
     if (rc != YVEX_OK) {
         return rc;
     }
-    yvex_backend_memory_release(backend, tensor->bytes);
     tensor->owner = NULL;
     tensor->owner_id = 0;
     free(tensor->name);

@@ -392,21 +392,6 @@ static int moe_print_unsupported_family_report(const yvex_cli_moe_options *optio
     return 5;
 }
 
-/* Purpose: Compute moe append role for its CLI invariant (`moe_append_role`). */
-static void moe_append_role(char *out, size_t out_cap, const char *role)
-{
-    size_t used;
-
-    if (!out || out_cap == 0u || !role || !role[0]) return;
-    used = strlen(out);
-    if (used > 0u) {
-        if (used + 1u >= out_cap) return;
-        out[used++] = ',';
-        out[used] = '\0';
-    }
-    snprintf(out + used, used < out_cap ? out_cap - used : 0u, "%s", role);
-}
-
 /* Purpose: Render moe print model report from typed facts (`moe_print_model_report`).
  * Inputs: Borrowed typed facts.
  * Effects: Writes through CLI I/O only.
@@ -450,7 +435,7 @@ static int moe_print_model_report(const yvex_cli_moe_options *options,
     expert_qtypes[0] = '\0';
     if (expert_gate) {
         present_roles++;
-        moe_append_role(expert_roles, sizeof(expert_roles), "moe-expert-gate");
+        model_artifact_append_role(expert_roles, sizeof(expert_roles), "moe-expert-gate");
         snprintf(expert_qtypes + strlen(expert_qtypes),
                  strlen(expert_qtypes) < sizeof(expert_qtypes) ? sizeof(expert_qtypes) - strlen(expert_qtypes) : 0u,
                  "%smoe-expert-gate:%s",
@@ -459,7 +444,7 @@ static int moe_print_model_report(const yvex_cli_moe_options *options,
     }
     if (expert_up) {
         present_roles++;
-        moe_append_role(expert_roles, sizeof(expert_roles), "moe-expert-up");
+        model_artifact_append_role(expert_roles, sizeof(expert_roles), "moe-expert-up");
         snprintf(expert_qtypes + strlen(expert_qtypes),
                  strlen(expert_qtypes) < sizeof(expert_qtypes) ? sizeof(expert_qtypes) - strlen(expert_qtypes) : 0u,
                  "%smoe-expert-up:%s",
@@ -468,7 +453,7 @@ static int moe_print_model_report(const yvex_cli_moe_options *options,
     }
     if (expert_down) {
         present_roles++;
-        moe_append_role(expert_roles, sizeof(expert_roles), "moe-expert-down");
+        model_artifact_append_role(expert_roles, sizeof(expert_roles), "moe-expert-down");
         snprintf(expert_qtypes + strlen(expert_qtypes),
                  strlen(expert_qtypes) < sizeof(expert_qtypes) ? sizeof(expert_qtypes) - strlen(expert_qtypes) : 0u,
                  "%smoe-expert-down:%s",

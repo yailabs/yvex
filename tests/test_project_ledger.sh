@@ -282,6 +282,7 @@ TRACK.INTEGRITY
 TRACK.MODEL
 TRACK.TENSOR
 TRACK.RESIDENCY
+TRACK.RUNTIME
 TRACK.BACKEND
 TRACK.GRAPH
 TRACK.PREFILL
@@ -299,7 +300,28 @@ TRACK.RELEASE
 TRACK.POST010
 EOF
 
-cmp -s "$tracks" "$expected_tracks" || fail "stable 25-track order changed"
+track_count=$(wc -l < "$tracks" | tr -d ' ')
+test "$track_count" -eq 26 || fail "expected 26 canonical tracks, found $track_count"
+cmp -s "$tracks" "$expected_tracks" || fail "stable 26-track order changed"
+
+runtime_row_count=$(awk -F '\t' '$2 ~ /^V010\.RUNTIME\.([0-9]|1[0-7])$/ { count++ } END { print count + 0 }' "$rows")
+test "$runtime_row_count" -eq 18 ||
+  fail "expected 18 canonical common runtime rows, found $runtime_row_count"
+runtime_wrong_owner=$(awk -F '\t' '
+$2 ~ /^V010\.RUNTIME\.([0-9]|1[0-7])$/ && $1 != "TRACK.RUNTIME" { print $2; exit }
+' "$rows")
+test -z "$runtime_wrong_owner" ||
+  fail "common runtime row has wrong owner: $runtime_wrong_owner"
+generation_runtime_row=$(awk -F '\t' '
+$1 == "TRACK.GENERATION" && $2 ~ /^V010\.RUNTIME\.([0-9]|1[0-7])$/ { print $2; exit }
+' "$rows")
+test -z "$generation_runtime_row" ||
+  fail "generation retains migrated common runtime row: $generation_runtime_row"
+awk -F '\t' '
+$1 == "TRACK.RUNTIME" && $2 == "V010.RUNTIME.1" &&
+    $3 == "milestone" && $4 == "complete" { found = 1 }
+END { exit found ? 0 : 1 }
+' "$rows" || fail "V010.RUNTIME.1 is not the completed common runtime milestone"
 
 for required_id in \
   MODEL.CLASS.QWEN.0 \
@@ -358,8 +380,12 @@ grep -F '| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `complete` |' "$projec
   fail "DeepSeek attention execution is not complete"
 grep -F '| `V010.CLI.GRAPH.0` | DeepSeek + common operator | `complete` |' "$project" >/dev/null ||
   fail "DeepSeek attention operator reachability is not complete"
+grep -F '| `V010.RUNTIME.1` | common | `complete` |' "$project" >/dev/null ||
+  fail "common runtime model/session plane is not complete"
 grep -F '| `V010.RUNTIME.DEEPSEEK.KV.0` | DeepSeek | `active` |' "$project" >/dev/null ||
   fail "DeepSeek KV is not active"
+grep -F '| `V010.RUNTIME.DEEPSEEK.KV.0` | DeepSeek | `active` | Allocate, index, write, read, advance, bound, clear, and release the exact persistent DeepSeek KV state used by prefill and decode. | V010.RUNTIME.1 | current |' "$project" >/dev/null ||
+  fail "DeepSeek KV does not depend on the common runtime milestone"
 grep -F '| V010.MODEL.TRANSFORM.IR.0 | recovered/promoted |' "$project" >/dev/null ||
   fail "quantization does not depend on the transformation IR"
 
@@ -373,7 +399,9 @@ in_block && /^```$/ {
       block ~ /V010\.REPO\.SEMANTIC\.COMPRESSION\.0/ &&
       block ~ /V010\.REPO\.C\.CANONICALIZATION\.0/ &&
       block ~ /V010\.GRAPH\.DEEPSEEK\.ATTENTION\.0/ &&
-      block ~ /V010\.CLI\.GRAPH\.0/) {
+      block ~ /V010\.CLI\.GRAPH\.0/ &&
+      block ~ /V010\.RUNTIME\.1:/ &&
+      block ~ /V010\.RUNTIME\.DEEPSEEK\.KV\.0/) {
     print block
     exit
   }
@@ -392,7 +420,10 @@ BEGIN { expected = 1 }
 /V010\.REPO\.SEMANTIC\.COMPRESSION\.0/ { if (expected != 5) exit 1; expected = 6 }
 /V010\.REPO\.C\.CANONICALIZATION\.0/ { if (expected != 6) exit 1; expected = 7 }
 /V010\.GRAPH\.DEEPSEEK\.ATTENTION\.0/ { if (expected != 7) exit 1; expected = 8 }
-END { exit expected == 8 ? 0 : 1 }
+/V010\.CLI\.GRAPH\.0/ { if (expected != 8) exit 1; expected = 9 }
+/V010\.RUNTIME\.1:/ { if (expected != 9) exit 1; expected = 10 }
+/V010\.RUNTIME\.DEEPSEEK\.KV\.0/ { if (expected != 10) exit 1; expected = 11 }
+END { exit expected == 11 ? 0 : 1 }
 ' || fail "compilation/repository/attention critical-path order is invalid"
 
-echo "project ledger: ok (tracks=25 recovered=$recovered_count ids=$row_count milestones=$milestone_count active=$active_id)"
+echo "project ledger: ok (tracks=$track_count recovered=$recovered_count ids=$row_count milestones=$milestone_count active=$active_id)"

@@ -128,6 +128,29 @@ static int write_q4_fixture(const char *path, unsigned long long row_width)
     return fclose(fp) == 0;
 }
 
+static int inspect_fixture(const char *path, yvex_gguf_layout_result *layout,
+                           yvex_gguf_parse_result *parse)
+{
+    yvex_artifact_options options;
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    yvex_error err;
+    int rc;
+
+    memset(&options, 0, sizeof(options));
+    options.path = path;
+    options.readonly = 1;
+    yvex_error_clear(&err);
+    rc = yvex_artifact_open(&artifact, &options, &err);
+    if (rc == YVEX_OK)
+        rc = yvex_gguf_open_ex(&gguf, artifact, NULL, parse, &err);
+    if (rc == YVEX_OK && layout)
+        rc = yvex_gguf_layout_validate(artifact, gguf, layout, &err);
+    yvex_gguf_close(gguf);
+    yvex_artifact_close(artifact);
+    return rc;
+}
+
 static int test_pinned_registry_parity(void)
 {
     size_t i;
@@ -159,6 +182,9 @@ static int test_pinned_registry_parity(void)
 
 static int test_identity_admission(void)
 {
+    const yvex_quant_numeric_capability *q2_k;
+    const yvex_quant_numeric_capability *q4_0;
+    const yvex_quant_numeric_capability *q8_0;
     yvex_gguf_qtype_storage_result result;
     unsigned long long dims[] = {32ull};
 
@@ -176,13 +202,13 @@ static int test_identity_admission(void)
     YVEX_TEST_ASSERT_STREQ(yvex_gguf_qtype_identity_status_name(
                                YVEX_GGUF_QTYPE_IDENTITY_RESERVED),
                            "reserved", "reserved identity has stable state");
-    YVEX_TEST_ASSERT(yvex_gguf_qtype_reference_dequantization_supported(
-                         YVEX_GGUF_QTYPE_Q4_0) == 0,
+    q4_0 = yvex_quant_numeric_capability_at(YVEX_GGUF_QTYPE_Q4_0);
+    q8_0 = yvex_quant_numeric_capability_at(YVEX_GGUF_QTYPE_Q8_0);
+    q2_k = yvex_quant_numeric_capability_at(YVEX_GGUF_QTYPE_Q2_K);
+    YVEX_TEST_ASSERT(q4_0 && q4_0->reference_decoder_available == 0,
                      "known geometry does not imply reference decoder");
-    YVEX_TEST_ASSERT(yvex_gguf_qtype_reference_dequantization_supported(
-                         YVEX_GGUF_QTYPE_Q8_0) == 1 &&
-                         yvex_gguf_qtype_reference_dequantization_supported(
-                             YVEX_GGUF_QTYPE_Q2_K) == 1,
+    YVEX_TEST_ASSERT(q8_0 && q8_0->reference_decoder_available == 1 && q2_k &&
+                         q2_k->reference_decoder_available == 1,
                      "implemented codecs project canonical reference decoders");
     return 0;
 }
@@ -301,48 +327,47 @@ static int test_legacy_row_and_range_validation(void)
     return 0;
 }
 
-static int test_report_integration(void)
+static int test_reader_integration(void)
 {
-    yvex_gguf_abi_report report;
-    yvex_gguf_qtype_report_row row;
+    const yvex_quant_numeric_capability *capability;
     const yvex_gguf_qtype_geometry *geometry;
+    yvex_gguf_qtype_storage_result storage;
+    yvex_gguf_layout_result layout;
+    yvex_gguf_parse_result parse;
     unsigned long long dims[] = {32ull, 2ull};
-    yvex_error err;
-    int rc;
 
-    yvex_error_clear(&err);
-    rc = yvex_gguf_artifact_abi_report_build(
-        "tests/fixtures/gguf/valid-metadata-tensors.gguf", &report, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "GGUF ABI report builds");
-    YVEX_TEST_ASSERT(report.qtype.status == YVEX_GGUF_ABI_SECTION_OK,
-                     "qtype ABI report accepted");
-    YVEX_TEST_ASSERT(report.qtype.checked_tensor_count == 1ull,
-                     "qtype checked tensor count");
-    YVEX_TEST_ASSERT(report.qtype.total_storage_bytes == 128ull,
-                     "qtype report total storage bytes");
-    YVEX_TEST_ASSERT(report.range.total_expected_storage_bytes == 128ull,
-                     "range owner consumes canonical bytes");
-    YVEX_TEST_ASSERT_STREQ(report.next_row, "V010.CUDA.FAILCLOSED.0",
-                           "artifact reader next row");
+    memset(&layout, 0, sizeof(layout));
+    memset(&parse, 0, sizeof(parse));
+    YVEX_TEST_ASSERT(inspect_fixture(
+                         "tests/fixtures/gguf/valid-metadata-tensors.gguf",
+                         &layout, &parse) == YVEX_OK,
+                     "canonical reader and layout accept fixture");
+    YVEX_TEST_ASSERT(layout.tensors_validated == 1ull,
+                     "layout checks every qtype tensor");
+    YVEX_TEST_ASSERT(layout.raw_tensor_bytes == 128ull,
+                     "layout owns aggregate qtype bytes");
 
     geometry = yvex_gguf_qtype_geometry_find(YVEX_GGUF_QTYPE_Q4_0);
-    yvex_gguf_qtype_report_row_from_geometry(geometry, dims, 2u, &row);
-    YVEX_TEST_ASSERT_STREQ(row.identity_status, "admitted", "report identity");
-    YVEX_TEST_ASSERT_STREQ(row.storage_status, "ok", "report storage status");
-    YVEX_TEST_ASSERT_STREQ(row.reference_dequantization, "unavailable",
-                           "report decoder boundary");
-    YVEX_TEST_ASSERT(row.expected_storage_bytes == 36ull,
+    capability = yvex_quant_numeric_capability_at(YVEX_GGUF_QTYPE_Q4_0);
+    YVEX_TEST_ASSERT(geometry != NULL, "report geometry exists");
+    YVEX_TEST_ASSERT_STREQ(yvex_gguf_qtype_identity_status_name(geometry->identity_status),
+                           "admitted", "report identity");
+    YVEX_TEST_ASSERT(yvex_gguf_qtype_tensor_storage(geometry->qtype, dims, 2u, &storage) ==
+                         YVEX_GGUF_QTYPE_STORAGE_OK,
+                     "report storage status");
+    YVEX_TEST_ASSERT(capability && capability->reference_decoder_available == 0,
+                     "report decoder boundary");
+    YVEX_TEST_ASSERT(storage.total_bytes == 36ull,
                      "report uses row-aware bytes");
     return 0;
 }
 
-static int test_gguf_and_range_consumers_preserve_rows(void)
+static int test_reader_and_layout_preserve_rows(void)
 {
     const char *valid_path = "build/tests/gguf-qtype/q4-valid.gguf";
     const char *invalid_path = "build/tests/gguf-qtype/q4-invalid.gguf";
-    yvex_gguf_abi_report report;
-    yvex_error err;
-    int rc;
+    yvex_gguf_layout_result layout;
+    yvex_gguf_parse_result parse;
 
     (void)mkdir("build", 0777);
     (void)mkdir("build/tests", 0777);
@@ -352,22 +377,19 @@ static int test_gguf_and_range_consumers_preserve_rows(void)
     YVEX_TEST_ASSERT(write_q4_fixture(invalid_path, 16ull),
                      "write partial-row Q4_0 fixture");
 
-    yvex_error_clear(&err);
-    rc = yvex_gguf_artifact_abi_report_build(valid_path, &report, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "GGUF owner accepts two complete Q4_0 rows");
-    YVEX_TEST_ASSERT(report.qtype.total_storage_bytes == 36ull,
-                     "GGUF qtype aggregate uses row geometry");
-    YVEX_TEST_ASSERT(report.range.total_expected_storage_bytes == 36ull,
-                     "GGUF range map uses row geometry");
+    memset(&layout, 0, sizeof(layout));
+    memset(&parse, 0, sizeof(parse));
+    YVEX_TEST_ASSERT(inspect_fixture(valid_path, &layout, &parse) == YVEX_OK,
+                     "reader accepts two complete Q4_0 rows");
+    YVEX_TEST_ASSERT(layout.raw_tensor_bytes == 36ull,
+                     "layout aggregate uses row geometry");
 
-    yvex_error_clear(&err);
-    rc = yvex_gguf_artifact_abi_report_build(invalid_path, &report, &err);
-    YVEX_TEST_ASSERT(rc != YVEX_OK,
-                     "GGUF report propagates typed refusal facts");
-    YVEX_TEST_ASSERT(report.qtype.status == YVEX_GGUF_ABI_SECTION_REFUSED,
-                     "GGUF owner refuses flattened-only Q4_0 alignment");
-    YVEX_TEST_ASSERT(strstr(report.qtype.reason, "row width") != NULL,
-                     "GGUF report retains row mismatch reason");
+    memset(&parse, 0, sizeof(parse));
+    YVEX_TEST_ASSERT(inspect_fixture(invalid_path, NULL, &parse) != YVEX_OK,
+                     "reader propagates qtype geometry refusal");
+    YVEX_TEST_ASSERT(parse.code == YVEX_GGUF_PARSE_REFUSED_QTYPE &&
+                         parse.section == YVEX_GGUF_PARSE_SECTION_QTYPE,
+                     "partial Q4_0 row has typed qtype refusal");
     return 0;
 }
 
@@ -378,7 +400,7 @@ int yvex_test_gguf_qtype_abi(void)
     if (test_row_aware_geometry() != 0) return 1;
     if (test_overflow_statuses() != 0) return 1;
     if (test_legacy_row_and_range_validation() != 0) return 1;
-    if (test_report_integration() != 0) return 1;
-    if (test_gguf_and_range_consumers_preserve_rows() != 0) return 1;
+    if (test_reader_integration() != 0) return 1;
+    if (test_reader_and_layout_preserve_rows() != 0) return 1;
     return 0;
 }

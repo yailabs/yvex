@@ -139,6 +139,8 @@ int yvex_safetensors_read_header_file_with_facts(const char *abs_path,
         facts->header_json_bytes = header_len;
         facts->data_region_offset = 8u + header_len;
         facts->payload_bytes = payload_bytes;
+        yvex_core_execution_observation_record(
+            YVEX_CORE_OBSERVE_SOURCE_HEADER, 1ull);
     }
     free(json);
     return rc;
@@ -228,46 +230,32 @@ static int safetensors_tensor(yvex_json *json,
                               yvex_native_weight_table *table,
                               yvex_error *err) {
     char *dtype = NULL;
+    char key[YVEX_JSON_KEY_CAP];
     unsigned long long dims[YVEX_NATIVE_WEIGHT_MAX_DIMS] = {0};
     unsigned long long start = 0u, end = 0u;
     unsigned int rank = 0u, seen = 0u;
-    int valid = safetensors_json_expect(json, '{');
+    yvex_json_iter iter;
+    yvex_json_item item = YVEX_JSON_ITEM_ERROR;
+    int valid = yvex_json_iter_begin(json, &iter, YVEX_JSON_COLLECTION_OBJECT);
 
-    while (valid) {
-        char *key;
-
-        yvex_json_space(json);
-        if (json->cursor < json->end && *json->cursor == '}') {
-            json->cursor++;
-            break;
-        }
-        key = yvex_json_string_dup(json, YVEX_JSON_KEY_CAP);
-        valid = key && safetensors_json_expect(json, ':');
-        if (valid && strcmp(key, "dtype") == 0) {
+    while (valid && (item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+                        YVEX_JSON_ITEM_READY) {
+        if (strcmp(key, "dtype") == 0) {
             free(dtype);
             dtype = yvex_json_string_dup(json, 64u);
             valid = dtype != NULL;
-            seen |= valid ? 1u : 0u;
-        } else if (valid && strcmp(key, "shape") == 0) {
+            if (valid) seen |= 1u;
+        } else if (strcmp(key, "shape") == 0) {
             valid = safetensors_shape(json, dims, &rank);
-            seen |= valid ? 2u : 0u;
-        } else if (valid && strcmp(key, "data_offsets") == 0) {
+            if (valid) seen |= 2u;
+        } else if (strcmp(key, "data_offsets") == 0) {
             valid = safetensors_offsets(json, &start, &end);
-            seen |= valid ? 4u : 0u;
-        } else if (valid) {
+            if (valid) seen |= 4u;
+        } else {
             valid = yvex_json_skip_value(json);
         }
-        free(key);
-        if (!valid)
-            break;
-        yvex_json_space(json);
-        if (json->cursor < json->end && *json->cursor == ',') {
-            json->cursor++;
-            continue;
-        }
-        if (json->cursor >= json->end || *json->cursor != '}')
-            valid = 0;
     }
+    if (item != YVEX_JSON_ITEM_END) valid = 0;
     if (!valid || seen != 7u || end > payload_bytes) {
         free(dtype);
         return safetensors_json_refuse(err,
@@ -292,6 +280,9 @@ static int safetensors_parse_header(const char *json,
                                     yvex_native_weight_table *table,
                                     yvex_error *err) {
     yvex_json parser;
+    yvex_json_iter iter;
+    yvex_json_item item;
+    char key[YVEX_JSON_KEY_CAP];
 
     if (!json || !shard_path || !table) {
         yvex_error_set(
@@ -299,19 +290,12 @@ static int safetensors_parse_header(const char *json,
         return YVEX_ERR_INVALID_ARG;
     }
     yvex_json_init(&parser, json, strlen(json));
-    if (!safetensors_json_expect(&parser, '{'))
+    if (!yvex_json_iter_begin(&parser, &iter, YVEX_JSON_COLLECTION_OBJECT))
         return safetensors_json_refuse(err, shard_path, "unexpected JSON token");
-    yvex_json_space(&parser);
-    if (parser.cursor < parser.end && *parser.cursor == '}')
-        return safetensors_json_refuse(err, shard_path, "empty safetensors header");
-    while (parser.cursor < parser.end) {
-        char *key = yvex_json_string_dup(&parser, YVEX_JSON_KEY_CAP);
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
         int rc;
 
-        if (!key || !safetensors_json_expect(&parser, ':')) {
-            free(key);
-            return safetensors_json_refuse(err, shard_path, "malformed safetensors header");
-        }
         if (strcmp(key, "__metadata__") == 0) {
             rc = yvex_json_skip_value(&parser)
                      ? YVEX_OK
@@ -319,21 +303,14 @@ static int safetensors_parse_header(const char *json,
         } else {
             rc = safetensors_tensor(&parser, key, payload_bytes, shard_path, table, err);
         }
-        free(key);
         if (rc != YVEX_OK)
             return rc;
-        yvex_json_space(&parser);
-        if (parser.cursor < parser.end && *parser.cursor == ',') {
-            parser.cursor++;
-            continue;
-        }
-        if (parser.cursor < parser.end && *parser.cursor == '}') {
-            parser.cursor++;
-            return yvex_json_complete(&parser)
-                       ? YVEX_OK
-                       : safetensors_json_refuse(err, shard_path, "trailing JSON bytes");
-        }
-        return safetensors_json_refuse(err, shard_path, "malformed safetensors header");
     }
-    return safetensors_json_refuse(err, shard_path, "unterminated safetensors header");
+    if (item != YVEX_JSON_ITEM_END || iter.trailing_separator)
+        return safetensors_json_refuse(err, shard_path, "malformed safetensors header");
+    if (iter.count == 0u)
+        return safetensors_json_refuse(err, shard_path, "empty safetensors header");
+    return yvex_json_complete(&parser)
+               ? YVEX_OK
+               : safetensors_json_refuse(err, shard_path, "trailing JSON bytes");
 }

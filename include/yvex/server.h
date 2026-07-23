@@ -13,7 +13,6 @@
 #include <stddef.h>
 #include <yvex/backend.h>
 #include <yvex/core.h>
-#include <yvex/runtime.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -75,9 +74,6 @@ int yvex_server_serve(yvex_server *server,
 int yvex_server_stop(yvex_server *server,
                      yvex_error *err);
 void yvex_server_close(yvex_server *server);
-
-yvex_server_status yvex_server_status_of(const yvex_server *server);
-const char *yvex_server_status_name(yvex_server_status status);
 
 int yvex_server_get_summary(const yvex_server *server,
                             yvex_server_summary *out,

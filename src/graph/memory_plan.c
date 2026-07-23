@@ -9,6 +9,8 @@
  * Failure: every partial allocation, load, or transaction is released or aborted deterministically. */
 #include "src/graph/private.h"
 
+#include <yvex/internal/graph_state.h>
+
 #include <limits.h>
 #include <stdlib.h>
 static int attention_rolling_view_init(const yvex_attention_layer_plan *layer,
@@ -18,6 +20,419 @@ static int attention_rolling_view_init(const yvex_attention_layer_plan *layer,
 static const yvex_attention_memory_sink_options memory_sink_defaults = {
     .fail_acquire_kind = YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT,
     .fail_seal_kind = YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT};
+
+/* Purpose: project graph-memory failures through one stable context and role boundary.
+ * Inputs: typed code, layer, expected/actual facts, status, and immutable reason.
+ * Effects: writes only caller failure/error outputs.
+ * Failure: returns the requested status without publishing graph state.
+ * Boundary: memory lifecycle refusals never infer tensor roles or runtime capability. */
+static int attention_memory_reject(
+    yvex_attention_failure *failure, yvex_attention_failure_code code,
+    unsigned long long layer, unsigned long long expected, unsigned long long actual,
+    yvex_error *err, yvex_status status, const char *reason)
+{
+    return yvex_attention_reject(failure, code, NULL, layer, YVEX_TENSOR_ROLE_UNKNOWN,
+                                 expected, actual, err, status, reason);
+}
+
+/* Purpose: append one pointer-free workspace component to its recipe identity.
+ * Inputs: active hash and one validated component.
+ * Effects: serializes canonical scalar fields without touching execution memory.
+ * Failure: hash refusal returns false and leaves the recipe untrusted.
+ * Boundary: excludes addresses, padding, native layout, and backend resources. */
+static int attention_workspace_component_hash(
+    yvex_sha256 *hash, const yvex_attention_workspace_component *component)
+{
+    return yvex_sha256_update_text(
+               hash, "yvex.graph.attention.workspace-component.v1") &&
+           yvex_sha256_update_u64(hash, component->schema_version) &&
+           yvex_sha256_update_u64(hash, component->ordinal) &&
+           yvex_sha256_update_u64(hash, component->kind) &&
+           yvex_sha256_update_u64(hash, component->lifetime) &&
+           yvex_sha256_update_u64(hash, component->element_count) &&
+           yvex_sha256_update_u64(hash, component->element_width) &&
+           yvex_sha256_update_u64(hash, component->alignment) &&
+           yvex_sha256_update_u64(
+               hash, (unsigned long long)component->scales_with_tokens);
+}
+
+/* Purpose: seal one family-projected workspace recipe before backend lowering.
+ * Inputs: mutable unpublished pointer-free recipe and typed error output.
+ * Effects: validates ordered components and publishes component and recipe identities.
+ * Failure: malformed or unhashable facts return a typed error without trusted identity.
+ * Boundary: records semantic extents only; no backend enum, allocation, or execution enters. */
+int yvex_attention_workspace_recipe_seal(yvex_attention_workspace_recipe *recipe,
+                                         yvex_error *err)
+{
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    unsigned long long seen = 0ull;
+    unsigned int index;
+
+    if (!recipe ||
+        recipe->schema_version != YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1 ||
+        !recipe->token_capacity || !recipe->component_count ||
+        recipe->component_count > YVEX_ATTENTION_WORKSPACE_COMPONENT_CAP ||
+        recipe->mode > YVEX_ATTENTION_EXECUTION_FULL ||
+        recipe->scope > YVEX_ATTENTION_OPERATION_RELEASE_SET ||
+        recipe->evidence_level > YVEX_ATTENTION_EVIDENCE_FULL ||
+        !yvex_sha256_hex_valid(recipe->state_recipe_identity)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "graph.attention.workspace.recipe",
+                       "complete bounded workspace recipe facts are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(&hash, "yvex.graph.attention.workspace-recipe.v1") ||
+        !yvex_sha256_update_u64(&hash, recipe->schema_version) ||
+        !yvex_sha256_update_u64(&hash, recipe->layer_index) ||
+        !yvex_sha256_update_u64(&hash, recipe->mode) ||
+        !yvex_sha256_update_u64(&hash, recipe->scope) ||
+        !yvex_sha256_update_u64(&hash, recipe->evidence_level) ||
+        !yvex_sha256_update_u64(&hash, recipe->token_capacity) ||
+        !yvex_sha256_update_u64(&hash, recipe->component_count) ||
+        !yvex_sha256_update_text(&hash, recipe->state_recipe_identity))
+        goto identity_failure;
+    for (index = 0u; index < recipe->component_count; ++index) {
+        yvex_attention_workspace_component *component = &recipe->components[index];
+        unsigned long long bit;
+
+        if (component->schema_version != YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1 ||
+            component->ordinal != index ||
+            component->kind > YVEX_ATTENTION_WORKSPACE_CORE_INPUT_EVIDENCE ||
+            component->lifetime > YVEX_ATTENTION_WORKSPACE_GRAPH_STABLE ||
+            !component->element_count || !component->element_width ||
+            !component->alignment ||
+            (component->alignment & (component->alignment - 1ull)) != 0ull ||
+            (component->scales_with_tokens != 0 &&
+             component->scales_with_tokens != 1)) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, "graph.attention.workspace.recipe",
+                           "workspace component recipe is malformed");
+            return YVEX_ERR_FORMAT;
+        }
+        bit = 1ull << (unsigned int)component->kind;
+        if (seen & bit) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, "graph.attention.workspace.recipe",
+                           "workspace component kind is duplicated");
+            return YVEX_ERR_FORMAT;
+        }
+        seen |= bit;
+        if (!attention_workspace_component_hash(&hash, component))
+            goto identity_failure;
+    }
+    if (!yvex_sha256_final(&hash, digest)) goto identity_failure;
+    yvex_sha256_hex(digest, recipe->identity);
+    yvex_error_clear(err);
+    return YVEX_OK;
+
+identity_failure:
+    recipe->identity[0] = '\0';
+    yvex_error_set(err, YVEX_ERR_STATE, "graph.attention.workspace.recipe",
+                   "workspace recipe identity could not be sealed");
+    return YVEX_ERR_STATE;
+}
+
+typedef enum {
+    ATTENTION_TRACE_INPUT,
+    ATTENTION_TRACE_Q_LOW,
+    ATTENTION_TRACE_QUERY,
+    ATTENTION_TRACE_RAW_KV,
+    ATTENTION_TRACE_COMPRESSED_KV,
+    ATTENTION_TRACE_INDEXER_KV,
+    ATTENTION_TRACE_INDEX_QUERY,
+    ATTENTION_TRACE_INDEX_WEIGHTS,
+    ATTENTION_TRACE_VALUES,
+    ATTENTION_TRACE_OUTPUT,
+    ATTENTION_TRACE_ENVELOPE_OUTPUT,
+    ATTENTION_TRACE_MAIN_KV,
+    ATTENTION_TRACE_MAIN_SCORE,
+    ATTENTION_TRACE_INDEX_KV,
+    ATTENTION_TRACE_INDEX_SCORE,
+    ATTENTION_TRACE_FLOAT_COUNT
+} attention_trace_float_field;
+
+typedef enum {
+    ATTENTION_TRACE_COMPRESSED_POSITIONS,
+    ATTENTION_TRACE_INDEXER_POSITIONS,
+    ATTENTION_TRACE_TOPK_COUNTS,
+    ATTENTION_TRACE_TOPK_POSITIONS,
+    ATTENTION_TRACE_U64_COUNT
+} attention_trace_u64_field;
+
+static const size_t attention_trace_float_offsets[] = {
+    offsetof(yvex_attention_publication, input),
+    offsetof(yvex_attention_publication, q_low),
+    offsetof(yvex_attention_publication, query),
+    offsetof(yvex_attention_publication, raw_kv),
+    offsetof(yvex_attention_publication, compressed_kv),
+    offsetof(yvex_attention_publication, indexer_kv),
+    offsetof(yvex_attention_publication, index_query),
+    offsetof(yvex_attention_publication, index_weights),
+    offsetof(yvex_attention_publication, attention_values),
+    offsetof(yvex_attention_publication, output),
+    offsetof(yvex_attention_publication, envelope_output),
+    offsetof(yvex_attention_publication, next_main_rolling_state.kv_state),
+    offsetof(yvex_attention_publication, next_main_rolling_state.score_state),
+    offsetof(yvex_attention_publication, next_indexer_rolling_state.kv_state),
+    offsetof(yvex_attention_publication, next_indexer_rolling_state.score_state),
+};
+
+static const size_t attention_trace_u64_offsets[] = {
+    offsetof(yvex_attention_publication, compressed_positions),
+    offsetof(yvex_attention_publication, indexer_positions),
+    offsetof(yvex_attention_publication, topk_counts),
+    offsetof(yvex_attention_publication, topk_positions),
+};
+
+typedef struct {
+    size_t view_offset, output_offset, width;
+} attention_rolling_field;
+
+static const attention_rolling_field attention_rolling_fields[] = {
+    {offsetof(yvex_attention_rolling_state_view, present),
+     offsetof(yvex_attention_rolling_state_output, present), sizeof(int)},
+    {offsetof(yvex_attention_rolling_state_view, schema_version),
+     offsetof(yvex_attention_rolling_state_output, schema_version), sizeof(unsigned int)},
+    {offsetof(yvex_attention_rolling_state_view, kind),
+     offsetof(yvex_attention_rolling_state_output, kind), sizeof(yvex_attention_rolling_kind)},
+    {offsetof(yvex_attention_rolling_state_view, attention_class),
+     offsetof(yvex_attention_rolling_state_output, attention_class), sizeof(yvex_attention_class)},
+    {offsetof(yvex_attention_rolling_state_view, layer_index),
+     offsetof(yvex_attention_rolling_state_output, layer_index), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, next_token_position),
+     offsetof(yvex_attention_rolling_state_output, next_token_position), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, ratio),
+     offsetof(yvex_attention_rolling_state_output, ratio), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, head_dimension),
+     offsetof(yvex_attention_rolling_state_output, head_dimension), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, state_width),
+     offsetof(yvex_attention_rolling_state_output, state_width), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, state_slots),
+     offsetof(yvex_attention_rolling_state_output, state_slots), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, previous_fill),
+     offsetof(yvex_attention_rolling_state_output, previous_fill), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, current_fill),
+     offsetof(yvex_attention_rolling_state_output, current_fill), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, cursor),
+     offsetof(yvex_attention_rolling_state_output, cursor), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, kv_state_stride),
+     offsetof(yvex_attention_rolling_state_output, kv_state_stride), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, score_state_stride),
+     offsetof(yvex_attention_rolling_state_output, score_state_stride), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, kv_state_extent),
+     offsetof(yvex_attention_rolling_state_output, kv_state_extent), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, score_state_extent),
+     offsetof(yvex_attention_rolling_state_output, score_state_extent), sizeof(unsigned long long)},
+    {offsetof(yvex_attention_rolling_state_view, kv_state),
+     offsetof(yvex_attention_rolling_state_output, kv_state), sizeof(float *)},
+    {offsetof(yvex_attention_rolling_state_view, score_state),
+     offsetof(yvex_attention_rolling_state_output, score_state), sizeof(float *)},
+    {offsetof(yvex_attention_rolling_state_view, overlap),
+     offsetof(yvex_attention_rolling_state_output, overlap), sizeof(int)},
+    {offsetof(yvex_attention_rolling_state_view, rotated),
+     offsetof(yvex_attention_rolling_state_output, rotated), sizeof(int)},
+    {offsetof(yvex_attention_rolling_state_view, attention_plan_identity),
+     offsetof(yvex_attention_rolling_state_output, attention_plan_identity),
+     YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP},
+};
+
+/* Purpose: transfer the common rolling-state representation without duplicating field policy. */
+static void attention_rolling_transfer(void *destination, const void *source, int output_to_view)
+{
+    unsigned int i;
+
+    for (i = 0u; i < sizeof(attention_rolling_fields) / sizeof(attention_rolling_fields[0]); ++i) {
+        const attention_rolling_field *field = &attention_rolling_fields[i];
+        size_t destination_offset = output_to_view ? field->view_offset : field->output_offset;
+        size_t source_offset = output_to_view ? field->output_offset : field->view_offset;
+        memcpy((unsigned char *)destination + destination_offset,
+               (const unsigned char *)source + source_offset, field->width);
+    }
+}
+
+/* Purpose: address one typed publication range selected by the canonical storage table. */
+static float **attention_trace_float_slot(yvex_attention_publication *trace,
+                                          attention_trace_float_field field)
+{
+    return (float **)(void *)((unsigned char *)trace + attention_trace_float_offsets[field]);
+}
+
+/* Purpose: address one typed discrete publication range selected by the storage table. */
+static unsigned long long **attention_trace_u64_slot(yvex_attention_publication *trace,
+                                                     attention_trace_u64_field field)
+{
+    return (unsigned long long **)(void *)((unsigned char *)trace +
+                                           attention_trace_u64_offsets[field]);
+}
+
+/* Purpose: copy one checked graph-owned range into heap or workspace storage. */
+static int attention_storage_copy(void **out, unsigned long long count, const void *source,
+                                  unsigned long long source_count, size_t width,
+                                  yvex_attention_workspace *workspace)
+{
+    void *copy;
+    size_t bytes;
+
+    if (!out || count > source_count || (count && (!source || !width)) ||
+        !yvex_attention_checked_size(count, width, &bytes)) return 0;
+    *out = NULL;
+    if (!count) return 1;
+    copy = workspace ? yvex_attention_workspace_calloc(workspace, count, width)
+                     : yvex_attention_calloc_array(count, width);
+    if (!copy) return 0;
+    memcpy(copy, source, bytes);
+    *out = copy;
+    return 1;
+}
+
+/* Purpose: allocate or copy every publication range through one checked storage lifecycle.
+ * Inputs: empty publication, exact element counts, optional sources, workspace, and byte limit.
+ * Effects: owns all admitted ranges and returns their exact aggregate byte count.
+ * Failure: returns bounds or allocation status with partial ranges still safely releasable.
+ * Boundary: storage only; it neither derives trace geometry nor performs attention arithmetic. */
+static int attention_trace_storage_open(
+    yvex_attention_publication *trace,
+    const unsigned long long float_counts[ATTENTION_TRACE_FLOAT_COUNT],
+    const float *const float_sources[ATTENTION_TRACE_FLOAT_COUNT],
+    const unsigned long long u64_counts[ATTENTION_TRACE_U64_COUNT],
+    const unsigned long long *const u64_sources[ATTENTION_TRACE_U64_COUNT],
+    yvex_attention_workspace *workspace, unsigned long long limit_bytes,
+    unsigned long long *owned_bytes)
+{
+    unsigned long long total = 0ull, bytes;
+    unsigned int i;
+
+    for (i = 0u; i < ATTENTION_TRACE_FLOAT_COUNT; ++i)
+        if (!yvex_core_u64_mul(float_counts[i], sizeof(float), &bytes) ||
+            !yvex_core_u64_add(total, bytes, &total))
+            return YVEX_ERR_BOUNDS;
+    for (i = 0u; i < ATTENTION_TRACE_U64_COUNT; ++i)
+        if (!yvex_core_u64_mul(u64_counts[i], sizeof(unsigned long long), &bytes) ||
+            !yvex_core_u64_add(total, bytes, &total))
+            return YVEX_ERR_BOUNDS;
+    if (total > limit_bytes || total > (unsigned long long)SIZE_MAX)
+        return YVEX_ERR_BOUNDS;
+    for (i = 0u; i < ATTENTION_TRACE_FLOAT_COUNT; ++i) {
+        float **slot = attention_trace_float_slot(trace, (attention_trace_float_field)i);
+        if (float_sources && float_counts[i] && !float_sources[i])
+            return YVEX_ERR_INVALID_ARG;
+        *slot = workspace
+            ? yvex_attention_workspace_calloc(workspace, float_counts[i], sizeof(**slot))
+            : yvex_attention_calloc_array(float_counts[i], sizeof(**slot));
+        if (float_counts[i] && !*slot)
+            return YVEX_ERR_NOMEM;
+        if (float_counts[i] && float_sources)
+            memcpy(*slot, float_sources[i], (size_t)float_counts[i] * sizeof(**slot));
+    }
+    for (i = 0u; i < ATTENTION_TRACE_U64_COUNT; ++i) {
+        unsigned long long **slot = attention_trace_u64_slot(trace, (attention_trace_u64_field)i);
+        if (u64_sources && u64_counts[i] && !u64_sources[i])
+            return YVEX_ERR_INVALID_ARG;
+        *slot = workspace
+            ? yvex_attention_workspace_calloc(workspace, u64_counts[i], sizeof(**slot))
+            : yvex_attention_calloc_array(u64_counts[i], sizeof(**slot));
+        if (u64_counts[i] && !*slot)
+            return YVEX_ERR_NOMEM;
+        if (u64_counts[i] && u64_sources)
+            memcpy(*slot, u64_sources[i], (size_t)u64_counts[i] * sizeof(**slot));
+    }
+    *owned_bytes = total;
+    return YVEX_OK;
+}
+
+typedef struct {
+    unsigned long long input_width, compressed_capacity, indexer_capacity;
+    unsigned long long main_kv_extent, main_score_extent;
+    unsigned long long index_kv_extent, index_score_extent, topk_capacity;
+} attention_trace_shape;
+
+/* Purpose: resolve all publication extents once from semantic geometry and typed capacities.
+ * Inputs: immutable publication geometry plus explicit emission, rolling, and top-k capacities.
+ * Effects: writes exact float and integer element counts only.
+ * Failure: checked multiplication returns false without publishing partial storage.
+ * Boundary: graph-memory geometry only; no allocation or numerical execution occurs. */
+static int attention_trace_counts(
+    const yvex_attention_publication *trace, const attention_trace_shape *shape,
+    unsigned long long floats[ATTENTION_TRACE_FLOAT_COUNT],
+    unsigned long long integers[ATTENTION_TRACE_U64_COUNT])
+{
+    const unsigned long long widths[ATTENTION_TRACE_FLOAT_COUNT] = {
+        shape->input_width, trace->q_rank, trace->query_width, trace->kv_width,
+        trace->compressed_stride, trace->indexer_stride, trace->index_query_stride,
+        trace->index_weight_stride, trace->query_width, trace->hidden_width,
+        trace->envelope_output_width, 1ull, 1ull, 1ull, 1ull};
+    const unsigned long long rows[ATTENTION_TRACE_FLOAT_COUNT] = {
+        trace->token_count, trace->token_count, trace->token_count, trace->token_count,
+        shape->compressed_capacity, shape->indexer_capacity, trace->token_count,
+        trace->token_count, trace->token_count, trace->token_count, trace->token_count,
+        shape->main_kv_extent, shape->main_score_extent,
+        shape->index_kv_extent, shape->index_score_extent};
+    unsigned int i;
+
+    memset(integers, 0, sizeof(*integers) * ATTENTION_TRACE_U64_COUNT);
+    for (i = 0u; i < ATTENTION_TRACE_FLOAT_COUNT; ++i)
+        if (!yvex_core_u64_mul(rows[i], widths[i], &floats[i])) return 0;
+    integers[ATTENTION_TRACE_COMPRESSED_POSITIONS] = shape->compressed_capacity;
+    integers[ATTENTION_TRACE_INDEXER_POSITIONS] = shape->indexer_capacity;
+    integers[ATTENTION_TRACE_TOPK_COUNTS] = shape->topk_capacity ? trace->token_count : 0ull;
+    return yvex_core_u64_mul(trace->token_count, shape->topk_capacity,
+                             &integers[ATTENTION_TRACE_TOPK_POSITIONS]);
+}
+
+/* Purpose: retain production output/state spans while omitting unrequested evidence storage.
+ * Inputs: admitted evidence level and complete logical trace extents.
+ * Effects: zeros only spans outside the requested publication class.
+ * Failure: invalid evidence levels return false without admitting storage.
+ * Boundary: changes publication storage only, never production numerical work. */
+static int attention_trace_counts_filter(
+    yvex_attention_evidence_level level,
+    unsigned long long floats[ATTENTION_TRACE_FLOAT_COUNT],
+    unsigned long long integers[ATTENTION_TRACE_U64_COUNT])
+{
+    if ((unsigned int)level > (unsigned int)YVEX_ATTENTION_EVIDENCE_FULL)
+        return 0;
+    if (level < YVEX_ATTENTION_EVIDENCE_FULL)
+        floats[ATTENTION_TRACE_INPUT] = 0ull;
+    if (level < YVEX_ATTENTION_EVIDENCE_STAGES) {
+        floats[ATTENTION_TRACE_Q_LOW] = 0ull;
+        floats[ATTENTION_TRACE_QUERY] = 0ull;
+        floats[ATTENTION_TRACE_INDEX_QUERY] = 0ull;
+        floats[ATTENTION_TRACE_INDEX_WEIGHTS] = 0ull;
+        floats[ATTENTION_TRACE_VALUES] = 0ull;
+    }
+    if (level < YVEX_ATTENTION_EVIDENCE_FULL) {
+        integers[ATTENTION_TRACE_TOPK_COUNTS] = 0ull;
+        integers[ATTENTION_TRACE_TOPK_POSITIONS] = 0ull;
+    }
+    return 1;
+}
+
+/* Purpose: project one layer into the shared publication geometry contract.
+ * Inputs: empty publication, admitted layer, scope, token range, index policy, and top-k capacity.
+ * Effects: initializes semantic dimensions only; pointer ownership remains untouched.
+ * Failure: checked head-width multiplication leaves the descriptor unusable.
+ * Boundary: generic trace metadata; storage and attention execution remain separate. */
+static int attention_trace_layer_describe(
+    yvex_attention_publication *trace, const yvex_attention_layer_plan *layer,
+    yvex_attention_operation_scope scope, unsigned long long position,
+    unsigned long long tokens, int index_enabled, unsigned long long topk_capacity)
+{
+    memset(trace, 0, sizeof(*trace));
+    trace->layer_index = layer->layer_index;
+    trace->attention_class = layer->attention_class;
+    trace->token_position = position;
+    trace->token_count = tokens;
+    trace->hidden_width = trace->core_output_width = layer->hidden_dimension;
+    trace->envelope_output_width = scope == YVEX_ATTENTION_OPERATION_ENVELOPE
+        ? layer->residual_expanded_width : 0ull;
+    trace->q_rank = layer->query_lora_rank;
+    trace->kv_width = trace->compressed_stride = layer->head_dimension;
+    trace->indexer_stride = layer->indexer_head_dimension;
+    trace->index_weight_stride = layer->indexer_heads;
+    trace->topk_stride = topk_capacity;
+    return yvex_core_u64_mul(layer->query_heads, layer->head_dimension, &trace->query_width) &&
+        (!index_enabled || yvex_core_u64_mul(layer->indexer_heads, layer->indexer_head_dimension,
+                                             &trace->index_query_stride));
+}
 // Purpose: Return the admitted cuda weights release fact without transferring ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
@@ -49,6 +464,8 @@ static int attention_cuda_load_weight(yvex_materialization_session *session,
     unsigned long long blocks;
     unsigned long long row_bytes;
     unsigned long long expected;
+    const unsigned char *resident = NULL;
+    yvex_materialization_failure materialization_failure;
     int rc;
     if (!session || !runtime_binding || !runtime_binding->binding || !owned || !job ||
         slot >= YVEX_BACKEND_ATTENTION_WEIGHT_COUNT)
@@ -73,27 +490,37 @@ static int attention_cuda_load_weight(yvex_materialization_session *session,
                                      runtime_binding, binding->layer_index, binding->role,
                                      binding->encoded_bytes, expected, err, YVEX_ERR_FORMAT,
                                      "CUDA attention encoded tensor range is not row-exact");
-    owned->owned[slot] = (unsigned char *)malloc((size_t)binding->encoded_bytes);
-    if (!owned->owned[slot])
-        return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION,
-                                     runtime_binding, binding->layer_index, binding->role,
-                                     binding->encoded_bytes, 0ull, err, YVEX_ERR_NOMEM,
-                                     "CUDA attention encoded weight allocation failed");
-    rc = yvex_materialization_session_read(session, binding, 0ull, owned->owned[slot],
-                                           (size_t)binding->encoded_bytes, NULL, err);
+    memset(&materialization_failure, 0, sizeof(materialization_failure));
+    rc = yvex_materialization_session_borrow(
+        session, binding, 0ull, (size_t)binding->encoded_bytes, &resident,
+        &materialization_failure, err);
+    if (rc == YVEX_ERR_INVALID_ARG) {
+        yvex_error_clear(err);
+        owned->owned[slot] = (unsigned char *)malloc((size_t)binding->encoded_bytes);
+        if (!owned->owned[slot])
+            return yvex_attention_reject(
+                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, runtime_binding,
+                binding->layer_index, binding->role, binding->encoded_bytes, 0ull, err,
+                YVEX_ERR_NOMEM, "CUDA attention encoded weight allocation failed");
+        rc = yvex_materialization_session_read(
+            session, binding, 0ull, owned->owned[slot], (size_t)binding->encoded_bytes,
+            NULL, err);
+        resident = owned->owned[slot];
+        if (rc == YVEX_OK &&
+            !yvex_core_u64_add(owned->payload_bytes_read, binding->encoded_bytes,
+                               &owned->payload_bytes_read))
+            rc = YVEX_ERR_BOUNDS;
+    }
     if (rc != YVEX_OK)
-        return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_READ, runtime_binding,
-                                     binding->layer_index, binding->role, binding->encoded_bytes,
-                                     0ull, err, (yvex_status)rc,
-                                     "CUDA attention failed to read admitted encoded weight");
-    if (!yvex_core_u64_add(owned->payload_bytes_read, binding->encoded_bytes,
-                           &owned->payload_bytes_read))
-        return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION,
-                                     runtime_binding, binding->layer_index, binding->role,
-                                     ULLONG_MAX, binding->encoded_bytes, err, YVEX_ERR_BOUNDS,
-                                     "CUDA attention payload-byte accounting overflowed");
+        return yvex_attention_reject(
+            failure, rc == YVEX_ERR_BOUNDS ? YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION
+                                           : YVEX_DEEPSEEK_ATTENTION_FAILURE_READ,
+            runtime_binding, binding->layer_index, binding->role, binding->encoded_bytes,
+            0ull, err, (yvex_status)rc,
+            rc == YVEX_ERR_BOUNDS ? "CUDA attention payload-byte accounting overflowed"
+                                  : "CUDA attention failed to borrow resident encoded weight");
     weight = &job->weights[slot];
-    weight->encoded = owned->owned[slot];
+    weight->encoded = resident;
     weight->encoded_bytes = (size_t)binding->encoded_bytes;
     weight->row_bytes = row_bytes;
     weight->row_width = binding->row_width;
@@ -163,225 +590,325 @@ int yvex_attention_cuda_rolling_project(const yvex_attention_rolling_state_view 
     };
     return 1;
 }
-// Purpose: Accumulate one typed trace extent without losing overflow evidence.
-static int attention_trace_bytes_add(unsigned long long count, unsigned long long width,
-                                     unsigned long long *total) {
-    unsigned long long bytes;
-    return yvex_core_u64_mul(count, width, &bytes) && yvex_core_u64_add(*total, bytes, total);
-}
-// Purpose: Return the admitted cuda trace allocate fact without transferring ownership.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-int yvex_attention_cuda_trace_allocate(yvex_attention_execution_trace *trace,
-                                       const yvex_attention_layer_plan *layer,
-                                       const yvex_attention_history_view *history,
-                                       unsigned long long token_position, const float *input,
-                                       unsigned long long limit_bytes,
-                                       unsigned long long *owned_bytes,
-                                       yvex_attention_failure *failure, yvex_error *err) {
-    unsigned long long query_width;
-    unsigned long long index_query_width = 0ull;
-    unsigned long long topk_capacity = 0ull;
-    unsigned long long main_extent = 0ull;
-    unsigned long long index_extent = 0ull;
-    unsigned long long float_count = 0ull;
-    unsigned long long u64_count = 0ull;
-    unsigned long long total_bytes = 0ull;
-    unsigned long long candidate_count;
-    if (!owned_bytes)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
-            layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
-            0ull, err, YVEX_ERR_INVALID_ARG, "CUDA attention trace byte output is required");
-    *owned_bytes = 0ull;
-    if (!trace || !layer || !history || !input ||
-        !yvex_core_u64_mul(layer->query_heads, layer->head_dimension, &query_width))
-        return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT,
-                                     NULL, layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER,
-                                     YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
-                                     YVEX_ERR_INVALID_ARG,
-                                     "CUDA attention trace allocation requires plan and input");
-    if (!attention_trace_bytes_add(layer->hidden_dimension, 2ull, &float_count) ||
-        !attention_trace_bytes_add(layer->query_lora_rank, 1ull, &float_count) ||
-        !attention_trace_bytes_add(query_width, 2ull, &float_count) ||
-        !attention_trace_bytes_add(layer->head_dimension, 1ull, &float_count))
-        goto budget_failure;
-    if (layer->attention_class != YVEX_ATTENTION_CLASS_SWA) {
-        if (!yvex_core_u64_mul(history->main_rolling_state.state_width,
-                               history->main_rolling_state.state_slots, &main_extent) ||
-            !attention_trace_bytes_add(layer->head_dimension, 1ull, &float_count) ||
-            !attention_trace_bytes_add(main_extent, 2ull, &float_count) ||
-            !attention_trace_bytes_add(1ull, sizeof(unsigned long long), &total_bytes))
-            goto budget_failure;
-    }
-    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
-        if (!yvex_core_u64_mul(layer->indexer_heads, layer->indexer_head_dimension,
-                               &index_query_width) ||
-            !yvex_core_u64_add(history->compressed_entry_count, 1ull, &candidate_count))
-            goto budget_failure;
-        topk_capacity = yvex_attention_min_u64(candidate_count, layer->sparse_topk.k);
-        if (!yvex_core_u64_mul(history->indexer_rolling_state.state_width,
-                               history->indexer_rolling_state.state_slots, &index_extent) ||
-            !attention_trace_bytes_add(layer->indexer_head_dimension, 1ull, &float_count) ||
-            !attention_trace_bytes_add(index_query_width, 1ull, &float_count) ||
-            !attention_trace_bytes_add(layer->indexer_heads, 1ull, &float_count) ||
-            !attention_trace_bytes_add(index_extent, 2ull, &float_count) ||
-            !yvex_core_u64_add(topk_capacity, 2ull, &u64_count))
-            goto budget_failure;
-    }
-    if (!attention_trace_bytes_add(float_count, sizeof(float), &total_bytes) ||
-        !attention_trace_bytes_add(u64_count, sizeof(unsigned long long), &total_bytes) ||
-        total_bytes > limit_bytes || total_bytes > (unsigned long long)SIZE_MAX)
-        goto budget_failure;
-    memset(trace, 0, sizeof(*trace));
-#define ALLOC_TRACE(field, count, type)                                                            \
-    do {                                                                                           \
-        trace->field = (type *)yvex_attention_calloc_array((count), sizeof(type));                 \
-        if ((count) && !trace->field)                                                              \
-            goto allocation_failure;                                                               \
-    } while (0)
-    ALLOC_TRACE(input, layer->hidden_dimension, float);
-    ALLOC_TRACE(q_low, layer->query_lora_rank, float);
-    ALLOC_TRACE(query, query_width, float);
-    ALLOC_TRACE(raw_kv, layer->head_dimension, float);
-    ALLOC_TRACE(attention_values, query_width, float);
-    ALLOC_TRACE(output, layer->hidden_dimension, float);
-    memcpy(trace->input, input, (size_t)layer->hidden_dimension * sizeof(*trace->input));
-    if (layer->attention_class != YVEX_ATTENTION_CLASS_SWA) {
-        ALLOC_TRACE(compressed_kv, layer->head_dimension, float);
-        ALLOC_TRACE(compressed_positions, 1ull, unsigned long long);
-        ALLOC_TRACE(next_main_rolling_state.kv_state, main_extent, float);
-        ALLOC_TRACE(next_main_rolling_state.score_state, main_extent, float);
-    }
-    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
-        ALLOC_TRACE(indexer_kv, layer->indexer_head_dimension, float);
-        ALLOC_TRACE(indexer_positions, 1ull, unsigned long long);
-        ALLOC_TRACE(index_query, index_query_width, float);
-        ALLOC_TRACE(index_weights, layer->indexer_heads, float);
-        ALLOC_TRACE(topk_counts, 1ull, unsigned long long);
-        ALLOC_TRACE(topk_positions, topk_capacity, unsigned long long);
-        ALLOC_TRACE(next_indexer_rolling_state.kv_state, index_extent, float);
-        ALLOC_TRACE(next_indexer_rolling_state.score_state, index_extent, float);
-    }
-#undef ALLOC_TRACE
-    trace->owned = 1;
-    trace->layer_index = layer->layer_index;
-    trace->attention_class = layer->attention_class;
-    trace->token_position = token_position;
-    trace->token_count = 1ull;
-    trace->hidden_width = layer->hidden_dimension;
-    trace->q_rank = layer->query_lora_rank;
-    trace->query_width = query_width;
-    trace->kv_width = layer->head_dimension;
-    trace->compressed_stride = layer->head_dimension;
-    trace->indexer_stride = layer->indexer_head_dimension;
-    trace->index_query_stride =
-        layer->attention_class == YVEX_ATTENTION_CLASS_CSA ? index_query_width : 0ull;
-    trace->index_weight_stride = layer->indexer_heads;
-    trace->topk_stride = topk_capacity;
-    *owned_bytes = total_bytes;
-    return YVEX_OK;
-budget_failure:
-    return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH, NULL,
-                                 layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER,
-                                 YVEX_TENSOR_ROLE_UNKNOWN, limit_bytes, total_bytes, err,
-                                 YVEX_ERR_BOUNDS, "CUDA attention trace exceeds its host budget");
-allocation_failure:
-#undef ALLOC_TRACE
-    yvex_attention_execution_trace_release(trace);
-    return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
-                                 layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
-                                 YVEX_ERR_NOMEM, "CUDA attention trace allocation failed");
-}
 // Purpose: Return the admitted cuda rolling commit fact without transferring ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
 // Failure: returns a typed refusal or neutral result without partial capability publication.
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-void yvex_attention_cuda_rolling_commit(const yvex_attention_rolling_state_view *before,
-                                        unsigned long long token_position,
-                                        yvex_attention_rolling_state_output *after) {
-    int emitted;
-    if (!before || !before->present || !after)
+static void cuda_rolling_commit(const yvex_attention_rolling_state_view *before,
+                                unsigned long long token_position,
+                                unsigned long long token_count,
+                                yvex_attention_rolling_state_output *after) {
+    float *kv_state;
+    float *score_state;
+    unsigned long long cursor, previous_fill, current_fill, token;
+
+    if (!before || !before->present || !after || !token_count)
         return;
-    emitted = ((token_position + 1ull) % before->ratio) == 0ull;
-    after->present = 1;
-    after->schema_version = before->schema_version;
-    after->kind = before->kind;
-    after->attention_class = before->attention_class;
-    after->layer_index = before->layer_index;
-    after->next_token_position = token_position + 1ull;
-    after->ratio = before->ratio;
-    after->head_dimension = before->head_dimension;
-    after->state_width = before->state_width;
-    after->state_slots = before->state_slots;
-    after->previous_fill =
-        emitted ? (before->overlap ? before->ratio : 0ull) : before->previous_fill;
-    after->current_fill =
-        emitted ? 0ull
-                : (before->current_fill < before->cursor + 1ull ? before->cursor + 1ull
-                                                                : before->current_fill);
-    after->cursor = emitted ? 0ull : (before->cursor + 1ull) % before->ratio;
+    kv_state = after->kv_state;
+    score_state = after->score_state;
+    attention_rolling_transfer(after, before, 0);
+    after->kv_state = kv_state;
+    after->score_state = score_state;
+    cursor = before->cursor;
+    previous_fill = before->previous_fill;
+    current_fill = before->current_fill;
+    for (token = 0ull; token < token_count; ++token) {
+        int emitted = ((token_position + token + 1ull) % before->ratio) == 0ull;
+        previous_fill = emitted ? (before->overlap ? before->ratio : 0ull) : previous_fill;
+        current_fill = emitted ? 0ull : (current_fill < cursor + 1ull ? cursor + 1ull : current_fill);
+        cursor = emitted ? 0ull : (cursor + 1ull) % before->ratio;
+    }
+    after->next_token_position = token_position + token_count;
+    after->previous_fill = previous_fill;
+    after->current_fill = current_fill;
+    after->cursor = cursor;
     after->kv_state_stride = before->state_width;
     after->score_state_stride = before->state_width;
     if (!yvex_core_u64_mul(before->state_width, before->state_slots, &after->kv_state_extent))
         after->kv_state_extent = 0ull;
     after->score_state_extent = after->kv_state_extent;
-    after->overlap = before->overlap;
-    after->rotated = before->rotated;
-    memcpy(after->attention_plan_identity, before->attention_plan_identity,
-           sizeof(after->attention_plan_identity));
 }
 // Purpose: Return the admitted cuda checksum fact without transferring ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
 // Failure: returns a typed refusal or neutral result without partial capability publication.
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-double yvex_attention_cuda_checksum(const float *values, unsigned long long count) {
-    double checksum = 0.0;
-    unsigned long long i;
-    for (i = 0ull; values && i < count; ++i)
-        checksum += (double)values[i] * (double)((i % 17ull) + 1ull);
-    return checksum;
+static double cuda_checksum(const float *values, unsigned long long count) {
+    return yvex_attention_checksum(values, count);
 }
 // Purpose: Return the admitted cuda output identity fact without transferring ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
 // Failure: returns a typed refusal or neutral result without partial capability publication.
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-int yvex_attention_cuda_output_identity(const yvex_attention_plan *plan,
-                                        const yvex_attention_execution_trace *trace,
-                                        char out[YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP]) {
+static int cuda_output_identity(const yvex_attention_plan *plan,
+                                const yvex_attention_execution_trace *trace,
+                                char out[YVEX_DEEPSEEK_ATTENTION_IDENTITY_CAP]) {
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     const yvex_attention_summary *summary = yvex_attention_plan_summary(plan);
+    const float *values;
+    unsigned long long count;
+    unsigned long long width;
+    unsigned long long envelope;
     size_t bytes;
-    if (!summary || !trace || !out ||
-        !yvex_attention_checked_size(trace->hidden_width, sizeof(float), &bytes))
+
+    envelope = trace && trace->envelope_output_width ? 1ull : 0ull;
+    values = envelope ? trace->envelope_output : (trace ? trace->output : NULL);
+    width = envelope ? trace->envelope_output_width : (trace ? trace->hidden_width : 0ull);
+    if (!summary || !trace || !trace->complete || !out || !values || !width ||
+        !yvex_core_u64_mul(trace->token_count, width, &count) ||
+        !yvex_attention_checked_size(count, sizeof(float), &bytes))
         return 0;
     yvex_sha256_init(&hash);
-    if (!yvex_attention_hash_text(&hash, "yvex.deepseek.attention.cuda.output.v1") ||
-        !yvex_attention_hash_text(&hash, summary->attention_plan_identity) ||
-        !yvex_attention_hash_u64(&hash, trace->layer_index) ||
-        !yvex_attention_hash_u64(&hash, trace->token_position) ||
-        !yvex_sha256_update(&hash, trace->output, bytes) || !yvex_sha256_final(&hash, digest))
+    if (!attention_hash_text(&hash, "yvex.deepseek.attention.cuda.output.v2") ||
+        !attention_hash_text(&hash, summary->attention_plan_identity) ||
+        !attention_hash_u64(&hash, trace->layer_index) ||
+        !attention_hash_u64(&hash, trace->token_position) ||
+        !attention_hash_u64(&hash, trace->token_count) ||
+        !attention_hash_u64(&hash, envelope) ||
+        !attention_hash_u64(&hash, width) ||
+        !yvex_sha256_update(&hash, values, bytes) || !yvex_sha256_final(&hash, digest))
         return 0;
     yvex_sha256_hex(digest, out);
     return 1;
 }
+
+/* Purpose: map one CUDA execution refusal through the generic attention boundary.
+ * Inputs: live execution context, typed failure, exact expected/actual facts, status, and reason.
+ * Effects: writes only caller-owned failure and error records.
+ * Failure: returns the requested status without publishing output or candidate state.
+ * Boundary: shared graph refusal mapping owns no family dispatch or backend execution. */
+int yvex_attention_cuda_reject(
+    attention_cuda_context *context, yvex_attention_failure_code code,
+    unsigned long long expected, unsigned long long actual,
+    yvex_status status, const char *reason)
+{
+    return yvex_attention_reject(
+        context->failure, code, NULL,
+        context->layer ? context->layer->layer_index : context->opts->layer_index,
+        YVEX_TENSOR_ROLE_UNKNOWN, expected, actual, context->err, status, reason);
+}
+
+/* Purpose: publish CUDA evidence and rolling state after complete device execution.
+ * Inputs: synchronized backend result, private trace, history, and result owner.
+ * Effects: commits result facts and optionally transfers the complete publication.
+ * Failure: accounting or identity refusal publishes no candidate state.
+ * Boundary: generic graph-memory publication does not own family dispatch or persistent KV. */
+int yvex_attention_cuda_publish(attention_cuda_context *context)
+{
+    unsigned long long q_low, query, raw, output, envelope;
+    unsigned long long token;
+    if (context->cuda_output.tokens_executed != context->token_count ||
+        !yvex_core_u64_mul(context->token_count, context->trace.q_rank, &q_low) ||
+        !yvex_core_u64_mul(context->token_count, context->trace.query_width, &query) ||
+        !yvex_core_u64_mul(context->token_count, context->trace.kv_width, &raw) ||
+        !yvex_core_u64_mul(context->token_count, context->trace.hidden_width, &output) ||
+        !yvex_core_u64_mul(context->token_count, context->trace.envelope_output_width,
+                           &envelope))
+        return yvex_attention_cuda_reject(
+            context, YVEX_DEEPSEEK_ATTENTION_FAILURE_BACKEND,
+            context->token_count, context->cuda_output.tokens_executed,
+            YVEX_ERR_STATE,
+            "CUDA attention backend did not complete the admitted token range");
+    context->trace.compressed_count = context->cuda_output.compressed_count;
+    context->trace.indexer_count = context->cuda_output.indexer_count;
+    context->trace.compressed_stride = context->trace.compressed_count
+                                           ? context->layer->head_dimension : 0ull;
+    context->trace.indexer_stride = context->trace.indexer_count
+                                        ? context->layer->indexer_head_dimension : 0ull;
+    if (context->layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
+        unsigned long long storage_stride = context->trace.topk_stride;
+        unsigned long long semantic_stride = context->cuda_output.topk_count;
+        if (semantic_stride > storage_stride)
+            return yvex_attention_cuda_reject(
+                context, YVEX_DEEPSEEK_ATTENTION_FAILURE_BACKEND,
+                storage_stride, semantic_stride, YVEX_ERR_BOUNDS,
+                "CUDA attention top-k publication exceeded its storage stride");
+        if (context->trace.topk_positions && semantic_stride < storage_stride)
+            for (token = 1ull; token < context->token_count; ++token)
+                memmove(context->trace.topk_positions + token * semantic_stride,
+                        context->trace.topk_positions + token * storage_stride,
+                        (size_t)semantic_stride * sizeof(*context->trace.topk_positions));
+        context->trace.topk_stride = semantic_stride;
+    }
+    context->trace.complete = 1;
+    context->result->executed = 1;
+    context->result->full_attention = 1;
+    context->result->cuda_executed = 1;
+    context->result->operation_scope = context->opts->operation_scope;
+    context->result->layer_index = context->layer->layer_index;
+    context->result->attention_class = context->layer->attention_class;
+    context->result->token_position = context->opts->token_position;
+    context->result->q_a_rows = context->layer->query_lora_rank;
+    context->result->q_b_rows = context->layer->query_heads * context->layer->head_dimension;
+    context->result->kv_rows = context->layer->head_dimension;
+    context->result->topk_candidates = context->cuda_output.valid_candidate_count;
+    context->result->topk_selected = context->cuda_output.topk_count;
+    context->result->local_entries =
+        context->history->local_tail_count + context->token_count;
+    context->result->compressed_entries = context->cuda_output.compressed_count;
+    context->result->payload_bytes_read = context->weights.payload_bytes_read;
+    context->result->state_raw_entries = context->token_count;
+    context->result->state_compressed_entries = context->cuda_output.compressed_count;
+    context->result->state_indexer_entries = context->cuda_output.indexer_count;
+    context->result->cuda_kernel_launches = context->cuda_output.kernel_launches;
+    context->result->cuda_h2d_bytes = context->cuda_output.h2d_bytes;
+    context->result->cuda_d2h_bytes = context->cuda_output.d2h_bytes;
+    context->result->cuda_device_execution_elapsed_ns =
+        context->cuda_output.device_execution_elapsed_ns;
+    if (!yvex_core_u64_add(context->trace_bytes,
+                           context->cuda_output.peak_host_bytes,
+                           &context->result->cuda_peak_host_bytes))
+        return yvex_attention_cuda_reject(
+            context, YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH,
+            context->opts->scratch_limit_bytes, ULLONG_MAX, YVEX_ERR_BOUNDS,
+            "CUDA attention peak host accounting overflowed");
+    context->result->cuda_peak_device_bytes = context->cuda_output.peak_device_bytes;
+    context->result->cuda_host_workspace_capacity =
+        context->cuda_output.host_workspace_capacity;
+    context->result->cuda_host_workspace_used = context->cuda_output.host_workspace_used;
+    context->result->cuda_host_workspace_peak = context->cuda_output.host_workspace_peak;
+    context->result->cuda_host_workspace_allocations =
+        context->cuda_output.host_workspace_allocation_count;
+    context->result->cuda_host_workspace_reused = context->cuda_output.host_workspace_reused;
+    context->result->q_projection_checksum = context->trace.q_low
+        ? cuda_checksum(context->trace.q_low, q_low) : 0.0;
+    context->result->kv_projection_checksum =
+        cuda_checksum(context->trace.raw_kv, raw);
+    context->result->rope_checksum = context->trace.query
+        ? cuda_checksum(context->trace.query, query) : 0.0;
+    context->result->attention_checksum = context->trace.attention_values
+        ? cuda_checksum(context->trace.attention_values, query) : 0.0;
+    context->result->core_output_checksum =
+        cuda_checksum(context->trace.output, output);
+    context->result->envelope_output_checksum =
+        cuda_checksum(context->trace.envelope_output, envelope);
+    context->result->output_checksum =
+        context->opts->operation_scope == YVEX_ATTENTION_OPERATION_ENVELOPE
+            ? context->result->envelope_output_checksum
+            : context->result->core_output_checksum;
+    if (!cuda_output_identity(
+            context->plan, &context->trace, context->result->output_identity))
+        return yvex_attention_cuda_reject(
+            context, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA,
+            1ull, 0ull, YVEX_ERR_STATE,
+            "CUDA attention output identity construction failed");
+    if (context->history->main_rolling_state.present)
+        cuda_rolling_commit(
+            &context->history->main_rolling_state, context->opts->token_position,
+            context->token_count, &context->trace.next_main_rolling_state);
+    if (context->history->indexer_rolling_state.present)
+        cuda_rolling_commit(
+            &context->history->indexer_rolling_state, context->opts->token_position,
+            context->token_count, &context->trace.next_indexer_rolling_state);
+    if (context->opts->publication || context->opts->trace) {
+        yvex_attention_publication *publication = context->opts->publication
+            ? context->opts->publication : context->opts->trace;
+        *publication = context->trace;
+        memset(&context->trace, 0, sizeof(context->trace));
+    }
+    if (context->failure) memset(context->failure, 0, sizeof(*context->failure));
+    yvex_error_clear(context->err);
+    return YVEX_OK;
+}
+
+/* Purpose: allocate one complete multi-token CUDA publication before dispatch.
+ * Inputs: empty publication, admitted layer, scope, position, and token count.
+ * Effects: owns bounded storage for every device-produced trace component.
+ * Failure: overflow or allocation failure releases all partial storage.
+ * Boundary: publication storage only; does not execute numerical work. */
+int yvex_attention_cuda_trace_open(yvex_attention_publication *trace,
+                                   const yvex_attention_layer_plan *layer,
+                                   yvex_attention_operation_scope scope,
+                                   const yvex_attention_history_view *history,
+                                   unsigned long long token_position,
+                                   unsigned long long token_count,
+                                   yvex_attention_evidence_level evidence_level,
+                                   yvex_attention_workspace *workspace,
+                                   unsigned long long limit_bytes,
+                                   unsigned long long *owned_bytes,
+                                   yvex_attention_failure *failure, yvex_error *err)
+{
+    unsigned long long floats[ATTENTION_TRACE_FLOAT_COUNT] = {0ull};
+    unsigned long long integers[ATTENTION_TRACE_U64_COUNT] = {0ull};
+    unsigned long long end, compressed = 0ull, indexer = 0ull;
+    unsigned long long main_extent = 0ull, index_extent = 0ull, topk = 0ull;
+    attention_trace_shape shape;
+    unsigned long long input_width;
+
+    if (!trace || !layer || !history || !owned_bytes || !token_count ||
+        !yvex_core_u64_add(token_position, token_count, &end))
+        goto invalid;
+    input_width = scope == YVEX_ATTENTION_OPERATION_ENVELOPE
+        ? layer->residual_expanded_width : layer->hidden_dimension;
+    *owned_bytes = 0ull;
+    if (layer->attention_class != YVEX_ATTENTION_CLASS_SWA) {
+        compressed = end / layer->compression_ratio - token_position / layer->compression_ratio;
+        if (!yvex_core_u64_mul(history->main_rolling_state.state_width,
+                               history->main_rolling_state.state_slots, &main_extent))
+            goto fail;
+    }
+    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
+        indexer = compressed;
+        topk = layer->sparse_topk.k;
+        if (!yvex_core_u64_mul(history->indexer_rolling_state.state_width,
+                               history->indexer_rolling_state.state_slots, &index_extent))
+            goto fail;
+    }
+    if (!attention_trace_layer_describe(
+            trace, layer, scope, token_position, token_count, 1,
+            topk))
+        goto fail;
+    trace->evidence_level = (unsigned int)evidence_level;
+    trace->workspace = workspace;
+    shape = (attention_trace_shape){input_width, compressed, indexer, main_extent, main_extent,
+                                    index_extent, index_extent, trace->topk_stride};
+    if (!attention_trace_counts(trace, &shape, floats, integers) ||
+        !attention_trace_counts_filter(evidence_level, floats, integers))
+        goto fail;
+    {
+        int rc = attention_trace_storage_open(trace, floats, NULL, integers, NULL, workspace,
+                                              limit_bytes, owned_bytes);
+        if (rc != YVEX_OK) {
+            yvex_attention_execution_trace_release(trace);
+            return attention_memory_reject(
+                failure, rc == YVEX_ERR_NOMEM ? YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION
+                                              : YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH,
+                layer->layer_index, limit_bytes, *owned_bytes, err, (yvex_status)rc,
+                rc == YVEX_ERR_NOMEM ? "CUDA attention trace allocation failed"
+                                     : "CUDA attention trace exceeds its host budget");
+        }
+    }
+    trace->owned = 1;
+    trace->core_output = trace->output;
+    return YVEX_OK;
+invalid:
+    return attention_memory_reject(
+        failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT,
+        layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER, 1ull, 0ull, err,
+        YVEX_ERR_INVALID_ARG, "CUDA attention trace requires history and a bounded token range");
+fail:
+    yvex_attention_execution_trace_release(trace);
+    return attention_memory_reject(
+        failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH,
+        layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER, limit_bytes, 0ull, err,
+        YVEX_ERR_BOUNDS, "CUDA attention trace geometry exceeds its host budget");
+}
+
 // Purpose: Return the admitted rolling storage allocate fact without transferring ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
 // Failure: returns a typed refusal or neutral result without partial capability publication.
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-int yvex_attention_rolling_storage_allocate(const yvex_attention_layer_plan *layer,
-                                            yvex_attention_rolling_kind kind,
-                                            unsigned long long token_position, float **kv_state_out,
-                                            float **score_state_out,
-                                            yvex_attention_rolling_state_view *view_out,
-                                            yvex_attention_failure *failure, yvex_error *err) {
+int yvex_attention_rolling_storage_acquire(const yvex_attention_layer_plan *layer,
+                                           yvex_attention_rolling_kind kind,
+                                           unsigned long long token_position,
+                                           yvex_attention_workspace *workspace,
+                                           float **kv_state_out, float **score_state_out,
+                                           yvex_attention_rolling_state_view *view_out,
+                                           yvex_attention_failure *failure, yvex_error *err) {
     unsigned long long ratio;
     unsigned long long head_dim;
     unsigned long long state_width;
@@ -393,6 +920,7 @@ int yvex_attention_rolling_storage_allocate(const yvex_attention_layer_plan *lay
     int overlap;
     int rotated;
     int rc;
+    unsigned long long mark = workspace ? yvex_attention_workspace_mark(workspace) : 0ull;
 
     if (kv_state_out)
         *kv_state_out = NULL;
@@ -404,25 +932,28 @@ int yvex_attention_rolling_storage_allocate(const yvex_attention_layer_plan *lay
         !yvex_attention_rolling_geometry(layer, kind, &ratio, &head_dim, &state_width, &state_slots,
                                          &overlap, &rotated) ||
         !yvex_core_u64_mul(state_slots, state_width, &extent))
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
-            layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
-            0ull, err, YVEX_ERR_FORMAT,
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY,
+            layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER, 1ull, 0ull, err, YVEX_ERR_FORMAT,
             "DeepSeek attention could not derive empty rolling-state geometry");
-    kv_state = (float *)yvex_attention_calloc_array(extent, sizeof(float));
-    score_state = (float *)yvex_attention_calloc_array(extent, sizeof(float));
+    kv_state = workspace
+        ? (float *)yvex_attention_workspace_calloc(workspace, extent, sizeof(float))
+        : (float *)yvex_attention_calloc_array(extent, sizeof(float));
+    score_state = workspace
+        ? (float *)yvex_attention_workspace_calloc(workspace, extent, sizeof(float))
+        : (float *)yvex_attention_calloc_array(extent, sizeof(float));
     if (!kv_state || !score_state) {
-        rc = yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
-                                   layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, extent, 0ull, err,
-                                   YVEX_ERR_NOMEM,
-                                   "DeepSeek attention empty rolling-state allocation failed");
+        rc = attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, layer->layer_index,
+            extent, 0ull, err, YVEX_ERR_NOMEM,
+            "DeepSeek attention empty rolling-state allocation failed");
         goto fail;
     }
     if (!attention_rolling_view_init(layer, kind, token_position, kv_state, score_state, &view)) {
-        rc = yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL,
-                                   layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, extent, 0ull, err,
-                                   YVEX_ERR_FORMAT,
-                                   "DeepSeek attention empty rolling-state initialization failed");
+        rc = attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, layer->layer_index,
+            extent, 0ull, err, YVEX_ERR_FORMAT,
+            "DeepSeek attention empty rolling-state initialization failed");
         goto fail;
     }
     *kv_state_out = kv_state;
@@ -431,10 +962,17 @@ int yvex_attention_rolling_storage_allocate(const yvex_attention_layer_plan *lay
     return YVEX_OK;
 
 fail:
-    free(kv_state);
-    free(score_state);
+    if (workspace) {
+        yvex_error rewind_error;
+        yvex_error_clear(&rewind_error);
+        (void)yvex_attention_workspace_rewind(workspace, mark, &rewind_error);
+    } else {
+        free(kv_state);
+        free(score_state);
+    }
     return rc;
 }
+
 // Purpose: Initialize rolling view init to its canonical fail-closed state.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
@@ -491,29 +1029,7 @@ static int attention_rolling_view_init(const yvex_attention_layer_plan *layer,
 void yvex_attention_rolling_output_bind(const yvex_attention_rolling_state_output *out,
                                         yvex_attention_rolling_state_view *view) {
     memset(view, 0, sizeof(*view));
-    view->present = out->present;
-    view->schema_version = out->schema_version;
-    view->kind = out->kind;
-    view->attention_class = out->attention_class;
-    view->layer_index = out->layer_index;
-    view->next_token_position = out->next_token_position;
-    view->ratio = out->ratio;
-    view->head_dimension = out->head_dimension;
-    view->state_width = out->state_width;
-    view->state_slots = out->state_slots;
-    view->previous_fill = out->previous_fill;
-    view->current_fill = out->current_fill;
-    view->cursor = out->cursor;
-    view->kv_state_stride = out->kv_state_stride;
-    view->score_state_stride = out->score_state_stride;
-    view->kv_state_extent = out->kv_state_extent;
-    view->score_state_extent = out->score_state_extent;
-    view->kv_state = out->kv_state;
-    view->score_state = out->score_state;
-    view->overlap = out->overlap;
-    view->rotated = out->rotated;
-    memcpy(view->attention_plan_identity, out->attention_plan_identity,
-           sizeof(view->attention_plan_identity));
+    attention_rolling_transfer(view, out, 1);
 }
 // Purpose: Return the admitted execution trace release fact without transferring ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
@@ -521,42 +1037,65 @@ void yvex_attention_rolling_output_bind(const yvex_attention_rolling_state_outpu
 // Failure: returns a typed refusal or neutral result without partial capability publication.
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 void yvex_attention_execution_trace_release(yvex_attention_execution_trace *trace) {
+    yvex_attention_workspace *workspace;
+    unsigned int i;
+
     if (!trace)
         return;
-    free(trace->input);
-    free(trace->q_low);
-    free(trace->query);
-    free(trace->raw_kv);
-    free(trace->compressed_kv);
-    free(trace->indexer_kv);
-    free(trace->index_query);
-    free(trace->index_weights);
-    free(trace->attention_values);
-    free(trace->output);
-    free(trace->compressed_positions);
-    free(trace->indexer_positions);
-    free(trace->topk_counts);
-    free(trace->topk_positions);
-    free(trace->next_main_rolling_state.kv_state);
-    free(trace->next_main_rolling_state.score_state);
-    free(trace->next_indexer_rolling_state.kv_state);
-    free(trace->next_indexer_rolling_state.score_state);
+    workspace = trace->workspace;
+    if (!workspace) {
+        for (i = 0u; i < ATTENTION_TRACE_FLOAT_COUNT; ++i)
+            free(*attention_trace_float_slot(trace, (attention_trace_float_field)i));
+        for (i = 0u; i < ATTENTION_TRACE_U64_COUNT; ++i)
+            free(*attention_trace_u64_slot(trace, (attention_trace_u64_field)i));
+    }
     memset(trace, 0, sizeof(*trace));
 }
-// Purpose: Apply the checked graph-local trace copy float invariant.
-static int attention_trace_copy_float(float **out, const float *values, unsigned long long count) {
-    float *copy;
-    if (!out || (count && !values))
+
+/* Purpose: distinguish committed core and envelope output in one owned trace.
+ * Inputs: complete trace plus committed core and optional envelope spans.
+ * Effects: aliases core_output to the existing owned output and copies envelope values atomically.
+ * Failure: allocation or invalid geometry releases the incomplete trace and returns false.
+ * Boundary: evidence ownership only; no attention or residual arithmetic is performed here. */
+int yvex_attention_trace_outputs_attach(yvex_attention_execution_trace *trace,
+                                        const yvex_attention_component_span *core,
+                                        const yvex_attention_component_span *envelope)
+{
+    unsigned long long envelope_width = envelope ? envelope->dims[1] : 0ull;
+
+    if (!trace || !trace->owned || !trace->complete || !trace->output || !core || !core->data ||
+        core->dims[1] != trace->hidden_width ||
+        (envelope && (!envelope->data || !envelope_width)))
         return 0;
-    *out = NULL;
-    if (!count)
-        return 1;
-    copy = (float *)yvex_attention_calloc_array(count, sizeof(*copy));
-    if (!copy)
+    trace->core_output = trace->output;
+    trace->core_output_width = core->dims[1];
+    if (!envelope) return 1;
+    if (!attention_storage_copy((void **)&trace->envelope_output,
+                                envelope->expected_elements, envelope->data,
+                                envelope->expected_elements, sizeof(float), trace->workspace)) {
+        yvex_attention_execution_trace_release(trace);
         return 0;
-    memcpy(copy, values, (size_t)count * sizeof(*copy));
-    *out = copy;
+    }
+    trace->envelope_output_width = envelope_width;
     return 1;
+}
+
+/* Purpose: publish scope-aware core and envelope checksums from committed output spans.
+ * Inputs: mutable result, selected scope, required core span, and optional envelope span.
+ * Effects: writes only the three output checksum fields.
+ * Failure: absent spans produce neutral checksums; callers validate required spans before use.
+ * Boundary: result evidence only; it does not alter committed output or state. */
+void yvex_attention_result_outputs_publish(yvex_attention_cpu_result *result,
+                                           yvex_attention_operation_scope scope,
+                                           const yvex_attention_component_span *core,
+                                           const yvex_attention_component_span *envelope)
+{
+    result->core_output_checksum = core && core->data
+        ? yvex_attention_checksum(core->data, core->expected_elements) : 0.0;
+    result->envelope_output_checksum = envelope && envelope->data
+        ? yvex_attention_checksum(envelope->data, envelope->expected_elements) : 0.0;
+    result->output_checksum = scope == YVEX_ATTENTION_OPERATION_ENVELOPE
+        ? result->envelope_output_checksum : result->core_output_checksum;
 }
 // Purpose: Return the admitted trace capture fact without transferring ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
@@ -579,14 +1118,27 @@ int yvex_attention_trace_capture(
     unsigned long long topk_stride, const yvex_attention_rolling_state_output *main_state,
     const float *main_state_kv, const float *main_state_score,
     const yvex_attention_rolling_state_output *index_state, const float *index_state_kv,
-    const float *index_state_score) {
-    unsigned long long count;
+    const float *index_state_score, yvex_attention_evidence_level evidence_level,
+    yvex_attention_workspace *workspace) {
+    unsigned long long floats[ATTENTION_TRACE_FLOAT_COUNT] = {0ull};
+    unsigned long long integers[ATTENTION_TRACE_U64_COUNT] = {0ull};
+    const float *float_sources[ATTENTION_TRACE_FLOAT_COUNT] = {
+        input, q_low, query, raw_kv, compressed_kv, indexer_kv, index_query,
+        index_weights, attention_values, output, NULL, main_state_kv,
+        main_state_score, index_state_kv, index_state_score};
+    const unsigned long long *u64_sources[ATTENTION_TRACE_U64_COUNT] = {
+        compressed_positions, indexer_positions, topk_counts, topk_positions};
+    attention_trace_shape shape;
+    unsigned long long owned_bytes;
+
     if (!trace || trace->owned || !token_count || !hidden_width || !q_rank || !query_width ||
         !kv_width || (compressed_count && !compressed_positions) ||
         (indexer_count && !indexer_positions) || (topk_stride && (!topk_counts || !topk_positions)))
         return 0;
     memset(trace, 0, sizeof(*trace));
     trace->owned = 1;
+    trace->workspace = workspace;
+    trace->evidence_level = (unsigned int)evidence_level;
     trace->layer_index = layer_index;
     trace->attention_class = attention_class;
     trace->token_position = token_position;
@@ -602,78 +1154,31 @@ int yvex_attention_trace_capture(
     trace->index_query_stride = index_query_stride;
     trace->index_weight_stride = index_weight_stride;
     trace->topk_stride = topk_stride;
-    if (!yvex_core_u64_mul(token_count, hidden_width, &count) ||
-        !attention_trace_copy_float(&trace->input, input, count) ||
-        !yvex_core_u64_mul(token_count, q_rank, &count) ||
-        !attention_trace_copy_float(&trace->q_low, q_low, count) ||
-        !yvex_core_u64_mul(token_count, query_width, &count) ||
-        !attention_trace_copy_float(&trace->query, query, count) ||
-        !yvex_core_u64_mul(token_count, kv_width, &count) ||
-        !attention_trace_copy_float(&trace->raw_kv, raw_kv, count) ||
-        !yvex_core_u64_mul(compressed_count, compressed_stride, &count) ||
-        !attention_trace_copy_float(&trace->compressed_kv, compressed_kv, count) ||
-        !yvex_core_u64_mul(indexer_count, indexer_stride, &count) ||
-        !attention_trace_copy_float(&trace->indexer_kv, indexer_kv, count) ||
-        !yvex_core_u64_mul(token_count, index_query_stride, &count) ||
-        !attention_trace_copy_float(&trace->index_query, index_query, count) ||
-        !yvex_core_u64_mul(token_count, index_weight_stride, &count) ||
-        !attention_trace_copy_float(&trace->index_weights, index_weights, count) ||
-        !yvex_core_u64_mul(token_count, query_width, &count) ||
-        !attention_trace_copy_float(&trace->attention_values, attention_values, count) ||
-        !yvex_core_u64_mul(token_count, hidden_width, &count) ||
-        !attention_trace_copy_float(&trace->output, output, count)) {
-        yvex_attention_execution_trace_release(trace);
-        return 0;
-    }
-    if (compressed_count) {
-        trace->compressed_positions = (unsigned long long *)yvex_attention_calloc_array(
-            compressed_count, sizeof(*trace->compressed_positions));
-        if (!trace->compressed_positions)
-            goto fail;
-        memcpy(trace->compressed_positions, compressed_positions,
-               (size_t)compressed_count * sizeof(*trace->compressed_positions));
-    }
-    if (indexer_count) {
-        trace->indexer_positions = (unsigned long long *)yvex_attention_calloc_array(
-            indexer_count, sizeof(*trace->indexer_positions));
-        if (!trace->indexer_positions)
-            goto fail;
-        memcpy(trace->indexer_positions, indexer_positions,
-               (size_t)indexer_count * sizeof(*trace->indexer_positions));
-    }
-    if (topk_stride) {
-        trace->topk_counts = (unsigned long long *)yvex_attention_calloc_array(
-            token_count, sizeof(*trace->topk_counts));
-        if (!yvex_core_u64_mul(token_count, topk_stride, &count))
-            goto fail;
-        trace->topk_positions = (unsigned long long *)yvex_attention_calloc_array(
-            count, sizeof(*trace->topk_positions));
-        if (!trace->topk_counts || !trace->topk_positions)
-            goto fail;
-        memcpy(trace->topk_counts, topk_counts, (size_t)token_count * sizeof(*trace->topk_counts));
-        memcpy(trace->topk_positions, topk_positions,
-               (size_t)count * sizeof(*trace->topk_positions));
-    }
     if (main_state && main_state->present) {
         trace->next_main_rolling_state = *main_state;
         trace->next_main_rolling_state.kv_state = NULL;
         trace->next_main_rolling_state.score_state = NULL;
-        if (!attention_trace_copy_float(&trace->next_main_rolling_state.kv_state, main_state_kv,
-                                        main_state->kv_state_extent) ||
-            !attention_trace_copy_float(&trace->next_main_rolling_state.score_state,
-                                        main_state_score, main_state->score_state_extent))
-            goto fail;
     }
     if (index_state && index_state->present) {
         trace->next_indexer_rolling_state = *index_state;
         trace->next_indexer_rolling_state.kv_state = NULL;
         trace->next_indexer_rolling_state.score_state = NULL;
-        if (!attention_trace_copy_float(&trace->next_indexer_rolling_state.kv_state, index_state_kv,
-                                        index_state->kv_state_extent) ||
-            !attention_trace_copy_float(&trace->next_indexer_rolling_state.score_state,
-                                        index_state_score, index_state->score_state_extent))
-            goto fail;
     }
+    shape = (attention_trace_shape){
+        hidden_width, compressed_count, indexer_count,
+        main_state && main_state->present ? main_state->kv_state_extent : 0ull,
+        main_state && main_state->present ? main_state->score_state_extent : 0ull,
+        index_state && index_state->present ? index_state->kv_state_extent : 0ull,
+        index_state && index_state->present ? index_state->score_state_extent : 0ull,
+        topk_stride};
+    if (!attention_trace_counts(trace, &shape, floats, integers) ||
+        !attention_trace_counts_filter(evidence_level, floats, integers))
+        goto fail;
+    /* The committed envelope is attached below; do not allocate an unused duplicate span. */
+    floats[ATTENTION_TRACE_ENVELOPE_OUTPUT] = 0ull;
+    if (attention_trace_storage_open(trace, floats, float_sources, integers, u64_sources,
+                                     workspace, ULLONG_MAX, &owned_bytes) != YVEX_OK)
+        goto fail;
     trace->complete = 1;
     return 1;
 fail:
@@ -688,7 +1193,7 @@ fail:
 static void attention_component_release(yvex_attention_component_span *span) {
     if (!span)
         return;
-    free(span->data);
+    if (!span->workspace) free(span->data);
     memset(span, 0, sizeof(*span));
 }
 // Purpose: Release graph-owned resources held by transaction release staging.
@@ -745,21 +1250,156 @@ static int attention_component_prepare_f32(yvex_attention_component_span *span,
 static int attention_emission_count(unsigned long long token_position,
                                     unsigned long long token_count, unsigned long long ratio,
                                     unsigned long long *out) {
-    unsigned long long i;
-    unsigned long long count = 0ull;
-    if (!out || ratio == 0ull)
+    unsigned long long end;
+
+    if (!out || ratio == 0ull || !yvex_core_u64_add(token_position, token_count, &end))
         return 0;
-    for (i = 0ull; i < token_count; ++i) {
-        if (token_position > ULLONG_MAX - i - 1ull)
+    *out = end / ratio - token_position / ratio;
+    return 1;
+}
+
+typedef enum {
+    ATTENTION_LAYOUT_ALWAYS,
+    ATTENTION_LAYOUT_ENVELOPE,
+    ATTENTION_LAYOUT_COMPRESSED,
+    ATTENTION_LAYOUT_COMPRESSED_EMISSION,
+    ATTENTION_LAYOUT_CSA,
+    ATTENTION_LAYOUT_CSA_EMISSION
+} attention_component_admission;
+
+typedef enum {
+    ATTENTION_EXTENT_TOKEN_HIDDEN,
+    ATTENTION_EXTENT_TOKEN_KV,
+    ATTENTION_EXTENT_TOKEN_ENVELOPE,
+    ATTENTION_EXTENT_MAIN_KV,
+    ATTENTION_EXTENT_MAIN_SCORE,
+    ATTENTION_EXTENT_COMPRESSED_KV,
+    ATTENTION_EXTENT_INDEX_KV,
+    ATTENTION_EXTENT_INDEX_SCORE,
+    ATTENTION_EXTENT_INDEXER_KV
+} attention_component_extent;
+
+typedef struct {
+    yvex_attention_component_kind kind;
+    attention_component_admission admission;
+    attention_component_extent extent;
+    const char *failure;
+} attention_component_spec;
+
+static const attention_component_spec attention_component_specs[] = {
+    {YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT, ATTENTION_LAYOUT_ALWAYS,
+     ATTENTION_EXTENT_TOKEN_HIDDEN, "DeepSeek attention state transaction output extent overflowed"},
+    {YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV, ATTENTION_LAYOUT_ALWAYS,
+     ATTENTION_EXTENT_TOKEN_KV, "DeepSeek attention state transaction output extent overflowed"},
+    {YVEX_DEEPSEEK_ATTENTION_COMPONENT_ENVELOPE_OUTPUT, ATTENTION_LAYOUT_ENVELOPE,
+     ATTENTION_EXTENT_TOKEN_ENVELOPE, "attention envelope transaction extent overflowed"},
+    {YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_KV_STATE, ATTENTION_LAYOUT_COMPRESSED,
+     ATTENTION_EXTENT_MAIN_KV, "DeepSeek attention main rolling-state extent overflowed"},
+    {YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_SCORE_STATE, ATTENTION_LAYOUT_COMPRESSED,
+     ATTENTION_EXTENT_MAIN_SCORE, "DeepSeek attention main rolling-state extent overflowed"},
+    {YVEX_DEEPSEEK_ATTENTION_COMPONENT_COMPRESSED_MAIN_KV,
+     ATTENTION_LAYOUT_COMPRESSED_EMISSION, ATTENTION_EXTENT_COMPRESSED_KV,
+     "DeepSeek attention compressed KV extent overflowed"},
+    {YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV_STATE, ATTENTION_LAYOUT_CSA,
+     ATTENTION_EXTENT_INDEX_KV, "DeepSeek attention indexer rolling-state extent overflowed"},
+    {YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_SCORE_STATE, ATTENTION_LAYOUT_CSA,
+     ATTENTION_EXTENT_INDEX_SCORE, "DeepSeek attention indexer rolling-state extent overflowed"},
+    {YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV, ATTENTION_LAYOUT_CSA_EMISSION,
+     ATTENTION_EXTENT_INDEXER_KV, "DeepSeek attention indexer KV extent overflowed"},
+};
+
+/* Purpose: derive every transaction component from one canonical typed layout table.
+ * Inputs: admitted layer/history, operation scope, and contiguous token interval.
+ * Effects: initializes required spans and optionally totals their F32 elements.
+ * Failure: reports the exact failed extent without allocating or partially publishing state.
+ * Boundary: state-delta geometry only; persistent KV and staging allocation remain separate. */
+static int attention_transaction_layout(
+    const yvex_attention_layer_plan *layer, const yvex_attention_history_view *history,
+    yvex_attention_operation_scope scope, unsigned long long position,
+    unsigned long long tokens, yvex_attention_component_span *spans,
+    unsigned long long *elements, const char **failure, unsigned long long *expected)
+{
+    unsigned long long emitted = 0ull, total = 0ull;
+    unsigned int i;
+
+    memset(spans, 0, sizeof(*spans) * YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT);
+    if (layer->attention_class != YVEX_ATTENTION_CLASS_SWA &&
+        !attention_emission_count(position, tokens, layer->compression_ratio, &emitted)) {
+        if (failure) *failure = "DeepSeek attention compression emission count overflowed";
+        if (expected) *expected = layer->compression_ratio;
+        return 0;
+    }
+    for (i = 0u; i < sizeof(attention_component_specs) / sizeof(attention_component_specs[0]); ++i) {
+        const attention_component_spec *spec = &attention_component_specs[i];
+        const yvex_attention_rolling_state_view *rolling = &history->main_rolling_state;
+        unsigned long long dim0 = tokens, dim1 = layer->hidden_dimension;
+        unsigned long long stride = dim1, positions = tokens;
+        int admitted = spec->admission == ATTENTION_LAYOUT_ALWAYS ||
+            (spec->admission == ATTENTION_LAYOUT_ENVELOPE &&
+             scope == YVEX_ATTENTION_OPERATION_ENVELOPE) ||
+            ((spec->admission == ATTENTION_LAYOUT_COMPRESSED ||
+              spec->admission == ATTENTION_LAYOUT_COMPRESSED_EMISSION) &&
+             layer->attention_class != YVEX_ATTENTION_CLASS_SWA) ||
+            ((spec->admission == ATTENTION_LAYOUT_CSA ||
+              spec->admission == ATTENTION_LAYOUT_CSA_EMISSION) &&
+             layer->attention_class == YVEX_ATTENTION_CLASS_CSA);
+
+        if (!admitted || ((spec->admission == ATTENTION_LAYOUT_COMPRESSED_EMISSION ||
+                           spec->admission == ATTENTION_LAYOUT_CSA_EMISSION) && !emitted))
+            continue;
+        if (spec->extent == ATTENTION_EXTENT_TOKEN_KV ||
+            spec->extent == ATTENTION_EXTENT_COMPRESSED_KV)
+            dim1 = stride = layer->head_dimension;
+        else if (spec->extent == ATTENTION_EXTENT_TOKEN_ENVELOPE)
+            dim1 = stride = layer->residual_expanded_width;
+        else if (spec->extent == ATTENTION_EXTENT_INDEXER_KV)
+            dim1 = stride = layer->indexer_head_dimension;
+        if (spec->extent == ATTENTION_EXTENT_COMPRESSED_KV ||
+            spec->extent == ATTENTION_EXTENT_INDEXER_KV)
+            dim0 = positions = emitted;
+        if (spec->extent == ATTENTION_EXTENT_MAIN_KV ||
+            spec->extent == ATTENTION_EXTENT_MAIN_SCORE ||
+            spec->extent == ATTENTION_EXTENT_INDEX_KV ||
+            spec->extent == ATTENTION_EXTENT_INDEX_SCORE) {
+            if (spec->extent == ATTENTION_EXTENT_INDEX_KV ||
+                spec->extent == ATTENTION_EXTENT_INDEX_SCORE)
+                rolling = &history->indexer_rolling_state;
+            dim0 = rolling->state_slots;
+            dim1 = rolling->state_width;
+            stride = spec->extent == ATTENTION_EXTENT_MAIN_KV ||
+                    spec->extent == ATTENTION_EXTENT_INDEX_KV
+                ? rolling->kv_state_stride : rolling->score_state_stride;
+        }
+        if (!attention_component_prepare_f32(&spans[spec->kind], spec->kind, 2u, dim0, dim1,
+                                             stride, position, positions) ||
+            !yvex_core_u64_add(total, spans[spec->kind].expected_elements, &total)) {
+            if (failure) *failure = spec->failure;
+            if (expected) *expected = dim0;
             return 0;
-        if (((token_position + i + 1ull) % ratio) == 0ull) {
-            if (count == ULLONG_MAX)
-                return 0;
-            count++;
         }
     }
-    *out = count;
+    if (elements) *elements = total;
     return 1;
+}
+
+/* Purpose: derive exact transaction-owned F32 staging for one attention request.
+ * Inputs: immutable layer/history, operation scope, and contiguous token range.
+ * Effects: writes only the complete element count.
+ * Failure: invalid state or arithmetic overflow leaves the output zero.
+ * Boundary: accounts core, envelope, and candidate state; it allocates no storage. */
+int yvex_attention_transaction_scratch_elements(
+    const yvex_attention_layer_plan *layer, const yvex_attention_history_view *history,
+    yvex_attention_operation_scope scope, unsigned long long token_position,
+    unsigned long long token_count, unsigned long long *elements)
+{
+    yvex_attention_component_span spans[YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT];
+
+    if (elements) *elements = 0ull;
+    if (!layer || !history || !elements || !token_count ||
+        (scope != YVEX_ATTENTION_OPERATION_CORE && scope != YVEX_ATTENTION_OPERATION_ENVELOPE))
+        return 0;
+    return attention_transaction_layout(layer, history, scope, token_position, token_count,
+                                        spans, elements, NULL, NULL);
 }
 // Purpose: Construct transaction allocate staging with checked geometry and explicit ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
@@ -774,12 +1414,15 @@ static int attention_transaction_allocate_staging(yvex_attention_state_transacti
         yvex_attention_component_span *span = &transaction->components[i];
         if (!span->required)
             continue;
-        span->data = calloc(1u, (size_t)span->byte_extent);
+        span->workspace = transaction->sink ? transaction->sink->workspace : NULL;
+        span->data = span->workspace
+            ? yvex_attention_workspace_calloc(span->workspace, span->byte_extent, 1ull)
+            : calloc(1u, (size_t)span->byte_extent);
         if (!span->data) {
             attention_transaction_release_staging(transaction);
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL, transaction->layer_index,
-                YVEX_TENSOR_ROLE_UNKNOWN, span->byte_extent, 0ull, err, YVEX_ERR_NOMEM,
+            return attention_memory_reject(
+                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, transaction->layer_index,
+                span->byte_extent, 0ull, err, YVEX_ERR_NOMEM,
                 "DeepSeek attention state transaction staging allocation failed");
         }
     }
@@ -798,24 +1441,24 @@ static int attention_transaction_identity(const yvex_attention_state_transaction
     if (!transaction || !out)
         return 0;
     yvex_sha256_init(&hash);
-    if (!yvex_attention_hash_text(&hash, "yvex.deepseek.attention.delta.v1") ||
-        !yvex_attention_hash_u64(&hash, transaction->layer_index) ||
-        !yvex_attention_hash_u64(&hash, transaction->attention_class) ||
-        !yvex_attention_hash_u64(&hash, transaction->token_position) ||
-        !yvex_attention_hash_u64(&hash, transaction->token_count) ||
-        !yvex_attention_hash_text(&hash, transaction->previous_state_identity))
+    if (!attention_hash_text(&hash, "yvex.deepseek.attention.delta.v1") ||
+        !attention_hash_u64(&hash, transaction->layer_index) ||
+        !attention_hash_u64(&hash, transaction->attention_class) ||
+        !attention_hash_u64(&hash, transaction->token_position) ||
+        !attention_hash_u64(&hash, transaction->token_count) ||
+        !attention_hash_text(&hash, transaction->previous_state_identity))
         return 0;
     for (i = 0u; i < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++i) {
         const yvex_attention_component_span *span = &transaction->components[i];
         if (!span->required)
             continue;
-        if (!yvex_attention_hash_u64(&hash, span->kind) ||
-            !yvex_attention_hash_u64(&hash, span->rank) ||
-            !yvex_attention_hash_u64(&hash, span->dims[0]) ||
-            !yvex_attention_hash_u64(&hash, span->dims[1]) ||
-            !yvex_attention_hash_u64(&hash, span->stride) ||
-            !yvex_attention_hash_u64(&hash, span->produced_elements) ||
-            !yvex_attention_hash_u64(&hash, span->byte_extent) ||
+        if (!attention_hash_u64(&hash, span->kind) ||
+            !attention_hash_u64(&hash, span->rank) ||
+            !attention_hash_u64(&hash, span->dims[0]) ||
+            !attention_hash_u64(&hash, span->dims[1]) ||
+            !attention_hash_u64(&hash, span->stride) ||
+            !attention_hash_u64(&hash, span->produced_elements) ||
+            !attention_hash_u64(&hash, span->byte_extent) ||
             !yvex_sha256_update(&hash, span->data, (size_t)span->byte_extent))
             return 0;
     }
@@ -853,13 +1496,14 @@ int yvex_attention_memory_sink_init(yvex_attention_memory_sink *sink,
                                     const yvex_attention_memory_sink_options *options,
                                     yvex_attention_failure *failure, yvex_error *err) {
     if (!sink)
-        return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT,
-                                     NULL, YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
-                                     0ull, err, YVEX_ERR_INVALID_ARG,
-                                     "DeepSeek attention memory sink requires caller storage");
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, YVEX_ATTENTION_NO_LAYER,
+            1ull, 0ull, err, YVEX_ERR_INVALID_ARG,
+            "DeepSeek attention memory sink requires caller storage");
     memset(sink, 0, sizeof(*sink));
     sink->initialized = 1;
     sink->options = options ? *options : memory_sink_defaults;
+    sink->workspace = sink->options.workspace;
     return yvex_attention_accept(failure, err);
 }
 // Purpose: Return the admitted memory sink release fact without transferring ownership.
@@ -880,127 +1524,63 @@ void yvex_attention_memory_sink_release(yvex_attention_memory_sink *sink) {
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
 // Failure: returns a typed refusal or neutral result without partial capability publication.
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-int yvex_attention_state_transaction_begin(yvex_attention_memory_sink *sink,
-                                           const yvex_attention_layer_plan *layer,
-                                           const yvex_attention_history_view *history,
-                                           unsigned long long token_position,
-                                           unsigned long long token_count,
-                                           yvex_attention_state_transaction *transaction,
-                                           yvex_attention_failure *failure, yvex_error *err) {
-    unsigned long long compressed_count = 0ull;
+int yvex_attention_state_transaction_begin_scope(
+    yvex_attention_memory_sink *sink, const yvex_attention_layer_plan *layer,
+    const yvex_attention_history_view *history, yvex_attention_operation_scope scope,
+    unsigned long long token_position, unsigned long long token_count,
+    yvex_attention_state_transaction *transaction, yvex_attention_failure *failure,
+    yvex_error *err) {
+    const char *layout_failure = NULL;
+    unsigned long long layout_expected = 0ull;
     int rc;
     if (transaction)
         memset(transaction, 0, sizeof(*transaction));
-    if (!sink || !sink->initialized || !layer || !history || !transaction || token_count == 0ull)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
-            layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER, YVEX_TENSOR_ROLE_UNKNOWN, 1ull,
-            token_count, err, YVEX_ERR_INVALID_ARG,
+    if (!sink || !sink->initialized || !layer || !history || !transaction || token_count == 0ull ||
+        (scope != YVEX_ATTENTION_OPERATION_CORE && scope != YVEX_ATTENTION_OPERATION_ENVELOPE))
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT,
+            layer ? layer->layer_index : YVEX_ATTENTION_NO_LAYER, 1ull, token_count, err,
+            YVEX_ERR_INVALID_ARG,
             "DeepSeek attention state transaction requires sink, layer, history, and tokens");
     if (sink->options.fail_begin)
-        return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                                     layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
-                                     YVEX_ERR_STATE,
-                                     "DeepSeek attention memory sink injected begin failure");
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, layer->layer_index, 1ull, 0ull,
+            err, YVEX_ERR_STATE, "DeepSeek attention memory sink injected begin failure");
     rc = yvex_attention_history_validate(layer, history, failure, err);
     if (rc != YVEX_OK)
         return rc;
     if (history->token_count != token_position)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, NULL, layer->layer_index,
-            YVEX_TENSOR_ROLE_UNKNOWN, history->token_count, token_position, err, YVEX_ERR_STATE,
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_HISTORY, layer->layer_index,
+            history->token_count, token_position, err, YVEX_ERR_STATE,
             "DeepSeek attention state transaction token position is not contiguous");
     if (token_position > ULLONG_MAX - token_count)
-        return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                                     layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, ULLONG_MAX,
-                                     token_position, err, YVEX_ERR_BOUNDS,
-                                     "DeepSeek attention state transaction token range overflows");
-    memset(transaction, 0, sizeof(*transaction));
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, layer->layer_index, ULLONG_MAX,
+            token_position, err, YVEX_ERR_BOUNDS,
+            "DeepSeek attention state transaction token range overflows");
     transaction->status = YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN;
     transaction->sink = sink;
     transaction->layer_index = layer->layer_index;
     transaction->attention_class = layer->attention_class;
     transaction->token_position = token_position;
     transaction->token_count = token_count;
-    (void)snprintf(transaction->previous_state_identity,
-                   sizeof(transaction->previous_state_identity), "%s",
-                   sink->has_committed ? sink->committed_identity : "initial");
-    if (!attention_component_prepare_f32(
-            &transaction->components[YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT],
-            YVEX_DEEPSEEK_ATTENTION_COMPONENT_ATTENTION_OUTPUT, 2u, token_count,
-            layer->hidden_dimension, layer->hidden_dimension, token_position, token_count) ||
-        !attention_component_prepare_f32(
-            &transaction->components[YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV],
-            YVEX_DEEPSEEK_ATTENTION_COMPONENT_RAW_LOCAL_KV, 2u, token_count, layer->head_dimension,
-            layer->head_dimension, token_position, token_count))
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL, layer->layer_index,
-            YVEX_TENSOR_ROLE_UNKNOWN, token_count, 0ull, err, YVEX_ERR_BOUNDS,
-            "DeepSeek attention state transaction output extent overflowed");
-    if (layer->attention_class != YVEX_ATTENTION_CLASS_SWA) {
-        const yvex_attention_rolling_state_view *main_state = &history->main_rolling_state;
-        if (!attention_component_prepare_f32(
-                &transaction->components[YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_KV_STATE],
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_KV_STATE, 2u, main_state->state_slots,
-                main_state->state_width, main_state->kv_state_stride, token_position,
-                token_count) ||
-            !attention_component_prepare_f32(
-                &transaction->components[YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_SCORE_STATE],
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_MAIN_SCORE_STATE, 2u, main_state->state_slots,
-                main_state->state_width, main_state->score_state_stride, token_position,
-                token_count))
-            return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                                         layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-                                         main_state->state_slots, 0ull, err, YVEX_ERR_BOUNDS,
-                                         "DeepSeek attention main rolling-state extent overflowed");
-        if (!attention_emission_count(token_position, token_count, layer->compression_ratio,
-                                      &compressed_count))
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL, layer->layer_index,
-                YVEX_TENSOR_ROLE_UNKNOWN, layer->compression_ratio, 0ull, err, YVEX_ERR_BOUNDS,
-                "DeepSeek attention compression emission count overflowed");
-        if (compressed_count &&
-            !attention_component_prepare_f32(
-                &transaction->components[YVEX_DEEPSEEK_ATTENTION_COMPONENT_COMPRESSED_MAIN_KV],
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_COMPRESSED_MAIN_KV, 2u, compressed_count,
-                layer->head_dimension, layer->head_dimension, token_position, compressed_count))
-            return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                                         layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-                                         compressed_count, 0ull, err, YVEX_ERR_BOUNDS,
-                                         "DeepSeek attention compressed KV extent overflowed");
-    }
-    if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA) {
-        const yvex_attention_rolling_state_view *index_state = &history->indexer_rolling_state;
-        if (!attention_component_prepare_f32(
-                &transaction->components[YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV_STATE],
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV_STATE, 2u, index_state->state_slots,
-                index_state->state_width, index_state->kv_state_stride, token_position,
-                token_count) ||
-            !attention_component_prepare_f32(
-                &transaction->components[YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_SCORE_STATE],
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_SCORE_STATE, 2u, index_state->state_slots,
-                index_state->state_width, index_state->score_state_stride, token_position,
-                token_count))
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL, layer->layer_index,
-                YVEX_TENSOR_ROLE_UNKNOWN, index_state->state_slots, 0ull, err, YVEX_ERR_BOUNDS,
-                "DeepSeek attention indexer rolling-state extent overflowed");
-        if (compressed_count &&
-            !attention_component_prepare_f32(
-                &transaction->components[YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV],
-                YVEX_DEEPSEEK_ATTENTION_COMPONENT_INDEXER_KV, 2u, compressed_count,
-                layer->indexer_head_dimension, layer->indexer_head_dimension, token_position,
-                compressed_count))
-            return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                                         layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-                                         compressed_count, 0ull, err, YVEX_ERR_BOUNDS,
-                                         "DeepSeek attention indexer KV extent overflowed");
-    }
+    yvex_core_text_copy(transaction->previous_state_identity,
+                        sizeof(transaction->previous_state_identity),
+                        sink->has_committed ? sink->committed_identity : "initial");
+    if (!attention_transaction_layout(layer, history, scope, token_position, token_count,
+                                      transaction->components, NULL, &layout_failure,
+                                      &layout_expected))
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, layer->layer_index,
+            layout_expected, 0ull, err, YVEX_ERR_BOUNDS,
+            layout_failure ? layout_failure : "DeepSeek attention state layout overflowed");
     rc = attention_transaction_allocate_staging(transaction, failure, err);
     if (rc != YVEX_OK)
         return rc;
     return yvex_attention_accept(failure, err);
 }
+
 // Purpose: Return the admitted state transaction acquire fact without transferring ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
@@ -1015,23 +1595,23 @@ int yvex_attention_state_transaction_acquire(yvex_attention_state_transaction *t
         memset(out, 0, sizeof(*out));
     if (!transaction || transaction->status != YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN ||
         kind >= YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA,
             transaction ? transaction->layer_index : YVEX_ATTENTION_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
+            YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
             transaction ? transaction->status : YVEX_DEEPSEEK_ATTENTION_TRANSACTION_EMPTY, err,
             YVEX_ERR_STATE, "DeepSeek attention state transaction acquire requires begun state");
     span = &transaction->components[kind];
     if (!span->required || !span->data || span->acquired)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL, transaction->layer_index,
-            YVEX_TENSOR_ROLE_UNKNOWN, 1ull, span->acquired, err, YVEX_ERR_STATE,
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, transaction->layer_index,
+            1ull, span->acquired, err, YVEX_ERR_STATE,
             "DeepSeek attention state component is absent or already acquired");
     if (transaction->sink && transaction->sink->options.fail_acquire_kind == kind)
-        return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                                     transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
-                                     err, YVEX_ERR_STATE,
-                                     "DeepSeek attention memory sink injected acquire failure");
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, transaction->layer_index,
+            1ull, 0ull, err, YVEX_ERR_STATE,
+            "DeepSeek attention memory sink injected acquire failure");
     span->acquired = 1;
     if (out)
         *out = *span;
@@ -1049,28 +1629,28 @@ int yvex_attention_state_transaction_seal(yvex_attention_state_transaction *tran
     yvex_attention_component_span *span;
     if (!transaction || transaction->status != YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN ||
         kind >= YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA,
             transaction ? transaction->layer_index : YVEX_ATTENTION_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
+            YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
             transaction ? transaction->status : YVEX_DEEPSEEK_ATTENTION_TRANSACTION_EMPTY, err,
             YVEX_ERR_STATE, "DeepSeek attention state transaction seal requires begun state");
     span = &transaction->components[kind];
     if (!span->required || !span->acquired || span->sealed ||
         produced_elements != span->expected_elements)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL, transaction->layer_index,
-            YVEX_TENSOR_ROLE_UNKNOWN, span->expected_elements, produced_elements, err,
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, transaction->layer_index,
+            span->expected_elements, produced_elements, err,
             YVEX_ERR_BOUNDS, "DeepSeek attention state component seal has wrong element count");
     if (transaction->sink && transaction->sink->options.fail_seal_kind == kind)
-        return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                                     transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
-                                     err, YVEX_ERR_STATE,
-                                     "DeepSeek attention memory sink injected seal failure");
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, transaction->layer_index,
+            1ull, 0ull, err, YVEX_ERR_STATE,
+            "DeepSeek attention memory sink injected seal failure");
     if (!attention_component_values_are_finite(span))
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, NULL, transaction->layer_index,
-            YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err, YVEX_ERR_FORMAT,
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_NUMERIC, transaction->layer_index,
+            1ull, 0ull, err, YVEX_ERR_FORMAT,
             "DeepSeek attention state component contains non-finite values");
     span->produced_elements = produced_elements;
     span->written = 1;
@@ -1089,26 +1669,26 @@ int yvex_attention_state_transaction_commit(yvex_attention_state_transaction *tr
     memset(next, 0, sizeof(next));
     if (!transaction || transaction->status != YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN ||
         !transaction->sink || !transaction->sink->initialized)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA,
             transaction ? transaction->layer_index : YVEX_ATTENTION_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
+            YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
             transaction ? transaction->status : YVEX_DEEPSEEK_ATTENTION_TRANSACTION_EMPTY, err,
             YVEX_ERR_STATE, "DeepSeek attention state transaction commit requires begun state");
     if (transaction->sink->options.fail_commit)
-        return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                                     transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
-                                     err, YVEX_ERR_STATE,
-                                     "DeepSeek attention memory sink injected commit failure");
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, transaction->layer_index,
+            1ull, 0ull, err, YVEX_ERR_STATE,
+            "DeepSeek attention memory sink injected commit failure");
     for (i = 0u; i < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++i) {
         const yvex_attention_component_span *span = &transaction->components[i];
         if (!span->required)
             continue;
         if (!span->acquired || !span->written || !span->sealed ||
             span->produced_elements != span->expected_elements)
-            return yvex_attention_reject(
-                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, span->expected_elements,
+            return attention_memory_reject(
+                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, transaction->layer_index,
+                span->expected_elements,
                 span->produced_elements, err, YVEX_ERR_STATE,
                 "DeepSeek attention state transaction cannot commit incomplete component");
     }
@@ -1117,34 +1697,33 @@ int yvex_attention_state_transaction_commit(yvex_attention_state_transaction *tr
         if (!span->required)
             continue;
         next[i] = *span;
-        next[i].data = malloc((size_t)span->byte_extent);
-        if (!next[i].data) {
+        if (!attention_storage_copy(&next[i].data, span->expected_elements, span->data,
+                                    span->expected_elements, sizeof(float), next[i].workspace)) {
             unsigned int j;
             for (j = 0u; j < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++j)
                 attention_component_release(&next[j]);
-            return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
-                                         transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
-                                         span->byte_extent, 0ull, err, YVEX_ERR_NOMEM,
-                                         "DeepSeek attention state commit allocation failed");
+            return attention_memory_reject(
+                failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, transaction->layer_index,
+                span->byte_extent, 0ull, err, YVEX_ERR_NOMEM,
+                "DeepSeek attention state commit allocation failed");
         }
-        memcpy(next[i].data, span->data, (size_t)span->byte_extent);
     }
     if (!attention_transaction_identity(transaction, transaction->transaction_identity)) {
         for (i = 0u; i < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++i)
             attention_component_release(&next[i]);
-        return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                                     transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
-                                     err, YVEX_ERR_FORMAT,
-                                     "DeepSeek attention state transaction identity failed");
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, transaction->layer_index,
+            1ull, 0ull, err, YVEX_ERR_FORMAT,
+            "DeepSeek attention state transaction identity failed");
     }
     for (i = 0u; i < YVEX_DEEPSEEK_ATTENTION_COMPONENT_COUNT; ++i) {
         attention_component_release(&transaction->sink->committed[i]);
         transaction->sink->committed[i] = next[i];
         memset(&next[i], 0, sizeof(next[i]));
     }
-    (void)snprintf(transaction->sink->committed_identity,
-                   sizeof(transaction->sink->committed_identity), "%s",
-                   transaction->transaction_identity);
+    yvex_core_text_copy(transaction->sink->committed_identity,
+                        sizeof(transaction->sink->committed_identity),
+                        transaction->transaction_identity);
     transaction->sink->has_committed = 1;
     attention_transaction_release_staging(transaction);
     transaction->status = YVEX_DEEPSEEK_ATTENTION_TRANSACTION_COMMITTED;
@@ -1158,19 +1737,19 @@ int yvex_attention_state_transaction_commit(yvex_attention_state_transaction *tr
 int yvex_attention_state_transaction_abort(yvex_attention_state_transaction *transaction,
                                            yvex_attention_failure *failure, yvex_error *err) {
     if (!transaction || transaction->status != YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN)
-        return yvex_attention_reject(
-            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA,
             transaction ? transaction->layer_index : YVEX_ATTENTION_NO_LAYER,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
+            YVEX_DEEPSEEK_ATTENTION_TRANSACTION_BEGUN,
             transaction ? transaction->status : YVEX_DEEPSEEK_ATTENTION_TRANSACTION_EMPTY, err,
             YVEX_ERR_STATE, "DeepSeek attention state transaction abort requires begun state");
     attention_transaction_release_staging(transaction);
     transaction->status = YVEX_DEEPSEEK_ATTENTION_TRANSACTION_ABORTED;
     if (transaction->sink && transaction->sink->options.fail_abort)
-        return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, NULL,
-                                     transaction->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull,
-                                     err, YVEX_ERR_STATE,
-                                     "DeepSeek attention memory sink injected abort failure");
+        return attention_memory_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_STATE_DELTA, transaction->layer_index,
+            1ull, 0ull, err, YVEX_ERR_STATE,
+            "DeepSeek attention memory sink injected abort failure");
     return yvex_attention_accept(failure, err);
 }
 // Purpose: Return the admitted memory sink committed component fact without transferring ownership.

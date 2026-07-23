@@ -28,6 +28,8 @@
 #include <yvex/model.h>
 #include <yvex/registry.h>
 
+#define FIELD_COUNT(fields_) (sizeof(fields_) / sizeof((fields_)[0]))
+
 static const char *const literal_pair_0[] = {
     "reason: current artifact metadata could not be parsed", "status: models-metadata-drift"};
 
@@ -38,6 +40,147 @@ static const char *const literal_pair_2[] = {"format: unknown", "status: unsuppo
 static const char *const literal_lines_0[] = {"metadata_status: fail", "readiness_status: fail",
                                               "metadata_issue_0_code: current-metadata-unavailable",
                                               "metadata_issue_0_registered: available"};
+
+static const char inspect_help_text[] =
+    "usage: yvex inspect FILE_OR_ALIAS\n\nInspect parses a GGUF descriptor and prints a "
+    "descriptor-only summary. It does not materialize weights or execute a graph.\n";
+static const char integrity_help_text[] =
+    "usage: yvex integrity check --model FILE_OR_ALIAS [--expect-sha256 HASH] "
+    "[--require-token-embedding] [--partial-token N]\n"
+    "       yvex integrity report --model FILE_OR_ALIAS [--backend cpu|cuda] "
+    "[--expect-sha256 HASH] [--require-token-embedding] [--partial-token N] "
+    "[--audit | --output normal|table|audit]\n"
+    "\nIntegrity validates local GGUF structure, tensor accounting, digest identity when "
+    "supplied, metadata drift, and selected embedding readiness. It is not a supply-chain "
+    "security audit.\nDefault report output is compact. Use --audit for full diagnostic fields.\n";
+static const char materialize_help_text[] =
+    "usage: yvex materialize --model FILE_OR_ALIAS --backend cpu|cuda [--require-all] "
+    "[--allow-unsupported-dtype]\n\nMaterialize copies selected GGUF tensor bytes into "
+    "backend-owned storage after integrity preflight. It does not execute prefill, decode, "
+    "sampling, generation, or inference.\n";
+static const char materialize_gate_help_text[] =
+    "usage: yvex materialize-gate check --model FILE_OR_ALIAS --label LABEL --family FAMILY "
+    "--scope selected-tensor --expect-tensor NAME --expect-rank N --expect-dims D1[,D2,D3] "
+    "--expect-dtype DTYPE --expect-bytes BYTES [--sha256 HASH] [--backend cpu] [--backend cuda] "
+    "[--require-cpu] [--require-cuda] [--repeat N] [--check-cleanup] [--report-out FILE]\n\n"
+    "The materialization gate validates identity, tensor facts, repeated backend "
+    "materialization, cleanup, and failure classes.\n";
+static const char metadata_help_text[] =
+    "usage: yvex metadata FILE_OR_ALIAS\n\nMetadata prints parsed GGUF metadata key/value "
+    "summaries. Arrays are summarized.\n";
+static const char model_gate_help_text[] =
+    "usage: yvex model-gate check --model FILE_OR_ALIAS --label LABEL --family FAMILY "
+    "--expect-tensor NAME --expect-rank N --expect-dims D1[,D2,D3] --expect-dtype DTYPE "
+    "--expect-bytes BYTES [--sha256 HASH] [--backend cpu] [--backend cuda] [--require-cpu] "
+    "[--require-cuda] [--report-out FILE]\n\nModel gate checks selected tensor identity, "
+    "expected tensor specs, and requested CPU/CUDA materialization without claiming full-model "
+    "support.\n";
+static const char tensors_help_text[] =
+    "usage: yvex tensors FILE_OR_ALIAS\n\nTensors prints YVEX tensor table rows with role, "
+    "dtype, known storage bytes, and checked offsets.\n";
+
+#define INTEGRITY_FIELD(key_, kind_, member_, fallback_)                                            \
+    { key_, kind_, offsetof(yvex_artifact_integrity_report, member_), fallback_ }
+
+static const yvex_render_field_spec integrity_counter_fields[] = {
+    INTEGRITY_FIELD("tensor_count", YVEX_RENDER_FIELD_U64, tensor_count, NULL),
+    INTEGRITY_FIELD("known_tensor_bytes", YVEX_RENDER_FIELD_U64, known_tensor_bytes, NULL),
+    INTEGRITY_FIELD("tensor_ranges_checked", YVEX_RENDER_FIELD_U64, tensor_ranges_checked, NULL),
+    INTEGRITY_FIELD("tensor_ranges_valid", YVEX_RENDER_FIELD_U64, tensor_ranges_valid, NULL),
+    INTEGRITY_FIELD("tensor_ranges_invalid", YVEX_RENDER_FIELD_U64, tensor_ranges_invalid, NULL),
+    INTEGRITY_FIELD("tensor_shapes_checked", YVEX_RENDER_FIELD_U64, tensor_shapes_checked, NULL),
+    INTEGRITY_FIELD("tensor_shapes_valid", YVEX_RENDER_FIELD_U64, tensor_shapes_valid, NULL),
+    INTEGRITY_FIELD("tensor_shapes_invalid", YVEX_RENDER_FIELD_U64, tensor_shapes_invalid, NULL),
+    INTEGRITY_FIELD("tensor_dtypes_checked", YVEX_RENDER_FIELD_U64, tensor_dtypes_checked, NULL),
+    INTEGRITY_FIELD("tensor_dtypes_valid", YVEX_RENDER_FIELD_U64, tensor_dtypes_valid, NULL),
+    INTEGRITY_FIELD("tensor_dtypes_invalid", YVEX_RENDER_FIELD_U64, tensor_dtypes_invalid, NULL),
+    INTEGRITY_FIELD("tensor_byte_counts_checked", YVEX_RENDER_FIELD_U64,
+                    tensor_byte_counts_checked, NULL),
+    INTEGRITY_FIELD("tensor_byte_counts_invalid", YVEX_RENDER_FIELD_U64,
+                    tensor_byte_counts_invalid, NULL),
+};
+static const yvex_render_field_spec integrity_selected_fields[] = {
+    INTEGRITY_FIELD("selected_embedding_shape", YVEX_RENDER_FIELD_TEXT_ARRAY,
+                    selected_embedding_shape, ""),
+    INTEGRITY_FIELD("selected_embedding_hidden_size", YVEX_RENDER_FIELD_U64,
+                    selected_embedding_hidden_size, NULL),
+    INTEGRITY_FIELD("selected_embedding_vocab_size", YVEX_RENDER_FIELD_U64,
+                    selected_embedding_vocab_size, NULL),
+    INTEGRITY_FIELD("selected_embedding_output_count", YVEX_RENDER_FIELD_U64,
+                    selected_embedding_output_count, NULL),
+    INTEGRITY_FIELD("selected_embedding_output_bytes", YVEX_RENDER_FIELD_U64,
+                    selected_embedding_output_bytes, NULL),
+    INTEGRITY_FIELD("selected_embedding_slice_bytes", YVEX_RENDER_FIELD_U64,
+                    selected_embedding_slice_bytes, NULL),
+};
+static const yvex_render_field_spec integrity_identity_fields[] = {
+    INTEGRITY_FIELD("identity_checked", YVEX_RENDER_FIELD_BOOL, identity_checked, NULL),
+    INTEGRITY_FIELD("sha256", YVEX_RENDER_FIELD_TEXT_ARRAY, sha256, "unavailable"),
+    INTEGRITY_FIELD("registered_sha256", YVEX_RENDER_FIELD_TEXT_ARRAY, registered_sha256,
+                    "absent"),
+};
+static const yvex_render_field_spec integrity_result_fields[] = {
+    INTEGRITY_FIELD("digest_status", YVEX_RENDER_FIELD_TEXT_ARRAY, digest_status, "unknown"),
+};
+static const yvex_render_field_spec integrity_issue_count_fields[] = {
+    INTEGRITY_FIELD("integrity_errors", YVEX_RENDER_FIELD_U32, error_count, NULL),
+    INTEGRITY_FIELD("integrity_warnings", YVEX_RENDER_FIELD_U32, warning_count, NULL),
+};
+static const yvex_render_field_spec integrity_audit_counter_fields[] = {
+    INTEGRITY_FIELD("tensor_count", YVEX_RENDER_FIELD_U64, tensor_count, NULL),
+    INTEGRITY_FIELD("known_tensor_bytes", YVEX_RENDER_FIELD_U64, known_tensor_bytes, NULL),
+    INTEGRITY_FIELD("tensor_ranges_checked", YVEX_RENDER_FIELD_U64, tensor_ranges_checked, NULL),
+    INTEGRITY_FIELD("tensor_ranges_invalid", YVEX_RENDER_FIELD_U64, tensor_ranges_invalid, NULL),
+    INTEGRITY_FIELD("tensor_shapes_checked", YVEX_RENDER_FIELD_U64, tensor_shapes_checked, NULL),
+    INTEGRITY_FIELD("tensor_shapes_invalid", YVEX_RENDER_FIELD_U64, tensor_shapes_invalid, NULL),
+    INTEGRITY_FIELD("tensor_dtypes_checked", YVEX_RENDER_FIELD_U64, tensor_dtypes_checked, NULL),
+    INTEGRITY_FIELD("tensor_dtypes_invalid", YVEX_RENDER_FIELD_U64, tensor_dtypes_invalid, NULL),
+    INTEGRITY_FIELD("tensor_byte_counts_checked", YVEX_RENDER_FIELD_U64,
+                    tensor_byte_counts_checked, NULL),
+    INTEGRITY_FIELD("tensor_byte_counts_invalid", YVEX_RENDER_FIELD_U64,
+                    tensor_byte_counts_invalid, NULL),
+};
+#undef INTEGRITY_FIELD
+
+#define SUMMARY_FIELD(key_, member_)                                                               \
+    { key_, YVEX_RENDER_FIELD_U64, offsetof(yvex_materialize_summary, member_), NULL }
+static const yvex_render_field_spec materialize_summary_fields[] = {
+    SUMMARY_FIELD("tensors_total", tensors_total),
+    SUMMARY_FIELD("tensors_materialized", tensors_materialized),
+    SUMMARY_FIELD("tensors_failed", tensors_failed),
+    SUMMARY_FIELD("bytes_total", bytes_total),
+    SUMMARY_FIELD("bytes_materialized", bytes_materialized),
+    SUMMARY_FIELD("backend_allocated_bytes", backend_allocated_bytes),
+};
+static const yvex_render_field_spec materialize_gate_prefix_fields[] = {
+    {"materialization_gate", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_materialize_summary, materialization_gate), "fail"},
+    {"materialization_phase", YVEX_RENDER_FIELD_TEXT,
+     offsetof(yvex_materialize_summary, materialization_phase), "preflight"},
+};
+static const yvex_render_field_spec materialize_gate_detail_fields[] = {
+    {"shape_status", YVEX_RENDER_FIELD_TEXT, offsetof(yvex_materialize_summary, shape_status),
+     "unchecked"},
+    {"range_status", YVEX_RENDER_FIELD_TEXT, offsetof(yvex_materialize_summary, range_status),
+     "unchecked"},
+    {"backend_status", YVEX_RENDER_FIELD_TEXT, offsetof(yvex_materialize_summary, backend_status),
+     "not-opened"},
+    {"allocation_attempted", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_materialize_summary, allocation_attempted), NULL},
+    {"transfer_attempted", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_materialize_summary, transfer_attempted), NULL},
+    {"cleanup_attempted", YVEX_RENDER_FIELD_BOOL,
+     offsetof(yvex_materialize_summary, cleanup_attempted), NULL},
+    {"cleanup_status", YVEX_RENDER_FIELD_TEXT, offsetof(yvex_materialize_summary, cleanup_status),
+     "not-needed"},
+    {"bytes_planned", YVEX_RENDER_FIELD_U64, offsetof(yvex_materialize_summary, bytes_planned),
+     NULL},
+    {"bytes_allocated", YVEX_RENDER_FIELD_U64, offsetof(yvex_materialize_summary, bytes_allocated),
+     NULL},
+    {"bytes_transferred", YVEX_RENDER_FIELD_U64,
+     offsetof(yvex_materialize_summary, bytes_transferred), NULL},
+};
+#undef SUMMARY_FIELD
 
 #define MATERIALIZE_FIELD(key_, kind_, member_, fallback_)                                         \
     { key_, kind_, offsetof(yvex_materialize_gate_summary, member_), fallback_ }
@@ -131,7 +274,6 @@ static void artifact_view_close(artifact_view *view) {
 static int artifact_view_open(artifact_view *view, const char *path, int require_tensors,
                               int require_model, yvex_error *err) {
     int rc;
-
     memset(view, 0, sizeof(*view));
     rc = open_artifact_for_gguf(path, &view->artifact, err);
     if (rc == YVEX_OK)
@@ -153,7 +295,6 @@ static int artifact_view_open(artifact_view *view, const char *path, int require
 static void print_integrity_report(const yvex_artifact_integrity_report *report,
                                    const char *model_label) {
     unsigned int i;
-
     yvex_cli_out_writef(stdout, "artifact_integrity: check\nmodel: %s\nformat: %s\n",
                         model_label ? model_label : report->path,
                         report->format[0] ? report->format : "unknown");
@@ -162,47 +303,22 @@ static void print_integrity_report(const yvex_artifact_integrity_report *report,
     yvex_cli_out_writef(stdout, "file_size: %llu\n", report->file_size);
     if (report->architecture[0])
         yvex_cli_out_writef(stdout, "architecture: %s\n", report->architecture);
-    yvex_cli_out_writef(
-        stdout,
-        "tensor_count: %llu\nknown_tensor_bytes: %llu\ntensor_ranges_checked: %llu\n"
-        "tensor_ranges_valid: %llu\ntensor_ranges_invalid: %llu\ntensor_shapes_checked: %llu\n"
-        "tensor_shapes_valid: %llu\ntensor_shapes_invalid: %llu\ntensor_dtypes_checked: %llu\n"
-        "tensor_dtypes_valid: %llu\ntensor_dtypes_invalid: %llu\ntensor_byte_counts_checked: %llu\n"
-        "tensor_byte_counts_invalid: %llu\n",
-        report->tensor_count, report->known_tensor_bytes, report->tensor_ranges_checked,
-        report->tensor_ranges_valid, report->tensor_ranges_invalid, report->tensor_shapes_checked,
-        report->tensor_shapes_valid, report->tensor_shapes_invalid, report->tensor_dtypes_checked,
-        report->tensor_dtypes_valid, report->tensor_dtypes_invalid,
-        report->tensor_byte_counts_checked, report->tensor_byte_counts_invalid);
-    if (report->selected_embedding_shape[0]) {
-        yvex_cli_out_writef(
-            stdout,
-            "selected_embedding_shape: %s\nselected_embedding_hidden_size: %llu\n"
-            "selected_embedding_vocab_size: %llu\nselected_embedding_output_count: %llu\n"
-            "selected_embedding_output_bytes: %llu\nselected_embedding_slice_bytes: %llu\n",
-            report->selected_embedding_shape, report->selected_embedding_hidden_size,
-            report->selected_embedding_vocab_size, report->selected_embedding_output_count,
-            report->selected_embedding_output_bytes, report->selected_embedding_slice_bytes);
-    }
-    yvex_cli_out_writef(stdout, "identity_checked: %s\nsha256: %s\nregistered_sha256: %s\n",
-                        report->identity_checked ? "true" : "false",
-                        report->sha256[0] ? report->sha256 : "unavailable",
-                        report->registered_sha256[0] ? report->registered_sha256 : "absent");
+    render_object_fields(stdout, report, integrity_counter_fields, FIELD_COUNT(integrity_counter_fields));
+    if (report->selected_embedding_shape[0])
+        render_object_fields(stdout, report, integrity_selected_fields,
+                             FIELD_COUNT(integrity_selected_fields));
+    render_object_fields(stdout, report, integrity_identity_fields, FIELD_COUNT(integrity_identity_fields));
     if (report->expected_sha256[0])
         yvex_cli_out_writef(stdout, "expected_sha256: %s\nactual_sha256: %s\n",
                             report->expected_sha256,
                             report->sha256[0] ? report->sha256 : "unavailable");
-    yvex_cli_out_writef(stdout,
-                        "digest_status: %s\nintegrity_status: %s\nintegrity_errors: %u\n"
-                        "integrity_warnings: %u\n",
-                        report->digest_status[0] ? report->digest_status : "unknown",
-                        report->passed ? "pass" : "fail", report->error_count,
-                        report->warning_count);
-
+    render_object_fields(stdout, report, integrity_result_fields, FIELD_COUNT(integrity_result_fields));
+    yvex_cli_out_writef(stdout, "integrity_status: %s\n", report->passed ? "pass" : "fail");
+    render_object_fields(stdout, report, integrity_issue_count_fields,
+                         FIELD_COUNT(integrity_issue_count_fields));
     for (i = 0; i < report->issue_count; ++i) {
         const yvex_integrity_issue *issue = yvex_artifact_integrity_issue_at(report, i);
         const char *prefix;
-
         if (!issue)
             continue;
         prefix = issue->severity == YVEX_INTEGRITY_SEVERITY_WARNING ? "warning" : "error";
@@ -219,7 +335,6 @@ static void print_integrity_report(const yvex_artifact_integrity_report *report,
         }
         yvex_cli_out_writef(stdout, "%s_%u_reason: %s\n", prefix, i, issue->reason);
     }
-
     yvex_cli_out_writef(stdout, "status: %s\n",
                         report->passed ? "artifact-integrity-pass" : "artifact-integrity-fail");
 }
@@ -236,7 +351,6 @@ static void print_metadata_value(const yvex_gguf_value *value) {
     const char *string_data;
     unsigned long long string_len;
     yvex_gguf_array_info array;
-
     switch (yvex_gguf_value_type_of(value)) {
     case YVEX_GGUF_VALUE_UINT8:
     case YVEX_GGUF_VALUE_UINT16:
@@ -298,11 +412,9 @@ static int integrity_options_parse(int arg_count, char **args, int report_mode,
                                    integrity_cli_options *options) {
     const char *surface = report_mode ? "integrity report" : "integrity";
     int i;
-
     memset(options, 0, sizeof(*options));
     for (i = 3; i < arg_count; ++i) {
         const char *option = args[i];
-
         if (strcmp(option, "--require-token-embedding") == 0) {
             options->integrity.require_token_embedding = 1;
             continue;
@@ -378,11 +490,9 @@ static int command_integrity(int arg_count, char **args) {
     yvex_model_ref ref;
     yvex_error err;
     int rc;
-
     yvex_error_clear(&err);
     memset(&report, 0, sizeof(report));
     memset(&ref, 0, sizeof(ref));
-
     if (arg_count >= 3 && (strcmp(args[2], "--help") == 0 || strcmp(args[2], "-h") == 0)) {
         yvex_integrity_help(stdout);
         return 0;
@@ -401,7 +511,6 @@ static int command_integrity(int arg_count, char **args) {
             "cuda] [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N]\n");
         return 2;
     }
-
     rc = integrity_options_parse(arg_count, args, 0, &parsed);
     if (rc != 0)
         return rc;
@@ -412,7 +521,6 @@ static int command_integrity(int arg_count, char **args) {
     if (ref.kind == YVEX_MODEL_REF_ALIAS && ref.sha256 && ref.sha256[0]) {
         parsed.integrity.registered_sha256 = ref.sha256;
     }
-
     rc = yvex_artifact_integrity_check_path(ref.path, &parsed.integrity, &report, &err);
     print_integrity_report(&report, ref.path);
     yvex_model_ref_clear(&ref);
@@ -434,11 +542,9 @@ static int command_inspect(int arg_count, char **args) {
     yvex_artifact_integrity_report integrity_report;
     yvex_error err;
     int rc;
-
     yvex_error_clear(&err);
     memset(&integrity_options, 0, sizeof(integrity_options));
     memset(&integrity_report, 0, sizeof(integrity_report));
-
     if (arg_count != 3 || strcmp(args[2], "--help") == 0 || strcmp(args[2], "-h") == 0) {
         if (arg_count == 3) {
             yvex_inspect_help(stdout);
@@ -448,12 +554,10 @@ static int command_inspect(int arg_count, char **args) {
         yvex_cli_out_writef(stderr, "usage: yvex inspect FILE_OR_ALIAS\n");
         return 2;
     }
-
     rc = open_artifact_for_gguf(args[2], &view.artifact, &err);
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, exit_for_status(rc));
     }
-
     rc = yvex_gguf_probe_file(view.artifact, &probe, &err);
     if (rc == YVEX_OK && !probe.is_gguf) {
         yvex_cli_out_lines(stdout, literal_pair_2,
@@ -461,7 +565,6 @@ static int command_inspect(int arg_count, char **args) {
         artifact_view_close(&view);
         return 5;
     }
-
     if (rc != YVEX_OK) {
         if (rc == YVEX_ERR_UNSUPPORTED) {
             yvex_cli_out_lines(stdout, literal_pair_1,
@@ -470,7 +573,6 @@ static int command_inspect(int arg_count, char **args) {
         artifact_view_close(&view);
         return print_yvex_error(&err, exit_for_status(rc));
     }
-
     rc = yvex_gguf_open(&view.gguf, view.artifact, &err);
     if (rc == YVEX_OK)
         rc = yvex_tensor_table_from_gguf(&view.tensors, view.gguf, &err);
@@ -499,7 +601,6 @@ static int command_inspect(int arg_count, char **args) {
         artifact_view_close(&view);
         return 0;
     }
-
     artifact_view_close(&view);
     return print_yvex_error(&err, exit_for_status(rc));
 }
@@ -514,9 +615,7 @@ static int command_metadata(int arg_count, char **args) {
     yvex_error err;
     unsigned long long i;
     int rc;
-
     yvex_error_clear(&err);
-
     if (arg_count != 3 || strcmp(args[2], "--help") == 0 || strcmp(args[2], "-h") == 0) {
         if (arg_count == 3) {
             yvex_metadata_help(stdout);
@@ -526,17 +625,14 @@ static int command_metadata(int arg_count, char **args) {
         yvex_cli_out_writef(stderr, "usage: yvex metadata FILE_OR_ALIAS\n");
         return 2;
     }
-
     rc = artifact_view_open(&view, args[2], 0, 0, &err);
     if (rc != YVEX_OK)
         return print_yvex_error(&err, exit_for_status(rc));
-
     header = yvex_gguf_header_view(view.gguf);
     yvex_cli_out_writef(stdout, "format: gguf\n");
     yvex_cli_out_writef(stdout, "version: %u\n", header->version);
     yvex_cli_out_writef(stdout, "metadata_count: %llu\n", yvex_gguf_metadata_count(view.gguf));
     yvex_cli_out_writef(stdout, "\n");
-
     for (i = 0; i < yvex_gguf_metadata_count(view.gguf); ++i) {
         const char *key = yvex_gguf_metadata_key(view.gguf, i);
         const yvex_gguf_value *value = yvex_gguf_metadata_value(view.gguf, i);
@@ -544,16 +640,11 @@ static int command_metadata(int arg_count, char **args) {
         print_metadata_value(value);
         yvex_cli_out_writef(stdout, "\n");
     }
-
     artifact_view_close(&view);
     return 0;
 }
 
-/* Purpose: Render the immutable identity prefix shared by every alias refusal.
- * Inputs: Alias, current file identity, surface, and typed status labels.
- * Effects: Writes the stable identity field sequence to operator stdout.
- * Failure: Stream failures remain owned by the CLI I/O boundary.
- * Boundary: Rendering does not validate or mutate identity facts. */
+/* Purpose: Render the immutable identity prefix shared by every alias refusal. */
 static void print_registered_identity(const yvex_model_ref *ref,
                                       const yvex_artifact_file_identity *identity,
                                       const char *surface, const char *digest_status,
@@ -585,11 +676,9 @@ int enforce_registered_identity_cli(const yvex_model_ref *ref, const char *surfa
     const char *reason = "current file identity matches registered alias";
     int pass = 1;
     int rc;
-
     if (!ref || ref->kind != YVEX_MODEL_REF_ALIAS) {
         return YVEX_OK;
     }
-
     yvex_error_clear(&err);
     memset(&identity, 0, sizeof(identity));
     rc = yvex_artifact_identity_read(ref->path, &identity, &err);
@@ -615,7 +704,6 @@ int enforce_registered_identity_cli(const yvex_model_ref *ref, const char *surfa
     } else {
         rc = YVEX_OK;
     }
-
     if (pass) {
         memset(&current_metadata, 0, sizeof(current_metadata));
         memset(&registered_metadata, 0, sizeof(registered_metadata));
@@ -647,7 +735,6 @@ int enforce_registered_identity_cli(const yvex_model_ref *ref, const char *surfa
             return exit_for_status(YVEX_ERR_STATE);
         }
     }
-
     if (!pass) {
         print_registered_identity(ref, &identity, surface, digest_status, identity_status);
         yvex_cli_out_writef(stdout, "reason: %s\n", reason);
@@ -657,40 +744,11 @@ int enforce_registered_identity_cli(const yvex_model_ref *ref, const char *surfa
     }
     return rc;
 }
-/* Purpose: Render print materialization gate fields from typed facts (`print_materialization_gate_fields`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
-static void print_materialization_gate_fields(
-    const char *gate, const char *phase, const char *integrity_status, const char *identity_status,
-    const char *metadata_status, const char *shape_status, const char *range_status,
-    const char *backend_status, int allocation_attempted, int transfer_attempted,
-    int cleanup_attempted, const char *cleanup_status, unsigned long long bytes_planned,
-    unsigned long long bytes_allocated, unsigned long long bytes_transferred) {
-    yvex_cli_out_writef(
-        stdout,
-        "materialization_gate: %s\nmaterialization_phase: %s\nintegrity_status: %s\n"
-        "identity_status: %s\nmetadata_status: %s\nshape_status: %s\nrange_status: %s\n"
-        "backend_status: %s\nallocation_attempted: %s\ntransfer_attempted: %s\n"
-        "cleanup_attempted: %s\ncleanup_status: %s\nbytes_planned: %llu\n"
-        "bytes_allocated: %llu\nbytes_transferred: %llu\n",
-        gate ? gate : "fail", phase ? phase : "preflight",
-        integrity_status ? integrity_status : "unchecked",
-        identity_status ? identity_status : "unregistered",
-        metadata_status ? metadata_status : "unregistered",
-        shape_status ? shape_status : "unchecked", range_status ? range_status : "unchecked",
-        backend_status ? backend_status : "not-opened", allocation_attempted ? "true" : "false",
-        transfer_attempted ? "true" : "false", cleanup_attempted ? "true" : "false",
-        cleanup_status ? cleanup_status : "not-needed", bytes_planned, bytes_allocated,
-        bytes_transferred);
-}
-
-/* Purpose: Render print materialization summary from typed facts (`print_materialization_summary`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
+/* Purpose: Render the admitted materialization summary without deriving capability.
+ * Inputs: Immutable model, reference, backend, and materialization facts.
+ * Effects: Writes the stable operator field sequence through CLI I/O.
+ * Failure: Stream failure publishes no execution or materialization state.
+ * Boundary: Rendering does not alter artifact or backend ownership. */
 static void print_materialization_summary(const yvex_model_context *ctx,
                                           const yvex_model_ref *model_ref, const char *backend_name,
                                           const yvex_materialize_summary *summary) {
@@ -699,22 +757,19 @@ static void print_materialization_summary(const yvex_model_context *ctx,
     yvex_cli_out_writef(stdout, "model: %s\n",
                         yvex_model_name(ctx->model)[0] ? yvex_model_name(ctx->model) : "unknown");
     yvex_cli_out_writef(stdout, "backend: %s\n", backend_name);
-    print_materialization_gate_fields(
-        summary->materialization_gate, summary->materialization_phase, "pass",
-        model_ref->kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
-        model_ref->kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered", summary->shape_status,
-        summary->range_status, summary->backend_status, summary->allocation_attempted,
-        summary->transfer_attempted, summary->cleanup_attempted, summary->cleanup_status,
-        summary->bytes_planned, summary->bytes_allocated, summary->bytes_transferred);
+    render_object_fields(stdout, summary, materialize_gate_prefix_fields,
+                         FIELD_COUNT(materialize_gate_prefix_fields));
+    yvex_cli_out_writef(stdout, "integrity_status: pass\nidentity_status: %s\nmetadata_status: %s\n",
+                        model_ref->kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                        model_ref->kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered");
+    render_object_fields(stdout, summary, materialize_gate_detail_fields,
+                         FIELD_COUNT(materialize_gate_detail_fields));
+    render_object_fields(stdout, summary, materialize_summary_fields,
+                         FIELD_COUNT(materialize_summary_fields));
     yvex_cli_out_writef(
         stdout,
-        "tensors_total: %llu\ntensors_materialized: %llu\ntensors_failed: %llu\n"
-        "bytes_total: %llu\nbytes_materialized: %llu\nbackend_allocated_bytes: %llu\n"
-        "execution_ready: false\n"
-        "reason: graph partial; materialized weights do not imply executable inference\nstatus: "
-        "%s\n",
-        summary->tensors_total, summary->tensors_materialized, summary->tensors_failed,
-        summary->bytes_total, summary->bytes_materialized, summary->backend_allocated_bytes,
+        "execution_ready: false\nreason: graph partial; materialized weights do not imply "
+        "executable inference\nstatus: %s\n",
         summary->status == YVEX_WEIGHT_STATUS_MATERIALIZED ? "weights-materialized"
                                                            : "weights-partial");
 }
@@ -725,6 +780,87 @@ typedef struct {
     yvex_weight_table *weights;
     yvex_model_ref reference;
 } materialize_cli_state;
+
+typedef enum {
+    MATERIALIZE_REFUSAL_IDENTITY,
+    MATERIALIZE_REFUSAL_CONTEXT,
+    MATERIALIZE_REFUSAL_BACKEND,
+    MATERIALIZE_REFUSAL_DTYPE,
+    MATERIALIZE_REFUSAL_TRANSFER,
+    MATERIALIZE_REFUSAL_ALLOCATION,
+    MATERIALIZE_REFUSAL_PREFLIGHT
+} materialize_refusal_kind;
+
+enum {
+    MATERIALIZE_REFUSAL_HEADER = 1u << 0u,
+    MATERIALIZE_REFUSAL_REASON = 1u << 1u,
+    MATERIALIZE_REFUSAL_ALLOCATED = 1u << 2u,
+    MATERIALIZE_REFUSAL_TRANSFERRED = 1u << 3u,
+    MATERIALIZE_REFUSAL_CLEANED = 1u << 4u
+};
+
+typedef struct {
+    const char *phase;
+    const char *integrity;
+    const char *identity;
+    const char *metadata;
+    const char *shape;
+    const char *range;
+    const char *backend;
+    const char *status;
+    unsigned int flags;
+} materialize_refusal_spec;
+
+static const materialize_refusal_spec materialize_refusals[] = {
+    {"preflight", "not-checked", "fail", "fail", "not-checked", "not-checked", "not-opened",
+     "materialization-integrity-fail", 0u},
+    {"preflight", "fail", NULL, NULL, "unchecked", "unchecked", "not-opened",
+     "materialization-integrity-fail", 0u},
+    {"preflight", "pass", NULL, NULL, "pass", "pass", "unavailable", "weights-unsupported",
+     MATERIALIZE_REFUSAL_HEADER | MATERIALIZE_REFUSAL_REASON},
+    {"preflight", "pass", NULL, NULL, "fail", "fail", "ready", "weights-unsupported",
+     MATERIALIZE_REFUSAL_HEADER | MATERIALIZE_REFUSAL_REASON},
+    {"transfer", "pass", NULL, NULL, "pass", "pass", "ready",
+     "materialization-failed-cleaned", MATERIALIZE_REFUSAL_ALLOCATED |
+                                                MATERIALIZE_REFUSAL_TRANSFERRED |
+                                                MATERIALIZE_REFUSAL_CLEANED},
+    {"allocation", "pass", NULL, NULL, "pass", "pass", "ready",
+     "materialization-failed-cleaned", MATERIALIZE_REFUSAL_ALLOCATED |
+                                                MATERIALIZE_REFUSAL_CLEANED},
+    {"preflight", "fail", NULL, NULL, "fail", "fail", "ready",
+     "materialization-integrity-fail", 0u},
+};
+
+/* Purpose: Render one canonical materialization refusal from declarative lifecycle facts.
+ * Inputs: Resolved reference, backend label, refusal kind, and optional reason.
+ * Effects: Writes the stable failure field sequence through CLI I/O.
+ * Failure: No partial materialization state is published.
+ * Boundary: Declarative rendering does not classify the domain error. */
+static void print_materialize_refusal(const yvex_model_ref *ref, const char *backend_name,
+                                      materialize_refusal_kind kind, const char *reason) {
+    const materialize_refusal_spec *spec = &materialize_refusals[kind];
+    const char *registered = ref->kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered";
+    if (spec->flags & MATERIALIZE_REFUSAL_HEADER) {
+        yvex_cli_out_writef(stdout, "materialization status: unsupported\n");
+        yvex_cli_out_writef(stdout, "backend: %s\n", backend_name);
+    }
+    yvex_cli_out_writef(
+        stdout,
+        "materialization_gate: fail\nmaterialization_phase: %s\nintegrity_status: %s\n"
+        "identity_status: %s\nmetadata_status: %s\nshape_status: %s\nrange_status: %s\n"
+        "backend_status: %s\nallocation_attempted: %s\ntransfer_attempted: %s\n"
+        "cleanup_attempted: %s\ncleanup_status: %s\nbytes_planned: 0\nbytes_allocated: 0\n"
+        "bytes_transferred: 0\n",
+        spec->phase, spec->integrity, spec->identity ? spec->identity : registered,
+        spec->metadata ? spec->metadata : registered, spec->shape, spec->range, spec->backend,
+        spec->flags & MATERIALIZE_REFUSAL_ALLOCATED ? "true" : "false",
+        spec->flags & MATERIALIZE_REFUSAL_TRANSFERRED ? "true" : "false",
+        spec->flags & MATERIALIZE_REFUSAL_CLEANED ? "true" : "false",
+        spec->flags & MATERIALIZE_REFUSAL_CLEANED ? "pass" : "not-needed");
+    if (spec->flags & MATERIALIZE_REFUSAL_REASON)
+        yvex_cli_out_writef(stdout, "reason: %s\n", reason ? reason : "");
+    yvex_cli_out_writef(stdout, "status: %s\n", spec->status);
+}
 
 /* Purpose: Release every CLI-owned materialization resource in reverse order.
  * Inputs: Partially or fully initialized command state.
@@ -756,17 +892,14 @@ static int command_materialize(int arg_count, char **args) {
     const char *backend_name = NULL;
     int i;
     int rc;
-
     yvex_error_clear(&err);
     memset(&state, 0, sizeof(state));
     memset(&backend_options, 0, sizeof(backend_options));
     memset(&materialize_options, 0, sizeof(materialize_options));
-
     if (arg_count == 3 && (strcmp(args[2], "--help") == 0 || strcmp(args[2], "-h") == 0)) {
         yvex_materialize_help(stdout);
         return 0;
     }
-
     for (i = 2; i < arg_count; ++i) {
         if (strcmp(args[i], "--model") == 0) {
             if (i + 1 >= arg_count) {
@@ -790,7 +923,6 @@ static int command_materialize(int arg_count, char **args) {
             return 2;
         }
     }
-
     if (!model_path || !backend_name) {
         yvex_cli_out_writef(
             stderr, "yvex: materialize requires --model FILE_OR_ALIAS and --backend cpu|cuda\n");
@@ -799,7 +931,6 @@ static int command_materialize(int arg_count, char **args) {
                                     "unsupported-dtype]\n");
         return 2;
     }
-
     if (strcmp(backend_name, "cpu") == 0) {
         backend_options.kind = YVEX_BACKEND_KIND_CPU;
     } else if (strcmp(backend_name, "cuda") == 0) {
@@ -808,43 +939,27 @@ static int command_materialize(int arg_count, char **args) {
         yvex_cli_out_writef(stderr, "yvex: unknown backend kind: %s\n", backend_name);
         return 2;
     }
-
     rc = yvex_model_ref_resolve(&state.reference, model_path, NULL, &err);
     if (rc != YVEX_OK)
         return print_yvex_error(&err, exit_for_status(rc));
     rc = enforce_registered_identity_cli(&state.reference, "materialize");
     if (rc != YVEX_OK) {
-        print_materialization_gate_fields("fail", "preflight", "not-checked", "fail", "fail",
-                                          "not-checked", "not-checked", "not-opened", 0, 0, 0,
-                                          "not-needed", 0, 0, 0);
-        yvex_cli_out_writef(stdout, "status: materialization-integrity-fail\n");
+        print_materialize_refusal(&state.reference, backend_name, MATERIALIZE_REFUSAL_IDENTITY,
+                                  NULL);
         rc = exit_for_status(rc);
         goto done;
     }
-
     rc = yvex_model_context_open(state.reference.path, &state.context, &err);
     if (rc != YVEX_OK) {
-        print_materialization_gate_fields(
-            "fail", "preflight", "fail",
-            state.reference.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
-            state.reference.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered", "unchecked",
-            "unchecked", "not-opened", 0, 0, 0, "not-needed", 0, 0, 0);
-        yvex_cli_out_writef(stdout, "status: materialization-integrity-fail\n");
+        print_materialize_refusal(&state.reference, backend_name, MATERIALIZE_REFUSAL_CONTEXT,
+                                  NULL);
         rc = print_yvex_error(&err, exit_for_status(rc));
         goto done;
     }
-
     rc = yvex_backend_open(&state.backend, &backend_options, &err);
     if (rc == YVEX_ERR_UNSUPPORTED) {
-        yvex_cli_out_writef(stdout, "materialization status: unsupported\n");
-        yvex_cli_out_writef(stdout, "backend: %s\n", backend_name);
-        print_materialization_gate_fields(
-            "fail", "preflight", "pass",
-            state.reference.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
-            state.reference.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered", "pass", "pass",
-            "unavailable", 0, 0, 0, "not-needed", 0, 0, 0);
-        yvex_cli_out_writef(stdout, "reason: %s\n", yvex_error_message(&err));
-        yvex_cli_out_writef(stdout, "status: weights-unsupported\n");
+        print_materialize_refusal(&state.reference, backend_name, MATERIALIZE_REFUSAL_BACKEND,
+                                  yvex_error_message(&err));
         rc = 5;
         goto done;
     }
@@ -852,60 +967,37 @@ static int command_materialize(int arg_count, char **args) {
         rc = print_yvex_error(&err, exit_for_status(rc));
         goto done;
     }
-
     materialize_options.backend_name = backend_name;
     rc = yvex_weight_table_materialize(&state.weights, state.context.artifact, state.context.gguf,
                                        state.context.table, state.backend, &materialize_options,
                                        &err);
     if (rc == YVEX_ERR_UNSUPPORTED) {
-        yvex_cli_out_writef(stdout, "materialization status: unsupported\n");
-        yvex_cli_out_writef(stdout, "backend: %s\n", backend_name);
-        print_materialization_gate_fields(
-            "fail", "preflight", "pass",
-            state.reference.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
-            state.reference.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered", "fail", "fail",
-            "ready", 0, 0, 0, "not-needed", 0, 0, 0);
-        yvex_cli_out_writef(stdout, "reason: %s\n", yvex_error_message(&err));
-        yvex_cli_out_writef(stdout, "status: weights-unsupported\n");
+        print_materialize_refusal(&state.reference, backend_name, MATERIALIZE_REFUSAL_DTYPE,
+                                  yvex_error_message(&err));
         rc = 5;
         goto done;
     }
     if (rc != YVEX_OK) {
         if (getenv("YVEX_TEST_FAIL_MATERIALIZE_AFTER_TRANSFER")) {
-            print_materialization_gate_fields(
-                "fail", "transfer", "pass",
-                state.reference.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
-                state.reference.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered", "pass",
-                "pass", "ready", 1, 1, 1, "pass", 0, 0, 0);
-            yvex_cli_out_writef(stdout, "status: materialization-failed-cleaned\n");
+            print_materialize_refusal(&state.reference, backend_name,
+                                      MATERIALIZE_REFUSAL_TRANSFER, NULL);
         } else if (getenv("YVEX_TEST_FAIL_MATERIALIZE_AFTER_ALLOC")) {
-            print_materialization_gate_fields(
-                "fail", "allocation", "pass",
-                state.reference.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
-                state.reference.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered", "pass",
-                "pass", "ready", 1, 0, 1, "pass", 0, 0, 0);
-            yvex_cli_out_writef(stdout, "status: materialization-failed-cleaned\n");
+            print_materialize_refusal(&state.reference, backend_name,
+                                      MATERIALIZE_REFUSAL_ALLOCATION, NULL);
         } else {
-            print_materialization_gate_fields(
-                "fail", "preflight", "fail",
-                state.reference.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
-                state.reference.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered", "fail",
-                "fail", "ready", 0, 0, 0, "not-needed", 0, 0, 0);
-            yvex_cli_out_writef(stdout, "status: materialization-integrity-fail\n");
+            print_materialize_refusal(&state.reference, backend_name,
+                                      MATERIALIZE_REFUSAL_PREFLIGHT, NULL);
         }
         rc = print_yvex_error(&err, exit_for_status(rc));
         goto done;
     }
-
     rc = yvex_weight_table_get_summary(state.weights, &summary, &err);
     if (rc != YVEX_OK) {
         rc = print_yvex_error(&err, exit_for_status(rc));
         goto done;
     }
-
     print_materialization_summary(&state.context, &state.reference, backend_name, &summary);
     rc = 0;
-
 done:
     materialize_cli_close(&state);
     return rc;
@@ -969,7 +1061,6 @@ static int gate_cli_parse(int arg_count, char **args, gate_cli_kind kind,
                           gate_cli_request *request) {
     const char *surface = kind == GATE_CLI_MATERIALIZE ? "materialize-gate" : "model-gate";
     int i;
-
     memset(request, 0, sizeof(*request));
     request->scope = YVEX_MATERIALIZE_SCOPE_UNKNOWN;
     request->repeat_count = 1u;
@@ -977,7 +1068,6 @@ static int gate_cli_parse(int arg_count, char **args, gate_cli_kind kind,
         const char *option = args[i];
         const char *value;
         unsigned long long parsed;
-
         if (strcmp(option, "--require-cpu") == 0) {
             request->require_cpu = request->check_cpu = 1;
             continue;
@@ -1067,16 +1157,41 @@ static int gate_cli_parse(int arg_count, char **args, gate_cli_kind kind,
     return 0;
 }
 
-/* Purpose: Render one complete expected-tensor contract shared by both gates.
- * Inputs: Stream plus immutable tensor identity, shape, dtype, and byte facts.
- * Effects: Writes the stable expected-tensor field sequence.
- * Failure: Stream failure remains observable through the owning report writer.
- * Boundary: This helper performs no tensor lookup or validation. */
+/* Purpose: Resolve and authenticate the artifact reference shared by both gate commands.
+ * Inputs: Parsed request, gate kind, and caller-owned reference/result slots.
+ * Effects: Opens one model reference and writes its admitted path, digest, and metadata status.
+ * Failure: Emits the legacy typed refusal, clears partial reference state, and returns CLI status.
+ * Boundary: Reference admission remains owned by registry and artifact identity APIs. */
+static int gate_ref_open(const gate_cli_request *request, gate_cli_kind kind, yvex_model_ref *ref,
+                         const char **path, const char **sha256, const char **metadata_status,
+                         yvex_error *err) {
+    const char *surface = kind == GATE_CLI_MATERIALIZE ? "materialize-gate" : "model-gate";
+    int rc = yvex_model_ref_resolve(ref, request->model, NULL, err);
+    if (rc != YVEX_OK)
+        return print_yvex_error(err, exit_for_status(rc));
+    rc = enforce_registered_identity_cli(ref, surface);
+    if (rc != YVEX_OK) {
+        yvex_model_ref_clear(ref);
+        return exit_for_status(rc);
+    }
+    *path = ref->path;
+    *sha256 = request->sha256;
+    if ((!*sha256 || !(*sha256)[0]) && ref->kind == YVEX_MODEL_REF_ALIAS && ref->sha256 &&
+        ref->sha256[0])
+        *sha256 = ref->sha256;
+    if (metadata_status)
+        *metadata_status = ref->kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered";
+    return 0;
+}
+
+static int gate_report_file(const char *path, gate_cli_kind kind, const void *options,
+                            const void *summary, const char *reason);
+
+/* Purpose: Render one complete expected-tensor contract shared by both gates. */
 static void print_expected_tensor(FILE *fp, const char *name, unsigned int rank,
                                   const unsigned long long dims[4], const char *dtype,
                                   unsigned long long bytes) {
     unsigned int axis;
-
     yvex_cli_out_writef(
         fp, "expected_tensor: %s\nexpected_rank: %u\nexpected_dims:", name ? name : "", rank);
     for (axis = 0; axis < rank; ++axis)
@@ -1085,22 +1200,20 @@ static void print_expected_tensor(FILE *fp, const char *name, unsigned int rank,
                         bytes);
 }
 
-/* Purpose: Render print materialize gate report from typed facts (`print_materialize_gate_report`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
+/* Purpose: Render a materialization-gate result without reconstructing its decision.
+ * Inputs: Immutable gate options, summary, and optional typed reason.
+ * Effects: Writes the stable gate report to the caller-owned stream.
+ * Failure: Stream failure does not mutate gate or artifact state.
+ * Boundary: The domain gate remains the sole decision authority. */
 static void print_materialize_gate_report(FILE *fp, const yvex_materialize_gate_options *options,
                                           const yvex_materialize_gate_summary *summary,
                                           const char *reason) {
     yvex_cli_out_writef(fp, "materialize gate: check\n");
     render_object_fields(fp, summary, materialize_gate_heading_fields,
-                         sizeof(materialize_gate_heading_fields) /
-                             sizeof(materialize_gate_heading_fields[0]));
+                         FIELD_COUNT(materialize_gate_heading_fields));
     yvex_cli_out_writef(fp, "scope: %s\n", yvex_materialize_scope_name(summary->scope));
     render_object_fields(fp, summary, materialize_gate_state_fields,
-                         sizeof(materialize_gate_state_fields) /
-                             sizeof(materialize_gate_state_fields[0]));
+                         FIELD_COUNT(materialize_gate_state_fields));
     yvex_cli_out_writef(fp, "cpu: %s\n", yvex_materialize_backend_status_name(summary->cpu_status));
     yvex_cli_out_writef(fp, "cuda: %s\n",
                         yvex_materialize_backend_status_name(summary->cuda_status));
@@ -1129,14 +1242,13 @@ static int command_materialize_gate(int arg_count, char **args) {
     gate_cli_request request;
     yvex_model_ref model_ref;
     yvex_error err;
+    int report_rc;
     int rc;
-
     yvex_error_clear(&err);
     memset(&options, 0, sizeof(options));
     memset(&expected, 0, sizeof(expected));
     memset(&summary, 0, sizeof(summary));
     memset(&model_ref, 0, sizeof(model_ref));
-
     if (arg_count >= 3 && (strcmp(args[2], "--help") == 0 || strcmp(args[2], "-h") == 0)) {
         yvex_materialize_gate_help(stdout);
         return 0;
@@ -1145,7 +1257,6 @@ static int command_materialize_gate(int arg_count, char **args) {
         yvex_cli_out_writef(stderr, "yvex: materialize-gate requires subcommand check\n");
         return 2;
     }
-
     rc = gate_cli_parse(arg_count, args, GATE_CLI_MATERIALIZE, &request);
     if (rc != 0)
         return rc;
@@ -1181,50 +1292,23 @@ static int command_materialize_gate(int arg_count, char **args) {
         options.expected_tensors = &expected;
         options.expected_tensor_count = 1;
     }
-
-    rc = yvex_model_ref_resolve(&model_ref, options.model_path, NULL, &err);
-    if (rc != YVEX_OK) {
-        return print_yvex_error(&err, exit_for_status(rc));
-    }
-    rc = enforce_registered_identity_cli(&model_ref, "materialize-gate");
-    if (rc != YVEX_OK) {
-        yvex_model_ref_clear(&model_ref);
-        return exit_for_status(rc);
-    }
-    options.model_path = model_ref.path;
-    if ((!options.sha256 || !options.sha256[0]) && model_ref.kind == YVEX_MODEL_REF_ALIAS &&
-        model_ref.sha256 && model_ref.sha256[0]) {
-        options.sha256 = model_ref.sha256;
-    }
-    options.metadata_status = model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered";
-
+    rc = gate_ref_open(&request, GATE_CLI_MATERIALIZE, &model_ref, &options.model_path,
+                       &options.sha256, &options.metadata_status, &err);
+    if (rc != 0)
+        return rc;
     rc = yvex_materialize_gate_check(&options, &summary, &err);
     print_materialize_gate_report(stdout, &options, &summary,
                                   rc == YVEX_OK ? NULL : yvex_error_message(&err));
-    if (request.report_out) {
-        FILE *fp = fopen(request.report_out, "wb");
-        if (!fp) {
-            yvex_cli_out_writef(stderr, "yvex: cannot write report: %s\n", request.report_out);
-            yvex_model_ref_clear(&model_ref);
-            return 1;
-        }
-        print_materialize_gate_report(fp, &options, &summary,
-                                      rc == YVEX_OK ? NULL : yvex_error_message(&err));
-        fclose(fp);
-    }
+    report_rc = gate_report_file(request.report_out, GATE_CLI_MATERIALIZE, &options, &summary,
+                                 rc == YVEX_OK ? NULL : yvex_error_message(&err));
     yvex_model_ref_clear(&model_ref);
-    return rc == YVEX_OK ? 0 : exit_for_status(rc);
+    return report_rc != 0 ? report_rc : rc == YVEX_OK ? 0 : exit_for_status(rc);
 }
-/* Purpose: Render print model gate report from typed facts (`print_model_gate_report`).
- * Inputs: Borrowed typed facts.
- * Effects: Writes through CLI I/O only.
- * Failure: Typed refusal; outputs remain defined.
- * Boundary: No capability policy. */
+/* Purpose: Render a model-gate result without reconstructing its decision. */
 static void print_model_gate_report(FILE *fp, const yvex_model_gate_options *options,
                                     const yvex_model_gate_summary *summary, const char *reason) {
     yvex_cli_out_writef(fp, "model gate: check\n");
-    render_object_fields(fp, summary, model_gate_state_fields,
-                         sizeof(model_gate_state_fields) / sizeof(model_gate_state_fields[0]));
+    render_object_fields(fp, summary, model_gate_state_fields, FIELD_COUNT(model_gate_state_fields));
     yvex_cli_out_writef(fp, "cpu: %s\n", yvex_model_gate_backend_status_name(summary->cpu_status));
     yvex_cli_out_writef(fp, "cuda: %s\n",
                         yvex_model_gate_backend_status_name(summary->cuda_status));
@@ -1239,6 +1323,29 @@ static void print_model_gate_report(FILE *fp, const yvex_model_gate_options *opt
                         reason && reason[0] ? reason : "selected tensor materialization gate");
     yvex_cli_out_writef(fp, "status: %s\n", yvex_model_gate_status_name(summary->status));
 }
+
+/* Purpose: Publish an optional gate report through the renderer selected by its typed gate kind.
+ * Inputs: Optional path, matching gate option/summary objects, and immutable failure reason.
+ * Effects: Creates and closes only the requested report file after stdout rendering completes.
+ * Failure: Preserves the legacy write refusal and returns process status 1.
+ * Boundary: This adapter serializes existing typed facts and owns no gate decision. */
+static int gate_report_file(const char *path, gate_cli_kind kind, const void *options,
+                            const void *summary, const char *reason) {
+    FILE *fp;
+    if (!path)
+        return 0;
+    fp = fopen(path, "wb");
+    if (!fp) {
+        yvex_cli_out_writef(stderr, "yvex: cannot write report: %s\n", path);
+        return 1;
+    }
+    if (kind == GATE_CLI_MATERIALIZE)
+        print_materialize_gate_report(fp, options, summary, reason);
+    else
+        print_model_gate_report(fp, options, summary, reason);
+    fclose(fp);
+    return 0;
+}
 /* Purpose: Orchestrate the typed command model gate request (`command_model_gate`).
  * Inputs: Borrowed typed facts.
  * Effects: Mutates declared CLI state only.
@@ -1251,14 +1358,13 @@ static int command_model_gate(int arg_count, char **args) {
     gate_cli_request request;
     yvex_model_ref model_ref;
     yvex_error err;
+    int report_rc;
     int rc;
-
     yvex_error_clear(&err);
     memset(&options, 0, sizeof(options));
     memset(&expected, 0, sizeof(expected));
     memset(&summary, 0, sizeof(summary));
     memset(&model_ref, 0, sizeof(model_ref));
-
     if (arg_count >= 3 && (strcmp(args[2], "--help") == 0 || strcmp(args[2], "-h") == 0)) {
         yvex_model_gate_help(stdout);
         return 0;
@@ -1267,7 +1373,6 @@ static int command_model_gate(int arg_count, char **args) {
         yvex_cli_out_writef(stderr, "yvex: model-gate requires subcommand check\n");
         return 2;
     }
-
     rc = gate_cli_parse(arg_count, args, GATE_CLI_MODEL, &request);
     if (rc != 0)
         return rc;
@@ -1292,37 +1397,17 @@ static int command_model_gate(int arg_count, char **args) {
     expected.bytes = request.tensor_bytes;
     options.expected_tensors = &expected;
     options.expected_tensor_count = 1;
-    rc = yvex_model_ref_resolve(&model_ref, options.model_path, NULL, &err);
-    if (rc != YVEX_OK) {
-        return print_yvex_error(&err, exit_for_status(rc));
-    }
-    rc = enforce_registered_identity_cli(&model_ref, "model-gate");
-    if (rc != YVEX_OK) {
-        yvex_model_ref_clear(&model_ref);
-        return exit_for_status(rc);
-    }
-    options.model_path = model_ref.path;
-    if ((!options.artifact_sha256 || !options.artifact_sha256[0]) &&
-        model_ref.kind == YVEX_MODEL_REF_ALIAS && model_ref.sha256 && model_ref.sha256[0]) {
-        options.artifact_sha256 = model_ref.sha256;
-    }
-
+    rc = gate_ref_open(&request, GATE_CLI_MODEL, &model_ref, &options.model_path,
+                       &options.artifact_sha256, NULL, &err);
+    if (rc != 0)
+        return rc;
     rc = yvex_model_gate_check(&options, &summary, &err);
     print_model_gate_report(stdout, &options, &summary,
                             rc == YVEX_OK ? NULL : yvex_error_message(&err));
-    if (request.report_out) {
-        FILE *fp = fopen(request.report_out, "wb");
-        if (!fp) {
-            yvex_cli_out_writef(stderr, "yvex: cannot write report: %s\n", request.report_out);
-            yvex_model_ref_clear(&model_ref);
-            return 1;
-        }
-        print_model_gate_report(fp, &options, &summary,
-                                rc == YVEX_OK ? NULL : yvex_error_message(&err));
-        fclose(fp);
-    }
+    report_rc = gate_report_file(request.report_out, GATE_CLI_MODEL, &options, &summary,
+                                 rc == YVEX_OK ? NULL : yvex_error_message(&err));
     yvex_model_ref_clear(&model_ref);
-    return rc == YVEX_OK ? 0 : exit_for_status(rc);
+    return report_rc != 0 ? report_rc : rc == YVEX_OK ? 0 : exit_for_status(rc);
 }
 
 typedef struct {
@@ -1331,7 +1416,6 @@ typedef struct {
     yvex_model_metadata_snapshot current_metadata;
     yvex_model_registry_entry registered_metadata;
     yvex_model_metadata_drift_report metadata_report;
-    yvex_cli_graph_guard_report graph_report;
     yvex_backend_options backend_options;
     yvex_model_ref ref;
     const char *model_arg;
@@ -1344,11 +1428,6 @@ typedef struct {
     const char *materialization_gate;
     const char *materialization_backend;
     const char *backend_status;
-    const char *graph_fixture_guard;
-    const char *graph_partial_guard;
-    const char *graph_partial_backend;
-    const char *graph_partial_dispatch_ready;
-    const char *graph_partial_reference_ready;
     const char *report_status;
     const char *status;
     const char *model_input_kind;
@@ -1362,6 +1441,75 @@ typedef struct {
     int selected_ready;
     int hard_fail;
 } integrity_cli_state;
+
+#define STATE_FIELD(key_, kind_, member_, fallback_)                                                \
+    { key_, kind_, offsetof(integrity_cli_state, member_), fallback_ }
+#define STATE_NESTED_FIELD(key_, kind_, outer_, type_, member_, fallback_)                          \
+    { key_, kind_, offsetof(integrity_cli_state, outer_) + offsetof(type_, member_), fallback_ }
+#define STATE_METADATA_FIELD(key_, kind_, member_, fallback_)                                       \
+    {                                                                                               \
+        key_, kind_,                                                                                \
+            offsetof(integrity_cli_state, current_metadata) +                                      \
+                offsetof(yvex_model_metadata_snapshot, entry) +                                    \
+                offsetof(yvex_model_registry_entry, member_),                                      \
+            fallback_                                                                              \
+    }
+
+static const yvex_render_field_spec integrity_audit_request_fields[] = {
+    STATE_FIELD("model", YVEX_RENDER_FIELD_TEXT, model_arg, ""),
+    STATE_NESTED_FIELD("resolved_path", YVEX_RENDER_FIELD_TEXT, ref, yvex_model_ref, path, ""),
+    STATE_FIELD("model_input_kind", YVEX_RENDER_FIELD_TEXT, model_input_kind, ""),
+};
+static const yvex_render_field_spec integrity_audit_identity_fields[] = {
+    STATE_NESTED_FIELD("architecture", YVEX_RENDER_FIELD_TEXT_ARRAY, integrity_report,
+                       yvex_artifact_integrity_report, architecture, "unknown"),
+    STATE_FIELD("identity_status", YVEX_RENDER_FIELD_TEXT, identity_status, "unknown"),
+    STATE_NESTED_FIELD("digest_status", YVEX_RENDER_FIELD_TEXT_ARRAY, integrity_report,
+                       yvex_artifact_integrity_report, digest_status, "unknown"),
+    STATE_NESTED_FIELD("sha256", YVEX_RENDER_FIELD_TEXT_ARRAY, integrity_report,
+                       yvex_artifact_integrity_report, sha256, "unavailable"),
+    STATE_NESTED_FIELD("registered_sha256", YVEX_RENDER_FIELD_TEXT_ARRAY, integrity_report,
+                       yvex_artifact_integrity_report, registered_sha256, "absent"),
+};
+static const yvex_render_field_spec integrity_audit_metadata_fields[] = {
+    STATE_FIELD("metadata_status", YVEX_RENDER_FIELD_TEXT, metadata_status, "unknown"),
+    STATE_FIELD("readiness_status", YVEX_RENDER_FIELD_TEXT, readiness_status, "unknown"),
+    STATE_FIELD("support_level", YVEX_RENDER_FIELD_TEXT, support_level, "unknown"),
+};
+static const yvex_render_field_spec integrity_audit_primary_fields[] = {
+    STATE_METADATA_FIELD("primary_tensor", YVEX_RENDER_FIELD_TEXT, primary_tensor_name, ""),
+    STATE_METADATA_FIELD("primary_tensor_role", YVEX_RENDER_FIELD_TEXT, primary_tensor_role, ""),
+    STATE_METADATA_FIELD("primary_tensor_dtype", YVEX_RENDER_FIELD_TEXT, primary_tensor_dtype, ""),
+    STATE_METADATA_FIELD("primary_tensor_rank", YVEX_RENDER_FIELD_U32, primary_tensor_rank, NULL),
+    STATE_METADATA_FIELD("primary_tensor_dims", YVEX_RENDER_FIELD_TEXT, primary_tensor_dims, ""),
+    STATE_METADATA_FIELD("primary_tensor_bytes", YVEX_RENDER_FIELD_U64, primary_tensor_bytes, NULL),
+};
+static const yvex_render_field_spec integrity_audit_selection_fields[] = {
+    STATE_FIELD("selected_embedding_ready", YVEX_RENDER_FIELD_BOOL, selected_ready, NULL),
+    STATE_FIELD("selected_embedding_hidden_size", YVEX_RENDER_FIELD_U64, selected_hidden_size,
+                NULL),
+    STATE_FIELD("selected_embedding_vocab_size", YVEX_RENDER_FIELD_U64, selected_vocab_size,
+                NULL),
+    STATE_FIELD("selected_embedding_output_count", YVEX_RENDER_FIELD_U64, selected_output_count,
+                NULL),
+    STATE_FIELD("selected_embedding_output_bytes", YVEX_RENDER_FIELD_U64, selected_output_bytes,
+                NULL),
+    STATE_FIELD("selected_embedding_slice_bytes", YVEX_RENDER_FIELD_U64, selected_slice_bytes,
+                NULL),
+};
+static const yvex_render_field_spec integrity_audit_backend_fields[] = {
+    STATE_FIELD("backend_status", YVEX_RENDER_FIELD_TEXT, backend_status, "unknown"),
+    STATE_FIELD("materialization_preflight", YVEX_RENDER_FIELD_TEXT, materialization_preflight,
+                "unknown"),
+    STATE_FIELD("materialization_backend", YVEX_RENDER_FIELD_TEXT, materialization_backend,
+                "unknown"),
+    STATE_FIELD("materialization_gate", YVEX_RENDER_FIELD_TEXT, materialization_gate, "unknown"),
+    STATE_NESTED_FIELD("allocation_required_bytes", YVEX_RENDER_FIELD_U64, integrity_report,
+                       yvex_artifact_integrity_report, known_tensor_bytes, NULL),
+};
+#undef STATE_METADATA_FIELD
+#undef STATE_NESTED_FIELD
+#undef STATE_FIELD
 
 /* Purpose: Construct the owned integrity state init state (`integrity_cli_state_init`).
  * Inputs: Borrowed typed facts.
@@ -1378,11 +1526,6 @@ static void integrity_cli_state_init(integrity_cli_state *state) {
     state->materialization_gate = "not-checked";
     state->materialization_backend = "not-checked";
     state->backend_status = "not-checked";
-    state->graph_fixture_guard = "not-applicable";
-    state->graph_partial_guard = "not-checked";
-    state->graph_partial_backend = "not-checked";
-    state->graph_partial_dispatch_ready = "false";
-    state->graph_partial_reference_ready = "false";
     state->report_status = "pass";
     state->status = "integrity-report-pass";
 }
@@ -1395,7 +1538,6 @@ static void integrity_cli_state_init(integrity_cli_state *state) {
 static int integrity_cli_parse(int arg_count, char **args, integrity_cli_state *state) {
     integrity_cli_options parsed;
     int rc = integrity_options_parse(arg_count, args, 1, &parsed);
-
     if (rc != 0)
         return rc;
     state->integrity_options = parsed.integrity;
@@ -1412,7 +1554,6 @@ static int integrity_cli_parse(int arg_count, char **args, integrity_cli_state *
  * Boundary: No capability policy. */
 static void integrity_cli_metadata(integrity_cli_state *state) {
     yvex_error metadata_err;
-
     state->model_input_kind = state->ref.kind == YVEX_MODEL_REF_ALIAS ? "alias" : "path";
     if (state->ref.kind == YVEX_MODEL_REF_ALIAS) {
         if (!state->ref.sha256 || !state->ref.sha256[0] ||
@@ -1484,7 +1625,7 @@ static void integrity_cli_metadata(integrity_cli_state *state) {
     }
 }
 
-/* Purpose: Compute integrity selected shape for its CLI invariant (`integrity_cli_selected_shape`). */
+/* Purpose: Project the admitted selected embedding geometry into report state. */
 static void integrity_cli_selected_shape(integrity_cli_state *state) {
     if (state->integrity_report.selected_embedding_shape[0]) {
         state->selected_ready =
@@ -1510,11 +1651,9 @@ static void integrity_cli_selected_shape(integrity_cli_state *state) {
 static void integrity_cli_backend(integrity_cli_state *state, yvex_error *err) {
     yvex_backend *backend = NULL;
     int rc;
-
     if (!state->backend_name)
         return;
     state->materialization_backend = state->backend_name;
-    state->graph_partial_backend = state->backend_name;
     if (!state->hard_fail) {
         state->backend_options.kind = strcmp(state->backend_name, "cuda") == 0
                                           ? YVEX_BACKEND_KIND_CUDA
@@ -1544,26 +1683,6 @@ static void integrity_cli_backend(integrity_cli_state *state, yvex_error *err) {
         state->materialization_preflight = "fail";
         state->materialization_gate = "fail";
     }
-    if (!state->hard_fail && state->selected_ready) {
-        yvex_error graph_err;
-        yvex_error_clear(&graph_err);
-        rc = yvex_graph_preflight(&state->ref, state->backend_name, 0, 0,
-                                  state->integrity_options.token_id, &state->graph_report,
-                                  &graph_err);
-        if (rc == YVEX_OK && strcmp(state->graph_report.guard_status, "pass") == 0) {
-            state->graph_partial_guard = "pass";
-            state->graph_partial_dispatch_ready = "true";
-            state->graph_partial_reference_ready = "true";
-        } else {
-            state->graph_partial_guard = "fail";
-            state->hard_fail = 1;
-            yvex_error_clear(&graph_err);
-        }
-    } else if (!state->selected_ready && state->integrity_options.require_token_embedding) {
-        state->graph_partial_guard = "fail";
-    } else if (!state->selected_ready) {
-        state->graph_partial_guard = "not-applicable";
-    }
 }
 
 /* Purpose: Render integrity render normal from typed facts (`integrity_cli_render_normal`).
@@ -1573,7 +1692,6 @@ static void integrity_cli_backend(integrity_cli_state *state, yvex_error *err) {
  * Boundary: No capability policy. */
 static int integrity_cli_render_normal(integrity_cli_state *state) {
     const char *top_blocker = "none";
-
     if (state->hard_fail) {
         if (state->integrity_report.error_count > 0u && state->integrity_report.issues[0].code[0]) {
             top_blocker = state->integrity_report.issues[0].code;
@@ -1614,85 +1732,32 @@ static int integrity_cli_render_normal(integrity_cli_state *state) {
 static int integrity_cli_render_audit(integrity_cli_state *state) {
     const yvex_artifact_integrity_report *report = &state->integrity_report;
     int i;
-
     yvex_cli_out_writef(stdout, "artifact_integrity_report: summary\n");
-    yvex_cli_out_writef(stdout, "model: %s\nresolved_path: %s\nmodel_input_kind: %s\n",
-                        state->model_arg, state->ref.path ? state->ref.path : "",
-                        state->model_input_kind);
+    render_object_fields(stdout, state, integrity_audit_request_fields,
+                         FIELD_COUNT(integrity_audit_request_fields));
     yvex_cli_out_writef(stdout, "format: %s\n", report->format[0] ? report->format : "unknown");
     if (report->version)
         yvex_cli_out_writef(stdout, "version: %u\n", report->version);
-    yvex_cli_out_writef(stdout, "architecture: %s\nidentity_status: %s\ndigest_status: %s\n",
-                        report->architecture[0] ? report->architecture : "unknown",
-                        state->identity_status,
-                        report->digest_status[0] ? report->digest_status : "unknown");
-    yvex_cli_out_writef(stdout, "sha256: %s\nregistered_sha256: %s\n",
-                        report->sha256[0] ? report->sha256 : "unavailable",
-                        report->registered_sha256[0] ? report->registered_sha256 : "absent");
+    render_object_fields(stdout, state, integrity_audit_identity_fields,
+                         FIELD_COUNT(integrity_audit_identity_fields));
     if (report->expected_sha256[0]) {
         yvex_cli_out_writef(stdout, "expected_sha256: %s\nactual_sha256: %s\n",
                             report->expected_sha256,
                             report->sha256[0] ? report->sha256 : "unavailable");
     }
-    yvex_cli_out_writef(
-        stdout,
-        "metadata_status: %s\nreadiness_status: %s\nsupport_level: %s\nintegrity_status: %s\n",
-        state->metadata_status, state->readiness_status, state->support_level,
-        report->passed ? "pass" : "fail");
-    yvex_cli_out_writef(stdout, "integrity_errors: %u\nintegrity_warnings: %u\n",
-                        report->error_count, report->warning_count);
-    yvex_cli_out_writef(stdout,
-                        "tensor_count: %llu\nknown_tensor_bytes: %llu\ntensor_ranges_checked: "
-                        "%llu\ntensor_ranges_invalid: "
-                        "%llu\ntensor_shapes_checked: %llu\ntensor_shapes_invalid: "
-                        "%llu\ntensor_dtypes_checked: %llu\n"
-                        "tensor_dtypes_invalid: %llu\ntensor_byte_counts_checked: "
-                        "%llu\ntensor_byte_counts_invalid: %llu\n",
-                        report->tensor_count, report->known_tensor_bytes,
-                        report->tensor_ranges_checked, report->tensor_ranges_invalid,
-                        report->tensor_shapes_checked, report->tensor_shapes_invalid,
-                        report->tensor_dtypes_checked, report->tensor_dtypes_invalid,
-                        report->tensor_byte_counts_checked, report->tensor_byte_counts_invalid);
-    yvex_cli_out_writef(
-        stdout, "primary_tensor: %s\nprimary_tensor_role: %s\nprimary_tensor_dtype: %s\n",
-        state->metadata_checked && state->current_metadata.entry.primary_tensor_name
-            ? state->current_metadata.entry.primary_tensor_name
-            : "",
-        state->metadata_checked && state->current_metadata.entry.primary_tensor_role
-            ? state->current_metadata.entry.primary_tensor_role
-            : "",
-        state->metadata_checked && state->current_metadata.entry.primary_tensor_dtype
-            ? state->current_metadata.entry.primary_tensor_dtype
-            : "");
-    yvex_cli_out_writef(
-        stdout, "primary_tensor_rank: %u\nprimary_tensor_dims: %s\nprimary_tensor_bytes: %llu\n",
-        state->metadata_checked ? state->current_metadata.entry.primary_tensor_rank : 0u,
-        state->metadata_checked && state->current_metadata.entry.primary_tensor_dims
-            ? state->current_metadata.entry.primary_tensor_dims
-            : "",
-        state->metadata_checked ? state->current_metadata.entry.primary_tensor_bytes : 0ull);
-    yvex_cli_out_writef(
-        stdout,
-        "selected_embedding_ready: %s\nselected_embedding_hidden_size: "
-        "%llu\nselected_embedding_vocab_size:"
-        " %llu\nselected_embedding_output_count: %llu\nselected_embedding_output_bytes: %llu\n"
-        "selected_embedding_slice_bytes: %llu\n",
-        state->selected_ready ? "true" : "false", state->selected_hidden_size,
-        state->selected_vocab_size, state->selected_output_count, state->selected_output_bytes,
-        state->selected_slice_bytes);
-    yvex_cli_out_writef(
-        stdout,
-        "backend_status: %s\nmaterialization_preflight: %s\nmaterialization_backend: %s\n"
-        "materialization_gate: %s\nallocation_required_bytes: %llu\n",
-        state->backend_status, state->materialization_preflight, state->materialization_backend,
-        state->materialization_gate, report->known_tensor_bytes);
-    yvex_cli_out_writef(stdout,
-                        "graph_fixture_guard: %s\ngraph_partial_guard: %s\ngraph_partial_backend: "
-                        "%s\ngraph_partial_token: "
-                        "%u\ngraph_partial_dispatch_ready: %s\ngraph_partial_reference_ready: %s\n",
-                        state->graph_fixture_guard, state->graph_partial_guard,
-                        state->graph_partial_backend, state->integrity_options.token_id,
-                        state->graph_partial_dispatch_ready, state->graph_partial_reference_ready);
+    render_object_fields(stdout, state, integrity_audit_metadata_fields,
+                         FIELD_COUNT(integrity_audit_metadata_fields));
+    yvex_cli_out_writef(stdout, "integrity_status: %s\n", report->passed ? "pass" : "fail");
+    render_object_fields(stdout, report, integrity_issue_count_fields,
+                         FIELD_COUNT(integrity_issue_count_fields));
+    render_object_fields(stdout, report, integrity_audit_counter_fields,
+                         FIELD_COUNT(integrity_audit_counter_fields));
+    render_object_fields(stdout, state, integrity_audit_primary_fields,
+                         FIELD_COUNT(integrity_audit_primary_fields));
+    render_object_fields(stdout, state, integrity_audit_selection_fields,
+                         FIELD_COUNT(integrity_audit_selection_fields));
+    render_object_fields(stdout, state, integrity_audit_backend_fields,
+                         FIELD_COUNT(integrity_audit_backend_fields));
     if (state->metadata_checked && state->ref.kind == YVEX_MODEL_REF_ALIAS) {
         for (i = 0; i < (int)state->metadata_report.issue_count; ++i) {
             yvex_cli_out_writef(stdout, "metadata_issue_%u_code: %s\n", (unsigned int)i,
@@ -1719,13 +1784,11 @@ static int command_integrity_report(int arg_count, char **args) {
     integrity_cli_state state;
     yvex_error err;
     int rc;
-
     integrity_cli_state_init(&state);
     yvex_error_clear(&err);
     rc = integrity_cli_parse(arg_count, args, &state);
     if (rc != 0)
         return rc;
-
     rc = yvex_model_ref_resolve(&state.ref, state.model_arg, NULL, &err);
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, exit_for_status(rc));
@@ -1763,11 +1826,9 @@ static int command_tensors(int arg_count, char **args) {
     yvex_error err;
     unsigned long long i;
     int rc;
-
     yvex_error_clear(&err);
     memset(&integrity_options, 0, sizeof(integrity_options));
     memset(&integrity_report, 0, sizeof(integrity_report));
-
     if (arg_count != 3 || strcmp(args[2], "--help") == 0 || strcmp(args[2], "-h") == 0) {
         if (arg_count == 3) {
             yvex_tensors_help(stdout);
@@ -1777,7 +1838,6 @@ static int command_tensors(int arg_count, char **args) {
         yvex_cli_out_writef(stderr, "usage: yvex tensors FILE_OR_ALIAS\n");
         return 2;
     }
-
     rc = artifact_view_open(&view, args[2], 1, 0, &err);
     if (rc == YVEX_OK)
         rc = yvex_artifact_integrity_validate(view.artifact, view.gguf, view.tensors,
@@ -1786,7 +1846,6 @@ static int command_tensors(int arg_count, char **args) {
         artifact_view_close(&view);
         return print_yvex_error(&err, exit_for_status(rc));
     }
-
     header = yvex_gguf_header_view(view.gguf);
     yvex_cli_out_writef(stdout, "format: gguf\n");
     yvex_cli_out_writef(stdout, "version: %u\n", header->version);
@@ -1795,12 +1854,10 @@ static int command_tensors(int arg_count, char **args) {
                         yvex_gguf_tensor_data_offset(view.gguf));
     yvex_cli_out_writef(stdout, "alignment: %u\n", yvex_gguf_alignment(view.gguf));
     yvex_cli_out_writef(stdout, "\n");
-
     for (i = 0; i < yvex_tensor_table_count(view.tensors); ++i) {
         const yvex_tensor_info *tensor = yvex_tensor_table_at(view.tensors, i);
         yvex_tensor_range range;
         int range_rc;
-
         memset(&range, 0, sizeof(range));
         range_rc = yvex_tensor_range_validate(view.artifact, view.gguf, tensor, &range, &err);
         yvex_cli_out_writef(stdout, "%llu %s role=%s rank=%u dims=", i, tensor->name,
@@ -1819,7 +1876,6 @@ static int command_tensors(int arg_count, char **args) {
             yvex_error_clear(&err);
         }
     }
-
     artifact_view_close(&view);
     return 0;
 }
@@ -1885,9 +1941,7 @@ int yvex_tensors_command(int arg_count, char **args) {
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
 void yvex_inspect_help(FILE *fp) {
-    yvex_cli_out_writef(fp, "usage: yvex inspect FILE_OR_ALIAS\n\nInspect parses a GGUF descriptor "
-                            "and prints a descriptor-"
-                            "only summary. It does not materialize weights or execute a graph.\n");
+    yvex_cli_out_fputs(inspect_help_text, fp);
 }
 /* Purpose: Render integrity help from typed facts (`yvex_integrity_help`).
  * Inputs: Borrowed typed facts.
@@ -1895,21 +1949,7 @@ void yvex_inspect_help(FILE *fp) {
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
 void yvex_integrity_help(FILE *fp) {
-    yvex_cli_out_writef(
-        fp,
-        "usage: yvex integrity check --model FILE_OR_ALIAS [--expect-sha256 HASH] [--require-token-"
-        "embedding] [--partial-token N]\n");
-    yvex_cli_out_writef(
-        fp,
-        "       yvex integrity report --model FILE_OR_ALIAS [--backend cpu|cuda] [--expect-sha256 "
-        "HASH] [--"
-        "require-token-embedding] [--partial-token N] [--audit | --output normal|table|audit]\n");
-    yvex_cli_out_writef(fp, "\nIntegrity validates local GGUF structure, tensor accounting, digest "
-                            "identity when supplied, "
-                            "metadata drift, and selected embedding readiness. It is not a "
-                            "supply-chain security audit.\n");
-    yvex_cli_out_writef(
-        fp, "Default report output is compact. Use --audit for full diagnostic fields.\n");
+    yvex_cli_out_fputs(integrity_help_text, fp);
 }
 /* Purpose: Render materialize help from typed facts (`yvex_materialize_help`).
  * Inputs: Borrowed typed facts.
@@ -1917,13 +1957,7 @@ void yvex_integrity_help(FILE *fp) {
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
 void yvex_materialize_help(FILE *fp) {
-    yvex_cli_out_writef(
-        fp,
-        "usage: yvex materialize --model FILE_OR_ALIAS --backend cpu|cuda [--require-all] [--allow-"
-        "unsupported-dtype]\n\nMaterialize copies selected GGUF tensor bytes into backend-owned "
-        "storage "
-        "after integrity preflight. It does not execute prefill, decode, sampling, generation, or "
-        "inference.\n");
+    yvex_cli_out_fputs(materialize_help_text, fp);
 }
 /* Purpose: Render materialize gate help from typed facts (`yvex_materialize_gate_help`).
  * Inputs: Borrowed typed facts.
@@ -1931,17 +1965,7 @@ void yvex_materialize_help(FILE *fp) {
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
 void yvex_materialize_gate_help(FILE *fp) {
-    yvex_cli_out_writef(fp, "usage: yvex materialize-gate check --model FILE_OR_ALIAS --label "
-                            "LABEL --family FAMILY --scope "
-                            "selected-tensor --expect-tensor NAME --expect-rank N --expect-dims "
-                            "D1[,D2,D3] --expect-dtype "
-                            "DTYPE --expect-bytes BYTES [--sha256 HASH] [--backend cpu] [--backend "
-                            "cuda] [--require-cpu] [--"
-                            "require-cuda] [--repeat N] [--check-cleanup] [--report-out "
-                            "FILE]\n\nThe materialization gate "
-                            "validates identity, tensor facts, repeated backend materialization, "
-                            "cleanup, and failure classes.\n"
-                            "");
+    yvex_cli_out_fputs(materialize_gate_help_text, fp);
 }
 /* Purpose: Render metadata help from typed facts (`yvex_metadata_help`).
  * Inputs: Borrowed typed facts.
@@ -1949,9 +1973,7 @@ void yvex_materialize_gate_help(FILE *fp) {
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
 void yvex_metadata_help(FILE *fp) {
-    yvex_cli_out_writef(fp, "usage: yvex metadata FILE_OR_ALIAS\n\nMetadata prints parsed GGUF "
-                            "metadata key/value summaries. "
-                            "Arrays are summarized.\n");
+    yvex_cli_out_fputs(metadata_help_text, fp);
 }
 /* Purpose: Render model gate help from typed facts (`yvex_model_gate_help`).
  * Inputs: Borrowed typed facts.
@@ -1959,16 +1981,7 @@ void yvex_metadata_help(FILE *fp) {
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
 void yvex_model_gate_help(FILE *fp) {
-    yvex_cli_out_writef(
-        fp,
-        "usage: yvex model-gate check --model FILE_OR_ALIAS --label LABEL --family FAMILY "
-        "--expect-tensor "
-        "NAME --expect-rank N --expect-dims D1[,D2,D3] --expect-dtype DTYPE --expect-bytes BYTES "
-        "[--sha256 "
-        "HASH] [--backend cpu] [--backend cuda] [--require-cpu] [--require-cuda] [--report-out "
-        "FILE]\n\n"
-        "Model gate checks selected tensor identity, expected tensor specs, and requested CPU/CUDA "
-        "materialization without claiming full-model support.\n");
+    yvex_cli_out_fputs(model_gate_help_text, fp);
 }
 /* Purpose: Render tensors help from typed facts (`yvex_tensors_help`).
  * Inputs: Borrowed typed facts.
@@ -1976,7 +1989,5 @@ void yvex_model_gate_help(FILE *fp) {
  * Failure: Typed refusal; outputs remain defined.
  * Boundary: No capability policy. */
 void yvex_tensors_help(FILE *fp) {
-    yvex_cli_out_writef(fp, "usage: yvex tensors FILE_OR_ALIAS\n\nTensors prints YVEX tensor table "
-                            "rows with role, dtype, "
-                            "known storage bytes, and checked offsets.\n");
+    yvex_cli_out_fputs(tensors_help_text, fp);
 }

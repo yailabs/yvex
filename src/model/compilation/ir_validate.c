@@ -1246,18 +1246,18 @@ int yvex_transform_ir_validate_and_seal(
 
     ir->summary.schema_version = builder->header.schema_version;
     ir->summary.state = YVEX_TRANSFORM_IR_STATE_SEALED;
-    (void)snprintf(ir->summary.logical_model_identity,
-                   sizeof(ir->summary.logical_model_identity), "%s",
-                   builder->logical_model_identity);
+    yvex_core_text_copy(ir->summary.logical_model_identity,
+                        sizeof(ir->summary.logical_model_identity),
+                        builder->logical_model_identity);
     ir->summary.source_snapshot_identity =
         builder->header.source_snapshot_identity;
     ir->summary.coverage_identity = builder->header.coverage_identity;
-    (void)snprintf(ir->summary.required_payload_identity,
-                   sizeof(ir->summary.required_payload_identity), "%s",
-                   builder->required_payload_identity);
-    (void)snprintf(ir->summary.payload_trust_class,
-                   sizeof(ir->summary.payload_trust_class), "%s",
-                   builder->payload_trust_class);
+    yvex_core_text_copy(ir->summary.required_payload_identity,
+                        sizeof(ir->summary.required_payload_identity),
+                        builder->required_payload_identity);
+    yvex_core_text_copy(ir->summary.payload_trust_class,
+                        sizeof(ir->summary.payload_trust_class),
+                        builder->payload_trust_class);
     ir->summary.index_capacity = ir->source_index_capacity +
                                  ir->terminal_index_capacity;
     ir->summary.validation_steps = builder->value_count + builder->node_count +

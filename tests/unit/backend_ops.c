@@ -25,9 +25,12 @@
  *   - exits 0 on success
  *   - prints concise failure to stderr
  */
+#include <limits.h>
 #include <string.h>
 
 #include <yvex/api.h>
+#include <yvex/internal/backend.h>
+#include <yvex/internal/graph_state.h>
 
 #include "tests/test.h"
 
@@ -852,6 +855,115 @@ static int test_mlp_success_and_failures(void)
     return 0;
 }
 
+/* Purpose: create one sealed backend-neutral recipe with alignment and token scaling. */
+static int attention_workspace_recipe_make(yvex_attention_workspace_recipe *recipe,
+                                           unsigned long long token_capacity,
+                                           yvex_attention_evidence_level evidence_level,
+                                           yvex_error *err)
+{
+    yvex_attention_workspace_component *first, *second, *rolling, *evidence;
+
+    memset(recipe, 0, sizeof(*recipe));
+    recipe->schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1;
+    recipe->layer_index = 7ull;
+    recipe->token_capacity = token_capacity;
+    recipe->mode = YVEX_ATTENTION_EXECUTION_FULL;
+    recipe->scope = YVEX_ATTENTION_OPERATION_ENVELOPE;
+    recipe->evidence_level = evidence_level;
+    recipe->component_count =
+        evidence_level == YVEX_ATTENTION_EVIDENCE_FULL ? 4u : 3u;
+    memset(recipe->state_recipe_identity, 'a', YVEX_SHA256_HEX_BYTES - 1u);
+    recipe->state_recipe_identity[YVEX_SHA256_HEX_BYTES - 1u] = '\0';
+    first = &recipe->components[0];
+    *first = (yvex_attention_workspace_component){
+        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1,
+        .ordinal = 0u, .kind = YVEX_ATTENTION_WORKSPACE_STATUS,
+        .lifetime = YVEX_ATTENTION_WORKSPACE_EXECUTION,
+        .element_count = 3ull, .element_width = 4ull, .alignment = 8ull};
+    second = &recipe->components[1];
+    *second = (yvex_attention_workspace_component){
+        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1,
+        .ordinal = 1u, .kind = YVEX_ATTENTION_WORKSPACE_QUERY,
+        .lifetime = YVEX_ATTENTION_WORKSPACE_EXECUTION,
+        .element_count = 5ull, .element_width = 8ull, .alignment = 16ull,
+        .scales_with_tokens = 1};
+    rolling = &recipe->components[2];
+    *rolling = (yvex_attention_workspace_component){
+        .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1,
+        .ordinal = 2u, .kind = YVEX_ATTENTION_WORKSPACE_MAIN_ROLLING_VALUES,
+        .lifetime = YVEX_ATTENTION_WORKSPACE_GRAPH_STABLE,
+        .element_count = 2ull, .element_width = 4ull, .alignment = 8ull};
+    if (evidence_level == YVEX_ATTENTION_EVIDENCE_FULL) {
+        evidence = &recipe->components[3];
+        *evidence = (yvex_attention_workspace_component){
+            .schema_version = YVEX_ATTENTION_WORKSPACE_RECIPE_SCHEMA_V1,
+            .ordinal = 3u, .kind = YVEX_ATTENTION_WORKSPACE_CORE_INPUT_EVIDENCE,
+            .lifetime = YVEX_ATTENTION_WORKSPACE_EXECUTION,
+            .element_count = 7ull, .element_width = sizeof(float),
+            .alignment = 16ull, .scales_with_tokens = 1};
+    }
+    return yvex_attention_workspace_recipe_seal(recipe, err);
+}
+
+/* Purpose: prove recipe lowering is exact, deterministic, identity-bound, and checked. */
+static int test_attention_workspace_recipe_lowering(void)
+{
+    yvex_attention_workspace_recipe recipe, full_recipe;
+    char baseline[YVEX_ATTENTION_IDENTITY_CAP];
+    unsigned long long first = 0ull, second = 0ull;
+    yvex_error err;
+
+    YVEX_TEST_ASSERT(
+        attention_workspace_recipe_make(&recipe, 4ull, YVEX_ATTENTION_EVIDENCE_NONE,
+                                        &err) == YVEX_OK,
+                     "attention workspace fixture seals");
+    (void)snprintf(baseline, sizeof(baseline), "%s", recipe.identity);
+    YVEX_TEST_ASSERT(
+        yvex_backend_attention_workspace_required_from_recipe(&recipe, &first, &err) == YVEX_OK &&
+            first == 216ull,
+        "backend lowers token-scaled execution and captured rolling extents exactly");
+    YVEX_TEST_ASSERT(
+        attention_workspace_recipe_make(&full_recipe, 4ull,
+                                        YVEX_ATTENTION_EVIDENCE_FULL, &err) == YVEX_OK &&
+            strcmp(baseline, full_recipe.identity) != 0 &&
+            yvex_backend_attention_workspace_required_from_recipe(
+                &full_recipe, &second, &err) == YVEX_OK &&
+            second == 336ull && second > first,
+        "full evidence changes identity and reserves its exact additional staging");
+    second = 0ull;
+    YVEX_TEST_ASSERT(
+        yvex_backend_attention_workspace_required_from_recipe(&recipe, &second, &err) == YVEX_OK &&
+            second == first,
+        "workspace recipe lowering is deterministic");
+    recipe.token_capacity = 5ull;
+    second = 99ull;
+    YVEX_TEST_ASSERT(
+        yvex_backend_attention_workspace_required_from_recipe(&recipe, &second, &err) ==
+            YVEX_ERR_STATE && second == 0ull,
+        "backend rejects a stale mutated recipe identity");
+    YVEX_TEST_ASSERT(
+        yvex_backend_attention_workspace_required_from_recipe(NULL, &second, &err) ==
+            YVEX_ERR_INVALID_ARG && second == 0ull,
+        "backend rejects a missing workspace recipe");
+    YVEX_TEST_ASSERT(
+        yvex_backend_attention_workspace_required_from_recipe(&recipe, NULL, &err) ==
+            YVEX_ERR_INVALID_ARG,
+        "backend rejects a missing workspace result");
+    YVEX_TEST_ASSERT(
+        attention_workspace_recipe_make(&recipe, 2ull, YVEX_ATTENTION_EVIDENCE_NONE,
+                                        &err) == YVEX_OK,
+                     "overflow workspace fixture seals before lowering");
+    recipe.components[1].element_count = ULLONG_MAX;
+    recipe.identity[0] = '\0';
+    YVEX_TEST_ASSERT(yvex_attention_workspace_recipe_seal(&recipe, &err) == YVEX_OK,
+                     "overflow workspace fixture reseals deterministically");
+    YVEX_TEST_ASSERT(
+        yvex_backend_attention_workspace_required_from_recipe(&recipe, &second, &err) ==
+            YVEX_ERR_BOUNDS && second == 0ull,
+        "backend refuses workspace arithmetic overflow without publication");
+    return 0;
+}
+
 int yvex_test_backend_ops(void)
 {
     if (test_capabilities() != 0) return 1;
@@ -864,5 +976,6 @@ int yvex_test_backend_ops(void)
     if (test_matmul_success_and_failures() != 0) return 1;
     if (test_mlp_success_and_failures() != 0) return 1;
     if (test_embed_failures() != 0) return 1;
+    if (test_attention_workspace_recipe_lowering() != 0) return 1;
     return 0;
 }

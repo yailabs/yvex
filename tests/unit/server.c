@@ -3,8 +3,8 @@
  *
  *
  * Purpose:
- *   Proves the server shell server shell creates summaries and routes health, metrics,
- *   model catalog, and unsupported generation endpoints without execution.
+ *   Proves the server shell creates unloaded summaries, rejects the retired
+ *   diagnostic engine path, and routes non-execution endpoints.
  */
 #include <string.h>
 
@@ -34,13 +34,10 @@ static int test_server_summary(void)
     options.model_path = "tests/fixtures/gguf/valid-tokenizer-simple.gguf";
     options.backend_name = "cpu";
     options.load_engine = 1;
+    server = NULL;
     rc = yvex_server_create(&server, &options, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "server create with model");
-    rc = yvex_server_get_summary(server, &summary, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "model summary");
-    YVEX_TEST_ASSERT_STREQ(summary.engine_status, "partial", "engine partial");
-    YVEX_TEST_ASSERT_STREQ(summary.backend_status, "ready", "backend ready");
-    yvex_server_close(server);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED, "server rejects retired engine loading");
+    YVEX_TEST_ASSERT(server == NULL, "failed server create publishes no handle");
     return 0;
 }
 
@@ -56,9 +53,9 @@ static int test_routes(void)
     memset(&options, 0, sizeof(options));
     options.host = "127.0.0.1";
     options.port = 18081;
-    options.model_path = "tests/fixtures/gguf/valid-tokenizer-simple.gguf";
-    options.backend_name = "cpu";
-    options.load_engine = 1;
+    options.model_path = NULL;
+    options.backend_name = NULL;
+    options.load_engine = 0;
     rc = yvex_server_create(&server, &options, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "server create for routes");
 
@@ -78,7 +75,10 @@ static int test_routes(void)
     rc = yvex_server_route(server, &request, &response, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "models route");
     YVEX_TEST_ASSERT(strstr(response.body, "\"schema\": \"yvex.models.v1\"") != NULL, "models schema");
-    YVEX_TEST_ASSERT(strstr(response.body, "\"inference\": \"not_implemented\"") != NULL, "inference not implemented");
+    YVEX_TEST_ASSERT(strstr(response.body, "\"generation_available\": false") != NULL,
+                     "generation remains unavailable");
+    YVEX_TEST_ASSERT(strstr(response.body, "\"data\": []") != NULL,
+                     "retired diagnostic engine publishes no model");
 
     strcpy(request.method, "POST");
     strcpy(request.path, "/v1/completions");

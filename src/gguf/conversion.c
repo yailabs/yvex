@@ -56,15 +56,8 @@ typedef struct {
     unsigned int target_scalar_bytes;
 } yvex_conversion_tensor_plan;
 
-static const char *const conversion_status_names[] = {
-    "conversion-unknown", "conversion-planned", "conversion-emitted", "conversion-partial",
-    "conversion-failed",
-};
 static const char *const tensor_status_names[] = {
     "unknown", "ready", "emitted", "skipped", "unsupported_qtype", "unmapped", "failed",
-};
-static const char *const transform_names[] = {
-    "none", "transpose", "dtype_cast", "quantize", "unsupported",
 };
 static const char *const mapping_status_names[] = {
     "unknown", "mapped", "unmapped", "ambiguous", "shape_mismatch", "unsupported_arch",
@@ -96,18 +89,6 @@ static int conversion_report_plan_json(FILE *fp, const yvex_conversion_options *
                                        const yvex_conversion_tensor_plan *plans,
                                        unsigned long long plan_count, yvex_error *err);
 
-/* Purpose: render one stable selected-conversion lifecycle name.
- * Inputs: conversion status.
- * Effects: returns immutable static text.
- * Failure: unknown values return the unknown label.
- * Boundary: diagnostics only. */
-const char *yvex_conversion_status_name(yvex_conversion_status status) {
-    return status >= YVEX_CONVERSION_STATUS_UNKNOWN &&
-                   (size_t)status < sizeof(conversion_status_names) / sizeof(conversion_status_names[0])
-               ? conversion_status_names[status]
-               : conversion_status_names[YVEX_CONVERSION_STATUS_UNKNOWN];
-}
-
 /* Purpose: render one stable per-tensor conversion result name.
  * Inputs: tensor status.
  * Effects: returns immutable static text.
@@ -118,18 +99,6 @@ const char *yvex_convert_tensor_status_name(yvex_convert_tensor_status status) {
                    (size_t)status < sizeof(tensor_status_names) / sizeof(tensor_status_names[0])
                ? tensor_status_names[status]
                : tensor_status_names[YVEX_CONVERT_TENSOR_STATUS_UNKNOWN];
-}
-
-/* Purpose: render one stable legacy transform-kind name.
- * Inputs: transform enum.
- * Effects: returns immutable static text.
- * Failure: unknown values return a non-authoritative label.
- * Boundary: diagnostics only. */
-const char *yvex_convert_transform_kind_name(yvex_convert_transform_kind transform) {
-    return transform >= YVEX_CONVERT_TRANSFORM_NONE &&
-                   (size_t)transform < sizeof(transform_names) / sizeof(transform_names[0])
-               ? transform_names[transform]
-               : "unknown";
 }
 
 /* Purpose: choose the bounded legacy proof qtype for one admitted tensor role. */
@@ -307,15 +276,6 @@ int yvex_conversion_emit_gguf(const yvex_conversion_options *options,
     summary_out->status = YVEX_CONVERSION_STATUS_EMITTED;
     summary_out->emitted_tensor_count = 1;
     return YVEX_OK;
-}
-
-/* Purpose: decode one little-endian 16-bit scalar from admitted payload bytes.
- * Inputs: at least two readable bytes.
- * Effects: returns the decoded integer without mutation.
- * Failure: caller owns buffer admission; this helper has no status result.
- * Boundary: historical proof scalar decoding only. */
-static unsigned int read_u16le(const unsigned char *p) {
-    return ((unsigned int)p[0]) | ((unsigned int)p[1] << 8);
 }
 
 /* Purpose: preserve the historical proof-path F32-to-F16 projection. Inputs: one scalar.
@@ -519,9 +479,9 @@ static int conversion_convert_payload(const unsigned char *src, unsigned long lo
         if (src_dtype == YVEX_NATIVE_DTYPE_F32) {
             memcpy(&f, src + i * 4ull, sizeof(f));
         } else if (src_dtype == YVEX_NATIVE_DTYPE_F16) {
-            f = f16_bits_to_float(read_u16le(src + i * 2ull));
+            f = f16_bits_to_float(gguf_u16le_load(src + i * 2ull));
         } else {
-            f = bf16_bits_to_float(read_u16le(src + i * 2ull));
+            f = bf16_bits_to_float(gguf_u16le_load(src + i * 2ull));
         }
         if (strcmp(plan->target_qtype, "F32") == 0) {
             write_f32le(dst + i * 4ull, f);
@@ -1147,7 +1107,6 @@ int yvex_weight_mapping_table_build(yvex_weight_mapping_table **out,
     memset(&native_options, 0, sizeof(native_options));
     native_options.source_dir = options->native_source_dir;
     native_options.recursive = 1;
-    native_options.include_metadata = 0;
     rc = yvex_native_weight_table_open(&table->native, &native_options, err);
     if (rc == YVEX_OK && (options->compare_template || options->template_path)) {
         rc = wm_open_template(table, options->template_path, err);
@@ -1295,12 +1254,15 @@ static int text_ends_with(const char *text, const char *suffix) {
     return suffix_len <= text_len && strcmp(text + text_len - suffix_len, suffix) == 0;
 }
 
-/* Purpose: parse a model-prefixed DeepSeek layer name with an exact suffix. */
-static int ds_layer_suffix(const char *native_name, const char *suffix, unsigned int *layer_out) {
+/* Purpose: parse one admitted DeepSeek layer pattern with an exact suffix. */
+static int ds_layer_suffix(const char *native_name, int plain,
+                           const char *suffix, unsigned int *layer_out) {
     unsigned int layer;
-    int consumed;
+    int consumed, matched;
 
-    if (sscanf(native_name, "model.layers.%u.%n", &layer, &consumed) != 1) {
+    matched = plain ? sscanf(native_name, "layers.%u.%n", &layer, &consumed)
+                    : sscanf(native_name, "model.layers.%u.%n", &layer, &consumed);
+    if (matched != 1) {
         return 0;
     }
     if (strcmp(native_name + consumed, suffix) != 0) {
@@ -1310,48 +1272,24 @@ static int ds_layer_suffix(const char *native_name, const char *suffix, unsigned
     return 1;
 }
 
-/* Purpose: parse a compact DeepSeek layer name with an exact suffix. */
-static int ds_plain_layer_suffix(const char *native_name, const char *suffix,
-                                 unsigned int *layer_out) {
-    unsigned int layer;
-    int consumed;
-
-    if (sscanf(native_name, "layers.%u.%n", &layer, &consumed) != 1) {
-        return 0;
-    }
-    if (strcmp(native_name + consumed, suffix) != 0) {
-        return 0;
-    }
-    *layer_out = layer;
-    return 1;
-}
-
-/* Purpose: parse model-prefixed DeepSeek layer/expert indices with an exact suffix. */
-static int ds_expert_suffix(const char *native_name, const char *suffix, unsigned int *layer_out,
+/* Purpose: parse one admitted DeepSeek layer/expert pattern with an exact suffix.
+ * Inputs: immutable tensor name, format selector, suffix, and index outputs.
+ * Effects: writes layer and expert only after the complete pattern matches.
+ * Failure: malformed or mismatched names return false without publishing indices.
+ * Boundary: parsing compatibility names does not infer tensor roles or qtypes. */
+static int ds_expert_suffix(const char *native_name, int plain,
+                            const char *suffix, unsigned int *layer_out,
                             unsigned int *expert_out) {
     unsigned int layer;
     unsigned int expert;
-    int consumed;
+    int consumed, matched;
 
-    if (sscanf(native_name, "model.layers.%u.mlp.experts.%u.%n", &layer, &expert, &consumed) != 2) {
-        return 0;
-    }
-    if (strcmp(native_name + consumed, suffix) != 0) {
-        return 0;
-    }
-    *layer_out = layer;
-    *expert_out = expert;
-    return 1;
-}
-
-/* Purpose: parse compact DeepSeek layer/expert indices with an exact suffix. */
-static int ds_plain_expert_suffix(const char *native_name, const char *suffix,
-                                  unsigned int *layer_out, unsigned int *expert_out) {
-    unsigned int layer;
-    unsigned int expert;
-    int consumed;
-
-    if (sscanf(native_name, "layers.%u.ffn.experts.%u.%n", &layer, &expert, &consumed) != 2) {
+    matched = plain
+                  ? sscanf(native_name, "layers.%u.ffn.experts.%u.%n",
+                           &layer, &expert, &consumed)
+                  : sscanf(native_name, "model.layers.%u.mlp.experts.%u.%n",
+                           &layer, &expert, &consumed);
+    if (matched != 2) {
         return 0;
     }
     if (strcmp(native_name + consumed, suffix) != 0) {
@@ -1525,18 +1463,19 @@ int yvex_gguf_map_deepseek_name(const char *native_name, char *target, size_t ta
             return ds_set(target, target_cap, role, issue, ds_native_exact[i].role,
                           ds_native_exact[i].target);
     for (i = 0; i < sizeof(ds_layer_rules) / sizeof(ds_layer_rules[0]); ++i)
-        if (ds_layer_suffix(native_name, ds_layer_rules[i].source_suffix, &layer))
+        if (ds_layer_suffix(native_name, 0, ds_layer_rules[i].source_suffix, &layer))
             return ds_set_layer(target, target_cap, role, issue, layer, &ds_layer_rules[i]);
     for (i = 0; i < sizeof(ds_plain_layer_rules) / sizeof(ds_plain_layer_rules[0]); ++i)
-        if (ds_plain_layer_suffix(native_name, ds_plain_layer_rules[i].source_suffix, &layer))
+        if (ds_layer_suffix(native_name, 1, ds_plain_layer_rules[i].source_suffix, &layer))
             return ds_set_layer(target, target_cap, role, issue, layer, &ds_plain_layer_rules[i]);
     for (i = 0; i < sizeof(ds_expert_rules) / sizeof(ds_expert_rules[0]); ++i)
-        if (ds_expert_suffix(native_name, ds_expert_rules[i].source_suffix, &layer, &expert))
+        if (ds_expert_suffix(native_name, 0, ds_expert_rules[i].source_suffix,
+                             &layer, &expert))
             return ds_set_expert(target, target_cap, role, issue, layer, expert,
                                  &ds_expert_rules[i]);
     for (i = 0; i < sizeof(ds_plain_expert_rules) / sizeof(ds_plain_expert_rules[0]); ++i)
-        if (ds_plain_expert_suffix(native_name, ds_plain_expert_rules[i].source_suffix, &layer,
-                                   &expert))
+        if (ds_expert_suffix(native_name, 1, ds_plain_expert_rules[i].source_suffix,
+                             &layer, &expert))
             return ds_set_expert(target, target_cap, role, issue, layer, expert,
                                  &ds_plain_expert_rules[i]);
 

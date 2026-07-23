@@ -159,23 +159,6 @@ static int quant_key_equal(const yvex_transform_logical_key *left,
            left->group_index == right->group_index;
 }
 
-/* Purpose: derive a power-of-two open-addressing capacity at bounded load.
- * Inputs: required terminal count.
- * Effects: none.
- * Failure: returns zero when doubling would overflow.
- * Boundary: capacity affects lookup storage, never plan identity. */
-static unsigned long long quant_index_capacity(unsigned long long count) {
-    unsigned long long capacity = 1u;
-    if (count > ULLONG_MAX / 2u)
-        return 0u;
-    while (capacity < count * 2u) {
-        if (capacity > ULLONG_MAX / 2u)
-            return 0u;
-        capacity *= 2u;
-    }
-    return capacity;
-}
-
 /* Purpose: add one ownership size without diagnostic arithmetic wrap.
  * Inputs: size operands and caller-owned result.
  * Effects: writes the sum or a saturated failure sentinel.
@@ -800,22 +783,23 @@ static int quant_build_allocate(quant_build_context *context,
     context->plan->summary.source_value_count = context->ir_summary->source_value_count;
     context->plan->summary.source_snapshot_identity = context->ir_summary->source_snapshot_identity;
     context->plan->summary.mapping_identity = context->mapping_identity;
-    (void)snprintf(context->plan->summary.profile_name, sizeof(context->plan->summary.profile_name),
-                   "%s", context->profile_name);
-    (void)snprintf(context->plan->summary.transform_identity,
-                   sizeof(context->plan->summary.transform_identity), "%s",
-                   context->ir_summary->transform_identity);
-    (void)snprintf(context->plan->summary.required_payload_identity,
-                   sizeof(context->plan->summary.required_payload_identity), "%s",
-                   context->ir_summary->required_payload_identity);
-    (void)snprintf(context->plan->summary.backend_compute_contract,
-                   sizeof(context->plan->summary.backend_compute_contract), "%s",
-                   "cpu-cuda-encoded-row-dot-v1");
-    (void)snprintf(context->plan->summary.calibration_identity,
-                   sizeof(context->plan->summary.calibration_identity), "%s",
-                   "no-calibration-required");
-    context->plan->summary.index_capacity = quant_index_capacity(count);
-    if (!context->plan->summary.index_capacity ||
+    yvex_core_text_copy(context->plan->summary.profile_name,
+                        sizeof(context->plan->summary.profile_name),
+                        context->profile_name);
+    yvex_core_text_copy(context->plan->summary.transform_identity,
+                        sizeof(context->plan->summary.transform_identity),
+                        context->ir_summary->transform_identity);
+    yvex_core_text_copy(context->plan->summary.required_payload_identity,
+                        sizeof(context->plan->summary.required_payload_identity),
+                        context->ir_summary->required_payload_identity);
+    yvex_core_text_copy(context->plan->summary.backend_compute_contract,
+                        sizeof(context->plan->summary.backend_compute_contract),
+                        "cpu-cuda-encoded-row-dot-v1");
+    yvex_core_text_copy(context->plan->summary.calibration_identity,
+                        sizeof(context->plan->summary.calibration_identity),
+                        "no-calibration-required");
+    if (!yvex_core_power_of_two_capacity(count, 1ull, 1ull, 2ull,
+                                         &context->plan->summary.index_capacity) ||
         count > SIZE_MAX / sizeof(*context->plan->decisions) ||
         context->plan->summary.index_capacity > SIZE_MAX / sizeof(*context->plan->index))
         return quant_plan_fail(
@@ -1093,6 +1077,8 @@ int yvex_quant_plan_build_explicit(yvex_quant_plan **out, const yvex_transform_i
     context.plan->summary.state = YVEX_QUANT_PLAN_SEALED;
     context.plan->summary.complete = 1;
     *out = context.plan;
+    yvex_core_execution_observation_record(
+        YVEX_CORE_OBSERVE_QUANT_PLAN, 1ull);
     if (failure)
         memset(failure, 0, sizeof(*failure));
     yvex_error_clear(err);
@@ -1260,6 +1246,8 @@ int yvex_quant_plan_build_deepseek_profile(yvex_quant_plan **out, const yvex_tra
         return rc;
     }
     *out = context.plan;
+    yvex_core_execution_observation_record(
+        YVEX_CORE_OBSERVE_QUANT_PLAN, 1ull);
     if (failure)
         memset(failure, 0, sizeof(*failure));
     yvex_error_clear(err);

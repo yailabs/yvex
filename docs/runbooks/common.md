@@ -1,6 +1,6 @@
 # Common Operator Runbook
 
-Date: 2026-07-10
+Date: 2026-07-22
 Status: repository validation and hygiene
 
 ## Purpose
@@ -11,7 +11,8 @@ command atlases, and future command syntax.
 
 Validation proves only the behavior exercised by each test. It does not make
 the DeepSeek target, a complete model artifact, CUDA generation, evaluation,
-benchmark, or release supported.
+full-model benchmark, or release supported. Bounded attention benchmarks do
+not satisfy those higher gates.
 
 ## Fast Build Check
 
@@ -104,8 +105,8 @@ Stop after:
   CUDA build, unit, smoke, refusal, and reference checks pass.
 
 Boundary:
-  bounded CUDA evidence only. CUDA capability remains below the fail-closed
-  runtime boundary.
+  generated-bundle CUDA validation, including the admitted attention runtime;
+  it does not establish persistent KV, transformer, or generation support.
 
 ```sh
 make check-cuda
@@ -164,8 +165,9 @@ git diff -- docs MODEL_ARTIFACTS.md AGENTS.md
 
 ## Operator-Local Cleanup
 
-Never add source weights, emitted artifacts, registries, logs, pid files,
-reports, caches, partial downloads, or generated backend outputs to git.
+Never add source weights, emitted artifacts, runtime bindings, registries,
+benchmark baselines, JSON/CSV reports, SVG charts, logs, pid files, caches,
+partial downloads, or generated backend outputs to git.
 
 Before committing:
 

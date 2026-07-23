@@ -11,6 +11,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <yvex/internal/source.h>
 
 /* Purpose: Parse source output mode parse into typed CLI state (`source_output_mode_parse`).
  * Inputs: Borrowed typed facts.
@@ -38,30 +39,6 @@ static int source_output_mode_parse(const char *value,
     if (strcmp(value, "json") == 0) {
         *mode = YVEX_SOURCE_RENDER_JSON;
         return 1;
-    }
-    return 0;
-}
-
-/* Purpose: Compute source path basename for its CLI invariant (`source_path_basename`). */
-static const char *source_path_basename(const char *path)
-{
-    const char *slash;
-
-    if (!path || !path[0]) return NULL;
-    slash = strrchr(path, '/');
-    return slash && slash[1] ? slash + 1 : path;
-}
-
-/* Purpose: Compute source target matches family name for its CLI invariant (`source_target_matches_family_name`). */
-static int source_target_matches_family_name(const char *family,
-                                             const char *target)
-{
-    if (!family || !target) return 0;
-    if (strcmp(family, "qwen") == 0) {
-        return strncmp(target, "qwen", 4) == 0;
-    }
-    if (strcmp(family, "gemma") == 0) {
-        return strncmp(target, "gemma", 5) == 0;
     }
     return 0;
 }
@@ -227,9 +204,9 @@ void yvex_source_report_request_from_parsed(yvex_source_report_request *request,
     request->tensor_limit = args->tensor_limit;
     request->profile = yvex_source_report_find_profile(args->family);
     if (!request->target && request->source) {
-        base = source_path_basename(request->source);
+        base = yvex_source_path_basename(request->source);
         if (base && request->profile &&
-            source_target_matches_family_name(request->profile->family_key, base)) {
+            yvex_source_target_matches_family_name(request->profile->family_key, base)) {
             snprintf(request->resolved_target, sizeof(request->resolved_target), "%s", base);
             request->target = request->resolved_target;
         }

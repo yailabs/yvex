@@ -263,7 +263,10 @@ static int artifact_hash_path(const char *path, unsigned int error_kind,
  * Boundary: snapshot validation remains the enclosing operation's responsibility. */
 static int artifact_hash_range(const yvex_artifact *artifact, unsigned long long start,
                                unsigned long long byte_count, unsigned char *buffer,
-                               size_t buffer_bytes, artifact_hash *hash, yvex_error *err)
+                               size_t buffer_bytes, artifact_hash *hash,
+                               int (*progress)(void *, unsigned long long,
+                                               unsigned long long),
+                               void *progress_context, yvex_error *err)
 {
     unsigned long long delivered = 0u;
 
@@ -281,6 +284,12 @@ static int artifact_hash_range(const yvex_artifact *artifact, unsigned long long
         if (!artifact_hash_update(hash, buffer, take))
             return YVEX_ERR_BOUNDS;
         delivered += (unsigned long long)take;
+        if (progress && !progress(progress_context, delivered, byte_count)) {
+            yvex_error_set(err, YVEX_ERR_CANCELLED,
+                           "yvex_artifact_identity_read_open",
+                           "artifact identity read was cancelled");
+            return YVEX_ERR_CANCELLED;
+        }
     }
     return YVEX_OK;
 }
@@ -470,7 +479,22 @@ int yvex_artifact_identity_read(const char *path,
  * Boundary: physical identity does not prove semantic completeness or support. */
 int yvex_artifact_identity_read_open(const yvex_artifact *artifact,
                                      yvex_artifact_file_identity *out,
-                                     yvex_error *err) {
+                                     yvex_error *err)
+{
+    return yvex_artifact_identity_read_open_progress(artifact, out, NULL, NULL, err);
+}
+
+/* Purpose: hash one stable opened artifact while reporting exact byte progress.
+ * Inputs: immutable artifact, output, optional callback/context, and error state.
+ * Effects: performs bounded reads and invokes the callback after each completed chunk.
+ * Failure: callback cancellation or physical drift publishes no partial identity.
+ * Boundary: progress observes physical hashing only and cannot alter artifact trust. */
+int yvex_artifact_identity_read_open_progress(
+    const yvex_artifact *artifact, yvex_artifact_file_identity *out,
+    int (*progress)(void *context, unsigned long long completed,
+                    unsigned long long total),
+    void *progress_context, yvex_error *err)
+{
     artifact_hash_provider provider;
     artifact_hash hash;
     unsigned char digest[32];
@@ -500,7 +524,8 @@ int yvex_artifact_identity_read_open(const yvex_artifact *artifact,
     size = yvex_artifact_size(artifact);
     artifact_hash_provider_open(&provider);
     artifact_hash_init(&hash, &provider);
-    rc = artifact_hash_range(artifact, 0u, size, buf, sizeof(buf), &hash, err);
+    rc = artifact_hash_range(artifact, 0u, size, buf, sizeof(buf), &hash,
+                             progress, progress_context, err);
     if (rc != YVEX_OK) {
         if (!yvex_error_is_set(err))
             yvex_error_set(err, rc, "yvex_artifact_identity_read_open",
@@ -518,6 +543,9 @@ int yvex_artifact_identity_read_open(const yvex_artifact *artifact,
         rc = YVEX_ERR_BOUNDS;
         goto failure;
     }
+    rc = yvex_artifact_cache_release(artifact, 0ull, size, err);
+    if (rc != YVEX_OK)
+        goto failure;
     artifact_hash_provider_close(&provider);
     yvex_sha256_hex(digest, out->sha256);
     out->file_size = size;
@@ -598,7 +626,7 @@ int yvex_artifact_payload_identity_compute(const yvex_artifact *artifact, const 
         }
         artifact_hash_init(&terminal, &provider);
         rc = artifact_hash_range(artifact, tensor->absolute_offset, tensor->storage_bytes, buffer,
-                                 buffer_bytes, &terminal, err);
+                                 buffer_bytes, &terminal, NULL, NULL, err);
         if (rc != YVEX_OK)
             goto done;
         if (ULLONG_MAX - next.payload_bytes_read < tensor->storage_bytes ||

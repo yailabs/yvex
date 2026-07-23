@@ -14,6 +14,7 @@
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
 #include <yvex/internal/core.h>
+#include <yvex/internal/gguf.h>
 #include <yvex/internal/io.h>
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/model.h>
@@ -107,70 +108,10 @@ static yvex_dtype qtype_to_dtype(yvex_quant_qtype qtype);
 static int qtype_storage_supported(yvex_quant_qtype qtype);
 static int qtype_compute_supported(yvex_quant_qtype qtype);
 
-typedef struct {
-    yvex_json cursor;
-    const char *path;
-    const char *context;
-    yvex_error *err;
-} policy_json;
-
-/* Purpose: advance the policy-document cursor past insignificant JSON whitespace. */
-static void policy_json_space(policy_json *json) {
-    yvex_json_space(&json->cursor);
-}
-
-/* Purpose: report one policy-document JSON refusal without publishing policy state. */
-static int policy_json_fail(policy_json *json, const char *message) {
-    yvex_error_setf(json->err, YVEX_ERR_FORMAT, json->context, "%s in %s", message, json->path);
-    return YVEX_ERR_FORMAT;
-}
-
-/* Purpose: consume one required structural byte from the policy document. */
-static int policy_json_expect(policy_json *json, char expected) {
-    yvex_json_space(&json->cursor);
-    if (json->cursor.cursor >= json->cursor.end || *json->cursor.cursor != expected) {
-        return policy_json_fail(json, "unexpected JSON token");
-    }
-    json->cursor.cursor++;
-    return YVEX_OK;
-}
-
-/* Purpose: allocate one bounded policy string from the shared JSON cursor. */
-static char *policy_json_string(policy_json *json) {
-    char *value = yvex_json_string_dup(&json->cursor, 16u * 1024u * 1024u);
-
-    if (!value) {
-        policy_json_fail(json, "expected bounded JSON string");
-    }
-    return value;
-}
-
-/* Purpose: skip one unknown policy value through the shared bounded JSON grammar. */
-static int policy_json_skip(policy_json *json) {
-    return yvex_json_skip_value(&json->cursor) ? YVEX_OK
-                                               : policy_json_fail(json, "malformed JSON value");
-}
-
 /* Purpose: parse one exact policy boolean without coercing another JSON value. */
-static int policy_json_bool(policy_json *json, int *out) {
+static int policy_json_bool(yvex_gguf_json *json, int *out) {
     return yvex_json_bool(&json->cursor, out) ? YVEX_OK
-                                              : policy_json_fail(json, "expected boolean");
-}
-
-/* Purpose: read one regular policy document below the canonical metadata cap.
- * Inputs: path, output buffer and length slots, diagnostic context, and error sink.
- * Effects: allocates one bounded file buffer owned by the caller.
- * Failure: typed I/O or size refusal leaves the output null.
- * Boundary: the helper reads policy metadata, never model payload. */
-static int policy_json_read(const char *path, char **out, size_t *length, const char *context,
-                            yvex_error *err) {
-    *out = yvex_read_bounded_file(path, 16u * 1024u * 1024u, length, err);
-    if (*out)
-        return YVEX_OK;
-    if (yvex_error_code(err) == YVEX_OK) {
-        yvex_error_setf(err, YVEX_ERR_IO, context, "cannot read JSON document: %s", path);
-    }
-    return yvex_error_code(err);
+                                              : yvex_gguf_json_fail(json, "expected boolean");
 }
 
 /* Purpose: project one policy qtype onto the canonical dtype spelling.
@@ -572,42 +513,32 @@ done:
  * Effects: replaces owned source strings and skips unknown fields structurally.
  * Failure: malformed syntax or allocation failure returns typed refusal.
  * Boundary: path parsing does not open the referenced template. */
-static int qj_parse_source(policy_json *j, yvex_quant_policy *policy) {
-    int rc = policy_json_expect(j, '{');
+static int qj_parse_source(yvex_gguf_json *j, yvex_quant_policy *policy) {
+    int rc = yvex_gguf_json_expect(j, '{');
     if (rc != YVEX_OK)
         return rc;
     while (j->cursor.cursor < j->cursor.end) {
-        char *key;
-        policy_json_space(j);
-        if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == '}') {
-            j->cursor.cursor++;
-            return YVEX_OK;
-        }
-        key = policy_json_string(j);
-        if (!key)
-            return yvex_error_code(j->err);
-        rc = policy_json_expect(j, ':');
-        if (rc != YVEX_OK) {
-            free(key);
-            return rc;
-        }
+        char *key = NULL;
+        int complete = 0;
+
+        rc = yvex_gguf_json_member(j, &key, &complete);
+        if (rc != YVEX_OK) return rc;
+        if (complete) return YVEX_OK;
         if (strcmp(key, "kind") == 0) {
             free(policy->source_kind);
-            policy->source_kind = policy_json_string(j);
+            policy->source_kind = yvex_gguf_json_string(j);
         } else if (strcmp(key, "template_path") == 0) {
             free(policy->template_path);
-            policy->template_path = policy_json_string(j);
+            policy->template_path = yvex_gguf_json_string(j);
         } else {
-            rc = policy_json_skip(j);
+            rc = yvex_gguf_json_skip(j);
         }
         free(key);
         if (rc != YVEX_OK)
             return rc;
-        policy_json_space(j);
-        if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == ',')
-            j->cursor.cursor++;
+        yvex_gguf_json_optional_comma(j);
     }
-    return policy_json_fail(j, "unterminated source object");
+    return yvex_gguf_json_fail(j, "unterminated source object");
 }
 
 /* Purpose: parse and append one complete typed policy rule.
@@ -615,7 +546,8 @@ static int qj_parse_source(policy_json *j, yvex_quant_policy *policy) {
  * Effects: allocates temporary tokens and one owned rule on success.
  * Failure: missing fields, malformed values, or allocation failure append no partial rule.
  * Boundary: parsing a qtype choice does not claim its numeric implementation. */
-static int qj_parse_rule(policy_json *j, yvex_quant_policy *policy) {
+static int qj_parse_rule(yvex_gguf_json *j, void *context) {
+    yvex_quant_policy *policy = context;
     char *selector_kind = NULL;
     char *selector = NULL;
     char *qtype = NULL;
@@ -623,56 +555,44 @@ static int qj_parse_rule(policy_json *j, yvex_quant_policy *policy) {
     yvex_quant_selector_kind kind;
     yvex_quant_qtype qt;
     yvex_tensor_role role = YVEX_TENSOR_ROLE_UNKNOWN;
-    int rc = policy_json_expect(j, '{');
+    int rc = yvex_gguf_json_expect(j, '{');
 
     if (rc != YVEX_OK)
         return rc;
     while (j->cursor.cursor < j->cursor.end) {
-        char *key;
-        policy_json_space(j);
-        if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == '}') {
-            j->cursor.cursor++;
-            break;
-        }
-        key = policy_json_string(j);
-        if (!key) {
-            rc = yvex_error_code(j->err);
-            goto done;
-        }
-        rc = policy_json_expect(j, ':');
-        if (rc != YVEX_OK) {
-            free(key);
-            goto done;
-        }
+        char *key = NULL;
+        int complete = 0;
+
+        rc = yvex_gguf_json_member(j, &key, &complete);
+        if (rc != YVEX_OK) goto done;
+        if (complete) break;
         if (strcmp(key, "selector_kind") == 0) {
             free(selector_kind);
-            selector_kind = policy_json_string(j);
+            selector_kind = yvex_gguf_json_string(j);
             if (!selector_kind)
                 rc = yvex_error_code(j->err);
         } else if (strcmp(key, "selector") == 0) {
             free(selector);
-            selector = policy_json_string(j);
+            selector = yvex_gguf_json_string(j);
             if (!selector)
                 rc = yvex_error_code(j->err);
         } else if (strcmp(key, "qtype") == 0) {
             free(qtype);
-            qtype = policy_json_string(j);
+            qtype = yvex_gguf_json_string(j);
             if (!qtype)
                 rc = yvex_error_code(j->err);
         } else if (strcmp(key, "requires_imatrix") == 0) {
             rc = policy_json_bool(j, &requires_imatrix);
         } else {
-            rc = policy_json_skip(j);
+            rc = yvex_gguf_json_skip(j);
         }
         free(key);
         if (rc != YVEX_OK)
             goto done;
-        policy_json_space(j);
-        if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == ',')
-            j->cursor.cursor++;
+        yvex_gguf_json_optional_comma(j);
     }
     if (!selector_kind || !selector || !qtype) {
-        rc = policy_json_fail(j, "policy rule missing selector_kind, selector, or qtype");
+        rc = yvex_gguf_json_fail(j, "policy rule missing selector_kind, selector, or qtype");
         goto done;
     }
     kind = selector_from_name(selector_kind);
@@ -688,38 +608,6 @@ done:
     return rc;
 }
 
-/* Purpose: parse the ordered array of physical-encoding rules.
- * Inputs: bounded cursor and policy under construction.
- * Effects: appends complete rules in document order.
- * Failure: malformed delimiters or rows stop with typed format refusal.
- * Boundary: document order is policy evidence, not execution scheduling. */
-static int qj_parse_rules(policy_json *j, yvex_quant_policy *policy) {
-    int rc = policy_json_expect(j, '[');
-    if (rc != YVEX_OK)
-        return rc;
-    policy_json_space(j);
-    if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == ']') {
-        j->cursor.cursor++;
-        return YVEX_OK;
-    }
-    while (j->cursor.cursor < j->cursor.end) {
-        rc = qj_parse_rule(j, policy);
-        if (rc != YVEX_OK)
-            return rc;
-        policy_json_space(j);
-        if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == ',') {
-            j->cursor.cursor++;
-            continue;
-        }
-        if (j->cursor.cursor < j->cursor.end && *j->cursor.cursor == ']') {
-            j->cursor.cursor++;
-            return YVEX_OK;
-        }
-        return policy_json_fail(j, "malformed rules array");
-    }
-    return policy_json_fail(j, "unterminated rules array");
-}
-
 /* Purpose: parse one complete bounded JSON document into an owned policy.
  * Inputs: output slot, source path, and typed error sink.
  * Effects: reads metadata bytes, allocates policy state, and stores complete rules.
@@ -727,9 +615,7 @@ static int qj_parse_rules(policy_json *j, yvex_quant_policy *policy) {
  * Boundary: policy parsing performs zero source payload reads. */
 static int policy_parse_json(yvex_quant_policy **out, const char *path, yvex_error *err) {
     yvex_quant_policy *policy;
-    policy_json j;
-    char *buf = NULL;
-    size_t len = 0u;
+    yvex_gguf_json j;
     int rc;
 
     if (!out || !path) {
@@ -737,41 +623,27 @@ static int policy_parse_json(yvex_quant_policy **out, const char *path, yvex_err
         return YVEX_ERR_INVALID_ARG;
     }
     *out = NULL;
-    rc = policy_json_read(path, &buf, &len, "quant_policy_json", err);
+    rc = yvex_gguf_json_open(&j, path, "quant_policy_json", err);
     if (rc != YVEX_OK)
         return rc;
     policy = (yvex_quant_policy *)calloc(1, sizeof(*policy));
     if (!policy) {
-        free(buf);
+        yvex_gguf_json_close(&j);
         yvex_error_set(err, YVEX_ERR_NOMEM, "quant_policy_json", "policy allocation failed");
         return YVEX_ERR_NOMEM;
     }
-    yvex_json_init(&j.cursor, buf, len);
-    j.path = path;
-    j.context = "quant_policy_json";
-    j.err = err;
-    rc = policy_json_expect(&j, '{');
+    rc = yvex_gguf_json_expect(&j, '{');
     if (rc != YVEX_OK)
         goto fail;
     while (j.cursor.cursor < j.cursor.end) {
-        char *key;
-        policy_json_space(&j);
-        if (j.cursor.cursor < j.cursor.end && *j.cursor.cursor == '}') {
-            j.cursor.cursor++;
-            break;
-        }
-        key = policy_json_string(&j);
-        if (!key) {
-            rc = yvex_error_code(err);
-            goto fail;
-        }
-        rc = policy_json_expect(&j, ':');
-        if (rc != YVEX_OK) {
-            free(key);
-            goto fail;
-        }
+        char *key = NULL;
+        int complete = 0;
+
+        rc = yvex_gguf_json_member(&j, &key, &complete);
+        if (rc != YVEX_OK) goto fail;
+        if (complete) break;
         if (strcmp(key, "schema") == 0) {
-            char *schema = policy_json_string(&j);
+            char *schema = yvex_gguf_json_string(&j);
             if (!schema) {
                 free(key);
                 rc = yvex_error_code(err);
@@ -780,33 +652,32 @@ static int policy_parse_json(yvex_quant_policy **out, const char *path, yvex_err
             if (strcmp(schema, "yvex.quant_policy.v1") != 0) {
                 free(schema);
                 free(key);
-                rc = policy_json_fail(&j, "unsupported quant policy schema");
+                rc = yvex_gguf_json_fail(&j, "unsupported quant policy schema");
                 goto fail;
             }
             free(schema);
         } else if (strcmp(key, "name") == 0) {
             free(policy->name);
-            policy->name = policy_json_string(&j);
+            policy->name = yvex_gguf_json_string(&j);
             if (!policy->name)
                 rc = yvex_error_code(err);
         } else if (strcmp(key, "architecture") == 0) {
             free(policy->architecture);
-            policy->architecture = policy_json_string(&j);
+            policy->architecture = yvex_gguf_json_string(&j);
             if (!policy->architecture)
                 rc = yvex_error_code(err);
         } else if (strcmp(key, "source") == 0) {
             rc = qj_parse_source(&j, policy);
         } else if (strcmp(key, "rules") == 0) {
-            rc = qj_parse_rules(&j, policy);
+            rc = yvex_gguf_json_array(&j, qj_parse_rule, policy,
+                                      "malformed rules array", "unterminated rules array");
         } else {
-            rc = policy_json_skip(&j);
+            rc = yvex_gguf_json_skip(&j);
         }
         free(key);
         if (rc != YVEX_OK)
             goto fail;
-        policy_json_space(&j);
-        if (j.cursor.cursor < j.cursor.end && *j.cursor.cursor == ',')
-            j.cursor.cursor++;
+        yvex_gguf_json_optional_comma(&j);
     }
     if (!policy->name)
         policy->name = yvex_core_strdup("unnamed-policy");
@@ -818,12 +689,12 @@ static int policy_parse_json(yvex_quant_policy **out, const char *path, yvex_err
         goto fail;
     }
     *out = policy;
-    free(buf);
+    yvex_gguf_json_close(&j);
     return YVEX_OK;
 
 fail:
     yvex_quant_policy_close(policy);
-    free(buf);
+    yvex_gguf_json_close(&j);
     return rc;
 }
 

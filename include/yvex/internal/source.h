@@ -11,6 +11,7 @@
 #define INCLUDE_YVEX_INTERNAL_SOURCE_H_INCLUDED
 
 #include <stddef.h>
+#include <string.h>
 #include <yvex/core.h>
 #include <yvex/internal/core.h>
 #include <yvex/source.h>
@@ -58,6 +59,41 @@ const yvex_source_target_identity *yvex_source_release_identity(void);
 
 /* Purpose: match a target identifier against the canonical release source. */
 int yvex_source_is_release_target(const char *target_id);
+
+/* Purpose: return the final non-empty component of one borrowed source path. */
+static inline const char *yvex_source_path_basename(const char *path)
+{
+    const char *slash;
+
+    if (!path || !path[0]) return NULL;
+    slash = strrchr(path, '/');
+    return slash && slash[1] ? slash + 1 : path;
+}
+
+/* Purpose: match one source target label against an admitted family prefix. */
+static inline int yvex_source_target_matches_family_name(const char *family,
+                                                         const char *target)
+{
+    if (!family || !target) return 0;
+    if (strcmp(family, "qwen") == 0) return strncmp(target, "qwen", 4u) == 0;
+    if (strcmp(family, "gemma") == 0) return strncmp(target, "gemma", 5u) == 0;
+    return 0;
+}
+
+/* Purpose: admit one root-relative shard basename for source payload manifests. */
+static inline int yvex_source_payload_name_is_canonical(const char *name)
+{
+    const char *cursor;
+
+    if (!name || !name[0] || name[0] == '/' || strcmp(name, ".") == 0 ||
+        strcmp(name, "..") == 0)
+        return 0;
+    for (cursor = name; *cursor; ++cursor) {
+        if (*cursor == '/' || *cursor == '\\' || *cursor == '\n' || *cursor == '\r')
+            return 0;
+    }
+    return 1;
+}
 
 /* Purpose: project an immutable source identity beneath a caller-owned models root. */
 int yvex_source_target_path(char *out,
@@ -220,8 +256,6 @@ typedef struct yvex_source_verification {
     const char *blockers[YVEX_SOURCE_VERIFY_BLOCKER_CAP];
     unsigned int blocker_count;
 } yvex_source_verification;
-int yvex_source_checked_add_u64(unsigned long long *total,
-                                unsigned long long value);
 int yvex_source_verify(const yvex_source_verify_options *options,
                        yvex_source_verification *out,
                        yvex_error *err);
@@ -362,21 +396,21 @@ void yvex_source_metadata_blob_release(yvex_source_metadata_blob *blob);
 
 /* Write contract. */
 struct yvex_source_payload_session;
-int yvex_source_manifest_publish_verified(
-    const char *out_path,
-    const yvex_source_verify_options *options,
-    const yvex_source_verification *verification,
-    yvex_error *err);
-int yvex_source_derived_inventory_publish(
-    const char *out_path,
-    const yvex_source_verify_options *options,
-    const yvex_source_derived_inventory *inventory,
-    yvex_error *err);
-int yvex_source_manifest_publish_payload(
-    const char *out_path,
-    const yvex_source_verification *verification,
-    const struct yvex_source_payload_session *session,
-    yvex_error *err);
+typedef enum {
+    YVEX_SOURCE_PUBLICATION_VERIFIED_MANIFEST = 0,
+    YVEX_SOURCE_PUBLICATION_PAYLOAD_MANIFEST = 1,
+    YVEX_SOURCE_PUBLICATION_DERIVED_INVENTORY = 2
+} yvex_source_publication_kind;
+typedef struct {
+    yvex_source_publication_kind kind;
+    const char *out_path;
+    const yvex_source_verify_options *options;
+    const yvex_source_verification *verification;
+    const yvex_source_derived_inventory *inventory;
+    const struct yvex_source_payload_session *payload_session;
+} yvex_source_publication_request;
+int yvex_source_publish(const yvex_source_publication_request *request,
+                        yvex_error *err);
 
 /* Private contract. */
 typedef struct {

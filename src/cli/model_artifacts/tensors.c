@@ -502,21 +502,6 @@ static int tensor_collection_print_unsupported_family_report(const yvex_cli_tens
     return 5;
 }
 
-/* Purpose: Compute tensor collection append role for its CLI invariant (`tensor_collection_append_role`). */
-static void tensor_collection_append_role(char *out, size_t out_cap, const char *role)
-{
-    size_t used;
-
-    if (!out || out_cap == 0u || !role || !role[0]) return;
-    used = strlen(out);
-    if (used > 0u) {
-        if (used + 1u >= out_cap) return;
-        out[used++] = ',';
-        out[used] = '\0';
-    }
-    snprintf(out + used, used < out_cap ? out_cap - used : 0u, "%s", role);
-}
-
 /* Purpose: Compute tensor collection role status for its CLI invariant (`tensor_collection_role_status`). */
 static const char *tensor_collection_role_status(const yvex_tensor_info *tensor)
 {
@@ -570,28 +555,28 @@ static int tensor_collection_print_model_report(const yvex_cli_tensor_collection
     present_roles[0] = '\0';
     missing_roles[0] = '\0';
     expert_roles[0] = '\0';
-    if (router) tensor_collection_append_role(present_roles, sizeof(present_roles), "moe_router");
-    else tensor_collection_append_role(missing_roles, sizeof(missing_roles), "moe_router");
+    if (router) model_artifact_append_role(present_roles, sizeof(present_roles), "moe_router");
+    else model_artifact_append_role(missing_roles, sizeof(missing_roles), "moe_router");
     if (expert_gate) {
         present_expert_roles++;
-        tensor_collection_append_role(present_roles, sizeof(present_roles), "moe_expert_gate");
-        tensor_collection_append_role(expert_roles, sizeof(expert_roles), "moe_expert_gate");
+        model_artifact_append_role(present_roles, sizeof(present_roles), "moe_expert_gate");
+        model_artifact_append_role(expert_roles, sizeof(expert_roles), "moe_expert_gate");
     } else {
-        tensor_collection_append_role(missing_roles, sizeof(missing_roles), "moe_expert_gate");
+        model_artifact_append_role(missing_roles, sizeof(missing_roles), "moe_expert_gate");
     }
     if (expert_up) {
         present_expert_roles++;
-        tensor_collection_append_role(present_roles, sizeof(present_roles), "moe_expert_up");
-        tensor_collection_append_role(expert_roles, sizeof(expert_roles), "moe_expert_up");
+        model_artifact_append_role(present_roles, sizeof(present_roles), "moe_expert_up");
+        model_artifact_append_role(expert_roles, sizeof(expert_roles), "moe_expert_up");
     } else {
-        tensor_collection_append_role(missing_roles, sizeof(missing_roles), "moe_expert_up");
+        model_artifact_append_role(missing_roles, sizeof(missing_roles), "moe_expert_up");
     }
     if (expert_down) {
         present_expert_roles++;
-        tensor_collection_append_role(present_roles, sizeof(present_roles), "moe_expert_down");
-        tensor_collection_append_role(expert_roles, sizeof(expert_roles), "moe_expert_down");
+        model_artifact_append_role(present_roles, sizeof(present_roles), "moe_expert_down");
+        model_artifact_append_role(expert_roles, sizeof(expert_roles), "moe_expert_down");
     } else {
-        tensor_collection_append_role(missing_roles, sizeof(missing_roles), "moe_expert_down");
+        model_artifact_append_role(missing_roles, sizeof(missing_roles), "moe_expert_down");
     }
     if (!present_roles[0]) snprintf(present_roles, sizeof(present_roles), "none");
     if (!missing_roles[0]) snprintf(missing_roles, sizeof(missing_roles), "none");

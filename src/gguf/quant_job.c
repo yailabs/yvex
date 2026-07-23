@@ -347,33 +347,6 @@ static int json_fail(job_json *json, const char *message) {
     return YVEX_ERR_FORMAT;
 }
 
-/* Purpose: consume one exact structural delimiter after bounded whitespace. */
-static int json_expect(job_json *json, char expected) {
-    yvex_json_space(&json->cursor);
-    if (json->cursor.cursor >= json->cursor.end || *json->cursor.cursor != expected) {
-        return json_fail(json, "unexpected JSON token");
-    }
-    json->cursor.cursor++;
-    return YVEX_OK;
-}
-
-/* Purpose: iterate an object with exact comma and key syntax. */
-static int json_next_key(job_json *json, int *first, char *key, size_t cap) {
-    yvex_json_space(&json->cursor);
-    if (json->cursor.cursor < json->cursor.end && *json->cursor.cursor == '}') {
-        json->cursor.cursor++;
-        return 0;
-    }
-    if (!*first && json_expect(json, ',') != YVEX_OK)
-        return -1;
-    *first = 0;
-    if (!yvex_json_string(&json->cursor, key, cap) || json_expect(json, ':') != YVEX_OK) {
-        json_fail(json, "malformed object member");
-        return -1;
-    }
-    return 1;
-}
-
 /* Purpose: replace one owned job string from a bounded JSON token.
  * Inputs: parser cursor and address of an owned string slot.
  * Effects: allocates the replacement and releases the previous string.
@@ -401,12 +374,13 @@ static int json_skip(job_json *json) {
  * Boundary: parsing a path does not execute or admit the tool. */
 static int parse_tool(job_json *json, yvex_quant_job_doc *doc) {
     char key[YVEX_JSON_KEY_CAP];
-    int first = 1;
-    int next;
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    if (json_expect(json, '{') != YVEX_OK)
-        return YVEX_ERR_FORMAT;
-    while ((next = json_next_key(json, &first, key, sizeof(key))) > 0) {
+    if (!yvex_json_iter_begin(&json->cursor, &iter, YVEX_JSON_COLLECTION_OBJECT))
+        return json_fail(json, "unexpected JSON token");
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
         if (strcmp(key, "kind") == 0) {
             char *value = yvex_json_string_dup(&json->cursor, 256u);
             if (!value)
@@ -421,24 +395,28 @@ static int parse_tool(job_json *json, yvex_quant_job_doc *doc) {
             return YVEX_ERR_FORMAT;
         }
     }
-    return next < 0 ? YVEX_ERR_FORMAT : YVEX_OK;
+    return item == YVEX_JSON_ITEM_END && !iter.trailing_separator
+               ? YVEX_OK
+               : json_fail(json, "malformed object member");
 }
 
-/* Purpose: parse nested source, policy, calibration, and template input paths.
- * Inputs: bounded cursor and job document under construction.
- * Effects: replaces the corresponding owned path fields.
+/* Purpose: parse one bounded range of declared quant-job path fields.
+ * Inputs: bounded cursor, document, and half-open canonical field-table range.
+ * Effects: replaces only recognized owned paths and skips unknown members.
  * Failure: malformed values stop the object without promoting partial state.
- * Boundary: parsing paths performs no source or artifact I/O. */
-static int parse_inputs(job_json *json, yvex_quant_job_doc *doc) {
+ * Boundary: parsing path declarations performs no source or artifact I/O. */
+static int parse_paths(job_json *json, yvex_quant_job_doc *doc,
+                       size_t begin, size_t end) {
     char key[YVEX_JSON_KEY_CAP];
     char **target;
-    int first = 1;
-    int next;
+    yvex_json_iter iter;
+    yvex_json_item item;
 
-    if (json_expect(json, '{') != YVEX_OK)
-        return YVEX_ERR_FORMAT;
-    while ((next = json_next_key(json, &first, key, sizeof(key))) > 0) {
-        target = job_field_find(doc, key, 3u, 9u);
+    if (!yvex_json_iter_begin(&json->cursor, &iter, YVEX_JSON_COLLECTION_OBJECT))
+        return json_fail(json, "unexpected JSON token");
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
+        target = job_field_find(doc, key, begin, end);
         if (target) {
             if (json_replace_text(json, target) != YVEX_OK)
                 return YVEX_ERR_FORMAT;
@@ -446,32 +424,9 @@ static int parse_inputs(job_json *json, yvex_quant_job_doc *doc) {
             return YVEX_ERR_FORMAT;
         }
     }
-    return next < 0 ? YVEX_ERR_FORMAT : YVEX_OK;
-}
-
-/* Purpose: parse the nested artifact and log output paths.
- * Inputs: bounded cursor and job document under construction.
- * Effects: replaces owned output-path fields.
- * Failure: malformed values return typed format refusal.
- * Boundary: output declarations do not create files. */
-static int parse_outputs(job_json *json, yvex_quant_job_doc *doc) {
-    char key[YVEX_JSON_KEY_CAP];
-    char **target;
-    int first = 1;
-    int next;
-
-    if (json_expect(json, '{') != YVEX_OK)
-        return YVEX_ERR_FORMAT;
-    while ((next = json_next_key(json, &first, key, sizeof(key))) > 0) {
-        target = job_field_find(doc, key, 9u, 11u);
-        if (target) {
-            if (json_replace_text(json, target) != YVEX_OK)
-                return YVEX_ERR_FORMAT;
-        } else if (json_skip(json) != YVEX_OK) {
-            return YVEX_ERR_FORMAT;
-        }
-    }
-    return next < 0 ? YVEX_ERR_FORMAT : YVEX_OK;
+    return item == YVEX_JSON_ITEM_END && !iter.trailing_separator
+               ? YVEX_OK
+               : json_fail(json, "malformed object member");
 }
 
 /* Purpose: materialize owned empty strings for every omitted optional quant-job field.
@@ -502,8 +457,8 @@ static int job_parse_json_file(const char *path, yvex_quant_job_doc *doc, yvex_e
     char *buffer = NULL;
     size_t length = 0u;
     job_json json;
-    int first = 1;
-    int next;
+    yvex_json_iter iter;
+    yvex_json_item item;
     int rc = YVEX_OK;
 
     if (!path || !doc) {
@@ -522,11 +477,13 @@ static int job_parse_json_file(const char *path, yvex_quant_job_doc *doc, yvex_e
     yvex_json_init(&json.cursor, buffer, length);
     json.path = path;
     json.err = err;
-    if (json_expect(&json, '{') != YVEX_OK) {
+    if (!yvex_json_iter_begin(&json.cursor, &iter, YVEX_JSON_COLLECTION_OBJECT)) {
+        json_fail(&json, "unexpected JSON token");
         rc = YVEX_ERR_FORMAT;
         goto fail;
     }
-    while ((next = json_next_key(&json, &first, key, sizeof(key))) > 0) {
+    while ((item = yvex_json_object_member(&iter, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
         if (strcmp(key, "name") == 0)
             rc = json_replace_text(&json, &doc->name);
         else if (strcmp(key, "architecture") == 0) {
@@ -542,9 +499,9 @@ static int job_parse_json_file(const char *path, yvex_quant_job_doc *doc, yvex_e
         } else if (strcmp(key, "tool") == 0)
             rc = parse_tool(&json, doc);
         else if (strcmp(key, "inputs") == 0)
-            rc = parse_inputs(&json, doc);
+            rc = parse_paths(&json, doc, 3u, 9u);
         else if (strcmp(key, "outputs") == 0)
-            rc = parse_outputs(&json, doc);
+            rc = parse_paths(&json, doc, 9u, 11u);
         else if (strcmp(key, "command") == 0)
             rc = json_replace_text(&json, &doc->command);
         else
@@ -552,7 +509,8 @@ static int job_parse_json_file(const char *path, yvex_quant_job_doc *doc, yvex_e
         if (rc != YVEX_OK)
             goto fail;
     }
-    if (next < 0 || !yvex_json_complete(&json.cursor)) {
+    if (item != YVEX_JSON_ITEM_END || iter.trailing_separator ||
+        !yvex_json_complete(&json.cursor)) {
         rc = json_fail(&json, "incomplete quantization job document");
         goto fail;
     }

@@ -28,13 +28,6 @@
 #define WRITER_DEFAULT_BUDGET (128u * 1024u * 1024u)
 #define WRITER_METADATA_CAP 96u
 
-static const char *const writer_code_names[] = {
-    "ok", "invalid-argument", "unsealed-plan", "identity-mismatch", "metadata-incomplete",
-    "duplicate-metadata", "unsupported-metadata", "duplicate-tensor", "tensor-divergence",
-    "qtype-geometry", "arithmetic-overflow", "resource-limit", "allocation", "serialization",
-    "lifecycle",
-};
-
 typedef enum {
     WRITER_META_SCALAR = 0,
     WRITER_META_TOKEN_ARRAY,
@@ -58,12 +51,7 @@ typedef struct {
     const yvex_deepseek_gguf_metadata *map_entry;
 } writer_metadata;
 
-typedef struct {
-    unsigned char *bytes;
-    size_t length;
-    size_t capacity;
-    size_t maximum;
-} writer_buffer;
+typedef yvex_core_bytes writer_buffer;
 
 struct yvex_gguf_writer_plan {
     yvex_gguf_writer_plan_summary summary;
@@ -93,7 +81,7 @@ static int writer_fail(yvex_gguf_writer_failure *failure, yvex_gguf_writer_code 
         failure->expected = expected;
         failure->actual = actual;
         if (name)
-            (void)snprintf(failure->name, sizeof(failure->name), "%s", name);
+            yvex_core_text_copy(failure->name, sizeof(failure->name), name);
     }
     yvex_error_set(err, status, "gguf.writer.plan", message);
     return status;
@@ -155,67 +143,6 @@ static int writer_tensor_names_unique(const yvex_gguf_writer_tensor *tensors,
     return result;
 }
 
-/* Purpose: reserve bounded structural-prefix capacity with geometric growth.
- * Inputs: owned buffer state and additional byte requirement.
- * Effects: may reallocate buffer storage and update capacity.
- * Failure: returns false for overflow, budget excess, or allocation failure.
- * Boundary: manages prefix scratch only, never tensor payload storage. */
-static int writer_buffer_reserve(writer_buffer *buffer, size_t extra) {
-    size_t required;
-    size_t capacity;
-    unsigned char *grown;
-    if (!buffer || extra > SIZE_MAX - buffer->length)
-        return 0;
-    required = buffer->length + extra;
-    if (required > buffer->maximum)
-        return 0;
-    if (required <= buffer->capacity)
-        return 1;
-    capacity = buffer->capacity ? buffer->capacity : 4096u;
-    while (capacity < required) {
-        if (capacity > buffer->maximum / 2u) {
-            capacity = buffer->maximum;
-            break;
-        }
-        capacity *= 2u;
-    }
-    if (capacity < required)
-        return 0;
-    grown = (unsigned char *)realloc(buffer->bytes, capacity);
-    if (!grown)
-        return 0;
-    buffer->bytes = grown;
-    buffer->capacity = capacity;
-    return 1;
-}
-
-/* Purpose: append an exact byte sequence to the structural prefix.
- * Inputs: owned buffer, optional bytes, and byte count.
- * Effects: grows the buffer and advances its serialized length.
- * Failure: returns false when capacity cannot be reserved.
- * Boundary: byte copy primitive with no GGUF type interpretation. */
-static int writer_bytes(writer_buffer *buffer, const void *bytes, size_t byte_count) {
-    if (!writer_buffer_reserve(buffer, byte_count))
-        return 0;
-    if (byte_count)
-        memcpy(buffer->bytes + buffer->length, bytes, byte_count);
-    buffer->length += byte_count;
-    return 1;
-}
-
-/* Purpose: append canonical zero padding to the structural prefix.
- * Inputs: owned buffer and padding byte count.
- * Effects: grows storage, zeroes the appended range, and advances length.
- * Failure: returns false when bounded capacity cannot be reserved.
- * Boundary: emits structural padding only, not tensor-range padding. */
-static int writer_zero(writer_buffer *buffer, size_t byte_count) {
-    if (!writer_buffer_reserve(buffer, byte_count))
-        return 0;
-    memset(buffer->bytes + buffer->length, 0, byte_count);
-    buffer->length += byte_count;
-    return 1;
-}
-
 /* Purpose: serialize one unsigned 32-bit value in little-endian order.
  * Inputs: owned prefix buffer and scalar value.
  * Effects: appends exactly four bytes.
@@ -226,7 +153,7 @@ static int writer_u32(writer_buffer *buffer, unsigned int value) {
     unsigned int index;
     for (index = 0u; index < 4u; ++index)
         bytes[index] = (unsigned char)(value >> (index * 8u));
-    return writer_bytes(buffer, bytes, sizeof(bytes));
+    return yvex_core_bytes_append(buffer, bytes, sizeof(bytes));
 }
 
 /* Purpose: serialize one unsigned 64-bit value in little-endian order.
@@ -239,7 +166,7 @@ static int writer_u64(writer_buffer *buffer, unsigned long long value) {
     unsigned int index;
     for (index = 0u; index < 8u; ++index)
         bytes[index] = (unsigned char)(value >> (index * 8u));
-    return writer_bytes(buffer, bytes, sizeof(bytes));
+    return yvex_core_bytes_append(buffer, bytes, sizeof(bytes));
 }
 
 /* Purpose: serialize the exact IEEE-754 binary32 bit pattern.
@@ -270,7 +197,8 @@ static int writer_f64(writer_buffer *buffer, double value) {
  * Failure: returns false when either append exceeds the prefix budget.
  * Boundary: accepts arbitrary bytes; callers own UTF-8 or tokenizer validity. */
 static int writer_string(writer_buffer *buffer, const unsigned char *bytes, size_t byte_count) {
-    return writer_u64(buffer, byte_count) && writer_bytes(buffer, bytes, byte_count);
+    return writer_u64(buffer, byte_count) &&
+           yvex_core_bytes_append(buffer, bytes, byte_count);
 }
 
 /* Purpose: detect a duplicate key in the bounded metadata staging set.
@@ -300,7 +228,7 @@ static writer_metadata *writer_metadata_new(writer_metadata *entries, unsigned i
         return NULL;
     entry = &entries[(*count)++];
     memset(entry, 0, sizeof(*entry));
-    (void)snprintf(entry->key, sizeof(entry->key), "%s", key);
+    yvex_core_text_copy(entry->key, sizeof(entry->key), key);
     return entry;
 }
 
@@ -459,7 +387,7 @@ static int writer_metadata_serialize(writer_buffer *buffer, const writer_metadat
         return writer_f64(buffer, entry->f64);
     case YVEX_GGUF_VALUE_BOOL: {
         unsigned char value = entry->boolean ? 1u : 0u;
-        return writer_bytes(buffer, &value, 1u);
+        return yvex_core_bytes_append(buffer, &value, 1u);
     }
     case YVEX_GGUF_VALUE_STRING:
         return writer_string(buffer, entry->string_bytes, entry->string_length);
@@ -560,21 +488,23 @@ static void writer_plan_seed(yvex_gguf_writer_plan *plan, const yvex_quant_plan 
     plan->summary.tensor_count = tensor_count;
     plan->summary.source_snapshot_identity = quant->source_snapshot_identity;
     plan->summary.mapping_identity = quant->mapping_identity;
-    (void)snprintf(plan->summary.payload_identity, sizeof(plan->summary.payload_identity), "%s",
-                   quant->required_payload_identity);
-    (void)snprintf(plan->summary.transform_identity, sizeof(plan->summary.transform_identity), "%s",
-                   quant->transform_identity);
-    (void)snprintf(plan->summary.profile_name, sizeof(plan->summary.profile_name), "%s",
-                   quant->profile_name);
-    (void)snprintf(plan->summary.profile_identity, sizeof(plan->summary.profile_identity), "%s",
-                   quant->profile_identity);
-    (void)snprintf(plan->summary.payload_plan_identity,
-                   sizeof(plan->summary.payload_plan_identity), "%s",
-                   quant->payload_plan_identity);
+    yvex_core_text_copy(plan->summary.payload_identity,
+                        sizeof(plan->summary.payload_identity),
+                        quant->required_payload_identity);
+    yvex_core_text_copy(plan->summary.transform_identity,
+                        sizeof(plan->summary.transform_identity),
+                        quant->transform_identity);
+    yvex_core_text_copy(plan->summary.profile_name, sizeof(plan->summary.profile_name), quant->profile_name);
+    yvex_core_text_copy(plan->summary.profile_identity,
+                        sizeof(plan->summary.profile_identity),
+                        quant->profile_identity);
+    yvex_core_text_copy(plan->summary.payload_plan_identity,
+                        sizeof(plan->summary.payload_plan_identity),
+                        quant->payload_plan_identity);
     if (options->required_execution_identity)
-        (void)snprintf(plan->summary.required_execution_identity,
-                       sizeof(plan->summary.required_execution_identity), "%s",
-                       options->required_execution_identity);
+        yvex_core_text_copy(plan->summary.required_execution_identity,
+                            sizeof(plan->summary.required_execution_identity),
+                            options->required_execution_identity);
 }
 
 /* Purpose: serialize a deterministic GGUF header, metadata set, and directory.
@@ -617,12 +547,12 @@ static int writer_prefix_serialize(writer_buffer *buffer, const writer_metadata 
  * Boundary: computes positions only and performs no file writes. */
 static int writer_prefix_finish(yvex_gguf_writer_plan *plan, writer_buffer *buffer,
                                 unsigned int alignment, unsigned long long data_span) {
-    unsigned long long structural_unaligned = buffer->length;
+    unsigned long long structural_unaligned = buffer->count;
     unsigned long long data_offset;
     unsigned long long ordinal;
 
     if (!writer_align(structural_unaligned, alignment, &data_offset) || data_offset > SIZE_MAX ||
-        !writer_zero(buffer, (size_t)(data_offset - structural_unaligned)) ||
+        !yvex_core_bytes_append_zero(buffer, (size_t)(data_offset - structural_unaligned)) ||
         !yvex_core_u64_add(data_offset, data_span, &plan->summary.final_file_bytes))
         return 0;
     for (ordinal = 0u; ordinal < plan->summary.tensor_count; ++ordinal) {
@@ -632,74 +562,13 @@ static int writer_prefix_finish(yvex_gguf_writer_plan *plan, writer_buffer *buff
             !yvex_core_u64_add(data_offset, tensor->padded_end, &tensor->padded_end))
             return 0;
     }
-    plan->prefix = buffer->bytes;
-    plan->prefix_bytes = buffer->length;
-    buffer->bytes = NULL;
+    plan->prefix = buffer->data;
+    plan->prefix_bytes = buffer->count;
+    buffer->data = NULL;
     plan->summary.structural_bytes = structural_unaligned;
     plan->summary.pre_data_padding_bytes = data_offset - structural_unaligned;
     plan->summary.data_section_bytes = data_span;
     return 1;
-}
-
-typedef enum {
-    WRITER_FIXTURE_TENSOR_OK = 0,
-    WRITER_FIXTURE_TENSOR_INVALID,
-    WRITER_FIXTURE_TENSOR_ARITHMETIC
-} writer_fixture_tensor_status;
-
-/* Purpose: project and account every explicit fixture terminal in plan order.
- * Inputs: fixture names, sealed quant plan, alignment, and owned tensor array.
- * Effects: fills tensor rows, qtype counts, padding, and total payload geometry.
- * Failure: returns typed local status and the first failing ordinal.
- * Boundary: fixture planning proves mechanics but cannot establish artifact admission. */
-static writer_fixture_tensor_status
-writer_fixture_tensors_build(yvex_gguf_writer_plan *plan, const yvex_quant_plan *quant_plan,
-                             const yvex_gguf_writer_fixture_tensor *fixtures,
-                             unsigned long long tensor_count, unsigned int alignment,
-                             unsigned long long *failed_ordinal, unsigned long long *data_span) {
-    unsigned long long relative = 0u;
-    unsigned long long ordinal;
-
-    for (ordinal = 0u; ordinal < tensor_count; ++ordinal) {
-        const yvex_quant_decision *decision = yvex_quant_plan_decision_at(quant_plan, ordinal);
-        yvex_gguf_qtype_storage_result geometry;
-        yvex_gguf_writer_tensor *tensor = &plan->tensors[ordinal];
-        unsigned long long raw_end;
-        unsigned int dimension;
-        if (!decision || !fixtures[ordinal].name || !fixtures[ordinal].name[0] ||
-            strlen(fixtures[ordinal].name) >= sizeof(tensor->name) ||
-            yvex_gguf_qtype_validate_tensor_storage(decision->qtype, decision->dims, decision->rank,
-                                                    decision->encoded_bytes,
-                                                    &geometry) != YVEX_GGUF_QTYPE_STORAGE_OK) {
-            *failed_ordinal = ordinal;
-            return WRITER_FIXTURE_TENSOR_INVALID;
-        }
-        (void)snprintf(tensor->name, sizeof(tensor->name), "%s", fixtures[ordinal].name);
-        tensor->rank = decision->rank;
-        tensor->qtype = decision->qtype;
-        tensor->relative_offset = relative;
-        tensor->raw_bytes = decision->encoded_bytes;
-        for (dimension = 0u; dimension < decision->rank; ++dimension)
-            tensor->dims[dimension] = decision->dims[dimension];
-        if (!yvex_core_u64_add(relative, tensor->raw_bytes, &raw_end) ||
-            !writer_align(raw_end, alignment, &tensor->padded_end) ||
-            decision->qtype > YVEX_GGUF_QTYPE_ABI_UPSTREAM_MAX_ID ||
-            !yvex_core_u64_add(plan->summary.tensor_payload_bytes, tensor->raw_bytes,
-                            &plan->summary.tensor_payload_bytes) ||
-            !yvex_core_u64_add(plan->summary.tensor_padding_bytes, tensor->padded_end - raw_end,
-                            &plan->summary.tensor_padding_bytes) ||
-            !yvex_core_u64_add(plan->summary.qtype_payload_bytes[decision->qtype], tensor->raw_bytes,
-                            &plan->summary.qtype_payload_bytes[decision->qtype]) ||
-            plan->summary.qtype_tensor_counts[decision->qtype] == ULLONG_MAX) {
-            *failed_ordinal = ordinal;
-            return WRITER_FIXTURE_TENSOR_ARITHMETIC;
-        }
-        tensor->padded_bytes = tensor->padded_end - relative;
-        relative = tensor->padded_end;
-        plan->summary.qtype_tensor_counts[decision->qtype]++;
-    }
-    *data_span = relative;
-    return WRITER_FIXTURE_TENSOR_OK;
 }
 
 /* Purpose: initialize canonical writer-plan resource and alignment options.
@@ -715,17 +584,80 @@ void yvex_gguf_writer_plan_options_default(yvex_gguf_writer_plan_options *option
     options->maximum_owned_bytes = WRITER_DEFAULT_BUDGET;
 }
 
+typedef enum {
+    WRITER_FIXTURE_TENSOR_OK = 0,
+    WRITER_FIXTURE_TENSOR_INVALID,
+    WRITER_FIXTURE_TENSOR_ARITHMETIC
+} writer_fixture_tensor_status;
+
+/* Purpose: project and account every explicit fixture terminal in plan order.
+ * Inputs: fixture names, sealed quant plan, alignment, and owned tensor array.
+ * Effects: fills tensor rows, qtype counts, padding, and total payload geometry.
+ * Failure: returns typed local status and the first failing ordinal.
+ * Boundary: fixture planning proves mechanics but cannot establish artifact admission. */
+static writer_fixture_tensor_status writer_fixture_tensors_build(
+    yvex_gguf_writer_plan *plan, const yvex_quant_plan *quant_plan,
+    const yvex_gguf_writer_proof_tensor *fixtures, unsigned long long tensor_count,
+    unsigned int alignment, unsigned long long *failed_ordinal,
+    unsigned long long *data_span) {
+    unsigned long long relative = 0u;
+    unsigned long long ordinal;
+
+    for (ordinal = 0u; ordinal < tensor_count; ++ordinal) {
+        const yvex_quant_decision *decision = yvex_quant_plan_decision_at(quant_plan, ordinal);
+        yvex_gguf_qtype_storage_result geometry;
+        yvex_gguf_writer_tensor *tensor = &plan->tensors[ordinal];
+        unsigned long long raw_end;
+        unsigned int dimension;
+
+        if (!decision || !fixtures[ordinal].name || !fixtures[ordinal].name[0] ||
+            strlen(fixtures[ordinal].name) >= sizeof(tensor->name) ||
+            yvex_gguf_qtype_validate_tensor_storage(decision->qtype, decision->dims,
+                                                    decision->rank, decision->encoded_bytes,
+                                                    &geometry) != YVEX_GGUF_QTYPE_STORAGE_OK) {
+            *failed_ordinal = ordinal;
+            return WRITER_FIXTURE_TENSOR_INVALID;
+        }
+        yvex_core_text_copy(tensor->name, sizeof(tensor->name), fixtures[ordinal].name);
+        tensor->rank = decision->rank;
+        tensor->qtype = decision->qtype;
+        tensor->relative_offset = relative;
+        tensor->raw_bytes = decision->encoded_bytes;
+        for (dimension = 0u; dimension < decision->rank; ++dimension)
+            tensor->dims[dimension] = decision->dims[dimension];
+        if (!yvex_core_u64_add(relative, tensor->raw_bytes, &raw_end) ||
+            !writer_align(raw_end, alignment, &tensor->padded_end) ||
+            decision->qtype > YVEX_GGUF_QTYPE_ABI_UPSTREAM_MAX_ID ||
+            !yvex_core_u64_add(plan->summary.tensor_payload_bytes, tensor->raw_bytes,
+                               &plan->summary.tensor_payload_bytes) ||
+            !yvex_core_u64_add(plan->summary.tensor_padding_bytes,
+                               tensor->padded_end - raw_end,
+                               &plan->summary.tensor_padding_bytes) ||
+            !yvex_core_u64_add(plan->summary.qtype_payload_bytes[decision->qtype],
+                               tensor->raw_bytes,
+                               &plan->summary.qtype_payload_bytes[decision->qtype]) ||
+            plan->summary.qtype_tensor_counts[decision->qtype] == ULLONG_MAX) {
+            *failed_ordinal = ordinal;
+            return WRITER_FIXTURE_TENSOR_ARITHMETIC;
+        }
+        tensor->padded_bytes = tensor->padded_end - relative;
+        relative = tensor->padded_end;
+        plan->summary.qtype_tensor_counts[decision->qtype]++;
+    }
+    *data_span = relative;
+    return WRITER_FIXTURE_TENSOR_OK;
+}
+
 /* Purpose: build a structurally real GGUF plan from an explicit quant fixture.
  * Inputs: sealed fixture quant plan, names, count, options, and result records.
  * Effects: allocates a self-owned tensor directory and serialized prefix.
  * Failure: releases every partial allocation and returns typed writer refusal.
  * Boundary: omits tokenizer proof and therefore cannot enter complete admission. */
-int yvex_gguf_writer_plan_build_fixture(yvex_gguf_writer_plan **out,
-                                        const yvex_quant_plan *quant_plan,
-                                        const yvex_gguf_writer_fixture_tensor *fixture_tensors,
-                                        unsigned long long tensor_count,
-                                        const yvex_gguf_writer_plan_options *options,
-                                        yvex_gguf_writer_failure *failure, yvex_error *err) {
+static int writer_plan_build_tensor_proof(
+    yvex_gguf_writer_plan **out, const yvex_quant_plan *quant_plan,
+    const yvex_gguf_writer_proof_tensor *fixture_tensors, unsigned long long tensor_count,
+    const yvex_gguf_writer_plan_options *options, yvex_gguf_writer_failure *failure,
+    yvex_error *err) {
     const yvex_quant_plan_summary *quant = yvex_quant_plan_summary_get(quant_plan);
     yvex_gguf_writer_plan_options local;
     yvex_gguf_writer_plan *plan = NULL;
@@ -741,8 +673,8 @@ int yvex_gguf_writer_plan_build_fixture(yvex_gguf_writer_plan **out,
         *out = NULL;
     if (!out || !quant || !quant->complete || !fixture_tensors || !tensor_count ||
         tensor_count != quant->terminal_count || tensor_count > SIZE_MAX / sizeof(*plan->tensors))
-        return writer_fail(failure, YVEX_GGUF_WRITER_INVALID_ARGUMENT, NULL, ULLONG_MAX, ULLONG_MAX,
-                           quant ? quant->terminal_count : 0u, tensor_count, err,
+        return writer_fail(failure, YVEX_GGUF_WRITER_INVALID_ARGUMENT, NULL, ULLONG_MAX,
+                           ULLONG_MAX, quant ? quant->terminal_count : 0u, tensor_count, err,
                            YVEX_ERR_INVALID_ARG,
                            "matching explicit quant and writer fixture tensors are required");
     yvex_gguf_writer_plan_options_default(&local);
@@ -750,13 +682,14 @@ int yvex_gguf_writer_plan_build_fixture(yvex_gguf_writer_plan **out,
         local = *options;
     if (!local.alignment || (local.alignment & (local.alignment - 1u)) != 0u ||
         !local.maximum_owned_bytes)
-        return writer_fail(failure, YVEX_GGUF_WRITER_INVALID_ARGUMENT, NULL, ULLONG_MAX, ULLONG_MAX,
-                           1u, local.alignment, err, YVEX_ERR_INVALID_ARG,
+        return writer_fail(failure, YVEX_GGUF_WRITER_INVALID_ARGUMENT, NULL, ULLONG_MAX,
+                           ULLONG_MAX, 1u, local.alignment, err, YVEX_ERR_INVALID_ARG,
                            "fixture writer options are invalid");
     plan = (yvex_gguf_writer_plan *)calloc(1u, sizeof(*plan));
     if (!plan)
         goto allocation_failure;
-    plan->tensors = (yvex_gguf_writer_tensor *)calloc((size_t)tensor_count, sizeof(*plan->tensors));
+    plan->tensors = (yvex_gguf_writer_tensor *)calloc((size_t)tensor_count,
+                                                      sizeof(*plan->tensors));
     if (!plan->tensors)
         goto allocation_failure;
     writer_plan_seed(plan, quant_plan, quant, tensor_count, &local);
@@ -772,16 +705,15 @@ int yvex_gguf_writer_plan_build_fixture(yvex_gguf_writer_plan **out,
     if (unique == 0)
         goto duplicate_failure;
     memset(metadata, 0, sizeof(metadata));
-    (void)snprintf(metadata[0].key, sizeof(metadata[0].key), "general.architecture");
+    yvex_core_text_copy(metadata[0].key, sizeof(metadata[0].key), "general.architecture");
     metadata[0].type = YVEX_GGUF_VALUE_STRING;
     metadata[0].source = WRITER_META_SCALAR;
     metadata[0].string_bytes = (const unsigned char *)"yvex-fixture";
     metadata[0].string_length = strlen("yvex-fixture");
-    (void)snprintf(metadata[1].key, sizeof(metadata[1].key), "general.alignment");
+    yvex_core_text_copy(metadata[1].key, sizeof(metadata[1].key), "general.alignment");
     metadata[1].type = YVEX_GGUF_VALUE_UINT32;
     metadata[1].source = WRITER_META_SCALAR;
     metadata[1].u64 = local.alignment;
-    memset(&buffer, 0, sizeof(buffer));
     buffer.maximum = local.maximum_owned_bytes;
     if (!writer_prefix_serialize(&buffer, metadata, 2u, NULL, plan->tensors, tensor_count) ||
         !writer_prefix_finish(plan, &buffer, local.alignment, data_span))
@@ -789,7 +721,8 @@ int yvex_gguf_writer_plan_build_fixture(yvex_gguf_writer_plan **out,
     plan->summary.metadata_count = 2u;
     if (!yvex_core_u64_mul(tensor_count, sizeof(*plan->tensors), &tensor_bytes) ||
         !yvex_core_u64_add(sizeof(*plan), tensor_bytes, &plan->summary.owned_bytes) ||
-        !yvex_core_u64_add(plan->summary.owned_bytes, plan->prefix_bytes, &plan->summary.owned_bytes))
+        !yvex_core_u64_add(plan->summary.owned_bytes, plan->prefix_bytes,
+                           &plan->summary.owned_bytes))
         goto serialization_failure;
     if (plan->summary.owned_bytes > local.maximum_owned_bytes ||
         plan->summary.tensor_payload_bytes != quant->encoded_bytes || !writer_plan_identity(plan))
@@ -808,18 +741,20 @@ duplicate_failure:
                        "fixture tensor names are duplicate");
 tensor_failure:
     yvex_gguf_writer_plan_release(&plan);
-    return writer_fail(failure, YVEX_GGUF_WRITER_QTYPE_GEOMETRY, NULL, ULLONG_MAX, failed_ordinal,
-                       1u, 0u, err, YVEX_ERR_FORMAT,
+    return writer_fail(failure, YVEX_GGUF_WRITER_QTYPE_GEOMETRY, NULL, ULLONG_MAX,
+                       failed_ordinal, 1u, 0u, err, YVEX_ERR_FORMAT,
                        "fixture tensor name or qtype geometry is invalid");
 allocation_failure:
     yvex_gguf_writer_plan_release(&plan);
     return writer_fail(failure, YVEX_GGUF_WRITER_ALLOCATION, NULL, ULLONG_MAX, ULLONG_MAX,
-                       tensor_count, 0u, err, YVEX_ERR_NOMEM, "fixture writer allocation failed");
+                       tensor_count, 0u, err, YVEX_ERR_NOMEM,
+                       "fixture writer allocation failed");
 serialization_failure:
-    free(buffer.bytes);
+    free(buffer.data);
     yvex_gguf_writer_plan_release(&plan);
-    return writer_fail(failure, YVEX_GGUF_WRITER_SERIALIZATION, NULL, ULLONG_MAX, ULLONG_MAX, 1u,
-                       0u, err, YVEX_ERR_BOUNDS, "fixture writer serialization failed");
+    return writer_fail(failure, YVEX_GGUF_WRITER_SERIALIZATION, NULL, ULLONG_MAX, ULLONG_MAX,
+                       1u, 0u, err, YVEX_ERR_BOUNDS,
+                       "fixture writer serialization failed");
 }
 
 typedef struct {
@@ -1015,7 +950,7 @@ static int writer_deepseek_tensor_add(writer_deepseek_context *context, unsigned
                            descriptor->emitted_name, ULLONG_MAX, ordinal, decision->encoded_bytes,
                            geometry.total_bytes, context->err, YVEX_ERR_FORMAT,
                            "quant decision violates canonical qtype byte geometry");
-    (void)snprintf(tensor->name, sizeof(tensor->name), "%s", descriptor->emitted_name);
+    yvex_core_text_copy(tensor->name, sizeof(tensor->name), descriptor->emitted_name);
     tensor->rank = decision->rank;
     tensor->qtype = decision->qtype;
     tensor->relative_offset = *relative;
@@ -1038,13 +973,13 @@ static int writer_deepseek_tensor_add(writer_deepseek_context *context, unsigned
     if (decision->qtype > YVEX_GGUF_QTYPE_ABI_UPSTREAM_MAX_ID ||
         context->plan->summary.qtype_tensor_counts[decision->qtype] == ULLONG_MAX ||
         !yvex_core_u64_add(context->plan->summary.qtype_payload_bytes[decision->qtype],
-                        tensor->raw_bytes,
-                        &context->plan->summary.qtype_payload_bytes[decision->qtype]) ||
+                           tensor->raw_bytes,
+                           &context->plan->summary.qtype_payload_bytes[decision->qtype]) ||
         !yvex_core_u64_add(context->plan->summary.tensor_payload_bytes, tensor->raw_bytes,
-                        &context->plan->summary.tensor_payload_bytes) ||
+                           &context->plan->summary.tensor_payload_bytes) ||
         !yvex_core_u64_add(context->plan->summary.tensor_padding_bytes,
-                        tensor->padded_bytes - tensor->raw_bytes,
-                        &context->plan->summary.tensor_padding_bytes))
+                           tensor->padded_bytes - tensor->raw_bytes,
+                           &context->plan->summary.tensor_padding_bytes))
         return writer_fail(context->failure, YVEX_GGUF_WRITER_ARITHMETIC_OVERFLOW, tensor->name,
                            ULLONG_MAX, ordinal, ULLONG_MAX, tensor->raw_bytes, context->err,
                            YVEX_ERR_BOUNDS, "aggregate tensor accounting overflowed");
@@ -1092,6 +1027,7 @@ static int writer_deepseek_plan_finish(writer_deepseek_context *context) {
 
     memset(&context->buffer, 0, sizeof(context->buffer));
     context->buffer.maximum = context->options.maximum_owned_bytes;
+    context->buffer.initial_capacity = 4096u;
     if (!writer_prefix_serialize(&context->buffer, context->metadata, context->metadata_count,
                                  context->plan->tokenizer, context->plan->tensors,
                                  context->quant->terminal_count) ||
@@ -1132,11 +1068,11 @@ static int writer_deepseek_plan_finish(writer_deepseek_context *context) {
  * Effects: returns an independently owned tokenizer/prefix/tensor plan.
  * Failure: releases all partial state and returns a typed plan refusal.
  * Boundary: performs no file I/O and reads zero source payload bytes. */
-int yvex_gguf_writer_build_deepseek(yvex_gguf_writer_plan **out, const yvex_quant_plan *quant_plan,
-                                    const yvex_deepseek_gguf_map *map,
-                                    const yvex_source_verification *verification,
-                                    const yvex_gguf_writer_plan_options *options,
-                                    yvex_gguf_writer_failure *failure, yvex_error *err) {
+static int writer_plan_build_deepseek(
+    yvex_gguf_writer_plan **out, const yvex_quant_plan *quant_plan,
+    const yvex_deepseek_gguf_map *map, const yvex_source_verification *verification,
+    const yvex_gguf_writer_plan_options *options, yvex_gguf_writer_failure *failure,
+    yvex_error *err) {
     writer_deepseek_context context;
     int rc;
 
@@ -1198,15 +1134,54 @@ int yvex_gguf_writer_build_deepseek(yvex_gguf_writer_plan **out, const yvex_quan
     if (rc != YVEX_OK)
         goto build_failure;
     *out = context.plan;
+    yvex_core_execution_observation_record(
+        YVEX_CORE_OBSERVE_WRITER_PLAN, 1ull);
     if (failure)
         memset(failure, 0, sizeof(*failure));
     yvex_error_clear(err);
     return YVEX_OK;
 
 build_failure:
-    free(context.buffer.bytes);
+    free(context.buffer.data);
     yvex_gguf_writer_plan_release(&context.plan);
     return rc;
+}
+
+/* Purpose: build one writer plan from a tagged, immutable input class.
+ * Inputs: destination, typed request, and optional failure records.
+ * Effects: delegates to exactly one bounded or complete plan implementation.
+ * Failure: rejects absent or unknown tags without publishing partial state.
+ * Boundary: this is the sole cross-owner writer-plan constructor. */
+int yvex_gguf_writer_plan_build(yvex_gguf_writer_plan **out,
+                                const yvex_gguf_writer_plan_request *request,
+                                yvex_gguf_writer_failure *failure, yvex_error *err) {
+    if (out)
+        *out = NULL;
+    if (!out || !request)
+        return writer_fail(failure, YVEX_GGUF_WRITER_INVALID_ARGUMENT, NULL, ULLONG_MAX,
+                           ULLONG_MAX, 1u, 0u, err, YVEX_ERR_INVALID_ARG,
+                           "a typed writer-plan request is required");
+    switch (request->input_class) {
+    case YVEX_GGUF_WRITER_INPUT_COMPLETE_ARTIFACT:
+        if (request->input.complete.family_adapter != yvex_model_register_deepseek_v4())
+            return writer_fail(failure, YVEX_GGUF_WRITER_INVALID_ARGUMENT, NULL,
+                               ULLONG_MAX, ULLONG_MAX, 1u, 0u, err,
+                               YVEX_ERR_UNSUPPORTED,
+                               "writer family adapter is unsupported");
+        return writer_plan_build_deepseek(
+            out, request->quant_plan,
+            (const yvex_deepseek_gguf_map *)request->input.complete.lowering,
+            request->input.complete.verification, request->options, failure, err);
+    case YVEX_GGUF_WRITER_INPUT_TENSOR_PROOF:
+        return writer_plan_build_tensor_proof(
+            out, request->quant_plan, request->input.tensor_proof.tensors,
+            request->input.tensor_proof.tensor_count, request->options, failure, err);
+    default:
+        return writer_fail(failure, YVEX_GGUF_WRITER_INVALID_ARGUMENT, NULL, ULLONG_MAX,
+                           ULLONG_MAX, YVEX_GGUF_WRITER_INPUT_TENSOR_PROOF,
+                           request->input_class, err, YVEX_ERR_INVALID_ARG,
+                           "writer-plan input class is unsupported");
+    }
 }
 
 /* Purpose: release all independently owned writer-plan state idempotently.
@@ -1262,27 +1237,4 @@ const unsigned char *yvex_gguf_writer_plan_prefix(const yvex_gguf_writer_plan *p
         return NULL;
     *byte_count = plan->prefix_bytes;
     return plan->prefix;
-}
-
-/* Purpose: project a writer-plan result code to stable diagnostic text.
- * Inputs: typed writer code.
- * Effects: none.
- * Failure: unknown values map to an explicit unknown spelling.
- * Boundary: diagnostics never replace typed writer recovery. */
-const char *yvex_gguf_writer_code_name(yvex_gguf_writer_code code) {
-    return code >= YVEX_GGUF_WRITER_OK &&
-                   (size_t)code < sizeof(writer_code_names) / sizeof(writer_code_names[0])
-               ? writer_code_names[code]
-               : "unknown";
-}
-
-/* Purpose: report availability of immutable GGUF v3 writer planning.
- * Inputs: optional borrowed reason output.
- * Effects: publishes one static implementation-boundary explanation.
- * Failure: compiled writer planning is unconditional and returns supported.
- * Boundary: does not claim file emission, artifact admission, or runtime support. */
-int yvex_gguf_writer_supported(const char **reason) {
-    if (reason)
-        *reason = "immutable GGUF v3 writer plans are implemented";
-    return 1;
 }

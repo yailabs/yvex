@@ -13,7 +13,6 @@
  * Failure: preserves caller ownership and returns typed admission, state, or operation failures. */
 
 #include <yvex/internal/backend.h>
-#include <yvex/internal/quant_numeric.h>
 
 #include <limits.h>
 #include <math.h>
@@ -22,48 +21,6 @@
 #include <string.h>
 
 static int backend_desc_valid(const yvex_backend_tensor_desc *desc, yvex_error *err);
-
-/* Projects immutable numeric truth without probing hardware or launching work. */
-/* Purpose: Implement the canonical qtype refuse mechanism owned by the backend boundary.
- * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
- * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
- * Failure: Returns a typed backend refusal and publishes no partial success state.
- * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
-void yvex_backend_qtype_refuse(yvex_backend_qtype_fact *fact,
-                               const char *backend,
-                               const char *qtype)
-{
-    const yvex_quant_numeric_capability *capability;
-    int available = 0;
-
-    if (!fact) return;
-    fact->backend = backend ? backend : "unknown";
-    fact->qtype = qtype ? qtype : "unknown";
-    capability = yvex_quant_numeric_capability_by_name(qtype);
-    if (!capability) {
-        fact->compute_status = "unknown-qtype";
-        fact->reason = "unknown-qtype";
-        return;
-    }
-    if (backend && strcmp(backend, "cpu") == 0)
-        available = capability->dedicated_cpu_compute_available;
-    else if (backend && strcmp(backend, "cuda") == 0)
-        available = capability->dedicated_cuda_compute_available;
-    else {
-        fact->compute_status = "unsupported-backend";
-        fact->reason = "backend-not-covered-by-numeric-contract";
-        return;
-    }
-    fact->compute_status = available ? "available" : "unavailable";
-    fact->reason = available
-        ? "dedicated-encoded-row-dot-v1"
-        : yvex_quant_refusal_name(
-              capability->identity_known && capability->storage_admitted
-                  ? backend && strcmp(backend, "cuda") == 0
-                      ? YVEX_QUANT_REFUSAL_CUDA_COMPUTE_UNAVAILABLE
-                      : YVEX_QUANT_REFUSAL_CPU_COMPUTE_UNAVAILABLE
-                  : capability->refusal);
-}
 
 static const char *const backend_kind_names[] = {"cpu", "cuda", "metal", "rocm"};
 static const char *const backend_status_names[] = {
@@ -264,7 +221,7 @@ const char *yvex_backend_capability_name(yvex_backend_capability capability)
 /* Purpose: Select and construct the requested backend kind through its canonical implementation.
  * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
  * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
- * Failure: Returns a typed backend refusal and publishes no partial success state.
+ * Failure: Returns a typed refusal; a non-null error owner exists only for checked cleanup retry.
  * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
 int yvex_backend_open(yvex_backend **out,
                       const yvex_backend_options *options,
@@ -286,7 +243,9 @@ int yvex_backend_open(yvex_backend **out,
     }
 
     if (kind == YVEX_BACKEND_KIND_CPU) {
-        return yvex_backend_open_cpu_impl(out, memory_limit_bytes, err);
+        int rc = yvex_backend_open_cpu(out, err);
+        if (rc == YVEX_OK) (*out)->stats.memory_limit_bytes = memory_limit_bytes;
+        return rc;
     }
     if (kind == YVEX_BACKEND_KIND_CUDA) {
         return yvex_backend_open_cuda_impl(out, options ? options->device : NULL,
@@ -299,20 +258,6 @@ int yvex_backend_open(yvex_backend **out,
     return YVEX_ERR_UNSUPPORTED;
 }
 
-/* Purpose: Construct the CPU backend through the same public admission contract as other kinds.
- * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
- * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
- * Failure: Returns a typed backend refusal and publishes no partial success state.
- * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
-int yvex_backend_open_cpu(yvex_backend **out, yvex_error *err)
-{
-    yvex_backend_options options;
-
-    memset(&options, 0, sizeof(options));
-    options.kind = YVEX_BACKEND_KIND_CPU;
-    return yvex_backend_open(out, &options, err);
-}
-
 /* Purpose: Project whether admitted state satisfies context available without promoting a higher capability.
  * Inputs: None; immutable owner constants determine the result.
  * Effects: Does not mutate caller-visible or owner state.
@@ -323,14 +268,14 @@ int yvex_backend_cuda_context_available(void)
     yvex_backend *backend = NULL;
     yvex_backend_options options;
     yvex_error err;
-    int rc;
+    int close_rc, rc;
 
     memset(&options, 0, sizeof(options));
     options.kind = YVEX_BACKEND_KIND_CUDA;
     yvex_error_clear(&err);
     rc = yvex_backend_open(&backend, &options, &err);
-    yvex_backend_close(backend);
-    return rc == YVEX_OK;
+    close_rc = yvex_backend_close_checked(&backend, &err);
+    return rc == YVEX_OK && close_rc == YVEX_OK;
 }
 
 /* Purpose: Project whether admitted state satisfies available without promoting a higher capability.
@@ -343,23 +288,144 @@ int yvex_backend_cuda_available(void)
     return yvex_backend_cuda_context_available();
 }
 
-/* Purpose: Release the resources owned by close without changing borrowed inputs.
- * Inputs: An owned object that may be null or already released where its lifecycle permits.
- * Effects: Releases only resources owned by the supplied object and leaves it reset or unusable.
- * Failure: Null and already-released inputs follow the idempotent lifecycle contract.
- * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
-void yvex_backend_close(yvex_backend *backend)
+/* Purpose: discharge exactly one previously acquired shared-resource lease.
+ * Inputs: the still-live primary owner named by the child registration.
+ * Effects: atomically decrements only the packed live-child count and never clears CLOSING.
+ * Failure: missing ownership or underflow leaves the lifecycle unchanged for diagnosis and retry.
+ * Boundary: callers must not dereference the owner after successful release. */
+static int backend_shared_owner_release(yvex_backend *owner, yvex_error *err)
 {
-    yvex_error err;
+    unsigned long long desired, observed;
+
+    if (!owner) {
+        yvex_error_set(err, YVEX_ERR_STATE, "backend.shared.release",
+                       "backend resource owner is required");
+        return YVEX_ERR_STATE;
+    }
+    observed = atomic_load_explicit(&owner->lifecycle, memory_order_acquire);
+    for (;;) {
+        if (!(observed & YVEX_BACKEND_LIFECYCLE_CHILD_MASK)) {
+            yvex_error_set(err, YVEX_ERR_STATE, "backend.shared.release",
+                           "backend shared-resource lease is not registered");
+            return YVEX_ERR_STATE;
+        }
+        desired = observed - 1ull;
+        if (atomic_compare_exchange_weak_explicit(
+                &owner->lifecycle, &observed, desired,
+                memory_order_acq_rel, memory_order_acquire)) {
+            yvex_error_clear(err);
+            return YVEX_OK;
+        }
+    }
+}
+
+/* Purpose: atomically make one backend cleanup-only before any owned resource is released.
+ * Inputs: a stable exclusive backend owner and typed error output.
+ * Effects: irreversibly records CLOSING while preserving the exact live-child count.
+ * Failure: live children refuse physical cleanup after the terminal state is recorded.
+ * Boundary: admission performs no teardown; checked close or an outer lifecycle owner does that work. */
+int yvex_backend_close_admit(yvex_backend *backend, yvex_error *err)
+{
+    unsigned long long desired, observed;
 
     if (!backend) {
-        return;
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "backend.close.admit",
+                       "backend is required");
+        return YVEX_ERR_INVALID_ARG;
     }
-    yvex_error_clear(&err);
+    observed = atomic_load_explicit(&backend->lifecycle, memory_order_acquire);
+    while (!(observed & YVEX_BACKEND_LIFECYCLE_CLOSING)) {
+        desired = observed | YVEX_BACKEND_LIFECYCLE_CLOSING;
+        if (atomic_compare_exchange_weak_explicit(
+                &backend->lifecycle, &observed, desired,
+                memory_order_acq_rel, memory_order_acquire)) {
+            observed = desired;
+            break;
+        }
+    }
+    backend->status = YVEX_BACKEND_STATUS_FAILED;
+    if (observed & YVEX_BACKEND_LIFECYCLE_CHILD_MASK) {
+        yvex_error_set(err, YVEX_ERR_STATE, "backend.close.admit",
+                       "backend context still has live shared children");
+        return YVEX_ERR_STATE;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/* Purpose: release one backend through pointer ownership while preserving retryable child ownership.
+ * Inputs: address of an exclusively owned backend pointer and typed error output.
+ * Effects: releases pinned staging and backend resources, then nulls ownership only after discharge.
+ * Failure: pre-release failure preserves the backend pointer; post-release diagnostics remain observable.
+ * Boundary: public checked lifecycle used when completion depends on successful resource discharge. */
+int yvex_backend_close_checked(yvex_backend **backend_ptr, yvex_error *err)
+{
+    yvex_backend *backend;
+    yvex_backend *resource_owner;
+    yvex_error cleanup;
+    int first_rc = YVEX_OK, rc;
+
+    if (!backend_ptr || !*backend_ptr) {
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    backend = *backend_ptr;
+    resource_owner = backend->resource_owner;
+    if (backend->shared_owner_registered &&
+        (!resource_owner || resource_owner == backend ||
+         !(atomic_load_explicit(&resource_owner->lifecycle, memory_order_acquire) &
+           YVEX_BACKEND_LIFECYCLE_CHILD_MASK))) {
+        yvex_error_set(err, YVEX_ERR_STATE, "backend.close",
+                       "shared backend owner registration is inconsistent");
+        return YVEX_ERR_STATE;
+    }
+    rc = yvex_backend_close_admit(backend, err);
+    if (rc != YVEX_OK) return rc;
+    yvex_error_clear(&cleanup);
+    rc = yvex_backend_host_workspace_detach(backend, &cleanup);
+    if (rc != YVEX_OK) {
+        first_rc = rc;
+        if (err) *err = cleanup;
+        if (backend->host_workspace_base)
+            return first_rc;
+    }
     if (backend->vtable && backend->vtable->close) {
-        (void)backend->vtable->close(backend, &err);
+        yvex_error_clear(&cleanup);
+        rc = backend->vtable->close(backend, &cleanup);
+        if (rc != YVEX_OK && first_rc == YVEX_OK) {
+            first_rc = rc;
+            if (err) *err = cleanup;
+        }
+        if (rc != YVEX_OK && backend->impl)
+            return first_rc;
+    }
+    if (backend->shared_owner_registered) {
+        yvex_error_clear(&cleanup);
+        rc = backend_shared_owner_release(resource_owner, &cleanup);
+        if (rc != YVEX_OK) {
+            if (err) *err = cleanup;
+            return rc;
+        }
+        backend->shared_owner_registered = 0;
+        backend->resource_owner = NULL;
     }
     free(backend);
+    *backend_ptr = NULL;
+    if (first_rc == YVEX_OK) yvex_error_clear(err);
+    return first_rc;
+}
+
+/* Purpose: retain the installed idempotent close ABI for callers without a cleanup result channel.
+ * Inputs: exclusively owned backend or null.
+ * Effects: delegates complete ownership discharge to the checked backend lifecycle.
+ * Failure: legacy callers cannot observe cleanup failure; completion-sensitive owners use the internal ABI.
+ * Boundary: compatibility projection only; runtime completion never calls this wrapper. */
+void yvex_backend_close(yvex_backend *backend)
+{
+    yvex_error ignored;
+
+    yvex_error_clear(&ignored);
+    (void)yvex_backend_close_checked(&backend, &ignored);
 }
 
 /* Purpose: Implement the canonical kind of mechanism owned by the backend boundary.
@@ -379,7 +445,8 @@ yvex_backend_kind yvex_backend_kind_of(const yvex_backend *backend)
  * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
 yvex_backend_status yvex_backend_status_of(const yvex_backend *backend)
 {
-    return backend ? backend->status : YVEX_BACKEND_STATUS_FAILED;
+    return backend ? atomic_load_explicit(&backend->status, memory_order_acquire)
+                   : YVEX_BACKEND_STATUS_FAILED;
 }
 
 /* Purpose: Retrieve get memory stats from admitted immutable or owned state.
@@ -413,11 +480,15 @@ int yvex_backend_get_device_info(const yvex_backend *backend,
                                  yvex_backend_device_info *out,
                                  yvex_error *err)
 {
+    int rc;
+
     if (!backend || !out) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_get_device_info",
                        "backend and out are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "yvex_backend_get_device_info", err);
+    if (rc != YVEX_OK) return rc;
     if (!backend->vtable || !backend->vtable->device_info) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_get_device_info",
                        "backend does not provide device info");
@@ -447,6 +518,8 @@ int yvex_backend_tensor_alloc(yvex_backend *backend,
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_tensor_alloc", "backend is required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "yvex_backend_tensor_alloc", err);
+    if (rc != YVEX_OK) return rc;
     rc = backend_desc_valid(desc, err);
     if (rc != YVEX_OK) {
         return rc;
@@ -495,6 +568,12 @@ int yvex_backend_tensor_release(yvex_backend *backend,
                        "backend does not support tensor release");
         return YVEX_ERR_UNSUPPORTED;
     }
+    if (atomic_load_explicit(&backend->lifecycle, memory_order_acquire) &
+        YVEX_BACKEND_LIFECYCLE_CHILD_MASK) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_tensor_release",
+                       "backend tensor is still borrowed by shared children");
+        return YVEX_ERR_STATE;
+    }
     rc = backend->vtable->tensor_free(backend, *tensor, err);
     if (rc == YVEX_OK) {
         *tensor = NULL;
@@ -510,36 +589,6 @@ int yvex_backend_tensor_release(yvex_backend *backend,
 const char *yvex_device_tensor_name(const yvex_device_tensor *tensor)
 {
     return tensor && tensor->name ? tensor->name : "";
-}
-
-/* Purpose: Implement the canonical device tensor dtype mechanism owned by the backend boundary.
- * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
- * Effects: Does not mutate caller-visible or owner state.
- * Failure: Returns the canonical unknown or zero sentinel for an invalid typed value.
- * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
-yvex_dtype yvex_device_tensor_dtype(const yvex_device_tensor *tensor)
-{
-    return tensor ? tensor->dtype : YVEX_DTYPE_UNKNOWN;
-}
-
-/* Purpose: Implement the canonical device tensor rank mechanism owned by the backend boundary.
- * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
- * Effects: Does not mutate caller-visible or owner state.
- * Failure: Returns the canonical unknown or zero sentinel for an invalid typed value.
- * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
-unsigned int yvex_device_tensor_rank(const yvex_device_tensor *tensor)
-{
-    return tensor ? tensor->rank : 0;
-}
-
-/* Purpose: Implement the canonical device tensor dims mechanism owned by the backend boundary.
- * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
- * Effects: Does not mutate caller-visible or owner state.
- * Failure: Returns the canonical unknown or zero sentinel for an invalid typed value.
- * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
-const unsigned long long *yvex_device_tensor_dims(const yvex_device_tensor *tensor)
-{
-    return tensor ? tensor->dims : NULL;
 }
 
 /* Purpose: Implement the canonical device tensor bytes mechanism owned by the backend boundary.
@@ -573,11 +622,15 @@ int yvex_backend_tensor_write(yvex_backend *backend,
                               unsigned long long len,
                               yvex_error *err)
 {
+    int rc;
+
     if (!backend || !tensor || !src) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_tensor_write",
                        "backend, tensor, and src are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "yvex_backend_tensor_write", err);
+    if (rc != YVEX_OK) return rc;
     if (!backend->vtable || !backend->vtable->tensor_write) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_tensor_write",
                        "backend does not support tensor writes");
@@ -597,11 +650,15 @@ int yvex_backend_tensor_read(yvex_backend *backend,
                              unsigned long long len,
                              yvex_error *err)
 {
+    int rc;
+
     if (!backend || !tensor || !dst) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_tensor_read",
                        "backend, tensor, and dst are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "yvex_backend_tensor_read", err);
+    if (rc != YVEX_OK) return rc;
     if (!backend->vtable || !backend->vtable->tensor_read) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_tensor_read",
                        "backend does not support tensor reads");
@@ -620,11 +677,15 @@ int yvex_backend_tensor_copy(yvex_backend *backend,
                              const yvex_device_tensor *src,
                              yvex_error *err)
 {
+    int rc;
+
     if (!backend || !dst || !src) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_tensor_copy",
                        "backend, dst, and src are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "yvex_backend_tensor_copy", err);
+    if (rc != YVEX_OK) return rc;
     if (!backend->vtable || !backend->vtable->tensor_copy) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_tensor_copy",
                        "backend does not support tensor copy");
@@ -640,10 +701,14 @@ int yvex_backend_tensor_copy(yvex_backend *backend,
  * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
 int yvex_backend_sync(yvex_backend *backend, yvex_error *err)
 {
+    int rc;
+
     if (!backend) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_sync", "backend is required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "yvex_backend_sync", err);
+    if (rc != YVEX_OK) return rc;
     if (!backend->vtable || !backend->vtable->sync) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_sync",
                        "backend does not support sync");
@@ -691,6 +756,13 @@ int yvex_backend_query_capability(const yvex_backend *backend,
     memset(out, 0, sizeof(*out));
     out->backend_kind = backend->kind;
     out->variant = variant;
+    if (backend_cleanup_only(backend)) {
+        out->state = YVEX_BACKEND_CAPABILITY_FAILED;
+        out->reason = YVEX_BACKEND_CAPABILITY_REASON_CLEANUP_FAILED;
+        backend_variant_dtypes(out);
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
     out->state = YVEX_BACKEND_CAPABILITY_UNSUPPORTED;
     out->reason = YVEX_BACKEND_CAPABILITY_REASON_VARIANT_UNSUPPORTED;
     backend_variant_dtypes(out);
@@ -705,18 +777,6 @@ int yvex_backend_query_capability(const yvex_backend *backend,
         backend_variant_dtypes(out);
     }
     return rc;
-}
-
-/* Purpose: Project whether admitted state satisfies variant supported without promoting a higher capability. */
-static int backend_variant_supported(const yvex_backend *backend,
-                                     yvex_backend_operation_variant variant)
-{
-    yvex_backend_capability_result result;
-    yvex_error err;
-
-    yvex_error_clear(&err);
-    return yvex_backend_query_capability(backend, variant, &result, &err) == YVEX_OK &&
-           result.state == YVEX_BACKEND_CAPABILITY_SUPPORTED;
 }
 
 /* Purpose: Project whether admitted state satisfies supports without promoting a higher capability.
@@ -755,11 +815,15 @@ int yvex_backend_op_embed(yvex_backend *backend,
                           yvex_device_tensor *out,
                           yvex_error *err)
 {
+    int rc;
+
     if (!backend || !embedding || !token_ids || !out || token_count == 0) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_embed",
                        "backend, embedding, token ids, and output are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "yvex_backend_op_embed", err);
+    if (rc != YVEX_OK) return rc;
     if (!backend->vtable || !backend->vtable->op_embed) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_embed",
                        "backend does not support embed op");
@@ -780,11 +844,15 @@ int yvex_backend_op_rms_norm(yvex_backend *backend,
                              yvex_device_tensor *out,
                              yvex_error *err)
 {
+    int rc;
+
     if (!backend || !input || !weight || !out) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rms_norm",
                        "backend, input, weight, and output are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "yvex_backend_op_rms_norm", err);
+    if (rc != YVEX_OK) return rc;
     if (!isfinite(epsilon) || epsilon <= 0.0f) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rms_norm",
                        "epsilon must be finite and positive");
@@ -810,11 +878,15 @@ int yvex_backend_op_rope(yvex_backend *backend,
                          yvex_device_tensor *out,
                          yvex_error *err)
 {
+    int rc;
+
     if (!backend || !input || !out) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rope",
                        "backend, input, and output are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "yvex_backend_op_rope", err);
+    if (rc != YVEX_OK) return rc;
     if (!isfinite(rope_base) || rope_base <= 1.0f) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rope",
                        "rope_base must be finite and greater than 1");
@@ -840,11 +912,15 @@ int yvex_backend_op_matmul(yvex_backend *backend,
                            yvex_device_tensor *out,
                            yvex_error *err)
 {
+    int rc;
+
     if (!backend || !input || !weight || !out) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_matmul",
                        "backend, input, weight, and output are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "yvex_backend_op_matmul", err);
+    if (rc != YVEX_OK) return rc;
     if (!backend->vtable || !backend->vtable->op_matmul) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_matmul",
                        "backend does not support matmul op");
@@ -868,12 +944,16 @@ int yvex_backend_op_mlp(yvex_backend *backend,
                         yvex_device_tensor *out,
                         yvex_error *err)
 {
+    int rc;
+
     if (!backend || !input || !gate_weight || !up_weight || !down_weight ||
         !options || !intermediate || !out) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_mlp",
                        "backend, input, weights, options, intermediate, and output are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "yvex_backend_op_mlp", err);
+    if (rc != YVEX_OK) return rc;
     if (!backend->vtable || !backend->vtable->op_mlp) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_mlp",
                        "backend does not support MLP op");
@@ -901,12 +981,16 @@ int yvex_backend_op_attention(yvex_backend *backend,
                               yvex_device_tensor *out,
                               yvex_error *err)
 {
+    int rc;
+
     if (!backend || !query || !keys || !values || !score_scratch ||
         !probability_scratch || !out) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_attention",
                        "backend, Q/K/V, scratches, and output are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    rc = backend_dispatch_admit(backend, "yvex_backend_op_attention", err);
+    if (rc != YVEX_OK) return rc;
     if (seq_len == 0) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_attention",
                        "seq_len must be positive");
@@ -969,18 +1053,6 @@ static int backend_desc_valid(const yvex_backend_tensor_desc *desc, yvex_error *
     return YVEX_OK;
 }
 
-/* Purpose: prove exact F32 storage geometry without multiplying past U64.
- * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
- * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
- * Failure: Returns a typed backend refusal and publishes no partial success state.
- * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
-int yvex_backend_tensor_f32_elements(const yvex_device_tensor *tensor,
-                                     unsigned long long elements)
-{
-    return tensor && elements <= ULLONG_MAX / sizeof(float) &&
-           tensor->bytes == elements * (unsigned long long)sizeof(float);
-}
-
 /* Purpose: compute the deterministic positive real root shared by CPU and CUDA RoPE.
  * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
  * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
@@ -1028,7 +1100,9 @@ int yvex_backend_memory_can_add(const yvex_backend *backend,
 {
     unsigned long long next;
 
-    if (backend->stats.allocated_bytes > ULLONG_MAX - bytes) {
+    if (backend->stats.allocated_bytes > ULLONG_MAX - bytes ||
+        backend->stats.allocation_count == ULLONG_MAX ||
+        backend->stats.allocation_events == ULLONG_MAX) {
         yvex_error_set(err, YVEX_ERR_NOMEM, where, "allocated byte counter overflow");
         return YVEX_ERR_NOMEM;
     }
@@ -1043,34 +1117,6 @@ int yvex_backend_memory_can_add(const yvex_backend *backend,
     return YVEX_OK;
 }
 
-/* Purpose: commit one admitted allocation to canonical backend counters.
- * Inputs: A validated configuration, checked resource limits, and caller-owned result storage.
- * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
- * Failure: Returns a typed backend refusal and publishes no partial success state.
- * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
-void yvex_backend_memory_acquire(yvex_backend *backend, unsigned long long bytes)
-{
-    backend->stats.allocated_bytes += bytes;
-    backend->stats.allocation_count += 1ull;
-    if (backend->stats.allocated_bytes > backend->stats.peak_allocated_bytes) {
-        backend->stats.peak_allocated_bytes = backend->stats.allocated_bytes;
-    }
-}
-
-/* Purpose: release one owned allocation from canonical backend counters.
- * Inputs: An owned object that may be null or already released where its lifecycle permits.
- * Effects: Releases only resources owned by the supplied object and leaves it reset or unusable.
- * Failure: Null and already-released inputs follow the idempotent lifecycle contract.
- * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
-void yvex_backend_memory_release(yvex_backend *backend, unsigned long long bytes)
-{
-    backend->stats.allocated_bytes =
-        backend->stats.allocated_bytes >= bytes ? backend->stats.allocated_bytes - bytes : 0ull;
-    if (backend->stats.allocation_count > 0ull) {
-        backend->stats.allocation_count -= 1ull;
-    }
-}
-
 /* Purpose: validate one exact whole-tensor read or write.
  * Inputs: Immutable typed facts whose ownership, shape, or lifecycle state must be admitted.
  * Effects: Does not mutate caller-visible or owner state.
@@ -1082,7 +1128,7 @@ int yvex_backend_tensor_rw_validate(const char *where,
                                     unsigned long long len,
                                     yvex_error *err)
 {
-    if (!yvex_backend_tensor_owner_is(backend, tensor)) {
+    if (!backend_tensor_owner_is(backend, tensor)) {
         yvex_error_set(err, YVEX_ERR_STATE, where, "tensor does not belong to this backend");
         return YVEX_ERR_STATE;
     }
@@ -1105,8 +1151,8 @@ int yvex_backend_tensor_copy_validate(const yvex_backend *backend,
                                       const char *where,
                                       yvex_error *err)
 {
-    if (!yvex_backend_tensor_owner_is(backend, dst) ||
-        !yvex_backend_tensor_owner_is(backend, src)) {
+    if (!backend_tensor_owner_is(backend, dst) ||
+        !backend_tensor_owner_is(backend, src)) {
         yvex_error_set(err, YVEX_ERR_STATE, where,
                        "source and destination must belong to this backend");
         return YVEX_ERR_STATE;
@@ -1142,7 +1188,7 @@ static int backend_validate_f32_set(const yvex_backend *backend,
     size_t index;
 
     for (index = 0; index < count; ++index) {
-        if (!yvex_backend_tensor_owner_is(backend, tensors[index])) {
+        if (!backend_tensor_owner_is(backend, tensors[index])) {
             yvex_error_set(err, YVEX_ERR_STATE, where, owner_message);
             return YVEX_ERR_STATE;
         }
@@ -1192,8 +1238,8 @@ int yvex_backend_validate_embed(const yvex_backend *backend,
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, where, "embedding validation arguments are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (!yvex_backend_tensor_owner_is(backend, embedding) ||
-        !yvex_backend_tensor_owner_is(backend, out)) {
+    if (!backend_tensor_owner_is(backend, embedding) ||
+        !backend_tensor_owner_is(backend, out)) {
         yvex_error_set(err, YVEX_ERR_STATE, where,
                        "embedding and output tensors must belong to this backend");
         return YVEX_ERR_STATE;
@@ -1216,7 +1262,7 @@ int yvex_backend_validate_embed(const yvex_backend *backend,
     }
     elements = *hidden_size * *vocab_size;
     if ((embedding->dtype == YVEX_DTYPE_F32 &&
-         !yvex_backend_tensor_f32_elements(embedding, elements)) ||
+         !backend_tensor_f32_elements(embedding, elements)) ||
         (embedding->dtype == YVEX_DTYPE_F16 &&
          !backend_f16_elements(embedding, elements))) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, where,
@@ -1227,7 +1273,7 @@ int yvex_backend_validate_embed(const yvex_backend *backend,
     }
     if (token_count > ULLONG_MAX / *hidden_size || out->rank != 2 ||
         out->dims[0] != token_count || out->dims[1] != *hidden_size ||
-        !yvex_backend_tensor_f32_elements(out, token_count * *hidden_size)) {
+        !backend_tensor_f32_elements(out, token_count * *hidden_size)) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, where,
                        token_count > ULLONG_MAX / *hidden_size
                            ? "output dimensions overflow"
@@ -1267,9 +1313,9 @@ int yvex_backend_validate_rms_norm(const yvex_backend *backend,
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, where, "hidden-size output is required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (!yvex_backend_tensor_owner_is(backend, input) ||
-        !yvex_backend_tensor_owner_is(backend, weight) ||
-        !yvex_backend_tensor_owner_is(backend, out)) {
+    if (!backend_tensor_owner_is(backend, input) ||
+        !backend_tensor_owner_is(backend, weight) ||
+        !backend_tensor_owner_is(backend, out)) {
         yvex_error_set(err, YVEX_ERR_STATE, where,
                        "input, weight, and output tensors must belong to this backend");
         return YVEX_ERR_STATE;
@@ -1303,15 +1349,15 @@ int yvex_backend_validate_rms_norm(const yvex_backend *backend,
                                  : "RMSNorm output shape must match input shape");
         return YVEX_ERR_FORMAT;
     }
-    if (!yvex_backend_tensor_f32_elements(input, *hidden_size) ||
-        !yvex_backend_tensor_f32_elements(out, *hidden_size) ||
+    if (!backend_tensor_f32_elements(input, *hidden_size) ||
+        !backend_tensor_f32_elements(out, *hidden_size) ||
         (weight->dtype == YVEX_DTYPE_F32 &&
-         !yvex_backend_tensor_f32_elements(weight, *hidden_size)) ||
+         !backend_tensor_f32_elements(weight, *hidden_size)) ||
         (weight->dtype == YVEX_DTYPE_F16 &&
          !backend_f16_elements(weight, *hidden_size))) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, where,
-                       !yvex_backend_tensor_f32_elements(input, *hidden_size) ||
-                               !yvex_backend_tensor_f32_elements(out, *hidden_size)
+                       !backend_tensor_f32_elements(input, *hidden_size) ||
+                               !backend_tensor_f32_elements(out, *hidden_size)
                            ? "RMSNorm input/output bytes must match F32 hidden size"
                            : weight->dtype == YVEX_DTYPE_F32
                                  ? "RMSNorm F32 weight bytes must match hidden size"
@@ -1401,9 +1447,9 @@ int yvex_backend_validate_matmul(const yvex_backend *backend,
         yvex_error_set(err, YVEX_ERR_BOUNDS, where, "matmul-element-count-overflow");
         return YVEX_ERR_BOUNDS;
     }
-    if (!yvex_backend_tensor_f32_elements(input, m * k) ||
-        !yvex_backend_tensor_f32_elements(weight, k * n) ||
-        !yvex_backend_tensor_f32_elements(out, m * n)) {
+    if (!backend_tensor_f32_elements(input, m * k) ||
+        !backend_tensor_f32_elements(weight, k * n) ||
+        !backend_tensor_f32_elements(out, m * n)) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, where,
                        "matmul tensor bytes must match F32 shape accounting");
         return YVEX_ERR_BOUNDS;
@@ -1476,12 +1522,12 @@ int yvex_backend_validate_attention(const yvex_backend *backend,
                            : "attention score/probability scratches must have dims [seq_len]");
         return YVEX_ERR_FORMAT;
     }
-    if (!yvex_backend_tensor_f32_elements(query, head_dim) ||
-        !yvex_backend_tensor_f32_elements(keys, kv_elements) ||
-        !yvex_backend_tensor_f32_elements(values, kv_elements) ||
-        !yvex_backend_tensor_f32_elements(score_scratch, seq_len) ||
-        !yvex_backend_tensor_f32_elements(probability_scratch, seq_len) ||
-        !yvex_backend_tensor_f32_elements(out, head_dim)) {
+    if (!backend_tensor_f32_elements(query, head_dim) ||
+        !backend_tensor_f32_elements(keys, kv_elements) ||
+        !backend_tensor_f32_elements(values, kv_elements) ||
+        !backend_tensor_f32_elements(score_scratch, seq_len) ||
+        !backend_tensor_f32_elements(probability_scratch, seq_len) ||
+        !backend_tensor_f32_elements(out, head_dim)) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, where,
                        "attention tensor bytes must match F32 shape accounting");
         return YVEX_ERR_BOUNDS;
@@ -1580,9 +1626,9 @@ int yvex_backend_validate_mlp(const yvex_backend *backend,
                            "mlp routed weights must match expert/hidden/ffn geometry");
             return YVEX_ERR_FORMAT;
         }
-        if (!yvex_backend_tensor_f32_elements(gate_weight, routed_up) ||
-            !yvex_backend_tensor_f32_elements(up_weight, routed_up) ||
-            !yvex_backend_tensor_f32_elements(down_weight, routed_down)) {
+        if (!backend_tensor_f32_elements(gate_weight, routed_up) ||
+            !backend_tensor_f32_elements(up_weight, routed_up) ||
+            !backend_tensor_f32_elements(down_weight, routed_down)) {
             yvex_error_set(err, YVEX_ERR_BOUNDS, where,
                            "mlp routed weight bytes must match F32 shape accounting");
             return YVEX_ERR_BOUNDS;
@@ -1599,17 +1645,17 @@ int yvex_backend_validate_mlp(const yvex_backend *backend,
                            "mlp dense weights must have hidden/ffn transpose geometry");
             return YVEX_ERR_FORMAT;
         }
-        if (!yvex_backend_tensor_f32_elements(gate_weight, up_elements) ||
-            !yvex_backend_tensor_f32_elements(up_weight, up_elements) ||
-            !yvex_backend_tensor_f32_elements(down_weight, down_elements)) {
+        if (!backend_tensor_f32_elements(gate_weight, up_elements) ||
+            !backend_tensor_f32_elements(up_weight, up_elements) ||
+            !backend_tensor_f32_elements(down_weight, down_elements)) {
             yvex_error_set(err, YVEX_ERR_BOUNDS, where,
                            "mlp dense weight bytes must match F32 shape accounting");
             return YVEX_ERR_BOUNDS;
         }
     }
-    if (!yvex_backend_tensor_f32_elements(input, batch * hidden) ||
-        !yvex_backend_tensor_f32_elements(intermediate, batch * ffn) ||
-        !yvex_backend_tensor_f32_elements(out, batch * hidden)) {
+    if (!backend_tensor_f32_elements(input, batch * hidden) ||
+        !backend_tensor_f32_elements(intermediate, batch * ffn) ||
+        !backend_tensor_f32_elements(out, batch * hidden)) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, where,
                        "mlp tensor bytes must match F32 shape accounting");
         return YVEX_ERR_BOUNDS;
@@ -1623,15 +1669,305 @@ int yvex_backend_validate_mlp(const yvex_backend *backend,
     return YVEX_OK;
 }
 
-/* Purpose: Implement the canonical tensor owner is mechanism owned by the backend boundary.
- * Inputs: Typed caller-owned outputs and immutable values declared by this subsystem ABI.
- * Effects: Updates only caller-owned result storage or lifecycle state explicitly named by the ABI.
- * Failure: Returns a typed backend refusal and publishes no partial success state.
- * Boundary: Backend admission and execution; does not infer model topology or generation capability. */
-int yvex_backend_tensor_owner_is(const yvex_backend *backend,
-                                 const yvex_device_tensor *tensor)
+/* Purpose: attach one stable host/device residency mapping to a backend execution context.
+ * Inputs: host arena plus a tensor owned by this backend or its exact retained context owner.
+ * Effects: records a borrowed immutable mapping; the tensor owner retains physical ownership.
+ * Failure: rejects wrong owner relation, extent, generation, or an existing mapping.
+ * Boundary: maps bytes only and does not infer tensors, qtypes, or family topology. */
+int yvex_backend_resident_attach(yvex_backend *backend, const unsigned char *host_base,
+                                 unsigned long long bytes,
+                                 const yvex_device_tensor *device_tensor,
+                                 unsigned long long generation, yvex_error *err)
 {
-    return backend && tensor && tensor->owner == backend && tensor->owner_id != 0;
+    if (!backend || backend_cleanup_only(backend) ||
+        backend->kind != YVEX_BACKEND_KIND_CUDA ||
+        backend->status == YVEX_BACKEND_STATUS_FAILED || !host_base || !bytes ||
+        !device_tensor ||
+        (!backend_tensor_owner_is(backend, device_tensor) &&
+         backend->resource_owner != device_tensor->owner) ||
+        device_tensor->bytes < bytes || !device_tensor->data || !generation) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "backend.residency.attach",
+                       "same-owner or exact context-owner CUDA tensor is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (backend->resident_host_base) {
+        yvex_error_set(err, YVEX_ERR_STATE, "backend.residency.attach",
+                       "backend residency mapping is already attached");
+        return YVEX_ERR_STATE;
+    }
+    backend->resident_host_base = host_base;
+    backend->resident_host_bytes = bytes;
+    backend->resident_device_tensor = device_tensor;
+    backend->resident_device_address = (unsigned long long)(uintptr_t)device_tensor->data;
+    backend->resident_generation = generation;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/* Purpose: detach one borrowed residency mapping before its device tensor is released.
+ * Inputs: owning backend or null.
+ * Effects: clears only the backend's borrowed host/device mapping facts.
+ * Failure: null is a harmless no-op.
+ * Boundary: does not free the device tensor or host arena. */
+void yvex_backend_resident_detach(yvex_backend *backend)
+{
+    if (!backend)
+        return;
+    backend->resident_host_base = NULL;
+    backend->resident_host_bytes = 0ull;
+    backend->resident_device_tensor = NULL;
+    backend->resident_device_address = 0ull;
+    backend->resident_generation = 0ull;
+}
+
+/* Purpose: translate one borrowed host subrange into its stable resident device address.
+ * Inputs: backend mapping and exact host byte range.
+ * Effects: writes only the resolved device address on a complete hit.
+ * Failure: returns miss for an unattached/outside range and invalid for arithmetic overflow.
+ * Boundary: performs no allocation, transfer, or fallback. */
+int yvex_backend_resident_resolve(const yvex_backend *backend, const unsigned char *host,
+                                  unsigned long long bytes,
+                                  unsigned long long *device_address)
+{
+    uintptr_t base, pointer;
+    unsigned long long offset;
+
+    if (device_address)
+        *device_address = 0ull;
+    if (!backend || backend_cleanup_only(backend) ||
+        backend->status == YVEX_BACKEND_STATUS_FAILED || !host || !bytes ||
+        !device_address || !backend->resident_host_base)
+        return YVEX_BACKEND_RESIDENT_MISS;
+    base = (uintptr_t)backend->resident_host_base;
+    pointer = (uintptr_t)host;
+    if (pointer < base)
+        return YVEX_BACKEND_RESIDENT_MISS;
+    offset = (unsigned long long)(pointer - base);
+    if (offset > backend->resident_host_bytes || bytes > backend->resident_host_bytes - offset)
+        return YVEX_BACKEND_RESIDENT_MISS;
+    if (backend->resident_device_address > ULLONG_MAX - offset)
+        return YVEX_BACKEND_RESIDENT_INVALID;
+    *device_address = backend->resident_device_address + offset;
+    return YVEX_BACKEND_RESIDENT_HIT;
+}
+
+/* Purpose: attach one stable reusable device workspace to a backend session.
+ * Inputs: CUDA backend, same-owner device tensor, generation, and error output.
+ * Effects: records one immutable workspace extent and resets its bump cursor.
+ * Failure: rejects wrong ownership, empty extent, or duplicate attachment.
+ * Boundary: does not allocate, resize, or select execution policy. */
+int yvex_backend_workspace_attach(yvex_backend *backend,
+                                  const yvex_device_tensor *device_tensor,
+                                  unsigned long long generation, yvex_error *err)
+{
+    if (!backend || backend_cleanup_only(backend) ||
+        backend->kind != YVEX_BACKEND_KIND_CUDA ||
+        backend->status == YVEX_BACKEND_STATUS_FAILED || !device_tensor ||
+        !backend_tensor_owner_is(backend, device_tensor) || !device_tensor->data ||
+        !device_tensor->bytes || !generation) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "backend.workspace.attach",
+                       "same-owner CUDA workspace tensor and generation are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (backend->workspace_device_tensor) {
+        yvex_error_set(err, YVEX_ERR_STATE, "backend.workspace.attach",
+                       "backend workspace is already attached");
+        return YVEX_ERR_STATE;
+    }
+    backend->workspace_device_tensor = device_tensor;
+    backend->workspace_device_address = (unsigned long long)(uintptr_t)device_tensor->data;
+    backend->workspace_bytes = device_tensor->bytes;
+    backend->workspace_generation = generation;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/* Purpose: detach one borrowed reusable workspace before releasing its tensor.
+ * Inputs: owning backend or null.
+ * Effects: clears workspace address, extent, cursor, peak, and generation.
+ * Failure: null is a harmless no-op.
+ * Boundary: tensor release remains the execution-session owner's responsibility. */
+void yvex_backend_workspace_detach(yvex_backend *backend)
+{
+    if (!backend)
+        return;
+    backend->workspace_device_tensor = NULL;
+    backend->workspace_device_address = 0ull;
+    backend->workspace_bytes = 0ull;
+    backend->workspace_cursor = 0ull;
+    backend->workspace_peak = 0ull;
+    backend->workspace_generation = 0ull;
+}
+
+/* Purpose: acquire one aligned stable subrange without allocating or resizing the workspace.
+ * Inputs: attached workspace, byte extent, power-of-two alignment, and address output.
+ * Effects: advances only the session-local bump cursor and peak counter.
+ * Failure: returns miss for no workspace/capacity and invalid for bad alignment or overflow.
+ * Boundary: caller serializes use; no implicit allocation or execution-mode fallback occurs. */
+int yvex_backend_workspace_acquire(yvex_backend *backend, unsigned long long bytes,
+                                   unsigned long long alignment,
+                                   unsigned long long *device_address)
+{
+    unsigned long long aligned, mask;
+
+    if (device_address)
+        *device_address = 0ull;
+    if (!backend || backend_cleanup_only(backend) ||
+        backend->status == YVEX_BACKEND_STATUS_FAILED || !device_address ||
+        !backend->workspace_device_tensor)
+        return YVEX_BACKEND_RESIDENT_MISS;
+    if (!bytes || !alignment || (alignment & (alignment - 1ull)) != 0ull)
+        return YVEX_BACKEND_RESIDENT_INVALID;
+    mask = alignment - 1ull;
+    if (backend->workspace_cursor > ULLONG_MAX - mask)
+        return YVEX_BACKEND_RESIDENT_INVALID;
+    aligned = (backend->workspace_cursor + mask) & ~mask;
+    if (aligned > backend->workspace_bytes || bytes > backend->workspace_bytes - aligned ||
+        backend->workspace_device_address > ULLONG_MAX - aligned)
+        return YVEX_BACKEND_RESIDENT_MISS;
+    *device_address = backend->workspace_device_address + aligned;
+    backend->workspace_cursor = aligned + bytes;
+    if (backend->workspace_cursor > backend->workspace_peak)
+        backend->workspace_peak = backend->workspace_cursor;
+    return YVEX_BACKEND_RESIDENT_HIT;
+}
+
+/* Purpose: prepare one backend-owned cold arena for standalone execution.
+ * Inputs: unprepared backend and exact bounded capacity.
+ * Effects: allocates once for backend lifetime and records owned cold preparation.
+ * Failure: duplicate preparation, overflow, or allocation failure preserves prior state.
+ * Boundary: runtime sessions attach their own arena and never call this fallback. */
+int yvex_backend_host_workspace_prepare_owned(yvex_backend *backend,
+                                              unsigned long long bytes,
+                                              yvex_error *err)
+{
+    unsigned char *base;
+    int rc;
+
+    if (!backend || backend_cleanup_only(backend) ||
+        backend->status == YVEX_BACKEND_STATUS_FAILED || !bytes ||
+        bytes > SIZE_MAX) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "backend.host_workspace.prepare",
+                       "owned host workspace capacity is invalid");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (backend->host_workspace_base) {
+        yvex_error_set(err, YVEX_ERR_STATE, "backend.host_workspace.prepare",
+                       "backend host workspace was already prepared");
+        return YVEX_ERR_STATE;
+    }
+    if (backend->vtable && backend->vtable->host_workspace_alloc)
+        rc = backend->vtable->host_workspace_alloc(backend, (size_t)bytes, &base, err);
+    else {
+        base = (unsigned char *)malloc((size_t)bytes);
+        rc = base ? YVEX_OK : YVEX_ERR_NOMEM;
+    }
+    if (!base) {
+        if (rc == YVEX_OK)
+            yvex_error_set(err, YVEX_ERR_NOMEM, "backend.host_workspace.prepare",
+                           "failed to allocate standalone host workspace");
+        return rc == YVEX_OK ? YVEX_ERR_NOMEM : rc;
+    }
+    backend->host_workspace_base = base;
+    backend->host_workspace_bytes = bytes;
+    backend->host_workspace_generation = 1ull;
+    backend->host_workspace_allocation_count = 1ull;
+    backend->host_workspace_owned = 1;
+    backend->host_workspace_pinned = backend->vtable &&
+                                     backend->vtable->host_workspace_free;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/* Purpose: detach one stable host arena at its session/backend lifecycle boundary.
+ * Inputs: backend with borrowed or owned host workspace and typed cleanup output.
+ * Effects: clears arena facts only after borrowed detach or successful physical release.
+ * Failure: pre-release failure preserves the complete attachment for exact retry.
+ * Boundary: borrowed session storage remains owned by the session. */
+int yvex_backend_host_workspace_detach(yvex_backend *backend, yvex_error *err)
+{
+    int rc = YVEX_OK;
+
+    if (!backend) goto done;
+    if (backend->host_workspace_owned && backend->host_workspace_pinned &&
+        backend->vtable && backend->vtable->host_workspace_free) {
+        rc = backend->vtable->host_workspace_free(
+            backend, &backend->host_workspace_base, err);
+    } else if (backend->host_workspace_owned) {
+        free(backend->host_workspace_base);
+        backend->host_workspace_base = NULL;
+    }
+    if (rc != YVEX_OK && backend->host_workspace_base)
+        return rc;
+    backend->host_workspace_base = NULL;
+    backend->host_workspace_bytes = 0ull;
+    backend->host_workspace_cursor = 0ull;
+    backend->host_workspace_peak = 0ull;
+    backend->host_workspace_generation = 0ull;
+    backend->host_workspace_allocation_count = 0ull;
+    backend->host_workspace_owned = 0;
+    backend->host_workspace_pinned = 0;
+done:
+    if (rc == YVEX_OK) yvex_error_clear(err);
+    return rc;
+}
+
+/* Purpose: acquire one aligned stable host subrange without allocating or resizing.
+ * Inputs: prepared arena, exact bytes, power-of-two alignment, and output address.
+ * Effects: advances cursor and peak only after a complete capacity check.
+ * Failure: miss reports absent/insufficient capacity; invalid reports malformed geometry.
+ * Boundary: no implicit preparation, growth, or execution-mode fallback occurs. */
+int yvex_backend_host_workspace_acquire(yvex_backend *backend,
+                                        unsigned long long bytes,
+                                        unsigned long long alignment,
+                                        void **address)
+{
+    uintptr_t base, current, aligned;
+    unsigned long long offset, mask;
+
+    if (address)
+        *address = NULL;
+    if (!backend || backend_cleanup_only(backend) ||
+        backend->status == YVEX_BACKEND_STATUS_FAILED || !address ||
+        !backend->host_workspace_base)
+        return YVEX_BACKEND_RESIDENT_MISS;
+    if (!bytes || !alignment || (alignment & (alignment - 1ull)) != 0ull)
+        return YVEX_BACKEND_RESIDENT_INVALID;
+    mask = alignment - 1ull;
+    base = (uintptr_t)backend->host_workspace_base;
+    if (backend->host_workspace_cursor > UINTPTR_MAX - base ||
+        base + backend->host_workspace_cursor > UINTPTR_MAX - mask)
+        return YVEX_BACKEND_RESIDENT_INVALID;
+    current = base + backend->host_workspace_cursor;
+    aligned = (current + (uintptr_t)mask) & ~(uintptr_t)mask;
+    offset = (unsigned long long)(aligned - base);
+    if (offset > backend->host_workspace_bytes ||
+        bytes > backend->host_workspace_bytes - offset)
+        return YVEX_BACKEND_RESIDENT_MISS;
+    *address = (void *)aligned;
+    backend->host_workspace_cursor = offset + bytes;
+    if (backend->host_workspace_cursor > backend->host_workspace_peak)
+        backend->host_workspace_peak = backend->host_workspace_cursor;
+    return YVEX_BACKEND_RESIDENT_HIT;
+}
+
+/* Purpose: project exact host arena lifecycle and allocation evidence.
+ * Inputs: backend and caller-owned summary.
+ * Effects: writes immutable facts only.
+ * Failure: false for invalid arguments.
+ * Boundary: reports capacity/usage; it does not infer runtime readiness. */
+int yvex_backend_host_workspace_summary_get(
+    const yvex_backend *backend, yvex_backend_host_workspace_summary *summary)
+{
+    if (!backend || !summary)
+        return 0;
+    *summary = (yvex_backend_host_workspace_summary){
+        backend->host_workspace_base != NULL, backend->host_workspace_owned,
+        backend->host_workspace_pinned,
+        backend->host_workspace_bytes, backend->host_workspace_cursor,
+        backend->host_workspace_peak, backend->host_workspace_generation,
+        backend->host_workspace_allocation_count};
+    return 1;
 }
 
 /* Purpose: Implement the canonical tensor same shape mechanism owned by the backend boundary.

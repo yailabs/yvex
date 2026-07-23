@@ -14,6 +14,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
+#include <yvex/internal/gguf.h>
 #include <yvex/internal/quant_numeric.h>
 
 static const float source_mxfp4_values[16] = {
@@ -44,30 +45,6 @@ static void quant_scalar_failure(yvex_quant_failure *failure, yvex_quant_failure
     yvex_error_set(
         err, code == YVEX_QUANT_FAILURE_INVALID_ARGUMENT ? YVEX_ERR_INVALID_ARG : YVEX_ERR_FORMAT,
         "quant.scalar", message);
-}
-
-/* Purpose: decode one canonical little-endian unsigned 16-bit value.
- * Inputs: two readable bytes.
- * Effects: none.
- * Failure: none; the caller owns range validation.
- * Boundary: byte decoding is independent from host endianness. */
-static unsigned short quant_load_u16(const unsigned char *bytes) {
-    return (unsigned short)((unsigned short)bytes[0] | ((unsigned short)bytes[1] << 8));
-}
-
-/* Purpose: decode one canonical little-endian unsigned 32-bit value.
- * Inputs: four readable bytes.
- * Effects: none.
- * Failure: none; the caller owns range validation.
- * Boundary: byte decoding does not classify the represented scalar. */
-static unsigned int quant_load_u32(const unsigned char *bytes) {
-    return (unsigned int)bytes[0] | ((unsigned int)bytes[1] << 8) | ((unsigned int)bytes[2] << 16) |
-           ((unsigned int)bytes[3] << 24);
-}
-
-/* Purpose: interpret canonical two's-complement I32 bits without implementation-defined narrowing. */
-static int32_t quant_i32_from_u32(uint32_t value) {
-    return value <= (uint32_t)INT32_MAX ? (int32_t)value : -1 - (int32_t)(UINT32_MAX - value);
 }
 
 /* Purpose: decode every IEEE binary16 bit pattern into the corresponding binary32 value.
@@ -245,17 +222,17 @@ int yvex_quant_source_scalar_decode(yvex_native_dtype dtype, const unsigned char
     }
     switch (dtype) {
     case YVEX_NATIVE_DTYPE_F32:
-        bits = quant_load_u32(source);
+        bits = gguf_u32le_load(source);
         memcpy(out, &bits, sizeof(*out));
         break;
     case YVEX_NATIVE_DTYPE_F16:
-        *out = yvex_quant_f16_decode(quant_load_u16(source));
+        *out = yvex_quant_f16_decode(gguf_u16le_load(source));
         break;
     case YVEX_NATIVE_DTYPE_BF16:
-        *out = yvex_quant_bf16_decode(quant_load_u16(source));
+        *out = yvex_quant_bf16_decode(gguf_u16le_load(source));
         break;
     case YVEX_NATIVE_DTYPE_I32: {
-        int32_t integer = quant_i32_from_u32(quant_load_u32(source));
+        int32_t integer = gguf_i32_from_u32(gguf_u32le_load(source));
         *out = (float)integer;
         break;
     }

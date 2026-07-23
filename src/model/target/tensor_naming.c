@@ -38,6 +38,12 @@ static const char *const lowering_failure_names[] = {
     "transform-ir-refused", "lowering-divergence", "mapping-identity-mismatch"
 };
 
+static const yvex_deepseek_gguf_map_failure cleared_map_failure = {
+    .layer_index = YVEX_DEEPSEEK_GGUF_NO_INDEX,
+    .predictor_index = YVEX_DEEPSEEK_GGUF_NO_INDEX,
+    .expert_index = YVEX_DEEPSEEK_GGUF_NO_INDEX
+};
+
 /* Purpose: enforce typed naming validate invariants before publication.
  * Inputs: typed facts are borrowed.
  * Effects: updates bounded report or plan state.
@@ -279,8 +285,8 @@ static void naming_maybe_write_sidecar(const yvex_model_target_request *request,
     if (!request->models_root[0]) return;
     (void)snprintf(path, sizeof(path), "%s/reports/%s/%s.tensor-map.json",
                    request->models_root, family, request->target_id);
-    (void)yvex_model_target_write_tensor_map_sidecar(path, request->target_id,
-                                                     family, status, coverage);
+    (void)yvex_model_target_write_sidecar(YVEX_MODEL_TARGET_SIDECAR_TENSOR_MAP, path,
+                                          request->target_id, family, status, coverage);
 }
 
 typedef struct {
@@ -588,6 +594,7 @@ int yvex_tensor_naming_report_build(
 static void lowering_close(yvex_deepseek_gguf_map *map);
 static const char *lowering_failure_name(
     yvex_deepseek_gguf_map_failure_code code);
+static yvex_tensor_scope map_scope(yvex_transform_scope scope);
 
 /* Purpose: map lowering family ir through canonical typed vocabulary. */
 
@@ -622,6 +629,170 @@ typedef struct {
     yvex_deepseek_gguf_map_failure *failure;
     yvex_error *err;
 } map_builder;
+
+typedef struct {
+    yvex_deepseek_gguf_transform transform;
+    unsigned int qtype;
+    int supported;
+} map_transform_projection;
+
+static const yvex_tensor_collection map_collections[YVEX_TRANSFORM_SUBSYSTEM_COUNT] = {
+    YVEX_TENSOR_COLLECTION_GLOBAL,
+    YVEX_TENSOR_COLLECTION_ATTENTION,
+    YVEX_TENSOR_COLLECTION_COMPRESSOR,
+    YVEX_TENSOR_COLLECTION_INDEXER,
+    YVEX_TENSOR_COLLECTION_NORM,
+    YVEX_TENSOR_COLLECTION_MHC,
+    YVEX_TENSOR_COLLECTION_ROUTER,
+    YVEX_TENSOR_COLLECTION_ROUTED_EXPERT,
+    YVEX_TENSOR_COLLECTION_SHARED_EXPERT,
+    YVEX_TENSOR_COLLECTION_GLOBAL,
+    YVEX_TENSOR_COLLECTION_AUXILIARY
+};
+
+static const yvex_tensor_scope map_scopes[] = {
+    YVEX_TENSOR_SCOPE_GLOBAL,
+    YVEX_TENSOR_SCOPE_MAIN_LAYER,
+    YVEX_TENSOR_SCOPE_MTP
+};
+
+enum { MAP_SCOPE_COUNT = 3, MAP_SUBSYSTEM_COUNT = YVEX_TRANSFORM_SUBSYSTEM_COUNT };
+
+static const yvex_deepseek_gguf_contribution_kind map_contribution_kinds[][2] = {
+    {YVEX_DEEPSEEK_GGUF_CONTRIBUTION_PRIMARY,
+     YVEX_DEEPSEEK_GGUF_CONTRIBUTION_PRIMARY},
+    {YVEX_DEEPSEEK_GGUF_CONTRIBUTION_PRIMARY,
+     YVEX_DEEPSEEK_GGUF_CONTRIBUTION_SCALE},
+    {YVEX_DEEPSEEK_GGUF_CONTRIBUTION_EXPERT_WEIGHT,
+     YVEX_DEEPSEEK_GGUF_CONTRIBUTION_EXPERT_SCALE},
+    {YVEX_DEEPSEEK_GGUF_CONTRIBUTION_ROUTING_TABLE,
+     YVEX_DEEPSEEK_GGUF_CONTRIBUTION_ROUTING_TABLE}
+};
+
+static const map_transform_projection map_transforms[YVEX_TRANSFORM_OP_COUNT] = {
+    [YVEX_TRANSFORM_OP_IDENTITY] = {
+        YVEX_DEEPSEEK_GGUF_TRANSFORM_DIRECT, YVEX_GGUF_NO_FORCED_QTYPE, 1},
+    [YVEX_TRANSFORM_OP_DECODE_SCALE_PAIR] = {
+        YVEX_DEEPSEEK_GGUF_TRANSFORM_FP8_E4M3_E8M0, YVEX_GGUF_NO_FORCED_QTYPE, 1},
+    [YVEX_TRANSFORM_OP_CHECKED_CAST] = {
+        YVEX_DEEPSEEK_GGUF_TRANSFORM_I64_TO_I32, 26u, 1},
+    [YVEX_TRANSFORM_OP_EXPERT_AGGREGATE] = {
+        YVEX_DEEPSEEK_GGUF_TRANSFORM_EXPERT_MXFP4, 39u, 1}
+};
+
+typedef struct {
+    yvex_tensor_collection collection;
+    unsigned long long count;
+} map_collection_expectation;
+
+static const map_collection_expectation map_trunk_expectations[] = {
+    {YVEX_TENSOR_COLLECTION_GLOBAL, 6u},
+    {YVEX_TENSOR_COLLECTION_ATTENTION, 344u},
+    {YVEX_TENSOR_COLLECTION_MHC, 258u},
+    {YVEX_TENSOR_COLLECTION_NORM, 86u},
+    {YVEX_TENSOR_COLLECTION_ROUTED_EXPERT, 129u},
+    {YVEX_TENSOR_COLLECTION_SHARED_EXPERT, 129u},
+    {YVEX_TENSOR_COLLECTION_ROUTER, 86u},
+    {YVEX_TENSOR_COLLECTION_COMPRESSOR, 164u},
+    {YVEX_TENSOR_COLLECTION_INDEXER, 126u}
+};
+
+typedef struct {
+    size_t offset;
+    unsigned long long count;
+} map_summary_expectation;
+
+static const map_summary_expectation map_summary_expectations[] = {
+    {offsetof(yvex_deepseek_gguf_map_summary, source_contribution_count),
+     YVEX_DEEPSEEK_GGUF_SOURCE_COUNT},
+    {offsetof(yvex_deepseek_gguf_map_summary, descriptor_count),
+     YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT},
+    {offsetof(yvex_deepseek_gguf_map_summary, trunk_descriptor_count),
+     YVEX_DEEPSEEK_GGUF_TRUNK_DESCRIPTOR_COUNT},
+    {offsetof(yvex_deepseek_gguf_map_summary, mtp_descriptor_count),
+     YVEX_DEEPSEEK_GGUF_MTP_DESCRIPTOR_COUNT},
+    {offsetof(yvex_deepseek_gguf_map_summary, pinned_standard_count),
+     YVEX_DEEPSEEK_GGUF_TRUNK_DESCRIPTOR_COUNT},
+    {offsetof(yvex_deepseek_gguf_map_summary, extension_count),
+     YVEX_DEEPSEEK_GGUF_MTP_DESCRIPTOR_COUNT}
+};
+
+typedef enum {
+    M_LIT = 0, M_MODEL, M_LAYER, M_CSA,
+    M_LAYER_NUM, M_CSA_NUM, M_RATIOS, M_CLAMP
+} map_metadata_owner;
+
+#define M_STR YVEX_DEEPSEEK_GGUF_METADATA_STRING
+#define M_U64 YVEX_DEEPSEEK_GGUF_METADATA_U64
+#define M_F64 YVEX_DEEPSEEK_GGUF_METADATA_F64
+#define M_BOOL YVEX_DEEPSEEK_GGUF_METADATA_BOOL
+#define M_U64S YVEX_DEEPSEEK_GGUF_METADATA_U64_ARRAY
+#define M_F64S YVEX_DEEPSEEK_GGUF_METADATA_F64_ARRAY
+
+typedef yvex_deepseek_v4_model_spec model_t;
+typedef yvex_deepseek_v4_layer_spec layer_t;
+
+typedef struct {
+    const char *key;
+    yvex_deepseek_gguf_metadata_type type;
+    map_metadata_owner owner;
+    size_t offset;
+    union {
+        const char *string;
+        unsigned long long u64;
+        double f64;
+    } literal;
+} map_metadata_spec;
+
+static const map_metadata_spec map_metadata_specs[] = {
+    {"general.architecture", M_STR, M_LIT, 0u, {.string = "deepseek4"}},
+    {"general.name", M_STR, M_LIT, 0u, {.string = "DeepSeek-V4-Flash"}},
+    {"general.source.huggingface.repository", M_STR, M_MODEL, offsetof(model_t, repository), {0}},
+    {"yvex.source.revision", M_STR, M_MODEL, offsetof(model_t, revision), {0}},
+    {"deepseek4.block_count", M_U64, M_MODEL, offsetof(model_t, main_layer_count), {0}},
+    {"deepseek4.embedding_length", M_U64, M_MODEL, offsetof(model_t, hidden_size), {0}},
+    {"deepseek4.context_length", M_U64, M_MODEL, offsetof(model_t, maximum_context), {0}},
+    {"deepseek4.vocab_size", M_U64, M_MODEL, offsetof(model_t, vocabulary_size), {0}},
+    {"deepseek4.attention.head_count", M_U64, M_LAYER, offsetof(layer_t, query_heads), {0}},
+    {"deepseek4.attention.head_count_kv", M_U64, M_LAYER, offsetof(layer_t, kv_heads), {0}},
+    {"deepseek4.attention.key_length", M_U64, M_LAYER, offsetof(layer_t, head_dimension), {0}},
+    {"deepseek4.attention.value_length", M_U64, M_LAYER, offsetof(layer_t, head_dimension), {0}},
+    {"deepseek4.attention.layer_norm_rms_epsilon", M_F64, M_LAYER, offsetof(layer_t, rms_norm_epsilon), {0}},
+    {"deepseek4.rope.dimension_count", M_U64, M_LAYER, offsetof(layer_t, rope_head_dimension), {0}},
+    {"deepseek4.rope.freq_base", M_F64, M_LAYER_NUM, offsetof(layer_t, position.theta), {0}},
+    {"deepseek4.attention.q_lora_rank", M_U64, M_LAYER, offsetof(layer_t, query_lora_rank), {0}},
+    {"deepseek4.attention.output_lora_rank", M_U64, M_LAYER, offsetof(layer_t, output_lora_rank), {0}},
+    {"deepseek4.attention.output_group_count", M_U64, M_LAYER, offsetof(layer_t, output_groups), {0}},
+    {"deepseek4.attention.compress_ratios", M_U64S, M_RATIOS, 0u, {0}},
+    {"deepseek4.attention.sliding_window", M_U64, M_LAYER, offsetof(layer_t, kv.sliding_window), {0}},
+    {"deepseek4.expert_count", M_U64, M_LAYER, offsetof(layer_t, moe.routed_experts), {0}},
+    {"deepseek4.expert_used_count", M_U64, M_LAYER, offsetof(layer_t, moe.experts_per_token), {0}},
+    {"deepseek4.expert_shared_count", M_U64, M_LAYER, offsetof(layer_t, moe.shared_experts), {0}},
+    {"deepseek4.expert_feed_forward_length", M_U64, M_LAYER, offsetof(layer_t, moe.expert_intermediate_size), {0}},
+    {"deepseek4.expert_weights_scale", M_F64, M_LAYER, offsetof(layer_t, moe.routed_scaling_factor), {0}},
+    {"deepseek4.expert_weights_norm", M_BOOL, M_LAYER, offsetof(layer_t, moe.normalize_topk_probabilities), {0}},
+    {"deepseek4.expert_gating_func", M_U64, M_LIT, 0u, {.u64 = 4u}},
+    {"deepseek4.swiglu_clamp_exp", M_F64S, M_CLAMP, 0u, {0}},
+    {"deepseek4.swiglu_clamp_shexp", M_F64S, M_CLAMP, 0u, {0}},
+    {"deepseek4.hash_layer_count", M_U64, M_MODEL, offsetof(model_t, hash_router_layer_count), {0}},
+    {"deepseek4.attention.compress_rope_freq_base", M_F64, M_CSA_NUM, offsetof(layer_t, position.theta), {0}},
+    {"deepseek4.hyper_connection.count", M_U64, M_LAYER, offsetof(layer_t, mhc.residual_streams), {0}},
+    {"deepseek4.hyper_connection.sinkhorn_iterations", M_U64, M_LAYER, offsetof(layer_t, mhc.sinkhorn_iterations), {0}},
+    {"deepseek4.hyper_connection.epsilon", M_F64, M_LAYER, offsetof(layer_t, mhc.epsilon), {0}},
+    {"deepseek4.indexer.head_count", M_U64, M_CSA, offsetof(layer_t, indexer_heads), {0}},
+    {"deepseek4.indexer.key_length", M_U64, M_CSA, offsetof(layer_t, indexer_head_dimension), {0}},
+    {"deepseek4.indexer.top_k", M_U64, M_CSA, offsetof(layer_t, indexer_topk), {0}},
+    {"tokenizer.ggml.model", M_STR, M_LIT, 0u, {.string = "gpt2"}},
+    {"tokenizer.ggml.vocab_size", M_U64, M_MODEL, offsetof(model_t, tokenizer.vocabulary_size), {0}},
+    {"tokenizer.ggml.bos_token_id", M_U64, M_MODEL, offsetof(model_t, tokenizer.bos_token_id), {0}},
+    {"tokenizer.ggml.eos_token_id", M_U64, M_MODEL, offsetof(model_t, tokenizer.eos_token_id), {0}},
+    {"yvex.tokenizer.sidecars_verified", M_BOOL, M_LIT, 0u, {.u64 = 1u}},
+    {"yvex.deepseek4.mtp.schema", M_U64, M_LIT, 0u, {.u64 = YVEX_GGUF_MTP_EXTENSION_VERSION}},
+    {"yvex.deepseek4.mtp.predictor_count", M_U64, M_MODEL, offsetof(model_t, auxiliary_layer_count), {0}},
+    {"yvex.deepseek4.mtp.descriptor_count", M_U64, M_LIT, 0u, {.u64 = YVEX_DEEPSEEK_GGUF_MTP_DESCRIPTOR_COUNT}},
+    {"yvex.deepseek4.mtp.runtime_supported", M_BOOL, M_LIT, 0u, {0}},
+    {"yvex.deepseek4.mtp.name_prefix", M_STR, M_LIT, 0u, {.string = "yvex.mtp.v1"}}
+};
 
 /* Purpose: map map default allocate through canonical typed vocabulary.
  * Inputs: typed facts are borrowed.
@@ -659,10 +830,7 @@ static unsigned long long map_hash_string(const char *text)
 static void map_failure_clear(yvex_deepseek_gguf_map_failure *failure)
 {
     if (!failure) return;
-    memset(failure, 0, sizeof(*failure));
-    failure->layer_index = YVEX_DEEPSEEK_GGUF_NO_INDEX;
-    failure->predictor_index = YVEX_DEEPSEEK_GGUF_NO_INDEX;
-    failure->expert_index = YVEX_DEEPSEEK_GGUF_NO_INDEX;
+    *failure = cleared_map_failure;
 }
 
 /* Purpose: enforce typed map reject invariants before publication.
@@ -700,10 +868,8 @@ static int map_reject(map_builder *builder,
         failure->expert_index = expert;
         failure->expected = expected;
         failure->actual = actual;
-        (void)snprintf(failure->source_name, sizeof(failure->source_name),
-                       "%s", source_name ? source_name : "");
-        (void)snprintf(failure->emitted_name, sizeof(failure->emitted_name),
-                       "%s", emitted_name ? emitted_name : "");
+        yvex_core_text_copy(failure->source_name, sizeof(failure->source_name), source_name ? source_name : "");
+        yvex_core_text_copy(failure->emitted_name, sizeof(failure->emitted_name), emitted_name ? emitted_name : "");
     }
     yvex_error_setf(builder ? builder->err : NULL, status,
                     "deepseek_gguf_lowering",
@@ -716,6 +882,51 @@ static int map_reject(map_builder *builder,
     return status;
 }
 
+/* Purpose: reject a map-wide invariant without manufacturing tensor context. */
+static int map_reject_global(map_builder *builder,
+                             yvex_deepseek_gguf_map_failure_code code,
+                             const char *subject,
+                             unsigned long long expected,
+                             unsigned long long actual)
+{
+    return map_reject(builder, code, YVEX_TENSOR_ROLE_UNKNOWN,
+                      YVEX_TENSOR_SCOPE_GLOBAL, YVEX_DEEPSEEK_GGUF_NO_INDEX,
+                      YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
+                      subject, NULL, expected, actual);
+}
+
+/* Purpose: reject one descriptor while preserving its exact diagnostic key. */
+static int map_reject_descriptor(map_builder *builder,
+                                 yvex_deepseek_gguf_map_failure_code code,
+                                 const yvex_deepseek_gguf_descriptor *descriptor,
+                                 unsigned long long expert,
+                                 const char *source,
+                                 const char *emitted,
+                                 unsigned long long expected,
+                                 unsigned long long actual)
+{
+    return map_reject(builder, code, descriptor->role, descriptor->scope,
+                      descriptor->layer_index, descriptor->predictor_index,
+                      expert, source, emitted, expected, actual);
+}
+
+/* Purpose: reject one logical key before a descriptor is safely available. */
+static int map_reject_key(map_builder *builder,
+                          yvex_deepseek_gguf_map_failure_code code,
+                          const yvex_transform_logical_key *key,
+                          int include_location,
+                          unsigned long long expected,
+                          unsigned long long actual)
+{
+    return map_reject(builder, code, key ? key->role : YVEX_TENSOR_ROLE_UNKNOWN,
+                      key ? map_scope(key->scope) : YVEX_TENSOR_SCOPE_GLOBAL,
+                      key && include_location ? key->layer_index
+                                              : YVEX_DEEPSEEK_GGUF_NO_INDEX,
+                      key && include_location ? key->auxiliary_index
+                                              : YVEX_DEEPSEEK_GGUF_NO_INDEX,
+                      YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, expected, actual);
+}
+
 /* Purpose: map map allocate zero through canonical typed vocabulary.
  * Inputs: typed facts are borrowed.
  * Effects: updates bounded report or plan state.
@@ -726,19 +937,6 @@ static void *map_allocate_zero(yvex_deepseek_gguf_map *map, size_t size)
     void *allocation = map->allocator.allocate(size, map->allocator.context);
     if (allocation) memset(allocation, 0, size);
     return allocation;
-}
-
-/* Purpose: map map index capacity through canonical typed vocabulary. */
-static unsigned long long map_index_capacity(unsigned long long count)
-{
-    unsigned long long capacity = 8u;
-    if (count > ULLONG_MAX / 2u) return 0u;
-    count *= 2u;
-    while (capacity < count) {
-        if (capacity > ULLONG_MAX / 2u) return 0u;
-        capacity *= 2u;
-    }
-    return capacity;
 }
 
 /* Purpose: register one map index insert while preserving order and bounds. */
@@ -768,70 +966,73 @@ static int map_index_insert(map_index_slot *slots,
  * Effects: updates bounded report or plan state.
  * Failure: preserves typed refusal and cleanup.
  * Boundary: never promotes payload or runtime execution. */
-static int map_emitted_index_insert(yvex_deepseek_gguf_map *map,
-                                    unsigned long long hash,
-                                    unsigned long long value)
+static int map_unique_index_equal(const yvex_deepseek_gguf_map *map,
+                                  int emitted,
+                                  unsigned long long left,
+                                  unsigned long long right)
 {
-    unsigned long long slot = hash & (map->emitted_index_capacity - 1u);
+    const yvex_deepseek_gguf_descriptor *candidate = &map->descriptors[right];
+    const yvex_deepseek_gguf_descriptor *current = &map->descriptors[left];
+
+    return emitted ? strcmp(current->emitted_name, candidate->emitted_name) == 0
+                   : current->role == candidate->role &&
+                         current->scope == candidate->scope &&
+                         current->layer_index == candidate->layer_index &&
+                         current->predictor_index == candidate->predictor_index;
+}
+
+/* Purpose: insert one descriptor into a uniqueness-aware canonical index.
+ * Inputs: sealed map, selected index kind, canonical hash, and descriptor ordinal.
+ * Effects: publishes one occupied index slot only when its key is unique.
+ * Failure: returns false on a duplicate key or exhausted index without replacing a slot.
+ * Boundary: indexes admitted descriptor facts and never changes tensor naming semantics. */
+static int map_unique_index_insert(yvex_deepseek_gguf_map *map,
+                                   int emitted,
+                                   unsigned long long hash,
+                                   unsigned long long value)
+{
+    map_index_slot *slots = emitted ? map->emitted_index : map->role_index;
+    unsigned long long capacity = emitted ? map->emitted_index_capacity
+                                          : map->role_index_capacity;
+    unsigned long long slot = hash & (capacity - 1u);
     unsigned long long probe;
 
-    for (probe = 0u; probe < map->emitted_index_capacity; ++probe) {
-        map_index_slot *entry = &map->emitted_index[slot];
+    for (probe = 0u; probe < capacity; ++probe) {
+        map_index_slot *entry = &slots[slot];
         if (!entry->value_plus_one) {
             entry->hash = hash;
             entry->value_plus_one = value + 1u;
             return 1;
         }
         if (entry->hash == hash &&
-            strcmp(map->descriptors[entry->value_plus_one - 1u].emitted_name,
-                   map->descriptors[value].emitted_name) == 0) return 0;
-        slot = (slot + 1u) & (map->emitted_index_capacity - 1u);
+            map_unique_index_equal(
+                map, emitted, entry->value_plus_one - 1u, value)) return 0;
+        slot = (slot + 1u) & (capacity - 1u);
     }
     return 0;
 }
 
-/* Purpose: register one map role index insert while preserving order and bounds.
- * Inputs: typed facts are borrowed.
- * Effects: updates bounded report or plan state.
- * Failure: preserves typed refusal and cleanup.
- * Boundary: never promotes payload or runtime execution. */
+/* Purpose: register one emitted name while preserving uniqueness. */
+static int map_emitted_index_insert(yvex_deepseek_gguf_map *map,
+                                    unsigned long long hash,
+                                    unsigned long long value)
+{
+    return map_unique_index_insert(map, 1, hash, value);
+}
+
+/* Purpose: register one logical role key while preserving uniqueness. */
 static int map_role_index_insert(yvex_deepseek_gguf_map *map,
                                  unsigned long long hash,
                                  unsigned long long value)
 {
-    const yvex_deepseek_gguf_descriptor *candidate = &map->descriptors[value];
-    unsigned long long slot = hash & (map->role_index_capacity - 1u);
-    unsigned long long probe;
-
-    for (probe = 0u; probe < map->role_index_capacity; ++probe) {
-        map_index_slot *entry = &map->role_index[slot];
-        if (!entry->value_plus_one) {
-            entry->hash = hash;
-            entry->value_plus_one = value + 1u;
-            return 1;
-        }
-        if (entry->hash == hash) {
-            const yvex_deepseek_gguf_descriptor *current =
-                &map->descriptors[entry->value_plus_one - 1u];
-            if (current->role == candidate->role &&
-                current->scope == candidate->scope &&
-                current->layer_index == candidate->layer_index &&
-                current->predictor_index == candidate->predictor_index)
-                return 0;
-        }
-        slot = (slot + 1u) & (map->role_index_capacity - 1u);
-    }
-    return 0;
+    return map_unique_index_insert(map, 0, hash, value);
 }
 
 /* Purpose: map map scope through canonical typed vocabulary. */
 static yvex_tensor_scope map_scope(yvex_transform_scope scope)
 {
-    if (scope == YVEX_TRANSFORM_SCOPE_MAIN_LAYER)
-        return YVEX_TENSOR_SCOPE_MAIN_LAYER;
-    if (scope == YVEX_TRANSFORM_SCOPE_AUXILIARY)
-        return YVEX_TENSOR_SCOPE_MTP;
-    return YVEX_TENSOR_SCOPE_GLOBAL;
+    return (unsigned int)scope < MAP_SCOPE_COUNT ? map_scopes[(unsigned int)scope]
+                                                  : YVEX_TENSOR_SCOPE_GLOBAL;
 }
 
 /* Purpose: map map collection through canonical typed vocabulary.
@@ -842,31 +1043,8 @@ static yvex_tensor_scope map_scope(yvex_transform_scope scope)
 static yvex_tensor_collection map_collection(
     yvex_transform_subsystem subsystem)
 {
-    switch (subsystem) {
-    case YVEX_TRANSFORM_SUBSYSTEM_GLOBAL:
-    case YVEX_TRANSFORM_SUBSYSTEM_OUTPUT:
-        return YVEX_TENSOR_COLLECTION_GLOBAL;
-    case YVEX_TRANSFORM_SUBSYSTEM_ATTENTION:
-        return YVEX_TENSOR_COLLECTION_ATTENTION;
-    case YVEX_TRANSFORM_SUBSYSTEM_COMPRESSOR:
-        return YVEX_TENSOR_COLLECTION_COMPRESSOR;
-    case YVEX_TRANSFORM_SUBSYSTEM_INDEXER:
-        return YVEX_TENSOR_COLLECTION_INDEXER;
-    case YVEX_TRANSFORM_SUBSYSTEM_NORMALIZATION:
-        return YVEX_TENSOR_COLLECTION_NORM;
-    case YVEX_TRANSFORM_SUBSYSTEM_RESIDUAL:
-        return YVEX_TENSOR_COLLECTION_MHC;
-    case YVEX_TRANSFORM_SUBSYSTEM_ROUTER:
-        return YVEX_TENSOR_COLLECTION_ROUTER;
-    case YVEX_TRANSFORM_SUBSYSTEM_ROUTED_EXPERT:
-        return YVEX_TENSOR_COLLECTION_ROUTED_EXPERT;
-    case YVEX_TRANSFORM_SUBSYSTEM_SHARED_EXPERT:
-        return YVEX_TENSOR_COLLECTION_SHARED_EXPERT;
-    case YVEX_TRANSFORM_SUBSYSTEM_AUXILIARY:
-        return YVEX_TENSOR_COLLECTION_AUXILIARY;
-    default:
-        return YVEX_TENSOR_COLLECTION_COUNT;
-    }
+    return (unsigned int)subsystem < MAP_SUBSYSTEM_COUNT
+        ? map_collections[(unsigned int)subsystem] : YVEX_TENSOR_COLLECTION_COUNT;
 }
 
 /* Purpose: map map transform through canonical typed vocabulary.
@@ -878,26 +1056,15 @@ static int map_transform(const yvex_transform_node *node,
                          yvex_deepseek_gguf_transform *transform,
                          unsigned int *qtype)
 {
+    const map_transform_projection *projection;
+
     if (!node || !transform || !qtype) return 0;
-    *qtype = YVEX_GGUF_NO_FORCED_QTYPE;
-    switch (node->kind) {
-    case YVEX_TRANSFORM_OP_IDENTITY:
-        *transform = YVEX_DEEPSEEK_GGUF_TRANSFORM_DIRECT;
-        return 1;
-    case YVEX_TRANSFORM_OP_DECODE_SCALE_PAIR:
-        *transform = YVEX_DEEPSEEK_GGUF_TRANSFORM_FP8_E4M3_E8M0;
-        return 1;
-    case YVEX_TRANSFORM_OP_EXPERT_AGGREGATE:
-        *transform = YVEX_DEEPSEEK_GGUF_TRANSFORM_EXPERT_MXFP4;
-        *qtype = 39u;
-        return 1;
-    case YVEX_TRANSFORM_OP_CHECKED_CAST:
-        *transform = YVEX_DEEPSEEK_GGUF_TRANSFORM_I64_TO_I32;
-        *qtype = 26u;
-        return 1;
-    default:
-        return 0;
-    }
+    if ((unsigned int)node->kind >= YVEX_TRANSFORM_OP_COUNT ||
+        !map_transforms[(unsigned int)node->kind].supported) return 0;
+    projection = &map_transforms[(unsigned int)node->kind];
+    *transform = projection->transform;
+    *qtype = projection->qtype;
+    return 1;
 }
 
 /* Purpose: map map contribution kind through canonical typed vocabulary. */
@@ -905,16 +1072,12 @@ static yvex_deepseek_gguf_contribution_kind map_contribution_kind(
     yvex_deepseek_gguf_transform transform,
     unsigned long long input)
 {
-    if (transform == YVEX_DEEPSEEK_GGUF_TRANSFORM_I64_TO_I32)
-        return YVEX_DEEPSEEK_GGUF_CONTRIBUTION_ROUTING_TABLE;
-    if (transform == YVEX_DEEPSEEK_GGUF_TRANSFORM_FP8_E4M3_E8M0)
-        return input ? YVEX_DEEPSEEK_GGUF_CONTRIBUTION_SCALE
-                     : YVEX_DEEPSEEK_GGUF_CONTRIBUTION_PRIMARY;
-    if (transform == YVEX_DEEPSEEK_GGUF_TRANSFORM_EXPERT_MXFP4)
-        return input & 1u
-            ? YVEX_DEEPSEEK_GGUF_CONTRIBUTION_EXPERT_SCALE
-            : YVEX_DEEPSEEK_GGUF_CONTRIBUTION_EXPERT_WEIGHT;
-    return YVEX_DEEPSEEK_GGUF_CONTRIBUTION_PRIMARY;
+    unsigned int secondary = transform == YVEX_DEEPSEEK_GGUF_TRANSFORM_EXPERT_MXFP4
+        ? (unsigned int)(input & 1u) : input != 0u;
+
+    return (unsigned int)transform <= YVEX_DEEPSEEK_GGUF_TRANSFORM_I64_TO_I32
+        ? map_contribution_kinds[(unsigned int)transform][secondary]
+        : YVEX_DEEPSEEK_GGUF_CONTRIBUTION_PRIMARY;
 }
 
 /* Purpose: map map descriptor begin through canonical typed vocabulary.
@@ -950,11 +1113,9 @@ static int map_descriptor_begin(map_builder *builder,
     if (collection >= YVEX_TENSOR_COLLECTION_COUNT ||
         !map_transform(node, &descriptor->transform, &qtype) ||
         terminal->shape.rank > YVEX_TENSOR_MAX_DIMS) {
-        return map_reject(
+        return map_reject_descriptor(
             builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_LOWERING_DIVERGENCE,
-            descriptor->role, scope, descriptor->layer_index,
-            descriptor->predictor_index, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            NULL, NULL, 1u, 0u);
+            descriptor, YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, 1u, 0u);
     }
     descriptor->forced_qtype = qtype;
     descriptor->logical_rank = terminal->shape.rank;
@@ -976,40 +1137,32 @@ static int map_descriptor_begin(map_builder *builder,
             descriptor->layer_index, descriptor->predictor_index,
             descriptor->emitted_name, sizeof(descriptor->emitted_name),
             &provenance, &reason)) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_NAME,
-            descriptor->role, scope, descriptor->layer_index,
-            descriptor->predictor_index, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            NULL, reason, 1u, 0u);
+        return map_reject_descriptor(
+            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_NAME, descriptor,
+            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, reason, 1u, 0u);
     }
     descriptor->name_provenance = provenance;
     if (!yvex_gguf_layout_map_shape_supported(
             descriptor->role, qtype, descriptor->logical_rank,
             descriptor->logical_dims, &reason)) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_LAYOUT,
-            descriptor->role, scope, descriptor->layer_index,
-            descriptor->predictor_index, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            NULL, descriptor->emitted_name, 1u, 0u);
+        return map_reject_descriptor(
+            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_LAYOUT, descriptor,
+            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, descriptor->emitted_name, 1u, 0u);
     }
     if (!map_emitted_index_insert(
             map, map_hash_string(descriptor->emitted_name), descriptor_index)) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_DUPLICATE_NAME,
-            descriptor->role, scope, descriptor->layer_index,
-            descriptor->predictor_index, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            NULL, descriptor->emitted_name, 1u, 2u);
+        return map_reject_descriptor(
+            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_DUPLICATE_NAME, descriptor,
+            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, descriptor->emitted_name, 1u, 2u);
     }
     role_hash = yvex_core_hash_mix_u64(role_hash, descriptor->role);
     role_hash = yvex_core_hash_mix_u64(role_hash, descriptor->scope);
     role_hash = yvex_core_hash_mix_u64(role_hash, descriptor->layer_index);
     role_hash = yvex_core_hash_mix_u64(role_hash, descriptor->predictor_index);
     if (!map_role_index_insert(map, role_hash, descriptor_index)) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_DUPLICATE_NAME,
-            descriptor->role, scope, descriptor->layer_index,
-            descriptor->predictor_index, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            NULL, descriptor->emitted_name, 1u, 2u);
+        return map_reject_descriptor(
+            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_DUPLICATE_NAME, descriptor,
+            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, descriptor->emitted_name, 1u, 2u);
     }
     descriptor->identity = map_hash_string(descriptor->emitted_name);
     descriptor->identity = yvex_core_hash_mix_u64(descriptor->identity,
@@ -1056,11 +1209,10 @@ static int map_descriptor_add_source(
     unsigned int dimension;
 
     if (!value || value->kind != YVEX_TRANSFORM_VALUE_SOURCE)
-        return map_reject(
+        return map_reject_descriptor(
             builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_LOWERING_DIVERGENCE,
-            descriptor->role, descriptor->scope, descriptor->layer_index,
-            descriptor->predictor_index, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            NULL, descriptor->emitted_name, 1u, 0u);
+            descriptor, YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL,
+            descriptor->emitted_name, 1u, 0u);
     source = yvex_transform_ir_source_at(
         builder->transform_ir, value->source_index);
     if (!source || index >= YVEX_DEEPSEEK_GGUF_SOURCE_COUNT ||
@@ -1068,18 +1220,14 @@ static int map_descriptor_add_source(
         source->shape.rank > 2u || source->role_hint != descriptor->role ||
         map_scope(source->scope) != descriptor->scope ||
         map_collection(source->subsystem) != descriptor->collection) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_COVERAGE_ROW,
-            descriptor->role, descriptor->scope, descriptor->layer_index,
-            descriptor->predictor_index,
+        return map_reject_descriptor(
+            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_COVERAGE_ROW, descriptor,
             source ? source->expert_index : YVEX_DEEPSEEK_GGUF_NO_INDEX,
             source ? source->source_name : NULL, descriptor->emitted_name,
             1u, 0u);
     }
     contribution = &map->contributions[index];
-    (void)snprintf(contribution->source_name,
-                   sizeof(contribution->source_name), "%s",
-                   source->source_name);
+    yvex_core_text_copy(contribution->source_name, sizeof(contribution->source_name), source->source_name);
     contribution->source_dtype = source->source_dtype;
     contribution->source_rank = source->shape.rank;
     for (dimension = 0u; dimension < source->shape.rank; ++dimension)
@@ -1091,10 +1239,9 @@ static int map_descriptor_add_source(
     contribution->expert_index = source->expert_index;
     if (!map_index_insert(map->source_index, map->source_index_capacity,
                           map_hash_string(source->source_name), index)) {
-        return map_reject(
+        return map_reject_descriptor(
             builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_DUPLICATE_SOURCE,
-            descriptor->role, descriptor->scope, descriptor->layer_index,
-            descriptor->predictor_index, source->expert_index,
+            descriptor, source->expert_index,
             source->source_name, descriptor->emitted_name, 1u, 2u);
     }
     descriptor->contribution_count++;
@@ -1123,11 +1270,8 @@ static int map_build_descriptors(map_builder *builder)
         summary->terminal_count != YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT ||
         summary->edge_count != YVEX_DEEPSEEK_GGUF_SOURCE_COUNT ||
         summary->payload_bytes_read != 0u) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_TRANSFORM_IR,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL,
+        return map_reject_global(
+            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_TRANSFORM_IR, NULL,
             YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT,
             summary ? summary->terminal_count : 0u);
     }
@@ -1140,26 +1284,17 @@ static int map_build_descriptors(map_builder *builder)
 
         if (!terminal || terminal->canonical_ordinal != ordinal ||
             terminal->producer_node_id >= summary->node_count) {
-            return map_reject(
+            return map_reject_key(
                 builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_TRANSFORM_IR,
-                terminal ? terminal->logical_key.role : YVEX_TENSOR_ROLE_UNKNOWN,
-                terminal ? map_scope(terminal->logical_key.scope)
-                         : YVEX_TENSOR_SCOPE_GLOBAL,
-                YVEX_DEEPSEEK_GGUF_NO_INDEX,
-                YVEX_DEEPSEEK_GGUF_NO_INDEX,
-                YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, ordinal,
+                terminal ? &terminal->logical_key : NULL, 0, ordinal,
                 terminal ? terminal->canonical_ordinal : ULLONG_MAX);
         }
         node = yvex_transform_ir_node_at(
             builder->transform_ir, terminal->producer_node_id);
         if (!node || node->output_value_id != terminal->id) {
-            return map_reject(
+            return map_reject_key(
                 builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_TRANSFORM_IR,
-                terminal->logical_key.role,
-                map_scope(terminal->logical_key.scope),
-                terminal->logical_key.layer_index,
-                terminal->logical_key.auxiliary_index,
-                YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, terminal->id,
+                &terminal->logical_key, 1, terminal->id,
                 node ? node->output_value_id : ULLONG_MAX);
         }
         rc = map_descriptor_begin(builder, terminal, node, ordinal);
@@ -1177,132 +1312,79 @@ static int map_build_descriptors(map_builder *builder)
  * Effects: updates bounded report or plan state.
  * Failure: preserves typed refusal and cleanup.
  * Boundary: never promotes payload or runtime execution. */
-static int map_add_metadata_string(map_builder *builder,
-                                   const char *key,
-                                   const char *value)
+static int map_metadata_begin(map_builder *builder,
+                              const char *key,
+                              yvex_deepseek_gguf_metadata **out)
 {
     yvex_deepseek_gguf_map *map = builder->map;
-    yvex_deepseek_gguf_metadata *entry;
     unsigned long long index;
 
-    if (!key || !value || map->summary.metadata_count >= MAP_METADATA_CAP)
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_METADATA,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, key, NULL, MAP_METADATA_CAP,
-            map->summary.metadata_count + 1u);
+    if (!key || map->summary.metadata_count >= MAP_METADATA_CAP)
+        return map_reject_global(builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_METADATA,
+                                 key, MAP_METADATA_CAP,
+                                 map->summary.metadata_count + 1u);
     for (index = 0u; index < map->summary.metadata_count; ++index)
         if (strcmp(map->metadata[index].key, key) == 0)
-            return map_reject(
-                builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_METADATA,
-                YVEX_TENSOR_ROLE_UNKNOWN, YVEX_TENSOR_SCOPE_GLOBAL,
-                YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-                YVEX_DEEPSEEK_GGUF_NO_INDEX, key, NULL, 1u, 2u);
-    entry = &map->metadata[map->summary.metadata_count++];
-    (void)snprintf(entry->key, sizeof(entry->key), "%s", key);
-    entry->type = YVEX_DEEPSEEK_GGUF_METADATA_STRING;
-    (void)snprintf(entry->string_value, sizeof(entry->string_value), "%s",
-                   value);
+            return map_reject_global(builder,
+                                     YVEX_DEEPSEEK_GGUF_MAP_FAILURE_METADATA,
+                                     key, 1u, 2u);
+    *out = &map->metadata[map->summary.metadata_count++];
+    yvex_core_text_copy((*out)->key, sizeof((*out)->key), key);
     return YVEX_OK;
 }
 
-/* Purpose: register one map add metadata u64 while preserving order and bounds. */
-static int map_add_metadata_u64(map_builder *builder,
-                                const char *key,
-                                unsigned long long value)
-{
-    int rc = map_add_metadata_string(builder, key, "");
-    yvex_deepseek_gguf_metadata *entry;
-    if (rc != YVEX_OK) return rc;
-    entry = &builder->map->metadata[builder->map->summary.metadata_count - 1u];
-    entry->type = YVEX_DEEPSEEK_GGUF_METADATA_U64;
-    entry->u64_value = value;
-    return YVEX_OK;
-}
-
-/* Purpose: register one map add metadata bool while preserving order and bounds. */
-static int map_add_metadata_bool(map_builder *builder,
-                                 const char *key,
-                                 int value)
-{
-    int rc = map_add_metadata_string(builder, key, "");
-    yvex_deepseek_gguf_metadata *entry;
-    if (rc != YVEX_OK) return rc;
-    entry = &builder->map->metadata[builder->map->summary.metadata_count - 1u];
-    entry->type = YVEX_DEEPSEEK_GGUF_METADATA_BOOL;
-    entry->bool_value = value != 0;
-    return YVEX_OK;
-}
-
-/* Purpose: register one map add metadata f64 while preserving order and bounds. */
-static int map_add_metadata_f64(map_builder *builder,
-                                const char *key,
-                                double value)
-{
-    int rc = map_add_metadata_string(builder, key, "");
-    yvex_deepseek_gguf_metadata *entry;
-    if (rc != YVEX_OK) return rc;
-    entry = &builder->map->metadata[builder->map->summary.metadata_count - 1u];
-    entry->type = YVEX_DEEPSEEK_GGUF_METADATA_F64;
-    entry->f64_value = value;
-    return YVEX_OK;
-}
-
-/* Purpose: register one map add metadata array while preserving order and bounds.
- * Inputs: typed facts are borrowed.
- * Effects: updates bounded report or plan state.
- * Failure: preserves typed refusal and cleanup.
- * Boundary: never promotes payload or runtime execution. */
-static int map_add_metadata_array(map_builder *builder,
-                                  const char *key,
-                                  const unsigned long long *values,
-                                  unsigned int count)
+/* Purpose: project one typed metadata specification from immutable family facts.
+ * Inputs: builder, immutable specification, family facts, and bounded layer vectors.
+ * Effects: appends exactly one metadata entry in specification order.
+ * Failure: propagates typed cardinality, duplicate-key, and metadata-capacity refusals.
+ * Boundary: table projection preserves the canonical metadata values and serialized order. */
+static int map_add_metadata_spec(map_builder *builder,
+                                 const map_metadata_spec *spec,
+                                 const model_t *model,
+                                 const layer_t *first,
+                                 const layer_t *first_csa,
+                                 const unsigned long long *ratios,
+                                 const double *clamp)
 {
     yvex_deepseek_gguf_metadata *entry;
+    const void *owner = spec->owner == M_MODEL
+        ? (const void *)model
+        : (spec->owner == M_CSA ||
+           spec->owner == M_CSA_NUM)
+            ? (const void *)first_csa : (const void *)first;
+    const char *field = owner ? (const char *)owner + spec->offset : NULL;
+    unsigned int count = (unsigned int)model->main_layer_count;
     int rc;
-    if (!values || !count || count > 64u)
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_METADATA,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, key, NULL, 64u, count);
-    rc = map_add_metadata_string(builder, key, "");
-    if (rc != YVEX_OK) return rc;
-    entry = &builder->map->metadata[builder->map->summary.metadata_count - 1u];
-    entry->type = YVEX_DEEPSEEK_GGUF_METADATA_U64_ARRAY;
-    memcpy(entry->array_values, values,
-           (size_t)count * sizeof(entry->array_values[0]));
-    entry->array_count = count;
-    return YVEX_OK;
-}
 
-/* Purpose: register one map add metadata f64 array while preserving order and bounds.
- * Inputs: typed facts are borrowed.
- * Effects: updates bounded report or plan state.
- * Failure: preserves typed refusal and cleanup.
- * Boundary: never promotes payload or runtime execution. */
-static int map_add_metadata_f64_array(map_builder *builder,
-                                      const char *key,
-                                      const double *values,
-                                      unsigned int count)
-{
-    yvex_deepseek_gguf_metadata *entry;
-    unsigned int index;
-    int rc;
-    if (!values || !count || count > 64u)
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_METADATA,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, key, NULL, 64u, count);
-    rc = map_add_metadata_string(builder, key, "");
+    if (!count || count > 64u)
+        return map_reject_global(builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_METADATA,
+                                 spec->key, 64u, count);
+    rc = map_metadata_begin(builder, spec->key, &entry);
     if (rc != YVEX_OK) return rc;
-    entry = &builder->map->metadata[builder->map->summary.metadata_count - 1u];
-    entry->type = YVEX_DEEPSEEK_GGUF_METADATA_F64_ARRAY;
-    for (index = 0u; index < count; ++index)
-        entry->f64_array_values[index] = values[index];
-    entry->array_count = count;
+    entry->type = spec->type;
+    if (spec->type == M_STR) {
+        const char *value = spec->owner == M_LIT
+            ? spec->literal.string : field;
+        yvex_core_text_copy(entry->string_value, sizeof(entry->string_value), value);
+    } else if (spec->type == M_U64) {
+        entry->u64_value = spec->owner == M_LIT
+            ? spec->literal.u64 : *(const unsigned long long *)field;
+    } else if (spec->type == M_BOOL) {
+        entry->bool_value = spec->owner == M_LIT
+            ? spec->literal.u64 != 0u : *(const int *)field != 0;
+    } else if (spec->type == M_F64) {
+        entry->f64_value = spec->owner == M_LAYER_NUM ||
+                           spec->owner == M_CSA_NUM
+            ? (double)*(const unsigned long long *)field : *(const double *)field;
+    } else if (spec->type == M_U64S) {
+        memcpy(entry->array_values, ratios,
+               (size_t)count * sizeof(entry->array_values[0]));
+    } else {
+        memcpy(entry->f64_array_values, clamp,
+               (size_t)count * sizeof(entry->f64_array_values[0]));
+    }
+    entry->array_count = spec->type >= M_U64S
+        ? count : 0u;
     return YVEX_OK;
 }
 
@@ -1314,99 +1396,29 @@ static int map_add_metadata_f64_array(map_builder *builder,
 
 static int map_build_metadata(map_builder *builder)
 {
-    const yvex_deepseek_v4_model_spec *model =
+    const model_t *model =
         lowering_family_ir()->model(builder->architecture);
-    const yvex_deepseek_v4_layer_spec *first =
+    const layer_t *first =
         lowering_family_ir()->layer_at(builder->architecture, 0u);
-    const yvex_deepseek_v4_layer_spec *first_csa =
+    const layer_t *first_csa =
         lowering_family_ir()->layer_at(builder->architecture, 2u);
     unsigned long long ratios[64];
     double clamp[64];
     unsigned long long index;
     int rc;
-
-#define META_STR(k, v) do { rc = map_add_metadata_string(builder, k, v);     \
-    if (rc != YVEX_OK) return rc; } while (0)
-#define META_U64(k, v) do { rc = map_add_metadata_u64(builder, k, v);         \
-    if (rc != YVEX_OK) return rc; } while (0)
-#define META_BOOL(k, v) do { rc = map_add_metadata_bool(builder, k, v);       \
-    if (rc != YVEX_OK) return rc; } while (0)
-#define META_F64(k, v) do { rc = map_add_metadata_f64(builder, k, v);         \
-    if (rc != YVEX_OK) return rc; } while (0)
-    META_STR("general.architecture", "deepseek4");
-    META_STR("general.name", "DeepSeek-V4-Flash");
-    META_STR("general.source.huggingface.repository", model->repository);
-    META_STR("yvex.source.revision", model->revision);
-    META_U64("deepseek4.block_count", model->main_layer_count);
-    META_U64("deepseek4.embedding_length", model->hidden_size);
-    META_U64("deepseek4.context_length", model->maximum_context);
-    META_U64("deepseek4.vocab_size", model->vocabulary_size);
-    META_U64("deepseek4.attention.head_count", first->query_heads);
-    META_U64("deepseek4.attention.head_count_kv", first->kv_heads);
-    META_U64("deepseek4.attention.key_length", first->head_dimension);
-    META_U64("deepseek4.attention.value_length", first->head_dimension);
-    META_F64("deepseek4.attention.layer_norm_rms_epsilon",
-             first->rms_norm_epsilon);
-    META_U64("deepseek4.rope.dimension_count", first->rope_head_dimension);
-    META_F64("deepseek4.rope.freq_base", (double)first->position.theta);
-    META_U64("deepseek4.attention.q_lora_rank", first->query_lora_rank);
-    META_U64("deepseek4.attention.output_lora_rank", first->output_lora_rank);
-    META_U64("deepseek4.attention.output_group_count", first->output_groups);
-    for (index = 0u; index < model->main_layer_count; ++index)
-        ratios[index] = lowering_family_ir()->layer_at(
-            builder->architecture, index)->compression_ratio;
-    rc = map_add_metadata_array(builder,
-                                "deepseek4.attention.compress_ratios",
-                                ratios, (unsigned int)model->main_layer_count);
-    if (rc != YVEX_OK) return rc;
-    META_U64("deepseek4.attention.sliding_window", first->kv.sliding_window);
-    META_U64("deepseek4.expert_count", first->moe.routed_experts);
-    META_U64("deepseek4.expert_used_count", first->moe.experts_per_token);
-    META_U64("deepseek4.expert_shared_count", first->moe.shared_experts);
-    META_U64("deepseek4.expert_feed_forward_length",
-             first->moe.expert_intermediate_size);
-    META_F64("deepseek4.expert_weights_scale",
-             first->moe.routed_scaling_factor);
-    META_BOOL("deepseek4.expert_weights_norm",
-              first->moe.normalize_topk_probabilities);
-    META_U64("deepseek4.expert_gating_func", 4u);
-    for (index = 0u; index < model->main_layer_count; ++index)
-        clamp[index] = lowering_family_ir()->layer_at(
-            builder->architecture, index)->moe.activation_limit;
-    rc = map_add_metadata_f64_array(builder,
-                                    "deepseek4.swiglu_clamp_exp", clamp,
-                                    (unsigned int)model->main_layer_count);
-    if (rc != YVEX_OK) return rc;
-    rc = map_add_metadata_f64_array(builder,
-                                    "deepseek4.swiglu_clamp_shexp", clamp,
-                                    (unsigned int)model->main_layer_count);
-    if (rc != YVEX_OK) return rc;
-    META_U64("deepseek4.hash_layer_count", model->hash_router_layer_count);
-    META_F64("deepseek4.attention.compress_rope_freq_base",
-             (double)first_csa->position.theta);
-    META_U64("deepseek4.hyper_connection.count", first->mhc.residual_streams);
-    META_U64("deepseek4.hyper_connection.sinkhorn_iterations",
-             first->mhc.sinkhorn_iterations);
-    META_F64("deepseek4.hyper_connection.epsilon", first->mhc.epsilon);
-    META_U64("deepseek4.indexer.head_count", first_csa->indexer_heads);
-    META_U64("deepseek4.indexer.key_length", first_csa->indexer_head_dimension);
-    META_U64("deepseek4.indexer.top_k", first_csa->indexer_topk);
-    META_STR("tokenizer.ggml.model", "gpt2");
-    META_U64("tokenizer.ggml.vocab_size", model->tokenizer.vocabulary_size);
-    META_U64("tokenizer.ggml.bos_token_id", model->tokenizer.bos_token_id);
-    META_U64("tokenizer.ggml.eos_token_id", model->tokenizer.eos_token_id);
-    META_BOOL("yvex.tokenizer.sidecars_verified", 1);
-    META_U64("yvex.deepseek4.mtp.schema", YVEX_GGUF_MTP_EXTENSION_VERSION);
-    META_U64("yvex.deepseek4.mtp.predictor_count",
-             model->auxiliary_layer_count);
-    META_U64("yvex.deepseek4.mtp.descriptor_count",
-             YVEX_DEEPSEEK_GGUF_MTP_DESCRIPTOR_COUNT);
-    META_BOOL("yvex.deepseek4.mtp.runtime_supported", 0);
-    META_STR("yvex.deepseek4.mtp.name_prefix", "yvex.mtp.v1");
-#undef META_F64
-#undef META_BOOL
-#undef META_U64
-#undef META_STR
+    for (index = 0u; index < model->main_layer_count; ++index) {
+        const layer_t *layer =
+            lowering_family_ir()->layer_at(builder->architecture, index);
+        ratios[index] = layer->compression_ratio;
+        clamp[index] = layer->moe.activation_limit;
+    }
+    for (index = 0u;
+         index < sizeof(map_metadata_specs) / sizeof(map_metadata_specs[0]);
+         ++index) {
+        rc = map_add_metadata_spec(builder, &map_metadata_specs[index], model,
+                                   first, first_csa, ratios, clamp);
+        if (rc != YVEX_OK) return rc;
+    }
     return YVEX_OK;
 }
 
@@ -1423,26 +1435,16 @@ static int map_finalize(map_builder *builder)
     unsigned long long identity = 1469598103934665603ull;
     unsigned long long index;
 
-    if (map->summary.source_contribution_count !=
-            YVEX_DEEPSEEK_GGUF_SOURCE_COUNT ||
-        map->summary.descriptor_count !=
-            YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT ||
-        map->summary.trunk_descriptor_count !=
-            YVEX_DEEPSEEK_GGUF_TRUNK_DESCRIPTOR_COUNT ||
-        map->summary.mtp_descriptor_count !=
-            YVEX_DEEPSEEK_GGUF_MTP_DESCRIPTOR_COUNT ||
-        map->summary.pinned_standard_count !=
-            YVEX_DEEPSEEK_GGUF_TRUNK_DESCRIPTOR_COUNT ||
-        map->summary.extension_count !=
-            YVEX_DEEPSEEK_GGUF_MTP_DESCRIPTOR_COUNT) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ACCOUNTING,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL,
-            YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT,
-            map->summary.descriptor_count);
-    }
+    for (index = 0u;
+         index < sizeof(map_summary_expectations) / sizeof(map_summary_expectations[0]);
+         ++index)
+        if (*(const unsigned long long *)((const char *)&map->summary +
+                                          map_summary_expectations[index].offset) !=
+            map_summary_expectations[index].count)
+            return map_reject_global(
+                builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ACCOUNTING, NULL,
+                YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT,
+                map->summary.descriptor_count);
     for (index = 0u; index < map->summary.descriptor_count; ++index) {
         const yvex_deepseek_gguf_descriptor *descriptor =
             &map->descriptors[index];
@@ -1450,22 +1452,16 @@ static int map_finalize(map_builder *builder)
             trunk[descriptor->collection]++;
         identity = yvex_core_hash_mix_u64(identity, descriptor->identity);
     }
-    if (trunk[YVEX_TENSOR_COLLECTION_GLOBAL] != 6u ||
-        trunk[YVEX_TENSOR_COLLECTION_ATTENTION] != 344u ||
-        trunk[YVEX_TENSOR_COLLECTION_MHC] != 258u ||
-        trunk[YVEX_TENSOR_COLLECTION_NORM] != 86u ||
-        trunk[YVEX_TENSOR_COLLECTION_ROUTED_EXPERT] != 129u ||
-        trunk[YVEX_TENSOR_COLLECTION_SHARED_EXPERT] != 129u ||
-        trunk[YVEX_TENSOR_COLLECTION_ROUTER] != 86u ||
-        trunk[YVEX_TENSOR_COLLECTION_COMPRESSOR] != 164u ||
-        trunk[YVEX_TENSOR_COLLECTION_INDEXER] != 126u) {
-        return map_reject(
-            builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ACCOUNTING,
-            YVEX_TENSOR_ROLE_UNKNOWN,
-            YVEX_TENSOR_SCOPE_MAIN_LAYER,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, 1328u, 0u);
-    }
+    for (index = 0u;
+         index < sizeof(map_trunk_expectations) / sizeof(map_trunk_expectations[0]);
+         ++index)
+        if (trunk[map_trunk_expectations[index].collection] !=
+            map_trunk_expectations[index].count)
+            return map_reject(
+                builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ACCOUNTING,
+                YVEX_TENSOR_ROLE_UNKNOWN, YVEX_TENSOR_SCOPE_MAIN_LAYER,
+                YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
+                YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, 1328u, 0u);
     identity = yvex_core_hash_mix_u64(identity, map->summary.source_identity);
     identity = yvex_core_hash_mix_u64(identity, map->summary.coverage_identity);
     map->summary.mapping_identity = identity;
@@ -1486,7 +1482,7 @@ static int lowering_build_with_allocator(
     yvex_deepseek_gguf_map_failure *failure,
     yvex_error *err)
 {
-    const yvex_deepseek_v4_model_spec *model;
+    const model_t *model;
     const yvex_transform_ir_summary *transform_summary;
     yvex_deepseek_gguf_map *map;
     map_builder builder;
@@ -1501,21 +1497,16 @@ static int lowering_build_with_allocator(
     builder.err = err;
     if (!out || !architecture || !transform_ir || !allocator ||
         !allocator->allocate || !allocator->release) {
-        return map_reject(
+        return map_reject_global(
             &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_INVALID_ARGUMENT,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, 1u, 0u);
+            NULL, 1u, 0u);
     }
     model = lowering_family_ir()->model(architecture);
     transform_summary = yvex_transform_ir_summary_get(transform_ir);
     if (!model || model->main_layer_count != 43u ||
         model->auxiliary_layer_count != 1u) {
-        return map_reject(
-            &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ARCHITECTURE,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL, 44u,
+        return map_reject_global(
+            &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ARCHITECTURE, NULL, 44u,
             model ? model->main_layer_count + model->auxiliary_layer_count : 0u);
     }
     if (!transform_summary || !transform_summary->complete ||
@@ -1523,30 +1514,33 @@ static int lowering_build_with_allocator(
             YVEX_DEEPSEEK_GGUF_SOURCE_COUNT ||
         transform_summary->terminal_count !=
             YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT) {
-        return map_reject(
-            &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_TRANSFORM_IR,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, NULL, NULL,
+        return map_reject_global(
+            &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_TRANSFORM_IR, NULL,
             YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT,
             transform_summary ? transform_summary->terminal_count : 0u);
     }
     map = (yvex_deepseek_gguf_map *)allocator->allocate(
         sizeof(*map), allocator->context);
     if (!map)
-        return map_reject(
+        return map_reject_global(
             &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ALLOCATION,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, "map", NULL, sizeof(*map), 0u);
+            "map", sizeof(*map), 0u);
     memset(map, 0, sizeof(*map));
     map->allocator = *allocator;
-    map->source_index_capacity =
-        map_index_capacity(YVEX_DEEPSEEK_GGUF_SOURCE_COUNT);
-    map->emitted_index_capacity =
-        map_index_capacity(YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT);
-    map->role_index_capacity =
-        map_index_capacity(YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT);
+    builder.map = map;
+    if (!yvex_core_power_of_two_capacity(YVEX_DEEPSEEK_GGUF_SOURCE_COUNT, 8ull,
+                                         1ull, 2ull, &map->source_index_capacity) ||
+        !yvex_core_power_of_two_capacity(YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT, 8ull,
+                                         1ull, 2ull, &map->emitted_index_capacity) ||
+        !yvex_core_power_of_two_capacity(YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT, 8ull,
+                                         1ull, 2ull, &map->role_index_capacity))
+    {
+        rc = map_reject_global(
+            &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ARITHMETIC_OVERFLOW,
+            "mapping-index", 1u, 0u);
+        lowering_close(map);
+        return rc;
+    }
     map->descriptors = (yvex_deepseek_gguf_descriptor *)map_allocate_zero(
         map, (size_t)YVEX_DEEPSEEK_GGUF_DESCRIPTOR_COUNT *
              sizeof(*map->descriptors));
@@ -1559,16 +1553,13 @@ static int lowering_build_with_allocator(
     map->emitted_index = (map_index_slot *)map_allocate_zero(map, bytes);
     bytes = (size_t)map->role_index_capacity * sizeof(*map->role_index);
     map->role_index = (map_index_slot *)map_allocate_zero(map, bytes);
-    builder.map = map;
     builder.architecture = architecture;
     builder.transform_ir = transform_ir;
     if (!map->descriptors || !map->contributions || !map->source_index ||
         !map->emitted_index || !map->role_index) {
-        rc = map_reject(
+        rc = map_reject_global(
             &builder, YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ALLOCATION,
-            YVEX_TENSOR_ROLE_UNKNOWN, YVEX_TENSOR_SCOPE_GLOBAL,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, YVEX_DEEPSEEK_GGUF_NO_INDEX,
-            YVEX_DEEPSEEK_GGUF_NO_INDEX, "mapping-tables", NULL, 1u, 0u);
+            "mapping-tables", 1u, 0u);
         lowering_close(map);
         return rc;
     }
@@ -1616,17 +1607,18 @@ static int lowering_build(
 static void lowering_close(yvex_deepseek_gguf_map *map)
 {
     yvex_deepseek_gguf_map_allocator allocator;
+    void *allocations[5];
+    unsigned int index;
+
     if (!map) return;
     allocator = map->allocator;
-    if (map->role_index) allocator.release(map->role_index, allocator.context);
-    if (map->emitted_index)
-        allocator.release(map->emitted_index, allocator.context);
-    if (map->source_index)
-        allocator.release(map->source_index, allocator.context);
-    if (map->contributions)
-        allocator.release(map->contributions, allocator.context);
-    if (map->descriptors)
-        allocator.release(map->descriptors, allocator.context);
+    allocations[0] = map->role_index;
+    allocations[1] = map->emitted_index;
+    allocations[2] = map->source_index;
+    allocations[3] = map->contributions;
+    allocations[4] = map->descriptors;
+    for (index = 0u; index < sizeof(allocations) / sizeof(allocations[0]); ++index)
+        if (allocations[index]) allocator.release(allocations[index], allocator.context);
     allocator.release(map, allocator.context);
 }
 
@@ -1642,8 +1634,7 @@ static const yvex_deepseek_gguf_descriptor *lowering_at(
     const yvex_deepseek_gguf_map *map,
     unsigned long long index)
 {
-    return map && index < map->summary.descriptor_count
-        ? &map->descriptors[index] : NULL;
+    return map && index < map->summary.descriptor_count ? &map->descriptors[index] : NULL;
 }
 
 /* Purpose: project the immutable bounded lowering contribution at view. */
@@ -1652,8 +1643,7 @@ lowering_contribution_at(
     const yvex_deepseek_gguf_map *map,
     unsigned long long index)
 {
-    return map && index < map->summary.source_contribution_count
-        ? &map->contributions[index] : NULL;
+    return map && index < map->summary.source_contribution_count ? &map->contributions[index] : NULL;
 }
 
 /* Purpose: resolve one map find name through the canonical index.
@@ -1752,8 +1742,7 @@ static const yvex_deepseek_gguf_metadata *lowering_metadata_at(
     const yvex_deepseek_gguf_map *map,
     unsigned long long index)
 {
-    return map && index < map->summary.metadata_count
-        ? &map->metadata[index] : NULL;
+    return map && index < map->summary.metadata_count ? &map->metadata[index] : NULL;
 }
 
 /* Purpose: resolve one lowering metadata find through the canonical index. */

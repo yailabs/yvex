@@ -1,5 +1,5 @@
 /* Owner: graph core and encoded attention operations.
- * Owns: graph lifecycle, value/op tables, shapes, encoded reads/dots, reduction, and output projection.
+ * Owns: graph lifecycle, reusable workspaces, shapes, encoded reads/dots, reduction, and output projection.
  * Does not own: planning, family schedules, transactions, reports, backend kernels, or generation.
  * Invariants: graph facts and positioned reads preserve admitted descriptor geometry.
  * Boundary: graph construction and bounded operations are not transformer or generation support.
@@ -13,6 +13,271 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+struct yvex_attention_workspace {
+    unsigned char *arena;
+    yvex_attention_workspace_summary summary;
+};
+
+// Purpose: Derive the reusable numerical graph arena from family scratch policy.
+// Inputs: A sealed family plan.
+// Effects: Publishes one checked arena capacity without allocating storage.
+// Failure: Refuses absent policy or overflow.
+// Boundary: Backend staging has an independent descriptor-specific lifecycle.
+int yvex_attention_workspace_capacity_resolve(
+    const yvex_graph_family_api *family, const yvex_attention_plan *plan,
+    unsigned long long *arena_bytes, yvex_error *err)
+{
+    const yvex_attention_summary *summary;
+    yvex_attention_cpu_options options;
+    unsigned long long required_arena;
+    if (arena_bytes) *arena_bytes = 0ull;
+    if (!family || !plan || !arena_bytes || !family->plan_summary ||
+        !family->cpu_options_default) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "attention.workspace",
+                       "sealed plan and family workspace policy are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    summary = family->plan_summary(plan);
+    memset(&options, 0, sizeof(options));
+    family->cpu_options_default(&options);
+    if (!summary || !summary->full_execution_ready || !options.scratch_limit_bytes ||
+        !yvex_core_u64_mul(options.scratch_limit_bytes, 3ull, &required_arena)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.workspace",
+                       "attention plan has no bounded executable workspace policy");
+        return YVEX_ERR_STATE;
+    }
+    *arena_bytes = required_arena;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+// Purpose: Allocate the one reusable host arena during cold session preparation.
+// Inputs: Exclusive output ownership and a checked nonzero byte capacity.
+// Effects: Allocates and zeroes one arena; no execution span becomes active.
+// Failure: Invalid capacity or allocation failure publishes no workspace.
+// Boundary: This is the only heap allocation in the graph workspace lifecycle.
+int yvex_attention_workspace_open(yvex_attention_workspace **out,
+                                  unsigned long long capacity_bytes, yvex_error *err)
+{
+    yvex_attention_workspace *workspace;
+    if (out) *out = NULL;
+    if (!out || !capacity_bytes || capacity_bytes > (unsigned long long)SIZE_MAX) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "attention.workspace",
+                       "attention workspace capacity is invalid");
+        return YVEX_ERR_BOUNDS;
+    }
+    workspace = (yvex_attention_workspace *)calloc(1u, sizeof(*workspace));
+    if (workspace) workspace->arena = (unsigned char *)calloc(1u, (size_t)capacity_bytes);
+    if (!workspace || !workspace->arena) {
+        free(workspace);
+        yvex_error_set(err, YVEX_ERR_NOMEM, "attention.workspace",
+                       "attention workspace cold allocation failed");
+        return YVEX_ERR_NOMEM;
+    }
+    workspace->summary.capacity_bytes = capacity_bytes;
+    workspace->summary.open = 1;
+    *out = workspace;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+// Purpose: Begin one exclusive execution lifetime without resizing storage.
+// Inputs: An open, inactive session-owned workspace.
+// Effects: Resets the cursor and advances the workspace generation.
+// Failure: Missing, closed, or already active workspaces remain unchanged.
+// Boundary: One mutable execution context may own the arena at a time.
+int yvex_attention_workspace_begin(yvex_attention_workspace *workspace, yvex_error *err)
+{
+    if (!workspace || !workspace->summary.open || workspace->summary.active) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.workspace",
+                       "attention workspace is absent or already active");
+        return YVEX_ERR_STATE;
+    }
+    workspace->summary.used_bytes = 0ull;
+    workspace->summary.active = 1;
+    workspace->summary.generation++;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+// Purpose: Borrow the current nested allocation boundary without mutation.
+// Inputs: An active workspace.
+// Effects: Returns its current byte cursor without changing ownership.
+// Failure: An inactive workspace returns the explicit invalid mark.
+// Boundary: Marks identify nested graph lifetimes, not persistent state.
+unsigned long long yvex_attention_workspace_mark(const yvex_attention_workspace *workspace)
+{
+    return workspace && workspace->summary.active ? workspace->summary.used_bytes : ULLONG_MAX;
+}
+
+// Purpose: Retire one nested lifetime after every borrowed span is consumed.
+// Inputs: An active workspace and a previously observed cursor mark.
+// Effects: Rewinds the cursor and records one retirement.
+// Failure: Invalid or forward marks preserve every live span.
+// Boundary: Callers must publish output and state evidence before rewinding.
+int yvex_attention_workspace_rewind(yvex_attention_workspace *workspace,
+                                    unsigned long long mark, yvex_error *err)
+{
+    if (!workspace || !workspace->summary.active || mark > workspace->summary.used_bytes) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.workspace",
+                       "attention workspace rewind boundary is invalid");
+        return YVEX_ERR_STATE;
+    }
+    workspace->summary.used_bytes = mark;
+    workspace->summary.rewind_count++;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+// Purpose: Finish one execution only when no borrowed arena spans remain.
+// Inputs: An active workspace rewound to its root mark.
+// Effects: Ends exclusive execution ownership without freeing storage.
+// Failure: Live spans or an inactive workspace remain unchanged.
+// Boundary: Cold close, not finish, releases the process-lifetime arena.
+int yvex_attention_workspace_finish(yvex_attention_workspace *workspace, yvex_error *err)
+{
+    if (!workspace || !workspace->summary.active || workspace->summary.used_bytes) {
+        yvex_error_set(err, YVEX_ERR_STATE, "attention.workspace",
+                       "attention workspace still owns live execution spans");
+        return YVEX_ERR_STATE;
+    }
+    workspace->summary.active = 0;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+// Purpose: Acquire one aligned zeroed range without heap fallback or cursor drift.
+// Inputs: An active workspace and checked element count and width.
+// Effects: Advances the cursor and zeroes only the admitted range.
+// Failure: Overflow or exhaustion increments refusal evidence and returns null.
+// Boundary: Returned storage remains borrowed until its enclosing rewind.
+void *yvex_attention_workspace_calloc(yvex_attention_workspace *workspace,
+                                      unsigned long long count, unsigned long long width)
+{
+    const unsigned long long alignment = (unsigned long long)_Alignof(max_align_t);
+    unsigned long long bytes, aligned, next;
+    void *result;
+    if (!workspace || !workspace->summary.active || !count || !width ||
+        !yvex_core_u64_mul(count, width, &bytes) ||
+        !yvex_core_u64_add(workspace->summary.used_bytes, alignment - 1ull, &aligned))
+        return NULL;
+    aligned -= aligned % alignment;
+    if (!yvex_core_u64_add(aligned, bytes, &next) ||
+        next > workspace->summary.capacity_bytes) {
+        workspace->summary.capacity_failure_count++;
+        return NULL;
+    }
+    result = workspace->arena + aligned;
+    memset(result, 0, (size_t)bytes);
+    workspace->summary.used_bytes = next;
+    if (next > workspace->summary.peak_bytes) workspace->summary.peak_bytes = next;
+    workspace->summary.acquisition_count++;
+    return result;
+}
+
+// Purpose: Borrow immutable arena counters for runtime accounting.
+// Inputs: An optional workspace handle.
+// Effects: Returns a borrowed summary and performs no mutation.
+// Failure: An absent workspace yields no summary.
+// Boundary: Runtime may project counters but cannot mutate graph ownership.
+const yvex_attention_workspace_summary *yvex_attention_workspace_summary_get(
+    const yvex_attention_workspace *workspace)
+{
+    return workspace ? &workspace->summary : NULL;
+}
+
+// Purpose: Release the cold arena allocation through exclusive pointer ownership.
+// Inputs: An optional owner slot containing a workspace.
+// Effects: Clears the owner slot and frees exactly the cold-owned arena.
+// Failure: Repeated or null close is an idempotent no-op.
+// Boundary: Arena-backed spans are never freed individually.
+void yvex_attention_workspace_close(yvex_attention_workspace **workspace_ptr)
+{
+    yvex_attention_workspace *workspace;
+    if (!workspace_ptr || !*workspace_ptr) return;
+    workspace = *workspace_ptr;
+    *workspace_ptr = NULL;
+    free(workspace->arena);
+    memset(workspace, 0, sizeof(*workspace));
+    free(workspace);
+}
+
+// Purpose: Allocate scratch from an attached arena or cold compatibility heap.
+// Inputs: A scratch budget plus checked element count and width.
+// Effects: Borrows arena storage or allocates one standalone cold range.
+// Failure: Overflow, capacity exhaustion, or allocation failure returns null.
+// Boundary: Runtime execution always attaches an arena; fixtures may use heap compatibility.
+void *yvex_attention_scratch_calloc(yvex_attention_scratch_budget *budget,
+                                    unsigned long long count, unsigned long long width)
+{
+    return budget && budget->workspace
+               ? yvex_attention_workspace_calloc(budget->workspace, count, width)
+               : yvex_attention_calloc_array(count, width);
+}
+
+// Purpose: Release only cold compatibility allocations; arena ranges retire at rewind.
+// Inputs: The allocation's originating scratch budget and optional pointer.
+// Effects: Frees standalone heap storage and leaves arena storage untouched.
+// Failure: Null or arena-backed allocations require no action.
+// Boundary: This helper never changes the reusable workspace cursor.
+void yvex_attention_scratch_free(yvex_attention_scratch_budget *budget, void *allocation)
+{
+    if (!budget || !budget->workspace) free(allocation);
+}
+
+// Purpose: Admit family-neutral execution facts before numerical mutation.
+// Inputs: Immutable plan, descriptor, session, options, and family ratio facts.
+// Effects: Publishes one borrowed layer only after complete validation.
+// Failure: Typed refusal leaves publications, state, and payload untouched.
+// Boundary: Family owners execute admitted semantics; this owner validates common lifecycle.
+int yvex_attention_execution_admit(
+    const yvex_attention_plan *plan, const char *logical_identity,
+    yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
+    const yvex_attention_cpu_options *options, const char *cancel_stage,
+    unsigned long long csa_ratio, unsigned long long hca_ratio,
+    const yvex_attention_layer_plan **layer, yvex_attention_failure *failure,
+    yvex_error *err)
+{
+    int rc = yvex_attention_context_validate(
+        plan, logical_identity, session, descriptor, failure, err);
+    if (rc != YVEX_OK) return rc;
+    if (!options || !layer || (options->publication && options->trace) ||
+        (options->publication && options->publication->owned) ||
+        (options->trace && options->trace->owned))
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
+            options ? options->layer_index : YVEX_ATTENTION_NO_LAYER,
+            YVEX_TENSOR_ROLE_UNKNOWN, 0ull, 1ull, err, YVEX_ERR_STATE,
+            "attention publication must be singular and released before reuse");
+    *layer = yvex_attention_plan_layer_at(plan, options->layer_index);
+    if (!*layer)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ARCHITECTURE, NULL,
+            options->layer_index, YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
+            YVEX_ERR_BOUNDS, "attention execution layer is absent");
+    if (options->operation_scope != YVEX_ATTENTION_OPERATION_CORE &&
+        options->operation_scope != YVEX_ATTENTION_OPERATION_ENVELOPE)
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_INVALID_ARGUMENT, NULL,
+            options->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+            YVEX_ATTENTION_OPERATION_ENVELOPE, options->operation_scope, err,
+            YVEX_ERR_FORMAT, "attention operation scope is invalid");
+    if (options->input_stride <
+        (options->operation_scope == YVEX_ATTENTION_OPERATION_ENVELOPE
+             ? (*layer)->residual_expanded_width : (*layer)->hidden_dimension))
+        return yvex_attention_reject(
+            failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION, NULL,
+            options->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
+            (*layer)->hidden_dimension, options->input_stride, err,
+            YVEX_ERR_BOUNDS, "attention input stride is shorter than its scope");
+    rc = yvex_attention_class_geometry_validate(
+        *layer, csa_ratio, hca_ratio, failure, err);
+    return rc == YVEX_OK
+               ? yvex_attention_cancel_check(options->cancellation,
+                                              options->layer_index, cancel_stage,
+                                              failure, err)
+               : rc;
+}
 static void graph_value_clear(yvex_graph_value_info *value);
 static void graph_op_clear(yvex_graph_op_info *op);
 static void graph_missing_clear(yvex_graph_missing_required *missing);
@@ -26,31 +291,6 @@ static int graph_add_op(yvex_graph *graph, yvex_op_kind kind, yvex_op_status sta
                         yvex_error *err);
 static int graph_add_missing(yvex_graph *graph, yvex_tensor_role role, const char *reason,
                              yvex_error *err);
-static const char *const graph_status_names[] = {"empty", "built", "partial", "unsupported",
-                                                 "invalid"};
-static const char *const op_kind_names[] = {"embed",
-                                            "rms_norm",
-                                            "matmul",
-                                            "rope",
-                                            "attention_prefill",
-                                            "attention_decode",
-                                            "kv_write",
-                                            "kv_read",
-                                            "swiglu",
-                                            "residual_add",
-                                            "logits",
-                                            "sampler",
-                                            "unsupported"};
-static const char *const op_status_names[] = {"planned", "missing_input", "unsupported",
-                                              "invalid_shape"};
-static const char *const value_kind_names[] = {"token_ids", "activation", "weight", "kv_cache",
-                                               "logits",    "temporary",  "unknown"};
-static const char *const residency_names[] = {"host", "device", "backend_decides"};
-
-/* Purpose: map one contiguous enum value to its stable ABI label. */
-static const char *enum_name(const char *const *names, size_t count, int value) {
-    return value >= 0 && (size_t)value < count ? names[value] : "unknown";
-}
 typedef struct {
     const yvex_attention_layer_plan *layer;
     const yvex_attention_history_view *history;
@@ -150,7 +390,7 @@ static int reduce_local_rows(const attention_reduce_context *context, unsigned l
 // Purpose: Validate reduce hca candidate valid against the admitted graph invariants.
 static int reduce_hca_candidate_valid(const attention_reduce_context *context,
                                       unsigned long long candidate, unsigned long long absolute) {
-    unsigned long long position = yvex_attention_segment_position(
+    unsigned long long position = attention_segment_position(
         context->history->compressed_positions, context->history->compressed_entry_count,
         context->current_compressed_positions, context->current_compressed_count, candidate);
     return position != ULLONG_MAX && position <= absolute &&
@@ -179,7 +419,7 @@ static int reduce_compressed_rows(const attention_reduce_context *context,
         if (context->layer->attention_class == YVEX_ATTENTION_CLASS_HCA &&
             !reduce_hca_candidate_valid(context, index, absolute))
             continue;
-        row = yvex_attention_segment_row(
+        row = attention_segment_row(
             context->history->compressed_kv, context->history->compressed_entry_count,
             context->history->compressed_kv_stride, context->current_compressed,
             context->current_compressed_count, context->current_compressed_stride, index);
@@ -277,7 +517,7 @@ static int reduce_select(const attention_reduce_context *context, unsigned long 
     context->trace_topk_counts[token] = *selected_count;
     for (candidate = 0ull; candidate < *selected_count; ++candidate)
         context->trace_topk_positions[token * context->trace_topk_stride + candidate] =
-            yvex_attention_segment_position(context->history->compressed_positions,
+            attention_segment_position(context->history->compressed_positions,
                                             context->history->compressed_entry_count,
                                             context->current_compressed_positions,
                                             context->current_compressed_count, selected[candidate]);
@@ -394,7 +634,7 @@ int yvex_attention_reduce_chunk(
         return rc;
     if (layer->attention_class == YVEX_ATTENTION_CLASS_CSA && context.compressed_total) {
         unsigned long long selected_capacity =
-            yvex_attention_min_u64(context.compressed_total, layer->sparse_topk.k);
+            attention_min_u64(context.compressed_total, layer->sparse_topk.k);
         if (!yvex_attention_scratch_reserve(scratch, selected_capacity, sizeof(*selected),
                                             &selected_reserved))
             return yvex_attention_reject(
@@ -402,10 +642,10 @@ int yvex_attention_reduce_chunk(
                 YVEX_TENSOR_ROLE_UNKNOWN, scratch ? scratch->limit_bytes : 0ull,
                 scratch ? (unsigned long long)scratch->live_bytes : 0ull, err, YVEX_ERR_BOUNDS,
                 "sparse selection exceeds the attention scratch budget");
-        selected =
-            (unsigned long long *)yvex_attention_calloc_array(selected_capacity, sizeof(*selected));
+        selected = (unsigned long long *)yvex_attention_scratch_calloc(
+            scratch, selected_capacity, sizeof(*selected));
         if (!selected) {
-            yvex_attention_scratch_release(scratch, selected_reserved);
+            attention_scratch_release(scratch, selected_reserved);
             return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
                                          layer->layer_index, YVEX_TENSOR_ROLE_UNKNOWN,
                                          context.compressed_total, 0ull, err, YVEX_ERR_NOMEM,
@@ -430,8 +670,8 @@ int yvex_attention_reduce_chunk(
         if (rc != YVEX_OK)
             break;
     }
-    free(selected);
-    yvex_attention_scratch_release(scratch, selected_reserved);
+    yvex_attention_scratch_free(scratch, selected);
+    attention_scratch_release(scratch, selected_reserved);
     return rc;
 }
 // Purpose: Return the admitted output project fact without transferring ownership.
@@ -476,7 +716,7 @@ int yvex_attention_output_project(
             YVEX_TENSOR_ROLE_ATTENTION_OUT_A, scratch ? scratch->limit_bytes : 0ull,
             scratch ? (unsigned long long)scratch->live_bytes : 0ull, err, YVEX_ERR_BOUNDS,
             "attention output projection scratch budget exceeded");
-    low = (float *)yvex_attention_calloc_array(low_elements, sizeof(float));
+    low = (float *)yvex_attention_scratch_calloc(scratch, low_elements, sizeof(float));
     if (!low)
         rc = yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, out_a,
                                    out_a->layer_index, YVEX_TENSOR_ROLE_ATTENTION_OUT_A,
@@ -527,8 +767,8 @@ int yvex_attention_output_project(
             }
     }
 cleanup:
-    free(low);
-    yvex_attention_scratch_release(scratch, low_bytes);
+    yvex_attention_scratch_free(scratch, low);
+    attention_scratch_release(scratch, low_bytes);
     return rc;
 }
 // Purpose: Return the admitted decode flat fact without transferring ownership.
@@ -605,9 +845,9 @@ int yvex_attention_activation_apply(const yvex_attention_activation_policy *poli
                                          budget ? (unsigned long long)budget->live_bytes : 0ull,
                                          err, YVEX_ERR_BOUNDS,
                                          "runtime activation transform scratch budget exceeded");
-        scratch = (float *)yvex_attention_calloc_array(count, sizeof(*scratch));
+        scratch = (float *)yvex_attention_scratch_calloc(budget, count, sizeof(*scratch));
         if (!scratch) {
-            yvex_attention_scratch_release(budget, scratch_bytes);
+            attention_scratch_release(budget, scratch_bytes);
             return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
                                          layer_index, role, count, 0ull, err, YVEX_ERR_NOMEM,
                                          "runtime activation Hadamard scratch allocation failed");
@@ -639,7 +879,8 @@ int yvex_attention_activation_apply(const yvex_attention_activation_policy *poli
                                    "runtime activation dequantized block scratch budget exceeded");
         goto cleanup;
     }
-    block_out = (float *)yvex_attention_calloc_array(block_width, sizeof(*block_out));
+    block_out = (float *)yvex_attention_scratch_calloc(
+        budget, block_width, sizeof(*block_out));
     if (!block_out) {
         rc = yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
                                    layer_index, role, block_width, 0ull, err, YVEX_ERR_NOMEM,
@@ -654,7 +895,8 @@ int yvex_attention_activation_apply(const yvex_attention_activation_policy *poli
                                    "runtime activation code block scratch budget exceeded");
         goto cleanup;
     }
-    codes = (unsigned char *)yvex_attention_calloc_array(block_width, sizeof(*codes));
+    codes = (unsigned char *)yvex_attention_scratch_calloc(
+        budget, block_width, sizeof(*codes));
     if (!codes) {
         rc = yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION, NULL,
                                    layer_index, role, block_width, 0ull, err, YVEX_ERR_NOMEM,
@@ -681,12 +923,12 @@ int yvex_attention_activation_apply(const yvex_attention_activation_policy *poli
     }
     yvex_error_clear(err);
 cleanup:
-    free(scratch);
-    free(block_out);
-    free(codes);
-    yvex_attention_scratch_release(budget, codes_bytes);
-    yvex_attention_scratch_release(budget, block_out_bytes);
-    yvex_attention_scratch_release(budget, scratch_bytes);
+    yvex_attention_scratch_free(budget, scratch);
+    yvex_attention_scratch_free(budget, block_out);
+    yvex_attention_scratch_free(budget, codes);
+    attention_scratch_release(budget, codes_bytes);
+    attention_scratch_release(budget, block_out_bytes);
+    attention_scratch_release(budget, scratch_bytes);
     return rc;
 }
 // Purpose: Reserve checked live CPU scratch without mutating the budget on refusal.
@@ -710,24 +952,6 @@ int yvex_attention_scratch_reserve(yvex_attention_scratch_budget *budget, unsign
     *bytes_out = bytes;
     return 1;
 }
-// Purpose: Release one previously admitted live CPU scratch extent.
-// Inputs: one execution-owned budget and its exact admitted byte extent.
-// Effects: decrements live bytes without changing the recorded peak.
-// Failure: invalid or excessive releases leave the budget unchanged.
-// Boundary: release does not free storage or alter execution evidence.
-void yvex_attention_scratch_release(yvex_attention_scratch_budget *budget, size_t bytes) {
-    if (budget && bytes <= budget->live_bytes)
-        budget->live_bytes -= bytes;
-}
-// Purpose: Return the admitted result reset fact without transferring ownership.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-void yvex_attention_result_reset(yvex_attention_cpu_result *result) {
-    if (result)
-        memset(result, 0, sizeof(*result));
-}
 // Purpose: Return the admitted binding find fact without transferring ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
@@ -744,7 +968,7 @@ yvex_attention_binding_find(const yvex_runtime_descriptor *descriptor, yvex_tens
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
 // Failure: returns a typed refusal or neutral result without partial capability publication.
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-int yvex_attention_row_geometry(const yvex_materialized_tensor_binding *binding,
+static int attention_row_geometry(const yvex_materialized_tensor_binding *binding,
                                 unsigned long long *row_bytes_out,
                                 unsigned long long *row_count_out, yvex_attention_failure *failure,
                                 yvex_error *err) {
@@ -788,7 +1012,7 @@ int yvex_attention_row_geometry(const yvex_materialized_tensor_binding *binding,
 // Effects: advances payload evidence exactly once on success.
 // Failure: overflow returns a typed dimension refusal without counter mutation.
 // Boundary: accounts admitted reads but does not perform payload I/O.
-int yvex_attention_payload_account(yvex_attention_cpu_result *result, unsigned long long bytes,
+static int attention_payload_account(yvex_attention_cpu_result *result, unsigned long long bytes,
                                    const yvex_runtime_tensor_binding *binding,
                                    yvex_attention_failure *failure, yvex_error *err) {
     unsigned long long total;
@@ -830,7 +1054,7 @@ int yvex_attention_decode_row(yvex_materialization_session *session,
             runtime_binding ? runtime_binding->role : YVEX_TENSOR_ROLE_UNKNOWN, 1ull, 0ull, err,
             YVEX_ERR_INVALID_ARG, "attention row decode requires session, binding, and output");
     binding = runtime_binding->binding;
-    rc = yvex_attention_row_geometry(binding, &row_bytes, &row_count, failure, err);
+    rc = attention_row_geometry(binding, &row_bytes, &row_count, failure, err);
     if (rc != YVEX_OK)
         return rc;
     if (row_index >= row_count || out_elements != binding->row_width)
@@ -844,14 +1068,14 @@ int yvex_attention_decode_row(yvex_materialization_session *session,
             binding->role, scratch ? scratch->limit_bytes : 0ull,
             scratch ? (unsigned long long)scratch->live_bytes : 0ull, err, YVEX_ERR_BOUNDS,
             "attention encoded row scratch budget exceeded");
-    encoded = (unsigned char *)malloc((size_t)row_bytes);
+    encoded = (unsigned char *)yvex_attention_scratch_calloc(scratch, row_bytes, 1ull);
     if (!encoded)
         rc = yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION,
                                    runtime_binding, binding->layer_index, binding->role, row_bytes,
                                    0ull, err, YVEX_ERR_NOMEM,
                                    "failed to allocate attention encoded row scratch");
     if (!encoded) {
-        yvex_attention_scratch_release(scratch, encoded_scratch);
+        attention_scratch_release(scratch, encoded_scratch);
         return rc;
     }
     rc = yvex_materialization_session_read(session, binding, row_index * row_bytes, encoded,
@@ -862,7 +1086,7 @@ int yvex_attention_decode_row(yvex_materialization_session *session,
                                    "failed to read attention encoded row");
         goto cleanup;
     }
-    rc = yvex_attention_payload_account(result, row_bytes, runtime_binding, failure, err);
+    rc = attention_payload_account(result, row_bytes, runtime_binding, failure, err);
     if (rc != YVEX_OK)
         goto cleanup;
     block_count = binding->row_width / binding->block_size;
@@ -881,8 +1105,8 @@ int yvex_attention_decode_row(yvex_materialization_session *session,
         }
     }
 cleanup:
-    free(encoded);
-    yvex_attention_scratch_release(scratch, encoded_scratch);
+    yvex_attention_scratch_free(scratch, encoded);
+    attention_scratch_release(scratch, encoded_scratch);
     return rc;
 }
 // Purpose: Return the admitted dot batch fact without transferring ownership.
@@ -916,7 +1140,7 @@ int yvex_attention_dot_batch(yvex_materialization_session *session,
             YVEX_ERR_INVALID_ARG,
             "attention batch dot rows require session, binding, vectors, and output");
     binding = runtime_binding->binding;
-    rc = yvex_attention_row_geometry(binding, &row_bytes, &row_count, failure, err);
+    rc = attention_row_geometry(binding, &row_bytes, &row_count, failure, err);
     if (rc != YVEX_OK)
         return rc;
     if (vector_len != binding->row_width)
@@ -930,7 +1154,7 @@ int yvex_attention_dot_batch(yvex_materialization_session *session,
                                      row_count, start_row, err, YVEX_ERR_BOUNDS,
                                      "attention batch dot row range starts beyond tensor rows");
     rows =
-        yvex_attention_min_u64(max_rows ? max_rows : row_count - start_row, row_count - start_row);
+        attention_min_u64(max_rows ? max_rows : row_count - start_row, row_count - start_row);
     if (rows == 0ull)
         return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_DIMENSION,
                                      runtime_binding, binding->layer_index, binding->role, 1ull,
@@ -942,14 +1166,14 @@ int yvex_attention_dot_batch(yvex_materialization_session *session,
             binding->layer_index, binding->role, rows, output_stride, err, YVEX_ERR_BOUNDS,
             "attention batch dot output stride is smaller than produced rows");
     if (!yvex_attention_scratch_reserve(scratch, row_bytes, 1u, &encoded_scratch)) {
-        yvex_attention_scratch_release(scratch, encoded_scratch);
+        attention_scratch_release(scratch, encoded_scratch);
         return yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_SCRATCH,
                                      runtime_binding, binding->layer_index, binding->role,
                                      scratch ? scratch->limit_bytes : 0ull,
                                      scratch ? (unsigned long long)scratch->live_bytes : 0ull, err,
                                      YVEX_ERR_BOUNDS, "attention dot row scratch budget exceeded");
     }
-    encoded = (unsigned char *)malloc((size_t)row_bytes);
+    encoded = (unsigned char *)yvex_attention_scratch_calloc(scratch, row_bytes, 1ull);
     if (!encoded) {
         rc = yvex_attention_reject(failure, YVEX_DEEPSEEK_ATTENTION_FAILURE_ALLOCATION,
                                    runtime_binding, binding->layer_index, binding->role, row_bytes,
@@ -969,7 +1193,7 @@ int yvex_attention_dot_batch(yvex_materialization_session *session,
                                        "failed to read attention batch dot encoded row");
             goto cleanup;
         }
-        rc = yvex_attention_payload_account(result, row_bytes, runtime_binding, failure, err);
+        rc = attention_payload_account(result, row_bytes, runtime_binding, failure, err);
         if (rc != YVEX_OK)
             goto cleanup;
         for (token = 0ull; token < token_count; ++token) {
@@ -995,8 +1219,8 @@ int yvex_attention_dot_batch(yvex_materialization_session *session,
     }
     *rows_out = rows;
 cleanup:
-    free(encoded);
-    yvex_attention_scratch_release(scratch, encoded_scratch);
+    yvex_attention_scratch_free(scratch, encoded);
+    attention_scratch_release(scratch, encoded_scratch);
     return rc;
 }
 // Purpose: Return the admitted checksum fact without transferring ownership.
@@ -1048,15 +1272,6 @@ void yvex_graph_close(yvex_graph *graph) {
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 yvex_graph_status yvex_graph_status_of(const yvex_graph *graph) {
     return graph ? graph->status : YVEX_GRAPH_STATUS_EMPTY;
-}
-// Purpose: Project the stable textual ABI label for a graph construction status.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-const char *yvex_graph_status_name(yvex_graph_status status) {
-    return enum_name(graph_status_names, sizeof(graph_status_names) / sizeof(graph_status_names[0]),
-                     (int)status);
 }
 // Purpose: Return the admitted value count fact without transferring ownership.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
@@ -1283,41 +1498,6 @@ int yvex_graph_build_for_model(yvex_graph **out, const yvex_model_descriptor *mo
     yvex_error_clear(err);
     return YVEX_OK;
 }
-// Purpose: Project the stable textual ABI label for op kind name.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-const char *yvex_op_kind_name(yvex_op_kind kind) {
-    return enum_name(op_kind_names, sizeof(op_kind_names) / sizeof(op_kind_names[0]), (int)kind);
-}
-// Purpose: Project the stable textual ABI label for op status name.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-const char *yvex_op_status_name(yvex_op_status status) {
-    return enum_name(op_status_names, sizeof(op_status_names) / sizeof(op_status_names[0]),
-                     (int)status);
-}
-// Purpose: Project the stable textual ABI label for value kind name.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-const char *yvex_value_kind_name(yvex_value_kind kind) {
-    return enum_name(value_kind_names, sizeof(value_kind_names) / sizeof(value_kind_names[0]),
-                     (int)kind);
-}
-// Purpose: Project the stable textual ABI label for residency name.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-const char *yvex_residency_name(yvex_residency residency) {
-    return enum_name(residency_names, sizeof(residency_names) / sizeof(residency_names[0]),
-                     (int)residency);
-}
 // Purpose: Apply the checked graph-local shape product invariant.
 // Inputs: typed caller-owned values accepted by the graph private ABI.
 // Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
@@ -1440,34 +1620,42 @@ static void graph_missing_clear(yvex_graph_missing_required *missing) {
     free((char *)missing->reason);
     memset(missing, 0, sizeof(*missing));
 }
-// Purpose: Construct reserve values with checked geometry and explicit ownership.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-static int reserve_values(yvex_graph *graph, unsigned long long need, yvex_error *err) {
-    yvex_graph_value_info *next;
+/* Purpose: grow one graph-owned row table with shared checked capacity semantics.
+ * Inputs: current rows/capacity, required row count, row width, diagnostics, and output.
+ * Effects: may reallocate and zero only the newly admitted graph-owned rows.
+ * Failure: overflow or allocation refusal leaves the original table and capacity unchanged.
+ * Boundary: manages generic graph storage without interpreting row contents. */
+static int reserve_rows(void *rows, unsigned long long *capacity, unsigned long long need,
+                        size_t row_bytes, const char *where, const char *overflow_message,
+                        const char *allocation_message, void **out, yvex_error *err) {
+    void *grown;
     unsigned long long next_cap;
-    if (graph->value_cap >= need) {
+
+    if (*capacity >= need) {
+        *out = rows;
         return YVEX_OK;
     }
-    next_cap = graph->value_cap == 0 ? 4 : graph->value_cap * 2u;
+    next_cap = *capacity == 0 ? 4 : *capacity;
     while (next_cap < need) {
+        if (next_cap > ULLONG_MAX / 2u) {
+            next_cap = need;
+            break;
+        }
         next_cap *= 2u;
     }
-    if (next_cap > (unsigned long long)(SIZE_MAX / sizeof(*graph->values))) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_graph_add_value", "value table too large");
+    if (!row_bytes || next_cap > (unsigned long long)(SIZE_MAX / row_bytes)) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, where, overflow_message);
         return YVEX_ERR_NOMEM;
     }
-    next =
-        (yvex_graph_value_info *)realloc(graph->values, (size_t)next_cap * sizeof(*graph->values));
-    if (!next) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_graph_add_value", "failed to grow value table");
+    grown = realloc(rows, (size_t)next_cap * row_bytes);
+    if (!grown) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, where, allocation_message);
         return YVEX_ERR_NOMEM;
     }
-    memset(next + graph->value_cap, 0, (size_t)(next_cap - graph->value_cap) * sizeof(*next));
-    graph->values = next;
-    graph->value_cap = next_cap;
+    memset((unsigned char *)grown + (size_t)*capacity * row_bytes, 0,
+           (size_t)(next_cap - *capacity) * row_bytes);
+    *capacity = next_cap;
+    *out = grown;
     return YVEX_OK;
 }
 // Purpose: Construct reserve ops with checked geometry and explicit ownership.
@@ -1476,68 +1664,19 @@ static int reserve_values(yvex_graph *graph, unsigned long long need, yvex_error
 // Failure: returns a typed refusal or neutral result without partial capability publication.
 // Boundary: remains graph-local and cannot promote attention, KV, or generation support.
 static int reserve_ops(yvex_graph *graph, unsigned long long need, yvex_error *err) {
-    yvex_graph_op_info *next_ops;
-    yvex_graph_op_edges *next_edges;
-    unsigned long long next_cap;
-    if (graph->op_cap >= need) {
-        return YVEX_OK;
-    }
-    next_cap = graph->op_cap == 0 ? 4 : graph->op_cap * 2u;
-    while (next_cap < need) {
-        next_cap *= 2u;
-    }
-    if (next_cap > (unsigned long long)(SIZE_MAX / sizeof(*graph->ops)) ||
-        next_cap > (unsigned long long)(SIZE_MAX / sizeof(*graph->edges))) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_graph_add_op", "op table too large");
-        return YVEX_ERR_NOMEM;
-    }
-    next_ops = (yvex_graph_op_info *)realloc(graph->ops, (size_t)next_cap * sizeof(*graph->ops));
-    if (!next_ops) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_graph_add_op", "failed to grow op table");
-        return YVEX_ERR_NOMEM;
-    }
-    graph->ops = next_ops;
-    next_edges =
-        (yvex_graph_op_edges *)realloc(graph->edges, (size_t)next_cap * sizeof(*graph->edges));
-    if (!next_edges) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_graph_add_op", "failed to grow op edge table");
-        return YVEX_ERR_NOMEM;
-    }
-    memset(graph->ops + graph->op_cap, 0, (size_t)(next_cap - graph->op_cap) * sizeof(*graph->ops));
-    memset(next_edges + graph->op_cap, 0, (size_t)(next_cap - graph->op_cap) * sizeof(*next_edges));
-    graph->edges = next_edges;
-    graph->op_cap = next_cap;
-    return YVEX_OK;
-}
-// Purpose: Construct reserve missing with checked geometry and explicit ownership.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-static int reserve_missing(yvex_graph *graph, unsigned long long need, yvex_error *err) {
-    yvex_graph_missing_required *next;
-    unsigned long long next_cap;
-    if (graph->missing_cap >= need) {
-        return YVEX_OK;
-    }
-    next_cap = graph->missing_cap == 0 ? 4 : graph->missing_cap * 2u;
-    while (next_cap < need) {
-        next_cap *= 2u;
-    }
-    if (next_cap > (unsigned long long)(SIZE_MAX / sizeof(*graph->missing))) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_graph_add_missing", "missing table too large");
-        return YVEX_ERR_NOMEM;
-    }
-    next = (yvex_graph_missing_required *)realloc(graph->missing,
-                                                  (size_t)next_cap * sizeof(*graph->missing));
-    if (!next) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_graph_add_missing",
-                       "failed to grow missing table");
-        return YVEX_ERR_NOMEM;
-    }
-    memset(next + graph->missing_cap, 0, (size_t)(next_cap - graph->missing_cap) * sizeof(*next));
-    graph->missing = next;
-    graph->missing_cap = next_cap;
+    unsigned long long op_capacity = graph->op_cap, edge_capacity = graph->op_cap;
+    void *rows = NULL;
+    int rc = reserve_rows(graph->ops, &op_capacity, need, sizeof(*graph->ops),
+                          "yvex_graph_add_op", "op table too large",
+                          "failed to grow op table", &rows, err);
+    if (rc != YVEX_OK) return rc;
+    graph->ops = (yvex_graph_op_info *)rows;
+    rc = reserve_rows(graph->edges, &edge_capacity, need, sizeof(*graph->edges),
+                      "yvex_graph_add_op", "op table too large",
+                      "failed to grow op edge table", &rows, err);
+    if (rc != YVEX_OK) return rc;
+    graph->edges = (yvex_graph_op_edges *)rows;
+    graph->op_cap = op_capacity;
     return YVEX_OK;
 }
 // Purpose: Apply the checked graph-local add value invariant.
@@ -1557,7 +1696,15 @@ static int graph_add_value(yvex_graph *graph, yvex_value_kind kind, const char *
                        "invalid value arguments");
         return YVEX_ERR_INVALID_ARG;
     }
-    rc = reserve_values(graph, graph->value_count + 1u, err);
+    {
+        void *rows = NULL;
+        rc = reserve_rows(graph->values, &graph->value_cap, graph->value_count + 1u,
+                          sizeof(*graph->values), "yvex_graph_add_value",
+                          "value table too large", "failed to grow value table",
+                          &rows, err);
+        if (rc == YVEX_OK)
+            graph->values = (yvex_graph_value_info *)rows;
+    }
     if (rc != YVEX_OK) {
         return rc;
     }
@@ -1648,7 +1795,15 @@ static int graph_add_missing(yvex_graph *graph, yvex_tensor_role role, const cha
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_graph_add_missing", "graph is required");
         return YVEX_ERR_INVALID_ARG;
     }
-    rc = reserve_missing(graph, graph->missing_count + 1u, err);
+    {
+        void *rows = NULL;
+        rc = reserve_rows(graph->missing, &graph->missing_cap,
+                          graph->missing_count + 1u, sizeof(*graph->missing),
+                          "yvex_graph_add_missing", "missing table too large",
+                          "failed to grow missing table", &rows, err);
+        if (rc == YVEX_OK)
+            graph->missing = (yvex_graph_missing_required *)rows;
+    }
     if (rc != YVEX_OK) {
         return rc;
     }
@@ -1664,15 +1819,4 @@ static int graph_add_missing(yvex_graph *graph, yvex_tensor_role role, const cha
     }
     graph->missing_count += 1u;
     return YVEX_OK;
-}
-// Purpose: Return the admitted op edges at fact without transferring ownership.
-// Inputs: typed caller-owned values accepted by the graph private ABI.
-// Effects: mutates only explicit outputs or graph-owned state; performs no operator I/O.
-// Failure: returns a typed refusal or neutral result without partial capability publication.
-// Boundary: remains graph-local and cannot promote attention, KV, or generation support.
-const yvex_graph_op_edges *yvex_graph_op_edges_at(const yvex_graph *graph,
-                                                  unsigned long long index) {
-    if (!graph || index >= graph->op_count)
-        return NULL;
-    return &graph->edges[index];
 }

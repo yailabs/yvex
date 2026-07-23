@@ -10,6 +10,7 @@
  * Inputs: immutable catalog rows, typed target requests, and source identity facts.
  * Effects: writes caller-owned reports and resolves request-specific operator paths.
  * Failure: invalid targets and path overflow produce typed refusal without capability promotion. */
+#include <yvex/internal/core.h>
 #include <yvex/internal/model_target.h>
 
 #include <stdio.h>
@@ -229,13 +230,6 @@ static const char *catalog_models_root(const yvex_model_target_request *request,
     return "models";
 }
 
-/* Purpose: compare or copy catalog copy path under exact ownership. */
-static void catalog_copy_path(char *out, size_t cap, const char *path)
-{
-    if (!out || cap == 0u) return;
-    (void)snprintf(out, cap, "%s", path ? path : "");
-}
-
 /* Purpose: form the bounded canonical catalog absolute path without path drift. */
 static void catalog_absolute_path(char *out, size_t cap, const char *path)
 {
@@ -245,11 +239,11 @@ static void catalog_absolute_path(char *out, size_t cap, const char *path)
     out[0] = '\0';
     if (!path || !path[0]) return;
     if (path[0] == '/') {
-        catalog_copy_path(out, cap, path);
+        yvex_core_text_copy(out, cap, path);
         return;
     }
     if (!getcwd(cwd, sizeof(cwd))) {
-        catalog_copy_path(out, cap, path);
+        yvex_core_text_copy(out, cap, path);
         return;
     }
     (void)snprintf(out, cap, "%s/%s", cwd, path);
@@ -317,8 +311,7 @@ static void catalog_path_report(const yvex_model_target_request *request,
         if (!yvex_source_target_path(
                 source_path, sizeof(source_path), root_abs,
                 yvex_source_release_identity())) {
-            (void)snprintf(source_path, sizeof(source_path), "%s",
-                           "path-overflow");
+            yvex_core_text_copy(source_path, sizeof(source_path), "path-overflow");
         }
     } else {
         (void)snprintf(source_path, sizeof(source_path), "%s/hf/%s/%s",
@@ -406,19 +399,62 @@ static int catalog_unknown_subcommand(const yvex_model_target_request *request,
     return YVEX_OK;
 }
 
+typedef enum {
+    CATALOG_PROJECTION_SOURCE,
+    CATALOG_PROJECTION_NEXT,
+    CATALOG_PROJECTION_BOUNDARY,
+    CATALOG_PROJECTION_COUNT
+} catalog_projection_kind;
+
+typedef struct {
+    const char *target_class;
+    const char *values[CATALOG_PROJECTION_COUNT];
+} catalog_projection_row;
+
+static const char *const catalog_release_values[CATALOG_PROJECTION_COUNT] = {
+    "verification-required",
+    "V010.SOURCE.PAYLOAD.STREAM.0",
+    "selected release source only; artifact, runtime, and generation unsupported",
+};
+
+static const char *const catalog_default_values[CATALOG_PROJECTION_COUNT] = {
+    "missing",
+    "",
+    "target/source profile only; no source download/runtime/generation",
+};
+
+static const catalog_projection_row catalog_projection_rows[] = {
+    {"selected-runtime-slice",
+     {"unknown", "", "selected-slice only; no full-runtime generation"}},
+    {"official-source-huge-model",
+     {"planned", "V010.SOURCE.8",
+      "source/storage pressure only; no GLM runtime/generation"}},
+    {"source-model-candidate", {"missing", "V010.MAP.8",
+                                "target/source profile only; no source download/runtime/generation"}},
+};
+
+/* Purpose: project one catalog vocabulary column through the canonical target-class table.
+ * Inputs: immutable target record and bounded projection kind.
+ * Effects: none.
+ * Failure: callers provide an admitted projection kind; unmatched classes use the canonical default.
+ * Boundary: vocabulary projection does not change target capability or project state. */
+static const char *catalog_projection(const yvex_model_target_record *rec,
+                                      catalog_projection_kind kind)
+{
+    size_t index;
+
+    if (yvex_source_is_release_target(rec->target_id)) return catalog_release_values[kind];
+    for (index = 0u; index < sizeof(catalog_projection_rows) /
+                                      sizeof(catalog_projection_rows[0]); ++index)
+        if (strcmp(rec->target_class, catalog_projection_rows[index].target_class) == 0)
+            return catalog_projection_rows[index].values[kind];
+    return catalog_default_values[kind];
+}
+
 /* Purpose: project typed catalog source status vocabulary without lost semantics. */
 static const char *catalog_source_status(const yvex_model_target_record *rec)
 {
-    if (yvex_source_is_release_target(rec->target_id)) {
-        return "verification-required";
-    }
-    if (strcmp(rec->target_class, "selected-runtime-slice") == 0) {
-        return "unknown";
-    }
-    if (strcmp(rec->target_class, "official-source-huge-model") == 0) {
-        return "planned";
-    }
-    return "missing";
+    return catalog_projection(rec, CATALOG_PROJECTION_SOURCE);
 }
 
 /* Purpose: project typed catalog artifact status vocabulary without lost semantics. */
@@ -447,31 +483,13 @@ static const char *catalog_runtime_status(const yvex_model_target_record *rec)
 /* Purpose: project catalog next row from typed facts without capability drift. */
 static const char *catalog_next_row(const yvex_model_target_record *rec)
 {
-    if (yvex_source_is_release_target(rec->target_id)) {
-        return "V010.SOURCE.PAYLOAD.STREAM.0";
-    }
-    if (strcmp(rec->target_class, "official-source-huge-model") == 0) {
-        return "V010.SOURCE.8";
-    }
-    if (strcmp(rec->target_class, "source-model-candidate") == 0) {
-        return "V010.MAP.8";
-    }
-    return "";
+    return catalog_projection(rec, CATALOG_PROJECTION_NEXT);
 }
 
 /* Purpose: project catalog boundary from typed facts without capability drift. */
 static const char *catalog_boundary(const yvex_model_target_record *rec)
 {
-    if (yvex_source_is_release_target(rec->target_id)) {
-        return "selected release source only; artifact, runtime, and generation unsupported";
-    }
-    if (strcmp(rec->target_class, "selected-runtime-slice") == 0) {
-        return "selected-slice only; no full-runtime generation";
-    }
-    if (strcmp(rec->target_class, "official-source-huge-model") == 0) {
-        return "source/storage pressure only; no GLM runtime/generation";
-    }
-    return "target/source profile only; no source download/runtime/generation";
+    return catalog_projection(rec, CATALOG_PROJECTION_BOUNDARY);
 }
 
 /* Purpose: apply the canonical catalog runtime shape transformation and invariants. */

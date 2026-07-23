@@ -130,60 +130,6 @@ static const char *const coverage_failure_names[] = {
 #undef COLLECTION_STRING
 #undef COLLECTION_U64
 
-/* Purpose: construct bounded collection deepseek build state from admitted inputs.
- * Inputs: typed facts are borrowed.
- * Effects: updates bounded report or plan state.
- * Failure: preserves typed refusal and cleanup.
- * Boundary: never promotes payload or runtime execution. */
-static int collection_deepseek_build(
-    const yvex_model_target_request *request,
-    yvex_model_target_report *report,
-    yvex_error *err)
-{
-    yvex_source_verification verification;
-    yvex_deepseek_tensor_coverage *coverage = NULL;
-    yvex_deepseek_tensor_coverage_failure failure;
-    char models_root[512];
-    char source_path[512];
-    int rc;
-
-    if (!yvex_model_target_release_source_paths(
-            request, models_root, sizeof(models_root), source_path,
-            sizeof(source_path))) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "tensor_collection",
-                       "DeepSeek source path exceeds report bounds");
-        return YVEX_ERR_BOUNDS;
-    }
-    rc = yvex_model_register_deepseek_v4()->coverage.open_verified_source(
-        &coverage, &verification, source_path,
-        models_root, &failure, err);
-    if (rc != YVEX_OK) {
-        report->status = "tensor-coverage-blocked";
-        report->exit_code = 5;
-        yvex_model_target_report_add_error(
-            report,
-            "model-target tensor-collection: DeepSeek coverage refused: %s tensor=%s",
-            yvex_model_register_deepseek_v4()->coverage.failure_name(failure.code),
-            failure.tensor_name[0] ? failure.tensor_name : "none");
-        yvex_error_clear(err);
-        return YVEX_OK;
-    }
-    report->family_coverage = coverage;
-    {
-        const yvex_model_target_report_profile profile = {
-            .status = "exact-source-tensor-covered",
-            .target_id = request->target_id, .family = "deepseek", .stage = "header-only",
-            .tensor_map_status = "blocked", .runtime_status = "unsupported",
-            .generation_status = "unsupported", .next_row = "V010.SOURCE.PAYLOAD.STREAM.0",
-            .boundary = "exact source coverage consumed by the canonical map; payload, "
-                        "artifact, runtime, and generation remain blocked"
-        };
-
-        yvex_model_target_report_prepare(report, request, &profile);
-    }
-    return YVEX_OK;
-}
-
 /* Purpose: map collection family facts through canonical typed vocabulary. */
 static void collection_family_facts(const char *family,
                                     const char **top_blocker,
@@ -255,7 +201,12 @@ int yvex_tensor_collection_report_build(
         return YVEX_OK;
     }
     if (yvex_source_is_release_target(request->target_id)) {
-        return collection_deepseek_build(request, report, err);
+        return yvex_model_target_report_release_coverage(
+            request, report, "tensor-collection", "tensor_collection",
+            "exact-source-tensor-covered",
+            "exact source coverage consumed by the canonical map; payload, artifact, "
+            "runtime, and generation remain blocked",
+            err);
     }
     family = yvex_model_target_family_key(request->target_id);
     collection_family_facts(family, &top_blocker, &source_blocker);
@@ -393,8 +344,7 @@ static int coverage_reject(
         failure->code = code;
         failure->collection = collection;
         failure->scope = scope;
-        (void)snprintf(failure->tensor_name, sizeof(failure->tensor_name),
-                       "%s", name ? name : "");
+        yvex_core_text_copy(failure->tensor_name, sizeof(failure->tensor_name), name ? name : "");
         failure->layer_index = layer;
         failure->expert_index = expert;
         failure->dimension_index = dimension;
@@ -1238,7 +1188,6 @@ static int coverage_open_verified_source(
     source_options.models_root = models_root && models_root[0]
                                      ? models_root
                                      : "models";
-    source_options.promote_manifest = 0;
     rc = yvex_source_verify_with_snapshot(&source_options, verification,
                                           &snapshot, err);
     if (rc != YVEX_OK) goto cleanup;

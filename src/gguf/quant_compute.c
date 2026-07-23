@@ -92,17 +92,6 @@ int yvex_quant_metrics_update(yvex_quant_metrics *metrics, const float *referenc
     return 1;
 }
 
-/* Purpose: derive mean absolute error from the finite observations in an accumulator.
- * Inputs: an optional immutable metric record.
- * Effects: none.
- * Failure: empty or null metrics yield zero by contract.
- * Boundary: this projection does not change numeric admission. */
-double yvex_quant_metrics_mean_absolute_error(const yvex_quant_metrics *metrics) {
-    return metrics && metrics->finite_count
-               ? metrics->absolute_error_sum / (double)metrics->finite_count
-               : 0.0;
-}
-
 /* Purpose: derive root mean square error from finite accumulated observations.
  * Inputs: an optional immutable metric record.
  * Effects: none.
@@ -112,26 +101,6 @@ double yvex_quant_metrics_rmse(const yvex_quant_metrics *metrics) {
     return metrics && metrics->finite_count
                ? sqrt(metrics->squared_error_sum / (double)metrics->finite_count)
                : 0.0;
-}
-
-/* Purpose: project the documented zero-policy relative-error mean.
- * Inputs: an optional immutable metric record.
- * Effects: none.
- * Failure: empty or null metrics yield zero by contract.
- * Boundary: the projection cannot select a physical encoding. */
-double yvex_quant_metrics_mean_relative_error(const yvex_quant_metrics *metrics) {
-    return metrics && metrics->finite_count
-               ? metrics->relative_error_sum / (double)metrics->finite_count
-               : 0.0;
-}
-
-/* Purpose: measure absolute divergence between reference and reconstructed dot products.
- * Inputs: an optional immutable metric record.
- * Effects: none.
- * Failure: a null record yields zero by contract.
- * Boundary: the result is bounded compute evidence only. */
-double yvex_quant_metrics_dot_absolute_error(const yvex_quant_metrics *metrics) {
-    return metrics ? fabs(metrics->dot_reconstructed - metrics->dot_reference) : 0.0;
 }
 
 /* Purpose: publish one typed CPU-compute refusal with expected and observed geometry.

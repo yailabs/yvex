@@ -1,6 +1,6 @@
 # YVEX Model Artifacts
 
-Date: 2026-07-14
+Date: 2026-07-22
 Status: artifact policy
 
 Complete and supported model artifacts are external operator assets. They are
@@ -38,7 +38,7 @@ Exact source:
 $HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash
 ```
 
-Future canonical full target:
+Canonical full target:
 
 ```text
 deepseek4-v4-flash
@@ -53,9 +53,12 @@ a complete GGUF for DeepSeek-V4-Flash produced by YVEX
 Two complete DeepSeek-V4-Flash model artifacts currently exist outside the
 repository: the source-faithful profile and the selected Q8_0 + Q2_K profile.
 Both passed complete writer/reader admission. The selected artifact also passed
-bounded materialization and runtime-descriptor construction, but neither is a
-supported model artifact: graph execution, generation, evaluation, benchmark,
-and release gates remain incomplete as recorded in `PROJECT.md`.
+bounded materialization, runtime-descriptor construction and complete
+SWA/CSA/HCA attention execution through the admitted CPU and GB10 CUDA paths.
+Both are complete artifacts, but neither is a supported model artifact:
+persistent KV, complete transformer
+execution, generation, evaluation, full-model benchmark and release gates
+remain incomplete as recorded in `PROJECT.md`.
 
 ## Source Payload Handoff
 
@@ -145,7 +148,9 @@ Expected result:
 
 ## Non-Claims
 
-This policy does not claim complete GGUF emission, qtype compute or
-quantization coverage, writer completion, roundtrip completion, full materialization,
-runtime execution, DeepSeek generation, CUDA generation, evaluation evidence,
-benchmark measurement, or release readiness.
+This policy records the completed quantization, GGUF emission, roundtrip,
+bounded materialization and admitted attention-execution evidence named above.
+It does not claim that either complete artifact is a supported model artifact,
+nor does it claim persistent KV, complete transformer execution, DeepSeek text
+generation, CUDA model generation, evaluation evidence, a full-model benchmark
+or release readiness.

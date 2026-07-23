@@ -613,16 +613,6 @@ int yvex_tokenizer_pad_id(const yvex_tokenizer *tokenizer, unsigned int *out)
     return special_id_get(tokenizer, tokenizer ? &tokenizer->pad : 0, out);
 }
 
-/* Purpose: read the admitted separator-token ID.
- * Inputs: tokenizer and required output.
- * Effects: publishes one scalar ID when present.
- * Failure: invalid arguments or missing metadata return refusal.
- * Boundary: immutable SEP metadata projection. */
-int yvex_tokenizer_sep_id(const yvex_tokenizer *tokenizer, unsigned int *out)
-{
-    return special_id_get(tokenizer, tokenizer ? &tokenizer->sep : 0, out);
-}
-
 /* Purpose: validate and expose one GGUF metadata array's element type and count.
  * Inputs: value, expected type, output, error context, and metadata key.
  * Effects: writes immutable array facts on success.
