@@ -1,326 +1,448 @@
 # YVEX
 
-**YVEX is a native C/CUDA model-compilation system for verified open-weight
-inference.** It turns pinned model sources into identity-bound physical
-artifacts and admits each execution boundary only through executable evidence.
+**YVEX is a native C/CUDA inference system that compiles pinned open-weight
+model sources through admitted family profiles into identity-bound artifacts
+and executes admitted graph boundaries over those artifacts through explicit
+runtime contracts.**
 
-The DeepSeek-V4-Flash path is complete through source trust, Transformation
-IR, quantization, GGUF emission, roundtrip admission and bounded
-materialization. A content-addressed runtime binding now opens one immutable,
-family-neutral runtime model and reusable execution sessions. Complete
-SWA/CSA/HCA attention is operator-reachable through the main `yvex` binary on
-CPU and the admitted GB10 CUDA path; persistent KV is the active frontier, and
-autoregressive generation is not yet admitted.
+Source trust, logical semantics, physical lowering, artifact admission, runtime
+binding, residency, persistent state, backend execution, and evidence remain
+separate boundaries. Each consumer receives the exact identity and capability
+facts established by its predecessor.
 
-[Architecture](#architecture) · [Verified at scale](#verified-at-scale) ·
-[Run attention](#run-the-attention-boundary) · [Build](#build-and-validate) ·
+Family profiles define model-specific topology, tensor roles, numerical policy,
+and execution composition. Common owners provide reusable verification,
+compilation, artifact, runtime, memory, graph, backend, operator, and evidence
+mechanisms. A capability enters the supported surface only after its production
+path, refusals, cleanup, operator command, and identity-bound evidence pass the
+declared gate.
+
+[System architecture](#system-architecture) ·
+[Design invariants](#design-invariants) ·
+[Release vertical](#release-vertical-deepseek-v4-flash-on-nvidia-gb10) ·
+[Implementation snapshot](#verified-implementation-snapshot) ·
+[Executable surfaces](#current-executable-surfaces) ·
 [Project status](PROJECT.md)
 
-## Verified at scale
+## What YVEX owns
 
-| Proof | Verified result |
-| --- | --- |
-| Source trust | 46 / 46 shards and 159,617,149,040 payload bytes verified against pinned upstream Git LFS SHA-256 identities |
-| Transformation plan | 69,187 exact source values become 1,360 terminal tensors through one immutable artifact-neutral IR |
-| Selected physical artifact | Complete GGUF v3 file, 102,408,545,440 bytes, with all 1,360 tensors and exact tokenizer metadata |
-| Bounded materialization | All 102,396,843,592 encoded tensor bytes walked with 16 MiB peak executor-owned staging |
-| Numeric compute | Canonical codecs and direct CPU/CUDA compute evidence for every qtype selected by the release profile |
-| Runtime frontier | One verified model open and an 806-binding resident attention core/envelope pack serve reusable sessions; complete DeepSeek attention executes 43 layers and 634 core bindings through CPU eager and GB10 CUDA eager/graph modes |
+YVEX owns the transitions that make an identified model executable without
+collapsing model meaning, byte representation, resource lifetime, device
+behavior, or evidence into one authority.
 
-These are identity-bound implementation results, not projections from file
-names, reports or fixture success. The selected artifact exists outside the
-repository and is never tracked as source.
+| Boundary | Responsibility | Handoff |
+| --- | --- | --- |
+| Source trust | Verify pinned repositories, configuration, tokenizer assets, shard inventories, payload identities, and immutable tensor ranges | Verified source snapshot |
+| Model and compilation | Represent family semantics, exact tensor roles, Transformation IR, derivation identity, physical profiles, and lowering policy | Complete physical plan |
+| Artifacts | Encode tensors, construct GGUF, publish atomically, establish artifact identity, admit structure, and materialize typed bindings | Admitted artifact and runtime binding |
+| Runtime and resources | Open an immutable runtime model, create isolated sessions, retain resident resources, plan memory, and enforce capability prerequisites | Prepared execution context |
+| Execution and state | Lower semantic graphs, dispatch admitted backend operations, produce candidate state changes, and publish outputs transactionally | Output, state delta, and execution status |
+| Evidence and admission | Bind identities, failures, numerical comparisons, timing, evaluation, and benchmark facts to the exact path that ran | Capability or typed refusal |
 
-## Architecture
+Capability terms are strict:
 
-YVEX treats a model as verified structure that can be compiled, lowered and
-bound—not as a filename that happens to end in `.gguf`.
+- **Implements** means the behavior exists in production code.
+- **Executes** means a real production path traverses the behavior.
+- **Admits** means the required identity, integrity, capability, and evidence
+  gates pass.
+- **Supports** means the complete declared capability gate has passed.
+- **Targets** describes a release path the project intends to close.
+- **Plans** describes behavior that remains future work.
 
-| Boundary | What YVEX owns |
-| --- | --- |
-| Verified inputs | Exact repository revision, structured configuration, tokenizer facts, shard inventory, payload digests and immutable tensor ranges |
-| Model compilation | Typed architecture, exact tensor roles, artifact-neutral transformations, deterministic derivation identities and physical-profile decisions |
-| Physical artifacts | Numeric encoding, GGUF layout, metadata, tokenizer material, atomic publication, full-file identity and independent roundtrip admission |
-| Execution admission | Content-addressed runtime binding, immutable common model, session-owned state/workspace, resident weights, fail-closed backend modes and evidence attached to the exact identities that ran |
+## System architecture
 
-The identities remain distinct:
-
-```text
-logical model
-  -> Transformation IR
-  -> physical profile
-  -> artifact
-  -> materialization
-  -> runtime descriptor + attention plan
-  -> runtime binding
-  -> immutable model + execution session
-  -> semantic + executable graph
-  -> execution evidence
-```
-
-Changing precision, layout or container representation does not redefine the
-logical model. Producing a complete artifact does not establish runtime
-support. A backend primitive does not establish transformer execution.
+This section defines the complete YVEX ownership chain, including boundaries
+whose implementation gates remain open. The
+[implementation snapshot](#verified-implementation-snapshot) reports which
+parts are admitted.
 
 ```mermaid
 flowchart TD
-    S["Verified DeepSeek source<br/>complete"] --> M["DeepSeek model + Transformation IR<br/>complete"]
-    M --> Q["Selected profile + quantization<br/>complete"]
-    Q --> G["GGUF emission + roundtrip + admission<br/>complete"]
-    G --> R["Bounded materialization + runtime binding<br/>complete"]
-    R --> U["Common runtime model + reusable session<br/>complete"]
-    U --> A["DeepSeek attention<br/>CPU eager + GB10 CUDA eager/graphs"]
-    A --> K["Persistent KV<br/>active / unsupported"]
-    K --> T["Full-model prefill + transformer + generation<br/>blocked"]
+    S["Verified source snapshot"] --> L["Family semantics + logical model"]
+    L --> T["Exact tensor roles + Transformation IR"]
+    T --> P["Physical profile + lowering"]
+    P --> Q["Quantization + encoding"]
+    Q --> A["Artifact construction + identity"]
+    A --> I["Admission + materialization"]
+    I --> B["Runtime binding"]
+    B --> R["Immutable runtime model + mutable execution session"]
+    B --> SG["Semantic graph"]
+    SG --> EG["Executable graph"]
+    R --> M["Residency + memory plan"]
+    R --> K["Persistent model state"]
+    EG --> PH["Phase-aware execution<br/>prefill or decode"]
+    M --> PH
+    K --> PH
+    PH --> X["Backend dispatch + launch graph"]
+    X --> C["Validated activation + candidate state delta"]
+    C --> K
+    C --> O["Output head + logits"]
+    O --> SP["Sampling + token append + stop policy"]
+    SP --> D["Detokenization + text"]
+    I -.-> E["Identity-bound execution evidence"]
+    R -.-> E
+    X -.-> E
+    D --> E
+    E --> V["Evaluation"]
+    V --> BM["Benchmark"]
+    BM --> RA["Release admission"]
 ```
 
-Five rules shape the implementation:
+### Verified model inputs
 
-- **Identity before interpretation.** Consumers bind the exact source,
-  payload, plan, profile, artifact and runtime facts they were built for.
-- **Planning before byte execution.** Immutable plans decide meaning and
-  geometry; bounded executors own reads, buffers, conversion and cleanup.
-- **Transactional physical boundaries.** Partial tensors, partial artifacts
-  and stale snapshots are failures, never degraded successes.
-- **Generic mechanisms, explicit family policy.** Common owners implement
-  reusable storage, numeric and lifecycle behavior; family owners select the
-  topology and composition that are actually true for that model.
-- **Cold trust, warm reuse.** One runtime model authenticates and opens one
-  admitted artifact and resident weight pack. Every session reuses stable
-  workspace; CUDA graph modes additionally reuse captured graph executables,
-  without rebuilding source or compilation truth.
+A source snapshot binds one upstream revision, structured model configuration,
+tokenizer material, shard inventory, tensor directory, payload identities, and
+drift policy. Source owners establish which bytes and semantic facts may enter
+compilation. Runtime execution never reconstructs this trust boundary.
 
-## DeepSeek-V4-Flash release target
+### Logical model and family semantics
 
-[DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) is the
-sole v0.1.0 release target. Its pinned source revision is
-`60d8d70770c6776ff598c94bb586a859a38244f1`.
+The logical model records architecture, tensor roles, block composition,
+sequence-mixer policy, position rules, persistent-state semantics, FFN or MoE
+structure, tokenizer relationships, and output policy independently from
+container format and backend.
 
-The v0.1.0 end target is real autoregressive execution on NVIDIA DGX Spark /
-GB10 CUDA. Current CUDA evidence covers selected-qtype compute and the complete
-attention-owned SWA/CSA/HCA composition. It does not establish full-model
-residency, persistent KV, transformer composition or generation.
+A typed family profile supplies irreducible model policy. Common mechanisms
+consume that policy through bounded interfaces rather than inferring a family
+from filenames, target strings, or tensor-name conventions.
 
-The admitted logical model records 43 main layers and one MTP layer, hybrid
-SWA/CSA/HCA attention, mHC residual structure, position and KV requirements,
-one shared plus 256 routed experts per main layer, top-6 routing, an untied
-129,280-entry vocabulary and declared 1,048,576-token context geometry.
-Full-model long-context execution remains blocked with the rest of the
-transformer; the attention-local compression and state boundaries have their
-own bounded execution evidence.
+### Transformation and physical compilation
 
-The sealed Transformation IR accounts for every verified input exactly once:
+Transformation IR defines how verified source contributions become logical
+terminal tensors through typed, deterministic operations. Planning establishes
+meaning, shapes, axes, identities, and dependencies before payload execution.
 
-| Operation | Terminals | Source contributions |
-| --- | ---: | ---: |
-| Identity transfer | 850 | 850 |
-| Scale-paired decode | 375 | 750 |
-| Checked I64 to I32 cast | 3 | 3 |
-| Expert aggregation | 132 | 67,584 |
-| **Total** | **1,360** | **69,187** |
+A physical profile then selects dtypes, qtypes, layouts, alignment, encoding,
+placement constraints, and numerical policy. Changing physical representation
+does not redefine the logical model.
 
-The selected physical profile is
-`deepseek-v4-flash-q8_0-q2_k-v1`:
+### Artifact construction and admission
 
-| Encoding | Tensors | Encoded payload bytes |
-| --- | ---: | ---: |
-| F32 | 417 | 144,672,072 |
-| BF16 | 433 | 2,830,518,528 |
-| I32 | 3 | 9,308,160 |
-| Q8_0 | 375 | 6,399,459,328 |
-| Q2_K | 132 | 93,012,885,504 |
-| **Total** | **1,360** | **102,396,843,592** |
+Artifact construction executes the sealed physical plan, encodes payloads,
+writes metadata and tensor directories, and publishes the result
+transactionally. GGUF is the v0.1 release container; the logical model remains
+independent from that serialization.
 
-YVEX has emitted and validated both canonical physical profiles:
+Admission validates the complete structure, byte ranges, identities, metadata,
+qtypes, shapes, and compatibility facts required by the next consumer.
+Materialization projects admitted artifact tensors into typed runtime bindings
+without reopening model semantics.
 
-- **Source-faithful:** 177,680,573,600 bytes.
-- **Q8_0 + Q2_K selected profile:** 102,408,545,440 bytes.
+### Runtime binding and residency
 
-```text
-source-faithful SHA-256  f16e800c0d7383ee76cb2e2fa8bdd674bab29c017cba64eaba85c39016e257ca
-selected SHA-256        01b2bed4f070d0a3fdb02e546764b3a49cb69886eebe17b4877d20294725682c
-```
+A content-addressed runtime binding carries immutable compilation truth into
+execution. It identifies the artifact, family adapter, tensor bindings,
+runtime-numeric policy, descriptors, graphs, capability requirements, and
+invalidation rules.
 
-Each artifact contains 68 metadata entries, 129,280 tokenizer tokens, 127,741
-merges and all 1,360 tensors. Both passed native full-byte verification and the
-official GGUF reader pinned to ggml revision
-`af97976c7810cdabb1863172f31c432dab767de7`; the selected artifact also passed
-a complete deterministic second serialization.
+The runtime model owns shareable immutable resources for one admitted binding.
+Execution sessions own mutable workspace, cancellation, state views, graph
+instances, and publication lifecycle. Residency owners decide where encoded
+weights and reusable buffers live and account for every allocation, transfer,
+reuse, and release.
 
-The selected artifact then passed a complete bounded materialization walk:
-1,360 tensor bindings, 33,792 expert subviews, every encoded payload byte and
-zero missing bindings, using 16 MiB peak executor-owned staging. The runtime
-descriptor and attention plan project those admitted facts into an external
-content-addressed binding. Execution reopens that binding into the immutable
-common model and a reusable session before invoking the attention executor;
-that evidence does not promote persistent KV, complete transformer execution
-or generation.
+### Execution graphs and backend dispatch
 
-## Current capability frontier
+The semantic graph expresses model operations and state effects independently
+from device scheduling. The executable graph resolves physical bindings,
+buffer lifetimes, backend variants, execution phases, and dependency order.
+A launch graph records device kernels, transfers, barriers, and stable
+addresses.
 
-| Boundary | Current state |
+Backends execute admitted operations. They receive model policy through typed
+descriptors and refuse unavailable devices, kernels, qtypes, modes, shapes, or
+resource budgets before dispatch.
+
+### Persistent state and autoregressive execution
+
+Persistent state carries semantically observable history across execution
+units. Its owner exposes an immutable prior view and accepts a candidate delta
+only after output, bounds, cancellation, numerical status, and device
+completion have been validated.
+
+Full prefill maps token identifiers through embeddings and the complete block
+stack into persistent state. Decode consumes that state to produce the next
+hidden boundary. Final normalization and the output head produce logits;
+sampling selects a token under an explicit policy; append and stop rules
+advance the sequence; detokenization publishes text.
+
+### Evidence, evaluation, benchmark, and release
+
+Execution evidence identifies the model, physical variant, artifact, runtime
+binding, state transition, backend, device, mode, input, output, and completion
+or refusal that occurred.
+
+Numerical conformance, model evaluation, component performance, full-model
+performance, and release admission are separate gates. Evidence reports facts;
+it does not grant capability by itself.
+
+## Design invariants
+
+- **Identity-bound derivation.** Every downstream object consumes the exact
+  source, plan, artifact, descriptor, runtime, or state identity for which it
+  was constructed. Stale or incompatible identities refuse before execution.
+- **Logical and physical separation.** Model meaning remains independent from
+  qtype, layout, container, device, and placement decisions.
+- **Planning before byte execution.** Immutable plans decide semantics and
+  geometry; bounded executors own reads, buffers, conversion, publication, and
+  cleanup.
+- **Family policy through typed boundaries.** Families select topology,
+  schedules, tensor roles, numerical policy, and operation composition.
+  Common owners retain reusable mechanisms.
+- **Fail-closed admission.** Missing integrity, capability, resource, kernel,
+  mode, or identity prerequisites produce typed refusal without fallback.
+- **Transactional publication.** Failed work publishes neither partial output
+  nor persistent-state mutation.
+- **Explicit resource ownership.** Artifacts, mappings, resident weights,
+  workspace, persistent state, graph resources, and outputs have distinct
+  lifetimes and cleanup rules.
+- **Backend execution without model inference.** Backends execute typed
+  operations and never reconstruct family topology or artifact meaning.
+- **Evidence scoped to the executed boundary.** Primitive, attention,
+  transformer, generation, evaluation, and benchmark evidence remain distinct.
+- **Operator reachability.** Executable milestones expose production behavior
+  through the main `yvex` CLI; Make targets, fixtures, and test binaries remain
+  validation surfaces.
+
+## Release vertical: DeepSeek-V4-Flash on NVIDIA GB10
+
+[DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash)
+is the sole v0.1.0 release target. It pressures the common system with hybrid
+SWA, CSA, and HCA attention, mHC residual structure, mixture-of-experts
+topology, long-context state geometry, large tensor inventories, mixed physical
+encodings, and explicit CPU/CUDA parity requirements.
+
+The admitted vertical includes:
+
+- 46 verified source shards and 69,187 exact source contributions;
+- 1,360 emitted terminal tensors;
+- a selected complete GGUF of approximately 102.4 GB;
+- 43 main attention layers and 634 core attention bindings;
+- complete attention core and envelope execution on CPU and the admitted
+  NVIDIA GB10 CUDA path.
+
+These results establish the current complete-artifact and attention execution
+boundary. Persistent KV, tokenizer-backed prefill, FFN/MoE execution, complete
+transformer composition, model decode, logits, sampling, text generation,
+evaluation, full-model benchmark, and release admission retain separate gates.
+
+Detailed family semantics live in
+[`docs/model-families.md`](docs/model-families.md). Artifact terminology and
+support boundaries live in [`MODEL_ARTIFACTS.md`](MODEL_ARTIFACTS.md). Exact
+operator procedures live in
+[`docs/runbooks/deepseek.md`](docs/runbooks/deepseek.md).
+
+## Verified implementation snapshot
+
+Snapshot: 23 July 2026.
+[`PROJECT.md`](PROJECT.md) is the sole live authority for implementation state,
+dependencies, capability gates, and release admission.
+
+| Boundary | Verified evidence stage |
 | --- | --- |
-| Exact source identity, headers and payload trust | complete |
-| Typed architecture, tensor coverage and Transformation IR | complete |
-| Physical profile, codecs and selected-qtype CPU/CUDA compute | complete |
-| GGUF writer, complete emission, roundtrip and artifact admission | complete |
-| Bounded materialization and DeepSeek runtime descriptor | complete |
-| Common runtime model, binding and session lifecycle | complete for the admitted attention plane |
-| Complete DeepSeek SWA/CSA/HCA attention | complete on CPU and admitted GB10 CUDA |
-| Operator attention probe | available through `yvex graph attention execute` |
-| Persistent KV | active; unsupported |
-| Model-backed prefill and transformer composition | blocked |
-| Autoregressive text generation | unsupported |
-| Evaluation | unavailable |
-| Benchmark | attention-local profile/benchmark available; full-model benchmark not measured |
-| Release | blocked |
+| Source repository, headers, and payload | Verified against the pinned DeepSeek snapshot |
+| Logical model, tensor coverage, and Transformation IR | Complete for the release vertical |
+| Physical profiles and complete artifacts | Source-faithful and selected GGUF artifacts emitted and admitted outside the repository |
+| Artifact materialization | All 1,360 selected-artifact tensors materialized through bounded access |
+| Runtime binding, model, and session | Implemented and consumed by the attention operator |
+| Attention residency | Core and envelope weights prepared for reusable CPU and CUDA execution |
+| Attention core and envelope | All 43 layers and 634 core bindings execute on CPU eager and admitted GB10 CUDA eager, piecewise, and full graph modes |
+| Persistent KV | Unsupported |
+| Tokenizer-backed model prefill and model decode | Unsupported |
+| FFN/MoE and complete transformer composition | Unsupported |
+| Logits, sampling, and text generation | Unsupported |
+| Evaluation | Blocked |
+| Benchmark | Attention-local measurement is executable; full-model benchmark is not measured |
+| Release | Blocked |
 
-This table is a public snapshot. [`PROJECT.md`](PROJECT.md) is the sole live
-authority for milestone state, dependencies and the active boundary.
+A complete model artifact contains every required tensor and metadata item. A
+supported model artifact must also pass the full runtime, generation,
+evaluation, benchmark, and release gates described in
+[`MODEL_ARTIFACTS.md`](MODEL_ARTIFACTS.md).
 
-A **complete model artifact** contains all required tensors, metadata and
-tokenizer material and has passed structural and physical verification. A
-**supported model artifact** must additionally pass residency, full runtime,
-generation, evaluation, benchmark and release gates. DeepSeek-V4-Flash is the
-release target; it is not yet a supported generation target.
+## Current executable surfaces
 
-Qwen and Gemma remain bounded engineering evidence for common and family
-contracts. GLM remains planned. None is presented as a supported generation
-target.
+The admitted graph commands consume a canonical attention activation probe at
+the exact model geometry. Prompt-backed prefill, model decode, and generation
+remain outside this operator surface.
 
-## Run the attention boundary
-
-The main binary can execute the admitted DeepSeek attention implementation over
-the external selected GGUF. The input is a deterministic
-`canonical_attention_probe` at exact model geometry, not a prompt or full-model
-prefill, decode, or generation request. Here `prefill` means an activation
-chunk and `decode` means one activation token against explicit attention state.
-
-Prepare the external content-addressed runtime binding once through
-`yvex graph attention prepare`, then pass its path to execution commands:
+Discover the command hierarchy:
 
 ```sh
-EVIDENCE="$(mktemp -d /tmp/yvex-attention.XXXXXX)"
-mkdir "$EVIDENCE/bindings"
-
-./yvex graph attention prepare \
-  --target deepseek4-v4-flash \
-  --runtime-binding-dir "$EVIDENCE/bindings" --output json \
-  >"$EVIDENCE/prepare.json"
-BINDING="$(python3 -c \
-  'import json,sys; print(json.load(open(sys.argv[1]))["runtime_binding_path"])' \
-  "$EVIDENCE/prepare.json")"
-
-# Representative SWA, CSA, and HCA layers on CPU.
-./yvex graph attention execute \
-  --target deepseek4-v4-flash --backend cpu \
-  --runtime-binding "$BINDING" \
-  --phase prefill --mode eager --probe canonical --scope quick --output audit
-
-# All 43 layers and 634 attention bindings on CPU.
-./yvex graph attention execute \
-  --target deepseek4-v4-flash --backend cpu \
-  --runtime-binding "$BINDING" \
-  --phase decode --mode eager --probe canonical --scope full --output audit
-
-# Representative and complete execution on the admitted GB10 CUDA path.
-./yvex graph attention execute \
-  --target deepseek4-v4-flash --backend cuda \
-  --runtime-binding "$BINDING" \
-  --phase prefill --mode piecewise --probe canonical --scope quick --output audit
-./yvex graph attention execute \
-  --target deepseek4-v4-flash --backend cuda \
-  --runtime-binding "$BINDING" \
-  --phase decode --mode full --probe canonical --scope full --output audit
-
-# Runtime-local benchmark with an externally stored, deterministically rendered SVG.
-./yvex graph attention benchmark \
-  --target deepseek4-v4-flash --backend cuda \
-  --runtime-binding "$BINDING" \
-  --phase decode --mode full --scope full \
-  --operation-scope release-attention-set --probe canonical \
-  --warmup 3 --repeat 20 --progress off \
-  --baseline "$EVIDENCE/full.yvex-benchmark" --write-baseline \
-  --chart "$EVIDENCE/full.svg" --output json \
-  >"$EVIDENCE/full.json"
-
-# Compare a second compatible run with the published baseline.
-./yvex graph attention benchmark \
-  --target deepseek4-v4-flash --backend cuda \
-  --runtime-binding "$BINDING" \
-  --phase decode --mode full --scope full \
-  --operation-scope release-attention-set --probe canonical \
-  --warmup 3 --repeat 20 --progress off \
-  --baseline "$EVIDENCE/full.yvex-benchmark" \
-  --chart "$EVIDENCE/full-comparison.svg" --output csv \
-  >"$EVIDENCE/full-comparison.csv"
+./yvex commands
+./yvex graph attention --help
 ```
 
-Repeat the write-then-compare pair with `--mode eager`, `piecewise`, and
-`full`, using distinct external baseline, report, and chart paths for each
-mode. SVG rendering is deterministic for one exact benchmark record, but the
-measured timings are not asserted to be byte-repeatable. Use the identity-bound
-JSON or CSV results for quantitative cross-mode comparison. All reports,
-charts, and baselines remain outside the repository.
+Set `MODELS_ROOT` and `ARTIFACT` to the external admitted model locations.
+Create an empty external directory named by `BINDING_DIR`, then prepare the
+content-addressed runtime binding:
 
-By default the command resolves the canonical operator model root and admitted
-artifact; `--models-root DIR --artifact FILE` selects explicit external paths.
-Quick mode reports the three representative layers it ran. Full mode fails
-unless all 2 SWA, 21 CSA, and 20 HCA descriptors and all 634 bindings execute.
-The command calls the production API directly; it does not run a Make target,
-test binary, or the test-only semantic oracle. CPU supports eager execution;
-CUDA exposes eager, piecewise and full Driver API graph modes plus explicit
-automatic selection. Output tensor, candidate state delta, path-specific
-evidence and full execution each have distinct digests. Benchmark JSON, CSV,
-baselines and SVG charts are external operator evidence, not full-model
-benchmark or release claims. Runtime output keeps `runtime_generation_ready=false`
-and `end_user_generation_available=false`.
+```sh
+./yvex graph attention prepare \
+  --target deepseek4-v4-flash \
+  --models-root "$MODELS_ROOT" \
+  --artifact "$ARTIFACT" \
+  --runtime-binding-dir "$BINDING_DIR" \
+  --output json
+```
 
-## Build and validate
+Read `runtime_binding_path` from the structured result and assign it to
+`BINDING`. Inspect the sealed runtime facts:
 
-YVEX builds a native library, CLI and daemon:
+```sh
+./yvex graph attention describe \
+  --target deepseek4-v4-flash \
+  --models-root "$MODELS_ROOT" \
+  --artifact "$ARTIFACT" \
+  --runtime-binding "$BINDING" \
+  --output json
+```
+
+Execute representative SWA, CSA, and HCA layers on CPU:
+
+```sh
+./yvex graph attention execute \
+  --target deepseek4-v4-flash \
+  --models-root "$MODELS_ROOT" \
+  --artifact "$ARTIFACT" \
+  --runtime-binding "$BINDING" \
+  --backend cpu \
+  --phase prefill \
+  --mode eager \
+  --operation-scope envelope \
+  --tokens 2 \
+  --repeat 2 \
+  --probe canonical \
+  --scope quick \
+  --output audit
+```
+
+Execute the full 43-layer attention set through the admitted CUDA full-graph
+mode:
+
+```sh
+./yvex graph attention execute \
+  --target deepseek4-v4-flash \
+  --models-root "$MODELS_ROOT" \
+  --artifact "$ARTIFACT" \
+  --runtime-binding "$BINDING" \
+  --backend cuda \
+  --phase decode \
+  --mode full \
+  --operation-scope release-attention-set \
+  --probe canonical \
+  --scope full \
+  --output audit
+```
+
+Compare CPU and CUDA production execution for one requested mode:
+
+```sh
+./yvex graph attention compare \
+  --target deepseek4-v4-flash \
+  --models-root "$MODELS_ROOT" \
+  --artifact "$ARTIFACT" \
+  --runtime-binding "$BINDING" \
+  --phase decode \
+  --mode full \
+  --operation-scope release-attention-set \
+  --probe canonical \
+  --scope full \
+  --output json
+```
+
+Measure the attention-local CUDA boundary:
+
+```sh
+./yvex graph attention benchmark \
+  --target deepseek4-v4-flash \
+  --models-root "$MODELS_ROOT" \
+  --artifact "$ARTIFACT" \
+  --runtime-binding "$BINDING" \
+  --backend cuda \
+  --phase decode \
+  --mode full \
+  --operation-scope release-attention-set \
+  --probe canonical \
+  --scope full \
+  --warmup 3 \
+  --repeat 20 \
+  --progress off \
+  --output json
+```
+
+The [DeepSeek runbook](docs/runbooks/deepseek.md) covers binding discovery,
+CUDA prerequisites, refusal recovery, identity-bound benchmark baselines, CSV
+output, and deterministic external SVG chart generation.
+
+## Build products and validation
+
+Build the native products:
 
 ```sh
 make -j4
+```
+
+The build produces:
+
+- `build/lib/libyvex.a`, the static C library;
+- `./yvex`, the operator CLI and admitted attention execution surface;
+- `./yvexd`, the bounded status/server shell.
+
+Run the canonical repository validation:
+
+```sh
+make smoke
+make test-core
 make check
 make check-cuda
 ```
 
-The default build produces `build/lib/libyvex.a`, `./yvex` and `./yvexd`.
-`make check` includes the CPU/unit, CLI smoke, documentation, topology and
-fail-closed no-`nvcc` gates.
+`make check` covers CPU/unit tests, CLI smoke tests, documentation, ownership,
+layout, architecture, ABI, project-ledger, and fail-closed no-`nvcc` guards.
+`make check-cuda` requires an NVIDIA CUDA-capable host and validates the exact
+CUDA operations admitted by the repository.
 
-`make check-cuda` requires an NVIDIA CUDA-capable host. It verifies the exact
-CUDA capabilities currently admitted by the repository; it does not claim
-complete DeepSeek transformer execution.
-
-## Repository map
+## Repository architecture
 
 | Area | Canonical owners |
 | --- | --- |
-| Verified source | `src/source/` |
-| Logical model and compilation | `src/model/families/`, `src/model/compilation/` |
-| Physical lowering and artifacts | `src/gguf/`, `src/artifact/` |
-| Graph and backend execution | `src/graph/`, `src/backend/` |
-| Common model/session runtime | `src/runtime/` |
-| Public C interfaces | `include/yvex/` |
-| Executable evidence and guards | `tests/` |
+| Source identity and payload trust | `src/source/` |
+| Family semantics and target facts | `src/model/families/`, `src/model/target/` |
+| Transformation and physical compilation | `src/model/compilation/` |
+| GGUF structure, qtypes, and writing | `src/gguf/` |
+| Artifact admission and materialization | `src/artifact/`, `src/model/artifacts/` |
+| Runtime binding, model, and session | `src/runtime/` |
+| Graph semantics and execution protocols | `src/graph/` |
+| CPU/CUDA backend execution | `src/backend/` |
+| Tokenizer-owned facts and operations | `src/tokenizer/` |
+| Operator, rendering, and I/O | `src/cli/` |
+| Daemon and bounded server shell | `src/daemon/`, `src/server/` |
+| Installed and internal C contracts | `include/yvex/` |
+| Ownership and policy configuration | `config/` |
+| Unit, integration, live, fault, and external evidence | `tests/` |
 
 The directory is the namespace. Generic mechanisms and family recipes have
-separate owners, private headers are bounded, and the build preserves
-source-relative object paths. `config/source_owners.tsv` provides the
-machine-readable ownership map enforced by repository guards.
+separate owners, and `config/source_owners.tsv` is the machine-readable
+production ownership manifest.
 
-## Technical documentation
+## Documentation map
 
 | Document | Authority |
 | --- | --- |
-| [`PROJECT.md`](PROJECT.md) | Current state, complete ledger, dependencies, release gates and the single active boundary |
-| [`MODEL_ARTIFACTS.md`](MODEL_ARTIFACTS.md) | Artifact terminology, physical identity, admission and support boundaries |
-| [`docs/contract.md`](docs/contract.md) | Implemented lifecycle, ownership, failure and cleanup contracts |
-| [`docs/api.md`](docs/api.md) | Public C APIs, typed results and lifetime rules |
-| [`docs/reference-architecture.md`](docs/reference-architecture.md) | Implementation-agnostic inference architecture, conformance invariants and pinned engineering references |
-| [`docs/system-target.md`](docs/system-target.md) | Canonical filesystem and subsystem ownership |
+| [`PROJECT.md`](PROJECT.md) | Product target, live project state, capability gates, dependencies, complete ledger, and release admission |
+| [`AGENTS.md`](AGENTS.md) | Persistent implementation, ownership, validation, claim, and closure rules |
+| [`MODEL_ARTIFACTS.md`](MODEL_ARTIFACTS.md) | Artifact terminology, admission, integrity, materialization, and support boundaries |
+| [`docs/contract.md`](docs/contract.md) | Implemented runtime, lifecycle, failure, cleanup, CLI, and ownership contracts |
+| [`docs/api.md`](docs/api.md) | Public and internal C APIs with lifetime facts |
+| [`docs/model-families.md`](docs/model-families.md) | Normative family integration architecture and implemented family profiles |
+| [`docs/operator-runbook.md`](docs/operator-runbook.md) | Operator workflow index and recovery routing |
+| [`docs/runbooks/deepseek.md`](docs/runbooks/deepseek.md) | Exact DeepSeek artifact, attention, benchmark, and chart procedures |
+| [`docs/runbooks/common.md`](docs/runbooks/common.md) | Common build, validation, cleanup, and artifact guards |
+| [`docs/reference-architecture.md`](docs/reference-architecture.md) | Family-neutral inference architecture, conformance invariants, and external engineering references |
+| [`docs/v010-release-doctrine.md`](docs/v010-release-doctrine.md) | v0.1 release gate meanings and explicit non-claims |
+| [`docs/system-target.md`](docs/system-target.md) | Filesystem, subsystem, and semantic-owner topology |
+| [`docs/cli-output-architecture.md`](docs/cli-output-architecture.md) | CLI grammar, renderer, and structured-output ownership |
 
 ## License
 

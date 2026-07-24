@@ -32,6 +32,18 @@ reject_text() {
   fi
 }
 
+require_before() {
+  file=$1
+  first=$2
+  second=$3
+  first_line=$(grep -nF -- "$first" "$file" | head -n 1 | cut -d: -f1)
+  second_line=$(grep -nF -- "$second" "$file" | head -n 1 | cut -d: -f1)
+  test -n "$first_line" && test -n "$second_line" ||
+    fail "$file cannot order missing sections: $first / $second"
+  test "$first_line" -lt "$second_line" ||
+    fail "$file section order is wrong: $first must precede $second"
+}
+
 for file in \
   README.md \
   AGENTS.md \
@@ -168,76 +180,178 @@ require_text AGENTS.md 'per-family runtimes, duplicated storage or registries, t
 
 require_pattern README.md '^# YVEX$'
 require_text README.md '[Project status](PROJECT.md)'
-require_text README.md '[`PROJECT.md`](PROJECT.md) is the sole live'
+require_text README.md '[`PROJECT.md`](PROJECT.md) is the sole live authority'
 
-# Guard the public architecture and evidence, not its editorial section names.
+# The README is the stable public system definition. Guard its architecture,
+# section order, claim discipline, and real operator surface without freezing
+# volatile release evidence into the opening copy.
+for heading in \
+  '## What YVEX owns' \
+  '## System architecture' \
+  '## Design invariants' \
+  '## Release vertical: DeepSeek-V4-Flash on NVIDIA GB10' \
+  '## Verified implementation snapshot' \
+  '## Current executable surfaces' \
+  '## Build products and validation' \
+  '## Repository architecture' \
+  '## Documentation map' \
+  '## License'
+do
+  require_text README.md "$heading"
+done
+
+require_before README.md '## What YVEX owns' '## System architecture'
+require_before README.md '## System architecture' '## Design invariants'
+require_before README.md '## Design invariants' \
+  '## Release vertical: DeepSeek-V4-Flash on NVIDIA GB10'
+require_before README.md '## Release vertical: DeepSeek-V4-Flash on NVIDIA GB10' \
+  '## Verified implementation snapshot'
+require_before README.md '## Verified implementation snapshot' \
+  '## Current executable surfaces'
+
+for definition in \
+  'native C/CUDA inference system' \
+  'pinned open-weight' \
+  'model sources through admitted family profiles' \
+  'identity-bound artifacts' \
+  'runtime contracts.' \
+  'Family profiles define model-specific topology' \
+  'Common owners provide reusable verification'
+do
+  require_text README.md "$definition"
+done
+
+for term in Implements Executes Admits Supports Targets Plans; do
+  require_text README.md "**$term**"
+done
+
 for boundary in \
-  'Verified source' \
-  'logical model' \
-  'Transformation IR' \
-  'physical profile' \
-  'artifact' \
-  'materialization' \
-  'runtime descriptor' \
-  'execution evidence'
+  'Verified source snapshot' \
+  'Family semantics + logical model' \
+  'Exact tensor roles + Transformation IR' \
+  'Physical profile + lowering' \
+  'Quantization + encoding' \
+  'Artifact construction + identity' \
+  'Admission + materialization' \
+  'Runtime binding' \
+  'runtime model' \
+  'execution session' \
+  'Residency + memory plan' \
+  'Semantic graph' \
+  'Executable graph' \
+  'Persistent model state' \
+  'prefill or decode' \
+  'Backend dispatch + launch graph' \
+  'Output head + logits' \
+  'Sampling + token append + stop policy' \
+  'Detokenization + text' \
+  'Identity-bound execution evidence' \
+  'Evaluation' \
+  'Benchmark' \
+  'Release admission'
 do
   require_text README.md "$boundary"
 done
 
+for invariant in \
+  'Identity-bound derivation.' \
+  'Logical and physical separation.' \
+  'Planning before byte execution.' \
+  'Family policy through typed boundaries.' \
+  'Fail-closed admission.' \
+  'Transactional publication.' \
+  'Explicit resource ownership.' \
+  'Backend execution without model inference.' \
+  'Evidence scoped to the executed boundary.' \
+  'Operator reachability.'
+do
+  require_text README.md "$invariant"
+done
+
+require_text README.md \
+  '[DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash)'
+require_text README.md 'is the sole v0.1.0 release target.'
 for evidence in \
-  '46 / 46 shards and 159,617,149,040 payload bytes' \
-  '69,187 exact source values become 1,360 terminal tensors' \
-  'Complete GGUF v3 file, 102,408,545,440 bytes' \
-  '102,396,843,592 encoded tensor bytes walked with 16 MiB' \
-  '`deepseek-v4-flash-q8_0-q2_k-v1`' \
-  '177,680,573,600 bytes' \
-  '102,408,545,440 bytes' \
-  '33,792 expert subviews' \
-  '68 metadata entries, 129,280 tokenizer tokens, 127,741' \
-  '60d8d70770c6776ff598c94bb586a859a38244f1' \
-  'af97976c7810cdabb1863172f31c432dab767de7' \
-  'f16e800c0d7383ee76cb2e2fa8bdd674bab29c017cba64eaba85c39016e257ca' \
-  '01b2bed4f070d0a3fdb02e546764b3a49cb69886eebe17b4877d20294725682c'
+  '46 verified source shards and 69,187 exact source contributions' \
+  '1,360 emitted terminal tensors' \
+  'selected complete GGUF of approximately 102.4 GB' \
+  '43 main attention layers and 634 core attention bindings' \
+  'complete attention core and envelope execution on CPU' \
+  'NVIDIA GB10 CUDA path'
 do
   require_text README.md "$evidence"
 done
 
-require_pattern README.md 'source identity.*payload trust.*complete'
-require_pattern README.md 'architecture.*Transformation IR.*complete'
-require_pattern README.md 'Physical profile.*CPU/CUDA compute.*complete'
-require_pattern README.md 'GGUF writer.*artifact admission.*complete'
-require_pattern README.md 'materialization.*runtime descriptor.*complete'
-require_pattern README.md 'DeepSeek SWA/CSA/HCA attention.*complete.*GB10 CUDA'
-require_text README.md './yvex graph attention execute'
-require_text README.md './yvex graph attention benchmark'
-require_text README.md '--chart "$EVIDENCE/full.svg"'
-require_text README.md '`canonical_attention_probe` at exact model geometry, not a prompt'
+for snapshot in \
+  '| Persistent KV | Unsupported |' \
+  '| Tokenizer-backed model prefill and model decode | Unsupported |' \
+  '| FFN/MoE and complete transformer composition | Unsupported |' \
+  '| Logits, sampling, and text generation | Unsupported |' \
+  '| Evaluation | Blocked |' \
+  'full-model benchmark is not measured' \
+  '| Release | Blocked |'
+do
+  require_text README.md "$snapshot"
+done
+require_text README.md 'complete model artifact'
+require_text README.md 'supported model artifact'
+
+for command in \
+  './yvex commands' \
+  './yvex graph attention --help' \
+  './yvex graph attention prepare' \
+  './yvex graph attention describe' \
+  './yvex graph attention execute' \
+  './yvex graph attention compare' \
+  './yvex graph attention benchmark'
+do
+  require_text README.md "$command"
+done
+require_text README.md 'canonical attention activation probe'
+require_text README.md 'Prompt-backed prefill, model decode, and generation'
+
+readme_commands=$(grep -E '^[[:space:]]*\./yvex([[:space:]]|$)' README.md |
+  sed 's/^[[:space:]]*//')
+while IFS= read -r command; do
+  test -n "$command" || continue
+  case "$command" in
+    './yvex commands' | \
+    './yvex graph attention --help' | \
+    './yvex graph attention prepare \' | \
+    './yvex graph attention describe \' | \
+    './yvex graph attention execute \' | \
+    './yvex graph attention compare \' | \
+    './yvex graph attention benchmark \') ;;
+    *) fail "README contains an unregistered operator command: $command" ;;
+  esac
+done <<EOF
+$readme_commands
+EOF
+
+if grep -nE '^[[:space:]]*\./yvex (generate|prefill|decode|logits|sample|serve|fullmodel|materialize)([[:space:]]|$)' README.md; then
+  fail 'README contains an unsupported operator command'
+fi
+
 require_text docs/contract.md '### DeepSeek Attention Operator Contract'
 require_text docs/api.md '### Internal DeepSeek Attention Operator Boundary'
 require_text docs/contract.md '## Benchmark And Profile Contract'
 require_text docs/api.md '## Benchmark And Chart Contract'
 require_text docs/runbooks/deepseek.md '--chart "$EVIDENCE/$MODE.svg"'
 require_text docs/runbooks/deepseek.md 'not full-model benchmark results.'
-require_text docs/runbooks/README.md 'production attention commands, benchmark charts, unsupported'
-require_pattern README.md 'Persistent KV.*active.*unsupported'
-require_pattern README.md 'Model-backed prefill.*transformer composition.*blocked'
-require_pattern README.md 'Autoregressive text generation.*unsupported'
-require_pattern README.md 'Evaluation.*unavailable'
-require_pattern README.md 'Benchmark.*not measured'
-require_pattern README.md 'Release.*blocked'
+require_text docs/runbooks/README.md \
+  'production attention commands, benchmark charts, unsupported'
 
-require_text README.md '[DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash)'
-require_text README.md 'sole v0.1.0 release target.'
-require_text README.md 'NVIDIA DGX Spark /'
-require_text README.md 'GB10 CUDA.'
-require_text README.md 'does not establish full-model'
-require_text README.md 'residency, persistent KV, transformer composition or generation.'
-require_text README.md 'declared 1,048,576-token context geometry.'
-require_text README.md 'it is not yet a supported generation target.'
-require_text README.md 'Qwen and Gemma'
-require_text README.md 'GLM remains'
-require_text README.md 'complete model artifact'
-require_text README.md 'supported model artifact'
+# Exact release evidence remains guarded at its live project-control owner.
+for evidence in \
+  '46/46 safetensors headers, 69,187 unique tensor records' \
+  '177,680,573,600 bytes with identity `f16e800c0d7383ee76cb2e2fa8bdd674bab29c017cba64eaba85c39016e257ca`' \
+  '102,408,545,440 bytes with identity `01b2bed4f070d0a3fdb02e546764b3a49cb69886eebe17b4877d20294725682c`' \
+  '68 metadata entries, exact tokenizer material, and all 1,360 tensors' \
+  '102,396,843,592 encoded payload bytes through bounded file-backed/staged access' \
+  '33,792 expert subviews'
+do
+  require_text PROJECT.md "$evidence"
+done
 
 for stale in \
   '## Engineering Method' \
@@ -264,9 +378,12 @@ reject_text README.md 'YVEX is release-ready'
 reject_text README.md 'DeepSeek device residency is complete'
 reject_text README.md 'DeepSeek model runtime is complete'
 reject_text README.md 'DeepSeek CUDA attention is complete'
-reject_text README.md 'production-ready'
-reject_text README.md 'blazing fast'
-reject_text README.md 'state of the art'
+
+if grep -niE \
+  'production-ready|blazing fast|state of the art|enterprise-grade|seamless|powerful|cutting-edge|revolutionary' \
+  README.md; then
+  fail 'README contains forbidden marketing language'
+fi
 
 if grep -nE 'V010\.|POST010\.' README.md; then
   fail 'README exposes internal project-control IDs'
@@ -290,6 +407,23 @@ test "$mermaid_count" -ge 1 ||
 flowchart_td_count=$(grep -c '^flowchart TD$' README.md)
 test "$flowchart_td_count" -eq "$mermaid_count" ||
   fail "README Mermaid diagrams must be top-down: $flowchart_td_count/$mermaid_count"
+
+primary_mermaid=$(awk '
+/^```mermaid$/ && !seen {
+  seen = 1
+  inside = 1
+  next
+}
+inside && /^```$/ { exit }
+inside { print }
+' README.md)
+printf '%s\n' "$primary_mermaid" | grep -F 'flowchart TD' >/dev/null ||
+  fail 'README primary architecture diagram is not top-down'
+if printf '%s\n' "$primary_mermaid" |
+  grep -niE 'deepseek|deepseek4|active|blocked|unsupported|complete'; then
+  fail 'README primary architecture diagram is family-specific or stateful'
+fi
+
 awk '
 /^```mermaid$/ {
   if (in_mermaid) exit 1
