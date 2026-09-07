@@ -204,9 +204,15 @@ In another terminal, after the selected representation is READY:
 
 ```sh
 yvex model load qwen3.8-27b
-yvex chat --model qwen3.8-27b
+yvex chat --model qwen3.8-27b --session qwen-example
+# After leaving chat with Ctrl-D:
+yvex session close qwen-example
 yvex model unload qwen3.8-27b
 ```
+
+Leaving chat detaches the client. The named session and its sequence state remain
+on the server until `session close`; live sessions or model leases prevent
+unload. Close the session when you no longer need its conversation state.
 
 A second load of an already loaded engine returns the explicit already-loaded
 result; it does not allocate another residency. Repeating unload for an already
@@ -229,6 +235,33 @@ artifact handles pin the file. External references and unique unpublished
 artifacts are refused. Repeating eviction after removal is a successful no-op;
 the publication and logical identity remain in the catalog. Pulling the same
 pinned repository/filename materializes the exact representation again.
+
+The following round trip was exercised on a DGX Spark with an already admitted
+Qwen CUDA profile on 7 September 2026. The published GGUF was first evicted;
+its upstream Safetensors had also been evicted before runtime validation.
+
+```sh
+yvex model pull hf://yailabs/Qwen3.8-27B-Text-GGUF@066eb288bffd5a07c0d5ca584114a1f3fcfd13a8 \
+  --variant Qwen3.8-27B-Text-BF16.gguf --auth never
+yvex model load qwen3.8-27b \
+  --variant 1fce07008eaa78e04eedd1a031144f48eb6af617f2b5c508811ba91dca7e00f1
+yvex chat --model qwen3.8-27b --session qwen-rehydration-6 --max-new-tokens 32
+# In chat: /nothink, then "Say hello in one short English sentence."; Ctrl-D to leave.
+yvex session close qwen-rehydration-6
+yvex model unload qwen3.8-27b
+yvex model evict qwen3.8-27b \
+  --variant 1fce07008eaa78e04eedd1a031144f48eb6af617f2b5c508811ba91dca7e00f1
+yvex model show qwen3.8-27b
+```
+
+With initially empty, isolated official Hub/Xet caches, materializing and
+verifying the 53,815,809,152-byte file took 8,831.322 seconds over that machine's
+Wi-Fi connection. No local provider payload was reused. The second exact pull
+took 0.517 seconds, retained the same inode, and required no network connection
+or provider subprocess. These are measurements of that run, not transfer-speed
+guarantees. Generation returned `Hello!`; unload retained the GGUF, and eviction
+then removed it while preserving its SHA-256, logical identity, and immutable
+remote revision. The host remained running through unload and eviction.
 
 Managed upstream acquisitions have an independent source-removal path:
 
