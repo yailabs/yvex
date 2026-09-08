@@ -159,7 +159,8 @@ stop chat instead of continuing with uncertain terminal state.
 
 This is an interface portability boundary, not cross-platform qualification.
 Linux PTY tests exercise the implementation and the pinned REPLAI ABI, which
-currently declares Linux support. A macOS or Windows port must qualify its
+now has Linux/macOS POSIX qualification. YVEX itself remains Linux-qualified;
+a macOS or Windows port must qualify its
 platform adapter, editor dependency and local transport; neither a POSIX signal
 nor a Windows console event is a generic request type.
 

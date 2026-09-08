@@ -15,7 +15,9 @@ presentation grammar. Keeping two live editors would leave ownership ambiguous.
 
 `src/cli/io/client.c` consumes REPLAI C ABI 1 through its installed header. The
 exact revision, Git tree and downloaded archive checksum are owned by
-`config/replai.json`: revision `df5538c718b8d068432032e7fb116fb8bfab158e`.
+`config/replai.json`: active revision `6365f84e12865871bf26ecf0d984b48213d81ebc`.
+The original cutover qualified `df5538c718b8d068432032e7fb116fb8bfab158e`;
+that historical identity remains unchanged in its evidence.
 No floating branch, vendored header, committed native artifact or runtime
 fallback editor exists. The adjacent REPLAI repository is not required.
 
