@@ -220,6 +220,8 @@ contains "$OUT_DIR/host.out" 'protocol 20'
 contains "$OUT_DIR/host.out" '0/2 engines · 2 workers'
 contains "$OUT_DIR/host.out" 'events lifecycle · progress · resources'
 contains "$OUT_DIR/host.out" 'host ready · Ctrl-C to stop'
+not_contains "$OUT_DIR/host.out" '█'
+not_contains "$OUT_DIR/host.out" '▀'
 contains "$OUT_DIR/status.json" '"schema":"yvex.host.status.v1"'
 contains "$OUT_DIR/status.json" '"protocol":20'
 contains "$OUT_DIR/status.json" '"status":2'
@@ -354,16 +356,16 @@ contains "$OUT_DIR/terminal-load.err" 'deployment is not current (malformed-bind
 run_client host stop >/dev/null
 wait "$server_pid"
 server_pid=
-contains "$OUT_DIR/server-terminal.typescript" 'YVEX HOST'
-contains "$OUT_DIR/server-terminal.typescript" '▀██████████████████████▀'
-contains "$OUT_DIR/server-terminal.typescript" 'Y V E X'
-contains "$OUT_DIR/server-terminal.typescript" 'STATE      ● STARTING'
+contains "$OUT_DIR/server-terminal.typescript" 'YVEX 0.1.0 · HOST'
+contains "$OUT_DIR/server-terminal.typescript" '▀▀█▄ █ ▄█▀▀'
+contains "$OUT_DIR/server-terminal.typescript" 'HOST     0/2 engines · 2 workers'
+contains "$OUT_DIR/server-terminal.typescript" 'PROTOCOL 20'
 contains "$OUT_DIR/server-terminal.typescript" 'NATIVE'
 not_contains "$OUT_DIR/server-terminal.typescript" 'LOAD   deepseek4-v4-flash-dspark · g1'
 contains "$OUT_DIR/server-terminal.typescript" 'FAIL'
 contains "$OUT_DIR/server-terminal.typescript" 'deepseek4-v4-flash-dspark-'
 contains "$OUT_DIR/server-terminal.typescript" ' generation=0 backend=CPU'
-contains "$OUT_DIR/server-terminal.typescript" 'EVENTS     lifecycle · progress · resources'
+contains "$OUT_DIR/server-terminal.typescript" 'EVENTS   lifecycle · progress · resources'
 contains "$OUT_DIR/server-terminal.typescript" 'host ready · Ctrl-C to stop'
 not_contains "$OUT_DIR/server-terminal.typescript" 'CONTROL'
 not_contains "$OUT_DIR/server-terminal.typescript" 'OPERATE'
@@ -373,7 +375,7 @@ not_contains "$OUT_DIR/server-terminal.typescript" 'yvex[host] >'
 not_contains "$OUT_DIR/server-terminal.typescript" 'yvex[multi-engine] >'
 test ! -e "$SOCKET_PATH"
 
-# Narrow terminals use a smaller solid reduction of the same canonical mark.
+# Ordinary 80-column terminals keep the same compact mark beside the facts.
 HOME="$HOME_ROOT" XDG_RUNTIME_DIR="$SOCKET_ROOT" NO_COLOR=1 TERM=xterm-256color \
     script -q -f -e -c \
         "stty cols 80 rows 30; $YVEX_BIN serve --openai off" \
@@ -395,10 +397,89 @@ test "$ready" -eq 1 || fail 'compact terminal host did not become ready'
 run_client host stop >/dev/null
 wait "$server_pid"
 server_pid=
-contains "$OUT_DIR/server-compact.typescript" '▀████████████████▀'
-contains "$OUT_DIR/server-compact.typescript" '▄██▀  ██  ▀██▄'
-contains "$OUT_DIR/server-compact.typescript" 'Y V E X'
+contains "$OUT_DIR/server-compact.typescript" '▀▀█▄ █ ▄█▀▀'
+contains "$OUT_DIR/server-compact.typescript" 'YVEX 0.1.0 · HOST'
+contains "$OUT_DIR/server-compact.typescript" 'OPENAI   disabled'
 not_contains "$OUT_DIR/server-compact.typescript" 'Interactive host console'
 test ! -e "$SOCKET_PATH"
+
+# Real PTY geometry, truthful options and ANSI/plain equivalence. No model loads.
+python3 - "$YVEX_BIN" "$HOME_ROOT" "$SOCKET_ROOT" <<'PY'
+import fcntl, os, pathlib, pty, re, select, struct, subprocess, sys, termios, time
+import unicodedata
+
+binary, home, runtime = sys.argv[1:]
+runtime = pathlib.Path(runtime) / 'é界é界'
+runtime.mkdir(mode=0o700)
+env = dict(os.environ, HOME=home, XDG_RUNTIME_DIR=str(runtime), TERM='xterm-256color')
+env.pop('COLUMNS', None)
+env['NO_COLOR'] = '1'
+ready = b'host ready \xc2\xb7 Ctrl-C to stop'
+ansi = re.compile(r'\x1b\[[0-9;]*m')
+captures = {}
+
+for width, colored in [(40, False), (60, False), (76, False), (80, False),
+                       (132, False), (160, False), (80, True)]:
+    trial = dict(env)
+    if colored:
+        trial.pop('NO_COLOR')
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 30, width, 0, 0))
+    proc = None
+    try:
+        proc = subprocess.Popen([binary, 'serve', '--openai', 'off', '--workers', '2',
+                                 '--max-engines', '2'], env=trial, stdin=subprocess.DEVNULL,
+                                stdout=slave, stderr=slave, start_new_session=True)
+        data = bytearray()
+        deadline = time.monotonic() + 10
+        while ready not in data and time.monotonic() < deadline and proc.poll() is None:
+            if select.select([master], [], [], 0.1)[0]:
+                data.extend(os.read(master, 65536))
+        assert ready in data, (width, 'host readiness', bytes(data))
+        subprocess.run([binary, 'host', 'stop'], env=trial, check=True, timeout=5,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        assert proc.wait(timeout=5) == 0
+        raw = bytes(data).decode('utf-8')
+        assert ('\x1b[' in raw) == colored
+        text = ansi.sub('', raw).replace('\r\n', '\n')
+        banner = text.split('host ready', 1)[0]
+        lines = [line for line in banner.splitlines() if line.strip()]
+        assert len(lines) == (8 if width >= 76 else 7), lines
+        for line in lines:
+            cells = sum(0 if unicodedata.combining(c) else
+                        2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1
+                        for c in line)
+            assert cells < width, (width, cells, line)
+        for fact in ('YVEX 0.1.0 · HOST', 'verified inference runtime',
+                     'HOST     0/2 engines · 2 workers', 'PROTOCOL 20',
+                     'OPENAI   disabled', 'lifecycle', 'progress', 'resources'):
+            assert fact in banner, (width, fact)
+        native = next(line.split('NATIVE   ', 1)[1] for line in lines if 'NATIVE   ' in line)
+        expected = str(runtime / 'yvex/yvexd.sock')
+        if native.startswith('...'):
+            assert expected.endswith(native[3:]), (native, expected)
+        else:
+            assert native == expected
+        if width >= 76:
+            assert lines[0].index('YVEX') == 29
+            for label in ('HOST', 'PROTOCOL', 'NATIVE', 'OPENAI', 'EVENTS'):
+                line = next(line for line in lines if f'{label:<8} ' in line)
+                assert line.index(label) == 29, (label, line)
+        else:
+            assert '█' not in banner
+        if not colored:
+            captures[width] = banner
+        else:
+            assert banner == captures[width]
+        assert not (runtime / 'yvex/yvexd.sock').exists()
+        print(f'banner PTY: {width} columns, color={colored}, '
+              f'{len(lines)} content rows, width/identity/cleanup PASS')
+    finally:
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+            proc.wait(timeout=5)
+        os.close(master)
+        os.close(slave)
+PY
 
 printf 'cli persistent server lifecycle: ok\n'
