@@ -2,6 +2,7 @@
 
 #include <limits.h>
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <yvex/internal/backend.h>
@@ -637,9 +638,13 @@ static int execution_test_memory_facts(void)
 static int execution_test_device_view(void)
 {
     yvex_backend *backend = NULL;
-    yvex_device_tensor *tensor = NULL;
+    yvex_device_tensor *tensor = NULL, *other_tensor = NULL;
     yvex_backend_tensor_desc descriptor = {0};
     yvex_execution_device_view view = {0};
+    yvex_execution_device_view saved, sibling;
+    yvex_execution_device_publication publication = {0}, independent = {0};
+    float first[12] = {1.0f}, replacement[12] = {9.0f}, observed[12] = {0};
+    unsigned int *legacy;
     yvex_error err;
 
     descriptor.name = "execution-device-view";
@@ -649,9 +654,10 @@ static int execution_test_device_view(void)
     descriptor.bytes = 48ull;
     YVEX_TEST_ASSERT(
         yvex_backend_open_cpu(&backend, &err) == YVEX_OK &&
-            yvex_backend_tensor_alloc(backend, &descriptor, &tensor, &err) == YVEX_OK,
-        "device view uses one real backend-owned tensor");
-    view.schema_version = YVEX_EXECUTION_DEVICE_VIEW_SCHEMA_V1;
+            yvex_backend_tensor_alloc(backend, &descriptor, &tensor, &err) == YVEX_OK &&
+            yvex_backend_tensor_alloc(backend, &descriptor, &other_tensor, &err) == YVEX_OK,
+        "device views use independent real backend-owned tensors");
+    view.schema_version = YVEX_EXECUTION_DEVICE_VIEW_SCHEMA_V2;
     view.kind = YVEX_EXECUTION_DEVICE_LOGITS;
     view.backend = backend;
     view.tensor = tensor;
@@ -666,16 +672,65 @@ static int execution_test_device_view(void)
     view.materialization = YVEX_EXECUTION_MATERIALIZE_NONE;
     execution_test_identity(view.runtime_model_identity, '6');
     execution_test_identity(view.execution_profile_identity, '7');
+    YVEX_TEST_ASSERT(yvex_execution_device_view_validate(&view, &err) == YVEX_ERR_FORMAT,
+                     "device shape and lineage alone do not admit a borrowed value");
+    view.publication = &publication;
+    YVEX_TEST_ASSERT(yvex_execution_device_publication_begin(&publication, &err) == YVEX_OK &&
+                         yvex_execution_device_publication_begin(&independent, &err) == YVEX_OK &&
+                         yvex_backend_tensor_write(backend, tensor, first, sizeof(first), &err) == YVEX_OK,
+                     "a producer begins before writing its reusable allocation");
+    view.publication_generation = publication.generation;
     YVEX_TEST_ASSERT(yvex_execution_device_view_validate(&view, &err) == YVEX_OK,
                      "exact device view should validate");
     view.columns = 5ull;
     YVEX_TEST_ASSERT(yvex_execution_device_view_validate(&view, &err) ==
                          YVEX_ERR_FORMAT,
                      "device view with a mismatched extent should refuse");
+    view.columns = 4ull;
+    saved = sibling = view;
+    sibling.publication = &independent;
+    sibling.tensor = other_tensor;
+    sibling.publication_generation = independent.generation;
+    YVEX_TEST_ASSERT(yvex_execution_device_publication_begin(&publication, &err) == YVEX_OK &&
+                         yvex_backend_tensor_write(backend, tensor, replacement, sizeof(replacement), &err) == YVEX_OK &&
+                         yvex_backend_tensor_read(backend, tensor, observed, sizeof(observed), &err) == YVEX_OK &&
+                         observed[0] == 9.0f &&
+                         yvex_execution_device_view_validate(&saved, &err) == YVEX_ERR_FORMAT &&
+                         yvex_execution_device_view_validate(&sibling, &err) == YVEX_OK,
+                     "overwrite expires the old publication without globally expiring another owner");
+    view.publication_generation = publication.generation;
+    YVEX_TEST_ASSERT(yvex_execution_device_view_validate(&view, &err) == YVEX_OK &&
+                         saved.resource_generation == view.resource_generation &&
+                         saved.session_generation == view.session_generation &&
+                         saved.state_generation == view.state_generation,
+                     "producer publication, not unchanged model/session/state lineage, admits the successor");
+    saved = view;
+    YVEX_TEST_ASSERT(yvex_execution_device_publication_begin(&publication, &err) == YVEX_OK &&
+                         yvex_execution_device_view_validate(&saved, &err) == YVEX_ERR_FORMAT,
+                     "a begun but cancelled producer attempt cannot revive the preceding result");
+    view.publication_generation = publication.generation;
+    legacy = malloc(sizeof(*legacy));
+    YVEX_TEST_ASSERT(legacy != NULL, "allocate exactly the old version discriminator");
+    *legacy = 1u;
+    YVEX_TEST_ASSERT(yvex_execution_device_view_validate(
+                         (const yvex_execution_device_view *)legacy, &err) == YVEX_ERR_FORMAT,
+                     "old view version refuses before reading new layout fields");
+    free(legacy);
+    publication.generation = ULLONG_MAX;
+    view.publication_generation = ULLONG_MAX;
+    YVEX_TEST_ASSERT(yvex_execution_device_view_validate(&view, &err) == YVEX_OK &&
+                         yvex_execution_device_publication_begin(&publication, &err) == YVEX_ERR_BOUNDS &&
+                         publication.retired &&
+                         yvex_execution_device_view_validate(&view, &err) == YVEX_ERR_FORMAT &&
+                         yvex_execution_device_publication_begin(&publication, &err) == YVEX_ERR_STATE,
+                     "publication exhaustion retires permanently instead of wrapping into an old identity");
+    yvex_execution_device_publication_retire(&independent);
     YVEX_TEST_ASSERT(
         yvex_backend_tensor_release(backend, &tensor, &err) == YVEX_OK &&
+            yvex_backend_tensor_release(backend, &other_tensor, &err) == YVEX_OK &&
+            yvex_execution_device_view_validate(&sibling, &err) == YVEX_ERR_FORMAT &&
             yvex_backend_close_checked(&backend, &err) == YVEX_OK,
-        "device view releases exact backend ownership");
+        "retired publication rejects before touching released backend storage");
     return 0;
 }
 

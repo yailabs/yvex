@@ -498,6 +498,7 @@ int yvex_runtime_device_view_bind(yvex_execution_device_view *out, yvex_executio
     yvex_model_engine *model, yvex_runtime_execution_session *session,
     const yvex_attention_state_provider *provider,
     const yvex_runtime_execution_profile *profile, const yvex_device_tensor *tensor,
+    const yvex_execution_device_publication *publication,
     unsigned long long offset, unsigned long long rows, unsigned long long columns,
     yvex_error *err);
 int yvex_runtime_cleanup_lease_acquire(

@@ -60,6 +60,7 @@ static void sampling_identity(char output[YVEX_SHA256_HEX_CAP], char digit)
 
 static int sampling_device_row(
     yvex_backend *backend, const yvex_device_tensor *tensor,
+    const yvex_execution_device_publication *publication,
     const yvex_runtime_logits_plan_summary *plan,
     yvex_runtime_logits_row_result *row)
 {
@@ -78,7 +79,9 @@ static int sampling_device_row(
     sampling_identity(row->backend_execution_identity, 'd');
     yvex_runtime_identity_copy(row->output_head_plan_identity,
                                plan->output_head_plan_identity);
-    row->device_logits.schema_version = YVEX_EXECUTION_DEVICE_VIEW_SCHEMA_V1;
+    row->device_logits.schema_version = YVEX_EXECUTION_DEVICE_VIEW_SCHEMA_V2;
+    row->device_logits.publication = publication;
+    row->device_logits.publication_generation = publication->generation;
     row->device_logits.kind = YVEX_EXECUTION_DEVICE_LOGITS;
     row->device_logits.backend = backend;
     row->device_logits.tensor = tensor;
@@ -120,6 +123,7 @@ static int sampling_transactional_device(
     yvex_backend *backend, const yvex_device_tensor *device_logits)
 {
     yvex_runtime_logits_plan_summary plan = {0};
+    yvex_execution_device_publication publication = {0};
     yvex_runtime_logits_row_result row;
     yvex_runtime_sampling_policy policy = sampling_policy();
     yvex_runtime_sampling_options options = {
@@ -135,7 +139,8 @@ static int sampling_transactional_device(
     plan.row_width = plan.hidden_width = 4ull;
     sampling_identity(plan.output_head_plan_identity, 'a');
     YVEX_TEST_ASSERT(
-        sampling_device_row(backend, device_logits, &plan, &row) &&
+        yvex_execution_device_publication_begin(&publication, &err) == YVEX_OK &&
+            sampling_device_row(backend, device_logits, &publication, &plan, &row) &&
             yvex_runtime_sampling_policy_seal(&policy, 4ull, &err) == YVEX_OK &&
             yvex_runtime_sampling_context_open(
                 &context, &plan, &policy, &options, &err) == YVEX_OK &&
@@ -163,9 +168,23 @@ static int sampling_transactional_device(
             yvex_runtime_sampling_context_snapshot(context, &after, &err) == YVEX_OK &&
             after.successful_samples == before.successful_samples + 1ull &&
             after.stochastic_draws == before.stochastic_draws + 1ull &&
-            strcmp(after.rng_state_identity, committed.rng_state_after_identity) == 0 &&
-            yvex_runtime_sampling_context_close(&context, &err) == YVEX_OK,
+            strcmp(after.rng_state_identity, committed.rng_state_after_identity) == 0,
         "CUDA sampling transaction publishes one bounded device result and one RNG draw");
+    before = after;
+    YVEX_TEST_ASSERT(
+        yvex_execution_device_publication_begin(&publication, &err) == YVEX_OK &&
+            yvex_runtime_logits_row_validate(&plan, NULL, 0ull, &row, &err) == YVEX_ERR_FORMAT &&
+            yvex_runtime_sampling_transaction_begin(context, &transaction, &err) == YVEX_OK &&
+            yvex_runtime_sampling_select(context, transaction, &source, &aborted, &err) == YVEX_ERR_UNSUPPORTED &&
+            !aborted.completed &&
+            yvex_runtime_sampling_transaction_abort(&transaction, &err) == YVEX_OK &&
+            yvex_runtime_sampling_context_snapshot(context, &after, &err) == YVEX_OK &&
+            after.successful_samples == before.successful_samples &&
+            after.stochastic_draws == before.stochastic_draws &&
+            strcmp(after.rng_state_identity, before.rng_state_identity) == 0,
+        "expired logits refuse cached CUDA sampling without a token or committed RNG mutation");
+    YVEX_TEST_ASSERT(yvex_runtime_sampling_context_close(&context, &err) == YVEX_OK,
+                     "sampling closes after expired-device refusal");
     return 0;
 }
 

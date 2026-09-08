@@ -33,15 +33,16 @@ struct yvex_runtime_transformer_context {
     yvex_device_tensor *device_residual[2], *device_attention, *device_hidden;
     /* Max-shaped workspaces publish only the exact final rows completed by the kernel. */
     yvex_device_tensor device_hidden_publication, device_pre_normalized_publication;
+    yvex_execution_device_publication publication;
     yvex_device_tensor *device_global[YVEX_TRANSFORMER_WEIGHT_COUNT];
     float *embedding, *expanded_a, *expanded_b, *candidate_hidden;
     float *moe_combined, *moe_post, *moe_combination, *moe_routed, *moe_shared;
     yvex_execution_batch_source *execution_sources;
     yvex_execution_batch_row *execution_rows;
     unsigned int *execution_tokens;
-    unsigned long long token_capacity, host_bytes, final_weight_bytes, execution_count, moe_workspace_bytes;
+    unsigned long long token_capacity, host_bytes, final_weight_bytes, moe_workspace_bytes;
     pthread_mutex_t mutex;
-    int mutex_ready, busy, invalidated;
+    int mutex_ready, busy;
 };
 static const yvex_attention_plan *transformer_runtime_attention(
     const yvex_model_engine_view *view, yvex_tensor_scope scope)
@@ -1150,10 +1151,15 @@ static int transformer_core_features_execute(
                                           "draft core-feature device view is incompatible");
     if (pthread_mutex_lock(&context->mutex) != 0)
         return transformer_runtime_refuse(err, YVEX_ERR_STATE, "transformer context lock failed");
-    if (context->busy || context->invalidated) {
+    if (context->busy) {
         (void)pthread_mutex_unlock(&context->mutex);
         return transformer_runtime_refuse(err, YVEX_ERR_STATE,
-                                          "transformer context is busy or invalidated");
+                                          "transformer context is busy");
+    }
+    rc = yvex_execution_device_publication_begin(&context->publication, err);
+    if (rc != YVEX_OK) {
+        (void)pthread_mutex_unlock(&context->mutex);
+        return rc;
     }
     context->busy = 1;
     (void)pthread_mutex_unlock(&context->mutex);
@@ -1169,7 +1175,8 @@ static int transformer_core_features_execute(
         rc = yvex_runtime_device_view_bind(
             &device_view, YVEX_EXECUTION_DEVICE_FEATURE_TAP, context->model,
             context->session, context->session_view->draft_attention_state_provider,
-            context->options.execution_profile, device_features, 0ull,
+            context->options.execution_profile, device_features,
+            &context->publication, 0ull,
             token_count, plan->hidden_width, err);
     activation.host_input = features;
     activation.token_count = token_count;
@@ -1260,7 +1267,6 @@ static int transformer_core_features_execute(
     }
     if (pthread_mutex_lock(&context->mutex) == 0) {
         context->busy = 0;
-        if (rc == YVEX_OK) context->execution_count++;
         (void)pthread_mutex_unlock(&context->mutex);
     }
     if (rc == YVEX_OK) yvex_error_clear(err);
@@ -1421,7 +1427,7 @@ static int transformer_device_output_publish(yvex_runtime_transformer_context *c
         return YVEX_ERR_STATE;
     return yvex_runtime_device_view_bind(view, YVEX_EXECUTION_DEVICE_HIDDEN,
         context->model, context->session, provider,
-        context->options.execution_profile, tensor, 0ull, chunk->token_count,
+        context->options.execution_profile, tensor, &context->publication, 0ull, chunk->token_count,
         plan->hidden_width, err);
 }
 static int transformer_execution_finish(
@@ -1548,7 +1554,6 @@ static int transformer_execution_finish(
     }
     if (pthread_mutex_lock(&context->mutex) == 0) {
         context->busy = 0;
-        if (rc == YVEX_OK) context->execution_count++;
         (void)pthread_mutex_unlock(&context->mutex);
     }
     if (rc == YVEX_OK) result->completed = 1;
@@ -1593,10 +1598,15 @@ int yvex_runtime_transformer_execute(yvex_runtime_transformer_context *context,
     if (rc != YVEX_OK) return rc;
     if (pthread_mutex_lock(&context->mutex) != 0)
         return transformer_runtime_refuse(err, YVEX_ERR_STATE, "transformer context lock failed");
-    if (context->busy || context->invalidated) {
+    if (context->busy) {
         (void)pthread_mutex_unlock(&context->mutex);
         return transformer_runtime_refuse(err, YVEX_ERR_STATE,
-                                          "transformer context is busy or invalidated");
+                                          "transformer context is busy");
+    }
+    rc = yvex_execution_device_publication_begin(&context->publication, err);
+    if (rc != YVEX_OK) {
+        (void)pthread_mutex_unlock(&context->mutex);
+        return rc;
     }
     context->busy = 1;
     (void)pthread_mutex_unlock(&context->mutex);
@@ -1767,6 +1777,7 @@ int yvex_runtime_transformer_context_close(yvex_runtime_transformer_context **co
         }
         (void)pthread_mutex_unlock(&(*context)->mutex);
     }
+    yvex_execution_device_publication_retire(&(*context)->publication);
     buffers[0] = &(*context)->device_embedding_encoded;
     buffers[1] = &(*context)->device_embedding;
     buffers[2] = &(*context)->device_residual[0];

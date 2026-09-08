@@ -97,6 +97,7 @@ struct yvex_runtime_decoder_execution_context {
     decoder_linear_owner linears[DECODER_LINEAR_COUNT];
     yvex_device_tensor *buffers[DECODER_BUFFER_COUNT];
     yvex_device_tensor hidden_publication;
+    yvex_execution_device_publication publication;
     float *state_workspace;
     unsigned long long state_workspace_values;
     unsigned long long *position_workspace;
@@ -831,6 +832,7 @@ int yvex_runtime_decoder_execution_context_close(
         }
         (void)pthread_mutex_unlock(&context->mutex);
     }
+    yvex_execution_device_publication_retire(&context->publication);
     backend = context->session_view ? context->session_view->backend : NULL;
     for (index = 0u; backend && index < DECODER_LINEAR_COUNT; ++index) {
         if (context->linears[index].single && context->operations)
@@ -1440,6 +1442,7 @@ static int decoder_layer_execute(decoder_layer_run *run,
 static int decoder_enter(yvex_runtime_decoder_execution_context *context,
                          yvex_error *err)
 {
+    int rc;
     if (!context || !context->mutex_ready ||
         pthread_mutex_lock(&context->mutex) != 0)
         return decoder_refuse(err, YVEX_ERR_STATE, "runtime.decoder.enter",
@@ -1448,6 +1451,11 @@ static int decoder_enter(yvex_runtime_decoder_execution_context *context,
         (void)pthread_mutex_unlock(&context->mutex);
         return decoder_refuse(err, YVEX_ERR_STATE, "runtime.decoder.enter",
                               "decoder context is busy or invalidated");
+    }
+    rc = yvex_execution_device_publication_begin(&context->publication, err);
+    if (rc != YVEX_OK) {
+        (void)pthread_mutex_unlock(&context->mutex);
+        return rc;
     }
     context->busy = 1;
     (void)pthread_mutex_unlock(&context->mutex);
@@ -1699,7 +1707,8 @@ static int decoder_publish_result(
     rc = yvex_runtime_device_view_bind(
         &result->device_hidden, YVEX_EXECUTION_DEVICE_HIDDEN, context->model,
         context->session, context->session_view->attention_state_provider,
-        context->options.execution_profile, &context->hidden_publication, 0ull,
+        context->options.execution_profile, &context->hidden_publication,
+        &context->publication, 0ull,
         rows, width, err);
     if (rc == YVEX_OK &&
         !decoder_execution_identity(result, result->execution_identity))

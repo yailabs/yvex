@@ -362,6 +362,57 @@ static int live_device_profile(live_logits *execution, yvex_model_engine *model,
     return yvex_runtime_execution_profile_seal(&request, profile, err);
 }
 
+/* Reuse the real logits producer without repeating a model forward. A completed
+ * batch remains borrowed storage, not an immutable copy of its values. */
+static int live_device_publication_reuse(
+    yvex_runtime_logits_context *logits, yvex_runtime_sampling_context *sampling,
+    const yvex_output_head_batch_request *request,
+    const yvex_runtime_logits_source *sources,
+    const yvex_runtime_logits_row_result *old_rows,
+    const yvex_runtime_sampling_source *old_sources,
+    unsigned int expected_token, yvex_error *err)
+{
+    const yvex_runtime_logits_plan_summary *plan = yvex_runtime_logits_plan_summary_get(logits);
+    yvex_runtime_logits_row_result rows[LIVE_LOGITS_ROWS];
+    yvex_runtime_logits_result result;
+    yvex_runtime_sampling_source source;
+    yvex_runtime_sampling_result selected = {0};
+    yvex_runtime_sampling_context_summary before, after;
+    unsigned long long index, rejected = 0ull;
+    int rc = yvex_runtime_sampling_context_snapshot(sampling, &before, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_logits_execute_rows(logits, request, sources, NULL, 0ull,
+                                               rows, LIVE_LOGITS_ROWS, &result, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_logits_result_validate(plan, NULL, 0ull, rows,
+                                                  LIVE_LOGITS_ROWS, &result, err);
+    for (index = 0ull; rc == YVEX_OK && index < LIVE_LOGITS_ROWS; ++index) {
+        if (yvex_runtime_logits_row_validate(plan, NULL, 0ull, &old_rows[index], err) != YVEX_ERR_FORMAT ||
+            yvex_runtime_sampling_select(sampling, NULL, &old_sources[index], &selected, err) != YVEX_ERR_UNSUPPORTED ||
+            selected.completed)
+            rc = YVEX_ERR_STATE;
+        else rejected++;
+    }
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_sampling_context_snapshot(sampling, &after, err);
+    if (rc == YVEX_OK && (before.successful_samples != after.successful_samples ||
+                         before.stochastic_draws != after.stochastic_draws ||
+                         strcmp(before.rng_state_identity, after.rng_state_identity)))
+        rc = YVEX_ERR_STATE;
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_sampling_source_from_logits(sampling, &source, NULL, 0ull, &rows[0], err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_sampling_select(sampling, NULL, &source, &selected, err);
+    if (rc == YVEX_OK && (!selected.completed || selected.selected_token_id != expected_token))
+        rc = YVEX_ERR_FORMAT;
+    if (rc == YVEX_OK)
+        printf("device_publication_reuse stale_rows=%llu rejected=%llu expected_token=%u observed_token=%u rng_mutations=0 result=pass\n",
+               (unsigned long long)LIVE_LOGITS_ROWS, rejected, expected_token, selected.selected_token_id);
+    else
+        yvex_error_set(err, rc, "test.logits.publication", "producer reuse admitted stale output or changed selection");
+    return rc;
+}
+
 static int live_device_batch(live_logits *execution, yvex_model_engine *model,
                              const live_sampling_result *host_greedy,
                              live_device_result *out, yvex_error *err)
@@ -483,6 +534,9 @@ static int live_device_batch(live_logits *execution, yvex_model_engine *model,
     if (rc != YVEX_OK && !yvex_error_is_set(err))
         yvex_error_set(err, rc, "test.logits.device-batch",
                        "device-resident output batch invariants failed");
+    if (rc == YVEX_OK)
+        rc = live_device_publication_reuse(logits, sampling, &request, sources, rows,
+                                           sampling_sources, host_greedy->rows[0].selected_token_id, err);
     yvex_error_clear(&cleanup);
     close_rc = yvex_runtime_sampling_context_close(&sampling, &cleanup);
     if (rc == YVEX_OK && close_rc != YVEX_OK) { rc = close_rc; *err = cleanup; }

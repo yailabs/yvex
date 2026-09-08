@@ -263,6 +263,20 @@ operation units rather than pretending every workload is token execution.
 
 ## Cancellation and draining
 
+Device hidden/logit rows are borrowed results with a producer-owned publication
+generation. Beginning another producer operation invalidates preceding results
+before workspace reuse, including an attempt that subsequently refuses or is
+cancelled. Retirement invalidates results before resource cleanup; exhaustion
+refuses instead of wrapping. The common validator checks this lifetime before
+touching tensor storage. Model, session and state lineage alone cannot prove
+that a reused buffer still contains the published value.
+
+Consumers serialize use with the producer and must not retain a view beyond
+its context's lifetime. This is not a concurrent read lease, a retained copy,
+or persistent state identity. Derived additive logits also borrow their caller's
+adjusted storage and cannot outlive the base publication. A raw device view is
+not evidence that a model/state transaction committed.
+
 Cancellation is correlated to one engine generation, session, request, and
 turn. It remains observable at the bounded safe points provided by tokenizer,
 prefill, Transformer/MoE, verification, logits, sampling, media execution, and

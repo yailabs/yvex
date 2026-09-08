@@ -154,6 +154,11 @@ greedy/stochastic selection, and admitted speculative acceptance/correction.
 The common sampling owner supplies transactional RNG, validates bounded result
 publication, and commits RNG only with the surrounding state transaction.
 Tokenizer and protocol remain host-owned; this is not all-on-device generation.
+Transient hidden/logit publications have one producer-owned borrow generation;
+workspace reuse expires old views before downstream selection. This replaces
+passive producer counters with checked lifetime authority, without copying full
+rows or adding a persisted identity. The [runtime contract](../contracts/runtime.md#cancellation-and-draining)
+defines serialization and retirement limits.
 Audit and forensic profiles may request bounded host evidence
 or full reference intermediates. Those adapters are explicit and are not
 reachable as a silent production fallback.

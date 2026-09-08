@@ -1149,6 +1149,7 @@ static int speculation_accept_device(yvex_runtime_speculation_context *context,
     int rc;
     if (!operations || !operations->accept_stochastic || !context->device_adjusted_logits ||
         !context->pending_target_logits.tensor ||
+        yvex_execution_device_view_validate(&context->pending_target_logits, err) != YVEX_OK ||
         context->pending_target_logits.backend != context->device_backend ||
         !yvex_core_u64_mul(request->candidate_count, context->vocabulary_size, &draft_values) ||
         !yvex_core_u64_mul(request->candidate_count + 1ull, context->vocabulary_size,

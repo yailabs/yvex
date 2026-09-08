@@ -1,6 +1,7 @@
 /* Validate device execution views without importing runtime lifecycle state. */
 #include <yvex/internal/device_view.h>
 
+#include <limits.h>
 #include <yvex/internal/backend.h>
 #include <yvex/internal/core.h>
 
@@ -11,12 +12,41 @@ static int device_view_refuse(yvex_error *err, yvex_status status,
     return status;
 }
 
+int yvex_execution_device_publication_begin(
+    yvex_execution_device_publication *publication, yvex_error *err)
+{
+    if (!publication || publication->retired)
+        return device_view_refuse(err, YVEX_ERR_STATE,
+                                   "device publication owner is unavailable");
+    if (publication->generation == ULLONG_MAX) {
+        publication->retired = 1;
+        return device_view_refuse(err, YVEX_ERR_BOUNDS,
+                                   "device publication generation is exhausted");
+    }
+    publication->generation++;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+void yvex_execution_device_publication_retire(
+    yvex_execution_device_publication *publication)
+{
+    if (publication) publication->retired = 1;
+}
+
 int yvex_execution_device_view_validate(
     const yvex_execution_device_view *view, yvex_error *err)
 {
     unsigned long long elements, bytes, offset_bytes, end;
-    if (!view || view->schema_version != YVEX_EXECUTION_DEVICE_VIEW_SCHEMA_V1 ||
-        view->kind > YVEX_EXECUTION_DEVICE_WORKSPACE || !view->backend || !view->tensor ||
+    /* Reject old layouts and expired borrows before inspecting a tensor whose
+     * backing may already have been replaced during workspace growth/cleanup. */
+    if (!view || view->schema_version != YVEX_EXECUTION_DEVICE_VIEW_SCHEMA_V2 ||
+        !view->publication || view->publication->retired ||
+        !view->publication_generation ||
+        view->publication_generation != view->publication->generation)
+        return device_view_refuse(err, YVEX_ERR_FORMAT,
+                                   "device value publication is stale or unavailable");
+    if (view->kind > YVEX_EXECUTION_DEVICE_WORKSPACE || !view->backend || !view->tensor ||
         !yvex_backend_tensor_owned_by(view->backend, view->tensor) ||
         !view->resource_generation || !view->session_generation ||
         !view->state_generation || !view->rows || !view->columns ||

@@ -11,7 +11,21 @@
 extern "C" {
 #endif
 
-#define YVEX_EXECUTION_DEVICE_VIEW_SCHEMA_V1 1u
+#define YVEX_EXECUTION_DEVICE_VIEW_SCHEMA_V2 2u
+
+/* Context-owned borrow lifetime, not model/state identity or a resource lease.
+ * Begin invalidates preceding results before their workspace can be overwritten.
+ * Callers serialize production, consumption and close; neither this record nor
+ * a borrowed view may outlive its producer. Retirement is irreversible. */
+typedef struct {
+    unsigned long long generation;
+    int retired;
+} yvex_execution_device_publication;
+
+int yvex_execution_device_publication_begin(
+    yvex_execution_device_publication *publication, yvex_error *err);
+void yvex_execution_device_publication_retire(
+    yvex_execution_device_publication *publication);
 
 typedef enum {
     YVEX_EXECUTION_DEVICE_HIDDEN = 0,
@@ -45,6 +59,8 @@ typedef struct {
     yvex_execution_materialization_policy materialization;
     char runtime_model_identity[YVEX_SHA256_HEX_CAP];
     char execution_profile_identity[YVEX_SHA256_HEX_CAP];
+    const yvex_execution_device_publication *publication;
+    unsigned long long publication_generation;
 } yvex_execution_device_view;
 
 int yvex_execution_device_view_validate(

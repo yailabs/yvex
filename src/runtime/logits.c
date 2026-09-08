@@ -29,10 +29,10 @@ struct yvex_runtime_logits_context {
     yvex_device_tensor *device_hidden, *device_logits;
     /* The allocation is max-shaped; only this exact completed prefix may be published. */
     yvex_device_tensor device_logits_publication;
+    yvex_execution_device_publication publication;
     pthread_mutex_t mutex;
-    unsigned long long execution_count;
     char shared_draft_plan_identity[YVEX_SHA256_HEX_CAP];
-    int mutex_ready, busy, invalidated, shared_draft_plan_admitted;
+    int mutex_ready, busy, shared_draft_plan_admitted;
 };
 /*
  * Admit and project logits readiness from the exact immutable output-head residency.
@@ -794,7 +794,7 @@ static int logits_device_view_build(
         view, YVEX_EXECUTION_DEVICE_LOGITS, context->model, context->session,
         provider, context->options.execution_profile,
         &context->device_logits_publication,
-        element_offset, 1ull, context->plan.summary.vocabulary_size, err);
+        &context->publication, element_offset, 1ull, context->plan.summary.vocabulary_size, err);
 }
 static int logits_row_identity_build(yvex_runtime_logits_row_result *result)
 {
@@ -1198,24 +1198,29 @@ int yvex_runtime_logits_result_validate(
 }
 static int logits_enter(yvex_runtime_logits_context *context, yvex_error *err)
 {
+    int rc;
     if (!context || !context->mutex_ready ||
         pthread_mutex_lock(&context->mutex) != 0)
         return logits_refuse(err, YVEX_ERR_STATE, "logits context lock failed");
-    if (context->busy || context->invalidated) {
+    if (context->busy) {
         (void)pthread_mutex_unlock(&context->mutex);
         return logits_refuse(err, YVEX_ERR_STATE,
-                             "logits context is busy or invalidated");
+                             "logits context is busy");
+    }
+    rc = yvex_execution_device_publication_begin(&context->publication, err);
+    if (rc != YVEX_OK) {
+        (void)pthread_mutex_unlock(&context->mutex);
+        return rc;
     }
     context->busy = 1;
     (void)pthread_mutex_unlock(&context->mutex);
     return YVEX_OK;
 }
-static void logits_leave(yvex_runtime_logits_context *context, int completed)
+static void logits_leave(yvex_runtime_logits_context *context)
 {
     if (context && context->mutex_ready &&
         pthread_mutex_lock(&context->mutex) == 0) {
         context->busy = 0;
-        if (completed) context->execution_count++;
         (void)pthread_mutex_unlock(&context->mutex);
     }
 }
@@ -1258,7 +1263,7 @@ int yvex_runtime_logits_project(
     else if (rc == YVEX_OK && !context->options.device_selection)
         rc = logits_refuse(err, YVEX_ERR_BOUNDS,
                            "logits publication extent overflowed");
-    logits_leave(context, rc == YVEX_OK);
+    logits_leave(context);
     return rc;
 }
 static int logits_batch_contract(
@@ -1482,7 +1487,7 @@ static int logits_project_cuda_batch(
             result->final_source_position = sources[index].source_position;
         }
     }
-    logits_leave(context, rc == YVEX_OK);
+    logits_leave(context);
     return rc;
 }
 /*
@@ -1692,7 +1697,7 @@ int yvex_runtime_logits_project_compatible(
     for (index = 0ull; index < row_count && rc == YVEX_OK; ++index)
         rc = logits_row_finish(contexts[index], sources[index], YVEX_BACKEND_KIND_CUDA,
                                NULL, 0ull, rows[index], err);
-    while (entered) logits_leave(contexts[--entered], rc == YVEX_OK);
+    while (entered) logits_leave(contexts[--entered]);
     return rc;
 }
 int yvex_runtime_logits_execute(
@@ -1738,6 +1743,7 @@ int yvex_runtime_logits_context_close(yvex_runtime_logits_context **context,
         }
         (void)pthread_mutex_unlock(&(*context)->mutex);
     }
+    yvex_execution_device_publication_retire(&(*context)->publication);
     if ((*context)->device_logits)
         rc = yvex_backend_tensor_release((*context)->session_view->backend,
                                          &(*context)->device_logits, err);

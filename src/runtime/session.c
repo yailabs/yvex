@@ -52,6 +52,7 @@ int yvex_runtime_device_view_bind(
     yvex_model_engine *model, yvex_runtime_execution_session *session,
     const yvex_attention_state_provider *provider,
     const yvex_runtime_execution_profile *profile, const yvex_device_tensor *tensor,
+    const yvex_execution_device_publication *publication,
     unsigned long long offset, unsigned long long rows, unsigned long long columns,
     yvex_error *err)
 {
@@ -63,7 +64,7 @@ int yvex_runtime_device_view_bind(
     yvex_runtime_residency_summary residency;
     yvex_graph_attention_state_summary state;
     if (!out || !model_view || !session_view || !provider || !provider->summary ||
-        !profile || !tensor ||
+        !profile || !tensor || !publication ||
         yvex_model_engine_summary_copy(model, &model_summary, err) != YVEX_OK ||
         yvex_runtime_session_summary_copy(session, &session_summary, err) != YVEX_OK ||
         yvex_runtime_residency_snapshot(model_view->residency, &residency,
@@ -75,7 +76,9 @@ int yvex_runtime_device_view_bind(
         return YVEX_ERR_STATE;
     }
     memset(out, 0, sizeof(*out));
-    out->schema_version = YVEX_EXECUTION_DEVICE_VIEW_SCHEMA_V1;
+    out->schema_version = YVEX_EXECUTION_DEVICE_VIEW_SCHEMA_V2;
+    out->publication = publication;
+    out->publication_generation = publication->generation;
     out->kind = kind;
     out->backend = session_view->backend;
     out->tensor = tensor;
