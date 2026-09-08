@@ -249,3 +249,25 @@ downstream_safe: true | false
 `proceed` requires an implemented consumer-safe boundary. A green build alone
 does not close missing ownership, rollback, operator reachability, numerical
 authority, or required evidence.
+
+### Quality-first closure reporting
+
+Every closure executing meaningful QA must report material evidence using this
+table, with non-applicable fields identified rather than invented:
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+
+For numerical/model qualification, include actual expected/observed tokens,
+state values, logits/logprobs or error metrics as applicable: maximum absolute
+and relative error, worst case and dispersion. Lifecycle evidence reports
+observed transitions; performance evidence reports repeated distributions and
+resource facts. Name the reference and distinguish internal software contracts,
+internal numerical oracles, upstream/authoritative conformance, runtime
+qualification, behavior, performance and release evidence. Internal YVEX
+agreement does not establish upstream conformance when an authoritative
+reference exists. Missing mandatory evidence remains BLOCKED or SKIP.
+
+Test counts alone are not an acceptable evidence report. Aggregate PASS/FAIL/
+BLOCKED/SKIP counts are a supplemental footer, never a substitute for expected
+versus observed quality and the exact claim supported.

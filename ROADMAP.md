@@ -7,25 +7,26 @@ Status: living public project control
 | Axis | Current truth |
 | --- | --- |
 | Project target | Native, harness-independent model compilation and execution substrate. |
-| Active engineering boundary | `SPECTRUM.MAMBA2.REPAIR.0` — pure-SSM compilation and source authority. |
+| Active engineering boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` — general code ownership/cutover, then qualification and exact performance replay before A01 resumes. |
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REASSESSMENT.0` COMPLETE: source-declared logical relations and platform-isolated terminal mechanics qualified. |
-| Architecture Spectrum | A01 PARTIAL; A02–A10 PLANNED. |
-| Most important structural gap | The common model language and decoder cannot yet carry pure SSM through a complete artifact and hosted execution. Programs C / S own this pressure. |
+| Architecture Spectrum | A01 PARTIAL, current non-KV state pressure and queued family repair after refoundation; A02–A10 PLANNED. |
+| Adopted state architecture target | Dual-stream primary computation plus persistent model-native computational state. YAI owns semantic authority; YVEX owns computational realization. Program N is OPEN, not implemented. |
+| Most important structural gap | Refound unique compiler/runtime/state owners against C / S / N targets without implementing N. Pure-SSM decoder, tokenizer and normalization barriers remain A01 work. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media. Evidence depths differ. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
 | Behavior evaluation | BLOCKED / not ready. |
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
 | Release qualification | BLOCKED. |
 | Current branch | `models2`; branch epochs coordinate integration, not model ownership. |
-| Next decision point | Earn the next truthful A01 evidence stage or retain its precise blocker; resume DeepSeek optimization only by explicit decision. |
+| Next decision point | Qualify the generic refoundation and replay the retained control before resuming A01; unresolved mandatory evidence prevents progression. DeepSeek optimization still needs explicit resumption. |
 
 <!-- maturity-counts:start -->
 <!-- Generated from System Maturity by tests/documentation_architecture.py. -->
 | Maturity state | Meaning | Current count |
 | --- | --- | ---: |
 | 🟢 ESTABLISHED | Generic owner and claimed boundary implemented and qualified at the stated scope. | 31 |
-| 🟡 PARTIAL | Real foundation; genericity, breadth, portability, performance or evidence incomplete. | 38 |
-| 🔴 OPEN | Generic capability absent or not yet claimable. | 38 |
+| 🟡 PARTIAL | Real foundation; genericity, breadth, portability, performance or evidence incomplete. | 42 |
+| 🔴 OPEN | Generic capability absent or not yet claimable. | 51 |
 | ⚪ LATER | Intentionally outside the current maturity horizon. | 14 |
 <!-- maturity-counts:end -->
 
@@ -92,6 +93,21 @@ every primitive, composition or source format below executes today.
 | Multimodal composition | Tower, connector/projector, fusion | Image, audio and video component graphs |
 | Iterative generation | Diffusion/flow/denoising state machine | Image/video and diffusion-language systems |
 | Component composition | Target/draft, encoder/decoder, tower/LM, codec/decoder | One substrate for composite models |
+| Persistent state input | Typed independently retained model-state inputs | Consume computational state beyond ordinary context |
+| State Read | Explicit operation consuming persistent state | No hidden state-injection convention |
+| State Update | Explicit operation producing state changes | Architecture-owned update semantics |
+| State-producing blocks | Blocks contributing to persistent state | Express trained state architectures |
+| State-consuming blocks | Blocks reading persistent state | Layer-aware state integration |
+| State gating | Learned/declared interaction between primary computation and state | No universal injection mechanism |
+| Cross-state attention / interaction | Optional interactions between computational state streams | Support distinct architectural realizations |
+| Persistent banks | Typed model-native banks with explicit geometry | Separate representation from lifecycle |
+| Multi-timescale state roles | Different computational update/retention scales | No hard-coded semantic-memory categories |
+| State realization profile | Model-specific realization constraints | Bind the state target to exact model capability |
+
+The target model signature can grow from input → model → output to
+`(primary input, persistent computational state)` → model graph →
+`(output, updated persistent computational state)`. This is target-language
+breadth, not a claim that current models expose that interface.
 
 #### Physical Model Compiler
 
@@ -209,6 +225,129 @@ appropriate. Fixed recurrent state need not grow like KV.
 
 Existing virtual pages and immutable prefix sharing are foundations, not proof
 of the complete cross-provider contract or an automatic caching policy.
+
+### Native Cognitive State
+
+**Adopted architecture target; no cognitive-state runtime is implemented.**
+YAI owns semantic cognitive state; YVEX owns its computational realization.
+Token context remains a supported execution strategy, but is not assumed to be
+the only persistent information a future model can consume.
+
+| Capability | State | Current YVEX truth | Boundary required for promotion | Program | Evidence / owner |
+| --- | :---: | --- | --- | --- | --- |
+| Model-state capability advertisement | 🔴 OPEN | Context capacity and sequence-state classes do not advertise cognitive-state realization. | Exact model/deployment advertises context-only, retained state, external State Read, State Update or native state with compatibility constraints. | N / C | [Adopted target](#native-cognitive-state); [current runtime contract][runtime-contract] |
+| Semantic-state ingress | 🔴 OPEN | Typed content and session state are not a semantic-state lowering contract. | Typed external frame/delta constrains lowering without importing Case semantics. | N / X | [Adopted target](#native-cognitive-state) |
+| Computational cognitive-state identity | 🟡 PARTIAL | Physical layout/content/checkpoint identities exist; none binds semantic source to a cognitive realization. | Bind semantic source, exact model, lowering/profile and update lineage sufficiently for reuse or invalidation. | N / S | [Checkpoint records][state-checkpoints]; [state store][state-store] |
+| Context-only compatibility lowering | 🔴 OPEN | Ordinary context/prefill executes; prompt rendering is not provenance-bound semantic-state lowering. | Ingress → context realization has explicit provenance, limits and reproducibility. | N / C | [Adopted target](#native-cognitive-state); [runtime][runtime] |
+| Persistent state compilation | 🔴 OPEN | Physical checkpoints retain execution state, not compiled semantic-state realizations. | Compile semantic state into independently retained state for an exact model/profile. | N / C | [Adopted target](#native-cognitive-state) |
+| Incremental state compilation | 🔴 OPEN | No semantic delta-to-computational update contract. | Validate when a delta permits partial recompilation and when complete rebuilding is required. | N / C | [Adopted target](#native-cognitive-state) |
+| Persistent State Read | 🔴 OPEN | Internal KV/recurrent sequence updates are not reads of an independently persistent cognitive bank. | Explicit model-semantic operation consumes independently retained state with qualified identity and effects. | N / C | [Adopted target](#native-cognitive-state); [family boundary][families] |
+| Layer-aware state injection / interaction | 🔴 OPEN | No declared cognitive-state interaction topology. | Express model-specific cross-attention, gating, projection, recurrent interfaces or state-consuming blocks without freezing one mechanism. | C / N | [Target language](#semantic-model-ir-target-language) |
+| Multi-timescale state layout | 🔴 OPEN | No cognitive-state realization with declared update/retention timescales. | Distinct computational scales remain representable without fixed tensor counts or semantic-memory taxonomy. | N / C | [Adopted target](#native-cognitive-state) |
+| External State Update | 🔴 OPEN | No external/compiler-assisted cognitive-state update contract. | New realization has explicit provenance, compatibility and transaction semantics. | N / S | [Adopted target](#native-cognitive-state) |
+| Learned State Update | 🔴 OPEN | No qualified learned producer of cognitive-state deltas. | Model/companion updates are computationally qualified without acquiring semantic mutation authority. | N / C | [Adopted target](#native-cognitive-state) |
+| Native State Update | 🔴 OPEN | No admitted trained architecture exposes this persistent-state update contract. | First-class trained update operation has independent numerical, lifecycle and usefulness evidence. | N / C | [Adopted target](#native-cognitive-state) |
+| Cognitive-state checkpoint provenance | 🟡 PARTIAL | Attention target/draft checkpoints bind model, artifact, binding and payload; recurrent sequence serialization is explicitly refused. No semantic provenance. | Bind computational checkpoint to semantic source, parent update and realization compatibility; qualify supported providers. | N / S | [State store][state-store]; [restore/rejection tests][state-tests] |
+| Model replacement / state invalidation | 🟡 PARTIAL | Generation and checkpoint identity reject stale/incompatible state; semantic-source recompilation is absent. | Invalidate/rebuild computational state on incompatible model/profile changes without changing semantic authority. | N / R / S | [Runtime contract][runtime-contract]; [state store][state-store] |
+| Cognitive-state locality / residency | 🟡 PARTIAL | Session-state banks/accounting are separate from weights; no independently retained cross-context cognitive-bank lifecycle. | Explicit state locality/residency and movement independent of weights and prompt storage, with resource-failure evidence. | N / S | [State residency][state-residency]; [resource truth][runtime] |
+| Retention / interference / forgetting evaluation | 🔴 OPEN | No declared cognitive-state evaluation or qualified result. | Measure retention, interference, intended forgetting, continuity and update stability on identity-bound realizations. | N / Q | [Adopted target](#native-cognitive-state) |
+| Model → YAI return-path evidence | 🔴 OPEN | No cognitive-state proposal/consequence interface to external semantic authority. | Expose operation/model/parent-state/update evidence without claiming semantic canonicalization. | N / X / Q | [Adopted target](#native-cognitive-state) |
+
+The four PARTIAL rows describe limited **physical foundations**, not partial
+State Read/Update support. Program N as a whole is OPEN: its ingress and
+realization contract do not exist. Existing S/R mechanisms remain their owners.
+
+#### Semantic authority and computational realization
+
+| Owner | Boundary |
+| --- | --- |
+| YAI | Semantic meaning/continuity, Case-bound authority, disclosure/authority semantics and semantic `StateFrame` / `StateDelta` producer semantics. |
+| YVEX | Exact model-state capability, semantic-state lowering, computational identity/layout, read/update execution contracts, realization compatibility/provenance; paging/residency and checkpoint/rollback through physical runtime owners. |
+| Model | Learned interpretation of computational state and, where supported, learned state-update behavior. |
+
+YAI preserves what the system knows. YVEX determines whether and how an exact
+model can carry it computationally. **YAI semantic state != YVEX computational
+state.** YVEX is not a Case owner, semantic-memory database, workflow/policy or
+authority owner, canonical fact store or YAI replacement. YAI does not own KV
+layouts, recurrent tensors, latent banks, state pages, GPU residency/movement,
+physical checkpoints, model layers or native update equations.
+
+The dual-stream target is primary token/activation/residual computation alongside
+cross-context persistent, model-specific computational state. The second stream
+can carry independent identity and, where the architecture permits, independent
+residency/versioning. Its read and eventual update are explicit model operations:
+
+```text
+YAI semantic S_t -- SemanticStateFrame / SemanticStateDelta --> YVEX lowering
+                                                             │
+                      M_t = Lower(S_t, exact model, profile) <─┘
+                                      │
+primary input / activations ──> model graph <── State Read(M_t)
+                                      │
+                         output + State Update(M_t), if supported
+                                      │
+                     computational evidence / typed consequence
+                                      │
+                        YAI semantic authority / admission
+                                      │
+                                    S_t+1
+```
+
+Frame/delta names here identify a **target boundary**, not current wire types.
+`S_t` remains authoritative and may be portable across models. `M_t` is derived,
+model-specific, possibly opaque, disposable and rebuildable. No latent tensor
+becomes a canonical Case fact merely because execution changed it. YVEX may
+attest what operation ran, which model/parent state produced the change, and
+its computational provenance; semantic proposals remain subject to YAI admission.
+
+#### Realization depth
+
+| Depth | Target meaning | Current architectural interpretation |
+| --- | --- | --- |
+| Context-only | Project semantic state into ordinary input/context; reconstruct through prefill. | Compatibility/fallback strategy on existing context execution; generic provenance-bound lowering is OPEN. Not the ultimate architecture target. |
+| Persistent prefix / sequence state | Retain/reuse model-produced context-derived state beyond one prompt construction. | Existing physical foundation; not generic cognitive-state semantics. |
+| Latent Read | Consume a persistent model-native bank independently of normal token context. | OPEN strategic target. |
+| Latent Read/Write | Consume and produce updates to persistent model-native state. | OPEN strategic target. |
+| Native State | Trained/designed architecture treats persistent state as a first-class computational stream. | OPEN strategic target and research horizon; no current model-support claim. |
+
+Multi-timescale pressure may distinguish immediate/local, task, Case/big-picture
+and slow/stable retention. These are external representational pressures, not
+YVEX semantic-memory categories, four prescribed tensors or one injection rule.
+
+#### Identity and replacement target
+
+A computational realization needs enough identity to determine whether it can
+be reused, resumed, compared, invalidated or rebuilt in an exact execution context:
+
+| Identity requirement | Purpose |
+| --- | --- |
+| Semantic source identity/digest | Recover the authoritative source of the derived realization. |
+| Exact model artifact and runtime binding / compatible deployment | Reject incompatible execution contexts. |
+| State architecture/layout and realization profile | Bind geometry and model-specific realization constraints. |
+| Compiler/lowering identity and precision/physical representation | Distinguish different computations from the same semantic input. |
+| Generation/update and parent computational state/checkpoint | Recover update lineage and rollback ancestry. |
+| Compatibility / invalidation posture | Determine valid reuse versus mandatory reconstruction. |
+
+These are identity requirements, not a serialization design or one mandatory
+giant hash. **Semantic `S_t` must survive model replacement as authority;
+computational `M_t` need not.** A new model, incompatible state architecture or
+profile may invalidate `M_t`; YVEX should recompile, reinitialize or reconstruct
+it from authoritative semantic state. Rebuildability prevents derived state
+from becoming an accidental second semantic authority.
+
+#### C / N / S and P
+
+| Program | Responsibility | Explicit non-ownership |
+| --- | --- | --- |
+| C — Model Language & Compiler | Describe external state inputs/outputs, read/update operations, stream topology, banks, gating and state-consuming/producing blocks. | Residency, paging and semantic authority. |
+| N — Native Cognitive State | Advertise capability; accept state ingress; compile a model/profile-specific realization; define cognitive read/update contracts, incremental lowering, provenance, compatibility and evaluation. | Case meaning, canonical semantic facts and physical allocation/scheduling mechanisms. |
+| S — Sequence Runtime | Session ownership; candidate/committed transactions; paging, COW, sharing, residency/movement/accounting, checkpoints, rollback, scheduling and physical lifetime. | Whether a bank means memory, task state or another cognitive role; family update equations. |
+| P — Physical Model Compiler | Model/package quantization, representation/layout and hardware/workload-aware physical recipe search. | Semantic-state ingress or cognitive-state realization meaning. |
+
+Conceptually **C → N → S → execution**: describe model meaning, compile the
+realization, execute its physical lifecycle. This is not a prescribed source
+directory layering. P and N may later share physical mechanisms where real
+evidence warrants it; their different subjects are not collapsed now.
 
 ### Generation control
 
@@ -371,6 +510,18 @@ artifact/deployment → runtime lifecycle → whole-model execution → behavior
 evaluation → benchmark → release qualification. [Its canonical figure][method]
 explains the boundaries; no lower stage substitutes for a higher one.
 
+Qualification keeps these authorities distinct:
+
+| Evidence class | What it can establish |
+| --- | --- |
+| Internal software contract | Implementation behavior, including negative paths. |
+| Internal numerical oracle | Agreement with the declared internal reference at its scope. |
+| Upstream / authoritative reference conformance | Agreement with an independently identified authoritative implementation/vector; internal YVEX agreement is insufficient. |
+| Runtime / transactional qualification | Isolation, commit/abort/reset, cancellation and resource cleanup. |
+| Behavior evaluation | Declared model-quality or computational-state usefulness outcomes. |
+| Performance qualification | Repeated identity-bound measurements and comparable distributions. |
+| Release qualification | All version-specific independent gates close together. |
+
 ### Scale-out
 
 | Capability | State | Current YVEX truth | Boundary required for promotion | Program | Evidence / owner |
@@ -399,6 +550,7 @@ foundations with open boundaries; a completed wave does not complete a program.
 | C | Model Language & Compiler | Express heterogeneous topology, operations and source semantics. | Semantic IR; graph composition; tokenizer | 🟡 PARTIAL |
 | P | Physical Model Compiler | Synthesize/search physical representations from immutable source. | Policy; recipes; quantization; artifact construction | 🟡 PARTIAL |
 | S | Sequence Runtime | Mature state, scheduling, paging, reuse and resources. | Typed state; inflight batching; long context | 🟡 PARTIAL |
+| N | Native Cognitive State | Compile, retain, expose, version and evolve persistent model-native computational state independently of token context. | State ingress; realization; State Read/Update; cognitive identity/evaluation | 🔴 OPEN |
 | G | Generation Control | Generalize sampling, constraints and speculation. | Samplers; logprobs; grammar; proposals | 🟡 PARTIAL |
 | D | Dynamic Composition | Admit adapters and reusable component graphs. | Base compatibility; adapters; component lifecycle | 🟡 PARTIAL |
 | O | Output Runners | Separate model execution from chat generation. | Generate; embed; pool; score; reward | 🟡 PARTIAL |
@@ -416,7 +568,7 @@ platform ownership; latest major boundary `MAINTENANCE.ARCHITECTURE.REASSESSMENT
 
 **Open maturity boundaries:** Transformer-shaped composition and structural overhead requiring measurement.
 
-**Current pressure:** A01 genericity defects and real consumers with misplaced interfaces.
+**Current pressure:** general refoundation before A01 resumption; non-KV and adopted dual-stream C/S/N targets challenge current owners without authorizing N implementation.
 
 **Material advance:** remove a demonstrated ownership defect with negative/lifecycle QA and exact performance replay where relevant.
 
@@ -428,13 +580,13 @@ platform ownership; latest major boundary `MAINTENANCE.ARCHITECTURE.REASSESSMENT
 
 **Established foundation:** family interpretation, tensor roles, Transformation IR and authenticated package plans.
 
-**Open maturity boundaries:** SSM-only topology, normalization/tokenizer authority, broader operators/state/output heads.
+**Open maturity boundaries:** SSM-only topology, normalization/tokenizer authority, broader operators/state/output heads; target persistent-state inputs/outputs, read/update topology, banks and gating.
 
 **Current pressure:** A01's source-only barrier; later spectrum families test different assumptions.
 
 **Material advance:** another computational shape compiles through shared mechanisms without backend reconstruction.
 
-**Does not own:** allocation lifetimes, serving policy or application task selection.
+**Does not own:** allocation/residency lifetimes, semantic-state authority, serving policy or application task selection.
 
 ### P — Physical Model Compiler
 
@@ -448,7 +600,7 @@ platform ownership; latest major boundary `MAINTENANCE.ARCHITECTURE.REASSESSMENT
 
 **Material advance:** reproducible constrained search feeds deterministic construction and independent final qualification.
 
-**Does not own:** model suitability, task selection, runtime residency or the release gate itself.
+**Does not own:** model suitability, task selection, runtime residency, N's cognitive-state realization meaning or the release gate itself.
 
 ### S — Sequence Runtime
 
@@ -458,11 +610,36 @@ platform ownership; latest major boundary `MAINTENANCE.ARCHITECTURE.REASSESSMENT
 
 **Open maturity boundaries:** cross-provider paging, inflight scheduling, prompt fairness, prefix caching and long-context evidence.
 
-**Current pressure:** recurrent versus attention geometry; actual concurrent workloads, not configured width.
+**Current pressure:** recurrent versus attention geometry; actual concurrent workloads, not configured width; future N state must reuse typed physical lifecycle rather than another runtime.
 
 **Material advance:** shared mechanisms qualified against distinct providers and resource-failure paths.
 
-**Does not own:** family update equations, semantic model selection or unmeasured eviction policy.
+**Does not own:** cognitive meaning, family update equations, semantic model selection or unmeasured eviction policy.
+
+### N — Native Cognitive State
+
+**Purpose:** compile, retain, expose, version and evolve persistent model-native
+computational cognitive state independently of ordinary token-context persistence.
+
+**Existing physical foundations:** S/R own typed transactions, limited checkpoint
+identity, stale-generation rejection and state-resource accounting. These support
+future realization but do not implement N; program state remains OPEN.
+
+**Open cognitive-state boundaries:** ingress and capability advertisement;
+model-state compiler/profile; cognitive identity, State Read/Update, incremental
+lowering, compatibility/recompilation, provenance and computational evaluation.
+
+**Current architecture pressure:** YAI semantic authority must survive model
+replacement; A01 rejects state-equals-KV assumptions. Refoundation prepares C/S/N
+boundaries, not a cognitive-state runtime or an A01 evidence promotion.
+
+**Material advance:** a real model/reference demonstrates one declared realization
+depth with ingress, identity, negative/lifecycle and useful-state evidence. Read,
+update, retention and non-interference are separate claims.
+
+**Does not own:** Case/semantic memory, workflow, disclosure or authority policy,
+canonical facts, family mathematics, S's physical mechanisms or P's model/package
+recipe search. Computational updates return proposals/evidence, not semantic truth.
 
 ### G — Generation Control
 
@@ -540,13 +717,17 @@ platform ownership; latest major boundary `MAINTENANCE.ARCHITECTURE.REASSESSMENT
 
 **Established foundation:** mapped QA, reference components, typed measurement and source-stable receipts.
 
-**Open maturity boundaries:** independent full-model conformance, quality evaluation, release benchmark and release qualification.
+**Open maturity boundaries:** upstream conformance, independent full-model quality, release benchmark and release qualification; future N retention/interference evaluation.
 
-**Current pressure:** v0.1 dependencies and incomplete MiniMax full-scale evidence.
+**Current pressure:** v0.1 dependencies, incomplete MiniMax full-scale evidence and exact post-refoundation replay. DeepSeek official/reference vectors and Qwen pinned upstream references are selected future conformance work, not evidence executed by this alignment.
 
 **Material advance:** reproducible independent results on exact identities, including negative evidence.
 
 **Does not own:** targets as measured facts, selection-data reuse as independent proof or missing gates relabelled PASS.
+
+The mandatory [quality-first closure rule][quality-reporting] requires expected
+versus observed evidence, authority and tolerances; aggregate PASS counts are
+supplemental. This alignment implements no new upstream conformance harness.
 
 ## Architecture Spectrum
 
@@ -557,7 +738,7 @@ maturity**. Planned references are not acquisition or executable support claims.
 
 | ID | Computational pressure | Reference target | What it tries to falsify | Current public state |
 | --- | --- | --- | --- | --- |
-| A01 | Pure SSM | `mistralai/Mamba-Codestral-7B-v0.1` | Transformer-shaped decoder/state assumptions | PARTIAL / active repair |
+| A01 | Pure SSM | `mistralai/Mamba-Codestral-7B-v0.1` | Transformer-shaped decoder and computational-state-equals-KV assumptions | PARTIAL / repair queued after refoundation qualification |
 | A02 | Pure recurrent | RWKV7-1.5B | Sequence state must be attention/SSM-shaped | PLANNED |
 | A03 | Encoder-decoder | FLAN-T5 | Decoder-only lifecycle; missing retained encoder state/cross-attention | PLANNED |
 | A04 | Diffusion language model | LLaDA-8B-Instruct | Autoregressive-only generation | PLANNED |
@@ -572,6 +753,10 @@ A01 has pinned acquisition, complete source roles, common transactional recurren
 state and component numerics. It still refuses READY: tokenizer/special-token
 and normalization authority, complete SSM decoder/artifact, deployment, load
 and hosted generation remain unclosed. [Mamba2][mamba] owns that barrier.
+Its broader pressure is that persistent computational state must not mean
+Transformer KV. Future N realizations may consume attention, SSM, recurrent,
+convolution, latent or architecture-native state without sharing storage geometry.
+That relevance neither implements N nor bypasses A01's present blockers.
 
 Every spectrum vertical begins with real reference acquisition through YVEX
 and immutable revision capture before support claims. This public table does
@@ -610,18 +795,27 @@ decision. This is neither the maturity matrix nor the release scope.
 | Order | Boundary | State | Program | Maturity impact | Required after-state | Depends on |
 | ---: | --- | --- | --- | --- | --- | --- |
 | 1 | `MAINTENANCE.ARCHITECTURE.REASSESSMENT.0` | COMPLETE | R / X / C | Identity, client portability, architecture integrity | Qualified source-declared relations and platform-isolated client semantics; bounded performance control retained. | Accepted integrated foundation |
-| 2 | `SPECTRUM.MAMBA2.REPAIR.0` | ACTIVE | C / S | Pure-SSM language, tokenizer authority, recurrent execution | Resolve source/normalization authority and SSM-only compiled decoder; earn the next truthful evidence stage. | Qualified reassessment |
-| 3 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
-| 4 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
-| 5 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
-| 6 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
+| 2 | `NATIVE.COGNITIVE.STATE.ALIGNMENT.0` | COMPLETE | R / N / Q | Adopted dual-stream target and evidence-reporting discipline; no implementation promotion | Freeze semantic/computational ownership and refoundation-before-A01 ordering in public control. | `MAINTENANCE.ARCHITECTURE.REASSESSMENT.0` |
+| 3 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` | ACTIVE | R | Unique generic owners; prepares C / S / N boundaries | Refound code against demonstrated pressure and the adopted state target, without implementing N or advancing A01. Preserve/verify an exact pre-mutation performance control. | `NATIVE.COGNITIVE.STATE.ALIGNMENT.0` |
+| 4 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.QUALIFICATION.0` | NEXT | Q / R | Source-stable semantic/lifecycle evidence and exact performance replay | Qualify changed contracts with independent numerical authority where required; replay the retained control with identical model/representation/mode/workload/hardware and report distributions or blocked evidence. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` |
+| 5 | `SPECTRUM.MAMBA2.REPAIR.0` | BLOCKED | C / S | Pure-SSM language, tokenizer authority, recurrent execution; A01 evidence remains PARTIAL | Resume family repair after qualification; resolve source/normalization authority and SSM-only compiled decoder before earning the next evidence stage. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.QUALIFICATION.0` |
+| 6 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
+| 7 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
+| 8 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
+| 9 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
 
-Active Next: SPECTRUM.MAMBA2.REPAIR.0
+Active Next: MAINTENANCE.ARCHITECTURE.REFOUNDATION.0
 
-Next temporal movement is **repair the same A01 boundary**, not begin A02.
-The nearest listed release-track continuation is DeepSeek optimization,
-still PARTIAL and requiring explicit resumption. No separate NEXT wave is
-authorized in parallel by this roadmap refoundation.
+The selected order is **alignment → code refoundation/cutover → qualification
+and exact replay → A01 repair**. A01's temporal row is BLOCKED by that dependency,
+not demoted from PARTIAL evidence; its family progression remains
+`repair_same_boundary`. NEXT qualification follows refoundation, not parallel
+model work. DeepSeek optimization stays PARTIAL pending explicit resumption.
+
+The [GB10 workload/measurement authority][gb10] constrains replay. A retained
+receipt must still identify a valid clean pre-mutation control; absent assets or
+comparability remain BLOCKED, never an invented speedup or silently satisfied
+qualification gate. No model inference is required for this target alignment.
 
 ## General Substrate Progression
 
@@ -630,11 +824,14 @@ to implement every OPEN row.
 
 | Horizon | Engineering objective | Programs | Exit condition |
 | --- | --- | --- | --- |
-| Now | Close spectrum blockers while preserving generic ownership | R / C / S | A01 no longer needs fake Transformer semantics; evidence stays truthful. |
+| Now | Refound generic ownership, qualify/replay, then resume A01 | R / C / S | Unique owners evaluated against dual-stream pressure; A01 repairs its existing non-KV boundary afterward. No N runtime implementation. |
 | Near | Broaden model language and physical representation foundations | C / P | Common architectures compile through shared semantics and reproducible recipes. |
+| Near | Prepare persistent-state language and realization/lifecycle boundaries | C / S / N | Future state-capable models need not create another runtime; semantic authority remains external. |
 | Near | Mature single-node sequence runtime | S / G | Typed paging, inflight scheduling, chunked prefill and reusable prefixes qualified. |
 | Near/Mid | Expand execution beyond chat | O / D / M | Embedding/scoring/adapters/media use common engine and result semantics. |
+| Near/Mid | Qualify progressively deeper computational-state realization under real model/research pressure | N / C / S | Provenance-bound context lowering, persistent realization, State Read and State Update earn separate evidence stages. |
 | Mid | Close independent qualification gaps | Q | Selected current-tree behavior, performance and reliability evidence reproducible. |
+| Mid | Qualify computational cognitive-state behavior | N / Q | Measure retention, interference, forgetting, cross-context continuity, update stability and recompilation/invalidation; do not replace YAI semantic evaluation. |
 | Later | Scale beyond the present single-node substrate | F | Distributed identity, state, scheduling and failure semantics established. |
 
 Qualification accompanies every horizon; Mid describes completion of the broad
@@ -671,7 +868,11 @@ platform qualification. [MLC quick start][mlc]
 
 | Active / near boundary | Program | Maturity rows affected | Spectrum pressure | Release impact |
 | --- | --- | --- | --- | --- |
-| `SPECTRUM.MAMBA2.REPAIR.0` | C / S | Semantic IR, composition, typed state, tokenizer | A01 | Indirect; no v0.1 promotion or scope expansion |
+| State-target alignment, COMPLETE | N / R / Q | Strategic adoption and evidence rules only; N remains OPEN | Non-KV state is pressure, not cognitive support | No release evidence or gate changes |
+| `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` | R | Prepares C / S / N ownership; does not implement N | A01 remains PARTIAL; no family promotion | No automatic gate closure |
+| Post-refoundation qualification and exact replay | Q / R | Changed contracts, numerical/lifecycle evidence and comparable performance | Required before A01 resumes | Evidence only at measured scope, not release qualification |
+| `SPECTRUM.MAMBA2.REPAIR.0`, queued | C / S | Semantic IR, composition, non-KV state, tokenizer | A01 directly pressures generic state and informs N; no automatic N promotion | Indirect; no v0.1 promotion or scope expansion |
+| Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |
 | Explicit DeepSeek optimization resumption | Q / S / R | Baseline, resource/structural performance evidence | Existing DeepSeek control, not a new Axx | Predecessor of evaluation |
 | Model-language breadth after A01 | C / O / D / M | Components, heads, tokenizer and modality semantics | A02–A10 selected by pressure | General substrate, not automatically v0.1 |
 | Single-node runtime maturity | S / G | Paging, inflight batching, prefill, caching | Distinct admitted state providers | Only requirements explicitly admitted by version scope |
@@ -684,6 +885,8 @@ v0.1 targets DeepSeek-V4-Flash-DSpark text on admitted GB10 CUDA through a
 complete YVEX artifact, native host and bounded compatibility surface.
 [The version record][release] owns required scope; [doctrine][doctrine] owns
 gate semantics. Spectrum breadth must not silently expand this release.
+Native Cognitive State is an independent substrate direction, **not a new v0.1
+gate**. This release may use today's context-compatible model architecture.
 
 | Release gate | State | Evidence owner | Blocking prerequisite | What completion proves |
 | --- | --- | --- | --- | --- |
@@ -724,11 +927,25 @@ release_qualification_ready=0
 | Authentication/TLS | false | No implemented/qualified product security boundary. |
 | Distributed execution | false / LATER | Single-node is the admitted substrate. |
 | Disaggregated serving | false / LATER | Distributed identity/state/failure semantics must precede it. |
+| Generic semantic-state ingress | false | Content inputs do not implement a semantic-state lowering boundary. |
+| Generic model-state compilation | false | No semantic source → exact computational realization contract. |
+| Persistent cognitive State Read | false | Ordinary sequence state is not an independently persistent cognitive bank. |
+| Generic State Update | false | No admitted cognitive-state update contract. |
+| Learned/native State Update | false | No independently qualified learned/native update architecture. |
+| Multi-timescale cognitive-state realization | false | Adopted representational target, not current layout support. |
+| YAI StateFrame/StateDelta runtime integration | false | Target names are not implemented protocol objects. |
+| Cognitive-state retention/interference qualification | false | No declared qualified computational cognitive-state evaluation. |
+| Native-state model support | false | Strategic adoption is not architecture admission or execution. |
 
 LATER is deliberate scope deferral, not concealed debt in a claimed release.
 OPEN remote/security rows are visible maturity gaps, not new v0.1 obligations.
 Cognitive roles and application task selection stay outside YVEX; external
 consumers may demonstrate execution pressure, not prescribe physical ownership.
+KV, recurrent/SSM state, paging, prefix sharing and state checkpointing do not
+by themselves establish Native Cognitive State. Context-only compatibility
+remains valid; it is neither generic semantic-state lowering nor the final
+architecture assumption. Native Cognitive State targets are OPEN, not deferred
+out of the architecture horizon or silently added to v0.1.
 
 ## Progression and Promotion Discipline
 
@@ -748,12 +965,24 @@ qualified real boundary**. The claim's scope determines the required proof.
 | Model execution | Model quality |
 | Model quality | Benchmark |
 | Benchmark | Release |
+| Persistent bytes | Cognitive state |
+| State checkpoint | Semantic memory |
+| KV reuse | State Read |
+| Recurrent state | Native Cognitive State |
+| Model-produced latent delta | Canonical semantic fact |
+| State Read implementation | Useful memory |
+| State Update implementation | Stable memory |
+| Retention | Absence of interference |
+| Model-native state | YAI authority |
 
 Use the lowest demonstrated stage. Green software QA cannot close missing
 numerical, lifecycle, operator or quality authority. Characterization is not a
 benchmark; selection data cannot independently qualify its selected result.
 Performance comparisons fix model bytes, representation, mode, workload,
 hardware and comparable environment, with repeated observations and dispersion.
+N rows advance only on their exact implemented and qualified generic property,
+not adjacent state primitives. Computational evidence may inform YAI admission;
+it cannot perform semantic canonicalization on YAI's behalf.
 
 The [engineering method][method] defines `proceed`, `repair_same_boundary`,
 `complete_evidence` and `blocked_external`. Finishing a prompt is not permission
@@ -816,6 +1045,10 @@ H classifications. Git owns previous versions; this file owns the present.
 [tokenizer-tests]: tests/unit/runtime_tokenizer.c
 [decoder-plan]: src/graph/decoder_plan.c
 [state-store]: src/runtime/state_store.c
+[state-checkpoints]: include/yvex/internal/runtime_state_store.h
+[state-tests]: tests/unit/runtime_state.c
+[state-residency]: src/runtime/state_residency.c
+[quality-reporting]: AGENTS.md#quality-first-closure-reporting
 [state-pages]: src/graph/state_pages.c
 [state-prefix]: src/graph/state_prefix.c
 [sampling]: src/runtime/sampling.c

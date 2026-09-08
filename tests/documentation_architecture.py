@@ -86,11 +86,13 @@ MATURITY_STATES = {
     "⚪ LATER": "Intentionally outside the current maturity horizon.",
 }
 TEMPORAL_STATES = {"ACTIVE", "NEXT", "PARTIAL", "BLOCKED", "NOT MEASURED", "COMPLETE", "DEFERRED"}
-PROGRAMS = set("RCPSGDOMXQF")
+PROGRAMS = set("RCPSNGDOMXQF")
 COUNTS_START = "<!-- maturity-counts:start -->"
 COUNTS_END = "<!-- maturity-counts:end -->"
 MATURITY_HEADER = ["Capability", "State", "Current YVEX truth",
                    "Boundary required for promotion", "Program", "Evidence / owner"]
+EVIDENCE_HEADER = ["Test / lane", "Authority / oracle", "Input / fixture", "Expected",
+                   "Observed", "Metric / tolerance", "Result", "Claim supported"]
 
 
 def table_rows(text: str) -> list[list[str]]:
@@ -172,8 +174,8 @@ def validate_roadmap(text: str, *, check_counts: bool = True) -> dict:
     for row in program_rows:
         require(len(row) == 5 and all(row) and row[4] in MATURITY_STATES, "invalid program row")
         if row[4] != "⚪ LATER":
-            require(bool(re.search(rf"(?m)^### {row[0]} — ", sections["Strategic Programs"])),
-                    f"missing program detail card: {row[0]}")
+            require(len(re.findall(rf"(?m)^### {row[0]} — ", sections["Strategic Programs"])) == 1,
+                    f"missing/duplicate program detail card: {row[0]}")
 
     for row in table_rows(sections["General Substrate Progression"]):
         if len(row) == 4 and row[0] != "Horizon":
@@ -205,6 +207,15 @@ def validate_roadmap(text: str, *, check_counts: bool = True) -> dict:
         ids.add(row[1])
         if row[2] == "ACTIVE":
             active.append(row[1])
+    predecessors = {}
+    for row in sequence:
+        for dependency in re.findall(r"\b[A-Z0-9_]+(?:\.[A-Z0-9_]+)+\b", row[6]):
+            require(dependency in predecessors,
+                    f"dependency is missing or not earlier in sequence: {dependency}")
+            if row[2] in {"ACTIVE", "COMPLETE"}:
+                require(predecessors[dependency] == "COMPLETE",
+                        f"{row[1]} depends on an incomplete boundary: {dependency}")
+        predecessors[row[1]] = row[2]
     next_ids = re.findall(r"(?m)^Active Next:\s*(\S+)\s*$", text)
     require(len(active) == 1 and next_ids == active, "Active Next and execution sequence disagree")
     snapshot = dict(row for row in table_rows(sections[ROADMAP_SECTIONS[0]]) if len(row) == 2)
@@ -234,6 +245,12 @@ def check_roadmap() -> None:
         # Mutations exercise relationships without freezing current prose/statuses.
         first_row = next(line for line in text.splitlines() if "| 🟢 ESTABLISHED |" in line and line.count("|") == 7)
         first_sequence = next(line for line in text.splitlines() if line.startswith("| 1 | `"))
+        active_sequence = next(line for line in text.splitlines() if "| ACTIVE |" in line)
+        program_n = next(line for line in text.splitlines() if line.startswith("| N | Native Cognitive State |"))
+        dependency_sequence = next(line for line in text.splitlines()
+                                   if line.startswith("| 2 | `"))
+        def with_dependency(line: str, dependency: str) -> str:
+            return text.replace(line, line.rsplit("|", 2)[0] + f"| `{dependency}` |", 1)
         mutations = {
             "duplicate section": text + "\n## System Maturity\n",
             "missing section": text.replace("## Strategic Programs", "## Programs", 1),
@@ -250,6 +267,15 @@ def check_roadmap() -> None:
             "private classifications": text + "\n| H01 | private |\n",
             "spectrum elsewhere": text + "\n| A01 | elsewhere |\n",
             "missing program": text.replace("| F | Scale-out", "| Z | Scale-out", 1),
+            "missing N program": text.replace(program_n + "\n", "", 1),
+            "duplicate N program": text.replace(program_n, program_n + "\n" + program_n, 1),
+            "duplicate N card": text.replace("### N — Native Cognitive State",
+                                             "### N — Native Cognitive State\n\n### N — duplicate", 1),
+            "unknown dependency": with_dependency(active_sequence, "UNKNOWN.0"),
+            "self dependency": with_dependency(active_sequence, result["active"]),
+            "forward dependency": with_dependency(first_sequence, result["active"]),
+            "incomplete predecessor": text.replace(dependency_sequence,
+                dependency_sequence.replace("| COMPLETE |", "| BLOCKED |", 1), 1),
             "false release": text.replace("release_qualification_ready=0", "release_qualification_ready=1", 1)
                 if "release_qualification_ready=0" in text else text.replace("release_qualification_ready=1", "release_qualification_ready=0", 1),
         }
@@ -478,6 +504,9 @@ def check_current_truth(paths: set[str]) -> None:
             fail(f"engineering method lacks authority: {section}")
 
     check_roadmap()
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    if table_rows(agents).count(EVIDENCE_HEADER) != 1:
+        fail("AGENTS must own one quality-first closure evidence schema")
 
     server = (ROOT / "include/yvex/server.h").read_text(encoding="utf-8")
     match = re.search(r"#define YVEX_LOCAL_PROTOCOL_VERSION (\d+)u", server)
