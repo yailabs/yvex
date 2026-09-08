@@ -37,41 +37,9 @@ test ! -d docs/milestones || fail 'retired milestone plans remain in the current
 require_text "$roadmap" 'Status: living public project control'
 require_text "$roadmap" 'This file is the sole live authority'
 require_text "$roadmap" 'Active Next:'
-require_text "$roadmap" 'model_behavior_evaluation_ready=0'
-require_text "$roadmap" 'full_model_release_benchmark_ready=0'
-require_text "$roadmap" 'release_qualification_ready=0'
-
-tmp_base="${TMPDIR:-/tmp}/yvex-project-control.$$"
-rows="$tmp_base.rows"
-trap 'rm -f "$rows"' EXIT HUP INT TERM
-
-awk -F '|' '
-function trim(value) {
-  gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-  return value
-}
-function uncode(value) {
-  value = trim(value)
-  gsub(/^`|`$/, "", value)
-  return value
-}
-/^## Current sequence$/ { in_sequence = 1; next }
-/^Active Next: / { in_sequence = 0 }
-in_sequence && /^\| [0-9]+ \| `[A-Z0-9.]+`/ {
-  print uncode($3) "\t" uncode($4)
-}
-' "$roadmap" > "$rows"
-
-row_count=$(wc -l < "$rows" | tr -d ' ')
-test "$row_count" -gt 0 || fail 'current sequence is empty'
-unique_count=$(cut -f 1 "$rows" | LC_ALL=C sort -u | wc -l | tr -d ' ')
-test "$unique_count" -eq "$row_count" || fail 'current milestone IDs are not unique'
-active_count=$(awk -F '\t' '$2 == "active" { count++ } END { print count + 0 }' "$rows")
-test "$active_count" -eq 1 || fail "expected one active milestone, found $active_count"
-active_id=$(awk -F '\t' '$2 == "active" { print $1 }' "$rows")
-active_next=$(sed -n 's/^Active Next: \([^[:space:]]*\)$/\1/p' "$roadmap")
-test "$active_next" = "$active_id" ||
-  fail "Active Next does not match active milestone: $active_next/$active_id"
+# One parser owns roadmap topology, derived counts, temporal relations and
+# release-flag consistency. A line ceiling cannot qualify information ownership.
+python3 tests/documentation_architecture.py --roadmap-only
 
 all_active_files=$(git ls-files --cached --others --exclude-standard -- '*.md' | while IFS= read -r file; do
   test -f "$file" || continue
@@ -79,9 +47,6 @@ all_active_files=$(git ls-files --cached --others --exclude-standard -- '*.md' |
 done | LC_ALL=C sort)
 test "$all_active_files" = 'ROADMAP.md' ||
   fail "Active Next exists outside ROADMAP.md: $all_active_files"
-
-roadmap_lines=$(wc -l < "$roadmap" | tr -d ' ')
-test "$roadmap_lines" -le 350 || fail "ROADMAP.md exceeds 350 lines: $roadmap_lines"
 
 require_text CONTRIBUTING.md '## Before opening work'
 require_text CONTRIBUTING.md '## Development order'
@@ -97,4 +62,4 @@ test "$issue_count" -eq 3 || fail "unexpected issue-template count: $issue_count
 require_text .github/ISSUE_TEMPLATE/config.yml 'blank_issues_enabled: false'
 require_text .github/pull_request_template.md '## Claims and progression'
 
-printf 'project control: ok (milestones=%s active=%s roadmap_lines=%s)\n' "$row_count" "$active_id" "$roadmap_lines"
+printf 'project control: ok\n'
