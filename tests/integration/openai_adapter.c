@@ -42,9 +42,24 @@ static int timeout_parse(const char *text, unsigned long long *timeout)
     return 1;
 }
 
+static void access_evidence(server_telemetry *telemetry)
+{
+    unsigned long long sequence = 0;
+    yvex_server_event event;
+    yvex_error err;
+    while (yvex_server_telemetry_next(telemetry, sequence, 0, &event, &err) == YVEX_OK) {
+        sequence = event.sequence;
+        if (strncmp(event.phase, "http:", 5u)) continue;
+        printf("access\t%s\t%s\t%s\t%llu\t%llu\t%llu\t%.6f\t%s\n",
+               yvex_server_event_kind_name(event.kind), event.request_id, event.phase,
+               event.value_a, event.value_b, event.value_c, event.seconds, event.session_id);
+    }
+}
+
 int main(int argc, char **argv)
 {
     server_openai_listener *listener = NULL;
+    server_telemetry *telemetry = NULL;
     server_openai_options options;
     yvex_error err;
     sigset_t signals;
@@ -90,11 +105,13 @@ int main(int argc, char **argv)
     sigaddset(&signals, SIGINT);
     sigaddset(&signals, SIGTERM);
     if (pthread_sigmask(SIG_BLOCK, &signals, NULL) != 0) return 1;
-    rc = yvex_server_openai_prepare(&listener, &options, NULL, &err);
+    rc = yvex_server_telemetry_open(&telemetry, 1024u, &err);
+    if (rc == YVEX_OK) rc = yvex_server_openai_prepare(&listener, &options, telemetry, &err);
     if (rc == YVEX_OK) rc = yvex_server_openai_start(listener, &err);
     if (rc != YVEX_OK) {
         fprintf(stderr, "openai_adapter: %s\n", yvex_error_message(&err));
         yvex_server_openai_close(&listener);
+        yvex_server_telemetry_close(&telemetry);
         return 1;
     }
     yvex_server_openai_activate(listener);
@@ -105,6 +122,8 @@ int main(int argc, char **argv)
     yvex_server_openai_request_stop(listener);
     if (yvex_server_openai_finish(listener, &err) != YVEX_OK) rc = YVEX_ERR_STATE;
     yvex_server_openai_close(&listener);
+    access_evidence(telemetry);
+    yvex_server_telemetry_close(&telemetry);
     return rc == YVEX_OK ? 0 : 1;
 
 invalid:

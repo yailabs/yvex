@@ -713,8 +713,9 @@ grep -E 'REQUEST[[:space:]]+persisted/' "$root/server.out" >/dev/null
 grep -E 'DONE[[:space:]]+[^[:space:]]+/[^[:space:]]+ generated=[1-9][0-9]* position=[1-9][0-9]*' \
     "$root/server.out" >/dev/null
 grep -F 'LOAD      phase=binding-validation completed=0 operations total=unknown' "$root/server.out" >/dev/null
-grep -E 'LOAD[[:space:]]+phase=artifact-verification completed=[0-9.]+/[0-9.]+(KiB|MiB|GiB|B) \(100%\)' \
+grep -E 'LOAD[[:space:]]+phase=artifact-verification completed=[0-9.]+/[0-9.]+(KiB|MiB|GiB|B) elapsed=' \
     "$root/server.out" >/dev/null
+! grep -E '(LOAD|PREFILL|DECODE|DONE)[[:space:]].*%' "$root/server.out" >/dev/null
 grep -E 'MODEL[[:space:]]+tiny-executable generation=[1-9][0-9]* backend=CPU strategy=target-only' \
     "$root/server.out" >/dev/null
 ! grep -E 'REQ[[:space:]]|DEC[[:space:]]|PF[[:space:]]| t[0-9]+ p[0-9]+|avg[0-9]+|rss[0-9]+' \

@@ -56,6 +56,41 @@ test "$attempt" -lt 100
 
 curl -fsS "$base/v1/models" >"$root/models.json"
 curl -fsS "$base/v1/models/deepseek4-v4-flash-dspark" >"$root/model.json"
+# Exercise external discovery without model execution, concurrent correlation,
+# request rejection and metadata redaction through the actual HTTP owner.
+python3 - "$port" >"$root/access-peers.json" <<'PY'
+import concurrent.futures, http.client, json, socket, sys
+port = int(sys.argv[1])
+def discover(_):
+    client = http.client.HTTPConnection('127.0.0.1', port, timeout=5)
+    client.connect()
+    peer = client.sock.getsockname()[1]
+    client.request('GET', '/v1/models', headers={
+        'Authorization': 'Bearer log-secret-fixture', 'User-Agent': 'YAI-log-fixture',
+        'X-Forwarded-For': '198.51.100.27'})
+    response = client.getresponse()
+    assert response.status == 200
+    response.read()
+    client.close()
+    return peer
+with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+    peers = list(pool.map(discover, range(8)))
+for path in ('/private-log-fixture?token=log-secret-fixture', '/v1/models/private-log-fixture'):
+    client = http.client.HTTPConnection('127.0.0.1', port, timeout=5)
+    client.request('GET', path)
+    response = client.getresponse()
+    assert response.status == 404
+    response.read()
+    client.close()
+with socket.create_connection(('127.0.0.1', port), timeout=5) as client:
+    client.sendall(b'GET /health HTTP/1.1\r\nHost: localhost\r\n'
+                   b'Content-Length: 0\r\nContent-Length: 0\r\n\r\n')
+    reply = bytearray()
+    while chunk := client.recv(4096):
+        reply.extend(chunk)
+    assert reply.startswith(b'HTTP/1.1 400 ')
+print(json.dumps(peers))
+PY
 curl -fsS -H 'Content-Type: application/json' "$base/v1/chat/completions" \
     -d '{"model":"deepseek4-v4-flash-dspark","messages":[{"role":"user","content":"Hello"}],"temperature":0}' \
     >"$root/chat.json"
@@ -267,6 +302,42 @@ PY
 kill "$gateway_pid"
 wait "$gateway_pid"
 gateway_pid=
+python3 - "$root" <<'PY'
+import collections, json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+raw = (root/'gateway.out').read_text()
+for private in ('log-secret-fixture', 'private-log-fixture', 'YAI-log-fixture',
+                '198.51.100.27', 'REASONING_DISCONNECT', 'Load m1'):
+    assert private not in raw, private
+groups = collections.defaultdict(list)
+for line in raw.splitlines():
+    if not line.startswith('access\t'):
+        continue
+    _, kind, request, phase, peer, status, error, elapsed, session = line.split('\t')
+    assert request.startswith('http-') and 0 < int(peer) < 65536
+    groups[request].append((kind, phase, int(peer), int(status), int(error), float(elapsed), session))
+assert groups
+closed = []
+for request, rows in groups.items():
+    end = rows[-1]
+    assert end[0] == 'client.disconnected' and end[5] > 0, (request, rows)
+    if end[1] == 'http:invalid':
+        assert len(rows) == 1 and end[3] == 400
+    else:
+        assert len(rows) == 2 and rows[0][0] == 'request.received', (request, rows)
+        assert rows[0][1:3] == end[1:3] and rows[0][3:6] == (0, 0, 0.0)
+    closed.append(end)
+peers = json.loads((root/'access-peers.json').read_text())
+for peer in peers:
+    assert any(row[1:5] == ('http:GET /v1/models', peer, 200, 0) for row in closed)
+assert any(row[1] == 'http:unsupported' and row[3] == 404 for row in closed)
+assert any(row[1] == 'http:GET /v1/models/{id}' and row[3] == 404 for row in closed)
+assert {200, 400, 404, 409, 422, 429, 504} <= {row[3] for row in closed}
+assert any(row[1] == 'http:POST /v1/chat/completions' and row[3] == 200 and
+           row[4] != 0 and row[6].startswith('oa-') for row in closed), 'SSE failure stays HTTP 200'
+print('HTTP evidence: 8 concurrent discovery peers correlated; 200/400/404/409/422/429/504 observed; '
+      'SSE failure preserves sent status; private metadata absent')
+PY
 created=$(grep -c '^session.new ' "$root/host.err" || true)
 closed=$(grep -c '^session.close ' "$root/host.err" || true)
 test "$created" -gt 0

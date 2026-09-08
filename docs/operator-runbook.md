@@ -632,26 +632,38 @@ Follow typed server activity independently of the foreground host stream:
 ```
 
 The foreground server stream and `host logs` project each request as one
-coherent compact unit. Normal rows use `REQ`, `PF`, `1ST`, `DEC`, `DONE`,
-`CXL`, and `FAIL`; live generation uses `t`/`p` for generated tokens/position,
-`avg` for cumulative decode rate, `r32` for the bounded recent rate, `sp` for
-speculative acceptance, and `rss`/`dev`/`ws`/`st`/`run`/`q` for live resource
-and queue facts. Long identifiers are shortened only in this human projection.
+coherent compact unit. Normal rows use `REQUEST`, `PROMPT`, `PREFILL`, `FIRST`,
+`DECODE`, `DONE`, `CANCELLED`, and `FAIL`. Named fields show generated tokens,
+position, phase and elapsed seconds; `decode-avg` is cumulative subsequent
+decode throughput and `rolling[count/window]` is recent throughput, both in
+tok/s. Prefill shows actual token counts and available tok/s, not percentages;
+consecutive intermediate updates are coalesced to a one-second cadence.
+`RESOURCES` rows identify host-wide process RSS, workspace, session state and
+request/queue counts, with explicit units. Long identifiers are shortened only
+in this human projection.
 They group speculative cycles, show queue pressure only when contended, and
-finish with one stable terminal row. Ordinary connection churn, duplicate load
+finish with one stable terminal row. Native internal connection churn, duplicate load
 lifecycle detail, token fragments, and profiler rows are suppressed. `host
 status` remains a current snapshot; `host logs` contains
 chronology only and never prepends status sections. Without `--follow`, the
 command returns after a bounded recent retained event tail.
 `host logs --follow` remains attached for live events. `host logs --verbose`
-exposes each typed speculative cycle. `host logs --json` emits the
+exposes each typed speculative cycle and supplied prefill update. `host logs --json` emits the
 canonical complete JSONL event record, including typed detail omitted by the compact
 human view. Prompts and answers remain absent from every projection by default.
 
-Large engine loads use server-authored `LOAD` phases. `verify` reports actual
-bytes and `res` actual tensors when a denominator exists; phases such as `bind`,
-`open`, `admit`, `mat`, `seal`, `be`, and `ws` show activity and elapsed time
-without inventing percentages.
+Large engine loads use server-authored `LOAD` phases. `artifact-verification`
+reports actual bytes and `residency` actual tensors when a denominator exists.
+Other lifecycle phases retain their full names and show activity and elapsed
+time; available rates use the corresponding work units, never token/s for bytes.
+
+`HTTP` rows expose external OpenAI requests, including `GET /v1/models` before
+any generation. They show a correlated `http-N` ID, endpoint template, observed
+peer, and closure status/outcome/duration; generation adds the acquired session
+ID. An SSE stream can fail after HTTP 200. Through an SSH tunnel, the peer is
+the loopback forwarding socket, not the originating application's identity.
+Prompts, credentials, request headers and arbitrary URLs are excluded; see the
+[transport observation contract](contracts/events-telemetry.md#external-http-access).
 
 Raw server-event JSONL is selected at startup with `--logs json`. Increase
 `--trace-level` from `summary` to `stages`, `tokens`, or `full` only when the

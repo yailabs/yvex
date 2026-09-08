@@ -116,8 +116,9 @@ static void test_decode(void)
     event.proposed_tokens = 100;
     event.accepted_tokens = 39;
     capture(&renderer, &event, NULL);
-    expect(strstr(output, "total-avg=6.98 tok/s") && strstr(output, "spec-accept=39.0%") &&
-           !strstr(output, "decode-avg"), "total wall and speculative acceptance keep their scopes");
+    expect(strstr(output, "total-avg=6.98 tok/s") && strstr(output, "spec-accepted=39/100") &&
+           !strstr(output, "decode-avg") && !strchr(output, '%'),
+           "total wall and exact speculative counts keep their scopes");
     event.kind = YVEX_SERVER_EVENT_SPECULATIVE_CYCLE_COMMITTED;
     event.speculative_cycle = 8;
     event.proposed_tokens = 10;
@@ -160,8 +161,8 @@ static void test_lifecycle(void)
     event.measurement.completed_units = 1024;
     event.measurement.total_units = 2048;
     capture(&renderer, &event, NULL);
-    expect(strstr(output, "phase=artifact-verification completed=1.0/2.0KiB (50%)") != NULL,
-           "load has real phase, denominator and binary units");
+    expect(strstr(output, "phase=artifact-verification completed=1.0/2.0KiB") &&
+           !strchr(output, '%'), "load has exact progress and binary units, not a percentage");
     event.measurement.available = 0;
     capture(&renderer, &event, NULL);
     expect(strstr(output, "completed=1024 bytes total=unknown") && !strchr(output, '%'),
@@ -169,19 +170,150 @@ static void test_lifecycle(void)
     event.measurement.available = YVEX_EXECUTION_MEASUREMENT_DENOMINATOR_AVAILABLE;
     event.measurement.total_units = 0;
     capture(&renderer, &event, NULL);
-    expect(!strchr(output, '%'), "zero denominator cannot manufacture percentage");
+    expect(strstr(output, "total=unknown") != NULL, "zero denominator remains unavailable");
     event.kind = YVEX_SERVER_EVENT_PREFILL_PROGRESS;
     strcpy(event.phase, "prefill");
     event.measurement.work_unit = YVEX_EXECUTION_WORK_TOKENS;
     event.measurement.total_units = 2048;
     capture(&renderer, &event, NULL);
     expect(strstr(output, "PREFILL") && strstr(output, "main/r5 phase=prefill") &&
-           strstr(output, "completed=1024/2048 tokens (50%)"),
+           strstr(output, "completed=1024/2048 tokens") && !strchr(output, '%'),
            "long prefill progress keeps request identity and a real denominator");
     event.kind = YVEX_SERVER_EVENT_TELEMETRY_DROPPED;
     capture(&renderer, &event, NULL);
     expect(strstr(output, "telemetry coalesced=97 dropped=126 capacity=100") != NULL,
            "telemetry pressure remains visible");
+}
+
+static void test_progress_rates(void)
+{
+    yvex_cli_watch_renderer renderer;
+    yvex_server_event event = decode_event();
+    yvex_execution_measurement *measurement = &event.measurement;
+    yvex_cli_watch_renderer_open(&renderer, 0);
+    event.kind = YVEX_SERVER_EVENT_PREFILL_PROGRESS;
+    strcpy(event.phase, "prefill");
+    measurement->scope = YVEX_EXECUTION_SCOPE_PREFILL;
+    measurement->completed_units = 330;
+    measurement->total_units = 330;
+    measurement->duration_ns = 28070000000ull;
+    measurement->cumulative_rate = 11.76;
+    measurement->available = YVEX_EXECUTION_MEASUREMENT_DENOMINATOR_AVAILABLE |
+                             YVEX_EXECUTION_MEASUREMENT_DURATION_AVAILABLE |
+                             YVEX_EXECUTION_MEASUREMENT_CUMULATIVE_RATE_AVAILABLE;
+    capture(&renderer, &event, NULL);
+    expect(strstr(output, "completed=330/330 tokens elapsed=28.07s | avg=11.76 tok/s") &&
+           !strchr(output, '%') && !strstr(output, "999"),
+           "prefill exposes measured token throughput, not percentage or fallback");
+    measurement->available &= ~YVEX_EXECUTION_MEASUREMENT_CUMULATIVE_RATE_AVAILABLE;
+    capture(&renderer, &event, NULL);
+    expect(!strstr(output, "tok/s"), "missing typed rate is not invented from counters");
+    event.kind = YVEX_SERVER_EVENT_PREFILL_STARTED;
+    measurement->completed_units = 0;
+    measurement->duration_ns = 0;
+    capture(&renderer, &event, NULL);
+    expect(!strstr(output, "tok/s"), "prefill start has no fabricated zero rate");
+    event.kind = YVEX_SERVER_EVENT_ENGINE_LOAD_PROGRESS;
+    strcpy(event.phase, "artifact-verification");
+    measurement->scope = YVEX_EXECUTION_SCOPE_MODEL_LIFECYCLE;
+    measurement->work_unit = YVEX_EXECUTION_WORK_BYTES;
+    measurement->completed_units = 1073741824ull;
+    measurement->total_units = 2147483648ull;
+    measurement->duration_ns = 500000000ull;
+    measurement->cumulative_rate = 2147483648.0;
+    measurement->available |= YVEX_EXECUTION_MEASUREMENT_CUMULATIVE_RATE_AVAILABLE;
+    capture(&renderer, &event, NULL);
+    expect(strstr(output, "completed=1.0/2.0GiB elapsed=0.50s | avg=2.00 GiB/s") &&
+           !strstr(output, "tok/s") && !strchr(output, '%'),
+           "byte throughput has binary transfer units, never token units");
+    measurement->schema_version = 0;
+    capture(&renderer, &event, NULL);
+    expect(!strstr(output, "GiB/s"), "unrecognized measurement cannot supply a typed rate");
+    measurement->schema_version = YVEX_EXECUTION_MEASUREMENT_SCHEMA_V1;
+    measurement->work_unit = YVEX_EXECUTION_WORK_TENSORS;
+    measurement->completed_units = 1409;
+    measurement->total_units = 1409;
+    measurement->duration_ns = 36750000000ull;
+    measurement->cumulative_rate = 38.34;
+    capture(&renderer, &event, NULL);
+    expect(strstr(output, "avg=38.34 tensors/s") && !strstr(output, "tok/s"),
+           "tensor progress cannot masquerade as generation speed");
+}
+
+static void test_http_access(void)
+{
+    yvex_cli_watch_renderer renderer;
+    yvex_server_event event = {0};
+    yvex_cli_watch_renderer_open(&renderer, 0);
+    event.kind = YVEX_SERVER_EVENT_REQUEST_RECEIVED;
+    strcpy(event.phase, "http:GET /v1/models");
+    strcpy(event.request_id, "http-7");
+    event.value_a = 44150;
+    expect(capture(&renderer, &event, NULL), "external discovery is visible without inference");
+    expect(strstr(output, "HTTP") && strstr(output, "http-7 openai GET /v1/models") &&
+           strstr(output, "peer=127.0.0.1:44150 received") && !strstr(output, "status="),
+           "received request carries actual peer and route but no invented result");
+    event.kind = YVEX_SERVER_EVENT_CLIENT_DISCONNECTED;
+    event.value_b = 200;
+    event.seconds = 0.125;
+    capture(&renderer, &event, NULL);
+    expect(strstr(output, "closed status=200 outcome=complete elapsed=0.125s") != NULL,
+           "HTTP closure has observed status and duration");
+    event.value_c = (unsigned long long)-YVEX_ERR_CANCELLED;
+    strcpy(event.session_id, "oa-000000000007");
+    capture(&renderer, &event, NULL);
+    expect(strstr(output, "status=200 outcome=cancelled") && strstr(output, "session=oa-000000000007"),
+           "SSE cancellation preserves HTTP 200 and model-session correlation");
+    event.value_b = 404;
+    event.value_c = 0;
+    capture(&renderer, &event, NULL);
+    expect(strstr(output, "outcome=rejected") != NULL, "written rejection is not success");
+    event.value_b = 504;
+    event.value_c = (unsigned long long)-YVEX_ERR_TIMEOUT;
+    capture(&renderer, &event, NULL);
+    expect(strstr(output, "status=504 outcome=failed error=YVEX_ERR_TIMEOUT") != NULL,
+           "server failure is distinct from invalid client input and has a named error");
+    event.value_b = 0;
+    event.value_c = (unsigned long long)-YVEX_ERR_IO;
+    capture(&renderer, &event, NULL);
+    expect(strstr(output, "status=unavailable outcome=incomplete") && !strstr(output, "YAI"),
+           "failed header write has no HTTP status or fabricated client identity");
+    strcpy(event.phase, "request");
+    expect(!capture(&renderer, &event, NULL), "native internal connection churn remains suppressed");
+    event.kind = YVEX_SERVER_EVENT_SESSION_CREATED;
+    event.value_b = 0;
+    event.value_c = 1;
+    capture(&renderer, &event, NULL);
+    expect(strstr(output, "created active_sessions=1") != NULL,
+           "created session count is the lifecycle owner's count, not its zero argument");
+    event.kind = YVEX_SERVER_EVENT_SESSION_CLOSED;
+    capture(&renderer, &event, NULL);
+    expect(strstr(output, "closed active_sessions=0") != NULL, "closure uses its own count field");
+}
+
+static void test_prefill_cadence(void)
+{
+    yvex_cli_watch_renderer renderer;
+    yvex_server_event event = decode_event();
+    yvex_execution_measurement *measurement = &event.measurement;
+    int shown = 0;
+    yvex_cli_watch_renderer_open(&renderer, 0);
+    event.kind = YVEX_SERVER_EVENT_PREFILL_STARTED;
+    strcpy(event.phase, "prefill");
+    measurement->available = YVEX_EXECUTION_MEASUREMENT_DURATION_AVAILABLE |
+                             YVEX_EXECUTION_MEASUREMENT_DENOMINATOR_AVAILABLE;
+    measurement->total_units = 100;
+    capture(&renderer, &event, NULL);
+    event.kind = YVEX_SERVER_EVENT_PREFILL_PROGRESS;
+    for (unsigned int index = 1; index <= 100; index++) {
+        measurement->completed_units = index;
+        measurement->duration_ns = (unsigned long long)index * 100000000ull;
+        shown += capture(&renderer, &event, NULL);
+    }
+    expect(shown == 10, "100 prefill chunk events become 10 timed progress rows, including final");
+    yvex_cli_watch_renderer_open(&renderer, 1);
+    expect(capture(&renderer, &event, NULL) && capture(&renderer, &event, NULL),
+           "verbose prefill retains all supplied events");
 }
 
 static void test_resources(void)
@@ -235,6 +367,9 @@ int main(void)
     yvex_server_event event = decode_event();
     test_decode();
     test_lifecycle();
+    test_progress_rates();
+    test_http_access();
+    test_prefill_cadence();
     test_resources();
     if (failures) return 1;
     yvex_cli_watch_renderer_open(&renderer, 0);

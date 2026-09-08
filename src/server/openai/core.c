@@ -39,6 +39,7 @@ struct server_openai_listener {
     pthread_cond_t connection_idle;
     pthread_t thread;
     unsigned long long active_connections, maximum_connections;
+    unsigned long long connection_sequence;
     int listen_fd, thread_started, thread_status;
     int connection_mutex_ready, connection_idle_ready;
     yvex_error thread_error;
@@ -47,6 +48,9 @@ struct server_openai_listener {
 typedef struct {
     server_openai_listener *listener;
     int fd;
+    unsigned short peer_port;
+    unsigned long long ordinal;
+    char session[YVEX_SERVER_SESSION_NAME_CAP];
 } openai_connection;
 
 static unsigned long long wall_seconds(void)
@@ -784,7 +788,7 @@ static int generation_execute(openai_gateway *gateway,
         }
         if (message.kind == YVEX_CLIENT_MESSAGE_TURN_STARTED && sink->stream &&
             !sink->headers_sent) {
-            rc = openai_http_sse_begin(sink->fd, err);
+            rc = openai_http_sse_begin(sink->fd, sink->sent_status, err);
             if (rc == YVEX_OK) sink->headers_sent = 1;
             if (rc == YVEX_OK && sink->endpoint == OPENAI_ENDPOINT_RESPONSES)
                 rc = response_event_emit(
@@ -869,7 +873,7 @@ static int http_status(int status, yvex_client_failure_class failure_class)
     }
 }
 
-static int send_error(int fd, int status, const char *message)
+static int send_error(int fd, int status, const char *message, int *sent_status)
 {
     unsigned char *json = NULL;
     unsigned long long count = 0u;
@@ -893,7 +897,7 @@ static int send_error(int fd, int status, const char *message)
                           message ? message : "request failed",
                           &json, &count, &err) != YVEX_OK)
         return YVEX_ERR;
-    (void)openai_http_json(fd, status, json, count, &err);
+    (void)openai_http_json(fd, status, json, count, sent_status, &err);
     free(json);
     return YVEX_OK;
 }
@@ -922,7 +926,8 @@ static int route(const openai_http_request *request,
 }
 
 static int handle_read(openai_gateway *gateway, int fd,
-                       openai_endpoint endpoint, const char *requested_model)
+                       openai_endpoint endpoint, const char *requested_model,
+                       int *sent_status)
 {
     static const unsigned char healthy[] =
         "{\"status\":\"ok\",\"adapter\":\"ready\",\"server\":\"ready\","
@@ -935,23 +940,23 @@ static int handle_read(openai_gateway *gateway, int fd,
     yvex_error err;
     int rc = daemon_status(gateway, &summary, &err);
     if (rc != YVEX_OK)
-        return send_error(fd, 503, "YVEX server is unavailable or not ready");
+        return send_error(fd, 503, "YVEX server is unavailable or not ready", sent_status);
     if (endpoint == OPENAI_ENDPOINT_HEALTH)
-        return openai_http_json(fd, 200, healthy, sizeof(healthy) - 1u, &err);
+        return openai_http_json(fd, 200, healthy, sizeof(healthy) - 1u, sent_status, &err);
     rc = daemon_engines(gateway, engines, YVEX_SERVER_IMPLEMENTATION_MAXIMUM_ENGINES,
                         &engine_count, &err);
     if (rc != YVEX_OK)
-        return send_error(fd, 503, "YVEX engine catalog is unavailable");
+        return send_error(fd, 503, "YVEX engine catalog is unavailable", sent_status);
     if (endpoint == OPENAI_ENDPOINT_MODEL) {
         selected = engine_find(engines, engine_count, requested_model);
         if (!selected)
-            return send_error(fd, 404, "requested model is not loaded");
+            return send_error(fd, 404, "requested model is not loaded", sent_status);
     }
     rc = openai_json_models(selected ? selected : engines,
                             selected ? 1ull : engine_count,
                             endpoint == OPENAI_ENDPOINT_MODELS, &json, &count,
                             &err);
-    if (rc == YVEX_OK) rc = openai_http_json(fd, 200, json, count, &err);
+    if (rc == YVEX_OK) rc = openai_http_json(fd, 200, json, count, sent_status, &err);
     free(json);
     return rc;
 }
@@ -993,7 +998,8 @@ static int generation_admit_engine(openai_gateway *gateway,
 
 static int handle_generation(openai_gateway *gateway, int fd,
                              const openai_http_request *http,
-                             openai_endpoint endpoint)
+                             openai_endpoint endpoint, int *sent_status,
+                             char session_observation[YVEX_SERVER_SESSION_NAME_CAP])
 {
     yvex_server_engine_summary engine = {0};
     openai_admitted_request admitted = {0};
@@ -1001,6 +1007,7 @@ static int handle_generation(openai_gateway *gateway, int fd,
     disconnect_watch watch = {0};
     openai_http_sink sink = {
         .fd = fd,
+        .sent_status = sent_status,
         .endpoint = endpoint
     };
     openai_response_record *prior = NULL, *retained = NULL;
@@ -1016,12 +1023,13 @@ static int handle_generation(openai_gateway *gateway, int fd,
     int state_locked = 0, error_status = 500, rc;
     yvex_error err, failure_error;
     rc = daemon_status(gateway, NULL, &err);
-    if (rc != YVEX_OK) return send_error(fd, 503, "YVEX server is unavailable or not ready");
+    if (rc != YVEX_OK)
+        return send_error(fd, 503, "YVEX server is unavailable or not ready", sent_status);
     rc = generation_admit_engine(gateway, http, endpoint, &admitted, &engine,
                                  &error_status, &err);
     if (rc != YVEX_OK) {
         openai_admitted_request_clear(&admitted);
-        return send_error(fd, error_status, yvex_error_message(&err));
+        return send_error(fd, error_status, yvex_error_message(&err), sent_status);
     }
     rc = next_request_ordinal(gateway, &request_ordinal, &err);
     if (rc != YVEX_OK) goto failure;
@@ -1088,6 +1096,7 @@ static int handle_generation(openai_gateway *gateway, int fd,
         created_session = 1;
     }
     yvex_core_text_copy(result.session_name, sizeof(result.session_name), session);
+    yvex_core_text_copy(session_observation, YVEX_SERVER_SESSION_NAME_CAP, session);
     rc = disconnect_watch_open(&watch, gateway, fd, engine.alias,
                                engine.generation, session, &err);
     if (rc != YVEX_OK) goto failure;
@@ -1133,7 +1142,7 @@ static int handle_generation(openai_gateway *gateway, int fd,
         rc = openai_json_result(endpoint, id, engine.alias, now,
                                 &result, &json, &json_count, &err);
         if (rc == YVEX_OK)
-            rc = openai_http_json(fd, 200, json, json_count, &err);
+            rc = openai_http_json(fd, 200, json, json_count, sent_status, &err);
         if (rc != YVEX_OK) goto failure;
     }
     free(json);
@@ -1160,7 +1169,7 @@ failure:
     }
     if (!sink.headers_sent)
         (void)send_error(fd, http_status(rc, result.failure_class),
-                         yvex_error_message(&failure_error));
+                         yvex_error_message(&failure_error), sent_status);
     else if (endpoint == OPENAI_ENDPOINT_RESPONSES) {
         yvex_error stream_error;
         (void)response_event_emit(
@@ -1187,34 +1196,67 @@ failure:
     return rc;
 }
 /*
- * Admit and route one accepted loopback connection.
- *
- * Sends one bounded error when possible and always returns connection ownership. One request per
- * connection; no keep-alive or runtime ownership.
+ * Publish content-free transport facts without manufacturing model/provider admission.
+ * The listener admits only loopback peers; route strings are static templates below.
  */
-static int handle_connection(openai_gateway *gateway, int fd)
+static void http_access_emit(const openai_connection *connection,
+                              yvex_server_event_kind kind, const char *phase,
+                              int status, int rc, unsigned long long started)
 {
+    char id[YVEX_SERVER_ID_CAP];
+    unsigned long long now = yvex_core_monotonic_ns();
+    double elapsed = started && now >= started ? (double)(now - started) / 1e9 : 0.0;
+    yvex_error ignored;
+    if (!connection->listener->gateway.telemetry) return;
+    (void)snprintf(id, sizeof(id), "http-%llu", connection->ordinal);
+    (void)yvex_server_telemetry_emit(
+        connection->listener->gateway.telemetry, NULL, kind,
+        rc != YVEX_OK || status >= 400 ? YVEX_SERVER_SEVERITY_WARNING
+                                      : YVEX_SERVER_SEVERITY_INFO,
+        connection->session, id, NULL, phase, connection->peer_port, (unsigned long long)status,
+        rc < 0 ? (unsigned long long)(-(long long)rc) : 0ull, elapsed, 0.0, &ignored);
+}
+
+/* One bounded request per accepted connection; no keep-alive or runtime ownership. */
+static int handle_connection(openai_connection *connection)
+{
+    static const char *const phases[] = {
+        "http:GET /health", "http:GET /v1/models", "http:GET /v1/models/{id}",
+        "http:POST /v1/chat/completions", "http:POST /v1/responses"
+    };
+    openai_gateway *gateway = &connection->listener->gateway;
+    int fd = connection->fd, sent_status = 0;
+    unsigned long long started = yvex_core_monotonic_ns();
+    const char *phase = "http:invalid";
     struct timeval timeout = {30, 0};
     openai_http_request request;
     openai_endpoint endpoint;
     char model[YVEX_PROVIDER_MODEL_CAP];
     yvex_error err;
-    int rc;
+    int rc, routed;
     (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     (void)setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
     rc = openai_http_read(fd, &request, &err);
     if (rc != YVEX_OK) {
         (void)send_error(fd, http_status(rc, YVEX_CLIENT_FAILURE_NONE),
-                         yvex_error_message(&err));
+                         yvex_error_message(&err), &sent_status);
+        http_access_emit(connection, YVEX_SERVER_EVENT_CLIENT_DISCONNECTED,
+                          phase, sent_status, rc, started);
         return rc;
     }
-    if (!route(&request, &endpoint, model)) {
-        (void)send_error(fd, 404, "endpoint is outside the YVEX OpenAI profile");
+    routed = route(&request, &endpoint, model);
+    phase = routed ? phases[endpoint] : "http:unsupported";
+    http_access_emit(connection, YVEX_SERVER_EVENT_REQUEST_RECEIVED,
+                      phase, 0, YVEX_OK, 0ull);
+    if (!routed) {
+        (void)send_error(fd, 404, "endpoint is outside the YVEX OpenAI profile", &sent_status);
         rc = YVEX_ERR_UNSUPPORTED;
     } else if (endpoint <= OPENAI_ENDPOINT_MODEL)
-        rc = handle_read(gateway, fd, endpoint, model);
+        rc = handle_read(gateway, fd, endpoint, model, &sent_status);
     else
-        rc = handle_generation(gateway, fd, &request, endpoint);
+        rc = handle_generation(gateway, fd, &request, endpoint, &sent_status, connection->session);
+    http_access_emit(connection, YVEX_SERVER_EVENT_CLIENT_DISCONNECTED,
+                      phase, sent_status, rc, started);
     openai_http_request_clear(&request);
     return rc;
 }
@@ -1236,7 +1278,7 @@ static void *connection_main(void *opaque)
     server_openai_listener *listener = connection->listener;
     yvex_server_telemetry_openai_request(listener->gateway.telemetry,
                                          1, 0, 0, 0);
-    int rc = handle_connection(&listener->gateway, connection->fd);
+    int rc = handle_connection(connection);
     yvex_server_telemetry_openai_request(
         listener->gateway.telemetry, -1, rc == YVEX_OK,
         rc != YVEX_OK && rc != YVEX_ERR_CANCELLED,
@@ -1247,7 +1289,7 @@ static void *connection_main(void *opaque)
     return NULL;
 }
 
-static int connection_start(server_openai_listener *listener, int fd,
+static int connection_start(server_openai_listener *listener, int fd, unsigned short peer_port,
                             yvex_error *err)
 {
     openai_connection *connection = NULL;
@@ -1267,6 +1309,8 @@ static int connection_start(server_openai_listener *listener, int fd,
                                 &listener->connection_mutex);
     if (atomic_load_explicit(&listener->stop, memory_order_acquire))
         rc = YVEX_ERR_CANCELLED;
+    else if (listener->connection_sequence == ULLONG_MAX)
+        rc = YVEX_ERR_BOUNDS;
     else {
         connection = calloc(1u, sizeof(*connection));
         if (!connection) rc = YVEX_ERR_NOMEM;
@@ -1274,6 +1318,8 @@ static int connection_start(server_openai_listener *listener, int fd,
     if (rc == YVEX_OK) {
         connection->listener = listener;
         connection->fd = fd;
+        connection->peer_port = peer_port;
+        connection->ordinal = ++listener->connection_sequence;
         listener->active_connections++;
     }
     (void)pthread_mutex_unlock(&listener->connection_mutex);
@@ -1359,12 +1405,12 @@ static void *listener_main(void *opaque)
             }
             if (peer.sin_addr.s_addr == htonl(INADDR_LOOPBACK)) {
                 yvex_error connection_error;
-                int request_rc = connection_start(listener, client,
+                int request_rc = connection_start(listener, client, ntohs(peer.sin_port),
                                                   &connection_error);
                 if (request_rc == YVEX_OK) client = -1;
                 else if (request_rc != YVEX_ERR_CANCELLED)
                     (void)send_error(client, 503,
-                                     yvex_error_message(&connection_error));
+                                     yvex_error_message(&connection_error), NULL);
             }
             if (client >= 0) (void)close(client);
         }

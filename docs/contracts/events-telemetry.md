@@ -83,13 +83,13 @@ neither is an event replay. Human projections render retained history plus live
 events in stable semantic categories. They retain operator-significant host,
 engine, session, contended queue, prefill, first-token, aggregate speculative
 economics, completion, cancellation, and failure events while suppressing
-connection churn, uncontended queue admission, fragments, intermediate
+native internal connection churn, uncontended queue admission, fragments, intermediate
 draft/verification steps, and profile rows. They render bytes in human units,
 speculative acceptance as
 accepted/proposed, and stop codes as their named contract values. The `--json`
 projection retains the full selected event sequence with sequence, severity,
-turn, phase, timing, and rate. Neither projection
-exposes generic positional counter names. Native prefill
+turn, phase, timing, and rate. Human rows name each counter's meaning; raw JSONL
+retains the versioned event fields and their phase-specific interpretation. Native prefill
 progress sent to the REPL is another projection of the sealed event, not a
 synthetic client event.
 
@@ -104,7 +104,9 @@ fragments and individual speculative phases require explicit detailed trace.
 The rate record names its denominator. Cumulative decode is committed decode
 work divided by complete decode wall; rolling decode is recent committed work
 divided by its own recent duration, with a current maximum window of 32 tokens.
-The compact server projection labels these `avg` and `r32`; canonical JSON keeps
+The compact server projection labels subsequent decode `decode-avg` and
+`rolling[count/window]`; prefill and total-operation rates remain distinct.
+Canonical JSON keeps
 the complete scope, clock, composition, unit, work, duration, and rates. Human
 abbreviations never replace the typed authority.
 
@@ -130,10 +132,17 @@ fallback hash, receipt state, bytes actually hashed, file extent, and elapsed
 time. These authentication facts do not imply materialization or residency.
 
 Engine load progress is authored by each lifecycle owner. Verification bytes
-and residency tensors expose percentages only when a real denominator exists.
+and residency tensors publish completed/total counts when a real denominator exists.
 Binding, open, admission, materialization, seal, backend, or workspace phases
-with no owned denominator expose activity and elapsed time only. Progress is
+with no owned denominator retain unknown totals. Human server logs show counts,
+elapsed time and available typed rates instead of progress percentages: token/s
+for prefill/decode, binary byte/s for transfers, tensors/s or operations/s for
+the corresponding load work. Prefill, subsequent-decode and total-operation
+rates keep their scopes; unavailable rates are not invented. Progress is
 coalesced; terminal lifecycle and failure evidence is retained.
+The normal human prefill projection coalesces consecutive intermediate updates
+at a one-second cadence; starts, terminal counts and request switches remain
+visible. The verbose projection retains each supplied prefill update.
 
 Speculative events carry availability-bearing named generation mode, cycle,
 candidate extent, selected-verification, accepted, rejected, stop-discarded,
@@ -141,7 +150,35 @@ correction/bonus, promoted, replay, verification, confidence, timing, and
 policy-identity facts. Legacy generic event counters remain part of the
 versioned base event record but do not encode DSpark meaning. The human log
 groups each request and its cycle summary; JSONL preserves the individual
-events. Neither projection publishes draft token text.
+events. The human watch log shows accepted/proposed token counts rather than
+an acceptance percentage. Neither projection publishes draft token text.
+
+## External HTTP access
+
+The OpenAI adapter publishes transport observations into the same retained
+event stream, including discovery with no inference. `request.received` follows
+bounded HTTP parsing; `client.disconnected` records completion/refusal at the
+end of the connection handler. Malformed HTTP has only the latter event.
+These are transport facts, not model admission or authenticated client identity.
+
+Within these event kinds, `phase=http:<route>` identifies an allowlisted method
+and endpoint template, or `http:unsupported` / `http:invalid`. No raw path,
+query, model selector, headers or body is copied into this phase. A host-local
+`http-N` request ID correlates receipt and closure independently of model turn
+IDs; a session ID is added when generation actually acquired a model session.
+Process/sequence identity disambiguates restarts. The existing event counters
+carry observed loopback peer port (`value_a`), first successfully written HTTP
+status (`value_b`, zero means unavailable), and absolute YVEX error code
+(`value_c`, zero means none). Closure duration covers the handler, including
+request read and response execution, using the monotonic clock; it is not
+model decode duration or socket admission-queue wait.
+
+HTTP 200 does not prove a successful generation: SSE may fail or be cancelled
+after its header was written. Human rows keep status and outcome separate.
+Through an SSH tunnel the observed peer is the local forwarding endpoint;
+neither that address nor a client-supplied header authenticates YAI or another
+application. Authorization, forwarded-address and User-Agent headers are not
+logged. This adds no transport, authentication or remote-serving capability.
 
 ## Privacy and content
 

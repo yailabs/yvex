@@ -209,7 +209,7 @@ static const char *status_reason(int status)
 }
 
 int openai_http_json(int fd, int status, const unsigned char *body,
-                     unsigned long long count, yvex_error *err)
+                     unsigned long long count, int *sent_status, yvex_error *err)
 {
     char header[512];
     int length;
@@ -224,10 +224,11 @@ int openai_http_json(int fd, int status, const unsigned char *body,
     if (length < 0 || (size_t)length >= sizeof(header)) return YVEX_ERR_BOUNDS;
     if (write_all(fd, header, (size_t)length, err) != YVEX_OK)
         return yvex_error_code(err);
+    if (sent_status && !*sent_status) *sent_status = status;
     return write_all(fd, body, (size_t)count, err);
 }
 
-int openai_http_sse_begin(int fd, yvex_error *err)
+int openai_http_sse_begin(int fd, int *sent_status, yvex_error *err)
 {
     static const char header[] =
         "HTTP/1.1 200 OK\r\n"
@@ -236,7 +237,9 @@ int openai_http_sse_begin(int fd, yvex_error *err)
         "Connection: close\r\n"
         "X-Accel-Buffering: no\r\n"
         "X-YVEX-OpenAI-Profile: " OPENAI_COMPAT_PROFILE "\r\n\r\n";
-    return write_all(fd, header, sizeof(header) - 1u, err);
+    int rc = write_all(fd, header, sizeof(header) - 1u, err);
+    if (rc == YVEX_OK && sent_status && !*sent_status) *sent_status = 200;
+    return rc;
 }
 
 int openai_http_sse_event(int fd, const char *event,

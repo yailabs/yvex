@@ -48,6 +48,7 @@ typedef struct {
 } openai_http_request;
 typedef struct {
     int fd, headers_sent, stream;
+    int *sent_status; /* Connection-owned observation; set only after header write. */
     openai_endpoint endpoint;
     unsigned long long response_sequence, response_item_mask;
 } openai_http_sink;
@@ -102,8 +103,8 @@ typedef struct {
 int openai_http_read(int fd, openai_http_request *request, yvex_error *err);
 void openai_http_request_clear(openai_http_request *request);
 int openai_http_json(int fd, int status, const unsigned char *body,
-                     unsigned long long count, yvex_error *err);
-int openai_http_sse_begin(int fd, yvex_error *err);
+                     unsigned long long count, int *sent_status, yvex_error *err);
+int openai_http_sse_begin(int fd, int *sent_status, yvex_error *err);
 int openai_http_sse_event(int fd, const char *event,
                           const unsigned char *json,
                           unsigned long long count, yvex_error *err);

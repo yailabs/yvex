@@ -404,6 +404,43 @@ static int test_http_admission(void)
     return 0;
 }
 
+static int test_http_status_observation(void)
+{
+    static const unsigned char body[] = "{}";
+    char header[512] = {0};
+    int pair[2], status = 0;
+    yvex_error err;
+    YVEX_TEST_ASSERT(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0,
+                     "HTTP status fixture must open");
+    YVEX_TEST_ASSERT(openai_http_json(pair[1], 404, body, 2u, &status, &err) == YVEX_OK &&
+                         status == 404,
+                     "observed status must match the written rejection header");
+    YVEX_TEST_ASSERT(read(pair[0], header, sizeof(header) - 1u) > 0 &&
+                         strstr(header, "HTTP/1.1 404 Not Found\r\n"),
+                     "peer must receive the observed 404 status");
+    close(pair[0]);
+    status = 0;
+    YVEX_TEST_ASSERT(openai_http_json(pair[1], 200, body, 2u, &status, &err) == YVEX_ERR_IO &&
+                         status == 0,
+                     "a failed header write must not manufacture HTTP 200");
+    YVEX_TEST_ASSERT(openai_http_sse_begin(pair[1], &status, &err) == YVEX_ERR_IO && status == 0,
+                     "failed SSE header write must keep status unavailable");
+    close(pair[1]);
+    YVEX_TEST_ASSERT(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0,
+                     "SSE status fixture must open");
+    YVEX_TEST_ASSERT(openai_http_sse_begin(pair[1], &status, &err) == YVEX_OK && status == 200,
+                     "SSE header publication must record HTTP 200");
+    YVEX_TEST_ASSERT(openai_http_json(pair[1], 503, body, 2u, &status, &err) == YVEX_OK &&
+                         status == 200,
+                     "a later error write cannot overwrite the first published HTTP status");
+    close(pair[0]);
+    YVEX_TEST_ASSERT(openai_http_sse_event(pair[1], "error", body, 2u, &err) == YVEX_ERR_IO &&
+                         status == 200,
+                     "stream failure must not rewrite an already sent HTTP status");
+    close(pair[1]);
+    return 0;
+}
+
 static int test_http_peer_liveness(void)
 {
     int pair[2], closed = -1;
@@ -430,5 +467,6 @@ int yvex_test_openai(void)
     if (test_model_catalog_rendering() != 0) return 1;
     if (test_response_engine_generation() != 0) return 1;
     if (test_http_admission() != 0) return 1;
+    if (test_http_status_observation() != 0) return 1;
     return test_http_peer_liveness();
 }
