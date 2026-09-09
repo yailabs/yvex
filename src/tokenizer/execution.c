@@ -1046,11 +1046,8 @@ static unsigned long long next_piece(const tokenizer_span *span, unsigned long l
     return next;
 }
 
-/*
- * Append one token under the caller's pre-admitted result capacity.
- *
- * Encoding transaction.
- */
+/* Append a prompt token ID under the caller's admitted encoding-buffer bound.
+ * This bound is not a requested model-completion length. */
 static int encode_append(yvex_tokens *tokens, unsigned int token_id,
                          unsigned long long maximum, yvex_error *err)
 {
@@ -1058,8 +1055,9 @@ static int encode_append(yvex_tokens *tokens, unsigned int token_id,
     unsigned long long capacity;
 
     if (tokens->len >= maximum) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "tokenizer.encode", "token output capacity exceeded");
-        return YVEX_ERR_BOUNDS;
+        yvex_error_setf(err, YVEX_ERR_TOKEN_CAPACITY, "tokenizer.encode",
+                        "encoded token buffer capacity exceeded: limit=%llu", maximum);
+        return YVEX_ERR_TOKEN_CAPACITY;
     }
     if (tokens->len < tokens->cap) {
         tokens->ids[tokens->len++] = token_id;

@@ -1281,6 +1281,49 @@ int yvex_server_engine_lease_execute(
                      emit, emit_context, err);
 }
 
+int yvex_server_engine_lease_preflight(
+    server_engine_lease *lease, const yvex_client_request *request,
+    yvex_execution_preflight *output, yvex_error *err)
+{
+    server_engine *engine = lease ? lease->engine : NULL;
+    const yvex_model_engine_view *view;
+    const yvex_tokenizer_plan_summary *tokenizer;
+    yvex_runtime_generation_request prompt = {0};
+    yvex_rendered_prompt rendered = {0};
+    yvex_tokenizer_encode_result encoded = {0};
+    char identity[YVEX_SHA256_HEX_CAP];
+    int rc;
+    if (!output || !request || !engine || engine->generation != lease->generation)
+        return engine_refuse(err, YVEX_ERR_STATE, "live exact engine lease is required");
+    memset(output, 0, sizeof(*output));
+    if (engine->media || !request->provider_request)
+        return engine_refuse(err, YVEX_ERR_UNSUPPORTED, "preflight requires a complete text provider request");
+    view = yvex_model_engine_view_get(engine->model);
+    tokenizer = view ? yvex_tokenizer_plan_summary_get(view->tokenizer) : NULL;
+    if (!tokenizer)
+        return engine_refuse(err, YVEX_ERR_STATE, "admitted tokenizer is unavailable");
+    prompt.schema_version = YVEX_RUNTIME_GENERATION_SCHEMA_V3;
+    prompt.kind = YVEX_GENERATION_INPUT_PROVIDER;
+    prompt.provider_request = request->provider_request;
+    rc = yvex_runtime_prompt_encode(view->tokenizer, 0ull, &prompt,
+                                    &rendered, &encoded, identity, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_prompt_budget(
+            encoded.tokens.len, engine->options.context_capacity,
+            engine->options.maximum_new_tokens, request->provider_request->maximum_output_tokens,
+            output, err);
+    if (rc == YVEX_OK) {
+        output->rendered_prompt_bytes = rendered.len;
+        yvex_core_text_copy(output->prompt_identity, sizeof(output->prompt_identity),
+                            rendered.rendered_bytes_identity);
+        yvex_core_text_copy(output->tokenizer_identity, sizeof(output->tokenizer_identity),
+                            tokenizer->tokenizer_plan_identity);
+    }
+    yvex_rendered_prompt_free(&rendered);
+    yvex_tokenizer_encode_result_clear(&encoded);
+    return rc;
+}
+
 int yvex_server_engine_lease_cancel(server_engine_lease *lease,
                                     const char *session, yvex_error *err)
 {

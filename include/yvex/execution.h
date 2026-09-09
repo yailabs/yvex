@@ -9,6 +9,22 @@ extern "C" {
 #define YVEX_EXECUTION_CAPACITY_SCHEMA_V1 1u
 #define YVEX_EXECUTION_MEASUREMENT_SCHEMA_V1 1u
 #define YVEX_EXECUTION_RESOURCE_SCHEMA_V1 1u
+#define YVEX_EXECUTION_PREFLIGHT_SCHEMA_V1 1u
+#define YVEX_EXECUTION_INPUT_CAPACITY_EXCEEDED 1u
+#define YVEX_EXECUTION_OUTPUT_CAPACITY_EXCEEDED 2u
+
+/* Exact tokenizer realization, not a resource reservation or a quality claim.
+ * Tools and template tokens are included in input_tokens. Output is a ceiling:
+ * effective_output_tokens may be smaller than requested_output_tokens, including
+ * zero at the sequence boundary. No mandatory input is truncated.
+ */
+typedef struct {
+    unsigned int schema_version, violations;
+    unsigned long long input_tokens, rendered_prompt_bytes;
+    unsigned long long sequence_capacity, output_capacity;
+    unsigned long long requested_output_tokens, effective_output_tokens;
+    char tokenizer_identity[65], prompt_identity[65];
+} yvex_execution_preflight;
 
 /*
  * Runnable work is scheduler-visible logical concurrency. Physical width is

@@ -293,53 +293,12 @@ static int generation_encode_prompt(
     yvex_rendered_prompt *rendered, yvex_tokenizer_encode_result *encoded,
     char prompt_identity[YVEX_SHA256_HEX_CAP], yvex_error *err)
 {
-    yvex_tokenizer_encode_options encode;
-    int rc;
-    memset(rendered, 0, sizeof(*rendered));
-    memset(encoded, 0, sizeof(*encoded));
-    if (!request || request->schema_version != YVEX_RUNTIME_GENERATION_SCHEMA_V3 ||
-        request->kind > YVEX_GENERATION_INPUT_PROVIDER)
-        return generation_refuse(err, YVEX_ERR_INVALID_ARG,
-                                 "typed text or message input is required");
-    encode = request->encode_options;
-    if (!encode.maximum_tokens ||
-        encode.maximum_tokens > context->options.context_capacity)
-        encode.maximum_tokens = context->options.context_capacity;
-    if (request->kind == YVEX_GENERATION_INPUT_TEXT) {
-        if (!request->text || !request->text_bytes)
-            return generation_refuse(err, YVEX_ERR_INVALID_ARG,
-                                     "nonempty explicit-length prompt text is required");
-        rc = yvex_tokenizer_encode(context->tokenizer, request->text,
-                                   request->text_bytes, &encode, encoded, err);
-        if (rc == YVEX_OK)
-            yvex_runtime_identity_copy(prompt_identity,
-                                       encoded->input_identity);
-    } else if (request->kind == YVEX_GENERATION_INPUT_MESSAGES) {
-        if (!request->messages || !request->message_count)
-            return generation_refuse(err, YVEX_ERR_INVALID_ARG,
-                                     "nonempty typed prompt messages are required");
-        rc = yvex_tokenizer_encode_prompt(
-            context->tokenizer, request->messages, request->message_count,
-            &request->prompt_options, &encode, rendered, encoded, err);
-        if (rc == YVEX_OK)
-            yvex_runtime_identity_copy(prompt_identity,
-                                       rendered->prompt_identity);
-    } else {
-        if (!request->provider_request)
-            return generation_refuse(err, YVEX_ERR_INVALID_ARG,
-                                     "sealed provider request is required");
-        rc = yvex_tokenizer_encode_provider_prompt(
-            context->tokenizer, request->provider_request, &encode,
-            rendered, encoded, err);
-        if (rc == YVEX_OK)
-            yvex_runtime_identity_copy(prompt_identity,
-                                       rendered->prompt_identity);
-    }
-    if (rc == YVEX_OK && (!encoded->completed || !encoded->tokens.len ||
-                          encoded->tokens.len > context->options.context_capacity))
-        rc = generation_refuse(err, YVEX_ERR_BOUNDS,
-                               "encoded prompt is empty or exceeds context capacity");
-    return rc;
+    unsigned long long limit = context->options.context_capacity;
+    if (request && request->encode_options.maximum_tokens &&
+        request->encode_options.maximum_tokens < limit)
+        limit = request->encode_options.maximum_tokens;
+    return yvex_runtime_prompt_encode(context->tokenizer, limit, request,
+                                      rendered, encoded, prompt_identity, err);
 }
 static int generation_decoder_prefill(
     yvex_runtime_generation_context *context,

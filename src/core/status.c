@@ -346,6 +346,12 @@ const char *yvex_status_name(yvex_status status)
         return "YVEX_ERR_INVALID_ARG";
     case YVEX_ERR_TIMEOUT:
         return "YVEX_ERR_TIMEOUT";
+    case YVEX_ERR_TOKEN_CAPACITY:
+        return "YVEX_ERR_TOKEN_CAPACITY";
+    case YVEX_ERR_INPUT_CAPACITY:
+        return "YVEX_ERR_INPUT_CAPACITY";
+    case YVEX_ERR_OUTPUT_CAPACITY:
+        return "YVEX_ERR_OUTPUT_CAPACITY";
     default:
         return "YVEX_STATUS_UNKNOWN";
     }

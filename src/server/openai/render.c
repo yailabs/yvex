@@ -105,6 +105,12 @@ static int render_finish(render_builder *builder, unsigned char **output,
     return YVEX_OK;
 }
 
+const char *openai_capacity_error_code(int status)
+{
+    return status == YVEX_ERR_INPUT_CAPACITY ? "input_token_capacity_exceeded" :
+           status == YVEX_ERR_OUTPUT_CAPACITY ? "output_token_capacity_exceeded" : NULL;
+}
+
 int openai_json_error(int status, const char *type, const char *param,
                       const char *code, const char *message,
                       unsigned char **output, unsigned long long *count,
@@ -134,6 +140,103 @@ int openai_json_error(int status, const char *type, const char *param,
     return render_finish(&builder, output, count, err);
 }
 
+static int render_execution_identity(render_builder *builder,
+                                      const yvex_server_engine_summary *engine, yvex_error *err)
+{
+    char generation[96];
+    int rc;
+    (void)snprintf(generation, sizeof(generation), ",\"engine_generation\":%llu", engine->generation);
+    rc = render_literal(builder, generation, err);
+    if (rc == YVEX_OK) rc = render_literal(builder, ",\"artifact_identity\":", err);
+    if (rc == YVEX_OK) rc = render_text(builder, engine->artifact_identity, err);
+    if (rc == YVEX_OK) rc = render_literal(builder, ",\"runtime_binding_identity\":", err);
+    if (rc == YVEX_OK) rc = render_text(builder, engine->runtime_binding_identity, err);
+    if (rc == YVEX_OK) rc = render_literal(builder, ",\"runtime_model_identity\":", err);
+    if (rc == YVEX_OK) rc = render_text(builder, engine->runtime_model_identity, err);
+    if (rc == YVEX_OK) rc = render_literal(builder, ",\"specialization_identity\":", err);
+    if (rc == YVEX_OK) rc = render_text(builder, engine->specialization_identity, err);
+    if (rc == YVEX_OK) rc = render_literal(builder, ",\"capacity_plan_identity\":", err);
+    if (rc == YVEX_OK) rc = render_text(builder, engine->capacity_plan_identity, err);
+    return rc;
+}
+
+static int render_capacity(render_builder *builder,
+                            const yvex_server_engine_summary *engine, yvex_error *err)
+{
+    char limits[2048];
+    int length, rc = render_execution_identity(builder, engine, err);
+    if (rc != YVEX_OK) return rc;
+    if (engine->engine_kind != YVEX_SERVER_ENGINE_TEXT)
+        return render_literal(builder, ",\"yvex_capacity\":null", err);
+    length = snprintf(limits, sizeof(limits),
+        ",\"yvex_capacity\":{\"schema\":\"yvex.execution.capacity.v1\","
+        "\"http_body_bytes\":%u,\"http_header_bytes\":%u,\"http_header_count\":%u,"
+        "\"provider_wire_bytes\":%u,\"message_count\":%u,\"message_content_bytes\":%u,"
+        "\"total_content_bytes\":%u,\"tool_count\":%u,\"tool_schema_bytes_per_tool\":%u,"
+        "\"runtime_input_tokens\":%llu,\"runtime_sequence_tokens\":%llu,"
+        "\"maximum_requested_output_tokens\":%llu,\"maximum_output_bytes\":%llu,"
+        "\"architectural_context_tokens\":null,"
+        "\"session_capacity\":%llu,\"sessions_in_use\":%llu,\"resource_reservation\":false,"
+        "\"output_policy\":\"ceiling_clamped_to_remaining_sequence\","
+        "\"input_accounting\":\"exact_tokenizer_including_template_and_tools\","
+        "\"preflight\":%s}",
+        (unsigned int)OPENAI_HTTP_BODY_MAX, (unsigned int)OPENAI_HTTP_HEADER_MAX,
+        (unsigned int)OPENAI_HTTP_HEADER_COUNT_MAX, (unsigned int)YVEX_PROVIDER_WIRE_MAX_BYTES,
+        (unsigned int)YVEX_PROVIDER_MAX_MESSAGES, (unsigned int)YVEX_PROVIDER_MAX_MESSAGE_BYTES,
+        (unsigned int)YVEX_PROVIDER_MAX_CONTENT_BYTES, (unsigned int)YVEX_PROVIDER_MAX_TOOLS,
+        (unsigned int)YVEX_PROVIDER_MAX_TOOL_SCHEMA_BYTES,
+        engine->context_capacity, engine->context_capacity, engine->maximum_new_tokens,
+        engine->maximum_output_bytes, engine->maximum_sessions, engine->session_count,
+        engine->engine_kind == YVEX_SERVER_ENGINE_TEXT ?
+            "\"/v1/chat/completions/preflight\"" : "null");
+    return length > 0 && (size_t)length < sizeof(limits) ?
+        render_append(builder, limits, (unsigned long long)length, err) : YVEX_ERR_BOUNDS;
+}
+
+int openai_json_preflight(
+    const yvex_client_message *message, const char *request_identity,
+    unsigned char **output, unsigned long long *count, yvex_error *err)
+{
+    render_builder builder = {0};
+    const yvex_execution_preflight *value;
+    char facts[1024];
+    unsigned long long requested;
+    int rc, length;
+    if (output) *output = NULL;
+    if (count) *count = 0ull;
+    if (!message || message->kind != YVEX_CLIENT_MESSAGE_PREFLIGHT ||
+        !yvex_server_preflight_valid(&message->preflight)) return YVEX_ERR_INVALID_ARG;
+    value = &message->preflight;
+    requested = value->requested_output_tokens ? value->requested_output_tokens : value->output_capacity;
+    rc = render_literal(&builder, "{\"object\":\"yvex.execution.preflight\","
+        "\"yvex_profile\":\"" OPENAI_COMPAT_PROFILE "\",\"model\":", err);
+    if (rc == YVEX_OK) rc = render_text(&builder, message->engine.alias, err);
+    if (rc == YVEX_OK) rc = render_capacity(&builder, &message->engine, err);
+    length = snprintf(facts, sizeof(facts),
+        ",\"token_capacity_compatible\":%s,\"input_capacity_exceeded\":%s,"
+        "\"output_capacity_exceeded\":%s,\"full_requested_output_fits\":%s,"
+        "\"input_tokens\":%llu,\"rendered_prompt_bytes\":%llu,"
+        "\"requested_output_tokens\":%llu,\"effective_output_tokens\":%llu,"
+        "\"scope\":\"complete_stateless_chat_request\","
+        "\"execution_or_resources_qualified\":false,\"tokenizer_identity\":",
+        !value->violations ? "true" : "false",
+        (value->violations & YVEX_EXECUTION_INPUT_CAPACITY_EXCEEDED) ? "true" : "false",
+        (value->violations & YVEX_EXECUTION_OUTPUT_CAPACITY_EXCEEDED) ? "true" : "false",
+        !value->violations && value->effective_output_tokens == requested ? "true" : "false",
+        value->input_tokens, value->rendered_prompt_bytes,
+        value->requested_output_tokens, value->effective_output_tokens);
+    if (rc == YVEX_OK && (length <= 0 || (size_t)length >= sizeof(facts))) rc = YVEX_ERR_BOUNDS;
+    if (rc == YVEX_OK) rc = render_append(&builder, facts, (unsigned long long)length, err);
+    if (rc == YVEX_OK) rc = render_text(&builder, value->tokenizer_identity, err);
+    if (rc == YVEX_OK) rc = render_literal(&builder, ",\"prompt_identity\":", err);
+    if (rc == YVEX_OK) rc = render_text(&builder, value->prompt_identity, err);
+    if (rc == YVEX_OK) rc = render_literal(&builder, ",\"provider_request_identity\":", err);
+    if (rc == YVEX_OK) rc = render_text(&builder, request_identity, err);
+    if (rc == YVEX_OK) rc = render_literal(&builder, "}", err);
+    if (rc != YVEX_OK) { free(builder.data); return rc; }
+    return render_finish(&builder, output, count, err);
+}
+
 int openai_json_models(const yvex_server_engine_summary *engines,
                        unsigned long long engine_count, int list,
                        unsigned char **output, unsigned long long *count,
@@ -157,7 +260,9 @@ int openai_json_models(const yvex_server_engine_summary *engines,
             rc = render_literal(
                 &builder,
                 ",\"object\":\"model\",\"created\":0,\"owned_by\":\"yvex\","
-                "\"yvex_profile\":\"" OPENAI_COMPAT_PROFILE "\"}", err);
+                "\"yvex_profile\":\"" OPENAI_COMPAT_PROFILE "\"", err);
+        if (rc == YVEX_OK) rc = render_capacity(&builder, &engines[index], err);
+        if (rc == YVEX_OK) rc = render_literal(&builder, "}", err);
     }
     if (rc == YVEX_OK && list) rc = render_literal(&builder, "]}", err);
     if (rc != YVEX_OK) { free(builder.data); return rc; }
@@ -768,10 +873,16 @@ static int render_response_event_payload(
                 ",\"object\":\"response\",\"status\":\"failed\","
                 "\"model\":", err);
         if (rc == YVEX_OK) rc = render_text(builder, model, err);
+        if (rc == YVEX_OK) rc = render_literal(builder, ",\"error\":{\"code\":", err);
+        if (rc == YVEX_OK) {
+            const char *code = result ? openai_capacity_error_code(result->failure.code) : NULL;
+            rc = render_text(builder, code ? code : "server_error", err);
+        }
+        if (rc == YVEX_OK) rc = render_literal(builder, ",\"message\":", err);
         if (rc == YVEX_OK)
-            rc = render_literal(builder,
-                ",\"error\":{\"code\":\"server_error\","
-                "\"message\":\"YVEX generation failed\"}}", err);
+            rc = render_text(builder, result && result->failure.message[0] ?
+                result->failure.message : "YVEX generation failed", err);
+        if (rc == YVEX_OK) rc = render_literal(builder, "}}", err);
     }
     return rc;
 }

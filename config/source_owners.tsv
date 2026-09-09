@@ -283,6 +283,7 @@ src/runtime/resource.c	runtime	runtime.engine_resource	generic	private	resource-
 src/runtime/decode.c	runtime	runtime.decode	generic	private	transactional-execution	runtime,cli,tests	implementation	none
 src/runtime/acceptance.c	runtime	runtime.speculation_acceptance	generic	private	numerical-oracle	runtime,generation,tests	implementation	none
 src/runtime/generation.c	runtime	runtime.generation	generic	private	transactional-execution	runtime,cli,tests	implementation	none
+src/runtime/prompt.c	runtime	runtime.prompt	generic	private	reusable-algorithm	runtime,server,tests	implementation	none
 src/runtime/generation_context.c	runtime	runtime.generation_context	generic	private	resource-lifecycle	runtime,generation,tests	implementation	none
 src/runtime/generation_result.c	runtime	runtime.generation_result	generic	private	typed-report	runtime,cli,tests	implementation	none
 src/graph/device_view.c	graph	graph.device_view	generic	private	reusable-algorithm	graph,runtime,backend,tests	implementation	none

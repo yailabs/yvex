@@ -11,7 +11,7 @@
 #include "src/server/private.h"
 #include <yvex/provider.h>
 #include <yvex/server.h>
-#define OPENAI_COMPAT_PROFILE "yvex.openai.compat.v2"
+#define OPENAI_COMPAT_PROFILE "yvex.openai.compat.v3"
 #define OPENAI_HTTP_BODY_MAX YVEX_PROVIDER_WIRE_MAX_BYTES
 #define OPENAI_HTTP_HEADER_MAX 32768u
 #define OPENAI_HTTP_HEADER_COUNT_MAX 64u
@@ -22,7 +22,8 @@ typedef enum {
     OPENAI_ENDPOINT_MODELS,
     OPENAI_ENDPOINT_MODEL,
     OPENAI_ENDPOINT_CHAT,
-    OPENAI_ENDPOINT_RESPONSES
+    OPENAI_ENDPOINT_RESPONSES,
+    OPENAI_ENDPOINT_PREFLIGHT
 } openai_endpoint;
 typedef enum {
     OPENAI_RESPONSE_EVENT_CREATED = 0,
@@ -55,6 +56,7 @@ typedef struct {
 typedef struct {
     yvex_provider_request *provider;
     openai_endpoint endpoint;
+    unsigned long long engine_generation;
 } openai_admitted_request;
 typedef struct {
     unsigned char *arguments;
@@ -77,6 +79,7 @@ typedef struct {
     char session_name[YVEX_SERVER_SESSION_NAME_CAP];
     char turn_identity[YVEX_SHA256_HEX_CAP];
     yvex_client_failure_class failure_class;
+    yvex_error failure;
     int complete;
 } openai_generation_result;
 typedef struct {
@@ -115,10 +118,13 @@ int openai_json_admit(const openai_http_request *http, openai_endpoint endpoint,
     yvex_reasoning_policy default_reasoning, openai_admitted_request *request,
     yvex_error *err);
 void openai_admitted_request_clear(openai_admitted_request *request);
+const char *openai_capacity_error_code(int execution_status);
 int openai_json_error(int status, const char *type, const char *param,
                       const char *code, const char *message,
                       unsigned char **output, unsigned long long *count,
                       yvex_error *err);
+int openai_json_preflight(
+    const yvex_client_message *, const char *, unsigned char **, unsigned long long *, yvex_error *);
 int openai_json_models(const yvex_server_engine_summary *engines,
                        unsigned long long engine_count, int list,
                        unsigned char **output, unsigned long long *count,

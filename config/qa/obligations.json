@@ -8,6 +8,13 @@
   },
   "change_classes": [
     {
+      "id": "public-execution-capacity",
+      "patterns": ["src/runtime/prompt.c", "include/yvex/execution.h", "tests/live/openai_capacity.py"],
+      "lanes": ["fast", "structural", "runtime", "sanitizer"],
+      "tests": ["unit.protocol", "unit.openai", "unit.runtime_tokenizer", "integration.openai", "live.openai"],
+      "reason": "public capacity must agree with exact tokenizer admission, distinguish input/output/bytes and retain real positive and negative external-path evidence"
+    },
+    {
       "id": "device-result-publication",
       "patterns": ["src/graph/device_view.c", "include/yvex/internal/device_view.h",
                    "src/runtime/logits.c", "src/runtime/transformer.c", "src/runtime/decoder.c"],

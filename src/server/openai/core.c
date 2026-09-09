@@ -846,6 +846,7 @@ static int chat_stream_complete(openai_http_sink *sink, const char *id,
 
 static int http_status(int status, yvex_client_failure_class failure_class)
 {
+    if (status == YVEX_ERR_INPUT_CAPACITY || status == YVEX_ERR_OUTPUT_CAPACITY) return 413;
     switch (failure_class) {
     case YVEX_CLIENT_FAILURE_INVALID_REQUEST: return 400;
     case YVEX_CLIENT_FAILURE_MODEL_NOT_FOUND: return 404;
@@ -921,8 +922,26 @@ static int route(const openai_http_request *request,
     else if (strcmp(request->method, "POST") == 0 &&
              strcmp(request->path, "/v1/responses") == 0)
         *endpoint = OPENAI_ENDPOINT_RESPONSES;
+    else if (strcmp(request->method, "POST") == 0 &&
+             strcmp(request->path, "/v1/chat/completions/preflight") == 0)
+        *endpoint = OPENAI_ENDPOINT_PREFLIGHT;
     else return 0;
     return 1;
+}
+
+static int send_execution_error(int fd, int status, int execution_status,
+                                const char *reason, int *sent_status)
+{
+    unsigned char *json = NULL;
+    unsigned long long count = 0ull;
+    yvex_error err;
+    const char *code = openai_capacity_error_code(execution_status);
+    int rc;
+    if (!code) return send_error(fd, status, reason, sent_status);
+    rc = openai_json_error(413, "invalid_request_error", NULL, code, reason, &json, &count, &err);
+    if (rc == YVEX_OK) rc = openai_http_json(fd, 413, json, count, sent_status, &err);
+    free(json);
+    return rc;
 }
 
 static int handle_read(openai_gateway *gateway, int fd,
@@ -993,7 +1012,71 @@ static int generation_admit_engine(openai_gateway *gateway,
         return YVEX_ERR_STATE;
     }
     *engine = *selected;
+    if (admitted->engine_generation && admitted->engine_generation != engine->generation) {
+        *error_status = 409;
+        yvex_error_set(err, YVEX_ERR_STATE, "server.openai.engine", "requested engine generation is stale");
+        return YVEX_ERR_STATE;
+    }
     return YVEX_OK;
+}
+
+static int handle_preflight(openai_gateway *gateway, int fd,
+                             const openai_http_request *http, int *sent_status)
+{
+    openai_admitted_request admitted = {0};
+    yvex_server_engine_summary engine = {0};
+    yvex_client_request request = {0};
+    yvex_client_message message = {0};
+    yvex_client *client = NULL;
+    unsigned char *json = NULL;
+    unsigned long long count = 0ull;
+    yvex_error err;
+    int error_status = 500;
+    int rc = generation_admit_engine(gateway, http, OPENAI_ENDPOINT_CHAT,
+                                      &admitted, &engine, &error_status, &err);
+    if (rc == YVEX_OK) rc = client_connect(gateway, &client, &err);
+    if (rc == YVEX_OK) {
+        request.schema_version = YVEX_LOCAL_PROTOCOL_VERSION;
+        request.operation = YVEX_CLIENT_OP_EXECUTION_PREFLIGHT;
+        request.request_number = 1ull;
+        request.engine_generation = engine.generation;
+        yvex_core_text_copy(request.model_alias, sizeof(request.model_alias), engine.alias);
+        request.provider_request = admitted.provider;
+        rc = yvex_client_send(client, &request, &err);
+        if (rc == YVEX_OK) rc = yvex_client_receive(client, &message, &err);
+        if (rc == YVEX_OK && message.kind == YVEX_CLIENT_MESSAGE_ERROR) {
+            rc = message.status;
+            yvex_error_set(&err, (yvex_status)rc, "server.openai.preflight", message.reason);
+        }
+        if (rc == YVEX_OK && (message.kind != YVEX_CLIENT_MESSAGE_PREFLIGHT ||
+                              message.engine.generation != engine.generation)) {
+            rc = YVEX_ERR_STATE;
+            yvex_error_set(&err, YVEX_ERR_STATE, "server.openai.preflight",
+                           "exact engine preflight result is unavailable");
+        }
+        if (rc == YVEX_OK)
+            rc = openai_json_preflight(&message, admitted.provider->request_identity, &json, &count, &err);
+    }
+    if (rc == YVEX_OK) rc = openai_http_json(fd, 200, json, count, sent_status, &err);
+    else if (!*sent_status)
+        (void)send_execution_error(fd, error_status != 500 ? error_status :
+            http_status(rc, message.failure_class), rc, yvex_error_message(&err), sent_status);
+    free(json);
+    yvex_client_close(&client);
+    openai_admitted_request_clear(&admitted);
+    return rc;
+}
+
+static void chat_stream_failure(int fd, int status, const yvex_error *failure)
+{
+    yvex_error err;
+    unsigned char *json = NULL;
+    unsigned long long count = 0ull;
+    const char *code = openai_capacity_error_code(status);
+    if (openai_json_error(code ? 413 : 500, code ? "invalid_request_error" : "internal_error", NULL,
+        code ? code : "stream_failed", yvex_error_message(failure), &json, &count, &err) == YVEX_OK)
+        (void)openai_http_sse_event(fd, "error", json, count, &err);
+    free(json);
 }
 
 static int handle_generation(openai_gateway *gateway, int fd,
@@ -1155,6 +1238,7 @@ static int handle_generation(openai_gateway *gateway, int fd,
 failure:
     peer_closed = disconnect_watch_close(&watch) || peer_closed;
     failure_error = err;
+    result.failure = failure_error;
     if (generation_started && stateful && prior && prior->occupied) {
         openai_state_remove(prior);
         retained = NULL;
@@ -1168,25 +1252,14 @@ failure:
                             &err);
     }
     if (!sink.headers_sent)
-        (void)send_error(fd, http_status(rc, result.failure_class),
+        (void)send_execution_error(fd, http_status(rc, result.failure_class), rc,
                          yvex_error_message(&failure_error), sent_status);
     else if (endpoint == OPENAI_ENDPOINT_RESPONSES) {
         yvex_error stream_error;
         (void)response_event_emit(
             &sink, OPENAI_RESPONSE_EVENT_FAILED, id, engine.alias, now,
             NULL, &result, 0u, &stream_error);
-    } else {
-        yvex_error stream_error;
-        unsigned char *stream_json = NULL;
-        unsigned long long stream_count = 0u;
-        if (openai_json_error(
-                500, "internal_error", NULL, "stream_failed",
-                "YVEX generation failed", &stream_json, &stream_count,
-                &stream_error) == YVEX_OK)
-            (void)openai_http_sse_event(fd, "error", stream_json,
-                                        stream_count, &stream_error);
-        free(stream_json);
-    }
+    } else chat_stream_failure(fd, rc, &failure_error);
     free(json);
     yvex_provider_request_close(&context);
     yvex_provider_request_close(&combined);
@@ -1222,7 +1295,8 @@ static int handle_connection(openai_connection *connection)
 {
     static const char *const phases[] = {
         "http:GET /health", "http:GET /v1/models", "http:GET /v1/models/{id}",
-        "http:POST /v1/chat/completions", "http:POST /v1/responses"
+        "http:POST /v1/chat/completions", "http:POST /v1/responses",
+        "http:POST /v1/chat/completions/preflight"
     };
     openai_gateway *gateway = &connection->listener->gateway;
     int fd = connection->fd, sent_status = 0;
@@ -1253,6 +1327,8 @@ static int handle_connection(openai_connection *connection)
         rc = YVEX_ERR_UNSUPPORTED;
     } else if (endpoint <= OPENAI_ENDPOINT_MODEL)
         rc = handle_read(gateway, fd, endpoint, model, &sent_status);
+    else if (endpoint == OPENAI_ENDPOINT_PREFLIGHT)
+        rc = handle_preflight(gateway, fd, &request, &sent_status);
     else
         rc = handle_generation(gateway, fd, &request, endpoint, &sent_status, connection->session);
     http_access_emit(connection, YVEX_SERVER_EVENT_CLIENT_DISCONNECTED,

@@ -11,6 +11,7 @@
 #include <yvex/internal/evidence.h>
 #include <yvex/internal/sampling.h>
 #include <yvex/tokenizer.h>
+#include <yvex/execution.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -79,6 +80,15 @@ typedef struct {
     yvex_tokenizer_encode_options encode_options;
     const yvex_provider_request *provider_request;
 } yvex_runtime_generation_request;
+/* A zero limit counts the complete bounded prompt for read-only qualification. */
+int yvex_runtime_prompt_encode(
+    const yvex_tokenizer *, unsigned long long,
+    const yvex_runtime_generation_request *, yvex_rendered_prompt *,
+    yvex_tokenizer_encode_result *, char[YVEX_SHA256_HEX_CAP], yvex_error *);
+int yvex_runtime_prompt_budget(
+    unsigned long long input_tokens, unsigned long long sequence_capacity,
+    unsigned long long output_capacity, unsigned long long requested_output,
+    yvex_execution_preflight *, yvex_error *);
 typedef struct {
     unsigned int schema_version;
     yvex_execution_plan_kind producer_kind;

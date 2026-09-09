@@ -257,7 +257,8 @@ enum {
     TAG_MESSAGE_CONTENT_ID,
     TAG_ENGINE_ATTACHED_CLIENTS,
     TAG_ENGINE_MODEL_LEASES,
-    TAG_ENGINE_CAPABILITIES
+    TAG_ENGINE_CAPABILITIES,
+    TAG_EXECUTION_PREFLIGHT
 };
 typedef struct {
     unsigned char *data;
@@ -279,7 +280,7 @@ typedef struct {
     size_t offset, extent;
 } wire_member;
 _Static_assert(sizeof(double) == 8u, "local protocol requires binary64 double");
-_Static_assert(TAG_ENGINE_CAPABILITIES < 512u,
+_Static_assert(TAG_EXECUTION_PREFLIGHT < 512u,
                "known protocol tags must fit the duplicate-field set");
 static int protocol_refuse(yvex_error *err, yvex_status status,
                            const char *reason)
@@ -421,6 +422,13 @@ static int reader_text(const unsigned char *bytes, unsigned long long count,
     output[count] = '\0';
     return 1;
 }
+static int writer_preflight(wire_writer *writer, const yvex_client_message *message)
+{
+    unsigned char bytes[YVEX_SERVER_PROTOCOL_PREFLIGHT_BYTES];
+    if (message->kind != YVEX_CLIENT_MESSAGE_PREFLIGHT) return 1;
+    return yvex_server_protocol_preflight_encode(&message->preflight, bytes) &&
+           writer_field(writer, TAG_EXECUTION_PREFLIGHT, bytes, sizeof(bytes));
+}
 static int writer_capacity(wire_writer *writer, unsigned int tag,
                            const yvex_execution_capacity_summary *value)
 {
@@ -541,7 +549,7 @@ int yvex_protocol_request_encode(const yvex_client_request *request,
     if (!request || !output || !byte_count ||
         request->schema_version != YVEX_LOCAL_PROTOCOL_VERSION ||
         (int)request->operation < (int)YVEX_CLIENT_OP_HANDSHAKE ||
-        request->operation > YVEX_CLIENT_OP_ENGINE_LEASE_RELEASE ||
+        request->operation > YVEX_CLIENT_OP_EXECUTION_PREFLIGHT ||
         (int)request->trace_level < (int)YVEX_SERVER_TRACE_SUMMARY ||
         request->trace_level > YVEX_SERVER_TRACE_FULL ||
         !yvex_reasoning_request_policy_valid(request->reasoning_policy) ||
@@ -674,7 +682,7 @@ int yvex_protocol_request_decode(const unsigned char *input,
         switch (tag) {
         case TAG_OPERATION:
             valid = reader_u64(bytes, count, &value) &&
-                    value <= YVEX_CLIENT_OP_ENGINE_LEASE_RELEASE;
+                    value <= YVEX_CLIENT_OP_EXECUTION_PREFLIGHT;
             candidate.operation = (yvex_client_operation)value;
             have_operation = valid;
             break;
@@ -1298,7 +1306,8 @@ static int protocol_engine_write(wire_writer *writer,
     unsigned char capability[40];
     yvex_error ignored;
     unsigned long long flags;
-    if (message->kind != YVEX_CLIENT_MESSAGE_ENGINE) return 1;
+    if (message->kind != YVEX_CLIENT_MESSAGE_ENGINE &&
+        message->kind != YVEX_CLIENT_MESSAGE_PREFLIGHT) return 1;
     if (yvex_model_capability_wire_encode(&engine->capabilities,
                                           capability, &ignored) != YVEX_OK)
         return 0;
@@ -1351,6 +1360,7 @@ int yvex_protocol_message_encode(const yvex_client_message *message,
         !protocol_partial_write(&writer, &message->partial_turn) ||
         !protocol_runtime_write(&writer, &message->runtime) ||
         !protocol_engine_write(&writer, message) ||
+        !writer_preflight(&writer, message) ||
         !protocol_console_write(&writer, &message->console) ||
         !protocol_event_write(&writer, &message->event))
         return protocol_refuse(err, YVEX_ERR_BOUNDS,
@@ -1439,13 +1449,16 @@ static int message_base_field(yvex_client_message *candidate, unsigned int tag,
     if (member >= 0) return member;
 #define BASE_U64(field) (reader_u64(bytes, count, &value) ? ((field) = value, 1) : 0)
     switch (tag) {
+    case TAG_EXECUTION_PREFLIGHT:
+        valid = yvex_server_protocol_preflight_decode(bytes, count, &candidate->preflight);
+        break;
     case TAG_MESSAGE_MEASUREMENT:
         valid = yvex_server_protocol_measurement_decode(
             bytes, count, &candidate->measurement);
         break;
     case TAG_MESSAGE_KIND:
         valid = reader_u64(bytes, count, &value) &&
-                value <= YVEX_CLIENT_MESSAGE_ENGINE;
+                value <= YVEX_CLIENT_MESSAGE_PREFLIGHT;
         candidate->kind = (yvex_client_message_kind)value;
         *have_kind = valid;
         break;

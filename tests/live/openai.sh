@@ -9,6 +9,10 @@ BINDING=${YVEX_RUNTIME_BINDING:?YVEX_RUNTIME_BINDING is required}
 
 test -f "$ARTIFACT"
 test -f "$BINDING"
+artifact_sha256=${YVEX_MODEL_SHA256:-}
+if test -z "$artifact_sha256"; then
+    artifact_sha256=$(sha256sum "$ARTIFACT" | cut -d ' ' -f 1)
+fi
 root=$(mktemp -d "${TMPDIR:-/tmp}/yvex-openai-live.XXXXXX")
 runtime="$root/runtime"
 home="$root/home"
@@ -20,6 +24,7 @@ cat >"$home/.local/share/yvex/models.local.json" <<EOF
   "models": [{
     "alias": "deepseek4-v4-flash-dspark-runtime-openai-live",
     "path": "$ARTIFACT",
+    "sha256": "$artifact_sha256",
     "runtime_binding": "$BINDING",
     "runtime_target": "deepseek4-v4-flash-dspark",
     "runtime_backend": "cuda",
@@ -86,8 +91,9 @@ grep -F '"materialization_count":1' "$root/status.json" >/dev/null
 grep -F '"residency_build_count":1' "$root/status.json" >/dev/null
 grep -F '"openai_enabled":true' "$root/status.json" >/dev/null
 grep -F '"openai_ready":true' "$root/status.json" >/dev/null
-grep -F '"parallel":1' "$root/status.json" >/dev/null
-grep -F '"continuous_batching":false' "$root/status.json" >/dev/null
+XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" engine list --json >"$root/engines.json"
+grep -F '"configured_physical_sequence_width":1' "$root/engines.json" >/dev/null
+grep -F '"continuous_batching":false' "$root/engines.json" >/dev/null
 grep -F "\"openai_port\":$port" "$root/status.json" >/dev/null
 python3 - "$root/status.json" "$ARTIFACT" "$daemon_pid" <<'PY'
 import json, os, sys
@@ -120,6 +126,8 @@ done
 test "$attempt" -lt 100
 curl --fail-with-body -sS "$base/v1/models" >"$root/models.json"
 model=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["data"][0]["id"])' "$root/models.json")
+
+python3 tests/live/openai_capacity.py "$base" "$model" >"$root/capacity.jsonl"
 
 chat_body="{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply briefly.\"}],\"temperature\":0,\"max_completion_tokens\":2}"
 curl --fail-with-body -sS -H 'Content-Type: application/json' "$base/v1/chat/completions" \
@@ -207,5 +215,5 @@ XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" host stop >/dev/null
 wait "$daemon_pid"
 daemon_pid=
 grep -F '"kind":"runtime.shutdown.complete"' "$root/raw.jsonl" >/dev/null
-printf 'test: openai_live one_daemon_pid=%s model=%s profile=yvex.openai.compat.v2\n' \
+printf 'test: openai_live one_daemon_pid=%s model=%s profile=yvex.openai.compat.v3\n' \
     "$served_pid" "$model"

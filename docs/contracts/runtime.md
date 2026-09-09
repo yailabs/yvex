@@ -346,8 +346,8 @@ does not modify source snapshots or artifacts.
 
 ## Compatibility and non-claims
 
-Hosted behavior crosses private local protocol v20 and the bounded OpenAI
-compatibility profile v2. Pre-v0.1 private protocol versions may refuse rather
+Hosted behavior crosses private local protocol v21 and the bounded OpenAI
+compatibility profile v3. Pre-v0.1 private protocol versions may refuse rather
 than decode compatibly. Public and internal C ABI follow their typed header and
 schema contracts.
 

@@ -458,8 +458,74 @@ static int test_http_peer_liveness(void)
     return 0;
 }
 
+static int test_capacity_projection(void)
+{
+    yvex_client_message message = {0};
+    yvex_server_engine_summary *engine = &message.engine;
+    openai_admitted_request admitted = {0};
+    unsigned char *json = NULL;
+    unsigned long long count = 0ull;
+    yvex_error err;
+    const char *pin = "{\"model\":\"fixture\",\"yvex_engine_generation\":7,"
+        "\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"}],\"temperature\":0}";
+    YVEX_TEST_ASSERT(admit_fixture(pin, OPENAI_ENDPOINT_CHAT, &admitted, &err) == YVEX_OK &&
+        admitted.engine_generation == 7ull, "exact engine pin is outside provider semantics");
+    openai_admitted_request_clear(&admitted);
+    message.kind = YVEX_CLIENT_MESSAGE_PREFLIGHT;
+    engine->engine_kind = YVEX_SERVER_ENGINE_TEXT;
+    engine->generation = 7ull;
+    engine->context_capacity = 512ull;
+    engine->maximum_new_tokens = 512ull;
+    engine->maximum_sessions = 8ull;
+    strcpy(engine->alias, "fixture");
+    message.preflight.schema_version = YVEX_EXECUTION_PREFLIGHT_SCHEMA_V1;
+    message.preflight.input_tokens = 513ull;
+    message.preflight.rendered_prompt_bytes = 40277ull;
+    message.preflight.sequence_capacity = 512ull;
+    message.preflight.output_capacity = 512ull;
+    message.preflight.requested_output_tokens = 1ull;
+    message.preflight.violations = YVEX_EXECUTION_INPUT_CAPACITY_EXCEEDED;
+    memset(message.preflight.tokenizer_identity, 'a', 64u);
+    memset(message.preflight.prompt_identity, 'b', 64u);
+    YVEX_TEST_ASSERT(openai_json_preflight(&message, "", &json, &count, &err) == YVEX_OK &&
+        strstr((char *)json, "\"token_capacity_compatible\":false") &&
+        strstr((char *)json, "\"input_capacity_exceeded\":true") &&
+        strstr((char *)json, "\"output_capacity_exceeded\":false") &&
+        strstr((char *)json, "\"input_tokens\":513") &&
+        strstr((char *)json, "\"http_body_bytes\":1048576") &&
+        strstr((char *)json, "\"runtime_sequence_tokens\":512") &&
+        strstr((char *)json, "\"resource_reservation\":false") &&
+        strstr((char *)json, "\"architectural_context_tokens\":null") &&
+        strstr((char *)json, "\"yvex_profile\":\"yvex.openai.compat.v3\""),
+        "public capacity projection distinguishes bytes, input, output and unknown model maximum");
+    free(json);
+    json = NULL;
+    engine->engine_kind = YVEX_SERVER_ENGINE_MEDIA;
+    YVEX_TEST_ASSERT(openai_json_models(engine, 1ull, 0, &json, &count, &err) == YVEX_OK &&
+        strstr((char *)json, "\"yvex_capacity\":null") &&
+        !strstr((char *)json, "runtime_input_tokens"),
+        "media execution is not misrepresented by a text token envelope");
+    free(json);
+    {
+        openai_generation_result result = {0};
+        yvex_error_set(&result.failure, YVEX_ERR_INPUT_CAPACITY, "fixture",
+                       "input token capacity exceeded: limit=512");
+        json = NULL;
+        YVEX_TEST_ASSERT(openai_json_response_event(OPENAI_RESPONSE_EVENT_FAILED,
+            "response_fixture", "fixture", 0ull, NULL, &result, 0ull, 1ull,
+            &json, &count, &err) == YVEX_OK &&
+            strstr((char *)json, "input_token_capacity_exceeded") &&
+            strstr((char *)json, "input token capacity exceeded: limit=512") &&
+            !strstr((char *)json, "server_error"),
+            "capacity refusal retains its dimension after SSE headers are sent");
+        free(json);
+    }
+    return 0;
+}
+
 int yvex_test_openai(void)
 {
+    if (test_capacity_projection() != 0) return 1;
     if (test_chat_admission() != 0) return 1;
     if (test_request_refusals() != 0) return 1;
     if (test_responses_admission() != 0) return 1;

@@ -374,7 +374,7 @@ if HOME="$home" XDG_RUNTIME_DIR="$runtime" "$NATIVE_TURN" a --reasoning none \
     printf 'oversized explicit completion limit was admitted\n' >&2
     exit 1
 fi
-grep -F 'requested completion limit exceeds the admitted server envelope' \
+grep -F 'requested output token capacity exceeded: requested=9 limit=8' \
     "$root/run.oversized.err" >/dev/null
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$NATIVE_TURN" --session persisted a \
     --reasoning none --strategy greedy --max-new-tokens 1 >"$root/run.out" 2>"$root/run.err" &

@@ -67,14 +67,12 @@ static unsigned long long turn_resolved_maximum(
     const server_session_registry *registry, const yvex_client_request *request,
     unsigned long long completion_start_position)
 {
-    unsigned long long maximum = turn_requested_maximum(request);
-    unsigned long long remaining;
-    if (!maximum) maximum = registry->options.maximum_new_tokens;
-    remaining = registry->options.context_capacity > completion_start_position
-                    ? registry->options.context_capacity -
-                          completion_start_position
-                    : 0u;
-    return remaining < maximum ? remaining : maximum;
+    yvex_execution_preflight budget;
+    if (yvex_runtime_prompt_budget(
+            completion_start_position, registry->options.context_capacity,
+            registry->options.maximum_new_tokens, turn_requested_maximum(request),
+            &budget, NULL) != YVEX_OK) return 0ull;
+    return budget.effective_output_tokens;
 }
 static int provider_output_emit(turn_sink *sink,
                                 yvex_provider_output_kind kind,
@@ -533,17 +531,12 @@ static int session_prompt_extends_prefix(
 {
     yvex_rendered_prompt rendered = {0};
     yvex_tokenizer_encode_result encoded = {0};
+    char prompt_identity[YVEX_SHA256_HEX_CAP];
     int rc;
     *extends = 0;
-    if (request->kind == YVEX_GENERATION_INPUT_PROVIDER)
-        rc = yvex_tokenizer_encode_provider_prompt(
-            tokenizer, request->provider_request, &request->encode_options,
-            &rendered, &encoded, err);
-    else
-        rc = yvex_tokenizer_encode_prompt(
-            tokenizer, request->messages, request->message_count,
-            &request->prompt_options, &request->encode_options,
-            &rendered, &encoded, err);
+    rc = yvex_runtime_prompt_encode(
+        tokenizer, request->encode_options.maximum_tokens, request,
+        &rendered, &encoded, prompt_identity, err);
     if (rc == YVEX_OK)
         *extends = session->committed_count <= encoded.tokens.len &&
                    (!session->committed_count ||
@@ -1546,9 +1539,10 @@ static int session_turn(server_session_registry *registry,
         int native_valid = request->prompt && request->prompt_bytes &&
             request->prompt_bytes < SESSION_TRANSCRIPT_BYTES;
         if (turn_maximum > registry->options.maximum_new_tokens) {
-            yvex_error_set(err, YVEX_ERR_BOUNDS, "server.session.turn",
-                           "requested completion limit exceeds the admitted server envelope");
-            return YVEX_ERR_BOUNDS;
+            yvex_error_setf(err, YVEX_ERR_OUTPUT_CAPACITY, "server.session.turn",
+                            "requested output token capacity exceeded: requested=%llu limit=%llu",
+                            turn_maximum, registry->options.maximum_new_tokens);
+            return YVEX_ERR_OUTPUT_CAPACITY;
         }
         if ((!provider_valid && !native_valid) || !turn_maximum) {
             yvex_error_set(err, YVEX_ERR_INVALID_ARG, "server.session.turn",

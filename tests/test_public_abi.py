@@ -48,6 +48,9 @@ RECORDS = {
     "yvex_quant_policy_summary": (
         "include/yvex/quant.h", "YVEX_QUANT_POLICY_SCHEMA_VERSION", 2, 144,
         "8008bea6ecfd46feccef371a6425a8681ce3e9659d47a7806a2486bea192f455"),
+    "yvex_execution_preflight": (
+        "include/yvex/execution.h", "YVEX_EXECUTION_PREFLIGHT_SCHEMA_V1", 1, 192,
+        "053c443d033de7cd00e9ccb1c08df4e97a7d0423811f09f6abcadb1b3d08f324"),
     "yvex_execution_capacity_summary": (
         "include/yvex/execution.h", "YVEX_EXECUTION_CAPACITY_SCHEMA_V1", 1, 48,
         "763036124c7201a1908edd26f9a659320b1d0c449ec353440764b6c554a824a1"),
@@ -94,11 +97,11 @@ RECORDS = {
         "include/yvex/server.h", "YVEX_CLIENT_MEDIA_CONDITION_SCHEMA_V1", 1, 524,
         "15b251a93051e0f0cf0c70e1a14c2cdcb019b54d7e27851b6c36b02bcac9802b"),
     "yvex_client_request": (
-        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 20, 2112,
+        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 21, 2112,
         "824d78fe45c3c871a151937d368e7d652873f3265b6f2edac2f11ce6d4dca87e"),
     "yvex_client_message": (
-        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 20, 11152,
-        "a3a95424c67bd0b8559e8aeb96569fa916dd5ce7379e635b9d865b7726e0b5c0"),
+        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 21, 11344,
+        "89817068a9a56a76a5a55c2fbe22497200a34ddf8873f8a91da2a66ac9f4404e"),
     "yvex_tokenizer_plan_summary": (
         "include/yvex/tokenizer.h", "YVEX_TOKENIZER_PLAN_SCHEMA_CURRENT", 5, 872,
         "93fbfdefccd98e3add82e774a6ae9d3aa50384dd991e9bdc0cd90a01d5cdcb6e"),
@@ -208,7 +211,7 @@ def compiler_source() -> str:
         '"prompt conversation value changed");',
         'ABI_ASSERT(YVEX_TOKENIZER_PROMPT_VERBATIM == 2, '
         '"prompt verbatim value changed");',
-        'ABI_ASSERT(YVEX_LOCAL_PROTOCOL_VERSION == 20u, "local protocol identity changed");',
+        'ABI_ASSERT(YVEX_LOCAL_PROTOCOL_VERSION == 21u, "local protocol identity changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_NONE == 0, "engine-kind none value changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_TEXT == 1, "engine-kind text value changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_MEDIA == 2, "engine-kind media value changed");',

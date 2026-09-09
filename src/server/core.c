@@ -81,6 +81,8 @@ yvex_client_failure_class yvex_server_failure_class_from_status(int status)
     case YVEX_ERR_INVALID_ARG: return YVEX_CLIENT_FAILURE_INVALID_REQUEST;
     case YVEX_ERR_UNSUPPORTED:
         return YVEX_CLIENT_FAILURE_UNSUPPORTED_PARAMETER;
+    case YVEX_ERR_INPUT_CAPACITY:
+    case YVEX_ERR_OUTPUT_CAPACITY:
     case YVEX_ERR_BOUNDS: return YVEX_CLIENT_FAILURE_REQUEST_TOO_LARGE;
     case YVEX_ERR_STATE: return YVEX_CLIENT_FAILURE_INCOMPATIBLE_STATE;
     case YVEX_ERR_CANCELLED: return YVEX_CLIENT_FAILURE_CLIENT_CANCELLED;
@@ -994,6 +996,24 @@ static int engine_model_lease_control(yvex_server *server, int fd,
                : rc;
 }
 
+static int preflight_send(yvex_server *server, int fd,
+                          const yvex_client_request *request, yvex_error *err)
+{
+    server_engine_lease lease = {0};
+    yvex_client_message message = {0};
+    int rc = yvex_server_engine_manager_acquire(
+        server->engines, request->model_alias, request->engine_generation,
+        &lease, &message.engine, err);
+    if (rc == YVEX_OK)
+        rc = yvex_server_engine_lease_preflight(&lease, request, &message.preflight, err);
+    yvex_server_engine_manager_release(server->engines, &lease);
+    if (rc != YVEX_OK) return rc;
+    message.schema_version = YVEX_LOCAL_PROTOCOL_VERSION;
+    message.kind = YVEX_CLIENT_MESSAGE_PREFLIGHT;
+    message.request_number = request->request_number;
+    return yvex_server_protocol_send(fd, &message, err);
+}
+
 static void *client_main(void *opaque)
 {
     server_client_slot *slot = opaque;
@@ -1018,6 +1038,8 @@ static void *client_main(void *opaque)
                 rc = yvex_server_protocol_send(fd, &message, &err);
         } else if (request.operation == YVEX_CLIENT_OP_ENGINE_LIST) {
             rc = engine_list_send(server, fd, &request, &err);
+        } else if (request.operation == YVEX_CLIENT_OP_EXECUTION_PREFLIGHT) {
+            rc = preflight_send(server, fd, &request, &err);
         } else if (request.operation == YVEX_CLIENT_OP_ENGINE_LOAD) {
             rc = engine_load_control(server, fd, &request, &err);
         } else if (request.operation == YVEX_CLIENT_OP_ENGINE_UNLOAD) {

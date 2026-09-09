@@ -210,7 +210,16 @@ static int request_media_execution_valid(const yvex_client_request *request)
 int yvex_server_protocol_request_fields_valid(
     const yvex_client_request *request)
 {
-    return request && request_state_fields_valid(request) &&
+    return request &&
+           (request->operation != YVEX_CLIENT_OP_EXECUTION_PREFLIGHT ||
+            (request->model_alias[0] && request->engine_generation &&
+             request->provider_request && !request->session_name[0] && !request->prompt_bytes &&
+             !request->maximum_new_tokens && !request->stochastic && !request->seed_present &&
+             !request->temperature && !request->top_p && !request->top_k &&
+             !request->min_p && !request->typical_p && !request->seed &&
+             !request->event_after_sequence && !request->trace_content &&
+             request->trace_level == YVEX_SERVER_TRACE_SUMMARY)) &&
+           request_state_fields_valid(request) &&
            request_fork_fields_valid(request) &&
            request_content_fields_valid(request) &&
            request_lease_fields_valid(request) &&
@@ -227,7 +236,15 @@ int yvex_server_protocol_message_valid(const yvex_client_message *message)
     ((int)(value) >= (int)(first) && (value) <= (last))
 #define BOOL_VALID(value) ((value) == 0 || (value) == 1)
     return ENUM_VALID(message->kind, YVEX_CLIENT_MESSAGE_ACK,
-                      YVEX_CLIENT_MESSAGE_ENGINE) &&
+                      YVEX_CLIENT_MESSAGE_PREFLIGHT) &&
+           (message->kind == YVEX_CLIENT_MESSAGE_PREFLIGHT
+                ? (message->status == YVEX_OK &&
+                   yvex_server_preflight_valid(&message->preflight) &&
+                   engine->engine_kind == YVEX_SERVER_ENGINE_TEXT &&
+                   message->preflight.sequence_capacity == engine->context_capacity &&
+                   message->preflight.output_capacity == engine->maximum_new_tokens &&
+                   yvex_server_engine_summary_valid(engine))
+                : !message->preflight.schema_version) &&
            ENUM_VALID(message->failure_class, YVEX_CLIENT_FAILURE_NONE,
                       YVEX_CLIENT_FAILURE_GATEWAY_TIMEOUT) &&
            ENUM_VALID(message->generation_phase, YVEX_CLIENT_PHASE_UNAVAILABLE,

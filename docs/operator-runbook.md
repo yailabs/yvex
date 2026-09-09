@@ -590,7 +590,7 @@ model; a session is not synonymous with a KV cache:
 
 Client disconnect and detach do not close the engine. A partial or cancelled
 turn can retain model-committed state and is never silently marked complete.
-Protocol v20 reports the exact engine generation, committed position,
+Protocol v21 reports the exact engine generation, committed position,
 token/text counts, state generations, failure class, and reset requirement.
 Reset clears sequence/component state, tokens, transcript, decoder, and RNG policy without
 closing the engine or host.

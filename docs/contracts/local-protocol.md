@@ -1,8 +1,8 @@
-# Local Protocol v20
+# Local Protocol v21
 
 Status: normative private protocol contract
 
-Schema/version: `YVEX_LOCAL_PROTOCOL_VERSION = 20`.
+Schema/version: `YVEX_LOCAL_PROTOCOL_VERSION = 21`.
 
 Authority: `include/yvex/server.h` and `src/server/protocol.c`. This document
 explains the wire and lifecycle contract; code remains authoritative for exact
@@ -17,18 +17,18 @@ Unix-domain socket and is not a public network API.
 
 ## Framing and negotiation
 
-Every connection negotiates version 20 and exchanges bounded typed frames.
+Every connection negotiates version 21 and exchanges bounded typed frames.
 Lengths, enums, strings, arrays, message/tool fields, and correlations are
 validated before dispatch. Oversized, truncated, duplicate, unknown, or
 malformed fields refuse without entering the server scheduler.
 
-Every earlier version, including v19, is refused explicitly. There is no private
+Every earlier version, including v20, is refused explicitly. There is no private
 pre-v0.1 compatibility decoder. Unknown operations and response kinds fail
 closed.
 
 ## Operations
 
-Protocol v20 carries host status/stop, engine load/list/unload, demand-active
+Protocol v21 carries host status/stop, engine load/list/unload, demand-active
 model lease acquire/release, model and memory
 facts for each engine generation, text or media engine kind, target-only or
 speculative text execution strategy,
@@ -50,6 +50,18 @@ inspection is an offline-engine operation; live model inspection comes from
 the runtime owner.
 
 ## Ordered content and provenance
+
+Protocol v21 adds `EXECUTION_PREFLIGHT` and a versioned
+`yvex_execution_preflight` result. It requires an exact model alias and
+generation plus a complete provider request, and refuses session/media
+execution fields. An engine-manager lease pins the admitted tokenizer while
+the runtime prompt owner renders and encodes the input. No session or backend
+work is created. The result carries the exact engine summary, prompt byte
+identity, tokenizer identity, input count, separate input/output violations
+and remaining sequence/output budget. Wire verification rejects inconsistent
+counts, geometry, identities and versions. The result is not a resource
+reservation; dispatch retains ordinary admission. See the
+[public projection](../openai-compatibility.md#execution-capacity-and-preflight).
 
 A native generation turn may carry one ordered collection of at most 32 typed
 parts. Each part identifies its schema, kind (`text`, `image`, `audio`, `video`,
@@ -142,7 +154,7 @@ request fail before scheduler admission. Conditions are request-owned and do
 not alter engine identity or persist in a later turn.
 
 The admitted tokenizer contract classifies source-authored explicit reasoning
-separately from final text. Protocol v20 permits an omitted policy to remain
+separately from final text. Protocol v21 permits an omitted policy to remain
 `source-default` until the exact loaded model resolves it; concrete `disabled`,
 `low`, `enabled`, and `maximum` choices remain request facts. Provider request
 v4 independently carries source-default/drop/preserve reasoning-history policy.
@@ -213,7 +225,7 @@ accepted prefix, confidence facts, separate draft/verification/commit timing,
 effective committed rate, and policy identity. Exact seconds are never
 reconstructed from rounded rates.
 
-Protocol v20 retains measurement schema v1. Each record identifies
+Protocol v21 retains measurement schema v1. Each record identifies
 its phase scope, host/device clock, top-level/nested/enclosing/overlapping
 composition, work unit, and availability. A cumulative rate uses the complete
 declared work/duration denominator; rolling decode uses its own recent work and
@@ -290,7 +302,7 @@ summed into a synthetic total.
 
 ## Non-claims
 
-Protocol v20 is not a public remote API, authentication protocol, TLS transport,
+Protocol v21 is not a public remote API, authentication protocol, TLS transport,
 stable cross-version SDK promise, distributed serving protocol, or model
 quality contract. Versioned checkpoints preserve the admitted model and
 semantic-session state across restart; the in-memory fork does not create a

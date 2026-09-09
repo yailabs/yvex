@@ -177,7 +177,7 @@ host.
 
 ## Protocol planes
 
-Native commands and chat use private local protocol v20 over a UID-owned Unix
+Native commands and chat use private local protocol v21 over a UID-owned Unix
 socket. That protocol carries YVEX engine generations, sessions, KV identity,
 lifecycle, ordered typed content/provenance, model leases and directional
 capabilities, typed progress, cancellation, resource facts, and telemetry.

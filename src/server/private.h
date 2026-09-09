@@ -268,6 +268,14 @@ void yvex_server_decode_measurement(
 int yvex_server_profile_reconcile(
     const yvex_runtime_profile_record *, yvex_runtime_generation_mode,
     unsigned long long *attributed_ns, unsigned long long *unattributed_ns);
+#define YVEX_SERVER_PROTOCOL_PREFLIGHT_BYTES 192u
+int yvex_server_preflight_valid(const yvex_execution_preflight *);
+int yvex_server_protocol_preflight_encode(
+    const yvex_execution_preflight *, unsigned char[YVEX_SERVER_PROTOCOL_PREFLIGHT_BYTES]);
+int yvex_server_protocol_preflight_decode(
+    const unsigned char *, unsigned long long, yvex_execution_preflight *);
+int yvex_server_engine_lease_preflight(
+    server_engine_lease *, const yvex_client_request *, yvex_execution_preflight *, yvex_error *);
 int yvex_server_protocol_capacity_encode(
     const yvex_execution_capacity_summary *,
     unsigned char[YVEX_SERVER_PROTOCOL_CAPACITY_BYTES]);

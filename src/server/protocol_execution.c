@@ -1,4 +1,4 @@
-/* Encode and validate the fixed execution-truth subrecords carried by protocol v20. */
+/* Encode and validate the fixed execution-truth subrecords carried by protocol v21. */
 #include "src/server/private.h"
 
 #include <math.h>
@@ -38,6 +38,65 @@ static double truth_get_double(const unsigned char *in)
 static int bool_valid(int value)
 {
     return value == 0 || value == 1;
+}
+
+int yvex_server_preflight_valid(const yvex_execution_preflight *value)
+{
+    unsigned long long maximum, remaining, effective;
+    unsigned int violations = 0u;
+    if (!value || value->schema_version != YVEX_EXECUTION_PREFLIGHT_SCHEMA_V1 ||
+        !value->sequence_capacity || !value->output_capacity || !value->input_tokens ||
+        !value->rendered_prompt_bytes ||
+        !yvex_sha256_hex_valid(value->tokenizer_identity) ||
+        !yvex_sha256_hex_valid(value->prompt_identity)) return 0;
+    maximum = value->requested_output_tokens ? value->requested_output_tokens : value->output_capacity;
+    if (value->input_tokens > value->sequence_capacity)
+        violations |= YVEX_EXECUTION_INPUT_CAPACITY_EXCEEDED;
+    if (maximum > value->output_capacity)
+        violations |= YVEX_EXECUTION_OUTPUT_CAPACITY_EXCEEDED;
+    remaining = value->input_tokens < value->sequence_capacity ?
+        value->sequence_capacity - value->input_tokens : 0ull;
+    effective = violations ? 0ull : (remaining < maximum ? remaining : maximum);
+    return value->violations == violations && value->effective_output_tokens == effective;
+}
+
+int yvex_server_protocol_preflight_encode(
+    const yvex_execution_preflight *value, unsigned char output[YVEX_SERVER_PROTOCOL_PREFLIGHT_BYTES])
+{
+    if (!output || !yvex_server_preflight_valid(value)) return 0;
+    truth_put_u64(output, value->schema_version);
+    truth_put_u64(output + 8u, value->violations);
+    truth_put_u64(output + 16u, value->input_tokens);
+    truth_put_u64(output + 24u, value->rendered_prompt_bytes);
+    truth_put_u64(output + 32u, value->sequence_capacity);
+    truth_put_u64(output + 40u, value->output_capacity);
+    truth_put_u64(output + 48u, value->requested_output_tokens);
+    truth_put_u64(output + 56u, value->effective_output_tokens);
+    memcpy(output + 64u, value->tokenizer_identity, 64u);
+    memcpy(output + 128u, value->prompt_identity, 64u);
+    return 1;
+}
+
+int yvex_server_protocol_preflight_decode(
+    const unsigned char *bytes, unsigned long long count, yvex_execution_preflight *output)
+{
+    yvex_execution_preflight value = {0};
+    if (!bytes || !output || count != YVEX_SERVER_PROTOCOL_PREFLIGHT_BYTES ||
+        truth_get_u64(bytes) != YVEX_EXECUTION_PREFLIGHT_SCHEMA_V1 ||
+        truth_get_u64(bytes + 8u) > 3ull) return 0;
+    value.schema_version = YVEX_EXECUTION_PREFLIGHT_SCHEMA_V1;
+    value.violations = (unsigned int)truth_get_u64(bytes + 8u);
+    value.input_tokens = truth_get_u64(bytes + 16u);
+    value.rendered_prompt_bytes = truth_get_u64(bytes + 24u);
+    value.sequence_capacity = truth_get_u64(bytes + 32u);
+    value.output_capacity = truth_get_u64(bytes + 40u);
+    value.requested_output_tokens = truth_get_u64(bytes + 48u);
+    value.effective_output_tokens = truth_get_u64(bytes + 56u);
+    memcpy(value.tokenizer_identity, bytes + 64u, 64u);
+    memcpy(value.prompt_identity, bytes + 128u, 64u);
+    if (!yvex_server_preflight_valid(&value)) return 0;
+    *output = value;
+    return 1;
 }
 
 int yvex_server_execution_capacity_valid(

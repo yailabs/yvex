@@ -20,7 +20,6 @@
 #define TEST_DSML "\xef\xbd\x9c" "DSML" "\xef\xbd\x9c"
 
 extern const yvex_family_descriptor yvex_graph_family_descriptor_minimax_h3;
-extern const yvex_family_descriptor yvex_graph_family_descriptor_qwen3_5;
 
 typedef struct {
     pthread_mutex_t mutex;
@@ -184,15 +183,21 @@ static void fixture_open(yvex_tokenizer *tokenizer, yvex_token_info tokens[4])
     memcpy(tokenizer->plan.tokenizer_plan_identity, identity, sizeof(identity));
 }
 
+static const yvex_family_compiler_adapter *qwen_fixture_compiler(void)
+{
+    const yvex_graph_execution_binding *execution =
+        yvex_graph_execution_find(0u, 0u, YVEX_QWEN3_8_27B_TARGET_ID);
+    return execution ? execution->compiler : NULL;
+}
+
 static int qwen_fixture_open(yvex_tokenizer *tokenizer,
                              yvex_token_info tokens[4], yvex_error *err)
 {
-    const yvex_family_source_adapter *source =
-        yvex_graph_family_descriptor_qwen3_5.source();
+    const yvex_family_compiler_adapter *compiler = qwen_fixture_compiler();
     fixture_open(tokenizer, tokens);
     memset(&tokenizer->compiled_policy, 0, sizeof(tokenizer->compiled_policy));
-    if (!source || !source->tokenizer_policy ||
-        !source->tokenizer_policy(&tokenizer->compiled_policy, err) ||
+    if (!compiler || !compiler->tokenizer_policy ||
+        !compiler->tokenizer_policy(&tokenizer->compiled_policy, err) ||
         !yvex_tokenizer_family_policy_conversation(
             &tokenizer->compiled_policy, &tokenizer->conversation_view))
         return 0;
@@ -221,8 +226,7 @@ static int test_compiled_family_policy(void)
     const yvex_family_source_adapter *minimax =
         minimax_descriptor && minimax_descriptor->source
             ? minimax_descriptor->source() : NULL;
-    const yvex_family_source_adapter *qwen =
-        yvex_graph_family_descriptor_qwen3_5.source();
+    const yvex_family_compiler_adapter *qwen = qwen_fixture_compiler();
     yvex_tokenizer_family_policy first, decoded, changed, direct, direct_decoded,
         qwen_policy, qwen_decoded;
     yvex_conversation_protocol view;

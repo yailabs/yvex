@@ -1,4 +1,4 @@
-# YVEX OpenAI Compatibility Profile v2
+# YVEX OpenAI Compatibility Profile v3
 
 Status: normative implemented compatibility contract
 
@@ -8,8 +8,8 @@ the foreground YVEX server. Consumers: explicitly configured local OpenAI-compat
 adapter follows the hosted runtime lifecycle and owns no model, session, KV,
 worker, or telemetry authority.
 
-`yvex.openai.compat.v2` is a bounded, local application-provider profile. It
-adapts OpenAI-compatible HTTP/JSON/SSE requests to YVEX local protocol v20 and
+`yvex.openai.compat.v3` is a bounded, local application-provider profile. It
+adapts OpenAI-compatible HTTP/JSON/SSE requests to YVEX local protocol v21 and
 the persistent foreground host. It is not a claim of full OpenAI API or OpenAI
 service equivalence.
 
@@ -26,7 +26,7 @@ Those moving interfaces do not expand this explicitly versioned YVEX subset.
 application or SDK
   -> loopback HTTP/1.1
   -> YVEX server OpenAI adapter
-  -> provider-neutral request over YVEX protocol v20
+  -> provider-neutral request over YVEX protocol v21
   -> engine-manager routing by model alias and generation
   -> engine session and generation owners
 ```
@@ -40,9 +40,9 @@ authentication, TLS, CORS, and remote exposure are outside this profile.
 When the selected runtime profile uses DSpark, the adapter receives only
 target-verified committed fragments from the same server turn. Draft
 candidates are never emitted over JSON/SSE and never enter compatibility
-usage. This internal execution mode does not change compatibility profile v2.
+usage. This internal execution mode does not change compatibility profile v3.
 
-Profile v2 maps `reasoning_effort` values `none`, `low`, `medium`/`high`, and
+Profile v3 maps `reasoning_effort` values `none`, `low`, `medium`/`high`, and
 `max`/`xhigh` to typed source-authored model policies. An omitted field remains
 source-default until the loaded model resolves it. Chat responses and deltas expose
 explicit model-emitted text as `reasoning_content`; Responses objects use the
@@ -78,11 +78,65 @@ placeholder.
 | `GET /health` | supported, YVEX extension | host/listener readiness |
 | `GET /v1/models` | supported | currently loaded engine aliases |
 | `GET /v1/models/{id}` | supported | exact loaded-engine lookup |
+| `POST /v1/chat/completions/preflight` | supported, YVEX extension | exact tokenizer and token-capacity qualification; no session or model execution |
 | `POST /v1/chat/completions` | supported subset | ephemeral YVEX session and typed turn |
 | `POST /v1/responses` | supported subset | typed turn plus bounded response-state mapping |
 
 Embeddings, audio, images, files, batches, fine-tuning, moderation, Realtime,
 hosted tools, legacy Assistants, and all other paths refuse.
+
+## Execution capacity and preflight
+
+Profile v3 adds capacity discovery and token preflight; it does not increase a
+deployment's admitted context or silently truncate input. Model objects bind
+alias and generation to artifact, runtime binding, runtime model,
+specialization and capacity-plan identities. Their `yvex_capacity` separates
+HTTP body/header bounds, provider wire/content/message/tool bounds, runtime
+input/total-sequence tokens, requested output tokens, output bytes, session
+capacity and observed occupancy. The architectural model-context maximum is
+`null`: the runtime envelope is known, not every possible deployment.
+Media engines currently return `yvex_capacity: null`; a text-token envelope
+would not describe their admitted resource requirements.
+
+Submit the **same complete Chat Completions JSON** to
+`POST /v1/chat/completions/preflight`. Pin `yvex_engine_generation` on
+preflight and dispatch to refuse replacement generations. A 200 preflight
+response is a report, not necessarily admission: inspect
+`token_capacity_compatible`, `input_capacity_exceeded`,
+`output_capacity_exceeded`, and `full_requested_output_fits`.
+It gives exact `input_tokens`, `rendered_prompt_bytes`,
+`requested_output_tokens` and `effective_output_tokens`, bound to the
+tokenizer-plan identity and rendered-prompt byte identity. Rendering includes
+source-authored conversation controls, reasoning policy and tool schemas.
+Schema bytes have their own bound but are not an additive,
+tokenizer-independent token budget. JSON whitespace is not prompt content.
+
+Output limits retain their existing **ceiling** semantics:
+`effective = min(requested-or-server-default, sequence-capacity - input)`
+when both individual limits fit. At a full sequence effective output is zero;
+fitting input alone does not promise useful generation. An explicit ceiling
+above the server maximum refuses independently of input length.
+Preflight tokenizes the complete bounded prompt; generation may stop
+tokenization at its admitted input limit and refuses rather than truncating.
+
+This is stateless token-capacity qualification, not a reservation, sampler or
+numerical qualification, or assurance of future memory/queue availability.
+No model forward, session allocation, residency change or state mutation occurs.
+Dispatch still checks generation, session/resource admission and runtime state.
+Stateful Responses continuation is not covered: supply a complete reconstructed
+Chat request instead. Unseeded stochastic requests may receive different
+request identities; prompt bytes, counts and tokenizer identity remain the
+capacity authority.
+
+Input overflow returns HTTP 413 with `input_token_capacity_exceeded`;
+an excessive output ceiling returns `output_token_capacity_exceeded`.
+Both diagnostics include the admitted limit. HTTP/parser/provider bounds
+remain `request_too_large`, not token limits.
+If SSE headers were already sent, Chat publishes an `error` event and Responses
+publishes `response.failed` with the same precise capacity code; HTTP status
+cannot be changed after headers. Neither publishes successful completion.
+The former “token output capacity exceeded” meant the **tokenizer's output
+token-ID buffer for the input prompt**, not generated completion tokens.
 
 ## Chat Completions request profile
 
@@ -91,6 +145,7 @@ Supported fields are:
 | Field | Accepted form |
 | --- | --- |
 | `model` | exact ID returned by `/v1/models` |
+| `yvex_engine_generation` | optional positive generation pin from discovery; stale generations refuse with 409 |
 | `messages` | ordered `developer`, `system`, `user`, `assistant`, and `tool` messages; assistant history may carry `reasoning_content` and bounded typed tool calls |
 | `stream` | boolean |
 | `stream_options.include_usage` | boolean |
@@ -177,7 +232,7 @@ conversation objects refuse.
 ## Function tools
 
 The supported tool type is `function`. Definitions contain a name, optional
-description, JSON-schema parameters, and `strict=false`. Profile v2 admits a
+description, JSON-schema parameters, and `strict=false`. Profile v3 admits a
 bounded ordered set of calls when `parallel_tool_calls=true`; call IDs must be
 unique, and results are merged into the source-authored user/tool-result form
 in call order.
@@ -199,7 +254,7 @@ not promoted into a function-call object.
 `response_format={"type":"json_object"}` requests JSON through the admitted
 prompt policy and validates the complete result as one JSON object with no
 trailing non-whitespace bytes. Malformed JSON fails; the adapter never repairs
-it. JSON Schema and constrained decoding are not part of profile v2.
+it. JSON Schema and constrained decoding are not part of profile v3.
 
 Stop strings are bounded and matched across generated fragment boundaries
 before provider publication. Matched bytes are suppressed from the application
@@ -231,7 +286,7 @@ runtime.
 The adapter accepts bounded HTTP/1.1 with an explicit `Content-Length`, bounded
 headers and body, strict UTF-8 JSON, no duplicate keys, no trailing data, and no
 silent type coercion. Transfer-encoded request bodies refuse. One connection
-serves one request in profile v2.
+serves one request in profile v3.
 
 Errors use the OpenAI-compatible envelope:
 

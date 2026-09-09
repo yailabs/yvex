@@ -13,6 +13,8 @@
 #include <unistd.h>
 
 #include <yvex/server.h>
+#include <yvex/internal/generation.h>
+#include "src/server/private.h"
 
 #include "tests/test.h"
 
@@ -927,8 +929,8 @@ static int test_stale_frame_refusal(void)
                      "stale peer thread");
     rc = yvex_client_connect(&client, path, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT && client == NULL &&
-                         strstr(yvex_error_message(&err), "version 20") != NULL,
-                     "immediately prior v19 frame explicitly refuses");
+                         strstr(yvex_error_message(&err), "version 21") != NULL,
+                     "immediately prior v20 frame explicitly refuses");
     YVEX_TEST_ASSERT(pthread_join(thread, NULL) == 0, "stale peer join");
     (void)close(peer.listener);
     (void)unlink(path);
@@ -1274,8 +1276,61 @@ static int test_media_result_roundtrip(void)
     return 0;
 }
 
+static int test_execution_preflight_contract(void)
+{
+    yvex_execution_preflight value = {0}, decoded = {0};
+    unsigned char bytes[YVEX_SERVER_PROTOCOL_PREFLIGHT_BYTES];
+    yvex_error err;
+    struct {
+        unsigned long long input, requested, effective;
+        unsigned int violations;
+    } cases[] = {
+        {6ull, 1ull, 1ull, 0u}, {6ull, 0ull, 506ull, 0u},
+        {511ull, 8ull, 1ull, 0u}, {512ull, 1ull, 0ull, 0u},
+        {513ull, 1ull, 0ull, YVEX_EXECUTION_INPUT_CAPACITY_EXCEEDED},
+        {6ull, 513ull, 0ull, YVEX_EXECUTION_OUTPUT_CAPACITY_EXCEEDED},
+        {513ull, 513ull, 0ull, 3u}
+    };
+    size_t index;
+    for (index = 0u; index < sizeof(cases) / sizeof(cases[0]); ++index) {
+        YVEX_TEST_ASSERT(yvex_runtime_prompt_budget(cases[index].input, 512ull, 512ull,
+            cases[index].requested, &value, &err) == YVEX_OK &&
+            value.violations == cases[index].violations &&
+            value.effective_output_tokens == cases[index].effective,
+            "input, output and combined headroom remain distinct");
+        value.rendered_prompt_bytes = 40277ull;
+        memset(value.tokenizer_identity, 'a', 64u);
+        memset(value.prompt_identity, 'b', 64u);
+        YVEX_TEST_ASSERT(yvex_server_protocol_preflight_encode(&value, bytes) &&
+            yvex_server_protocol_preflight_decode(bytes, sizeof(bytes), &decoded) &&
+            decoded.input_tokens == cases[index].input &&
+            decoded.violations == cases[index].violations &&
+            decoded.effective_output_tokens == cases[index].effective &&
+            !strcmp(decoded.tokenizer_identity, value.tokenizer_identity),
+            "preflight preserves refusal dimension and exact token geometry over wire");
+        bytes[63] ^= 1u;
+        YVEX_TEST_ASSERT(!yvex_server_protocol_preflight_decode(bytes, sizeof(bytes), &decoded),
+            "false effective output fails wire verification");
+        YVEX_TEST_ASSERT(!yvex_server_protocol_preflight_decode(bytes, sizeof(bytes) - 1u, &decoded),
+            "truncated preflight refuses");
+    }
+    value.schema_version++;
+    YVEX_TEST_ASSERT(!yvex_server_protocol_preflight_encode(&value, bytes), "unknown preflight schema refuses");
+    {
+        yvex_client_request request = {0};
+        unsigned char wire[4096];
+        unsigned long long count;
+        request.schema_version = YVEX_LOCAL_PROTOCOL_VERSION;
+        request.operation = YVEX_CLIENT_OP_EXECUTION_PREFLIGHT;
+        YVEX_TEST_ASSERT(yvex_protocol_request_encode(&request, wire, sizeof(wire), &count, &err) ==
+            YVEX_ERR_INVALID_ARG, "preflight without exact engine and complete request refuses");
+    }
+    return 0;
+}
+
 int yvex_test_protocol(void)
 {
+    if (test_execution_preflight_contract() != 0) return 1;
     if (test_request_roundtrip() != 0) return 1;
     if (test_content_request_roundtrip() != 0) return 1;
     if (test_all_operation_roundtrips() != 0) return 1;

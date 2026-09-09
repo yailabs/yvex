@@ -1,5 +1,5 @@
 #!/bin/sh
-# Exercises production HTTP/SSE translation over the real local protocol v20 codec.
+# Exercises production HTTP/SSE translation over the real local protocol v21 codec.
 set -eu
 
 YVEX_OPENAI_ADAPTER=${YVEX_OPENAI_ADAPTER:-build/tests/openai_adapter}
@@ -186,7 +186,7 @@ python3 - "$root" <<'PY'
 import json, pathlib, sys
 root=pathlib.Path(sys.argv[1])
 health=json.load(open(root/'health.json'))
-assert health == {'status':'ok','adapter':'ready','server':'ready','profile':'yvex.openai.compat.v2'}
+assert health == {'status':'ok','adapter':'ready','server':'ready','profile':'yvex.openai.compat.v3'}
 assert json.load(open(root/'health-after-disconnect.json')) == health
 models=json.load(open(root/'models.json'))
 assert models['object']=='list' and models['data'][0]['id']=='deepseek4-v4-flash-dspark'
@@ -343,4 +343,4 @@ closed=$(grep -c '^session.close ' "$root/host.err" || true)
 test "$created" -gt 0
 test "$created" = "$closed"
 
-echo 'OpenAI adapter integration: protocol-v20 Chat/Responses/SSE/tool/state/cleanup/refusal passed'
+echo 'OpenAI adapter integration: protocol-v21 Chat/Responses/SSE/tool/state/cleanup/refusal passed'

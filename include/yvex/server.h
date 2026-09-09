@@ -11,7 +11,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define YVEX_LOCAL_PROTOCOL_VERSION 20u
+#define YVEX_LOCAL_PROTOCOL_VERSION 21u
 #define YVEX_CLIENT_MEDIA_CONDITION_SCHEMA_V1 1u
 #define YVEX_CLIENT_MEDIA_CONDITION_CAP 2u
 #define YVEX_CLIENT_MEDIA_RESULT_SCHEMA_V1 1u
@@ -295,7 +295,7 @@ typedef enum {
     YVEX_CLIENT_OP_ENGINE_LOAD,
     YVEX_CLIENT_OP_ENGINE_LIST,
     YVEX_CLIENT_OP_ENGINE_UNLOAD, YVEX_CLIENT_OP_ENGINE_ENSURE_ACTIVE,
-    YVEX_CLIENT_OP_ENGINE_LEASE_RELEASE
+    YVEX_CLIENT_OP_ENGINE_LEASE_RELEASE, YVEX_CLIENT_OP_EXECUTION_PREFLIGHT
 } yvex_client_operation;
 typedef enum {
     YVEX_CLIENT_MESSAGE_ACK = 0,
@@ -308,7 +308,7 @@ typedef enum {
     YVEX_CLIENT_MESSAGE_FRAGMENT,
     YVEX_CLIENT_MESSAGE_TURN_COMPLETE,
     YVEX_CLIENT_MESSAGE_CONSOLE_STATUS,
-    YVEX_CLIENT_MESSAGE_ENGINE
+    YVEX_CLIENT_MESSAGE_ENGINE, YVEX_CLIENT_MESSAGE_PREFLIGHT
 } yvex_client_message_kind;
 typedef enum {
     YVEX_CLIENT_FAILURE_NONE = 0,
@@ -362,7 +362,6 @@ typedef enum {
     YVEX_CLIENT_STREAM_CONTROL_EVENT,
     YVEX_CLIENT_STREAM_ERROR
 } yvex_client_stream_channel;
-
 /* A terminal failure snapshot separates committed state from failure/reset facts. */
 typedef struct {
     unsigned int schema_version;
@@ -541,6 +540,7 @@ typedef struct {
     char input_content_identity[YVEX_CONTENT_ID_CAP], model_lease_identity[YVEX_SERVER_ID_CAP];
     yvex_client_partial_turn partial_turn;
     yvex_client_state_checkpoint state_checkpoint;
+    yvex_execution_preflight preflight;
     yvex_client_media_result media_result;
     yvex_server_engine_summary engine;
     yvex_server_summary runtime;

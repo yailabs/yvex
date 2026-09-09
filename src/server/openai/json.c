@@ -868,6 +868,11 @@ int openai_json_admit(const openai_http_request *http, openai_endpoint endpoint,
                YVEX_JSON_ITEM_READY) {
         rc = key_unique(&seen, key, err);
         if (rc != YVEX_OK) break;
+        if (strcmp(key, "yvex_engine_generation") == 0) {
+            if (!yvex_json_u64(&json, &admitted->engine_generation) || !admitted->engine_generation)
+                rc = json_refuse(err, YVEX_ERR_FORMAT, "yvex_engine_generation must be positive");
+            continue;
+        }
         rc = common_field(key, &json, request, endpoint, &handled, err);
         if (rc != YVEX_OK) break;
         if (handled) {
