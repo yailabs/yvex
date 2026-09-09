@@ -14,6 +14,7 @@
 #include <yvex/internal/operator_graph.h>
 
 #include "src/runtime/private.h"
+#include "tests/support/tensor_program.h"
 #include "tests/test.h"
 
 static int open_gguf(const char *path, yvex_artifact **artifact, yvex_gguf **gguf)
@@ -321,6 +322,97 @@ static int test_semantic_model_ir(void)
     return 0;
 }
 
+static int compiled_fixture_u64(yvex_core_bytes *bytes, unsigned long long value)
+{
+    unsigned char wire[8];
+    unsigned int i;
+    for (i = 0u; i < 8u; ++i) wire[i] = (unsigned char)(value >> (i * 8u));
+    return yvex_core_bytes_append(bytes, wire, sizeof(wire));
+}
+
+static int compiled_fixture_text(yvex_core_bytes *bytes, const char *value)
+{
+    size_t size = strlen(value);
+    return compiled_fixture_u64(bytes, size) && yvex_core_bytes_append(bytes, value, size);
+}
+
+/* Independent container fixture: old authenticated decoder bytes enter through
+ * the version importer, never through runtime topology reconstruction. */
+static int test_compiled_decoder_import(const yvex_decoder_plan *decoder, const char *graph_identity)
+{
+    yvex_compiled_model_plan *legacy = NULL, *native = NULL, *refused = NULL;
+    const yvex_program_tensor_plan *ffn;
+    const yvex_program_tensor_summary *summary;
+    yvex_program_tensor_plan *incompatible = NULL;
+    yvex_core_bytes old = {.maximum = 65536u}, wire = {.maximum = 65536u};
+    yvex_core_bytes program = {.maximum = 65536u}, roundtrip = {.maximum = 65536u};
+    yvex_error err;
+    size_t payload_offset;
+
+    YVEX_TEST_ASSERT(compiled_fixture_text(&old, "yvex.compiled-model-plan.v4") &&
+        compiled_fixture_u64(&old, 4u) && compiled_fixture_text(&old, graph_identity) &&
+        compiled_fixture_u64(&old, 0u) && compiled_fixture_u64(&old, 0u) &&
+        compiled_fixture_u64(&old, 1u) &&
+        yvex_decoder_plan_encode(decoder, &old, &err) == YVEX_OK &&
+        compiled_fixture_u64(&old, 0u), "construct legacy container with one decoder and no output head");
+    YVEX_TEST_ASSERT(yvex_compiled_model_plan_decode(&legacy, old.data, old.count, &err) == YVEX_OK &&
+        (ffn = yvex_compiled_model_plan_dense_ffn(legacy)) != NULL &&
+        (summary = yvex_program_tensor_summary_get(ffn)) != NULL &&
+        summary->input_count == 4u && summary->step_count == 4u && summary->result_count == 1u &&
+        summary->maximum_rows == 32u && yvex_program_tensor_value_at(ffn, 0u)->width == 4u &&
+        yvex_program_tensor_value_at(ffn, 1u)->rows == 8u,
+        "v4 import seals executable FFN from exact authenticated decoder geometry");
+    YVEX_TEST_ASSERT(yvex_compiled_model_plan_encode(legacy, &roundtrip, &err) == YVEX_OK &&
+        roundtrip.count == old.count && !memcmp(roundtrip.data, old.data, old.count),
+        "legacy container retains its wire identity after importing transient execution work");
+    roundtrip.count = 0u;
+    YVEX_TEST_ASSERT(yvex_program_tensor_encode(ffn, &program, &err) == YVEX_OK &&
+        compiled_fixture_text(&wire, "yvex.compiled-model-plan.v5") &&
+        compiled_fixture_u64(&wire, 5u) && compiled_fixture_text(&wire, graph_identity) &&
+        compiled_fixture_u64(&wire, 0u) && compiled_fixture_u64(&wire, 0u) &&
+        compiled_fixture_u64(&wire, 1u) &&
+        yvex_decoder_plan_encode(decoder, &wire, &err) == YVEX_OK &&
+        compiled_fixture_u64(&wire, 0u), "construct explicit v5 container prefix");
+    payload_offset = wire.count;
+    YVEX_TEST_ASSERT(compiled_fixture_u64(&wire, program.count) &&
+        yvex_core_bytes_append(&wire, program.data, program.count) &&
+        yvex_compiled_model_plan_decode(&native, wire.data, wire.count, &err) == YVEX_OK &&
+        !strcmp(yvex_program_tensor_summary_get(yvex_compiled_model_plan_dense_ffn(native))->identity,
+                summary->identity) &&
+        yvex_compiled_model_plan_encode(native, &roundtrip, &err) == YVEX_OK &&
+        roundtrip.count == wire.count && !memcmp(roundtrip.data, wire.data, wire.count),
+        "v5 reopens persisted physical work and roundtrips exact bytes without rebuilding semantics");
+    YVEX_TEST_ASSERT(yvex_compiled_model_plan_decode(&refused, wire.data, wire.count - 1u, &err) ==
+        YVEX_ERR_FORMAT && !refused, "truncated physical work refuses before publication");
+    wire.data[wire.count - 1u] ^= 1u;
+    YVEX_TEST_ASSERT(yvex_compiled_model_plan_decode(&refused, wire.data, wire.count, &err) ==
+        YVEX_ERR_FORMAT && !refused, "changed physical identity refuses before publication");
+    wire.data[wire.count - 1u] ^= 1u;
+    wire.count = payload_offset;
+    YVEX_TEST_ASSERT(compiled_fixture_u64(&wire, (unsigned long long)-1) &&
+        yvex_compiled_model_plan_decode(&refused, wire.data, wire.count, &err) == YVEX_ERR_FORMAT && !refused,
+        "overstated physical extent refuses without allocation or arithmetic wrap");
+    program.count = 0u;
+    wire.count = payload_offset;
+    YVEX_TEST_ASSERT(test_tensor_program(&incompatible, 0, &err) == YVEX_OK &&
+        yvex_program_tensor_encode(incompatible, &program, &err) == YVEX_OK &&
+        compiled_fixture_u64(&wire, program.count) &&
+        yvex_core_bytes_append(&wire, program.data, program.count) &&
+        yvex_compiled_model_plan_decode(&refused, wire.data, wire.count, &err) == YVEX_ERR_FORMAT && !refused,
+        "independently valid physical work with incompatible context/operands cannot enter this decoder");
+    printf("Compiled decoder import: v4 byte roundtrip=%zu v5 byte roundtrip=%zu; "
+           "inputs=4 steps=4 results=1 rows<=32 hidden=4 intermediate=8; "
+           "truncation/identity/extent/signature negatives=4\n", old.count, roundtrip.count);
+    yvex_program_tensor_close(&incompatible);
+    yvex_compiled_model_plan_close(&native);
+    yvex_compiled_model_plan_close(&legacy);
+    free(old.data);
+    free(wire.data);
+    free(program.data);
+    free(roundtrip.data);
+    return 0;
+}
+
 static int test_hybrid_decoder_semantics(void)
 {
     static const char source[] =
@@ -505,6 +597,8 @@ static int test_hybrid_decoder_semantics(void)
             sequence_plan.bindings[0].layer_index == 0ull,
         "hybrid decoder plan authenticates topology and recurrent state economics");
     plan_summary = *yvex_decoder_plan_summary_get(plan);
+    YVEX_TEST_ASSERT(test_compiled_decoder_import(plan,
+        yvex_operator_graph_ir_summary(graph)->identity) == 0, "compiled decoder import contracts");
     plan_layers[0] = *yvex_decoder_plan_layer_at(plan, 0ull);
     plan_layers[1] = *yvex_decoder_plan_layer_at(plan, 1ull);
     YVEX_TEST_ASSERT(

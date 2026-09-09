@@ -5,7 +5,6 @@
 #include <yvex/internal/source_catalog.h>
 
 #include <string.h>
-
 static int mamba_source_compile(yvex_family_source_products *out,
     const yvex_compilation_runtime_binding_request *request, yvex_error *err)
 {
@@ -15,6 +14,7 @@ static int mamba_source_compile(yvex_family_source_products *out,
     yvex_source_tensor_snapshot *snapshot = NULL;
     yvex_mamba2_architecture architecture;
     yvex_mamba2_inventory inventory;
+    yvex_ir_module *program = NULL;
     int rc;
 
     if (out) memset(out, 0, sizeof(*out));
@@ -31,6 +31,9 @@ static int mamba_source_compile(yvex_family_source_products *out,
     if (rc == YVEX_OK) rc = family->open(&verification, &architecture, err);
     if (rc == YVEX_OK) rc = family->snapshot_audit(&architecture, snapshot, &inventory, err);
     yvex_source_tensor_snapshot_release(snapshot);
+    if (rc == YVEX_OK) rc = yvex_mamba2_program_build(
+        &program, &architecture, verification.manifest_payload_identity, err);
+    yvex_ir_module_close(&program);
     if (rc != YVEX_OK) return rc;
     yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "mamba2.source-gate",
         "Mamba2 source roles complete (%llu tensors, %llu bytes); "

@@ -8,6 +8,315 @@
 #include <stdlib.h>
 #include <string.h>
 
+static const yvex_ir_type *mamba_program_input(
+    const yvex_ir_module *m, const yvex_ir_operation *op, uint32_t index)
+{
+    return yvex_ir_type_at(m, yvex_ir_value_at(m, op->operands[index])->type);
+}
+
+static int mamba_program_shape(const yvex_ir_type *type, yvex_ir_type_kind kind,
+    uint32_t rank, const unsigned long long *shape, const char *domain)
+{
+    uint32_t index;
+    if (!type || type->kind != kind || type->scalar != YVEX_IR_F32 || type->rank != rank ||
+        (domain && strcmp(type->domain, domain))) return 0;
+    for (index = 0u; index < rank; ++index)
+        if (type->shape[index].symbol != YVEX_IR_NONE || type->shape[index].extent != shape[index]) return 0;
+    return 1;
+}
+
+static int mamba_program_mixer_verify(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
+{
+    const yvex_ir_operation *op = yvex_ir_operation_at(m, id);
+    const yvex_ir_type *input = mamba_program_input(m, op, 0u);
+    const yvex_ir_attribute *heads = yvex_ir_attribute_get(m, id, "heads");
+    const yvex_ir_attribute *head = yvex_ir_attribute_get(m, id, "head_dimension");
+    const yvex_ir_attribute *state = yvex_ir_attribute_get(m, id, "state_dimension");
+    const yvex_ir_attribute *groups = yvex_ir_attribute_get(m, id, "groups");
+    const yvex_ir_attribute *kernel = yvex_ir_attribute_get(m, id, "convolution_kernel");
+    yvex_selective_ssd_requirement requirement = {.schema_version = YVEX_SELECTIVE_SSD_SCHEMA_V1};
+    yvex_selective_ssd_geometry geometry;
+    unsigned long long shapes[10][3], hidden;
+    const uint32_t ranks[] = {2u, 3u, 1u, 1u, 1u, 1u, 1u, 2u, 2u, 3u};
+    uint32_t index;
+    int rc;
+    if (!input || input->kind != YVEX_IR_TENSOR || input->scalar != YVEX_IR_F32 || input->rank != 2u ||
+        input->shape[1].symbol != YVEX_IR_NONE || !heads || !head || !state || !groups || !kernel) goto invalid;
+    requirement.heads = heads->value.integer;
+    requirement.head_dimension = head->value.integer;
+    requirement.state_dimension = state->value.integer;
+    requirement.groups = groups->value.integer;
+    requirement.convolution_kernel = kernel->value.integer;
+    requirement.normalization_groups = yvex_ir_attribute_get(m, id, "normalization_groups")->value.integer;
+    requirement.normalization_epsilon = yvex_ir_attribute_get(m, id, "epsilon")->value.real;
+    requirement.time_step_minimum = yvex_ir_attribute_get(m, id, "time_step_minimum")->value.real;
+    requirement.time_step_maximum = yvex_ir_attribute_get(m, id, "time_step_maximum")->value.real;
+    requirement.time_step_unbounded = (int)yvex_ir_attribute_get(m, id, "time_step_unbounded")->value.integer;
+    requirement.norm_before_gate = (int)yvex_ir_attribute_get(m, id, "norm_before_gate")->value.integer;
+    rc = yvex_selective_ssd_geometry_seal(&geometry, &requirement, err);
+    if (rc != YVEX_OK) return rc;
+    hidden = input->shape[1].extent;
+    {
+        const unsigned long long expected[10][3] = {
+            {geometry.projection_width, hidden, 0u}, {geometry.convolution_width, 1u, requirement.convolution_kernel},
+            {geometry.convolution_width, 0u, 0u}, {requirement.heads, 0u, 0u},
+            {requirement.heads, 0u, 0u}, {requirement.heads, 0u, 0u}, {geometry.width, 0u, 0u},
+            {hidden, geometry.width, 0u}, {geometry.convolution_width, requirement.convolution_kernel, 0u},
+            {requirement.heads, requirement.head_dimension, requirement.state_dimension}};
+        memcpy(shapes, expected, sizeof(shapes));
+    }
+    for (index = 0u; index < 10u; ++index)
+        if (!mamba_program_shape(mamba_program_input(m, op, index + 1u),
+                                 index < 8u ? YVEX_IR_TENSOR : YVEX_IR_STATE, ranks[index], shapes[index],
+                                 index < 8u ? NULL : index == 8u ? "convolution.causal" : "ssm.selective"))
+            goto invalid;
+    if (yvex_ir_value_at(m, op->operands[0])->type != yvex_ir_value_at(m, op->results[0])->type ||
+        yvex_ir_value_at(m, op->operands[9])->type != yvex_ir_value_at(m, op->results[1])->type ||
+        yvex_ir_value_at(m, op->operands[10])->type != yvex_ir_value_at(m, op->results[2])->type) goto invalid;
+    return YVEX_OK;
+invalid:
+    yvex_error_set(err, YVEX_ERR_FORMAT, "mamba2.program", "selective-SSD program operand/state geometry mismatch");
+    return YVEX_ERR_FORMAT;
+}
+
+static int mamba_obligation_verify(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
+{
+    const yvex_ir_attribute *name = yvex_ir_attribute_get(m, id, "authority");
+    if (!name || (!name->value.text[0])) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "mamba2.program", "source obligation must identify its authority");
+        return YVEX_ERR_FORMAT;
+    }
+    return YVEX_OK;
+}
+
+static const yvex_ir_dialect *mamba_program_dialect(void)
+{
+    static const yvex_ir_attribute_rule mixer[] = {
+        {"heads", YVEX_IR_ATTR_U64, 1}, {"head_dimension", YVEX_IR_ATTR_U64, 1},
+        {"state_dimension", YVEX_IR_ATTR_U64, 1}, {"groups", YVEX_IR_ATTR_U64, 1},
+        {"convolution_kernel", YVEX_IR_ATTR_U64, 1}, {"normalization_groups", YVEX_IR_ATTR_U64, 1},
+        {"epsilon", YVEX_IR_ATTR_F64, 1}, {"time_step_minimum", YVEX_IR_ATTR_F64, 1},
+        {"time_step_maximum", YVEX_IR_ATTR_F64, 1}, {"time_step_unbounded", YVEX_IR_ATTR_BOOL, 1},
+        {"norm_before_gate", YVEX_IR_ATTR_BOOL, 1}};
+    static const yvex_ir_attribute_rule obligation[] = {
+        {"authority", YVEX_IR_ATTR_SYMBOL, 1}, {"conflict", YVEX_IR_ATTR_BOOL, 1}};
+    /* This operation names the Mamba2 mixer computation, including source-weight
+     * roles, selective SSD, causal convolution and gated normalization. It does
+     * not own allocation, session lifetime, dispatch or numerical qualification. */
+    static const yvex_ir_operation_definition operations[] = {
+        {"mamba2.mixer", 1u, 11u, 11u, 3u, 3u, 0u, YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE,
+         mixer, 11u, 0, mamba_program_mixer_verify},
+        {"mamba2.source_obligation", 1u, 0u, 0u, 0u, 0u, 0u, YVEX_IR_ORDERED,
+         obligation, 2u, 0, mamba_obligation_verify}};
+    static const yvex_ir_dialect dialect = {operations, sizeof(operations) / sizeof(operations[0])};
+    return &dialect;
+}
+
+typedef struct {
+    yvex_ir_module *module;
+    const yvex_mamba2_architecture *architecture;
+    const char *source_identity;
+    yvex_ir_id block, tensor, parameters[12], convolution, recurrent;
+    int rc;
+    yvex_error *error;
+} mamba_program_builder;
+
+static yvex_ir_id mamba_program_emit(mamba_program_builder *b, const char *operation,
+    const yvex_ir_id *operands, size_t operand_count, const yvex_ir_id *types, size_t result_count,
+    const yvex_ir_attribute *attributes, size_t attribute_count)
+{
+    yvex_ir_id op = YVEX_IR_NONE;
+    yvex_ir_operation_request request = {.operation = operation, .operands = operands,
+        .operand_count = operand_count, .result_types = types, .result_count = result_count,
+        .attributes = attributes, .attribute_count = attribute_count};
+    if (b->rc == YVEX_OK) b->rc = yvex_ir_operation_add(b->module, b->block, &request, &op, b->error);
+    return op;
+}
+
+static yvex_ir_id mamba_program_value(mamba_program_builder *b, yvex_ir_id op, uint32_t result)
+{
+    const yvex_ir_operation *value = yvex_ir_operation_at(b->module, op);
+    return value && result < value->result_count ? value->results[result] : YVEX_IR_NONE;
+}
+
+static yvex_ir_id mamba_program_parameter(mamba_program_builder *b, const char *name, yvex_ir_id type)
+{
+    yvex_ir_attribute attributes[2] = {
+        {.name = "parameter", .kind = YVEX_IR_ATTR_SYMBOL}, {.name = "source", .kind = YVEX_IR_ATTR_TEXT}};
+    yvex_ir_id op;
+    yvex_core_text_copy(attributes[0].value.text, sizeof(attributes[0].value.text), name);
+    yvex_core_text_copy(attributes[1].value.text, sizeof(attributes[1].value.text),
+                        b->source_identity);
+    op = mamba_program_emit(b, "core.parameter", NULL, 0u, &type, 1u, attributes, 2u);
+    return mamba_program_value(b, op, 0u);
+}
+
+static yvex_ir_id mamba_program_norm(mamba_program_builder *b, yvex_ir_id input, const char *weight)
+{
+    yvex_ir_attribute attributes[2] = {
+        {.name = "epsilon", .kind = YVEX_IR_ATTR_F64}, {.name = "weight_offset", .kind = YVEX_IR_ATTR_F64}};
+    yvex_ir_id operands[2], op;
+    attributes[0].value.real = b->architecture->normalization_epsilon;
+    operands[0] = input;
+    operands[1] = mamba_program_parameter(b, weight, b->parameters[1]);
+    op = mamba_program_emit(b, "nn.rms_norm", operands, 2u, &b->tensor, 1u, attributes, 2u);
+    return mamba_program_value(b, op, 0u);
+}
+
+static int mamba_program_types(mamba_program_builder *b, yvex_ir_id *tokens)
+{
+    const yvex_mamba2_architecture *a = b->architecture;
+    const yvex_selective_ssd_requirement *r = &a->mixer.requirement;
+    const unsigned long long shapes[12][3] = {
+        {a->vocabulary_size, a->hidden_size, 0u}, {a->hidden_size, 0u, 0u},
+        {a->mixer.projection_width, a->hidden_size, 0u}, {a->mixer.convolution_width, 1u, r->convolution_kernel},
+        {a->mixer.convolution_width, 0u, 0u}, {r->heads, 0u, 0u}, {r->heads, 0u, 0u}, {r->heads, 0u, 0u},
+        {a->mixer.width, 0u, 0u}, {a->hidden_size, a->mixer.width, 0u},
+        {a->mixer.convolution_width, r->convolution_kernel, 0u}, {r->heads, r->head_dimension, r->state_dimension}};
+    yvex_ir_dimension sequence = {.name = "sequence", .minimum = 1u, .maximum = 1048576u, .multiple = 1u};
+    yvex_ir_type type = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_INDEX, .rank = 1u};
+    yvex_ir_id symbol;
+    uint32_t index, dim;
+    int rc = yvex_ir_dimension_add(b->module, &sequence, &symbol, b->error);
+    type.shape[0] = (yvex_ir_extent){symbol, 0u};
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(b->module, &type, tokens, b->error);
+    type.scalar = YVEX_IR_F32;
+    type.rank = 2u;
+    type.shape[1] = (yvex_ir_extent){YVEX_IR_NONE, a->hidden_size};
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(b->module, &type, &b->tensor, b->error);
+    for (index = 0u; rc == YVEX_OK && index < 12u; ++index) {
+        type = (yvex_ir_type){.kind = index < 10u ? YVEX_IR_TENSOR : YVEX_IR_STATE,
+            .scalar = YVEX_IR_F32, .rank = shapes[index][2] ? 3u : shapes[index][1] ? 2u : 1u};
+        for (dim = 0u; dim < type.rank; ++dim) type.shape[dim] = (yvex_ir_extent){YVEX_IR_NONE, shapes[index][dim]};
+        if (index >= 10u)
+            yvex_core_text_copy(type.domain, sizeof(type.domain),
+                                index == 10u ? "convolution.causal" : "ssm.selective");
+        rc = yvex_ir_type_intern(b->module, &type, &b->parameters[index], b->error);
+    }
+    b->convolution = b->parameters[10];
+    b->recurrent = b->parameters[11];
+    return rc;
+}
+
+static yvex_ir_id mamba_program_layer(mamba_program_builder *b, unsigned long long layer,
+    yvex_ir_id input, yvex_ir_id *convolution, yvex_ir_id *recurrent)
+{
+    static const char *const suffix[] = {"in_proj.weight", "conv1d.weight", "conv1d.bias",
+        "A_log", "D", "dt_bias", "norm.weight", "out_proj.weight"};
+    const yvex_selective_ssd_requirement *r = &b->architecture->mixer.requirement;
+    yvex_ir_attribute attributes[] = {
+        {.name = "heads", .kind = YVEX_IR_ATTR_U64, .value.integer = r->heads},
+        {.name = "head_dimension", .kind = YVEX_IR_ATTR_U64, .value.integer = r->head_dimension},
+        {.name = "state_dimension", .kind = YVEX_IR_ATTR_U64, .value.integer = r->state_dimension},
+        {.name = "groups", .kind = YVEX_IR_ATTR_U64, .value.integer = r->groups},
+        {.name = "convolution_kernel", .kind = YVEX_IR_ATTR_U64, .value.integer = r->convolution_kernel},
+        {.name = "normalization_groups", .kind = YVEX_IR_ATTR_U64, .value.integer = r->normalization_groups},
+        {.name = "epsilon", .kind = YVEX_IR_ATTR_F64, .value.real = r->normalization_epsilon},
+        {.name = "time_step_minimum", .kind = YVEX_IR_ATTR_F64, .value.real = r->time_step_minimum},
+        {.name = "time_step_maximum", .kind = YVEX_IR_ATTR_F64, .value.real = r->time_step_maximum},
+        {.name = "time_step_unbounded", .kind = YVEX_IR_ATTR_BOOL, .value.integer = (uint64_t)r->time_step_unbounded},
+        {.name = "norm_before_gate", .kind = YVEX_IR_ATTR_BOOL, .value.integer = (uint64_t)r->norm_before_gate}};
+    yvex_ir_id operands[11], types[] = {b->tensor, b->convolution, b->recurrent}, op, residual[2];
+    char name[96];
+    uint32_t index;
+    snprintf(name, sizeof(name), "backbone.layers.%llu.norm.weight", layer);
+    operands[0] = mamba_program_norm(b, input, name);
+    for (index = 0u; index < 8u; ++index) {
+        snprintf(name, sizeof(name), "backbone.layers.%llu.mixer.%s", layer, suffix[index]);
+        operands[index + 1u] = mamba_program_parameter(b, name, b->parameters[index + 2u]);
+    }
+    operands[9] = *convolution;
+    operands[10] = *recurrent;
+    op = mamba_program_emit(b, "mamba2.mixer", operands, 11u, types, 3u,
+                            attributes, sizeof(attributes) / sizeof(attributes[0]));
+    *convolution = mamba_program_value(b, op, 1u);
+    *recurrent = mamba_program_value(b, op, 2u);
+    residual[0] = input;
+    residual[1] = mamba_program_value(b, op, 0u);
+    return mamba_program_value(b, mamba_program_emit(b, "tensor.add", residual, 2u,
+                                                     &b->tensor, 1u, NULL, 0u), 0u);
+}
+
+int yvex_mamba2_program_build(yvex_ir_module **out, const yvex_mamba2_architecture *a,
+                               const char *source_identity, yvex_error *err)
+{
+    yvex_ir_dialect dialects[3] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect(), *mamba_program_dialect()};
+    mamba_program_builder builder = {.architecture = a, .source_identity = source_identity, .error = err};
+    yvex_ir_id *arguments = NULL, *results = NULL, *outputs = NULL, tokens, function, hidden, op;
+    size_t count, layer;
+    yvex_ir_type output_type;
+    if (out) *out = NULL;
+    if (!out || !a || !a->architecture_complete || !a->hidden_size || !a->vocabulary_size ||
+        !a->layer_count || a->layer_count > YVEX_MAMBA2_LAYER_CAP ||
+        !yvex_sha256_hex_valid(a->architecture_identity) ||
+        !yvex_sha256_hex_valid(source_identity) ||
+        yvex_selective_ssd_geometry_validate(&a->mixer, err) != YVEX_OK) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "mamba2.program", "source-authoritative geometry is required");
+        return YVEX_ERR_FORMAT;
+    }
+    count = 1u + 2u * (size_t)a->layer_count;
+    arguments = calloc(count, sizeof(*arguments));
+    results = calloc(count, sizeof(*results));
+    outputs = calloc(count, sizeof(*outputs));
+    builder.rc = arguments && results && outputs ? YVEX_OK : YVEX_ERR_NOMEM;
+    if (builder.rc != YVEX_OK)
+        yvex_error_set(err, YVEX_ERR_NOMEM, "mamba2.program", "program signature allocation failed");
+    if (builder.rc == YVEX_OK)
+        builder.rc = yvex_ir_module_open(&builder.module, "mamba2", source_identity, dialects, 3u, err);
+    if (builder.rc == YVEX_OK) builder.rc = mamba_program_types(&builder, &tokens);
+    if (builder.rc != YVEX_OK) goto done;
+    arguments[0] = tokens;
+    output_type = *yvex_ir_type_at(builder.module, builder.tensor);
+    output_type.shape[1].extent = a->vocabulary_size;
+    builder.rc = yvex_ir_type_intern(builder.module, &output_type, &results[0], err);
+    for (layer = 0u; layer < a->layer_count; ++layer) {
+        arguments[1u + 2u * layer] = results[1u + 2u * layer] = builder.convolution;
+        arguments[2u + 2u * layer] = results[2u + 2u * layer] = builder.recurrent;
+    }
+    if (builder.rc == YVEX_OK)
+        builder.rc = yvex_ir_function_add(builder.module, "forward", arguments, count, results, count,
+                                           YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE | YVEX_IR_ORDERED, &function, err);
+    if (builder.rc != YVEX_OK) goto done;
+    builder.block = yvex_ir_function_at(builder.module, function)->body;
+    memcpy(outputs, yvex_ir_block_at(builder.module, builder.block)->arguments, count * sizeof(*outputs));
+    {
+        yvex_ir_attribute obligation[] = {
+            {.name = "authority", .kind = YVEX_IR_ATTR_SYMBOL, .value.text = "source.normalization"},
+            {.name = "conflict", .kind = YVEX_IR_ATTR_BOOL,
+             .value.integer = (uint64_t)a->normalization_policy_conflict}};
+        mamba_program_emit(&builder, "mamba2.source_obligation", NULL, 0u, NULL, 0u, obligation, 2u);
+        yvex_core_text_copy(obligation[0].value.text, sizeof(obligation[0].value.text), "source.tokenizer");
+        obligation[1].value.integer = (uint64_t)a->token_policy_conflict;
+        mamba_program_emit(&builder, "mamba2.source_obligation", NULL, 0u, NULL, 0u, obligation, 2u);
+    }
+    {
+        yvex_ir_id inputs[] = {outputs[0], mamba_program_parameter(&builder,
+                                     "backbone.embeddings.weight", builder.parameters[0])};
+        op = mamba_program_emit(&builder, "nn.embedding", inputs, 2u, &builder.tensor, 1u, NULL, 0u);
+        hidden = mamba_program_value(&builder, op, 0u);
+    }
+    for (layer = 0u; builder.rc == YVEX_OK && layer < a->layer_count; ++layer)
+        hidden = mamba_program_layer(&builder, layer, hidden, &outputs[1u + 2u * layer], &outputs[2u + 2u * layer]);
+    hidden = mamba_program_norm(&builder, hidden, "backbone.norm_f.weight");
+    {
+        yvex_ir_id inputs[] = {hidden, mamba_program_parameter(&builder, "lm_head.weight", builder.parameters[0])};
+        op = mamba_program_emit(&builder, "nn.linear", inputs, 2u, &results[0], 1u, NULL, 0u);
+        outputs[0] = mamba_program_value(&builder, op, 0u);
+    }
+    mamba_program_emit(&builder, "core.return", outputs, count, NULL, 0u, NULL, 0u);
+    if (builder.rc == YVEX_OK) builder.rc = yvex_ir_seal(builder.module, err);
+    if (builder.rc == YVEX_OK) {
+        yvex_ir_pass passes[] = {*yvex_ir_canonical_pass(), *yvex_ir_dead_code_pass()};
+        builder.rc = yvex_ir_pass_pipeline(builder.module, passes, 2u, out, NULL, err);
+    }
+done:
+    yvex_ir_module_close(&builder.module);
+    free(outputs);
+    free(results);
+    free(arguments);
+    return builder.rc;
+}
+
 typedef enum { MAMBA_U64, MAMBA_BOOL, MAMBA_DOUBLE, MAMBA_TEXT } mamba_field_kind;
 typedef struct {
     const char *name;

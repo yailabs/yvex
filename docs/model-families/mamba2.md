@@ -88,7 +88,7 @@ still impose those requirements. It also needs complete artifact lowering,
 tokenizer/output-policy adjudication, and all-layer/logit/session qualification.
 An attention-shaped placeholder would misrepresent this boundary.
 
-Protocol v20 and installed public ABIs are unchanged. The existing decoder
+Mamba source admission requires no family-specific public ABI. The existing decoder
 serialization remains unchanged: common state layouts are derived from its
 authenticated transition geometry on import. A02-A09, YAI roles, performance
 optimization and release benchmarks receive no support claim from this work.

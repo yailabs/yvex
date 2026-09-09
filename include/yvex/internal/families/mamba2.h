@@ -4,6 +4,7 @@
 
 #include <yvex/internal/source.h>
 #include <yvex/internal/semantic_decoder.h>
+#include <yvex/internal/ir.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,6 +70,10 @@ typedef struct {
 } yvex_mamba2_api;
 
 const yvex_mamba2_api *yvex_model_register_mamba2(void);
+/* Imported computational program only. Unresolved source obligations prevent
+ * executable legalization; constructing it does not publish a deployment. */
+int yvex_mamba2_program_build(yvex_ir_module **, const yvex_mamba2_architecture *,
+                               const char *source_identity, yvex_error *);
 
 #ifdef __cplusplus
 }

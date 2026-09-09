@@ -7,6 +7,7 @@
 
 #include <yvex/internal/backend.h>
 #include <yvex/internal/component.h>
+#include <yvex/internal/compiler.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/decoder_execution.h>
 #include <yvex/internal/decoder_plan.h>
@@ -15,13 +16,12 @@
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/sequence_mixer.h>
 #include <yvex/internal/stateful_attention.h>
+#include <yvex/internal/tensor_execution.h>
 
 enum {
     DECODER_LINEAR_ATTENTION_Q = 0,
     DECODER_LINEAR_ATTENTION_KV,
     DECODER_LINEAR_ATTENTION_OUT,
-    DECODER_LINEAR_FFN_UP,
-    DECODER_LINEAR_FFN_DOWN,
     DECODER_LINEAR_DELTA_QKV,
     DECODER_LINEAR_DELTA_VALUE,
     DECODER_LINEAR_DELTA_HEAD,
@@ -44,9 +44,6 @@ enum {
     DECODER_BUFFER_DELTA_GATE,
     DECODER_BUFFER_DELTA_BETA,
     DECODER_BUFFER_DELTA_DECAY,
-    DECODER_BUFFER_FFN_GATE,
-    DECODER_BUFFER_FFN_UP,
-    DECODER_BUFFER_FFN_PRODUCT,
     DECODER_BUFFER_COSINE,
     DECODER_BUFFER_SINE,
     DECODER_BUFFER_COUNT
@@ -95,6 +92,7 @@ struct yvex_runtime_decoder_execution_context {
     decoder_small_weight output_norm;
     decoder_layer_resources *layers;
     decoder_linear_owner linears[DECODER_LINEAR_COUNT];
+    yvex_tensor_execution *ffn;
     yvex_device_tensor *buffers[DECODER_BUFFER_COUNT];
     yvex_device_tensor hidden_publication;
     yvex_execution_device_publication publication;
@@ -342,14 +340,6 @@ static int decoder_bind_common_layer(
         rc = decoder_refuse(err, YVEX_ERR_FORMAT,
                             "runtime.decoder.ffn-weights",
                             "dense FFN bindings differ from the decoder plan");
-    decoder_linear_configure(
-        &context->linears[DECODER_LINEAR_FFN_UP], "decoder.dense-ffn.up",
-        YVEX_TRANSFORMER_LINEAR_OPERATION_GATE_UP, plan->hidden_width,
-        plan->intermediate_width);
-    decoder_linear_configure(
-        &context->linears[DECODER_LINEAR_FFN_DOWN], "decoder.dense-ffn.down",
-        YVEX_TRANSFORMER_LINEAR_OPERATION_DOWN, plan->intermediate_width,
-        plan->hidden_width);
     return rc;
 }
 
@@ -562,9 +552,6 @@ static int decoder_buffer_geometry_build(
     geometry->width[DECODER_BUFFER_HIDDEN_B] = context->summary->hidden_width;
     geometry->width[DECODER_BUFFER_NORMALIZED] = context->summary->hidden_width;
     geometry->width[DECODER_BUFFER_UPDATE] = context->summary->hidden_width;
-    geometry->width[DECODER_BUFFER_FFN_GATE] = context->summary->intermediate_width;
-    geometry->width[DECODER_BUFFER_FFN_UP] = context->summary->intermediate_width;
-    geometry->width[DECODER_BUFFER_FFN_PRODUCT] = context->summary->intermediate_width;
     for (layer = 0ull; layer < context->summary->layer_count; ++layer) {
         const yvex_decoder_layer_plan *plan =
             yvex_decoder_plan_layer_at(context->plan, layer);
@@ -718,6 +705,39 @@ static int decoder_buffers_open(yvex_runtime_decoder_execution_context *context,
     return rc;
 }
 
+static int decoder_program_open(yvex_runtime_decoder_execution_context *context, yvex_error *err)
+{
+    unsigned long long host = context->options.maximum_host_bytes;
+    unsigned long long device = context->options.maximum_device_bytes;
+    if ((host && context->host_bytes >= host) || (device && context->device_bytes >= device))
+        return decoder_refuse(err, YVEX_ERR_BOUNDS, "runtime.decoder.program",
+                               "no resource budget remains for the admitted tensor program");
+    return yvex_tensor_execution_open(&context->ffn,
+        yvex_compiled_model_plan_dense_ffn(context->model_view->compiled_plan),
+        context->session_view->backend, context->options.token_capacity,
+        host ? host - context->host_bytes : 0ull,
+        device ? device - context->device_bytes : 0ull, err);
+}
+
+static int decoder_program_prepare(yvex_runtime_decoder_execution_context *context,
+                                    unsigned long long rows, yvex_error *err)
+{
+    const yvex_tensor_execution_resources *resources;
+    unsigned long long total;
+    int rc = yvex_tensor_execution_prepare(context->ffn, rows, err);
+    if (rc != YVEX_OK) return rc;
+    resources = yvex_tensor_execution_resources_get(context->ffn);
+    /* Other decoder resources and the program workspace retain unique owners;
+     * aggregate admission does not reconstruct or duplicate either allocation. */
+    if (!resources || !yvex_core_u64_add(context->host_bytes, resources->host_bytes, &total) ||
+        (context->options.maximum_host_bytes && total > context->options.maximum_host_bytes) ||
+        !yvex_core_u64_add(context->device_bytes, resources->device_bytes, &total) ||
+        (context->options.maximum_device_bytes && total > context->options.maximum_device_bytes))
+        return decoder_refuse(err, YVEX_ERR_BOUNDS, "runtime.decoder.program",
+                               "tensor program resources exceed the decoder execution budget");
+    return YVEX_OK;
+}
+
 static int decoder_operations_valid(
     const yvex_backend_transformer_operations *operations)
 {
@@ -726,7 +746,6 @@ static int decoder_operations_valid(
            operations->linear_execute && operations->linear_release &&
            operations->rotary_half_f32 &&
            operations->split_interleaved_two_f32 &&
-           operations->silu_product_bf16 &&
            operations->sigmoid_product_bf16 && operations->add_bf16 &&
            operations->bf16_round;
 }
@@ -782,8 +801,10 @@ int yvex_runtime_decoder_execution_context_open(
     }
     if (rc == YVEX_OK) rc = decoder_resources_bind(context, err);
     if (rc == YVEX_OK) rc = decoder_buffers_open(context, err);
+    if (rc == YVEX_OK) rc = decoder_program_open(context, err);
     if (rc != YVEX_OK) {
         (void)yvex_runtime_decoder_execution_context_close(&context, NULL);
+        *out = context;
         return rc;
     }
     *out = context;
@@ -834,6 +855,8 @@ int yvex_runtime_decoder_execution_context_close(
     }
     yvex_execution_device_publication_retire(&context->publication);
     backend = context->session_view ? context->session_view->backend : NULL;
+    rc = yvex_tensor_execution_close(&context->ffn, err);
+    if (rc != YVEX_OK) return rc;
     for (index = 0u; backend && index < DECODER_LINEAR_COUNT; ++index) {
         if (context->linears[index].single && context->operations)
             rc = context->operations->linear_release(
@@ -1367,33 +1390,20 @@ static int decoder_gated_delta(
 }
 
 static int decoder_ffn(decoder_layer_run *run,
-                       const yvex_decoder_layer_plan *plan,
                        decoder_layer_resources *resources, yvex_error *err)
 {
-    unsigned long long tokens = run->request->token_count;
-    unsigned long long values = tokens * plan->intermediate_width;
-    yvex_device_tensor gate, up, product;
-    int rc;
-    if (!decoder_tensor_view(run->context->buffers[DECODER_BUFFER_FFN_GATE],
-                             values, tokens, plan->intermediate_width, &gate) ||
-        !decoder_tensor_view(run->context->buffers[DECODER_BUFFER_FFN_UP],
-                             values, tokens, plan->intermediate_width, &up) ||
-        !decoder_tensor_view(run->context->buffers[DECODER_BUFFER_FFN_PRODUCT],
-                             values, tokens, plan->intermediate_width,
-                             &product))
-        return decoder_refuse(err, YVEX_ERR_BOUNDS, "runtime.decoder.ffn",
-                              "dense FFN workspace views are invalid");
-    rc = decoder_linear(run, DECODER_LINEAR_FFN_UP, &resources->ffn_gate,
-                        &run->normalized, &gate, err);
+    yvex_tensor_execution_argument arguments[] = {
+        {.tensor = &run->normalized}, {.parameter = &resources->ffn_gate.encoded},
+        {.parameter = &resources->ffn_up.encoded}, {.parameter = &resources->ffn_down.encoded}};
+    yvex_device_tensor *outputs[] = {&run->update};
+    yvex_tensor_execution_result result;
+    int rc = yvex_tensor_execution_run(run->context->ffn, run->request->token_count,
+        arguments, 4u, outputs, 1u, &result, err);
+    if (rc == YVEX_OK && !yvex_core_u64_add(run->result->linear_operations,
+        result.linear_operations, &run->result->linear_operations))
+        return decoder_refuse(err, YVEX_ERR_BOUNDS, "runtime.decoder.ffn", "linear operation counter overflowed");
     if (rc == YVEX_OK)
-        rc = decoder_linear(run, DECODER_LINEAR_FFN_UP, &resources->ffn_up,
-                            &run->normalized, &up, err);
-    if (rc == YVEX_OK)
-        rc = decoder_binary(run, run->context->operations->silu_product_bf16,
-                            &gate, &up, &product, values, err);
-    if (rc == YVEX_OK)
-        rc = decoder_linear(run, DECODER_LINEAR_FFN_DOWN,
-                            &resources->ffn_down, &product, &run->update, err);
+        rc = decoder_operation_add(run, &result.backend, err);
     return rc;
 }
 
@@ -1428,7 +1438,7 @@ static int decoder_layer_execute(decoder_layer_run *run,
         rc = decoder_normalize(
             run, &run->current, &resources->ffn_norm,
             plan->normalization_epsilon, &run->normalized, rows, width, err);
-    if (rc == YVEX_OK) rc = decoder_ffn(run, plan, resources, err);
+    if (rc == YVEX_OK) rc = decoder_ffn(run, resources, err);
     if (rc == YVEX_OK)
         rc = decoder_add(run, &run->current, &run->update, &run->next, rows,
                          width, err);
@@ -1739,6 +1749,7 @@ static int decoder_execute_locked(
     if (rc == YVEX_OK)
         rc = decoder_request_validate(context, request, &attention_before,
                                       &sequence_before, err);
+    if (rc == YVEX_OK) rc = decoder_program_prepare(context, request->token_count, err);
     if (rc == YVEX_OK) {
         rc = yvex_runtime_session_begin(context->session, &failure, err);
         session_owned = rc == YVEX_OK;

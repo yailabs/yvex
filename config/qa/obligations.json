@@ -8,6 +8,16 @@
   },
   "change_classes": [
     {
+      "id": "typed-computational-ir",
+      "patterns": ["src/ir/**", "include/yvex/internal/ir.h", "tests/unit/ir.c",
+                   "src/graph/program*.c", "include/yvex/internal/program.h", "tests/unit/program.c",
+                   "src/runtime/tensor_program.c", "include/yvex/internal/tensor_execution.h",
+                   "tests/unit/cuda/program.c", "tests/support/tensor_program.h"],
+      "lanes": ["fast", "structural", "numeric", "runtime", "sanitizer"],
+      "tests": ["unit.ir", "unit.program", "cuda.program", "integration.tiny-vertical"],
+      "reason": "typed program ownership requires compiler refusals, deterministic passes/identity, lifetime safety and migrated production consumers"
+    },
+    {
       "id": "public-execution-capacity",
       "patterns": ["src/runtime/prompt.c", "include/yvex/execution.h", "tests/live/openai_capacity.py"],
       "lanes": ["fast", "structural", "runtime", "sanitizer"],

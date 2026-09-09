@@ -1,6 +1,7 @@
 /* Source-contract fixtures are not model acquisition or hosted-generation evidence. */
 #include "tests/test.h"
 #include <yvex/internal/families/mamba2.h>
+#include <yvex/internal/program.h>
 #include <yvex/internal/graph.h>
 #include <yvex/internal/source_catalog.h>
 #include <errno.h>
@@ -92,6 +93,43 @@ static int mamba_contract(const char *root)
         api->tensor_audit(&a, table, &inventory, &err) == YVEX_OK &&
         inventory.complete && inventory.tensors == 21u,
         "bidirectional role coverage is exact");
+    {
+        yvex_ir_module *program = NULL, *again = NULL;
+        yvex_program_execution *execution = NULL;
+        yvex_core_bytes dump = {.maximum = 65536u};
+        const yvex_ir_function *forward;
+        /* Synthetic role fixture identity, not a published provider snapshot. */
+        YVEX_TEST_ASSERT(yvex_mamba2_program_build(&program, &a, inventory.role_identity, &err) == YVEX_OK &&
+                         yvex_mamba2_program_build(&again, &a, inventory.role_identity, &err) == YVEX_OK,
+                         "pure SSM source projects into verified typed program");
+        forward = yvex_ir_function_at(program, 0u);
+        YVEX_TEST_ASSERT(forward && forward->result_count == 5u &&
+                         strcmp(yvex_ir_identity(program), yvex_ir_identity(again)) == 0,
+                         "two layers produce four explicit state versions plus logits deterministically");
+        YVEX_TEST_ASSERT(yvex_program_execution_compile(&execution, program, &err) == YVEX_OK &&
+            yvex_program_execution_entry_count(execution) == 1u &&
+            yvex_program_execution_entry_at(execution, 0u)->result_count == 5u,
+            "pure SSM compiles dependency form without attention; this does not admit backend execution");
+        yvex_program_execution_close(&execution);
+        YVEX_TEST_ASSERT(yvex_ir_print(program, &dump, &err) == YVEX_OK &&
+                         yvex_core_bytes_append(&dump, "", 1u) &&
+                         strstr((char *)dump.data, "mamba2.mixer.v1") &&
+                         strstr((char *)dump.data, "state<ssm.selective; 4x2x2xf32>") &&
+                         strstr((char *)dump.data, "state<convolution.causal; 16x3xf32>") &&
+                         strstr((char *)dump.data, "mamba2.source_obligation.v1") &&
+                         strstr((char *)dump.data, "conflict = true") &&
+                         !strstr((char *)dump.data, "attention") && !strstr((char *)dump.data, "rope"),
+                         "SSA program has no mandatory Transformer state and retains source promotion barriers");
+        free(dump.data);
+        yvex_ir_module_close(&again);
+        YVEX_TEST_ASSERT(yvex_mamba2_program_build(&again, &a, a.architecture_identity, &err) == YVEX_OK &&
+                         strcmp(yvex_ir_identity(program), yvex_ir_identity(again)) != 0,
+                         "changing source identity changes program identity even with identical geometry");
+        yvex_ir_module_close(&again);
+        YVEX_TEST_ASSERT(yvex_mamba2_program_build(&again, &a, "", &err) != YVEX_OK && !again,
+                         "source identity cannot be inferred from architecture geometry");
+        yvex_ir_module_close(&program);
+    }
     bad = *yvex_native_weight_table_at(table, 0);
     bad.dims[0]++;
     YVEX_TEST_ASSERT(api->tensor_classify(&a, &bad, &binding, &err) != YVEX_OK,

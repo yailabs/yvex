@@ -715,7 +715,7 @@ test-runtime: $(TEST_RUNNER)
 	YVEX_TEST_FILTER=runtime_profile $(TEST_RUNNER)
 	YVEX_TEST_FILTER=runtime_state $(TEST_RUNNER)
 	YVEX_TEST_FILTER=runtime_benchmark $(TEST_RUNNER)
-	YVEX_TEST_FILTER=unit.sequence_state,unit.sequence_state_session,unit.sequence_mixer,unit.selective_ssd,unit.mamba2_source $(TEST_RUNNER)
+	YVEX_TEST_FILTER=unit.ir,unit.program,unit.sequence_state,unit.sequence_state_session,unit.sequence_mixer,unit.selective_ssd,unit.mamba2_source $(TEST_RUNNER)
 	@! YVEX_TEST_FILTER=__unknown_runtime_test__ $(TEST_RUNNER) >/dev/null 2>&1
 	@! YVEX_TEST_FILTER=runtime_benchmark,runtime_benchmark \
 		$(TEST_RUNNER) >/dev/null 2>&1
@@ -1542,7 +1542,7 @@ $(OBJ_DIR)/%.o: %.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(SOURCE_MANIFEST_MK) $(SOURCE_FAMILY_HEADER) &: \
-		$(SOURCE_OWNER_MANIFEST) $(SOURCE_MANIFEST_GENERATOR)
+		$(SOURCE_OWNER_MANIFEST) $(SOURCE_MANIFEST_GENERATOR) config/qa/registry.json
 	@mkdir -p $(@D)
 	python3 $(SOURCE_MANIFEST_GENERATOR) --manifest $(SOURCE_OWNER_MANIFEST) \
 		--output $(SOURCE_MANIFEST_MK) --family-header $(SOURCE_FAMILY_HEADER)

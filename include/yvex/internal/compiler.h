@@ -11,6 +11,7 @@
 #include <yvex/core.h>
 #include <yvex/backend.h>
 #include <yvex/internal/core.h>
+#include <yvex/internal/ir.h>
 #include <yvex/internal/media_target.h>
 #include <yvex/internal/model.h>
 #include <yvex/internal/output_head.h>
@@ -355,12 +356,14 @@ typedef struct {
     const yvex_semantic_composite_request *composite;
     const yvex_semantic_reference_request *references;
     unsigned long long reference_count;
+    const yvex_ir_module *program;
 } yvex_semantic_model_ir_request;
 int yvex_semantic_model_ir_seal(
     yvex_semantic_model_ir **out,
     const yvex_semantic_model_ir_request *request, yvex_error *err);
 const yvex_semantic_model_ir_summary *yvex_semantic_model_ir_summary_get(
     const yvex_semantic_model_ir *model);
+const yvex_ir_module *yvex_semantic_model_ir_program(const yvex_semantic_model_ir *model);
 int yvex_semantic_model_ir_attention_view(
     const yvex_semantic_model_ir *model, yvex_tensor_scope tensor_scope,
     const yvex_semantic_attention_layer **layers,
@@ -498,8 +501,10 @@ struct yvex_materialization_session;
 struct yvex_runtime_descriptor;
 struct yvex_attention_plan; struct yvex_decoder_plan;
 struct yvex_moe_plan; struct yvex_transformer_plan;
+struct yvex_program_execution; struct yvex_program_tensor_plan;
 typedef struct {
     const yvex_semantic_model_ir *semantic_model;
+    const struct yvex_program_execution *program;
     const yvex_operator_graph_ir *operator_graph;
     const struct yvex_materialization_session *materialization;
     const struct yvex_runtime_descriptor *descriptor;
@@ -560,6 +565,7 @@ const struct yvex_moe_plan *yvex_compiled_model_plan_moe(
 const struct yvex_transformer_plan *yvex_compiled_model_plan_transformer(
     const yvex_compiled_model_plan *plan, int draft);
 const struct yvex_decoder_plan *yvex_compiled_model_plan_decoder(const yvex_compiled_model_plan *plan);
+const struct yvex_program_tensor_plan *yvex_compiled_model_plan_dense_ffn(const yvex_compiled_model_plan *plan);
 const struct yvex_runtime_logits_plan_summary *yvex_compiled_model_plan_output_head(
     const yvex_compiled_model_plan *plan);
 const char *yvex_compiled_model_plan_operator_graph_identity(

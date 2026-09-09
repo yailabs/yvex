@@ -17,6 +17,7 @@
 #include <yvex/internal/gguf_writer.h>
 #include <yvex/internal/graph.h>
 #include <yvex/internal/operator_graph.h>
+#include <yvex/internal/program.h>
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/tokenizer.h>
 
@@ -37,6 +38,8 @@ typedef struct {
     yvex_semantic_model_ir *semantic_model;
     yvex_operator_graph_ir *operator_graph;
     yvex_physical_execution_ir *physical_execution;
+    yvex_program_parameters *program_parameters;
+    yvex_program_execution *program_execution;
     yvex_compiled_model_plan *compiled_plan;
     yvex_runtime_descriptor *descriptor;
     yvex_attention_plan *attention;
@@ -89,6 +92,8 @@ static void binding_compiler_close(binding_compiler *compiler)
 {
     if (!compiler) return;
     yvex_compiled_model_plan_close(&compiler->compiled_plan);
+    yvex_program_parameters_close(&compiler->program_parameters);
+    yvex_program_execution_close(&compiler->program_execution);
     yvex_physical_execution_ir_close(&compiler->physical_execution);
     yvex_gguf_writer_plan_release(&compiler->writer);
     yvex_quant_plan_release(&compiler->quant);
@@ -178,6 +183,9 @@ static int binding_compiler_graph(binding_compiler *compiler, yvex_error *err)
     int rc = compiler->pipeline->semantic_model_build(
         &compiler->semantic_model, compiler->source.verification, err);
 
+    if (rc == YVEX_OK && yvex_semantic_model_ir_program(compiler->semantic_model))
+        rc = yvex_program_execution_compile(&compiler->program_execution,
+            yvex_semantic_model_ir_program(compiler->semantic_model), err);
     if (rc == YVEX_OK)
         rc = compiler->pipeline->runtime_descriptor_build(
             &compiler->descriptor, &compiler->admission, compiler->materialization,
@@ -434,9 +442,14 @@ static int binding_compiler_prepare(
     rc = yvex_physical_execution_ir_build(
         &compiler->physical_execution, compiler->materialization,
         compiler->descriptor, compiler->admission.profile_identity, err);
+    if (rc == YVEX_OK && yvex_semantic_model_ir_program(compiler->semantic_model))
+        rc = yvex_program_parameters_compile(&compiler->program_parameters,
+            yvex_semantic_model_ir_program(compiler->semantic_model), compiler->source.transform_ir,
+            compiler->physical_execution, err);
     if (rc == YVEX_OK) {
         yvex_compiled_model_plan_request plan = {
             .semantic_model = compiler->semantic_model,
+            .program = compiler->program_execution,
             .operator_graph = compiler->operator_graph,
             .materialization = compiler->materialization,
             .descriptor = compiler->descriptor,

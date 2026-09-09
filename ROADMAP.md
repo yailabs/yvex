@@ -7,18 +7,18 @@ Status: living public project control
 | Axis | Current truth |
 | --- | --- |
 | Project target | Native, harness-independent model compilation and execution substrate. |
-| Active engineering boundary | `SPECTRUM.MAMBA2.REPAIR.0` — selected family repair after qualified generic refoundation; no A01 evidence promotion. |
+| Active engineering boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` — typed multi-level model/program IR and consumer cutover before A01 resumes. |
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` and its qualification COMPLETE at producer-owned device-result validity: expired borrows fail closed; source-stable QA and exact bounded performance replay retained. Earlier identity/platform repairs preserved. |
-| Architecture Spectrum | A01 PARTIAL, active non-KV state repair boundary; A02–A10 PLANNED. |
+| Architecture Spectrum | A01 PARTIAL, repair queued behind refoundation .1 and qualification; A02–A10 PLANNED. |
 | Adopted state architecture target | Dual-stream primary computation plus persistent model-native computational state. YAI owns semantic authority; YVEX owns computational realization. Program N is OPEN, not implemented. |
-| Most important structural gap | Pure-SSM decoder, tokenizer and normalization authority still obstruct A01. C / S / N remain distinct targets; the qualified borrow-lifetime mechanism does not implement N or close all structural debt. |
+| Most important structural gap | Model computation still depends on decoder-shaped records. Establish explicit typed values, state/effects, programs and lowering authority; preserve distinct C / S / N targets. A01 tokenizer/normalization and whole-model barriers remain. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media. Evidence depths differ. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
 | Behavior evaluation | BLOCKED / not ready. |
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
 | Release qualification | BLOCKED. |
 | Current branch | `models2`; branch epochs coordinate integration, not model ownership. |
-| Next decision point | Repair A01's existing boundary and earn its next evidence stage. DeepSeek optimization still needs explicit resumption and authoritative conformance evidence; bounded replay is not full-model quality or release qualification. |
+| Next decision point | Qualify the .1 compiler/runtime cutover, then replay comparable controls before A01 repair. No IR target or before/after agreement establishes upstream conformance or release qualification. |
 
 <!-- maturity-counts:start -->
 <!-- Generated from System Maturity by tests/documentation_architecture.py. -->
@@ -464,7 +464,7 @@ tokenizer kind is explicitly weaker than executing its processor.
 | Native CLI | 🟢 ESTABLISHED | Product operations consume typed owners. | Preserve thin parsing/rendering boundaries as operations grow. | X | [Command architecture][commands] |
 | REPLAI-backed interaction | 🟢 ESTABLISHED | External editing; YVEX retains command/session/cancellation meaning. | Preserve the boundary and qualify dependency changes. | X / R | [Editor ADR][editor]; [terminal tests][terminal-tests] |
 | Local typed protocol | 🟢 ESTABLISHED | Versioned private contract routes exact engine/session facts. | Version only on explicit wire-contract changes. | X | [Local protocol][protocol] |
-| OpenAI-compatible projection | 🟡 PARTIAL | Bounded local compatibility translates to native semantics. | Qualify new projections without a second semantic owner. | X | [Compatibility matrix][openai] |
+| OpenAI-compatible projection | 🟡 PARTIAL | Bounded local compatibility; exact-tokenizer preflight and distinct byte/input/output/sequence limits are exposed for text engines. | Qualify additional real consumers; preflight is not resource reservation or whole-workload qualification. | X | [Compatibility matrix][openai] |
 | Generic external harness consumption | 🟡 PARTIAL | Typed facts serve current native and compatibility consumers. | Independently qualify additional real consumers without frontend leakage. | X | [C API][c-api]; [runtime contract][runtime-contract] |
 | SDK-ready client boundary | 🟡 PARTIAL | Consumable C interfaces exist; broad SDK/platform lifecycle evidence is incomplete. | Supported packaging, error/cancel semantics and consumer tests. | X | [C API][c-api] |
 | Linux terminal execution | 🟢 ESTABLISHED | Private POSIX adapter and REPLAI have real PTY/lifetime evidence. | Preserve submission, interrupt, restoration and cleanup. | X | [Editor ADR][editor]; [terminal tests][terminal-tests] |
@@ -572,7 +572,7 @@ retains serialized use and producer-lifetime limits; this is not a concurrent le
 
 **Open maturity boundaries:** Transformer-shaped composition and structural overhead requiring measurement.
 
-**Current pressure:** A01's non-KV composition and adopted dual-stream C/S/N targets continue to challenge current owners without authorizing N implementation. One qualified repair does not complete Program R.
+**Current pressure:** refoundation .1 replaces decoder-shaped computational authority with a typed multi-level IR and migrates real consumers. It also separates exact model/checkpoint identity from architecture import and executable program ownership; historical `families` containers are not permanent vertical runtimes. A01 and dual-stream C/S/N targets challenge the language without authorizing N implementation. The completed .0 borrow repair remains complete.
 
 **Material advance:** remove a demonstrated ownership defect with negative/lifecycle QA and exact performance replay where relevant.
 
@@ -749,7 +749,7 @@ maturity**. Planned references are not acquisition or executable support claims.
 
 | ID | Computational pressure | Reference target | What it tries to falsify | Current public state |
 | --- | --- | --- | --- | --- |
-| A01 | Pure SSM | `mistralai/Mamba-Codestral-7B-v0.1` | Transformer-shaped decoder and computational-state-equals-KV assumptions | PARTIAL / active repair boundary |
+| A01 | Pure SSM | `mistralai/Mamba-Codestral-7B-v0.1` | Transformer-shaped decoder and computational-state-equals-KV assumptions | PARTIAL / repair queued after refoundation .1 qualification |
 | A02 | Pure recurrent | RWKV7-1.5B | Sequence state must be attention/SSM-shaped | PLANNED |
 | A03 | Encoder-decoder | FLAN-T5 | Decoder-only lifecycle; missing retained encoder state/cross-attention | PLANNED |
 | A04 | Diffusion language model | LLaDA-8B-Instruct | Autoregressive-only generation | PLANNED |
@@ -809,19 +809,37 @@ decision. This is neither the maturity matrix nor the release scope.
 | 2 | `NATIVE.COGNITIVE.STATE.ALIGNMENT.0` | COMPLETE | R / N / Q | Adopted dual-stream target and evidence-reporting discipline; no implementation promotion | Freeze semantic/computational ownership and refoundation-before-A01 ordering in public control. | `MAINTENANCE.ARCHITECTURE.REASSESSMENT.0` |
 | 3 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` | COMPLETE | R | Unique device-result validity owner; no N implementation or A01 promotion | Producer publication generations invalidate borrowed values before workspace reuse; consumers reject stale results without changing family numerics or public ABI/protocol. | `NATIVE.COGNITIVE.STATE.ALIGNMENT.0` |
 | 4 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.QUALIFICATION.0` | COMPLETE | Q / R | Source-stable lifecycle, numerical component and bounded replay evidence | Mapped QA, stale-result/RNG negative tests and sanitizer lanes qualified; three warm fixed-output controls per clean tree preserve model/binding/kernel/output identity. Characterization only; upstream/full-model conformance remains open. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` |
-| 5 | `SPECTRUM.MAMBA2.REPAIR.0` | ACTIVE | C / S | Pure-SSM language, tokenizer authority, recurrent execution; A01 evidence remains PARTIAL | Resolve source/normalization authority and SSM-only compiled decoder before earning the next evidence stage. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.QUALIFICATION.0` |
-| 6 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
-| 7 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
-| 8 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
-| 9 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
+| 5 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` | ACTIVE | R / C | Typed computational language, explicit state/effects, program/component and physical/target lowering boundaries | Migrate real consumers to verified IR; retire superseded authority. Separate source/catalog model identities, architecture import recipes and lowered execution; qualify consumer migration before removing historical family containers. Represent pure SSM without claiming A01 execution or N. Preserve numerics and .0 publication lifetimes. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.QUALIFICATION.0` |
+| 6 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` | NEXT | Q / R / C | Broad consumer evidence and comparable post-cutover replay | Qualify compiler refusals, migrated families, transactions, CPU/CUDA and sanitizers; replay exact controls and retain the independent full-model conformance gap. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` |
+| 7 | `SPECTRUM.MAMBA2.REPAIR.0` | BLOCKED | C / S | Pure-SSM language, tokenizer authority, recurrent execution; A01 evidence remains PARTIAL | Resume after .1 qualification; resolve source/normalization authority and SSM-only executable boundary before earning the next evidence stage. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` |
+| 8 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
+| 9 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
+| 10 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
+| 11 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
 
-Active Next: SPECTRUM.MAMBA2.REPAIR.0
+Active Next: MAINTENANCE.ARCHITECTURE.REFOUNDATION.1
 
-Alignment, the bounded generic refoundation and its qualification/replay are
-complete. **A01 repair is the selected next engineering boundary**, not an
-implementation delivered by this maintenance work. A01 retains PARTIAL evidence
-and `repair_same_boundary`. DeepSeek optimization stays PARTIAL pending explicit
-resumption; its upstream/whole-model conformance gap remains Program Q work.
+The bounded .0 refoundation and its qualification remain complete. The selected
+order is now **.1 typed compiler/runtime cutover → .1 qualification/replay →
+A01 repair**. Blocking A01's temporal row does not demote its PARTIAL evidence
+or change `repair_same_boundary`. DeepSeek optimization stays PARTIAL pending
+explicit resumption; upstream/whole-model conformance remains Program Q work.
+
+The .1 boundary also owns truthful public execution-capacity admission (R / X):
+discovery and deterministic preflight must describe the exact engine/tokenizer
+envelope, and refusals must identify the exceeded dimension. A small probe is
+not evidence that arbitrary dense content fits. This repair does not increase
+the configured context or admit mandatory-content truncation. YVEX's real-model
+positive/negative controls do not establish an external consumer's Golden PASS;
+that consumer must qualify the published profile and rerun its real workload.
+
+The .1 source-layout criterion is semantic ownership, not a filename taxonomy:
+source/catalog owns exact models, revisions, selectors and relationships;
+architecture importers own source-schema interpretation and IR projection;
+typed programs and admitted operations own computation. Names such as `mamba2`
+may remain legitimate architecture importers or irreducible operation owners.
+Moving or renaming a `families` file alone does not close the boundary, and
+generalizing an importer must not silently widen its qualified source envelope.
 
 The [GB10 workload/measurement authority][gb10] constrains replay. The retained
 pre/post control uses clean source snapshots, 44 input tokens and 256 committed
@@ -837,7 +855,7 @@ to implement every OPEN row.
 
 | Horizon | Engineering objective | Programs | Exit condition |
 | --- | --- | --- | --- |
-| Now | Repair A01 on the qualified generic foundation | R / C / S | Resolve the existing non-KV decoder/source-authority boundary while preserving unique owners. No N runtime implementation. |
+| Now | Establish typed model/program IR and migrate execution before A01 | R / C / S | Verified computational, physical and target boundaries; qualified consumer cutover and replay precede A01 repair. No N runtime implementation. |
 | Near | Broaden model language and physical representation foundations | C / P | Common architectures compile through shared semantics and reproducible recipes. |
 | Near | Prepare persistent-state language and realization/lifecycle boundaries | C / S / N | Future state-capable models need not create another runtime; semantic authority remains external. |
 | Near | Mature single-node sequence runtime | S / G | Typed paging, inflight scheduling, chunked prefill and reusable prefixes qualified. |
@@ -884,7 +902,9 @@ platform qualification. [MLC quick start][mlc]
 | State-target alignment, COMPLETE | N / R / Q | Strategic adoption and evidence rules only; N remains OPEN | Non-KV state is pressure, not cognitive support | No release evidence or gate changes |
 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0`, COMPLETE | R | Producer-owned result validity; preserves C / S / N separation, does not implement N | A01 remains PARTIAL; no family promotion | No automatic gate closure |
 | Post-refoundation qualification and exact replay, COMPLETE | Q / R | Changed borrow contracts and bounded comparable performance; full-model conformance still open | Generic prerequisite qualified before A01 repair | Evidence only at measured scope, not release qualification |
-| `SPECTRUM.MAMBA2.REPAIR.0`, ACTIVE | C / S | Semantic IR, composition, non-KV state, tokenizer | A01 directly pressures generic state and informs N; no automatic N promotion | Indirect; no v0.1 promotion or scope expansion |
+| `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1`, ACTIVE | R / C | Typed values, shapes, operations, effects, programs and explicit lowering; no N implementation | Pure-SSM representability is required, not A01 execution | Preserve numerics; no automatic release promotion |
+| .1 qualification/replay, NEXT | Q / R / C | Compiler refusal, migrated consumer and comparable execution evidence | Precedes queued A01 repair | No upstream conformance inferred from internal parity |
+| `SPECTRUM.MAMBA2.REPAIR.0`, queued | C / S | Semantic IR, composition, non-KV state, tokenizer | A01 directly pressures generic state and informs N; no automatic N promotion | Indirect; no v0.1 promotion or scope expansion |
 | Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |
 | Explicit DeepSeek optimization resumption | Q / S / R | Baseline, resource/structural performance evidence | Existing DeepSeek control, not a new Axx | Predecessor of evaluation |
 | Model-language breadth after A01 | C / O / D / M | Components, heads, tokenizer and modality semantics | A02–A10 selected by pressure | General substrate, not automatically v0.1 |

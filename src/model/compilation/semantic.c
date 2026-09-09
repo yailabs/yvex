@@ -13,6 +13,7 @@
 #include <string.h>
 
 struct yvex_semantic_model_ir {
+    yvex_ir_module *program;
     yvex_semantic_model_ir_summary summary;
     yvex_semantic_attention_layer *attention_layers;
     unsigned long long attention_layer_count;
@@ -242,6 +243,9 @@ static int semantic_identity(yvex_semantic_model_ir *model)
          !semantic_decoder_identity(
              &hash, model->decoder_layers, model->decoder_layer_count)) ||
         !semantic_composite_identity(&hash, model) ||
+        (model->program &&
+         (!yvex_sha256_update_text(&hash, "computational-program.v1") ||
+          !yvex_sha256_update_text(&hash, yvex_ir_identity(model->program)))) ||
         !yvex_sha256_final(&hash, digest))
         return 0;
     yvex_sha256_hex(digest, summary->identity);
@@ -501,6 +505,7 @@ static int semantic_references_build(
 static void semantic_model_release(yvex_semantic_model_ir *model)
 {
     if (!model) return;
+    yvex_ir_module_close(&model->program);
     free(model->attention_layers);
     free(model->draft_attention_layers);
     free(model->decoder_layers);
@@ -527,6 +532,9 @@ int yvex_semantic_model_ir_seal(
         !yvex_sha256_hex_valid(request->source_model_identity) ||
         !yvex_sha256_hex_valid(request->logical_model_identity) ||
         !yvex_sha256_hex_valid(request->semantic_payload_identity) ||
+        (request->program &&
+         (!yvex_ir_source_identity(request->program) ||
+          strcmp(yvex_ir_source_identity(request->program), request->source_model_identity))) ||
         (!!request->attention_layer != !!request->attention_layer_count) ||
         (!!request->draft_attention_layer != !!request->draft_attention_layer_count) ||
         ((request->attention_layer_count || request->draft_attention_layer_count) &&
@@ -545,6 +553,10 @@ int yvex_semantic_model_ir_seal(
     model = calloc(1u, sizeof(*model));
     if (!model)
         return semantic_refuse(err, YVEX_ERR_NOMEM, "semantic model allocation failed");
+    if (request->program && !(model->program = yvex_ir_module_retain(request->program, err))) {
+        semantic_model_release(model);
+        return yvex_error_code(err);
+    }
     model->summary.schema_version = request->schema_version;
     model->summary.family_adapter_id = request->family_adapter_id;
     model->summary.family_adapter_version = request->family_adapter_version;
@@ -675,6 +687,11 @@ const yvex_semantic_model_ir_summary *yvex_semantic_model_ir_summary_get(
     const yvex_semantic_model_ir *model)
 {
     return model ? &model->summary : NULL;
+}
+
+const yvex_ir_module *yvex_semantic_model_ir_program(const yvex_semantic_model_ir *model)
+{
+    return model ? model->program : NULL;
 }
 
 void yvex_semantic_model_ir_close(yvex_semantic_model_ir **model)

@@ -3,10 +3,12 @@
 
 #include <yvex/internal/core.h>
 #include <yvex/internal/families/qwen3_5.h>
+#include <yvex/internal/program.h>
 #include <yvex/internal/graph.h>
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -113,6 +115,149 @@ static void qwen_test_verification(yvex_source_verification *verification,
                         "Qwen3_5ForConditionalGeneration");
 }
 
+static int qwen_test_program(const yvex_qwen3_5_architecture *architecture)
+{
+    static const char source[] = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    yvex_ir_module *program = NULL, *repeat = NULL, *imported = NULL;
+    yvex_program_execution *lowered = NULL;
+    yvex_ir_dialect dialects[] = {
+        *yvex_ir_core_dialect(), *yvex_ir_neural_dialect(), *yvex_ir_sequence_dialect()};
+    yvex_ir_id function, id;
+    const yvex_ir_function *forward;
+    const yvex_ir_block *body;
+    yvex_core_bytes bytes = {.maximum = 4u * 1024u * 1024u};
+    unsigned int delta = 0u, attention = 0u, norms = 0u, ffn = 0u, parameters = 0u;
+    yvex_error error;
+    int rc = yvex_qwen3_5_program_build(&program, architecture, source, &error);
+    if (rc != YVEX_OK) fprintf(stderr, "Qwen program refusal: %s\n", yvex_error_message(&error));
+    YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_ir_function_count(program) == 3u &&
+                     yvex_ir_function_find(program, "forward", &function), "typed forward/output programs");
+    forward = yvex_ir_function_at(program, function);
+    body = yvex_ir_block_at(program, forward->body);
+    YVEX_TEST_ASSERT(body->argument_count == 114u && forward->result_count == 113u,
+                     "tokens + position + 48 convolution/48 recurrent/16 KV states; distinct output versions");
+    for (id = body->first_operation; id != YVEX_IR_NONE; id = yvex_ir_operation_at(program, id)->next) {
+        const yvex_ir_operation *op = yvex_ir_operation_at(program, id);
+        YVEX_TEST_ASSERT(strcmp(op->definition->name, "core.call"), "all 64 FFN component calls were legalized");
+        delta += !strcmp(op->definition->name, "sequence.gated_delta");
+        attention += !strcmp(op->definition->name, "attention.gated_causal");
+        norms += !strcmp(op->definition->name, "nn.rms_norm");
+        ffn += !strcmp(op->definition->name, "nn.silu_product");
+        parameters += !strcmp(op->definition->name, "core.parameter");
+    }
+    YVEX_TEST_ASSERT(delta == 48u && attention == 16u && norms == 129u && ffn == 64u && parameters == 850u,
+                     "source projection preserves real hybrid operations and every forward parameter");
+    parameters = 0u;
+    for (id = 0u; id < yvex_ir_operation_count(program); ++id) {
+        const yvex_ir_operation *op = yvex_ir_operation_at(program, id);
+        const yvex_ir_type *type;
+        const yvex_ir_attribute *parameter;
+        yvex_native_weight_info tensor = {0};
+        yvex_qwen3_5_tensor_binding classified = {0};
+        yvex_qwen3_5_failure failure = {0};
+        unsigned int dimension;
+        if (strcmp(op->definition->name, "core.parameter")) continue;
+        type = yvex_ir_type_at(program, yvex_ir_value_at(program, op->results[0])->type);
+        parameter = yvex_ir_attribute_get(program, id, "parameter");
+        tensor.name = parameter->value.text;
+        tensor.dtype = YVEX_NATIVE_DTYPE_BF16;
+        tensor.rank = type->rank;
+        tensor.data_bytes = 2u;
+        for (dimension = 0u; dimension < type->rank; ++dimension) {
+            tensor.dims[dimension] = type->shape[dimension].extent;
+            YVEX_TEST_ASSERT(yvex_core_u64_mul(tensor.data_bytes, tensor.dims[dimension], &tensor.data_bytes),
+                             "parameter byte geometry is bounded");
+        }
+        rc = yvex_model_register_qwen3_5()->tensor_classify(architecture, &tensor, &classified, &failure, &error);
+        if (rc != YVEX_OK) fprintf(stderr, "Qwen parameter %s: %s\n", tensor.name, yvex_error_message(&error));
+        YVEX_TEST_ASSERT(rc == YVEX_OK && classified.classification == YVEX_QWEN3_5_TENSOR_TEXT_EXECUTION_REQUIRED,
+                         "each program parameter agrees with the independent source tensor-role classifier");
+        parameters++;
+    }
+    YVEX_TEST_ASSERT(parameters == 851u, "all forward and output parameters have source-admitted geometry");
+    YVEX_TEST_ASSERT(yvex_qwen3_5_program_build(&repeat, architecture, source, &error) == YVEX_OK &&
+                     !strcmp(yvex_ir_identity(program), yvex_ir_identity(repeat)), "repeatable source projection");
+    rc = yvex_ir_encode(program, &bytes, &error);
+    if (rc == YVEX_OK) rc = yvex_ir_decode(&imported, bytes.data, bytes.count, dialects, 3u, &error);
+    if (rc != YVEX_OK) fprintf(stderr, "Qwen program roundtrip: %s\n", yvex_error_message(&error));
+    YVEX_TEST_ASSERT(rc == YVEX_OK &&
+                     !strcmp(yvex_ir_identity(program), yvex_ir_identity(imported)), "hybrid program roundtrip");
+    YVEX_TEST_ASSERT(yvex_program_execution_compile(&lowered, imported, &error) == YVEX_OK &&
+        yvex_program_execution_entry_count(lowered) == 3u,
+        "imported Qwen module lowers every computational entry to explicit dependency/value slots");
+    {
+        const yvex_program_entry *entry = yvex_program_execution_entry_at(lowered, 1u);
+        size_t step, dependency;
+        YVEX_TEST_ASSERT(entry && !strcmp(entry->symbol, "forward") && entry->input_count == 114u &&
+            entry->result_count == 113u, "execution form preserves all 112 typed state inputs and successors");
+        for (step = 0u; step < entry->step_count; ++step)
+            for (dependency = 0u; dependency < entry->steps[step].dependency_count; ++dependency)
+                YVEX_TEST_ASSERT(entry->steps[step].dependencies[dependency] < step,
+                    "all whole-forward dependencies are compiled before their use");
+        printf("Qwen execution form: entries=3 forward_steps=%zu values=%zu state_inputs=112 state_results=112\n",
+               entry->step_count, entry->value_count);
+    }
+    printf("Qwen program: forward inputs=114 results=113; delta=48 attention=16 RMSNorm=129 FFN=64 parameters=851\n");
+    free(bytes.data);
+    yvex_program_execution_close(&lowered);
+    yvex_ir_module_close(&imported);
+    yvex_ir_module_close(&repeat);
+    yvex_ir_module_close(&program);
+    return 0;
+}
+
+static int qwen_test_lowering(const yvex_graph_execution_binding *execution,
+    const yvex_source_verification *verification)
+{
+    yvex_semantic_model_ir *semantic = NULL;
+    yvex_source_verification source = *verification;
+    const yvex_semantic_decoder_layer *layers;
+    const yvex_semantic_attention_layer *attention;
+    unsigned long long count, index;
+    yvex_error error;
+    int rc;
+    yvex_core_text_copy(source.manifest_payload_identity, sizeof(source.manifest_payload_identity),
+                        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+    rc = execution->compiler->binding_pipeline->semantic_model_build(&semantic, &source, &error);
+    if (rc != YVEX_OK) fprintf(stderr, "Qwen lowering refusal: %s\n", yvex_error_message(&error));
+    YVEX_TEST_ASSERT(rc == YVEX_OK &&
+                     yvex_ir_identity(yvex_semantic_model_ir_program(semantic)) &&
+                     yvex_semantic_model_ir_decoder_view(semantic, &layers, &count) && count == 64u,
+                     "actual compiler lowers source-bound program into current execution records");
+    for (index = 0u; index < count; ++index) {
+        const yvex_semantic_decoder_layer *layer = &layers[index];
+        int full = (index + 1u) % 4u == 0u;
+        YVEX_TEST_ASSERT(layer->hidden_width == 5120u && layer->intermediate_width == 17408u &&
+                         layer->normalization_epsilon == 1.0e-6 &&
+                         layer->normalization_weight_convention == YVEX_NORMALIZATION_WEIGHT_ONE_PLUS &&
+                         layer->mixer == (full ? YVEX_SEMANTIC_DECODER_MIXER_FULL_CAUSAL_ATTENTION :
+                                                YVEX_SEMANTIC_DECODER_MIXER_GATED_DELTA),
+                         "lowered shape, normalization and operation classes preserve the admitted source");
+        if (!full)
+            YVEX_TEST_ASSERT(layer->gated_delta.query_heads == 16u && layer->gated_delta.value_heads == 48u &&
+                             layer->gated_delta.key_head_dimension == 128u &&
+                             layer->gated_delta.value_head_dimension == 128u &&
+                             layer->gated_delta.convolution_kernel == 4u &&
+                             layer->gated_delta.recurrent_state_dtype == YVEX_DTYPE_F32 &&
+                             layer->gated_delta.numeric_contract == YVEX_SEQUENCE_MIXER_NUMERIC_F32_RECURRENCE,
+                             "gated-delta geometry and F32 recurrence survive program lowering");
+    }
+    YVEX_TEST_ASSERT(yvex_semantic_model_ir_attention_view(semantic, YVEX_TENSOR_SCOPE_MAIN_LAYER,
+                                                          &attention, &count) && count == 16u,
+                     "attention schedule is projected from typed attention operations");
+    for (index = 0u; index < count; ++index)
+        YVEX_TEST_ASSERT(attention[index].layer_index == 4u * index + 3u &&
+                         attention[index].query_heads == 24u && attention[index].kv_heads == 4u &&
+                         attention[index].head_dimension == 256u && attention[index].rope_head_dimension == 64u &&
+                         attention[index].position.maximum_context == 262144u &&
+                         attention[index].position.theta == 10000000u &&
+                         attention[index].compute_contract == YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
+                         "attention population, position semantics and rounding contract preserved");
+    printf("Qwen lowering: 64/64 execution records and 16/16 attention records match source geometry/numerical class\n");
+    yvex_semantic_model_ir_close(&semantic);
+    return 0;
+}
+
 int yvex_test_qwen3_5_architecture(void)
 {
     const char *root = "build/tests/qwen3-5-architecture";
@@ -195,6 +340,8 @@ int yvex_test_qwen3_5_architecture(void)
             architecture->generation.stop_token_ids[0] == 248046ull &&
             architecture->generation.stop_token_ids[1] == 248044ull,
         "deferred vision and generation facts remain accounted");
+    YVEX_TEST_ASSERT(qwen_test_program(architecture) == 0, "Qwen typed program source projection");
+    YVEX_TEST_ASSERT(qwen_test_lowering(execution, &verification) == 0, "Qwen compiler consumer");
     api->close(&model);
     YVEX_TEST_ASSERT(!model, "close semantic architecture");
 

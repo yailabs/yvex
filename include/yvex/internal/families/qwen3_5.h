@@ -4,6 +4,7 @@
 
 #include <yvex/core.h>
 #include <yvex/internal/conversation.h>
+#include <yvex/internal/ir.h>
 #include <yvex/internal/source.h>
 
 #ifdef __cplusplus
@@ -186,6 +187,8 @@ typedef struct {
 
 const yvex_qwen3_5_api *yvex_model_register_qwen3_5(void);
 const yvex_conversation_protocol *yvex_model_qwen3_5_conversation(void);
+int yvex_qwen3_5_program_build(yvex_ir_module **out,
+    const yvex_qwen3_5_architecture *architecture, const char *source_identity, yvex_error *err);
 
 #ifdef __cplusplus
 }

@@ -5,6 +5,7 @@
 #include <yvex/internal/decoder_plan.h>
 #include <yvex/internal/moe.h>
 #include <yvex/internal/operator_graph.h>
+#include <yvex/internal/program.h>
 #include <yvex/internal/transformer.h>
 
 #include <limits.h>
@@ -15,6 +16,7 @@
 #define MODEL_PLAN_SCHEMA_V2 2u
 #define MODEL_PLAN_SCHEMA_V3 3u
 #define MODEL_PLAN_SCHEMA_V4 4u
+#define MODEL_PLAN_SCHEMA_V5 5u
 #define MODEL_PLAN_MAX_LAYERS 65536ull
 
 typedef struct {
@@ -23,7 +25,9 @@ typedef struct {
 } model_plan_cursor;
 
 struct yvex_compiled_model_plan {
+    unsigned int schema;
     char operator_graph_identity[YVEX_SHA256_HEX_BYTES];
+    yvex_program_tensor_plan *dense_ffn;
     yvex_decoder_plan *decoder;
     yvex_moe_plan *moe, *draft_moe;
     yvex_transformer_plan *transformer, *draft_transformer;
@@ -562,6 +566,7 @@ void yvex_compiled_model_plan_close(yvex_compiled_model_plan **owner)
 {
     yvex_compiled_model_plan *plans = owner ? *owner : NULL;
     if (!plans) return;
+    yvex_program_tensor_close(&plans->dense_ffn);
     yvex_decoder_plan_close(&plans->decoder);
     yvex_transformer_plan_close(&plans->draft_transformer);
     yvex_transformer_plan_close(&plans->transformer);
@@ -588,6 +593,111 @@ static int decoder_capabilities_unsupported(
            capabilities->logits_ready || capabilities->generation_ready;
 }
 
+/* Import authenticated v3/v4 FFN semantics once at the schema boundary. Native
+ * compilation supplies its real program. This lineage names a legacy compiled
+ * projection, not an upstream/provider-source conformance proof. */
+static int legacy_decoder_ffn_import(yvex_program_tensor_plan **out, const yvex_decoder_plan *decoder,
+                                      yvex_error *err)
+{
+    const yvex_decoder_plan_summary *s = yvex_decoder_plan_summary_get(decoder);
+    yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+    yvex_ir_module *module = NULL;
+    yvex_program_execution *execution = NULL;
+    yvex_ir_dimension rows = {.name = "sequence", .minimum = 1u, .multiple = 1u};
+    yvex_ir_type t = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_BF16, .rank = 2u};
+    yvex_ir_id dimension, hidden, intermediate, signature[4], function, block, op;
+    yvex_ir_id args[4], values[4], operands[2];
+    size_t i;
+    int rc;
+    if (!s) return model_plan_refuse(err, YVEX_ERR_FORMAT, "legacy FFN import requires an admitted decoder");
+    rows.maximum = s->maximum_context;
+    rc = yvex_ir_module_open(&module, "legacy_decoder_ffn", s->decoder_plan_identity, dialects, 2u, err);
+    if (rc == YVEX_OK) rc = yvex_ir_dimension_add(module, &rows, &dimension, err);
+    if (rc == YVEX_OK) {
+        t.shape[0] = (yvex_ir_extent){dimension, 0u};
+        t.shape[1] = (yvex_ir_extent){YVEX_IR_NONE, s->hidden_width};
+        rc = yvex_ir_type_intern(module, &t, &hidden, err);
+    }
+    if (rc == YVEX_OK) {
+        signature[0] = hidden;
+        t.shape[1].extent = s->intermediate_width;
+        rc = yvex_ir_type_intern(module, &t, &intermediate, err);
+    }
+    if (rc == YVEX_OK) {
+        t.shape[0] = (yvex_ir_extent){YVEX_IR_NONE, s->intermediate_width};
+        t.shape[1].extent = s->hidden_width;
+        rc = yvex_ir_type_intern(module, &t, &signature[1], err);
+    }
+    if (rc == YVEX_OK) {
+        signature[2] = signature[1];
+        t.shape[0].extent = s->hidden_width;
+        t.shape[1].extent = s->intermediate_width;
+        rc = yvex_ir_type_intern(module, &t, &signature[3], err);
+    }
+    if (rc == YVEX_OK)
+        rc = yvex_ir_function_add(module, "dense_ffn", signature, 4u, &hidden, 1u, 0u, &function, err);
+    if (rc == YVEX_OK) {
+        block = yvex_ir_function_at(module, function)->body;
+        memcpy(args, yvex_ir_block_at(module, block)->arguments, sizeof(args));
+    }
+    for (i = 0u; rc == YVEX_OK && i < 4u; ++i) {
+        yvex_ir_operation_request r = {.operation = i == 2u ? "nn.silu_product" : "nn.linear",
+            .operands = operands, .operand_count = 2u, .result_types = i == 3u ? &hidden : &intermediate,
+            .result_count = 1u};
+        operands[0] = i < 2u ? args[0] : i == 2u ? values[0] : values[2];
+        operands[1] = i < 2u ? args[i + 1u] : i == 2u ? values[1] : args[3];
+        rc = yvex_ir_operation_add(module, block, &r, &op, err);
+        if (rc == YVEX_OK) values[i] = yvex_ir_operation_at(module, op)->results[0];
+    }
+    if (rc == YVEX_OK) {
+        yvex_ir_operation_request r = {.operation = "core.return", .operands = &values[3], .operand_count = 1u};
+        rc = yvex_ir_operation_add(module, block, &r, &op, err);
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_seal(module, err);
+    if (rc == YVEX_OK) rc = yvex_program_execution_compile(&execution, module, err);
+    if (rc == YVEX_OK) rc = yvex_program_tensor_compile(out, execution, "dense_ffn", err);
+    yvex_program_execution_close(&execution);
+    yvex_ir_module_close(&module);
+    return rc;
+}
+
+static int compiled_ffn_signature_valid(const yvex_compiled_model_plan *plan)
+{
+    const yvex_decoder_plan_summary *d = yvex_decoder_plan_summary_get(plan->decoder);
+    const yvex_program_tensor_summary *p = yvex_program_tensor_summary_get(plan->dense_ffn);
+    const yvex_program_tensor_value *a, *gate, *up, *down, *output;
+    if (!d) return !p;
+    if (!p || p->input_count != 4u || p->result_count != 1u || p->minimum_rows != 1u ||
+        p->maximum_rows != d->maximum_context || p->row_multiple != 1u) return 0;
+    a = yvex_program_tensor_value_at(plan->dense_ffn, 0u);
+    gate = yvex_program_tensor_value_at(plan->dense_ffn, 1u);
+    up = yvex_program_tensor_value_at(plan->dense_ffn, 2u);
+    down = yvex_program_tensor_value_at(plan->dense_ffn, 3u);
+    output = yvex_program_tensor_value_at(plan->dense_ffn, yvex_program_tensor_result_at(plan->dense_ffn, 0u));
+    return !a->parameter && a->width == d->hidden_width && gate->parameter && up->parameter && down->parameter &&
+        gate->width == d->hidden_width && up->width == d->hidden_width &&
+        gate->rows == d->intermediate_width && up->rows == d->intermediate_width &&
+        down->width == d->intermediate_width && down->rows == d->hidden_width &&
+        !output->parameter && output->width == d->hidden_width;
+}
+
+static int compiled_ffn_build(yvex_compiled_model_plan *plan, const yvex_compiled_model_plan_request *r,
+                               yvex_error *err)
+{
+    const yvex_ir_module *m = yvex_semantic_model_ir_program(r->semantic_model);
+    int rc;
+    if (m) {
+        const char *id = yvex_ir_identity(yvex_program_execution_module(r->program));
+        if (!id || strcmp(yvex_ir_identity(m), id))
+            return model_plan_refuse(err, YVEX_ERR_FORMAT, "native model-plan requires matching execution IR");
+        rc = yvex_program_tensor_compile(&plan->dense_ffn, r->program, "dense_ffn", err);
+    } else rc = legacy_decoder_ffn_import(&plan->dense_ffn, plan->decoder, err);
+    if (rc == YVEX_OK && !compiled_ffn_signature_valid(plan))
+        rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "compiled FFN signature differs from admitted operands");
+    if (rc == YVEX_OK) plan->schema = MODEL_PLAN_SCHEMA_V5;
+    return rc;
+}
+
 int yvex_compiled_model_plan_build(
     yvex_compiled_model_plan **out,
     const yvex_compiled_model_plan_request *request, yvex_error *err)
@@ -607,6 +717,7 @@ int yvex_compiled_model_plan_build(
     if (!plan)
         return model_plan_refuse(err, YVEX_ERR_NOMEM,
                                  "compiled model-plan allocation failed");
+    plan->schema = MODEL_PLAN_SCHEMA_V4;
     {
         const yvex_operator_graph_summary *operators =
             yvex_operator_graph_ir_summary(request->operator_graph);
@@ -673,6 +784,7 @@ int yvex_compiled_model_plan_build(
                 &request->logits_policy, err);
         else
             rc = YVEX_OK;
+        if (rc == YVEX_OK) rc = compiled_ffn_build(plan, request, err);
         if (rc == YVEX_OK) {
             *out = plan;
             yvex_error_clear(err);
@@ -771,10 +883,11 @@ int yvex_compiled_model_plan_encode(
         (plans->moe != NULL) != (plans->transformer != NULL) ||
         (plans->draft_moe != NULL) != (plans->draft_transformer != NULL) ||
         (target_present && decoder_present) || (!target_present && draft_present) ||
-        !compiled_output_matches_producer(plans) ||
+        !compiled_output_matches_producer(plans) || !compiled_ffn_signature_valid(plans) ||
         !yvex_sha256_hex_valid(plans->operator_graph_identity) ||
-        !plan_put_text(bytes, "yvex.compiled-model-plan.v4") ||
-        !plan_put_u64(bytes, MODEL_PLAN_SCHEMA_V4) ||
+        !plan_put_text(bytes, plans->schema == MODEL_PLAN_SCHEMA_V5 ?
+                       "yvex.compiled-model-plan.v5" : "yvex.compiled-model-plan.v4") ||
+        !plan_put_u64(bytes, plans->schema == MODEL_PLAN_SCHEMA_V5 ? MODEL_PLAN_SCHEMA_V5 : MODEL_PLAN_SCHEMA_V4) ||
         !plan_put_text(bytes, plans->operator_graph_identity) ||
         !plan_put_u64(bytes, (unsigned int)target_present) ||
         (target_present &&
@@ -791,6 +904,15 @@ int yvex_compiled_model_plan_encode(
         (output_present && !output_head_write(bytes, &plans->output_head)))
         return model_plan_refuse(err, YVEX_ERR_FORMAT,
                                  "compiled model-plan encoding failed");
+    if (plans->schema == MODEL_PLAN_SCHEMA_V5) {
+        yvex_core_bytes program = {.maximum = 16u * 1024u * 1024u};
+        int rc = yvex_program_tensor_encode(plans->dense_ffn, &program, err);
+        if (rc == YVEX_OK && (!plan_put_u64(bytes, program.count) ||
+            !yvex_core_bytes_append(bytes, program.data, program.count)))
+            rc = model_plan_refuse(err, YVEX_ERR_NOMEM, "compiled tensor program encoding failed");
+        free(program.data);
+        if (rc != YVEX_OK) return rc;
+    }
     yvex_error_clear(err);
     return YVEX_OK;
 }
@@ -817,6 +939,8 @@ int yvex_compiled_model_plan_decode(
         expected_schema = MODEL_PLAN_SCHEMA_V3;
     else if (strcmp(domain, "yvex.compiled-model-plan.v4") == 0)
         expected_schema = MODEL_PLAN_SCHEMA_V4;
+    else if (strcmp(domain, "yvex.compiled-model-plan.v5") == 0)
+        expected_schema = MODEL_PLAN_SCHEMA_V5;
     if (!expected_schema || !plan_get_u64(&cursor, &schema) ||
         schema != expected_schema)
         return model_plan_refuse(err, YVEX_ERR_FORMAT,
@@ -863,10 +987,21 @@ int yvex_compiled_model_plan_decode(
                                "compiled output-head presence is malformed");
     if (rc == YVEX_OK && output_present)
         rc = output_head_read(&cursor, &plan->output_head, 0, err);
+    plan->schema = (unsigned int)schema;
+    if (rc == YVEX_OK && schema >= MODEL_PLAN_SCHEMA_V5) {
+        unsigned long long length;
+        if (!decoder_present || !plan_get_u64(&cursor, &length) || length > cursor.count - cursor.offset)
+            rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "compiled tensor program extent is malformed");
+        else {
+            rc = yvex_program_tensor_decode(&plan->dense_ffn, cursor.data + cursor.offset, (size_t)length, err);
+            if (rc == YVEX_OK) cursor.offset += (size_t)length;
+        }
+    } else if (rc == YVEX_OK && decoder_present)
+        rc = legacy_decoder_ffn_import(&plan->dense_ffn, plan->decoder, err);
     if (rc == YVEX_OK &&
         ((target_present && decoder_present) ||
          (!target_present && draft_present) ||
-         !compiled_output_matches_producer(plan)))
+         !compiled_output_matches_producer(plan) || !compiled_ffn_signature_valid(plan)))
         rc = model_plan_refuse(err, YVEX_ERR_FORMAT,
                                "compiled execution producers are inconsistent");
     if (rc == YVEX_OK && cursor.offset != cursor.count)
@@ -1139,6 +1274,11 @@ const yvex_runtime_logits_plan_summary *yvex_compiled_model_plan_output_head(
     const yvex_compiled_model_plan *plan)
 {
     return plan && plan->output_head.schema_version ? &plan->output_head : NULL;
+}
+
+const yvex_program_tensor_plan *yvex_compiled_model_plan_dense_ffn(const yvex_compiled_model_plan *plan)
+{
+    return plan ? plan->dense_ffn : NULL;
 }
 
 const char *yvex_compiled_model_plan_operator_graph_identity(

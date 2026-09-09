@@ -26,12 +26,6 @@
 #define QWEN_MAPPING_IDENTITY 9266396127046126464ull
 #define QWEN_SOURCE_FAITHFUL_PRESET "qwen3.8-source-faithful"
 
-typedef struct {
-    yvex_compilation_source_session *source;
-    yvex_semantic_model_ir *semantic;
-} qwen_source_owner;
-
-static void qwen_source_release(void *pointer);
 static int qwen_tokenizer_policy(yvex_tokenizer_family_policy *out,
                                  yvex_error *err);
 
@@ -424,17 +418,58 @@ static int qwen_numeric_contract_build(
     return YVEX_OK;
 }
 
-static yvex_gated_delta_requirement qwen_delta_requirement(
-    const yvex_qwen3_5_architecture *architecture)
+/* Transitional execution-record lowering. The source projection is a verified
+ * program; these records are retained only until executable schedule cutover. */
+static const yvex_ir_operation *qwen_program_transition(const yvex_ir_module *program,
+    unsigned long long wanted, int attention_only, unsigned long long *layer_index, yvex_ir_id *operation)
 {
-    yvex_gated_delta_requirement requirement = {
+    yvex_ir_id function, id;
+    unsigned long long ordinal = 0u, layer = 0u;
+    const yvex_ir_block *block;
+    if (!yvex_ir_identity(program) || !yvex_ir_function_find(program, "forward", &function)) return NULL;
+    block = yvex_ir_block_at(program, yvex_ir_function_at(program, function)->body);
+    for (id = block->first_operation; id != YVEX_IR_NONE; id = yvex_ir_operation_at(program, id)->next) {
+        const yvex_ir_operation *op = yvex_ir_operation_at(program, id);
+        int attention = !strcmp(op->definition->name, "attention.gated_causal");
+        if (!attention && strcmp(op->definition->name, "sequence.gated_delta")) continue;
+        if ((!attention_only || attention) && ordinal++ == wanted) {
+            *layer_index = layer;
+            *operation = id;
+            return op;
+        }
+        ++layer;
+    }
+    return NULL;
+}
+
+static const yvex_ir_operation *qwen_program_definition(const yvex_ir_module *program,
+    yvex_ir_id value, const char *name)
+{
+    const yvex_ir_value *v = yvex_ir_value_at(program, value);
+    const yvex_ir_operation *op = v ? yvex_ir_operation_at(program, v->definition) : NULL;
+    return op && !strcmp(op->definition->name, name) ? op : NULL;
+}
+
+static const yvex_ir_operation *qwen_program_input_norm(const yvex_ir_module *program,
+    const yvex_ir_operation *transition, yvex_ir_id *id)
+{
+    const yvex_ir_operation *linear = qwen_program_definition(program, transition->operands[0], "nn.linear");
+    const yvex_ir_operation *norm = linear
+        ? qwen_program_definition(program, linear->operands[0], "nn.rms_norm") : NULL;
+    if (norm) *id = yvex_ir_value_at(program, linear->operands[0])->definition;
+    return norm;
+}
+
+static yvex_gated_delta_requirement qwen_program_delta_requirement(const yvex_ir_module *program, yvex_ir_id id)
+{
+    return (yvex_gated_delta_requirement){
         .schema_version = YVEX_SEQUENCE_MIXER_GATED_DELTA_SCHEMA_V2,
-        .query_heads = architecture->text.linear_key_heads,
-        .key_heads = architecture->text.linear_key_heads,
-        .value_heads = architecture->text.linear_value_heads,
-        .key_head_dimension = architecture->text.linear_key_head_dimension,
-        .value_head_dimension = architecture->text.linear_value_head_dimension,
-        .convolution_kernel = architecture->text.linear_convolution_kernel,
+        .query_heads = yvex_ir_attribute_get(program, id, "key_heads")->value.integer,
+        .key_heads = yvex_ir_attribute_get(program, id, "key_heads")->value.integer,
+        .value_heads = yvex_ir_attribute_get(program, id, "value_heads")->value.integer,
+        .key_head_dimension = yvex_ir_attribute_get(program, id, "key_dimension")->value.integer,
+        .value_head_dimension = yvex_ir_attribute_get(program, id, "value_dimension")->value.integer,
+        .convolution_kernel = yvex_ir_attribute_get(program, id, "convolution_kernel")->value.integer,
         .projected_dtype = YVEX_DTYPE_F32,
         .convolution_state_dtype = YVEX_DTYPE_F32,
         .recurrent_state_dtype = YVEX_DTYPE_F32,
@@ -443,84 +478,90 @@ static yvex_gated_delta_requirement qwen_delta_requirement(
         .numeric_contract = YVEX_SEQUENCE_MIXER_NUMERIC_F32_RECURRENCE,
         .output_normalization_weight_convention =
             YVEX_NORMALIZATION_WEIGHT_DIRECT,
-        .qk_normalization_epsilon = 1.0e-6,
-        .output_normalization_epsilon = architecture->text.rms_norm_epsilon,
-        .query_scale = 1.0 / sqrt(
-            (double)architecture->text.linear_key_head_dimension),
+        .qk_normalization_epsilon = yvex_ir_attribute_get(program, id, "qk_epsilon")->value.real,
+        .output_normalization_epsilon = yvex_ir_attribute_get(program, id, "epsilon")->value.real,
+        .query_scale = yvex_ir_attribute_get(program, id, "query_scale")->value.real,
         .deterministic = 1};
-
-    return requirement;
 }
 
 static int qwen_decoder_layer(
     const void *context, unsigned long long index,
     yvex_semantic_decoder_layer *out)
 {
-    const yvex_qwen3_5_architecture *architecture = context;
-    yvex_qwen3_5_layer_kind kind;
-
-    if (!architecture || !out || index >= architecture->text.layer_count)
-        return 0;
-    kind = architecture->text.layers[index];
+    const yvex_ir_module *program = context;
+    yvex_ir_id id, norm_id, cursor;
+    unsigned long long layer;
+    const yvex_ir_operation *transition, *norm, *ffn = NULL;
+    const yvex_ir_type *hidden, *intermediate;
+    int attention;
+    if (!out || !(transition = qwen_program_transition(program, index, 0, &layer, &id)) ||
+        !(norm = qwen_program_input_norm(program, transition, &norm_id))) return 0;
+    for (cursor = transition->next; cursor != YVEX_IR_NONE; cursor = yvex_ir_operation_at(program, cursor)->next) {
+        const yvex_ir_operation *op = yvex_ir_operation_at(program, cursor);
+        if (!strcmp(op->definition->name, "nn.silu_product")) { ffn = op; break; }
+        if (op->definition->effects) return 0;
+    }
+    if (!ffn) return 0;
+    hidden = yvex_ir_type_at(program, yvex_ir_value_at(program, norm->results[0])->type);
+    intermediate = yvex_ir_type_at(program, yvex_ir_value_at(program, ffn->results[0])->type);
+    if (hidden->shape[1].symbol != YVEX_IR_NONE || intermediate->shape[1].symbol != YVEX_IR_NONE ||
+        yvex_ir_attribute_get(program, norm_id, "weight_offset")->value.real != 1.0) return 0;
+    attention = !strcmp(transition->definition->name, "attention.gated_causal");
     memset(out, 0, sizeof(*out));
     out->ordinal = index;
-    out->layer_index = index;
+    out->layer_index = layer;
     out->tensor_scope = YVEX_TENSOR_SCOPE_MAIN_LAYER;
-    out->mixer = kind == YVEX_QWEN3_5_LAYER_FULL_ATTENTION
+    out->mixer = attention
                      ? YVEX_SEMANTIC_DECODER_MIXER_FULL_CAUSAL_ATTENTION
                      : YVEX_SEMANTIC_DECODER_MIXER_GATED_DELTA;
     out->feed_forward = YVEX_SEMANTIC_DECODER_FFN_DENSE_SILU_GATED;
-    out->hidden_width = architecture->text.hidden_size;
-    out->intermediate_width = architecture->text.intermediate_size;
+    out->hidden_width = hidden->shape[1].extent;
+    out->intermediate_width = intermediate->shape[1].extent;
     out->normalization_weight_convention = YVEX_NORMALIZATION_WEIGHT_ONE_PLUS;
-    out->normalization_epsilon = architecture->text.rms_norm_epsilon;
+    out->normalization_epsilon = yvex_ir_attribute_get(program, norm_id, "epsilon")->value.real;
     out->mixer_output_gate = 1;
-    if (kind == YVEX_QWEN3_5_LAYER_LINEAR_ATTENTION)
-        out->gated_delta = qwen_delta_requirement(architecture);
-    return kind == YVEX_QWEN3_5_LAYER_LINEAR_ATTENTION ||
-           kind == YVEX_QWEN3_5_LAYER_FULL_ATTENTION;
+    if (!attention) out->gated_delta = qwen_program_delta_requirement(program, id);
+    return 1;
 }
 
 static int qwen_attention_layer(
     const void *context, unsigned long long ordinal,
     yvex_semantic_attention_layer *out)
 {
-    const yvex_qwen3_5_architecture *architecture = context;
-    unsigned long long index, found = 0ull;
-
-    if (!architecture || !out ||
-        ordinal >= architecture->text.full_attention_layers) return 0;
-    for (index = 0ull; index < architecture->text.layer_count; ++index) {
-        if (architecture->text.layers[index] !=
-            YVEX_QWEN3_5_LAYER_FULL_ATTENTION) continue;
-        if (found++ != ordinal) continue;
-        memset(out, 0, sizeof(*out));
-        out->ordinal = ordinal;
-        out->layer_index = index;
-        out->predictor_index = YVEX_ATTENTION_NO_TENSOR_INDEX;
-        out->tensor_scope = YVEX_TENSOR_SCOPE_MAIN_LAYER;
-        /* A maximum-context window selects the exact bounded full-causal H28 path. */
-        out->attention_class = YVEX_ATTENTION_CLASS_SWA;
-        out->compute_contract = YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1;
-        out->sliding_window = architecture->text.maximum_positions;
-        out->query_heads = architecture->text.attention_heads;
-        out->kv_heads = architecture->text.kv_heads;
-        out->head_dimension = architecture->text.attention_head_dimension;
-        out->rope_head_dimension = architecture->text.rotary_dimension;
-        out->hidden_dimension = architecture->text.hidden_size;
-        out->rms_norm_epsilon = architecture->text.rms_norm_epsilon;
-        out->attention_input_norm_required = 1;
-        out->attention_input_norm_width = architecture->text.hidden_size;
-        out->attention_input_norm_role = YVEX_TENSOR_ROLE_ATTENTION_NORM;
-        out->position.rope_dimension = architecture->text.rotary_dimension;
-        out->position.theta = architecture->text.rope_theta;
-        out->position.scaling_factor = 1ull;
-        out->position.original_context = architecture->text.maximum_positions;
-        out->position.maximum_context = architecture->text.maximum_positions;
-        out->position.partial_rope = 1;
-        return 1;
-    }
-    return 0;
+    const yvex_ir_module *program = context;
+    const yvex_ir_operation *transition, *norm;
+    const yvex_ir_type *hidden;
+    unsigned long long index;
+    yvex_ir_id id, norm_id;
+    if (!out || !(transition = qwen_program_transition(program, ordinal, 1, &index, &id)) ||
+        !(norm = qwen_program_input_norm(program, transition, &norm_id))) return 0;
+    hidden = yvex_ir_type_at(program, yvex_ir_value_at(program, norm->results[0])->type);
+    if (hidden->shape[1].symbol != YVEX_IR_NONE) return 0;
+    memset(out, 0, sizeof(*out));
+    out->ordinal = ordinal;
+    out->layer_index = index;
+    out->predictor_index = YVEX_ATTENTION_NO_TENSOR_INDEX;
+    out->tensor_scope = YVEX_TENSOR_SCOPE_MAIN_LAYER;
+    /* A maximum-context window selects the exact bounded full-causal H28 path. */
+    out->attention_class = YVEX_ATTENTION_CLASS_SWA;
+    out->compute_contract = YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1;
+    out->sliding_window = yvex_ir_attribute_get(program, id, "maximum_context")->value.integer;
+    out->query_heads = yvex_ir_attribute_get(program, id, "query_heads")->value.integer;
+    out->kv_heads = yvex_ir_attribute_get(program, id, "kv_heads")->value.integer;
+    out->head_dimension = yvex_ir_attribute_get(program, id, "head_dimension")->value.integer;
+    out->rope_head_dimension = yvex_ir_attribute_get(program, id, "rotary_dimension")->value.integer;
+    out->hidden_dimension = hidden->shape[1].extent;
+    out->rms_norm_epsilon = yvex_ir_attribute_get(program, norm_id, "epsilon")->value.real;
+    out->attention_input_norm_required = 1;
+    out->attention_input_norm_width = out->hidden_dimension;
+    out->attention_input_norm_role = YVEX_TENSOR_ROLE_ATTENTION_NORM;
+    out->position.rope_dimension = out->rope_head_dimension;
+    out->position.theta = yvex_ir_attribute_get(program, id, "theta")->value.integer;
+    out->position.scaling_factor = 1ull;
+    out->position.original_context = out->sliding_window;
+    out->position.maximum_context = out->sliding_window;
+    out->position.partial_rope = 1;
+    return 1;
 }
 
 static int qwen_execution_descriptor(
@@ -581,6 +622,7 @@ static int qwen_semantic_model_build(yvex_semantic_model_ir **out,
     yvex_qwen3_5_model *model = NULL;
     const yvex_qwen3_5_architecture *architecture;
     yvex_semantic_reference_request references[4];
+    yvex_ir_module *program = NULL;
     yvex_semantic_model_ir_request request = {0};
     yvex_model_execution_descriptor execution = {0};
     yvex_semantic_numeric_contract numeric = {0};
@@ -600,6 +642,9 @@ static int qwen_semantic_model_build(yvex_semantic_model_ir **out,
             &execution, verification, architecture, err);
     if (rc == YVEX_OK)
         rc = qwen_numeric_contract_build(architecture, &numeric, err);
+    if (rc == YVEX_OK)
+        rc = yvex_qwen3_5_program_build(&program, architecture,
+                                       verification->manifest_payload_identity, err);
     if (rc == YVEX_OK) {
         references[0] = (yvex_semantic_reference_request){
             "source-revision", architecture->source_revision};
@@ -618,16 +663,18 @@ static int qwen_semantic_model_build(yvex_semantic_model_ir **out,
         request.semantic_payload_identity = execution.identity;
         request.execution_descriptor = &execution;
         request.numeric_contract = &numeric;
-        request.attention_context = architecture;
+        request.attention_context = program;
         request.attention_layer = qwen_attention_layer;
         request.attention_layer_count = architecture->text.full_attention_layers;
-        request.decoder_context = architecture;
+        request.decoder_context = program;
         request.decoder_layer = qwen_decoder_layer;
         request.decoder_layer_count = architecture->text.layer_count;
         request.references = references;
         request.reference_count = sizeof(references) / sizeof(references[0]);
+        request.program = program;
         rc = yvex_semantic_model_ir_seal(out, &request, err);
     }
+    yvex_ir_module_close(&program);
     family->close(&model);
     return rc;
 }
@@ -638,7 +685,7 @@ static int qwen_compilation_source_open(
 {
     yvex_compilation_source_options options = {0};
     yvex_compilation_source_failure failure = {0};
-    qwen_source_owner *owner;
+    yvex_compilation_source_session *source = NULL;
     int rc;
 
     if (out) memset(out, 0, sizeof(*out));
@@ -647,18 +694,11 @@ static int qwen_compilation_source_open(
                        "exact source path and models root are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    owner = calloc(1u, sizeof(*owner));
-    if (!owner) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "qwen3_5.compilation-source",
-                       "source compiler ownership allocation failed");
-        return YVEX_ERR_NOMEM;
-    }
     options.source_path = request->source_path;
     options.models_root = request->models_root;
     options.manifest_path = request->source_manifest_path;
     yvex_source_payload_budget_default(&options.budget);
     if (request->source_stream_count > 64u) {
-        qwen_source_release(owner);
         yvex_error_set(err, YVEX_ERR_BOUNDS, "qwen3_5.compilation-source",
                        "source stream count exceeds the bounded compiler worker limit");
         return YVEX_ERR_BOUNDS;
@@ -673,28 +713,24 @@ static int qwen_compilation_source_open(
     options.chunk_bytes = options.budget.chunk_bytes;
     options.page_bytes = options.budget.page_bytes;
     rc = yvex_compilation_source_operations.open(
-        &owner->source, &options, &qwen_source_projection, &failure, err);
-    if (rc == YVEX_OK)
-        rc = qwen_semantic_model_build(
-            &owner->semantic,
-            yvex_compilation_source_operations.verification(owner->source), err);
+        &source, &options, &qwen_source_projection, &failure, err);
     if (rc != YVEX_OK) {
-        qwen_source_release(owner);
+        yvex_compilation_source_operations.close(source);
         return rc;
     }
-    out->owner = owner;
-    out->verification = yvex_compilation_source_operations.verification(owner->source);
-    out->transform_ir = yvex_compilation_source_operations.transform(owner->source);
-    out->transform_binding = yvex_compilation_source_operations.binding(owner->source);
-    out->artifact_lowering = yvex_compilation_source_operations.lowering(owner->source);
-    out->source_summary = yvex_compilation_source_operations.summary(owner->source);
+    out->owner = source;
+    out->verification = yvex_compilation_source_operations.verification(source);
+    out->transform_ir = yvex_compilation_source_operations.transform(source);
+    out->transform_binding = yvex_compilation_source_operations.binding(source);
+    out->artifact_lowering = yvex_compilation_source_operations.lowering(source);
+    out->source_summary = yvex_compilation_source_operations.summary(source);
     out->lowering_context = out->artifact_lowering;
     out->tokenizer_vocabulary_size =
         out->verification ? out->verification->tokenizer_effective_vocab_size : 0ull;
     if (!out->verification || !out->transform_ir || !out->transform_binding ||
         !out->artifact_lowering || !out->source_summary ||
         !out->tokenizer_vocabulary_size) {
-        qwen_source_release(owner);
+        yvex_compilation_source_operations.close(source);
         memset(out, 0, sizeof(*out));
         yvex_error_set(err, YVEX_ERR_STATE, "qwen3_5.compilation-source",
                        "Qwen source projection omitted a compiler input");
@@ -705,52 +741,7 @@ static int qwen_compilation_source_open(
 
 static void qwen_compilation_source_close(void *owner)
 {
-    qwen_source_release(owner);
-}
-
-static void qwen_source_release(void *pointer)
-{
-    qwen_source_owner *owner = pointer;
-
-    if (!owner) return;
-    yvex_semantic_model_ir_close(&owner->semantic);
-    yvex_compilation_source_operations.close(owner->source);
-    free(owner);
-}
-
-static int qwen_source_compile(yvex_family_source_products *out,
-                               const yvex_compilation_runtime_binding_request *request,
-                               yvex_error *err)
-{
-    yvex_family_compilation_source source = {0};
-    qwen_source_owner *owner = NULL;
-    const yvex_semantic_model_ir_summary *semantic;
-    int rc;
-
-    if (out) memset(out, 0, sizeof(*out));
-    if (!out || !request) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "qwen3_5.source-compiler",
-                       "exact source path and models root are required");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    rc = qwen_compilation_source_open(&source, request, err);
-    owner = source.owner;
-    semantic = rc == YVEX_OK
-                   ? yvex_semantic_model_ir_summary_get(owner->semantic) : NULL;
-    if (rc != YVEX_OK || !semantic) {
-        qwen_source_release(owner);
-        return rc != YVEX_OK ? rc : YVEX_ERR_STATE;
-    }
-    out->owner = owner;
-    out->release = qwen_source_release;
-    out->verification = source.verification;
-    out->source_summary = source.source_summary;
-    out->semantic_model = owner->semantic;
-    out->transform_ir = source.transform_ir;
-    out->lowering = source.artifact_lowering;
-    yvex_core_text_copy(out->derivation_identity,
-                        sizeof(out->derivation_identity), semantic->identity);
-    return YVEX_OK;
+    yvex_compilation_source_operations.close(owner);
 }
 
 static int qwen_graph_plan_build(
@@ -1088,20 +1079,6 @@ static int qwen_tokenizer_policy(yvex_tokenizer_family_policy *out,
                YVEX_TOKENIZER_PROMPT_CONVERSATION, err) == YVEX_OK;
 }
 
-static const yvex_family_source_adapter *qwen_source_adapter(void)
-{
-    static const yvex_family_source_adapter adapter = {
-        .schema_version = YVEX_FAMILY_SOURCE_ADAPTER_SCHEMA_V1,
-        .target_id = YVEX_QWEN3_8_27B_TARGET_ID,
-        .family = YVEX_QWEN3_5_FAMILY_KEY,
-        .tokenizer_architecture = YVEX_QWEN3_5_FAMILY_KEY,
-        .tokenizer_pre = "qwen2",
-        .tokenizer_policy = qwen_tokenizer_policy,
-        .compile = qwen_source_compile};
-
-    return &adapter;
-}
-
 const yvex_family_descriptor yvex_graph_family_descriptor_qwen3_5 = {
     .schema_version = YVEX_FAMILY_DESCRIPTOR_SCHEMA_V1,
     .target_id = YVEX_QWEN3_8_27B_TARGET_ID,
@@ -1109,5 +1086,4 @@ const yvex_family_descriptor yvex_graph_family_descriptor_qwen3_5 = {
     .tokenizer_architecture = YVEX_QWEN3_5_FAMILY_KEY,
     .tokenizer_pre = "qwen2",
     .execution = qwen_execution_binding,
-    .quant_presets = qwen_quant_presets,
-    .source = qwen_source_adapter};
+    .quant_presets = qwen_quant_presets};

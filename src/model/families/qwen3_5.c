@@ -1297,6 +1297,338 @@ const yvex_conversation_protocol *yvex_model_qwen3_5_conversation(void)
     return &qwen_conversation;
 }
 
+/* Source projection owns composition. Neither the IR nor later execution
+ * needs a Qwen layer enum to discover this order or these state dependencies. */
+typedef struct {
+    yvex_ir_module *module;
+    const yvex_qwen3_5_text_architecture *text;
+    const char *source;
+    yvex_ir_id block, sequence, hidden, position, convolution, recurrent, kv;
+    unsigned long long qkv_width, value_width, attention_width, kv_width;
+    char prefix[64];
+    int rc;
+    yvex_error *error;
+} qwen_program_builder;
+
+static yvex_ir_id qwen_program_type(qwen_program_builder *b, yvex_ir_type_kind kind,
+    yvex_ir_scalar scalar, const uint64_t *shape, uint32_t rank, const char *domain, int rows)
+{
+    yvex_ir_type type = {.kind = kind, .scalar = scalar, .rank = rank};
+    yvex_ir_id id = YVEX_IR_NONE;
+    uint32_t index;
+    for (index = 0u; index < rank; ++index) type.shape[index] = (yvex_ir_extent){YVEX_IR_NONE, shape[index]};
+    if (rows) type.shape[0] = (yvex_ir_extent){b->sequence, 0u};
+    if (domain) yvex_core_text_copy(type.domain, sizeof(type.domain), domain);
+    if (b->rc == YVEX_OK) b->rc = yvex_ir_type_intern(b->module, &type, &id, b->error);
+    return id;
+}
+
+static yvex_ir_id qwen_program_rows(qwen_program_builder *b, uint64_t width, yvex_ir_scalar scalar)
+{
+    const uint64_t shape[] = {1u, width};
+    return qwen_program_type(b, YVEX_IR_TENSOR, scalar, shape, 2u, NULL, 1);
+}
+
+static yvex_ir_id qwen_program_emit(qwen_program_builder *b, const char *name,
+    const yvex_ir_id *operands, size_t inputs, const yvex_ir_id *types, size_t outputs,
+    const yvex_ir_attribute *attributes, size_t count)
+{
+    yvex_ir_id id = YVEX_IR_NONE;
+    yvex_ir_operation_request request = {.operation = name, .operands = operands, .operand_count = inputs,
+        .result_types = types, .result_count = outputs, .attributes = attributes, .attribute_count = count};
+    if (b->rc == YVEX_OK) b->rc = yvex_ir_operation_add(b->module, b->block, &request, &id, b->error);
+    return id;
+}
+
+static yvex_ir_id qwen_program_result(qwen_program_builder *b, yvex_ir_id id, uint32_t index)
+{
+    const yvex_ir_operation *op = yvex_ir_operation_at(b->module, id);
+    return op && index < op->result_count ? op->results[index] : YVEX_IR_NONE;
+}
+
+static yvex_ir_id qwen_program_parameter(qwen_program_builder *b, const char *suffix,
+    const uint64_t *shape, uint32_t rank)
+{
+    yvex_ir_attribute attrs[] = {
+        {.name = "parameter", .kind = YVEX_IR_ATTR_SYMBOL}, {.name = "source", .kind = YVEX_IR_ATTR_TEXT}};
+    yvex_ir_id type = qwen_program_type(b, YVEX_IR_TENSOR, YVEX_IR_BF16, shape, rank, NULL, 0);
+    int count = snprintf(attrs[0].value.text, sizeof(attrs[0].value.text), "%s%s", b->prefix, suffix);
+    if (count < 0 || (size_t)count >= sizeof(attrs[0].value.text)) {
+        b->rc = YVEX_ERR_BOUNDS;
+        yvex_error_set(b->error, b->rc, "qwen3_5.program", "parameter symbol exceeds the IR name bound");
+    }
+    yvex_core_text_copy(attrs[1].value.text, sizeof(attrs[1].value.text), b->source);
+    return qwen_program_result(b, qwen_program_emit(b, "core.parameter", NULL, 0u, &type, 1u, attrs, 2u), 0u);
+}
+
+static yvex_ir_id qwen_program_linear(qwen_program_builder *b, yvex_ir_id input,
+    const char *suffix, uint64_t input_width, uint64_t output_width, yvex_ir_scalar output_scalar)
+{
+    const uint64_t shape[] = {output_width, input_width};
+    yvex_ir_id args[] = {input, qwen_program_parameter(b, suffix, shape, 2u)};
+    yvex_ir_id type = qwen_program_rows(b, output_width, output_scalar);
+    return qwen_program_result(b, qwen_program_emit(b, "nn.linear", args, 2u, &type, 1u, NULL, 0u), 0u);
+}
+
+static yvex_ir_id qwen_program_norm(qwen_program_builder *b, yvex_ir_id input, const char *suffix)
+{
+    const uint64_t shape[] = {b->text->hidden_size};
+    yvex_ir_id args[] = {input, qwen_program_parameter(b, suffix, shape, 1u)};
+    yvex_ir_attribute attrs[] = {
+        {.name = "epsilon", .kind = YVEX_IR_ATTR_F64, .value.real = b->text->rms_norm_epsilon},
+        {.name = "weight_offset", .kind = YVEX_IR_ATTR_F64, .value.real = 1.0}};
+    return qwen_program_result(b, qwen_program_emit(b, "nn.rms_norm", args, 2u,
+                                                   &b->hidden, 1u, attrs, 2u), 0u);
+}
+
+static yvex_ir_id qwen_program_delta(qwen_program_builder *b, yvex_ir_id input, yvex_ir_id *states)
+{
+    const yvex_qwen3_5_text_architecture *t = b->text;
+    uint64_t convolution[] = {b->qkv_width, 1u, t->linear_convolution_kernel};
+    uint64_t heads[] = {t->linear_value_heads}, dimension[] = {t->linear_value_head_dimension};
+    yvex_ir_id args[10], types[] = {
+        qwen_program_rows(b, b->value_width, YVEX_IR_BF16), b->convolution, b->recurrent};
+    yvex_ir_attribute attrs[] = {
+        {.name = "key_heads", .kind = YVEX_IR_ATTR_U64, .value.integer = t->linear_key_heads},
+        {.name = "value_heads", .kind = YVEX_IR_ATTR_U64, .value.integer = t->linear_value_heads},
+        {.name = "key_dimension", .kind = YVEX_IR_ATTR_U64, .value.integer = t->linear_key_head_dimension},
+        {.name = "value_dimension", .kind = YVEX_IR_ATTR_U64, .value.integer = t->linear_value_head_dimension},
+        {.name = "convolution_kernel", .kind = YVEX_IR_ATTR_U64, .value.integer = t->linear_convolution_kernel},
+        {.name = "qk_epsilon", .kind = YVEX_IR_ATTR_F64, .value.real = 1.0e-6},
+        {.name = "epsilon", .kind = YVEX_IR_ATTR_F64, .value.real = t->rms_norm_epsilon},
+        {.name = "query_scale", .kind = YVEX_IR_ATTR_F64,
+         .value.real = 1.0 / sqrt((double)t->linear_key_head_dimension)}};
+    yvex_ir_id op, value;
+    args[0] = qwen_program_linear(b, input, "linear_attn.in_proj_qkv.weight",
+                                  t->hidden_size, b->qkv_width, YVEX_IR_BF16);
+    args[1] = qwen_program_linear(b, input, "linear_attn.in_proj_z.weight",
+                                  t->hidden_size, b->value_width, YVEX_IR_BF16);
+    args[2] = qwen_program_linear(b, input, "linear_attn.in_proj_b.weight",
+                                  t->hidden_size, heads[0], YVEX_IR_BF16);
+    args[3] = qwen_program_linear(b, input, "linear_attn.in_proj_a.weight",
+                                  t->hidden_size, heads[0], YVEX_IR_BF16);
+    args[4] = qwen_program_parameter(b, "linear_attn.conv1d.weight", convolution, 3u);
+    args[5] = qwen_program_parameter(b, "linear_attn.A_log", heads, 1u);
+    args[6] = qwen_program_parameter(b, "linear_attn.dt_bias", heads, 1u);
+    args[7] = qwen_program_parameter(b, "linear_attn.norm.weight", dimension, 1u);
+    args[8] = states[0];
+    args[9] = states[1];
+    op = qwen_program_emit(b, "sequence.gated_delta", args, 10u, types, 3u,
+                           attrs, sizeof(attrs) / sizeof(attrs[0]));
+    states[0] = qwen_program_result(b, op, 1u);
+    states[1] = qwen_program_result(b, op, 2u);
+    value = qwen_program_result(b, op, 0u);
+    return qwen_program_linear(b, value, "linear_attn.out_proj.weight",
+                                b->value_width, t->hidden_size, YVEX_IR_BF16);
+}
+
+static yvex_ir_id qwen_program_attention(qwen_program_builder *b, yvex_ir_id input,
+                                         yvex_ir_id start, yvex_ir_id *state)
+{
+    const yvex_qwen3_5_text_architecture *t = b->text;
+    const uint64_t shape[] = {t->attention_head_dimension};
+    yvex_ir_id args[7], types[] = {qwen_program_rows(b, b->attention_width, YVEX_IR_BF16), b->kv};
+    yvex_ir_attribute attrs[] = {
+        {.name = "query_heads", .kind = YVEX_IR_ATTR_U64, .value.integer = t->attention_heads},
+        {.name = "kv_heads", .kind = YVEX_IR_ATTR_U64, .value.integer = t->kv_heads},
+        {.name = "head_dimension", .kind = YVEX_IR_ATTR_U64, .value.integer = t->attention_head_dimension},
+        {.name = "rotary_dimension", .kind = YVEX_IR_ATTR_U64, .value.integer = t->rotary_dimension},
+        {.name = "maximum_context", .kind = YVEX_IR_ATTR_U64, .value.integer = t->maximum_positions},
+        {.name = "theta", .kind = YVEX_IR_ATTR_U64, .value.integer = t->rope_theta},
+        {.name = "qk_epsilon", .kind = YVEX_IR_ATTR_F64, .value.real = 1.0e-6}};
+    yvex_ir_id op, value;
+    args[0] = qwen_program_linear(b, input, "self_attn.q_proj.weight",
+                                  t->hidden_size, b->attention_width * 2u, YVEX_IR_BF16);
+    args[1] = qwen_program_linear(b, input, "self_attn.k_proj.weight",
+                                  t->hidden_size, b->kv_width, YVEX_IR_BF16);
+    args[2] = qwen_program_linear(b, input, "self_attn.v_proj.weight",
+                                  t->hidden_size, b->kv_width, YVEX_IR_BF16);
+    args[3] = qwen_program_parameter(b, "self_attn.q_norm.weight", shape, 1u);
+    args[4] = qwen_program_parameter(b, "self_attn.k_norm.weight", shape, 1u);
+    args[5] = start;
+    args[6] = *state;
+    op = qwen_program_emit(b, "attention.gated_causal", args, 7u, types, 2u,
+                           attrs, sizeof(attrs) / sizeof(attrs[0]));
+    *state = qwen_program_result(b, op, 1u);
+    value = qwen_program_result(b, op, 0u);
+    return qwen_program_linear(b, value, "self_attn.o_proj.weight",
+                                b->attention_width, t->hidden_size, YVEX_IR_BF16);
+}
+
+static yvex_ir_id qwen_program_ffn(qwen_program_builder *b, yvex_ir_id input)
+{
+    const uint64_t up[] = {b->text->intermediate_size, b->text->hidden_size};
+    const uint64_t down[] = {b->text->hidden_size, b->text->intermediate_size};
+    yvex_ir_attribute callee = {.name = "callee", .kind = YVEX_IR_ATTR_SYMBOL, .value.text = "dense_ffn"};
+    yvex_ir_id args[4];
+    args[0] = input;
+    args[1] = qwen_program_parameter(b, "mlp.gate_proj.weight", up, 2u);
+    args[2] = qwen_program_parameter(b, "mlp.up_proj.weight", up, 2u);
+    args[3] = qwen_program_parameter(b, "mlp.down_proj.weight", down, 2u);
+    return qwen_program_result(b, qwen_program_emit(b, "core.call", args, 4u,
+                                                   &b->hidden, 1u, &callee, 1u), 0u);
+}
+
+static int qwen_program_ffn_definition(qwen_program_builder *b)
+{
+    const uint64_t up[] = {b->text->intermediate_size, b->text->hidden_size};
+    const uint64_t down[] = {b->text->hidden_size, b->text->intermediate_size};
+    yvex_ir_id signature[4], function, inputs[4], args[2], gate, lifted, product, output;
+    yvex_ir_id intermediate = qwen_program_rows(b, b->text->intermediate_size, YVEX_IR_BF16);
+    signature[0] = b->hidden;
+    signature[1] = signature[2] = qwen_program_type(b, YVEX_IR_TENSOR, YVEX_IR_BF16, up, 2u, NULL, 0);
+    signature[3] = qwen_program_type(b, YVEX_IR_TENSOR, YVEX_IR_BF16, down, 2u, NULL, 0);
+    if (b->rc == YVEX_OK)
+        b->rc = yvex_ir_function_add(b->module, "dense_ffn", signature, 4u, &b->hidden, 1u,
+                                     0u, &function, b->error);
+    if (b->rc != YVEX_OK) return b->rc;
+    b->block = yvex_ir_function_at(b->module, function)->body;
+    memcpy(inputs, yvex_ir_block_at(b->module, b->block)->arguments, sizeof(inputs));
+    args[0] = inputs[0];
+    args[1] = inputs[1];
+    gate = qwen_program_result(b, qwen_program_emit(b, "nn.linear", args, 2u, &intermediate, 1u, NULL, 0u), 0u);
+    args[1] = inputs[2];
+    lifted = qwen_program_result(b, qwen_program_emit(b, "nn.linear", args, 2u, &intermediate, 1u, NULL, 0u), 0u);
+    args[0] = gate;
+    args[1] = lifted;
+    product = qwen_program_result(b, qwen_program_emit(b, "nn.silu_product", args, 2u,
+                                                      &intermediate, 1u, NULL, 0u), 0u);
+    args[0] = product;
+    args[1] = inputs[3];
+    output = qwen_program_result(b, qwen_program_emit(b, "nn.linear", args, 2u, &b->hidden, 1u, NULL, 0u), 0u);
+    (void)qwen_program_emit(b, "core.return", &output, 1u, NULL, 0u, NULL, 0u);
+    return b->rc;
+}
+
+static yvex_ir_id qwen_program_add(qwen_program_builder *b, yvex_ir_id left, yvex_ir_id right)
+{
+    yvex_ir_id args[] = {left, right};
+    return qwen_program_result(b, qwen_program_emit(b, "tensor.add", args, 2u,
+                                                   &b->hidden, 1u, NULL, 0u), 0u);
+}
+
+static int qwen_program_geometry(qwen_program_builder *b, yvex_ir_id *tokens)
+{
+    const yvex_qwen3_5_text_architecture *t = b->text;
+    yvex_ir_dimension sequence = {.name = "sequence", .minimum = 1u,
+        .maximum = t->maximum_positions, .multiple = 1u};
+    uint64_t shape[4];
+    unsigned long long key_width;
+    if (!yvex_core_u64_mul(t->linear_key_heads, t->linear_key_head_dimension, &key_width) ||
+        !yvex_core_u64_mul(t->linear_value_heads, t->linear_value_head_dimension, &b->value_width) ||
+        !yvex_core_u64_add(key_width, key_width, &b->qkv_width) ||
+        !yvex_core_u64_add(b->qkv_width, b->value_width, &b->qkv_width) ||
+        !yvex_core_u64_mul(t->attention_heads, t->attention_head_dimension, &b->attention_width) ||
+        b->attention_width > UINT64_MAX / 2u ||
+        !yvex_core_u64_mul(t->kv_heads, t->attention_head_dimension, &b->kv_width) ||
+        t->linear_convolution_kernel < 2u) {
+        yvex_error_set(b->error, YVEX_ERR_BOUNDS, "qwen3_5.program", "source geometry overflow or empty history");
+        return YVEX_ERR_BOUNDS;
+    }
+    b->rc = yvex_ir_dimension_add(b->module, &sequence, &b->sequence, b->error);
+    shape[0] = 1u;
+    *tokens = qwen_program_type(b, YVEX_IR_TENSOR, YVEX_IR_INDEX, shape, 1u, NULL, 1);
+    b->position = qwen_program_type(b, YVEX_IR_SCALAR, YVEX_IR_INDEX, NULL, 0u, NULL, 0);
+    b->hidden = qwen_program_rows(b, t->hidden_size, YVEX_IR_BF16);
+    shape[0] = b->qkv_width;
+    shape[1] = t->linear_convolution_kernel - 1u;
+    b->convolution = qwen_program_type(b, YVEX_IR_STATE, YVEX_IR_F32, shape, 2u, "convolution.causal", 0);
+    shape[0] = t->linear_value_heads;
+    shape[1] = t->linear_key_head_dimension;
+    shape[2] = t->linear_value_head_dimension;
+    b->recurrent = qwen_program_type(b, YVEX_IR_STATE, YVEX_IR_F32, shape, 3u, "recurrent.gated_delta", 0);
+    shape[0] = 2u;
+    shape[1] = t->maximum_positions;
+    shape[2] = t->kv_heads;
+    shape[3] = t->attention_head_dimension;
+    b->kv = qwen_program_type(b, YVEX_IR_STATE, YVEX_IR_BF16, shape, 4u, "attention.causal_kv", 0);
+    return b->rc;
+}
+
+static int qwen_program_functions(qwen_program_builder *b, yvex_ir_id tokens)
+{
+    const yvex_qwen3_5_text_architecture *t = b->text;
+    yvex_ir_id args[2u + 2u * YVEX_QWEN3_5_LAYER_CAP], types[1u + 2u * YVEX_QWEN3_5_LAYER_CAP];
+    yvex_ir_id results[1u + 2u * YVEX_QWEN3_5_LAYER_CAP], function, input, start, normalized;
+    size_t count = 0u, index, layer;
+    const uint64_t embedding_shape[] = {t->vocabulary_size, t->hidden_size};
+    args[0] = tokens;
+    args[1] = b->position;
+    types[0] = b->hidden;
+    for (layer = 0u; layer < t->layer_count; ++layer) {
+        if (t->layers[layer] == YVEX_QWEN3_5_LAYER_LINEAR_ATTENTION) {
+            types[1u + count] = args[2u + count] = b->convolution;
+            ++count;
+            types[1u + count] = args[2u + count] = b->recurrent;
+        } else types[1u + count] = args[2u + count] = b->kv;
+        ++count;
+    }
+    b->rc = yvex_ir_function_add(b->module, "forward", args, 2u + count, types, 1u + count,
+                                 YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, &function, b->error);
+    if (b->rc != YVEX_OK) return b->rc;
+    b->block = yvex_ir_function_at(b->module, function)->body;
+    /* Copy IDs before emitting: builder vectors may relocate. */
+    memcpy(args, yvex_ir_block_at(b->module, b->block)->arguments, (2u + count) * sizeof(*args));
+    start = args[1];
+    for (index = 0u; index < count; ++index) results[1u + index] = args[2u + index];
+    args[1] = qwen_program_parameter(b, "model.language_model.embed_tokens.weight", embedding_shape, 2u);
+    input = qwen_program_result(b, qwen_program_emit(b, "nn.embedding", args, 2u,
+                                                    &b->hidden, 1u, NULL, 0u), 0u);
+    for (layer = 0u, index = 1u; b->rc == YVEX_OK && layer < t->layer_count; ++layer) {
+        yvex_ir_id update;
+        snprintf(b->prefix, sizeof(b->prefix), "model.language_model.layers.%zu.", layer);
+        normalized = qwen_program_norm(b, input, "input_layernorm.weight");
+        if (t->layers[layer] == YVEX_QWEN3_5_LAYER_LINEAR_ATTENTION) {
+            update = qwen_program_delta(b, normalized, &results[index]);
+            index += 2u;
+        } else update = qwen_program_attention(b, normalized, start, &results[index++]);
+        input = qwen_program_add(b, input, update);
+        normalized = qwen_program_norm(b, input, "post_attention_layernorm.weight");
+        input = qwen_program_add(b, input, qwen_program_ffn(b, normalized));
+    }
+    b->prefix[0] = '\0';
+    results[0] = qwen_program_norm(b, input, "model.language_model.norm.weight");
+    (void)qwen_program_emit(b, "core.return", results, 1u + count, NULL, 0u, NULL, 0u);
+    /* Runner composition invokes the output head separately; model != sampling loop. */
+    types[0] = qwen_program_rows(b, t->vocabulary_size, YVEX_IR_F32);
+    if (b->rc == YVEX_OK)
+        b->rc = yvex_ir_function_add(b->module, "output", &b->hidden, 1u, types, 1u, 0u, &function, b->error);
+    if (b->rc != YVEX_OK) return b->rc;
+    b->block = yvex_ir_function_at(b->module, function)->body;
+    input = yvex_ir_block_at(b->module, b->block)->arguments[0];
+    results[0] = qwen_program_linear(b, input, "lm_head.weight", t->hidden_size, t->vocabulary_size, YVEX_IR_F32);
+    (void)qwen_program_emit(b, "core.return", results, 1u, NULL, 0u, NULL, 0u);
+    return b->rc;
+}
+
+int yvex_qwen3_5_program_build(yvex_ir_module **out,
+    const yvex_qwen3_5_architecture *architecture, const char *source_identity, yvex_error *err)
+{
+    yvex_ir_dialect dialects[] = {
+        *yvex_ir_core_dialect(), *yvex_ir_neural_dialect(), *yvex_ir_sequence_dialect()};
+    qwen_program_builder b = {.source = source_identity, .error = err};
+    yvex_qwen3_5_architecture checked;
+    yvex_ir_id tokens = YVEX_IR_NONE;
+    yvex_ir_pass passes[] = {*yvex_ir_inline_pass(), *yvex_ir_canonical_pass(), *yvex_ir_dead_code_pass()};
+    if (out) *out = NULL;
+    if (!out || !architecture || !yvex_sha256_hex_valid(source_identity)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "qwen3_5.program", "exact source and architecture are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    checked = *architecture;
+    b.rc = qwen_validate(&checked, NULL, err);
+    if (b.rc != YVEX_OK) return b.rc;
+    b.text = &checked.text;
+    b.rc = yvex_ir_module_open(&b.module, "qwen3_5_text", source_identity, dialects, 3u, err);
+    if (b.rc == YVEX_OK) b.rc = qwen_program_geometry(&b, &tokens);
+    if (b.rc == YVEX_OK) b.rc = qwen_program_functions(&b, tokens);
+    if (b.rc == YVEX_OK) b.rc = qwen_program_ffn_definition(&b);
+    if (b.rc == YVEX_OK) b.rc = yvex_ir_seal(b.module, err);
+    if (b.rc == YVEX_OK) b.rc = yvex_ir_pass_pipeline(b.module, passes, 3u, out, NULL, err);
+    yvex_ir_module_close(&b.module);
+    return b.rc;
+}
+
 const yvex_qwen3_5_api *yvex_model_register_qwen3_5(void)
 {
     static const yvex_qwen3_5_api api = {
