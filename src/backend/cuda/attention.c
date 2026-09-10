@@ -1354,7 +1354,7 @@ static int attn_index_topk(attn_run *run) {
     const yvex_backend_attention_job *job = run->job;
     attn_rolling_run *rolling = &run->rolling[ROLL_INDEX];
     unsigned long long candidates = job->indexer_count + rolling->value_count, extent;
-    if (candidates > UINT_MAX || !yvex_core_power_of_two_capacity(candidates, 1ull, 1ull, 1ull, &extent) ||
+    if (run->candidate_capacity > UINT_MAX || !yvex_core_power_of_two_capacity(candidates, 1ull, 1ull, 1ull, &extent) ||
         extent > run->candidate_capacity) return attn_run_fail(run,
         YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT, "cuda.attention.score",
         UINT_MAX, candidates, YVEX_ERR_BOUNDS, "candidate population exceeds launch geometry");
@@ -1366,7 +1366,7 @@ static int attn_index_topk(attn_run *run) {
         (void *)&job->compression_ratio, (void *)&job->token_position, &run->topk_scores, &run->device_status
     };
     rc = run->ops->launch(&run->resources, run->state->attention_candidate_scores_function,
-        candidates ? (unsigned int)candidates : 1u, YVEX_CUDA_ATTN_BLOCK,
+        (unsigned int)run->candidate_capacity, YVEX_CUDA_ATTN_BLOCK,
         YVEX_CUDA_ATTN_BLOCK * sizeof(double), score_params, "cuda.attention.score", run->failure, run->err);
     if (rc != YVEX_OK) return rc;
     void *params[] = {

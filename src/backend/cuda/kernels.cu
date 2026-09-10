@@ -1673,7 +1673,8 @@ static __device__ void attention_candidate_sort(
     }
 }
 
-/* Independent candidate blocks; the head/dimension reduction order is unchanged.
+/* Capacity-sized launch, actual candidates only; graph geometry remains stable.
+ * Independent candidate blocks preserve the head/dimension reduction order.
  * A separate same-stream ranking launch is the device-wide completion boundary.
  * Scores are private scratch: failures cannot publish a selected population. */
 extern "C" __global__ void yvex_attention_candidate_scores(

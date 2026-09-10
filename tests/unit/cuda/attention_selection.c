@@ -60,6 +60,23 @@ static float selection_score(const selection_storage *s, unsigned long long cand
     return (float)score;
 }
 
+typedef struct { yvex_backend *backend; void **params; } selection_graph_fixture;
+
+/* Allocation/launch envelope is stable; actual candidate counts are replay inputs. */
+static int selection_graph_enqueue(void *context, int enqueue_kernels, yvex_error *err)
+{
+    selection_graph_fixture *fixture = context;
+    yvex_cuda_backend_state *state = yvex_cuda_state(fixture->backend);
+    return enqueue_kernels ? yvex_cuda_launch(fixture->backend,
+        YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, state->attention_candidate_scores_function,
+        SELECTION_CAPACITY, 256u, 256u * sizeof(double), fixture->params,
+        "cuda.test.attention-score-replay", err) :
+        yvex_cuda_graph_kernel_update(fixture->backend,
+            YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, state->attention_candidate_scores_function,
+            SELECTION_CAPACITY, 256u, 256u * sizeof(double), fixture->params,
+            "cuda.test.attention-score-replay", err);
+}
+
 static int selection_case(yvex_backend *backend, unsigned long long count,
                           unsigned long long k, unsigned int scenario)
 {
@@ -147,9 +164,22 @@ static int selection_case(yvex_backend *backend, unsigned long long count,
             &current, &current_positions, &current_count, &stride, &heads, &width,
             &ratio, &query_position, &scores, &status
         };
-        rc = yvex_cuda_launch(
+        if (scenario == 16u) {
+            selection_graph_fixture fixture = {backend, params};
+            yvex_backend_cuda_graph_info info;
+            unsigned long long saved_history = history_count, saved_current = current_count;
+            history_count = current_count = 0ull;
+            rc = yvex_cuda_graph_execute(backend, "attention-score-capacity-replay-v1", NULL,
+                selection_graph_enqueue, &fixture, 0u, &info, &err);
+            YVEX_TEST_ASSERT(rc == YVEX_OK, "capture empty candidate population");
+            history_count = saved_history; current_count = saved_current;
+            rc = yvex_cuda_graph_execute(backend, "attention-score-capacity-replay-v1", NULL,
+                selection_graph_enqueue, &fixture, 0u, &info, &err);
+            YVEX_TEST_ASSERT(rc == YVEX_OK && info.capture_count == 1ull && info.replay_count >= 2ull,
+                "changed population replays the same admitted score launch without recapture");
+        } else rc = yvex_cuda_launch(
             backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
-            state->attention_candidate_scores_function, count ? (unsigned int)count : 1u,
+            state->attention_candidate_scores_function, (unsigned int)extent,
             256u, 256u * sizeof(double), params, "cuda.test.attention-score", &err);
     }
     if (rc == YVEX_OK) rc = yvex_cuda_launch_synchronize(backend,
@@ -170,7 +200,8 @@ static int selection_case(yvex_backend *backend, unsigned long long count,
     YVEX_TEST_ASSERT(rc == YVEX_OK &&
         yvex_backend_tensor_read(backend, arena, observed, sizeof(*observed), &err) == YVEX_OK,
         "read candidate selection");
-    if (scenario == 3u || scenario == 4u || scenario == 5u || scenario == 7u || scenario >= 12u) {
+    if (scenario == 3u || scenario == 4u || scenario == 5u || scenario == 7u ||
+        (scenario >= 12u && scenario <= 15u)) {
         YVEX_TEST_ASSERT(observed->status != 0 && observed->selected_count == 0ull &&
                          observed->valid_count == 0ull,
                          "duplicate/nonfinite/prior error/invalid K cannot publish candidate ranking");
@@ -237,6 +268,8 @@ int yvex_cuda_test_attention_selection(void)
     if (selection_case(backend, 64ull, 17ull, 9u)) return 1;
     for (unsigned int scenario = 10u; scenario <= 15u; ++scenario)
         if (selection_case(backend, 513ull, 17ull, scenario)) return 1;
+    for (size_t i = 0u; i < sizeof(counts) / sizeof(counts[0]); ++i)
+        if (selection_case(backend, counts[i], 512ull, 16u)) return 1;
     yvex_backend_close(backend);
     return 0;
 }
