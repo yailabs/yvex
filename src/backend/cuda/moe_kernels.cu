@@ -12,7 +12,15 @@ static __device__ float moe_warp_dot(
 {
     if (!q8_input)
         return qtype_warp_dot(weight, (const float *)activation, extent, qtype, status);
-    float sum = q8_warp_dot(weight, activation, extent, row_bytes / extent, qtype);
+    /* Specialize common encoded row geometry, not a model or recipe. Constant
+     * block counts let CUDA eliminate dynamic group rounds and address divisions.
+     * Every path uses the same dot primitive, lane order and exceptional recovery. */
+    float sum;
+    if (qtype == YVEX_GGUF_QTYPE_IQ2_XXS && extent == 16ull && row_bytes == 16ull * 66ull)
+        sum = q8_warp_dot(weight, activation, 16ull, 66ull, YVEX_GGUF_QTYPE_IQ2_XXS);
+    else if (qtype == YVEX_GGUF_QTYPE_Q2_K && extent == 8ull && row_bytes == 8ull * 84ull)
+        sum = q8_warp_dot(weight, activation, 8ull, 84ull, YVEX_GGUF_QTYPE_Q2_K);
+    else sum = q8_warp_dot(weight, activation, extent, row_bytes / extent, qtype);
     /* Only the exceptional row pays for serial FP64 recovery; finite rows retain DP4A order. */
     if (!(threadIdx.x & 31u) && !isfinite(sum)) {
         double recovered = 0.0;

@@ -280,6 +280,10 @@ extern "C" __global__ void yvex_attention_reduce_native(
     float *out,
     int *status)
 {
+    /* Retain each lane's query and accumulator, not another state representation.
+     * Wider heads keep streaming; candidate/FMA order and the BF16 boundary are unchanged. */
+    float cached_query[4], accumulated[4] = {0.0f}, cached_row[4];
+    const bool retained = head_dim <= 1024ull;
     __shared__ float warp_sums[8];
     __shared__ float maximum;
     __shared__ float denominator;
@@ -333,6 +337,13 @@ extern "C" __global__ void yvex_attention_reduce_native(
     for (unsigned long long i = (unsigned long long)thread; i < head_dim;
          i += (unsigned long long)blockDim.x)
         out[(ordinal * query_heads + head) * head_dim + i] = 0.0f;
+    if (retained) {
+#pragma unroll
+        for (unsigned int part = 0u; part < 4u; ++part) {
+            unsigned long long i = thread + part * 256ull;
+            cached_query[part] = i < head_dim ? q[i] : 0.0f;
+        }
+    }
     __syncthreads();
     if (!active) return;
     attention_reduce_rows rows = {
@@ -349,9 +360,17 @@ extern "C" __global__ void yvex_attention_reduce_native(
                 &rows, pass, ordinal, candidate, local_offset, &visible);
             if (!visible) continue;
             float dot = 0.0f;
-            for (unsigned long long i = (unsigned long long)thread; i < head_dim;
-                 i += (unsigned long long)blockDim.x)
-                dot = fmaf(q[i], row[i], dot);
+            if (retained) {
+#pragma unroll
+                for (unsigned int part = 0u; part < 4u; ++part) {
+                    unsigned long long i = thread + part * 256ull;
+                    cached_row[part] = i < head_dim ? row[i] : 0.0f;
+                    if (i < head_dim) dot = fmaf(cached_query[part], cached_row[part], dot);
+                }
+            } else {
+                for (unsigned long long i = thread; i < head_dim; i += blockDim.x)
+                    dot = fmaf(q[i], row[i], dot);
+            }
             for (unsigned int offset = 16u; offset; offset >>= 1u)
                 dot += __shfl_down_sync(0xffffffffu, dot, offset);
             if (lane == 0u) warp_sums[warp] = dot;
@@ -379,16 +398,23 @@ extern "C" __global__ void yvex_attention_reduce_native(
             }
             __syncthreads();
             if (!active) return;
-            for (unsigned long long i = (unsigned long long)thread; i < head_dim;
-                 i += (unsigned long long)blockDim.x) {
-                unsigned long long offset =
-                    (ordinal * query_heads + head) * head_dim + i;
-                out[offset] = fmaf(probability, row[i],
-                                   out[offset] * renormalization);
+            if (retained) {
+#pragma unroll
+                for (unsigned int part = 0u; part < 4u; ++part)
+                    accumulated[part] = fmaf(probability, cached_row[part],
+                                               accumulated[part] * renormalization);
+            } else {
+                for (unsigned long long i = thread; i < head_dim; i += blockDim.x) {
+                    unsigned long long offset = (ordinal * query_heads + head) * head_dim + i;
+                    out[offset] = fmaf(probability, row[i], out[offset] * renormalization);
+                }
             }
-            __syncthreads();
+            /* Next dot's barrier follows all readers of the previous softmax factors.
+             * Accumulators are lane-private, so no additional barrier is required here. */
         }
     }
+    /* Final error publication also waits for every lane to finish consuming active. */
+    __syncthreads();
     if (thread == 0u && (!isfinite(denominator) || denominator <= 0.0f)) {
         atomicCAS(status, 0, 1);
         active = 0;
@@ -399,7 +425,7 @@ extern "C" __global__ void yvex_attention_reduce_native(
          i += (unsigned long long)blockDim.x) {
         unsigned long long offset =
             (ordinal * query_heads + head) * head_dim + i;
-        float published = out[offset] / denominator;
+        float published = (retained ? accumulated[i / 256ull] : out[offset]) / denominator;
         if (!isfinite(published)) atomicCAS(status, 0, 1);
         else out[offset] = float_to_bf16_rne(published);
     }
