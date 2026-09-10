@@ -6,6 +6,7 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/execution.h>
 #include <yvex/internal/program.h>
+#include <yvex/internal/program_kernels.h>
 #include <yvex/qtype.h>
 
 #include <stdio.h>
@@ -271,6 +272,144 @@ static int program_test_tensor(void)
     return 0;
 }
 
+static int program_device_fixture(yvex_program_physical **out, yvex_error *err)
+{
+    yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+    yvex_ir_module *m = NULL;
+    yvex_program_execution *execution = NULL;
+    yvex_ir_dimension dim = {.name = "rows", .minimum = 1u, .maximum = 3u, .multiple = 1u};
+    yvex_ir_type t = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_BF16, .rank = 2u,
+        .shape = {{0u, 0u}, {YVEX_IR_NONE, 32u}}};
+    yvex_ir_id dimension, type, function, block, value, op;
+    unsigned int i;
+    int rc = yvex_ir_module_open(&m, "physical_lifetimes", program_source, dialects, 2u, err);
+    if (rc == YVEX_OK) rc = yvex_ir_dimension_add(m, &dim, &dimension, err);
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(m, &t, &type, err);
+    if (rc == YVEX_OK) rc = yvex_ir_function_add(m, "forward", &type, 1u, &type, 1u, 0u, &function, err);
+    if (rc == YVEX_OK) {
+        block = yvex_ir_function_at(m, function)->body;
+        value = yvex_ir_block_at(m, block)->arguments[0];
+    }
+    for (i = 0u; rc == YVEX_OK && i < 6u; ++i) {
+        yvex_ir_id args[] = {value, value};
+        yvex_ir_operation_request request = {.operation = "tensor.add", .operands = args, .operand_count = 2u,
+            .result_types = &type, .result_count = 1u};
+        rc = yvex_ir_operation_add(m, block, &request, &op, err);
+        if (rc == YVEX_OK) value = yvex_ir_operation_at(m, op)->results[0];
+    }
+    if (rc == YVEX_OK) {
+        yvex_ir_operation_request request = {.operation = "core.return", .operands = &value, .operand_count = 1u};
+        rc = yvex_ir_operation_add(m, block, &request, &op, err);
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_seal(m, err);
+    if (rc == YVEX_OK) rc = yvex_program_execution_compile(&execution, m, err);
+    if (rc == YVEX_OK) rc = yvex_program_physical_compile(out, execution, "forward", NULL, 0u, program_source, err);
+    yvex_program_execution_close(&execution);
+    yvex_ir_module_close(&m);
+    return rc;
+}
+
+static int program_device_invoke(void *context, const yvex_program_device_invocation *r,
+                                  yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    float left[96], right[96];
+    yvex_device_tensor *out = &r->values[r->step->results[0]];
+    size_t i;
+    int rc = yvex_backend_tensor_read(context, &r->values[r->step->operands[0]], left, out->bytes, err);
+    if (rc == YVEX_OK) rc = yvex_backend_tensor_read(context, &r->values[r->step->operands[1]], right, out->bytes, err);
+    if (rc != YVEX_OK) return rc;
+    for (i = 0u; i < out->bytes / sizeof(float); ++i) left[i] += right[i];
+    memset(facts, 0, sizeof(*facts));
+    return yvex_backend_tensor_write(context, out, left, out->bytes, err);
+}
+
+static int program_device_cancel(void *context)
+{
+    unsigned int *remaining = context;
+    return (*remaining)-- == 0u;
+}
+
+static int program_test_device(void)
+{
+    const yvex_program_device_kernel implementations[] = {{"add.bf16.v1", program_device_invoke}};
+    yvex_program_physical *p = NULL, *decoded = NULL;
+    yvex_program_device *device = NULL, *refused = NULL;
+    yvex_backend *backend = NULL;
+    yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CPU};
+    yvex_backend_tensor_desc d = {.name = "physical-test", .dtype = YVEX_DTYPE_F32, .rank = 2u,
+        .dims = {3u, 32u}, .bytes = 96u * sizeof(float)};
+    yvex_device_tensor *input = NULL, *output = NULL;
+    yvex_program_device_argument args = {0};
+    yvex_program_device_result result;
+    yvex_backend_memory_stats before, after;
+    yvex_core_bytes wire = {.maximum = 65536u};
+    yvex_error err = {0};
+    float values[96], observed[96];
+    size_t i;
+    unsigned int until_cancel = 2u;
+    int rc;
+    YVEX_TEST_ASSERT(program_device_fixture(&p, &err) == YVEX_OK &&
+        yvex_program_physical_summary_get(p)->storage_count == 2u,
+        "compiler proves six SSA operations need only two non-overlapping intermediate slots");
+    for (i = 0u; i < 6u; ++i)
+        YVEX_TEST_ASSERT(yvex_program_physical_step_at(p, i)->attribute_count == 0u,
+            "attribute-free tensor.add lowers without reading absent semantic attribute storage");
+    YVEX_TEST_ASSERT(yvex_program_physical_encode(p, &wire, &err) == YVEX_OK &&
+        yvex_program_physical_decode(&decoded, wire.data, wire.count, &err) == YVEX_OK,
+        "runtime consumes reopened physical work after source/semantic/execution owners close");
+    YVEX_TEST_ASSERT(yvex_backend_open(&backend, &options, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &before, &err) == YVEX_OK,
+        "real CPU backend opens before program resources");
+    rc = yvex_program_device_open(&device, decoded, backend, 3u, 0u, 0u,
+        implementations, 1u, backend, &err);
+    if (rc != YVEX_OK) fprintf(stderr, "physical CPU bind: %s\n", yvex_error_message(&err));
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "physical instructions bind a deterministic storage/dispatch fixture");
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &d, &input, &err) == YVEX_OK &&
+        yvex_backend_tensor_alloc(backend, &d, &output, &err) == YVEX_OK, "independent input/output storage");
+    for (i = 0u; i < 96u; ++i) values[i] = (float)((int)i - 48) / 64.0f;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, input, values, sizeof(values), &err) == YVEX_OK,
+        "deterministic exactly representable BF16 input");
+    args.tensor = input;
+    rc = yvex_program_device_run(device, 3u, &args, 1u, &output, 1u, NULL, NULL, &result, &err);
+    if (rc != YVEX_OK) fprintf(stderr, "physical CPU invocation: %s\n", yvex_error_message(&err));
+    YVEX_TEST_ASSERT(rc == YVEX_OK && result.operations == 6u && output->is_written &&
+        yvex_backend_tensor_read(backend, output, observed, sizeof(observed), &err) == YVEX_OK,
+        "all six physical instructions execute through compiler-assigned reusable slots");
+    for (i = 0u; i < 96u; ++i)
+        YVEX_TEST_ASSERT(observed[i] == values[i] * 64.0f, "scalar doubling oracle agrees exactly on every result");
+    YVEX_TEST_ASSERT(yvex_program_device_run(device, 3u, &args, 1u, &output, 1u,
+        program_device_cancel, &until_cancel, &result, &err) == YVEX_ERR_CANCELLED &&
+        result.operations == 2u && !output->is_written, "cancellation after two operations never publishes a partial result");
+    until_cancel = 6u;
+    YVEX_TEST_ASSERT(yvex_program_device_run(device, 3u, &args, 1u, &output, 1u,
+        program_device_cancel, &until_cancel, &result, &err) == YVEX_ERR_CANCELLED &&
+        result.operations == 6u && !output->is_written,
+        "cancellation during the final operation prevents publication even when every value was produced");
+    YVEX_TEST_ASSERT(yvex_program_device_run(device, 3u, &args, 1u, &input, 1u, NULL, NULL, &result, &err) != YVEX_OK &&
+        !result.operations, "aliasing refuses before execution");
+    YVEX_TEST_ASSERT(yvex_program_device_run(device, 4u, &args, 1u, &output, 1u, NULL, NULL, &result, &err) == YVEX_ERR_BOUNDS &&
+        !result.operations, "oversized population refuses before dispatch");
+    YVEX_TEST_ASSERT(yvex_program_device_open(&refused, decoded, backend, 3u, 1u, 0u,
+        implementations, 1u, backend, &err) == YVEX_ERR_BOUNDS && !refused,
+        "host budget refusal publishes no execution owner");
+    YVEX_TEST_ASSERT(yvex_program_device_open(&refused, decoded, backend, 3u, 0u, 1u,
+        implementations, 1u, backend, &err) == YVEX_ERR_BOUNDS && !refused,
+        "device budget refusal cleans its partially prepared owner");
+    YVEX_TEST_ASSERT(yvex_program_device_run(device, 3u, &args, 1u, &output, 1u, NULL, NULL, &result, &err) == YVEX_OK &&
+        result.operations == 6u && output->is_written, "cancelled owner can be invoked again");
+    YVEX_TEST_ASSERT(yvex_program_device_close(&device, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &input, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &output, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK && before.allocated_bytes == after.allocated_bytes &&
+        yvex_backend_close_checked(&backend, &err) == YVEX_OK, "all physical allocations return to baseline");
+    printf("Physical CPU storage/dispatch fixture (not CPU model kernels): six operations, two reusable slots, 96 values; max_abs=0 tolerance=0; "
+           "cancel after two/final operation -> unpublished; retry -> six; alias/capacity/budget negatives; cleanup allocation delta=0\n");
+    free(wire.data);
+    yvex_program_physical_close(&decoded);
+    yvex_program_physical_close(&p);
+    return 0;
+}
+
 int yvex_test_program(void)
 {
     char semantic_identity[YVEX_SHA256_HEX_BYTES] = {0}, physical_identity[YVEX_SHA256_HEX_BYTES] = {0};
@@ -322,5 +461,6 @@ int yvex_test_program(void)
     printf("Program lowering: 2 exact physical recipes accepted, 13 inconsistent joins refused before runtime; "
            "semantic identity unchanged across BF16/F32 physical recipes\n");
     if (program_test_execution() != 0) return 1;
+    if (program_test_device() != 0) return 1;
     return program_test_tensor();
 }

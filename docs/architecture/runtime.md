@@ -86,6 +86,19 @@ owns:
 - engine-wide executable caches and compatible-work scheduler;
 - sessions attached to this exact generation.
 
+The migrated token-forward consumer uses compiled physical SSA work rather
+than walking decoder layers. The engine retains immutable work; its execution
+context binds parameter resources, prepares numerical implementations and owns
+reusable intermediate storage. Individual state operations stage through the
+session providers. Recurrent provider geometry is derived from the admitted
+physical program; session callers cannot supply a competing state plan. An
+unnormalized decoder refuses instead of rebuilding topology during session
+opening. The enclosing runtime resolves transactions and publishes
+borrowed device results. SSA values, provider state versions and producer
+publication generations remain different lifetimes. DeepSeek transformer and
+MiniMax component consumers are not yet cut over to this owner; see the
+[compiler boundary](compilation.md#typed-computational-programs).
+
 Compilation, source acquisition, model catalogs, server transport, and
 application request parsing are outside the engine. Family callbacks are absent
 from model open. Family semantics have already become pointer-free package

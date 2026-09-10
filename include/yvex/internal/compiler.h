@@ -502,9 +502,12 @@ struct yvex_runtime_descriptor;
 struct yvex_attention_plan; struct yvex_decoder_plan;
 struct yvex_moe_plan; struct yvex_transformer_plan;
 struct yvex_program_execution; struct yvex_program_tensor_plan;
+struct yvex_program_parameters; struct yvex_program_physical;
 typedef struct {
     const yvex_semantic_model_ir *semantic_model;
     const struct yvex_program_execution *program;
+    const struct yvex_program_parameters *program_parameters;
+    const struct yvex_physical_execution_ir *program_physical_parameters;
     const yvex_operator_graph_ir *operator_graph;
     const struct yvex_materialization_session *materialization;
     const struct yvex_runtime_descriptor *descriptor;
@@ -549,6 +552,10 @@ int yvex_compiled_model_plan_encode(
 int yvex_compiled_model_plan_decode(
     yvex_compiled_model_plan **out, const unsigned char *data, size_t count,
     yvex_error *err);
+struct yvex_attention_layer_plan;
+int yvex_compiled_model_plan_normalize(yvex_compiled_model_plan *,
+    const struct yvex_attention_layer_plan *, size_t,
+    const struct yvex_physical_execution_ir *, yvex_error *);
 int yvex_compiled_model_plan_admit(
     const yvex_compiled_model_plan *plan,
     const yvex_compiled_model_plan_admission *admission);
@@ -566,6 +573,7 @@ const struct yvex_transformer_plan *yvex_compiled_model_plan_transformer(
     const yvex_compiled_model_plan *plan, int draft);
 const struct yvex_decoder_plan *yvex_compiled_model_plan_decoder(const yvex_compiled_model_plan *plan);
 const struct yvex_program_tensor_plan *yvex_compiled_model_plan_dense_ffn(const yvex_compiled_model_plan *plan);
+const struct yvex_program_physical *yvex_compiled_model_plan_forward(const yvex_compiled_model_plan *plan);
 const struct yvex_runtime_logits_plan_summary *yvex_compiled_model_plan_output_head(
     const yvex_compiled_model_plan *plan);
 const char *yvex_compiled_model_plan_operator_graph_identity(

@@ -6,6 +6,8 @@
 #include <yvex/internal/moe.h>
 #include <yvex/internal/operator_graph.h>
 #include <yvex/internal/program.h>
+#include <yvex/internal/program_physical.h>
+#include <yvex/internal/execution.h>
 #include <yvex/internal/transformer.h>
 
 #include <limits.h>
@@ -17,6 +19,7 @@
 #define MODEL_PLAN_SCHEMA_V3 3u
 #define MODEL_PLAN_SCHEMA_V4 4u
 #define MODEL_PLAN_SCHEMA_V5 5u
+#define MODEL_PLAN_SCHEMA_V6 6u
 #define MODEL_PLAN_MAX_LAYERS 65536ull
 
 typedef struct {
@@ -28,6 +31,7 @@ struct yvex_compiled_model_plan {
     unsigned int schema;
     char operator_graph_identity[YVEX_SHA256_HEX_BYTES];
     yvex_program_tensor_plan *dense_ffn;
+    yvex_program_physical *forward;
     yvex_decoder_plan *decoder;
     yvex_moe_plan *moe, *draft_moe;
     yvex_transformer_plan *transformer, *draft_transformer;
@@ -567,6 +571,7 @@ void yvex_compiled_model_plan_close(yvex_compiled_model_plan **owner)
     yvex_compiled_model_plan *plans = owner ? *owner : NULL;
     if (!plans) return;
     yvex_program_tensor_close(&plans->dense_ffn);
+    yvex_program_physical_close(&plans->forward);
     yvex_decoder_plan_close(&plans->decoder);
     yvex_transformer_plan_close(&plans->draft_transformer);
     yvex_transformer_plan_close(&plans->transformer);
@@ -661,11 +666,51 @@ static int legacy_decoder_ffn_import(yvex_program_tensor_plan **out, const yvex_
     return rc;
 }
 
+static int compiled_forward_signature_valid(const yvex_compiled_model_plan *plan)
+{
+    const yvex_decoder_plan_summary *d = yvex_decoder_plan_summary_get(plan->decoder);
+    const yvex_program_physical_summary *s = yvex_program_physical_summary_get(plan->forward);
+    const yvex_program_physical_value *tokens, *position, *output;
+    size_t i, delta = 0u, attention = 0u, embeddings = 0u;
+    if (!s || !d || strcmp(s->entry, "forward") || s->input_count < 2u ||
+        s->minimum_rows != 1u || s->maximum_rows != d->maximum_context || s->row_multiple != 1u ||
+        s->input_count != 2u + 2u * d->recurrent_layer_count + d->attention_layer_count ||
+        s->result_count != s->input_count - 1u) return 0;
+    tokens = yvex_program_physical_value_at(plan->forward, 0u);
+    position = yvex_program_physical_value_at(plan->forward, 1u);
+    output = yvex_program_physical_value_at(plan->forward, yvex_program_physical_result_at(plan->forward, 0u));
+    if (tokens->type.kind != YVEX_IR_TENSOR || tokens->type.scalar != YVEX_IR_INDEX || tokens->type.rank != 1u ||
+        position->type.kind != YVEX_IR_SCALAR || position->type.scalar != YVEX_IR_INDEX ||
+        output->type.kind != YVEX_IR_TENSOR || output->type.scalar != YVEX_IR_BF16 || output->type.rank != 2u ||
+        output->type.shape[1].extent != d->hidden_width) return 0;
+    for (i = 2u; i < s->input_count; ++i) {
+        const yvex_program_physical_value *state = yvex_program_physical_value_at(plan->forward, i);
+        if (state->type.kind != YVEX_IR_STATE) return 0;
+    }
+    for (i = 0u; i < s->step_count; ++i) {
+        const yvex_program_physical_step *step = yvex_program_physical_step_at(plan->forward, i);
+        delta += !strcmp(step->implementation, "gated_delta.bf16.f32state.v1");
+        attention += !strcmp(step->implementation, "gated_causal.bf16.v1");
+        if (!strcmp(step->implementation, "embedding.bf16.v1")) {
+            const yvex_program_physical_value *weight =
+                yvex_program_physical_value_at(plan->forward, step->operands[1]);
+            if (step->operands[0] != 0u || weight->type.shape[0].extent != d->vocabulary_size ||
+                weight->type.shape[1].extent != d->hidden_width) return 0;
+            embeddings++;
+        }
+    }
+    /* These persisted compatibility/report views may not contradict the program.
+     * They are not used to construct its operations or parameter bindings. */
+    return embeddings == 1u && delta == d->recurrent_layer_count && attention == d->attention_layer_count &&
+        delta + attention == d->layer_count;
+}
+
 static int compiled_ffn_signature_valid(const yvex_compiled_model_plan *plan)
 {
     const yvex_decoder_plan_summary *d = yvex_decoder_plan_summary_get(plan->decoder);
     const yvex_program_tensor_summary *p = yvex_program_tensor_summary_get(plan->dense_ffn);
     const yvex_program_tensor_value *a, *gate, *up, *down, *output;
+    if (plan->schema == MODEL_PLAN_SCHEMA_V6) return !p && compiled_forward_signature_valid(plan);
     if (!d) return !p;
     if (!p || p->input_count != 4u || p->result_count != 1u || p->minimum_rows != 1u ||
         p->maximum_rows != d->maximum_context || p->row_multiple != 1u) return 0;
@@ -679,6 +724,49 @@ static int compiled_ffn_signature_valid(const yvex_compiled_model_plan *plan)
         gate->rows == d->intermediate_width && up->rows == d->intermediate_width &&
         down->width == d->intermediate_width && down->rows == d->hidden_width &&
         !output->parameter && output->width == d->hidden_width;
+}
+
+static int compiled_forward_build(yvex_compiled_model_plan *plan, const yvex_compiled_model_plan_request *r,
+                                   yvex_error *err)
+{
+    const yvex_physical_execution_summary *physical =
+        yvex_physical_execution_ir_summary(r->program_physical_parameters);
+    const yvex_ir_module *m = yvex_program_parameters_module(r->program_parameters);
+    const yvex_ir_module *program = yvex_program_execution_module(r->program);
+    yvex_program_parameter_binding *bindings;
+    size_t count = yvex_program_parameters_count(r->program_parameters), i;
+    unsigned long long j;
+    int rc = YVEX_OK;
+    if (!program) return YVEX_OK; /* Historical schema import, never a native source projection. */
+    if (!m || !physical || !count || strcmp(yvex_ir_identity(m), yvex_ir_identity(program)))
+        return model_plan_refuse(err, YVEX_ERR_FORMAT, "program parameters require the exact compiled IR lineage");
+    bindings = calloc(count, sizeof(*bindings));
+    if (!bindings) return model_plan_refuse(err, YVEX_ERR_NOMEM, "physical parameter binding allocation failed");
+    for (i = 0u; rc == YVEX_OK && i < count; ++i) {
+        const yvex_program_parameter *parameter = yvex_program_parameter_at(r->program_parameters, i);
+        size_t matches = 0u;
+        for (j = 0u; j < physical->decision_count; ++j) {
+            const yvex_physical_execution_decision *d =
+                yvex_physical_execution_ir_decision_at(r->program_physical_parameters, j);
+            if (d->terminal_tensor_id != parameter->terminal) continue;
+            bindings[i] = (yvex_program_parameter_binding){parameter->value, d->terminal_tensor_id, d->canonical_qtype};
+            matches++;
+        }
+        if (matches != 1u)
+            rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "program parameter has ambiguous physical work");
+    }
+    if (rc == YVEX_OK) rc = yvex_program_physical_compile(&plan->forward, r->program, "forward", bindings, count,
+        physical->identity, err);
+    if (rc == YVEX_OK)
+        rc = yvex_program_physical_parameters_validate(plan->forward, r->program_physical_parameters, err);
+    if (rc == YVEX_OK && !compiled_forward_signature_valid(plan))
+        rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "compiled forward contradicts the retained producer view");
+    free(bindings);
+    if (rc == YVEX_OK) {
+        yvex_program_tensor_close(&plan->dense_ffn);
+        plan->schema = MODEL_PLAN_SCHEMA_V6;
+    }
+    return rc;
 }
 
 static int compiled_ffn_build(yvex_compiled_model_plan *plan, const yvex_compiled_model_plan_request *r,
@@ -785,6 +873,7 @@ int yvex_compiled_model_plan_build(
         else
             rc = YVEX_OK;
         if (rc == YVEX_OK) rc = compiled_ffn_build(plan, request, err);
+        if (rc == YVEX_OK) rc = compiled_forward_build(plan, request, err);
         if (rc == YVEX_OK) {
             *out = plan;
             yvex_error_clear(err);
@@ -885,9 +974,10 @@ int yvex_compiled_model_plan_encode(
         (target_present && decoder_present) || (!target_present && draft_present) ||
         !compiled_output_matches_producer(plans) || !compiled_ffn_signature_valid(plans) ||
         !yvex_sha256_hex_valid(plans->operator_graph_identity) ||
-        !plan_put_text(bytes, plans->schema == MODEL_PLAN_SCHEMA_V5 ?
+        !plan_put_text(bytes, plans->schema == MODEL_PLAN_SCHEMA_V6 ? "yvex.compiled-model-plan.v6" :
+                       plans->schema == MODEL_PLAN_SCHEMA_V5 ?
                        "yvex.compiled-model-plan.v5" : "yvex.compiled-model-plan.v4") ||
-        !plan_put_u64(bytes, plans->schema == MODEL_PLAN_SCHEMA_V5 ? MODEL_PLAN_SCHEMA_V5 : MODEL_PLAN_SCHEMA_V4) ||
+        !plan_put_u64(bytes, plans->schema >= MODEL_PLAN_SCHEMA_V5 ? plans->schema : MODEL_PLAN_SCHEMA_V4) ||
         !plan_put_text(bytes, plans->operator_graph_identity) ||
         !plan_put_u64(bytes, (unsigned int)target_present) ||
         (target_present &&
@@ -910,6 +1000,15 @@ int yvex_compiled_model_plan_encode(
         if (rc == YVEX_OK && (!plan_put_u64(bytes, program.count) ||
             !yvex_core_bytes_append(bytes, program.data, program.count)))
             rc = model_plan_refuse(err, YVEX_ERR_NOMEM, "compiled tensor program encoding failed");
+        free(program.data);
+        if (rc != YVEX_OK) return rc;
+    }
+    if (plans->schema == MODEL_PLAN_SCHEMA_V6) {
+        yvex_core_bytes program = {.maximum = 256u * 1024u * 1024u};
+        int rc = yvex_program_physical_encode(plans->forward, &program, err);
+        if (rc == YVEX_OK && (!plan_put_u64(bytes, program.count) ||
+            !yvex_core_bytes_append(bytes, program.data, program.count)))
+            rc = model_plan_refuse(err, YVEX_ERR_NOMEM, "compiled forward program encoding failed");
         free(program.data);
         if (rc != YVEX_OK) return rc;
     }
@@ -941,6 +1040,8 @@ int yvex_compiled_model_plan_decode(
         expected_schema = MODEL_PLAN_SCHEMA_V4;
     else if (strcmp(domain, "yvex.compiled-model-plan.v5") == 0)
         expected_schema = MODEL_PLAN_SCHEMA_V5;
+    else if (strcmp(domain, "yvex.compiled-model-plan.v6") == 0)
+        expected_schema = MODEL_PLAN_SCHEMA_V6;
     if (!expected_schema || !plan_get_u64(&cursor, &schema) ||
         schema != expected_schema)
         return model_plan_refuse(err, YVEX_ERR_FORMAT,
@@ -988,7 +1089,7 @@ int yvex_compiled_model_plan_decode(
     if (rc == YVEX_OK && output_present)
         rc = output_head_read(&cursor, &plan->output_head, 0, err);
     plan->schema = (unsigned int)schema;
-    if (rc == YVEX_OK && schema >= MODEL_PLAN_SCHEMA_V5) {
+    if (rc == YVEX_OK && schema == MODEL_PLAN_SCHEMA_V5) {
         unsigned long long length;
         if (!decoder_present || !plan_get_u64(&cursor, &length) || length > cursor.count - cursor.offset)
             rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "compiled tensor program extent is malformed");
@@ -996,8 +1097,17 @@ int yvex_compiled_model_plan_decode(
             rc = yvex_program_tensor_decode(&plan->dense_ffn, cursor.data + cursor.offset, (size_t)length, err);
             if (rc == YVEX_OK) cursor.offset += (size_t)length;
         }
-    } else if (rc == YVEX_OK && decoder_present)
+    } else if (rc == YVEX_OK && decoder_present && schema < MODEL_PLAN_SCHEMA_V5)
         rc = legacy_decoder_ffn_import(&plan->dense_ffn, plan->decoder, err);
+    if (rc == YVEX_OK && schema == MODEL_PLAN_SCHEMA_V6) {
+        unsigned long long length;
+        if (!plan_get_u64(&cursor, &length) || length > cursor.count - cursor.offset)
+            rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "compiled forward program extent is malformed");
+        else {
+            rc = yvex_program_physical_decode(&plan->forward, cursor.data + cursor.offset, (size_t)length, err);
+            if (rc == YVEX_OK) cursor.offset += (size_t)length;
+        }
+    }
     if (rc == YVEX_OK &&
         ((target_present && decoder_present) ||
          (!target_present && draft_present) ||
@@ -1045,6 +1155,23 @@ static int decoder_output_admitted(
                   admission->runtime_descriptor_identity) == 0 &&
            strcmp(output->output_head_plan_identity,
                   admission->output_head_plan_identity) == 0;
+}
+
+int yvex_compiled_model_plan_normalize(yvex_compiled_model_plan *plan,
+    const yvex_attention_layer_plan *attention, size_t attention_count,
+    const yvex_physical_execution_ir *parameters, yvex_error *err)
+{
+    if (!plan) return model_plan_refuse(err, YVEX_ERR_INVALID_ARG, "compiled import owner required");
+    int rc;
+    if (!plan->decoder) return YVEX_OK;
+    /* The enclosing binding has authenticated both old topology and physical
+     * parameters. Retained old bytes serve serialization identity only. */
+    rc = plan->forward ? YVEX_OK : yvex_decoder_plan_normalize_program(&plan->forward, plan->decoder,
+        attention, attention_count, parameters, err);
+    if (rc == YVEX_OK && !compiled_forward_signature_valid(plan))
+        rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "imported forward contradicts the retained producer view");
+    if (rc == YVEX_OK) rc = yvex_program_physical_parameters_validate(plan->forward, parameters, err);
+    return rc;
 }
 
 int yvex_compiled_model_plan_admit(
@@ -1279,6 +1406,11 @@ const yvex_runtime_logits_plan_summary *yvex_compiled_model_plan_output_head(
 const yvex_program_tensor_plan *yvex_compiled_model_plan_dense_ffn(const yvex_compiled_model_plan *plan)
 {
     return plan ? plan->dense_ffn : NULL;
+}
+
+const yvex_program_physical *yvex_compiled_model_plan_forward(const yvex_compiled_model_plan *plan)
+{
+    return plan ? plan->forward : NULL;
 }
 
 const char *yvex_compiled_model_plan_operator_graph_identity(

@@ -538,8 +538,7 @@ int yvex_runtime_private_session_prepare_persistent_scope_state_locked(
     const yvex_graph_attention_capacity_plan *capacity,
     yvex_model_engine_failure *failure, yvex_error *err);
 int yvex_runtime_private_session_sequence_state_open(
-    yvex_runtime_execution_session *session,
-    const yvex_sequence_state_plan *plan, int bounded,
+    yvex_runtime_execution_session *session, int bounded,
     unsigned long long *state_budget, unsigned long long *admitted_host_bytes,
     yvex_model_engine_failure *failure, yvex_error *err);
 int yvex_runtime_private_session_sequence_state_attach(

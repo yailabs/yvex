@@ -1728,7 +1728,7 @@ int yvex_runtime_session_open(yvex_runtime_execution_session **out,
     state_budget = request->maximum_host_bytes ? request->maximum_host_bytes - admitted_host_bytes
                                                : 0ull;
     rc = yvex_runtime_private_session_sequence_state_open(
-        session, request->sequence_state_plan,
+        session,
         request->maximum_host_bytes != 0ull, &state_budget,
         &admitted_host_bytes, failure, err);
     if (rc != YVEX_OK)

@@ -333,11 +333,6 @@ const yvex_program_tensor_value *yvex_program_tensor_value_at(const yvex_program
     return p && i < p->summary.value_count ? &p->values[i] : NULL;
 }
 
-const yvex_program_tensor_step *yvex_program_tensor_step_at(const yvex_program_tensor_plan *p, size_t i)
-{
-    return p && i < p->summary.step_count ? &p->steps[i] : NULL;
-}
-
 yvex_ir_id yvex_program_tensor_result_at(const yvex_program_tensor_plan *p, size_t i)
 {
     return p && i < p->summary.result_count ? p->results[i] : YVEX_IR_NONE;

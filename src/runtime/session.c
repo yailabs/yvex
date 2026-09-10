@@ -11,6 +11,7 @@
 #include <yvex/internal/backend.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/graph_state.h>
+#include <yvex/internal/program_physical.h>
 
 typedef struct {
     unsigned long long required, logical_required, host_total, device_total, generation;
@@ -198,29 +199,31 @@ int yvex_runtime_private_attention_workspace_required(
 }
 
 int yvex_runtime_private_session_sequence_state_open(
-    yvex_runtime_execution_session *session,
-    const yvex_sequence_state_plan *plan, int bounded,
+    yvex_runtime_execution_session *session, int bounded,
     unsigned long long *state_budget, unsigned long long *admitted_host_bytes,
     yvex_model_engine_failure *failure, yvex_error *err)
 {
     yvex_sequence_state_plan derived;
-    const yvex_decoder_plan_summary *decoder;
+    const yvex_program_physical *program = session && session->engine ?
+        yvex_compiled_model_plan_forward(session->engine->view.compiled_plan) : NULL;
     yvex_sequence_state_summary summary;
     unsigned long long bytes;
     int rc;
 
-    decoder = session && session->engine
-                  ? yvex_decoder_plan_summary_get(session->engine->view.decoder)
-                  : NULL;
-    if (!plan && decoder && decoder->recurrent_layer_count) {
-        rc = yvex_decoder_plan_sequence_state(
-            session->engine->view.decoder, &derived, err);
-        if (rc != YVEX_OK) return rc;
-        plan = &derived;
+    if (!program) {
+        if (session && session->engine && session->engine->view.decoder)
+            return yvex_runtime_private_reject(
+                failure, YVEX_MODEL_ENGINE_FAILURE_GRAPH, "sequence-state", 0u, 0u,
+                "decoder import has not produced an admitted executable program", err, YVEX_ERR_STATE);
+        return YVEX_OK;
     }
-    if (!plan) return YVEX_OK;
+    if (!yvex_program_physical_sequence_state(program, &derived))
+        return yvex_runtime_private_reject(
+            failure, YVEX_MODEL_ENGINE_FAILURE_GRAPH, "sequence-state", 0u, 0u,
+            "executable program has no verified state bindings", err, YVEX_ERR_STATE);
+    if (!derived.binding_count) return YVEX_OK;
     rc = yvex_sequence_state_open_for_backend(
-        &session->sequence_state, plan, session->summary.backend, err);
+        &session->sequence_state, &derived, session->summary.backend, err);
     if (rc == YVEX_OK)
         rc = yvex_sequence_state_summary_copy(
             session->sequence_state, &summary, err);

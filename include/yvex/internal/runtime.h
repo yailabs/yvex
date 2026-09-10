@@ -433,7 +433,6 @@ typedef struct {
     yvex_backend_kind backend;
     unsigned long long maximum_host_bytes, maximum_device_bytes;
     const yvex_attention_state_provider_factory *attention_state_factory;
-    const yvex_sequence_state_plan *sequence_state_plan;
 } yvex_runtime_session_open_request;
 typedef struct {
     int open, busy, cancelled, invalidated;

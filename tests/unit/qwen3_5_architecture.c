@@ -4,7 +4,9 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/families/qwen3_5.h>
 #include <yvex/internal/program.h>
+#include <yvex/internal/program_physical.h>
 #include <yvex/internal/graph.h>
+#include <yvex/qtype.h>
 
 #include <errno.h>
 #include <stdio.h>
@@ -115,6 +117,65 @@ static void qwen_test_verification(yvex_source_verification *verification,
                         "Qwen3_5ForConditionalGeneration");
 }
 
+static int qwen_test_physical(const yvex_program_execution *execution)
+{
+    const yvex_ir_module *m = yvex_program_execution_module(execution);
+    yvex_program_parameter_binding bindings[851];
+    yvex_program_physical *physical = NULL, *decoded = NULL, *rejected = NULL;
+    const yvex_program_physical_summary *s;
+    yvex_core_bytes bytes = {.maximum = 4u * 1024u * 1024u};
+    yvex_core_bytes again = {.maximum = 4u * 1024u * 1024u};
+    yvex_error err = {0};
+    size_t i, count = 0u, delta = 0u, attention = 0u, states = 0u;
+    int rc;
+    for (i = 0u; i < yvex_ir_operation_count(m); ++i) {
+        const yvex_ir_operation *op = yvex_ir_operation_at(m, (yvex_ir_id)i);
+        if (strcmp(op->definition->name, "core.parameter")) continue;
+        YVEX_TEST_ASSERT(count < 851u, "bounded fixture parameter inventory");
+        bindings[count] = (yvex_program_parameter_binding){op->results[0], count, YVEX_GGUF_QTYPE_BF16};
+        count++;
+    }
+    rc = yvex_program_physical_compile(&physical, execution, "forward", bindings, count,
+                                       yvex_ir_identity(m), &err);
+    if (rc != YVEX_OK) fprintf(stderr, "Qwen physical lowering: %s\n", yvex_error_message(&err));
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "whole forward has admitted physical work, not only FFN");
+    s = yvex_program_physical_summary_get(physical);
+    for (i = 0u; i < s->step_count; ++i) {
+        const yvex_program_physical_step *step = yvex_program_physical_step_at(physical, i);
+        delta += !strcmp(step->implementation, "gated_delta.bf16.f32state.v1");
+        attention += !strcmp(step->implementation, "gated_causal.bf16.v1");
+    }
+    for (i = 0u; i < s->result_count; ++i) {
+        const yvex_program_physical_value *v = yvex_program_physical_value_at(physical,
+            yvex_program_physical_result_at(physical, i));
+        if (v->type.kind != YVEX_IR_STATE) continue;
+        YVEX_TEST_ASSERT(v->state_root >= 2u && v->state_root < s->input_count,
+                         "state successor preserves its explicit input lifetime");
+        states++;
+    }
+    YVEX_TEST_ASSERT(delta == 48u && attention == 16u && states == 112u &&
+        s->input_count == 114u && s->result_count == 113u && s->storage_count < 64u,
+        "physical dataflow preserves hybrid state and compiles bounded reusable activation storage");
+    YVEX_TEST_ASSERT(yvex_program_physical_encode(physical, &bytes, &err) == YVEX_OK &&
+        yvex_program_physical_decode(&decoded, bytes.data, bytes.count, &err) == YVEX_OK &&
+        yvex_program_physical_encode(decoded, &again, &err) == YVEX_OK &&
+        bytes.count == again.count && !memcmp(bytes.data, again.data, bytes.count),
+        "physical work roundtrip preserves every value, effect, state root and parameter binding");
+    bytes.data[bytes.count - 1u] ^= 1u;
+    YVEX_TEST_ASSERT(yvex_program_physical_decode(&rejected, bytes.data, bytes.count, &err) != YVEX_OK &&
+        !rejected, "corrupt physical identity is rejected without publishing a program");
+    bindings[0].qtype = YVEX_GGUF_QTYPE_F32;
+    YVEX_TEST_ASSERT(yvex_program_physical_compile(&rejected, execution, "forward", bindings, count,
+        yvex_ir_identity(m), &err) != YVEX_OK && !rejected, "unlegalized parameter precision fails closed");
+    printf("Qwen physical: delta=%zu attention=%zu state_successors=%zu steps=%zu storage_slots=%zu binary_bytes=%zu\n",
+        delta, attention, states, s->step_count, s->storage_count, bytes.count);
+    free(again.data);
+    free(bytes.data);
+    yvex_program_physical_close(&decoded);
+    yvex_program_physical_close(&physical);
+    return 0;
+}
+
 static int qwen_test_program(const yvex_qwen3_5_architecture *architecture)
 {
     static const char source[] = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -198,6 +259,7 @@ static int qwen_test_program(const yvex_qwen3_5_architecture *architecture)
                entry->step_count, entry->value_count);
     }
     printf("Qwen program: forward inputs=114 results=113; delta=48 attention=16 RMSNorm=129 FFN=64 parameters=851\n");
+    YVEX_TEST_ASSERT(qwen_test_physical(lowered) == 0, "whole-program physical lowering");
     free(bytes.data);
     yvex_program_execution_close(&lowered);
     yvex_ir_module_close(&imported);

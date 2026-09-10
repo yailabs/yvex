@@ -140,20 +140,20 @@ capacity planner evaluates state geometry, artifact bytes, hardware facts and
 resource reserve. The current 4096-token DeepSeek profile is one such selected
 workload, not the model's semantic limit.
 
-Runtime binding v15 persists the canonical operator graph identity, Physical
+Runtime binding v16 persists the canonical operator graph identity, Physical
 Execution IR v5 package records, and pointer-free compiled tokenizer,
 conversation, and model/operator plans. Source-owned syntax and exact tokenizer
 component identities enter through the family compiler adapter; tokenizer,
 runtime, and server consume the authenticated record without enumerating a
 concrete family.
 
-The v15 reader also authenticates accepted v14 bindings. It imports a v14
+The v16 reader also authenticates accepted v14/v15 bindings. It imports a v14
 physical record only when the legacy record names canonical package storage and
 does not require its retired derived-layout/runtime-policy fields; the importer
 then normalizes that package truth to PEIR v5 before engine specialization.
 Unsupported legacy derived assets fail closed. Bindings v7 through v13 remain
 explicit rebuild boundaries because they predate the canonical operator graph.
-Old bytes are never reinterpreted as v15.
+Old bytes are never reinterpreted as v16.
 
 The non-persisted runtime execution profile binds an exact engine generation
 and specialization to workload, kernel bundle, generation mode, evidence class,
@@ -199,11 +199,22 @@ The native program-language foundation is owned by
 [`include/yvex/internal/ir.h`](../../include/yvex/internal/ir.h) and
 [`src/ir/module.c`](../../src/ir/module.c). It is **not yet the complete serving-runtime cutover**:
 DeepSeek and MiniMax still consume their existing compiled execution records;
-Qwen's decoder now consumes lowered tensor work for its FFN, but its mixer and
-layer orchestration remain transitional. The operator graph and decoder plans
-above have not been retired.
+the Qwen token-forward runner now consumes complete physical SSA work for
+embedding, normalization, mixers, FFN and residual composition. It no longer
+walks decoder layers or resolves parameter roles during execution. Attention
+provider plans and runner/output report records remain derived consumers; the
+operator graph and decoder record formats above have not all been retired.
 Refoundation .1 remains active until those consumers and lowering boundaries
 are migrated and qualified.
+
+### Current consumer cutover
+
+| Consumer | Implemented IR boundary | Remaining closure boundary |
+| --- | --- | --- |
+| Qwen 3.5 | Complete forward physical work and slot-based runner; legacy decoder import normalized at binding admission; bounded recurrent and hybrid CUDA execution | Real artifact-backed hybrid preservation; remaining output/provider/report views and ownership cutover |
+| DeepSeek V4 / DSpark | Existing regression consumer; typed compiler foundation does not yet own complete target/draft computation | Migrate heterogeneous attention, mHC, MoE and draft dependencies; qualify target/speculative execution |
+| MiniMax H3 | Existing component/intake regression consumer | Migrate neural component composition without absorbing media I/O; qualify affected consumers |
+| Mamba2 | Pure SSM representable without attention/KV | Preserve representability only here; A01 executable repair remains queued and PARTIAL |
 
 ### Cutover acceptance boundary
 
@@ -231,9 +242,9 @@ verified source -> import -> Semantic Model IR -> Program / Execution IR
 | Semantic Model IR | Modules/functions/blocks, operations/values/types, shapes/attributes/effects and explicit state dependencies | Native IR construction and verification exist; executable families are not migrated |
 | Program / Execution IR | Legalized components, entrypoints, dependencies and state flow | Direct-call legalization and straight-line dependencies are implemented; executable regions remain pending |
 | Transformation IR + machine | Parameter derivation and target feasibility, without changing model meaning | Exact source constants join through sealed identity transforms; general transform legalization and target matching remain pending |
-| Physical IR | Dtype/qtype, layout, packing, alignment and sharing | Parameter joins and pure BF16 tensor legalization exist; general activation/state representation lowering remains pending |
-| Target / Schedule IR | Admitted physical work, dependencies, populations and placement | Bounded tensor instructions bind backend implementations once and prepare exact row populations; general schedule cutover pending |
-| Executable binding / runtime | Authenticate immutable execution truth; own engines/runners/sessions/scheduling/lifetimes | Compiled model-plan v5 carries lowered FFN work; runtime does not interpret Semantic IR; full binding migration remains pending |
+| Physical IR | Dtype/qtype, layout, packing, alignment and sharing | Parameter joins and BF16 forward operations with distinct recurrent/KV state handles exist; general representation lowering remains pending |
+| Target / Schedule IR | Admitted physical work, dependencies, populations and placement | Serial SSA instructions, last-use storage reuse and exact row populations bind static implementations; general schedule cutover pending |
+| Executable binding / runtime | Authenticate immutable execution truth; own engines/runners/sessions/scheduling/lifetimes | Compiled model-plan v6 carries physical token-forward work; legacy decoder containers normalize at cold binding import, not warm execution; other consumers remain pending |
 | State providers / backends / evidence | Physical state mechanisms and CPU/CUDA execution publish typed results and observations | Existing owners and producer-owned transient-result lifetimes preserved |
 
 A second graph serialized alongside decoder plans is not the accepted end state.
@@ -256,10 +267,11 @@ a runtime device-result publication generation, engine lease or checkpoint.
 | Imported program | Family/source interpretation as typed operations, parameter references and explicit state dependencies | Mamba2 source inspection and Qwen text projection; Mamba2 source obligations remain unresolved |
 | Canonical program | Same module infrastructure after verified alias and dead-pure-value passes | Immutable compiler object, canonical diagnostic text and semantic identity |
 | Straight-line execution form | Entry-local value slots, producer dependencies, serial effect order and last-use boundaries | Qwen binding compilation consumes this verified lowering; backend/region schedule cutover is not claimed |
-| IR binary v1 | Explicit-field encoding reopened through constructors, static dialect resolution and the verifier | Internal serialization contract tested by roundtrip/truncation; not embedded in current v15 runtime bindings |
+| IR binary v1 | Explicit-field encoding reopened through constructors, static dialect resolution and the verifier | Internal serialization contract tested by roundtrip/truncation; not embedded in current v16 runtime bindings |
 | Existing Transformation IR | Parameter derivation, ordered source contributions and provenance | Existing source-to-package authority; not replaced by program operations |
 | Parameter physical projection | Source-bound program constants joined to transformation terminals and physical package decisions | Compiler-owned terminal handles and a distinct identity; no payload access or target schedule |
-| Tensor program v1 | Verified pure rank-2 BF16 instructions, operand/result slots and admissible row populations | Persisted in compiled model-plan v5 for the migrated FFN consumer; independent from package PEIR v5 |
+| Tensor program v1 | Verified pure rank-2 BF16 instructions, operand/result slots and admissible row populations | Retained bounded operator consumer and model-plan v5 import; not independently serialized in native v6 |
+| Physical program v1 | Typed token/tensor/state slots, exact parameter handles, admitted implementation contracts and serial dependencies | Native model-plan v6 token-forward consumer; v3/v4/v5 decoder compatibility normalized once after binding authentication |
 | Existing package physical / target forms | Representation, admitted package storage and deployment implementation selection | PEIR/binding/specialization retained; universal operation/state schedule lowering remains pending |
 
 Semantic tensors contain scalar type and logical shape, not GGUF qtypes, CUDA
@@ -369,16 +381,55 @@ upstream conformance.
 
 Qwen's current attention/decoder compilation records are now projected from that
 verified program, which the compiler retains and binds into its identity. They
-remain transitional consumers: the runtime still executes the specialized mixer
-plans, but calls the lowered `dense_ffn` program for its feed-forward work. This
-removes the decoder's separate FFN operation sequence, three activation buffers
-and two linear-specialization owners. The tensor-program execution owner binds
-the admitted instructions, prepares row populations and owns their intermediate
-storage; the caller retains input/output ownership. This is a partial consumer
-migration, **not** completion of the executable schedule/backend cutover.
+remain compatibility/provider/report views, not the token-forward operation
+sequence. [`decoder.c`](../../src/runtime/decoder.c) is a runner over physical
+SSA instructions; the procedural layer loop, layer-indexed weight directory,
+per-layer linear preparation and separate FFN invocation have been removed.
+Generation iteration and the output/logits consumer remain above this forward
+program. Full artifact-backed hybrid Qwen preservation still requires real-model
+qualification; source projection alone does not earn it.
 The Qwen source fixture proves 48 recurrent operations,
 16 attention operations, 112 distinct state inputs and all 851 text parameters;
-it does not execute the full model.
+physical token-forward lowering produces 1,732 instructions with 14 reusable
+tensor storage slots. The output head remains a separate consumer. This fixture
+does not execute the full model.
+
+[`program_physical.c`](../../src/graph/program_physical.c) lowers explicit
+operands/results, logical publications, parameter tensor IDs, state roots and
+last-use intervals. It admits embedding, BF16 linear/RMSNorm/SiLU/add, gated
+delta and gated causal attention. A state successor is a semantic dependency,
+not an allocation or a physical copy. The current provider specialization
+admits one transition per state root per invocation; unsupported state flow is
+refused, not silently linearized. Exact package identity, qtype, row geometry
+and encoded extent are checked against PEIR at cold binding admission.
+
+[`program_device.c`](../../src/runtime/program_device.c) binds static
+implementation contracts once and executes slots without source/role/layer
+lookup. [`program_kernels.c`](../../src/runtime/program_kernels.c) owns exact
+parameter handles and reusable linear specializations, including preparation
+budgets. [`program_sequence.c`](../../src/runtime/program_sequence.c) stages
+individual recurrent/attention operations through existing providers; it does
+not own layer composition or transaction commit. Recurrent provider bindings
+derive from IR state-root slots rather than decoder ordinals. Attention still
+uses a cold-validated derived provider plan. Operation scratch protects SSA
+inputs from in-place Q/K normalization and RoPE.
+
+The bounded CUDA fixtures execute complete imported forward programs with
+nonzero BF16 weights through real recurrent, attention and residency providers:
+
+| Composition | Numerical operations | State inputs/successors | Compared outputs | Compared committed state values |
+| --- | ---: | ---: | ---: | ---: |
+| Two recurrent blocks | 30 | 4 | 96 | 2,432 |
+| Two recurrent blocks + one attention block | 43 | 5 | 96 | 2,624 |
+
+Chunked versus single-token invocation is exact at tolerance zero for both
+outputs and state. Cancellation after a transition aborts all participating
+state owners without changing committed bytes; retry commits and cleanup
+returns allocation to baseline. These are internal cross-path and lifetime
+proofs, not an independent model oracle, full-scale Qwen execution or upstream
+conformance. The CPU storage/dispatch fixture additionally refuses publication
+when cancellation is observed during the final operation, even after all
+values were computed. It proves VM contracts, not production CPU model kernels.
 
 ### Physical tensor execution and schema import
 
@@ -391,23 +442,29 @@ Semantic identity, execution identity and physical-program identity remain
 separate. Unsupported types, effects, operations, shapes or duplicate output
 bindings refuse during compilation/import.
 
-Compiled model-plan **v5** persists that tensor projection with explicit lengths
-and field encoding inside runtime binding v15. It does not persist the complete
-Semantic IR module, and its version is independent from package PEIR v5. The
-v3/v4 decoder importer translates authenticated legacy FFN geometry once into
-the same lowered form; it does not reinterpret old bytes as v5. Re-encoding a
-v4 container retains its original bytes. Native v5 admission validates both
-the physical program and its exact input/output/context compatibility with the
-remaining transitional decoder consumer. This import boundary disappears only
-when those durable legacy containers no longer require support.
+Compiled model-plan **v6** persists the complete physical token-forward program
+inside runtime binding v16, without a redundant standalone FFN program. Its
+version is independent from package PEIR v5 and physical-program binary v1.
+Field encoding and semantic/execution/parameter/physical identities are separate;
+the complete Semantic IR module is not persisted in the binding.
+[`decoder_import.c`](../../src/graph/decoder_import.c) translates authenticated
+v3/v4/v5 decoder geometry and PEIR parameter roles once into the current program.
+This compatibility importer is never invoked per token. The v4/v5 fixtures
+retain exact bytes on re-encoding; v3 retains its existing upgrade-to-v4 writer
+behavior. New v6 containers validate program, parameter storage and retained
+runner signature together. Malformed lengths, identities,
+state/effect/type constraints or incompatible attention policy fail closed.
+Older binaries cannot open v6; existing packages need no weight rewrite.
 
-[`tensor_program.c`](../../src/runtime/tensor_program.c) resolves instruction
-implementations at open, owns intermediate storage and prepares exact row
-populations before execution. Inputs, parameters and result destinations remain
-caller-owned. No compiler operation-name lookup or topology reconstruction runs
-per FFN invocation. Failed preparation publishes no runnable population; failed
-execution marks the result unwritten. Borrowed device-result validity still
-belongs to the enclosing producer publication generation, not an IR value ID.
+Production token-forward execution and the independent BF16 CUDA fixture both
+use [`program_device.c`](../../src/runtime/program_device.c) with
+[`program_kernels.c`](../../src/runtime/program_kernels.c). The older bounded
+FFN executor and its private ABI have been retired. Model-plan v5 serialization
+retains an import-compatibility owner, not a parallel runtime. Parameter
+representation is checked once at cold binding; an invocation supplies only
+its actual input values, not a mutable directory of weight interpretations.
+Borrowed device-result validity belongs to the enclosing producer publication
+generation, not an IR value ID.
 
 The independent CUDA fixture compares 256 scalar BF16 results at widths 1 and 3
 with zero error/tolerance. It exercises allocation budgets, failed preparation,

@@ -48,6 +48,14 @@ typedef struct {
 } yvex_decoder_plan_summary;
 
 typedef struct yvex_decoder_plan yvex_decoder_plan;
+struct yvex_program_physical;
+struct yvex_physical_execution_ir;
+struct yvex_attention_layer_plan;
+/* Persisted v3-v5 compatibility only. Normalizes records into current physical
+ * computational work before engine/session creation; no payload or backend. */
+int yvex_decoder_plan_normalize_program(struct yvex_program_physical **, const yvex_decoder_plan *,
+    const struct yvex_attention_layer_plan *, size_t attention_count,
+    const struct yvex_physical_execution_ir *, yvex_error *);
 
 int yvex_decoder_plan_compile(
     yvex_decoder_plan **out, const yvex_semantic_model_ir *semantic_model,

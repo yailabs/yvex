@@ -12,6 +12,8 @@
 #include <yvex/internal/graph.h>
 #include <yvex/internal/model.h>
 #include <yvex/internal/operator_graph.h>
+#include <yvex/internal/program_physical.h>
+#include <yvex/internal/execution.h>
 
 #include "src/runtime/private.h"
 #include "tests/support/tensor_program.h"
@@ -413,6 +415,179 @@ static int test_compiled_decoder_import(const yvex_decoder_plan *decoder, const 
     return 0;
 }
 
+static int test_compiled_session_state(const yvex_compiled_model_plan *plan)
+{
+    const unsigned long long budgets[] = {79u, 80u, 1024u};
+    yvex_model_engine model = {0};
+    size_t i;
+    model.view.compiled_plan = plan; /* No decoder topology is available to the session. */
+    for (i = 0u; i < sizeof(budgets) / sizeof(budgets[0]); ++i) {
+        yvex_runtime_execution_session session = {0};
+        yvex_model_engine_failure failure = {0};
+        yvex_error err = {0};
+        unsigned long long budget = budgets[i], admitted = 0u;
+        int rc;
+        session.engine = &model;
+        session.summary.backend = YVEX_BACKEND_KIND_CPU;
+        rc = yvex_runtime_private_session_sequence_state_open(&session, 1, &budget, &admitted, &failure, &err);
+        if (!i) {
+            YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS && !session.sequence_state &&
+                budget == budgets[i] && !admitted, "compiled state refuses a 79-byte budget without partial ownership");
+        } else {
+            YVEX_TEST_ASSERT(rc == YVEX_OK && session.sequence_state &&
+                session.summary.sequence_state_binding_count == 1u &&
+                session.summary.sequence_committed_state_bytes == 40u &&
+                session.summary.sequence_candidate_state_bytes == 40u && admitted == 80u && budget == budgets[i] - 80u,
+                "session consumes exact compiled recurrent geometry without a decoder or caller-provided state plan");
+        }
+        YVEX_TEST_ASSERT(yvex_sequence_state_close_checked(&session.sequence_state, &err) == YVEX_OK &&
+            !session.sequence_state, "admitted or refused compiled state leaves no provider owner");
+    }
+    puts("Compiled session state: no decoder view; committed=40 candidate=40 bytes; budgets 80/1024 admitted; "
+         "79 refused before publication; cleanup complete");
+    return 0;
+}
+
+static int test_compiled_forward_import(const yvex_decoder_plan *decoder,
+    const yvex_program_physical *program, const yvex_physical_execution_ir *parameters)
+{
+    yvex_core_bytes wire = {.maximum = 1024u * 1024u}, payload = {.maximum = 1024u * 1024u};
+    yvex_core_bytes again = {.maximum = 1024u * 1024u};
+    yvex_compiled_model_plan *plan = NULL, *rejected = NULL;
+    yvex_error err = {0};
+    size_t payload_offset;
+    YVEX_TEST_ASSERT(compiled_fixture_text(&wire, "yvex.compiled-model-plan.v6") &&
+        compiled_fixture_u64(&wire, 6u) &&
+        compiled_fixture_text(&wire, yvex_decoder_plan_summary_get(decoder)->operator_graph_identity) &&
+        compiled_fixture_u64(&wire, 0u) && compiled_fixture_u64(&wire, 0u) &&
+        compiled_fixture_u64(&wire, 1u) && yvex_decoder_plan_encode(decoder, &wire, &err) == YVEX_OK &&
+        compiled_fixture_u64(&wire, 0u) && yvex_program_physical_encode(program, &payload, &err) == YVEX_OK,
+        "independent v6 container fixture has one complete physical program, no duplicate FFN");
+    payload_offset = wire.count;
+    YVEX_TEST_ASSERT(compiled_fixture_u64(&wire, payload.count) &&
+        yvex_core_bytes_append(&wire, payload.data, payload.count) &&
+        yvex_compiled_model_plan_decode(&plan, wire.data, wire.count, &err) == YVEX_OK &&
+        yvex_compiled_model_plan_forward(plan) && !yvex_compiled_model_plan_dense_ffn(plan) &&
+        yvex_program_physical_parameters_validate(yvex_compiled_model_plan_forward(plan), parameters, &err) == YVEX_OK &&
+        yvex_compiled_model_plan_encode(plan, &again, &err) == YVEX_OK &&
+        again.count == wire.count && !memcmp(wire.data, again.data, wire.count),
+        "whole executable reopens against exact physical bindings and roundtrips without rebuilding computation");
+    YVEX_TEST_ASSERT(test_compiled_session_state(plan) == 0,
+        "runtime state consumes reopened physical program authority");
+    YVEX_TEST_ASSERT(yvex_compiled_model_plan_decode(&rejected, wire.data, wire.count - 1u, &err) != YVEX_OK &&
+        !rejected, "truncated full program refuses before publication");
+    wire.data[wire.count - 1u] ^= 1u;
+    YVEX_TEST_ASSERT(yvex_compiled_model_plan_decode(&rejected, wire.data, wire.count, &err) != YVEX_OK &&
+        !rejected, "corrupt full-program identity refuses before publication");
+    wire.count = payload_offset;
+    YVEX_TEST_ASSERT(compiled_fixture_u64(&wire, ULLONG_MAX) &&
+        yvex_compiled_model_plan_decode(&rejected, wire.data, wire.count, &err) != YVEX_OK && !rejected,
+        "overflowing executable extent refuses without resource allocation");
+    printf("Model-plan v6: complete forward roundtrip bytes=%zu; no redundant FFN program; "
+        "exact physical bindings accepted; malformed extent/truncation/identity refusals=3\n", again.count);
+    yvex_compiled_model_plan_close(&plan);
+    free(wire.data); free(payload.data); free(again.data);
+    return 0;
+}
+
+static int test_decoder_program_normalization(const yvex_decoder_plan *decoder)
+{
+    static const struct { yvex_tensor_role role; unsigned long long layer, width, rows; } tensors[] = {
+        {YVEX_TENSOR_ROLE_TOKEN_EMBEDDING, YVEX_TRANSFORM_IR_NO_ID, 4u, 8u},
+        {YVEX_TENSOR_ROLE_OUTPUT_NORM, YVEX_TRANSFORM_IR_NO_ID, 4u, 1u},
+        {YVEX_TENSOR_ROLE_ATTENTION_NORM, 0u, 4u, 1u},
+        {YVEX_TENSOR_ROLE_SEQUENCE_MIXER_QKV_PROJECTION, 0u, 4u, 6u},
+        {YVEX_TENSOR_ROLE_SEQUENCE_MIXER_OUTPUT_GATE, 0u, 4u, 2u},
+        {YVEX_TENSOR_ROLE_SEQUENCE_MIXER_BETA_PROJECTION, 0u, 4u, 1u},
+        {YVEX_TENSOR_ROLE_SEQUENCE_MIXER_DECAY_PROJECTION, 0u, 4u, 1u},
+        {YVEX_TENSOR_ROLE_SEQUENCE_MIXER_CONVOLUTION, 0u, 2u, 6u},
+        {YVEX_TENSOR_ROLE_SEQUENCE_MIXER_DECAY_LOG, 0u, 1u, 1u},
+        {YVEX_TENSOR_ROLE_SEQUENCE_MIXER_TIME_BIAS, 0u, 1u, 1u},
+        {YVEX_TENSOR_ROLE_SEQUENCE_MIXER_OUTPUT_NORM, 0u, 2u, 1u},
+        {YVEX_TENSOR_ROLE_SEQUENCE_MIXER_OUTPUT, 0u, 2u, 4u},
+        {YVEX_TENSOR_ROLE_FFN_NORM, 0u, 4u, 1u},
+        {YVEX_TENSOR_ROLE_FFN_GATE, 0u, 4u, 8u},
+        {YVEX_TENSOR_ROLE_FFN_UP, 0u, 4u, 8u},
+        {YVEX_TENSOR_ROLE_FFN_DOWN, 0u, 8u, 4u},
+        {YVEX_TENSOR_ROLE_ATTENTION_NORM, 1u, 4u, 1u},
+        {YVEX_TENSOR_ROLE_ATTENTION_Q, 1u, 4u, 8u},
+        {YVEX_TENSOR_ROLE_ATTENTION_K, 1u, 4u, 4u},
+        {YVEX_TENSOR_ROLE_ATTENTION_V, 1u, 4u, 4u},
+        {YVEX_TENSOR_ROLE_ATTENTION_Q_NORM, 1u, 4u, 1u},
+        {YVEX_TENSOR_ROLE_ATTENTION_K_NORM, 1u, 4u, 1u},
+        {YVEX_TENSOR_ROLE_ATTENTION_OUT, 1u, 4u, 4u},
+        {YVEX_TENSOR_ROLE_FFN_NORM, 1u, 4u, 1u},
+        {YVEX_TENSOR_ROLE_FFN_GATE, 1u, 4u, 8u},
+        {YVEX_TENSOR_ROLE_FFN_UP, 1u, 4u, 8u},
+        {YVEX_TENSOR_ROLE_FFN_DOWN, 1u, 8u, 4u}};
+    const size_t count = sizeof(tensors) / sizeof(tensors[0]);
+    yvex_physical_execution_decision decisions[sizeof(tensors) / sizeof(tensors[0])] = {{0}};
+    yvex_physical_execution_summary summary = {.schema_version = YVEX_PHYSICAL_EXECUTION_SCHEMA_V5,
+        .decision_count = count};
+    yvex_attention_layer_plan attention = {.ordinal = 0u, .layer_index = 1u, .query_heads = 1u, .kv_heads = 1u,
+        .head_dimension = 4u, .rope_head_dimension = 4u, .sliding_window = 32u,
+        .compute_contract = YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
+        .position = {.theta = 10000u, .scaling_factor = 1u}};
+    yvex_physical_execution_ir *parameters = NULL;
+    yvex_program_physical *program = NULL, *again = NULL;
+    yvex_core_bytes first = {.maximum = 1024u * 1024u}, second = {.maximum = 1024u * 1024u};
+    yvex_error err = {0};
+    size_t i, variant;
+    int rc;
+    yvex_core_text_copy(summary.physical_variant_identity, sizeof(summary.physical_variant_identity),
+        yvex_decoder_plan_summary_get(decoder)->decoder_plan_identity);
+    for (i = 0u; i < count; ++i) {
+        decisions[i] = (yvex_physical_execution_decision){.schema_version = YVEX_PHYSICAL_EXECUTION_SCHEMA_V5,
+            .terminal_tensor_id = i, .role = tensors[i].role,
+            .scope = tensors[i].layer == YVEX_TRANSFORM_IR_NO_ID ?
+                YVEX_TENSOR_SCOPE_GLOBAL : YVEX_TENSOR_SCOPE_MAIN_LAYER,
+            .layer_index = tensors[i].layer, .predictor_index = YVEX_TRANSFORM_IR_NO_ID,
+            .canonical_qtype = YVEX_GGUF_QTYPE_BF16, .canonical_row_width = tensors[i].width,
+            .canonical_row_count = tensors[i].rows, .encoded_offset = 256u * (i + 1u),
+            .encoded_bytes = 2u * tensors[i].width * tensors[i].rows, .alignment = 32u,
+            .consumer = YVEX_EXECUTION_CONSUMER_OUTPUT_HEAD, .layout = YVEX_EXECUTION_LAYOUT_CANONICAL_ROW,
+            .sharing = YVEX_EXECUTION_SHARING_MODEL_READ_ONLY};
+        yvex_core_text_copy(decisions[i].terminal_identity, sizeof(decisions[i].terminal_identity),
+            summary.physical_variant_identity);
+    }
+    YVEX_TEST_ASSERT(yvex_physical_execution_ir_import(&parameters, &summary, decisions, count, &err) == YVEX_OK,
+        "legacy parameters have independently validated physical identities and geometry");
+    rc = yvex_decoder_plan_normalize_program(&program, decoder, &attention, 1u, parameters, &err);
+    if (rc != YVEX_OK) fprintf(stderr, "legacy normalization: %s\n", yvex_error_message(&err));
+    YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_program_physical_summary_get(program)->input_count == 5u &&
+        yvex_program_physical_summary_get(program)->result_count == 4u,
+        "legacy hybrid topology normalizes to explicit token/position/three-state signature");
+    YVEX_TEST_ASSERT(test_compiled_forward_import(decoder, program, parameters) == 0,
+        "current compiled program container binds normalized computation");
+    YVEX_TEST_ASSERT(yvex_decoder_plan_normalize_program(&again, decoder, &attention, 1u, parameters, &err) == YVEX_OK &&
+        yvex_program_physical_encode(program, &first, &err) == YVEX_OK &&
+        yvex_program_physical_encode(again, &second, &err) == YVEX_OK && first.count == second.count &&
+        !memcmp(first.data, second.data, first.count), "compatibility normalization is deterministic");
+    yvex_program_physical_close(&again);
+    for (variant = 0u; variant < 5u; ++variant) {
+        yvex_attention_layer_plan invalid = attention;
+        if (variant == 0u) invalid.sliding_window--;
+        if (variant == 1u) invalid.position.scaling_factor++;
+        if (variant == 2u) invalid.compute_contract = YVEX_ATTENTION_COMPUTE_UNKNOWN;
+        if (variant == 3u) invalid.query_heads = 0u;
+        if (variant == 4u) invalid.layer_index = 0u;
+        YVEX_TEST_ASSERT(yvex_decoder_plan_normalize_program(&again, decoder, &invalid, 1u, parameters, &err) != YVEX_OK &&
+            !again, "incompatible legacy attention cannot silently become another operation");
+    }
+    yvex_physical_execution_ir_close(&parameters);
+    decisions[0].role = YVEX_TENSOR_ROLE_OUTPUT_HEAD;
+    YVEX_TEST_ASSERT(yvex_physical_execution_ir_import(&parameters, &summary, decisions, count, &err) == YVEX_OK &&
+        yvex_program_physical_parameters_validate(program, parameters, &err) != YVEX_OK &&
+        yvex_decoder_plan_normalize_program(&again, decoder, &attention, 1u, parameters, &err) != YVEX_OK && !again,
+        "missing exact parameter role fails at compatibility import, not on first token");
+    printf("Legacy decoder normalization: 27 BF16 bindings, token/position/3 state inputs, "
+        "4 outputs; repeated canonical bytes equal; 6 incompatible geometry/policy/role refusals\n");
+    yvex_physical_execution_ir_close(&parameters);
+    yvex_program_physical_close(&program);
+    free(first.data); free(second.data);
+    return 0;
+}
+
 static int test_hybrid_decoder_semantics(void)
 {
     static const char source[] =
@@ -597,6 +772,7 @@ static int test_hybrid_decoder_semantics(void)
             sequence_plan.bindings[0].layer_index == 0ull,
         "hybrid decoder plan authenticates topology and recurrent state economics");
     plan_summary = *yvex_decoder_plan_summary_get(plan);
+    YVEX_TEST_ASSERT(test_decoder_program_normalization(plan) == 0, "legacy program normalization contracts");
     YVEX_TEST_ASSERT(test_compiled_decoder_import(plan,
         yvex_operator_graph_ir_summary(graph)->identity) == 0, "compiled decoder import contracts");
     plan_layers[0] = *yvex_decoder_plan_layer_at(plan, 0ull);
@@ -637,12 +813,12 @@ static int test_hybrid_decoder_semantics(void)
     runtime_session.engine = &runtime_model;
     YVEX_TEST_ASSERT(
         yvex_runtime_private_session_sequence_state_open(
-            &runtime_session, NULL, 1, &state_budget, &admitted_state_bytes,
-            &state_failure, &err) == YVEX_OK &&
-            runtime_session.sequence_state != NULL &&
-            runtime_session.summary.sequence_state_binding_count == 1ull &&
-            admitted_state_bytes == 80ull && state_budget == 944ull,
-        "runtime session derives mixed decoder state from the admitted model");
+            &runtime_session, 1, &state_budget, &admitted_state_bytes,
+            &state_failure, &err) == YVEX_ERR_STATE &&
+            runtime_session.sequence_state == NULL &&
+            runtime_session.summary.sequence_state_binding_count == 0ull &&
+            admitted_state_bytes == 0ull && state_budget == 1024ull,
+        "runtime refuses an unnormalized decoder instead of reconstructing state from historical topology");
     yvex_sequence_state_close(&runtime_session.sequence_state);
     yvex_decoder_plan_close(&plan);
     yvex_operator_graph_ir_close(&graph);

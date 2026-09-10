@@ -75,7 +75,6 @@ int yvex_program_tensor_encode(const yvex_program_tensor_plan *, yvex_core_bytes
 int yvex_program_tensor_decode(yvex_program_tensor_plan **, const unsigned char *, size_t, yvex_error *);
 const yvex_program_tensor_summary *yvex_program_tensor_summary_get(const yvex_program_tensor_plan *);
 const yvex_program_tensor_value *yvex_program_tensor_value_at(const yvex_program_tensor_plan *, size_t);
-const yvex_program_tensor_step *yvex_program_tensor_step_at(const yvex_program_tensor_plan *, size_t);
 yvex_ir_id yvex_program_tensor_result_at(const yvex_program_tensor_plan *, size_t);
 void yvex_program_tensor_close(yvex_program_tensor_plan **);
 

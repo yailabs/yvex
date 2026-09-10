@@ -1600,6 +1600,9 @@ static int binding_file_decode(yvex_runtime_binding **out,
             "runtime binding canonical records are inconsistent", err);
         goto done;
     }
+    rc = yvex_compiled_model_plan_normalize(binding->plan, binding->layers,
+        (size_t)binding->summary.layer_count, binding->physical_execution, err);
+    if (rc != YVEX_OK) goto done;
     summary_finish(&binding->summary, &binding->admission,
                    &binding->materialization, &binding->descriptor,
                    &binding->attention,

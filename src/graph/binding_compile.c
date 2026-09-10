@@ -450,6 +450,8 @@ static int binding_compiler_prepare(
         yvex_compiled_model_plan_request plan = {
             .semantic_model = compiler->semantic_model,
             .program = compiler->program_execution,
+            .program_parameters = compiler->program_parameters,
+            .program_physical_parameters = compiler->physical_execution,
             .operator_graph = compiler->operator_graph,
             .materialization = compiler->materialization,
             .descriptor = compiler->descriptor,
