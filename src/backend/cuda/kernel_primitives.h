@@ -226,31 +226,33 @@ static __device__ float qtype_warp_dot(const unsigned char *row, const float *ve
         if (!lane) atomicCAS(status, 0, 2);
     } else if (qtype == YVEX_GGUF_QTYPE_F32) for (unsigned long long i = lane; i < width; i += 32ull) {
         float weight = __uint_as_float(qtype_load_u32(row + i * 4ull)), value = vector[i];
-        if (!isfinite(weight) || !isfinite(value)) atomicCAS(status, 0, 1);
-        else sum = fmaf(weight, value, sum);
+        sum = fmaf(weight, value, sum);
     } else if (qtype == YVEX_GGUF_QTYPE_F16) for (unsigned long long i = lane; i < width; i += 32ull) {
         float weight = f16_bits_to_float(qtype_load_u16(row + i * 2ull)), value = vector[i];
-        if (!isfinite(weight) || !isfinite(value)) atomicCAS(status, 0, 1);
-        else sum = fmaf(weight, value, sum);
+        sum = fmaf(weight, value, sum);
     } else if (qtype == YVEX_GGUF_QTYPE_BF16) for (unsigned long long i = lane; i < width; i += 32ull) {
         float weight = bf16_bits_to_float(qtype_load_u16(row + i * 2ull)), value = vector[i];
-        if (!isfinite(weight) || !isfinite(value)) atomicCAS(status, 0, 1);
-        else sum = fmaf(weight, value, sum);
+        sum = fmaf(weight, value, sum);
     } else if (qtype == YVEX_GGUF_QTYPE_MXFP4) for (unsigned long long i = lane; i < width; i += 32ull) {
         const unsigned char *block = row + (i >> 5u) * 17ull;
         unsigned int packed = block[1u + (unsigned int)(i & 15ull)];
         unsigned int code = (i & 16ull) ? packed >> 4u : packed & 15u;
         float weight = mxfp4_code_to_float(code) * e8m0_bits_to_float(block[0]) * 0.5f;
         float value = vector[i];
-        if (!isfinite(weight) || !isfinite(value)) atomicCAS(status, 0, 1);
-        else sum = fmaf(weight, value, sum);
+        sum = fmaf(weight, value, sum);
     } else for (unsigned long long i = lane; i < width; i += 32ull) {
         float weight = qtype_value(row, i, qtype), value = vector[i];
-        if (!isfinite(weight) || !isfinite(value)) atomicCAS(status, 0, 1);
-        else sum = fmaf(weight, value, sum);
+        sum = fmaf(weight, value, sum);
     }
     for (unsigned int offset = 16u; offset; offset >>= 1u)
         sum += __shfl_down_sync(0xffffffffu, sum, offset);
+    /* Rescan only exceptional dots; finite overflow must retain the caller's recovery. */
+    if (!isfinite(__shfl_sync(0xffffffffu, sum, 0u))) {
+        int invalid = 0;
+        for (unsigned long long i = lane; i < width; i += 32ull)
+            invalid |= !isfinite(qtype_value(row, i, qtype)) || !isfinite(vector[i]);
+        if (__any_sync(0xffffffffu, invalid) && !lane) atomicCAS(status, 0, 1);
+    }
     return sum;
 }
 #define YVEX_CUDA_Q8_K_BLOCK 256ull
