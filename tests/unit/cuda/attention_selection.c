@@ -62,6 +62,33 @@ static float selection_score(const selection_storage *s, unsigned long long cand
 
 typedef struct { yvex_backend *backend; void **params; } selection_graph_fixture;
 
+/* Exercise both the exact narrow-product domain and the original F64 fallback.
+ * The oracle remains scalar F64; fixtures do not implement device eligibility. */
+static void selection_product_fixture(selection_storage *s, unsigned int scenario,
+    unsigned long long count, unsigned long long heads, unsigned long long width)
+{
+    if (scenario == 17u) {
+        for (unsigned long long i = 0ull; i < heads * width; ++i)
+            s->query[i] = nextafterf(s->query[i], INFINITY);
+        return;
+    }
+    if (scenario < 18u || scenario > 23u) return;
+    float query = scenario == 18u ? 0x1.fep-63f : scenario == 19u ? 0x1.fep63f :
+        scenario == 20u ? 0x1.fep64f : scenario == 21u ? 0x1.fep-97f :
+        scenario == 22u ? 0x1p-133f : -0.0f;
+    float row = scenario == 22u ? 0x1p100f : query;
+    float scale = scenario == 19u || scenario == 20u ? 0x1p-64f :
+        scenario == 21u ? 0x1p100f : 1.0f;
+    for (unsigned long long head = 0ull; head < heads; ++head) {
+        s->weights[head] = scale;
+        for (unsigned long long i = 0ull; i < width; ++i)
+            s->query[head * width + i] = i % 3ull ? query : -query;
+    }
+    for (unsigned long long candidate = 0ull; candidate < count; ++candidate)
+        for (unsigned long long i = 0ull; i < width; ++i)
+            s->rows[candidate][i] = i % 3ull ? row : -row;
+}
+
 /* Allocation/launch envelope is stable; actual candidate counts are replay inputs. */
 static int selection_graph_enqueue(void *context, int enqueue_kernels, yvex_error *err)
 {
@@ -98,6 +125,7 @@ static int selection_case(yvex_backend *backend, unsigned long long count,
     YVEX_TEST_ASSERT(host && observed, "allocate candidate ranking oracle");
     while (extent < count) extent *= 2ull;
     if (scenario == 9u) heads = 512ull; /* More than one reduction tile. */
+    if (scenario == 24u) { heads = 33ull; width = 63ull; }
     for (unsigned long long head = 0ull; head < heads; ++head) {
         host->query[head * width] = (float)(head + 1ull);
         host->weights[head] = scenario == 1u ? -1.0f : 1.0f;
@@ -127,6 +155,7 @@ static int selection_case(yvex_backend *backend, unsigned long long count,
         host->weights[0] = FLT_MAX;
         host->query[0] = FLT_MAX;
     }
+    selection_product_fixture(host, scenario, count, heads, width);
     for (unsigned long long index = 0ull; index < count; ++index) {
         unsigned long long position = host->positions[index];
         if (position > query_position || position > ~0ull - ratio + 1ull ||
@@ -270,6 +299,8 @@ int yvex_cuda_test_attention_selection(void)
         if (selection_case(backend, 513ull, 17ull, scenario)) return 1;
     for (size_t i = 0u; i < sizeof(counts) / sizeof(counts[0]); ++i)
         if (selection_case(backend, counts[i], 512ull, 16u)) return 1;
+    for (unsigned int scenario = 17u; scenario <= 24u; ++scenario)
+        if (selection_case(backend, 513ull, 17ull, scenario)) return 1;
     yvex_backend_close(backend);
     return 0;
 }

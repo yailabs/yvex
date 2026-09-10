@@ -82,7 +82,15 @@ static int dot_case(yvex_backend *backend, unsigned int qtype, unsigned int scen
     yvex_error err;
     CUdeviceptr base, weight, input, output, status, selected, route, absent = 0ull;
     if (dot_fixture(&before, qtype, scenario, expected, &bytes)) return 1;
+    if (mode == 3u && scenario == 3u) failure = 1; /* Paired projection has no overflow recovery. */
     expert_bytes = bytes * rows;
+    if (mode == 3u) {
+        memcpy(before.weights + expert_bytes, before.weights, (size_t)expert_bytes);
+        if (scenario >= 6u) {
+            uint16_t bits = scenario == 6u ? 0x7fc0u : 0x7f80u;
+            memcpy(before.weights + expert_bytes + 37u * 2u, &bits, sizeof(bits));
+        }
+    }
     d.bytes = d.dims[0] = sizeof(before);
     YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &d, &arena, &err) == YVEX_OK &&
         yvex_backend_tensor_write(backend, arena, &before, sizeof(before), &err) == YVEX_OK,
@@ -91,23 +99,27 @@ static int dot_case(yvex_backend *backend, unsigned int qtype, unsigned int scen
     weight = base + offsetof(dot_storage, weights); input = base + offsetof(dot_storage, input);
     output = base + offsetof(dot_storage, output); status = base + offsetof(dot_storage, status);
     selected = base + offsetof(dot_storage, selected); route = base + offsetof(dot_storage, route);
+    CUdeviceptr second_weight = weight + expert_bytes;
+    CUdeviceptr second_output = output + DOT_ROWS * sizeof(float);
     void *ordinary[] = {&weight, &bytes, &width, &zero, &rows, &tokens, &qtype,
         &input, &width, &no, &no, &no, &absent, &output, &rows, &no, &status};
     void *grouped[] = {&weight, &bytes, &width, &one, &rows, &one, &tokens, &qtype,
         &input, &width, &output, &rows, &no, &status};
     void *expert[] = {&weight, &bytes, &expert_bytes, &qtype, &weight, &bytes, &expert_bytes, &qtype,
         &selected, &route, &one, &one, &input, &width, &no, &rows, &limit, &output, &status};
+    void *pair[] = {&weight, &bytes, &second_weight, &bytes, &width, &rows, &input, &output, &second_output, &status};
     CUfunction function = mode == 0u ? state->qtype_matvec_function :
-        mode == 1u ? state->qtype_grouped_rows_function : state->moe_grouped_up_function;
+        mode == 1u ? state->qtype_grouped_rows_function : mode == 2u ? state->moe_grouped_up_function :
+        state->attention_bf16_pair_function;
     rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, function, 1u, 256u, 0u,
-        mode == 0u ? ordinary : mode == 1u ? grouped : expert, "cuda.test.dot-finiteness", &err);
+        mode == 0u ? ordinary : mode == 1u ? grouped : mode == 2u ? expert : pair, "cuda.test.dot-finiteness", &err);
     if (rc == YVEX_OK) rc = yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
         &device_wide, "cuda.test.dot-finiteness", &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_backend_tensor_read(backend, arena, &after, sizeof(after), &err) == YVEX_OK,
         "read dot completion/status");
     YVEX_TEST_ASSERT((after.status != 0) == failure, "nonfinite input refuses before clamp; finite overflow remains recoverable");
     if (!failure) for (unsigned int i = 0u; i < (mode == 2u ? DOT_ROWS : DOT_ROWS * DOT_TOKENS); ++i) {
-        double value = expected[i];
+        double value = expected[mode == 3u ? i % DOT_ROWS : i];
         if (mode == 2u) {
             float g = scenario == 3u ? 10.0f : fminf((float)value, 10.0f);
             float u = scenario == 3u ? 10.0f : fmaxf(-10.0f, fminf((float)value, 10.0f));
@@ -146,6 +158,8 @@ int yvex_cuda_test_dot_finiteness(void)
         for (unsigned int mode = 0u; mode < 3u; ++mode)
             for (unsigned int scenario = 0u; scenario < 6u; ++scenario)
                 if (dot_case(backend, qtypes[q], scenario, mode)) return 1;
+    for (unsigned int scenario = 0u; scenario < 8u; ++scenario)
+        if (dot_case(backend, YVEX_GGUF_QTYPE_BF16, scenario, 3u)) return 1;
     yvex_backend_close(backend);
     return 0;
 }

@@ -1688,12 +1688,13 @@ extern "C" __global__ void yvex_attention_candidate_scores(
     float *scores, int *status)
 {
     extern __shared__ double head_terms[];
-    __shared__ int active;
+    __shared__ int active, narrow_products;
     unsigned long long candidate = (unsigned long long)blockIdx.x;
     unsigned int thread = threadIdx.x;
     if (!status) return;
     if (!index_query || !index_weights || !scores || !heads ||
-        !head_dim || !ratio || history_count > ~0ull - current_count ||
+        !head_dim || heads > (~0ull - head_dim) / head_dim ||
+        !ratio || history_count > ~0ull - current_count ||
         (history_count && (!history_indexer || !history_positions ||
                            history_stride < head_dim)) ||
         (current_count && (!current_indexer || !current_positions ||
@@ -1706,7 +1707,10 @@ extern "C" __global__ void yvex_attention_candidate_scores(
         : current_positions[candidate - history_count];
     if (position > query_position || position > ~0ull - ratio + 1ull ||
         position + ratio - 1ull > query_position) return;
-    if (thread == 0u) active = atomicAdd(status, 0) == 0;
+    if (thread == 0u) {
+        active = atomicAdd(status, 0) == 0;
+        narrow_products = 1;
+    }
     __syncthreads();
     if (!active) return;
     {
@@ -1717,6 +1721,20 @@ extern "C" __global__ void yvex_attention_candidate_scores(
             unsigned long long local = candidate - history_count;
             row = current_indexer + local * current_stride;
         }
+        /* Two normal BF16 values have at most 16 significant product bits.
+         * Biased exponents [64,190] keep their product normal and finite in
+         * F32. Signed zero is also exact. Verify actual bits once, then select
+         * a uniform loop: no inferred dtype and no per-product branch. */
+        int eligible = 1;
+        unsigned long long query_values = heads * head_dim;
+        for (unsigned long long i = thread; i < query_values + head_dim; i += blockDim.x) {
+            float value = i < query_values ? index_query[i] : row[i - query_values];
+            unsigned int bits = __float_as_uint(value), exponent = (bits >> 23u) & 255u;
+            if ((bits & 65535u) || ((bits & 0x7fffffffu) && (exponent < 64u || exponent > 190u)))
+                eligible = 0;
+        }
+        if (!eligible) atomicAnd(&narrow_products, 0);
+        __syncthreads();
         /* Heads are independent; lane zero retains the source-order reduction
            across each tile so ranking and tie behavior stay bit-identical. */
         double score = 0.0;
@@ -1727,7 +1745,10 @@ extern "C" __global__ void yvex_attention_candidate_scores(
             if (head < heads) {
                 double dot = 0.0;
                 const float *query = index_query + head * head_dim;
-                for (unsigned long long lane = 0ull; lane < head_dim; ++lane) {
+                if (narrow_products) {
+                    for (unsigned long long lane = 0ull; lane < head_dim; ++lane)
+                        dot = __dadd_rn(dot, (double)__fmul_rn(query[lane], row[lane]));
+                } else for (unsigned long long lane = 0ull; lane < head_dim; ++lane) {
                     double term = __dmul_rn((double)query[lane], (double)row[lane]);
                     dot = __dadd_rn(dot, term);
                 }

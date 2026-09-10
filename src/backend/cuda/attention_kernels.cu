@@ -46,12 +46,10 @@ extern "C" __global__ void yvex_attention_bf16_pair(
         float value = input[i];
         float first_weight = bf16_bits_to_float(qtype_load_u16(first + i * 2ull));
         float second_weight = bf16_bits_to_float(qtype_load_u16(second + i * 2ull));
-        if (!isfinite(value) || !isfinite(first_weight) || !isfinite(second_weight))
-            atomicCAS(status, 0, 1);
-        else {
-            first_sum = fmaf(first_weight, value, first_sum);
-            second_sum = fmaf(second_weight, value, second_sum);
-        }
+        /* Nonfinite operands propagate to a terminal sum and are refused
+         * below. Keep finite validation outside the ordered FMA loop. */
+        first_sum = fmaf(first_weight, value, first_sum);
+        second_sum = fmaf(second_weight, value, second_sum);
     }
     for (unsigned int offset = 16u; offset; offset >>= 1u) {
         first_sum += __shfl_down_sync(0xffffffffu, first_sum, offset);
