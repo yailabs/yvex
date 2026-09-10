@@ -13,6 +13,7 @@ Status: living public project control
 | Adopted state architecture target | Dual-stream primary computation plus persistent model-native computational state. YAI owns semantic authority; YVEX owns computational realization. Program N is OPEN, not implemented. |
 | Most important structural gap | Typed IR and the physical token-forward runner exist, with bounded hybrid CUDA/state evidence; DeepSeek/DSpark and MiniMax still retain historical computational authority. Complete consumer migration and artifact-backed Qwen preservation before closing .1. A01 tokenizer/normalization and whole-model barriers remain. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media. Evidence depths differ. |
+| External execution pressure | Capacity-compatible 12,055-token Golden still fails prefill: 10,002 tokens in 630.48 s, zero generated, then producer HTTP 504. Exact candidate scoring/ranking repair is qualified; complete-request latency is not. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
 | Behavior evaluation | BLOCKED / not ready. |
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
@@ -844,13 +845,27 @@ that consumer must qualify the published profile and rerun its real workload.
 Real external prefill execution is a separate active `.1` repair pressure
 (R / S / Q), not a reopened capacity defect: the unchanged 40,277-byte Golden
 request tokenizes to 12,055 inputs and fits the explicitly configured
-16,384-token deployment, but the retained service reached only 918 tokens
-before the consumer's 300-second cancellation, with no generated token.
-Bounded CUDA tracing locates growing cost in candidate ranking, not body
-admission. Repair and real-request replay must preserve exact selection and
-fail-closed state publication. Capacity preflight does not qualify execution
-latency; neither a selector test nor a first response closes External Golden
-or the remaining universal consumer cutover.
+16,384-token deployment with 4,329 output tokens available. Exact CUDA candidate
+scoring and cooperative ranking now preserve ordered numerical reduction,
+candidate identities/ties/refusals and capacity-stable graph replay, qualified
+by the [independent selection oracle](tests/unit/cuda/attention_selection.c),
+device memory/synchronization checks and real target/DSpark regressions.
+
+The current unmodified-request replay uses loaded weights but a fresh session
+and zero reused prompt tokens: 918 tokens in 48.49 s, 5,106 at 300.06 s and
+10,002 at 630.48 s. It still ends with producer HTTP 504 at 633.21 s, zero
+generated tokens and clean cancellation/session retirement. Complete prefill,
+first-token latency and normal response completion remain unqualified; the
+local-protocol timeout is unchanged. Late-prefix GPU tracing separates scoring
+from ranking and now identifies MoE/projection and attention reduction as the
+larger residual work. Further repair must follow that evidence, preserve exact
+numerics and measure scaling across the prompt, not just its first prefix.
+
+`downstream_safe=false` for this external workload. Capacity preflight does not
+qualify execution latency; neither a selector test nor a first response closes
+External Golden or the remaining universal consumer cutover. YAI owns its
+external free/Workflow verdict; no timeout increase, truncated content, implicit
+fallback or model-specific workaround may substitute for execution evidence.
 
 The .1 source-layout criterion is semantic ownership, not a filename taxonomy:
 source/catalog owns exact models, revisions, selectors and relationships;
@@ -922,6 +937,7 @@ platform qualification. [MLC quick start][mlc]
 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0`, COMPLETE | R | Producer-owned result validity; preserves C / S / N separation, does not implement N | A01 remains PARTIAL; no family promotion | No automatic gate closure |
 | Post-refoundation qualification and exact replay, COMPLETE | Q / R | Changed borrow contracts and bounded comparable performance; full-model conformance still open | Generic prerequisite qualified before A01 repair | Evidence only at measured scope, not release qualification |
 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1`, ACTIVE | R / C | Typed values, shapes, operations, effects, programs and explicit lowering; no N implementation | Pure-SSM representability is required, not A01 execution | Preserve numerics; no automatic release promotion |
+| .1 real Golden prefill repair | R / S / Q | Long-context execution, exact candidate work and measured residual bottlenecks; capacity admission already repaired | Existing DeepSeek execution pressure, not A01 progression | Full request still fails; no behavior, benchmark or release gate promotion |
 | .1 qualification/replay, NEXT | Q / R / C | Compiler refusal, migrated consumer and comparable execution evidence | Precedes queued A01 repair | No upstream conformance inferred from internal parity |
 | `SPECTRUM.MAMBA2.REPAIR.0`, queued | C / S | Semantic IR, composition, non-KV state, tokenizer | A01 directly pressures generic state and informs N; no automatic N promotion | Indirect; no v0.1 promotion or scope expansion |
 | Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |
