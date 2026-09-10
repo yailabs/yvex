@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,6 +91,22 @@ def check_source_stability() -> None:
                 raise AssertionError("legacy evidence without optional stability fields was refused")
 
 
+def check_cuda_header_obligations(registry: dict, tests: list[dict]) -> None:
+    obligations = qa.load_obligations(registry)
+    required = {"cuda.native", "cuda.no-nvcc", "live.deepseek.generation",
+                "live.deepseek.logits", "performance.runtime"}
+    headers = sorted((ROOT / "src/backend/cuda").glob("*.h"))
+    if not headers:
+        raise AssertionError("CUDA header consumers disappeared from the obligation probe")
+    for header in headers:
+        path = str(header.relative_to(ROOT))
+        with patch.object(qa, "changed_paths", return_value=[path]):
+            plan = qa.build_plan(registry, tests, obligations, "HEAD")
+        missing = required - set(plan["required_tests"])
+        if missing:
+            raise AssertionError(f"{path}: header-only change lost CUDA obligations {sorted(missing)}")
+
+
 def main() -> int:
     source = ROOT / "config/qa/registry.json"
     registry, tests = generate_qa_registry.load_and_validate(ROOT, source)
@@ -105,6 +122,7 @@ def main() -> int:
     if first != second:
         raise AssertionError("QA projections are not deterministic")
     check_source_stability()
+    check_cuda_header_obligations(registry, tests)
 
     duplicate = copy.deepcopy(registry)
     duplicate["tests"].append(copy.deepcopy(duplicate["tests"][0]))
