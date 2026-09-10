@@ -180,6 +180,8 @@ static const cuda_kernel_binding cuda_kernel_bindings[] = {
      CUDA_HANDLE_OFFSET(attention_rolling_state_function)},
     {"yvex_attention_topk", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(attention_topk_function)},
+    {"yvex_attention_candidate_scores", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+     CUDA_HANDLE_OFFSET(attention_candidate_scores_function)},
     {"yvex_attention_reduce", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
      CUDA_HANDLE_OFFSET(attention_reduce_function)},
     {"yvex_attention_reduce_native", YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
