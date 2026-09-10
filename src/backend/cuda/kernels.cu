@@ -1630,11 +1630,60 @@ extern "C" __global__ void yvex_attention_rolling_state(
         }
     }
 }
-/*
- * Score and rank the complete admitted CSA candidate set on device.
- *
- * Writes deterministic selected indexes and counts. Host owns transaction publication.
- */
+/* Ordering only: score arithmetic is not part of heap maintenance. */
+static __device__ __forceinline__ bool attention_candidate_better(
+    float score, unsigned long long candidate, float other_score, unsigned long long other,
+    const unsigned long long *history, unsigned long long history_count,
+    const unsigned long long *current)
+{
+    unsigned long long position = candidate < history_count ? history[candidate] : current[candidate - history_count];
+    unsigned long long other_position = other < history_count ? history[other] : current[other - history_count];
+    return score > other_score || (score == other_score && position < other_position);
+}
+
+/* The score/index arrays are private scratch, paired throughout heap movement.
+ * Complete visibility/duplicate/finite checks precede all selection. */
+static __device__ void attention_candidate_sift(
+    float *scores, unsigned long long *indexes, unsigned long long count, unsigned long long root,
+    const unsigned long long *history, unsigned long long history_count,
+    const unsigned long long *current)
+{
+    float score = scores[root];
+    unsigned long long candidate = indexes[root];
+    while (root < count / 2ull) {
+        unsigned long long child = root * 2ull + 1ull;
+        if (child + 1ull < count && attention_candidate_better(
+                scores[child + 1ull], indexes[child + 1ull], scores[child], indexes[child],
+                history, history_count, current)) child++;
+        if (!attention_candidate_better(scores[child], indexes[child], score, candidate,
+                                        history, history_count, current)) break;
+        scores[root] = scores[child];
+        indexes[root] = indexes[child];
+        root = child;
+    }
+    scores[root] = score;
+    indexes[root] = candidate;
+}
+
+static __device__ unsigned long long attention_candidate_pop(
+    float *scores, unsigned long long *indexes, unsigned long long count,
+    const unsigned long long *history, unsigned long long history_count,
+    const unsigned long long *current)
+{
+    unsigned long long candidate = indexes[0], remaining = count - 1ull;
+    float score = scores[0];
+    scores[0] = scores[remaining];
+    indexes[0] = indexes[remaining];
+    scores[remaining] = score;
+    indexes[remaining] = candidate;
+    if (remaining) attention_candidate_sift(scores, indexes, remaining, 0ull,
+                                            history, history_count, current);
+    return candidate;
+}
+
+/* Score and rank all admitted CSA candidates. Host owns transaction publication.
+ * The max heap preserves score-descending/position-ascending order in
+ * O(N + K log N), without the former O(N*K*K) repeated-membership search. */
 extern "C" __global__ void yvex_attention_topk(
     const float *index_query, const float *index_weights,
     const float *history_indexer, const unsigned long long *history_positions,
@@ -1651,7 +1700,6 @@ extern "C" __global__ void yvex_attention_topk(
     extern __shared__ double head_terms[];
     __shared__ unsigned long long valid;
     __shared__ int active;
-    __shared__ int candidate_valid;
     unsigned long long total;
     unsigned int thread = threadIdx.x;
     if (!status) return;
@@ -1673,36 +1721,42 @@ extern "C" __global__ void yvex_attention_topk(
     __syncthreads();
     if (!active) return;
     total = history_count + current_count;
-    for (unsigned long long candidate = 0ull; candidate < total; ++candidate) {
+    if (thread == 0u) {
+        for (unsigned long long candidate = 0ull; candidate < total; ++candidate) {
+            unsigned long long position = candidate < history_count ? history_positions[candidate]
+                : current_positions[candidate - history_count];
+            if (position > query_position || position > ~0ull - ratio + 1ull ||
+                position + ratio - 1ull > query_position) continue;
+            valid_indexes[valid] = candidate;
+            scores[valid++] = 0.0f;
+        }
+        /* Equal zero scores order this scratch population by position. Check
+           adjacent positions instead of rereading every preceding candidate.
+           No monotonic source order is assumed and no duplicate is discarded. */
+        for (unsigned long long parent = valid / 2ull; parent > 0ull; --parent)
+            attention_candidate_sift(scores, valid_indexes, valid, parent - 1ull,
+                                      history_positions, history_count, current_positions);
+        for (unsigned long long remaining = valid; remaining > 1ull; --remaining)
+            (void)attention_candidate_pop(scores, valid_indexes, remaining,
+                history_positions, history_count, current_positions);
+        for (unsigned long long i = 1ull; i < valid; ++i) {
+            unsigned long long a = valid_indexes[i - 1ull], b = valid_indexes[i];
+            unsigned long long pa = a < history_count ? history_positions[a] : current_positions[a - history_count];
+            unsigned long long pb = b < history_count ? history_positions[b] : current_positions[b - history_count];
+            if (pa == pb) { atomicCAS(status, 0, 1); active = 0; }
+        }
+    }
+    __syncthreads();
+    if (!active) return;
+    for (unsigned long long ordinal = 0ull; ordinal < valid; ++ordinal) {
+        unsigned long long candidate = valid_indexes[ordinal];
         const float *row;
-        unsigned long long position;
         if (candidate < history_count) {
             row = history_indexer + candidate * history_stride;
-            position = history_positions[candidate];
         } else {
             unsigned long long local = candidate - history_count;
             row = current_indexer + local * current_stride;
-            position = current_positions[local];
         }
-        if (thread == 0u) {
-            candidate_valid = row && position <= query_position &&
-                position <= ~0ull - ratio + 1ull &&
-                position + ratio - 1ull <= query_position;
-            for (unsigned long long prior = 0ull;
-                 candidate_valid && prior < valid; ++prior) {
-                unsigned long long prior_candidate = valid_indexes[prior];
-                unsigned long long prior_position = prior_candidate < history_count
-                    ? history_positions[prior_candidate]
-                    : current_positions[prior_candidate - history_count];
-                if (prior_position == position) {
-                    atomicCAS(status, 0, 1);
-                    active = 0;
-                }
-            }
-        }
-        __syncthreads();
-        if (!active) return;
-        if (!candidate_valid) continue;
         /* Heads are independent; lane zero retains the source-order reduction
            across each tile so ranking and tie behavior stay bit-identical. */
         double score = 0.0;
@@ -1737,9 +1791,7 @@ extern "C" __global__ void yvex_attention_topk(
                 atomicCAS(status, 0, 1);
                 active = 0;
             } else {
-                scores[valid] = (float)score;
-                valid_indexes[valid] = candidate;
-                valid++;
+                scores[ordinal] = (float)score;
             }
         }
         __syncthreads();
@@ -1747,25 +1799,12 @@ extern "C" __global__ void yvex_attention_topk(
     }
     if (thread == 0u) {
         unsigned long long chosen = valid < k ? valid : k;
+        for (unsigned long long parent = valid / 2ull; parent > 0ull; --parent)
+            attention_candidate_sift(scores, valid_indexes, valid, parent - 1ull,
+                                      history_positions, history_count, current_positions);
         for (unsigned long long rank = 0ull; rank < chosen; ++rank) {
-            unsigned long long best = ~0ull;
-            for (unsigned long long i = 0ull; i < valid; ++i) {
-                unsigned long long candidate = valid_indexes[i];
-                unsigned long long position = candidate < history_count
-                    ? history_positions[candidate]
-                    : current_positions[candidate - history_count];
-                int already = 0;
-                for (unsigned long long prior = 0ull; prior < rank; ++prior)
-                    if (selected[prior] == candidate) already = 1;
-                if (already) continue;
-                if (best == ~0ull || scores[i] > scores[best] ||
-                    (scores[i] == scores[best] && position <
-                        (valid_indexes[best] < history_count
-                            ? history_positions[valid_indexes[best]]
-                            : current_positions[valid_indexes[best] - history_count])))
-                    best = i;
-            }
-            selected[rank] = valid_indexes[best];
+            selected[rank] = attention_candidate_pop(scores, valid_indexes, valid - rank,
+                history_positions, history_count, current_positions);
             selected_positions[rank] = selected[rank] < history_count
                 ? history_positions[selected[rank]]
                 : current_positions[selected[rank] - history_count];

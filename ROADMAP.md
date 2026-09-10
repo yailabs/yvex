@@ -841,6 +841,17 @@ the configured context or admit mandatory-content truncation. YVEX's real-model
 positive/negative controls do not establish an external consumer's Golden PASS;
 that consumer must qualify the published profile and rerun its real workload.
 
+Real external prefill execution is a separate active `.1` repair pressure
+(R / S / Q), not a reopened capacity defect: the unchanged 40,277-byte Golden
+request tokenizes to 12,055 inputs and fits the explicitly configured
+16,384-token deployment, but the retained service reached only 918 tokens
+before the consumer's 300-second cancellation, with no generated token.
+Bounded CUDA tracing locates growing cost in candidate ranking, not body
+admission. Repair and real-request replay must preserve exact selection and
+fail-closed state publication. Capacity preflight does not qualify execution
+latency; neither a selector test nor a first response closes External Golden
+or the remaining universal consumer cutover.
+
 The .1 source-layout criterion is semantic ownership, not a filename taxonomy:
 source/catalog owns exact models, revisions, selectors and relationships;
 architecture importers own source-schema interpretation and IR projection;
