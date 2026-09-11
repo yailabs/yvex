@@ -441,7 +441,7 @@ static __device__ float q2_k_q8_k_dot_group(const unsigned char *weight,
 }
 static __device__ float iq2_xxs_q8_k_dot_group(const unsigned char *weight,
                                                const unsigned char *activation,
-                                               unsigned int group_width)
+                                               unsigned int group_width, const unsigned short *grid_table)
 {
     unsigned int group_lane = (threadIdx.x & 31u) & (group_width - 1u);
     float weight_scale = f16_bits_to_float(qtype_load_u16(weight));
@@ -457,7 +457,7 @@ static __device__ float iq2_xxs_q8_k_dot_group(const unsigned char *weight,
             unsigned int grid_index = (grids >> (8u * subgroup)) & 255u;
             unsigned int signs = iq2_xxs_signs(
                 (sign_scale >> (7u * subgroup)) & 127u);
-            unsigned short grid = iq2_xxs_grid[grid_index];
+            unsigned short grid = grid_table ? grid_table[grid_index] : iq2_xxs_grid[grid_index];
             const unsigned char *q8 = activation + 4u + group * 32u + subgroup * 8u;
             int subgroup_sum = group_lane < 2u
                 ? __dp4a(iq2_xxs_i8x4(grid, group_lane ? 4u : 0u, signs),
@@ -505,10 +505,10 @@ static __device__ float mxfp4_q8_k_dot_group(const unsigned char *weight,
 static __device__ float qtype_q8_k_dot_group(const unsigned char *weight,
                                              const unsigned char *activation,
                                              unsigned int qtype,
-                                             unsigned int group_width)
+                                             unsigned int group_width, const unsigned short *grid_table)
 {
     if (qtype == YVEX_GGUF_QTYPE_IQ2_XXS)
-        return iq2_xxs_q8_k_dot_group(weight, activation, group_width);
+        return iq2_xxs_q8_k_dot_group(weight, activation, group_width, grid_table);
     if (qtype == YVEX_GGUF_QTYPE_Q2_K)
         return q2_k_q8_k_dot_group(weight, activation, group_width);
     if (qtype == YVEX_GGUF_QTYPE_Q8_0)
@@ -568,7 +568,7 @@ static __device__ float qtype_q8_k_dot(const unsigned char *weight,
 static __device__ float q8_warp_dot(const unsigned char *weight, const unsigned char *activation,
                                     unsigned long long blocks,
                                     unsigned long long weight_block,
-                                    unsigned int qtype)
+                                    unsigned int qtype, const unsigned short *grid_table = nullptr)
 {
     unsigned int lane = threadIdx.x & 31u;
     float sum = 0.0f;
@@ -582,7 +582,7 @@ static __device__ float q8_warp_dot(const unsigned char *weight, const unsigned 
             unsigned int bounded_block = block < blocks ? block : 0u;
             float group_value = qtype_q8_k_dot_group(weight + (unsigned long long)bounded_block * weight_block,
                 activation + (unsigned long long)bounded_block * YVEX_CUDA_Q8_K_BYTES,
-                qtype, lanes);
+                qtype, lanes, grid_table);
             if (block >= blocks) group_value = 0.0f;
             float original_lane_value = __shfl_sync(0xffffffffu, group_value, (int)((lane % groups) * lanes));
             if (lane / groups == round && (unsigned long long)lane < blocks) sum = original_lane_value;

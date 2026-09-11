@@ -1453,9 +1453,10 @@ static int quant_cuda_grouped_attention_rows(yvex_backend *backend)
     return 0;
 }
 
-static int quant_cuda_mxfp4_q8_shared_rows(yvex_backend *backend)
+static int quant_cuda_mxfp4_q8_shared_rows(yvex_backend *backend, unsigned int input_count,
+                                         int output_bf16)
 {
-    enum { ROWS = 4096, INPUT_ROWS = 5, WIDTH = 1024 };
+    enum { ROWS = 4099, INPUT_ROWS = 8, WIDTH = 1024 };
     const yvex_cuda_attention_operations *operations =
         yvex_cuda_attention_operations_get();
     yvex_backend_attention_weight weight = {0};
@@ -1469,18 +1470,19 @@ static int quant_cuda_mxfp4_q8_shared_rows(yvex_backend *backend)
     float *expected = NULL, *actual = NULL, *ordinary = NULL;
     yvex_quant_failure quant_failure;
     yvex_error err;
-    size_t row_bytes = 0u, output_bytes = INPUT_ROWS * ROWS * sizeof(float);
+    size_t row_bytes = 0u, output_bytes = input_count * ROWS * sizeof(float);
     unsigned long long index, row;
     unsigned int input_row, grid, block;
-    int block_row, device_wide = 1, forensic = 0, output_bf16 = 0;
+    int block_row, device_wide = 1, forensic = 0;
     int q8_input = 1, status_value = 0, rc;
+    double maximum_error = 0.0;
 
     expected = malloc(output_bytes);
     actual = malloc(output_bytes);
     ordinary = malloc(output_bytes);
     YVEX_TEST_ASSERT(expected && actual && ordinary,
                      "MXFP4 shared-row host oracle allocates");
-    for (input_row = 0u; input_row < INPUT_ROWS; ++input_row) {
+    for (input_row = 0u; input_row < input_count; ++input_row) {
         for (index = 0ull; index < WIDTH; ++index)
             vectors[input_row * WIDTH + index] =
                 (float)((int)((index * 5ull + input_row * 7u) % 37ull) - 18) /
@@ -1513,7 +1515,7 @@ static int quant_cuda_mxfp4_q8_shared_rows(yvex_backend *backend)
         memcpy(mapped + row * row_bytes, encoded_row, row_bytes);
         free(encoded_row);
         encoded_row = NULL;
-        for (input_row = 0u; input_row < INPUT_ROWS; ++input_row)
+        for (input_row = 0u; input_row < input_count; ++input_row) {
             YVEX_TEST_ASSERT(
                 yvex_quant_cpu_dot(
                     YVEX_GGUF_QTYPE_MXFP4, mapped + row * row_bytes,
@@ -1521,12 +1523,16 @@ static int quant_cuda_mxfp4_q8_shared_rows(yvex_backend *backend)
                     &expected[input_row * ROWS + row], &quant_failure,
                     &err) == YVEX_OK,
                 "MXFP4 shared-row independent Q8 oracle succeeds");
+            if (output_bf16)
+                expected[input_row * ROWS + row] = yvex_quant_bf16_decode(
+                    yvex_quant_bf16_encode(expected[input_row * ROWS + row]));
+        }
     }
     YVEX_TEST_ASSERT(
         yvex_backend_resident_attach(
             backend, mapped, descriptor.bytes, resident, 31ull, &err) == YVEX_OK &&
             quant_cuda_tensor(backend, "mxfp4_q8_shared_rows_input", YVEX_DTYPE_F32,
-                              vectors, sizeof(vectors), &input, &err) &&
+                              vectors, input_count * WIDTH * sizeof(float), &input, &err) &&
             quant_cuda_tensor(backend, "mxfp4_q8_shared_rows_output", YVEX_DTYPE_F32,
                               NULL, output_bytes, &output, &err) &&
             quant_cuda_tensor(backend, "mxfp4_q8_shared_rows_ordinary", YVEX_DTYPE_F32,
@@ -1543,8 +1549,8 @@ static int quant_cuda_mxfp4_q8_shared_rows(yvex_backend *backend)
     work.variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED;
     work.activation_q8 = 1;
     rc = operations->matvec(
-        &work, &weight, yvex_cuda_tensor_ptr(resident), 0ull, ROWS, INPUT_ROWS,
-        yvex_cuda_tensor_ptr(input), yvex_cuda_tensor_ptr(output), 0,
+        &work, &weight, yvex_cuda_tensor_ptr(resident), 0ull, ROWS, input_count,
+        yvex_cuda_tensor_ptr(input), yvex_cuda_tensor_ptr(output), output_bf16,
         yvex_cuda_tensor_ptr(status), "cuda.test.mxfp4-q8-shared-rows",
         &attention_failure, &err);
     if (rc == YVEX_OK)
@@ -1558,7 +1564,7 @@ static int quant_cuda_mxfp4_q8_shared_rows(yvex_backend *backend)
         "production attention selects two-launch exact MXFP4 shared-row execution");
     YVEX_TEST_ASSERT(
         yvex_cuda_qtype_matvec_geometry(
-            ROWS, WIDTH, INPUT_ROWS, YVEX_GGUF_QTYPE_MXFP4, 1,
+            ROWS, WIDTH, input_count, YVEX_GGUF_QTYPE_MXFP4, 1,
             &grid, &block, &block_row) && !block_row,
         "ordinary MXFP4 geometry remains available as the numerical oracle");
     {
@@ -1566,7 +1572,7 @@ static int quant_cuda_mxfp4_q8_shared_rows(yvex_backend *backend)
         CUdeviceptr quantized = work.q8_input;
         CUdeviceptr ordinary_ptr = yvex_cuda_tensor_ptr(ordinary_output);
         CUdeviceptr status_ptr = yvex_cuda_tensor_ptr(status), additive = 0ull;
-        unsigned long long start_row = 0ull, rows = ROWS, input_rows = INPUT_ROWS;
+        unsigned long long start_row = 0ull, rows = ROWS, input_rows = input_count;
         unsigned long long input_stride = WIDTH, output_stride = ROWS;
         unsigned int qtype = YVEX_GGUF_QTYPE_MXFP4;
         void *params[] = {
@@ -1587,11 +1593,17 @@ static int quant_cuda_mxfp4_q8_shared_rows(yvex_backend *backend)
     YVEX_TEST_ASSERT(rc == YVEX_OK && work.launches == 3ull &&
                          memcmp(actual, ordinary, output_bytes) == 0,
                      "shared activation rows are bit-identical to ordinary row dots");
-    for (index = 0ull; index < INPUT_ROWS * ROWS; ++index)
+    for (index = 0ull; index < input_count * ROWS; ++index) {
+        double difference = fabs((double)actual[index] - expected[index]);
+        if (difference > maximum_error) maximum_error = difference;
         YVEX_TEST_ASSERT(
             fabs((double)actual[index] - expected[index]) <=
                 1e-5 * (1.0 + fabs((double)expected[index])),
             "MXFP4 shared activation matches the independent Q8 reference");
+    }
+    printf("MXFP4 row locality: inputs=%u rows=%u bf16=%d values=%u bit_mismatches=0 "
+           "independent_max_abs=%.12g\n", input_count, ROWS, output_bf16,
+           input_count * ROWS, maximum_error);
     YVEX_TEST_ASSERT(
         yvex_cuda_work_cleanup(&work, &err) == YVEX_OK &&
             yvex_backend_resident_detach(backend, &err) == YVEX_OK &&
@@ -3716,8 +3728,10 @@ int yvex_cuda_test_quant_qtype(void)
     }
     YVEX_TEST_ASSERT(quant_cuda_grouped_attention_rows(backend) == 0,
                      "grouped attention rows retain exact activation semantics");
-    YVEX_TEST_ASSERT(quant_cuda_mxfp4_q8_shared_rows(backend) == 0,
-                     "MXFP4 narrow attention rows reuse exact Q8 activation storage");
+    for (unsigned int input_count = 1u; input_count <= 8u; ++input_count)
+        for (int bf16 = 0; bf16 <= 1; ++bf16)
+            YVEX_TEST_ASSERT(quant_cuda_mxfp4_q8_shared_rows(backend, input_count, bf16) == 0,
+                "MXFP4 row locality preserves every admitted narrow population and tail");
     YVEX_TEST_ASSERT(quant_cuda_bf16_projection_pair(backend) == 0,
                      "paired BF16 projections reuse one exact activation load stream");
     YVEX_TEST_ASSERT(quant_cuda_bf16_gemm(backend) == 0,

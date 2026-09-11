@@ -28,12 +28,13 @@ static void moe_rows_input(moe_rows_storage *s, unsigned int qtype,
         unsigned char *p = s->weights + i * bytes;
         unsigned int scale = qtype == YVEX_GGUF_QTYPE_Q2_K ? 80u : 0u;
         p[scale] = scenario == 4u ? 0xffu : 0u;
-        p[scale + 1u] = scenario == 4u ? 0x7bu : 0x20u;
+        p[scale + 1u] = scenario == 4u ? 0x7bu : scenario == 6u ? 0x7cu : scenario == 7u ? 0x7eu : 0x20u;
         if (qtype == YVEX_GGUF_QTYPE_Q2_K) { p[82] = 0u; p[83] = 0x18u; }
     }
     for (unsigned long long i = 0ull; i < MOE_ROWS_PAIRS * blocks; ++i) {
         unsigned char *p = s->inputs + i * MOE_ROWS_Q8_BYTES;
-        float scale = scenario == 3u ? NAN : scenario == 4u ? FLT_MAX : 1.0f / 4096.0f;
+        float scale = scenario == 3u ? NAN : scenario == 4u ? FLT_MAX :
+                      scenario == 5u ? INFINITY : 1.0f / 4096.0f;
         memcpy(p, &scale, sizeof(scale));
         for (unsigned int j = 0u; j < 256u; ++j)
             p[4u + j] = scenario == 4u ? 0u : (unsigned char)((int)((i * 13ull + j * 7ull) % 255ull) - 127);
@@ -53,7 +54,7 @@ static void moe_rows_input(moe_rows_storage *s, unsigned int qtype,
 }
 
 static int moe_rows_check(yvex_backend *backend, unsigned int qtype,
-                          unsigned long long blocks, unsigned int scenario)
+                          unsigned long long blocks, unsigned int scenario, int up_stage)
 {
     const unsigned int bytes = qtype == YVEX_GGUF_QTYPE_Q2_K ? 84u : 66u;
     unsigned long long row_bytes = blocks * bytes, expert_bytes = row_bytes * MOE_ROWS_WIDTH;
@@ -67,6 +68,7 @@ static int moe_rows_check(yvex_backend *backend, unsigned int qtype,
     yvex_error err;
     CUdeviceptr base, weights, selected, order, input, output, status, absent = 0;
     double maximum_error = 0.0, maximum_ratio = 0.0;
+    double limit = 7.0;
     YVEX_TEST_ASSERT(host && observed, "allocate encoded expert oracle");
     moe_rows_input(host, qtype, blocks, bytes, scenario);
     descriptor.bytes = descriptor.dims[0] = sizeof(*host);
@@ -78,14 +80,19 @@ static int moe_rows_check(yvex_backend *backend, unsigned int qtype,
     output = base + offsetof(moe_rows_storage, outputs); status = base + offsetof(moe_rows_storage, status);
     void *params[] = {&weights, &row_bytes, &expert_bytes, &qtype, &selected, &order,
         &absent, &absent, &absent, &minimum, &pairs, &topk, &experts, &input, &blocks, &q8_input, &width, &output, &status};
+    void *up_params[] = {&weights, &row_bytes, &expert_bytes, &qtype,
+        &weights, &row_bytes, &expert_bytes, &qtype, &selected, &absent, &order,
+        &absent, &absent, &absent, &minimum, &pairs, &topk, &experts, &input, &blocks, &q8_input,
+        &width, &limit, &output, &status};
     rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
-        state->moe_grouped_down_rows_function, (unsigned int)(pairs * 2ull), 256u, 0u,
-        params, "cuda.test.moe-encoded-rows", &err);
+        up_stage ? state->moe_grouped_up_rows_function : state->moe_grouped_down_rows_function,
+        (unsigned int)(pairs * 2ull), 256u, 0u, up_stage ? up_params : params,
+        "cuda.test.moe-encoded-rows", &err);
     if (rc == YVEX_OK) rc = yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
         &device_wide, "cuda.test.moe-encoded-rows", &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_backend_tensor_read(
         backend, arena, observed, sizeof(*observed), &err) == YVEX_OK, "read expert row result");
-    if (scenario >= 1u && scenario <= 3u) {
+    if ((scenario >= 1u && scenario <= 3u) || scenario >= 5u) {
         YVEX_TEST_ASSERT(observed->status != 0, "prior error/invalid expert/nonfinite input prevents publication");
     } else {
         YVEX_TEST_ASSERT(observed->status == 0, "valid expert row or exceptional exact recovery succeeds");
@@ -97,20 +104,27 @@ static int moe_rows_check(yvex_backend *backend, unsigned int qtype,
                     float decoded[256], scale;
                     yvex_quant_failure failure;
                     const unsigned char *w = host->weights + expert * expert_bytes + row * row_bytes + block * bytes;
-                    const unsigned char *x = host->inputs + (pair * blocks + block) * MOE_ROWS_Q8_BYTES;
+                    unsigned long long input_row = up_stage ? source / topk : pair;
+                    const unsigned char *x = host->inputs + (input_row * blocks + block) * MOE_ROWS_Q8_BYTES;
                     YVEX_TEST_ASSERT(yvex_quant_decode_block(qtype, w, bytes, decoded, 256u,
                         &failure, &err) == YVEX_OK, "independent CPU weight decoder");
                     memcpy(&scale, x, sizeof(scale));
                     for (unsigned int i = 0u; i < 256u; ++i)
                         expected += (double)decoded[i] * scale * (signed char)x[4u + i];
                 }
-                double difference = fabs((double)observed->outputs[source * width + row] - expected);
+                if (up_stage) {
+                    double g = fmin(expected, limit), u = fmax(-limit, fmin(expected, limit));
+                    double silu = g >= 0.0 ? g / (1.0 + exp(-g)) : g * exp(g) / (1.0 + exp(g));
+                    expected = silu * u;
+                }
+                unsigned long long result_row = up_stage ? pair : source;
+                double difference = fabs((double)observed->outputs[result_row * width + row] - expected);
                 double tolerance = fabs(expected) / 256.0 + 2e-5;
                 if (difference > maximum_error) maximum_error = difference;
                 if (difference / tolerance > maximum_ratio) maximum_ratio = difference / tolerance;
-                YVEX_TEST_ASSERT(isfinite(observed->outputs[source * width + row]) && difference <= tolerance,
+                YVEX_TEST_ASSERT(isfinite(observed->outputs[result_row * width + row]) && difference <= tolerance,
                     "expert output matches decoded-weight F64 dot plus BF16 rounding");
-                if (scenario == 4u) YVEX_TEST_ASSERT(observed->outputs[source * width + row] == 0.0f,
+                if (scenario == 4u) YVEX_TEST_ASSERT(observed->outputs[result_row * width + row] == 0.0f,
                     "overflowed fast path recovers exact zero through F64");
             }
     }
@@ -118,8 +132,8 @@ static int moe_rows_check(yvex_backend *backend, unsigned int qtype,
         "expert execution preserves weights, inputs and worklist");
     YVEX_TEST_ASSERT(observed->before_canary == 12345.0f && observed->after_canary == 12345.0f,
         "partial row groups preserve output canaries");
-    printf("moe encoded rows: qtype=%u blocks=%llu scenario=%u values=%llu status=%d max_abs=%.12g "
-           "worst_error_over_tolerance=%.9g recovery_exact=%s\n", qtype, blocks, scenario,
+    printf("moe encoded rows: stage=%s qtype=%u blocks=%llu scenario=%u values=%llu status=%d max_abs=%.12g "
+           "worst_error_over_tolerance=%.9g recovery_exact=%s\n", up_stage ? "up" : "down", qtype, blocks, scenario,
            pairs * width, observed->status, maximum_error, maximum_ratio, scenario == 4u ? "true" : "n/a");
     YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK, "release expert fixture");
     free(host); free(observed);
@@ -136,11 +150,12 @@ int yvex_cuda_test_moe_rows(void)
     int rc = yvex_backend_open(&backend, &options, &err);
     if (rc == YVEX_ERR_UNSUPPORTED) return 77;
     YVEX_TEST_ASSERT(rc == YVEX_OK, "open expert CUDA backend");
+    for (int up_stage = 0; up_stage <= 1; ++up_stage)
     for (size_t q = 0u; q < sizeof(qtypes) / sizeof(qtypes[0]); ++q) {
         for (size_t i = 0u; i < sizeof(blocks) / sizeof(blocks[0]); ++i)
-            if (moe_rows_check(backend, qtypes[q], blocks[i], 0u)) return 1;
-        for (unsigned int scenario = 1u; scenario <= 4u; ++scenario)
-            if (moe_rows_check(backend, qtypes[q], q ? 8ull : 16ull, scenario)) return 1;
+            if (moe_rows_check(backend, qtypes[q], blocks[i], 0u, up_stage)) return 1;
+        for (unsigned int scenario = 1u; scenario <= 7u; ++scenario)
+            if (moe_rows_check(backend, qtypes[q], q ? 8ull : 16ull, scenario, up_stage)) return 1;
     }
     yvex_backend_close(backend);
     return 0;

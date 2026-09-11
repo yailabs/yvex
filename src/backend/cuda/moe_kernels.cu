@@ -8,7 +8,8 @@
 #include <yvex/internal/execution_batch.h>
 static __device__ float moe_warp_dot(
     const unsigned char *weight, const unsigned char *activation, unsigned long long extent,
-    unsigned long long row_bytes, unsigned int qtype, int q8_input, int *status)
+    unsigned long long row_bytes, unsigned int qtype, int q8_input, int *status,
+    const unsigned short *grid_table = nullptr)
 {
     if (!q8_input)
         return qtype_warp_dot(weight, (const float *)activation, extent, qtype, status);
@@ -17,10 +18,10 @@ static __device__ float moe_warp_dot(
      * Every path uses the same dot primitive, lane order and exceptional recovery. */
     float sum;
     if (qtype == YVEX_GGUF_QTYPE_IQ2_XXS && extent == 16ull && row_bytes == 16ull * 66ull)
-        sum = q8_warp_dot(weight, activation, 16ull, 66ull, YVEX_GGUF_QTYPE_IQ2_XXS);
+        sum = q8_warp_dot(weight, activation, 16ull, 66ull, YVEX_GGUF_QTYPE_IQ2_XXS, grid_table);
     else if (qtype == YVEX_GGUF_QTYPE_Q2_K && extent == 8ull && row_bytes == 8ull * 84ull)
         sum = q8_warp_dot(weight, activation, 8ull, 84ull, YVEX_GGUF_QTYPE_Q2_K);
-    else sum = q8_warp_dot(weight, activation, extent, row_bytes / extent, qtype);
+    else sum = q8_warp_dot(weight, activation, extent, row_bytes / extent, qtype, grid_table);
     /* Only the exceptional row pays for serial FP64 recovery; finite rows retain DP4A order. */
     if (!(threadIdx.x & 31u) && !isfinite(sum)) {
         double recovered = 0.0;
@@ -28,7 +29,10 @@ static __device__ float moe_warp_dot(
             const unsigned char *q8 = activation +
                 (i / YVEX_CUDA_Q8_K_BLOCK) * YVEX_CUDA_Q8_K_BYTES;
             int quantized = (int)(signed char)q8[4ull + i % YVEX_CUDA_Q8_K_BLOCK];
-            recovered += (double)qtype_value(weight, i, qtype) * __uint_as_float(qtype_load_u32(q8)) * quantized;
+            float decoded = qtype_value(weight, i, qtype);
+            float scale = __uint_as_float(qtype_load_u32(q8));
+            if (!isfinite(decoded) || !isfinite(scale)) { atomicCAS(status, 0, 1); return 0.0f; }
+            recovered += (double)decoded * scale * quantized;
         }
         sum = (float)recovered;
     }
@@ -454,6 +458,14 @@ extern "C" __global__ void yvex_moe_grouped_up_rows(
     float *intermediate, int *status)
 {
     extern __shared__ float staged_activation[];
+    __shared__ unsigned short grid_table[256];
+    /* Copy the canonical table before any status-dependent exit. Lane-varying
+     * lookup then uses block-local storage, with unchanged codes and dot order. */
+    if (q8_input && (gate_qtype == YVEX_GGUF_QTYPE_IQ2_XXS || up_qtype == YVEX_GGUF_QTYPE_IQ2_XXS)) {
+        for (unsigned int i = threadIdx.x; i < 256u; i += blockDim.x)
+            grid_table[i] = iq2_xxs_grid[i];
+        __syncthreads();
+    }
     unsigned int lane = threadIdx.x & 31u;
     unsigned long long warp = (unsigned long long)(threadIdx.x >> 5u);
     /* A row block stays within one ordered pair so its warps can reuse one exact activation. */
@@ -508,9 +520,9 @@ extern "C" __global__ void yvex_moe_grouped_up_rows(
     gate_row = gate + expert * gate_expert_bytes + output_row * gate_row_bytes;
     up_row = up + expert * up_expert_bytes + output_row * up_row_bytes;
     g = moe_warp_dot(gate_row, activation, input_extent, gate_row_bytes,
-                     gate_qtype, q8_input, status);
+                     gate_qtype, q8_input, status, grid_table);
     u = moe_warp_dot(up_row, activation, input_extent, up_row_bytes,
-                     up_qtype, q8_input, status);
+                     up_qtype, q8_input, status, grid_table);
     if (!lane && !*status) {
         g = fminf(g, (float)limit);
         u = fmaxf((float)-limit, fminf(u, (float)limit));
@@ -537,6 +549,12 @@ extern "C" __global__ void yvex_moe_grouped_down_rows(
     int q8_input, unsigned long long hidden, float *pair_outputs, int *status)
 {
     extern __shared__ float staged_activation[];
+    __shared__ unsigned short grid_table[256];
+    if (q8_input && qtype == YVEX_GGUF_QTYPE_IQ2_XXS) {
+        for (unsigned int i = threadIdx.x; i < 256u; i += blockDim.x)
+            grid_table[i] = iq2_xxs_grid[i];
+        __syncthreads();
+    }
     unsigned int lane = threadIdx.x & 31u;
     unsigned long long warp = (unsigned long long)(threadIdx.x >> 5u);
     /* The pair-local block contract also makes partial output-row groups synchronization-safe. */
@@ -581,7 +599,7 @@ extern "C" __global__ void yvex_moe_grouped_down_rows(
     if (output_row >= hidden) return;
     weight = down + expert * expert_bytes + output_row * row_bytes;
     float dot = moe_warp_dot(weight, activation, intermediate_extent,
-                             row_bytes, qtype, q8_input, status);
+                             row_bytes, qtype, q8_input, status, grid_table);
     if (!lane && !*status) {
         float value = float_to_bf16_rne(dot);
         if (!isfinite(value)) atomicCAS(status, 0, 1);

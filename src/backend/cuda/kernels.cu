@@ -626,8 +626,8 @@ extern "C" __global__ void yvex_qtype_matvec(
 }
 
 /* Narrow row batches reuse one admitted Q8 activation across eight independent
- * MXFP4 row dots. The warp dot is unchanged; shared storage only removes
- * redundant global reads and therefore preserves its numerical order. */
+ * MXFP4 row dots. Adjacent blocks visit the same weight rows for different
+ * inputs; shared activation and weight locality preserve the warp dot order. */
 extern "C" __global__ void yvex_mxfp4_q8_rows(
     const unsigned char *encoded,
     unsigned long long row_bytes,
@@ -646,10 +646,10 @@ extern "C" __global__ void yvex_mxfp4_q8_rows(
     unsigned int warp = threadIdx.x >> 5u;
     unsigned long long blocks = row_width / YVEX_CUDA_Q8_K_BLOCK;
     unsigned long long blocks_per_input = (row_count + 7ull) / 8ull;
-    unsigned long long input_row = blocks_per_input
-        ? (unsigned long long)blockIdx.x / blocks_per_input : input_rows;
-    unsigned long long row_group = blocks_per_input
-        ? (unsigned long long)blockIdx.x % blocks_per_input : blocks_per_input;
+    unsigned long long input_row = input_rows
+        ? (unsigned long long)blockIdx.x % input_rows : input_rows;
+    unsigned long long row_group = input_rows
+        ? (unsigned long long)blockIdx.x / input_rows : blocks_per_input;
     unsigned long long row = row_group * 8ull + warp;
     unsigned long long activation_bytes = blocks * YVEX_CUDA_Q8_K_BYTES;
     unsigned long long weight_block = blocks ? row_bytes / blocks : 0ull;
