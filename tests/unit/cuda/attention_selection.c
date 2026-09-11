@@ -121,6 +121,35 @@ static void selection_position_fixture(selection_storage *s, unsigned int scenar
     if (scenario == 29u) s->positions[count - 1ull] = s->positions[0];
 }
 
+/* Exact-sum boundary, cancellation and neighboring heads choosing different
+ * arithmetic paths. The expected score is still the scalar F64 oracle above. */
+static void selection_integer_fixture(selection_storage *s, unsigned int scenario,
+    unsigned long long count, unsigned long long heads, unsigned long long width)
+{
+    if (scenario < 32u || scenario > 39u) return;
+    for (unsigned long long head = 0ull; head < heads; ++head) {
+        s->weights[head] = head % 3ull ? 0.5f : -0.25f;
+        for (unsigned long long i = 0ull; i < width; ++i) {
+            float value = i % 4ull < 2ull ? 0x1.fep30f : 0x1.fep0f;
+            if (scenario == 33u) value = i % 4ull < 2ull ? 0x1.fep31f : 0x1.fep0f;
+            if (scenario == 34u && head % 3ull == 1ull) value = nextafterf(value, INFINITY);
+            if (scenario == 34u && head % 3ull == 2ull) value = i ? 0x1p-32f : 0x1p32f;
+            if (scenario == 36u) value = -0.0f;
+            if (scenario == 37u) value = 0x1p-133f;
+            if (scenario >= 38u) value = ldexpf(0x1.fep0f, (int)((i * 7ull + head) % 47ull) - 23);
+            s->query[head * width + i] = i % 4ull == 1ull ? -value : value;
+        }
+    }
+    for (unsigned long long c = 0ull; c < count; ++c)
+        for (unsigned long long i = 0ull; i < width; ++i) {
+            float value = 0x1.fep0f;
+            if (scenario == 38u) value = ldexpf(value, (int)((c * 13ull + i) % 43ull) - 21);
+            if (scenario == 39u && c % 3ull == 1ull) value = nextafterf(value, INFINITY);
+            if (scenario == 39u && c % 3ull == 2ull) value = 0x1p-133f;
+            s->rows[c][i] = c % 2ull ? -value : value;
+        }
+}
+
 static int selection_case(yvex_backend *backend, unsigned long long count,
                           unsigned long long k, unsigned int scenario)
 {
@@ -147,6 +176,9 @@ static int selection_case(yvex_backend *backend, unsigned long long count,
     }
     if (scenario == 9u) heads = 512ull; /* More than one reduction tile. */
     if (scenario == 24u) { heads = 33ull; width = 63ull; }
+    if (scenario == 34u) { heads = 67ull; width = 65ull; }
+    if (scenario == 35u) { heads = 1ull; width = 1ull; }
+    if (scenario == 38u || scenario == 39u) { heads = 7ull; width = 127ull; }
     for (unsigned long long head = 0ull; head < heads; ++head) {
         host->query[head * width] = (float)(head + 1ull);
         host->weights[head] = scenario == 1u ? -1.0f : 1.0f;
@@ -178,6 +210,7 @@ static int selection_case(yvex_backend *backend, unsigned long long count,
     }
     selection_product_fixture(host, scenario, count, heads, width);
     selection_position_fixture(host, scenario, count, history_count, query_position);
+    selection_integer_fixture(host, scenario, count, heads, width);
     for (unsigned long long index = 0ull; index < count; ++index) {
         unsigned long long position = host->positions[index];
         if (position > query_position || position > ~0ull - ratio + 1ull ||
@@ -326,6 +359,9 @@ int yvex_cuda_test_attention_selection(void)
     for (unsigned int scenario = 25u; scenario <= 31u; ++scenario)
         if (selection_case(backend, 513ull, 17ull, scenario) ||
             selection_case(backend, 4096ull, 512ull, scenario)) return 1;
+    for (unsigned int scenario = 32u; scenario <= 39u; ++scenario)
+        if (selection_case(backend, 129ull, 17ull, scenario) ||
+            selection_case(backend, 513ull, 512ull, scenario)) return 1;
     yvex_backend_close(backend);
     return 0;
 }

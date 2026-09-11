@@ -1673,8 +1673,65 @@ static __device__ void attention_candidate_sort(
     }
 }
 
+/* Four lanes may reassociate only a provably exact integer dot. BF16 mantissas
+ * have at most eight bits: exponent span + 16 + ceil(log2(width)) <= 53 bounds
+ * every partial sum by F64's exact integer range (and safely inside I64).
+ * Scaling that integer by a power of two equals source-order F64 accumulation.
+ * The subgroup mask is essential: neighboring heads may take different paths. */
+static __device__ double attention_index_dot_group(const float *query, const float *row,
+                                                   unsigned long long width)
+{
+    if (!query) return 0.0;
+    unsigned int lane = threadIdx.x & 3u, mask = 15u << (threadIdx.x & 28u);
+    int eligible = 1, qmin = 255, qmax = 0, rmin = 255, rmax = 0;
+    for (unsigned long long i = lane; i < width; i += 4ull) {
+        unsigned int a = __float_as_uint(query[i]), b = __float_as_uint(row[i]);
+        int ea = (a >> 23u) & 255u, eb = (b >> 23u) & 255u;
+        if ((a & 65535u) || (b & 65535u) ||
+            ((a & 0x7fffffffu) && (ea < 64 || ea > 190)) ||
+            ((b & 0x7fffffffu) && (eb < 64 || eb > 190))) eligible = 0;
+        if (a & 0x7fffffffu) { qmin = min(qmin, ea); qmax = max(qmax, ea); }
+        if (b & 0x7fffffffu) { rmin = min(rmin, eb); rmax = max(rmax, eb); }
+    }
+    for (unsigned int offset = 2u; offset; offset >>= 1u) {
+        eligible &= __shfl_down_sync(mask, eligible, offset, 4);
+        qmin = min(qmin, __shfl_down_sync(mask, qmin, offset, 4));
+        qmax = max(qmax, __shfl_down_sync(mask, qmax, offset, 4));
+        rmin = min(rmin, __shfl_down_sync(mask, rmin, offset, 4));
+        rmax = max(rmax, __shfl_down_sync(mask, rmax, offset, 4));
+    }
+    eligible = __shfl_sync(mask, eligible, 0, 4);
+    qmin = __shfl_sync(mask, qmin, 0, 4); qmax = __shfl_sync(mask, qmax, 0, 4);
+    rmin = __shfl_sync(mask, rmin, 0, 4); rmax = __shfl_sync(mask, rmax, 0, 4);
+    unsigned int count_bits = width == 1ull ? 0u : 64u - __clzll(width - 1ull);
+    double dot = 0.0;
+    if (eligible && qmin <= qmax && rmin <= rmax && count_bits <= 37u &&
+        (unsigned int)(qmax - qmin + rmax - rmin) <= 37u - count_bits) {
+        long long total = 0;
+        for (unsigned long long i = lane; i < width; i += 4ull) {
+            unsigned int a = __float_as_uint(query[i]), b = __float_as_uint(row[i]);
+            if ((a & 0x7fffffffu) && (b & 0x7fffffffu)) {
+                unsigned int product = (128u + ((a >> 16u) & 127u)) * (128u + ((b >> 16u) & 127u));
+                unsigned int shift = ((a >> 23u) & 255u) - qmin + ((b >> 23u) & 255u) - rmin;
+                long long term = (long long)((unsigned long long)product << shift);
+                total += (a ^ b) & 0x80000000u ? -term : term;
+            }
+        }
+        for (unsigned int offset = 2u; offset; offset >>= 1u)
+            total += __shfl_down_sync(mask, total, offset, 4);
+        dot = ldexp((double)total, qmin + rmin - 268);
+    } else if (!lane) {
+        for (unsigned long long i = 0ull; i < width; ++i) {
+            double product = eligible ? (double)__fmul_rn(query[i], row[i])
+                : __dmul_rn((double)query[i], (double)row[i]);
+            dot = __dadd_rn(dot, product);
+        }
+    }
+    return dot;
+}
+
 /* Capacity-sized launch, actual candidates only; graph geometry remains stable.
- * Independent candidate blocks preserve the head/dimension reduction order.
+ * Independent candidate blocks preserve exact dots and ordered head reduction.
  * A separate same-stream ranking launch is the device-wide completion boundary.
  * Scores are private scratch: failures cannot publish a selected population. */
 extern "C" __global__ void yvex_attention_candidate_scores(
@@ -1688,12 +1745,12 @@ extern "C" __global__ void yvex_attention_candidate_scores(
     float *scores, int *status)
 {
     extern __shared__ double head_terms[];
-    __shared__ int active, narrow_products;
+    __shared__ int active;
     unsigned long long candidate = (unsigned long long)blockIdx.x;
     unsigned int thread = threadIdx.x;
     if (!status) return;
     if (!index_query || !index_weights || !scores || !heads ||
-        !head_dim || heads > (~0ull - head_dim) / head_dim ||
+        !head_dim || heads > (~0ull - head_dim) / head_dim || blockDim.x != 256u ||
         !ratio || history_count > ~0ull - current_count ||
         (history_count && (!history_indexer || !history_positions ||
                            history_stride < head_dim)) ||
@@ -1709,7 +1766,6 @@ extern "C" __global__ void yvex_attention_candidate_scores(
         position + ratio - 1ull > query_position) return;
     if (thread == 0u) {
         active = atomicAdd(status, 0) == 0;
-        narrow_products = 1;
     }
     __syncthreads();
     if (!active) return;
@@ -1721,45 +1777,24 @@ extern "C" __global__ void yvex_attention_candidate_scores(
             unsigned long long local = candidate - history_count;
             row = current_indexer + local * current_stride;
         }
-        /* Two normal BF16 values have at most 16 significant product bits.
-         * Biased exponents [64,190] keep their product normal and finite in
-         * F32. Signed zero is also exact. Verify actual bits once, then select
-         * a uniform loop: no inferred dtype and no per-product branch. */
-        int eligible = 1;
-        unsigned long long query_values = heads * head_dim;
-        for (unsigned long long i = thread; i < query_values + head_dim; i += blockDim.x) {
-            float value = i < query_values ? index_query[i] : row[i - query_values];
-            unsigned int bits = __float_as_uint(value), exponent = (bits >> 23u) & 255u;
-            if ((bits & 65535u) || ((bits & 0x7fffffffu) && (exponent < 64u || exponent > 190u)))
-                eligible = 0;
-        }
-        if (!eligible) atomicAnd(&narrow_products, 0);
-        __syncthreads();
         /* Heads are independent; lane zero retains the source-order reduction
            across each tile so ranking and tie behavior stay bit-identical. */
         double score = 0.0;
         for (unsigned long long base = 0ull; base < heads;
-             base += (unsigned long long)blockDim.x) {
-            unsigned long long head = base + (unsigned long long)thread;
+             base += (unsigned long long)blockDim.x / 4ull) {
+            unsigned long long head = base + (unsigned long long)thread / 4ull;
             double contribution = 0.0;
-            if (head < heads) {
-                double dot = 0.0;
-                const float *query = index_query + head * head_dim;
-                if (narrow_products) {
-                    for (unsigned long long lane = 0ull; lane < head_dim; ++lane)
-                        dot = __dadd_rn(dot, (double)__fmul_rn(query[lane], row[lane]));
-                } else for (unsigned long long lane = 0ull; lane < head_dim; ++lane) {
-                    double term = __dmul_rn((double)query[lane], (double)row[lane]);
-                    dot = __dadd_rn(dot, term);
-                }
+            double dot = attention_index_dot_group(
+                head < heads ? index_query + head * head_dim : NULL, row, head_dim);
+            if (head < heads && !(thread & 3u)) {
                 if (dot < 0.0) dot = 0.0;
                 contribution = __dmul_rn(dot, (double)index_weights[head]);
             }
-            head_terms[thread] = contribution;
+            if (!(thread & 3u)) head_terms[thread / 4u] = contribution;
             __syncthreads();
             if (thread == 0u) {
                 unsigned long long tile = heads - base;
-                if (tile > (unsigned long long)blockDim.x) tile = blockDim.x;
+                if (tile > (unsigned long long)blockDim.x / 4ull) tile = blockDim.x / 4u;
                 for (unsigned long long i = 0ull; i < tile; ++i)
                     score = __dadd_rn(score, head_terms[i]);
             }
