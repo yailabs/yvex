@@ -828,7 +828,7 @@ explicit resumption; upstream/whole-model conformance remains Program Q work.
 
 The [current consumer matrix](docs/architecture/compilation.md#current-consumer-cutover)
 distinguishes Qwen's physical forward/output runner, shared output projection
-and DeepSeek's two-result final mHC program from the remaining DeepSeek/DSpark
+and DeepSeek's two-result final mHC and target-feature reduction programs from the remaining DeepSeek/DSpark
 layer and MiniMax neural computational migration.
 Exact Qwen artifact-backed preservation is a separate evidence obligation:
 an absent exact asset cannot earn whole-model qualification, but does not alone

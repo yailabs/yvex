@@ -127,6 +127,11 @@ static int kernel_instructions_bind(yvex_program_kernels *c, yvex_error *err)
         c->linear_slots[i] = SIZE_MAX;
         if (!strcmp(s->implementation, "parameter.encoded.v1") ||
             !strcmp(s->implementation, "linear.encoded.f32.v1")) continue;
+        if (!strcmp(s->implementation, "stream_mean.f32.f64acc.v1")) {
+            if (!c->ops || !c->ops->feature_mean)
+                return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "stream mean has no admitted backend implementation");
+            continue;
+        }
         if (!strcmp(s->implementation, "mhc.head_norm.bf16.v1")) {
             if (!c->ops || !c->ops->final)
                 return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "mHC head has no admitted backend implementation");
@@ -291,6 +296,11 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
         return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "operation has no admitted numerical operands/results");
     output = &r->values[s->results[0]];
     input = &r->values[s->operands[0]];
+    if (!strcmp(s->implementation, "stream_mean.f32.f64acc.v1")) {
+        const yvex_ir_type *type = &yvex_program_physical_value_at(c->program, s->operands[0])->type;
+        return c->ops->feature_mean(c->backend, input, r->rows, type->shape[2].extent,
+            type->shape[1].extent, output, NULL, 0u, 0u, 0u, NULL, facts, err);
+    }
     if (!strcmp(s->implementation, "mhc.head_norm.bf16.v1")) {
         const yvex_ir_type *type = &yvex_program_physical_value_at(c->program, s->operands[0])->type;
         const yvex_ir_attribute *epsilon = yvex_program_physical_attribute(s, "epsilon");

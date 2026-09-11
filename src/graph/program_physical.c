@@ -32,6 +32,7 @@ static const physical_rule physical_rules[] = {
     {"nn.linear", "linear.bf16.f32acc.v1", 0u},
     {"nn.linear", "linear.encoded.f32.v1", 0u},
     {"mhc.head_norm", "mhc.head_norm.bf16.v1", 0u},
+    {"tensor.stream_mean", "stream_mean.f32.f64acc.v1", 0u},
     {"nn.rms_norm", "rms_norm.bf16.v1", 0u},
     {"nn.silu_product", "silu_product.bf16.v1", 0u},
     {"tensor.add", "add.bf16.v1", 0u},
@@ -127,6 +128,7 @@ static int physical_numeric_verify(const yvex_program_physical *p,
     unsigned int i;
     int encoded = !strcmp(s->implementation, "linear.encoded.f32.v1");
     if (!strcmp(s->implementation, "parameter.encoded.v1")) return YVEX_OK;
+    if (!strcmp(s->implementation, "stream_mean.f32.f64acc.v1")) return YVEX_OK;
     if (!strcmp(s->implementation, "mhc.head_norm.bf16.v1")) {
         for (i = 1u; i < s->operand_count; ++i)
             if (!p->values[s->operands[i]].parameter)

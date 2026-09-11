@@ -131,6 +131,21 @@ static int neural_mhc_head(const yvex_ir_module *m, yvex_ir_id id, yvex_error *e
     return YVEX_OK;
 }
 
+/* The reduction accumulates streams in order in F64, divides in F64, then
+ * publishes F32. It does not introduce a BF16 rounding point. */
+static int neural_stream_mean(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
+{
+    const yvex_ir_operation *op = &m->operations[id];
+    const yvex_ir_type *x = neural_input(m, op, 0u), *y = neural_output(m, op, 0u);
+    if (!neural_float_tensor(x) || x->scalar != YVEX_IR_F32 || x->rank != 3u ||
+        x->shape[1].symbol != YVEX_IR_NONE || x->shape[2].symbol != YVEX_IR_NONE ||
+        !neural_float_tensor(y) || y->scalar != YVEX_IR_F32 || y->rank != 2u ||
+        !yvex_ir_extent_equal(x->shape[0], y->shape[0]) ||
+        !yvex_ir_extent_equal(x->shape[2], y->shape[1]))
+        return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "stream mean requires exact row/stream/channel geometry");
+    return YVEX_OK;
+}
+
 const yvex_ir_dialect *yvex_ir_neural_dialect(void)
 {
     static const yvex_ir_attribute_rule norm[] = {
@@ -145,6 +160,7 @@ const yvex_ir_dialect *yvex_ir_neural_dialect(void)
         {"nn.rms_norm", 1u, 2u, 2u, 1u, 1u, 0u, 0u, norm, 2u, 0, neural_norm},
         {"nn.layer_norm", 1u, 3u, 3u, 1u, 1u, 0u, 0u, norm, 2u, 0, neural_norm},
         {"mhc.head_norm", 1u, 5u, 5u, 2u, 2u, 0u, 0u, mhc, 2u, 0, neural_mhc_head},
+        {"tensor.stream_mean", 1u, 1u, 1u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_stream_mean},
         {"nn.silu", 1u, 1u, 1u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_unary},
         {"nn.gelu", 1u, 1u, 1u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_unary},
         /* SiLU rounds to the operand type before multiplication; the product

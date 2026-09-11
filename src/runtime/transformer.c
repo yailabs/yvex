@@ -25,8 +25,8 @@ struct yvex_runtime_transformer_context {
     yvex_runtime_transformer_options options;
     yvex_runtime_moe_context *moe;
     const yvex_transformer_plan *plan;
-    const yvex_program_physical *final_program;
-    yvex_program_stage *final_stage, *final_reference;
+    const yvex_program_physical *final_program, *feature_program;
+    yvex_program_stage *final_stage, *final_reference, *feature_stage, *feature_reference;
     yvex_backend *reference_backend;
     int final_ready;
     yvex_program_kernel_parameter final_parameters[4];
@@ -289,7 +289,9 @@ static int transformer_runtime_globals(yvex_runtime_transformer_context *context
     unsigned long long slot = YVEX_TRANSFORMER_WEIGHT_FINAL_FUNCTION, value_id, total = sizeof(*context);
     context->final_program = yvex_compiled_model_plan_final(context->model_view->compiled_plan,
         context->options.tensor_scope == YVEX_TENSOR_SCOPE_DRAFT);
-    if (!context->final_program)
+    context->feature_program = yvex_compiled_model_plan_feature(context->model_view->compiled_plan,
+        context->options.tensor_scope == YVEX_TENSOR_SCOPE_DRAFT);
+    if (!context->final_program || !context->feature_program)
         return transformer_runtime_refuse(err, YVEX_ERR_STATE, "authenticated final computational program is missing");
     for (value_id = 0u; value_id < yvex_program_physical_summary_get(context->final_program)->value_count; ++value_id) {
         const yvex_program_physical_value *value = yvex_program_physical_value_at(context->final_program, value_id);
@@ -333,9 +335,13 @@ static int transformer_runtime_globals(yvex_runtime_transformer_context *context
 
 static int transformer_final_open(yvex_runtime_transformer_context *c, yvex_error *err)
 {
-    unsigned long long host, device, reference_host = 0u, reference_device = 0u;
+    unsigned long long host, device, stage_device_bytes = 0u;
+    size_t i;
     int cpu = yvex_backend_kind_of(c->session_view->backend) == YVEX_BACKEND_KIND_CPU;
     int rc = yvex_program_stage_open(&c->final_stage, c->final_program, c->final_parameters, 4u,
+        c->session_view->backend, c->token_capacity, cpu, c->options.maximum_host_bytes,
+        c->options.maximum_device_bytes, err);
+    if (rc == YVEX_OK) rc = yvex_program_stage_open(&c->feature_stage, c->feature_program, NULL, 0u,
         c->session_view->backend, c->token_capacity, cpu, c->options.maximum_host_bytes,
         c->options.maximum_device_bytes, err);
     if (rc == YVEX_OK && !cpu && c->options.evidence_level == YVEX_ATTENTION_EVIDENCE_FULL) {
@@ -344,14 +350,19 @@ static int transformer_final_open(yvex_runtime_transformer_context *c, yvex_erro
         if (rc == YVEX_OK) rc = yvex_program_stage_open(&c->final_reference, c->final_program,
             c->final_parameters, 4u, c->reference_backend, c->token_capacity, 1,
             c->options.maximum_host_bytes, 0u, err);
+        if (rc == YVEX_OK) rc = yvex_program_stage_open(&c->feature_reference, c->feature_program,
+            NULL, 0u, c->reference_backend, c->token_capacity, 1, c->options.maximum_host_bytes, 0u, err);
     }
     if (rc != YVEX_OK) return rc;
-    yvex_program_stage_resources(c->final_stage, &host, &device);
-    yvex_program_stage_resources(c->final_reference, &reference_host, &reference_device);
-    if (!yvex_core_u64_add(host, reference_host, &host) ||
-        !yvex_core_u64_add(c->host_bytes, host, &c->host_bytes) ||
-        (c->options.maximum_host_bytes && c->host_bytes > c->options.maximum_host_bytes))
-        return transformer_runtime_refuse(err, YVEX_ERR_BOUNDS, "final program exceeds aggregate host budget");
+    yvex_program_stage *stages[] = {c->final_stage, c->final_reference, c->feature_stage, c->feature_reference};
+    for (i = 0u; i < sizeof(stages) / sizeof(stages[0]); ++i) {
+        yvex_program_stage_resources(stages[i], &host, &device);
+        if (!yvex_core_u64_add(c->host_bytes, host, &c->host_bytes) ||
+            !yvex_core_u64_add(stage_device_bytes, device, &stage_device_bytes) ||
+            (c->options.maximum_host_bytes && c->host_bytes > c->options.maximum_host_bytes) ||
+            (c->options.maximum_device_bytes && stage_device_bytes > c->options.maximum_device_bytes))
+            return transformer_runtime_refuse(err, YVEX_ERR_BOUNDS, "program stages exceed aggregate resource budget");
+    }
     c->final_ready = 1;
     return YVEX_OK;
 }
@@ -614,61 +625,69 @@ static int transformer_device_view(void *opaque, unsigned long long layer_ordina
     *output = source->device_output;
     return YVEX_OK;
 }
+/* Computation comes from the compiled feature entry. Strided runner storage
+ * is a publication destination, never an operand that changes the reduction. */
 static int transformer_feature_capture(transformer_chunk_context *chunk,
                                        unsigned long long completed_layer, yvex_error *err)
 {
-    const yvex_transformer_plan_summary *plan = yvex_transformer_plan_summary_get(chunk->owner->plan);
-    unsigned long long feature_index, resident_row_offset, token, hidden, stream;
-    float *destination;
-    if (!chunk->request->feature_layer_count ||
-        chunk->feature_next >= chunk->request->feature_layer_count ||
-        chunk->request->feature_layer_ordinals[chunk->feature_next] != completed_layer)
-        return YVEX_OK;
-    feature_index = chunk->feature_next++;
-    destination = chunk->output->features
-        ? chunk->output->features +
-              (chunk->token_offset * chunk->request->feature_layer_count +
-               feature_index) * plan->hidden_width
-        : NULL;
-    if (chunk->backend == YVEX_BACKEND_KIND_CUDA &&
-        chunk->owner->options.evidence_level != YVEX_ATTENTION_EVIDENCE_FULL) {
-        const yvex_backend_transformer_operations *operations =
-            transformer_backend_operations(chunk->owner->session_view->backend, err);
-        yvex_backend_operation_facts facts = {0};
-        if (!operations || !operations->feature_mean) return yvex_error_code(err);
-        if (!yvex_core_u64_add(chunk->output->device_feature_row_offset, chunk->token_offset,
-                               &resident_row_offset))
-            return transformer_runtime_refuse(err, YVEX_ERR_BOUNDS,
-                                               "transformer device feature row overflowed");
-        int rc = operations->feature_mean(
-            chunk->owner->session_view->backend, &chunk->device_current,
-            chunk->token_count, plan->hidden_width, plan->residual_streams,
-            &chunk->device_hidden, chunk->output->device_features,
-            resident_row_offset, chunk->output->device_feature_row_stride,
-            chunk->output->device_features ? feature_index * plan->hidden_width : 0ull,
-            destination ? chunk->owner->candidate_hidden : NULL, &facts, err);
+    yvex_runtime_transformer_context *c = chunk->owner;
+    const yvex_ir_type *type = &yvex_program_physical_value_at(c->feature_program, 0u)->type;
+    unsigned long long width = type->shape[2].extent, feature, token, row_offset;
+    yvex_backend_operation_facts facts = {0};
+    float *destination, *host[] = {c->candidate_hidden};
+    int rc;
+    if (!chunk->request->feature_layer_count || chunk->feature_next >= chunk->request->feature_layer_count ||
+        chunk->request->feature_layer_ordinals[chunk->feature_next] != completed_layer) return YVEX_OK;
+    feature = chunk->feature_next++;
+    destination = chunk->output->features ? chunk->output->features +
+        (chunk->token_offset * chunk->request->feature_layer_count + feature) * width : NULL;
+    if (chunk->backend == YVEX_BACKEND_KIND_CUDA && c->options.evidence_level != YVEX_ATTENTION_EVIDENCE_FULL) {
+        yvex_backend *backend = c->session_view->backend;
+        yvex_device_tensor input = chunk->device_current, output = chunk->device_hidden;
+        yvex_device_tensor *outputs[] = {&output};
+        input.rank = 3u; input.dims[0] = chunk->token_count;
+        input.dims[1] = type->shape[1].extent; input.dims[2] = width;
+        output.rank = 2u; output.dims[0] = chunk->token_count; output.dims[1] = width;
+        rc = yvex_program_stage_device(c->feature_stage, chunk->token_count, &input, outputs, 1u,
+            c->options.cancel_requested, c->options.cancel_context, &facts, err);
         if (rc != YVEX_OK) return rc;
-        rc = yvex_runtime_transformer_operation_facts_add(chunk->result, &facts, 0ull, 0ull, 0ull, err);
-        if (rc != YVEX_OK) return rc;
-        if (destination)
-            for (token = 0ull; token < chunk->token_count; ++token)
-                memcpy(destination + token * chunk->request->feature_layer_count * plan->hidden_width,
-                       chunk->owner->candidate_hidden + token * plan->hidden_width,
-                       (size_t)plan->hidden_width * sizeof(float));
-        return YVEX_OK;
-    }
-    for (token = 0ull; token < chunk->token_count; ++token) {
-        for (hidden = 0ull; hidden < plan->hidden_width; ++hidden) {
-            double sum = 0.0;
-            for (stream = 0ull; stream < plan->residual_streams; ++stream)
-                sum += chunk->current[
-                    token * plan->expanded_width +
-                    stream * plan->hidden_width + hidden];
-            destination[hidden] = (float)(sum / (double)plan->residual_streams);
+        if (!yvex_core_u64_add(chunk->output->device_feature_row_offset, chunk->token_offset, &row_offset))
+            return transformer_runtime_refuse(err, YVEX_ERR_BOUNDS, "feature publication row overflowed");
+        if (chunk->output->device_features) {
+            yvex_device_tensor source, target;
+            unsigned long long offset, column, stride = chunk->output->device_feature_row_stride;
+            if (!yvex_core_u64_mul(feature, width, &column) || column > stride || width > stride - column)
+                return transformer_runtime_refuse(err, YVEX_ERR_BOUNDS, "feature publication stride is incompatible");
+            for (token = 0u; token < chunk->token_count; ++token) {
+                if (!yvex_core_u64_add(row_offset, token, &offset) ||
+                    !yvex_core_u64_mul(offset, stride, &offset) || !yvex_core_u64_add(offset, column, &offset) ||
+                    !yvex_backend_tensor_f32_subview(&output, token * width, width, &source) ||
+                    !yvex_backend_tensor_f32_subview(chunk->output->device_features, offset, width, &target))
+                    return transformer_runtime_refuse(err, YVEX_ERR_BOUNDS,
+                        "feature publication storage is insufficient");
+                rc = yvex_backend_tensor_copy_async(backend, &target, &source, err);
+                if (rc != YVEX_OK) return rc;
+                facts.d2d_bytes += width * sizeof(float);
+            }
+            chunk->output->device_features->is_written = 1;
         }
-        destination += chunk->request->feature_layer_count * plan->hidden_width;
+        if (destination) {
+            rc = yvex_backend_tensor_read(backend, &output, c->candidate_hidden, output.bytes, err);
+            if (rc != YVEX_OK) return rc;
+            facts.d2h_bytes += output.bytes;
+            facts.download_count++;
+        }
+        rc = yvex_runtime_transformer_operation_facts_add(chunk->result, &facts, 0u, 0u, 0u, err);
+    } else {
+        rc = yvex_program_stage_host(c->feature_reference ? c->feature_reference : c->feature_stage,
+            chunk->token_count, chunk->current, host, 1u, c->options.cancel_requested,
+            c->options.cancel_context, &facts, err);
     }
-    return YVEX_OK;
+    if (rc == YVEX_OK && destination)
+        for (token = 0u; token < chunk->token_count; ++token)
+            memcpy(destination + token * chunk->request->feature_layer_count * width,
+                c->candidate_hidden + token * width, (size_t)width * sizeof(float));
+    return rc;
 }
 /* Complete one ordered block while the coordinator retains attention and KV commit authority. */
 int yvex_runtime_transformer_execute_block(
@@ -1809,6 +1828,8 @@ int yvex_runtime_transformer_context_close(yvex_runtime_transformer_context **co
     yvex_execution_device_publication_retire(&(*context)->publication);
     rc = yvex_program_stage_close(&(*context)->final_stage, err);
     if (rc == YVEX_OK) rc = yvex_program_stage_close(&(*context)->final_reference, err);
+    if (rc == YVEX_OK) rc = yvex_program_stage_close(&(*context)->feature_stage, err);
+    if (rc == YVEX_OK) rc = yvex_program_stage_close(&(*context)->feature_reference, err);
     if (rc == YVEX_OK) rc = yvex_backend_close_checked(&(*context)->reference_backend, err);
     if (rc != YVEX_OK) return rc;
     buffers[0] = &(*context)->device_embedding_encoded;
@@ -1839,145 +1860,4 @@ int yvex_runtime_transformer_context_close(yvex_runtime_transformer_context **co
     *context = NULL;
     yvex_error_clear(err);
     return YVEX_OK;
-}
-static int transformer_runtime_cleanup(void **opaque, yvex_error *err)
-{
-    return yvex_runtime_transformer_context_close(
-        (yvex_runtime_transformer_context **)opaque, err);
-}
-static void transformer_operator_refuse(yvex_transformer_operator_result *result,
-                                        const yvex_error *err)
-{
-    yvex_core_text_copy(result->status, sizeof(result->status), "refused");
-    yvex_core_text_copy(result->reason, sizeof(result->reason),
-                        err && yvex_error_is_set(err) ? yvex_error_message(err)
-                                                     : "transformer execution refused");
-}
-int yvex_transformer_operator_execute(const yvex_transformer_operator_request *request,
-                                      yvex_transformer_operator_result *result,
-                                      yvex_runtime_cleanup_lease **retained_cleanup,
-                                      yvex_error *err)
-{
-    yvex_model_engine_open_request model_request = {0};
-    yvex_runtime_session_open_request session_request = {0};
-    yvex_runtime_transformer_options options = {0};
-    yvex_runtime_transformer_request execution_request = {0};
-    yvex_runtime_transformer_output output = {0};
-    yvex_transformer_input_limits limits = {0};
-    yvex_model_engine_failure failure = {0};
-    yvex_runtime_cleanup_lease *cleanup = NULL;
-    yvex_model_engine *model = NULL;
-    yvex_runtime_execution_session *session = NULL;
-    yvex_runtime_transformer_context *context = NULL;
-    yvex_transformer_input *input = NULL;
-    const yvex_model_engine_view *model_view = NULL;
-    const yvex_transformer_plan_summary *plan = NULL;
-    const yvex_transformer_input_summary *input_summary = NULL;
-    yvex_error primary = {0};
-    unsigned long long output_count;
-    int rc, cleanup_rc, adopted = 0;
-    if (result) memset(result, 0, sizeof(*result));
-    if (!request || !result || !retained_cleanup || *retained_cleanup ||
-        !request->target || !request->artifact_path || !request->runtime_binding_path ||
-        !request->input_path || !request->chunk_tokens || !request->context_capacity ||
-        (request->backend != YVEX_BACKEND_KIND_CPU &&
-         request->backend != YVEX_BACKEND_KIND_CUDA)) {
-        rc = transformer_runtime_refuse(err, YVEX_ERR_INVALID_ARG,
-                                        "complete transformer operator arguments are required");
-        if (result) transformer_operator_refuse(result, err);
-        return rc;
-    }
-    yvex_core_text_copy(result->command, sizeof(result->command),
-                        "execute transformer run");
-    yvex_core_text_copy(result->target, sizeof(result->target), request->target);
-    yvex_core_text_copy(result->backend, sizeof(result->backend),
-                        request->backend == YVEX_BACKEND_KIND_CUDA ? "cuda" : "cpu");
-    yvex_core_text_copy(result->phase, sizeof(result->phase), "prefill");
-    model_request.artifact_path = request->artifact_path;
-    model_request.runtime_binding_path = request->runtime_binding_path;
-    model_request.target_id = request->target;
-    model_request.maximum_host_bytes = request->maximum_host_bytes;
-    session_request.backend = request->backend;
-    session_request.maximum_host_bytes = request->maximum_host_bytes;
-    session_request.maximum_device_bytes = request->maximum_device_bytes;
-    rc = yvex_runtime_cleanup_lease_acquire(&cleanup, &model_request, &session_request,
-                                            &model, &session, &failure, err);
-    limits.maximum_file_bytes = request->maximum_host_bytes
-                                    ? request->maximum_host_bytes : 1ull << 30u;
-    if (rc == YVEX_OK)
-        rc = yvex_transformer_input_open_file(&input, request->input_path, &limits, err);
-    options.maximum_host_bytes = request->maximum_host_bytes;
-    options.maximum_device_bytes = request->maximum_device_bytes;
-    options.context_capacity = request->context_capacity;
-    options.cancel_requested = request->cancel_requested;
-    options.cancel_context = request->cancel_context;
-    if (rc == YVEX_OK)
-        rc = yvex_runtime_transformer_context_open(
-            &context, model, session, &options, NULL, err);
-    if (rc == YVEX_OK) {
-        rc = yvex_runtime_cleanup_lease_adopt(cleanup, context,
-                                              transformer_runtime_cleanup, err);
-        adopted = rc == YVEX_OK;
-    }
-    model_view = yvex_model_engine_view_get(model);
-    plan = yvex_transformer_plan_summary_get(
-        yvex_runtime_transformer_context_plan(context));
-    input_summary = yvex_transformer_input_summary_get(input);
-    if (rc == YVEX_OK &&
-        (!model_view || !plan || !input_summary ||
-         !yvex_core_u64_mul(input_summary->token_count, plan->hidden_width,
-                            &output_count) || output_count > SIZE_MAX / sizeof(float)))
-        rc = transformer_runtime_refuse(err, YVEX_ERR_BOUNDS,
-                                        "transformer operator output extent overflowed");
-    if (rc == YVEX_OK) {
-        output.normalized_hidden = (float *)calloc((size_t)output_count, sizeof(float));
-        output.capacity = output_count;
-        if (!output.normalized_hidden)
-            rc = transformer_runtime_refuse(err, YVEX_ERR_NOMEM,
-                                            "transformer operator output allocation failed");
-    }
-    execution_request.backend = request->backend;
-    execution_request.chunk_tokens = request->chunk_tokens;
-    execution_request.phase = YVEX_TRANSFORMER_PHASE_PREFILL;
-    if (rc == YVEX_OK)
-        rc = yvex_runtime_transformer_execute(context, input, &execution_request,
-                                              &output, &result->execution, err);
-    if (rc == YVEX_OK) {
-        yvex_core_text_copy(result->family, sizeof(result->family),
-                            model_view->target_id);
-        yvex_runtime_identity_copy(result->artifact_identity,
-                                   model_view->binding->artifact_identity);
-        yvex_runtime_identity_copy(result->runtime_binding_identity,
-                                   model_view->binding->identity);
-        yvex_runtime_identity_copy(result->transformer_plan_identity,
-                                   plan->transformer_plan_identity);
-        result->hidden_width = plan->hidden_width;
-        result->expanded_width = plan->expanded_width;
-        result->layer_count = plan->layer_count;
-        result->embedding_ready = result->transformer_plan_ready = 1;
-        result->transformer_block_ready = result->transformer_stack_ready = 1;
-        result->transformer_final_head_ready = result->transformer_final_norm_ready = 1;
-        result->transformer_hidden_state_ready = result->full_model_prefill_ready = 1;
-        result->transformer_ready = 1;
-        result->single_token_transformer_component_ready = input_summary->token_count == 1ull;
-    }
-    free(output.normalized_hidden);
-    yvex_transformer_input_close(&input);
-    primary = err ? *err : (yvex_error){0};
-    if (!adopted && context) {
-        cleanup_rc = yvex_runtime_transformer_context_close(&context, err);
-        if (rc == YVEX_OK && cleanup_rc != YVEX_OK) rc = cleanup_rc;
-    }
-    cleanup_rc = yvex_runtime_cleanup_lease_close(&cleanup, err);
-    if (cleanup_rc != YVEX_OK) rc = cleanup_rc;
-    else if (rc != YVEX_OK && err) *err = primary;
-    if (cleanup) *retained_cleanup = cleanup;
-    if (rc == YVEX_OK) {
-        result->completed = 1;
-        yvex_core_text_copy(result->status, sizeof(result->status), "complete");
-        yvex_error_clear(err);
-    } else {
-        transformer_operator_refuse(result, err);
-    }
-    return rc;
 }

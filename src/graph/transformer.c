@@ -746,6 +746,54 @@ int yvex_transformer_final_program_import(yvex_program_physical **out,
     return rc;
 }
 
+int yvex_transformer_feature_program_import(yvex_program_physical **out,
+    const yvex_transformer_plan *plan, const yvex_physical_execution_ir *parameters, yvex_error *err)
+{
+    const yvex_transformer_plan_summary *s = yvex_transformer_plan_summary_get(plan);
+    const yvex_physical_execution_summary *physical = yvex_physical_execution_ir_summary(parameters);
+    yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+    yvex_ir_module *m = NULL;
+    yvex_program_execution *execution = NULL;
+    yvex_ir_dimension rows = {.name = "rows", .minimum = 1u, .multiple = 1u};
+    yvex_ir_type t = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 3u};
+    yvex_ir_id dim, input, result, function, block = YVEX_IR_NONE, op;
+    int rc;
+    if (out) *out = NULL;
+    if (!out || !s || !physical)
+        return transformer_refuse(err, YVEX_ERR_FORMAT, "feature import requires authenticated program geometry");
+    rows.maximum = s->maximum_context;
+    rc = yvex_ir_module_open(&m, "feature_import", s->logical_model_identity, dialects, 2u, err);
+    if (rc == YVEX_OK) rc = yvex_ir_dimension_add(m, &rows, &dim, err);
+    if (rc == YVEX_OK) {
+        t.shape[0] = (yvex_ir_extent){dim, 0u};
+        t.shape[1] = (yvex_ir_extent){YVEX_IR_NONE, s->residual_streams};
+        t.shape[2] = (yvex_ir_extent){YVEX_IR_NONE, s->hidden_width};
+        rc = yvex_ir_type_intern(m, &t, &input, err);
+    }
+    if (rc == YVEX_OK) {
+        t.rank = 2u; t.shape[1] = t.shape[2]; t.shape[2] = (yvex_ir_extent){0};
+        rc = yvex_ir_type_intern(m, &t, &result, err);
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_function_add(m, "feature", &input, 1u, &result, 1u, 0u, &function, err);
+    if (rc == YVEX_OK) {
+        block = yvex_ir_function_at(m, function)->body;
+        yvex_ir_operation_request r = {.operation = "tensor.stream_mean",
+            .operands = yvex_ir_block_at(m, block)->arguments, .operand_count = 1u,
+            .result_types = &result, .result_count = 1u};
+        rc = yvex_ir_operation_add(m, block, &r, &op, err);
+    }
+    if (rc == YVEX_OK) {
+        yvex_ir_id value = yvex_ir_operation_at(m, op)->results[0];
+        yvex_ir_operation_request r = {.operation = "core.return", .operands = &value, .operand_count = 1u};
+        rc = yvex_ir_operation_add(m, block, &r, &op, err);
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_seal(m, err);
+    if (rc == YVEX_OK) rc = yvex_program_execution_compile(&execution, m, err);
+    if (rc == YVEX_OK) rc = yvex_program_physical_compile(out, execution, "feature", NULL, 0u, physical->identity, err);
+    yvex_program_execution_close(&execution); yvex_ir_module_close(&m);
+    return rc;
+}
+
 int yvex_transformer_initial_residual(const yvex_transformer_plan *plan,
                                       const float *embedding, unsigned long long token_count,
                                       float *expanded, yvex_error *err)

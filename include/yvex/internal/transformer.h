@@ -121,6 +121,8 @@ struct yvex_program_physical;
 struct yvex_physical_execution_ir;
 int yvex_transformer_final_program_import(struct yvex_program_physical **,
     const yvex_transformer_plan *, const struct yvex_physical_execution_ir *, yvex_error *);
+int yvex_transformer_feature_program_import(struct yvex_program_physical **,
+    const yvex_transformer_plan *, const struct yvex_physical_execution_ir *, yvex_error *);
 int yvex_transformer_deferred_post(const yvex_transformer_plan *plan,
                                    const float *residual, const float *combined,
                                    const float *post, const float *combination,

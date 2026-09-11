@@ -576,6 +576,7 @@ const struct yvex_program_tensor_plan *yvex_compiled_model_plan_dense_ffn(const 
 const struct yvex_program_physical *yvex_compiled_model_plan_forward(const yvex_compiled_model_plan *plan);
 const struct yvex_program_physical *yvex_compiled_model_plan_output(const yvex_compiled_model_plan *plan);
 const struct yvex_program_physical *yvex_compiled_model_plan_final(const yvex_compiled_model_plan *, int draft);
+const struct yvex_program_physical *yvex_compiled_model_plan_feature(const yvex_compiled_model_plan *, int draft);
 const struct yvex_runtime_logits_plan_summary *yvex_compiled_model_plan_output_head(
     const yvex_compiled_model_plan *plan);
 const char *yvex_compiled_model_plan_operator_graph_identity(

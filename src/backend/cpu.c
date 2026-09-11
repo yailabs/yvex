@@ -169,9 +169,47 @@ numeric:
     return YVEX_ERR_FORMAT;
 }
 
+static int cpu_stream_mean(yvex_backend *backend, const yvex_device_tensor *input,
+    unsigned long long rows, unsigned long long width, unsigned long long streams,
+    yvex_device_tensor *output, yvex_device_tensor *resident, unsigned long long row_offset,
+    unsigned long long row_stride, unsigned long long column_offset, float *host_output,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long count, input_count, row, lane, stream;
+    if (facts) memset(facts, 0, sizeof(*facts));
+    if (output) output->is_written = 0;
+    if (!facts || !rows || !width || !streams || resident || row_offset || row_stride || column_offset ||
+        host_output || !yvex_core_u64_mul(rows, width, &count) ||
+        !yvex_core_u64_mul(count, streams, &input_count) || !backend_tensor_owner_is(backend, input) ||
+        !backend_tensor_f32_elements(input, input_count) || !input->is_written ||
+        !backend_tensor_owner_is(backend, output) || !backend_tensor_f32_elements(output, count) ||
+        input->data == output->data) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.stream-mean", "incompatible stream reduction operands");
+        return YVEX_ERR_FORMAT;
+    }
+    for (row = 0u; row < rows; ++row)
+        for (lane = 0u; lane < width; ++lane) {
+            double sum = 0.0;
+            for (stream = 0u; stream < streams; ++stream)
+                sum += ((const float *)input->data)[(row * streams + stream) * width + lane];
+            float value = (float)(sum / (double)streams);
+            if (!isfinite(value)) {
+                yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.stream-mean", "stream mean produced a non-finite value");
+                return YVEX_ERR_FORMAT;
+            }
+            ((float *)output->data)[row * width + lane] = value;
+        }
+    output->is_written = 1;
+    facts->activation_bytes = input->bytes + output->bytes;
+    facts->compulsory_memory_facts_available = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 static const yvex_backend_transformer_operations *cpu_transformer_operations(const yvex_backend *backend)
 {
-    static const yvex_backend_transformer_operations operations = {.final = cpu_mhc_head};
+    static const yvex_backend_transformer_operations operations = {
+        .feature_mean = cpu_stream_mean, .final = cpu_mhc_head};
     (void)backend;
     return &operations;
 }

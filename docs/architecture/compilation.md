@@ -213,7 +213,7 @@ are migrated and qualified.
 | Consumer | Implemented IR boundary | Remaining closure boundary |
 | --- | --- | --- |
 | Qwen 3.5 | Forward and output entries share compiler lineage; slot-based runner; executable token bounds, output width and state-operation populations derive from physical IR; legacy decoder import normalized at binding admission; bounded recurrent and hybrid CUDA execution | Real artifact-backed hybrid preservation; remaining provider/report views and ownership cutover |
-| DeepSeek V4 / DSpark | Output projection and two-result final mHC/RMSNorm consume physical SSA normalized at cold binding admission; real logits preserved; complete target/draft computation remains historical | Migrate heterogeneous attention, per-block mHC, MoE and target/draft dependencies; qualify integrated composition |
+| DeepSeek V4 / DSpark | Output projection, two-result final mHC/RMSNorm and target-feature stream reduction consume physical SSA normalized at cold binding admission; complete target/draft computation remains historical | Migrate heterogeneous attention, per-block mHC, MoE and target/draft dependencies; qualify integrated composition |
 | MiniMax H3 | Existing component/intake regression consumer | Migrate neural component composition without absorbing media I/O; qualify affected consumers |
 | Mamba2 | Pure SSM representable without attention/KV | Preserve representability only here; A01 executable repair remains queued and PARTIAL |
 
@@ -240,7 +240,7 @@ verified source -> import -> Semantic Model IR -> Program / Execution IR
 | Boundary | Required unique authority | Current cutover evidence |
 | --- | --- | --- |
 | Verified source / import | Source identity, configuration, tokenizer, parameter roles and component relationships | Mamba2 source inspection and Qwen text compilation project typed programs |
-| Semantic Model IR | Modules/functions/blocks, operations/values/types, shapes/attributes/effects and explicit state dependencies | Native IR construction and verification exist; executable families are not migrated |
+| Semantic Model IR | Modules/functions/blocks, operations/values/types, shapes/attributes/effects and explicit state dependencies | Qwen forward/output and bounded DeepSeek output/final/feature computations are migrated; complete heterogeneous and component consumers remain pending |
 | Program / Execution IR | Legalized components, entrypoints, dependencies and state flow | Direct-call legalization and straight-line dependencies are implemented; executable regions remain pending |
 | Transformation IR + machine | Parameter derivation and target feasibility, without changing model meaning | Exact source constants join through sealed identity transforms; general transform legalization and target matching remain pending |
 | Physical IR | Dtype/qtype, layout, packing, alignment and sharing | Parameter joins and BF16 forward operations with distinct recurrent/KV state handles exist; general representation lowering remains pending |
@@ -515,6 +515,21 @@ checks; device-result publication generations remain the enclosing runtime's
 authority. The full-evidence CPU reference path consumes the same compiled
 operation through a CPU backend. This is the final-head cutover, not migration
 of the remaining DeepSeek attention/MoE layer loop or DSpark orchestration.
+
+Target features consumed by draft execution use `tensor.stream_mean`, a pure
+F32 `[rows, streams, width]` to F32 `[rows, width]` reduction. Ordered stream
+addition and division use F64 accumulation, followed by one F32 publication;
+there is no BF16 rounding. The verifier owns the static stream/channel geometry
+and matching row population. `stream_mean.f32.f64acc.v1` selects the existing
+CUDA reduction kernel or its CPU numerical implementation. Cold binding
+normalization imports the retained geometry into a parameter-free feature
+program; runtime no longer computes that mean or calls its kernel directly.
+Feature-layer selection remains runner composition. Strided host/device feature
+storage is a publication destination, not part of the reduction semantics.
+The bounded operator command lifecycle lives in
+[`transformer_operator.c`](../../src/runtime/transformer_operator.c), separate
+from engine/session computation. None of these changes migrates the remaining
+attention/MoE topology or claims independent whole-model conformance.
 
 Production token-forward execution and the independent BF16 CUDA fixture both
 use [`program_device.c`](../../src/runtime/program_device.c) with

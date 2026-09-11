@@ -335,6 +335,7 @@ src/runtime/prefill.c	runtime	runtime.prefill	generic	private	transactional-exec
 include/yvex/internal/transformer.h	graph	graph.transformer	generic	private	internal-abi	graph,runtime,cli,tests	interface	none
 include/yvex/internal/joint_transformer.h	graph	graph.joint_transformer	generic	private	internal-abi	graph.family,runtime,backend	interface	none
 src/runtime/transformer.c	runtime	runtime.transformer	generic	private	transactional-execution	runtime,graph,cli,tests	implementation	none
+src/runtime/transformer_operator.c	runtime	runtime.transformer_operator	generic	private	executable-entrypoint	cli,tests	implementation	none
 src/runtime/transformer_input.c	runtime	runtime.transformer_input	generic	private	file-serialization	runtime,cli,tests	implementation	none
 src/runtime/residency.c	runtime	runtime.residency	generic	private	resource-lifecycle	artifact,graph,runtime	implementation	none
 src/runtime/specialization.c	runtime	runtime.specialization	generic	private	resource-lifecycle	graph,runtime,backend,tests	implementation	none

@@ -147,6 +147,15 @@ static int transformer_test_final_import(void)
                 p->maximum_rows == 8u && yvex_transformer_final_program_import(&repeat, plan, physical, &err) == YVEX_OK &&
                 !strcmp(p->identity, yvex_program_physical_summary_get(repeat)->identity),
                 "cold final import deterministically produces one input, four constants and two results");
+            yvex_program_physical_close(&repeat); yvex_program_physical_close(&program);
+            YVEX_TEST_ASSERT(yvex_transformer_feature_program_import(&program, plan, physical, &err) == YVEX_OK &&
+                yvex_transformer_feature_program_import(&repeat, plan, physical, &err) == YVEX_OK,
+                "authenticated target/draft geometry imports a feature program at the cold boundary");
+            p = yvex_program_physical_summary_get(program);
+            YVEX_TEST_ASSERT(p->input_count == 1u && p->result_count == 1u && p->step_count == 1u &&
+                p->maximum_rows == 8u && !strcmp(p->identity, yvex_program_physical_summary_get(repeat)->identity) &&
+                !strcmp(yvex_program_physical_step_at(program, 0u)->implementation, "stream_mean.f32.f64acc.v1"),
+                "feature import is a deterministic executable reduction, not a family runtime wrapper");
         }
         yvex_program_physical_close(&repeat); yvex_program_physical_close(&program);
         yvex_physical_execution_ir_close(&physical);

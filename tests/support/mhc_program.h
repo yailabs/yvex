@@ -78,8 +78,122 @@ static int test_mhc_compile(yvex_program_physical **out, unsigned int negative, 
     return rc;
 }
 
+static int test_stream_mean_compile(yvex_program_physical **out, unsigned int negative, yvex_error *err)
+{
+    const char *identity = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+    yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+    yvex_ir_module *m = NULL;
+    yvex_program_execution *execution = NULL;
+    yvex_ir_dimension rows = {.name = "rows", .minimum = 1u, .maximum = 3u, .multiple = 1u};
+    yvex_ir_type t = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 3u};
+    yvex_ir_id dim, input, result, function, block = YVEX_IR_NONE, op;
+    int rc = yvex_ir_module_open(&m, "feature_oracle", identity, dialects, 2u, err);
+    if (out) *out = NULL;
+    if (rc == YVEX_OK) rc = yvex_ir_dimension_add(m, &rows, &dim, err);
+    if (rc == YVEX_OK) {
+        t.shape[0] = (yvex_ir_extent){dim, 0u};
+        t.shape[1] = (yvex_ir_extent){YVEX_IR_NONE, 3u};
+        t.shape[2] = (yvex_ir_extent){YVEX_IR_NONE, 2u};
+        if (negative == 3u) t.shape[1] = t.shape[0];
+        rc = yvex_ir_type_intern(m, &t, &input, err);
+    }
+    if (rc == YVEX_OK) {
+        t = (yvex_ir_type){.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 2u};
+        t.shape[0] = (yvex_ir_extent){dim, 0u};
+        t.shape[1] = (yvex_ir_extent){YVEX_IR_NONE, negative == 1u ? 4u : 2u};
+        if (negative == 2u) t.scalar = YVEX_IR_BF16;
+        if (negative == 4u) t.shape[0] = (yvex_ir_extent){YVEX_IR_NONE, 3u};
+        rc = yvex_ir_type_intern(m, &t, &result, err);
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_function_add(m, "feature", &input, 1u, &result, 1u, 0u, &function, err);
+    if (rc == YVEX_OK) {
+        block = yvex_ir_function_at(m, function)->body;
+        yvex_ir_operation_request r = {.operation = "tensor.stream_mean",
+            .operands = yvex_ir_block_at(m, block)->arguments, .operand_count = 1u,
+            .result_types = &result, .result_count = 1u};
+        rc = yvex_ir_operation_add(m, block, &r, &op, err);
+    }
+    if (rc == YVEX_OK) {
+        yvex_ir_id value = yvex_ir_operation_at(m, op)->results[0];
+        yvex_ir_operation_request r = {.operation = "core.return", .operands = &value, .operand_count = 1u};
+        rc = yvex_ir_operation_add(m, block, &r, &op, err);
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_seal(m, err);
+    if (rc == YVEX_OK) rc = yvex_program_execution_compile(&execution, m, err);
+    if (rc == YVEX_OK) rc = yvex_program_physical_compile(out, execution, "feature", NULL, 0u, identity, err);
+    yvex_program_execution_close(&execution); yvex_ir_module_close(&m);
+    return rc;
+}
+
 static int test_mhc_cancel(void *opaque) { (void)opaque; return 1; }
 static int test_mhc_cancel_publication(void *opaque) { return ++*(unsigned int *)opaque == 3u; }
+
+static int test_stream_mean_execute(yvex_backend_kind kind)
+{
+    float input[] = {2, 4, 4, 6, 6, 8, -1, 2, -3, 4, -5, 6, 16777216, 1, 1, 2, -16777216, 3};
+    const float expected[] = {4, 6, -3, 4, 1.0f / 3.0f, 2};
+    float output[6] = {0}, single[6] = {0}, *outputs[] = {output};
+    yvex_program_physical *p = NULL, *copy = NULL, *bad = NULL;
+    yvex_program_stage *stage = NULL, *refused = NULL;
+    yvex_backend *backend = NULL;
+    yvex_backend_options options = {.kind = kind};
+    yvex_backend_memory_stats before, after;
+    yvex_backend_operation_facts facts;
+    yvex_core_bytes bytes = {.maximum = 65536u}, again = {.maximum = 65536u};
+    yvex_error err = {0};
+    float maximum = 0.0f;
+    unsigned int i, calls = 0u;
+    YVEX_TEST_ASSERT(test_stream_mean_compile(&p, 0u, &err) == YVEX_OK, "stream mean compiles to typed work");
+    for (i = 1u; i <= 4u; ++i)
+        YVEX_TEST_ASSERT(test_stream_mean_compile(&bad, i, &err) != YVEX_OK && !bad,
+            "stream mean rejects width, precision, dynamic stream count and inconsistent row population");
+    YVEX_TEST_ASSERT(yvex_program_physical_encode(p, &bytes, &err) == YVEX_OK &&
+        yvex_program_physical_decode(&copy, bytes.data, bytes.count, &err) == YVEX_OK &&
+        yvex_program_physical_encode(copy, &again, &err) == YVEX_OK && bytes.count == again.count &&
+        !memcmp(bytes.data, again.data, bytes.count), "stream mean physical identity roundtrips exactly");
+    YVEX_TEST_ASSERT(yvex_backend_open(&backend, &options, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &before, &err) == YVEX_OK, "stream mean backend opens");
+    YVEX_TEST_ASSERT(yvex_program_stage_open(&refused, copy, NULL, 0u, backend, 3u, 1, 1u, 1u, &err) != YVEX_OK &&
+        yvex_program_stage_close(&refused, &err) == YVEX_OK, "stream mean insufficient preparation budget refuses");
+    YVEX_TEST_ASSERT(yvex_program_stage_open(&stage, copy, NULL, 0u, backend, 3u, 1, 0u, 0u, &err) == YVEX_OK,
+        "stream mean reusable physical runner opens");
+    YVEX_TEST_ASSERT(yvex_program_stage_host(stage, 3u, input, outputs, 1u, NULL, NULL, &facts, &err) == YVEX_OK,
+        "stream mean executes through physical SSA");
+    for (i = 0u; i < 6u; ++i) {
+        float delta = fabsf(output[i] - expected[i]);
+        if (delta > maximum) maximum = delta;
+        YVEX_TEST_ASSERT(output[i] == expected[i], "stream mean preserves F64 accumulation without BF16 rounding");
+    }
+    for (i = 0u; i < 3u; ++i) {
+        outputs[0] = single + 2u * i;
+        YVEX_TEST_ASSERT(yvex_program_stage_host(stage, 1u, input + 6u * i, outputs, 1u,
+            NULL, NULL, &facts, &err) == YVEX_OK, "stream mean single-row invocation executes");
+    }
+    YVEX_TEST_ASSERT(!memcmp(output, single, sizeof(output)), "chunk and single stream reductions are exact");
+    outputs[0] = output;
+    for (i = 0u; i < 6u; ++i) output[i] = 123.0f;
+    YVEX_TEST_ASSERT(yvex_program_stage_host(stage, 3u, input, outputs, 1u,
+        test_mhc_cancel_publication, &calls, &facts, &err) == YVEX_ERR_CANCELLED,
+        "stream mean cancels before publishing the result");
+    for (i = 0u; i < 6u; ++i) YVEX_TEST_ASSERT(output[i] == 123.0f, "cancelled stream mean publishes nothing");
+    input[0] = NAN;
+    YVEX_TEST_ASSERT(yvex_program_stage_host(stage, 3u, input, outputs, 1u, NULL, NULL, &facts, &err) != YVEX_OK,
+        "non-finite stream reduction refuses");
+    for (i = 0u; i < 6u; ++i) YVEX_TEST_ASSERT(output[i] == 123.0f, "failed reduction publishes nothing");
+    input[0] = 2.0f;
+    YVEX_TEST_ASSERT(yvex_program_stage_host(stage, 3u, input, outputs, 1u, NULL, NULL, &facts, &err) == YVEX_OK &&
+        !memcmp(output, expected, sizeof(output)), "valid reduction recovers after cancellation and numerical refusal");
+    YVEX_TEST_ASSERT(yvex_program_stage_close(&stage, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK &&
+        after.allocated_bytes == before.allocated_bytes, "stream mean resources return to baseline");
+    printf("stream mean %s: outputs=6 mean[4]=%.9g max_abs=%.9g tolerance=0 chunk==single; "
+        "4 verifier negatives; cancellation/numeric refusal unpublished; allocation delta=0\n",
+        kind == YVEX_BACKEND_KIND_CPU ? "CPU" : "CUDA", output[4], maximum);
+    YVEX_TEST_ASSERT(yvex_backend_close_checked(&backend, &err) == YVEX_OK, "stream mean backend closes");
+    free(bytes.data); free(again.data);
+    yvex_program_physical_close(&copy); yvex_program_physical_close(&p);
+    return 0;
+}
 
 static int test_mhc_execute(yvex_backend_kind kind)
 {

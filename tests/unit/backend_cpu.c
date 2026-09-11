@@ -47,10 +47,10 @@ static int test_open_and_unsupported(void)
                          !yvex_backend_component_operations_get(backend),
                      "CPU does not advertise unimplemented sampling, MoE or component operation tables");
     const yvex_backend_transformer_operations *neural = yvex_backend_transformer_operations_get(backend);
-    YVEX_TEST_ASSERT(neural && neural->final && !neural->initial && !neural->feature_mean &&
+    YVEX_TEST_ASSERT(neural && neural->final && neural->feature_mean && !neural->initial &&
                          !neural->attention_execute && !neural->gated_delta_execute &&
                          !neural->linear_compile && !neural->dense_decoder_execute,
-                     "CPU advertises its real compiled mHC implementation without claiming unrelated operations");
+                     "CPU advertises compiled mHC and stream mean without claiming unrelated operations");
     YVEX_TEST_ASSERT(yvex_backend_bandwidth_probe(backend, &bandwidth, &err) ==
                          YVEX_ERR_UNSUPPORTED && !bandwidth.schema_version,
                      "CPU refuses CUDA bandwidth evidence without partial facts");
