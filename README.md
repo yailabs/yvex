@@ -1,11 +1,53 @@
 <p align="center">
-  <img src="docs/yvex-primary-lockup.svg" alt="YVEX logo" width="320">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/yvex-readme-stacked-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/brand/yvex-readme-stacked-light.png">
+    <img src="docs/assets/brand/yvex-readme-stacked-light.png" alt="YVEX" width="280">
+  </picture>
 </p>
 
-YVEX is a native C/CUDA model compiler and local inference system for
-identity-bound, verified open-weight execution. It compiles authenticated
-source facts into immutable packages, specializes them for an admitted
-machine, and serves isolated sessions through one persistent local host.
+<p align="center">
+  <strong>From model source to verified execution.</strong>
+</p>
+
+<p align="center">
+  A native C/CUDA model compiler and local inference runtime.
+</p>
+
+<p align="center">
+  <a href="#quick-start"><img src="https://img.shields.io/badge/language-C11-8D5CF5?style=flat&amp;labelColor=30363d" alt="Language: C11"></a>
+  <a href="docs/development/gb10-targets.md"><img src="https://img.shields.io/badge/backends-CPU_%2F_CUDA-8D5CF5?style=flat&amp;labelColor=30363d" alt="Backends: CPU / CUDA"></a>
+  <a href="ROADMAP.md"><img src="https://img.shields.io/badge/status-in%20development-8D5CF5?style=flat&amp;labelColor=30363d" alt="Status: in development"></a>
+  <a href="https://github.com/yailabs/yvex/actions/workflows/qa.yml"><img src="https://img.shields.io/github/actions/workflow/status/yailabs/yvex/qa.yml?branch=main&amp;label=QA%20%28main%29&amp;style=flat&amp;labelColor=30363d" alt="QA status on main"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8D5CF5?style=flat&amp;labelColor=30363d" alt="License: MIT"></a>
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#available-execution">Models</a> ·
+  <a href="#download-tested-model-artifacts">Downloads</a> ·
+  <a href="docs/architecture/system.md">Architecture</a> ·
+  <a href="docs/README.md">Documentation</a> ·
+  <a href="ROADMAP.md">Roadmap</a>
+</p>
+
+**YVEX brings model preparation and execution into one native system.** It
+compiles authenticated open-weight sources into immutable packages, specializes
+them for an admitted machine, and serves isolated sessions through a persistent
+local host. Source identity, physical representation and mutable state have
+distinct owners throughout the lifecycle.
+
+Use the `yvex` CLI to acquire, prepare and run models, or integrate applications
+through the [C API](docs/contracts/c-api.md),
+[local protocol](docs/contracts/local-protocol.md) and
+[OpenAI-compatible adapter](docs/openai-compatibility.md). Applications own
+their workflows and tools; YVEX owns the admitted computation and its lifetime.
+
+Start with the [build and local host](#quick-start), choose a
+[tested model artifact](#download-tested-model-artifacts), or follow the
+[integration contracts](docs/README.md#architecture-and-contracts). YVEX is under
+active development: [ROADMAP.md](ROADMAP.md) owns maturity and progression;
+the execution boundaries below state what has actually been demonstrated.
 
 ## Why YVEX
 
