@@ -44,6 +44,61 @@ static int physical_refuse(yvex_error *err, yvex_status status, const char *reas
     return status;
 }
 
+int yvex_program_physical_token_interface(const yvex_program_physical *p,
+    yvex_program_token_interface *out, yvex_error *err)
+{
+    yvex_program_token_interface view = {0};
+    const yvex_ir_type *tokens, *position, *hidden;
+    unsigned char *returned = NULL;
+    size_t i, embeddings = 0u;
+    if (out) memset(out, 0, sizeof(*out));
+    if (!p || !out || p->summary.input_count < 2u ||
+        p->summary.result_count != p->summary.input_count - 1u) goto incompatible;
+    tokens = &p->values[0].type;
+    position = &p->values[1].type;
+    hidden = &p->values[p->results[0]].type;
+    if (tokens->kind != YVEX_IR_TENSOR || tokens->scalar != YVEX_IR_INDEX || tokens->rank != 1u ||
+        position->kind != YVEX_IR_SCALAR || position->scalar != YVEX_IR_INDEX || position->rank ||
+        hidden->kind != YVEX_IR_TENSOR || hidden->scalar != YVEX_IR_BF16 || hidden->rank != 2u ||
+        hidden->shape[0].symbol != tokens->shape[0].symbol ||
+        hidden->shape[0].extent != tokens->shape[0].extent ||
+        hidden->shape[1].symbol != YVEX_IR_NONE) goto incompatible;
+    view.hidden_width = hidden->shape[1].extent;
+    view.state_inputs = p->summary.input_count - 2u;
+    returned = calloc(p->summary.input_count, 1u);
+    if (!returned) return physical_refuse(err, YVEX_ERR_NOMEM, "token interface state verification allocation failed");
+    for (i = 1u; i < p->summary.result_count; ++i) {
+        const yvex_program_physical_value *result = &p->values[p->results[i]];
+        if (result->type.kind != YVEX_IR_STATE || result->definition == YVEX_IR_NONE ||
+            result->state_root < 2u || result->state_root >= p->summary.input_count ||
+            returned[result->state_root]) goto incompatible;
+        returned[result->state_root] = 1u;
+    }
+    for (i = 2u; i < p->summary.input_count; ++i) {
+        if (p->values[i].type.kind != YVEX_IR_STATE || !returned[i]) goto incompatible;
+    }
+    for (i = 0u; i < p->summary.step_count; ++i) {
+        const yvex_program_physical_step *s = &p->steps[i];
+        view.recurrent_operations += !strcmp(s->implementation, "gated_delta.bf16.f32state.v1");
+        view.attention_operations += !strcmp(s->implementation, "gated_causal.bf16.v1");
+        if (!strcmp(s->implementation, "embedding.bf16.v1")) {
+            const yvex_program_physical_value *weight = &p->values[s->operands[1]];
+            if (s->operands[0] != 0u || !weight->parameter) goto incompatible;
+            if (!embeddings || weight->type.shape[0].extent < view.vocabulary_size)
+                view.vocabulary_size = weight->type.shape[0].extent;
+            embeddings++;
+        }
+    }
+    if (!embeddings || !view.vocabulary_size || !view.hidden_width) goto incompatible;
+    free(returned);
+    *out = view;
+    return YVEX_OK;
+incompatible:
+    free(returned);
+    return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
+        "program does not implement the admitted token-forward interface");
+}
+
 static int physical_seal(yvex_program_physical *, yvex_error *);
 
 static const physical_rule *physical_rule_find(const char *name, int lowered)

@@ -3,6 +3,7 @@
 #include "tests/support/tensor_program.h"
 #include "tests/support/linear_program.h"
 #include "tests/support/mhc_program.h"
+#include "tests/support/program_sequence.h"
 
 #include <yvex/internal/compilation.h>
 #include <yvex/internal/core.h>
@@ -412,8 +413,117 @@ static int program_test_device(void)
     return 0;
 }
 
+static int program_token_fixture(yvex_program_physical **out, int variant, yvex_error *err)
+{
+    yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+    yvex_ir_module *m = NULL;
+    yvex_program_execution *execution = NULL;
+    yvex_program_parameter_binding bindings[2];
+    yvex_ir_dimension rows = {.name = "rows", .minimum = 1u, .maximum = 8u, .multiple = 1u};
+    yvex_ir_type t = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_INDEX, .rank = 1u};
+    yvex_ir_id dim, inputs[2], output, hidden, weight_type, function, block, op, value, args[2];
+    unsigned int i, count = variant == 1 || variant == 2 ? 2u : 1u;
+    int rc = yvex_ir_module_open(&m, "token_interface", program_source, dialects, 2u, err);
+    if (rc == YVEX_OK) rc = yvex_ir_dimension_add(m, &rows, &dim, err);
+    if (rc == YVEX_OK) {
+        t.shape[0] = (yvex_ir_extent){dim, 0u};
+        rc = yvex_ir_type_intern(m, &t, &inputs[0], err);
+    }
+    if (rc == YVEX_OK) {
+        t = (yvex_ir_type){.kind = YVEX_IR_SCALAR, .scalar = YVEX_IR_INDEX};
+        if (variant == 3) t = (yvex_ir_type){.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_BF16,
+            .rank = 1u, .shape = {{dim, 0u}}};
+        rc = yvex_ir_type_intern(m, &t, &inputs[1], err);
+    }
+    if (rc == YVEX_OK) {
+        t = (yvex_ir_type){.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_BF16, .rank = 2u,
+            .shape = {{dim, 0u}, {YVEX_IR_NONE, 4u}}};
+        rc = yvex_ir_type_intern(m, &t, &hidden, err);
+    }
+    if (rc == YVEX_OK) {
+        t.shape[1].extent = variant == 2 ? 2u : 4u;
+        rc = yvex_ir_type_intern(m, &t, &output, err);
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_function_add(m, "forward", inputs, 2u, &output, 1u, 0u, &function, err);
+    if (rc == YVEX_OK) block = yvex_ir_function_at(m, function)->body;
+    for (i = 0u; rc == YVEX_OK && i < count; ++i) {
+        yvex_ir_attribute attrs[] = {{.name = "parameter", .kind = YVEX_IR_ATTR_SYMBOL},
+            {.name = "source", .kind = YVEX_IR_ATTR_TEXT}};
+        t.shape[0] = (yvex_ir_extent){YVEX_IR_NONE, i ? (variant == 2 ? 2u : 3u) : 5u};
+        t.shape[1].extent = 4u;
+        rc = yvex_ir_type_intern(m, &t, &weight_type, err);
+        snprintf(attrs[0].value.text, sizeof(attrs[0].value.text), "weight_%u", i);
+        yvex_core_text_copy(attrs[1].value.text, sizeof(attrs[1].value.text), program_source);
+        yvex_ir_operation_request r = {.operation = "core.parameter", .result_types = &weight_type,
+            .result_count = 1u, .attributes = attrs, .attribute_count = 2u};
+        if (rc == YVEX_OK) rc = yvex_ir_operation_add(m, block, &r, &op, err);
+        if (rc != YVEX_OK) break;
+        args[0] = i && variant == 2 ? value : yvex_ir_block_at(m, block)->arguments[0];
+        args[1] = yvex_ir_operation_at(m, op)->results[0];
+        bindings[i] = (yvex_program_parameter_binding){args[1], i, YVEX_GGUF_QTYPE_BF16};
+        r = (yvex_ir_operation_request){.operation = i && variant == 2 ? "nn.linear" : "nn.embedding",
+            .operands = args, .operand_count = 2u, .result_types = i ? &output : &hidden, .result_count = 1u};
+        rc = yvex_ir_operation_add(m, block, &r, &op, err);
+        if (rc == YVEX_OK) value = yvex_ir_operation_at(m, op)->results[0];
+    }
+    if (rc == YVEX_OK) {
+        yvex_ir_operation_request r = {.operation = "core.return", .operands = &value, .operand_count = 1u};
+        rc = yvex_ir_operation_add(m, block, &r, &op, err);
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_seal(m, err);
+    if (rc == YVEX_OK) rc = yvex_program_execution_compile(&execution, m, err);
+    if (rc == YVEX_OK) rc = yvex_program_physical_compile(out, execution, "forward", bindings, count, program_source, err);
+    yvex_program_execution_close(&execution);
+    yvex_ir_module_close(&m);
+    return rc;
+}
+
+static int program_test_token_interface(void)
+{
+    int variant;
+    for (variant = 0; variant < 6; ++variant) {
+        yvex_program_physical *p = NULL, *decoded = NULL;
+        yvex_ir_module *m = NULL;
+        yvex_core_bytes wire = {.maximum = 1048576u};
+        yvex_program_token_interface view = {0}, reopened = {0};
+        yvex_error err = {0};
+        int rc = variant < 4 ? program_token_fixture(&p, variant, &err) :
+            variant == 4 ? test_sequence_program(&m, &p, &err) : test_sequence_program_kind(&m, &p, 1, &err);
+        if (rc != YVEX_OK) fprintf(stderr, "token interface fixture %d: %s\n", variant, yvex_error_message(&err));
+        YVEX_TEST_ASSERT(rc == YVEX_OK, "token runner fixtures are verified physical programs");
+        rc = yvex_program_physical_token_interface(p, &view, &err);
+        if (variant == 3) {
+            YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED && !view.vocabulary_size && !view.hidden_width,
+                "tensor position input is valid computation but not the index-based token runner");
+        } else {
+            YVEX_TEST_ASSERT(rc == YVEX_OK && view.vocabulary_size == (variant >= 4 ? 64u : variant == 1 ? 3u : 5u) &&
+                view.hidden_width == (variant >= 4 ? 32u : variant == 2 ? 2u : 4u),
+                "executable operands determine token bounds and output geometry, including distinct embedding/output widths");
+            YVEX_TEST_ASSERT(view.state_inputs == (variant == 4 ? 4u : variant == 5 ? 5u : 0u) &&
+                view.recurrent_operations == (variant >= 4 ? 2u : 0u) &&
+                view.attention_operations == (variant == 5 ? 1u : 0u),
+                "state populations come from actual program inputs and operations, not decoder records");
+            YVEX_TEST_ASSERT(yvex_program_physical_encode(p, &wire, &err) == YVEX_OK &&
+                yvex_program_physical_decode(&decoded, wire.data, wire.count, &err) == YVEX_OK &&
+                yvex_program_physical_token_interface(decoded, &reopened, &err) == YVEX_OK &&
+                reopened.hidden_width == view.hidden_width && reopened.vocabulary_size == view.vocabulary_size &&
+                reopened.state_inputs == view.state_inputs && reopened.attention_operations == view.attention_operations &&
+                reopened.recurrent_operations == view.recurrent_operations,
+                "runner facts derive identically after authenticated physical import without a new persisted schema");
+        }
+        free(wire.data);
+        yvex_program_physical_close(&decoded);
+        yvex_program_physical_close(&p);
+        yvex_ir_module_close(&m);
+    }
+    printf("Token interface: vocab=5/3/64 hidden=4/2/32 state_inputs=0/4/5; "
+           "reopened facts identical; non-index position refused\n");
+    return 0;
+}
+
 int yvex_test_program(void)
 {
+    if (program_test_token_interface() != 0) return 1;
     if (test_mhc_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;
     if (test_linear_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;
     char semantic_identity[YVEX_SHA256_HEX_BYTES] = {0}, physical_identity[YVEX_SHA256_HEX_BYTES] = {0};

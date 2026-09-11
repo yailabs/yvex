@@ -674,39 +674,17 @@ static int compiled_forward_signature_valid(const yvex_compiled_model_plan *plan
 {
     const yvex_decoder_plan_summary *d = yvex_decoder_plan_summary_get(plan->decoder);
     const yvex_program_physical_summary *s = yvex_program_physical_summary_get(plan->forward);
-    const yvex_program_physical_value *tokens, *position, *output;
-    size_t i, delta = 0u, attention = 0u, embeddings = 0u;
-    if (!s || !d || strcmp(s->entry, "forward") || s->input_count < 2u ||
+    yvex_program_token_interface interface;
+    if (!s || !d || strcmp(s->entry, "forward") ||
         s->minimum_rows != 1u || s->maximum_rows != d->maximum_context || s->row_multiple != 1u ||
-        s->input_count != 2u + 2u * d->recurrent_layer_count + d->attention_layer_count ||
-        s->result_count != s->input_count - 1u) return 0;
-    tokens = yvex_program_physical_value_at(plan->forward, 0u);
-    position = yvex_program_physical_value_at(plan->forward, 1u);
-    output = yvex_program_physical_value_at(plan->forward, yvex_program_physical_result_at(plan->forward, 0u));
-    if (tokens->type.kind != YVEX_IR_TENSOR || tokens->type.scalar != YVEX_IR_INDEX || tokens->type.rank != 1u ||
-        position->type.kind != YVEX_IR_SCALAR || position->type.scalar != YVEX_IR_INDEX ||
-        output->type.kind != YVEX_IR_TENSOR || output->type.scalar != YVEX_IR_BF16 || output->type.rank != 2u ||
-        output->type.shape[1].extent != d->hidden_width) return 0;
-    for (i = 2u; i < s->input_count; ++i) {
-        const yvex_program_physical_value *state = yvex_program_physical_value_at(plan->forward, i);
-        if (state->type.kind != YVEX_IR_STATE) return 0;
-    }
-    for (i = 0u; i < s->step_count; ++i) {
-        const yvex_program_physical_step *step = yvex_program_physical_step_at(plan->forward, i);
-        delta += !strcmp(step->implementation, "gated_delta.bf16.f32state.v1");
-        attention += !strcmp(step->implementation, "gated_causal.bf16.v1");
-        if (!strcmp(step->implementation, "embedding.bf16.v1")) {
-            const yvex_program_physical_value *weight =
-                yvex_program_physical_value_at(plan->forward, step->operands[1]);
-            if (step->operands[0] != 0u || weight->type.shape[0].extent != d->vocabulary_size ||
-                weight->type.shape[1].extent != d->hidden_width) return 0;
-            embeddings++;
-        }
-    }
+        yvex_program_physical_token_interface(plan->forward, &interface, NULL) != YVEX_OK) return 0;
     /* These persisted compatibility/report views may not contradict the program.
      * They are not used to construct its operations or parameter bindings. */
-    return embeddings == 1u && delta == d->recurrent_layer_count && attention == d->attention_layer_count &&
-        delta + attention == d->layer_count;
+    return interface.hidden_width == d->hidden_width && interface.vocabulary_size == d->vocabulary_size &&
+        interface.state_inputs == 2u * d->recurrent_layer_count + d->attention_layer_count &&
+        interface.recurrent_operations == d->recurrent_layer_count &&
+        interface.attention_operations == d->attention_layer_count &&
+        interface.recurrent_operations + interface.attention_operations == d->layer_count;
 }
 
 static int compiled_output_program_valid(const yvex_compiled_model_plan *plan)

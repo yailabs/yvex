@@ -69,6 +69,18 @@ const yvex_program_physical_value *yvex_program_physical_value_at(const yvex_pro
 const yvex_program_physical_step *yvex_program_physical_step_at(const yvex_program_physical *, size_t);
 yvex_ir_id yvex_program_physical_result_at(const yvex_program_physical *, size_t);
 const yvex_ir_attribute *yvex_program_physical_attribute(const yvex_program_physical_step *, const char *);
+/* A runner-facing projection of executable operands/results, not another model
+ * topology. Only the admitted token/index -> hidden/state signature qualifies.
+ * The token bound is the intersection of executable embedding vocabularies;
+ * output width need not equal embedding width. Every state input must have one
+ * produced successor in the result signature. Row capacity is not a model
+ * context or a runtime resource reservation. The view is not serialized. */
+typedef struct {
+    unsigned long long vocabulary_size, hidden_width;
+    size_t state_inputs, attention_operations, recurrent_operations;
+} yvex_program_token_interface;
+int yvex_program_physical_token_interface(const yvex_program_physical *,
+    yvex_program_token_interface *, yvex_error *);
 /* Derived operation/provider views. Numeric geometry comes only from verified
  * instruction attributes; provider handles are state input slots, not layers. */
 const yvex_gated_delta_plan *yvex_program_physical_delta_at(const yvex_program_physical *, size_t step);

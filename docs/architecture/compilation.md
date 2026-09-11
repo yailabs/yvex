@@ -212,7 +212,7 @@ are migrated and qualified.
 
 | Consumer | Implemented IR boundary | Remaining closure boundary |
 | --- | --- | --- |
-| Qwen 3.5 | Forward and output entries share compiler lineage; slot-based runner; legacy decoder import normalized at binding admission; bounded recurrent and hybrid CUDA execution | Real artifact-backed hybrid preservation; remaining provider/report views and ownership cutover |
+| Qwen 3.5 | Forward and output entries share compiler lineage; slot-based runner; executable token bounds, output width and state-operation populations derive from physical IR; legacy decoder import normalized at binding admission; bounded recurrent and hybrid CUDA execution | Real artifact-backed hybrid preservation; remaining provider/report views and ownership cutover |
 | DeepSeek V4 / DSpark | Output projection and two-result final mHC/RMSNorm consume physical SSA normalized at cold binding admission; real logits preserved; complete target/draft computation remains historical | Migrate heterogeneous attention, per-block mHC, MoE and target/draft dependencies; qualify integrated composition |
 | MiniMax H3 | Existing component/intake regression consumer | Migrate neural component composition without absorbing media I/O; qualify affected consumers |
 | Mamba2 | Pure SSM representable without attention/KV | Preserve representability only here; A01 executable repair remains queued and PARTIAL |
@@ -256,6 +256,16 @@ typed computational state does not introduce semantic-state ingress or YAI
 authority into this compiler.
 
 ### Representation and ownership
+
+The token-forward runner consumes a compiler-derived interface from physical
+operands and results, not hidden-width/vocabulary/layer fields in the historical
+decoder. Multiple token embeddings intersect their admitted vocabulary bounds;
+embedding width need not equal returned hidden width. Each state input must have
+exactly one produced successor in the result signature. This bounded, linear-time
+projection is shared by cold compatibility admission and runner preparation and
+is not another persisted model representation. The retained decoder identity is
+used by the existing report schema; its authenticated context envelope remains
+distinct from the program's row population and runtime resource admission.
 
 A module owns dimensions, interned logical types, functions, blocks, operations
 and uniquely defined values. Construction copies requests; sealing verifies and

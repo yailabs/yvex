@@ -14,6 +14,7 @@
 #include <yvex/internal/graph.h>
 #include <yvex/internal/graph_state.h>
 #include <yvex/internal/sequence_mixer.h>
+#include <yvex/internal/program_physical.h>
 #include <yvex/internal/program_sequence.h>
 
 struct yvex_runtime_decoder_execution_context {
@@ -22,7 +23,8 @@ struct yvex_runtime_decoder_execution_context {
     const yvex_model_engine_view *model_view;
     const yvex_runtime_session_view *session_view;
     const yvex_decoder_plan *plan;
-    const yvex_decoder_plan_summary *summary;
+    const char *report_identity;
+    yvex_program_token_interface interface;
     yvex_runtime_decoder_execution_options options;
     const yvex_program_physical *physical;
     yvex_program_device *program_device;
@@ -179,11 +181,8 @@ static int decoder_physical_open(yvex_runtime_decoder_execution_context *c, yvex
     yvex_program_kernel_parameter *parameters = NULL;
     size_t i;
     int rc;
-    if (!s || s->input_count < 2u || !output || output->type.kind != YVEX_IR_TENSOR || output->type.rank != 2u ||
-        output->type.shape[1].extent != c->summary->hidden_width ||
-        yvex_program_physical_value_at(c->physical, 0u)->type.scalar != YVEX_IR_INDEX ||
-        yvex_program_physical_value_at(c->physical, 1u)->type.kind != YVEX_IR_SCALAR)
-        return decoder_refuse(err, YVEX_ERR_FORMAT, "runtime.program.runner", "incompatible forward signature");
+    rc = yvex_program_physical_token_interface(c->physical, &c->interface, err);
+    if (rc != YVEX_OK) return rc;
     rc = decoder_physical_account(c, sizeof(*c) + s->input_count * sizeof(*c->program_arguments), 0u, err);
     if (rc != YVEX_OK) return rc;
     c->program_arguments = calloc(s->input_count, sizeof(*c->program_arguments));
@@ -289,12 +288,15 @@ int yvex_runtime_decoder_execution_context_open(
     context->session_view = yvex_runtime_session_view_get(session);
     context->options = *options;
     context->plan = context->model_view ? context->model_view->decoder : NULL;
-    context->summary = yvex_decoder_plan_summary_get(context->plan);
+    const yvex_decoder_plan_summary *legacy = yvex_decoder_plan_summary_get(context->plan);
+    /* Retained only for the existing report schema and its authenticated source
+     * context envelope. Executable geometry/populations come from physical IR. */
+    context->report_identity = legacy ? legacy->decoder_plan_identity : NULL;
     context->physical = context->model_view ?
         yvex_compiled_model_plan_forward(context->model_view->compiled_plan) : NULL;
     if (!context->model_view || !context->session_view ||
-        context->session_view->engine != model || !context->summary || !context->physical ||
-        context->summary->maximum_context < options->context_capacity ||
+        context->session_view->engine != model || !legacy || !context->physical ||
+        legacy->maximum_context < options->context_capacity ||
         yvex_backend_kind_of(context->session_view->backend) !=
             YVEX_BACKEND_KIND_CUDA ||
         !context->session_view->sequence_state ||
@@ -512,7 +514,7 @@ static int decoder_request_validate(
             "decoder input must extend the exact committed mixed-state position");
     for (index = 0ull; index < request->token_count; ++index)
         if ((unsigned long long)request->token_ids[index] >=
-            context->summary->vocabulary_size)
+            context->interface.vocabulary_size)
             return decoder_refuse(err, YVEX_ERR_BOUNDS,
                                   "runtime.decoder.token",
                                   "decoder token exceeds the admitted vocabulary");
@@ -603,7 +605,7 @@ static int decoder_publish_result(
     yvex_runtime_decoder_execution_context *context = run->context;
     yvex_runtime_decoder_execution_result *result = run->result;
     unsigned long long rows = run->request->token_count;
-    unsigned long long width = context->summary->hidden_width;
+    unsigned long long width = context->interface.hidden_width;
     int rc;
     context->hidden_publication = run->normalized;
     result->schema_version = YVEX_RUNTIME_DECODER_EXECUTION_SCHEMA_V1;
@@ -613,7 +615,7 @@ static int decoder_publish_result(
     result->convolution_state_bytes = sequence->convolution_state_bytes;
     result->recurrent_state_bytes = sequence->recurrent_state_bytes;
     yvex_runtime_identity_copy(result->decoder_plan_identity,
-                               context->summary->decoder_plan_identity);
+                               context->report_identity);
     yvex_runtime_identity_copy(result->input_identity,
                                run->request->input_identity);
     if (!decoder_persistent_identity(attention, sequence,
@@ -645,7 +647,7 @@ static int decoder_physical_run(decoder_program_run *run, yvex_error *err)
     const yvex_program_physical_summary *s = yvex_program_physical_summary_get(c->physical);
     yvex_device_tensor *output[] = {&run->normalized};
     yvex_program_device_result result = {0};
-    unsigned long long rows = run->request->token_count, width = c->summary->hidden_width;
+    unsigned long long rows = run->request->token_count, width = c->interface.hidden_width;
     int rc;
     if (!decoder_tensor_view(c->output, rows * width, rows, width, &run->normalized))
         return decoder_refuse(err, YVEX_ERR_BOUNDS, "runtime.program.result", "runner output exceeds admitted storage");
@@ -704,9 +706,9 @@ static int decoder_execute_locked(
         (attention_after.next_position !=
              request->token_start + request->token_count ||
          sequence_after.committed_position != attention_after.next_position ||
-         result->layers_executed != context->summary->layer_count ||
-         result->attention_layers != context->summary->attention_layer_count ||
-         result->recurrent_layers != context->summary->recurrent_layer_count))
+         result->layers_executed != context->interface.attention_operations + context->interface.recurrent_operations ||
+         result->attention_layers != context->interface.attention_operations ||
+         result->recurrent_layers != context->interface.recurrent_operations))
         rc = decoder_refuse(err, YVEX_ERR_STATE, "runtime.decoder.commit",
                             "decoder mixed-state publication is incomplete");
     if (rc == YVEX_OK)
