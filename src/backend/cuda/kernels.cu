@@ -1777,8 +1777,9 @@ extern "C" __global__ void yvex_attention_candidate_scores(
     }
 }
 
-/* Rank only after all candidate scores complete. Ordering and duplicate checks
- * retain arbitrary source positions; no monotonic-history assumption is made. */
+/* Rank only after all candidate scores complete. Strict monotonicity of the
+ * actual joined positions proves uniqueness without a position sort. Arbitrary
+ * positions retain full sort/duplicate verification; ordering is never assumed. */
 extern "C" __global__ void yvex_attention_topk(
     const unsigned long long *history_positions, unsigned long long history_count,
     const unsigned long long *current_positions, unsigned long long current_count,
@@ -1802,11 +1803,19 @@ extern "C" __global__ void yvex_attention_topk(
     __syncthreads();
     if (!active) return;
     unsigned long long total = history_count + current_count, local_valid = 0ull;
+    int ascending = 1, descending = 1;
     for (unsigned long long candidate = threadIdx.x; candidate < extent; candidate += blockDim.x) {
         bool visible = candidate < total;
         if (visible) {
             unsigned long long position = candidate < history_count ? history_positions[candidate]
                 : current_positions[candidate - history_count];
+            if (candidate) {
+                unsigned long long previous = candidate - 1ull < history_count
+                    ? history_positions[candidate - 1ull]
+                    : current_positions[candidate - 1ull - history_count];
+                if (position <= previous) ascending = 0;
+                if (position >= previous) descending = 0;
+            }
             visible = position <= query_position && position <= ~0ull - ratio + 1ull &&
                 position + ratio - 1ull <= query_position;
         }
@@ -1818,14 +1827,17 @@ extern "C" __global__ void yvex_attention_topk(
         }
     }
     atomicAdd(&valid, local_valid);
-    __syncthreads();
-    attention_candidate_sort(scores, valid_indexes, extent,
-        history_positions, history_count, current_positions, true);
-    for (unsigned long long i = threadIdx.x + 1ull; i < valid; i += blockDim.x) {
-        unsigned long long a = valid_indexes[i - 1ull], b = valid_indexes[i];
-        unsigned long long pa = a < history_count ? history_positions[a] : current_positions[a - history_count];
-        unsigned long long pb = b < history_count ? history_positions[b] : current_positions[b - history_count];
-        if (pa == pb) atomicCAS(status, 0, 1);
+    ascending = __syncthreads_and(ascending);
+    descending = __syncthreads_and(descending);
+    if (!ascending && !descending) {
+        attention_candidate_sort(scores, valid_indexes, extent,
+            history_positions, history_count, current_positions, true);
+        for (unsigned long long i = threadIdx.x + 1ull; i < valid; i += blockDim.x) {
+            unsigned long long a = valid_indexes[i - 1ull], b = valid_indexes[i];
+            unsigned long long pa = a < history_count ? history_positions[a] : current_positions[a - history_count];
+            unsigned long long pb = b < history_count ? history_positions[b] : current_positions[b - history_count];
+            if (pa == pb) atomicCAS(status, 0, 1);
+        }
     }
     __syncthreads();
     if (threadIdx.x == 0u) active = *status == 0;

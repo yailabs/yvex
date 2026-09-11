@@ -104,6 +104,23 @@ static int selection_graph_enqueue(void *context, int enqueue_kernels, yvex_erro
             "cuda.test.attention-score-replay", err);
 }
 
+/* Verify joined history/current ordering, not a provider-specific assumption.
+ * A nonmonotonic but unique population and invisible duplicates remain legal. */
+static void selection_position_fixture(selection_storage *s, unsigned int scenario,
+    unsigned long long count, unsigned long long history_count, unsigned long long query_position)
+{
+    if (scenario < 25u || scenario > 31u) return;
+    for (unsigned long long i = 0ull; i < count; ++i) s->positions[i] = i * 4ull;
+    if (scenario == 26u) {
+        unsigned long long saved = s->positions[1];
+        s->positions[1] = s->positions[count - 2ull];
+        s->positions[count - 2ull] = saved;
+    }
+    if (scenario == 27u) s->positions[history_count] = s->positions[history_count - 1ull];
+    if (scenario == 28u) s->positions[count - 1ull] = s->positions[count - 2ull] = query_position + 1ull;
+    if (scenario == 29u) s->positions[count - 1ull] = s->positions[0];
+}
+
 static int selection_case(yvex_backend *backend, unsigned long long count,
                           unsigned long long k, unsigned int scenario)
 {
@@ -124,6 +141,10 @@ static int selection_case(yvex_backend *backend, unsigned long long count,
     int rc, device_wide = 0;
     YVEX_TEST_ASSERT(host && observed, "allocate candidate ranking oracle");
     while (extent < count) extent *= 2ull;
+    if (scenario == 30u || scenario == 31u) {
+        history_count = scenario == 30u ? 0ull : count;
+        current_count = count - history_count;
+    }
     if (scenario == 9u) heads = 512ull; /* More than one reduction tile. */
     if (scenario == 24u) { heads = 33ull; width = 63ull; }
     for (unsigned long long head = 0ull; head < heads; ++head) {
@@ -156,6 +177,7 @@ static int selection_case(yvex_backend *backend, unsigned long long count,
         host->query[0] = FLT_MAX;
     }
     selection_product_fixture(host, scenario, count, heads, width);
+    selection_position_fixture(host, scenario, count, history_count, query_position);
     for (unsigned long long index = 0ull; index < count; ++index) {
         unsigned long long position = host->positions[index];
         if (position > query_position || position > ~0ull - ratio + 1ull ||
@@ -230,7 +252,7 @@ static int selection_case(yvex_backend *backend, unsigned long long count,
         yvex_backend_tensor_read(backend, arena, observed, sizeof(*observed), &err) == YVEX_OK,
         "read candidate selection");
     if (scenario == 3u || scenario == 4u || scenario == 5u || scenario == 7u ||
-        (scenario >= 12u && scenario <= 15u)) {
+        (scenario >= 12u && scenario <= 15u) || scenario == 27u || scenario == 29u) {
         YVEX_TEST_ASSERT(observed->status != 0 && observed->selected_count == 0ull &&
                          observed->valid_count == 0ull,
                          "duplicate/nonfinite/prior error/invalid K cannot publish candidate ranking");
@@ -301,6 +323,9 @@ int yvex_cuda_test_attention_selection(void)
         if (selection_case(backend, counts[i], 512ull, 16u)) return 1;
     for (unsigned int scenario = 17u; scenario <= 24u; ++scenario)
         if (selection_case(backend, 513ull, 17ull, scenario)) return 1;
+    for (unsigned int scenario = 25u; scenario <= 31u; ++scenario)
+        if (selection_case(backend, 513ull, 17ull, scenario) ||
+            selection_case(backend, 4096ull, 512ull, scenario)) return 1;
     yvex_backend_close(backend);
     return 0;
 }
