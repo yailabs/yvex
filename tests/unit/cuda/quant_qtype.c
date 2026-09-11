@@ -2943,16 +2943,17 @@ static int quant_cuda_gqa_uniform_geometry(
     }
     YVEX_TEST_ASSERT(mismatches == 0ull,
                      "large exact-attention result matches the uniform analytic oracle");
-    YVEX_TEST_ASSERT(
-        quant_attention_execute(
+    for (unsigned int repeat = 0u; repeat < 4u; ++repeat) {
+        YVEX_TEST_ASSERT(quant_attention_execute(
             backend, query, key, value, output, tokens, heads, heads,
             HEAD_DIM, 0, &facts, &err) == YVEX_OK &&
             yvex_backend_tensor_read(
                 backend, output, repeated, bytes, &err) == YVEX_OK &&
             memcmp(result, repeated, (size_t)bytes) == 0,
-        "large exact-attention reuses workspace with byte-identical output");
+            "large exact-attention reuses workspace with byte-identical output");
+    }
     printf("cuda exact attention rows=%llu heads=%llu workspace=%llu launches=%llu "
-           "max_abs_error=%.9g mismatches=%llu\n",
+           "max_abs_error=%.9g mismatches=%llu exact_reuse_replays=4\n",
            tokens, heads, workspace_bytes, facts.kernel_launches,
            (double)max_abs, mismatches);
     yvex_backend_workspace_detach(backend);

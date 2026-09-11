@@ -262,6 +262,8 @@ extern "C" __global__ void yvex_gqa_softmax_f32(
         __syncthreads();
     }
     maximum = reduction[0];
+    /* Every warp must consume the maximum before the sum reuses reduction[0]. */
+    __syncthreads();
     for (source = threadIdx.x; source < tokens; source += blockDim.x)
         if (!causal || source <= query) sum += expf(scores[row * tokens + source] - maximum);
     reduction[threadIdx.x] = sum;
