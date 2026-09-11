@@ -201,7 +201,7 @@ int yvex_program_device_run(yvex_program_device *c, unsigned long long rows,
     result->device_bytes = c->device_bytes;
     for (i = 0u; rc == YVEX_OK && i < c->summary->step_count; ++i) {
         const yvex_program_physical_step *s = yvex_program_physical_step_at(c->program, i);
-        yvex_program_device_invocation r = {c->program, s, args, c->values, rows, i};
+        yvex_program_device_invocation r = {c->program, s, args, c->values, rows, i, cancel, cancel_context};
         yvex_backend_operation_facts facts = {0};
         if (!c->kernels[i].invoke) continue; /* Immutable parameter binding, no device work. */
         if (cancel && cancel(cancel_context)) {

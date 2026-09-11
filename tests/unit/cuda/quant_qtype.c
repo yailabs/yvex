@@ -260,7 +260,8 @@ static int quant_cuda_dense_matvec(yvex_backend *backend, unsigned int qtype)
     YVEX_TEST_ASSERT(yvex_backend_encoded_matvec(
                          backend, mapped, ROWS * row_bytes, qtype,
                          ROWS, WIDTH, row_bytes, 1ull, input, NULL, 0ull,
-                         NULL, output, 0, &facts, &err) == YVEX_OK &&
+                         NULL, output, qtype == YVEX_GGUF_QTYPE_BF16 ?
+                             YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32, &facts, &err) == YVEX_OK &&
                          facts.kernel_launches ==
                              (qtype == YVEX_GGUF_QTYPE_BF16 ? 2ull : 1ull) &&
                          !facts.accelerated_matrix_launches &&
@@ -455,7 +456,7 @@ static int quant_cuda_q8_matvec(yvex_backend *backend, unsigned int qtype)
                              "F32 activation CUDA row batch matches the reference tolerance");
     rc = yvex_backend_encoded_matvec(
         backend, mapped, ROWS * row_bytes, qtype, ROWS, WIDTH, row_bytes,
-        INPUT_ROWS, input, NULL, 0ull, NULL, output, 2, &facts, &err);
+        INPUT_ROWS, input, NULL, 0ull, NULL, output, (yvex_encoded_input_policy)3, &facts, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG && !facts.kernel_launches,
                      "encoded matvec refuses an unknown activation policy before launch");
     descriptor.name = "q8_activation_additive";
@@ -702,7 +703,7 @@ static int quant_cuda_bf16_gemm(yvex_backend *backend)
     rc = yvex_backend_encoded_matvec(
         backend, mapped, ROWS * row_bytes, YVEX_GGUF_QTYPE_BF16,
         ROWS, WIDTH, row_bytes, INPUT_ROWS, input, NULL, 0ull,
-        NULL, output, 1, &facts, &err);
+        NULL, output, YVEX_ENCODED_INPUT_BF16, &facts, &err);
     if (rc != YVEX_OK)
         fprintf(stderr, "BF16 cuBLAS refusal: %s (%s)\n",
                 yvex_error_message(&err), yvex_error_where(&err));

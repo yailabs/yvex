@@ -20,6 +20,7 @@
 #define MODEL_PLAN_SCHEMA_V4 4u
 #define MODEL_PLAN_SCHEMA_V5 5u
 #define MODEL_PLAN_SCHEMA_V6 6u
+#define MODEL_PLAN_SCHEMA_V7 7u
 #define MODEL_PLAN_MAX_LAYERS 65536ull
 
 typedef struct {
@@ -31,7 +32,7 @@ struct yvex_compiled_model_plan {
     unsigned int schema;
     char operator_graph_identity[YVEX_SHA256_HEX_BYTES];
     yvex_program_tensor_plan *dense_ffn;
-    yvex_program_physical *forward;
+    yvex_program_physical *forward, *output;
     yvex_decoder_plan *decoder;
     yvex_moe_plan *moe, *draft_moe;
     yvex_transformer_plan *transformer, *draft_transformer;
@@ -572,6 +573,7 @@ void yvex_compiled_model_plan_close(yvex_compiled_model_plan **owner)
     if (!plans) return;
     yvex_program_tensor_close(&plans->dense_ffn);
     yvex_program_physical_close(&plans->forward);
+    yvex_program_physical_close(&plans->output);
     yvex_decoder_plan_close(&plans->decoder);
     yvex_transformer_plan_close(&plans->draft_transformer);
     yvex_transformer_plan_close(&plans->transformer);
@@ -705,12 +707,28 @@ static int compiled_forward_signature_valid(const yvex_compiled_model_plan *plan
         delta + attention == d->layer_count;
 }
 
+static int compiled_output_program_valid(const yvex_compiled_model_plan *plan)
+{
+    const yvex_program_physical_summary *s = yvex_program_physical_summary_get(plan->output);
+    const yvex_program_physical_summary *forward = yvex_program_physical_summary_get(plan->forward);
+    const yvex_decoder_plan_summary *d = yvex_decoder_plan_summary_get(plan->decoder);
+    const yvex_transformer_plan_summary *t = yvex_transformer_plan_summary_get(plan->transformer);
+    unsigned long long rows = d ? d->maximum_context : t ? t->maximum_context : 0u;
+    if (!plan->output_head.schema_version) return !s;
+    if (!s) return plan->schema < MODEL_PLAN_SCHEMA_V7;
+    if (s->minimum_rows != 1u || s->row_multiple != 1u || s->maximum_rows != rows ||
+        yvex_output_head_program_validate(plan->output, &plan->output_head, NULL, NULL) != YVEX_OK) return 0;
+    return plan->schema < MODEL_PLAN_SCHEMA_V7 || (forward &&
+        !strcmp(s->semantic_identity, forward->semantic_identity) &&
+        !strcmp(s->execution_identity, forward->execution_identity));
+}
+
 static int compiled_ffn_signature_valid(const yvex_compiled_model_plan *plan)
 {
     const yvex_decoder_plan_summary *d = yvex_decoder_plan_summary_get(plan->decoder);
     const yvex_program_tensor_summary *p = yvex_program_tensor_summary_get(plan->dense_ffn);
     const yvex_program_tensor_value *a, *gate, *up, *down, *output;
-    if (plan->schema == MODEL_PLAN_SCHEMA_V6) return !p && compiled_forward_signature_valid(plan);
+    if (plan->schema >= MODEL_PLAN_SCHEMA_V6) return !p && compiled_forward_signature_valid(plan);
     if (!d) return !p;
     if (!p || p->input_count != 4u || p->result_count != 1u || p->minimum_rows != 1u ||
         p->maximum_rows != d->maximum_context || p->row_multiple != 1u) return 0;
@@ -761,10 +779,15 @@ static int compiled_forward_build(yvex_compiled_model_plan *plan, const yvex_com
         rc = yvex_program_physical_parameters_validate(plan->forward, r->program_physical_parameters, err);
     if (rc == YVEX_OK && !compiled_forward_signature_valid(plan))
         rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "compiled forward contradicts the retained producer view");
+    if (rc == YVEX_OK && plan->output_head.schema_version)
+        rc = yvex_program_physical_compile(&plan->output, r->program, "output", bindings, count,
+            physical->identity, err);
+    if (rc == YVEX_OK && plan->output)
+        rc = yvex_output_head_program_validate(plan->output, &plan->output_head, r->program_physical_parameters, err);
     free(bindings);
     if (rc == YVEX_OK) {
         yvex_program_tensor_close(&plan->dense_ffn);
-        plan->schema = MODEL_PLAN_SCHEMA_V6;
+        plan->schema = MODEL_PLAN_SCHEMA_V7;
     }
     return rc;
 }
@@ -972,9 +995,11 @@ int yvex_compiled_model_plan_encode(
         (plans->moe != NULL) != (plans->transformer != NULL) ||
         (plans->draft_moe != NULL) != (plans->draft_transformer != NULL) ||
         (target_present && decoder_present) || (!target_present && draft_present) ||
-        !compiled_output_matches_producer(plans) || !compiled_ffn_signature_valid(plans) ||
+        !compiled_output_matches_producer(plans) || !compiled_output_program_valid(plans) ||
+        !compiled_ffn_signature_valid(plans) ||
         !yvex_sha256_hex_valid(plans->operator_graph_identity) ||
-        !plan_put_text(bytes, plans->schema == MODEL_PLAN_SCHEMA_V6 ? "yvex.compiled-model-plan.v6" :
+        !plan_put_text(bytes, plans->schema == MODEL_PLAN_SCHEMA_V7 ? "yvex.compiled-model-plan.v7" :
+                       plans->schema == MODEL_PLAN_SCHEMA_V6 ? "yvex.compiled-model-plan.v6" :
                        plans->schema == MODEL_PLAN_SCHEMA_V5 ?
                        "yvex.compiled-model-plan.v5" : "yvex.compiled-model-plan.v4") ||
         !plan_put_u64(bytes, plans->schema >= MODEL_PLAN_SCHEMA_V5 ? plans->schema : MODEL_PLAN_SCHEMA_V4) ||
@@ -1003,12 +1028,21 @@ int yvex_compiled_model_plan_encode(
         free(program.data);
         if (rc != YVEX_OK) return rc;
     }
-    if (plans->schema == MODEL_PLAN_SCHEMA_V6) {
+    if (plans->schema >= MODEL_PLAN_SCHEMA_V6) {
         yvex_core_bytes program = {.maximum = 256u * 1024u * 1024u};
         int rc = yvex_program_physical_encode(plans->forward, &program, err);
         if (rc == YVEX_OK && (!plan_put_u64(bytes, program.count) ||
             !yvex_core_bytes_append(bytes, program.data, program.count)))
             rc = model_plan_refuse(err, YVEX_ERR_NOMEM, "compiled forward program encoding failed");
+        free(program.data);
+        if (rc != YVEX_OK) return rc;
+    }
+    if (plans->schema == MODEL_PLAN_SCHEMA_V7) {
+        yvex_core_bytes program = {.maximum = 256u * 1024u * 1024u};
+        int rc = plans->output ? yvex_program_physical_encode(plans->output, &program, err) : YVEX_OK;
+        if (rc == YVEX_OK && (!plan_put_u64(bytes, program.count) ||
+            (program.count && !yvex_core_bytes_append(bytes, program.data, program.count))))
+            rc = model_plan_refuse(err, YVEX_ERR_NOMEM, "compiled output program encoding failed");
         free(program.data);
         if (rc != YVEX_OK) return rc;
     }
@@ -1042,6 +1076,8 @@ int yvex_compiled_model_plan_decode(
         expected_schema = MODEL_PLAN_SCHEMA_V5;
     else if (strcmp(domain, "yvex.compiled-model-plan.v6") == 0)
         expected_schema = MODEL_PLAN_SCHEMA_V6;
+    else if (strcmp(domain, "yvex.compiled-model-plan.v7") == 0)
+        expected_schema = MODEL_PLAN_SCHEMA_V7;
     if (!expected_schema || !plan_get_u64(&cursor, &schema) ||
         schema != expected_schema)
         return model_plan_refuse(err, YVEX_ERR_FORMAT,
@@ -1099,7 +1135,7 @@ int yvex_compiled_model_plan_decode(
         }
     } else if (rc == YVEX_OK && decoder_present && schema < MODEL_PLAN_SCHEMA_V5)
         rc = legacy_decoder_ffn_import(&plan->dense_ffn, plan->decoder, err);
-    if (rc == YVEX_OK && schema == MODEL_PLAN_SCHEMA_V6) {
+    if (rc == YVEX_OK && schema >= MODEL_PLAN_SCHEMA_V6) {
         unsigned long long length;
         if (!plan_get_u64(&cursor, &length) || length > cursor.count - cursor.offset)
             rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "compiled forward program extent is malformed");
@@ -1108,6 +1144,18 @@ int yvex_compiled_model_plan_decode(
             if (rc == YVEX_OK) cursor.offset += (size_t)length;
         }
     }
+    if (rc == YVEX_OK && schema == MODEL_PLAN_SCHEMA_V7) {
+        unsigned long long length = 0u;
+        if (!plan_get_u64(&cursor, &length) || (length != 0u) != (output_present != 0u) ||
+            length > cursor.count - cursor.offset)
+            rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "compiled output program extent is malformed");
+        else if (length) {
+            rc = yvex_program_physical_decode(&plan->output, cursor.data + cursor.offset, (size_t)length, err);
+            if (rc == YVEX_OK) cursor.offset += (size_t)length;
+        }
+    }
+    if (rc == YVEX_OK && !compiled_output_program_valid(plan))
+        rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "output program differs from its producer signature/lineage");
     if (rc == YVEX_OK &&
         ((target_present && decoder_present) ||
          (!target_present && draft_present) ||
@@ -1162,8 +1210,21 @@ int yvex_compiled_model_plan_normalize(yvex_compiled_model_plan *plan,
     const yvex_physical_execution_ir *parameters, yvex_error *err)
 {
     if (!plan) return model_plan_refuse(err, YVEX_ERR_INVALID_ARG, "compiled import owner required");
-    int rc;
-    if (!plan->decoder) return YVEX_OK;
+    int rc = YVEX_OK;
+    if (plan->output_head.schema_version) {
+        const yvex_decoder_plan_summary *decoder = yvex_decoder_plan_summary_get(plan->decoder);
+        const yvex_transformer_plan_summary *transformer = yvex_transformer_plan_summary_get(plan->transformer);
+        unsigned long long rows = decoder ? decoder->maximum_context :
+            transformer ? transformer->maximum_context : 0u;
+        if (!plan->output && plan->schema == MODEL_PLAN_SCHEMA_V7)
+            return model_plan_refuse(err, YVEX_ERR_FORMAT, "native binding lacks its output program");
+        if (!plan->output)
+            rc = yvex_output_head_program_import(&plan->output, &plan->output_head, rows, parameters, err);
+        if (rc == YVEX_OK) rc = yvex_output_head_program_validate(plan->output, &plan->output_head, parameters, err);
+        if (rc == YVEX_OK && !compiled_output_program_valid(plan))
+            rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "output import differs from the authenticated producer");
+    }
+    if (!plan->decoder || rc != YVEX_OK) return rc;
     /* The enclosing binding has authenticated both old topology and physical
      * parameters. Retained old bytes serve serialization identity only. */
     rc = plan->forward ? YVEX_OK : yvex_decoder_plan_normalize_program(&plan->forward, plan->decoder,
@@ -1411,6 +1472,11 @@ const yvex_program_tensor_plan *yvex_compiled_model_plan_dense_ffn(const yvex_co
 const yvex_program_physical *yvex_compiled_model_plan_forward(const yvex_compiled_model_plan *plan)
 {
     return plan ? plan->forward : NULL;
+}
+
+const yvex_program_physical *yvex_compiled_model_plan_output(const yvex_compiled_model_plan *plan)
+{
+    return plan ? plan->output : NULL;
 }
 
 const char *yvex_compiled_model_plan_operator_graph_identity(

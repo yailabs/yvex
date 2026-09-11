@@ -574,6 +574,7 @@ const struct yvex_transformer_plan *yvex_compiled_model_plan_transformer(
 const struct yvex_decoder_plan *yvex_compiled_model_plan_decoder(const yvex_compiled_model_plan *plan);
 const struct yvex_program_tensor_plan *yvex_compiled_model_plan_dense_ffn(const yvex_compiled_model_plan *plan);
 const struct yvex_program_physical *yvex_compiled_model_plan_forward(const yvex_compiled_model_plan *plan);
+const struct yvex_program_physical *yvex_compiled_model_plan_output(const yvex_compiled_model_plan *plan);
 const struct yvex_runtime_logits_plan_summary *yvex_compiled_model_plan_output_head(
     const yvex_compiled_model_plan *plan);
 const char *yvex_compiled_model_plan_operator_graph_identity(

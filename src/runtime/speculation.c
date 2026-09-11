@@ -525,13 +525,12 @@ static int speculation_project_target_features(yvex_runtime_speculation_context 
         rc = resident_input ? YVEX_OK : yvex_backend_tensor_write(
             context->device_backend, &input, features, input_bytes, err);
         if (rc == YVEX_OK)
-            rc = yvex_backend_encoded_matvec(
-                context->device_backend, context->feature_projection.encoded,
-                context->feature_projection.encoded_bytes,
-                context->feature_projection.binding->qtype, context->hidden_width,
-                context->policy.concatenated_feature_width,
-                context->feature_projection.row_bytes, token_count, &input,
-                NULL, 0ull, NULL, &projected, 0, &facts, err);
+            rc = yvex_backend_encoded_matvec(context->device_backend, context->feature_projection.encoded,
+                context->feature_projection.encoded_bytes, context->feature_projection.binding->qtype,
+                context->hidden_width, context->policy.concatenated_feature_width,
+                context->feature_projection.row_bytes, token_count, &input, NULL, 0ull, NULL, &projected,
+                context->feature_projection.binding->qtype == YVEX_GGUF_QTYPE_BF16 ?
+                    YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32, &facts, err);
         if (rc == YVEX_OK)
             rc = yvex_backend_op_rms_norm(
                 context->device_backend, &projected, context->device_feature_norm,
@@ -779,11 +778,12 @@ static int speculation_draft_one(
             context->policy.markov_rank, context->markov_embedding.row_bytes,
             &previous_token, 1ull, &markov_input, &gather_facts, err);
     if (rc == YVEX_OK && context->device_draft_selection)
-        rc = yvex_backend_encoded_matvec(
-            context->device_backend, context->markov_output.encoded,
+        rc = yvex_backend_encoded_matvec(context->device_backend, context->markov_output.encoded,
             context->markov_output.encoded_bytes, context->markov_output.binding->qtype,
             context->vocabulary_size, context->policy.markov_rank, context->markov_output.row_bytes,
-            1ull, &markov_input, NULL, 0ull, &additive, &adjusted_output, 0, &device_facts, err);
+            1ull, &markov_input, NULL, 0ull, &additive, &adjusted_output,
+            context->markov_output.binding->qtype == YVEX_GGUF_QTYPE_BF16 ?
+                YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32, &device_facts, err);
     if (rc == YVEX_OK && context->device_draft_selection)
         context->device_adjusted_logits->is_written = 1;
     if (rc == YVEX_OK && context->device_draft_selection)
@@ -834,7 +834,7 @@ static int speculation_draft_one(
             context->confidence.encoded_bytes, context->confidence.binding->qtype,
             1ull, context->confidence.binding->row_width, context->confidence.row_bytes,
             1ull, &pre_normalized, &markov_input, context->hidden_width, NULL,
-            &device_confidence, 0, &confidence_facts, err);
+            &device_confidence, YVEX_ENCODED_INPUT_F32, &confidence_facts, err);
     if (rc == YVEX_OK && context->device_draft_selection)
         rc = yvex_backend_tensor_read(context->device_backend, &device_confidence,
                                       confidence, sizeof(*confidence), err);

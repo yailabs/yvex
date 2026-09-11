@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 typedef struct {
     yvex_transformer_linear_requirement requirement;
@@ -53,7 +54,8 @@ static int kernel_parameters_bind(yvex_program_kernels *c, const yvex_program_ke
     for (i = 0u; i < c->summary->value_count; ++i) {
         const yvex_program_physical_value *v = yvex_program_physical_value_at(c->program, i);
         const yvex_component_encoded_weight *binding = NULL;
-        unsigned long long bytes, elements = 1u;
+        const yvex_gguf_qtype_geometry *geometry = yvex_gguf_qtype_geometry_find(v->qtype);
+        unsigned long long bytes, row_bytes, elements = 1u;
         size_t matches = 0u;
         unsigned int axis;
         if (!v->parameter) continue;
@@ -66,10 +68,13 @@ static int kernel_parameters_bind(yvex_program_kernels *c, const yvex_program_ke
         for (axis = 0u; axis < v->type.rank; ++axis)
             if (!yvex_core_u64_mul(elements, v->type.shape[axis].extent, &elements))
                 return kernel_refuse(err, YVEX_ERR_FORMAT, "compiled parameter shape differs from artifact storage");
-        if (!yvex_core_u64_mul(elements, 2u, &bytes) || bytes != binding->encoded_bytes)
-            return kernel_refuse(err, YVEX_ERR_FORMAT, "compiled BF16 parameter byte geometry is inconsistent");
+        if (!geometry || !geometry->block_size || !geometry->bytes_per_block ||
+            binding->row_width % geometry->block_size ||
+            !yvex_core_u64_mul(binding->row_width / geometry->block_size, geometry->bytes_per_block, &row_bytes) ||
+            !yvex_core_u64_mul(elements / binding->row_width, row_bytes, &bytes) || bytes != binding->encoded_bytes)
+            return kernel_refuse(err, YVEX_ERR_FORMAT, "compiled parameter block geometry is inconsistent");
         if (!binding->encoded || binding->row_count != elements / binding->row_width ||
-            binding->row_bytes != binding->row_width * 2u)
+            binding->row_bytes != row_bytes)
             return kernel_refuse(err, YVEX_ERR_FORMAT, "compiled parameter residency is incomplete");
         c->weights[i] = *binding;
     }
@@ -115,6 +120,12 @@ static int kernel_instructions_bind(yvex_program_kernels *c, yvex_error *err)
     for (i = 0u; rc == YVEX_OK && i < c->summary->step_count; ++i) {
         const yvex_program_physical_step *s = yvex_program_physical_step_at(c->program, i);
         c->linear_slots[i] = SIZE_MAX;
+        if (!strcmp(s->implementation, "parameter.encoded.v1") ||
+            !strcmp(s->implementation, "linear.encoded.f32.v1")) continue;
+        if (!c->ops || !c->ops->linear_compile || !c->ops->linear_execute || !c->ops->linear_release ||
+            !c->ops->linear_summary || !c->ops->silu_product_bf16 || !c->ops->add_bf16 || !c->ops->bf16_round)
+            return kernel_refuse(err, YVEX_ERR_UNSUPPORTED,
+                "program requires unavailable backend numerical operations");
         if (!strcmp(s->implementation, "linear.bf16.f32acc.v1")) {
             const yvex_ir_type *a = &yvex_program_physical_value_at(c->program, s->operands[0])->type;
             const yvex_ir_type *r = &yvex_program_physical_value_at(c->program, s->results[0])->type;
@@ -157,9 +168,7 @@ int yvex_program_kernels_open(yvex_program_kernels **out, const yvex_program_phy
     unsigned long long host;
     int rc;
     if (out) *out = NULL;
-    if (!out || !s || (parameter_count && !parameters) || !backend || !ops ||
-        !ops->linear_compile || !ops->linear_execute || !ops->linear_release || !ops->linear_summary ||
-        !ops->silu_product_bf16 || !ops->add_bf16 || !ops->bf16_round)
+    if (!out || !s || (parameter_count && !parameters) || !backend)
         return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "compiled parameters and admitted backend operations required");
     host = sizeof(*c) + s->value_count * (sizeof(*c->weights) + sizeof(*c->small) + sizeof(*c->offsets)) +
         s->step_count * (sizeof(*c->linears) + sizeof(*c->linear_slots));
@@ -226,6 +235,37 @@ int yvex_program_kernels_prepare(yvex_program_kernels *c, unsigned long long row
     return rc;
 }
 
+/* The portable implementation retains the quantization owner's scalar dot
+ * algorithm and per-row cancellation. This is one linear operation, not model
+ * composition; dimensions and parameter handles arrive from physical work. */
+static int kernel_linear_cpu(const yvex_component_encoded_weight *w,
+    const yvex_program_device_invocation *r, const yvex_device_tensor *input,
+    yvex_device_tensor *output, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const float *x = (const float *)input->data;
+    float *y = (float *)output->data;
+    unsigned long long row, column;
+    output->is_written = 0;
+    for (row = 0u; row < r->rows; ++row)
+        for (column = 0u; column < w->row_count; ++column) {
+            yvex_quant_failure failure = {0};
+            int rc;
+            if (r->cancel_requested && r->cancel_requested(r->cancel_context))
+                return kernel_refuse(err, YVEX_ERR_CANCELLED, "linear CPU projection cancelled");
+            rc = yvex_quant_cpu_dot(w->qtype, w->encoded + column * w->row_bytes,
+                (size_t)w->row_bytes, x + row * w->row_width, w->row_width,
+                &y[row * w->row_count + column], &failure, err);
+            if (rc != YVEX_OK) return rc;
+            if (!isfinite(y[row * w->row_count + column]))
+                return kernel_refuse(err, YVEX_ERR_FORMAT, "linear CPU projection produced non-finite output");
+        }
+    facts->active_weight_bytes = w->encoded_bytes;
+    facts->activation_bytes = input->bytes + output->bytes;
+    facts->compulsory_memory_facts_available = 1;
+    output->is_written = 1;
+    return YVEX_OK;
+}
+
 int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_device_invocation *r,
                                 yvex_backend_operation_facts *facts, yvex_error *err)
 {
@@ -240,6 +280,17 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
         return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "operation has no admitted numerical operands/results");
     output = &r->values[s->results[0]];
     input = &r->values[s->operands[0]];
+    if (!strcmp(s->implementation, "linear.encoded.f32.v1")) {
+        const yvex_component_encoded_weight *w = &c->weights[s->operands[1]];
+        const yvex_ir_type *type = &yvex_program_physical_value_at(c->program, s->operands[0])->type;
+        yvex_encoded_input_policy precision = type->scalar == YVEX_IR_BF16 && w->qtype == YVEX_GGUF_QTYPE_BF16 ?
+            YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32;
+        if (yvex_backend_kind_of(c->backend) == YVEX_BACKEND_KIND_CPU)
+            return kernel_linear_cpu(w, r, input, output, facts, err);
+        return yvex_backend_encoded_matvec(c->backend, w->encoded, w->encoded_bytes, w->qtype,
+            w->row_count, w->row_width, w->row_bytes, r->rows, input, NULL, 0u, NULL,
+            output, precision, facts, err);
+    }
     if (!strcmp(s->implementation, "linear.bf16.f32acc.v1")) {
         const program_kernel_linear *l = &c->linears[c->linear_slots[r->step_index]];
         yvex_transformer_linear_execution_request request = {

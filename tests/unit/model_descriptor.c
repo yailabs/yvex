@@ -449,23 +449,25 @@ static int test_compiled_session_state(const yvex_compiled_model_plan *plan)
 }
 
 static int test_compiled_forward_import(const yvex_decoder_plan *decoder,
-    const yvex_program_physical *program, const yvex_physical_execution_ir *parameters)
+    const yvex_program_physical *program, const yvex_physical_execution_ir *parameters, unsigned int schema)
 {
     yvex_core_bytes wire = {.maximum = 1024u * 1024u}, payload = {.maximum = 1024u * 1024u};
     yvex_core_bytes again = {.maximum = 1024u * 1024u};
     yvex_compiled_model_plan *plan = NULL, *rejected = NULL;
     yvex_error err = {0};
     size_t payload_offset;
-    YVEX_TEST_ASSERT(compiled_fixture_text(&wire, "yvex.compiled-model-plan.v6") &&
-        compiled_fixture_u64(&wire, 6u) &&
+    YVEX_TEST_ASSERT(compiled_fixture_text(&wire, schema == 7u ?
+        "yvex.compiled-model-plan.v7" : "yvex.compiled-model-plan.v6") &&
+        compiled_fixture_u64(&wire, schema) &&
         compiled_fixture_text(&wire, yvex_decoder_plan_summary_get(decoder)->operator_graph_identity) &&
         compiled_fixture_u64(&wire, 0u) && compiled_fixture_u64(&wire, 0u) &&
         compiled_fixture_u64(&wire, 1u) && yvex_decoder_plan_encode(decoder, &wire, &err) == YVEX_OK &&
         compiled_fixture_u64(&wire, 0u) && yvex_program_physical_encode(program, &payload, &err) == YVEX_OK,
-        "independent v6 container fixture has one complete physical program, no duplicate FFN");
+        "independent container fixture has one complete physical program, no duplicate FFN");
     payload_offset = wire.count;
     YVEX_TEST_ASSERT(compiled_fixture_u64(&wire, payload.count) &&
         yvex_core_bytes_append(&wire, payload.data, payload.count) &&
+        (schema != 7u || compiled_fixture_u64(&wire, 0u)) &&
         yvex_compiled_model_plan_decode(&plan, wire.data, wire.count, &err) == YVEX_OK &&
         yvex_compiled_model_plan_forward(plan) && !yvex_compiled_model_plan_dense_ffn(plan) &&
         yvex_program_physical_parameters_validate(yvex_compiled_model_plan_forward(plan), parameters, &err) == YVEX_OK &&
@@ -483,8 +485,8 @@ static int test_compiled_forward_import(const yvex_decoder_plan *decoder,
     YVEX_TEST_ASSERT(compiled_fixture_u64(&wire, ULLONG_MAX) &&
         yvex_compiled_model_plan_decode(&rejected, wire.data, wire.count, &err) != YVEX_OK && !rejected,
         "overflowing executable extent refuses without resource allocation");
-    printf("Model-plan v6: complete forward roundtrip bytes=%zu; no redundant FFN program; "
-        "exact physical bindings accepted; malformed extent/truncation/identity refusals=3\n", again.count);
+    printf("Model-plan v%u: complete forward roundtrip bytes=%zu; no redundant FFN program; "
+        "exact physical bindings accepted; malformed extent/truncation/identity refusals=3\n", schema, again.count);
     yvex_compiled_model_plan_close(&plan);
     free(wire.data); free(payload.data); free(again.data);
     return 0;
@@ -557,7 +559,8 @@ static int test_decoder_program_normalization(const yvex_decoder_plan *decoder)
     YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_program_physical_summary_get(program)->input_count == 5u &&
         yvex_program_physical_summary_get(program)->result_count == 4u,
         "legacy hybrid topology normalizes to explicit token/position/three-state signature");
-    YVEX_TEST_ASSERT(test_compiled_forward_import(decoder, program, parameters) == 0,
+    YVEX_TEST_ASSERT(test_compiled_forward_import(decoder, program, parameters, 6u) == 0 &&
+        test_compiled_forward_import(decoder, program, parameters, 7u) == 0,
         "current compiled program container binds normalized computation");
     YVEX_TEST_ASSERT(yvex_decoder_plan_normalize_program(&again, decoder, &attention, 1u, parameters, &err) == YVEX_OK &&
         yvex_program_physical_encode(program, &first, &err) == YVEX_OK &&
@@ -839,6 +842,65 @@ static void model_test_identity(char output[YVEX_SHA256_HEX_CAP], char value)
     output[YVEX_SHA256_HEX_CAP - 1u] = '\0';
 }
 
+static int test_output_program_import(const yvex_runtime_logits_plan_summary *head)
+{
+    yvex_physical_execution_summary summary = {.schema_version = YVEX_PHYSICAL_EXECUTION_SCHEMA_V5,
+        .decision_count = 1u};
+    yvex_physical_execution_decision weight = {.schema_version = YVEX_PHYSICAL_EXECUTION_SCHEMA_V5,
+        .terminal_tensor_id = head->output_head_tensor_id, .role = YVEX_TENSOR_ROLE_OUTPUT_HEAD,
+        .scope = YVEX_TENSOR_SCOPE_GLOBAL, .layer_index = YVEX_TRANSFORM_IR_NO_ID,
+        .predictor_index = YVEX_TRANSFORM_IR_NO_ID, .canonical_qtype = head->qtype,
+        .canonical_row_width = head->row_width, .canonical_row_count = head->row_count,
+        .encoded_offset = 256u, .encoded_bytes = head->encoded_bytes, .alignment = 32u,
+        .consumer = YVEX_EXECUTION_CONSUMER_OUTPUT_HEAD, .layout = YVEX_EXECUTION_LAYOUT_CANONICAL_ROW,
+        .sharing = YVEX_EXECUTION_SHARING_MODEL_READ_ONLY};
+    yvex_physical_execution_ir *parameters = NULL;
+    yvex_program_physical *program = NULL, *repeat = NULL, *decoded = NULL, *rejected = NULL;
+    yvex_core_bytes bytes = {.maximum = 1024u * 1024u}, again = {.maximum = 1024u * 1024u};
+    yvex_runtime_logits_plan_summary incompatible = *head;
+    yvex_error err = {0};
+    model_test_identity(summary.physical_variant_identity, 'a');
+    model_test_identity(weight.terminal_identity, 'b');
+    YVEX_TEST_ASSERT(yvex_physical_execution_ir_import(&parameters, &summary, &weight, 1u, &err) == YVEX_OK &&
+        yvex_output_head_program_import(&program, head, 32u, parameters, &err) == YVEX_OK &&
+        yvex_output_head_program_import(&repeat, head, 32u, parameters, &err) == YVEX_OK &&
+        yvex_program_physical_encode(program, &bytes, &err) == YVEX_OK &&
+        yvex_program_physical_encode(repeat, &again, &err) == YVEX_OK && bytes.count == again.count &&
+        !memcmp(bytes.data, again.data, bytes.count), "cold output import has deterministic physical identity");
+    YVEX_TEST_ASSERT(yvex_program_physical_decode(&decoded, bytes.data, bytes.count, &err) == YVEX_OK &&
+        yvex_output_head_program_validate(decoded, head, parameters, &err) == YVEX_OK &&
+        yvex_program_physical_value_at(decoded, 0u)->type.scalar ==
+            (head->producer_kind == YVEX_EXECUTION_PLAN_DECODER ? YVEX_IR_BF16 : YVEX_IR_F32) &&
+        yvex_program_physical_value_at(decoded, 2u)->type.scalar == YVEX_IR_F32,
+        "reopened output preserves producer input precision independently from weight encoding");
+    incompatible.output_head_tensor_id++;
+    YVEX_TEST_ASSERT(yvex_output_head_plan_seal(&incompatible, &err) == YVEX_OK &&
+        yvex_output_head_program_validate(program, &incompatible, parameters, &err) != YVEX_OK &&
+        yvex_output_head_program_import(&rejected, &incompatible, 32u, parameters, &err) != YVEX_OK && !rejected,
+        "independently sealed wrong parameter handle fails before publication");
+    incompatible = *head;
+    incompatible.hidden_width = ++incompatible.row_width;
+    YVEX_TEST_ASSERT(yvex_output_head_plan_seal(&incompatible, &err) == YVEX_OK &&
+        yvex_output_head_program_import(&rejected, &incompatible, 32u, parameters, &err) != YVEX_OK && !rejected,
+        "independently sealed incompatible geometry fails at the physical join");
+    incompatible = *head;
+    incompatible.output_head_plan_identity[0] ^= 1;
+    YVEX_TEST_ASSERT(yvex_output_head_program_import(&rejected, &incompatible, 32u, parameters, &err) != YVEX_OK &&
+        !rejected && yvex_output_head_program_import(&rejected, head, 0u, parameters, &err) != YVEX_OK && !rejected,
+        "stale producer identity and absent population envelope cannot create output work");
+    printf("Output import: producer=%u input=%s result=F32 shape=rows[1,32]x4->rowsx8; "
+        "roundtrip=%zu bytes; deterministic; handle/geometry/identity/population negatives=4\n",
+        (unsigned int)head->producer_kind,
+        head->producer_kind == YVEX_EXECUTION_PLAN_DECODER ? "BF16" : "F32", bytes.count);
+    yvex_program_physical_close(&program);
+    yvex_program_physical_close(&repeat);
+    yvex_program_physical_close(&decoded);
+    yvex_physical_execution_ir_close(&parameters);
+    free(bytes.data);
+    free(again.data);
+    return 0;
+}
+
 static int test_decoder_output_head_identity(void)
 {
     yvex_runtime_logits_plan_summary summary = {
@@ -869,6 +931,7 @@ static int test_decoder_output_head_identity(void)
             yvex_output_head_plan_validate(&summary, &err) == YVEX_OK &&
             !summary.transformer_plan_identity[0],
         "decoder output head seals exact non-Transformer producer lineage");
+    YVEX_TEST_ASSERT(test_output_program_import(&summary) == 0, "decoder output normalizes into physical SSA");
     mutated = summary;
     model_test_identity(mutated.transformer_plan_identity, '7');
     YVEX_TEST_ASSERT(
@@ -893,6 +956,7 @@ static int test_decoder_output_head_identity(void)
         yvex_output_head_plan_seal(&summary, &err) == YVEX_OK &&
             yvex_output_head_plan_validate(&summary, &err) == YVEX_OK,
         "legacy Transformer output-head identity remains admissible");
+    YVEX_TEST_ASSERT(test_output_program_import(&summary) == 0, "legacy Transformer output normalizes into physical SSA");
     return 0;
 }
 

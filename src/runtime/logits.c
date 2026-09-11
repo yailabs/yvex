@@ -10,6 +10,7 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/runtime.h>
+#include <yvex/internal/program_kernels.h>
 #include "src/runtime/private.h"
 
 struct yvex_runtime_logits_plan {
@@ -23,6 +24,9 @@ struct yvex_runtime_logits_context {
     const yvex_runtime_session_view *session_view;
     yvex_runtime_logits_plan plan;
     yvex_runtime_logits_options options;
+    const yvex_program_physical *program;
+    yvex_program_device *program_device;
+    yvex_program_kernels *program_kernels;
     const unsigned char *resident_head;
     unsigned long long resident_head_bytes;
     float *candidate, *host_hidden_rows;
@@ -80,6 +84,65 @@ static int logits_device_open(yvex_runtime_logits_context *context,
     descriptor.bytes = bytes;
     return yvex_backend_tensor_alloc(context->session_view->backend,
                                      &descriptor, out, err);
+}
+
+static int logits_program_invoke(void *context, const yvex_program_device_invocation *r,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    yvex_runtime_logits_context *c = context;
+    return yvex_program_kernels_invoke(c->program_kernels, r, facts, err);
+}
+
+static int logits_program_open(yvex_runtime_logits_context *c, unsigned long long host_bytes,
+    yvex_error *err)
+{
+    static const yvex_program_device_kernel implementation = {"linear.encoded.f32.v1", logits_program_invoke};
+    const yvex_program_physical_value *weight;
+    unsigned long long kh, kd, vh, vd, total;
+    unsigned long long rows = yvex_backend_kind_of(c->session_view->backend) == YVEX_BACKEND_KIND_CPU
+        ? 1u : c->options.maximum_rows;
+    yvex_program_kernel_parameter parameter;
+    int rc;
+    c->program = yvex_compiled_model_plan_output(c->model_view->compiled_plan);
+    weight = yvex_program_physical_value_at(c->program, 1u);
+    if (!weight || !weight->parameter || weight->tensor_id != c->plan.binding->tensor_id)
+        return logits_refuse(err, YVEX_ERR_STATE, "output requires an authenticated compiled program");
+    parameter.tensor_id = weight->tensor_id;
+    parameter.weight = (yvex_component_encoded_weight){.encoded = c->resident_head,
+        .encoded_bytes = c->resident_head_bytes, .row_width = c->plan.binding->row_width,
+        .row_count = c->plan.binding->row_count, .row_bytes = c->plan.summary.row_bytes, .qtype = weight->qtype};
+    rc = yvex_program_kernels_open(&c->program_kernels, c->program, &parameter, 1u,
+        c->session_view->backend, c->options.maximum_host_bytes, c->options.maximum_device_bytes, err);
+    if (rc == YVEX_OK) rc = yvex_program_device_open(&c->program_device, c->program, c->session_view->backend,
+        rows, c->options.maximum_host_bytes, c->options.maximum_device_bytes, &implementation, 1u, c, err);
+    if (rc != YVEX_OK) return rc;
+    yvex_program_kernels_resources(c->program_kernels, &kh, &kd);
+    yvex_program_device_resources(c->program_device, &vh, &vd);
+    if (kd || vd || !yvex_core_u64_add(host_bytes, kh, &total) || !yvex_core_u64_add(total, vh, &total) ||
+        (c->options.maximum_host_bytes && total > c->options.maximum_host_bytes))
+        return logits_refuse(err, YVEX_ERR_BOUNDS, "compiled output resources exceed admission budget");
+    return YVEX_OK;
+}
+
+static int logits_program_run(yvex_runtime_logits_context *c, const yvex_device_tensor *input,
+    yvex_device_tensor *output, unsigned long long rows, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_program_physical_value *a = yvex_program_physical_value_at(c->program, 0u);
+    const yvex_program_physical_value *y = yvex_program_physical_value_at(c->program, 2u);
+    yvex_device_tensor x = *input, result = *output;
+    yvex_program_device_argument argument = {.tensor = &x};
+    yvex_device_tensor *outputs[] = {&result};
+    yvex_program_device_result observed;
+    int rc;
+    x.rank = result.rank = 2u;
+    x.dims[0] = result.dims[0] = rows;
+    x.dims[1] = a->type.shape[1].extent;
+    result.dims[1] = y->type.shape[1].extent;
+    output->is_written = 0;
+    rc = yvex_program_device_run(c->program_device, rows, &argument, 1u, outputs, 1u,
+        c->options.cancel_requested, c->options.cancel_context, &observed, err);
+    if (rc == YVEX_OK) { output->is_written = result.is_written; *facts = observed.backend; }
+    return rc;
 }
 /*
  * Open one reusable logits context over borrowed model/session owners.
@@ -234,6 +297,23 @@ static int logits_context_open(
                                     "logits.output", logits_elements, err);
         if (rc != YVEX_OK) goto failure;
     }
+    if (session_summary.backend == YVEX_BACKEND_KIND_CPU) {
+        unsigned long long staging;
+        if (!yvex_core_u64_mul(context->plan.summary.hidden_width, sizeof(float), &staging) ||
+            !yvex_core_u64_add(staging, candidate_bytes, &staging) ||
+            !yvex_core_u64_add(host_bytes, staging, &host_bytes) ||
+            (options->maximum_host_bytes && host_bytes > options->maximum_host_bytes)) {
+            rc = logits_refuse(err, YVEX_ERR_BOUNDS, "CPU program buffers exceed host budget");
+            goto failure;
+        }
+        rc = logits_device_open(context, &context->device_hidden, "output.input",
+            context->plan.summary.hidden_width, err);
+        if (rc == YVEX_OK) rc = logits_device_open(context, &context->device_logits, "output.result",
+            context->plan.summary.vocabulary_size, err);
+        if (rc != YVEX_OK) goto failure;
+    }
+    rc = logits_program_open(context, host_bytes, err);
+    if (rc != YVEX_OK) goto failure;
     if (pthread_mutex_init(&context->mutex, NULL) != 0) {
         rc = logits_refuse(err, YVEX_ERR_STATE,
                            "logits context synchronization initialization failed");
@@ -672,26 +752,14 @@ static int logits_source_validate(const yvex_runtime_logits_context *context,
 static int logits_project_cpu(yvex_runtime_logits_context *context,
                               const float *hidden, yvex_error *err)
 {
-    unsigned long long row;
-    for (row = 0ull; row < context->plan.summary.row_count; ++row) {
-        yvex_quant_failure failure;
-        if (context->options.cancel_requested &&
-            context->options.cancel_requested(context->options.cancel_context))
-            return logits_refuse(err, YVEX_ERR_CANCELLED,
-                                 "logits CPU projection was cancelled");
-        memset(&failure, 0, sizeof(failure));
-        if (yvex_quant_cpu_dot(
-                context->plan.summary.qtype,
-                context->resident_head + row * context->plan.summary.row_bytes,
-                (size_t)context->plan.summary.row_bytes, hidden,
-                context->plan.summary.hidden_width, &context->candidate[row],
-                &failure, err) != YVEX_OK)
-            return yvex_error_code(err);
-        if (!isfinite(context->candidate[row]))
-            return logits_refuse(err, YVEX_ERR_FORMAT,
-                                 "CPU output-head projection produced non-finite logits");
-    }
-    return YVEX_OK;
+    yvex_backend_operation_facts facts;
+    int rc = yvex_backend_tensor_write(context->session_view->backend, context->device_hidden,
+        hidden, context->device_hidden->bytes, err);
+    if (rc == YVEX_OK)
+        rc = logits_program_run(context, context->device_hidden, context->device_logits, 1u, &facts, err);
+    if (rc == YVEX_OK) rc = yvex_backend_tensor_read(context->session_view->backend, context->device_logits,
+        context->candidate, context->device_logits->bytes, err);
+    return rc;
 }
 /*
  * Execute one full resident output-head projection on CUDA without CPU fallback.
@@ -743,12 +811,7 @@ static int logits_project_cuda(yvex_runtime_logits_context *context,
                                        hidden_bytes, err);
     }
     if (rc == YVEX_OK)
-        rc = yvex_backend_encoded_matvec(
-            context->session_view->backend, context->resident_head,
-            context->resident_head_bytes, context->plan.summary.qtype,
-            context->plan.summary.row_count, context->plan.summary.row_width,
-            context->plan.summary.row_bytes, 1ull, device_hidden,
-            NULL, 0ull, NULL, &logits_view, 0, &facts, err);
+        rc = logits_program_run(context, device_hidden, &logits_view, 1u, &facts, err);
     if (rc == YVEX_OK)
         context->device_logits_publication = logits_view;
     if (rc == YVEX_OK && !context->options.device_selection)
@@ -1451,12 +1514,7 @@ static int logits_project_cuda_batch(
         }
     }
     if (rc == YVEX_OK)
-        rc = yvex_backend_encoded_matvec(
-            context->session_view->backend, context->resident_head,
-            context->resident_head_bytes, context->plan.summary.qtype,
-            context->plan.summary.row_count, context->plan.summary.row_width,
-            context->plan.summary.row_bytes, row_count, device_hidden,
-            NULL, 0ull, NULL, &logits_view, 0, &facts, err);
+        rc = logits_program_run(context, device_hidden, &logits_view, row_count, &facts, err);
     if (rc == YVEX_OK)
         context->device_logits_publication = logits_view;
     if (rc == YVEX_OK && !device_output)
@@ -1656,12 +1714,7 @@ int yvex_runtime_logits_project_compatible(
     }
     if (rc == YVEX_OK) {
         input_view.is_written = 1;
-        rc = yvex_backend_encoded_matvec(
-            leader->session_view->backend, leader->resident_head,
-            leader->resident_head_bytes, leader->plan.summary.qtype,
-            leader->plan.summary.row_count, leader->plan.summary.row_width,
-            leader->plan.summary.row_bytes, row_count, &input_view, NULL, 0ull,
-            NULL, &output_view, 0, &facts, err);
+        rc = logits_program_run(leader, &input_view, &output_view, row_count, &facts, err);
     }
     for (index = 0ull; index < row_count && rc == YVEX_OK; ++index) {
         yvex_device_tensor source, destination;
@@ -1744,6 +1797,9 @@ int yvex_runtime_logits_context_close(yvex_runtime_logits_context **context,
         (void)pthread_mutex_unlock(&(*context)->mutex);
     }
     yvex_execution_device_publication_retire(&(*context)->publication);
+    rc = yvex_program_device_close(&(*context)->program_device, err);
+    if (rc == YVEX_OK) rc = yvex_program_kernels_close(&(*context)->program_kernels, err);
+    if (rc != YVEX_OK) return rc;
     if ((*context)->device_logits)
         rc = yvex_backend_tensor_release((*context)->session_view->backend,
                                          &(*context)->device_logits, err);

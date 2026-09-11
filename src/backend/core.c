@@ -146,7 +146,7 @@ int yvex_backend_encoded_matvec(
     unsigned long long row_bytes, unsigned long long input_rows,
     const yvex_device_tensor *input, const yvex_device_tensor *input_tail,
     unsigned long long input_head_width, const yvex_device_tensor *additive,
-    yvex_device_tensor *output, int activation_q8,
+    yvex_device_tensor *output, yvex_encoded_input_policy input_policy,
     yvex_backend_operation_facts *facts, yvex_error *err)
 {
     const yvex_backend_encoded_operations *operations =
@@ -157,7 +157,7 @@ int yvex_backend_encoded_matvec(
     return operations->matvec(
         backend, resident_encoded, encoded_bytes, qtype, row_count, row_width,
         row_bytes, input_rows, input, input_tail, input_head_width, additive,
-        output, activation_q8, facts, err);
+        output, input_policy, facts, err);
 }
 
 int yvex_backend_encoded_gather(

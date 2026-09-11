@@ -34,7 +34,7 @@ static int cuda_encoded_matvec(
     yvex_backend *, const unsigned char *, unsigned long long, unsigned int,
     unsigned long long, unsigned long long, unsigned long long, unsigned long long,
     const yvex_device_tensor *, const yvex_device_tensor *, unsigned long long,
-    const yvex_device_tensor *, yvex_device_tensor *, int,
+    const yvex_device_tensor *, yvex_device_tensor *, yvex_encoded_input_policy,
     yvex_backend_operation_facts *, yvex_error *);
 static int cuda_encoded_gather(
     yvex_backend *, const unsigned char *, unsigned long long, unsigned int,
@@ -1384,7 +1384,7 @@ static int cuda_encoded_matvec(
     unsigned long long row_bytes, unsigned long long input_rows,
     const yvex_device_tensor *input, const yvex_device_tensor *input_tail,
     unsigned long long input_head_width, const yvex_device_tensor *additive,
-    yvex_device_tensor *output, int activation_q8,
+    yvex_device_tensor *output, yvex_encoded_input_policy input_policy,
     yvex_backend_operation_facts *facts, yvex_error *err)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
@@ -1404,12 +1404,18 @@ static int cuda_encoded_matvec(
     unsigned int matvec_grid, matvec_block, tensorcore_grid = 0u, tensorcore_block = 0u;
     yvex_error cleanup;
     if (facts) memset(facts, 0, sizeof(*facts));
-    if (activation_q8 != 0 && activation_q8 != 1) {
+    if (input_policy != YVEX_ENCODED_INPUT_F32 && input_policy != YVEX_ENCODED_INPUT_Q8 &&
+        input_policy != YVEX_ENCODED_INPUT_BF16) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cuda.encoded-matvec.activation",
-                       "activation Q8 policy must be explicitly disabled or enabled");
+                       "encoded activation precision requires an admitted policy");
         return YVEX_ERR_INVALID_ARG;
     }
-    q8_path = activation_q8 && !split_input && row_width % 256ull == 0ull &&
+    if (input_policy == YVEX_ENCODED_INPUT_BF16 && (qtype != YVEX_GGUF_QTYPE_BF16 || split_input)) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "cuda.encoded-matvec.activation",
+                       "BF16 input packing requires an unsplit BF16 matrix projection");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    q8_path = input_policy == YVEX_ENCODED_INPUT_Q8 && !split_input && row_width % 256ull == 0ull &&
               yvex_cuda_q8_activation_eligible(qtype);
     tensorcore_path = q8_path && state && state->qtype_tensorcore_rows_function &&
                       cuda_qtype_tensorcore_eligible(input_rows);
@@ -1461,8 +1467,7 @@ static int cuda_encoded_matvec(
                                       "cuda.encoded-matvec", err);
     if (rc == YVEX_OK) rc = yvex_cuda_set_current(backend, "cuda.encoded-matvec", err);
     encoded_ptr = (CUdeviceptr)device_address;
-    if (rc == YVEX_OK && !split_input &&
-        qtype == YVEX_GGUF_QTYPE_BF16 && state->blas.ready)
+    if (rc == YVEX_OK && input_policy == YVEX_ENCODED_INPUT_BF16 && state->blas.ready)
         return cuda_blas_bf16_projection(
             backend, state, encoded_ptr, encoded_bytes, row_count, row_width,
             input_rows, input, additive, output, activation_bytes, facts, err);

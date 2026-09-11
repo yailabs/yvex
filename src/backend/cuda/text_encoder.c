@@ -425,7 +425,8 @@ static int text_weight_project(text_layer_run *run, yvex_backend_text_weight_slo
     int rc = yvex_backend_encoded_matvec(
         run->backend, weight->encoded, weight->encoded_bytes, weight->qtype,
         weight->row_count, weight->row_width, weight->row_bytes, run->tokens,
-        input, NULL, 0ull, additive, output, 0, &facts, err);
+        input, NULL, 0ull, additive, output,
+        weight->qtype == YVEX_GGUF_QTYPE_BF16 ? YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32, &facts, err);
     if (rc == YVEX_OK && !text_facts_add(&run->facts, &facts))
         rc = conditioning_refuse(err, YVEX_ERR_BOUNDS, "cuda.text-layer.facts",
                                  "text projection accounting overflowed");

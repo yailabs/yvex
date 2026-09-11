@@ -52,7 +52,8 @@ static int neural_linear(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err
         output->rank != input->rank ||
         (output->scalar != input->scalar &&
          !(input->scalar == YVEX_IR_BF16 && output->scalar == YVEX_IR_F32)) ||
-        weight->scalar != input->scalar ||
+        (weight->scalar != input->scalar &&
+         !(input->scalar == YVEX_IR_F32 && weight->scalar == YVEX_IR_BF16)) ||
         !yvex_ir_extent_equal(input->shape[input->rank - 1u], weight->shape[1]) ||
         !yvex_ir_extent_equal(output->shape[output->rank - 1u], weight->shape[0]))
         return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "linear contraction/result geometry is incompatible");

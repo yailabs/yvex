@@ -24,6 +24,8 @@ typedef struct {
     yvex_device_tensor *values;
     unsigned long long rows;
     size_t step_index;
+    int (*cancel_requested)(void *);
+    void *cancel_context;
 } yvex_program_device_invocation;
 
 /* A static implementation table, not a dynamic plugin protocol. Each name is

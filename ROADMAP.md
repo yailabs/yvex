@@ -11,9 +11,9 @@ Status: living public project control
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` and its qualification COMPLETE at producer-owned device-result validity: expired borrows fail closed; source-stable QA and exact bounded performance replay retained. Earlier identity/platform repairs preserved. |
 | Architecture Spectrum | A01 PARTIAL, repair queued behind refoundation .1 and qualification; A02–A10 PLANNED. |
 | Adopted state architecture target | Dual-stream primary computation plus persistent model-native computational state. YAI owns semantic authority; YVEX owns computational realization. Program N is OPEN, not implemented. |
-| Most important structural gap | Typed IR and the physical token-forward runner exist, with bounded hybrid CUDA/state evidence; DeepSeek/DSpark and MiniMax still retain historical computational authority. Complete consumer migration and artifact-backed Qwen preservation before closing .1. A01 tokenizer/normalization and whole-model barriers remain. |
+| Most important structural gap | Physical forward/output programs exist, with bounded hybrid CUDA/state and real output-head evidence. DeepSeek/DSpark and MiniMax still retain computational authority requiring migration before .1 closes. Exact Qwen artifact-backed preservation remains separately blocked by asset identity. A01 tokenizer/normalization and whole-model barriers remain. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media. Evidence depths differ. |
-| External execution pressure | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Exact candidate, reduction and encoded-work repairs are qualified; complete-request latency is not. |
+| External execution characterization | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Retained as a measured limitation, not a refoundation .1 closure gate; no downstream-safe claim. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
 | Behavior evaluation | BLOCKED / not ready. |
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
@@ -827,8 +827,11 @@ or change `repair_same_boundary`. DeepSeek optimization stays PARTIAL pending
 explicit resumption; upstream/whole-model conformance remains Program Q work.
 
 The [current consumer matrix](docs/architecture/compilation.md#current-consumer-cutover)
-distinguishes Qwen's physical forward runner from the remaining DeepSeek/DSpark
-and MiniMax computational migration. Mamba remains representability evidence.
+distinguishes Qwen's physical forward/output runner and the shared output-head
+cutover from the remaining DeepSeek/DSpark and MiniMax computational migration.
+Exact Qwen artifact-backed preservation is a separate evidence obligation:
+an absent exact asset cannot earn whole-model qualification, but does not alone
+prevent architectural completion. Mamba remains representability evidence.
 The `.1` progression decision remains `repair_same_boundary`. Official DeepSeek
 vectors and authoritative upstream Qwen conformance have not been executed;
 the pre-existing whole-model DeepSeek CPU/CUDA discrepancy (max absolute error
@@ -842,8 +845,12 @@ the configured context or admit mandatory-content truncation. YVEX's real-model
 positive/negative controls do not establish an external consumer's Golden PASS;
 that consumer must qualify the published profile and rerun its real workload.
 
-Real external prefill execution is a separate active `.1` repair pressure
-(R / S / Q), not a reopened capacity defect: the unchanged 40,277-byte Golden
+Real external prefill execution is retained as `.1` characterization
+(R / S / Q), not a reopened capacity defect or a compiler-cutover closure gate.
+The selected closure criterion remains the implemented and qualified universal
+consumer/lowering cutover. Golden latency does not block that boundary, and
+removing it as a gate does not turn its failure into a pass or qualify YAI's
+external lifecycle. The unchanged 40,277-byte Golden
 request tokenizes to 12,055 inputs and fits the explicitly configured
 16,384-token deployment with 4,329 output tokens available. Exact CUDA candidate
 scoring and cooperative ranking preserve exact numerical results and ordered head reduction,
@@ -880,11 +887,12 @@ an independently additive bottleneck. The late-window MoE-up launch classes
 must remain distinct: 9,216 blocks average 1,225.20 microseconds, while 1,536
 blocks average 276.24 microseconds. Isolated lookup improvement does not prove
 equivalent improvement across these real populations. Qualified repairs have not closed
-the real request. Further exact-mechanism repairs must preserve numerical and
+the real request. Further performance work must preserve numerical and
 candidate semantics and qualify complete-request behavior across the prompt,
 not just its first prefix or isolated kernel.
 
-`downstream_safe=false` for this external workload. Capacity preflight does not
+`downstream_safe=false` for this external workload, independently of whether
+the compiler cutover earns its own progression. Capacity preflight does not
 qualify execution latency; neither a selector test nor a first response closes
 External Golden or the remaining universal consumer cutover. YAI owns its
 external free/Workflow verdict; no timeout increase, truncated content, implicit
@@ -960,7 +968,7 @@ platform qualification. [MLC quick start][mlc]
 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0`, COMPLETE | R | Producer-owned result validity; preserves C / S / N separation, does not implement N | A01 remains PARTIAL; no family promotion | No automatic gate closure |
 | Post-refoundation qualification and exact replay, COMPLETE | Q / R | Changed borrow contracts and bounded comparable performance; full-model conformance still open | Generic prerequisite qualified before A01 repair | Evidence only at measured scope, not release qualification |
 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1`, ACTIVE | R / C | Typed values, shapes, operations, effects, programs and explicit lowering; no N implementation | Pure-SSM representability is required, not A01 execution | Preserve numerics; no automatic release promotion |
-| .1 real Golden prefill repair | R / S / Q | Long-context execution, exact candidate work and measured residual bottlenecks; capacity admission already repaired | Existing DeepSeek execution pressure, not A01 progression | Full request still fails; no behavior, benchmark or release gate promotion |
+| .1 real Golden prefill characterization | R / S / Q | Long-context execution and measured residual bottlenecks; characterization, not a .1 closure gate | Existing DeepSeek execution pressure, not A01 progression | Full request still fails; no downstream-safe claim or behavior, benchmark or release gate promotion |
 | .1 qualification/replay, NEXT | Q / R / C | Compiler refusal, migrated consumer and comparable execution evidence | Precedes queued A01 repair | No upstream conformance inferred from internal parity |
 | `SPECTRUM.MAMBA2.REPAIR.0`, queued | C / S | Semantic IR, composition, non-KV state, tokenizer | A01 directly pressures generic state and informs N; no automatic N promotion | Indirect; no v0.1 promotion or scope expansion |
 | Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |

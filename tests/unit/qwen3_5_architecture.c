@@ -121,7 +121,7 @@ static int qwen_test_physical(const yvex_program_execution *execution)
 {
     const yvex_ir_module *m = yvex_program_execution_module(execution);
     yvex_program_parameter_binding bindings[851];
-    yvex_program_physical *physical = NULL, *decoded = NULL, *rejected = NULL;
+    yvex_program_physical *physical = NULL, *decoded = NULL, *rejected = NULL, *output = NULL;
     const yvex_program_physical_summary *s;
     yvex_core_bytes bytes = {.maximum = 4u * 1024u * 1024u};
     yvex_core_bytes again = {.maximum = 4u * 1024u * 1024u};
@@ -156,6 +156,21 @@ static int qwen_test_physical(const yvex_program_execution *execution)
     YVEX_TEST_ASSERT(delta == 48u && attention == 16u && states == 112u &&
         s->input_count == 114u && s->result_count == 113u && s->storage_count < 64u,
         "physical dataflow preserves hybrid state and compiles bounded reusable activation storage");
+    YVEX_TEST_ASSERT(yvex_program_physical_compile(&output, execution, "output", bindings, count,
+        yvex_ir_identity(m), &err) == YVEX_OK, "native output entry lowers without a legacy output-head importer");
+    {
+        const yvex_program_physical_summary *head = yvex_program_physical_summary_get(output);
+        const yvex_program_physical_step *linear = yvex_program_physical_step_at(output, 1u);
+        YVEX_TEST_ASSERT(head && head->input_count == 1u && head->result_count == 1u && head->step_count == 2u &&
+            !strcmp(head->semantic_identity, s->semantic_identity) &&
+            !strcmp(head->execution_identity, s->execution_identity) &&
+            yvex_program_physical_value_at(output, 0u)->type.scalar == YVEX_IR_BF16 &&
+            yvex_program_physical_value_at(output, 2u)->type.scalar == YVEX_IR_F32 && linear &&
+            !strcmp(linear->implementation, "linear.encoded.f32.v1"),
+            "forward/output share one compiler lineage and preserve distinct logical result precision");
+        printf("Qwen output: input=BF16 result=F32 values=%zu steps=%zu; shared forward semantic/execution identity\n",
+            head->value_count, head->step_count);
+    }
     YVEX_TEST_ASSERT(yvex_program_physical_encode(physical, &bytes, &err) == YVEX_OK &&
         yvex_program_physical_decode(&decoded, bytes.data, bytes.count, &err) == YVEX_OK &&
         yvex_program_physical_encode(decoded, &again, &err) == YVEX_OK &&
@@ -173,6 +188,7 @@ static int qwen_test_physical(const yvex_program_execution *execution)
     free(bytes.data);
     yvex_program_physical_close(&decoded);
     yvex_program_physical_close(&physical);
+    yvex_program_physical_close(&output);
     return 0;
 }
 

@@ -30,6 +30,7 @@ static const physical_rule physical_rules[] = {
     {"core.parameter", "parameter.encoded.v1", 0u},
     {"nn.embedding", "embedding.bf16.v1", 0u},
     {"nn.linear", "linear.bf16.f32acc.v1", 0u},
+    {"nn.linear", "linear.encoded.f32.v1", 0u},
     {"nn.rms_norm", "rms_norm.bf16.v1", 0u},
     {"nn.silu_product", "silu_product.bf16.v1", 0u},
     {"tensor.add", "add.bf16.v1", 0u},
@@ -51,6 +52,45 @@ static const physical_rule *physical_rule_find(const char *name, int lowered)
         if (!strcmp(name, lowered ? physical_rules[i].implementation : physical_rules[i].semantic))
             return &physical_rules[i];
     return NULL;
+}
+
+/* Implementation matching is a compiler decision. A semantic F32 result must
+ * never silently use the BF16-publication implementation (or vice versa). */
+static const physical_rule *physical_rule_select(const yvex_program_physical *p,
+    const char *semantic, const yvex_ir_id *results, size_t result_count)
+{
+    if (!strcmp(semantic, "nn.linear") && result_count == 1u &&
+        p->values[results[0]].type.scalar == YVEX_IR_F32)
+        return physical_rule_find("linear.encoded.f32.v1", 1);
+    return physical_rule_find(semantic, 0);
+}
+
+static int physical_numeric_verify(const yvex_program_physical *p,
+    const yvex_program_physical_step *s, yvex_error *err)
+{
+    unsigned int i;
+    int encoded = !strcmp(s->implementation, "linear.encoded.f32.v1");
+    if (!strcmp(s->implementation, "parameter.encoded.v1")) return YVEX_OK;
+    if (encoded && (s->operand_count != 2u || s->result_count != 1u ||
+        p->values[s->operands[0]].type.rank != 2u ||
+        !p->values[s->operands[1]].parameter || p->values[s->results[0]].type.rank != 2u))
+        return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
+            "encoded linear requires a matrix input and an immutable parameter");
+    for (i = 0u; i < s->operand_count; ++i) {
+        const yvex_program_physical_value *v = &p->values[s->operands[i]];
+        if (v->type.kind != YVEX_IR_TENSOR || v->type.scalar == YVEX_IR_INDEX) continue;
+        if ((!encoded && v->type.scalar != YVEX_IR_BF16) ||
+            (v->parameter && !encoded && v->qtype != YVEX_GGUF_QTYPE_BF16))
+            return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
+                "operand precision requires another physical implementation");
+    }
+    for (i = 0u; i < s->result_count; ++i) {
+        const yvex_program_physical_value *v = &p->values[s->results[i]];
+        if (v->type.kind == YVEX_IR_TENSOR && v->type.scalar != (encoded ? YVEX_IR_F32 : YVEX_IR_BF16))
+            return physical_refuse(err, YVEX_ERR_FORMAT,
+                "physical implementation does not preserve result precision");
+    }
+    return YVEX_OK;
 }
 
 static int physical_allocate(yvex_program_physical **out, const yvex_program_physical_summary *s,
@@ -231,7 +271,7 @@ static int physical_values_lower(yvex_program_physical *p, const yvex_ir_module 
         unsigned int axis;
         if (!type || type->member_count || (type->kind != YVEX_IR_TENSOR &&
             type->kind != YVEX_IR_STATE && type->kind != YVEX_IR_SCALAR) ||
-            (type->kind == YVEX_IR_TENSOR && type->scalar != YVEX_IR_BF16 &&
+            (type->kind == YVEX_IR_TENSOR && type->scalar != YVEX_IR_BF16 && type->scalar != YVEX_IR_F32 &&
              !(i < entry->input_count && type->scalar == YVEX_IR_INDEX && type->rank == 1u)) ||
             (type->kind == YVEX_IR_SCALAR && type->scalar != YVEX_IR_INDEX))
             return physical_refuse(err, YVEX_ERR_UNSUPPORTED, "value type has no physical execution representation");
@@ -281,7 +321,8 @@ static int physical_steps_lower(yvex_program_physical *p, const yvex_ir_module *
     for (i = 0u; i < p->summary.step_count; ++i) {
         const yvex_program_step *source = &entry->steps[i];
         const yvex_ir_operation *op = yvex_ir_operation_at(m, source->semantic_operation);
-        const physical_rule *rule = op ? physical_rule_find(op->definition->name, 0) : NULL;
+        const physical_rule *rule = op ? physical_rule_select(p, op->definition->name,
+            source->results, source->result_count) : NULL;
         yvex_program_physical_step *step = &p->steps[i];
         int parameter = rule && !strcmp(rule->semantic, "core.parameter");
         if (!rule || op->definition->version != 1u ||
@@ -349,12 +390,12 @@ static int physical_verify(yvex_program_physical *p, yvex_error *err)
         last[i] = YVEX_IR_NONE;
         if (v->type.rank > YVEX_IR_RANK_CAP || v->type.member_count ||
             (v->type.kind != YVEX_IR_TENSOR && v->type.kind != YVEX_IR_STATE && v->type.kind != YVEX_IR_SCALAR) ||
-            (v->type.kind == YVEX_IR_TENSOR && v->type.scalar != YVEX_IR_BF16 &&
+            (v->type.kind == YVEX_IR_TENSOR && v->type.scalar != YVEX_IR_BF16 && v->type.scalar != YVEX_IR_F32 &&
              !(i < s->input_count && v->type.scalar == YVEX_IR_INDEX && v->type.rank == 1u)) ||
             (v->type.kind == YVEX_IR_SCALAR && v->type.scalar != YVEX_IR_INDEX) ||
             (v->parameter != 0 && v->parameter != 1) ||
-            (v->parameter && (!v->type.rank || v->type.kind != YVEX_IR_TENSOR || v->type.scalar != YVEX_IR_BF16 ||
-                              v->qtype != YVEX_GGUF_QTYPE_BF16 || v->tensor_id == ULLONG_MAX)) ||
+            (v->parameter && (!v->type.rank || v->type.kind != YVEX_IR_TENSOR ||
+                              !yvex_gguf_qtype_geometry_find(v->qtype) || v->tensor_id == ULLONG_MAX)) ||
             (!v->parameter && (v->tensor_id != ULLONG_MAX || v->qtype)) ||
             (i < s->input_count && (v->parameter || v->definition != YVEX_IR_NONE))) {
             rc = physical_refuse(err, YVEX_ERR_FORMAT, "physical value storage/definition is invalid");
@@ -418,6 +459,7 @@ static int physical_verify(yvex_program_physical *p, yvex_error *err)
         } else for (j = 0u; rc == YVEX_OK && j < step->result_count; ++j)
             if (p->values[step->results[j]].parameter) rc = YVEX_ERR_FORMAT;
         if (rc == YVEX_OK) rc = yvex_ir_operation_add(m, block, &r, &opid, err);
+        if (rc == YVEX_OK) rc = physical_numeric_verify(p, step, err);
         for (j = 0u; rc == YVEX_OK && j < step->result_count; ++j)
             values[step->results[j]] = yvex_ir_operation_at(m, opid)->results[j];
     }
@@ -612,6 +654,7 @@ int yvex_program_physical_parameters_validate(const yvex_program_physical *p,
     for (i = 0u; i < p->summary.value_count; ++i) {
         const yvex_program_physical_value *v = &p->values[i];
         const yvex_physical_execution_decision *found = NULL;
+        const yvex_gguf_qtype_geometry *geometry = yvex_gguf_qtype_geometry_find(v->qtype);
         unsigned long long j, elements = 1u, bytes;
         unsigned int axis;
         size_t matches = 0u;
@@ -626,7 +669,10 @@ int yvex_program_physical_parameters_validate(const yvex_program_physical *p,
         if (!v->type.rank || matches != 1u || !found || found->canonical_qtype != v->qtype ||
             found->canonical_row_width != v->type.shape[v->type.rank - 1u].extent ||
             !found->canonical_row_width || found->canonical_row_count != elements / found->canonical_row_width ||
-            !yvex_core_u64_mul(elements, 2u, &bytes) || found->encoded_bytes != bytes)
+            !geometry || !geometry->block_size || !geometry->bytes_per_block ||
+            found->canonical_row_width % geometry->block_size ||
+            !yvex_core_u64_mul(elements / geometry->block_size, geometry->bytes_per_block, &bytes) ||
+            found->encoded_bytes != bytes)
             return physical_refuse(err, YVEX_ERR_FORMAT,
                 "program parameter shape/storage differs from physical binding");
     }

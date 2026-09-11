@@ -56,6 +56,8 @@ struct yvex_materialization_session;
 struct yvex_runtime_descriptor;
 struct yvex_transformer_plan;
 struct yvex_decoder_plan;
+struct yvex_program_physical;
+struct yvex_physical_execution_ir;
 
 int yvex_output_head_plan_build_transformer(
     yvex_runtime_logits_plan_summary *out,
@@ -77,6 +79,15 @@ int yvex_output_head_plan_seal(
     yvex_runtime_logits_plan_summary *summary, yvex_error *err);
 int yvex_output_head_plan_validate(
     const yvex_runtime_logits_plan_summary *summary, yvex_error *err);
+/* Cold compatibility import only. Current source programs lower their explicit
+ * output entry directly. Runtime borrows the resulting verified executable. */
+int yvex_output_head_program_import(struct yvex_program_physical **,
+    const yvex_runtime_logits_plan_summary *, unsigned long long maximum_rows,
+    const struct yvex_physical_execution_ir *, yvex_error *);
+/* A NULL physical directory checks only the authenticated producer view; cold
+ * binding admission subsequently requires exact parameter validation. */
+int yvex_output_head_program_validate(const struct yvex_program_physical *,
+    const yvex_runtime_logits_plan_summary *, const struct yvex_physical_execution_ir *, yvex_error *);
 
 #ifdef __cplusplus
 }

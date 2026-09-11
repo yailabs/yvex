@@ -307,9 +307,9 @@ static int joint_weight_project(joint_run *run, yvex_transformer_joint_weight_sl
         if (handled || rc != YVEX_OK) return rc;
     }
     rc = yvex_backend_encoded_matvec(
-        run->backend, weight->encoded, weight->encoded_bytes, weight->qtype,
-        weight->row_count, weight->row_width, weight->row_bytes, rows,
-        input, NULL, 0ull, NULL, output, 0, &facts, err);
+        run->backend, weight->encoded, weight->encoded_bytes, weight->qtype, weight->row_count,
+        weight->row_width, weight->row_bytes, rows, input, NULL, 0ull, NULL, output,
+        weight->qtype == YVEX_GGUF_QTYPE_BF16 ? YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32, &facts, err);
     if (rc == YVEX_OK && !joint_facts_add(&run->facts, &facts))
         rc = conditioning_refuse(err, YVEX_ERR_BOUNDS, "cuda.transformer.joint.joint.facts",
                                  "Omni projection accounting overflowed");
@@ -1049,9 +1049,9 @@ static int transformer_project(yvex_backend *backend,
 {
     yvex_backend_operation_facts part;
     int rc = yvex_backend_encoded_matvec(
-        backend, weight->encoded, weight->encoded_bytes, weight->qtype,
-        weight->row_count, weight->row_width, weight->row_bytes, rows,
-        input, NULL, 0ull, additive, output, 0, &part, err);
+        backend, weight->encoded, weight->encoded_bytes, weight->qtype, weight->row_count,
+        weight->row_width, weight->row_bytes, rows, input, NULL, 0ull, additive, output,
+        weight->qtype == YVEX_GGUF_QTYPE_BF16 ? YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32, &part, err);
     if (rc == YVEX_OK && !transformer_facts_add(facts, &part))
         rc = conditioning_refuse(err, YVEX_ERR_BOUNDS, "cuda.transformer.joint.transformer.facts",
                                  "transformer projection accounting overflowed");

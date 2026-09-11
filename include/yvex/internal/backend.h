@@ -288,13 +288,21 @@ typedef struct yvex_backend_operation_facts {
     unsigned long long activation_bytes, temporary_bytes, accelerated_matrix_launches;
     int compulsory_memory_facts_available;
 } yvex_backend_operation_facts;
+/* Weight encoding does not select activation precision. F32 preserves the
+ * input; BF16 explicitly permits BF16 packing for a BF16 matrix. Q8 permits
+ * the existing eligible encoded Q8 path and its admitted F32 fallback. */
+typedef enum {
+    YVEX_ENCODED_INPUT_F32 = 0,
+    YVEX_ENCODED_INPUT_Q8 = 1,
+    YVEX_ENCODED_INPUT_BF16 = 2
+} yvex_encoded_input_policy;
 struct yvex_backend_encoded_operations {
     int (*matvec)(yvex_backend *backend, const unsigned char *resident_encoded,
         unsigned long long encoded_bytes, unsigned int qtype, unsigned long long row_count,
         unsigned long long row_width, unsigned long long row_bytes,
         unsigned long long input_rows, const yvex_device_tensor *input,
         const yvex_device_tensor *input_tail, unsigned long long input_head_width,
-        const yvex_device_tensor *additive, yvex_device_tensor *output, int activation_q8,
+        const yvex_device_tensor *additive, yvex_device_tensor *output, yvex_encoded_input_policy input_policy,
         yvex_backend_operation_facts *facts, yvex_error *err);
     int (*gather)(yvex_backend *backend, const unsigned char *resident_encoded,
         unsigned long long encoded_bytes, unsigned int qtype, unsigned long long row_count,
@@ -307,7 +315,7 @@ int yvex_backend_encoded_matvec(yvex_backend *backend, const unsigned char *resi
     unsigned long long encoded_bytes, unsigned int qtype, unsigned long long row_count,
     unsigned long long row_width, unsigned long long row_bytes, unsigned long long input_rows,
     const yvex_device_tensor *input, const yvex_device_tensor *input_tail, unsigned long long input_head_width,
-    const yvex_device_tensor *additive, yvex_device_tensor *output, int activation_q8,
+    const yvex_device_tensor *additive, yvex_device_tensor *output, yvex_encoded_input_policy input_policy,
     yvex_backend_operation_facts *facts, yvex_error *err);
 int yvex_backend_encoded_gather(yvex_backend *backend, const unsigned char *resident_encoded,
     unsigned long long encoded_bytes, unsigned int qtype, unsigned long long row_count,

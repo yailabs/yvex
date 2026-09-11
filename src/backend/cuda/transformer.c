@@ -1630,7 +1630,8 @@ static int dense_project(dense_decoder_run *run,
     int rc = yvex_backend_encoded_matvec(
         run->backend, weight->encoded, weight->encoded_bytes, weight->qtype,
         weight->row_count, weight->row_width, weight->row_bytes, rows,
-        input, NULL, 0ull, NULL, output, 0, &facts, err);
+        input, NULL, 0ull, NULL, output,
+        weight->qtype == YVEX_GGUF_QTYPE_BF16 ? YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32, &facts, err);
     if (rc == YVEX_OK && !dense_facts_add(run, &facts))
         rc = dense_refuse(err, YVEX_ERR_BOUNDS, "cuda.dense-decoder.facts",
                           "dense decoder projection accounting overflowed");
