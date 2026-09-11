@@ -16,7 +16,7 @@ extern "C" {
 #define YVEX_SEQUENCE_MIXER_IDENTITY_CAP 65u
 #define YVEX_SEQUENCE_STATE_SCHEMA_V1 1u
 
-typedef struct {
+typedef struct yvex_gated_delta_plan {
     unsigned int schema_version;
     yvex_gated_delta_requirement requirement;
     unsigned long long query_width, key_width, value_width, qkv_width;
@@ -98,7 +98,7 @@ typedef struct {
 /* Device execution consumes family-owned projections and parameters while preserving the same
  * sealed recurrence and caller-owned candidate-state contract as the portable CPU authority.
  * A backend may mutate only next_state/output; committed state is always read-only. */
-typedef struct {
+typedef struct yvex_gated_delta_device_request {
     unsigned long long token_count;
     const yvex_device_tensor *projected_qkv;
     const yvex_device_tensor *projected_output_gate;
@@ -117,7 +117,7 @@ typedef struct {
     void *cancel_context;
 } yvex_gated_delta_device_request;
 
-typedef struct {
+typedef struct yvex_gated_delta_device_result {
     unsigned long long token_count, output_values;
     unsigned long long convolution_state_values, recurrent_state_values;
     unsigned long long recurrent_matrix_updates, accumulated_values;

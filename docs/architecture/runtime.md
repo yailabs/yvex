@@ -95,8 +95,11 @@ physical program; session callers cannot supply a competing state plan. An
 unnormalized decoder refuses instead of rebuilding topology during session
 opening. The enclosing runtime resolves transactions and publishes
 borrowed device results. SSA values, provider state versions and producer
-publication generations remain different lifetimes. DeepSeek transformer and
-MiniMax component consumers are not yet cut over to this owner; see the
+publication generations remain different lifetimes. DeepSeek target/draft final
+mHC and normalization now execute a two-result physical program, including the
+CPU full-evidence path; tensor-stage resources and transport do not rebuild
+compiler semantics. DeepSeek's remaining layer composition and MiniMax
+component consumers are not yet cut over to this owner; see the
 [compiler boundary](compilation.md#typed-computational-programs).
 
 Compilation, source acquisition, model catalogs, server transport, and

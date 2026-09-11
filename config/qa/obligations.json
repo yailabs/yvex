@@ -150,7 +150,8 @@
     },
     {
       "id": "backend-cuda",
-      "patterns": ["src/backend/cuda/*.c", "src/backend/cuda/*.h", "include/yvex/internal/cuda.h"],
+      "patterns": ["src/backend/cuda/*.c", "src/backend/cuda/*.h", "include/yvex/internal/cuda.h",
+                   "include/yvex/internal/neural_operations.h"],
       "lanes": ["fast", "structural", "numeric", "cuda", "sanitizer"],
       "tests": ["cuda.native", "live.deepseek.generation", "live.deepseek.logits"],
       "reason": "CUDA backend changes require native parity, faults, cleanup, and production reachability"

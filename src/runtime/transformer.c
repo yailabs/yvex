@@ -11,12 +11,11 @@
 #include <yvex/internal/execution_observation.h>
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/runtime.h>
+#include <yvex/internal/program_stage.h>
 #include "src/runtime/private.h"
 typedef struct {
     unsigned char *bytes;
     unsigned long long capacity;
-    float *decoded;
-    unsigned long long decoded_count;
 } transformer_weight_owner;
 struct yvex_runtime_transformer_context {
     yvex_model_engine *model;
@@ -26,6 +25,11 @@ struct yvex_runtime_transformer_context {
     yvex_runtime_transformer_options options;
     yvex_runtime_moe_context *moe;
     const yvex_transformer_plan *plan;
+    const yvex_program_physical *final_program;
+    yvex_program_stage *final_stage, *final_reference;
+    yvex_backend *reference_backend;
+    int final_ready;
+    yvex_program_kernel_parameter final_parameters[4];
     transformer_weight_owner global[YVEX_TRANSFORMER_WEIGHT_COUNT];
     unsigned char *embedding_encoded;
     unsigned long long embedding_row_bytes;
@@ -34,7 +38,6 @@ struct yvex_runtime_transformer_context {
     /* Max-shaped workspaces publish only the exact final rows completed by the kernel. */
     yvex_device_tensor device_hidden_publication, device_pre_normalized_publication;
     yvex_execution_device_publication publication;
-    yvex_device_tensor *device_global[YVEX_TRANSFORMER_WEIGHT_COUNT];
     float *embedding, *expanded_a, *expanded_b, *candidate_hidden;
     float *moe_combined, *moe_post, *moe_combination, *moe_routed, *moe_shared;
     yvex_execution_batch_source *execution_sources;
@@ -283,40 +286,104 @@ static int transformer_runtime_decode(const yvex_materialized_tensor_binding *bi
 }
 static int transformer_runtime_globals(yvex_runtime_transformer_context *context, yvex_error *err)
 {
-    unsigned long long slot, total = sizeof(*context);
-    for (slot = YVEX_TRANSFORMER_WEIGHT_FINAL_FUNCTION;
-         slot < YVEX_TRANSFORMER_WEIGHT_COUNT; ++slot) {
-        const yvex_materialized_tensor_binding *binding = transformer_runtime_binding(
-            context, (yvex_transformer_weight_slot)slot);
+    unsigned long long slot = YVEX_TRANSFORMER_WEIGHT_FINAL_FUNCTION, value_id, total = sizeof(*context);
+    context->final_program = yvex_compiled_model_plan_final(context->model_view->compiled_plan,
+        context->options.tensor_scope == YVEX_TENSOR_SCOPE_DRAFT);
+    if (!context->final_program)
+        return transformer_runtime_refuse(err, YVEX_ERR_STATE, "authenticated final computational program is missing");
+    for (value_id = 0u; value_id < yvex_program_physical_summary_get(context->final_program)->value_count; ++value_id) {
+        const yvex_program_physical_value *value = yvex_program_physical_value_at(context->final_program, value_id);
+        if (!value->parameter) continue;
+        if (slot == YVEX_TRANSFORMER_WEIGHT_COUNT)
+            return transformer_runtime_refuse(err, YVEX_ERR_FORMAT, "final parameter population is incompatible");
+        const yvex_materialized_tensor_binding *binding = value && value->parameter
+            ? yvex_materialization_session_tensor_at(context->model_view->materialization, value->tensor_id) : NULL;
         transformer_weight_owner *owner = &context->global[slot];
         unsigned long long count, decoded_bytes;
         if (!binding || !yvex_core_u64_mul(binding->row_width, binding->row_count, &count) ||
             !yvex_core_u64_mul(count, sizeof(float), &decoded_bytes) ||
             !yvex_core_u64_add(total, binding->encoded_bytes, &total) ||
-            !yvex_core_u64_add(total, decoded_bytes, &total) ||
             !yvex_core_u64_add(context->final_weight_bytes, decoded_bytes,
                                &context->final_weight_bytes) ||
             binding->encoded_bytes > SIZE_MAX || count > SIZE_MAX / sizeof(float))
             return transformer_runtime_refuse(err, YVEX_ERR_BOUNDS,
                                               "transformer global weight extent overflowed");
         owner->capacity = binding->encoded_bytes;
-        owner->decoded_count = count;
         owner->bytes = (unsigned char *)malloc((size_t)binding->encoded_bytes);
-        owner->decoded = (float *)malloc((size_t)decoded_bytes);
-        if (!owner->bytes || !owner->decoded)
+        if (!owner->bytes)
             return transformer_runtime_refuse(err, YVEX_ERR_NOMEM,
                                               "transformer global weight allocation failed");
         if (transformer_runtime_read(context, binding, 0ull, binding->encoded_bytes,
-                                     owner->bytes, err) != YVEX_OK ||
-            transformer_runtime_decode(binding, owner->bytes, binding->encoded_bytes,
-                                       owner->decoded, count, err) != YVEX_OK)
+                                     owner->bytes, err) != YVEX_OK)
             return yvex_error_code(err);
+        context->final_parameters[slot - YVEX_TRANSFORMER_WEIGHT_FINAL_FUNCTION] =
+            (yvex_program_kernel_parameter){value->tensor_id, {.encoded = owner->bytes,
+                .encoded_bytes = binding->encoded_bytes, .qtype = binding->qtype, .row_width = binding->row_width,
+                .row_count = binding->row_count, .row_bytes = binding->encoded_bytes / binding->row_count}};
+        slot++;
     }
+    if (slot != YVEX_TRANSFORMER_WEIGHT_COUNT)
+        return transformer_runtime_refuse(err, YVEX_ERR_FORMAT, "final parameter population is incomplete");
     if (context->options.maximum_host_bytes && total > context->options.maximum_host_bytes)
         return transformer_runtime_refuse(err, YVEX_ERR_BOUNDS,
                                           "transformer immutable globals exceed host budget");
     context->host_bytes = total;
     return YVEX_OK;
+}
+
+static int transformer_final_open(yvex_runtime_transformer_context *c, yvex_error *err)
+{
+    unsigned long long host, device, reference_host = 0u, reference_device = 0u;
+    int cpu = yvex_backend_kind_of(c->session_view->backend) == YVEX_BACKEND_KIND_CPU;
+    int rc = yvex_program_stage_open(&c->final_stage, c->final_program, c->final_parameters, 4u,
+        c->session_view->backend, c->token_capacity, cpu, c->options.maximum_host_bytes,
+        c->options.maximum_device_bytes, err);
+    if (rc == YVEX_OK && !cpu && c->options.evidence_level == YVEX_ATTENTION_EVIDENCE_FULL) {
+        yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CPU};
+        rc = yvex_backend_open(&c->reference_backend, &options, err);
+        if (rc == YVEX_OK) rc = yvex_program_stage_open(&c->final_reference, c->final_program,
+            c->final_parameters, 4u, c->reference_backend, c->token_capacity, 1,
+            c->options.maximum_host_bytes, 0u, err);
+    }
+    if (rc != YVEX_OK) return rc;
+    yvex_program_stage_resources(c->final_stage, &host, &device);
+    yvex_program_stage_resources(c->final_reference, &reference_host, &reference_device);
+    if (!yvex_core_u64_add(host, reference_host, &host) ||
+        !yvex_core_u64_add(c->host_bytes, host, &c->host_bytes) ||
+        (c->options.maximum_host_bytes && c->host_bytes > c->options.maximum_host_bytes))
+        return transformer_runtime_refuse(err, YVEX_ERR_BOUNDS, "final program exceeds aggregate host budget");
+    c->final_ready = 1;
+    return YVEX_OK;
+}
+
+static int transformer_final_host(transformer_chunk_context *chunk, yvex_error *err)
+{
+    yvex_runtime_transformer_context *c = chunk->owner;
+    const yvex_ir_type *t = &yvex_program_physical_value_at(c->final_program,
+        yvex_program_physical_result_at(c->final_program, 0u))->type;
+    float *outputs[] = {c->candidate_hidden, chunk->output->pre_normalized_hidden
+        ? chunk->output->pre_normalized_hidden + chunk->token_offset * t->shape[1].extent : c->moe_combined};
+    yvex_backend_operation_facts facts;
+    return yvex_program_stage_host(c->final_reference ? c->final_reference : c->final_stage,
+        chunk->token_count, chunk->current, outputs, 2u, c->options.cancel_requested,
+        c->options.cancel_context, &facts, err);
+}
+
+static int transformer_final_device(transformer_chunk_context *chunk, yvex_device_tensor *pre,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    yvex_runtime_transformer_context *c = chunk->owner;
+    const yvex_ir_type *t = &yvex_program_physical_value_at(c->final_program, 0u)->type;
+    yvex_device_tensor input = chunk->device_current, output = chunk->device_hidden;
+    yvex_device_tensor *outputs[] = {&output, pre};
+    input.rank = 3u; input.dims[0] = chunk->token_count;
+    input.dims[1] = t->shape[1].extent; input.dims[2] = t->shape[2].extent;
+    output.rank = pre->rank = 2u; output.dims[0] = pre->dims[0] = chunk->token_count;
+    output.dims[1] = pre->dims[1] = t->shape[2].extent;
+    int rc = yvex_program_stage_device(c->final_stage, chunk->token_count, &input, outputs, 2u,
+        c->options.cancel_requested, c->options.cancel_context, facts, err);
+    if (rc == YVEX_OK) chunk->device_hidden.is_written = output.is_written;
+    return rc;
 }
 static int transformer_device_tensor_open(
     yvex_runtime_transformer_context *context, yvex_device_tensor **out,
@@ -348,7 +415,7 @@ static int transformer_device_buffers(yvex_runtime_transformer_context *context,
         {&context->device_residual[1], "transformer-residual-b", expanded},
         {&context->device_attention, "transformer-attention", expanded},
         {&context->device_hidden, "transformer-hidden", hidden}};
-    unsigned long long encoded, index, slot;
+    unsigned long long encoded, index;
     int rc;
     if (yvex_backend_kind_of(context->session_view->backend) != YVEX_BACKEND_KIND_CUDA)
         return YVEX_OK;
@@ -368,17 +435,6 @@ static int transformer_device_buffers(yvex_runtime_transformer_context *context,
         rc = transformer_device_tensor_open(
             context, buffers[index].owner, buffers[index].name, YVEX_DTYPE_F32,
             buffers[index].elements, buffers[index].elements * sizeof(float), err);
-    for (slot = YVEX_TRANSFORMER_WEIGHT_FINAL_FUNCTION;
-         rc == YVEX_OK && slot < YVEX_TRANSFORMER_WEIGHT_COUNT; ++slot) {
-        transformer_weight_owner *owner = &context->global[slot];
-        rc = transformer_device_tensor_open(context, &context->device_global[slot],
-            "transformer-final-weight", YVEX_DTYPE_F32, owner->decoded_count,
-            owner->decoded_count * sizeof(float), err);
-        if (rc == YVEX_OK)
-            rc = yvex_backend_tensor_write(context->session_view->backend,
-                context->device_global[slot], owner->decoded,
-                owner->decoded_count * sizeof(float), err);
-    }
     return rc;
 }
 static int transformer_runtime_buffers(yvex_runtime_transformer_context *context,
@@ -387,6 +443,9 @@ static int transformer_runtime_buffers(yvex_runtime_transformer_context *context
     const yvex_transformer_plan_summary *s = yvex_transformer_plan_summary_get(context->plan);
     unsigned long long hidden, expanded, post, combination, total, bytes, owner_bytes;
     unsigned long long source_bytes, token_bytes;
+    if (context->token_capacity && !context->final_ready)
+        return transformer_runtime_refuse(err, YVEX_ERR_STATE,
+            "transformer preparation failed; close the retained owner");
     if (context->token_capacity)
         return tokens <= context->token_capacity
                    ? YVEX_OK
@@ -438,7 +497,9 @@ static int transformer_runtime_buffers(yvex_runtime_transformer_context *context
                                           "transformer chunk buffer allocation failed");
     context->token_capacity = tokens;
     context->host_bytes += bytes;
-    return transformer_device_buffers(context, hidden, expanded, err);
+    int rc = transformer_device_buffers(context, hidden, expanded, err);
+    if (rc == YVEX_OK) rc = transformer_final_open(context, err);
+    return rc;
 }
 static int transformer_encoded_subview(const yvex_device_tensor *source,
                                        unsigned long long bytes, yvex_device_tensor *view)
@@ -828,8 +889,6 @@ static int transformer_layer_evidence(void *opaque, yvex_backend_kind backend,
     if (chunk->layer_ordinal == s->layer_count)
         chunk->result->final_weight_bytes += context->final_weight_bytes;
     if (chunk->layer_ordinal == s->layer_count && backend == YVEX_BACKEND_KIND_CUDA) {
-        const yvex_backend_transformer_operations *operations =
-            transformer_backend_operations(context->session_view->backend, err);
         unsigned long long expanded_bytes = chunk->token_count * s->expanded_width * sizeof(float);
         unsigned long long hidden_bytes = chunk->token_count * s->hidden_width * sizeof(float);
         unsigned long long started_ns = yvex_core_monotonic_ns();
@@ -839,39 +898,19 @@ static int transformer_layer_evidence(void *opaque, yvex_backend_kind backend,
         int full = context->options.evidence_level == YVEX_ATTENTION_EVIDENCE_FULL;
         int device_pre = context->options.device_pre_normalized_output;
         int reference_pre = chunk->output->pre_normalized_hidden && full && !device_pre;
-        if (!operations || !operations->final) return yvex_error_code(err);
         if (reference_pre) {
             rc = yvex_backend_tensor_read(context->session_view->backend, &chunk->device_current,
                                           chunk->current, expanded_bytes, err);
             if (rc == YVEX_OK)
-                rc = yvex_transformer_final_stage_capture(
-                    context->plan, chunk->current, chunk->token_count,
-                    context->global[YVEX_TRANSFORMER_WEIGHT_FINAL_FUNCTION].decoded,
-                    context->global[YVEX_TRANSFORMER_WEIGHT_FINAL_BASE].decoded,
-                    context->global[YVEX_TRANSFORMER_WEIGHT_FINAL_SCALE].decoded,
-                    context->global[YVEX_TRANSFORMER_WEIGHT_OUTPUT_NORM].decoded,
-                    chunk->output->pre_normalized_hidden +
-                        chunk->token_offset * s->hidden_width,
-                    context->candidate_hidden, err);
+                rc = transformer_final_host(chunk, err);
         } else {
             /* Final attention storage is dead here; reuse it for the optional pre-normalized row. */
-            if ((chunk->output->pre_normalized_hidden || device_pre) &&
-                !yvex_backend_tensor_f32_subview(&chunk->device_attention, 0ull,
+            if (!yvex_backend_tensor_f32_subview(&chunk->device_attention, 0ull,
                     chunk->token_count * s->hidden_width, &device_pre_normalized))
                 rc = transformer_runtime_refuse(err, YVEX_ERR_BOUNDS,
                     "transformer final pre-normalized view is invalid");
             if (rc == YVEX_OK)
-                rc = operations->final(
-                    context->session_view->backend, &chunk->device_current,
-                    context->device_global[YVEX_TRANSFORMER_WEIGHT_FINAL_FUNCTION],
-                    context->device_global[YVEX_TRANSFORMER_WEIGHT_FINAL_BASE],
-                    context->device_global[YVEX_TRANSFORMER_WEIGHT_FINAL_SCALE],
-                    context->device_global[YVEX_TRANSFORMER_WEIGHT_OUTPUT_NORM],
-                    chunk->token_count, s->hidden_width, s->residual_streams,
-                    s->output_norm_epsilon, s->mhc_epsilon,
-                    chunk->output->pre_normalized_hidden || device_pre
-                        ? &device_pre_normalized : NULL,
-                    &chunk->device_hidden, &facts, err);
+                rc = transformer_final_device(chunk, &device_pre_normalized, &facts, err);
             if (rc == YVEX_OK) {
                 context->device_hidden_publication = chunk->device_hidden;
                 if (chunk->output->pre_normalized_hidden || device_pre)
@@ -912,17 +951,7 @@ static int transformer_layer_evidence(void *opaque, yvex_backend_kind backend,
         return rc;
     }
     if (chunk->layer_ordinal == s->layer_count)
-        return yvex_transformer_final_stage_capture(
-            context->plan, chunk->current, chunk->token_count,
-            context->global[YVEX_TRANSFORMER_WEIGHT_FINAL_FUNCTION].decoded,
-            context->global[YVEX_TRANSFORMER_WEIGHT_FINAL_BASE].decoded,
-            context->global[YVEX_TRANSFORMER_WEIGHT_FINAL_SCALE].decoded,
-            context->global[YVEX_TRANSFORMER_WEIGHT_OUTPUT_NORM].decoded,
-            chunk->output->pre_normalized_hidden
-                ? chunk->output->pre_normalized_hidden +
-                      chunk->token_offset * s->hidden_width
-                : NULL,
-            context->candidate_hidden, err);
+        return transformer_final_host(chunk, err);
     return YVEX_OK;
 }
 static int transformer_state_summary(const yvex_runtime_transformer_context *context,
@@ -1778,6 +1807,10 @@ int yvex_runtime_transformer_context_close(yvex_runtime_transformer_context **co
         (void)pthread_mutex_unlock(&(*context)->mutex);
     }
     yvex_execution_device_publication_retire(&(*context)->publication);
+    rc = yvex_program_stage_close(&(*context)->final_stage, err);
+    if (rc == YVEX_OK) rc = yvex_program_stage_close(&(*context)->final_reference, err);
+    if (rc == YVEX_OK) rc = yvex_backend_close_checked(&(*context)->reference_backend, err);
+    if (rc != YVEX_OK) return rc;
     buffers[0] = &(*context)->device_embedding_encoded;
     buffers[1] = &(*context)->device_embedding;
     buffers[2] = &(*context)->device_residual[0];
@@ -1788,16 +1821,11 @@ int yvex_runtime_transformer_context_close(yvex_runtime_transformer_context **co
         if (*buffers[index])
             rc = yvex_backend_tensor_release(
                 (*context)->session_view->backend, buffers[index], err);
-    for (index = 0ull; rc == YVEX_OK && index < YVEX_TRANSFORMER_WEIGHT_COUNT; ++index)
-        if ((*context)->device_global[index])
-            rc = yvex_backend_tensor_release((*context)->session_view->backend,
-                                             &(*context)->device_global[index], err);
     if (rc != YVEX_OK) return rc;
     rc = yvex_runtime_moe_context_close(&(*context)->moe, err);
     if (rc != YVEX_OK) return rc;
     for (index = 0ull; index < YVEX_TRANSFORMER_WEIGHT_COUNT; ++index) {
         free((*context)->global[index].bytes);
-        free((*context)->global[index].decoded);
     }
     free((*context)->embedding_encoded);
     free((*context)->embedding); free((*context)->expanded_a); free((*context)->expanded_b);

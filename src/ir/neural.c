@@ -98,10 +98,45 @@ static int neural_norm(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
     return YVEX_OK;
 }
 
+/* Sigmoid hyperconnection collapse followed by RMS normalization. Both BF16
+ * rounding points are semantic, and the pre-normalized value is an explicit
+ * result (draft consumers must not borrow a hidden intermediate). */
+static int neural_mhc_head(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
+{
+    const yvex_ir_operation *op = &m->operations[id];
+    const yvex_ir_type *x = neural_input(m, op, 0u), *fn = neural_input(m, op, 1u);
+    const yvex_ir_type *base = neural_input(m, op, 2u), *scale = neural_input(m, op, 3u);
+    const yvex_ir_type *norm = neural_input(m, op, 4u), *y = neural_output(m, op, 0u);
+    const yvex_ir_attribute *epsilon = yvex_ir_attribute_get(m, id, "epsilon");
+    const yvex_ir_attribute *mhc = yvex_ir_attribute_get(m, id, "mhc_epsilon");
+    unsigned long long expanded;
+    unsigned int i;
+    if (!neural_float_tensor(x) || x->scalar != YVEX_IR_F32 || x->rank != 3u ||
+        x->shape[1].symbol != YVEX_IR_NONE || x->shape[2].symbol != YVEX_IR_NONE ||
+        !yvex_core_u64_mul(x->shape[1].extent, x->shape[2].extent, &expanded) ||
+        !expanded || !epsilon || epsilon->value.real <= 0.0 || !mhc || mhc->value.real <= 0.0)
+        return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "mHC head requires explicit stream/channel geometry and epsilons");
+    for (i = 1u; i < 5u; ++i)
+        if (!neural_float_tensor(neural_input(m, op, i)) || neural_input(m, op, i)->scalar != YVEX_IR_F32)
+            return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "mHC head parameters have F32 logical semantics");
+    if (fn->rank != 2u || !yvex_ir_extent_equal(fn->shape[0], x->shape[1]) ||
+        fn->shape[1].symbol != YVEX_IR_NONE || fn->shape[1].extent != expanded ||
+        base->rank != 1u || !yvex_ir_extent_equal(base->shape[0], x->shape[1]) ||
+        scale->rank != 1u || scale->shape[0].symbol != YVEX_IR_NONE || scale->shape[0].extent != 1u ||
+        norm->rank != 1u || !yvex_ir_extent_equal(norm->shape[0], x->shape[2]) ||
+        !neural_float_tensor(y) || y->rank != 2u || y->scalar != YVEX_IR_BF16 ||
+        !yvex_ir_extent_equal(y->shape[0], x->shape[0]) || !yvex_ir_extent_equal(y->shape[1], x->shape[2]) ||
+        !yvex_ir_type_equal(y, neural_output(m, op, 1u)))
+        return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "mHC head parameter/result shapes disagree with stream geometry");
+    return YVEX_OK;
+}
+
 const yvex_ir_dialect *yvex_ir_neural_dialect(void)
 {
     static const yvex_ir_attribute_rule norm[] = {
         {"epsilon", YVEX_IR_ATTR_F64, 1}, {"weight_offset", YVEX_IR_ATTR_F64, 1}};
+    static const yvex_ir_attribute_rule mhc[] = {
+        {"epsilon", YVEX_IR_ATTR_F64, 1}, {"mhc_epsilon", YVEX_IR_ATTR_F64, 1}};
     static const yvex_ir_operation_definition operations[] = {
         {"tensor.add", 1u, 2u, 2u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_binary},
         {"tensor.multiply", 1u, 2u, 2u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_binary},
@@ -109,6 +144,7 @@ const yvex_ir_dialect *yvex_ir_neural_dialect(void)
         {"nn.embedding", 1u, 2u, 2u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_embedding},
         {"nn.rms_norm", 1u, 2u, 2u, 1u, 1u, 0u, 0u, norm, 2u, 0, neural_norm},
         {"nn.layer_norm", 1u, 3u, 3u, 1u, 1u, 0u, 0u, norm, 2u, 0, neural_norm},
+        {"mhc.head_norm", 1u, 5u, 5u, 2u, 2u, 0u, 0u, mhc, 2u, 0, neural_mhc_head},
         {"nn.silu", 1u, 1u, 1u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_unary},
         {"nn.gelu", 1u, 1u, 1u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_unary},
         /* SiLU rounds to the operand type before multiplication; the product

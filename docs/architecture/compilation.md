@@ -213,7 +213,7 @@ are migrated and qualified.
 | Consumer | Implemented IR boundary | Remaining closure boundary |
 | --- | --- | --- |
 | Qwen 3.5 | Forward and output entries share compiler lineage; slot-based runner; legacy decoder import normalized at binding admission; bounded recurrent and hybrid CUDA execution | Real artifact-backed hybrid preservation; remaining provider/report views and ownership cutover |
-| DeepSeek V4 / DSpark | Output projection consumes physical SSA normalized from authenticated legacy bindings; real logits regression; complete target/draft computation remains historical | Migrate heterogeneous attention, mHC, MoE and draft dependencies; qualify target/speculative execution |
+| DeepSeek V4 / DSpark | Output projection and two-result final mHC/RMSNorm consume physical SSA normalized at cold binding admission; real logits preserved; complete target/draft computation remains historical | Migrate heterogeneous attention, per-block mHC, MoE and target/draft dependencies; qualify integrated composition |
 | MiniMax H3 | Existing component/intake regression consumer | Migrate neural component composition without absorbing media I/O; qualify affected consumers |
 | Mamba2 | Pure SSM representable without attention/KV | Preserve representability only here; A01 executable repair remains queued and PARTIAL |
 
@@ -399,7 +399,7 @@ This fixture does not execute the full model.
 [`program_physical.c`](../../src/graph/program_physical.c) lowers explicit
 operands/results, logical publications, parameter tensor IDs, state roots and
 last-use intervals. It admits embedding, BF16 linear/RMSNorm/SiLU/add, gated
-delta and gated causal attention. A state successor is a semantic dependency,
+delta, gated causal attention and the two-result mHC head. A state successor is a semantic dependency,
 not an allocation or a physical copy. The current provider specialization
 admits one transition per state root per invocation; unsupported state flow is
 refused, not silently linearized. Exact package identity, qtype, row geometry
@@ -474,6 +474,37 @@ output values and is not bitwise preservation of the former output-head path.
 It does not resolve the separate whole-model CPU/CUDA numerical discrepancy or
 establish upstream model conformance. Legacy numerical recipes outside this
 output cutover retain their explicit existing input policy.
+
+The final hyperconnection head is `mhc.head_norm`: one F32 logical input
+`[rows, streams, width]`, four explicit parameter values (function, bias, scale,
+normalization), positive normalization/gating epsilons, and two BF16 logical
+results `[rows, width]`. Result zero is normalized hidden; result one is the
+pre-normalized hidden required by draft consumers. Sigmoid stream collapse
+rounds to BF16 before RMSNorm; normalization rounds again. Both dependencies
+are explicit values, not a hidden borrow from the numerical implementation.
+The verifier rejects inconsistent stream/channel geometry, scalar types and
+attributes. Physical lowering selects `mhc.head_norm.bf16.v1` and authenticates
+all four parameter handles against package PEIR; it does not assume their
+encoded qtype is the logical type.
+
+[`transformer.c`](../../src/graph/transformer.c) imports retained target/draft
+final-head summaries into that program once during cold binding normalization.
+Those summaries remain persisted compatibility inputs, not an alternative
+executable final-head implementation. No additional durable schema is introduced.
+The CPU equations now belong to the backend operation; the previous graph-side
+final/capture implementations and direct runtime final-kernel call are removed.
+The existing CUDA numerical kernel is unchanged.
+The numerical ABI is now in
+[`neural_operations.h`](../../include/yvex/internal/neural_operations.h), separate
+from model plans, import and runner records. CPU and the CUDA operation interface
+consume that narrow contract; existing numerical type names/layouts are retained.
+[`program_stage.c`](../../src/runtime/program_stage.c) binds tensor-only program
+resources and host/device transport without building IR or selecting family
+semantics. Host publication waits for all result transfers and cancellation
+checks; device-result publication generations remain the enclosing runtime's
+authority. The full-evidence CPU reference path consumes the same compiled
+operation through a CPU backend. This is the final-head cutover, not migration
+of the remaining DeepSeek attention/MoE layer loop or DSpark orchestration.
 
 Production token-forward execution and the independent BF16 CUDA fixture both
 use [`program_device.c`](../../src/runtime/program_device.c) with

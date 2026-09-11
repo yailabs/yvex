@@ -2,7 +2,7 @@
  * Neither tensor roles nor model/family names participate in invocation. */
 #include <yvex/internal/program_kernels.h>
 #include <yvex/internal/component.h>
-#include <yvex/internal/transformer.h>
+#include <yvex/internal/neural_operations.h>
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/qtype.h>
 
@@ -84,14 +84,16 @@ static int kernel_parameters_bind(yvex_program_kernels *c, const yvex_program_ke
 static int kernel_small_prepare(yvex_program_kernels *c, yvex_ir_id slot, double offset, yvex_error *err)
 {
     const yvex_component_encoded_weight *w = &c->weights[slot];
+    const yvex_gguf_qtype_geometry *geometry = yvex_gguf_qtype_geometry_find(w->qtype);
     yvex_backend_tensor_desc d = {.name = "program-parameter", .dtype = YVEX_DTYPE_F32, .rank = 1u};
     unsigned long long i, count;
     float *host;
     int rc;
     if (c->small[slot]) return c->offsets[slot] == offset ? YVEX_OK :
         kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "parameter requires distinct prepared normalization representations");
-    if (!w->encoded || w->qtype != YVEX_GGUF_QTYPE_BF16 ||
+    if (!w->encoded || !geometry || !geometry->block_size || !geometry->bytes_per_block ||
         !yvex_core_u64_mul(w->row_count, w->row_width, &count) || !count ||
+        count % geometry->block_size ||
         !yvex_core_u64_mul(count, sizeof(float), &d.bytes) || d.bytes > SIZE_MAX)
         return kernel_refuse(err, YVEX_ERR_FORMAT, "small parameter has invalid encoded geometry");
     /* This bounded temporary host decoding is preparation, not a retained mirror. */
@@ -100,12 +102,15 @@ static int kernel_small_prepare(yvex_program_kernels *c, yvex_ir_id slot, double
         return kernel_refuse(err, YVEX_ERR_BOUNDS, "small parameter preparation exceeds resource budget");
     host = malloc((size_t)d.bytes);
     if (!host) return kernel_refuse(err, YVEX_ERR_NOMEM, "small parameter preparation allocation failed");
-    for (i = 0u; i < count; ++i) {
-        unsigned short bits = (unsigned short)(w->encoded[2u * i] | ((unsigned int)w->encoded[2u * i + 1u] << 8u));
-        host[i] = yvex_quant_bf16_decode(bits) + (float)offset;
+    rc = YVEX_OK;
+    for (i = 0u; rc == YVEX_OK && i < count / geometry->block_size; ++i) {
+        yvex_quant_failure failure = {0};
+        rc = yvex_quant_decode_block(w->qtype, w->encoded + i * geometry->bytes_per_block,
+            geometry->bytes_per_block, host + i * geometry->block_size, geometry->block_size, &failure, err);
     }
+    for (i = 0u; rc == YVEX_OK && i < count; ++i) host[i] += (float)offset;
     d.dims[0] = count;
-    rc = yvex_backend_tensor_alloc(c->backend, &d, &c->small[slot], err);
+    if (rc == YVEX_OK) rc = yvex_backend_tensor_alloc(c->backend, &d, &c->small[slot], err);
     if (rc == YVEX_OK) rc = yvex_backend_tensor_write(c->backend, c->small[slot], host, d.bytes, err);
     if (rc == YVEX_OK) rc = kernel_account(c, 0u, d.bytes, err);
     if (rc == YVEX_OK) c->offsets[slot] = offset;
@@ -122,6 +127,12 @@ static int kernel_instructions_bind(yvex_program_kernels *c, yvex_error *err)
         c->linear_slots[i] = SIZE_MAX;
         if (!strcmp(s->implementation, "parameter.encoded.v1") ||
             !strcmp(s->implementation, "linear.encoded.f32.v1")) continue;
+        if (!strcmp(s->implementation, "mhc.head_norm.bf16.v1")) {
+            if (!c->ops || !c->ops->final)
+                return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "mHC head has no admitted backend implementation");
+            for (j = 1u; rc == YVEX_OK && j < 5u; ++j) rc = kernel_small_prepare(c, s->operands[j], 0.0, err);
+            continue;
+        }
         if (!c->ops || !c->ops->linear_compile || !c->ops->linear_execute || !c->ops->linear_release ||
             !c->ops->linear_summary || !c->ops->silu_product_bf16 || !c->ops->add_bf16 || !c->ops->bf16_round)
             return kernel_refuse(err, YVEX_ERR_UNSUPPORTED,
@@ -280,6 +291,15 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
         return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "operation has no admitted numerical operands/results");
     output = &r->values[s->results[0]];
     input = &r->values[s->operands[0]];
+    if (!strcmp(s->implementation, "mhc.head_norm.bf16.v1")) {
+        const yvex_ir_type *type = &yvex_program_physical_value_at(c->program, s->operands[0])->type;
+        const yvex_ir_attribute *epsilon = yvex_program_physical_attribute(s, "epsilon");
+        const yvex_ir_attribute *mhc = yvex_program_physical_attribute(s, "mhc_epsilon");
+        return c->ops->final(c->backend, input, c->small[s->operands[1]],
+            c->small[s->operands[2]], c->small[s->operands[3]], c->small[s->operands[4]], r->rows,
+            type->shape[2].extent, type->shape[1].extent, epsilon->value.real, mhc->value.real,
+            &r->values[s->results[1]], output, facts, err);
+    }
     if (!strcmp(s->implementation, "linear.encoded.f32.v1")) {
         const yvex_component_encoded_weight *w = &c->weights[s->operands[1]];
         const yvex_ir_type *type = &yvex_program_physical_value_at(c->program, s->operands[0])->type;

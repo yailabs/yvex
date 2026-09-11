@@ -9,6 +9,7 @@
 #include <yvex/internal/backend.h>
 #include "src/backend/private.h"
 #include <yvex/internal/quant_numeric.h>
+#include <yvex/internal/neural_operations.h>
 
 #include <limits.h>
 #include <math.h>
@@ -93,6 +94,88 @@ static int cpu_query_capability(const yvex_backend *backend,
     return YVEX_OK;
 }
 
+/* One admitted numerical operation, not a model/decoder plan. Stream geometry
+ * and both rounding points are supplied by the verified computational program. */
+static int cpu_mhc_head(yvex_backend *backend, const yvex_device_tensor *expanded,
+    const yvex_device_tensor *function, const yvex_device_tensor *base,
+    const yvex_device_tensor *scale, const yvex_device_tensor *norm,
+    unsigned long long rows, unsigned long long width, unsigned long long streams,
+    double epsilon, double mhc_epsilon, yvex_device_tensor *pre, yvex_device_tensor *output,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_device_tensor *tensors[] = {expanded, function, base, scale, norm, pre, output};
+    unsigned long long sizes[7], expanded_width, row, stream, lane, i;
+    const float *fn, *bias, *gain, *weights;
+    if (facts) memset(facts, 0, sizeof(*facts));
+    if (output) output->is_written = 0;
+    if (pre) pre->is_written = 0;
+    if (!facts || !rows || !width || !streams || !isfinite(epsilon) || epsilon <= 0.0 ||
+        !isfinite(mhc_epsilon) || mhc_epsilon <= 0.0 ||
+        !yvex_core_u64_mul(width, streams, &expanded_width) ||
+        !yvex_core_u64_mul(rows, expanded_width, &sizes[0]) ||
+        !yvex_core_u64_mul(streams, expanded_width, &sizes[1]) ||
+        !yvex_core_u64_mul(rows, width, &sizes[5])) goto invalid;
+    sizes[2] = streams; sizes[3] = 1u; sizes[4] = width; sizes[6] = sizes[5];
+    for (i = 0u; i < 7u; ++i) {
+        if (i == 5u && !pre) continue;
+        if (!backend_tensor_owner_is(backend, tensors[i]) || !backend_tensor_f32_elements(tensors[i], sizes[i]) ||
+            (i < 5u && !tensors[i]->is_written)) goto invalid;
+    }
+    if (pre && pre->data == output->data) goto invalid;
+    fn = (const float *)function->data; bias = (const float *)base->data;
+    gain = (const float *)scale->data; weights = (const float *)norm->data;
+    for (row = 0u; row < rows; ++row) {
+        const float *x = (const float *)expanded->data + row * expanded_width;
+        float *y = (float *)output->data + row * width;
+        double squares = 0.0, inverse;
+        for (i = 0u; i < expanded_width; ++i) squares += (double)x[i] * (double)x[i];
+        inverse = 1.0 / sqrt(squares / (double)expanded_width + epsilon);
+        if (!isfinite(inverse)) goto numeric;
+        memset(y, 0, (size_t)width * sizeof(float));
+        for (stream = 0u; stream < streams; ++stream) {
+            double mix = 0.0, coefficient;
+            for (i = 0u; i < expanded_width; ++i) mix += (double)fn[stream * expanded_width + i] * (double)x[i];
+            coefficient = 1.0 / (1.0 + exp(-(mix * inverse * (double)gain[0] + (double)bias[stream])));
+            coefficient += mhc_epsilon;
+            for (lane = 0u; lane < width; ++lane)
+                y[lane] += (float)(coefficient * (double)x[stream * width + lane]);
+        }
+        squares = 0.0;
+        for (lane = 0u; lane < width; ++lane) {
+            if (!isfinite(y[lane]) || !isfinite(weights[lane])) goto numeric;
+            y[lane] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(y[lane]));
+            squares += (double)y[lane] * (double)y[lane];
+        }
+        if (pre) memcpy((float *)pre->data + row * width, y, (size_t)width * sizeof(float));
+        inverse = 1.0 / sqrt(squares / (double)width + epsilon);
+        for (lane = 0u; lane < width; ++lane) {
+            double value = (double)y[lane] * inverse * (double)weights[lane];
+            if (!isfinite(value) || !isfinite((float)value)) goto numeric;
+            y[lane] = yvex_quant_bf16_decode(yvex_quant_bf16_encode((float)value));
+        }
+    }
+    output->is_written = 1;
+    if (pre) pre->is_written = 1;
+    facts->active_weight_bytes = function->bytes + base->bytes + scale->bytes + norm->bytes;
+    facts->activation_bytes = expanded->bytes + output->bytes + (pre ? pre->bytes : 0u);
+    facts->compulsory_memory_facts_available = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+invalid:
+    yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.mhc-head", "mHC head tensors or geometry are incompatible");
+    return YVEX_ERR_FORMAT;
+numeric:
+    yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.mhc-head", "mHC head produced non-finite values");
+    return YVEX_ERR_FORMAT;
+}
+
+static const yvex_backend_transformer_operations *cpu_transformer_operations(const yvex_backend *backend)
+{
+    static const yvex_backend_transformer_operations operations = {.final = cpu_mhc_head};
+    (void)backend;
+    return &operations;
+}
+
 static const yvex_backend_vtable cpu_vtable = {
     .memory_stats = cpu_memory_stats,
     .device_info = cpu_device_info,
@@ -110,6 +193,7 @@ static const yvex_backend_vtable cpu_vtable = {
     .op_matmul = cpu_op_matmul,
     .op_mlp = cpu_op_mlp,
     .op_attention = cpu_op_attention,
+    .transformer_operations = cpu_transformer_operations,
 };
 
 int yvex_backend_open_cpu(yvex_backend **out, yvex_error *err)

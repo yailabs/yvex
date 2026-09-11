@@ -17,6 +17,8 @@
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/runtime.h>
 #include <yvex/internal/transformer.h>
+#include <yvex/internal/program_physical.h>
+#include <yvex/internal/execution.h>
 
 static void transformer_test_identity(char output[YVEX_SHA256_HEX_CAP], unsigned int value)
 {
@@ -58,9 +60,10 @@ static int transformer_test_plan(yvex_transformer_plan **out,
         summary.weights[slot].tensor_id = slot;
         summary.weights[slot].role = (yvex_tensor_role)(YVEX_TENSOR_ROLE_TOKEN_EMBEDDING + slot);
         summary.weights[slot].qtype = YVEX_GGUF_QTYPE_F32;
-        summary.weights[slot].row_width = 1ull + slot;
-        summary.weights[slot].row_count = 1ull;
-        summary.weights[slot].encoded_bytes = 4ull * (1ull + slot);
+        const unsigned long long widths[] = {2u, 4u, 2u, 1u, 2u};
+        summary.weights[slot].row_width = widths[slot];
+        summary.weights[slot].row_count = slot == 0u ? 16u : slot == 1u ? 2u : 1u;
+        summary.weights[slot].encoded_bytes = 4ull * widths[slot] * summary.weights[slot].row_count;
     }
     layer.ordinal = layer.layer_index = 0ull;
     transformer_test_identity(layer.moe_layer_identity, 8u);
@@ -104,6 +107,55 @@ static int transformer_test_family(void)
     return 0;
 }
 
+static int transformer_test_final_import(void)
+{
+    yvex_transformer_plan *plan = NULL;
+    yvex_transformer_plan_summary s;
+    unsigned int variant, i;
+    if (transformer_test_plan(&plan, &s) != 0) return 1;
+    for (variant = 0u; variant < 4u; ++variant) {
+        yvex_physical_execution_summary summary = {.schema_version = YVEX_PHYSICAL_EXECUTION_SCHEMA_V5,
+            .decision_count = 4u};
+        yvex_physical_execution_decision decisions[4] = {0};
+        yvex_physical_execution_ir *physical = NULL;
+        yvex_program_physical *program = NULL, *repeat = NULL;
+        yvex_error err = {0};
+        transformer_test_identity(summary.physical_variant_identity, 32u);
+        for (i = 0u; i < 4u; ++i) {
+            const yvex_transformer_weight_binding *w = &s.weights[i + 1u];
+            decisions[i] = (yvex_physical_execution_decision){.schema_version = YVEX_PHYSICAL_EXECUTION_SCHEMA_V5,
+                .terminal_tensor_id = i + 1u, .role = w->role, .scope = YVEX_TENSOR_SCOPE_GLOBAL,
+                .layer_index = YVEX_TRANSFORM_IR_NO_ID, .predictor_index = YVEX_TRANSFORM_IR_NO_ID,
+                .canonical_qtype = w->qtype, .canonical_row_width = w->row_width, .canonical_row_count = w->row_count,
+                .encoded_bytes = w->encoded_bytes, .encoded_offset = 256u + i * 128u, .alignment = 32u,
+                .consumer = YVEX_EXECUTION_CONSUMER_FINAL_NORMALIZATION,
+                .layout = YVEX_EXECUTION_LAYOUT_CANONICAL_ROW, .sharing = YVEX_EXECUTION_SHARING_MODEL_READ_ONLY};
+            transformer_test_identity(decisions[i].terminal_identity, 64u + i);
+        }
+        if (variant == 1u) { decisions[0].canonical_row_width = 2u; decisions[0].canonical_row_count = 4u; }
+        if (variant == 2u) { decisions[0].canonical_qtype = YVEX_GGUF_QTYPE_BF16; decisions[0].encoded_bytes /= 2u; }
+        if (variant == 3u) decisions[0].terminal_tensor_id = 16u;
+        int rc = yvex_physical_execution_ir_import(&physical, &summary, decisions, 4u, &err);
+        YVEX_TEST_ASSERT(rc == YVEX_OK, "independently sealed physical parameter fixture");
+        rc = yvex_transformer_final_program_import(&program, plan, physical, &err);
+        if (!variant && rc != YVEX_OK) fprintf(stderr, "final cold import: %s\n", yvex_error_message(&err));
+        YVEX_TEST_ASSERT(variant ? rc != YVEX_OK && !program : rc == YVEX_OK,
+            "cold import joins exact parameter identity, precision and geometry before execution");
+        if (!variant) {
+            const yvex_program_physical_summary *p = yvex_program_physical_summary_get(program);
+            YVEX_TEST_ASSERT(p->input_count == 1u && p->result_count == 2u && p->step_count == 5u &&
+                p->maximum_rows == 8u && yvex_transformer_final_program_import(&repeat, plan, physical, &err) == YVEX_OK &&
+                !strcmp(p->identity, yvex_program_physical_summary_get(repeat)->identity),
+                "cold final import deterministically produces one input, four constants and two results");
+        }
+        yvex_program_physical_close(&repeat); yvex_program_physical_close(&program);
+        yvex_physical_execution_ir_close(&physical);
+    }
+    yvex_transformer_plan_close(&plan);
+    puts("mHC cold import: exact lineage repeat; 3 parameter identity/shape/precision mismatches refused");
+    return 0;
+}
+
 static int transformer_test_context_envelope(void)
 {
     yvex_compiled_context_envelope envelope = {
@@ -144,15 +196,12 @@ static int transformer_test_context_envelope(void)
 static int transformer_test_numeric(void)
 {
     yvex_transformer_plan *plan = NULL;
-    float embedding[] = {1.0f, 2.0f}, expanded[4], next[4], normalized[2];
-    float pre_normalized[2], pre_expected[2];
+    float embedding[] = {1.0f, 2.0f}, expanded[4], next[4];
     float feature[] = {3.0f, -4.0f}, feature_expected[2];
     float feature_norm[] = {0.5f, 1.5f};
     float residual[] = {1.0f, 2.0f, 3.0f, 4.0f};
     float combined[] = {5.0f, 6.0f}, post[] = {0.5f, 1.0f};
     float combination[] = {1.0f, 0.0f, 0.0f, 1.0f};
-    float function[8] = {0.0f}, base[] = {0.0f, 0.0f}, scale[] = {1.0f};
-    float norm[] = {1.0f, 2.0f}, expected[2];
     double square, inverse;
     yvex_error err;
     if (transformer_test_plan(&plan, NULL) != 0) return 1;
@@ -168,28 +217,6 @@ static int transformer_test_numeric(void)
                          next[2] == yvex_quant_bf16_decode(yvex_quant_bf16_encode(8.0f)) &&
                          next[3] == yvex_quant_bf16_decode(yvex_quant_bf16_encode(10.0f)),
                      "deferred FFN post matches independent residual combination");
-    expected[0] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(
-        (float)((0.5 + 1e-6) * (next[0] + next[2]))));
-    expected[1] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(
-        (float)((0.5 + 1e-6) * (next[1] + next[3]))));
-    pre_expected[0] = expected[0];
-    pre_expected[1] = expected[1];
-    square = ((double)expected[0] * expected[0] + (double)expected[1] * expected[1]) / 2.0;
-    inverse = 1.0 / sqrt(square + 1e-5);
-    expected[0] = yvex_quant_bf16_decode(yvex_quant_bf16_encode((float)(expected[0] * inverse)));
-    expected[1] = yvex_quant_bf16_decode(yvex_quant_bf16_encode((float)(expected[1] * inverse * 2.0)));
-    YVEX_TEST_ASSERT(yvex_transformer_final_stage(
-                         plan, next, 1ull, function, base, scale, norm, normalized, &err) == YVEX_OK &&
-                         normalized[0] == expected[0] && normalized[1] == expected[1],
-                     "final mHC head and RMSNorm match an independent full equation");
-    YVEX_TEST_ASSERT(
-        yvex_transformer_final_stage_capture(
-            plan, next, 1ull, function, base, scale, norm, pre_normalized,
-            normalized, &err) == YVEX_OK &&
-            pre_normalized[0] == pre_expected[0] &&
-            pre_normalized[1] == pre_expected[1] &&
-            normalized[0] == expected[0] && normalized[1] == expected[1],
-        "feature capture preserves the exact pre-output-normalized target state");
     square = ((double)feature[0] * feature[0] +
               (double)feature[1] * feature[1]) /
              2.0;
@@ -209,11 +236,6 @@ static int transformer_test_numeric(void)
         yvex_transformer_feature_normalize(feature, 2ull, feature_norm, 1e-6,
                                            &err) == YVEX_ERR_FORMAT,
         "non-finite draft feature normalization refuses");
-    next[0] = NAN;
-    YVEX_TEST_ASSERT(yvex_transformer_final_stage(
-                         plan, next, 1ull, function, base, scale, norm, normalized, &err) ==
-                         YVEX_ERR_FORMAT,
-                     "non-finite final input refuses");
     yvex_transformer_plan_close(&plan);
     return 0;
 }
@@ -328,6 +350,7 @@ static int transformer_test_block_api_refusal(void)
 
 int yvex_test_runtime_transformer(void)
 {
+    if (transformer_test_final_import() != 0) return 1;
     if (transformer_test_family() != 0) return 1;
     if (transformer_test_context_envelope() != 0) return 1;
     if (transformer_test_numeric() != 0) return 1;

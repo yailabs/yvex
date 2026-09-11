@@ -2,6 +2,7 @@
 #include "tests/test.h"
 #include "tests/support/tensor_program.h"
 #include "tests/support/linear_program.h"
+#include "tests/support/mhc_program.h"
 
 #include <yvex/internal/compilation.h>
 #include <yvex/internal/core.h>
@@ -413,6 +414,7 @@ static int program_test_device(void)
 
 int yvex_test_program(void)
 {
+    if (test_mhc_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;
     if (test_linear_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;
     char semantic_identity[YVEX_SHA256_HEX_BYTES] = {0}, physical_identity[YVEX_SHA256_HEX_BYTES] = {0};
     unsigned int variant;

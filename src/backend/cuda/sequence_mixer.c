@@ -1,6 +1,7 @@
 /* Execute one admitted gated-delta sequence mixer over transactional device state. */
 #include "src/backend/cuda/private.h"
 #include "src/backend/cuda/transformer_ops.h"
+#include <yvex/internal/sequence_mixer.h>
 
 #include <limits.h>
 #include <stdint.h>

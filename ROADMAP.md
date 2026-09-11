@@ -11,7 +11,7 @@ Status: living public project control
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` and its qualification COMPLETE at producer-owned device-result validity: expired borrows fail closed; source-stable QA and exact bounded performance replay retained. Earlier identity/platform repairs preserved. |
 | Architecture Spectrum | A01 PARTIAL, repair queued behind refoundation .1 and qualification; A02–A10 PLANNED. |
 | Adopted state architecture target | Dual-stream primary computation plus persistent model-native computational state. YAI owns semantic authority; YVEX owns computational realization. Program N is OPEN, not implemented. |
-| Most important structural gap | Physical forward/output programs exist, with bounded hybrid CUDA/state and real output-head evidence. DeepSeek/DSpark and MiniMax still retain computational authority requiring migration before .1 closes. Exact Qwen artifact-backed preservation remains separately blocked by asset identity. A01 tokenizer/normalization and whole-model barriers remain. |
+| Most important structural gap | Physical forward/output programs and the DeepSeek final mHC head execute through SSA, with bounded CPU/CUDA and real-logits evidence. DeepSeek/DSpark layer composition and MiniMax neural composition still require migration before .1 closes. Exact Qwen artifact-backed preservation remains separately blocked by asset identity. A01 tokenizer/normalization and whole-model barriers remain. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media. Evidence depths differ. |
 | External execution characterization | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Retained as a measured limitation, not a refoundation .1 closure gate; no downstream-safe claim. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
@@ -827,8 +827,9 @@ or change `repair_same_boundary`. DeepSeek optimization stays PARTIAL pending
 explicit resumption; upstream/whole-model conformance remains Program Q work.
 
 The [current consumer matrix](docs/architecture/compilation.md#current-consumer-cutover)
-distinguishes Qwen's physical forward/output runner and the shared output-head
-cutover from the remaining DeepSeek/DSpark and MiniMax computational migration.
+distinguishes Qwen's physical forward/output runner, shared output projection
+and DeepSeek's two-result final mHC program from the remaining DeepSeek/DSpark
+layer and MiniMax neural computational migration.
 Exact Qwen artifact-backed preservation is a separate evidence obligation:
 an absent exact asset cannot earn whole-model qualification, but does not alone
 prevent architectural completion. Mamba remains representability evidence.

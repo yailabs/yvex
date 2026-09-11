@@ -343,6 +343,7 @@ if rg -n -i 'minimax' src/backend/cuda/qtype.c src/backend/cuda/joint_transforme
 fi
 if rg -n 'encoded_bytes, row_count, row_width, row_bytes' \
     include/yvex/internal/backend.h include/yvex/internal/transformer.h \
+    include/yvex/internal/neural_operations.h \
     include/yvex/internal/joint_transformer.h; then
     fail "component execution duplicates the canonical encoded-weight descriptor"
 fi
@@ -350,7 +351,7 @@ rg -n 'typedef yvex_component_encoded_weight yvex_backend_text_weight' \
     include/yvex/internal/component.h >/dev/null ||
     fail "text execution does not reuse the canonical component weight view"
 rg -n 'typedef struct yvex_component_encoded_weight yvex_transformer_encoded_weight' \
-    include/yvex/internal/transformer.h >/dev/null ||
+    include/yvex/internal/neural_operations.h >/dev/null ||
     fail "dense Transformer execution does not reuse the canonical component weight view"
 
 if find src include -type f \( -name '*.c' -o -name '*.h' -o -name '*.cu' \) \
@@ -395,6 +396,7 @@ fi
 # cannot require one device API, compute capability, or implementation class.
 backend_neutral_headers='include/yvex/internal/sampling.h
 include/yvex/internal/transformer.h
+include/yvex/internal/neural_operations.h
 include/yvex/internal/execution_batch.h
 include/yvex/internal/execution_transaction.h
 include/yvex/internal/moe.h'
@@ -407,6 +409,7 @@ if rg -n 'yvex_backend_cuda_(operation_facts|encoded_)' src/runtime src/graph; t
 fi
 if rg -n 'YVEX_ENGINE_IMPLEMENTATION_CUDA|SM121|CUBLAS|compute_capability' \
     include/yvex/internal/sampling.h include/yvex/internal/transformer.h \
+    include/yvex/internal/neural_operations.h \
     include/yvex/internal/execution_batch.h include/yvex/internal/execution_transaction.h \
     include/yvex/internal/moe.h \
     src/graph/transformer.c src/graph/worklist.c; then
@@ -427,7 +430,7 @@ fi
 cat <<'EOF' | "${CC:-cc}" -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L \
         -Iinclude -I. -std=c11 -Wall -Wextra -pedantic -Werror -x c -fsyntax-only -
 #include <yvex/internal/sampling.h>
-#include <yvex/internal/transformer.h>
+#include <yvex/internal/neural_operations.h>
 
 static int neutral_workspace(unsigned long long rows, unsigned long long *bytes,
                              yvex_error *err)

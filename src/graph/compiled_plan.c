@@ -32,7 +32,7 @@ struct yvex_compiled_model_plan {
     unsigned int schema;
     char operator_graph_identity[YVEX_SHA256_HEX_BYTES];
     yvex_program_tensor_plan *dense_ffn;
-    yvex_program_physical *forward, *output;
+    yvex_program_physical *forward, *output, *final, *draft_final;
     yvex_decoder_plan *decoder;
     yvex_moe_plan *moe, *draft_moe;
     yvex_transformer_plan *transformer, *draft_transformer;
@@ -574,6 +574,8 @@ void yvex_compiled_model_plan_close(yvex_compiled_model_plan **owner)
     yvex_program_tensor_close(&plans->dense_ffn);
     yvex_program_physical_close(&plans->forward);
     yvex_program_physical_close(&plans->output);
+    yvex_program_physical_close(&plans->final);
+    yvex_program_physical_close(&plans->draft_final);
     yvex_decoder_plan_close(&plans->decoder);
     yvex_transformer_plan_close(&plans->draft_transformer);
     yvex_transformer_plan_close(&plans->transformer);
@@ -1211,6 +1213,11 @@ int yvex_compiled_model_plan_normalize(yvex_compiled_model_plan *plan,
 {
     if (!plan) return model_plan_refuse(err, YVEX_ERR_INVALID_ARG, "compiled import owner required");
     int rc = YVEX_OK;
+    if (plan->transformer && !plan->final)
+        rc = yvex_transformer_final_program_import(&plan->final, plan->transformer, parameters, err);
+    if (rc == YVEX_OK && plan->draft_transformer && !plan->draft_final)
+        rc = yvex_transformer_final_program_import(&plan->draft_final, plan->draft_transformer, parameters, err);
+    if (rc != YVEX_OK) return rc;
     if (plan->output_head.schema_version) {
         const yvex_decoder_plan_summary *decoder = yvex_decoder_plan_summary_get(plan->decoder);
         const yvex_transformer_plan_summary *transformer = yvex_transformer_plan_summary_get(plan->transformer);
@@ -1477,6 +1484,11 @@ const yvex_program_physical *yvex_compiled_model_plan_forward(const yvex_compile
 const yvex_program_physical *yvex_compiled_model_plan_output(const yvex_compiled_model_plan *plan)
 {
     return plan ? plan->output : NULL;
+}
+
+const yvex_program_physical *yvex_compiled_model_plan_final(const yvex_compiled_model_plan *plan, int draft)
+{
+    return plan ? (draft ? plan->draft_final : plan->final) : NULL;
 }
 
 const char *yvex_compiled_model_plan_operator_graph_identity(

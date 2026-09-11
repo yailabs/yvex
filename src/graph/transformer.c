@@ -6,6 +6,8 @@
  */
 #include <yvex/internal/joint_transformer.h>
 #include <yvex/internal/transformer.h>
+#include <yvex/internal/program_physical.h>
+#include <yvex/internal/execution.h>
 
 #include "src/graph/private.h"
 
@@ -655,6 +657,95 @@ void yvex_transformer_plan_close(yvex_transformer_plan **plan)
     *plan = NULL;
 }
 
+int yvex_transformer_final_program_import(yvex_program_physical **out,
+    const yvex_transformer_plan *plan, const yvex_physical_execution_ir *parameters, yvex_error *err)
+{
+    const yvex_transformer_plan_summary *s = yvex_transformer_plan_summary_get(plan);
+    const yvex_physical_execution_summary *physical = yvex_physical_execution_ir_summary(parameters);
+    yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+    yvex_ir_module *m = NULL;
+    yvex_program_execution *execution = NULL;
+    yvex_program_parameter_binding bindings[4];
+    yvex_ir_type t = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32};
+    yvex_ir_dimension rows = {.name = "rows", .minimum = 1u, .multiple = 1u};
+    yvex_ir_id dim, types[6], function, block = YVEX_IR_NONE, op, args[5], results[2];
+    yvex_ir_attribute attrs[] = {{.name = "epsilon", .kind = YVEX_IR_ATTR_F64},
+        {.name = "mhc_epsilon", .kind = YVEX_IR_ATTR_F64}};
+    static const char *symbols[] = {"head_function", "head_base", "head_scale", "head_norm"};
+    unsigned int i;
+    int rc;
+    if (out) *out = NULL;
+    if (!out || !s || !physical || s->final_policy != YVEX_TRANSFORMER_FINAL_SIGMOID_MHC_RMS)
+        return transformer_refuse(err, YVEX_ERR_FORMAT, "authenticated final-head import requires its admitted policy");
+    rows.maximum = s->maximum_context;
+    attrs[0].value.real = s->output_norm_epsilon;
+    attrs[1].value.real = s->mhc_epsilon;
+    rc = yvex_ir_module_open(&m, "final_import", s->logical_model_identity, dialects, 2u, err);
+    if (rc == YVEX_OK) rc = yvex_ir_dimension_add(m, &rows, &dim, err);
+    if (rc == YVEX_OK) {
+        t.rank = 3u;
+        t.shape[0] = (yvex_ir_extent){dim, 0u};
+        t.shape[1] = (yvex_ir_extent){YVEX_IR_NONE, s->residual_streams};
+        t.shape[2] = (yvex_ir_extent){YVEX_IR_NONE, s->hidden_width};
+        rc = yvex_ir_type_intern(m, &t, &types[0], err);
+    }
+    for (i = 0u; rc == YVEX_OK && i < 4u; ++i) {
+        t = (yvex_ir_type){.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = i ? 1u : 2u};
+        t.shape[0] = (yvex_ir_extent){YVEX_IR_NONE,
+            i == 2u ? 1u : i == 3u ? s->hidden_width : s->residual_streams};
+        if (!i) t.shape[1] = (yvex_ir_extent){YVEX_IR_NONE, s->expanded_width};
+        rc = yvex_ir_type_intern(m, &t, &types[i + 1u], err);
+    }
+    if (rc == YVEX_OK) {
+        t = (yvex_ir_type){.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_BF16, .rank = 2u};
+        t.shape[0] = (yvex_ir_extent){dim, 0u};
+        t.shape[1] = (yvex_ir_extent){YVEX_IR_NONE, s->hidden_width};
+        rc = yvex_ir_type_intern(m, &t, &types[5], err);
+    }
+    if (rc == YVEX_OK) {
+        results[0] = results[1] = types[5];
+        rc = yvex_ir_function_add(m, "final", types, 1u, results, 2u, 0u, &function, err);
+    }
+    if (rc == YVEX_OK) {
+        block = yvex_ir_function_at(m, function)->body;
+        args[0] = yvex_ir_block_at(m, block)->arguments[0];
+    }
+    for (i = 0u; rc == YVEX_OK && i < 4u; ++i) {
+        const yvex_transformer_weight_binding *w = &s->weights[i + YVEX_TRANSFORMER_WEIGHT_FINAL_FUNCTION];
+        yvex_ir_attribute parameter[] = {{.name = "parameter", .kind = YVEX_IR_ATTR_SYMBOL},
+            {.name = "source", .kind = YVEX_IR_ATTR_TEXT}};
+        yvex_ir_operation_request r = {.operation = "core.parameter", .result_types = &types[i + 1u],
+            .result_count = 1u, .attributes = parameter, .attribute_count = 2u};
+        yvex_core_text_copy(parameter[0].value.text, sizeof(parameter[0].value.text), symbols[i]);
+        yvex_core_text_copy(parameter[1].value.text, sizeof(parameter[1].value.text), s->logical_model_identity);
+        rc = yvex_ir_operation_add(m, block, &r, &op, err);
+        if (rc == YVEX_OK) {
+            args[i + 1u] = yvex_ir_operation_at(m, op)->results[0];
+            bindings[i] = (yvex_program_parameter_binding){args[i + 1u], w->tensor_id, w->qtype};
+        }
+    }
+    if (rc == YVEX_OK) {
+        yvex_ir_operation_request r = {.operation = "mhc.head_norm", .operands = args, .operand_count = 5u,
+            .result_types = results, .result_count = 2u, .attributes = attrs, .attribute_count = 2u};
+        rc = yvex_ir_operation_add(m, block, &r, &op, err);
+    }
+    if (rc == YVEX_OK) {
+        const yvex_ir_operation *head = yvex_ir_operation_at(m, op);
+        results[0] = head->results[0]; results[1] = head->results[1];
+        yvex_ir_operation_request r = {.operation = "core.return", .operands = results, .operand_count = 2u};
+        rc = yvex_ir_operation_add(m, block, &r, &op, err);
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_seal(m, err);
+    if (rc == YVEX_OK) rc = yvex_program_execution_compile(&execution, m, err);
+    if (rc == YVEX_OK)
+        rc = yvex_program_physical_compile(out, execution, "final", bindings, 4u, physical->identity, err);
+    if (rc == YVEX_OK) rc = yvex_program_physical_parameters_validate(*out, parameters, err);
+    if (rc != YVEX_OK) yvex_program_physical_close(out);
+    yvex_program_execution_close(&execution);
+    yvex_ir_module_close(&m);
+    return rc;
+}
+
 int yvex_transformer_initial_residual(const yvex_transformer_plan *plan,
                                       const float *embedding, unsigned long long token_count,
                                       float *expanded, yvex_error *err)
@@ -708,69 +799,6 @@ int yvex_transformer_deferred_post(const yvex_transformer_plan *plan,
             }
     yvex_error_clear(err);
     return YVEX_OK;
-}
-
-int yvex_transformer_final_stage_capture(
-    const yvex_transformer_plan *plan, const float *expanded,
-    unsigned long long token_count, const float *function, const float *base,
-    const float *scale, const float *norm, float *pre_normalized,
-    float *normalized, yvex_error *err)
-{
-    const yvex_transformer_plan_summary *s = yvex_transformer_plan_summary_get(plan);
-    unsigned long long token, stream, lane, index;
-    if (!s || !expanded || !function || !base || !scale || !norm || !normalized ||
-        pre_normalized == normalized ||
-        !token_count || s->final_policy != YVEX_TRANSFORMER_FINAL_SIGMOID_MHC_RMS)
-        return transformer_refuse(err, YVEX_ERR_INVALID_ARG,
-                                  "transformer final-stage arguments are invalid");
-    for (token = 0ull; token < token_count; ++token) {
-        const float *input = expanded + token * s->expanded_width;
-        float *output = normalized + token * s->hidden_width;
-        double squares = 0.0, inverse;
-        for (index = 0ull; index < s->expanded_width; ++index)
-            squares += (double)input[index] * (double)input[index];
-        inverse = 1.0 / sqrt(squares / (double)s->expanded_width + s->output_norm_epsilon);
-        if (!isfinite(inverse)) goto numeric;
-        memset(output, 0, (size_t)s->hidden_width * sizeof(float));
-        for (stream = 0ull; stream < s->residual_streams; ++stream) {
-            double mix = 0.0, coefficient;
-            for (index = 0ull; index < s->expanded_width; ++index)
-                mix += (double)function[stream * s->expanded_width + index] *
-                       (double)input[index];
-            coefficient = 1.0 / (1.0 + exp(-(mix * inverse * (double)scale[0] +
-                                             (double)base[stream])));
-            coefficient += s->mhc_epsilon;
-            for (lane = 0ull; lane < s->hidden_width; ++lane)
-                output[lane] += (float)(coefficient *
-                    (double)input[stream * s->hidden_width + lane]);
-        }
-        if (!yvex_attention_compute_round(YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
-                                          output, s->hidden_width))
-            goto numeric;
-        if (pre_normalized)
-            memcpy(pre_normalized + token * s->hidden_width, output,
-                   (size_t)s->hidden_width * sizeof(float));
-        if (!yvex_attention_rms_norm(output, s->hidden_width, norm,
-                                     s->output_norm_epsilon) ||
-            !yvex_attention_compute_round(YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
-                                          output, s->hidden_width))
-            goto numeric;
-    }
-    yvex_error_clear(err);
-    return YVEX_OK;
-numeric:
-    return transformer_refuse(err, YVEX_ERR_FORMAT,
-                              "transformer final head or RMSNorm produced non-finite values");
-}
-
-int yvex_transformer_final_stage(const yvex_transformer_plan *plan,
-                                 const float *expanded, unsigned long long token_count,
-                                 const float *function, const float *base, const float *scale,
-                                 const float *norm, float *normalized, yvex_error *err)
-{
-    return yvex_transformer_final_stage_capture(
-        plan, expanded, token_count, function, base, scale, norm, NULL,
-        normalized, err);
 }
 
 int yvex_transformer_feature_normalize(float *values,

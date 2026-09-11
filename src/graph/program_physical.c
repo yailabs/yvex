@@ -31,6 +31,7 @@ static const physical_rule physical_rules[] = {
     {"nn.embedding", "embedding.bf16.v1", 0u},
     {"nn.linear", "linear.bf16.f32acc.v1", 0u},
     {"nn.linear", "linear.encoded.f32.v1", 0u},
+    {"mhc.head_norm", "mhc.head_norm.bf16.v1", 0u},
     {"nn.rms_norm", "rms_norm.bf16.v1", 0u},
     {"nn.silu_product", "silu_product.bf16.v1", 0u},
     {"tensor.add", "add.bf16.v1", 0u},
@@ -71,6 +72,12 @@ static int physical_numeric_verify(const yvex_program_physical *p,
     unsigned int i;
     int encoded = !strcmp(s->implementation, "linear.encoded.f32.v1");
     if (!strcmp(s->implementation, "parameter.encoded.v1")) return YVEX_OK;
+    if (!strcmp(s->implementation, "mhc.head_norm.bf16.v1")) {
+        for (i = 1u; i < s->operand_count; ++i)
+            if (!p->values[s->operands[i]].parameter)
+                return physical_refuse(err, YVEX_ERR_UNSUPPORTED, "mHC physical head requires immutable parameters");
+        return YVEX_OK; /* The semantic verifier checks every scalar and shape. */
+    }
     if (encoded && (s->operand_count != 2u || s->result_count != 1u ||
         p->values[s->operands[0]].type.rank != 2u ||
         !p->values[s->operands[1]].parameter || p->values[s->results[0]].type.rank != 2u))

@@ -1,5 +1,5 @@
 /* Project the backend-neutral exact-attention contract onto CUDA GQA execution. */
-#include <yvex/internal/transformer.h>
+#include <yvex/internal/neural_operations.h>
 
 #include "src/backend/cuda/transformer_ops.h"
 

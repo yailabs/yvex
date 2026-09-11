@@ -14,6 +14,7 @@ include/yvex/internal/artifact_lowering.h	gguf	gguf.artifact_lowering	generic	pr
 include/yvex/internal/conversation.h	model	model.conversation_protocol	generic	private	internal-abi	model.family,tokenizer,server	interface	none
 include/yvex/internal/candidate.h	graph	graph.candidate	generic	private	internal-abi	graph,runtime,tests	interface	none
 include/yvex/internal/backend.h	backend	backend.internal	generic	private	internal-abi	graph,runtime,cli	interface	none
+include/yvex/internal/neural_operations.h	backend	backend.neural_operations	generic	private	internal-abi	graph,runtime,backend,tests	interface	none
 include/yvex/internal/convolution.h	graph	graph.convolution_abi	generic	private	internal-abi	graph.family,backend.cuda,tests	interface	none
 include/yvex/internal/benchmark.h	runtime	runtime.benchmark	generic	private	internal-abi	runtime,cli,tests	interface	none
 include/yvex/internal/compilation.h	model.compilation	model.compilation.internal	generic	private	internal-abi	model.family,quant	interface	none
@@ -302,6 +303,8 @@ src/runtime/generation.c	runtime	runtime.generation	generic	private	transactiona
 src/runtime/prompt.c	runtime	runtime.prompt	generic	private	reusable-algorithm	runtime,server,tests	implementation	none
 src/runtime/program_device.c	runtime	runtime.program_device	generic	private	resource-lifecycle	runtime,tests	implementation	none
 src/runtime/program_kernels.c	runtime	runtime.program_kernels	generic	private	resource-lifecycle	runtime,tests	implementation	none
+src/runtime/program_stage.c	runtime	runtime.program_stage	generic	private	resource-lifecycle	runtime,tests	implementation	none
+include/yvex/internal/program_stage.h	runtime	runtime.program_stage	generic	private	internal-interface	runtime,tests	interface	none
 src/runtime/program_sequence.c	runtime	runtime.program_sequence	generic	private	resource-lifecycle	runtime,tests	implementation	none
 src/runtime/generation_context.c	runtime	runtime.generation_context	generic	private	resource-lifecycle	runtime,generation,tests	implementation	none
 src/runtime/generation_result.c	runtime	runtime.generation_result	generic	private	typed-report	runtime,cli,tests	implementation	none

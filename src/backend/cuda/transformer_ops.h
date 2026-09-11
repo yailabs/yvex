@@ -2,7 +2,7 @@
 #ifndef SRC_BACKEND_CUDA_TRANSFORMER_OPS_H_INCLUDED
 #define SRC_BACKEND_CUDA_TRANSFORMER_OPS_H_INCLUDED
 
-#include <yvex/internal/transformer.h>
+#include <yvex/internal/neural_operations.h>
 
 #ifdef __cplusplus
 extern "C" {

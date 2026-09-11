@@ -1,6 +1,7 @@
 /* Compiler-owned tensor work versus an independent scalar BF16 oracle. */
 #include "tests/test.h"
 #include "tests/support/linear_program.h"
+#include "tests/support/mhc_program.h"
 #include <yvex/internal/program_kernels.h>
 #include <yvex/qtype.h>
 #include <math.h>
@@ -278,6 +279,7 @@ static int program_cuda_failures(program_fixture *f)
 
 int yvex_cuda_test_program(void)
 {
+    if (test_mhc_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
     if (test_linear_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
     program_fixture f = {0};
     yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CUDA};
