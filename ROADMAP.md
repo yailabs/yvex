@@ -13,7 +13,7 @@ Status: living public project control
 | Adopted state architecture target | Dual-stream primary computation plus persistent model-native computational state. YAI owns semantic authority; YVEX owns computational realization. Program N is OPEN, not implemented. |
 | Most important structural gap | Typed IR and the physical token-forward runner exist, with bounded hybrid CUDA/state evidence; DeepSeek/DSpark and MiniMax still retain historical computational authority. Complete consumer migration and artifact-backed Qwen preservation before closing .1. A01 tokenizer/normalization and whole-model barriers remain. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media. Evidence depths differ. |
-| External execution pressure | Capacity-compatible 12,055-token Golden still fails prefill: 10,308 tokens in 603.98 s, zero generated, then producer HTTP 504. Exact candidate, reduction and dot-path repairs are qualified; complete-request latency is not. |
+| External execution pressure | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Exact candidate, reduction and encoded-work repairs are qualified; complete-request latency is not. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
 | Behavior evaluation | BLOCKED / not ready. |
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
@@ -846,7 +846,7 @@ Real external prefill execution is a separate active `.1` repair pressure
 (R / S / Q), not a reopened capacity defect: the unchanged 40,277-byte Golden
 request tokenizes to 12,055 inputs and fits the explicitly configured
 16,384-token deployment with 4,329 output tokens available. Exact CUDA candidate
-scoring and cooperative ranking now preserve ordered numerical reduction,
+scoring and cooperative ranking preserve exact numerical results and ordered head reduction,
 candidate identities/ties/refusals and capacity-stable graph replay, qualified
 by the [independent selection oracle](tests/unit/cuda/attention_selection.c),
 device memory/synchronization checks and real target/DSpark regressions.
@@ -857,20 +857,32 @@ exceptional results. The [reduction](tests/unit/cuda/attention_reduction.c),
 [finite/exceptional-dot](tests/unit/cuda/dot_finiteness.c) oracles preserve
 numerics, finite-overflow recovery and fail-closed invalid operands. These are
 backend mechanism repairs, not new physical recipes or compiler cutover claims.
+Encoded projections improve weight-row locality and expert dots reuse the
+canonical IQ2 lookup table in block-local storage without changing dot order.
+A separately demonstrated block-softmax shared-reduction race is repaired at
+its storage-reuse boundary; the [bounded softmax oracle](tests/unit/cuda/attention_softmax.c)
+qualifies causal/finite/negative behavior and exact repetition, with zero
+reported device memory, synchronization and race errors at that scope.
 
-The current unmodified-request replay uses loaded weights but a fresh session
-and zero reused prompt tokens: 918 tokens in 44.95 s, 5,106 at 276.27 s and
-10,002 at 583.39 s. Its last progress is 10,308/12,055 in 603.98 s
-(17.07 tokens/s cumulative); producer HTTP 504 arrives at 606.45 s, with zero
+The current published unmodified-request replay uses loaded weights but a fresh
+session and zero reused prompt tokens: 918 tokens in 42.73 s, 5,532 at 276.01 s
+and 10,884 at 567.85 s. Its last progress is 11,694/12,055 in 613.70 s
+(19.05 tokens/s cumulative); producer HTTP 504 arrives at 616.18 s, with zero
 generated tokens and clean cancellation/session retirement. The subsequent
 five-input/one-output-token control still returns HTTP 200. Complete prefill,
 first-token latency and normal response completion remain unqualified; the
-local-protocol timeout is unchanged. Late-prefix GPU tracing separated scoring
-from ranking and identified MoE/projection and attention reduction as larger
-residual work. Qualified mechanism improvements have not closed the real request:
-further profiling must establish the remaining distribution on the current
-binary, preserve exact numerics and measure scaling across the prompt,
-not just its first prefix.
+local-protocol timeout is unchanged. Three bounded GPU traces of the current
+published binary separate scoring from ranking: near 600, 1,806 and 3,600
+processed tokens, mean scoring takes 37.12, 54.29 and 79.00 microseconds;
+ranking takes 19.84, 25.94 and 44.18 microseconds. MoE/projection and attention reduction dominate
+the sampled device work; stream synchronization includes device waiting, not
+an independently additive bottleneck. The late-window MoE-up launch classes
+must remain distinct: 9,216 blocks average 1,225.20 microseconds, while 1,536
+blocks average 276.24 microseconds. Isolated lookup improvement does not prove
+equivalent improvement across these real populations. Qualified repairs have not closed
+the real request. Further exact-mechanism repairs must preserve numerical and
+candidate semantics and qualify complete-request behavior across the prompt,
+not just its first prefix or isolated kernel.
 
 `downstream_safe=false` for this external workload. Capacity preflight does not
 qualify execution latency; neither a selector test nor a first response closes
