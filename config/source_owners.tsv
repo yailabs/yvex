@@ -126,6 +126,8 @@ src/backend/cuda/ops.c	backend.cuda	backend.cuda.ops	backend	private	reusable-al
 src/backend/cuda/private.h	backend.cuda	backend.cuda.private	backend	private	platform-interface	backend,graph	interface	none
 src/backend/cuda/qtype.c	backend.cuda	backend.cuda.qtype	backend	private	reusable-algorithm	backend,graph	implementation	none
 src/backend/cuda/residency.c	backend.cuda	backend.cuda.residency	backend	private	resource-lifecycle	runtime,backend	implementation	none
+src/backend/cuda/result_transfer.c	backend.cuda	backend.cuda.result_transfer	backend	private	reusable-algorithm	backend.cuda.moe	implementation	none
+src/backend/cuda/device_results.h	backend.cuda	backend.cuda.device_results	backend	private	platform-interface	backend.cuda.moe,backend.cuda.result_transfer	interface	none
 src/backend/cuda/sampling.c	backend.cuda	backend.cuda.sampling	backend	private	backend-implementation	runtime,generation	implementation	none
 src/backend/cuda/sequence_mixer.c	backend.cuda	backend.cuda.sequence_mixer	backend	private	backend-implementation	graph.sequence_mixer,runtime	implementation	none
 src/backend/cuda/sequence_mixer_kernels.cu	backend.cuda	backend.cuda.sequence_mixer	backend	private	backend-kernel	graph.sequence_mixer,runtime	backend-kernel	none

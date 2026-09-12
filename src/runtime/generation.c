@@ -22,7 +22,7 @@ struct runtime_generation_turn_state {
     unsigned char *text;
     yvex_runtime_generation_result *result;
     const yvex_transformer_plan_summary *transformer;
-    const yvex_decoder_plan_summary *decoder_plan;
+    const yvex_program_token_interface *decoder_interface;
     yvex_runtime_transformer_result current;
     yvex_runtime_decode_step_result last_decode;
     yvex_runtime_decoder_execution_result current_decoder, last_decoder;
@@ -309,15 +309,15 @@ static int generation_decoder_prefill(
     unsigned long long *completed_chunks,
     yvex_runtime_profile_record *profile, yvex_error *err)
 {
-    const yvex_decoder_plan_summary *plan = yvex_decoder_plan_summary_get(
-        yvex_runtime_decoder_execution_plan(context->decoder_execution));
+    const yvex_program_token_interface *plan =
+        yvex_runtime_decoder_execution_interface(context->decoder_execution);
     unsigned long long offset = 0ull;
     const unsigned long long suffix_count =
         encoded->tokens.len - reusable_prefix;
     int rc = plan ? YVEX_OK
                   : generation_refuse(
                         err, YVEX_ERR_STATE,
-                        "heterogeneous decoder plan is unavailable");
+                        "compiled token-forward interface is unavailable");
     memset(final_result, 0, sizeof(*final_result));
     *completed_chunks = 0ull;
     while (rc == YVEX_OK && offset < suffix_count) {
@@ -333,7 +333,7 @@ static int generation_decoder_prefill(
         request.token_start = reusable_prefix + offset;
         request.token_count = count;
         if (!yvex_runtime_generation_decoder_input_identity(
-                plan, request.token_ids, request.token_start,
+                context->plan.producer_plan_identity, request.token_ids, request.token_start,
                 request.token_count, input_identity))
             rc = generation_refuse(
                 err, YVEX_ERR_STATE,
@@ -685,7 +685,7 @@ static int generation_commit_ordinary(
     yvex_tokenizer_fragment fragment;
     yvex_graph_attention_state_summary state_after = {0};
     yvex_runtime_decoder_execution_request decoder_request = {0};
-    const yvex_decoder_plan_summary *decoder_plan = NULL;
+    const yvex_program_token_interface *decoder_interface = NULL;
     char decoder_input_identity[YVEX_SHA256_HEX_CAP];
     unsigned long long next_text, started, completed;
     const int decoder_producer = context->decoder_execution != NULL;
@@ -721,15 +721,13 @@ static int generation_commit_ordinary(
     if (rc == YVEX_OK) {
         started = yvex_core_monotonic_ns();
         if (decoder_producer) {
-            decoder_plan = yvex_decoder_plan_summary_get(
-                yvex_runtime_decoder_execution_plan(
-                    context->decoder_execution));
+            decoder_interface = yvex_runtime_decoder_execution_interface(context->decoder_execution);
             decoder_request.token_ids = &token->sampled_token_id;
             decoder_request.token_start = token->position_before;
             decoder_request.token_count = 1ull;
-            if (!decoder_plan ||
+            if (!decoder_interface ||
                 !yvex_runtime_generation_decoder_input_identity(
-                    decoder_plan, decoder_request.token_ids,
+                    context->plan.producer_plan_identity, decoder_request.token_ids,
                     decoder_request.token_start,
                     decoder_request.token_count, decoder_input_identity))
                 rc = generation_refuse(
@@ -1532,7 +1530,7 @@ static int generation_turn_prepare(
     const yvex_runtime_generation_turn_request *turn,
     yvex_tokenizer_encode_result *encoded, yvex_rendered_prompt *rendered,
     const yvex_transformer_plan_summary **transformer,
-    const yvex_decoder_plan_summary **decoder,
+    const yvex_program_token_interface **decoder,
     yvex_runtime_generation_result *result, yvex_error *err)
 {
     const yvex_runtime_generation_request *request = turn->prompt;
@@ -1586,8 +1584,7 @@ static int generation_turn_prepare(
     }
     *transformer = yvex_transformer_plan_summary_get(
         yvex_runtime_transformer_context_plan(context->transformer));
-    *decoder = yvex_decoder_plan_summary_get(
-        yvex_runtime_decoder_execution_plan(context->decoder_execution));
+    *decoder = yvex_runtime_decoder_execution_interface(context->decoder_execution);
     if (rc == YVEX_OK &&
         ((!*transformer == !*decoder) ||
          encoded->tokens.len > context->options.context_capacity ||
@@ -1645,7 +1642,7 @@ static int generation_target_step(yvex_runtime_generation_context *context,
             turn->current_hidden, turn->current_hidden_count,
             !turn->use_current && turn->transformer ? &turn->last_decode
                                                     : NULL,
-            turn->decoder_plan
+            turn->decoder_interface
                 ? (turn->use_current ? &turn->current_decoder
                                      : &turn->last_decoder)
                 : NULL,
@@ -1679,7 +1676,7 @@ static int generation_target_step(yvex_runtime_generation_context *context,
         rc = yvex_token_sequence_append(
             context->sequence, token->sampled_token_id,
             turn->transformer ? turn->transformer->vocabulary_size
-                              : turn->decoder_plan->vocabulary_size,
+                              : turn->decoder_interface->vocabulary_size,
             &sequence_ordinal, err);
     if (rc == YVEX_OK && (token->classification.eos || token->classification.stop ||
                           additional_stop))
@@ -1776,7 +1773,7 @@ int yvex_runtime_generation_turn_begin(
     if (rc == YVEX_OK)
         rc = generation_turn_prepare(context, turn, &encoded, &rendered,
                                      &state->transformer,
-                                     &state->decoder_plan, result, err);
+                                     &state->decoder_interface, result, err);
     completed = yvex_core_monotonic_ns();
     if (rc == YVEX_OK)
         rc = yvex_runtime_generation_profile_phase(generation_profile(context),

@@ -812,7 +812,8 @@ static int test_hybrid_decoder_semantics(void)
             &reopened, &plan_summary, plan_layers, &err) == YVEX_ERR_FORMAT &&
             reopened == NULL,
         "hybrid decoder plan rejects a mutated layer identity");
-    runtime_model.view.decoder = plan;
+    const yvex_runtime_logits_plan_summary imported_output = {.producer_kind = YVEX_EXECUTION_PLAN_DECODER};
+    runtime_model.view.output_head = &imported_output;
     runtime_session.engine = &runtime_model;
     YVEX_TEST_ASSERT(
         yvex_runtime_private_session_sequence_state_open(

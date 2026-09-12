@@ -107,6 +107,32 @@ def check_cuda_header_obligations(registry: dict, tests: list[dict]) -> None:
             raise AssertionError(f"{path}: header-only change lost CUDA obligations {sorted(missing)}")
 
 
+def check_cuda_native_assets(tests: list[dict]) -> None:
+    native = next(item for item in tests if item["id"] == "cuda.native")
+    assets = {"DEEPSEEK_SOURCE", "DEEPSEEK_MODELS_ROOT", "DEEPSEEK_SOURCE_MANIFEST"}
+    if set(native["requirements"]["assets"]) != assets or native["hermetic"]:
+        raise AssertionError("CUDA live attention dependencies are not declared")
+    if native["requirement_policy"] != "block" or "gb10-live-model" not in native["resources"]:
+        raise AssertionError("missing live assets must block without executing the CUDA lane")
+    facts = {"tools": {"nvcc": "/test/nvcc"}, "hardware": {"cuda_present": True}}
+    with tempfile.TemporaryDirectory() as directory:
+        configured = dict.fromkeys(assets, directory)
+        with patch.dict(qa.os.environ, configured, clear=True):
+            if qa.requirement_failure(native, facts) is not None:
+                raise AssertionError("configured CUDA prerequisites were refused")
+        for missing in sorted(assets):
+            environment = {key: value for key, value in configured.items() if key != missing}
+            with patch.dict(qa.os.environ, environment, clear=True):
+                reason = qa.requirement_failure(native, facts)
+                if not reason or missing not in reason:
+                    raise AssertionError(f"missing CUDA asset {missing} was not refused")
+            environment[missing] = str(Path(directory) / "absent")
+            with patch.dict(qa.os.environ, environment, clear=True):
+                reason = qa.requirement_failure(native, facts)
+                if not reason or missing not in reason:
+                    raise AssertionError(f"absent CUDA asset path {missing} was not refused")
+
+
 def main() -> int:
     source = ROOT / "config/qa/registry.json"
     registry, tests = generate_qa_registry.load_and_validate(ROOT, source)
@@ -123,6 +149,7 @@ def main() -> int:
         raise AssertionError("QA projections are not deterministic")
     check_source_stability()
     check_cuda_header_obligations(registry, tests)
+    check_cuda_native_assets(tests)
 
     duplicate = copy.deepcopy(registry)
     duplicate["tests"].append(copy.deepcopy(duplicate["tests"][0]))

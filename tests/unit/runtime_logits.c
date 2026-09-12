@@ -105,6 +105,10 @@ static int logits_test_lifecycle_refusal(void)
                          &context, NULL, NULL, NULL, &options, &err) ==
                          YVEX_ERR_INVALID_ARG && !context,
                      "logits context refuses missing production owners");
+    YVEX_TEST_ASSERT(yvex_runtime_logits_context_open_program(
+                         &context, NULL, NULL, &options, &err) ==
+                         YVEX_ERR_INVALID_ARG && !context,
+                     "program logits cannot replace an absent compiled producer with decoder geometry");
     YVEX_TEST_ASSERT(yvex_runtime_logits_project(
                          NULL, &source, YVEX_BACKEND_KIND_CPU, &output, 1ull,
                          &row, &err) == YVEX_ERR_STATE && output == 91.0f && !row.completed,

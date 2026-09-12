@@ -57,16 +57,17 @@ static int sequence_state_identity(yvex_sequence_state *state)
     return 1;
 }
 
-static int sequence_state_layout(
-    yvex_sequence_state *state, const yvex_sequence_state_plan *plan,
-    yvex_error *err)
+int yvex_sequence_state_plan_measure(const yvex_sequence_state_plan *plan,
+    yvex_sequence_state_geometry *out, yvex_error *err)
 {
-    unsigned long long index, convolution = 0ull, recurrent = 0ull;
-
+    yvex_sequence_state_geometry geometry = {0};
+    unsigned long long index;
+    if (out) memset(out, 0, sizeof(*out));
+    if (!plan || !out || plan->schema_version != YVEX_SEQUENCE_STATE_SCHEMA_V1 ||
+        (plan->binding_count && !plan->bindings) || plan->binding_count > SIZE_MAX / sizeof(*plan->bindings))
+        return sequence_state_refuse(err, YVEX_ERR_INVALID_ARG, "bounded typed state bindings are required");
     for (index = 0ull; index < plan->binding_count; ++index) {
         const yvex_sequence_state_binding *binding = &plan->bindings[index];
-        sequence_state_layer *layer = &state->layers[index];
-
         if (yvex_sequence_state_binding_validate(binding, err) != YVEX_OK)
             return sequence_state_refuse(
                 err, YVEX_ERR_FORMAT, "one recurrent layer plan is not sealed");
@@ -75,24 +76,42 @@ static int sequence_state_layout(
             return sequence_state_refuse(
                 err, YVEX_ERR_FORMAT,
                 "recurrent layer bindings must be unique and ordered");
-        layer->binding = *binding;
-        layer->convolution_offset = convolution;
-        layer->recurrent_offset = recurrent;
-        if (!yvex_core_u64_add(
-                convolution, binding->convolution_state_values,
-                &convolution) ||
-            !yvex_core_u64_add(
-                recurrent, binding->recurrent_state_values, &recurrent))
+        if (!yvex_core_u64_add(geometry.convolution_values, binding->convolution_state_values,
+                &geometry.convolution_values) ||
+            !yvex_core_u64_add(geometry.recurrent_values, binding->recurrent_state_values,
+                &geometry.recurrent_values))
             return sequence_state_refuse(
                 err, YVEX_ERR_BOUNDS, "recurrent state geometry overflowed");
     }
-    state->convolution_values = convolution;
-    state->recurrent_values = recurrent;
-    return yvex_core_u64_add(convolution, recurrent, &state->bank_values)
-               ? YVEX_OK
-               : sequence_state_refuse(
-                     err, YVEX_ERR_BOUNDS,
-                     "combined recurrent state geometry overflowed");
+    if (!yvex_core_u64_add(geometry.convolution_values, geometry.recurrent_values, &geometry.bank_values) ||
+        !yvex_core_u64_mul(geometry.bank_values, sizeof(float), &geometry.committed_bytes) ||
+        geometry.committed_bytes > SIZE_MAX || geometry.committed_bytes > ULLONG_MAX / 2ull)
+        return sequence_state_refuse(err, YVEX_ERR_BOUNDS, "combined recurrent state geometry overflowed");
+    geometry.candidate_bytes = geometry.committed_bytes;
+    *out = geometry;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+static int sequence_state_layout(
+    yvex_sequence_state *state, const yvex_sequence_state_plan *plan, yvex_error *err)
+{
+    yvex_sequence_state_geometry geometry;
+    unsigned long long convolution = 0ull, recurrent = 0ull;
+    int rc = yvex_sequence_state_plan_measure(plan, &geometry, err);
+    if (rc != YVEX_OK) return rc;
+    for (unsigned long long i = 0ull; i < plan->binding_count; ++i) {
+        sequence_state_layer *layer = &state->layers[i];
+        layer->binding = plan->bindings[i];
+        layer->convolution_offset = convolution;
+        layer->recurrent_offset = recurrent;
+        convolution += layer->binding.convolution_state_values;
+        recurrent += layer->binding.recurrent_state_values;
+    }
+    state->convolution_values = geometry.convolution_values;
+    state->recurrent_values = geometry.recurrent_values;
+    state->bank_values = geometry.bank_values;
+    return YVEX_OK;
 }
 
 static int sequence_state_allocate_metadata(

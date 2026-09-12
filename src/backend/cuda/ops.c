@@ -1864,6 +1864,67 @@ CUdeviceptr yvex_cuda_activation_pointer(
 {
     return backend_tensor_owner_is(backend, tensor) ? (CUdeviceptr)tensor->data : 0ull;
 }
+/* Standalone lowered mHC work uses the existing exact residual kernel. It owns
+ * completion/refusal only; no layer topology or state commit enters this ABI. */
+int yvex_cuda_residual_post(yvex_backend *backend, const yvex_device_tensor *residual,
+    const yvex_device_tensor *core, const yvex_device_tensor *post, const yvex_device_tensor *mix,
+    unsigned long long rows, unsigned long long streams, unsigned long long width,
+    yvex_device_tensor *output, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_cuda_work work = {.backend = backend, .state = state,
+        .variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED};
+    const yvex_device_tensor *inputs[] = {residual, core, post, mix};
+    unsigned long long sizes[4], total, tasks;
+    CUdeviceptr pointers[4], destination;
+    yvex_error cleanup = {0};
+    int rc, cleanup_rc, status = 0;
+    if (facts) memset(facts, 0, sizeof(*facts));
+    if (output) output->is_written = 0;
+    if (!state || !state->residual_mhc_post_function || !facts || !rows || !streams || !width ||
+        !yvex_core_u64_mul(rows, width, &sizes[1]) || !yvex_core_u64_mul(rows, streams, &sizes[2]) ||
+        !yvex_core_u64_mul(sizes[1], streams, &sizes[0]) || !yvex_core_u64_mul(sizes[2], streams, &sizes[3]) ||
+        !yvex_core_u64_add(sizes[0], CUDA_ATTENTION_BLOCK - 1u, &tasks) ||
+        tasks / CUDA_ATTENTION_BLOCK > UINT_MAX || !backend_tensor_owner_is(backend, output) ||
+        !backend_tensor_f32_elements(output, sizes[0])) goto invalid;
+    total = sizes[0];
+    for (size_t i = 0u; i < 4u; ++i) {
+        if (!backend_tensor_owner_is(backend, inputs[i]) || !backend_tensor_f32_elements(inputs[i], sizes[i]) ||
+            !inputs[i]->is_written || inputs[i]->data == output->data ||
+            !yvex_core_u64_add(total, sizes[i], &total)) goto invalid;
+        pointers[i] = (CUdeviceptr)inputs[i]->data;
+    }
+    if (!yvex_core_u64_mul(total, sizeof(float), &total)) goto invalid;
+    destination = (CUdeviceptr)output->data;
+    rc = yvex_cuda_work_allocate(&work, &work.status, sizeof(int), NULL, 1, "cuda.mhc-post.status", NULL, err);
+    if (rc == YVEX_OK) {
+        void *parameters[] = {&pointers[1], &pointers[0], &pointers[2], &pointers[3],
+            &streams, &width, &destination, &rows, &work.status};
+        rc = yvex_cuda_launch(backend, work.variant, state->residual_mhc_post_function,
+            (unsigned int)(tasks / CUDA_ATTENTION_BLOCK), CUDA_ATTENTION_BLOCK, 0u,
+            parameters, "cuda.mhc-post", err);
+    }
+    if (rc == YVEX_OK) rc = yvex_cuda_synchronize(backend, work.variant, "cuda.mhc-post", err);
+    if (rc == YVEX_OK) rc = yvex_cuda_status(&state->driver,
+        state->driver.cuMemcpyDtoH_v2(&status, work.status, sizeof(status)), "cuda.mhc-post.status", err);
+    cleanup_rc = yvex_cuda_work_cleanup(&work, &cleanup);
+    if (rc == YVEX_OK && cleanup_rc != YVEX_OK) {
+        rc = cleanup_rc;
+        if (err) *err = cleanup;
+    }
+    if (rc == YVEX_OK && status) goto invalid;
+    if (rc == YVEX_OK) {
+        output->is_written = 1;
+        facts->kernel_launches = facts->device_synchronizations = facts->download_count = 1u;
+        facts->d2h_bytes = sizeof(status); facts->temporary_bytes = sizeof(status);
+        facts->activation_bytes = total; facts->compulsory_memory_facts_available = 1;
+        yvex_error_clear(err);
+    }
+    return rc;
+invalid:
+    yvex_error_set(err, YVEX_ERR_FORMAT, "cuda.mhc-post", "invalid mHC post operands or non-finite result");
+    return YVEX_ERR_FORMAT;
+}
 /*
  * Copy a completed F32 activation into one stable backend-owned view.
  *

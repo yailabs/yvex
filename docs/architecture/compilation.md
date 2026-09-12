@@ -212,8 +212,8 @@ are migrated and qualified.
 
 | Consumer | Implemented IR boundary | Remaining closure boundary |
 | --- | --- | --- |
-| Qwen 3.5 | Forward and output entries share compiler lineage; slot-based runner; executable token bounds, output width and state-operation populations derive from physical IR; legacy decoder import normalized at binding admission; bounded recurrent and hybrid CUDA execution | Real artifact-backed hybrid preservation; remaining provider/report views and ownership cutover |
-| DeepSeek V4 / DSpark | Output projection, two-result final mHC/RMSNorm and target-feature stream reduction consume physical SSA normalized at cold binding admission; complete target/draft computation remains historical | Migrate heterogeneous attention, per-block mHC, MoE and target/draft dependencies; qualify integrated composition |
+| Qwen 3.5 | Forward and output entries share compiler lineage; slot-based runner; generation, state-capacity and logits consumers use the derived program signature; legacy decoder import normalized at binding admission; bounded recurrent/hybrid CUDA tests and exact-artifact CUDA generation | Whole-model before/after preservation and upstream conformance; remaining provider/report views and ownership cutover |
+| DeepSeek V4 / DSpark | Output projection, final mHC/RMSNorm, feature reduction and residual post consume physical SSA normalized at cold admission; normal CUDA MoE returns independently retained operands to the compiled post stage | Migrate complete heterogeneous attention, MoE computation and target/draft dependencies; finish deferred target scheduling and qualify integrated composition |
 | MiniMax H3 | Existing component/intake regression consumer | Migrate neural component composition without absorbing media I/O; qualify affected consumers |
 | Mamba2 | Pure SSM representable without attention/KV | Preserve representability only here; A01 executable repair remains queued and PARTIAL |
 
@@ -262,10 +262,19 @@ operands and results, not hidden-width/vocabulary/layer fields in the historical
 decoder. Multiple token embeddings intersect their admitted vocabulary bounds;
 embedding width need not equal returned hidden width. Each state input must have
 exactly one produced successor in the result signature. This bounded, linear-time
-projection is shared by cold compatibility admission and runner preparation and
-is not another persisted model representation. The retained decoder identity is
-used by the existing report schema; its authenticated context envelope remains
-distinct from the program's row population and runtime resource admission.
+projection is shared by cold compatibility admission, runner preparation,
+generation admission and output-head preparation. It is not another persisted
+model representation. The engine view no longer exposes a decoder plan. The
+output binding retains the decoder producer identity for existing report/input
+lineage only; model context comes from the authenticated binding envelope,
+distinct from program row population and runtime resource admission.
+
+Startup admission does not require an allocated session. The state provider's
+`yvex_sequence_state_plan_measure` validates the program-derived bindings and
+measures its committed/candidate F32 banks before allocation. The same geometry
+authority drives provider layout; generation does not reconstruct recurrent
+sizes from decoder layers or assume that allocation has already happened.
+This is physical storage admission, not Native Cognitive State support.
 
 A module owns dimensions, interned logical types, functions, blocks, operations
 and uniquely defined values. Construction copies requests; sealing verifies and
@@ -397,8 +406,12 @@ sequence. [`decoder.c`](../../src/runtime/decoder.c) is a runner over physical
 SSA instructions; the procedural layer loop, layer-indexed weight directory,
 per-layer linear preparation and separate FFN invocation have been removed.
 Generation iteration and the output/logits consumer remain above this forward
-program. Full artifact-backed hybrid Qwen preservation still requires real-model
-qualification; source projection alone does not earn it.
+program and consume its derived interface, not a historical decoder plan.
+The exact current Qwen artifact has completed bounded CUDA generation through
+this path: 15 prompt tokens, observed tokens 3793 and terminal 248046, one
+nonterminal commit and final sequence position 16, without prefix reuse.
+This is real execution evidence, not independent whole-model preservation or
+upstream conformance; those qualification obligations remain separate.
 The Qwen source fixture proves 48 recurrent operations,
 16 attention operations, 112 distinct state inputs and all 851 text parameters;
 physical token-forward lowering produces 1,732 instructions with 14 reusable
@@ -510,7 +523,10 @@ from model plans, import and runner records. CPU and the CUDA operation interfac
 consume that narrow contract; existing numerical type names/layouts are retained.
 [`program_stage.c`](../../src/runtime/program_stage.c) binds tensor-only program
 resources and host/device transport without building IR or selecting family
-semantics. Host publication waits for all result transfers and cancellation
+semantics. Input arity comes from the physical entrypoint, not a single-input
+runner assumption. Each input has an explicit typed device argument or its own
+host staging view; all staging and descriptor storage is admitted at open, with
+no argument-array allocation during invocation. Host publication waits for all result transfers and cancellation
 checks; device-result publication generations remain the enclosing runtime's
 authority. The full-evidence CPU reference path consumes the same compiled
 operation through a CPU backend. This is the final-head cutover, not migration
@@ -530,6 +546,28 @@ The bounded operator command lifecycle lives in
 [`transformer_operator.c`](../../src/runtime/transformer_operator.c), separate
 from engine/session computation. None of these changes migrates the remaining
 attention/MoE topology or claims independent whole-model conformance.
+
+`mhc.residual_post` makes residual, core result, post gates and source-to-target
+mixing four explicit F32 operands with common row identity. Its pure computation
+uses ordered F64 multiply/add, F32 conversion and BF16 round-to-nearest-even
+publication. `mhc.residual_post.f64acc.bf16.v1` admits CPU arithmetic and the
+existing CUDA residual kernel without changing its equations. Stream/channel
+geometry, mixing orientation, result geometry and precision are compiler-verified.
+The old `yvex_transformer_deferred_post` graph numerical API is removed. CPU and
+full-evidence DeepSeek block execution invoke the compiled four-input program.
+Normal CUDA execution also calls that stage: MoE transfers its core result,
+post gates and mixing matrix to three disjoint caller-owned carriers before
+workspace reuse. The runtime slices admitted carrier populations; compatible
+multi-session scheduling gathers/scatters all three results without rebuilding
+their numerical meaning. The post stage consumes these plus the residual input.
+Queued copies are not transaction commit; deferred status remains owned by the
+existing MoE phase completion and enclosing state transaction.
+
+The legacy fused post remains for full-evidence device execution and direct
+backend compatibility consumers, not as the normal CUDA block's computational
+authority. This is a residual-post consumer cutover, not the whole MoE/attention
+program cutover. The standalone post's per-operation CUDA synchronization is
+still a target/schedule integration obligation; no speedup is claimed.
 
 Production token-forward execution and the independent BF16 CUDA fixture both
 use [`program_device.c`](../../src/runtime/program_device.c) with

@@ -792,6 +792,24 @@ if rg -n '(yvex_runtime_descriptor_summary_get|yvex_model_execution_descriptor)'
     src/runtime/generation_context.c src/runtime/decode.c src/runtime/logits.c; then
     fail "runtime capacity or decode reconstructs geometry from the semantic descriptor"
 fi
+# Token-forward consumers use compiled signatures and session provider bytes.
+# Historical decoder records remain import compatibility, not runner authority.
+legacy_decoder_consumer_pattern='\b(yvex_decoder_plan(_[A-Za-z0-9_]+)?|yvex_compiled_model_plan_decoder|yvex_runtime_decoder_execution_plan)\b|model_view->decoder\b'
+printf '%s\n' 'yvex_decoder_plan_summary_get(plan);' |
+    rg "$legacy_decoder_consumer_pattern" >/dev/null ||
+    fail "decoder consumer guard misses historical semantic geometry"
+printf '%s\n' 'yvex_compiled_model_plan_decoder(model);' |
+    rg "$legacy_decoder_consumer_pattern" >/dev/null ||
+    fail "decoder consumer guard misses historical producer selection"
+if printf '%s\n' 'binding->decoder_plan_identity' 'yvex_program_physical_token_interface(program, out, err);' |
+    rg "$legacy_decoder_consumer_pattern" >/dev/null; then
+    fail "decoder consumer guard rejects report lineage or derived program signatures"
+fi
+if rg -n "$legacy_decoder_consumer_pattern" src/runtime/decoder.c src/runtime/generation.c \
+    src/runtime/generation_context.c src/runtime/generation_result.c src/runtime/logits.c \
+    src/runtime/core.c src/runtime/session.c; then
+    fail "token-forward runner, generation or output consumer reconstructs historical decoder topology"
+fi
 if rg -n 'descriptor->draft_layer_count' src/runtime/speculation.c; then
     fail "runtime speculation reconstructs compiled draft topology from the descriptor"
 fi

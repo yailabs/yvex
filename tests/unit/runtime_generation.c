@@ -1204,8 +1204,38 @@ static int generation_test_transaction_participants(void)
     return 0;
 }
 
+static int generation_test_program_input_identity(void)
+{
+    const unsigned int tokens[] = {4u, 83u, 438u};
+    char identity[YVEX_SHA256_HEX_CAP], changed[YVEX_SHA256_HEX_CAP];
+    /* Independently encoded length-delimited UTF-8 and little-endian uint64
+     * fields retain the existing report lineage without a decoder plan. */
+    const char expected[] = "2760d1fd046331a73c1d312922d35e5057c40deb1d44e1a42dde477ec1055fa0";
+    YVEX_TEST_ASSERT(yvex_runtime_generation_decoder_input_identity(
+        profile_id_a, tokens, 7ull, 3ull, identity) && !strcmp(identity, expected),
+        "program input identity preserves the canonical producer/token encoding");
+    YVEX_TEST_ASSERT(yvex_runtime_generation_decoder_input_identity(
+        profile_id_b, tokens, 7ull, 3ull, changed) && strcmp(identity, changed) &&
+        yvex_runtime_generation_decoder_input_identity(
+        profile_id_a, tokens, 8ull, 3ull, changed) && strcmp(identity, changed) &&
+        yvex_runtime_generation_decoder_input_identity(
+        profile_id_a, tokens, 7ull, 2ull, changed) && strcmp(identity, changed),
+        "producer, position and token population remain identity-bearing");
+    memcpy(changed, identity, sizeof(changed));
+    YVEX_TEST_ASSERT(!yvex_runtime_generation_decoder_input_identity(NULL, tokens, 7ull, 3ull, changed) &&
+        !yvex_runtime_generation_decoder_input_identity("invalid", tokens, 7ull, 3ull, changed) &&
+        !yvex_runtime_generation_decoder_input_identity(profile_id_a, NULL, 7ull, 3ull, changed) &&
+        !yvex_runtime_generation_decoder_input_identity(profile_id_a, tokens, 7ull, 0ull, changed) &&
+        !yvex_runtime_generation_decoder_input_identity(profile_id_a, tokens, 7ull, 3ull, NULL) &&
+        !strcmp(identity, changed), "missing input authority refuses without publishing an identity");
+    YVEX_TEST_ASSERT(!yvex_runtime_decoder_execution_interface(NULL),
+        "an absent executable context has no invented token interface");
+    return 0;
+}
+
 int yvex_test_runtime_generation(void)
 {
+    if (generation_test_program_input_identity() != 0) return 1;
     if (generation_test_engine_scheduling() != 0) return 1;
     if (generation_test_bounded_batch_coalescing() != 0) return 1;
     if (generation_test_incompatible_arrival_releases_impossible_wait() != 0)

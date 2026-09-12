@@ -280,6 +280,7 @@ static int program_cuda_failures(program_fixture *f)
 int yvex_cuda_test_program(void)
 {
     if (test_mhc_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
+    if (test_post_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
     if (test_stream_mean_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
     if (test_linear_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
     program_fixture f = {0};

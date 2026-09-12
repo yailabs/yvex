@@ -18,6 +18,7 @@
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/compiler.h>
 #include <yvex/internal/families/deepseek_v4.h>
+#include "src/runtime/private.h"
 
 static void moe_test_identity(char output[YVEX_SHA256_HEX_CAP], unsigned int value)
 {
@@ -325,8 +326,54 @@ static int moe_test_input(void)
     return 0;
 }
 
+static int moe_test_result_views(void)
+{
+    float storage[24] = {0};
+    yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CPU};
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *buffers[3] = {0}, views[3];
+    yvex_moe_device_results owners, result;
+    const unsigned long long counts[] = {12u, 4u, 8u};
+    yvex_error err = {0};
+    YVEX_TEST_ASSERT(yvex_backend_open(&backend, &options, &err) == YVEX_OK, "result-view backend");
+    for (size_t i = 0u; i < 3u; ++i) {
+        yvex_backend_tensor_desc d = {.name = "result-view", .dtype = YVEX_DTYPE_F32,
+            .rank = 1u, .dims = {counts[i]}, .bytes = counts[i] * sizeof(float)};
+        YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &d, &buffers[i], &err) == YVEX_OK &&
+            yvex_backend_tensor_write(backend, buffers[i], storage, d.bytes, &err) == YVEX_OK,
+            "prepare independent admitted result carriers");
+    }
+    owners = (yvex_moe_device_results){buffers[0], buffers[1], buffers[2]};
+    YVEX_TEST_ASSERT(yvex_runtime_private_moe_result_views(&owners, 4u, 1u, 2u, views, &result, &err) == YVEX_OK,
+        "slice two rows from four-row physical carriers");
+    for (size_t i = 0u; i < 3u; ++i)
+        YVEX_TEST_ASSERT(views[i].data == (unsigned char *)buffers[i]->data + counts[i] / 4u * sizeof(float) &&
+            views[i].bytes == counts[i] / 2u * sizeof(float) && views[i].owner == buffers[i]->owner,
+            "result offsets and populations derive only from admitted carrier extents");
+    for (size_t negative = 0u; negative < 5u; ++negative) {
+        unsigned long long capacity = 4u, first = 1u, rows = 2u;
+        if (negative == 0u) capacity = 0u;
+        if (negative == 1u) first = ULLONG_MAX;
+        if (negative == 2u) rows = ULLONG_MAX;
+        if (negative == 3u) capacity = 3u;
+        if (negative == 4u) rows = 0u;
+        result = owners;
+        YVEX_TEST_ASSERT(yvex_runtime_private_moe_result_views(&owners, capacity, first, rows,
+            views, &result, &err) == YVEX_ERR_BOUNDS && result.combined == owners.combined &&
+            result.post == owners.post && result.combination == owners.combination,
+            "invalid population refuses without publishing a partial result tuple");
+    }
+    for (size_t i = 0u; i < 3u; ++i)
+        YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &buffers[i], &err) == YVEX_OK,
+            "result carrier release");
+    YVEX_TEST_ASSERT(yvex_backend_close_checked(&backend, &err) == YVEX_OK, "result-view backend cleanup");
+    printf("MoE result views: carriers=3 selected_rows=2 capacity=4 exact_offsets=yes negatives=5\n");
+    return 0;
+}
+
 int yvex_test_runtime_moe(void)
 {
+    if (moe_test_result_views() != 0) return 1;
     if (moe_test_family_plan() != 0) return 1;
     if (moe_test_routing() != 0) return 1;
     if (moe_test_expert() != 0) return 1;

@@ -10,6 +10,9 @@ extern "C" {
 
 const yvex_backend_transformer_operations *yvex_cuda_transformer_operations_get(
     const yvex_backend *backend);
+int yvex_cuda_residual_post(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
+    const yvex_device_tensor *, const yvex_device_tensor *, unsigned long long, unsigned long long,
+    unsigned long long, yvex_device_tensor *, yvex_backend_operation_facts *, yvex_error *);
 int yvex_cuda_transformer_linear_bf16(
     yvex_backend *, const unsigned char *, unsigned long long,
     const unsigned char *, unsigned long long, unsigned long long,

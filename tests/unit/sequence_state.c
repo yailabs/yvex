@@ -1,6 +1,7 @@
 /* Qualify mixed-layer recurrent state lifecycle and coordinated publication. */
 #include "tests/test.h"
 
+#include <limits.h>
 #include <string.h>
 
 #include <yvex/internal/sequence_state.h>
@@ -59,6 +60,44 @@ static int sequence_state_commit(
     return yvex_runtime_transaction_resolve(&participant, 1u, status, err);
 }
 
+static int sequence_state_measure_refusals(void)
+{
+    static const char identity[] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    yvex_sequence_state_binding bindings[2];
+    yvex_sequence_state_plan plan = {.schema_version = YVEX_SEQUENCE_STATE_SCHEMA_V1};
+    yvex_sequence_state_geometry geometry;
+    yvex_error err;
+    memset(&geometry, 0xff, sizeof(geometry));
+    YVEX_TEST_ASSERT(yvex_sequence_state_plan_measure(&plan, &geometry, &err) == YVEX_OK &&
+        !geometry.bank_values && !geometry.committed_bytes && !geometry.candidate_bytes,
+        "an empty computational state population requires zero provider banks");
+    plan.binding_count = 1ull;
+    YVEX_TEST_ASSERT(yvex_sequence_state_plan_measure(&plan, &geometry, &err) == YVEX_ERR_INVALID_ARG &&
+        !geometry.bank_values && !geometry.committed_bytes,
+        "missing binding directory refuses before any state allocation");
+    plan.bindings = bindings;
+    plan.binding_count = 2ull;
+    YVEX_TEST_ASSERT(yvex_sequence_state_binding_seal(&bindings[0], 1ull, 4ull, 8ull, identity, &err) == YVEX_OK &&
+        yvex_sequence_state_binding_seal(&bindings[1], 1ull, 4ull, 8ull, identity, &err) == YVEX_OK &&
+        yvex_sequence_state_plan_measure(&plan, &geometry, &err) == YVEX_ERR_FORMAT && !geometry.bank_values,
+        "individually sealed duplicate state roots cannot be measured as an admissible population");
+    YVEX_TEST_ASSERT(yvex_sequence_state_binding_seal(&bindings[1], 3ull, 4ull, 8ull, identity, &err) == YVEX_OK,
+        "restore unique state roots");
+    bindings[1].identity[0] = bindings[1].identity[0] == '0' ? '1' : '0';
+    YVEX_TEST_ASSERT(yvex_sequence_state_plan_measure(&plan, &geometry, &err) == YVEX_ERR_FORMAT &&
+        !geometry.bank_values && !geometry.committed_bytes && !geometry.candidate_bytes,
+        "a late corrupted binding publishes no partial capacity");
+    plan.binding_count = 1ull;
+    YVEX_TEST_ASSERT(yvex_sequence_state_binding_seal(
+        &bindings[0], 1ull, 0ull, ULLONG_MAX / sizeof(float), identity, &err) == YVEX_OK &&
+        yvex_sequence_state_plan_measure(&plan, &geometry, &err) == YVEX_ERR_BOUNDS && !geometry.bank_values,
+        "one legal bank cannot conceal overflow of the provider's committed plus candidate storage");
+    YVEX_TEST_ASSERT(yvex_sequence_state_plan_measure(NULL, &geometry, &err) == YVEX_ERR_INVALID_ARG &&
+        yvex_sequence_state_plan_measure(&plan, NULL, &err) == YVEX_ERR_INVALID_ARG,
+        "measurement requires its exact plan and result owner");
+    return 0;
+}
+
 int yvex_test_sequence_state(void)
 {
     yvex_gated_delta_plan mixer;
@@ -66,9 +105,11 @@ int yvex_test_sequence_state(void)
     yvex_sequence_state_plan plan;
     yvex_sequence_state *state = NULL, *forked = NULL;
     yvex_sequence_state_summary summary;
+    yvex_sequence_state_geometry geometry;
     yvex_sequence_state_view committed;
     yvex_error err;
 
+    if (sequence_state_measure_refusals() != 0) return 1;
     yvex_error_clear(&err);
     YVEX_TEST_ASSERT(sequence_state_plan(&mixer, &err) == YVEX_OK,
                      "seal tiny recurrent plan");
@@ -83,6 +124,11 @@ int yvex_test_sequence_state(void)
         .schema_version = YVEX_SEQUENCE_STATE_SCHEMA_V1,
         .bindings = bindings,
         .binding_count = 2ull};
+    YVEX_TEST_ASSERT(yvex_sequence_state_plan_measure(&plan, &geometry, &err) == YVEX_OK &&
+        geometry.convolution_values == 40ull && geometry.recurrent_values == 24ull &&
+        geometry.bank_values == 64ull && geometry.committed_bytes == 256ull &&
+        geometry.candidate_bytes == 256ull,
+        "startup measures exact provider storage without a session, allocation or historical decoder");
     YVEX_TEST_ASSERT(yvex_sequence_state_open(&state, &plan, &err) == YVEX_OK,
                      "open heterogeneous recurrent state");
     YVEX_TEST_ASSERT(

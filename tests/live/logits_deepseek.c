@@ -6,6 +6,7 @@
 #include <yvex/internal/backend.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/deployment.h>
+#include <yvex/internal/execution.h>
 #include <yvex/internal/logits.h>
 #include <yvex/internal/runtime.h>
 #include <yvex/internal/sampling.h>
@@ -306,6 +307,119 @@ static int live_compare(const float *actual, const float *reference,
             comparison->first_failure = index;
     }
     return comparison->first_failure == count;
+}
+
+/* Preserve a failed oracle verdict while isolating population-dependent work.
+ * These are output-head diagnostics over the same admitted hidden rows, not
+ * retries of generation or a replacement oracle. No tolerance is relaxed. */
+static void live_cuda_projection_diagnostic(live_logits *execution)
+{
+    const yvex_runtime_logits_plan_summary *plan =
+        yvex_runtime_logits_plan_summary_get(execution->logits);
+    yvex_runtime_logits_row_result rows[LIVE_LOGITS_ROWS];
+    yvex_runtime_logits_result result;
+    yvex_error err = {0};
+    float *replay;
+    unsigned long long values;
+    int rc;
+    if (!plan || !yvex_core_u64_mul(LIVE_LOGITS_ROWS, plan->vocabulary_size, &values) ||
+        values > SIZE_MAX / sizeof(float)) return;
+    replay = malloc((size_t)values * sizeof(float));
+    if (!replay) return;
+    fprintf(stderr, "logits diagnostic original_digest=%s plan=%s vocabulary=%llu width=%llu\n",
+        execution->result.aggregate_logits_digest, plan->output_head_plan_identity,
+        plan->vocabulary_size, plan->hidden_width);
+    for (unsigned long long row = 0u; row < LIVE_LOGITS_ROWS; ++row) {
+        const float *reference = execution->reference_logits + row * plan->vocabulary_size;
+        const float *original = execution->raw_logits + row * plan->vocabulary_size;
+        live_comparison first, single;
+        char hidden_digest[YVEX_SHA256_HEX_CAP] = {0};
+        int unchanged = yvex_execution_f32_digest("yvex.transformer.normalized-hidden.v1",
+            execution->sources[row].normalized_hidden, plan->hidden_width, hidden_digest) &&
+            !strcmp(hidden_digest, execution->sources[row].normalized_hidden_digest);
+        (void)live_compare(original, reference, plan->vocabulary_size, 0, &first);
+        rc = yvex_runtime_logits_project(execution->logits, &execution->sources[row],
+            YVEX_BACKEND_KIND_CUDA, replay, plan->vocabulary_size, &rows[row], &err);
+        fprintf(stderr, "logits diagnostic row=%llu input_unchanged=%d original_ref_max_abs=%.17g "
+            "original_first=%llu single_status=%d", row, unchanged, first.maximum_absolute,
+            first.first_failure, rc);
+        if (first.first_failure < plan->vocabulary_size)
+            fprintf(stderr, " expected=%.9g observed=%.9g",
+                reference[first.first_failure], original[first.first_failure]);
+        if (rc == YVEX_OK) {
+            (void)live_compare(replay, reference, plan->vocabulary_size, 0, &single);
+            fprintf(stderr, " single_ref_max_abs=%.17g single_first=%llu",
+                single.maximum_absolute, single.first_failure);
+        } else fprintf(stderr, " where=%s reason=%s", yvex_error_where(&err), yvex_error_message(&err));
+        fputc('\n', stderr);
+    }
+    rc = yvex_runtime_logits_execute(execution->logits, execution->sources,
+        LIVE_LOGITS_ROWS, YVEX_BACKEND_KIND_CUDA, replay, values, rows,
+        LIVE_LOGITS_ROWS, &result, &err);
+    if (rc == YVEX_OK) {
+        live_comparison reference, original;
+        (void)live_compare(replay, execution->reference_logits, values, 0, &reference);
+        (void)live_compare(replay, execution->raw_logits, values, 0, &original);
+        fprintf(stderr, "logits diagnostic grouped_replay_ref_max_abs=%.17g "
+            "grouped_replay_original_max_abs=%.17g replay_digest=%s\n",
+            reference.maximum_absolute, original.maximum_absolute, result.aggregate_logits_digest);
+    } else fprintf(stderr, "logits diagnostic grouped_replay_status=%d where=%s reason=%s\n",
+        rc, yvex_error_where(&err), yvex_error_message(&err));
+    free(replay);
+}
+
+/* Reuse one admitted stage across changing populations. Every projection has
+ * its own verdict against the independent reference; a later pass cannot hide
+ * an earlier failure. The original hidden rows and logits remain untouched. */
+static int live_cuda_projection_reuse(live_logits *execution, yvex_error *err)
+{
+    static const unsigned long long starts[] = {0, 2, 0, 1, 0, 0, 1, 0};
+    static const unsigned long long counts[] = {3, 1, 2, 1, 3, 1, 2, 3};
+    const yvex_runtime_logits_plan_summary *plan =
+        yvex_runtime_logits_plan_summary_get(execution->logits);
+    yvex_runtime_logits_row_result rows[LIVE_LOGITS_ROWS];
+    yvex_runtime_logits_result result;
+    unsigned long long capacity, total = 0ull;
+    double maximum = 0.0;
+    float *output;
+    int rc = YVEX_OK;
+    if (!plan || !yvex_core_u64_mul(LIVE_LOGITS_ROWS, plan->vocabulary_size, &capacity) ||
+        capacity > SIZE_MAX / sizeof(float)) return YVEX_ERR_FORMAT;
+    output = malloc((size_t)capacity * sizeof(float));
+    if (!output) return YVEX_ERR_NOMEM;
+    for (size_t trial = 0u; rc == YVEX_OK && trial < sizeof(counts) / sizeof(counts[0]); ++trial) {
+        unsigned long long count = counts[trial] * plan->vocabulary_size;
+        unsigned long long offset = starts[trial] * plan->vocabulary_size;
+        live_comparison comparison;
+        for (unsigned long long index = 0ull; index < capacity; ++index) output[index] = 123.0f;
+        rc = yvex_runtime_logits_execute(execution->logits, execution->sources + starts[trial],
+            counts[trial], YVEX_BACKEND_KIND_CUDA, output, capacity, rows,
+            LIVE_LOGITS_ROWS, &result, err);
+        if (rc != YVEX_OK) break;
+        if (!live_compare(output, execution->reference_logits + offset, count, 0, &comparison)) {
+            fprintf(stderr, "logits reuse trial=%zu start=%llu rows=%llu first=%llu "
+                "expected=%.9g observed=%.9g max_abs=%.17g\n", trial, starts[trial],
+                counts[trial], comparison.first_failure,
+                execution->reference_logits[offset + comparison.first_failure],
+                output[comparison.first_failure], comparison.maximum_absolute);
+            yvex_error_set(err, YVEX_ERR_FORMAT, "test.logits.cuda-reuse",
+                           "reused CUDA projection exceeds the independent numerical contract");
+            rc = YVEX_ERR_FORMAT;
+        }
+        for (unsigned long long index = count; rc == YVEX_OK && index < capacity; ++index)
+            if (output[index] != 123.0f) {
+                yvex_error_set(err, YVEX_ERR_FORMAT, "test.logits.cuda-reuse",
+                               "projection modified output beyond the admitted population");
+                rc = YVEX_ERR_FORMAT;
+            }
+        maximum = fmax(maximum, comparison.maximum_absolute);
+        total += count;
+    }
+    if (rc == YVEX_OK)
+        printf("logits_reuse projections=8 populations=3,1,2,1,3,1,2,3 values=%llu "
+               "reference_max_abs=%.17g tail_sentinel=preserved\n", total, maximum);
+    free(output);
+    return rc;
 }
 
 static int live_device_profile(live_logits *execution, yvex_model_engine *model,
@@ -873,9 +987,14 @@ int main(int argc, char **argv)
                 cuda_reference.maximum_absolute, cuda_reference.maximum_relative,
                 cuda_reference.first_failure, cpu_cuda.maximum_absolute,
                 cpu_cuda.first_failure);
+        live_cuda_projection_diagnostic(&cuda);
         yvex_error_set(&err, YVEX_ERR_FORMAT, "test.logits.cuda-reference",
                        "CUDA full-vocabulary logits exceed the numerical contract");
         rc = YVEX_ERR_FORMAT;
+    }
+    if (rc == YVEX_OK) {
+        step = "cuda-projection-reuse";
+        rc = live_cuda_projection_reuse(&cuda, &err);
     }
     if (rc == YVEX_OK) {
         step = "sampling-greedy";

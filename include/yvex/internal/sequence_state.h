@@ -24,6 +24,16 @@ typedef struct {
 
 typedef struct yvex_sequence_state yvex_sequence_state;
 
+/* Provider-owned physical geometry, available before a session or allocation.
+ * The compiler supplies typed bindings; this provider owns its two F32 banks.
+ * Measurement does not reserve resources or qualify execution. */
+typedef struct {
+    unsigned long long convolution_values, recurrent_values, bank_values;
+    unsigned long long committed_bytes, candidate_bytes;
+} yvex_sequence_state_geometry;
+int yvex_sequence_state_plan_measure(const yvex_sequence_state_plan *plan,
+    yvex_sequence_state_geometry *out, yvex_error *err);
+
 int yvex_sequence_state_open(
     yvex_sequence_state **out, const yvex_sequence_state_plan *plan,
     yvex_error *err);

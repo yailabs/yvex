@@ -818,35 +818,54 @@ int yvex_transformer_initial_residual(const yvex_transformer_plan *plan,
     return YVEX_OK;
 }
 
-int yvex_transformer_deferred_post(const yvex_transformer_plan *plan,
-                                   const float *residual, const float *combined,
-                                   const float *post, const float *combination,
-                                   unsigned long long token_count, float *expanded,
-                                   yvex_error *err)
+int yvex_transformer_post_program_import(yvex_program_physical **out,
+    const yvex_transformer_plan *plan, const yvex_physical_execution_ir *parameters, yvex_error *err)
 {
     const yvex_transformer_plan_summary *s = yvex_transformer_plan_summary_get(plan);
-    unsigned long long token, target, source, lane;
-    if (!s || !residual || !combined || !post || !combination || !expanded || !token_count)
-        return transformer_refuse(err, YVEX_ERR_INVALID_ARG,
-                                  "deferred FFN post arguments are invalid");
-    for (token = 0ull; token < token_count; ++token)
-        for (target = 0ull; target < s->residual_streams; ++target)
-            for (lane = 0ull; lane < s->hidden_width; ++lane) {
-                double value = (double)post[token * s->residual_streams + target] *
-                               (double)combined[token * s->hidden_width + lane];
-                for (source = 0ull; source < s->residual_streams; ++source)
-                    value += (double)combination[(token * s->residual_streams + source) *
-                                                     s->residual_streams + target] *
-                             (double)residual[token * s->expanded_width +
-                                              source * s->hidden_width + lane];
-                if (!isfinite(value))
-                    return transformer_refuse(err, YVEX_ERR_FORMAT,
-                                              "deferred FFN post produced a non-finite value");
-                expanded[token * s->expanded_width + target * s->hidden_width + lane] =
-                    yvex_quant_bf16_decode(yvex_quant_bf16_encode((float)value));
-            }
-    yvex_error_clear(err);
-    return YVEX_OK;
+    const yvex_physical_execution_summary *physical = yvex_physical_execution_ir_summary(parameters);
+    yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+    yvex_ir_module *m = NULL;
+    yvex_program_execution *execution = NULL;
+    yvex_ir_dimension rows = {.name = "rows", .minimum = 1u, .multiple = 1u};
+    yvex_ir_id dim, types[4], result, function, block = YVEX_IR_NONE, op;
+    int rc;
+    if (out) *out = NULL;
+    if (!out || !s || !physical)
+        return transformer_refuse(err, YVEX_ERR_FORMAT, "post import requires authenticated program geometry");
+    rows.maximum = s->maximum_context;
+    rc = yvex_ir_module_open(&m, "post_import", s->logical_model_identity, dialects, 2u, err);
+    if (rc == YVEX_OK) rc = yvex_ir_dimension_add(m, &rows, &dim, err);
+    for (size_t i = 0u; rc == YVEX_OK && i < 4u; ++i) {
+        yvex_ir_type t = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32,
+            .rank = i == 0u || i == 3u ? 3u : 2u};
+        t.shape[0] = (yvex_ir_extent){dim, 0u};
+        t.shape[1] = (yvex_ir_extent){YVEX_IR_NONE, i == 1u ? s->hidden_width : s->residual_streams};
+        if (t.rank == 3u)
+            t.shape[2] = (yvex_ir_extent){YVEX_IR_NONE, i == 0u ? s->hidden_width : s->residual_streams};
+        rc = yvex_ir_type_intern(m, &t, &types[i], err);
+        if (rc == YVEX_OK && i == 0u) {
+            t.scalar = YVEX_IR_BF16;
+            rc = yvex_ir_type_intern(m, &t, &result, err);
+        }
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_function_add(m, "post", types, 4u, &result, 1u, 0u, &function, err);
+    if (rc == YVEX_OK) {
+        block = yvex_ir_function_at(m, function)->body;
+        yvex_ir_operation_request r = {.operation = "mhc.residual_post",
+            .operands = yvex_ir_block_at(m, block)->arguments, .operand_count = 4u,
+            .result_types = &result, .result_count = 1u};
+        rc = yvex_ir_operation_add(m, block, &r, &op, err);
+    }
+    if (rc == YVEX_OK) {
+        yvex_ir_id value = yvex_ir_operation_at(m, op)->results[0];
+        yvex_ir_operation_request r = {.operation = "core.return", .operands = &value, .operand_count = 1u};
+        rc = yvex_ir_operation_add(m, block, &r, &op, err);
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_seal(m, err);
+    if (rc == YVEX_OK) rc = yvex_program_execution_compile(&execution, m, err);
+    if (rc == YVEX_OK) rc = yvex_program_physical_compile(out, execution, "post", NULL, 0u, physical->identity, err);
+    yvex_program_execution_close(&execution); yvex_ir_module_close(&m);
+    return rc;
 }
 
 int yvex_transformer_feature_normalize(float *values,

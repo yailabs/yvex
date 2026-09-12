@@ -1664,10 +1664,14 @@ static int live_compatible_operation_batching_proof(
             yvex_error_setf(
                 err, rc, "generation_live.scheduler",
                 "compatible-operation batching was not observed "
-                "(rendezvous=%llu/%llu batches=%llu/%llu sources=%llu worklists=%llu)",
+                "(rendezvous=%llu/%llu batches=%llu/%llu sources=%llu worklists=%llu "
+                "submitted=%llu physical=%llu timeouts=%llu mismatches=%llu phase=%llu layer=%llu operation=%llu)",
                 out->multi_source_rendezvous, out->maximum_rendezvous_width,
                 out->multi_source_batches, out->maximum_multi_source_width,
-                out->maximum_source_count, out->multi_source_worklists);
+                out->maximum_source_count, out->multi_source_worklists,
+                out->submissions, out->physical_batches, out->coalescing_timeouts,
+                out->compatibility_mismatches, out->phase_mismatches, out->layer_mismatches,
+                out->operation_mismatches);
         }
     }
     (void)pthread_cond_destroy(&gate.condition);

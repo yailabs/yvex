@@ -177,12 +177,19 @@ typedef struct {
     int defer;
     yvex_moe_device_completion_slot *host;
 } yvex_moe_device_completion;
+/* Caller-owned computational results, not borrows of the MoE workspace.
+ * Each tensor has independent storage. The outer transaction still owns
+ * publication: queued copies do not constitute a successful state commit. */
+typedef struct {
+    yvex_device_tensor *combined, *post, *combination;
+} yvex_moe_device_results;
 typedef struct {
     const yvex_moe_layer_plan *layer;
     yvex_moe_weight_view weights[YVEX_MOE_WEIGHT_COUNT];
     const float *expanded_input;
     const yvex_device_tensor *device_input;
     yvex_device_tensor *device_output;
+    const yvex_moe_device_results *device_results;
     unsigned int token_id;
     int token_id_present;
     int (*cancel_requested)(void *context);
@@ -222,6 +229,7 @@ typedef struct {
     const float *expanded_rows;
     const yvex_device_tensor *device_rows;
     yvex_device_tensor *device_outputs;
+    const yvex_moe_device_results *device_results;
     const unsigned int *token_ids;
     int token_ids_present;
     yvex_execution_batch_provenance provenance;

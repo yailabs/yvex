@@ -47,7 +47,7 @@ static int test_open_and_unsupported(void)
                          !yvex_backend_component_operations_get(backend),
                      "CPU does not advertise unimplemented sampling, MoE or component operation tables");
     const yvex_backend_transformer_operations *neural = yvex_backend_transformer_operations_get(backend);
-    YVEX_TEST_ASSERT(neural && neural->final && neural->feature_mean && !neural->initial &&
+    YVEX_TEST_ASSERT(neural && neural->final && neural->feature_mean && neural->residual_post && !neural->initial &&
                          !neural->attention_execute && !neural->gated_delta_execute &&
                          !neural->linear_compile && !neural->dense_decoder_execute,
                      "CPU advertises compiled mHC and stream mean without claiming unrelated operations");

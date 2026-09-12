@@ -123,11 +123,8 @@ int yvex_transformer_final_program_import(struct yvex_program_physical **,
     const yvex_transformer_plan *, const struct yvex_physical_execution_ir *, yvex_error *);
 int yvex_transformer_feature_program_import(struct yvex_program_physical **,
     const yvex_transformer_plan *, const struct yvex_physical_execution_ir *, yvex_error *);
-int yvex_transformer_deferred_post(const yvex_transformer_plan *plan,
-                                   const float *residual, const float *combined,
-                                   const float *post, const float *combination,
-                                   unsigned long long token_count, float *expanded,
-                                   yvex_error *err);
+int yvex_transformer_post_program_import(struct yvex_program_physical **,
+    const yvex_transformer_plan *, const struct yvex_physical_execution_ir *, yvex_error *);
 int yvex_transformer_feature_normalize(float *values,
                                        unsigned long long value_count,
                                        const float *weights, double epsilon,

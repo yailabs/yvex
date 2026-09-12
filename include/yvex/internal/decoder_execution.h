@@ -5,6 +5,7 @@
 #include <yvex/internal/device_view.h>
 #include <yvex/internal/runtime.h>
 #include <yvex/internal/transformer.h>
+#include <yvex/internal/program_physical.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,7 +52,8 @@ int yvex_runtime_decoder_execution_context_open(
     yvex_runtime_decoder_execution_context **out, yvex_model_engine *model,
     yvex_runtime_execution_session *session,
     const yvex_runtime_decoder_execution_options *options, yvex_error *err);
-const yvex_decoder_plan *yvex_runtime_decoder_execution_plan(
+/* Derived executable signature, never a source/import decoder topology. */
+const yvex_program_token_interface *yvex_runtime_decoder_execution_interface(
     const yvex_runtime_decoder_execution_context *context);
 int yvex_runtime_decoder_execution_execute(
     yvex_runtime_decoder_execution_context *context,

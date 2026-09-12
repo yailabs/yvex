@@ -626,7 +626,7 @@ static int runtime_moe_layer_cuda(yvex_runtime_moe_context *context,
     yvex_moe_weight_view selected[3];
     unsigned long long rank, bytes_read = 0ull;
     int rc = yvex_backend_moe_begin(&execution, context->session_view->backend, job, result, err);
-    if (rc == YVEX_OK && job->device_output &&
+    if (rc == YVEX_OK && (job->device_output || job->device_results) &&
         job->evidence_level != YVEX_ATTENTION_EVIDENCE_FULL &&
         job->weights[YVEX_MOE_WEIGHT_ROUTED_GATE].device_address &&
         job->weights[YVEX_MOE_WEIGHT_ROUTED_UP].device_address &&
@@ -667,11 +667,35 @@ static int runtime_moe_layer_cuda(yvex_runtime_moe_context *context,
     return rc;
 }
 
+/* Slice already admitted physical result carriers; no model geometry is inferred. */
+int yvex_runtime_private_moe_result_views(const yvex_moe_device_results *owner,
+    unsigned long long capacity, unsigned long long first, unsigned long long rows,
+    yvex_device_tensor views[3], yvex_moe_device_results *out, yvex_error *err)
+{
+    if (!owner || !capacity || !rows || first > capacity || rows > capacity - first || !views || !out)
+        return runtime_moe_refuse(err, YVEX_ERR_BOUNDS, "MoE result population is invalid");
+    yvex_device_tensor *tensors[] = {owner->combined, owner->post, owner->combination};
+    for (size_t i = 0u; i < 3u; ++i) {
+        unsigned long long width, count, offset;
+        if (!tensors[i] || tensors[i]->dtype != YVEX_DTYPE_F32 ||
+            tensors[i]->bytes % sizeof(float) ||
+            (tensors[i]->bytes / sizeof(float)) % capacity ||
+            !(width = tensors[i]->bytes / sizeof(float) / capacity) ||
+            !yvex_core_u64_mul(first, width, &offset) || !yvex_core_u64_mul(rows, width, &count) ||
+            !yvex_backend_tensor_f32_subview(tensors[i], offset, count, &views[i]))
+            return runtime_moe_refuse(err, YVEX_ERR_BOUNDS, "MoE result view exceeds admitted storage");
+    }
+    *out = (yvex_moe_device_results){&views[0], &views[1], &views[2]};
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 static int runtime_moe_layer_owned(yvex_runtime_moe_context *context,
                                    unsigned long long layer_index,
                                    const float *expanded_input,
                                    const yvex_device_tensor *device_input,
-                                   yvex_device_tensor *device_output, unsigned int token_id,
+                                   yvex_device_tensor *device_output,
+                                   const yvex_moe_device_results *device_results, unsigned int token_id,
                                    int token_id_present, yvex_moe_layer_result *result,
                                    yvex_error *err)
 {
@@ -691,6 +715,7 @@ static int runtime_moe_layer_owned(yvex_runtime_moe_context *context,
     job.expanded_input = expanded_input;
     job.device_input = device_input;
     job.device_output = device_output;
+    job.device_results = device_results;
     result->combined_output = context->combined;
     result->combined_capacity = context->hidden_capacity;
     result->routed_output = context->routed;
@@ -737,7 +762,7 @@ static int runtime_moe_layer_owned(yvex_runtime_moe_context *context,
         result->qtype_counts[job.weights[slot].qtype] += count;
     }
     if (yvex_backend_kind_of(context->session_view->backend) == YVEX_BACKEND_KIND_CUDA &&
-        device_output && context->options.evidence_level != YVEX_ATTENTION_EVIDENCE_FULL) {
+        (device_output || device_results) && context->options.evidence_level != YVEX_ATTENTION_EVIDENCE_FULL) {
         if (!yvex_moe_router_result_identity(&result->router, layer->routed_experts,
                                               result->routing_digest))
             return runtime_moe_refuse(err, YVEX_ERR_STATE,
@@ -950,7 +975,7 @@ int yvex_runtime_moe_execute(yvex_runtime_moe_context *context,
             unsigned long long row = layer_index * input_summary->token_count + token_index;
             rc = runtime_moe_layer_owned(context, layer_index,
                                          layer_values + token_index * stride, NULL, NULL,
-                                         tokens[token_index], 1, &staged, err);
+                                         NULL, tokens[token_index], 1, &staged, err);
             if (rc != YVEX_OK) break;
             memcpy(context->candidate_combined + row * layer->hidden_width,
                    staged.combined_output, (size_t)layer->hidden_width * sizeof(float));
@@ -1095,7 +1120,7 @@ static int runtime_moe_execute_layer_mode(yvex_runtime_moe_context *context,
     session_begun = manage_session && rc == YVEX_OK;
     if (rc == YVEX_OK)
         rc = runtime_moe_layer_owned(context, layer_index, expanded_input,
-                                     device_input, device_output, token_id,
+                                     device_input, device_output, NULL, token_id,
                                      token_id_present, &staged, err);
     if (session_begun) {
         int finish_rc = yvex_runtime_session_finish(context->session, rc, err);
@@ -1317,6 +1342,28 @@ static int runtime_moe_transaction_begin(
  * token-local. This boundary prevents Transformer and future backends from defining batching as
  * repeated one-row calls; a grouped kernel can replace this adapter without changing semantics.
  */
+static int runtime_moe_row_owned(yvex_runtime_moe_context *context, unsigned long long layer_index,
+    const yvex_moe_row_batch *batch, unsigned long long row, yvex_moe_layer_result *result, yvex_error *err)
+{
+    yvex_device_tensor input, output, views[3];
+    yvex_moe_device_results results;
+    const yvex_device_tensor *input_ptr = NULL;
+    yvex_device_tensor *output_ptr = NULL;
+    if (batch->device_rows) {
+        if (!yvex_backend_tensor_f32_subview(batch->device_rows, row * batch->row_width,
+                batch->row_width, &input) ||
+            (!batch->device_results && !yvex_backend_tensor_f32_subview(batch->device_outputs,
+                row * batch->row_width, batch->row_width, &output)))
+            return runtime_moe_refuse(err, YVEX_ERR_BOUNDS, "ordered MoE device row view is invalid");
+        input_ptr = &input;
+        if (!batch->device_results) output_ptr = &output;
+    }
+    if (batch->device_results && yvex_runtime_private_moe_result_views(batch->device_results,
+        batch->row_count, row, 1u, views, &results, err) != YVEX_OK) return yvex_error_code(err);
+    return runtime_moe_layer_owned(context, layer_index, batch->expanded_rows + row * batch->row_stride,
+        input_ptr, output_ptr, batch->device_results ? &results : NULL, batch->token_ids[row], 1, result, err);
+}
+
 static int runtime_moe_execute_layer_rows(yvex_runtime_moe_context *context, unsigned long long layer_index,
     const yvex_moe_row_batch *batch, const yvex_moe_row_batch_output *output,
     yvex_moe_row_batch_result *result, yvex_error *err)
@@ -1358,7 +1405,7 @@ static int runtime_moe_execute_layer_rows(yvex_runtime_moe_context *context, uns
                  context->options.execution_profile->identity) != 0)) ||
         (!context->options.execution_profile && batch->execution_profile_identity) ||
         (batch->execution_class == YVEX_EXECUTION_CLASS_DEVICE_NATIVE &&
-         (!backend_operations || !batch->device_rows || !batch->device_outputs)) ||
+         (!backend_operations || !batch->device_rows || (!batch->device_outputs && !batch->device_results))) ||
         !yvex_core_u64_mul(batch->row_count, layer->hidden_width, &hidden_count) ||
         !yvex_core_u64_mul(batch->row_count, layer->residual_streams, &residual_count) ||
         !yvex_core_u64_mul(residual_count, layer->residual_streams, &combination_count) ||
@@ -1367,7 +1414,8 @@ static int runtime_moe_execute_layer_rows(yvex_runtime_moe_context *context, uns
         !output->shared_rows || output->shared_capacity < hidden_count ||
         !output->post_rows || output->post_capacity < residual_count ||
         !output->combination_rows || output->combination_capacity < combination_count ||
-        ((batch->device_rows == NULL) != (batch->device_outputs == NULL)) ||
+        ((batch->device_rows == NULL) != (!batch->device_outputs && !batch->device_results)) ||
+        (batch->device_outputs && batch->device_results) ||
         yvex_runtime_session_summary_copy(context->session, &session, err) != YVEX_OK ||
         !session.busy || !layer->routed_experts || layer->routed_experts > SIZE_MAX)
         return runtime_moe_refuse(err, YVEX_ERR_INVALID_ARG,
@@ -1418,6 +1466,7 @@ static int runtime_moe_execute_layer_rows(yvex_runtime_moe_context *context, uns
             batch_job.expanded_input = batch->expanded_rows;
             batch_job.device_input = batch->device_rows;
             batch_job.device_output = batch->device_outputs;
+            batch_job.device_results = batch->device_results;
             batch_job.execution_batch = &execution_batch;
             batch_job.worklist_policy = &worklist_policy;
             if (deferred) {
@@ -1453,25 +1502,7 @@ static int runtime_moe_execute_layer_rows(yvex_runtime_moe_context *context, uns
         }
     } else for (row = 0ull; row < batch->row_count && rc == YVEX_OK; ++row) {
         yvex_moe_layer_result staged;
-        yvex_device_tensor device_input, device_output;
-        const yvex_device_tensor *device_input_ptr = NULL;
-        yvex_device_tensor *device_output_ptr = NULL;
-        if (batch->device_rows &&
-            (!yvex_backend_tensor_f32_subview(batch->device_rows, row * batch->row_width,
-                                              batch->row_width, &device_input) ||
-             !yvex_backend_tensor_f32_subview(batch->device_outputs, row * batch->row_width,
-                                              batch->row_width, &device_output))) {
-            rc = runtime_moe_refuse(err, YVEX_ERR_BOUNDS,
-                                    "ordered MoE device row view is invalid");
-            break;
-        }
-        if (batch->device_rows) {
-            device_input_ptr = &device_input;
-            device_output_ptr = &device_output;
-        }
-        rc = runtime_moe_layer_owned(
-            context, layer_index, batch->expanded_rows + row * batch->row_stride,
-            device_input_ptr, device_output_ptr, batch->token_ids[row], 1, &staged, err);
+        rc = runtime_moe_row_owned(context, layer_index, batch, row, &staged, err);
         if (rc != YVEX_OK) break;
         memcpy(output->combined_rows + row * layer->hidden_width, staged.combined_output,
                (size_t)layer->hidden_width * sizeof(float));
@@ -1505,6 +1536,11 @@ static int runtime_moe_execute_layer_rows(yvex_runtime_moe_context *context, uns
             plan, layer, batch, &execution_batch, &worklist_policy, result, err);
 done:
     yvex_core_free(seen);
+    if (batch->device_results) {
+        yvex_device_tensor *views[] = {batch->device_results->combined,
+            batch->device_results->post, batch->device_results->combination};
+        for (size_t i = 0u; i < 3u; ++i) if (views[i]) views[i]->is_written = rc == YVEX_OK;
+    }
     if (locked) {
         context->busy = 0;
         if (rc == YVEX_OK) context->execution_count++;

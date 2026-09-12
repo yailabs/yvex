@@ -146,6 +146,34 @@ static int neural_stream_mean(const yvex_ir_module *m, yvex_ir_id id, yvex_error
     return YVEX_OK;
 }
 
+/* Gates and source-to-target mixing remain explicit operands. State lifetime
+ * is not an effect of this pure residual computation. */
+static int neural_mhc_post(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
+{
+    const yvex_ir_operation *op = &m->operations[id];
+    const yvex_ir_type *x = neural_input(m, op, 0u), *core = neural_input(m, op, 1u);
+    const yvex_ir_type *post = neural_input(m, op, 2u), *mix = neural_input(m, op, 3u);
+    const yvex_ir_type *y = neural_output(m, op, 0u);
+    const yvex_ir_type *inputs[] = {x, core, post, mix};
+    for (size_t i = 0u; i < 4u; ++i)
+        if (!neural_float_tensor(inputs[i]) || inputs[i]->scalar != YVEX_IR_F32 ||
+            !yvex_ir_extent_equal(inputs[i]->shape[0], x->shape[0]))
+            return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "mHC post requires F32 operands with the same row population");
+    if (x->rank != 3u || core->rank != 2u || post->rank != 2u || mix->rank != 3u ||
+        x->shape[1].symbol != YVEX_IR_NONE || x->shape[2].symbol != YVEX_IR_NONE ||
+        !yvex_ir_extent_equal(core->shape[1], x->shape[2]) ||
+        !yvex_ir_extent_equal(post->shape[1], x->shape[1]) ||
+        !yvex_ir_extent_equal(mix->shape[1], x->shape[1]) ||
+        !yvex_ir_extent_equal(mix->shape[2], x->shape[1]) ||
+        y->kind != YVEX_IR_TENSOR || y->scalar != YVEX_IR_BF16 || y->rank != 3u)
+        return yvex_ir_refuse(err, YVEX_ERR_FORMAT,
+            "mHC post stream/channel geometry or output precision is incompatible");
+    for (size_t i = 0u; i < 3u; ++i)
+        if (!yvex_ir_extent_equal(x->shape[i], y->shape[i]))
+            return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "mHC post preserves residual geometry");
+    return YVEX_OK;
+}
+
 const yvex_ir_dialect *yvex_ir_neural_dialect(void)
 {
     static const yvex_ir_attribute_rule norm[] = {
@@ -161,6 +189,7 @@ const yvex_ir_dialect *yvex_ir_neural_dialect(void)
         {"nn.layer_norm", 1u, 3u, 3u, 1u, 1u, 0u, 0u, norm, 2u, 0, neural_norm},
         {"mhc.head_norm", 1u, 5u, 5u, 2u, 2u, 0u, 0u, mhc, 2u, 0, neural_mhc_head},
         {"tensor.stream_mean", 1u, 1u, 1u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_stream_mean},
+        {"mhc.residual_post", 1u, 4u, 4u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_mhc_post},
         {"nn.silu", 1u, 1u, 1u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_unary},
         {"nn.gelu", 1u, 1u, 1u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_unary},
         /* SiLU rounds to the operand type before multiplication; the product

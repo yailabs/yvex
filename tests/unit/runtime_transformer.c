@@ -156,6 +156,15 @@ static int transformer_test_final_import(void)
                 p->maximum_rows == 8u && !strcmp(p->identity, yvex_program_physical_summary_get(repeat)->identity) &&
                 !strcmp(yvex_program_physical_step_at(program, 0u)->implementation, "stream_mean.f32.f64acc.v1"),
                 "feature import is a deterministic executable reduction, not a family runtime wrapper");
+            yvex_program_physical_close(&repeat); yvex_program_physical_close(&program);
+            YVEX_TEST_ASSERT(yvex_transformer_post_program_import(&program, plan, physical, &err) == YVEX_OK &&
+                yvex_transformer_post_program_import(&repeat, plan, physical, &err) == YVEX_OK,
+                "post geometry imports into four independent SSA inputs");
+            p = yvex_program_physical_summary_get(program);
+            YVEX_TEST_ASSERT(p->input_count == 4u && p->result_count == 1u && p->step_count == 1u &&
+                p->maximum_rows == 8u && !strcmp(p->identity, yvex_program_physical_summary_get(repeat)->identity) &&
+                !strcmp(yvex_program_physical_step_at(program, 0u)->implementation, "mhc.residual_post.f64acc.bf16.v1"),
+                "post semantic/physical lineage is deterministic at cold admission");
         }
         yvex_program_physical_close(&repeat); yvex_program_physical_close(&program);
         yvex_physical_execution_ir_close(&physical);
@@ -205,12 +214,9 @@ static int transformer_test_context_envelope(void)
 static int transformer_test_numeric(void)
 {
     yvex_transformer_plan *plan = NULL;
-    float embedding[] = {1.0f, 2.0f}, expanded[4], next[4];
+    float embedding[] = {1.0f, 2.0f}, expanded[4];
     float feature[] = {3.0f, -4.0f}, feature_expected[2];
     float feature_norm[] = {0.5f, 1.5f};
-    float residual[] = {1.0f, 2.0f, 3.0f, 4.0f};
-    float combined[] = {5.0f, 6.0f}, post[] = {0.5f, 1.0f};
-    float combination[] = {1.0f, 0.0f, 0.0f, 1.0f};
     double square, inverse;
     yvex_error err;
     if (transformer_test_plan(&plan, NULL) != 0) return 1;
@@ -219,13 +225,8 @@ static int transformer_test_numeric(void)
                          expanded[0] == 1.0f && expanded[1] == 2.0f &&
                          expanded[2] == 1.0f && expanded[3] == 2.0f,
                      "initial residual repeats the admitted embedding across streams");
-    YVEX_TEST_ASSERT(yvex_transformer_deferred_post(
-                         plan, residual, combined, post, combination, 1ull, next, &err) == YVEX_OK &&
-                         next[0] == yvex_quant_bf16_decode(yvex_quant_bf16_encode(3.5f)) &&
-                         next[1] == yvex_quant_bf16_decode(yvex_quant_bf16_encode(5.0f)) &&
-                         next[2] == yvex_quant_bf16_decode(yvex_quant_bf16_encode(8.0f)) &&
-                         next[3] == yvex_quant_bf16_decode(yvex_quant_bf16_encode(10.0f)),
-                     "deferred FFN post matches independent residual combination");
+    /* The same independent residual fixture now executes in unit.program and
+     * cuda.program through the multi-input physical stage, not a graph helper. */
     square = ((double)feature[0] * feature[0] +
               (double)feature[1] * feature[1]) /
              2.0;

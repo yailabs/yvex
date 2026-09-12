@@ -206,10 +206,51 @@ static int cpu_stream_mean(yvex_backend *backend, const yvex_device_tensor *inpu
     return YVEX_OK;
 }
 
+static int cpu_residual_post(yvex_backend *backend, const yvex_device_tensor *residual,
+    const yvex_device_tensor *core, const yvex_device_tensor *post, const yvex_device_tensor *mix,
+    unsigned long long rows, unsigned long long streams, unsigned long long width,
+    yvex_device_tensor *output, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_device_tensor *inputs[] = {residual, core, post, mix};
+    unsigned long long sizes[4], total, row, target, lane, source;
+    if (facts) memset(facts, 0, sizeof(*facts));
+    if (output) output->is_written = 0;
+    if (!facts || !rows || !streams || !width ||
+        !yvex_core_u64_mul(rows, width, &sizes[1]) || !yvex_core_u64_mul(rows, streams, &sizes[2]) ||
+        !yvex_core_u64_mul(sizes[1], streams, &sizes[0]) || !yvex_core_u64_mul(sizes[2], streams, &sizes[3]) ||
+        !backend_tensor_owner_is(backend, output) || !backend_tensor_f32_elements(output, sizes[0])) goto invalid;
+    total = sizes[0];
+    for (size_t i = 0u; i < 4u; ++i)
+        if (!backend_tensor_owner_is(backend, inputs[i]) || !backend_tensor_f32_elements(inputs[i], sizes[i]) ||
+            !inputs[i]->is_written || inputs[i]->data == output->data ||
+            !yvex_core_u64_add(total, sizes[i], &total)) goto invalid;
+    if (!yvex_core_u64_mul(total, sizeof(float), &total)) goto invalid;
+    for (row = 0u; row < rows; ++row)
+        for (target = 0u; target < streams; ++target)
+            for (lane = 0u; lane < width; ++lane) {
+                double value = (double)((const float *)post->data)[row * streams + target] *
+                    ((const float *)core->data)[row * width + lane];
+                for (source = 0u; source < streams; ++source)
+                    value += (double)((const float *)mix->data)[(row * streams + source) * streams + target] *
+                        ((const float *)residual->data)[(row * streams + source) * width + lane];
+                if (!isfinite((float)value)) goto invalid;
+                ((float *)output->data)[(row * streams + target) * width + lane] =
+                    yvex_quant_bf16_decode(yvex_quant_bf16_encode((float)value));
+            }
+    output->is_written = 1;
+    facts->activation_bytes = total;
+    facts->compulsory_memory_facts_available = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+invalid:
+    yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.mhc-post", "invalid mHC post operands or non-finite result");
+    return YVEX_ERR_FORMAT;
+}
+
 static const yvex_backend_transformer_operations *cpu_transformer_operations(const yvex_backend *backend)
 {
     static const yvex_backend_transformer_operations operations = {
-        .feature_mean = cpu_stream_mean, .final = cpu_mhc_head};
+        .feature_mean = cpu_stream_mean, .final = cpu_mhc_head, .residual_post = cpu_residual_post};
     (void)backend;
     return &operations;
 }

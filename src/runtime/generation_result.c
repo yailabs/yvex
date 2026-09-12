@@ -685,18 +685,18 @@ int yvex_runtime_generation_prefix_identity(
 }
 
 int yvex_runtime_generation_decoder_input_identity(
-    const yvex_decoder_plan_summary *plan, const unsigned int *tokens,
+    const char *producer_identity, const unsigned int *tokens,
     unsigned long long token_start, unsigned long long token_count,
     char output[YVEX_SHA256_HEX_CAP])
 {
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     unsigned long long index;
-    if (!plan || !tokens || !token_count || !output) return 0;
+    if (!yvex_sha256_hex_valid(producer_identity) || !tokens || !token_count || !output) return 0;
     yvex_sha256_init(&hash);
     if (!yvex_sha256_update_text(
             &hash, "yvex.runtime.decoder.token-input.v1") ||
-        !yvex_sha256_update_text(&hash, plan->decoder_plan_identity) ||
+        !yvex_sha256_update_text(&hash, producer_identity) ||
         !yvex_sha256_update_u64(&hash, token_start) ||
         !yvex_sha256_update_u64(&hash, token_count))
         return 0;

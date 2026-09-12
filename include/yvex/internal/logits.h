@@ -121,10 +121,9 @@ int yvex_runtime_logits_context_open(
     yvex_runtime_execution_session *session,
     const yvex_transformer_plan *transformer_plan,
     const yvex_runtime_logits_options *options, yvex_error *err);
-int yvex_runtime_logits_context_open_decoder(
+int yvex_runtime_logits_context_open_program(
     yvex_runtime_logits_context **out, yvex_model_engine *model,
     yvex_runtime_execution_session *session,
-    const yvex_decoder_plan *decoder_plan,
     const yvex_runtime_logits_options *options, yvex_error *err);
 const yvex_runtime_logits_plan_summary *yvex_runtime_logits_plan_summary_get(
     const yvex_runtime_logits_context *context);

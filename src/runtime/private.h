@@ -171,6 +171,7 @@ typedef struct {
     const yvex_device_tensor *device_rows;
     yvex_device_tensor *device_outputs;
     yvex_device_tensor *batch_device_rows, *batch_device_outputs;
+    const yvex_moe_device_results *device_results, *batch_device_results;
     float *expanded_rows, *combined_rows, *routed_rows, *shared_rows;
     float *post_rows, *combination_rows;
     unsigned int *batch_token_ids;
@@ -186,6 +187,8 @@ typedef struct {
     int (*cancel_requested)(void *context);
     void *cancel_context;
 } runtime_engine_moe_request;
+int yvex_runtime_private_moe_result_views(const yvex_moe_device_results *, unsigned long long,
+    unsigned long long, unsigned long long, yvex_device_tensor [3], yvex_moe_device_results *, yvex_error *);
 
 int yvex_runtime_private_engine_scheduler_open(
     runtime_engine_scheduler **out, unsigned long long queue_capacity,
@@ -581,7 +584,7 @@ int yvex_runtime_generation_sampling_account(
     const yvex_runtime_sampling_result *sampling,
     unsigned long long elapsed, yvex_error *err);
 int yvex_runtime_generation_decoder_input_identity(
-    const yvex_decoder_plan_summary *plan, const unsigned int *tokens,
+    const char *producer_identity, const unsigned int *tokens,
     unsigned long long token_start, unsigned long long token_count,
     char output[YVEX_SHA256_HEX_CAP]);
 int yvex_runtime_generation_state_summary(

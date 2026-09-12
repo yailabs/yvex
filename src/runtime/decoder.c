@@ -10,7 +10,6 @@
 #include <yvex/internal/compiler.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/decoder_execution.h>
-#include <yvex/internal/decoder_plan.h>
 #include <yvex/internal/graph.h>
 #include <yvex/internal/graph_state.h>
 #include <yvex/internal/sequence_mixer.h>
@@ -22,7 +21,6 @@ struct yvex_runtime_decoder_execution_context {
     yvex_runtime_execution_session *session;
     const yvex_model_engine_view *model_view;
     const yvex_runtime_session_view *session_view;
-    const yvex_decoder_plan *plan;
     const char *report_identity;
     yvex_program_token_interface interface;
     yvex_runtime_decoder_execution_options options;
@@ -287,16 +285,18 @@ int yvex_runtime_decoder_execution_context_open(
     context->model_view = yvex_model_engine_view_get(model);
     context->session_view = yvex_runtime_session_view_get(session);
     context->options = *options;
-    context->plan = context->model_view ? context->model_view->decoder : NULL;
-    const yvex_decoder_plan_summary *legacy = yvex_decoder_plan_summary_get(context->plan);
-    /* Retained only for the existing report schema and its authenticated source
-     * context envelope. Executable geometry/populations come from physical IR. */
-    context->report_identity = legacy ? legacy->decoder_plan_identity : NULL;
+    const yvex_runtime_logits_plan_summary *producer = context->model_view ? context->model_view->output_head : NULL;
+    const yvex_runtime_binding_summary *binding = context->model_view ? context->model_view->binding : NULL;
+    /* The persisted output binding retains its producer lineage. It supplies no
+     * execution topology: geometry and state populations come from physical IR. */
+    context->report_identity = producer ? producer->decoder_plan_identity : NULL;
     context->physical = context->model_view ?
         yvex_compiled_model_plan_forward(context->model_view->compiled_plan) : NULL;
     if (!context->model_view || !context->session_view ||
-        context->session_view->engine != model || !legacy || !context->physical ||
-        legacy->maximum_context < options->context_capacity ||
+        context->session_view->engine != model || !producer || !binding || !context->physical ||
+        producer->producer_kind != YVEX_EXECUTION_PLAN_DECODER ||
+        !yvex_sha256_hex_valid(context->report_identity) ||
+        binding->semantic_maximum_context < options->context_capacity ||
         yvex_backend_kind_of(context->session_view->backend) !=
             YVEX_BACKEND_KIND_CUDA ||
         !context->session_view->sequence_state ||
@@ -306,6 +306,10 @@ int yvex_runtime_decoder_execution_context_open(
     else
         context->mutex_ready = 1;
     if (rc == YVEX_OK) rc = decoder_physical_open(context, err);
+    if (rc == YVEX_OK && (producer->hidden_width != context->interface.hidden_width ||
+        producer->vocabulary_size != context->interface.vocabulary_size))
+        rc = decoder_refuse(err, YVEX_ERR_FORMAT, "runtime.program.output",
+            "output binding contradicts the admitted computational signature");
     if (rc != YVEX_OK) {
         (void)yvex_runtime_decoder_execution_context_close(&context, NULL);
         *out = context;
@@ -316,10 +320,10 @@ int yvex_runtime_decoder_execution_context_open(
     return YVEX_OK;
 }
 
-const yvex_decoder_plan *yvex_runtime_decoder_execution_plan(
+const yvex_program_token_interface *yvex_runtime_decoder_execution_interface(
     const yvex_runtime_decoder_execution_context *context)
 {
-    return context ? context->plan : NULL;
+    return context ? &context->interface : NULL;
 }
 
 int yvex_runtime_decoder_execution_context_close(

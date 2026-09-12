@@ -151,6 +151,10 @@ typedef struct yvex_transformer_attention_request {
     yvex_device_tensor *output;
 } yvex_transformer_attention_request;
 struct yvex_backend_transformer_operations {
+    int (*residual_post)(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
+                         const yvex_device_tensor *, const yvex_device_tensor *,
+                         unsigned long long, unsigned long long, unsigned long long,
+                         yvex_device_tensor *, yvex_backend_operation_facts *, yvex_error *);
     int (*initial)(yvex_backend *, const yvex_device_tensor *, unsigned int,
                    unsigned long long, unsigned long long, unsigned long long,
                    yvex_device_tensor *, yvex_device_tensor *,

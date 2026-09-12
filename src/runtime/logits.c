@@ -345,21 +345,24 @@ int yvex_runtime_logits_context_open(
         producer->vocabulary_size, options, err);
 }
 
-int yvex_runtime_logits_context_open_decoder(
+int yvex_runtime_logits_context_open_program(
     yvex_runtime_logits_context **out, yvex_model_engine *model,
     yvex_runtime_execution_session *session,
-    const yvex_decoder_plan *decoder_plan,
     const yvex_runtime_logits_options *options, yvex_error *err)
 {
-    const yvex_decoder_plan_summary *producer =
-        yvex_decoder_plan_summary_get(decoder_plan);
-    if (!producer)
+    const yvex_model_engine_view *view = yvex_model_engine_view_get(model);
+    const yvex_runtime_logits_plan_summary *producer = view ? view->output_head : NULL;
+    const yvex_program_physical *program = view ? yvex_compiled_model_plan_forward(view->compiled_plan) : NULL;
+    yvex_program_token_interface signature;
+    if (!producer || producer->producer_kind != YVEX_EXECUTION_PLAN_DECODER || !program)
         return logits_refuse(err, YVEX_ERR_INVALID_ARG,
-                             "decoder logits producer is unavailable");
+                             "compiled token-forward logits producer is unavailable");
+    int rc = yvex_program_physical_token_interface(program, &signature, err);
+    if (rc != YVEX_OK) return rc;
     return logits_context_open(
         out, model, session, YVEX_EXECUTION_PLAN_DECODER,
-        producer->decoder_plan_identity, producer->hidden_width,
-        producer->vocabulary_size, options, err);
+        producer->decoder_plan_identity, signature.hidden_width,
+        signature.vocabulary_size, options, err);
 }
 const yvex_runtime_logits_plan_summary *yvex_runtime_logits_plan_summary_get(
     const yvex_runtime_logits_context *context)

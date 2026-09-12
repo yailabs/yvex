@@ -1059,6 +1059,8 @@ static int compatible_moe_request_valid(
            request->attention && request->token_ids && request->row_count &&
            request->row_capacity && request->admitted_width &&
            request->row_count <= request->row_capacity &&
+           ((request->device_results == NULL) == (request->batch_device_results == NULL)) &&
+           !(request->device_results && request->device_outputs) &&
            request->admitted_width < 64ull &&
            request->attention->complete &&
            request->attention->token_count == request->row_count &&
@@ -1196,6 +1198,7 @@ static int compatible_moe_direct(
     batch.expanded_rows = request->attention->envelope_output;
     batch.device_rows = request->device_rows;
     batch.device_outputs = request->device_outputs;
+    batch.device_results = request->device_results;
     batch.token_ids = request->token_ids;
     batch.token_ids_present = 1;
     batch.provenance = request->provenance;
@@ -1289,7 +1292,8 @@ static int compatible_moe_batch_execute(
     yvex_moe_row_batch batch = {0};
     yvex_moe_row_batch_output output = {0};
     yvex_moe_row_batch_result physical = {0}, completion = {0};
-    yvex_device_tensor batch_rows_view, batch_outputs_view;
+    yvex_device_tensor batch_rows_view, batch_outputs_view, batch_result_views[3];
+    yvex_moe_device_results batch_results;
     unsigned long long source_index, row_index, row_next = 0ull;
     unsigned long long expanded_values, hidden_values, post_values;
     unsigned long long d2d_bytes = 0ull;
@@ -1314,17 +1318,22 @@ static int compatible_moe_batch_execute(
         !yvex_backend_tensor_f32_subview(
             owner->batch_device_rows, 0ull, expanded_values,
             &batch_rows_view) ||
-        !yvex_backend_tensor_f32_subview(
+        (!owner->device_results && !yvex_backend_tensor_f32_subview(
             owner->batch_device_outputs, 0ull, expanded_values,
-            &batch_outputs_view))
+            &batch_outputs_view)))
         return scheduler_refuse(err, YVEX_ERR_BOUNDS,
                                "compatible MoE batch exceeds sealed capacity");
+    if (owner->device_results && yvex_runtime_private_moe_result_views(owner->batch_device_results,
+        owner->row_capacity, 0u, leader->ticket.actual_width, batch_result_views, &batch_results, err) != YVEX_OK)
+        return yvex_error_code(err);
     for (source_index = 0ull; source_index < ticket_count && rc == YVEX_OK;
          ++source_index) {
         compatible_moe_ticket *entry = ordered[source_index];
         const runtime_engine_moe_request *request = entry->request;
         yvex_device_tensor destination;
         unsigned long long values;
+        if ((request->device_results == NULL) != (owner->device_results == NULL))
+            return scheduler_refuse(err, YVEX_ERR_FORMAT, "incompatible MoE result signatures");
         if (!yvex_core_u64_mul(request->row_count,
                                owner->transformer->expanded_width, &values) ||
             !yvex_backend_tensor_f32_subview(
@@ -1372,7 +1381,8 @@ static int compatible_moe_batch_execute(
     batch.row_width = batch.row_stride = owner->transformer->expanded_width;
     batch.expanded_rows = owner->expanded_rows;
     batch.device_rows = &batch_rows_view;
-    batch.device_outputs = &batch_outputs_view;
+    batch.device_outputs = owner->device_results ? NULL : &batch_outputs_view;
+    batch.device_results = owner->device_results ? &batch_results : NULL;
     batch.token_ids = owner->batch_token_ids;
     batch.token_ids_present = 1;
     batch.provenance = ticket_count > 1ull
@@ -1409,7 +1419,7 @@ static int compatible_moe_batch_execute(
     if (rc == YVEX_OK) {
         physical.completed = 1;
         physical.device_completion_pending = 0;
-        batch_outputs_view.is_written = 1;
+        if (!owner->device_results) batch_outputs_view.is_written = 1;
         physical.d2d_bytes += d2d_bytes;
         physical.queue_synchronizations += completion.queue_synchronizations;
         physical.device_synchronizations += completion.device_synchronizations;
@@ -1424,22 +1434,25 @@ static int compatible_moe_batch_execute(
          ++source_index) {
         compatible_moe_ticket *entry = ordered[source_index];
         const runtime_engine_moe_request *request = entry->request;
-        yvex_device_tensor source;
-        unsigned long long values;
-        if (!yvex_core_u64_mul(request->row_count,
-                               owner->transformer->expanded_width, &values) ||
-            !yvex_backend_tensor_f32_subview(
-                &batch_outputs_view,
-                row_next * owner->transformer->expanded_width, values,
-                &source))
+        yvex_device_tensor source[3];
+        yvex_moe_device_results slice;
+        yvex_device_tensor *targets[3] = {request->device_outputs, NULL, NULL};
+        unsigned long long values, count = owner->device_results ? 3u : 1u;
+        if (owner->device_results) {
+            rc = yvex_runtime_private_moe_result_views(&batch_results, leader->ticket.actual_width,
+                row_next, request->row_count, source, &slice, err);
+            targets[0] = request->device_results->combined; targets[1] = request->device_results->post;
+            targets[2] = request->device_results->combination;
+        } else if (!yvex_core_u64_mul(request->row_count, owner->transformer->expanded_width, &values) ||
+            !yvex_backend_tensor_f32_subview(&batch_outputs_view,
+                row_next * owner->transformer->expanded_width, values, &source[0]))
             rc = scheduler_refuse(err, YVEX_ERR_BOUNDS,
                                  "compatible MoE output view is invalid");
-        if (rc == YVEX_OK)
-            rc = compatible_moe_copy(request->backend,
-                                     request->device_outputs, &source, err);
-        if (rc == YVEX_OK &&
-            !compatible_tensor_same_view(request->device_outputs, &source))
-            physical.d2d_bytes += source.bytes;
+        for (size_t i = 0u; rc == YVEX_OK && i < count; ++i) {
+            rc = compatible_moe_copy(request->backend, targets[i], &source[i], err);
+            if (rc == YVEX_OK && !compatible_tensor_same_view(targets[i], &source[i]))
+                physical.d2d_bytes += source[i].bytes;
+        }
         row_next += request->row_count;
     }
     for (source_index = 0ull; source_index < ticket_count && rc == YVEX_OK;

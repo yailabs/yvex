@@ -1,4 +1,4 @@
-/* One-input, tensor-result physical program with explicit host/device transport.
+/* Tensor-input/result physical program with explicit host/device transport.
  * This owner prepares immutable parameters and staging; it never builds IR. */
 #ifndef INCLUDE_YVEX_INTERNAL_PROGRAM_STAGE_H_INCLUDED
 #define INCLUDE_YVEX_INTERNAL_PROGRAM_STAGE_H_INCLUDED
@@ -15,10 +15,10 @@ int yvex_program_stage_open(yvex_program_stage **, const yvex_program_physical *
     const yvex_program_kernel_parameter *, size_t, yvex_backend *, unsigned long long capacity,
     int host_io, unsigned long long host_limit, unsigned long long device_limit, yvex_error *);
 int yvex_program_stage_device(yvex_program_stage *, unsigned long long rows,
-    const yvex_device_tensor *, yvex_device_tensor *const *, size_t,
+    const yvex_device_tensor *const *, size_t, yvex_device_tensor *const *, size_t,
     int (*cancel)(void *), void *, yvex_backend_operation_facts *, yvex_error *);
 int yvex_program_stage_host(yvex_program_stage *, unsigned long long rows,
-    const float *, float *const *, size_t, int (*cancel)(void *), void *,
+    const float *const *, size_t, float *const *, size_t, int (*cancel)(void *), void *,
     yvex_backend_operation_facts *, yvex_error *);
 void yvex_program_stage_resources(const yvex_program_stage *, unsigned long long *host, unsigned long long *device);
 int yvex_program_stage_close(yvex_program_stage **, yvex_error *);

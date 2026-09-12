@@ -211,7 +211,8 @@ int yvex_runtime_private_session_sequence_state_open(
     int rc;
 
     if (!program) {
-        if (session && session->engine && session->engine->view.decoder)
+        if (session && session->engine && session->engine->view.output_head &&
+            session->engine->view.output_head->producer_kind == YVEX_EXECUTION_PLAN_DECODER)
             return yvex_runtime_private_reject(
                 failure, YVEX_MODEL_ENGINE_FAILURE_GRAPH, "sequence-state", 0u, 0u,
                 "decoder import has not produced an admitted executable program", err, YVEX_ERR_STATE);

@@ -33,6 +33,7 @@ struct yvex_compiled_model_plan {
     char operator_graph_identity[YVEX_SHA256_HEX_BYTES];
     yvex_program_tensor_plan *dense_ffn;
     yvex_program_physical *forward, *output, *final, *draft_final, *feature, *draft_feature;
+    yvex_program_physical *post, *draft_post;
     yvex_decoder_plan *decoder;
     yvex_moe_plan *moe, *draft_moe;
     yvex_transformer_plan *transformer, *draft_transformer;
@@ -578,6 +579,8 @@ void yvex_compiled_model_plan_close(yvex_compiled_model_plan **owner)
     yvex_program_physical_close(&plans->draft_final);
     yvex_program_physical_close(&plans->feature);
     yvex_program_physical_close(&plans->draft_feature);
+    yvex_program_physical_close(&plans->post);
+    yvex_program_physical_close(&plans->draft_post);
     yvex_decoder_plan_close(&plans->decoder);
     yvex_transformer_plan_close(&plans->draft_transformer);
     yvex_transformer_plan_close(&plans->transformer);
@@ -1201,6 +1204,10 @@ int yvex_compiled_model_plan_normalize(yvex_compiled_model_plan *plan,
         rc = yvex_transformer_feature_program_import(&plan->feature, plan->transformer, parameters, err);
     if (rc == YVEX_OK && plan->draft_transformer && !plan->draft_feature)
         rc = yvex_transformer_feature_program_import(&plan->draft_feature, plan->draft_transformer, parameters, err);
+    if (rc == YVEX_OK && plan->transformer && !plan->post)
+        rc = yvex_transformer_post_program_import(&plan->post, plan->transformer, parameters, err);
+    if (rc == YVEX_OK && plan->draft_transformer && !plan->draft_post)
+        rc = yvex_transformer_post_program_import(&plan->draft_post, plan->draft_transformer, parameters, err);
     if (rc != YVEX_OK) return rc;
     if (plan->output_head.schema_version) {
         const yvex_decoder_plan_summary *decoder = yvex_decoder_plan_summary_get(plan->decoder);
@@ -1478,6 +1485,11 @@ const yvex_program_physical *yvex_compiled_model_plan_final(const yvex_compiled_
 const yvex_program_physical *yvex_compiled_model_plan_feature(const yvex_compiled_model_plan *plan, int draft)
 {
     return plan ? (draft ? plan->draft_feature : plan->feature) : NULL;
+}
+
+const yvex_program_physical *yvex_compiled_model_plan_post(const yvex_compiled_model_plan *plan, int draft)
+{
+    return plan ? (draft ? plan->draft_post : plan->post) : NULL;
 }
 
 const char *yvex_compiled_model_plan_operator_graph_identity(

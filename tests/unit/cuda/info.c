@@ -820,6 +820,154 @@ static int assert_encoded_moe(yvex_backend *backend)
     return 0;
 }
 
+static int moe_results_cancel(void *context) { (void)context; return 1; }
+
+/* Preserve actual component values across destruction of the producer scratch.
+ * The comparison is composition preservation, not an upstream model oracle. */
+static int assert_moe_results(yvex_backend *backend, const yvex_moe_layer_job *original,
+    const yvex_moe_row_batch *original_rows, const yvex_moe_row_batch_output *output,
+    yvex_device_tensor *workspace, const float *expected)
+{
+    yvex_moe_layer_job job = *original;
+    yvex_moe_row_batch rows = *original_rows;
+    yvex_moe_device_results results = {0}, bad;
+    yvex_device_tensor invalid_view;
+    yvex_device_tensor **owners[] = {&results.combined, &results.post, &results.combination};
+    const unsigned long long counts[] = {4u, 2u, 2u};
+    float observed[3][4] = {{0}}, sentinel[4] = {123, 123, 123, 123};
+    unsigned char *poison = malloc((size_t)workspace->bytes);
+    const yvex_backend_moe_operations *ops = yvex_backend_moe_operations_get(backend);
+    yvex_moe_row_batch_result result;
+    yvex_error err = {0};
+    YVEX_TEST_ASSERT(poison && rows.row_count == 2u && job.layer->hidden_width == 2u &&
+        job.layer->residual_streams == 1u, "bounded result fixture geometry");
+    job.device_completion = NULL; job.device_output = NULL;
+    rows.device_outputs = NULL; rows.device_results = &results;
+    for (size_t i = 0u; i < 3u; ++i) {
+        yvex_backend_tensor_desc d = {.name = "moe-caller-result", .dtype = YVEX_DTYPE_F32,
+            .rank = 1u, .dims = {counts[i]}, .bytes = counts[i] * sizeof(float)};
+        YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &d, owners[i], &err) == YVEX_OK &&
+            yvex_backend_tensor_write(backend, *owners[i], sentinel, d.bytes, &err) == YVEX_OK,
+            "independent computational result storage prepares");
+    }
+    for (size_t negative = 0u; negative < 8u; ++negative) {
+        bad = results;
+        if (negative == 0u) bad.combination = NULL;
+        if (negative == 1u) bad.post = results.combined;
+        if (negative == 2u) bad.combined = (yvex_device_tensor *)rows.device_rows;
+        if (negative == 3u) bad.combination = workspace;
+        if (negative == 4u) {
+            YVEX_TEST_ASSERT(yvex_backend_tensor_f32_subview(results.combined, 1u, 2u, &invalid_view),
+                "construct distinct overlapping result view");
+            bad.post = &invalid_view;
+        }
+        if (negative == 5u) {
+            YVEX_TEST_ASSERT(yvex_backend_tensor_f32_subview(results.combination, 0u, 1u, &invalid_view),
+                "construct undersized last result");
+            bad.combination = &invalid_view;
+        }
+        if (negative == 6u) rows.device_outputs = original_rows->device_outputs;
+        if (negative == 7u) {
+            invalid_view = *results.post; invalid_view.dtype = YVEX_DTYPE_BF16;
+            bad.post = &invalid_view;
+        }
+        rows.device_results = &bad;
+        int refused = ops->execute_rows(backend, &job, &rows, output, &result, &err);
+        if (refused == YVEX_OK || result.completed) fprintf(stderr, "MoE result negative=%zu rc=%d completed=%d\n",
+            negative, refused, result.completed);
+        YVEX_TEST_ASSERT(refused != YVEX_OK &&
+            !result.completed, "incomplete, aliased and workspace result destinations refuse");
+        YVEX_TEST_ASSERT(yvex_backend_tensor_read(backend, results.combined, observed[0],
+            sizeof(sentinel), &err) == YVEX_OK && !memcmp(observed[0], sentinel, sizeof(sentinel)),
+            "all result storage validates before any copy");
+        rows.device_outputs = NULL;
+    }
+    rows.device_results = &results;
+    job.cancel_requested = moe_results_cancel;
+    YVEX_TEST_ASSERT(ops->execute_rows(backend, &job, &rows, output, &result, &err) == YVEX_ERR_CANCELLED &&
+        !result.completed && !results.combined->is_written && !results.post->is_written &&
+        !results.combination->is_written, "cancelled multi-result producer publishes nothing");
+    job.cancel_requested = NULL;
+    YVEX_TEST_ASSERT(ops->execute_rows(backend, &job, &rows, output, &result, &err) == YVEX_OK &&
+        result.completed && results.combined->is_written && results.post->is_written &&
+        results.combination->is_written && result.memory.activation_bytes == 12u * sizeof(float) &&
+        result.d2d_bytes >= 8u * sizeof(float), "MoE publishes core, gates and mixing with exact activation extent");
+    memset(poison, 0xa5, (size_t)workspace->bytes);
+    YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, workspace, poison, workspace->bytes, &err) == YVEX_OK,
+        "overwrite producer scratch after completion before reading results");
+    for (size_t i = 0u; i < 3u; ++i)
+        YVEX_TEST_ASSERT(yvex_backend_tensor_read(backend, *owners[i], observed[i],
+            counts[i] * sizeof(float), &err) == YVEX_OK, "results survive workspace reuse");
+    for (size_t row = 0u; row < 2u; ++row)
+        for (size_t lane = 0u; lane < 2u; ++lane) {
+            double value = (double)observed[1][row] * observed[0][row * 2u + lane] +
+                (double)observed[2][row] * rows.expanded_rows[row * 2u + lane];
+            float actual = yvex_quant_bf16_decode(yvex_quant_bf16_encode((float)value));
+            YVEX_TEST_ASSERT(actual == expected[row * 2u + lane], "separate results preserve exact residual composition");
+        }
+    {
+        yvex_moe_device_completion_slot slot = {0};
+        yvex_moe_device_completion completion = {.defer = 1, .host = &slot};
+        yvex_moe_row_batch_result finished;
+        job.device_completion = &completion;
+        YVEX_TEST_ASSERT(ops->execute_rows(backend, &job, &rows, output, &result, &err) == YVEX_OK &&
+            !result.completed && result.device_completion_pending && !result.memory.complete &&
+            !result.queue_synchronizations, "queued result copies are not transaction completion");
+        YVEX_TEST_ASSERT(ops->complete_rows(backend, 0, &finished, &err) == YVEX_OK && finished.completed &&
+            slot.status == 0 && slot.worklist.bucket_count > 0u,
+            "explicit phase barrier validates deferred multi-result work");
+        job.device_completion = NULL;
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, workspace, poison, workspace->bytes, &err) == YVEX_OK,
+            "reuse deferred producer scratch only after phase completion");
+        for (size_t i = 0u; i < 3u; ++i) {
+            float replay[4] = {0};
+            YVEX_TEST_ASSERT(yvex_backend_tensor_read(backend, *owners[i], replay,
+                counts[i] * sizeof(float), &err) == YVEX_OK &&
+                !memcmp(replay, observed[i], (size_t)counts[i] * sizeof(float)),
+                "deferred core/gates/mixing equal immediate values after workspace reuse");
+        }
+    }
+    for (size_t row = 0u; row < 2u; ++row) {
+        yvex_device_tensor input_view, views[3];
+        yvex_moe_layer_result single;
+        yvex_backend_moe_execution *execution = NULL;
+        float combined[2], routed[2], shared[2], post[1], combination[1];
+        YVEX_TEST_ASSERT(yvex_backend_tensor_f32_subview(rows.device_rows, row * 2u, 2u, &input_view),
+            "single-result producer input view");
+        for (size_t i = 0u; i < 3u; ++i)
+            YVEX_TEST_ASSERT(yvex_backend_tensor_f32_subview(*owners[i], row * counts[i] / 2u,
+                counts[i] / 2u, &views[i]), "single-result caller views");
+        bad = (yvex_moe_device_results){&views[0], &views[1], &views[2]};
+        job.device_input = &input_view; job.device_results = &bad;
+        job.expanded_input = rows.expanded_rows + row * 2u;
+        moe_fixture_result(&single, combined, routed, shared, post, combination);
+        int rc = yvex_backend_moe_begin(&execution, backend, &job, &single, &err);
+        if (rc == YVEX_OK) rc = yvex_backend_moe_add_expert(execution,
+            &job.weights[YVEX_MOE_WEIGHT_SHARED_GATE], &job.weights[YVEX_MOE_WEIGHT_SHARED_UP],
+            &job.weights[YVEX_MOE_WEIGHT_SHARED_DOWN], 1.0f, 1, &err);
+        if (rc == YVEX_OK) rc = yvex_backend_moe_finish(execution, &single, &err);
+        YVEX_TEST_ASSERT(rc == YVEX_OK && single.memory.activation_bytes == 6u * sizeof(float) &&
+            yvex_backend_moe_close(&execution, &err) == YVEX_OK,
+            "single producer writes explicit result views and closes cleanly");
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, workspace, poison, workspace->bytes, &err) == YVEX_OK,
+            "overwrite single producer workspace before reading caller results");
+        for (size_t i = 0u; i < 3u; ++i) {
+            float replay[2] = {0};
+            YVEX_TEST_ASSERT(views[i].is_written && yvex_backend_tensor_read(backend, &views[i], replay,
+                counts[i] / 2u * sizeof(float), &err) == YVEX_OK &&
+                !memcmp(replay, observed[i] + row * counts[i] / 2u, (size_t)counts[i] / 2u * sizeof(float)),
+                "single and grouped core/gates/mixing preserve all eight values exactly");
+        }
+    }
+    printf("MoE device results: tensors=3 values=8 single=grouped=deferred workspace_overwrite=preserved "
+        "composition_values=4 max_abs=0 tolerance=0 negatives=8 cancellation=unpublished\n");
+    for (size_t i = 0u; i < 3u; ++i)
+        YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, owners[i], &err) == YVEX_OK,
+            "caller result allocations release");
+    free(poison);
+    return 0;
+}
+
 static int assert_grouped_moe(yvex_backend *backend)
 {
     static const float mhc_function[] = {1.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.5f};
@@ -1127,6 +1275,7 @@ static int assert_grouped_moe(yvex_backend *backend)
             !completion_result.device_synchronizations,
         "a proved same-stream barrier adds no redundant MoE synchronization");
     job.device_completion = NULL;
+    if (assert_moe_results(backend, &job, &row_batch, &row_output, workspace, reference_device) != 0) return 1;
     yvex_backend_workspace_detach(backend);
     YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &workspace, &err) == YVEX_OK &&
                          yvex_backend_tensor_release(backend, &reference_output, &err) == YVEX_OK &&

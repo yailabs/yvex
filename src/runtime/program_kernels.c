@@ -132,6 +132,11 @@ static int kernel_instructions_bind(yvex_program_kernels *c, yvex_error *err)
                 return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "stream mean has no admitted backend implementation");
             continue;
         }
+        if (!strcmp(s->implementation, "mhc.residual_post.f64acc.bf16.v1")) {
+            if (!c->ops || !c->ops->residual_post)
+                return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "mHC post has no admitted backend implementation");
+            continue;
+        }
         if (!strcmp(s->implementation, "mhc.head_norm.bf16.v1")) {
             if (!c->ops || !c->ops->final)
                 return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "mHC head has no admitted backend implementation");
@@ -296,6 +301,12 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
         return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "operation has no admitted numerical operands/results");
     output = &r->values[s->results[0]];
     input = &r->values[s->operands[0]];
+    if (!strcmp(s->implementation, "mhc.residual_post.f64acc.bf16.v1")) {
+        const yvex_ir_type *type = &yvex_program_physical_value_at(c->program, s->operands[0])->type;
+        return c->ops->residual_post(c->backend, input, &r->values[s->operands[1]],
+            &r->values[s->operands[2]], &r->values[s->operands[3]], r->rows,
+            type->shape[1].extent, type->shape[2].extent, output, facts, err);
+    }
     if (!strcmp(s->implementation, "stream_mean.f32.f64acc.v1")) {
         const yvex_ir_type *type = &yvex_program_physical_value_at(c->program, s->operands[0])->type;
         return c->ops->feature_mean(c->backend, input, r->rows, type->shape[2].extent,

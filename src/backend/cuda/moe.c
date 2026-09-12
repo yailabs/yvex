@@ -1,6 +1,7 @@
 /* Execute compiled MoE work on resident weights without reconstructing model topology. */
 #include <yvex/internal/moe.h>
 #include "src/backend/cuda/private.h"
+#include "src/backend/cuda/device_results.h"
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
@@ -59,6 +60,39 @@ static int moe_cuda_refuse(yvex_error *err, yvex_status status, const char *reas
 {
     yvex_error_set(err, status, "cuda.moe", reason);
     return status;
+}
+
+/* The operation owns result geometry; the transfer owner admits storage. */
+static int moe_cuda_results(yvex_backend *backend, const yvex_moe_layer_plan *layer,
+    unsigned long long rows, const yvex_device_tensor *input,
+    const yvex_moe_device_results *results, const CUdeviceptr *sources,
+    unsigned long long *copied, yvex_error *err)
+{
+    unsigned long long sizes[3];
+    if (!results) return YVEX_OK;
+    yvex_device_tensor *targets[] = {results->combined, results->post, results->combination};
+    if (!layer || !rows || !input ||
+        !yvex_core_u64_mul(rows, layer->hidden_width, &sizes[0]) ||
+        !yvex_core_u64_mul(rows, layer->residual_streams, &sizes[1]) ||
+        !yvex_core_u64_mul(sizes[1], layer->residual_streams, &sizes[2]))
+        return moe_cuda_refuse(err, YVEX_ERR_BOUNDS, "MoE result geometry overflowed");
+    return yvex_cuda_device_results(backend, input, targets, sizes, sources, 3u, copied, err);
+}
+static void moe_cuda_results_written(const yvex_moe_device_results *results, int written)
+{
+    if (results) results->combined->is_written = results->post->is_written =
+        results->combination->is_written = written;
+}
+
+static int moe_cuda_activation_bytes(const yvex_moe_layer_plan *layer, unsigned long long rows,
+    const yvex_moe_device_results *results, unsigned long long *bytes)
+{
+    unsigned long long outputs = layer->expanded_width, count;
+    if (results && (!yvex_core_u64_mul(layer->residual_streams, layer->residual_streams, &outputs) ||
+        !yvex_core_u64_add(outputs, layer->residual_streams, &outputs) ||
+        !yvex_core_u64_add(outputs, layer->hidden_width, &outputs))) return 0;
+    return yvex_core_u64_add(layer->expanded_width, outputs, &count) &&
+        yvex_core_u64_mul(count, rows, &count) && yvex_core_u64_mul(count, sizeof(float), bytes);
 }
 
 static int moe_cuda_mhc_shared_bytes(unsigned long long streams,
@@ -482,7 +516,7 @@ static int moe_cuda_route(yvex_backend_moe_execution *execution,
                                           (bytes_), (stage_), &execution->failure, err);    \
         if (rc == YVEX_OK) { execution->d2h += (bytes_); execution->downloads++; }          \
     } while (0)
-    if (!job->device_output || job->evidence_level == YVEX_ATTENTION_EVIDENCE_FULL) {
+    if ((!job->device_output && !job->device_results) || job->evidence_level == YVEX_ATTENTION_EVIDENCE_FULL) {
         DOWNLOAD(result->router.router_logits, execution->logits,
                  (size_t)layer->routed_experts * sizeof(float), "cuda.moe.logits-download");
         DOWNLOAD(result->router.router_scores, execution->scores,
@@ -517,13 +551,17 @@ int yvex_backend_moe_begin(yvex_backend_moe_execution **out, yvex_backend *backe
         !result->combination ||
         result->combination_capacity < layer->residual_streams * layer->residual_streams)
         return moe_cuda_refuse(err, YVEX_ERR_INVALID_ARG, "CUDA MoE begin arguments are invalid");
-    if ((job->device_input || job->device_output) &&
+    if ((job->device_output && job->device_results) ||
+        ((job->device_input || job->device_output || job->device_results) &&
         (!backend_tensor_owner_is(backend, job->device_input) ||
-         !backend_tensor_owner_is(backend, job->device_output) ||
+         (!job->device_results && !backend_tensor_owner_is(backend, job->device_output)) ||
          !backend_tensor_f32_elements(job->device_input, layer->expanded_width) ||
-         !backend_tensor_f32_elements(job->device_output, layer->expanded_width)))
+         (!job->device_results && !backend_tensor_f32_elements(job->device_output, layer->expanded_width)))))
         return moe_cuda_refuse(err, YVEX_ERR_FORMAT,
                                "CUDA MoE device activation views are incompatible");
+    rc = moe_cuda_results(backend, layer, 1u, job->device_input, job->device_results, NULL, NULL, err);
+    if (rc != YVEX_OK) return rc;
+    moe_cuda_results_written(job->device_results, 0);
     execution = (yvex_backend_moe_execution *)calloc(1u, sizeof(*execution));
     if (!execution) return moe_cuda_refuse(err, YVEX_ERR_NOMEM, "CUDA MoE owner allocation failed");
     execution->backend = backend;
@@ -536,7 +574,7 @@ int yvex_backend_moe_begin(yvex_backend_moe_execution **out, yvex_backend *backe
     execution->work.variant = YVEX_BACKEND_VARIANT_ATTENTION_ENCODED;
     execution->work.forensic_numeric =
         job->evidence_level == YVEX_ATTENTION_EVIDENCE_FULL;
-    execution->grouped_selected = job->device_output &&
+    execution->grouped_selected = (job->device_output || job->device_results) &&
         job->evidence_level != YVEX_ATTENTION_EVIDENCE_FULL &&
         job->weights[YVEX_MOE_WEIGHT_ROUTED_GATE].device_address &&
         job->weights[YVEX_MOE_WEIGHT_ROUTED_UP].device_address &&
@@ -725,7 +763,7 @@ int yvex_backend_moe_finish(yvex_backend_moe_execution *execution,
 {
     const yvex_moe_layer_plan *layer = execution && execution->job
                                            ? execution->job->layer : NULL;
-    unsigned long long activation_elements, activation_bytes;
+    unsigned long long activation_bytes;
     int rc;
     if (!execution || !layer || !result || execution->finished)
         return moe_cuda_refuse(err, YVEX_ERR_INVALID_ARG, "CUDA MoE finish is invalid");
@@ -753,7 +791,7 @@ int yvex_backend_moe_finish(yvex_backend_moe_execution *execution,
         rc = execution->ops->round_bf16(&execution->work, execution->combined,
                                     layer->hidden_width, execution->status,
                                     "cuda.moe.output-round", &execution->failure, err);
-    if (rc == YVEX_OK && execution->job->device_output) {
+    if (rc == YVEX_OK && execution->job->device_output && !execution->job->device_results) {
         unsigned long long streams = layer->residual_streams, width = layer->hidden_width;
         unsigned long long one = 1ull;
         unsigned long long count = streams * width;
@@ -781,7 +819,7 @@ int yvex_backend_moe_finish(yvex_backend_moe_execution *execution,
                  (size_t)layer->experts_per_token * sizeof(float),
                  "cuda.moe.weights-publication");
     }
-    if (!execution->job->device_output ||
+    if ((!execution->job->device_output && !execution->job->device_results) ||
         execution->job->evidence_level == YVEX_ATTENTION_EVIDENCE_FULL) {
         DOWNLOAD(result->combined_output, execution->combined,
                  (size_t)layer->hidden_width * sizeof(float), "cuda.moe.output-download");
@@ -796,11 +834,13 @@ int yvex_backend_moe_finish(yvex_backend_moe_execution *execution,
                  "cuda.moe.combination-download");
     }
 #undef DOWNLOAD
+    if (rc == YVEX_OK) rc = moe_cuda_results(execution->backend, layer, 1u,
+        execution->job->device_input, execution->job->device_results,
+        (CUdeviceptr[]){execution->combined, execution->post, execution->combination}, &execution->d2d, err);
     if (rc == YVEX_OK) rc = moe_cuda_sync_status(execution, "cuda.moe.finish-sync", err);
     if (rc != YVEX_OK) return rc;
-    if (execution->job->device_input && execution->job->device_output) {
-        if (!yvex_core_u64_mul(layer->expanded_width, 2ull, &activation_elements) ||
-            !yvex_core_u64_mul(activation_elements, sizeof(float), &activation_bytes))
+    if (execution->job->device_input && (execution->job->device_output || execution->job->device_results)) {
+        if (!moe_cuda_activation_bytes(layer, 1u, execution->job->device_results, &activation_bytes))
             return moe_cuda_refuse(err, YVEX_ERR_BOUNDS,
                                    "CUDA MoE compulsory activation extent overflowed");
         result->memory.activation_bytes = activation_bytes;
@@ -823,6 +863,7 @@ int yvex_backend_moe_finish(yvex_backend_moe_execution *execution,
     result->shared_ns += execution->shared_ns;
     result->total_ns += yvex_core_monotonic_ns() - execution->started_ns;
     execution->finished = 1;
+    moe_cuda_results_written(execution->job->device_results, 1);
     yvex_error_clear(err);
     return YVEX_OK;
 }
@@ -1009,7 +1050,7 @@ static int moe_cuda_rows_geometry(const yvex_moe_layer_job *job, const yvex_moe_
         (job->eager_execution != 0 && job->eager_execution != 1))
         return moe_cuda_refuse(err, YVEX_ERR_INVALID_ARG,
                                "CUDA width-N MoE logical geometry is incompatible");
-    if (!rows->device_rows || !rows->device_outputs ||
+    if (!rows->device_rows || (!rows->device_outputs && !rows->device_results) ||
         !yvex_core_u64_mul(rows->row_count, layer->experts_per_token, pairs) ||
         !yvex_core_u64_mul(rows->row_count, layer->expanded_width, &expanded) ||
         !yvex_core_u64_mul(rows->row_count, layer->hidden_width, &hidden) ||
@@ -1021,7 +1062,7 @@ static int moe_cuda_rows_geometry(const yvex_moe_layer_job *job, const yvex_moe_
         !yvex_core_u64_mul(layer->routed_experts, layer->hidden_width,
                            &routed_down_rows) ||
         !backend_tensor_f32_elements(rows->device_rows, expanded) ||
-        !backend_tensor_f32_elements(rows->device_outputs, expanded))
+        (!rows->device_results && !backend_tensor_f32_elements(rows->device_outputs, expanded)))
         return moe_cuda_refuse(err, YVEX_ERR_INVALID_ARG,
                                "CUDA width-N MoE device geometry is incompatible");
     if ((job->device_completion &&
@@ -1498,7 +1539,7 @@ static int moe_cuda_batch_publish_kernels(moe_cuda_batch *batch,
             hidden_grid, MOE_CUDA_BLOCK, 0u, params, "cuda.moe.rows.combine",
             &batch->failure, err);
     }
-    if (rc == YVEX_OK) {
+    if (rc == YVEX_OK && !rows->device_results) {
         CUdeviceptr destination = (CUdeviceptr)rows->device_outputs->data;
         unsigned long long streams = layer->residual_streams, width = layer->hidden_width;
         void *params[] = {
@@ -1545,6 +1586,7 @@ static int moe_cuda_graph_key(const moe_cuda_batch *batch,
     HASH(batch->backend->resident_generation);
     HASH(batch->backend->workspace_generation);
     HASH(rows->row_count);
+    HASH(rows->device_results != NULL);
     HASH(layer->router_class);
     HASH(layer->hidden_width);
     HASH(layer->expanded_width);
@@ -1656,12 +1698,11 @@ static int moe_cuda_batch_publish(moe_cuda_batch *batch,
                                   yvex_error *err)
 {
     const yvex_moe_layer_plan *layer = job->layer;
-    unsigned long long expanded, activation_bytes, selected_bytes, weight_bytes;
+    unsigned long long activation_bytes, selected_bytes, weight_bytes;
     unsigned long long started, completed, cache_hits = 0ull, slot;
     int deferred = job->device_completion != NULL;
     int rc = YVEX_OK, device_wide = 0;
-    if (!yvex_core_u64_mul(rows->row_count, layer->expanded_width, &expanded) ||
-        !yvex_core_u64_mul(expanded, 2ull * sizeof(float), &activation_bytes) ||
+    if (!moe_cuda_activation_bytes(layer, rows->row_count, rows->device_results, &activation_bytes) ||
         !yvex_core_u64_mul(pairs, sizeof(*output->selected_experts), &selected_bytes) ||
         !yvex_core_u64_mul(pairs, sizeof(*output->selected_weights), &weight_bytes) ||
         selected_bytes > SIZE_MAX || weight_bytes > SIZE_MAX)
@@ -1808,7 +1849,7 @@ static int moe_cuda_execute_rows(yvex_backend *backend,
         job && rows && job->worklist_policy &&
         (rows->row_count >= 63ull || !(job->worklist_policy->supported_width_mask &
                                       (1ull << rows->row_count)));
-    if (!backend || !job || !rows || !output || !result ||
+    if (!backend || !job || !rows || !output || !result || (rows->device_outputs && rows->device_results) ||
         ((job->execution_batch == NULL) != (job->worklist_policy == NULL)) ||
         (job->execution_batch &&
          (yvex_execution_batch_validate(job->execution_batch, NULL) != YVEX_OK ||
@@ -1820,13 +1861,17 @@ static int moe_cuda_execute_rows(yvex_backend *backend,
          (!job->execution_batch || !job->worklist_policy)) ||
         yvex_backend_kind_of(backend) != YVEX_BACKEND_KIND_CUDA ||
         !backend_tensor_owner_is(backend, rows->device_rows) ||
-        !backend_tensor_owner_is(backend, rows->device_outputs) ||
+        (!rows->device_results && !backend_tensor_owner_is(backend, rows->device_outputs)) ||
         moe_cuda_rows_geometry(job, rows, output, &pairs, err) != YVEX_OK)
         return yvex_error_code(err) == YVEX_OK
                    ? moe_cuda_refuse(err, unsupported_width ? YVEX_ERR_UNSUPPORTED
                                                              : YVEX_ERR_INVALID_ARG,
                                      "CUDA width-N MoE owners or admitted width are invalid")
                    : yvex_error_code(err);
+    rc = moe_cuda_results(backend, layer, rows->row_count, rows->device_rows,
+        rows->device_results, NULL, NULL, err);
+    if (rc != YVEX_OK) return rc;
+    moe_cuda_results_written(rows->device_results, 0);
     if (job->cancel_requested && job->cancel_requested(job->cancel_context))
         return moe_cuda_refuse(err, YVEX_ERR_CANCELLED,
                                "CUDA width-N MoE was cancelled before launch");
@@ -1864,6 +1909,9 @@ static int moe_cuda_execute_rows(yvex_backend *backend,
     if (rc == YVEX_OK) rc = moe_cuda_batch_ranges(&batch, job, rows, pairs, err);
     if (rc == YVEX_OK)
         rc = moe_cuda_batch_execute_graph(&batch, job, rows, pairs, err);
+    if (rc == YVEX_OK) rc = moe_cuda_results(backend, layer, rows->row_count,
+        rows->device_rows, rows->device_results,
+        (CUdeviceptr[]){batch.combined, batch.post, batch.combination}, &batch.d2d, err);
     if (rc == YVEX_OK)
         rc = moe_cuda_batch_publish(&batch, job, rows, output, pairs, result, err);
     if (rc == YVEX_OK &&
@@ -1884,7 +1932,8 @@ static int moe_cuda_execute_rows(yvex_backend *backend,
     }
     cleanup_rc = yvex_cuda_work_cleanup(&batch.work, rc == YVEX_OK ? err : NULL);
     if (rc == YVEX_OK && cleanup_rc != YVEX_OK) rc = cleanup_rc;
-    if (rc == YVEX_OK) rows->device_outputs->is_written = 1;
+    if (rc == YVEX_OK && !rows->device_results) rows->device_outputs->is_written = 1;
+    if (rc == YVEX_OK) moe_cuda_results_written(rows->device_results, 1);
     if (rc != YVEX_OK) memset(result, 0, sizeof(*result));
     return rc;
 }

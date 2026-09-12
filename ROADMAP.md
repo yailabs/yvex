@@ -11,7 +11,7 @@ Status: living public project control
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` and its qualification COMPLETE at producer-owned device-result validity: expired borrows fail closed; source-stable QA and exact bounded performance replay retained. Earlier identity/platform repairs preserved. |
 | Architecture Spectrum | A01 PARTIAL, repair queued behind refoundation .1 and qualification; A02–A10 PLANNED. |
 | Adopted state architecture target | N.B1 — Slow-Update Dual-Stream is the official primary research target: primary R plus persistent Experiential Computational State E; unfinished deliberation L remains distinct. YAI owns semantic authority; YVEX owns computational realization. Program N and B1 post-training remain OPEN/unscheduled, not implemented. |
-| Most important structural gap | Physical forward/output programs and the DeepSeek final mHC head execute through SSA, with bounded CPU/CUDA and real-logits evidence. Qwen runner geometry and token bounds now derive from physical IR rather than decoder fields. DeepSeek/DSpark layer composition and MiniMax neural composition still require migration before .1 closes. Exact Qwen artifact-backed preservation remains separately blocked by asset identity. A01 tokenizer/normalization and whole-model barriers remain. |
+| Most important structural gap | Physical forward/output programs and selected DeepSeek stages execute through SSA, including normal CUDA residual post with caller-owned MoE operands. Complete DeepSeek/DSpark layer composition, deferred target scheduling and MiniMax neural composition still require migration before .1 closes. Qwen generation, state-capacity and output consumers use the compiled signature; bounded execution of its exact local artifact passes, but whole-model preservation remains unqualified. A01 tokenizer/normalization and whole-model barriers remain. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media. Evidence depths differ. |
 | External execution characterization | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Retained as a measured limitation, not a refoundation .1 closure gate; no downstream-safe claim. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
@@ -1344,11 +1344,16 @@ explicit resumption; upstream/whole-model conformance remains Program Q work.
 
 The [current consumer matrix](docs/architecture/compilation.md#current-consumer-cutover)
 distinguishes Qwen's physical forward/output runner, shared output projection
-and DeepSeek's two-result final mHC and target-feature reduction programs from the remaining DeepSeek/DSpark
-layer and MiniMax neural computational migration.
+and DeepSeek's final mHC, target-feature reduction and CPU/full-evidence
+four-input residual-post programs from remaining DeepSeek/DSpark device-native
+composition and MiniMax neural computational migration.
 Exact Qwen artifact-backed preservation is a separate evidence obligation:
-an absent exact asset cannot earn whole-model qualification, but does not alone
-prevent architectural completion. Mamba remains representability evidence.
+the registered BF16 representation has been acquired through canonical pull and
+is locally READY. Its compiled forward/output consumer has completed a bounded
+real CUDA generation (15 prompt tokens, two sampled tokens, EOS, no prefix reuse).
+That execution does not establish before/after whole-model preservation or
+upstream conformance; those obligations remain unqualified. Mamba remains
+representability evidence.
 The `.1` progression decision remains `repair_same_boundary`. Official DeepSeek
 vectors and authoritative upstream Qwen conformance have not been executed;
 the pre-existing whole-model DeepSeek CPU/CUDA discrepancy (max absolute error

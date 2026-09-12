@@ -307,9 +307,8 @@ static int generation_capacity_graph_geometry(
     const yvex_attention_layer_plan *layers[2];
     unsigned long long layer_counts[2];
     unsigned long long plan_index;
-    const yvex_decoder_plan_summary *decoder =
-        yvex_decoder_plan_summary_get(yvex_compiled_model_plan_decoder(
-            context->model_view->compiled_plan));
+    const yvex_program_physical *program =
+        yvex_compiled_model_plan_forward(context->model_view->compiled_plan);
     *workspace_capacity = NULL;
     if (!binding)
         return generation_context_refuse(
@@ -358,14 +357,20 @@ static int generation_capacity_graph_geometry(
         yvex_graph_attention_capacity_plan_close(&capacity);
         if (rc != YVEX_OK) return rc;
     }
-    if (decoder && decoder->recurrent_layer_count) {
+    if (program) {
+        yvex_sequence_state_plan required;
+        yvex_sequence_state_geometry state;
         unsigned long long bytes;
-        if (!yvex_core_u64_add(decoder->convolution_state_bytes,
-                               decoder->recurrent_state_bytes, &bytes) ||
-            !yvex_core_u64_mul(bytes, 2ull, &bytes) ||
+        if (!yvex_program_physical_sequence_state(program, &required))
+            return generation_context_refuse(err, YVEX_ERR_STATE,
+                "compiled recurrent state has no physical provider bindings");
+        int rc = yvex_sequence_state_plan_measure(&required, &state, err);
+        if (rc != YVEX_OK) return rc;
+        if (!yvex_core_u64_add(state.committed_bytes, state.candidate_bytes, &bytes) ||
+            (bytes &&
             !generation_capacity_fixed_add(
                 &geometry->classes[YVEX_MODEL_STATE_RECURRENT_SEQUENCE],
-                1ull, bytes))
+                1ull, bytes)))
             return generation_context_refuse(
                 err, YVEX_ERR_BOUNDS,
                 "recurrent sequence-state geometry overflowed");
@@ -411,9 +416,8 @@ static int generation_semantic_capacity_build(
         yvex_transformer_plan_summary_get(
             yvex_compiled_model_plan_transformer(
                 context->model_view->compiled_plan, 0));
-    const yvex_decoder_plan_summary *decoder =
-        yvex_decoder_plan_summary_get(yvex_compiled_model_plan_decoder(
-            context->model_view->compiled_plan));
+    const yvex_program_physical *program =
+        yvex_compiled_model_plan_forward(context->model_view->compiled_plan);
     const yvex_speculation_family_policy *speculation = NULL;
 
     memset(semantic, 0, sizeof(*semantic));
@@ -436,21 +440,24 @@ static int generation_semantic_capacity_build(
         return generation_context_refuse(
             err, YVEX_ERR_BOUNDS,
             "requested context exceeds the model-authored semantic maximum");
-    if (!transformer && !decoder)
+    if (!transformer && !program)
         return generation_context_refuse(
             err, YVEX_ERR_STATE,
             "compiled model exposes no executable generation producer");
-    if (transformer && decoder)
+    if (transformer && program)
         return generation_context_refuse(
             err, YVEX_ERR_STATE,
             "compiled model exposes ambiguous generation producers");
-    if (decoder) {
+    if (program) {
+        yvex_program_token_interface signature;
+        int rc = yvex_program_physical_token_interface(program, &signature, err);
+        if (rc != YVEX_OK) return rc;
         if (context->options.mode == YVEX_GENERATION_MODE_SPECULATIVE)
             return generation_context_refuse(
                 err, YVEX_ERR_UNSUPPORTED,
                 "decoder execution has no admitted draft producer");
-        semantic->hidden_width = decoder->hidden_width;
-        semantic->vocabulary_size = decoder->vocabulary_size;
+        semantic->hidden_width = signature.hidden_width;
+        semantic->vocabulary_size = signature.vocabulary_size;
         semantic->residual_streams = 1ull;
         semantic->candidate_width = 1ull;
     } else {
@@ -850,7 +857,7 @@ static int generation_attention_workspace(
         runtime_attention_evidence(context->options.evidence_profile) ==
             YVEX_ATTENTION_EVIDENCE_NONE;
     if (workspace) *workspace = 0ull;
-    if (context && yvex_compiled_model_plan_decoder(
+    if (context && yvex_compiled_model_plan_forward(
                        context->model_view->compiled_plan))
         return generation_decoder_attention_workspace(
             context, backend, workspace, err);
@@ -1224,7 +1231,7 @@ static int generation_plan_build(yvex_runtime_generation_context *context,
 {
     yvex_model_engine_summary model;
     const yvex_transformer_plan_summary *transformer;
-    const yvex_decoder_plan_summary *decoder;
+    const yvex_program_token_interface *decoder;
     const yvex_runtime_logits_plan_summary *logits;
     const yvex_tokenizer_plan_summary *tokenizer;
     const char *producer_identity;
@@ -1235,8 +1242,7 @@ static int generation_plan_build(yvex_runtime_generation_context *context,
         return yvex_error_code(err);
     transformer = yvex_transformer_plan_summary_get(
         yvex_runtime_transformer_context_plan(context->transformer));
-    decoder = yvex_decoder_plan_summary_get(
-        yvex_runtime_decoder_execution_plan(context->decoder_execution));
+    decoder = yvex_runtime_decoder_execution_interface(context->decoder_execution);
     logits = yvex_runtime_logits_plan_summary_get(context->logits);
     tokenizer = yvex_tokenizer_plan_summary_get(context->tokenizer);
     if ((transformer == NULL) == (decoder == NULL) || !logits || !tokenizer ||
@@ -1247,7 +1253,7 @@ static int generation_plan_build(yvex_runtime_generation_context *context,
     producer_kind = transformer ? YVEX_EXECUTION_PLAN_TRANSFORMER
                                 : YVEX_EXECUTION_PLAN_DECODER;
     producer_identity = transformer ? transformer->transformer_plan_identity
-                                    : decoder->decoder_plan_identity;
+                                    : logits->decoder_plan_identity;
     producer_vocabulary = transformer ? transformer->vocabulary_size
                                       : decoder->vocabulary_size;
     if (
@@ -1334,7 +1340,7 @@ static int generation_execution_owners_open(
     unsigned long long compatible_width = 0ull, draft_workspace = 0ull;
     unsigned long long workspace_token_capacity;
     const int decoder_producer =
-        context->model_view && context->model_view->decoder != NULL;
+        context->model_view && yvex_compiled_model_plan_forward(context->model_view->compiled_plan) != NULL;
     int device_selection = session_view &&
         generation_device_selection(context, session_view->backend);
     int rc;
@@ -1411,9 +1417,8 @@ static int generation_execution_owners_open(
     logits.cancel_requested = options->cancel_requested;
     logits.cancel_context = options->cancel_context;
     if (rc == YVEX_OK && decoder_producer)
-        rc = yvex_runtime_logits_context_open_decoder(
+        rc = yvex_runtime_logits_context_open_program(
             &context->logits, context->model, context->session,
-            yvex_runtime_decoder_execution_plan(context->decoder_execution),
             &logits, err);
     else if (rc == YVEX_OK)
         rc = yvex_runtime_logits_context_open(

@@ -20,6 +20,7 @@
 #endif
 
 static const yvex_backend_transformer_operations transformer_operations = {
+    .residual_post = yvex_cuda_residual_post,
     .initial = yvex_cuda_transformer_initial,
     .feature_mean = yvex_cuda_transformer_feature_mean,
     .final = yvex_cuda_transformer_final,
