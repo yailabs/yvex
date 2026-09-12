@@ -10,7 +10,7 @@ Status: living public project control
 | Active engineering boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` — typed multi-level model/program IR and consumer cutover before A01 resumes. |
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` and its qualification COMPLETE at producer-owned device-result validity: expired borrows fail closed; source-stable QA and exact bounded performance replay retained. Earlier identity/platform repairs preserved. |
 | Architecture Spectrum | A01 PARTIAL, repair queued behind refoundation .1 and qualification; A02–A10 PLANNED. |
-| Adopted state architecture target | Dual-stream primary computation plus persistent model-native computational state. YAI owns semantic authority; YVEX owns computational realization. Program N is OPEN, not implemented. |
+| Adopted state architecture target | N.B1 — Slow-Update Dual-Stream is the official primary research target: primary R plus persistent Experiential Computational State E; unfinished deliberation L remains distinct. YAI owns semantic authority; YVEX owns computational realization. Program N and B1 post-training remain OPEN/unscheduled, not implemented. |
 | Most important structural gap | Physical forward/output programs and the DeepSeek final mHC head execute through SSA, with bounded CPU/CUDA and real-logits evidence. Qwen runner geometry and token bounds now derive from physical IR rather than decoder fields. DeepSeek/DSpark layer composition and MiniMax neural composition still require migration before .1 closes. Exact Qwen artifact-backed preservation remains separately blocked by asset identity. A01 tokenizer/normalization and whole-model barriers remain. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media. Evidence depths differ. |
 | External execution characterization | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Retained as a measured limitation, not a refoundation .1 closure gate; no downstream-safe claim. |
@@ -27,14 +27,16 @@ Status: living public project control
 | --- | --- | ---: |
 | 🟢 ESTABLISHED | Generic owner and claimed boundary implemented and qualified at the stated scope. | 31 |
 | 🟡 PARTIAL | Real foundation; genericity, breadth, portability, performance or evidence incomplete. | 42 |
-| 🔴 OPEN | Generic capability absent or not yet claimable. | 51 |
+| 🔴 OPEN | Generic capability absent or not yet claimable. | 55 |
 | ⚪ LATER | Intentionally outside the current maturity horizon. | 14 |
 <!-- maturity-counts:end -->
 
 Counts describe the rows below, **not a percentage of project completion**.
 A narrow established mechanism does not make its entire program established.
 
-Navigate: [maturity](#system-maturity) · [programs](#strategic-programs) ·
+Navigate: [maturity](#system-maturity) · [B1 target](#nb1-slow-update-dual-stream) ·
+[model adaptation](#qwen-b1-model-adaptation-and-post-training-target) ·
+[programs](#strategic-programs) ·
 [spectrum](#architecture-spectrum) · [execution sequence](#current-execution-sequence) ·
 [substrate progression](#general-substrate-progression) · [v0.1](#v01-release-path) ·
 [nonclaims](#explicit-nonclaims-and-deferred-scope) · [promotion](#progression-and-promotion-discipline).
@@ -60,8 +62,8 @@ below describe desired breadth; they are not additional maturity claims.
 | --- | :---: | --- | --- | --- | --- |
 | Source provenance and immutable intake | 🟢 ESTABLISHED | Immutable revisions, inventory, retained payload and verification have common owners. | Preserve the same trust model as providers and representations grow. | C / R | [Source contract][storage]; [verification tests][source-tests] |
 | Logical model identity | 🟢 ESTABLISHED | Source-declared relations separate logical model, original selector, representation, artifact, deployment, working set and engine; catalog family exceptions removed. | Extend explicit relations without family/name inference or silent ambiguity. | R / C | [Lifecycle][lifecycle]; [catalog tests][catalog-tests] |
-| Semantic Model IR | 🟡 PARTIAL | Typed programs, state/effect verification, Qwen forward lowering and pure-SSM representability exist; not every executable consumer uses this authority. | Express heterogeneous semantics without family runtimes or compulsory Transformer structure. | C | [Compilation][compilation]; [Mamba2 barrier][mamba] |
-| Operator composition / graph language | 🟡 PARTIAL | Shared lowering and execution owners serve several families and component schedules. | New expressible variants primarily need compiler projection, not new runtime topology. | C / D | [Family boundary][families]; [decoder plan][decoder-plan] |
+| Semantic Model IR | 🟡 PARTIAL | Typed programs, state/effect verification, Qwen forward lowering and pure-SSM representability exist; not every executable consumer uses this authority. | Express heterogeneous R/E values, state-consuming/producing blocks, versions, multi-result computation and trainable roles without family runtimes or compulsory Transformer structure. | C | [Compilation][compilation]; [Mamba2 barrier][mamba] |
+| Operator composition / graph language | 🟡 PARTIAL | Shared lowering and execution owners serve several families and component schedules. | Compile dual-stream R/E augmentation, cross-state interaction, gates/merge and update barriers through common model semantics; no family cognitive runtime. | C / D | [Family boundary][families]; [decoder plan][decoder-plan] |
 | Transformation IR | 🟢 ESTABLISHED | Typed, ordered, artifact-neutral transformations precede payload materialization. | Remain the unique transformation authority as representations expand. | C / P | [Compilation][compilation] |
 | Physical policy | 🟡 PARTIAL | Per-terminal dtype/qtype, layout and alignment decisions exist for admitted recipes. | Broaden compiler-owned physical decisions without downstream reconstruction. | P | [Compilation][compilation] |
 | Physical Execution IR | 🟢 ESTABLISHED | Package physical records are sealed separately from deployment implementation choices. | Preserve authenticated consumption as semantic operations broaden. | C / P / R | [Artifact contract][artifacts]; [compilation][compilation] |
@@ -71,6 +73,7 @@ below describe desired breadth; they are not additional maturity claims.
 | Existing quantized representation import | 🟡 PARTIAL | Multiple GGUF qtypes and low-precision execution paths are admitted. | Broader format coverage without per-format runtime redesign. | P | [Compilation][compilation]; [DeepSeek][deepseek] |
 | Quantization synthesis | 🟡 PARTIAL | Mixed per-tensor policy and bounded calibration-informed recipes can be constructed. | Generic sensitivity/calibration-driven synthesis with reproducible decision provenance. | P | [GB10 targets][gb10]; [compilation][compilation] |
 | Physical Model Compiler search | 🔴 OPEN | Deterministic lower layers exist; recipe exploration remains bounded/manual engineering. | Hardware/workload/quality-aware search and reproducible Pareto selection. | P | [GB10 targets][gb10]; [compilation][compilation] |
+| Resource/state-root effect dependencies | 🔴 OPEN | Current lowering retains a global serial effect chain; explicit SSA/state foundations do not qualify independent state-root scheduling. | Order real dependencies, conflicting roots and explicit ordered semantics; preserve legal DAG branches for Target/Schedule choice. | C / S | [B1 compiler target](#compiler-execution-dag-and-admitted-backend-target); [current lowering][compilation] |
 
 #### Semantic Model IR target language
 
@@ -103,7 +106,9 @@ every primitive, composition or source format below executes today.
 | Cross-state attention / interaction | Optional interactions between computational state streams | Support distinct architectural realizations |
 | Persistent banks | Typed model-native banks with explicit geometry | Separate representation from lifecycle |
 | Multi-timescale state roles | Different computational update/retention scales | No hard-coded semantic-memory categories |
-| State realization profile | Model-specific realization constraints | Bind the state target to exact model capability |
+| State realization profile | Model-specific StateProfile, distinct from the B1-v0 reference choices | Bind exact representation, interaction, update and lifecycle capability |
+| State-root effects and execution DAG | Explicit roots, independent branches, multi-result state transitions and bounded barriers | Preserve legal independence without prescribing CUDA concurrency |
+| Trainable architecture augmentation | Parameter roles and R/E composition meaning | Describe a post-trainable model without owning optimizer policy |
 
 The target model signature can grow from input → model → output to
 `(primary input, persistent computational state)` → model graph →
@@ -196,11 +201,11 @@ gate; no performance target here is a measured result.
 | Multiple engine generations | 🟢 ESTABLISHED | Exact generations and multiple fitting engines coexist. | Preserve stale-reference rejection without process-global model assumptions. | S / R | [Runtime contract][runtime-contract] |
 | Model leases | 🟢 ESTABLISHED | Leases prevent premature retirement; ensure-active uses typed authority. | Reuse across composition without importing semantic model selection. | S / D | [Runtime][runtime] |
 | Session isolation | 🟢 ESTABLISHED | Sessions bind exact generations and own mutable sequence state. | Preserve isolation under batching and shared prefixes. | S | [Runtime contract][runtime-contract] |
-| Transactional typed state | 🟢 ESTABLISHED | Distinct attention, recurrent, convolution, speculative, RNG, decoder/media representations coordinate commit/abort/reset. | Retain common lifecycle without merging unlike geometry into fake KV. | S | [Runtime][runtime]; [state store][state-store] |
+| Transactional typed state | 🟢 ESTABLISHED | Distinct attention, recurrent, convolution, speculative, RNG, decoder/media representations coordinate commit/abort/reset. | Retain common lifecycle without merging unlike geometry; future E committed/working/candidate and L continuity require their own qualification. | S | [Runtime][runtime]; [state store][state-store] |
 | Resource accounting | 🟢 ESTABLISHED | Mapped, prepared, allocated, addressable and observed current/peak facts remain distinct. | Preserve known/unknown resource truth under dynamic placement. | S / R | [Resource truth][runtime]; [resource tests][resource-tests] |
 | Resource admission | 🟡 PARTIAL | Live capacity and backend facts constrain bounded engine admission. | Broader placement/concurrency admission with measured reserves and negative evidence. | S | [Runtime][runtime]; [resource tests][resource-tests] |
 | Automatic residency policy | 🔴 OPEN | Explicit load/unload and ensure-active are mechanisms, not a generic eviction policy. | Bounded retention/placement/eviction from authoritative resource facts. | S | [Storage contract][storage] |
-| Paged typed sequence state | 🟡 PARTIAL | Virtual-page budgeting and attention-oriented prefix/COW backing exist; no general cross-provider/device page manager. | Typed-provider paging, reuse and movement with transactional identity. | S | [Page store][state-pages]; [prefix backing][state-prefix] |
+| Paged typed sequence state | 🟡 PARTIAL | Virtual-page budgeting and attention-oriented prefix/COW backing exist; no general cross-provider/device page manager. | Typed-provider paging, reuse and movement with transactional identity; later E/L may share mechanisms without sharing state meaning. | S | [Page store][state-pages]; [prefix backing][state-prefix] |
 | Cooperative scheduling | 🟢 ESTABLISHED | Independent runnable work advances at safe quanta. | Preserve progress, cancellation and semantic isolation. | S | [Runtime scheduling][runtime] |
 | Compatible physical batching | 🟡 PARTIAL | Compatible work can rendezvous into real physical rows. | Broaden compatibility and measured batching without manufactured width. | S | [Runtime scheduling][runtime] |
 | Continuous / inflight batching | 🔴 OPEN | Dynamic sequence join/leave is not qualified. | Safe admission/retirement at execution boundaries with fairness and lifecycle evidence. | S | [Runtime limits][runtime] |
@@ -236,23 +241,24 @@ the only persistent information a future model can consume.
 
 | Capability | State | Current YVEX truth | Boundary required for promotion | Program | Evidence / owner |
 | --- | :---: | --- | --- | --- | --- |
-| Model-state capability advertisement | 🔴 OPEN | Context capacity and sequence-state classes do not advertise cognitive-state realization. | Exact model/deployment advertises context-only, retained state, external State Read, State Update or native state with compatibility constraints. | N / C | [Adopted target](#native-cognitive-state); [current runtime contract][runtime-contract] |
-| Semantic-state ingress | 🔴 OPEN | Typed content and session state are not a semantic-state lowering contract. | Typed external frame/delta constrains lowering without importing Case semantics. | N / X | [Adopted target](#native-cognitive-state) |
+| Model-state capability advertisement | 🔴 OPEN | Context capacity and sequence-state classes do not advertise cognitive-state realization. | Exact model/composition advertises compatible StateProfile: representation, geometry, read/update sites and clock, modes, decode-write posture, derived materializations and lifecycle constraints. | N / C | [Adopted target](#native-cognitive-state); [current runtime contract][runtime-contract] |
+| Semantic-state ingress | 🔴 OPEN | Typed content and session state are not a semantic-state lowering contract. | Mechanically validate a future public W contract, provenance, model/profile/generation compatibility and feasibility; never re-adjudicate YAI semantics. | N / X | [Adopted target](#native-cognitive-state) |
 | Computational cognitive-state identity | 🟡 PARTIAL | Physical layout/content/checkpoint identities exist; none binds semantic source to a cognitive realization. | Bind semantic source, exact model, lowering/profile and update lineage sufficiently for reuse or invalidation. | N / S | [Checkpoint records][state-checkpoints]; [state store][state-store] |
 | Context-only compatibility lowering | 🔴 OPEN | Ordinary context/prefill executes; prompt rendering is not provenance-bound semantic-state lowering. | Ingress → context realization has explicit provenance, limits and reproducibility. | N / C | [Adopted target](#native-cognitive-state); [runtime][runtime] |
-| Persistent state compilation | 🔴 OPEN | Physical checkpoints retain execution state, not compiled semantic-state realizations. | Compile semantic state into independently retained state for an exact model/profile. | N / C | [Adopted target](#native-cognitive-state) |
-| Incremental state compilation | 🔴 OPEN | No semantic delta-to-computational update contract. | Validate when a delta permits partial recompilation and when complete rebuilding is required. | N / C | [Adopted target](#native-cognitive-state) |
-| Persistent State Read | 🔴 OPEN | Internal KV/recurrent sequence updates are not reads of an independently persistent cognitive bank. | Explicit model-semantic operation consumes independently retained state with qualified identity and effects. | N / C | [Adopted target](#native-cognitive-state); [family boundary][families] |
-| Layer-aware state injection / interaction | 🔴 OPEN | No declared cognitive-state interaction topology. | Express model-specific cross-attention, gating, projection, recurrent interfaces or state-consuming blocks without freezing one mechanism. | C / N | [Target language](#semantic-model-ir-target-language) |
-| Multi-timescale state layout | 🔴 OPEN | No cognitive-state realization with declared update/retention timescales. | Distinct computational scales remain representable without fixed tensor counts or semantic-memory taxonomy. | N / C | [Adopted target](#native-cognitive-state) |
-| External State Update | 🔴 OPEN | No external/compiler-assisted cognitive-state update contract. | New realization has explicit provenance, compatibility and transaction semantics. | N / S | [Adopted target](#native-cognitive-state) |
-| Learned State Update | 🔴 OPEN | No qualified learned producer of cognitive-state deltas. | Model/companion updates are computationally qualified without acquiring semantic mutation authority. | N / C | [Adopted target](#native-cognitive-state) |
-| Native State Update | 🔴 OPEN | No admitted trained architecture exposes this persistent-state update contract. | First-class trained update operation has independent numerical, lifecycle and usefulness evidence. | N / C | [Adopted target](#native-cognitive-state) |
-| Cognitive-state checkpoint provenance | 🟡 PARTIAL | Attention target/draft checkpoints bind model, artifact, binding and payload; recurrent sequence serialization is explicitly refused. No semantic provenance. | Bind computational checkpoint to semantic source, parent update and realization compatibility; qualify supported providers. | N / S | [State store][state-store]; [restore/rejection tests][state-tests] |
+| Persistent state compilation | 🔴 OPEN | Physical checkpoints retain execution state, not compiled semantic-state realizations. | Lower future W to E under exact model/composition and StateProfile, with authenticated provenance and rebuildability. | N / C | [Adopted target](#native-cognitive-state) |
+| Incremental state compilation | 🔴 OPEN | No semantic delta-to-computational update contract. | Optional Reconcile of qualified external ΔW; refuse incompatible refresh and require full rebuild, independently from learned State Update. | N / C | [Adopted target](#native-cognitive-state) |
+| Persistent State Read | 🔴 OPEN | Internal KV/recurrent sequence updates are not reads of an independently persistent cognitive bank. | Explicit E→R operation with qualified identity/effects; B1 first reference uses latent-slot cross-state read at generic primary-layer sites. | N / C | [Adopted target](#native-cognitive-state); [family boundary][families] |
+| Layer-aware state injection / interaction | 🔴 OPEN | No declared cognitive-state interaction topology. | Express R↔E interaction across attention and recurrent mixers; B1 read/gate/merge and slow update remain model-specific, not a universal mechanism. | C / N | [Target language](#semantic-model-ir-target-language) |
+| Multi-timescale state layout | 🔴 OPEN | No cognitive-state realization with declared update/retention timescales. | E geometry/dtype and slow update clock are independent of primary R and prompt length; no semantic labels for latent slots. | N / C | [Adopted target](#native-cognitive-state) |
+| External State Update | 🔴 OPEN | No external/compiler-assisted cognitive-state update contract. | External W change may drive qualified Reconcile with provenance and transactions; this is distinct from model State Update. | N / S | [Adopted target](#native-cognitive-state) |
+| Learned State Update | 🔴 OPEN | No qualified learned producer of cognitive-state deltas. | Learned model/companion state production has computational evidence; neutral writes preserve the base path and never acquire semantic admission authority. | N / C | [Adopted target](#native-cognitive-state) |
+| Native State Update | 🔴 OPEN | No admitted trained architecture exposes this persistent-state update contract. | Trained R/E update produces an unpublished candidate with independent numerical/lifecycle/usefulness evidence; initial B1 decode is read-mostly. | N / C | [Adopted target](#native-cognitive-state) |
+| Cognitive-state checkpoint provenance | 🟡 PARTIAL | Attention target/draft checkpoints bind model, artifact, binding and payload; recurrent sequence serialization is explicitly refused. No semantic provenance. | Bind future E checkpoint to external provenance, parent generation and model/profile compatibility; qualify L checkpoint/resume separately from E. | N / S | [State store][state-store]; [restore/rejection tests][state-tests] |
 | Model replacement / state invalidation | 🟡 PARTIAL | Generation and checkpoint identity reject stale/incompatible state; semantic-source recompilation is absent. | Invalidate/rebuild computational state on incompatible model/profile changes without changing semantic authority. | N / R / S | [Runtime contract][runtime-contract]; [state store][state-store] |
-| Cognitive-state locality / residency | 🟡 PARTIAL | Session-state banks/accounting are separate from weights; no independently retained cross-context cognitive-bank lifecycle. | Explicit state locality/residency and movement independent of weights and prompt storage, with resource-failure evidence. | N / S | [State residency][state-residency]; [resource truth][runtime] |
-| Retention / interference / forgetting evaluation | 🔴 OPEN | No declared cognitive-state evaluation or qualified result. | Measure retention, interference, intended forgetting, continuity and update stability on identity-bound realizations. | N / Q | [Adopted target](#native-cognitive-state) |
+| Cognitive-state locality / residency | 🟡 PARTIAL | Session-state banks/accounting are separate from weights; no independently retained cross-context cognitive-bank lifecycle. | Independently retained E generations and leases outlive requests where qualified; bind derived materializations and invalidate stale caches with resource-failure evidence. | N / S | [State residency][state-residency]; [resource truth][runtime] |
+| Retention / interference / forgetting evaluation | 🔴 OPEN | No declared cognitive-state evaluation or qualified result. | Report Q0–Q4/D0 and correct/zero/wrong/swapped/stale E, read/update/write-frequency ablations, retention and stability separately from training and release claims. | N / Q | [Adopted target](#native-cognitive-state) |
 | Model → YAI return-path evidence | 🔴 OPEN | No cognitive-state proposal/consequence interface to external semantic authority. | Expose operation/model/parent-state/update evidence without claiming semantic canonicalization. | N / X / Q | [Adopted target](#native-cognitive-state) |
+| Experiential computational state lifecycle | 🔴 OPEN | Sequence transactions and engine/session leases do not implement independently persistent E generations. | Qualify E committed/working/candidate, binding/lease, atomic publication, invalidation and recovery independently from local state and L. | S / N | [E lifecycle target](#e-generations-derived-materializations-and-physical-lifetime) |
 
 The four PARTIAL rows describe limited **physical foundations**, not partial
 State Read/Update support. Program N as a whole is OPEN: its ingress and
@@ -260,95 +266,439 @@ realization contract do not exist. Existing S/R mechanisms remain their owners.
 
 #### Semantic authority and computational realization
 
-| Owner | Boundary |
-| --- | --- |
-| YAI | Semantic meaning/continuity, Case-bound authority, disclosure/authority semantics and semantic `StateFrame` / `StateDelta` producer semantics. |
-| YVEX | Exact model-state capability, semantic-state lowering, computational identity/layout, read/update execution contracts, realization compatibility/provenance; paging/residency and checkpoint/rollback through physical runtime owners. |
-| Model | Learned interpretation of computational state and, where supported, learned state-update behavior. |
-
-YAI preserves what the system knows. YVEX determines whether and how an exact
-model can carry it computationally. **YAI semantic state != YVEX computational
-state.** YVEX is not a Case owner, semantic-memory database, workflow/policy or
-authority owner, canonical fact store or YAI replacement. YAI does not own KV
-layouts, recurrent tensors, latent banks, state pages, GPU residency/movement,
-physical checkpoints, model layers or native update equations.
-
-The dual-stream target is primary token/activation/residual computation alongside
-cross-context persistent, model-specific computational state. The second stream
-can carry independent identity and, where the architecture permits, independent
-residency/versioning. Its read and eventual update are explicit model operations:
+The adopted YAI-side baseline is **D/H/S Recall v2 implemented and qualified
+at its published bounded scope**. This is the external architectural premise,
+not a YVEX qualification result. The next YAI boundary,
+`RECALL-AWARE.WORKING.STATE.0`, remains next/unselected: there is no public
+Semantic Working State `W` producer contract and no public YAI↔YVEX W→E wire
+format. Recall `R_t^q` below is semantic recall, distinct from model stream `R_l`.
 
 ```text
-YAI semantic S_t -- SemanticStateFrame / SemanticStateDelta --> YVEX lowering
-                                                             │
-                      M_t = Lower(S_t, exact model, profile) <─┘
-                                      │
-primary input / activations ──> model graph <── State Read(M_t)
-                                      │
-                         output + State Update(M_t), if supported
-                                      │
-                     computational evidence / typed consequence
-                                      │
-                        YAI semantic authority / admission
-                                      │
-                                    S_t+1
+                           YAI
+sources ──► D_t ┐
+history ──► H_t ├──► qualified Recall v2 ──► R_t^q   IMPLEMENTED, bounded
+current ──► S_t ┘                              │
+                                              ▼
+S + R + task + authority + Case constraints ──► W    NEXT YAI TARGET
+                                              │
+                         future public semantic/computational boundary
+                                              │
+                                              ▼
+                           YVEX PROGRAM N
+                         exact model + StateProfile
+                                              │
+                                     Lower / Reconcile
+                                              │
+                                              ▼
+                                         E_committed
+                                              │ begin
+                      PRIMARY STREAM          EXPERIENCE STREAM
+                           R_l                      E_working_g
+                            ├──── State Read ◄─────────┤
+                            ▼                          │
+                          R_l+1                        │
+                            └── selected slow update ─► E_working_g+1
+                                                       │
+                                                       ▼
+                                                  E_candidate
+                                                       │ prepare
+                                                 commit / abort
+                                                       │ commit only
+                                                       ▼
+                                              next E_committed
+
+separate deliberation continuity: L_t,k = unfinished computation
+W ingress, Lower/Reconcile and the R/E execution below W remain FUTURE.
 ```
 
-Frame/delta names here identify a **target boundary**, not current wire types.
-`S_t` remains authoritative and may be portable across models. `M_t` is derived,
-model-specific, possibly opaque, disposable and rebuildable. No latent tensor
-becomes a canonical Case fact merely because execution changed it. YVEX may
-attest what operation ran, which model/parent state produced the change, and
-its computational provenance; semantic proposals remain subject to YAI admission.
-
-#### Realization depth
-
-| Depth | Target meaning | Current architectural interpretation |
-| --- | --- | --- |
-| Context-only | Project semantic state into ordinary input/context; reconstruct through prefill. | Compatibility/fallback strategy on existing context execution; generic provenance-bound lowering is OPEN. Not the ultimate architecture target. |
-| Persistent prefix / sequence state | Retain/reuse model-produced context-derived state beyond one prompt construction. | Existing physical foundation; not generic cognitive-state semantics. |
-| Latent Read | Consume a persistent model-native bank independently of normal token context. | OPEN strategic target. |
-| Latent Read/Write | Consume and produce updates to persistent model-native state. | OPEN strategic target. |
-| Native State | Trained/designed architecture treats persistent state as a first-class computational stream. | OPEN strategic target and research horizon; no current model-support claim. |
-
-Multi-timescale pressure may distinguish immediate/local, task, Case/big-picture
-and slow/stable retention. These are external representational pressures, not
-YVEX semantic-memory categories, four prescribed tensors or one injection rule.
-
-#### Identity and replacement target
-
-A computational realization needs enough identity to determine whether it can
-be reused, resumed, compared, invalidated or rebuilt in an exact execution context:
-
-| Identity requirement | Purpose |
+| Owner | Authority |
 | --- | --- |
-| Semantic source identity/digest | Recover the authoritative source of the derived realization. |
-| Exact model artifact and runtime binding / compatible deployment | Reject incompatible execution contexts. |
-| State architecture/layout and realization profile | Bind geometry and model-specific realization constraints. |
-| Compiler/lowering identity and precision/physical representation | Distinguish different computations from the same semantic input. |
-| Generation/update and parent computational state/checkpoint | Recover update lineage and rollback ancestry. |
-| Compatibility / invalidation posture | Determine valid reuse versus mandatory reconstruction. |
+| YAI | Source-grounded domain knowledge D, history H, current semantic state S, Recall, working-state selection, semantic meaning, relevance, source truth, authority, disclosure, Case continuity, assignment semantics and semantic admission. |
+| YVEX | Exact model-state capability, StateProfile, computational realization and model-specific identity, compatibility, physical execution, residency, lifecycle, checkpoint and computational evidence. |
+| Model | Learned interpretation, learned R↔E interaction, learned State Read and learned State Update. |
 
-These are identity requirements, not a serialization design or one mandatory
-giant hash. **Semantic `S_t` must survive model replacement as authority;
-computational `M_t` need not.** A new model, incompatible state architecture or
-profile may invalidate `M_t`; YVEX should recompile, reinitialize or reconstruct
-it from authoritative semantic state. Rebuildability prevents derived state
-from becoming an accidental second semantic authority.
+**Semantic memory != computational memory; semantic truth != computational
+state; model update != semantic admission.** YVEX may return computational
+consequences, state transitions and evidence; it never becomes semantic authority.
+YAI does not own tensors, CUDA, residency, layers or model update equations.
+E does not become YAI memory, and model-produced latent changes do not become
+canonical Case facts.
 
-#### C / N / S and P
+Future W ingress is **mechanical validation, not semantic adjudication**.
+YVEX may validate representation integrity, schema/version compatibility,
+identity/digest binding, declared provenance binding, exact model compatibility,
+StateProfile and state-generation compatibility, realization capability and
+physical feasibility. It must not re-evaluate W's semantic validity, Participant
+authority, source visibility, disclosure permission, recalled relevance, policy
+currency, documentary truth or semantic admission. This creates no second
+reference monitor in YVEX.
 
-| Program | Responsibility | Explicit non-ownership |
+No `StateFrame` ABI, `StateDelta` ABI, W serialization, YAI endpoint, YAI-specific
+runtime adapter or fixed cross-repository schema is adopted here. A real future
+producer/consumer contract must use the permanent BOUNDARY workflow.
+This target-doctrine refinement is not a BOUNDARY event.
+
+#### E, L and three continuity classes
+
+`E_t` is Experiential Computational State: reusable model-native computational
+experience, potentially cross-request and longer-lived than a session, with
+independent identity/generation, StateProfile binding, model-specific
+representation, rebuildability, residency and checkpointing.
+
+`L_t,k` is Latent Deliberation State: unfinished computation for an authorized
+execution at internal step k. A suspended execution may require the bound E
+generation, current E_working if applicable, primary/intermediate execution
+state, program/iteration position, RNG state, runner state, execution
+configuration and checkpoint metadata. This collection preserves deliberation,
+not experiential memory. Future checkpoint/resume/invalidate/discard of L is
+independent from committed E. Loss of L loses unfinished work; it must not lose
+YAI semantic memory and need not lose E. Common paging/checkpoint mechanisms
+do not merge L into E or introduce a second thinking runtime.
+
+| Continuity class | Owner / survival contract |
+| --- | --- |
+| Semantic continuity | YAI; authoritative semantic state survives model/runtime loss. |
+| Experiential computational continuity | E; reuse requires exact model/program/profile/state compatibility. |
+| Deliberation continuity | L; unfinished work resumes only under an execution compatibility contract. |
+
+Model replacement may invalidate E and L; it must not invalidate YAI semantic
+continuity. No generic cross-model latent portability is claimed.
+
+Local/sequence state comprises attention KV, gated/recurrent and convolution
+state, position, RNG, decoder state, speculative candidates and ordinary
+prompt/session continuation. E is separately identified, versioned and
+invalidated, StateProfile-bound and potentially derived from future external W
+realization. A prompt/session reset need not invalidate E. A W, StateProfile,
+executable-composition or model change may invalidate E without changing YAI
+semantic state. An ordinary engine/session checkpoint is not qualified L
+continuity.
+
+#### Lower, Reconcile and model State Update
+
+| Transformation | Target meaning | Refusal / authority boundary |
 | --- | --- | --- |
-| C — Model Language & Compiler | Describe external state inputs/outputs, read/update operations, stream topology, banks, gating and state-consuming/producing blocks. | Residency, paging and semantic authority. |
-| N — Native Cognitive State | Advertise capability; accept state ingress; compile a model/profile-specific realization; define cognitive read/update contracts, incremental lowering, provenance, compatibility and evaluation. | Case meaning, canonical semantic facts and physical allocation/scheduling mechanisms. |
-| S — Sequence Runtime | Session ownership; candidate/committed transactions; paging, COW, sharing, residency/movement/accounting, checkpoints, rollback, scheduling and physical lifetime. | Whether a bank means memory, task state or another cognitive role; family update equations. |
-| P — Physical Model Compiler | Model/package quantization, representation/layout and hardware/workload-aware physical recipe search. | Semantic-state ingress or cognitive-state realization meaning. |
+| `E = Lower(W, exact model/composition, StateProfile)` | Full realization of future externally selected W. | Requires an actual qualified ingress/producer contract. |
+| `E' = Reconcile(E, qualified external ΔW, exact model/composition, StateProfile)` | External W change drives computational refresh. | Optional per profile; may refuse and require full rebuild. |
+| `(R, E) → model computation → candidate E'` | Learned State Update caused by model computation. | Produces a computational candidate, never semantic admission. |
 
-Conceptually **C → N → S → execution**: describe model meaning, compile the
-realization, execute its physical lifecycle. This is not a prescribed source
-directory layering. P and N may later share physical mechanisms where real
-evidence warrants it; their different subjects are not collapsed now.
+External Reconcile and model State Update must not collapse into one generic
+update. An exact realization binds external-source provenance/digest, exact
+executable composition/artifact/binding, StateProfile, compiler/lowering,
+precision/layout, generation, parent/update/checkpoint lineage and compatibility
+posture sufficiently to decide reuse, invalidation or rebuild. These are
+lifetime/identity requirements, not a wire schema or a mandatory giant hash.
+
+#### N.B1 Slow-Update Dual-Stream
+
+**Official primary Program N research target: N.B1 — Slow-Update Dual-Stream.**
+Program N remains OPEN. B1 is full dual-stream from the beginning: `R` is the
+primary residual/activation/current-computation stream; `E` is the persistent
+Experiential Computational State stream. Slow Update describes E's update
+clock, not ordinary persistent KV.
+
+```text
+R_(l+1) = F_l(R_l, E_g)
+E_(g+1) = G_g(E_g, R_source)
+
+l = primary layer/computation index
+g = experiential update generation inside the current execution
+
+R_l ∈ dtype_R [B, T, d_R]
+E_g ∈ dtype_E [B_E, M, d_E]
+```
+
+M is independent of current prompt length T; d_E and dtype_E may differ from
+d_R and dtype_R. E need not be text, token-aligned or carry ordinary token
+positions. Its precision/layout, update frequency and lifetime may differ from
+R and from local sequence state. These dimensions are not public ABI.
+
+F/G remain architecture-neutral: future qualified realizations may use
+cross-state attention, latent interaction, gated low-rank projection, recurrent
+or SSM transitions, associative memory, sparse routing, fast-weight/neural
+memory or another qualified architecture. The first B1 model selects latent
+slots, cross-state read, a learned primary gate and slow bidirectional update.
+It does not freeze the generic Program N equations.
+
+#### B1-v0 reference StateProfile and structural budget
+
+**REFERENCE DESIGN — NOT CURRENT IMPLEMENTATION — NOT MEASURED PERFORMANCE —
+NOT FROZEN ABI — NOT FINAL MODEL ARCHITECTURE.** These numbers define the first
+falsifiable B1 design, not universal Program N fields or performance estimates.
+
+| Reference profile fact | B1-v0 choice |
+| --- | --- |
+| First trained research vertical | Current admitted Qwen text target, with its untouched backbone retained separately. |
+| Primary stack | 64 layers: 48 recurrent/gated-delta mixers and 16 full-attention layers; d_R = 5120. |
+| Experiential slots / width | M = 64; d_E = 1024. |
+| Cross-state interaction width | d_X = 512. |
+| Canonical E dtype | BF16. |
+| State Read sites | One per primary text layer: 64 sites. |
+| Slow State Update sites | Eight boundaries over 64 layers, approximately one per eight layers. |
+| Input / state-producing execution | State Read plus configured slow intra-model update. |
+| Ordinary autoregressive decode | State Read enabled against a stable bound experiential generation/snapshot; persistent State Update disabled by default. |
+| Cross-request publication | Final candidate → prepare → transactional commit only. |
+
+For one batch/state instance, E shape `[64, 1024]` contains 65,536 elements:
+`64 × 1024 × 2 = 131,072` BF16 bytes = **128 KiB**. Holding E_committed,
+E_working and E_candidate simultaneously is approximately **384 KiB** of
+canonical E tensor storage, excluding metadata and derived materializations.
+This is structural arithmetic, not observed allocation or an allocation policy.
+
+| Large projection at each reference State Read site | Shape | Parameters |
+| --- | --- | ---: |
+| W_Q_RE | [5120, 512] | 2,621,440 |
+| W_K_E | [1024, 512] | 524,288 |
+| W_V_E | [1024, 512] | 524,288 |
+| W_O_ER | [512, 5120] | 2,621,440 |
+
+| Reference projection budget | Derived total |
+| --- | ---: |
+| State Read core per site | 6,291,456 parameters |
+| 64 State Read sites | 256 large tensors; 402,653,184 parameters |
+| Eight symmetric State Update sites, four large projections each | 32 large tensors; 50,331,648 parameters |
+| Combined projection core | 288 large tensors; 452,984,832 parameters |
+| BF16 core projection storage | 905,969,664 decimal bytes; 864 MiB binary |
+| Complete augmentation planning range | Approximately 455M–500M new parameters until the exact module graph freezes |
+
+The symmetric update estimate uses E→interaction query `[1024,512]`,
+primary→interaction key/value `[5120,512]` each and interaction→E output
+`[512,1024]`. Totals exclude gates, state normalization, learned slot
+identities/embeddings, initializer/State Encoder and small control parameters.
+The complete planning range is a low-single-digit-percent augmentation of the
+Qwen backbone, not a second full backbone or a measured implementation claim.
+
+StateProfile is the broader model-specific doctrine: representation class,
+geometry/dtype, initializer/State Encoder capability, read/update sites,
+interaction width/head geometry, projection/gate structure, normalization,
+update clock, state-producing modes, decode-write posture, commit boundary,
+derived materializations, residency constraints, checkpoint compatibility,
+Reconcile capability and exact augmentation/model compatibility. B1-v0 chooses
+one profile; it does not prescribe a universal record containing every choice.
+
+#### Reference State Read and neutral-path surgery
+
+At each reference Qwen primary layer:
+
+```text
+H_l = Norm_R(R_l)
+A_l = PrimaryMixer_l(H_l, ordinary sequence state)
+
+Q_R = Project_Q_RE(H_l)
+K_E = Project_K_E(E_g)
+V_E = Project_V_E(E_g)
+B_l = CrossStateRead(Q_R, K_E, V_E)
+
+g_R = learned primary gate
+R_intermediate = R_l + A_l + g_R ⊙ Project_R(B_l)
+R_(l+1) = R_intermediate + FFN_or_MoE(Norm(R_intermediate))
+```
+
+Exact normalization/residual placement is model/composition-specific; this is
+the first B1 reference architecture, not a universal Transformer law.
+For surgery parity before training, initialize the primary contribution with
+`g_R ≈ 0`, experiential `write ≈ 0` and `retention ≈ 1`. A disabled/neutral
+path must support exact or explicitly qualified near-exact base preservation;
+near-zero gates alone are not evidence of parity. Gates remain lightweight.
+
+#### Reference Slow State Update and execution clock
+
+At a declared update boundary:
+
+```text
+H_E = Norm_E(E_g)
+H_R = selected primary update source
+Q_E = Project_Q_ER(H_E)
+K_R = Project_K_R(H_R)
+V_R = Project_V_R(H_R)
+C_g = CrossStateUpdate(Q_E, K_R, V_R)
+
+retain_g = learned retain gate
+write_g = learned write gate
+proposal_g = Project_E(C_g)
+E_(g+1) = StateNorm(retain_g ⊙ E_g + write_g ⊙ proposal_g)
+```
+
+This is a first research equation, not the universal update law. The parity
+configuration must also preserve retention through StateNorm or bypass the
+write path; a normalization that changes E cannot silently count as no update.
+R advances at ordinary model frequency, E at the slower model-defined clock:
+
+```text
+layers  0–7  read E_0 → slow update E_0 → E_1
+layers  8–15 read E_1 → slow update E_1 → E_2
+...
+layers 56–63 read E_7 → final update E_7 → E_candidate
+```
+
+This trajectory belongs to configured input/state-producing execution.
+Ordinary token decode initially reads a stable snapshot; persistent E writes
+on every generated token are not the default. At the end of a qualified
+state-producing invocation/run, a final candidate may be offered for
+transactional publication. Decode-time E mutation requires separate future
+research and evidence. This execution-mode distinction is architectural.
+
+Latent slots are computational positions, never YAI fact, history, policy,
+user or long-term-memory slots. Learned slot identity, embeddings,
+specialization, competition and routing may emerge; YAI retains semantic
+categories and admission.
+
+#### E generations, derived materializations and physical lifetime
+
+| Lifecycle state | Meaning |
+| --- | --- |
+| E_committed | Immutable persistent generation visible at execution start. |
+| E_working_g | Intra-execution trajectory, unpublished. |
+| E_candidate | Final unpublished successor awaiting transaction resolution. |
+
+```text
+E_committed → begin → E_working_0 → Read / Slow Update → E_working_1 → ...
+    → E_candidate → prepare ──► commit / publish → next E_committed
+                           └─► abort / discard
+```
+
+Failure, cancellation or rejected work must never partially mutate committed
+E. Reuse Program S's transaction philosophy; current candidate/committed
+sequence transactions do not already implement E or B1 State Update.
+
+An engine/executable model would own immutable model resources and compatible
+E realization generations. Sessions/requests receive a binding/lease to an
+exact committed generation. Qualified read-only bindings may share physical
+backing; state-producing work creates a candidate successor rather than
+mutating shared committed E in place. The realization carries identity, exact
+composition and StateProfile, generation, external-source provenance,
+physical representation, residency, derived materializations, checkpoint,
+compatibility and invalidation state. S owns paging, sharing/COW, movement,
+rollback, resource accounting and scheduling; this lifecycle may outlive a
+normal request/session.
+
+Slow-changing E permits derived State Read materializations. In B1-v0,
+`K_E[layer]` and `V_E[layer]` each have shape `[64,512]`. Across 64 sites,
+128 BF16 tensors require `2 × 64 × 64 × 512 × 2 = 8,388,608` bytes,
+approximately **8 MiB per state instance**, excluding other storage.
+**These caches are not E.** Staleness identity must bind parent E generation,
+exact executable model/composition, StateProfile, read site, adapter/B1 weights,
+compiler/lowering identity and physical precision/layout. E_g→E_g+1 makes
+dependent materializations stale; eager, lazy or scheduled rematerialization
+remain target/compiler choices, not a frozen cache policy.
+
+#### Realization space and persistent-KV controls
+
+Program N is not a one-dimensional ladder from KV toward cognition. Its
+research dimensions are orthogonal; B1 selects one reference point.
+
+| Dimension | Research space |
+| --- | --- |
+| Representation | Persistent KV baseline, latent slots, associative matrix, recurrent/SSM, low-rank, sparse/routed banks, fast-weight/neural state and future representations. |
+| Interaction | Cross-state attention, gated projection, recurrent/state-space interaction, sparse routing and future qualified mechanisms. |
+| Update | Read-only, end-of-run, slow block-wise, bounded decode-time, per-layer and external Reconcile. |
+| Physical lifecycle | Identity/versioning, paging, sharing/COW, residency, derived caches, checkpoint, transactions, movement and schedule. |
+
+Associative, recurrent, SSM, low-rank, sparse/routed, fast-weight/neural and
+hierarchical multi-timescale experiential streams remain alternatives, not
+scheduled simultaneous implementations. B1 starts with latent slots,
+cross-state read and slow bidirectional update.
+
+Persistent prefix/KV remains a useful physical foundation, training-free
+standard-memory baseline, compatibility experiment and ablation/control. It
+supports context-derived-state and segmented persistent/local-attention
+research; it is not Program N's destination. **Current prefix reuse != E;
+persistent KV != proven State Read.** Context-only provenance-bound lowering
+remains OPEN despite ordinary context execution being available.
+
+A standard/prefix realization may combine a persistent K/V bank and a local
+mutable K/V bank under **one mathematically correct attention normalization**.
+Two separately normalized attentions added together are not equivalent.
+Unified online-softmax/LSE across segments is a future physical research path,
+not B1 dual-stream: E has its own computational trajectory and update semantics.
+
+#### Compiler, execution DAG and admitted backend target
+
+Current [typed compiler foundations][compilation] include STATE, READ_STATE,
+WRITE_STATE, SSA values, state versions, functions, regions, typed effects and
+producer dependencies at their documented implemented scopes. These establish
+bounded representational capacity, not B1. The current globally ordered effect
+baseline and serial lowering are too conservative for full dual-stream execution.
+
+C's future Semantic Model IR must describe primary tensor/state values,
+persistent E values, state-consuming/producing operations and blocks, R→E and
+E→R interactions, gating/merge, state normalization, version transitions,
+multi-result computation, explicit state roots, independent dependency branches,
+bounded update barriers/control structure and state-aware entrypoints.
+Trainable parameter roles and augmentation semantics belong here; optimizer
+policy is not required to describe a trainable model.
+
+Program/Execution IR must distinguish effects by resource/state root, for example
+`READ/WRITE(local_attention_state)`, `READ/WRITE(local_recurrent_state)`,
+`READ(E_generation_g)` and `WRITE(E_working_g+1)`. Ordering is required for real
+data dependencies, conflicting roots or explicit ordered semantics, not merely
+because both operations are stateful.
+
+```text
+                      normalized R
+                       /        \
+                      ▼          ▼
+                PrimaryMixer   StateRead(E)
+                      │          │
+                      └────┬─────┘
+                           ▼
+                        GateMerge
+                           │
+                           ▼
+                        FFN / MoE
+```
+
+Execution IR must preserve producer dependencies, state-root conflicts, effect
+ordering, last use, update barriers, merge synchronization and candidate-state
+transitions. It must not encode CUDA stream IDs. Target/Schedule lowering may
+execute PrimaryMixer and StateRead concurrently or serially before GateMerge
+when semantics allow either. Legal independent DAG nodes do not require CUDA
+concurrency; target evidence chooses the schedule. No speedup/latency prediction
+is adopted.
+
+Admitted CUDA execution is part of the real B1 architecture, not a late optional
+optimization. Correctness-first backend primitives include state and cross-state
+Q/K/V projections, State Read attention, State Update interaction, gate, merge,
+normalization, state-bank addressing, candidate-state write and derived
+materialization. Qualify each against independent reference operators before
+fusion research such as projection+read, read+gate, gate+residual merge,
+update+normalization or projection-cache materialization. Fusion may change
+implementation details, never model mathematics.
+
+Refoundation .1 establishes universal typed computational authority, explicit
+state/effects, a common compiler/runtime boundary and family-independent
+execution ownership. It must finish against its existing criterion; B1 does
+not add operators, implementation work or closure gates to .1.
+
+#### Generic provider and program ownership
+
+```text
+ordinary mode:
+  input → ordinary admitted model execution → output
+
+future state-capable mode:
+  input + optional compatible E binding + exact StateProfile
+    → state-aware execution → output + optional E_candidate
+```
+
+Ordinary mode requires neither E nor YAI. Numerical execution must not require
+Case, Recall, Participant, YAI identity or semantic-authority objects and must
+never branch on `if caller == YAI`. YAI is a future rich consumer of a generic
+capability. No QwenMemoryRuntime, DeepSeekMemoryRuntime or YAIStateRuntime.
+
+| Program | Future responsibility | Explicit non-ownership |
+| --- | --- | --- |
+| C — Model Language & Compiler | R/E semantics, state inputs/outputs, Read/Update blocks, versions, root effects, DAG/barriers, state-aware entrypoints and trainable augmentation meaning. | Semantic authority, residency and optimizer policy. |
+| N — Native Cognitive State | StateProfile, E realization identity, qualified future ingress, Lower/Reconcile, compatibility, invalidation/rebuild, Read/Update realization, experiential provenance and computational evaluation contract. | Case meaning, semantic admission and physical allocation/scheduling. |
+| S — Sequence Runtime | E committed/working/candidate lifetime, bindings/leases, transactions, paging/COW/sharing, residency/movement, checkpoints/rollback, resource accounting, safe schedule and future L checkpoint/resume. | Learned equations or semantic interpretation of banks. |
+| D — Dynamic Composition | Augmentation/module source, exact base compatibility, trained augmentation identity, State Encoder/Adapter and LoRA/DoRA/selective-adaptation composition, attach/import/deployment identity. | Invented compatibility or a mandatory optimizer. |
+| R / Source owners | Exact base source, initial augmentation weights, dataset and recipe provenance, checkpoint lineage and final trained source identity. | Training objectives as inference authority or copied source ownership. |
+| P — Physical Model Compiler | B1 weights and E precision/layout, derived representations/materializations, backend compatibility and target-machine-aware admitted choices. | Semantic meaning of W/E or training policy. |
+| Q — Qualification | Surgery parity, ordinary preservation, held-out post-training evaluation, causal state usefulness, interference/retention/update behavior, checkpoint, reference/CUDA equivalence, hybrid integration and cross-model controls. | Treating training/selection evidence as held-out or release proof. |
+
+These extend existing owners, not a new strategic program or directory layering.
+Model mathematics remains model-owned; N's realization contract, S's physical
+lifetime and P's representation choices remain distinct.
+
 
 ### Generation control
 
@@ -383,20 +733,155 @@ materially different strategies share the lifecycle, not every algorithm exists.
 
 | Capability | State | Current YVEX truth | Boundary required for promotion | Program | Evidence / owner |
 | --- | :---: | --- | --- | --- | --- |
-| Verified adapter source | 🔴 OPEN | Model trust exists, not an admitted generic adapter lifecycle. | Exact adapter provenance and immutable inventory. | D / C | [Source contract][storage]; [family integration][families] |
-| Base-model compatibility | 🔴 OPEN | Model binding does not establish adapter compatibility. | Validate base identity, roles and numerical constraints before specialization. | D | [Artifact contract][artifacts] |
-| Adapter representation | 🔴 OPEN | No generic adapter transformation/physical recipe contract. | Exact source-to-physical adapter identity and admission. | D / P | [Compilation][compilation] |
+| Verified adapter source | 🔴 OPEN | Model trust exists, not an admitted generic adapter lifecycle. | Exact adapter/B1 module provenance and immutable inventory, including State Encoder/Initializer and trained state-path weights. | D / R | [Source contract][storage]; [family integration][families] |
+| Base-model compatibility | 🔴 OPEN | Model binding does not establish adapter compatibility. | Validate exact immutable base, augmentation roles, StateProfile and numerical constraints before constructing a distinct executable composition. | D | [Artifact contract][artifacts] |
+| Adapter representation | 🔴 OPEN | No generic adapter transformation/physical recipe contract. | Exact source-to-physical trained augmentation identity, precision/layout and backend admission; bounded LoRA/DoRA/selective adaptation when qualified. | D / P | [Compilation][compilation] |
 | Dynamic attach/detach | 🔴 OPEN | Engine generations exist; dynamic adapter composition is unqualified. | Safe changes with exact new execution identity and retirement. | D / S | [Runtime contract][runtime-contract] |
 | Multiple resident adapters | 🔴 OPEN | Multiple engines do not imply multiple admitted adapters in an engine. | Coexistence, isolation, resource admission and cleanup. | D / S | [Runtime][runtime] |
 | Multi-LoRA batching | ⚪ LATER | Deferred until adapter identity and base lifecycle are established. | Batch compatible compositions without identity leakage. | D / S | [Runtime batching boundary][runtime] |
 | LoRA on MoE | ⚪ LATER | No generic adapter semantics to extend yet. | Sparse-role-compatible composition after the base contract. | D / C | [Family integration][families] |
 | Multimodal component adapters | ⚪ LATER | Outside the present composition horizon. | Adapters on admitted component interfaces with exact lineage. | D / M | [Family integration][families] |
-| Generic component graph | 🟡 PARTIAL | Target/draft and MiniMax schedules use shared owners. | Reusable encoder/decoder/tower/codec composition beyond bounded verticals. | D / C | [Family integration][families]; [MiniMax][minimax] |
+| Generic component graph | 🟡 PARTIAL | Target/draft and MiniMax schedules use shared owners. | Reusable architecture-augmented R/E composition and encoder/decoder/tower/codec graphs beyond bounded current verticals; current component schedules do not implement B1. | D / C | [Family integration][families]; [MiniMax][minimax] |
+| Architecture-augmented model composition | 🔴 OPEN | Current component composition does not admit B1 graph surgery or a trained R/E augmentation. | Immutable base plus augmentation architecture/weights and StateProfile receives its own compatible source, artifact, deployment and execution identities. | D / C | [Qwen adaptation target](#qwen-b1-model-adaptation-and-post-training-target) |
+| Post-training provenance / intake | 🔴 OPEN | Source trust does not implement generic dataset/recipe/checkpoint-lineage intake for externally post-trained compositions. | Bind trainable manifest, dataset/recipe/configuration, checkpoint lineage and trained source before import and independent qualification. | R / D / Q | [Provenance target](#provenance-and-inference-composition-pipeline); [Source contract][storage] |
 
 Target adapter lifecycle: source → verified adapter → base compatibility →
 admitted transformation → physical representation → deployment specialization
 → exact execution identity. **Base + adapter must not silently retain the same
 engine identity.** This is a future contract, not present dynamic support.
+
+#### Qwen B1 model adaptation and post-training target
+
+Qwen is the first **trained B1 research vertical**, not a newly selected wave.
+The [current family record][families] identifies `Qwen/Qwen3.8-27B`, interpreted
+by the existing `qwen3_5` owners: 64 text layers, 48 recurrent/gated-delta mixers
+with convolution state and 16 full-attention layers, primary width 5120.
+B1 attaches through a generic primary-layer interaction boundary:
+
+```text
+attention layer:   R → original full attention / local sequence state
+                  R → State Read(E)
+
+gated-delta layer: R → original recurrent / convolution computation
+                  R → State Read(E)
+```
+
+Both mixer classes use the same B1 abstraction and physical lifecycle. This
+hybrid reference would test directly that E is not another KV cache; no
+separate experiential runtime is permitted for either mixer class.
+
+The untouched Qwen checkpoint remains an immutable, separately executable
+reference. B1 is a distinct exact composition: **immutable backbone + B1
+architecture/composition + B1 trained weights + StateProfile**, with its own
+source/composition identity, training provenance, artifact, deployment,
+execution identity and qualification. The original model is not retroactively
+renamed or converted into B1.
+
+#### Mandatory model controls and adaptation ladder
+
+These are future research controls, not current execution capabilities,
+scheduled waves or expected outcomes. Q4 is conditional, not automatic.
+
+| Control | Architecture / weights / state | Question isolated |
+| --- | --- | --- |
+| Q0 — Original Qwen | Original architecture and weights, ordinary execution, no E. | Base reference. |
+| Q1 — Standard-memory Qwen | Original architecture/weights; equivalent relevant information in ordinary context and/or qualified retained prefix/KV. No learned B1 path. | Same-backbone standard-memory baseline. |
+| Q2 — B1 Surgery Parity | Full B1 graph and E present; new weights initialized, primary read gate neutral/near-zero and update write neutral/near-zero; no post-training. | Q0 vs Q2: does surgery preserve the original path? |
+| Q3 — B1 Post-Trained / Frozen Backbone | Backbone frozen; train State Encoder/Initializer, State Read, State Update, gates, experiential normalization and B1-specific parameters. | Q1 vs Q3: does learned E improve over standard memory on the same backbone? First actual trained B1 model. |
+| Q4 — B1 + Selective Backbone Adaptation | Only if Q3 warrants bounded LoRA, DoRA or selective unfreezing alongside B1. | Q3 vs Q4: does backbone co-adaptation materially help? |
+| D0 — DeepSeek Standard Control | Original DeepSeek architecture/weights, ordinary YVEX execution, no B1; equivalent information through ordinary rendered context and/or qualified retained prefix/context. | Q1 vs D0: what does scale buy under the standard paradigm? Q3/Q4 vs D0: can persistent computational state recover capability otherwise requiring more scale/context? |
+
+Potential Q4 sites include selected normalizations, mixer output projections,
+attention projections, FFN/down/output interaction points and later block
+groups. Selection remains evidence-driven; the roadmap does not freeze sites.
+
+| Stage | Trainable scope | Required research question / boundary |
+| --- | --- | --- |
+| PT0 — Surgery parity | No learning required. | Disabled/neutral B1 contribution preserves the backbone path, with exact or declared near-exact numerical criteria. |
+| PT1 — B1-only post-training | Frozen backbone; B1 augmentation trainable. | Demonstrate causal use of E. |
+| PT2 — Selective backbone adaptation | B1 plus limited backbone plasticity. | Test whether pretrained representations benefit from co-adaptation to R↔E. |
+| PT3 — Broader architecture-aware post-training | Future broader adaptation only if earlier stages show a clear ceiling. | Not scheduled merely because listed. |
+
+Native training around R/E from the beginning is a deeper research horizon,
+not a B1 prerequisite.
+
+The [live DeepSeek/DSpark record][deepseek] owns D0 structural truth: 43-layer
+SWA/CSA/HCA hybrid target, width 4096, mHC with four 4096-wide streams and a
+16,384-wide native residual boundary, 256 routed experts with top-6 selection,
+one shared expert per target layer and the admitted DSpark target/draft
+composition. D0 asks how much a substantially larger unmodified model can do
+with equivalent information delivered conventionally. It does not test whether
+DeepSeek could benefit from B1 training.
+
+**Do not insert random untrained B1 weights into DeepSeek and call it D0.**
+That confounds surgery damage with lack of training. DeepSeek is not the first
+post-trained B1 target. A future DeepSeek-B1 variant is unscheduled and may be
+considered only after causal Qwen evidence warrants extension; it would need
+its own neutral-path surgery parity before training. No DeepSeek B1 tensor
+budget or training campaign is adopted.
+
+#### Provenance and inference composition pipeline
+
+```text
+immutable base model source
+  + architecture augmentation definition
+  + StateProfile
+  + trainable-parameter manifest
+  + training dataset identity/provenance
+  + training recipe identity
+  + optimizer/training configuration identity where required
+  + checkpoint lineage
+    → trained augmentation / adapted weights
+    → exact base compatibility
+    → exact executable composition identity
+    → YVEX import / compilation / physical representation
+    → runtime binding
+    → independent qualification
+```
+
+This strengthens the existing D/C/R/P/Q lane without promoting generic adapter
+or external post-training integration to implemented. Training provenance
+authenticates where weights came from; it does not replace inference admission
+or independent qualification.
+
+An initial external differentiable research trainer may own autograd,
+backpropagation, optimizer, gradient accumulation, schedule and training
+checkpoint production with exact input/output provenance. YVEX imports the
+trained composition as immutable source truth. A YVEX-native trainer is neither
+implemented nor required: backward IR, optimizer execution, training scheduling,
+gradient state and distributed training remain possible future research.
+C may declare trainable roles and computational meaning without owning optimizer
+policy; D composes compatible modules, Source retains provenance, P realizes
+weights and Q independently qualifies the result.
+
+#### Cross-execution episodes and objective families
+
+B1 training/evaluation must exercise genuinely cross-execution state, for example:
+
+```text
+run 1: information introduced
+run 2: additional state
+run 3: contradiction / supersession
+run 4: delayed dependency
+run 5: irrelevant distractor
+run 6: changed condition
+final task: selective retained experience required
+```
+
+Candidate task classes include cross-request entity binding, supersession,
+long-gap dependency, technical project continuity, contradiction tracking,
+persistent preferences with distractors, procedural progress and delayed
+information composition. These are research episodes, not YVEX product or
+slot semantics. Equivalent-information context/prefix controls must remain
+visible, alongside held-out evaluation distinct from training and selection.
+
+Possible objective families combine ordinary language/task learning,
+teacher-logit or hidden-state distillation, state usefulness, wrong-state
+contrast, retention/stability regularization, write-magnitude regularization
+and base-model behavior preservation. No coefficients or final recipe are
+frozen. Success is not maximum write magnitude/frequency: useful E may retain
+most of its state and change only a small fraction.
+
 
 ### Output runners
 
@@ -523,6 +1008,32 @@ Qualification keeps these authorities distinct:
 | Performance qualification | Repeated identity-bound measurements and comparable distributions. |
 | Release qualification | All version-specific independent gates close together. |
 
+#### B1 qualification controls
+
+Mechanism existence is not B1 success. The [Q0/Q1/Q2/Q3/Q4/D0 matrix](#mandatory-model-controls-and-adaptation-ladder)
+must remain individually reported; Q4 is conditional on earlier evidence.
+Training metrics, held-out behavior, numerical conformance, runtime lifecycle,
+performance and release evidence remain separate. No outcome is predicted.
+
+| Future qualification boundary | Mandatory controls / observations |
+| --- | --- |
+| Ordinary-mode and surgery preservation | Ordinary execution without E; Q0/Q2 exact or declared near-exact parity; state-disabled behavior and base-model regression. |
+| Causal State Read usefulness | Correct E vs zero E, wrong E and swapped E; State Read disabled. Show whether E carries useful information and whether the model actually depends on it. |
+| Freshness, retention and update | Fresh vs stale E; cross-request retention; State Update disabled; write-frequency ablation; stability, intended forgetting and measured update behavior. |
+| Transaction and deliberation boundaries | Candidate/prepare/commit/abort transitions, cancellation, unchanged committed generation on failure; checkpoint/recovery, with future L continuity qualified independently. |
+| Compatibility and materialization | StateProfile mismatch refusal, model/composition replacement, E invalidation/rebuild and derived-cache staleness/rematerialization. |
+| Numerical and hybrid integration | Independent reference vs CUDA operators and composed execution; Qwen's recurrent/convolution and full-attention layer paths share the B1 boundary. |
+| Comparative behavior | Q1/Q3 same-backbone standard-memory comparison, conditional Q3/Q4 co-adaptation, Q1/D0 scale control and Q3/Q4 vs untouched D0 with equivalent relevant information. |
+| Performance and resources | Once implemented: repeated throughput/latency distributions, memory/residency, preparation/rematerialization costs, update frequency and numerical effect on exact source/composition/profile/device/workload identities. |
+
+Correct, zero, wrong, swapped and stale E, State Read disabled and State Update
+disabled are mandatory explicit state-level ablations, never hidden in an
+aggregate score. Report expected/observed tokens, logits/state values or error
+metrics where applicable, reference identity, tolerances, worst cases and
+dispersion. Internal agreement does not establish upstream conformance;
+training-set improvement does not establish held-out state usefulness.
+
+
 ### Scale-out
 
 | Capability | State | Current YVEX truth | Boundary required for promotion | Program | Evidence / owner |
@@ -551,9 +1062,9 @@ foundations with open boundaries; a completed wave does not complete a program.
 | C | Model Language & Compiler | Express heterogeneous topology, operations and source semantics. | Semantic IR; graph composition; tokenizer | 🟡 PARTIAL |
 | P | Physical Model Compiler | Synthesize/search physical representations from immutable source. | Policy; recipes; quantization; artifact construction | 🟡 PARTIAL |
 | S | Sequence Runtime | Mature state, scheduling, paging, reuse and resources. | Typed state; inflight batching; long context | 🟡 PARTIAL |
-| N | Native Cognitive State | Compile, retain, expose, version and evolve persistent model-native computational state independently of token context. | State ingress; realization; State Read/Update; cognitive identity/evaluation | 🔴 OPEN |
+| N | Native Cognitive State | Realize persistent model-native E independently of token context; N.B1 is the primary research target. | StateProfile; future W ingress/Lower/Reconcile; E identity; Read/Update; evaluation | 🔴 OPEN |
 | G | Generation Control | Generalize sampling, constraints and speculation. | Samplers; logprobs; grammar; proposals | 🟡 PARTIAL |
-| D | Dynamic Composition | Admit adapters and reusable component graphs. | Base compatibility; adapters; component lifecycle | 🟡 PARTIAL |
+| D | Dynamic Composition | Admit adapters, architecture augmentation and exact trained model compositions. | Base compatibility; adapters; augmented composition; post-training intake | 🟡 PARTIAL |
 | O | Output Runners | Separate model execution from chat generation. | Generate; embed; pool; score; reward | 🟡 PARTIAL |
 | M | Multimodal Execution | Generalize image/audio/video execution and publication. | Preprocessing; towers; connectors; iterative output | 🟡 PARTIAL |
 | X | External Interfaces | Preserve harness neutrality and portable interaction. | CLI; client API; REPLAI; platform evidence | 🟡 PARTIAL |
@@ -577,6 +1088,8 @@ retains serialized use and producer-lifetime limits; this is not a concurrent le
 
 **Material advance:** remove a demonstrated ownership defect with negative/lifecycle QA and exact performance replay where relevant.
 
+**Future source/provenance responsibility:** retain exact base and initial augmentation sources, dataset/recipe identities, checkpoint lineage and final trained source through existing Source owners; this does not implement post-training intake.
+
 **Does not own:** family mathematics, imagined consumer policy or release promotion.
 
 ### C — Model Language & Compiler
@@ -585,7 +1098,7 @@ retains serialized use and producer-lifetime limits; this is not a concurrent le
 
 **Established foundation:** family interpretation, tensor roles, Transformation IR and authenticated package plans.
 
-**Open maturity boundaries:** SSM-only topology, normalization/tokenizer authority, broader operators/state/output heads; target persistent-state inputs/outputs, read/update topology, banks and gating.
+**Open maturity boundaries:** SSM-only topology, normalization/tokenizer authority and broader operators/state/output heads. Future R/E semantics, read/update blocks, StateProfile-compatible entrypoints, root effects, dependency DAG/barriers and trainable augmentation roles extend the existing target language; they are not added to refoundation .1.
 
 **Current pressure:** A01's source-only barrier; later spectrum families test different assumptions.
 
@@ -599,7 +1112,7 @@ retains serialized use and producer-lifetime limits; this is not a concurrent le
 
 **Established foundation:** semantic projection, Transformation IR, physical policy/variant, GGUF writer, admission and measurement.
 
-**Open maturity boundaries:** sensitivity/calibration, feasibility filtering, candidate builds, Pareto selection and recipe evidence.
+**Open maturity boundaries:** sensitivity/calibration, feasibility filtering, candidate builds, Pareto selection and recipe evidence; future B1 weight/E precision/layout, derived materializations and target/backend compatibility.
 
 **Current pressure:** GB10 working-set/quality tradeoffs and distinct tensor numerical obligations.
 
@@ -613,7 +1126,7 @@ retains serialized use and producer-lifetime limits; this is not a concurrent le
 
 **Established foundation:** host, engines, leases, typed transactions, cooperative work and retained prefixes.
 
-**Open maturity boundaries:** cross-provider paging, inflight scheduling, prompt fairness, prefix caching and long-context evidence.
+**Open maturity boundaries:** cross-provider paging, inflight scheduling, prompt fairness, prefix caching and long-context evidence; future E generations/leases/transactions and independent L checkpoint/resume through common physical owners.
 
 **Current pressure:** recurrent versus attention geometry; actual concurrent workloads, not configured width; future N state must reuse typed physical lifecycle rather than another runtime.
 
@@ -630,16 +1143,19 @@ computational cognitive state independently of ordinary token-context persistenc
 identity, stale-generation rejection and state-resource accounting. These support
 future realization but do not implement N; program state remains OPEN.
 
-**Open cognitive-state boundaries:** ingress and capability advertisement;
-model-state compiler/profile; cognitive identity, State Read/Update, incremental
-lowering, compatibility/recompilation, provenance and computational evaluation.
+**Open cognitive-state boundaries:** StateProfile, qualified future W ingress,
+Lower and optional external Reconcile; E identity, compatibility/invalidation,
+Read/Update realization, provenance and computational evaluation. The official
+primary research target is [N.B1 — Slow-Update Dual-Stream](#nb1-slow-update-dual-stream),
+not persistent prefix/KV. E and unfinished deliberation L remain distinct.
 
 **Current architecture pressure:** YAI semantic authority must survive model
 replacement; A01 rejects state-equals-KV assumptions. Refoundation prepares C/S/N
 boundaries, not a cognitive-state runtime or an A01 evidence promotion.
 
-**Material advance:** a real model/reference demonstrates one declared realization
-depth with ingress, identity, negative/lifecycle and useful-state evidence. Read,
+**Material advance:** a real model/reference qualifies one declared point in
+the representation/interaction/update/lifecycle space, with exact identity,
+applicable ingress, negative/lifecycle and useful-state evidence. Read,
 update, retention and non-interference are separate claims.
 
 **Does not own:** Case/semantic memory, workflow, disclosure or authority policy,
@@ -666,9 +1182,9 @@ recipe search. Computational updates return proposals/evidence, not semantic tru
 
 **Established foundation:** component schedules and target/draft lifetimes.
 
-**Open maturity boundaries:** adapter trust, base compatibility, representation, attach/detach and resource-safe coexistence.
+**Open maturity boundaries:** adapter trust, base compatibility, representation, attach/detach and resource-safe coexistence; architecture-augmented composition, trained B1 State Encoder/read/update weights and provenance-bound external post-training intake.
 
-**Current pressure:** heterogeneous component models; adapters remain an unscheduled generic gap.
+**Current pressure:** heterogeneous component models and the unscheduled Qwen B1 adaptation target. Q2/PT0 surgery parity precedes Q3/PT1 frozen-backbone training; Q4/PT2 needs evidence. DeepSeek stays untouched D0. No post-training or trainer work is selected.
 
 **Material advance:** reusable composition with exact specialization identity and rollback.
 
@@ -722,7 +1238,7 @@ recipe search. Computational updates return proposals/evidence, not semantic tru
 
 **Established foundation:** mapped QA, reference components, typed measurement and source-stable receipts.
 
-**Open maturity boundaries:** upstream conformance, independent full-model quality, release benchmark and release qualification; future N retention/interference evaluation.
+**Open maturity boundaries:** upstream conformance, independent full-model quality, release benchmark and release qualification; future B1 surgery parity, held-out post-training/state-usefulness evaluation, explicit Q0–Q4/D0 controls and numerical/lifecycle/ablation evidence.
 
 **Current pressure:** v0.1 dependencies, incomplete MiniMax full-scale evidence and authoritative full-model conformance. The exact post-refoundation warm control is retained as characterization, not a release benchmark. DeepSeek official/reference vectors and Qwen pinned upstream references remain selected future work, not executed evidence.
 
@@ -926,7 +1442,7 @@ to implement every OPEN row.
 | Near | Prepare persistent-state language and realization/lifecycle boundaries | C / S / N | Future state-capable models need not create another runtime; semantic authority remains external. |
 | Near | Mature single-node sequence runtime | S / G | Typed paging, inflight scheduling, chunked prefill and reusable prefixes qualified. |
 | Near/Mid | Expand execution beyond chat | O / D / M | Embedding/scoring/adapters/media use common engine and result semantics. |
-| Near/Mid | Qualify progressively deeper computational-state realization under real model/research pressure | N / C / S | Provenance-bound context lowering, persistent realization, State Read and State Update earn separate evidence stages. |
+| Near/Mid | Qualify selected computational-state research points under real model pressure | N / C / S / D / Q | N.B1 is the primary target; Qwen surgery/post-training and provenance earn independent evidence. Prefix/KV remains a control, not the destination. No implementation wave is selected. |
 | Mid | Close independent qualification gaps | Q | Selected current-tree behavior, performance and reliability evidence reproducible. |
 | Mid | Qualify computational cognitive-state behavior | N / Q | Measure retention, interference, forgetting, cross-context continuity, update stability and recompilation/invalidation; do not replace YAI semantic evaluation. |
 | Later | Scale beyond the present single-node substrate | F | Distributed identity, state, scheduling and failure semantics established. |
@@ -1033,9 +1549,29 @@ release_qualification_ready=0
 | Generic State Update | false | No admitted cognitive-state update contract. |
 | Learned/native State Update | false | No independently qualified learned/native update architecture. |
 | Multi-timescale cognitive-state realization | false | Adopted representational target, not current layout support. |
-| YAI StateFrame/StateDelta runtime integration | false | Target names are not implemented protocol objects. |
+| Public W producer / W→E wire contract | false | YAI Recall v2 is bounded implemented truth; working-state selection is next/unselected. No StateFrame/StateDelta ABI or serialization is invented here. |
 | Cognitive-state retention/interference qualification | false | No declared qualified computational cognitive-state evaluation. |
 | Native-state model support | false | Strategic adoption is not architecture admission or execution. |
+
+The following remain explicitly **not implemented / not qualified**: public W
+ingress; W→E Lower; generic Reconcile; Experiential Computational State; B1;
+R/E dual-stream execution; StateProfile runtime; State Encoder; cross-state
+attention; Slow State Update; E committed/working/candidate runtime, leasing
+and residency; state-root effect scheduling; intra-program concurrent scheduling;
+B1 Qwen weights or post-training; selective B1 backbone adaptation; B1 DeepSeek;
+YVEX-native trainer; generic external post-training integration; L checkpoint/resume;
+and YAI-specific memory execution.
+
+Current prefix/KV != E; current typed IR state != Program N; current
+candidate/committed sequence transactions != B1 State Update; engine/session
+checkpointing != qualified L continuity. The B1-v0 tensor budget is reference
+design arithmetic, not allocation/performance evidence, frozen ABI or final model
+architecture. D0 has no B1 weights and no DeepSeek B1 training is scheduled.
+
+This alignment selects no implementation wave, does not start Program N, B1,
+post-training or A01, and does not expand/rename/reinterpret active refoundation
+.1. The live .1 → .1 qualification → A01 sequence and all v0.1 gates retain
+their own criteria. B1 and model adaptation remain unscheduled target doctrine.
 
 LATER is deliberate scope deferral, not concealed debt in a claimed release.
 OPEN remote/security rows are visible maturity gaps, not new v0.1 obligations.
