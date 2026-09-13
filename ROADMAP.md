@@ -9,7 +9,7 @@ Status: living public project control
 | Project target | Native, harness-independent model compilation and execution substrate. |
 | Active engineering boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` — typed multi-level model/program IR and consumer cutover before A01 resumes. |
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` and its qualification COMPLETE at producer-owned device-result validity: expired borrows fail closed; source-stable QA and exact bounded performance replay retained. Earlier identity/platform repairs preserved. |
-| Architecture Spectrum | A01 PARTIAL, repair queued behind refoundation .1 and qualification; A02–A10 PLANNED. |
+| Architecture Spectrum | A01 PARTIAL, repair queued behind refoundation .1 and qualification; A02–A11 PLANNED. |
 | Adopted state architecture target | N.B1 — Slow-Update Dual-Stream is the official primary research target: primary R plus persistent Experiential Computational State E; unfinished deliberation L remains distinct. YAI owns semantic authority; YVEX owns computational realization. Program N and B1 post-training remain OPEN/unscheduled, not implemented. |
 | Most important structural gap | Physical forward/output programs and selected DeepSeek stages execute through SSA, including normal CUDA residual post with caller-owned MoE operands. Complete DeepSeek/DSpark layer composition, deferred target scheduling and MiniMax neural composition still require migration before .1 closes. Qwen generation, state-capacity and output consumers use the compiled signature; bounded execution of its exact local artifact passes, but whole-model preservation remains unqualified. A01 tokenizer/normalization and whole-model barriers remain. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media. Evidence depths differ. |
@@ -27,7 +27,7 @@ Status: living public project control
 | --- | --- | ---: |
 | 🟢 ESTABLISHED | Generic owner and claimed boundary implemented and qualified at the stated scope. | 31 |
 | 🟡 PARTIAL | Real foundation; genericity, breadth, portability, performance or evidence incomplete. | 42 |
-| 🔴 OPEN | Generic capability absent or not yet claimable. | 55 |
+| 🔴 OPEN | Generic capability absent or not yet claimable. | 59 |
 | ⚪ LATER | Intentionally outside the current maturity horizon. | 14 |
 <!-- maturity-counts:end -->
 
@@ -62,10 +62,10 @@ below describe desired breadth; they are not additional maturity claims.
 | --- | :---: | --- | --- | --- | --- |
 | Source provenance and immutable intake | 🟢 ESTABLISHED | Immutable revisions, inventory, retained payload and verification have common owners. | Preserve the same trust model as providers and representations grow. | C / R | [Source contract][storage]; [verification tests][source-tests] |
 | Logical model identity | 🟢 ESTABLISHED | Source-declared relations separate logical model, original selector, representation, artifact, deployment, working set and engine; catalog family exceptions removed. | Extend explicit relations without family/name inference or silent ambiguity. | R / C | [Lifecycle][lifecycle]; [catalog tests][catalog-tests] |
-| Semantic Model IR | 🟡 PARTIAL | Typed programs, state/effect verification, Qwen forward lowering and pure-SSM representability exist; not every executable consumer uses this authority. | Express heterogeneous R/E values, state-consuming/producing blocks, versions, multi-result computation and trainable roles without family runtimes or compulsory Transformer structure. | C | [Compilation][compilation]; [Mamba2 barrier][mamba] |
-| Operator composition / graph language | 🟡 PARTIAL | Shared lowering and execution owners serve several families and component schedules. | Compile dual-stream R/E augmentation, cross-state interaction, gates/merge and update barriers through common model semantics; no family cognitive runtime. | C / D | [Family boundary][families]; [decoder plan][decoder-plan] |
+| Semantic Model IR | 🟡 PARTIAL | Typed programs, state/effect verification, Qwen forward lowering and pure-SSM representability exist; not every executable consumer uses this authority. | Express heterogeneous R/E values, state-consuming/producing blocks, versions, multi-result computation and trainable roles without family runtimes or compulsory Transformer structure; add token-derived indexed parameter access and shared cross-layer state dependencies. | C | [Compilation][compilation]; [Mamba2 barrier][mamba] |
+| Operator composition / graph language | 🟡 PARTIAL | Shared lowering and execution owners serve several families and component schedules. | Compile dual-stream R/E augmentation, cross-state interaction, gates/merge and update barriers through common model semantics; no family cognitive runtime. Also express phase-asymmetric programs and explicit state/result boundaries. | C / D | [Family boundary][families]; [decoder plan][decoder-plan] |
 | Transformation IR | 🟢 ESTABLISHED | Typed, ordered, artifact-neutral transformations precede payload materialization. | Remain the unique transformation authority as representations expand. | C / P | [Compilation][compilation] |
-| Physical policy | 🟡 PARTIAL | Per-terminal dtype/qtype, layout and alignment decisions exist for admitted recipes. | Broaden compiler-owned physical decisions without downstream reconstruction. | P | [Compilation][compilation] |
+| Physical policy | 🟡 PARTIAL | Per-terminal dtype/qtype, layout and alignment decisions exist for admitted recipes. | Broaden compiler-owned physical decisions without downstream reconstruction, including conditional tables, file-backed row representations and quantized runtime state. | P | [Compilation][compilation] |
 | Physical Execution IR | 🟢 ESTABLISHED | Package physical records are sealed separately from deployment implementation choices. | Preserve authenticated consumption as semantic operations broaden. | C / P / R | [Artifact contract][artifacts]; [compilation][compilation] |
 | Artifact emission | 🟢 ESTABLISHED | Transactional GGUF construction publishes admitted package representations. | Preserve deterministic construction and rollback across broader representations. | P | [Artifact contract][artifacts]; [writer tests][writer-tests] |
 | Artifact admission | 🟢 ESTABLISHED | Integrity, roles, identities and binding constraints fail closed. | Extend coverage without weakening integrity or mandatory semantic checks. | P / R | [Artifact contract][artifacts]; [integrity tests][integrity-tests] |
@@ -74,6 +74,8 @@ below describe desired breadth; they are not additional maturity claims.
 | Quantization synthesis | 🟡 PARTIAL | Mixed per-tensor policy and bounded calibration-informed recipes can be constructed. | Generic sensitivity/calibration-driven synthesis with reproducible decision provenance. | P | [GB10 targets][gb10]; [compilation][compilation] |
 | Physical Model Compiler search | 🔴 OPEN | Deterministic lower layers exist; recipe exploration remains bounded/manual engineering. | Hardware/workload/quality-aware search and reproducible Pareto selection. | P | [GB10 targets][gb10]; [compilation][compilation] |
 | Resource/state-root effect dependencies | 🔴 OPEN | Current lowering retains a global serial effect chain; explicit SSA/state foundations do not qualify independent state-root scheduling. | Order real dependencies, conflicting roots and explicit ordered semantics; preserve legal DAG branches for Target/Schedule choice. | C / S | [B1 compiler target](#compiler-execution-dag-and-admitted-backend-target); [current lowering][compilation] |
+| N-gram / token-derived addressing semantics | 🔴 OPEN | Exact tokenizer and source identities exist; generic n-gram window/key/address semantics are not admitted. | Seal tokenizer-bound addressing, compressed mappings, boundaries and hash/table rules; qualify positive and malformed-address vectors. | C / R | [Addressing target](#conditional-sparse-parameter-memory); [source contract][storage] |
+| Conditional sparse parameter memory | 🔴 OPEN | Dense parameters and routed experts do not establish indexed execution over huge immutable parameter tables. | Compile dynamic sparse row populations, physical table representations and bounded storage/cache execution with reference and refusal evidence. | C / P / S | [Conditional-memory target](#conditional-sparse-parameter-memory); [compilation][compilation] |
 
 #### Semantic Model IR target language
 
@@ -109,6 +111,9 @@ every primitive, composition or source format below executes today.
 | State realization profile | Model-specific StateProfile, distinct from the B1-v0 reference choices | Bind exact representation, interaction, update and lifecycle capability |
 | State-root effects and execution DAG | Explicit roots, independent branches, multi-result state transitions and bounded barriers | Preserve legal independence without prescribing CUDA concurrency |
 | Trainable architecture augmentation | Parameter roles and R/E composition meaning | Describe a post-trainable model without owning optimizer policy |
+| Token-derived addressing and conditional parameter reads | Exact window/key construction, indexed immutable reads, sparse row populations, combination/projection and gating | Bind table/tokenizer identity without a universal Engram primitive or whole-table dense operand |
+| Phase-asymmetric program composition | Components with different computation, state dependencies and parameter/workspace liveness | Express causal encoder → state projection → decoder through common compilation |
+| Shared cross-layer state | Explicit producer/source relationships for state and derived selections | Reuse a produced state or index population without duplicating ownership per layer |
 
 The target model signature can grow from input → model → output to
 `(primary input, persistent computational state)` → model graph →
@@ -160,6 +165,9 @@ into family interpretation.
 | Transformation | Admissible source-to-terminal transformation |
 | Backend implementation | Only implementations compatible with the numerical representation |
 | Workload reserve | Capacity left for state, context, workspace and concurrency |
+| Conditional parameter tables | Row-addressable dtype/qtype, block geometry, scales, packing, alignment, partitions/shards, file-backed or mmap-compatible layout, device gathers and cacheable rows |
+| Executable resource classes | Dense weights, routed experts and conditional tables may have different residency windows proven by program-phase dependencies; resident and non-resident representations remain distinct |
+| Runtime-state representation | Semantic state geometry independent of physical dtype/qtype, packing/scales/layout and backend implementation |
 
 Filter infeasible candidates before expensive builds or trials:
 
@@ -202,9 +210,11 @@ gate; no performance target here is a measured result.
 | Model leases | 🟢 ESTABLISHED | Leases prevent premature retirement; ensure-active uses typed authority. | Reuse across composition without importing semantic model selection. | S / D | [Runtime][runtime] |
 | Session isolation | 🟢 ESTABLISHED | Sessions bind exact generations and own mutable sequence state. | Preserve isolation under batching and shared prefixes. | S | [Runtime contract][runtime-contract] |
 | Transactional typed state | 🟢 ESTABLISHED | Distinct attention, recurrent, convolution, speculative, RNG, decoder/media representations coordinate commit/abort/reset. | Retain common lifecycle without merging unlike geometry; future E committed/working/candidate and L continuity require their own qualification. | S | [Runtime][runtime]; [state store][state-store] |
-| Resource accounting | 🟢 ESTABLISHED | Mapped, prepared, allocated, addressable and observed current/peak facts remain distinct. | Preserve known/unknown resource truth under dynamic placement. | S / R | [Resource truth][runtime]; [resource tests][resource-tests] |
+| Resource accounting | 🟢 ESTABLISHED | Mapped, prepared, allocated, addressable and observed current/peak facts remain distinct. | Preserve known/unknown resource truth under dynamic placement; future sparse tables require separate logical/backing/resident/moved bytes and row/cache populations. | S / R | [Resource truth][runtime]; [resource tests][resource-tests] |
 | Resource admission | 🟡 PARTIAL | Live capacity and backend facts constrain bounded engine admission. | Broader placement/concurrency admission with measured reserves and negative evidence. | S | [Runtime][runtime]; [resource tests][resource-tests] |
-| Automatic residency policy | 🔴 OPEN | Explicit load/unload and ensure-active are mechanisms, not a generic eviction policy. | Bounded retention/placement/eviction from authoritative resource facts. | S | [Storage contract][storage] |
+| Automatic residency policy | 🔴 OPEN | Explicit load/unload and ensure-active are mechanisms, not a generic eviction policy. | Bounded retention/placement/eviction from authoritative resource facts across dense parameters, experts, conditional tables, state and derived caches. | S | [Storage contract][storage] |
+| Phase-aware executable resource lifetime / residency | 🔴 OPEN | Engine resource accounting, explicit residency and bounded resource dependencies exist; generic compiler-proven immutable parameter residency windows do not. | Compile phase liveness for parameters, derived state and workspaces; physical planning/runtime retain, prefetch, evict or rematerialize under that proof and measured resource policy. | C / P / S | [Phase target](#phase-liveness-and-quantized-runtime-state); [runtime contract][runtime-contract] |
+| Quantized runtime-state representation | 🔴 OPEN | Typed attention/recurrent/convolution state and physical weight representations exist; generic compiler-owned low-bit mutable/runtime state is not qualified. | Separate semantic state geometry from dtype/qtype, scales, packing/layout and backend representation, with state numerical and lifecycle evidence. | C / P / S | [State representation target](#phase-liveness-and-quantized-runtime-state); [runtime][runtime] |
 | Paged typed sequence state | 🟡 PARTIAL | Virtual-page budgeting and attention-oriented prefix/COW backing exist; no general cross-provider/device page manager. | Typed-provider paging, reuse and movement with transactional identity; later E/L may share mechanisms without sharing state meaning. | S | [Page store][state-pages]; [prefix backing][state-prefix] |
 | Cooperative scheduling | 🟢 ESTABLISHED | Independent runnable work advances at safe quanta. | Preserve progress, cancellation and semantic isolation. | S | [Runtime scheduling][runtime] |
 | Compatible physical batching | 🟡 PARTIAL | Compatible work can rendezvous into real physical rows. | Broaden compatibility and measured batching without manufactured width. | S | [Runtime scheduling][runtime] |
@@ -231,6 +241,127 @@ appropriate. Fixed recurrent state need not grow like KV.
 
 Existing virtual pages and immutable prefix sharing are foundations, not proof
 of the complete cross-provider contract or an automatic caching policy.
+
+#### Conditional sparse parameter memory
+
+This OPEN target is an immutable model-parameter domain whose logical table can
+be enormous while execution dynamically selects only a small subset of rows
+from input/state-derived addresses. Engram in [A11](#a11-deepseek-v41-flash-target-pressure)
+is its first selected Spectrum pressure, not a new generic runtime or Program N
+realization. Selection as a research pressure does not schedule implementation.
+
+Three n-gram concepts have independent meaning and owners:
+
+| Concept | Computational path | Ownership |
+| --- | --- | --- |
+| Lexical n-gram addressing | Exact tokenizer → token IDs → ordered windows → qualified key/hash/address policy | Source facts under R; model/compiler semantics under C |
+| N-gram-addressed parameter memory | Key → indexed immutable table read → selected rows → model projection/interaction/gate | C semantics, P representation, S resources, backend execution |
+| N-gram generation proposal | Committed token history → suffix/n-gram heuristic → proposed tokens → generic speculative verification | G; independent of model-internal conditional memory |
+
+Future addressing identity binds the exact tokenizer/source revision, token-ID
+domain, compressed-token mapping if present, n-gram sizes, history padding and
+boundary rules, hash/address algorithm and version, cardinality, head/table
+partitioning, collision/search semantics, masking and image/non-text participation.
+Source projection/import seals those facts; runtime does not reconstruct them
+from strings. Changing the tokenizer can invalidate table compatibility even
+when backbone geometry matches. This target freezes no public n-gram ABI.
+
+Semantic Model IR must eventually express deterministic indexed parameter reads,
+token/window-derived keys, sparse row populations, row combination/projection,
+gating/residual interaction, explicit table identity and tokenizer-derived
+dependencies. It must not treat a huge table as one dense execution operand
+when only selected rows are needed. Unknown or malformed addressing semantics
+fail closed. These are semantic requirements, not frozen operation names or an
+`Engram` universal primitive.
+
+The physical model/state classes remain separate:
+
+| Class | Selection and lifetime meaning |
+| --- | --- |
+| Dense immutable parameters | Ordinary model computation; often resident |
+| Routed MoE experts | Immutable parameters selected by learned routing |
+| Conditional sparse parameter memory | Immutable rows selected by token/feature-derived addressing |
+| Local mutable sequence state | Attention KV, recurrent, convolution and decoder state |
+| Experiential Computational State E | Future mutable/versioned, cross-request, StateProfile-bound computational experience |
+| Latent Deliberation State L | Unfinished computation under its execution compatibility contract |
+
+These classes may share mechanisms, not semantic ownership or lifecycle by
+definition. There is no universal `memory` object. Engram is learned parameter
+memory, part of exact weights, and unchanged by ordinary inference. It is not
+application retrieval. E instead has future working-state-derived realization,
+Lower/Reconcile and model State Update; L preserves unfinished work.
+**Engram != E; Engram != L; Engram lookup != Recall or YAI retrieval.**
+Engram n-gram parameter lookup != State Read; an Engram row cache != E residency;
+replacing an Engram table or hash policy != model State Update. N does not own Engram, and
+Qwen-first B1 research/post-training remains independent.
+
+P's future table representation includes row dtype/qtype and block geometry,
+scales, packing/alignment, file-backed or mmap-compatible layout, partitioning,
+device gather representation, cacheable rows and admitted backend compatibility.
+This is broader than ordinary tensor quantization. Logical table size does not
+require full residency or the same policy as dense weights.
+
+A possible physical hierarchy is complete immutable backing → file/NVMe/mapping
+→ OS page cache or bounded host residency → YVEX hot-row/hot-page cache → optional
+device row cache → indexed backend execution. This does not require every level,
+SSD I/O on every lookup, or reliance on the OS cache alone. Actual policy needs
+measurement; source/artifact integrity still governs all reopened backing.
+
+Future resource evidence distinguishes logical table bytes, mapped/backing bytes,
+resident host/device bytes, cache capacity, cached row/page populations, unique
+rows requested, logical row bytes requested, physical bytes read/moved, hits,
+misses, evictions, prefetches and current/peak residency. Mapped, prepared,
+allocated, addressable, resident, moved and observed are different facts, not one
+"memory used" value. Model mapping, dense prepared weights, routed experts,
+conditional tables, state backing, workspace and derived caches need separate
+accounting even where storage mechanisms are shared.
+
+Future CPU/CUDA execution may require key/hash preparation, batched indexed
+gather, quantized row decode, head/column combination, projection, gating and
+residual addition. Independently testable reference operations and admitted
+backend numerics precede any gather/dequant/combine/project/gate fusion; fusion
+cannot change source mathematics. No such kernel is implemented by this target.
+
+#### Phase liveness and quantized runtime state
+
+Compiler-visible executable-resource lifetime should eventually influence
+physical residency. C proves program/component dependencies and liveness for
+immutable parameter groups, derived state and workspaces; P specializes legal
+representations and residency opportunities; S applies budgets, movement and
+cache policy. Retain, prefetch, stream, evict and rematerialize decisions derive
+from compiled truth and measured hardware facts, never a family-name heuristic.
+Current engine accounting and bounded dependencies do not establish this target.
+
+CED exposes encoder/prefill parameters, hot experts, Engram accesses and workspace,
+then an explicit state/result boundary, then decoder/generation parameters, hot
+experts, projected global state/KV, local/SWA state and workspace. The phases have
+different computation, state production/consumption and resource requirements.
+Resources needed again in a later phase must remain available or be restored
+before reuse; encoder/decoder membership alone is not an eviction proof.
+This is stronger than merely recognizing a T5-like encoder-decoder or applying
+model-wide SSD streaming. No equal byte populations, exact half-model eviction,
+fit, speedup or throughput follows from the layer split. Program/Execution IR
+preserves dependencies and legal independence; Target/Schedule chooses physical
+execution and synchronization, without mandatory CUDA concurrency.
+
+Quantized runtime state is a separate target from weight quantization. Semantic
+state geometry need not share activation precision; P must eventually bind
+state dtype/qtype, packing/scales/layout and backend representation independently.
+V4.1 FP4 KV pressures that contract; future long-context, recurrent/SSM and B1 E
+representations may also use it. This makes no FP4 choice for B1 and qualifies
+neither low-bit state nor a new E implementation.
+
+For these targets R/Source owns immutable source, tokenizer/addressing facts,
+table identity and checkpoint/family relations. C owns CED programs, shared
+cross-layer state, addressing/indexed reads, source interaction/mHC semantics
+and phase liveness. P owns table/state representation and backend compatibility.
+S owns residency, row/page movement, expert/conditional caches, phase-transition
+resources, state lifetime and accounting; S does not own n-gram meaning. G owns
+only the separate generation proposals. Q requires official/reference conformance,
+address/hash vectors, positive/refusal cases, cache-policy numerical invariance,
+phase-residency equivalence, low-bit state numerics and the complete terminal
+vertical before broader behavior/performance claims. Backend owners execute
+admitted primitives. N remains the independent B1/E owner.
 
 ### Native Cognitive State
 
@@ -728,6 +859,9 @@ is one contract usable by independent draft models, model-native draft/MTP,
 self-speculation, EAGLE-class strategies, n-gram and suffix proposals. These are
 breadth probes, **not six scheduled deliveries**. ESTABLISHED would mean
 materially different strategies share the lifecycle, not every algorithm exists.
+An n-gram proposal strategy uses committed output/history to propose tokens for
+verification under G. It is independent of lexical addressing and model-internal
+n-gram parameter memory: speculation breadth does not establish Engram support.
 
 ### Dynamic composition and adapters
 
@@ -741,7 +875,7 @@ materially different strategies share the lifecycle, not every algorithm exists.
 | Multi-LoRA batching | ⚪ LATER | Deferred until adapter identity and base lifecycle are established. | Batch compatible compositions without identity leakage. | D / S | [Runtime batching boundary][runtime] |
 | LoRA on MoE | ⚪ LATER | No generic adapter semantics to extend yet. | Sparse-role-compatible composition after the base contract. | D / C | [Family integration][families] |
 | Multimodal component adapters | ⚪ LATER | Outside the present composition horizon. | Adapters on admitted component interfaces with exact lineage. | D / M | [Family integration][families] |
-| Generic component graph | 🟡 PARTIAL | Target/draft and MiniMax schedules use shared owners. | Reusable architecture-augmented R/E composition and encoder/decoder/tower/codec graphs beyond bounded current verticals; current component schedules do not implement B1. | D / C | [Family integration][families]; [MiniMax][minimax] |
+| Generic component graph | 🟡 PARTIAL | Target/draft and MiniMax schedules use shared owners. | Reusable architecture-augmented R/E composition and encoder/decoder/tower/codec graphs beyond bounded current verticals; current component schedules do not implement B1. CED additionally requires explicit phase/state interfaces and resource liveness. | D / C | [Family integration][families]; [MiniMax][minimax] |
 | Architecture-augmented model composition | 🔴 OPEN | Current component composition does not admit B1 graph surgery or a trained R/E augmentation. | Immutable base plus augmentation architecture/weights and StateProfile receives its own compatible source, artifact, deployment and execution identities. | D / C | [Qwen adaptation target](#qwen-b1-model-adaptation-and-post-training-target) |
 | Post-training provenance / intake | 🔴 OPEN | Source trust does not implement generic dataset/recipe/checkpoint-lineage intake for externally post-trained compositions. | Bind trainable manifest, dataset/recipe/configuration, checkpoint lineage and trained source before import and independent qualification. | R / D / Q | [Provenance target](#provenance-and-inference-composition-pipeline); [Source contract][storage] |
 
@@ -1092,6 +1226,8 @@ retains serialized use and producer-lifetime limits; this is not a concurrent le
 
 **Does not own:** family mathematics, imagined consumer policy or release promotion.
 
+**Additional unscheduled A11 target:** Exact V4.1 source/tokenizer identity, addressing/table facts and checkpoint relations remain Source responsibilities; public-source research is not immutable acquisition.
+
 ### C — Model Language & Compiler
 
 **Purpose:** seal model meaning before runtime execution.
@@ -1105,6 +1241,8 @@ retains serialized use and producer-lifetime limits; this is not a concurrent le
 **Material advance:** another computational shape compiles through shared mechanisms without backend reconstruction.
 
 **Does not own:** allocation/residency lifetimes, semantic-state authority, serving policy or application task selection.
+
+**Additional unscheduled A11 target:** CED phase programs, CSA2 shared state, token-derived indexed parameter reads, Single-Pass mHC semantics and compiler-proven phase/resource liveness extend the language target without expanding .1.
 
 ### P — Physical Model Compiler
 
@@ -1120,6 +1258,8 @@ retains serialized use and producer-lifetime limits; this is not a concurrent le
 
 **Does not own:** model suitability, task selection, runtime residency, N's cognitive-state realization meaning or the release gate itself.
 
+**Additional unscheduled A11 target:** Conditional-table row qtype/layout, file-backed and cacheable representations, runtime-state qtype/layout and phase-specific representation choices require admitted backend compatibility.
+
 ### S — Sequence Runtime
 
 **Purpose:** progress, isolation and resource truth across sequence lifetimes.
@@ -1133,6 +1273,8 @@ retains serialized use and producer-lifetime limits; this is not a concurrent le
 **Material advance:** shared mechanisms qualified against distinct providers and resource-failure paths.
 
 **Does not own:** cognitive meaning, family update equations, semantic model selection or unmeasured eviction policy.
+
+**Additional unscheduled A11 target:** Conditional-row/page and expert-cache budgets, movement, phase-transition resources, lifetime and truthful accounting follow compiler dependencies; S never owns n-gram meaning.
 
 ### N — Native Cognitive State
 
@@ -1175,6 +1317,8 @@ recipe search. Computational updates return proposals/evidence, not semantic tru
 **Material advance:** new policies/strategies share one qualified lifecycle without changing another model's numerics.
 
 **Does not own:** HTTP syntax, application tools or quality judgments.
+
+**Terminology boundary:** N-gram/suffix proposals remain generation strategies over committed history, independently of A11. G does not own Engram or token-addressed model parameter memory.
 
 ### D — Dynamic Composition
 
@@ -1257,6 +1401,8 @@ The mandatory [quality-first closure rule][quality-reporting] requires expected
 versus observed evidence, authority and tolerances; aggregate PASS counts are
 supplemental. No upstream conformance harness is implied by the refoundation closure.
 
+**Additional unscheduled A11 target:** Address/hash vectors, conditional-table positive/refusal cases, cache-policy numerical invariance, phase-residency equivalence and FP4 state numerics precede complete one-token qualification and broader behavior/performance claims.
+
 ## Architecture Spectrum
 
 Architecture Spectrum is an adversarial qualification program. Reference
@@ -1276,6 +1422,7 @@ maturity**. Planned references are not acquisition or executable support claims.
 | A08 | Encoder-only / retrieval | BGE-M3 | Model equals autoregressive generator | PLANNED |
 | A09 | Audio / speech | Whisper-large-v3-turbo | Text-only input and decoder lifecycle | PLANNED |
 | A10 | Unified image generation | `HiDream-ai/HiDream-O1-Image` | Text-token-only output and autoregressive-only execution | PLANNED |
+| A11 | Phase-asymmetric CED; CSA2 shared cross-layer compressed sparse state; conditional sparse parameter memory; quantized runtime KV | `deepseek-ai/DeepSeek-V4.1-Flash` | Model equals one decoder loop; every layer owns KV; prefill/decode share a working set; immutable parameters share one residency lifetime; conditional memory must be resident; state quantization equals weight format; successor reuses predecessor topology | PLANNED |
 
 A01 has pinned acquisition, complete source roles, common transactional recurrent
 state and component numerics. It still refuses READY: tokenizer/special-token
@@ -1313,6 +1460,122 @@ are useful falsification tests too:
 These are design probes, not additional scheduled milestones. Spectrum and
 program evidence determine whether/when to use them. Existing DeepSeek,
 Qwen and MiniMax evidence stays at its [family-specific scope][families].
+
+### A11 DeepSeek V4.1 Flash target pressure
+
+**PLANNED; not acquired or implemented in YVEX.** The official target is
+[`deepseek-ai/DeepSeek-V4.1-Flash`](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash).
+The following public-source facts were inspected for roadmap research on
+2026-09-13. They are structural targets, not YVEX support, immutable acquisition
+evidence or measured YVEX resource use. No upstream revision is pinned here;
+actual acquisition must later capture an immutable revision through the normal
+source workflow.
+
+| Upstream structural fact | Reference value |
+| --- | --- |
+| Model type | `deepseek_v41` (nested text configuration: `deepseek_v41_text`) |
+| Parameter populations | 552B backbone; approximately 196B conditional Engram parameters |
+| Language stack | 40 layers: causal encoder 20 → decoder 20; hidden width 5120 |
+| Active backbone | Approximately 8B/token prefill; 16B/token decode |
+| MoE | 384 routed experts; top-6; one shared expert |
+| Context | Up to 1M tokens; configured maximum 1,048,576 |
+| Global KV | Approximately 890 bytes/token; main KV FP4/E2M1 with one E4M3 scale per 16 channels |
+| Engram sites / rows | Layers 1 and 14; respectively 384,006,168 and 384,016,682 rows |
+| Engram addressing | Maximum n-gram size 4; 8 heads; head width 256; compressed vocabulary 99,092 |
+| CSA2 KV sources | Layers 2, 8, 14, 20 |
+| CSA2 index sources | Layers 2, 8, 14, 20, 24, 28, 32, 36 |
+| Index geometry | 32 heads × 128; top-k 512 |
+| Hierarchical candidates | Source layer 20; 2048 candidate blocks × 8 |
+| Hyper-connections | Multiplicity 4; revised Single-Pass mHC / Mega-mHC |
+| DSpark | 3 next-token layers; block size 5; target taps 37, 38, 39 |
+
+Architecture totals, phase activation, FP4 scale granularity and mechanisms come
+from the [official model card](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/main/README.md).
+Exact dimensions, layer indices and addressing cardinalities come from the
+[official configuration](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/main/config.json)
+and [inference configuration](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/main/inference/config.json).
+The [official Engram reference](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/main/inference/engram.py)
+also exposes compressed-token mapping, window/hash partitions, padding and
+image-boundary handling: these must become exact source semantics, not runtime
+string heuristics. Public-source inspection does not admit that code into YVEX.
+
+V4.1 is a distinct architecture pressure. [Current V4/DSpark][deepseek] retains
+its 43-layer SWA/compressed sparse/heavy-compression hybrid, existing mHC,
+256 routed/top-6 experts and current target/draft relationship. Its evidence and
+v0.1 target remain unchanged. V4.1 instead adds CED, CSA2 cross-layer sharing,
+FP4 KV, Engram, revised mHC, 384 experts, a different DSpark topology and a vision
+source architecture. A successor name or matching shape establishes no support.
+
+The CED source shape is causal encoder → terminal encoder hidden state → global
+decoder KV projection → autoregressive decoder. CSA2 assigns static Full,
+Reindex and Reuse modes with shared main KV, indexer keys and reused Top-K
+indices; the hierarchical indexer uses a candidate pool from the first Full
+decoder layer. These are source-declared dependencies to project through common
+program/state semantics, not per-layer duplicate KV owners or a CSA2 runtime.
+They pressure [phase liveness](#phase-liveness-and-quantized-runtime-state), beyond
+ordinary encoder-decoder recognition.
+
+Single-Pass mHC requires separate source interpretation, typed semantics,
+independent reference numerics, physical lowering and backend numerics. Current
+V4 mHC evidence proves only its admitted scope. Likewise broader MoE routing
+does not imply a new runtime: total parameters != active parameters != resident
+parameters != moved parameters. Learned expert routing and token-addressed
+Engram select different populations with distinct semantics/accounting, even if
+their physical caches eventually share mechanisms.
+
+#### Bounded GB10 text target and evidence ladder
+
+The first intended machine pressure is one GB10 node in the approximately
+128 GB unified-memory class: **text, target only, small admitted context, bounded
+prompt, one generated token**. There is no YVEX fit claim before exact
+source/physical inventory, resource admission and execution evidence.
+
+The useful terminal boundary is exact official source → inventory → architecture
+import → typed semantic/program projection → admitted physical recipe → GB10
+load/resource admission → complete causal encoder on a bounded prompt →
+encoder-to-decoder state projection → decoder → complete logits → selected token.
+No partial layer/tensor result substitutes for that complete path.
+
+| Explanatory evidence boundary | Required future result |
+| --- | --- |
+| V41-SOURCE | Official immutable acquisition and exact config/tokenizer/tensor inventory |
+| V41-IMPORT | CED, CSA2, Engram, Single-Pass mHC, MoE and target relationships projected through common semantics |
+| V41-PHYSICAL | GB10-oriented text/target-only recipe, conditional-table and runtime-state representations, explicit resource envelope |
+| V41-REFERENCE | Bounded independent/component numerics, including addressing and refusal vectors |
+| V41-CUDA | Admitted GB10 primitives with reference/backend numerical evidence |
+| V41-RESIDENCY | Phase-aware parameter lifetime, expert residency/cache and conditional-table backing/cache; policy-equivalent results |
+| V41-TEXT-ONE-TOKEN | Complete bounded source → encoder → decoder → logits → token execution |
+
+Rows describe a non-scheduled dependency/evidence progression in that order,
+not new ACTIVE/NEXT milestones. Later evidence may expand to multiple tokens,
+continued prefill, larger contexts, DSpark, vision and provider breadth. None is
+an initial terminal requirement. Neither 1M context, long generation, release
+performance nor full provider parity belongs to the first target.
+
+Refoundation .1 supplies the common compiler/runtime authority on which this
+future integration depends; A11 adds no .1 closure criterion. Importers own
+irreducible source meaning, while canonical compiler/runtime and admitted
+backend owners execute it. No V4.1-specific runtime, application family branch,
+YAI/Case dependency or B1 dependency is introduced. A11 must eventually execute
+through ordinary YVEX model/provider semantics independently of Program N.
+
+#### External feasibility evidence
+
+The [Dwarf Star conversion/execution record](https://huggingface.co/antirez/deepseek-v4.1-flash-gguf)
+reports a Q2 file of 340.60 GiB: 151.77 GiB main weights plus 188.83 GiB Engram
+tables. It documents one 128 GB Mac using SSD streaming and a two-128-GB-Mac
+tensor-parallel path; Engram remains file-backed rather than fully resident.
+The documented V4.1 execution path is Metal. These are producer-reported
+**external physical-feasibility/execution evidence**, not runs reproduced by
+YVEX or evidence for CUDA, GB10, a YVEX physical recipe, numerics, fit, performance
+or release qualification. The byte figures exclude context/runtime reserves.
+No per-rank residency figure is adopted here.
+
+This motivates investigating bounded 128 GB-class execution with non-resident
+parameter mechanisms. It neither overrides official model mathematics nor
+selects Dwarf Star's implementation/cache architecture for YVEX. YVEX's target
+is compiler-proven phase/resource liveness informing physical specialization;
+no speed advantage over model-wide streaming is predicted.
 
 ## Current Execution Sequence
 
@@ -1495,7 +1758,7 @@ platform qualification. [MLC quick start][mlc]
 | `SPECTRUM.MAMBA2.REPAIR.0`, queued | C / S | Semantic IR, composition, non-KV state, tokenizer | A01 directly pressures generic state and informs N; no automatic N promotion | Indirect; no v0.1 promotion or scope expansion |
 | Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |
 | Explicit DeepSeek optimization resumption | Q / S / R | Baseline, resource/structural performance evidence | Existing DeepSeek control, not a new Axx | Predecessor of evaluation |
-| Model-language breadth after A01 | C / O / D / M | Components, heads, tokenizer and modality semantics | A02–A10 selected by pressure | General substrate, not automatically v0.1 |
+| Model-language breadth after A01 | C / O / D / M | Components, heads, tokenizer and modality semantics | A02–A11 selected by pressure | General substrate, not automatically v0.1 |
 | Single-node runtime maturity | S / G | Paging, inflight batching, prefill, caching | Distinct admitted state providers | Only requirements explicitly admitted by version scope |
 | Physical recipe search | P / Q | Policy, synthesis, search, qualification | Different tensor/state numerical obligations | Produces candidates, not release evidence |
 | v0.1 evaluation → benchmark → release | Q | Behavior, benchmark, release qualification | No spectrum promotion | Direct release gates |
@@ -1577,6 +1840,24 @@ This alignment selects no implementation wave, does not start Program N, B1,
 post-training or A01, and does not expand/rename/reinterpret active refoundation
 .1. The live .1 → .1 qualification → A01 sequence and all v0.1 gates retain
 their own criteria. B1 and model adaptation remain unscheduled target doctrine.
+
+The A11 amendment likewise selects no implementation wave and starts no source
+acquisition. A11 remains PLANNED, outside Current Execution Sequence and v0.1.
+It neither replaces current V4/DSpark nor modifies .1, qualification, A01 or N.B1.
+No n-gram implementation, Engram support, SSD streaming, B1 training or new
+family runtime is authorized by this doctrine.
+
+The following V4.1 capabilities are explicitly **not implemented / not qualified
+in YVEX**: `deepseek_v41` source acquisition; DeepSeek V4.1 import/execution;
+CED; CSA2; Hierarchical Sparse Indexer; Single-Pass mHC; V4.1 384-expert MoE;
+Engram; generic n-gram addressing; conditional sparse parameter memory;
+file-backed conditional-table execution or hot-row cache; compiler-derived
+phase-aware residency; FP4 runtime KV; V4.1 CUDA or GB10 execution; complete
+V4.1 one-token generation; V4.1 DSpark, vision or 1M context; 128 GB YVEX fit;
+and V4.1 release qualification. External Dwarf Star execution != YVEX support;
+V4 support != V4.1 support; an n-gram speculation target != Engram support;
+Engram != Program N E or L. Runtime-state quantization is a target, not an
+inference from weight-format support.
 
 LATER is deliberate scope deferral, not concealed debt in a claimed release.
 OPEN remote/security rows are visible maturity gaps, not new v0.1 obligations.
