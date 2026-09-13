@@ -528,6 +528,7 @@ int yvex_test_program(void)
     if (test_post_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;
     if (test_stream_mean_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;
     if (test_linear_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;
+    if (test_linear_residual_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;
     char semantic_identity[YVEX_SHA256_HEX_BYTES] = {0}, physical_identity[YVEX_SHA256_HEX_BYTES] = {0};
     unsigned int variant;
     for (variant = 0u; variant <= 14u; ++variant) {

@@ -283,6 +283,7 @@ int yvex_cuda_test_program(void)
     if (test_post_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
     if (test_stream_mean_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
     if (test_linear_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
+    if (test_linear_residual_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
     program_fixture f = {0};
     yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CUDA};
     yvex_backend_memory_stats after;

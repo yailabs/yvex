@@ -23,22 +23,23 @@ struct yvex_program_physical {
 
 typedef struct {
     const char *semantic, *implementation;
-    unsigned int effects;
+    unsigned int effects, parameter_operands; /* Bit i declares encoded parameter operand i. */
 } physical_rule;
 
 static const physical_rule physical_rules[] = {
-    {"core.parameter", "parameter.encoded.v1", 0u},
-    {"nn.embedding", "embedding.bf16.v1", 0u},
-    {"nn.linear", "linear.bf16.f32acc.v1", 0u},
-    {"nn.linear", "linear.encoded.f32.v1", 0u},
-    {"mhc.head_norm", "mhc.head_norm.bf16.v1", 0u},
-    {"tensor.stream_mean", "stream_mean.f32.f64acc.v1", 0u},
-    {"mhc.residual_post", "mhc.residual_post.f64acc.bf16.v1", 0u},
-    {"nn.rms_norm", "rms_norm.bf16.v1", 0u},
-    {"nn.silu_product", "silu_product.bf16.v1", 0u},
-    {"tensor.add", "add.bf16.v1", 0u},
-    {"sequence.gated_delta", "gated_delta.bf16.f32state.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE},
-    {"attention.gated_causal", "gated_causal.bf16.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE}};
+    {"core.parameter", "parameter.encoded.v1", 0u, 0u},
+    {"nn.embedding", "embedding.bf16.v1", 0u, 0x02u},
+    {"nn.linear", "linear.bf16.f32acc.v1", 0u, 0x02u},
+    {"nn.linear", "linear.encoded.f32.v1", 0u, 0x02u},
+    {"nn.linear_residual", "linear_residual.bf16.f32add.v1", 0u, 0x02u},
+    {"mhc.head_norm", "mhc.head_norm.bf16.v1", 0u, 0x1eu},
+    {"tensor.stream_mean", "stream_mean.f32.f64acc.v1", 0u, 0u},
+    {"mhc.residual_post", "mhc.residual_post.f64acc.bf16.v1", 0u, 0u},
+    {"nn.rms_norm", "rms_norm.bf16.v1", 0u, 0x02u},
+    {"nn.silu_product", "silu_product.bf16.v1", 0u, 0u},
+    {"tensor.add", "add.bf16.v1", 0u, 0u},
+    {"sequence.gated_delta", "gated_delta.bf16.f32state.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0xf0u},
+    {"attention.gated_causal", "gated_causal.bf16.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x18u}};
 
 static int physical_refuse(yvex_error *err, yvex_status status, const char *reason)
 {
@@ -127,19 +128,34 @@ static int physical_numeric_verify(const yvex_program_physical *p,
     const yvex_program_physical_step *s, yvex_error *err)
 {
     unsigned int i;
+    const physical_rule *rule = physical_rule_find(s->implementation, 1);
     int encoded = !strcmp(s->implementation, "linear.encoded.f32.v1");
+    int residual = !strcmp(s->implementation, "linear_residual.bf16.f32add.v1");
+    if (!rule) return physical_refuse(err, YVEX_ERR_UNSUPPORTED, "physical operation implementation is unknown");
+    /* Encoded parameters have no activation slot. An implementation must
+     * explicitly consume that representation; type compatibility alone does
+     * not make a constant into a materialized runtime tensor (or vice versa). */
+    for (i = 0u; i < s->operand_count; ++i)
+        if (!!p->values[s->operands[i]].parameter != !!(rule->parameter_operands & (1u << i)))
+            return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
+                "operand storage class requires another physical implementation");
+    for (i = 0u; i < s->operand_count; ++i) {
+        const yvex_program_physical_value *v = &p->values[s->operands[i]];
+        if (!v->parameter && v->type.kind == YVEX_IR_TENSOR && v->type.rank &&
+            v->type.shape[0].symbol == YVEX_IR_NONE &&
+            (p->summary.minimum_rows != p->summary.maximum_rows ||
+             v->type.shape[0].extent != p->summary.maximum_rows))
+            return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
+                "physical work requires the admitted entrypoint row population");
+    }
     if (!strcmp(s->implementation, "parameter.encoded.v1")) return YVEX_OK;
     if (!strcmp(s->implementation, "stream_mean.f32.f64acc.v1")) return YVEX_OK;
     if (!strcmp(s->implementation, "mhc.residual_post.f64acc.bf16.v1")) return YVEX_OK;
-    if (!strcmp(s->implementation, "mhc.head_norm.bf16.v1")) {
-        for (i = 1u; i < s->operand_count; ++i)
-            if (!p->values[s->operands[i]].parameter)
-                return physical_refuse(err, YVEX_ERR_UNSUPPORTED, "mHC physical head requires immutable parameters");
+    if (!strcmp(s->implementation, "mhc.head_norm.bf16.v1"))
         return YVEX_OK; /* The semantic verifier checks every scalar and shape. */
-    }
-    if (encoded && (s->operand_count != 2u || s->result_count != 1u ||
+    if ((encoded || residual) && (s->operand_count != (residual ? 3u : 2u) || s->result_count != 1u ||
         p->values[s->operands[0]].type.rank != 2u ||
-        !p->values[s->operands[1]].parameter || p->values[s->results[0]].type.rank != 2u))
+        p->values[s->results[0]].type.rank != 2u))
         return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
             "encoded linear requires a matrix input and an immutable parameter");
     for (i = 0u; i < s->operand_count; ++i) {

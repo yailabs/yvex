@@ -542,6 +542,34 @@ normalization imports the retained geometry into a parameter-free feature
 program; runtime no longer computes that mean or calls its kernel directly.
 Feature-layer selection remains runner composition. Strided host/device feature
 storage is a publication destination, not part of the reduction semantics.
+
+`nn.linear_residual` represents projection plus an explicit residual **before**
+the result's low-precision publication. It is not interchangeable with BF16
+`nn.linear` followed by `tensor.add`: that decomposition introduces an extra
+rounding point. Its verifier requires the residual's exact result type and row
+population; `linear_residual.bf16.f32add.v1` admits BF16 parameters/inputs,
+adds the residual to the F32 projection, and rounds once to BF16. CPU uses the
+existing scalar dot owner; CUDA uses the existing encoded projection with its
+additive operand and BF16 publication. The bounded independent oracle includes
+`1.001953125 - 1 = 0.001953125`, which double rounding would replace with zero,
+plus cancellation, nonfinite refusal and allocation cleanup. This is a
+qualified operation required by the existing MiniMax text computation, not a
+claim that its remaining procedural text/component composition has migrated.
+
+Every admitted physical operation also declares which operand positions consume
+encoded parameters and which require materialized values. Logical tensor type
+compatibility alone is insufficient: an encoded constant has no activation slot.
+The compiler and binary-admission verifier refuse an unsupported storage-class
+combination before execution, including a constant substituted for a linear
+input/residual or a runtime activation substituted for an immutable weight.
+This does not prohibit such logical programs; they need an explicit constant
+materialization or another admitted implementation, neither inferred by runtime.
+The current row-based executor also requires activation populations to agree
+with its admitted entrypoint population. A static leading extent is accepted
+only when it equals the entrypoint's fixed population; it cannot silently stand
+in for a variable invocation population. More general independent populations
+require additional lowering rather than unchecked runtime geometry.
+
 The bounded operator command lifecycle lives in
 [`transformer_operator.c`](../../src/runtime/transformer_operator.c), separate
 from engine/session computation. None of these changes migrates the remaining

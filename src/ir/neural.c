@@ -63,6 +63,18 @@ static int neural_linear(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err
     return YVEX_OK;
 }
 
+/* The residual is added before result publication. This is not interchangeable
+ * with a rounded low-precision linear result followed by tensor.add. */
+static int neural_linear_residual(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
+{
+    const yvex_ir_operation *op = &m->operations[id];
+    int rc = neural_linear(m, id, err);
+    if (rc != YVEX_OK) return rc;
+    if (!yvex_ir_type_equal(neural_input(m, op, 2u), neural_output(m, op, 0u)))
+        return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "linear residual requires exact result type and population");
+    return YVEX_OK;
+}
+
 static int neural_embedding(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
 {
     const yvex_ir_operation *op = &m->operations[id];
@@ -184,6 +196,7 @@ const yvex_ir_dialect *yvex_ir_neural_dialect(void)
         {"tensor.add", 1u, 2u, 2u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_binary},
         {"tensor.multiply", 1u, 2u, 2u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_binary},
         {"nn.linear", 1u, 2u, 2u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_linear},
+        {"nn.linear_residual", 1u, 3u, 3u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_linear_residual},
         {"nn.embedding", 1u, 2u, 2u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_embedding},
         {"nn.rms_norm", 1u, 2u, 2u, 1u, 1u, 0u, 0u, norm, 2u, 0, neural_norm},
         {"nn.layer_norm", 1u, 3u, 3u, 1u, 1u, 0u, 0u, norm, 2u, 0, neural_norm},

@@ -127,6 +127,11 @@ static int kernel_instructions_bind(yvex_program_kernels *c, yvex_error *err)
         c->linear_slots[i] = SIZE_MAX;
         if (!strcmp(s->implementation, "parameter.encoded.v1") ||
             !strcmp(s->implementation, "linear.encoded.f32.v1")) continue;
+        if (!strcmp(s->implementation, "linear_residual.bf16.f32add.v1")) {
+            if (yvex_backend_kind_of(c->backend) != YVEX_BACKEND_KIND_CPU && (!c->ops || !c->ops->bf16_round))
+                return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "linear residual requires exact BF16 publication");
+            continue;
+        }
         if (!strcmp(s->implementation, "stream_mean.f32.f64acc.v1")) {
             if (!c->ops || !c->ops->feature_mean)
                 return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "stream mean has no admitted backend implementation");
@@ -287,6 +292,55 @@ static int kernel_linear_cpu(const yvex_component_encoded_weight *w,
     return YVEX_OK;
 }
 
+static int kernel_linear_residual(yvex_program_kernels *c, const yvex_program_device_invocation *r,
+    const yvex_device_tensor *input, yvex_device_tensor *output,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_component_encoded_weight *w = &c->weights[r->step->operands[1]];
+    const yvex_device_tensor *residual = &r->values[r->step->operands[2]];
+    int rc;
+    if (yvex_backend_kind_of(c->backend) == YVEX_BACKEND_KIND_CPU) {
+        rc = kernel_linear_cpu(w, r, input, output, facts, err);
+        output->is_written = 0;
+        for (unsigned long long i = 0u; rc == YVEX_OK && i < output->bytes / sizeof(float); ++i) {
+            float value = ((float *)output->data)[i] + ((const float *)residual->data)[i];
+            if (!isfinite(value))
+                return kernel_refuse(err, YVEX_ERR_FORMAT, "linear residual produced non-finite output");
+            value = yvex_quant_bf16_decode(yvex_quant_bf16_encode(value));
+            if (!isfinite(value)) return kernel_refuse(err, YVEX_ERR_FORMAT, "linear residual exceeds BF16 range");
+            ((float *)output->data)[i] = value;
+        }
+        if (rc == YVEX_OK) {
+            if (!yvex_core_u64_add(facts->activation_bytes, residual->bytes, &facts->activation_bytes))
+                return kernel_refuse(err, YVEX_ERR_BOUNDS, "linear residual accounting overflowed");
+            output->is_written = 1;
+        }
+        return rc;
+    }
+    yvex_backend_operation_facts rounding = {0};
+    rc = yvex_backend_encoded_matvec(c->backend, w->encoded, w->encoded_bytes, w->qtype,
+        w->row_count, w->row_width, w->row_bytes, r->rows, input, NULL, 0u, residual,
+        output, YVEX_ENCODED_INPUT_BF16, facts, err);
+    if (rc == YVEX_OK) rc = c->ops->bf16_round(c->backend, output, output->bytes / sizeof(float), &rounding, err);
+    if (rc != YVEX_OK) { output->is_written = 0; return rc; }
+    if (!yvex_core_u64_add(facts->kernel_launches, rounding.kernel_launches, &facts->kernel_launches) ||
+        !yvex_core_u64_add(facts->queue_synchronizations, rounding.queue_synchronizations,
+                           &facts->queue_synchronizations) ||
+        !yvex_core_u64_add(facts->device_synchronizations, rounding.device_synchronizations,
+                           &facts->device_synchronizations) ||
+        !yvex_core_u64_add(facts->upload_count, rounding.upload_count, &facts->upload_count) ||
+        !yvex_core_u64_add(facts->download_count, rounding.download_count, &facts->download_count) ||
+        !yvex_core_u64_add(facts->h2d_bytes, rounding.h2d_bytes, &facts->h2d_bytes) ||
+        !yvex_core_u64_add(facts->d2h_bytes, rounding.d2h_bytes, &facts->d2h_bytes) ||
+        !yvex_core_u64_add(facts->d2d_bytes, rounding.d2d_bytes, &facts->d2d_bytes)) {
+        output->is_written = 0;
+        return kernel_refuse(err, YVEX_ERR_BOUNDS, "linear residual accounting overflowed");
+    }
+    if (rounding.temporary_bytes > facts->temporary_bytes) facts->temporary_bytes = rounding.temporary_bytes;
+    facts->compulsory_memory_facts_available &= rounding.compulsory_memory_facts_available;
+    return YVEX_OK;
+}
+
 int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_device_invocation *r,
                                 yvex_backend_operation_facts *facts, yvex_error *err)
 {
@@ -301,6 +355,8 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
         return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "operation has no admitted numerical operands/results");
     output = &r->values[s->results[0]];
     input = &r->values[s->operands[0]];
+    if (!strcmp(s->implementation, "linear_residual.bf16.f32add.v1"))
+        return kernel_linear_residual(c, r, input, output, facts, err);
     if (!strcmp(s->implementation, "mhc.residual_post.f64acc.bf16.v1")) {
         const yvex_ir_type *type = &yvex_program_physical_value_at(c->program, s->operands[0])->type;
         return c->ops->residual_post(c->backend, input, &r->values[s->operands[1]],
