@@ -5,6 +5,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <yvex/internal/component.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/graph.h>
 #include <yvex/internal/io.h>
@@ -77,13 +78,14 @@ int yvex_media_generate_command(const yvex_graph_args *args, yvex_error *err)
     yvex_error restore_error;
     int rc, restore_rc, render_rc, signals_installed = 0;
     if (!args || !args->media.generate || !adapter ||
-        !adapter->media_target_profile || !execution) {
+        !adapter->media_target_profile || !execution ||
+        execution->schema_version != YVEX_MEDIA_EXECUTION_RECIPE_SCHEMA_V2 || !execution->conditioning) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "media.generate.cli",
                        "the requested target has no admitted media adapter");
         return media_command_error(err);
     }
     rc = adapter->media_target_profile(&target, err);
-    request.schema_version = YVEX_RUNTIME_AV_GENERATION_SCHEMA_V1;
+    request.schema_version = YVEX_RUNTIME_AV_GENERATION_SCHEMA_V3;
     request.target = args->media.target;
     request.prompt = args->media.prompt;
     request.output_path = args->media.output_file;
@@ -100,6 +102,7 @@ int yvex_media_generate_command(const yvex_graph_args *args, yvex_error *err)
     request.audio_sample_rate = target.audio_sample_rate;
     request.inference_steps = (unsigned int)args->media.inference_steps;
     request.conditioning_layers = execution->conditioning_layers;
+    request.conditioning_width = execution->conditioning->hidden_width;
     request.transformer_blocks = args->media.transformer_blocks;
     request.seed = args->media.seed;
     request.keyframe_encode_seed = target.keyframe_encode_seed;

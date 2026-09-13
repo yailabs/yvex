@@ -20,6 +20,7 @@
 #define FIXTURE_HEIGHT 32ull
 #define FIXTURE_AUDIO_STEPS 207ull
 #define FIXTURE_BYTES 928ull
+#define FIXTURE_CONDITION_WIDTH 37ull
 #define FIXTURE_IDENTITY "32da281a901bbee03982e7f6d9743fa43b6b9c50ae8e5393d93bf0a3be0a5d99"
 
 static const unsigned char condition_png[] = {
@@ -37,7 +38,7 @@ typedef struct {
     unsigned long long token_count, condition_count, progress_mask;
     unsigned int token_ids[256];
     yvex_media_condition_role roles[YVEX_RUNTIME_MEDIA_CONDITION_CAP];
-    int fail_condition, cancel;
+    int fail_condition, wrong_width, cancel;
 } media_fixture_context;
 
 static media_fixture_context *active_fixture_context;
@@ -208,7 +209,7 @@ static int fixture_condition(
         return YVEX_ERR_STATE;
     }
     if (!token_count || request->layer_count != 1ull ||
-        !yvex_core_u64_mul(token_count, 5120ull, &expected) ||
+        !yvex_core_u64_mul(token_count, FIXTURE_CONDITION_WIDTH, &expected) ||
         expected > request->conditioning_capacity) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "test.runtime-media.condition",
                        "fixture conditioning extent is inconsistent");
@@ -219,7 +220,7 @@ static int fixture_condition(
     for (index = 0ull; index < token_count; ++index) request->text_tags[index] = 1u;
     memset(result, 0, sizeof(*result));
     result->token_count = token_count;
-    result->hidden_width = 5120ull;
+    result->hidden_width = context->wrong_width ? 5120ull : FIXTURE_CONDITION_WIDTH;
     result->layer_count = 1ull;
     result->condition_count = request->condition_count;
     result->resident_bytes = 128ull;
@@ -298,7 +299,7 @@ static int fixture_latent(
     context->latent_calls++;
     if (!execution || !execution->transformer_component || !plan ||
         !execution->conditioning ||
-        !execution->conditioning_capacity ||
+        execution->conditioning_capacity != 256ull * FIXTURE_CONDITION_WIDTH ||
         !yvex_sha256_hex_valid(execution->conditioning_identity) || !execution->layout ||
         !execution->layout_result || !execution->layout_result->complete ||
         !execution->timestep_indices || execution->timestep_capacity != plan->packed_rows ||
@@ -472,7 +473,7 @@ static yvex_runtime_av_generation_request fixture_request(
         pixel_mean[index] = 0.0f;
         pixel_std[index] = 1.0f;
     }
-    request.schema_version = YVEX_RUNTIME_AV_GENERATION_SCHEMA_V2;
+    request.schema_version = YVEX_RUNTIME_AV_GENERATION_SCHEMA_V3;
     request.target = "fixture-av";
     request.prompt = "hello";
     request.output_path = path;
@@ -490,6 +491,7 @@ static yvex_runtime_av_generation_request fixture_request(
     request.audio_sample_rate = 32000ull;
     request.inference_steps = 1u;
     request.conditioning_layers = 1ull;
+    request.conditioning_width = FIXTURE_CONDITION_WIDTH;
     request.transformer_blocks = 50ull;
     request.seed = 42ull;
     request.keyframe_encode_seed = 42ull;
@@ -795,6 +797,8 @@ static int test_generation_transaction(void)
                              YVEX_RUNTIME_AV_GENERATION_RESULT_SCHEMA_V3 &&
                          first_result.activation_arena_observed,
                      "complete staged media transaction");
+    printf("media conditioning: width=%llu capacity=%llu values; compiler geometry -> runtime -> latent PASS\n",
+           first.conditioning_width, first.maximum_prompt_tokens * first.conditioning_width);
     YVEX_TEST_ASSERT(first_result.frames == FIXTURE_FRAMES &&
                          first_result.width == FIXTURE_WIDTH &&
                          first_result.height == FIXTURE_HEIGHT &&
@@ -973,7 +977,45 @@ static int test_generation_refusals(void)
     YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT && !result.complete,
                      "request cannot mutate the opened media model contract");
     request.maximum_device_bytes--;
+    request.conditioning_width++;
+    rc = yvex_runtime_media_model_generate(model, &request, &result, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT && !result.complete && !context.condition_calls,
+                     "conditioning geometry cannot mutate an admitted engine contract");
+    request.conditioning_width--;
     yvex_runtime_media_model_close(&model);
+    {
+        unsigned int *old_header = malloc(sizeof(*old_header));
+        YVEX_TEST_ASSERT(old_header != NULL, "obsolete request header allocation");
+        *old_header = 2u;
+        rc = yvex_runtime_av_generate((const yvex_runtime_av_generation_request *)old_header, &result, &err);
+        free(old_header);
+        YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG && !result.complete && !context.condition_calls,
+                         "schema is checked before any absent request field is read");
+    }
+    request.schema_version = 2u;
+    rc = yvex_runtime_av_generate(&request, &result, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG && !result.complete && !context.condition_calls,
+                     "superseded internal generation layout is refused before component execution");
+    request.schema_version = YVEX_RUNTIME_AV_GENERATION_SCHEMA_V3;
+    request.conditioning_width = 0ull;
+    rc = yvex_runtime_av_generate(&request, &result, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG && !result.complete && !context.condition_calls,
+                     "absent conditioning geometry has no implicit family fallback");
+    request.conditioning_width = ~0ull;
+    rc = yvex_runtime_av_generate(&request, &result, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS && !result.complete && !context.condition_calls,
+                     "conditioning shape overflow is refused before component execution");
+    request.conditioning_width = request.maximum_host_bytes;
+    rc = yvex_runtime_av_generate(&request, &result, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS && !result.complete && !context.condition_calls,
+                     "conditioning staging cannot exceed the declared host budget");
+    request.conditioning_width = FIXTURE_CONDITION_WIDTH;
+    context.wrong_width = 1;
+    rc = yvex_runtime_av_generate(&request, &result, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE && !result.complete && context.condition_calls == 1ull &&
+                         !context.latent_calls && access(path, F_OK) != 0,
+                     "a result with historical family width is refused before the next component");
+    context.wrong_width = 0;
     request.conditions = invalid_conditions;
     request.condition_count = 2ull;
     rc = yvex_runtime_av_generate(&request, &result, &err);

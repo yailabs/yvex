@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <yvex/gguf.h>
+#include <yvex/internal/component.h>
 #include <yvex/internal/engine_scheduler.h>
 #include <yvex/internal/family_catalog.h>
 #include <yvex/internal/image.h>
@@ -131,7 +132,10 @@ static int media_target_validate(
         target->minimum_duration_milliseconds > target->maximum_duration_milliseconds ||
         !target->minimum_aspect_numerator || !target->minimum_aspect_denominator ||
         !target->maximum_aspect_numerator || !target->maximum_aspect_denominator ||
-        !execution || execution->schema_version != YVEX_MEDIA_EXECUTION_RECIPE_SCHEMA_V1 ||
+        !execution || execution->schema_version != YVEX_MEDIA_EXECUTION_RECIPE_SCHEMA_V2 ||
+        !execution->conditioning ||
+        execution->conditioning->schema_version != YVEX_COMPONENT_TEXT_RECIPE_SCHEMA_V1 ||
+        !execution->conditioning->hidden_width ||
         !execution->conditioning_layers || !execution->transformer_blocks ||
         !execution->maximum_prompt_tokens || !execution->maximum_packed_rows ||
         !execution->plan_build || !execution->layout_build || !execution->component_admit ||
@@ -235,7 +239,7 @@ int yvex_runtime_media_host_profile_build(
     out->maximum_aspect_denominator = target->maximum_aspect_denominator;
     request = &out->request_template;
     *request = (yvex_runtime_av_generation_request){
-        .schema_version = YVEX_RUNTIME_AV_GENERATION_SCHEMA_V2,
+        .schema_version = YVEX_RUNTIME_AV_GENERATION_SCHEMA_V3,
         .target = out->target,
         .text_artifact_path = out->text_artifact,
         .transformer_artifact_path = out->transformer_artifact,
@@ -246,6 +250,7 @@ int yvex_runtime_media_host_profile_build(
         .audio_sample_rate = target->audio_sample_rate, .seed = target->seed,
         .keyframe_encode_seed = target->keyframe_encode_seed,
         .conditioning_layers = execution->conditioning_layers,
+        .conditioning_width = execution->conditioning->hidden_width,
         .transformer_blocks = execution->transformer_blocks,
         .maximum_prompt_tokens = execution->maximum_prompt_tokens,
         .maximum_packed_rows = execution->maximum_packed_rows,
@@ -682,16 +687,16 @@ static int model_contract_validate(
     const yvex_runtime_av_generation_request *request, yvex_error *err)
 {
     yvex_runtime_av_generation_request expected;
+    unsigned long long conditioning_values, conditioning_bytes;
     int rc;
     if (!request ||
-        (request->schema_version != YVEX_RUNTIME_AV_GENERATION_SCHEMA_V1 &&
-         request->schema_version != YVEX_RUNTIME_AV_GENERATION_SCHEMA_V2) ||
+        request->schema_version != YVEX_RUNTIME_AV_GENERATION_SCHEMA_V3 ||
         !request->target || !request->target[0] ||
         !request->text_artifact_path || !request->transformer_artifact_path ||
         !request->video_artifact_path || !request->audio_artifact_path ||
         !request->source_identity || !yvex_sha256_hex_valid(request->source_identity) ||
         !request->fps_numerator || !request->fps_denominator || !request->audio_sample_rate ||
-        !request->conditioning_layers || !request->transformer_blocks ||
+        !request->conditioning_layers || !request->conditioning_width || !request->transformer_blocks ||
         !request->maximum_prompt_tokens || !request->maximum_packed_rows ||
         !request->maximum_host_bytes || !request->maximum_device_bytes ||
         !request->maximum_workspace_bytes || !request->maximum_file_bytes ||
@@ -710,6 +715,11 @@ static int model_contract_validate(
         !request->audio_decode)
         return generation_fail(err, YVEX_ERR_INVALID_ARG, "runtime.av-generation",
                                "one exact admitted media model contract is required");
+    if (!yvex_core_u64_mul(request->maximum_prompt_tokens, request->conditioning_width, &conditioning_values) ||
+        !yvex_core_u64_mul(conditioning_values, sizeof(float), &conditioning_bytes) ||
+        conditioning_bytes > SIZE_MAX || conditioning_bytes > request->maximum_host_bytes)
+        return generation_fail(err, YVEX_ERR_BOUNDS, "runtime.av-generation.conditioning",
+                               "admitted conditioning shape exceeds the host envelope");
     if (!request->output_semantic_domain && !request->video_output_requirement &&
         !request->audio_output_requirement) {
         if (request->video_output_specialization.physical_identity[0] ||
@@ -747,13 +757,11 @@ static int request_validate(
     int first = 0, last = 0;
     int rc = model_contract_validate(request, err);
     if (rc != YVEX_OK) return rc;
-    if ((request->schema_version == YVEX_RUNTIME_AV_GENERATION_SCHEMA_V1 &&
-         (request->conditions || request->condition_count)) ||
-        request->condition_count > YVEX_RUNTIME_MEDIA_CONDITION_CAP ||
+    if (request->condition_count > YVEX_RUNTIME_MEDIA_CONDITION_CAP ||
         (request->condition_count && !request->conditions))
         return generation_fail(err, YVEX_ERR_INVALID_ARG,
                                "runtime.av-generation.condition",
-                               "media conditions require the bounded generation-v2 contract");
+                               "media conditions exceed the admitted generation contract");
     for (index = 0ull; index < request->condition_count; ++index) {
         const yvex_runtime_media_condition *condition = request->conditions + index;
         if (condition->schema_version != YVEX_RUNTIME_MEDIA_CONDITION_SCHEMA_V1 ||
@@ -1003,6 +1011,7 @@ static int media_model_contract_matches(
            sealed->audio_sample_rate == request->audio_sample_rate &&
            sealed->keyframe_encode_seed == request->keyframe_encode_seed &&
            sealed->conditioning_layers == request->conditioning_layers &&
+           sealed->conditioning_width == request->conditioning_width &&
            sealed->transformer_blocks == request->transformer_blocks &&
            sealed->maximum_prompt_tokens == request->maximum_prompt_tokens &&
            sealed->maximum_packed_rows == request->maximum_packed_rows &&
@@ -1218,7 +1227,7 @@ static int conditioning_execute(generation_state *state, yvex_error *err)
                                     request->conditions[index].source_path,
                                     request->maximum_file_bytes, err);
     if (rc == YVEX_OK &&
-        !yvex_core_u64_mul(request->maximum_prompt_tokens, 5120ull,
+        !yvex_core_u64_mul(request->maximum_prompt_tokens, request->conditioning_width,
                            &state->conditioning_values))
         rc = generation_fail(err, YVEX_ERR_BOUNDS, "runtime.av-generation.conditioning",
                              "conditioning capacity overflowed");
@@ -1246,7 +1255,7 @@ static int conditioning_execute(generation_state *state, yvex_error *err)
         (!state->conditioning_result.complete ||
          !state->conditioning_result.token_count ||
          state->conditioning_result.token_count > request->maximum_prompt_tokens ||
-         state->conditioning_result.hidden_width != 5120ull ||
+         state->conditioning_result.hidden_width != request->conditioning_width ||
          state->conditioning_result.condition_count != request->condition_count ||
          !yvex_sha256_hex_valid(state->conditioning_result.prompt_identity) ||
          !yvex_sha256_hex_valid(state->conditioning_result.execution_identity)))

@@ -102,6 +102,16 @@ compiler semantics. DeepSeek's remaining layer composition and MiniMax
 component consumers are not yet cut over to this owner; see the
 [compiler boundary](compilation.md#typed-computational-programs).
 
+Media conditioning storage and result validation use the admitted component's
+output width, projected at cold profile construction and frozen in the engine
+contract. The runtime does not assume MiniMax's 5120-wide result. It rejects
+missing, overflowing or over-budget geometry before opening components, and
+rejects changed engine geometry or incompatible component results before latent
+execution/publication. Internal media execution recipe v2 and generation request
+v3 require this explicit boundary; older transient layouts are refused, not
+filled from a family default. This removes a runtime geometry authority, not
+the still-open MiniMax neural-program cutover. No public wire version changes.
+
 Compilation, source acquisition, model catalogs, server transport, and
 application request parsing are outside the engine. Family callbacks are absent
 from model open. Family semantics have already become pointer-free package

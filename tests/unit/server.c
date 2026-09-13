@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include <yvex/server.h>
+#include <yvex/internal/component.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/graph.h>
 #include <yvex/internal/media.h>
@@ -897,7 +898,7 @@ static int media_options(yvex_server_media_options *options, const char *output_
     options->schema_version = YVEX_SERVER_MEDIA_SCHEMA_V2;
     options->output_root = output_root;
     options->artifact_reopen_cache_root = output_root;
-    options->request_template.schema_version = YVEX_RUNTIME_AV_GENERATION_SCHEMA_V2;
+    options->request_template.schema_version = YVEX_RUNTIME_AV_GENERATION_SCHEMA_V3;
     options->request_template.target = "minimax-h3-base-fl2va-t2va";
     options->request_template.source_identity =
         "91972f8e4e6562562456c339b43eed1fba5f7b9d7fb13987f495b416a5109b5e";
@@ -911,6 +912,7 @@ static int media_options(yvex_server_media_options *options, const char *output_
     options->request_template.seed = target.seed;
     options->request_template.keyframe_encode_seed = target.keyframe_encode_seed;
     options->request_template.conditioning_layers = execution->conditioning_layers;
+    options->request_template.conditioning_width = execution->conditioning->hidden_width;
     options->request_template.transformer_blocks = execution->transformer_blocks;
     options->request_template.maximum_prompt_tokens = execution->maximum_prompt_tokens;
     options->request_template.maximum_packed_rows = execution->maximum_packed_rows;
@@ -1288,6 +1290,8 @@ static int test_media_family_profile(void)
     yvex_runtime_media_execution_request request = {0};
     yvex_media_target_profile target;
     yvex_runtime_media_host_profile profile, repeated;
+    yvex_media_execution_recipe execution;
+    yvex_component_text_recipe conditioning;
     yvex_error err;
     int rc;
 
@@ -1300,6 +1304,26 @@ static int test_media_family_profile(void)
         &profile, &target, adapter->media_execution, "/models/minimax-h3/revision",
         "/outputs/minimax-h3", &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "family catalog builds media host profile");
+    YVEX_TEST_ASSERT(profile.request_template.conditioning_width == 5120ull &&
+                         profile.request_template.schema_version == YVEX_RUNTIME_AV_GENERATION_SCHEMA_V3,
+                     "MiniMax conditioning width is projected from the admitted component recipe");
+    execution = *adapter->media_execution;
+    conditioning = *execution.conditioning;
+    conditioning.hidden_width = 37ull;
+    execution.conditioning = &conditioning;
+    rc = yvex_runtime_media_host_profile_build(
+        &repeated, &target, &execution, "/models/fixture", "/outputs/fixture", &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && repeated.request_template.conditioning_width == 37ull,
+                     "generic host projection preserves a non-family component width");
+    execution.schema_version = 1u;
+    YVEX_TEST_ASSERT(yvex_runtime_media_host_profile_build(
+        &repeated, &target, &execution, "/models/fixture", "/outputs/fixture", &err) == YVEX_ERR_INVALID_ARG,
+                     "old execution recipe schema cannot imply missing geometry");
+    execution.schema_version = YVEX_MEDIA_EXECUTION_RECIPE_SCHEMA_V2;
+    execution.conditioning = NULL;
+    YVEX_TEST_ASSERT(yvex_runtime_media_host_profile_build(
+        &repeated, &target, &execution, "/models/fixture", "/outputs/fixture", &err) == YVEX_ERR_INVALID_ARG,
+                     "missing conditioning contract refuses without model-name inference");
     YVEX_TEST_ASSERT(profile.schema_version == YVEX_RUNTIME_MEDIA_HOST_SCHEMA_V2,
                      "media host profile schema");
     YVEX_TEST_ASSERT_STREQ(profile.request_template.target,

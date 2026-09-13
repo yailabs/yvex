@@ -10,10 +10,11 @@ extern "C" {
 #endif
 
 #define YVEX_MEDIA_TARGET_PROFILE_SCHEMA_V2 2u
-#define YVEX_MEDIA_EXECUTION_RECIPE_SCHEMA_V1 1u
+#define YVEX_MEDIA_EXECUTION_RECIPE_SCHEMA_V2 2u
 #define YVEX_MEDIA_TARGET_TIER_CAP 5u
 
 typedef struct yvex_artifact yvex_artifact;
+typedef struct yvex_component_text_recipe yvex_component_text_recipe;
 typedef struct yvex_gguf yvex_gguf;
 typedef struct yvex_tensor_table yvex_tensor_table;
 typedef struct yvex_complete_artifact_admission yvex_complete_artifact_admission;
@@ -183,6 +184,7 @@ typedef int (*yvex_media_audio_fn)(
 
 typedef struct yvex_media_execution_recipe {
     unsigned int schema_version;
+    const yvex_component_text_recipe *conditioning;
     unsigned long long conditioning_layers, transformer_blocks;
     unsigned long long maximum_prompt_tokens, maximum_packed_rows;
     yvex_backend_kind component_backend;

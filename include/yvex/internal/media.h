@@ -15,8 +15,7 @@
 extern "C" {
 #endif
 
-#define YVEX_RUNTIME_AV_GENERATION_SCHEMA_V1 1u
-#define YVEX_RUNTIME_AV_GENERATION_SCHEMA_V2 2u
+#define YVEX_RUNTIME_AV_GENERATION_SCHEMA_V3 3u
 #define YVEX_RUNTIME_AV_GENERATION_RESULT_SCHEMA_V3 3u
 #define YVEX_RUNTIME_MEDIA_CONDITION_SCHEMA_V1 YVEX_MEDIA_CONDITION_SCHEMA_V1
 #define YVEX_RUNTIME_MEDIA_CONDITION_CAP YVEX_MEDIA_CONDITION_CAP
@@ -123,6 +122,8 @@ typedef struct {
     unsigned long long fps_numerator, fps_denominator, audio_sample_rate;
     unsigned int inference_steps;
     unsigned long long conditioning_layers, transformer_blocks, seed, keyframe_encode_seed;
+    /* Cold projection of the admitted component result shape; immutable within an engine. */
+    unsigned long long conditioning_width;
     unsigned long long maximum_prompt_tokens, maximum_packed_rows;
     unsigned long long maximum_host_bytes, maximum_device_bytes;
     unsigned long long maximum_workspace_bytes, maximum_file_bytes;

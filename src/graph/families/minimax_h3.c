@@ -1822,7 +1822,7 @@ static int component_variant_open(yvex_component_variant_source *out,
 static const yvex_component_variant_adapter *minimax_component_adapter(void)
 {
     static const yvex_media_execution_recipe media = {
-        .schema_version = YVEX_MEDIA_EXECUTION_RECIPE_SCHEMA_V1,
+        .schema_version = YVEX_MEDIA_EXECUTION_RECIPE_SCHEMA_V2, .conditioning = &text_recipe,
         .conditioning_layers = YVEX_MINIMAX_H3_TEXT_CONDITIONING_LAYERS, .transformer_blocks = 50ull,
         .maximum_prompt_tokens = YVEX_MINIMAX_H3_TEXT_MAX_TOKENS,
         .maximum_packed_rows = YVEX_MINIMAX_H3_OMNI_MAX_PACKED_ROWS,
