@@ -591,6 +591,64 @@ static int test_decoder_program_normalization(const yvex_decoder_plan *decoder)
     return 0;
 }
 
+static int test_native_execution_lineage(const yvex_semantic_model_ir_request *source_request)
+{
+    yvex_semantic_model_ir_request request = *source_request;
+    yvex_semantic_model_ir *model = NULL;
+    yvex_compiled_model_plan_request build = {0};
+    yvex_compiled_model_plan *plan = NULL;
+    yvex_ir_module *modules[2] = {NULL, NULL};
+    yvex_program_execution *executions[2] = {NULL, NULL};
+    yvex_ir_type scalar = {.kind = YVEX_IR_SCALAR, .scalar = YVEX_IR_INDEX};
+    yvex_ir_id type, function, block, value, operation;
+    yvex_error err;
+    size_t i;
+
+    YVEX_TEST_ASSERT(yvex_semantic_model_ir_seal(&model, &request, &err) == YVEX_OK,
+                     "seal metadata-only historical source fixture");
+    build.semantic_model = model;
+    YVEX_TEST_ASSERT(yvex_compiled_model_plan_build(&plan, &build, &err) == YVEX_ERR_FORMAT && !plan &&
+                     strcmp(yvex_error_message(&err), "native model-plan requires matching execution IR") == 0,
+                     "native build refuses metadata-only source instead of manufacturing a legacy FFN");
+    yvex_semantic_model_ir_close(&model);
+    for (i = 0u; i < 2u; ++i) {
+        YVEX_TEST_ASSERT(yvex_ir_module_open(&modules[i], i ? "different_program" : "native_program",
+                         request.source_model_identity, yvex_ir_core_dialect(), 1u, &err) == YVEX_OK &&
+                         yvex_ir_type_intern(modules[i], &scalar, &type, &err) == YVEX_OK &&
+                         yvex_ir_function_add(modules[i], "forward", &type, 1u, &type, 1u, 0u,
+                                              &function, &err) == YVEX_OK,
+                         "construct distinct typed programs for exact-lineage checks");
+        block = yvex_ir_function_at(modules[i], function)->body;
+        value = yvex_ir_block_at(modules[i], block)->arguments[0];
+        yvex_ir_operation_request ret = {.operation = "core.return", .operands = &value, .operand_count = 1u};
+        YVEX_TEST_ASSERT(yvex_ir_operation_add(modules[i], block, &ret, &operation, &err) == YVEX_OK &&
+                         yvex_ir_seal(modules[i], &err) == YVEX_OK &&
+                         yvex_program_execution_compile(&executions[i], modules[i], &err) == YVEX_OK,
+                         "seal and lower lineage fixtures without a standalone dense_ffn entrypoint");
+    }
+    request.program = modules[0];
+    YVEX_TEST_ASSERT(yvex_semantic_model_ir_seal(&model, &request, &err) == YVEX_OK,
+                     "bind source metadata to immutable typed program");
+    build.semantic_model = model;
+    for (i = 0u; i < 2u; ++i) {
+        build.program = i ? executions[1] : NULL;
+        YVEX_TEST_ASSERT(yvex_compiled_model_plan_build(&plan, &build, &err) == YVEX_ERR_FORMAT && !plan &&
+                         strcmp(yvex_error_message(&err), "native model-plan requires matching execution IR") == 0,
+                         "missing or mismatched execution lineage fails before physical construction");
+    }
+    build.program = executions[0];
+    YVEX_TEST_ASSERT(yvex_compiled_model_plan_build(&plan, &build, &err) == YVEX_ERR_INVALID_ARG && !plan,
+                     "matching lineage advances to the independent required physical inputs check");
+    yvex_semantic_model_ir_close(&model);
+    for (i = 0u; i < 2u; ++i) {
+        yvex_program_execution_close(&executions[i]);
+        yvex_ir_module_close(&modules[i]);
+    }
+    fprintf(stdout, "native model-plan lineage: three refusals, matching lineage admitted to physical checks; "
+                    "no physical execution claim\n");
+    return 0;
+}
+
 static int test_hybrid_decoder_semantics(void)
 {
     static const char source[] =
@@ -741,6 +799,7 @@ static int test_hybrid_decoder_semantics(void)
             view[1].mixer ==
                 YVEX_SEMANTIC_DECODER_MIXER_FULL_CAUSAL_ATTENTION,
         "hybrid semantic decoder seals exact heterogeneous mixer topology");
+    YVEX_TEST_ASSERT(test_native_execution_lineage(&request) == 0, "native program lineage contracts");
     YVEX_TEST_ASSERT(
         yvex_operator_graph_ir_build_decoder(
             &graph, model, NULL, NULL, &err) == YVEX_OK &&

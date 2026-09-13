@@ -385,6 +385,12 @@ The Qwen text projector emits `forward` and `output` entrypoints and a reusable
 ordered pass pipeline expands its 64 calls before execution-record projection;
 the function remains inspectable, not a new runtime architecture. BF16 logical
 publications remain distinct from F32 recurrent/convolution state and F32 logits.
+Native model-plan construction requires the exact sealed semantic/execution
+lineage and lowers the complete `forward` program directly. It does not compile
+and then discard a separate physical `dense_ffn` product, nor manufacture one
+from decoder metadata when the source program is absent. Historical v3/v4/v5
+containers retain their validated FFN translation at binary import only; that
+compatibility path is not an alternative native compiler authority.
 Linear projection, normalization, residual addition and the SiLU product are
 explicit operations. The SiLU product rounds the activation to its logical type
 before multiplication and rounds the product again; physical fusion must retain

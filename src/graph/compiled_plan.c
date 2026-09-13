@@ -740,7 +740,8 @@ static int compiled_forward_build(yvex_compiled_model_plan *plan, const yvex_com
     size_t count = yvex_program_parameters_count(r->program_parameters), i;
     unsigned long long j;
     int rc = YVEX_OK;
-    if (!program) return YVEX_OK; /* Historical schema import, never a native source projection. */
+    if (!program)
+        return model_plan_refuse(err, YVEX_ERR_FORMAT, "native forward requires compiled execution IR");
     if (!m || !physical || !count || strcmp(yvex_ir_identity(m), yvex_ir_identity(program)))
         return model_plan_refuse(err, YVEX_ERR_FORMAT, "program parameters require the exact compiled IR lineage");
     bindings = calloc(count, sizeof(*bindings));
@@ -770,27 +771,7 @@ static int compiled_forward_build(yvex_compiled_model_plan *plan, const yvex_com
     if (rc == YVEX_OK && plan->output)
         rc = yvex_output_head_program_validate(plan->output, &plan->output_head, r->program_physical_parameters, err);
     free(bindings);
-    if (rc == YVEX_OK) {
-        yvex_program_tensor_close(&plan->dense_ffn);
-        plan->schema = MODEL_PLAN_SCHEMA_V7;
-    }
-    return rc;
-}
-
-static int compiled_ffn_build(yvex_compiled_model_plan *plan, const yvex_compiled_model_plan_request *r,
-                               yvex_error *err)
-{
-    const yvex_ir_module *m = yvex_semantic_model_ir_program(r->semantic_model);
-    int rc;
-    if (m) {
-        const char *id = yvex_ir_identity(yvex_program_execution_module(r->program));
-        if (!id || strcmp(yvex_ir_identity(m), id))
-            return model_plan_refuse(err, YVEX_ERR_FORMAT, "native model-plan requires matching execution IR");
-        rc = yvex_program_tensor_compile(&plan->dense_ffn, r->program, "dense_ffn", err);
-    } else rc = legacy_decoder_ffn_import(&plan->dense_ffn, plan->decoder, err);
-    if (rc == YVEX_OK && !compiled_ffn_signature_valid(plan))
-        rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "compiled FFN signature differs from admitted operands");
-    if (rc == YVEX_OK) plan->schema = MODEL_PLAN_SCHEMA_V5;
+    if (rc == YVEX_OK) plan->schema = MODEL_PLAN_SCHEMA_V7;
     return rc;
 }
 
@@ -804,7 +785,16 @@ int yvex_compiled_model_plan_build(
     int compile_execution;
     int rc;
     if (out) *out = NULL;
-    if (!out || !request || !request->materialization ||
+    if (!out || !request)
+        return model_plan_refuse(err, YVEX_ERR_INVALID_ARG, "compiled model-plan request and output are required");
+    semantic = yvex_semantic_model_ir_summary_get(request->semantic_model);
+    if (semantic && semantic->schema_version == YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2) {
+        const char *model = yvex_ir_identity(yvex_semantic_model_ir_program(request->semantic_model));
+        const char *program = yvex_ir_identity(yvex_program_execution_module(request->program));
+        if (!model || !program || strcmp(model, program))
+            return model_plan_refuse(err, YVEX_ERR_FORMAT, "native model-plan requires matching execution IR");
+    }
+    if (!request->materialization ||
         !request->operator_graph || !request->descriptor ||
         !request->attention || !request->graph)
         return model_plan_refuse(err, YVEX_ERR_INVALID_ARG,
@@ -823,7 +813,6 @@ int yvex_compiled_model_plan_build(
             yvex_attention_plan_summary(request->attention);
         const yvex_attention_summary *draft =
             yvex_attention_plan_summary(request->draft_attention);
-        semantic = yvex_semantic_model_ir_summary_get(request->semantic_model);
         if (!operators || !descriptor || !attention ||
             operators->family_adapter_id != request->family_adapter_id ||
             operators->family_adapter_version != request->family_adapter_version ||
@@ -880,7 +869,6 @@ int yvex_compiled_model_plan_build(
                 &request->logits_policy, err);
         else
             rc = YVEX_OK;
-        if (rc == YVEX_OK) rc = compiled_ffn_build(plan, request, err);
         if (rc == YVEX_OK) rc = compiled_forward_build(plan, request, err);
         if (rc == YVEX_OK) {
             *out = plan;
