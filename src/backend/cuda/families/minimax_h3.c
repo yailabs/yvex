@@ -2,7 +2,6 @@
 #include <yvex/internal/artifact.h>
 #include <yvex/internal/backend.h>
 #include <yvex/internal/component.h>
-#include <yvex/internal/convolution.h>
 #include <yvex/internal/families/minimax_h3.h>
 #include <yvex/internal/image.h>
 #include <yvex/internal/multimodal.h>
@@ -21,7 +20,6 @@ enum {
     H3_IMAGE_PAD_TOKEN = 151655u,
     H3_VISION_PATCH = 16u,
     H3_VISION_MERGE = 2u,
-    H3_VISION_WIDTH = 1152u,
     H3_CONDITION_WIDTH = 5120u
 };
 
@@ -46,53 +44,13 @@ typedef struct {
 
 typedef struct {
     const yvex_component_execution *component;
+    const yvex_component_program_request *program;
     yvex_backend *backend;
     unsigned long long batch, channels, height, width;
     unsigned long long kernel_launches, h2d_bytes, d2h_bytes;
-    unsigned long long live_device_bytes, peak_device_bytes;
+    unsigned long long peak_device_bytes;
 } h3_encoder_run;
 
-static const yvex_component_text_recipe h3_text_recipe = {
-    .schema_version = YVEX_COMPONENT_TEXT_RECIPE_SCHEMA_V1,
-    .semantic_identity = YVEX_MINIMAX_H3_TEXT_COMPONENT_IDENTITY,
-    .layer_capacity = YVEX_MINIMAX_H3_TEXT_CONDITIONING_LAYERS,
-    .hidden_width = H3_CONDITION_WIDTH, .ffn_width = 25600ull,
-    .query_heads = 64ull, .kv_heads = 8ull, .head_dimension = 128ull,
-    .vocabulary_size = 151936ull, .rope_theta = 5000000ull,
-    .normalization_epsilon = 1.0e-6f,
-};
-
-static const yvex_vision_recipe h3_vision_recipe = {
-    .schema_version = YVEX_VISION_RECIPE_SCHEMA_V1,
-    .semantic_identity = "ea9d2aed59aae6b8f35860c334711a8ef082ea89829e1ab51401bc94b985c57e",
-    .patch_channels = 3ull, .temporal_patch = 2ull,
-    .patch_height = H3_VISION_PATCH, .patch_width = H3_VISION_PATCH,
-    .position_grid_side = 48ull, .hidden_width = H3_VISION_WIDTH,
-    .ffn_width = 4304ull, .heads = 16ull, .head_dimension = 72ull,
-    .layer_count = 27ull, .merge = H3_VISION_MERGE,
-    .output_width = H3_CONDITION_WIDTH, .deepstack_layer_count = 3ull,
-    .deepstack_layers = {8ull, 16ull, 24ull}, .rope_theta = 10000ull,
-    .normalization_epsilon = 1.0e-6f,
-};
-
-static const char *const h3_text_suffixes[YVEX_COMPONENT_TEXT_LAYER_WEIGHT_COUNT] = {
-    "input_layernorm.weight", "self_attn.q_proj.weight", "self_attn.k_proj.weight",
-    "self_attn.v_proj.weight", "self_attn.o_proj.weight", "self_attn.q_norm.weight",
-    "self_attn.k_norm.weight", "post_attention_layernorm.weight", "mlp.gate_proj.weight",
-    "mlp.up_proj.weight", "mlp.down_proj.weight",
-};
-
-static const char *const h3_vision_block_suffixes[YVEX_VISION_BLOCK_WEIGHT_COUNT] = {
-    "norm1.weight", "norm1.bias", "attn.qkv.weight", "attn.qkv.bias",
-    "attn.proj.weight", "attn.proj.bias", "norm2.weight", "norm2.bias",
-    "mlp.linear_fc1.weight", "mlp.linear_fc1.bias",
-    "mlp.linear_fc2.weight", "mlp.linear_fc2.bias",
-};
-
-static const char *const h3_merger_suffixes[YVEX_VISION_MERGER_WEIGHT_COUNT] = {
-    "norm.weight", "norm.bias", "linear_fc1.weight", "linear_fc1.bias",
-    "linear_fc2.weight", "linear_fc2.bias",
-};
 
 static int h3_refuse(yvex_error *err, yvex_status status, const char *where,
                      const char *message)
@@ -101,64 +59,6 @@ static int h3_refuse(yvex_error *err, yvex_status status, const char *where,
     return status;
 }
 
-static int h3_text_weight_name(void *context, unsigned long long layer, unsigned int slot,
-                               char output[256], yvex_error *err)
-{
-    int length;
-    (void)context;
-    if (slot >= YVEX_COMPONENT_TEXT_LAYER_WEIGHT_COUNT)
-        return h3_refuse(err, YVEX_ERR_BOUNDS, "minimax-h3.qwen.binding",
-                         "Qwen language weight slot exceeds the released recipe");
-    length = snprintf(output, 256u, "model.language_model.layers.%llu.%s",
-                      layer, h3_text_suffixes[slot]);
-    if (length < 0 || length >= 256)
-        return h3_refuse(err, YVEX_ERR_BOUNDS, "minimax-h3.qwen.binding",
-                         "Qwen language weight name exceeded its bound");
-    return YVEX_OK;
-}
-
-static int h3_vision_weight_name(void *context, int group, unsigned long long item,
-                                 unsigned int slot, char output[256], yvex_error *err)
-{
-    const char *prefix = NULL, *suffix = NULL;
-    int length;
-    (void)context;
-    if (group == YVEX_VISION_WEIGHT_EXTERNAL) {
-        static const char *const names[YVEX_VISION_EXTERNAL_WEIGHT_COUNT] = {
-            "model.visual.patch_embed.proj.weight", "model.visual.patch_embed.proj.bias",
-            "model.visual.pos_embed.weight",
-        };
-        if (slot >= YVEX_VISION_EXTERNAL_WEIGHT_COUNT)
-            return h3_refuse(err, YVEX_ERR_BOUNDS, "minimax-h3.vision.binding",
-                             "vision external weight slot exceeds its recipe");
-        length = snprintf(output, 256u, "%s", names[slot]);
-    } else {
-        if ((group == YVEX_VISION_WEIGHT_BLOCK &&
-             slot >= YVEX_VISION_BLOCK_WEIGHT_COUNT) ||
-            (group != YVEX_VISION_WEIGHT_BLOCK &&
-             slot >= YVEX_VISION_MERGER_WEIGHT_COUNT))
-            return h3_refuse(err, YVEX_ERR_BOUNDS, "minimax-h3.vision.binding",
-                             "vision weight slot exceeds its recipe");
-        suffix = group == YVEX_VISION_WEIGHT_BLOCK
-                     ? (slot < YVEX_VISION_BLOCK_WEIGHT_COUNT
-                            ? h3_vision_block_suffixes[slot] : NULL)
-                     : h3_merger_suffixes[slot];
-        if (group == YVEX_VISION_WEIGHT_BLOCK) prefix = "model.visual.blocks";
-        else if (group == YVEX_VISION_WEIGHT_MERGER) prefix = "model.visual.merger";
-        else if (group == YVEX_VISION_WEIGHT_DEEPSTACK)
-            prefix = "model.visual.deepstack_merger_list";
-        if (!prefix || !suffix)
-            return h3_refuse(err, YVEX_ERR_BOUNDS, "minimax-h3.vision.binding",
-                             "vision weight group exceeds its recipe");
-        length = group == YVEX_VISION_WEIGHT_MERGER
-                     ? snprintf(output, 256u, "%s.%s", prefix, suffix)
-                     : snprintf(output, 256u, "%s.%llu.%s", prefix, item, suffix);
-    }
-    if (length < 0 || length >= 256)
-        return h3_refuse(err, YVEX_ERR_BOUNDS, "minimax-h3.vision.binding",
-                         "vision weight name exceeded its bound");
-    return YVEX_OK;
-}
 
 static unsigned long long h3_round_even_div(unsigned long long value,
                                              unsigned long long divisor)
@@ -525,9 +425,9 @@ static int h3_text_only(const yvex_media_conditioning_request *request,
 {
     h3_presentation presentation = {0};
     yvex_component_text_request text = {
-        .recipe = &h3_text_recipe,
-        .embedding_weight_name = "model.language_model.embed_tokens.weight",
-        .layer_weight_name = h3_text_weight_name,
+        .program = request->text_program,
+        .parameter_name = request->text_parameter_name,
+        .parameter_context = request->text_parameter_context,
     };
     int rc;
     presentation.capacity = request->maximum_prompt_tokens;
@@ -539,7 +439,7 @@ static int h3_text_only(const yvex_media_conditioning_request *request,
                         "T2VA presentation allocation failed");
     else rc = h3_presentation_text(&presentation, request->tokenizer, request->prompt, 1u, err);
     text.token_ids = presentation.ids; text.token_count = presentation.count;
-    text.layer_count = request->layer_count; text.output = request->conditioning;
+    text.output = request->conditioning;
     text.output_capacity = request->conditioning_capacity;
     if (rc == YVEX_OK)
         rc = yvex_component_text_execute(
@@ -560,17 +460,22 @@ int yvex_backend_minimax_h3_fl2va_condition(
 {
     h3_images images = {0};
     h3_presentation presentation = {0};
-    yvex_component_multimodal_text_request text = {0};
+    yvex_component_text_request text = {0};
     yvex_backend_text_multimodal_input multimodal = {0};
     yvex_vision_request vision = {0};
     yvex_vision_result vision_result = {0};
     unsigned int *visual_indices = NULL;
     unsigned long long *position_ids = NULL;
-    unsigned long long merged_values, deep_values;
+    unsigned long long merged_values = 0u, deep_values = 0u;
     int rc;
     if (result) memset(result, 0, sizeof(*result));
-    if (!request || request->schema_version != YVEX_MEDIA_CONDITIONING_SCHEMA_V2 ||
-        !request->prompt || !request->tokenizer || !request->text_component ||
+    if (!request || request->schema_version != YVEX_MEDIA_CONDITIONING_SCHEMA_V3)
+        return h3_refuse(err, YVEX_ERR_INVALID_ARG, "minimax-h3.fl2va.conditioning",
+            "current typed conditioning request required");
+    if (request->condition_count && !request->vision_entry)
+        return h3_refuse(err, YVEX_ERR_STATE, "minimax-h3.vision.entry",
+            "image conditioning requires its admitted compiler entry");
+    if (!request->prompt || !request->tokenizer || !request->text_component ||
         !request->conditioning || !request->text_tags || !result ||
         request->condition_count > YVEX_MEDIA_CONDITION_CAP ||
         (request->condition_count && (!request->conditions || !request->condition_images)))
@@ -591,17 +496,17 @@ int yvex_backend_minimax_h3_fl2va_condition(
         rc = h3_presentation_build(request, &images, &presentation,
                                    &visual_indices, &position_ids, err);
     vision = (yvex_vision_request){
-        .recipe = &h3_vision_recipe, .patches = images.patches,
+        .patches = images.patches,
         .patch_rows = images.patch_rows, .patch_capacity = images.patch_rows * 1536ull,
         .image_count = images.count, .grid_height = images.grid_height,
-        .grid_width = images.grid_width, .weight_name = h3_vision_weight_name,
+        .grid_width = images.grid_width,
         .merged = images.merged, .deepstack = images.deepstack,
         .merged_capacity = merged_values, .deepstack_capacity = deep_values,
         .observe = request->vision_observe,
         .observer_context = request->vision_observer_context,
     };
     if (rc == YVEX_OK)
-        rc = yvex_component_vision_execute(
+        rc = request->vision_entry(
             request->text_component, &vision, &vision_result, err);
     if (rc == YVEX_OK && request->observe) {
         yvex_media_conditioning_observation observation = {
@@ -634,14 +539,14 @@ int yvex_backend_minimax_h3_fl2va_condition(
     multimodal.mrope_sections[0] = 24ull;
     multimodal.mrope_sections[1] = multimodal.mrope_sections[2] = 20ull;
     multimodal.vision_execution_identity = vision_result.execution_identity;
-    text.recipe = &h3_text_recipe;
-    text.embedding_weight_name = "model.language_model.embed_tokens.weight";
-    text.layer_weight_name = h3_text_weight_name;
+    text.program = request->text_program;
+    text.parameter_name = request->text_parameter_name;
+    text.parameter_context = request->text_parameter_context;
     text.token_ids = presentation.ids; text.token_count = presentation.count;
-    text.layer_count = request->layer_count; text.multimodal = &multimodal;
+    text.multimodal = &multimodal;
     text.output = request->conditioning; text.output_capacity = request->conditioning_capacity;
     if (rc == YVEX_OK)
-        rc = yvex_component_multimodal_text_execute(
+        rc = yvex_component_text_execute(
             request->text_component, &text, result, err);
     if (rc == YVEX_OK &&
         (!h3_token_identity(&presentation, result->prompt_identity) ||
@@ -759,256 +664,27 @@ static void h3_torch_normals(float *output, unsigned long long count,
     }
 }
 
-static int h3_encoder_tensor_open(
-    h3_encoder_run *run, const char *name, unsigned long long channels,
-    unsigned long long height, unsigned long long width,
-    yvex_device_tensor **tensor, yvex_error *err)
-{
-    yvex_backend_tensor_desc descriptor = {0};
-    unsigned long long values, bytes, next;
-    if (!run || !run->backend || !name || !channels || !height || !width || !tensor ||
-        !yvex_core_u64_mul(run->batch, channels, &values) ||
-        !yvex_core_u64_mul(values, height, &values) ||
-        !yvex_core_u64_mul(values, width, &values) ||
-        !yvex_core_u64_mul(values, sizeof(float), &bytes) ||
-        !yvex_core_u64_add(run->live_device_bytes, bytes, &next))
-        return h3_refuse(err, YVEX_ERR_BOUNDS, "minimax-h3.vae.allocate",
-                         "Visual VAE activation geometry overflowed");
-    descriptor.name = name;
-    descriptor.dtype = YVEX_DTYPE_F32;
-    descriptor.rank = 4u;
-    descriptor.dims[0] = run->batch;
-    descriptor.dims[1] = channels;
-    descriptor.dims[2] = height;
-    descriptor.dims[3] = width;
-    descriptor.bytes = bytes;
-    if (yvex_backend_tensor_alloc(run->backend, &descriptor, tensor, err) != YVEX_OK)
-        return yvex_error_code(err);
-    run->live_device_bytes = next;
-    if (next > run->peak_device_bytes) run->peak_device_bytes = next;
-    return YVEX_OK;
-}
-
-static int h3_encoder_tensor_close(h3_encoder_run *run,
-                                   yvex_device_tensor **tensor,
-                                   int rc, yvex_error *err)
-{
-    unsigned long long bytes;
-    yvex_error cleanup;
-    int cleanup_rc;
-    if (!tensor || !*tensor) return rc;
-    bytes = yvex_device_tensor_bytes(*tensor);
-    yvex_error_clear(&cleanup);
-    cleanup_rc = yvex_backend_tensor_release(run->backend, tensor, &cleanup);
-    if (bytes <= run->live_device_bytes) run->live_device_bytes -= bytes;
-    if (cleanup_rc != YVEX_OK) {
-        if (err) *err = cleanup;
-        return cleanup_rc;
-    }
-    return rc;
-}
-
-static int h3_encoder_weight(h3_encoder_run *run, const char *prefix,
-                             const char *suffix,
-                             yvex_component_encoded_weight *weight,
-                             yvex_error *err)
-{
-    char name[256];
-    int length = snprintf(name, sizeof(name), "%s.%s", prefix, suffix);
-    if (length < 0 || (size_t)length >= sizeof(name))
-        return h3_refuse(err, YVEX_ERR_BOUNDS, "minimax-h3.vae.binding",
-                         "Visual VAE tensor name exceeded its bound");
-    return yvex_component_execution_weight_view(run->component, name, weight, err);
-}
-
-static int h3_encoder_conv(
-    h3_encoder_run *run, const char *prefix, const yvex_device_tensor *input,
-    unsigned long long input_channels, unsigned long long output_channels,
-    unsigned long long input_height, unsigned long long input_width,
-    unsigned long long kernel, unsigned long long stride, int downsample,
-    yvex_device_tensor **output, unsigned long long *output_height,
-    unsigned long long *output_width, yvex_error *err)
-{
-    yvex_component_encoded_weight weight = {0}, bias = {0};
-    yvex_convolution_cuda_result facts = {0};
-    yvex_convolution_2d_geometry geometry = {
-        .batch = run->batch, .input_channels = input_channels,
-        .output_channels = output_channels, .input_height = input_height,
-        .input_width = input_width, .kernel_height = kernel, .kernel_width = kernel,
-        .stride_height = stride, .stride_width = stride,
-        .weight_temporal_extent = kernel, .weight_temporal_index = kernel - 1ull,
-        .padding = YVEX_CONVOLUTION_PADDING_REFLECT,
-    };
-    int rc;
-    if (downsample) {
-        geometry.padding_bottom = 1ull;
-        geometry.padding_right = 1ull;
-    } else {
-        geometry.padding_top = geometry.padding_bottom = kernel / 2ull;
-        geometry.padding_left = geometry.padding_right = kernel / 2ull;
-    }
-    *output_height = (input_height + geometry.padding_top + geometry.padding_bottom -
-                      kernel) / stride + 1ull;
-    *output_width = (input_width + geometry.padding_left + geometry.padding_right -
-                     kernel) / stride + 1ull;
-    rc = h3_encoder_weight(run, prefix, "weight", &weight, err);
-    if (rc == YVEX_OK) rc = h3_encoder_weight(run, prefix, "bias", &bias, err);
-    if (rc == YVEX_OK)
-        rc = h3_encoder_tensor_open(run, "minimax-h3-vae-conv", output_channels,
-                                    *output_height, *output_width, output, err);
-    if (rc == YVEX_OK)
-        rc = yvex_backend_conv2d_f32(run->backend, &geometry, input, &weight,
-                                     &bias, *output, &facts, err);
-    if (rc == YVEX_OK) run->kernel_launches += facts.kernel_launches;
-    if (rc != YVEX_OK) rc = h3_encoder_tensor_close(run, output, rc, err);
-    return rc;
-}
-
-static int h3_encoder_norm(
-    h3_encoder_run *run, const char *prefix, const yvex_device_tensor *input,
-    unsigned long long channels, unsigned long long height,
-    unsigned long long width, yvex_device_tensor **output, yvex_error *err)
-{
-    yvex_component_encoded_weight weight = {0}, bias = {0};
-    yvex_convolution_cuda_result facts = {0};
-    int rc = h3_encoder_weight(run, prefix, "weight", &weight, err);
-    if (rc == YVEX_OK) rc = h3_encoder_weight(run, prefix, "bias", &bias, err);
-    if (rc == YVEX_OK)
-        rc = h3_encoder_tensor_open(run, "minimax-h3-vae-norm", channels,
-                                    height, width, output, err);
-    if (rc == YVEX_OK)
-        rc = yvex_backend_group_norm_silu_f32(
-            run->backend, input, &weight, &bias, run->batch, channels,
-            height, width, 32ull, 1.0e-6f, *output, &facts, err);
-    if (rc == YVEX_OK) run->kernel_launches += facts.kernel_launches;
-    if (rc != YVEX_OK) rc = h3_encoder_tensor_close(run, output, rc, err);
-    return rc;
-}
-
-static int h3_encoder_residual(
-    h3_encoder_run *run, unsigned int level, unsigned int block,
-    yvex_device_tensor **input, unsigned long long input_channels,
-    unsigned long long output_channels, unsigned long long height,
-    unsigned long long width, yvex_error *err)
-{
-    yvex_device_tensor *norm = NULL, *first = NULL, *second_norm = NULL;
-    yvex_device_tensor *second = NULL, *shortcut = NULL;
-    yvex_convolution_cuda_result facts = {0};
-    unsigned long long out_h = 0ull, out_w = 0ull;
-    char base[128], name[160];
-    int length, rc;
-    length = snprintf(base, sizeof(base), "encoder.down.%u.block.%u", level, block);
-    if (length < 0 || (size_t)length >= sizeof(base))
-        return h3_refuse(err, YVEX_ERR_BOUNDS, "minimax-h3.vae.residual",
-                         "Visual VAE residual name exceeded its bound");
-    snprintf(name, sizeof(name), "%s.norm1", base);
-    rc = h3_encoder_norm(run, name, *input, input_channels, height, width, &norm, err);
-    snprintf(name, sizeof(name), "%s.conv1", base);
-    if (rc == YVEX_OK)
-        rc = h3_encoder_conv(run, name, norm, input_channels, output_channels,
-                             height, width, 3ull, 1ull, 0, &first, &out_h, &out_w, err);
-    rc = h3_encoder_tensor_close(run, &norm, rc, err);
-    snprintf(name, sizeof(name), "%s.norm2", base);
-    if (rc == YVEX_OK)
-        rc = h3_encoder_norm(run, name, first, output_channels, height, width,
-                             &second_norm, err);
-    snprintf(name, sizeof(name), "%s.conv2", base);
-    if (rc == YVEX_OK)
-        rc = h3_encoder_conv(run, name, second_norm, output_channels, output_channels,
-                             height, width, 3ull, 1ull, 0, &second, &out_h, &out_w, err);
-    rc = h3_encoder_tensor_close(run, &second_norm, rc, err);
-    rc = h3_encoder_tensor_close(run, &first, rc, err);
-    if (rc == YVEX_OK && input_channels != output_channels) {
-        snprintf(name, sizeof(name), "%s.nin_shortcut", base);
-        rc = h3_encoder_conv(run, name, *input, input_channels, output_channels,
-                             height, width, 1ull, 1ull, 0, &shortcut,
-                             &out_h, &out_w, err);
-    }
-    if (rc == YVEX_OK) {
-        yvex_device_tensor *destination = shortcut ? shortcut : *input;
-        rc = yvex_backend_add_f32(run->backend, destination, second,
-                                  run->batch * output_channels * height * width,
-                                  &facts, err);
-        if (rc == YVEX_OK) run->kernel_launches += facts.kernel_launches;
-    }
-    rc = h3_encoder_tensor_close(run, &second, rc, err);
-    if (shortcut) {
-        rc = h3_encoder_tensor_close(run, input, rc, err);
-        *input = shortcut;
-        shortcut = NULL;
-    }
-    rc = h3_encoder_tensor_close(run, &shortcut, rc, err);
-    return rc;
-}
-
 static int h3_encoder_execute(h3_encoder_run *run, const float *pixels,
-                              float *moments, yvex_error *err)
+    float *moments, unsigned long long moment_count, yvex_error *err)
 {
-    static const unsigned long long widths[6] = {128ull, 256ull, 256ull,
-                                                 512ull, 512ull, 1024ull};
-    yvex_device_tensor *hidden = NULL, *next = NULL, *normalized = NULL;
-    unsigned long long values, bytes, level, block, in_channels = 3ull;
-    unsigned long long height = run->height, width = run->width;
-    unsigned long long out_h = 0ull, out_w = 0ull;
-    int rc = h3_encoder_tensor_open(run, "minimax-h3-vae-pixels", 3ull,
-                                    height, width, &hidden, err);
-    if (!yvex_core_u64_mul(run->batch * 3ull, height * width, &values) ||
-        !yvex_core_u64_mul(values, sizeof(float), &bytes))
-        rc = h3_refuse(err, YVEX_ERR_BOUNDS, "minimax-h3.vae.input",
-                       "Visual VAE input extent overflowed");
-    if (rc == YVEX_OK)
-        rc = yvex_backend_tensor_write(run->backend, hidden, pixels, bytes, err);
-    if (rc == YVEX_OK) run->h2d_bytes += bytes;
-    if (rc == YVEX_OK)
-        rc = h3_encoder_conv(run, "encoder.conv_in", hidden, 3ull, 128ull,
-                             height, width, 3ull, 1ull, 0, &next,
-                             &out_h, &out_w, err);
-    rc = h3_encoder_tensor_close(run, &hidden, rc, err);
-    hidden = next; next = NULL; in_channels = 128ull;
-    for (level = 0ull; rc == YVEX_OK && level < 6ull; ++level) {
-        for (block = 0ull; rc == YVEX_OK && block < 2ull; ++block) {
-            rc = h3_encoder_residual(run, (unsigned int)level, (unsigned int)block,
-                                     &hidden, block ? widths[level] : in_channels,
-                                     widths[level], height, width, err);
-            in_channels = widths[level];
-        }
-        if (rc == YVEX_OK && level < 4ull) {
-            char name[128];
-            snprintf(name, sizeof(name), "encoder.down.%llu.downsample.conv", level);
-            rc = h3_encoder_conv(run, name, hidden, widths[level], widths[level],
-                                 height, width, 3ull, 2ull, 1, &next,
-                                 &out_h, &out_w, err);
-            if (rc == YVEX_OK) {
-                rc = h3_encoder_tensor_close(run, &hidden, rc, err);
-                hidden = next; next = NULL; height = out_h; width = out_w;
-            }
-        }
+    yvex_component_program_result result = {0};
+    unsigned long long input_count;
+    if (!yvex_core_u64_mul(run->batch, 3u, &input_count) ||
+        !yvex_core_u64_mul(input_count, run->height, &input_count) ||
+        !yvex_core_u64_mul(input_count, run->width, &input_count))
+        return h3_refuse(err, YVEX_ERR_BOUNDS, "minimax-h3.vae.input", "input extent overflowed");
+    const float *inputs[] = {pixels};
+    float *outputs[] = {moments};
+    yvex_component_program_request request = *run->program;
+    request.inputs = inputs; request.input_capacity = &input_count;
+    request.outputs = outputs; request.output_capacity = &moment_count;
+    int rc = yvex_component_tensor_program_execute(run->component, &request, &result, err);
+    if (rc == YVEX_OK) {
+        run->kernel_launches = result.facts.kernel_launches;
+        run->h2d_bytes = result.facts.h2d_bytes;
+        run->d2h_bytes = result.facts.d2h_bytes;
+        run->peak_device_bytes = result.device_bytes;
     }
-    if (rc == YVEX_OK)
-        rc = h3_encoder_norm(run, "encoder.norm_out", hidden, 1024ull,
-                             height, width, &normalized, err);
-    if (rc == YVEX_OK)
-        rc = h3_encoder_conv(run, "encoder.conv_out", normalized, 1024ull, 48ull,
-                             height, width, 3ull, 1ull, 0, &next,
-                             &out_h, &out_w, err);
-    rc = h3_encoder_tensor_close(run, &normalized, rc, err);
-    rc = h3_encoder_tensor_close(run, &hidden, rc, err);
-    hidden = next; next = NULL;
-    if (rc == YVEX_OK)
-        rc = h3_encoder_conv(run, "quant_conv", hidden, 48ull, 48ull,
-                             height, width, 1ull, 1ull, 0, &next,
-                             &out_h, &out_w, err);
-    rc = h3_encoder_tensor_close(run, &hidden, rc, err);
-    hidden = next; next = NULL;
-    if (rc == YVEX_OK &&
-        (!yvex_core_u64_mul(run->batch * 48ull, height * width, &values) ||
-         !yvex_core_u64_mul(values, sizeof(float), &bytes)))
-        rc = h3_refuse(err, YVEX_ERR_BOUNDS, "minimax-h3.vae.output",
-                       "Visual VAE posterior extent overflowed");
-    if (rc == YVEX_OK)
-        rc = yvex_backend_tensor_read(run->backend, hidden, moments, bytes, err);
-    if (rc == YVEX_OK) run->d2h_bytes += bytes;
-    rc = h3_encoder_tensor_close(run, &hidden, rc, err);
     return rc;
 }
 
@@ -1053,8 +729,9 @@ static int h3_keyframe_result_identity(
     return 1;
 }
 
-int yvex_backend_minimax_h3_keyframe_encode(
+int yvex_backend_minimax_h3_keyframe_execute(
     const yvex_media_keyframe_request *request,
+    const yvex_component_program_request *program,
     yvex_runtime_av_keyframe_result *result, yvex_error *err)
 {
     h3_images images = {0};
@@ -1064,16 +741,20 @@ int yvex_backend_minimax_h3_keyframe_encode(
     unsigned long long pixel_values, moment_values, image, channel, position;
     int rc;
     if (result) memset(result, 0, sizeof(*result));
-    if (!request || request->schema_version != YVEX_MEDIA_CONDITIONING_SCHEMA_V2 ||
+    if (!request || request->schema_version != YVEX_MEDIA_CONDITIONING_SCHEMA_V3 ||
         !request->conditions || !request->condition_images ||
         !request->condition_count || request->condition_count > YVEX_MEDIA_CONDITION_CAP ||
         !request->width || !request->height || request->width % 16ull ||
         request->height % 16ull || request->pixel_channels != 3ull ||
         request->latent_channels != 24ull || !request->pixel_mean ||
         !request->pixel_std || !request->latent_mean || !request->latent_std ||
-        !request->video_component || !request->condition_latents || !result)
+        !request->video_component || !request->condition_latents || !program || !result)
         return h3_refuse(err, YVEX_ERR_INVALID_ARG, "minimax-h3.fl2va.keyframe",
                          "one admitted typed FL2VA keyframe request is required");
+    if (!program->program || !program->parameter_name || program->rows != request->condition_count ||
+        program->input_count != 1u || program->output_count != 1u || program->index_inputs)
+        return h3_refuse(err, YVEX_ERR_FORMAT, "minimax-h3.vae.program",
+                        "keyframe execution requires one compiled encoder invocation");
     rc = h3_condition_order(request->conditions, request->condition_count, &images, err);
     for (image = 0ull; rc == YVEX_OK && image < images.count; ++image)
         rc = h3_canvas_prepare(request->condition_images + images.source_indices[image],
@@ -1112,6 +793,7 @@ int yvex_backend_minimax_h3_keyframe_encode(
                      request->pixel_mean[channel]) / request->pixel_std[channel];
             }
     run.component = request->video_component;
+    run.program = program;
     run.backend = request->video_component->backend;
     run.batch = request->condition_count;
     run.channels = 3ull;
@@ -1120,7 +802,7 @@ int yvex_backend_minimax_h3_keyframe_encode(
     if (rc == YVEX_OK && !run.backend)
         rc = h3_refuse(err, YVEX_ERR_STATE, "minimax-h3.vae.execution",
                         "Visual VAE component has no admitted CUDA backend");
-    if (rc == YVEX_OK) rc = h3_encoder_execute(&run, pixels, moments, err);
+    if (rc == YVEX_OK) rc = h3_encoder_execute(&run, pixels, moments, moment_values, err);
     if (rc == YVEX_OK && request->observe)
         rc = request->observe(request->observer_context, moments, moment_values,
                               request->condition_count, latent_height, latent_width, err);

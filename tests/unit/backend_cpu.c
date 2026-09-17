@@ -43,14 +43,14 @@ static int test_open_and_unsupported(void)
     YVEX_TEST_ASSERT_STREQ(yvex_backend_status_name(YVEX_BACKEND_STATUS_READY), "ready", "ready name");
     YVEX_TEST_ASSERT(yvex_backend_sync(backend, &err) == YVEX_OK, "cpu sync no-op");
     YVEX_TEST_ASSERT(!yvex_backend_sampling_operations_get(backend) &&
-                         !yvex_backend_moe_operations_get(backend) &&
-                         !yvex_backend_component_operations_get(backend),
-                     "CPU does not advertise unimplemented sampling, MoE or component operation tables");
+                         !yvex_backend_moe_operations_get(backend),
+                     "CPU does not advertise unimplemented sampling or MoE operation tables");
     const yvex_backend_transformer_operations *neural = yvex_backend_transformer_operations_get(backend);
     YVEX_TEST_ASSERT(neural && neural->final && neural->feature_mean && neural->residual_post && !neural->initial &&
-                         !neural->attention_execute && !neural->gated_delta_execute &&
-                         !neural->linear_compile && !neural->dense_decoder_execute,
-                     "CPU advertises compiled mHC and stream mean without claiming unrelated operations");
+                         neural->attention_execute && neural->normalization_f32 && neural->linear_bias_f32 &&
+                         !neural->gated_delta_execute &&
+                         !neural->linear_compile,
+                     "CPU advertises admitted neural primitives without claiming unrelated operations");
     YVEX_TEST_ASSERT(yvex_backend_bandwidth_probe(backend, &bandwidth, &err) ==
                          YVEX_ERR_UNSUPPORTED && !bandwidth.schema_version,
                      "CPU refuses CUDA bandwidth evidence without partial facts");
@@ -170,10 +170,68 @@ static int test_memory_limit_and_invalid_args(void)
     return 0;
 }
 
+static int test_attention_workspace(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *t[5] = {0};
+    yvex_backend_tensor_desc desc;
+    yvex_backend_operation_facts facts;
+    yvex_error err;
+    float zeros[4] = {0}, values[] = {2, 4, 6, 8}, sentinel[] = {-77, -77, -77, -77}, actual[4];
+    YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK, "attention CPU owner");
+    const yvex_backend_transformer_operations *ops = yvex_backend_transformer_operations_get(backend);
+    for (size_t i = 0u; i < 5u; ++i) {
+        make_desc(&desc, "attention-fixture", 2u, 2u);
+        YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, t + i, &err) == YVEX_OK &&
+            yvex_backend_tensor_write(backend, t[i], i == 2u ? values : zeros, sizeof(zeros), &err) == YVEX_OK,
+            "bounded attention tensors");
+    }
+    yvex_transformer_attention_requirement requirement = {.query_tokens = 2u, .key_value_tokens = 2u,
+        .query_heads = 1u, .key_value_heads = 1u, .head_dimension = 2u,
+        .query_dtype = YVEX_DTYPE_F32, .key_dtype = YVEX_DTYPE_F32,
+        .value_dtype = YVEX_DTYPE_F32, .output_dtype = YVEX_DTYPE_F32,
+        .layout = YVEX_TRANSFORMER_ATTENTION_LAYOUT_TOKEN_HEAD_DIM,
+        .mask = YVEX_TRANSFORMER_ATTENTION_MASK_FULL,
+        .numeric_contract = YVEX_TRANSFORMER_ATTENTION_NUMERIC_EXACT_F32, .deterministic = 1};
+    unsigned long long bytes;
+    YVEX_TEST_ASSERT(ops->attention_workspace_required(&requirement, &bytes, &err) == YVEX_OK && bytes == 8u,
+        "CPU implementation, not compiler, declares score workspace");
+    for (unsigned int test = 0u; test < 8u; ++test) {
+        yvex_device_tensor scratch = *t[4];
+        yvex_transformer_attention_request r = {.requirement = requirement, .query = t[0], .key = t[1],
+            .value = t[2], .output = t[3], .workspace = &scratch};
+        if (test == 1u) {
+            YVEX_TEST_ASSERT(yvex_backend_tensor_f32_subview(t[0], 1u, 2u, &scratch), "partially overlapping scratch");
+        }
+        if (test == 2u) scratch.dtype = YVEX_DTYPE_BF16;
+        if (test == 3u) scratch.bytes = 4u;
+        if (test == 4u) r.requirement.query_start = 1u;
+        if (test == 5u) r.requirement.numeric_contract = YVEX_TRANSFORMER_ATTENTION_NUMERIC_UNKNOWN;
+        if (test == 6u) r.workspace = NULL;
+        if (test == 7u) r.requirement.query_heads = 0u;
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, t[3], sentinel, sizeof(sentinel), &err) == YVEX_OK,
+            "output sentinel reset");
+        int rc = ops->attention_execute(backend, &r, &facts, &err);
+        if (test == 0u || test == 6u) {
+            YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_backend_tensor_read(backend, t[3], actual,
+                sizeof(actual), &err) == YVEX_OK, "borrowed and temporary workspace both execute");
+            for (size_t i = 0u; i < 4u; ++i)
+                YVEX_TEST_ASSERT(actual[i] == (i % 2u ? 6.0f : 4.0f), "independent uniform-attention oracle exact");
+        } else YVEX_TEST_ASSERT(rc != YVEX_OK && !memcmp(t[3]->data, sentinel, sizeof(sentinel)),
+            "workspace/type/geometry negatives do not alter output bytes");
+    }
+    for (size_t i = 0u; i < 5u; ++i)
+        YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, t + i, &err) == YVEX_OK, "attention tensor cleanup");
+    YVEX_TEST_ASSERT(yvex_backend_close_checked(&backend, &err) == YVEX_OK, "attention backend cleanup");
+    printf("CPU attention: workspace=8 bytes; borrowed/local exact [4,6,4,6]; six negative cases preserve sentinel\n");
+    return 0;
+}
+
 int yvex_test_backend_cpu(void)
 {
     if (test_open_and_unsupported() != 0) return 1;
     if (test_tensor_memory_and_copy() != 0) return 1;
     if (test_memory_limit_and_invalid_args() != 0) return 1;
+    if (test_attention_workspace() != 0) return 1;
     return 0;
 }

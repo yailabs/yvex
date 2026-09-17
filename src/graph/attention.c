@@ -979,7 +979,6 @@ typedef struct {
 typedef struct {
     const yvex_graph_execution_api *family;
     const yvex_attention_plan *plan;
-    const void *family_ir;
     yvex_materialization_session *session;
     const yvex_runtime_descriptor *descriptor;
     const yvex_attention_probe_request *request;
@@ -1301,11 +1300,11 @@ static int attention_probe_backend_execute(
     options->device_completion = cuda && context->defer_device_completion
                                      ? &run->completion : NULL;
     rc = cuda ? context->family->cuda_token_execute(
-                    context->plan, context->family_ir, context->session,
+                    context->plan, context->session,
                     context->descriptor, context->cuda_backend, options,
                     &run->evidence, context->failure, context->error)
               : context->family->cpu_chunk_execute(
-                    context->plan, context->family_ir, context->session,
+                    context->plan, context->session,
                     context->descriptor, options, &run->evidence,
                     context->failure, context->error);
     options->publication = NULL;
@@ -1811,13 +1810,13 @@ static int attention_probe_cuda_open(attention_probe_context *context) {
 }
 int yvex_attention_execute(
     const yvex_graph_execution_api *family, const yvex_attention_plan *plan,
-    const void *family_ir, yvex_materialization_session *session,
+    yvex_materialization_session *session,
     const yvex_runtime_descriptor *descriptor,
     const yvex_attention_execution_request *request,
     yvex_attention_probe_result *result,
     yvex_attention_failure *failure, yvex_error *err) {
     attention_probe_context context = {
-        .family = family, .plan = plan, .family_ir = family_ir,
+        .family = family, .plan = plan,
         .session = session, .descriptor = descriptor, .request = request,
         .failure = failure, .error = err};
     unsigned long long index;

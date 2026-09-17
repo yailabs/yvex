@@ -24,9 +24,48 @@ typedef enum {
 
 typedef struct {
     audio_mode mode;
+    int preservation;
     const char *artifact_path, *component, *input_path, *output_path, *reference_path;
     unsigned long long batch, latent_steps;
 } audio_arguments;
+
+/* Frozen pre-cutover outputs of the exact admitted audio artifact for one
+ * frame, latent[i]=(i-16)/64. This is per-backend preservation, NOT upstream
+ * conformance. Hash canonical little-endian F32 samples, never C structs. */
+static int preservation_output(const audio_arguments *arguments, const float *values, size_t count)
+{
+    const char *expected = arguments->mode == MODE_DECODE_CUDA ?
+        "10fdacf00380b308c3ba0f80a416a2855d4c993c7bd997b4f59258e8a792e785" :
+        "176da6b3161c2c1a9a7eab646ce0f2b66f56f9501c3f43be06e2f99603962320";
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    char observed[YVEX_SHA256_HEX_BYTES];
+    if (count != 800u) return 0;
+    yvex_sha256_init(&hash);
+    for (size_t i = 0u; i < count; ++i) {
+        uint32_t bits;
+        unsigned char bytes[4];
+        if (!isfinite(values[i])) return 0;
+        memcpy(&bits, &values[i], sizeof(bits));
+        for (size_t j = 0u; j < 4u; ++j) bytes[j] = (unsigned char)(bits >> (8u * j));
+        if (!yvex_sha256_update(&hash, bytes, sizeof(bytes))) return 0;
+    }
+    if (!yvex_sha256_final(&hash, digest)) return 0;
+    yvex_sha256_hex(digest, observed);
+    printf("audio_program_preservation backend=%s values=%zu first=%.9g last=%.9g\n"
+        "expected_sha256=%s\nobserved_sha256=%s\nbitwise_equal=%d\n"
+        "oracle=retained-procedural-output upstream_conformance=false\n",
+        arguments->mode == MODE_DECODE_CUDA ? "cuda" : "cpu", count,
+        (double)values[0], (double)values[count - 1u], expected, observed, !strcmp(expected, observed));
+    return !strcmp(expected, observed);
+}
+
+static int preservation_input(float *values, size_t count)
+{
+    if (count != 32u) return 0;
+    for (size_t i = 0u; i < count; ++i) values[i] = (float)((int)i - 16) / 64.0f;
+    return 1;
+}
 
 static int fail(const char *phase, const yvex_artifact_admission_failure *failure,
                 const yvex_error *err)
@@ -171,7 +210,8 @@ static int decode_cpu(const audio_arguments *arguments, const yvex_artifact *art
     float latent[32], output[800];
     int rc;
 
-    if (!file_read_exact(arguments->input_path, latent, 32u)) {
+    if (!(arguments->preservation ? preservation_input(latent, 32u) :
+        file_read_exact(arguments->input_path, latent, 32u))) {
         fprintf(stderr, "latent_read=refused\n");
         return YVEX_ERR_FORMAT;
     }
@@ -192,7 +232,9 @@ static int decode_cpu(const audio_arguments *arguments, const yvex_artifact *art
                 yvex_error_where(err), yvex_error_message(err));
         return rc;
     }
-    if (!file_write_exact(arguments->output_path, output, 800u))
+    if (arguments->preservation && !preservation_output(arguments, output, 800u))
+        return YVEX_ERR_FORMAT;
+    if (!arguments->preservation && !file_write_exact(arguments->output_path, output, 800u))
         return YVEX_ERR_IO;
     printf("audio_vae_decode=accepted backend=cpu\n");
     printf("samples=%llu\n", result.output_dims[2]);
@@ -229,7 +271,8 @@ static int decode_cuda(const audio_arguments *arguments, const yvex_artifact *ar
     }
     latent = (float *)malloc(latent_values * sizeof(*latent));
     output = (float *)malloc(output_values * sizeof(*output));
-    if (!latent || !output || !file_read_exact(arguments->input_path, latent, latent_values)) {
+    if (!latent || !output || !(arguments->preservation ? preservation_input(latent, latent_values) :
+        file_read_exact(arguments->input_path, latent, latent_values))) {
         fprintf(stderr, "audio_vae_cuda=refused input\n");
         rc = YVEX_ERR_FORMAT;
         goto done;
@@ -270,7 +313,11 @@ static int decode_cuda(const audio_arguments *arguments, const yvex_artifact *ar
                 yvex_error_where(err), yvex_error_message(err));
         goto done;
     }
-    if (!file_write_exact(arguments->output_path, output, output_values)) {
+    if (arguments->preservation && !preservation_output(arguments, output, output_values)) {
+        rc = YVEX_ERR_FORMAT;
+        goto done;
+    }
+    if (!arguments->preservation && !file_write_exact(arguments->output_path, output, output_values)) {
         rc = YVEX_ERR_IO;
         goto done;
     }
@@ -297,7 +344,13 @@ static int arguments_parse(int argc, char **argv, audio_arguments *arguments)
 {
     memset(arguments, 0, sizeof(*arguments));
     arguments->component = "audio_vae";
-    if ((argc == 5 || argc == 6) && strcmp(argv[1], "--decode") == 0) {
+    if (argc == 4 && !strcmp(argv[1], "--program-preservation") &&
+        (!strcmp(argv[2], "cpu") || !strcmp(argv[2], "cuda"))) {
+        arguments->mode = !strcmp(argv[2], "cuda") ? MODE_DECODE_CUDA : MODE_DECODE_CPU;
+        arguments->artifact_path = argv[3];
+        arguments->preservation = 1;
+        arguments->batch = 1u; arguments->latent_steps = 1u;
+    } else if ((argc == 5 || argc == 6) && strcmp(argv[1], "--decode") == 0) {
         arguments->mode = MODE_DECODE_CPU;
         arguments->artifact_path = argv[2]; arguments->input_path = argv[3];
         arguments->output_path = argv[4];
@@ -324,6 +377,7 @@ static int arguments_parse(int argc, char **argv, audio_arguments *arguments)
         fprintf(stderr,
                 "usage: minimax_h3_audio [--expect-refused] AUDIO_VAE_GGUF\n"
                 "       minimax_h3_audio --admit-component COMPONENT GGUF\n"
+                "       minimax_h3_audio --program-preservation cpu|cuda AUDIO\n"
                 "       minimax_h3_audio --decode AUDIO LATENT OUTPUT [REFERENCE]\n"
                 "       minimax_h3_audio --decode-cuda AUDIO LATENT OUTPUT BATCH STEPS "
                 "[REFERENCE]\n"

@@ -140,6 +140,90 @@ static int moe_rows_check(yvex_backend *backend, unsigned int qtype,
     return 0;
 }
 
+typedef struct {
+    float logits[6], bias[2], scores[6], weights[6];
+    unsigned long long selected[6], hash_selected[2];
+    int32_t table[6];
+    unsigned int tokens[3];
+    int status;
+} moe_route_storage;
+
+/* The source Gate ranks F32 scores + F32 correction bias. A sub-ULP bias
+ * must not become an FP64 ranking discriminator in the single-row lowering.
+ * Tie order is YVEX's declared low-ordinal rule, not a PyTorch topk tie claim. */
+static int moe_route_precision(yvex_backend *backend, unsigned int scenario)
+{
+    moe_route_storage host = {0}, observed[2];
+    yvex_backend_tensor_desc desc = {.name = "routing-precision", .dtype = YVEX_DTYPE_I8,
+        .rank = 1u, .dims = {sizeof(host)}, .bytes = sizeof(host)};
+    yvex_device_tensor *arena = NULL;
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_error err = {0};
+    unsigned long long rows = 3u, experts = 2u, topk = 2u, table_rows = 3u, columns = 2u;
+    unsigned long long row_bytes = 2u * sizeof(int32_t);
+    unsigned int router = scenario >= 3u && scenario <= 5u ? 0u : 1u;
+    int normalize = 1, device_wide = 0;
+    double scaling = 1.0;
+    memset(observed, 0, sizeof(observed));
+    host.bias[1] = scenario == 0u ? 0x1p-26f : scenario == 1u ? 0x1p-22f : 0.0f;
+    for (size_t i = 0u; i < 3u; ++i) {
+        host.tokens[i] = (unsigned int)i;
+        host.table[2u * i] = scenario == 5u ? 2 : 1;
+        host.table[2u * i + 1u] = scenario == 4u ? 1 : 0;
+    }
+    host.hash_selected[0] = (unsigned long long)host.table[0];
+    host.hash_selected[1] = (unsigned long long)host.table[1];
+    if (scenario == 6u) host.logits[0] = NAN;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &arena, &err) == YVEX_OK,
+        "allocate routing precision fixture");
+    CUdeviceptr base = yvex_cuda_activation_pointer(backend, arena);
+    CUdeviceptr logits = base + offsetof(moe_route_storage, logits), bias = base + offsetof(moe_route_storage, bias);
+    CUdeviceptr hash = base + offsetof(moe_route_storage, hash_selected), table = base + offsetof(moe_route_storage, table);
+    CUdeviceptr tokens = base + offsetof(moe_route_storage, tokens), scores = base + offsetof(moe_route_storage, scores);
+    CUdeviceptr selected = base + offsetof(moe_route_storage, selected), weights = base + offsetof(moe_route_storage, weights);
+    CUdeviceptr status = base + offsetof(moe_route_storage, status);
+    void *single[] = {&logits, &bias, &hash, &router, &experts, &topk, &normalize, &scaling,
+        &scores, &selected, &weights, &status};
+    void *multiple[] = {&logits, &bias, &table, &tokens, &router, &rows, &experts, &topk,
+        &table_rows, &columns, &row_bytes, &normalize, &scaling, &scores, &selected, &weights, &status};
+    for (size_t mode = 0u; mode < 2u; ++mode) {
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, &host, sizeof(host), &err) == YVEX_OK,
+            "reset exact routing inputs and status");
+        int rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+            mode ? state->moe_route_rows_function : state->moe_route_function,
+            mode ? 3u : 1u, mode ? 256u : 1u, 0u, mode ? multiple : single, "cuda.test.routing-precision", &err);
+        if (rc == YVEX_OK) rc = yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+            &device_wide, "cuda.test.routing-precision", &err);
+        YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_backend_tensor_read(backend, arena,
+            &observed[mode], sizeof(host), &err) == YVEX_OK, "observe both routing implementations");
+    }
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
+        "release routing fixture before comparison");
+    unsigned long long first = scenario == 1u || scenario == 3u ? 1u : 0u;
+    printf("MoE routing precision: scenario=%u expected=%llu,%llu single=%llu,%llu rows=%llu,%llu "
+        "status=%d/%d score=%.9g/%.9g weight=%.9g/%.9g tolerance=0\n", scenario, first, 1u - first,
+        observed[0].selected[0], observed[0].selected[1], observed[1].selected[0], observed[1].selected[1],
+        observed[0].status, observed[1].status, observed[0].scores[0], observed[1].scores[0],
+        observed[0].weights[0], observed[1].weights[0]);
+    for (size_t mode = 0u; mode < 2u; ++mode) {
+        if (scenario >= 4u) {
+            YVEX_TEST_ASSERT(observed[mode].status != 0, "invalid expert/nonfinite routing fails closed");
+            continue;
+        }
+        YVEX_TEST_ASSERT(observed[mode].status == 0, "valid routing succeeds");
+        for (size_t row = 0u; row < (mode ? 3u : 1u); ++row) {
+            YVEX_TEST_ASSERT(observed[mode].selected[2u * row] == first &&
+                observed[mode].selected[2u * row + 1u] == 1u - first,
+                "F32 ranking and explicit low-ordinal ties are independent of row lowering");
+            for (size_t rank = 0u; rank < 2u; ++rank)
+                YVEX_TEST_ASSERT(observed[mode].scores[2u * row + rank] == (float)sqrt(log(2.0)) &&
+                    observed[mode].weights[2u * row + rank] == 0.5f,
+                    "zero-logit analytic score and normalized weight are exact and unaffected by bias");
+        }
+    }
+    return 0;
+}
+
 int yvex_cuda_test_moe_rows(void)
 {
     const unsigned long long blocks[] = {1ull, 7ull, 8ull, 15ull, 16ull, 17ull};
@@ -150,6 +234,8 @@ int yvex_cuda_test_moe_rows(void)
     int rc = yvex_backend_open(&backend, &options, &err);
     if (rc == YVEX_ERR_UNSUPPORTED) return 77;
     YVEX_TEST_ASSERT(rc == YVEX_OK, "open expert CUDA backend");
+    for (unsigned int scenario = 0u; scenario < 7u; ++scenario)
+        if (moe_route_precision(backend, scenario)) return 1;
     for (int up_stage = 0; up_stage <= 1; ++up_stage)
     for (size_t q = 0u; q < sizeof(qtypes) / sizeof(qtypes[0]); ++q) {
         for (size_t i = 0u; i < sizeof(blocks) / sizeof(blocks[0]); ++i)

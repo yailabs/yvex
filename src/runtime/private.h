@@ -169,8 +169,7 @@ typedef struct {
     const yvex_runtime_execution_profile *execution_profile;
     const unsigned int *token_ids;
     const yvex_device_tensor *device_rows;
-    yvex_device_tensor *device_outputs;
-    yvex_device_tensor *batch_device_rows, *batch_device_outputs;
+    yvex_device_tensor *batch_device_rows;
     const yvex_moe_device_results *device_results, *batch_device_results;
     float *expanded_rows, *combined_rows, *routed_rows, *shared_rows;
     float *post_rows, *combination_rows;

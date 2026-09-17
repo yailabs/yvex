@@ -12,12 +12,13 @@
 #include <yvex/internal/graph.h>
 #include <yvex/internal/execution_batch.h>
 #include <yvex/internal/execution_observation.h>
+#include <yvex/internal/program_physical.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
 #define YVEX_MOE_PLAN_SCHEMA_V1 1u
 #define YVEX_MOE_INPUT_SCHEMA_V1 1u
-#define YVEX_MOE_ROW_BATCH_SCHEMA_V1 1u
+#define YVEX_MOE_ROW_BATCH_SCHEMA_V2 2u
 #define YVEX_MOE_ROW_BATCH_RESULT_SCHEMA_V4 4u
 #define YVEX_MOE_INPUT_SUFFIX ".yvex-moe-input"
 #define YVEX_MOE_NO_TENSOR ULLONG_MAX
@@ -115,6 +116,15 @@ const yvex_moe_plan_summary *yvex_moe_plan_summary_get(const yvex_moe_plan *plan
 const yvex_moe_layer_plan *yvex_moe_plan_layer_at(const yvex_moe_plan *plan,
                                                    unsigned long long ordinal);
 void yvex_moe_plan_close(yvex_moe_plan **plan);
+/* Cold import of admitted ingress semantics; never called by warm execution. */
+int yvex_moe_ingress_program_import(yvex_program_physical **, const yvex_moe_layer_plan *,
+    const char *source_identity, const char *physical_identity, unsigned long long maximum_rows, yvex_error *);
+int yvex_moe_shared_program_import(yvex_program_physical **, const yvex_moe_layer_plan *,
+    const char *source_identity, const char *physical_identity, unsigned long long maximum_rows, yvex_error *);
+int yvex_moe_plan_normalize_programs(yvex_moe_plan *, const yvex_physical_execution_ir *,
+    unsigned long long maximum_rows, yvex_error *);
+const yvex_program_physical *yvex_moe_plan_ingress(const yvex_moe_plan *, unsigned long long ordinal);
+const yvex_program_physical *yvex_moe_plan_shared(const yvex_moe_plan *, unsigned long long ordinal);
 typedef struct {
     unsigned int schema_version;
     unsigned long long token_start, token_count, layer_count;
@@ -184,11 +194,14 @@ typedef struct {
     yvex_device_tensor *combined, *post, *combination;
 } yvex_moe_device_results;
 typedef struct {
+    const yvex_device_tensor *normalized, *post, *combination, *router_logits, *shared;
+} yvex_moe_device_ingress;
+typedef struct {
     const yvex_moe_layer_plan *layer;
     yvex_moe_weight_view weights[YVEX_MOE_WEIGHT_COUNT];
     const float *expanded_input;
     const yvex_device_tensor *device_input;
-    yvex_device_tensor *device_output;
+    const yvex_moe_device_ingress *device_ingress;
     const yvex_moe_device_results *device_results;
     unsigned int token_id;
     int token_id_present;
@@ -228,7 +241,6 @@ typedef struct {
     unsigned long long row_count, row_width, row_stride;
     const float *expanded_rows;
     const yvex_device_tensor *device_rows;
-    yvex_device_tensor *device_outputs;
     const yvex_moe_device_results *device_results;
     const unsigned int *token_ids;
     int token_ids_present;
@@ -292,9 +304,7 @@ struct yvex_backend_moe_operations {
     int (*complete_rows)(yvex_backend *backend, int barrier_observed,
                          yvex_moe_row_batch_result *result, yvex_error *err);
 };
-int yvex_moe_ffn_prepare_cpu(const yvex_moe_layer_job *job, float *normalized,
-                             float *post, float *combination, yvex_error *err);
-int yvex_moe_route_cpu(const yvex_moe_layer_job *job, const float *normalized,
+int yvex_moe_route_cpu(const yvex_moe_layer_job *job, const float *logits,
                        yvex_moe_router_result *result, yvex_error *err);
 /* Route weight scales SwiGLU before BF16 publication and the down projection. */
 int yvex_moe_expert_cpu(const yvex_moe_layer_plan *layer,
@@ -310,7 +320,7 @@ int yvex_backend_moe_add_expert(yvex_backend_moe_execution *execution,
                                 const yvex_moe_weight_view *gate,
                                 const yvex_moe_weight_view *up,
                                 const yvex_moe_weight_view *down, float route_weight,
-                                int shared, yvex_error *err);
+                                yvex_error *err);
 int yvex_backend_moe_finish(yvex_backend_moe_execution *execution,
                             yvex_moe_layer_result *result, yvex_error *err);
 int yvex_backend_moe_close(yvex_backend_moe_execution **execution, yvex_error *err);
@@ -324,6 +334,21 @@ typedef struct {
     yvex_attention_evidence_level evidence_level;
     const struct yvex_runtime_execution_profile *execution_profile;
 } yvex_runtime_moe_options;
+/* Session-owned compiled ingress resources. Device results are call-scoped:
+ * the serialized caller consumes/copies them before the next invocation. */
+typedef struct yvex_runtime_moe_programs yvex_runtime_moe_programs;
+int yvex_runtime_moe_programs_open(yvex_runtime_moe_programs **, yvex_model_engine *,
+    yvex_runtime_execution_session *, const yvex_moe_plan *, const yvex_runtime_moe_options *,
+    unsigned long long host_reserved, unsigned long long device_reserved, yvex_error *);
+int yvex_runtime_moe_programs_host(yvex_runtime_moe_programs *, unsigned long long ordinal,
+    const float *input, float *const outputs[5], unsigned long long *read_bytes,
+    yvex_backend_operation_facts *, yvex_error *);
+int yvex_runtime_moe_programs_device(yvex_runtime_moe_programs *, unsigned long long ordinal,
+    unsigned long long rows, int batched, const yvex_device_tensor *, const float *host_input, yvex_moe_device_ingress *,
+    unsigned long long *encoded_bytes, yvex_backend_operation_facts *, yvex_error *);
+void yvex_runtime_moe_programs_resources(const yvex_runtime_moe_programs *,
+    unsigned long long *host, unsigned long long *device);
+int yvex_runtime_moe_programs_close(yvex_runtime_moe_programs **, yvex_error *);
 typedef struct {
     float *combined_outputs, *post, *combination;
     unsigned long long combined_capacity, post_capacity, combination_capacity;

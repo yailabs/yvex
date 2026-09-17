@@ -101,7 +101,7 @@ static int logits_program_open(yvex_runtime_logits_context *c, unsigned long lon
     unsigned long long kh, kd, vh, vd, total;
     unsigned long long rows = yvex_backend_kind_of(c->session_view->backend) == YVEX_BACKEND_KIND_CPU
         ? 1u : c->options.maximum_rows;
-    yvex_program_kernel_parameter parameter;
+    yvex_program_kernel_parameter parameter = {0};
     int rc;
     c->program = yvex_compiled_model_plan_output(c->model_view->compiled_plan);
     weight = yvex_program_physical_value_at(c->program, 1u);

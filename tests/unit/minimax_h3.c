@@ -2,9 +2,12 @@
 #include "tests/test.h"
 
 #include <yvex/internal/families/minimax_h3.h>
+#include <yvex/internal/text_program.h>
+#include <yvex/internal/signal_program.h>
+#include <yvex/internal/vision_program.h>
 
 #include "src/graph/private.h"
-#include "src/backend/cuda/component_ops.h"
+#include "tests/support/numeric_reference.h"
 #include <yvex/internal/artifact.h>
 #include <yvex/internal/backend.h>
 #include <yvex/internal/component.h>
@@ -12,6 +15,7 @@
 #include <yvex/internal/convolution.h>
 #include <yvex/internal/family_catalog.h>
 #include <yvex/internal/joint_transformer.h>
+#include <yvex/internal/image.h>
 #include <yvex/internal/latent.h>
 #include <yvex/internal/media.h>
 #include <yvex/internal/model_target.h>
@@ -572,11 +576,11 @@ static int test_audio_numeric_primitives(void)
     float beta[] = {0.0f};
     float up_filter[12] = {0};
     float down_filter[12] = {0};
-    yvex_graph_conv1d_geometry geometry = {1ull, 1ull, 1ull, 3ull, 3ull,
+    yvex_convolution_1d_geometry geometry = {1ull, 1ull, 1ull, 3ull, 3ull,
                                            1ull, 1ull, 1ull, 0ull, 0};
     yvex_error err;
 
-    YVEX_TEST_ASSERT(yvex_graph_conv1d_f32(
+    YVEX_TEST_ASSERT(yvex_convolution_1d_f32(
                          &geometry, input, 3ull, weight, 3ull, NULL, 0ull,
                          gain, 1ull, output, 3ull, &err) == YVEX_OK,
                      "weight-normalized Conv1D executes");
@@ -588,7 +592,7 @@ static int test_audio_numeric_primitives(void)
     geometry.input_length = 2ull;
     geometry.stride = 2ull;
     geometry.transposed = 1;
-    YVEX_TEST_ASSERT(yvex_graph_conv1d_f32(
+    YVEX_TEST_ASSERT(yvex_convolution_1d_f32(
                          &geometry, transpose_input, 2ull, weight, 3ull,
                          NULL, 0ull, gain, 1ull, output, 3ull, &err) == YVEX_OK,
                      "weight-normalized transposed Conv1D executes");
@@ -597,7 +601,7 @@ static int test_audio_numeric_primitives(void)
                          fabsf(output[2] - 4.0f) < 1.0e-5f,
                      "transposed Conv1D matches the independent hand calculation");
     geometry.output_padding = geometry.stride;
-    YVEX_TEST_ASSERT(yvex_graph_conv1d_f32(
+    YVEX_TEST_ASSERT(yvex_convolution_1d_f32(
                          &geometry, transpose_input, 2ull, weight, 3ull,
                          NULL, 0ull, gain, 1ull, output, 3ull, &err) == YVEX_ERR_INVALID_ARG,
                      "transposed Conv1D refuses output padding outside its stride");
@@ -605,7 +609,7 @@ static int test_audio_numeric_primitives(void)
 
     up_filter[5] = 0.5f;
     down_filter[5] = 1.0f;
-    YVEX_TEST_ASSERT(yvex_graph_alias_snake_f32(
+    YVEX_TEST_ASSERT(yvex_signal_alias_snake_f32(
                          alias_input, 1ull, 1ull, 2ull, alpha, beta,
                          up_filter, down_filter, alias_output, scratch, 4ull,
                          &err) == YVEX_OK,
@@ -613,13 +617,13 @@ static int test_audio_numeric_primitives(void)
     YVEX_TEST_ASSERT(fabsf(alias_output[0] - (1.0f + sinf(1.0f) * sinf(1.0f))) < 1.0e-5f &&
                          fabsf(alias_output[1] - (3.0f + sinf(3.0f) * sinf(3.0f))) < 1.0e-5f,
                      "alias-free activation matches the independent filter calculation");
-    YVEX_TEST_ASSERT(yvex_graph_alias_snake_f32(
+    YVEX_TEST_ASSERT(yvex_signal_alias_snake_f32(
                          alias_input, 1ull, 1ull, 2ull, alpha, beta,
                          up_filter, down_filter, alias_output, scratch, 3ull,
                          &err) == YVEX_ERR_INVALID_ARG,
                      "alias-free activation refuses insufficient scratch");
     down_filter[5] = INFINITY;
-    YVEX_TEST_ASSERT(yvex_graph_alias_snake_f32(
+    YVEX_TEST_ASSERT(yvex_signal_alias_snake_f32(
                          alias_input, 1ull, 1ull, 2ull, alpha, beta,
                          up_filter, down_filter, alias_output, scratch, 4ull,
                          &err) == YVEX_ERR_FORMAT,
@@ -648,7 +652,7 @@ static int test_video_numeric_primitives(void)
     float expected_first = (selected * 1.0f + 3.0f) / (selected + 1.0f);
     yvex_error err;
 
-    YVEX_TEST_ASSERT(yvex_graph_linear_source_f32(
+    YVEX_TEST_ASSERT(test_graph_linear_source_f32(
                          linear_input, 4ull, 2ull, 2ull,
                          linear_weight, 4ull, linear_bias, 2ull, 2ull,
                          linear_output, 4ull, &err) == YVEX_OK,
@@ -658,28 +662,28 @@ static int test_video_numeric_primitives(void)
                          fabsf(linear_output[2] + 0.5f) < 1.0e-6f &&
                          fabsf(linear_output[3] - 5.0f) < 1.0e-6f,
                      "source-layout linear projection matches the independent result");
-    YVEX_TEST_ASSERT(yvex_graph_linear_source_f32(
+    YVEX_TEST_ASSERT(test_graph_linear_source_f32(
                          linear_input, 3ull, 2ull, 2ull,
                          linear_weight, 4ull, linear_bias, 2ull, 2ull,
                          linear_output, 4ull, &err) == YVEX_ERR_BOUNDS,
                      "source-layout linear projection refuses mismatched extents");
-    YVEX_TEST_ASSERT(yvex_graph_layer_norm_f32(
+    YVEX_TEST_ASSERT(test_graph_layer_norm_f32(
                          layer_values, 1ull, 2ull, layer_weight, layer_bias,
                          1.0e-5, &err) == YVEX_OK &&
                          fabsf(layer_values[0] + 0.999995f) < 1.0e-5f &&
                          fabsf(layer_values[1] - 0.999995f) < 1.0e-5f,
                      "LayerNorm matches the independent two-value result");
-    YVEX_TEST_ASSERT(yvex_graph_silu_gate_f32(
+    YVEX_TEST_ASSERT(test_graph_silu_gate_f32(
                          fused, 1ull, 1ull, gated, &err) == YVEX_OK &&
                          gated[0] == 0.0f,
                      "gated SiLU applies gate-first source semantics");
-    YVEX_TEST_ASSERT(yvex_graph_full_attention_f32(
+    YVEX_TEST_ASSERT(test_graph_full_attention_f32(
                          qkv, 2ull, 1ull, 2ull, attention, scratch, 2ull,
                          &err) == YVEX_OK &&
                          fabsf(attention[0] - expected_first) < 1.0e-6f &&
                          fabsf(attention[1] - (expected_first + 1.0f)) < 1.0e-6f,
                      "full attention matches an independent noncausal softmax result");
-    YVEX_TEST_ASSERT(yvex_graph_full_attention_f32(
+    YVEX_TEST_ASSERT(test_graph_full_attention_f32(
                          qkv, 2ull, 1ull, 2ull, attention, scratch, 1ull,
                          &err) == YVEX_ERR_INVALID_ARG,
                      "full attention refuses insufficient scratch");
@@ -690,9 +694,7 @@ static int test_t2va_plan(void)
 {
     const yvex_minimax_h3_graph_api *graph = yvex_graph_register_minimax_h3();
     const yvex_transformer_joint_recipe *recipe = graph->omni_recipe;
-    yvex_transformer_linear_requirement dense[YVEX_TRANSFORMER_JOINT_LINEAR_COUNT];
     yvex_transformer_linear_requirement unsupported_requirement;
-    yvex_transformer_joint_recipe invalid_recipe;
     yvex_runtime_av_generation_request specialization = {
         .component_backend = YVEX_BACKEND_KIND_CUDA};
     yvex_transformer_linear_physical_plan video, audio, changed;
@@ -710,7 +712,6 @@ static int test_t2va_plan(void)
         .frames = 124ull, .inference_steps = 19u};
     float sample[2] = {0.5f, -1.0f}, velocity[2] = {2.0f, 4.0f};
     float stepped[2] = {13.0f, 13.0f};
-    unsigned int dense_slot;
     yvex_error err;
 
     YVEX_TEST_ASSERT(recipe &&
@@ -721,34 +722,12 @@ static int test_t2va_plan(void)
                          recipe->swiglu_layout ==
                              YVEX_TRANSFORMER_SWIGLU_LAYOUT_GATE_THEN_UP,
                      "Omni recipe preserves the released gate-before-up SwiGLU row layout");
-    for (dense_slot = 0u; dense_slot < YVEX_TRANSFORMER_JOINT_LINEAR_COUNT; ++dense_slot)
-        YVEX_TEST_ASSERT(
-            yvex_transformer_joint_linear_requirement(
-                recipe, (yvex_transformer_joint_linear_slot)dense_slot,
-                dense + dense_slot, &err) == YVEX_OK,
-            "joint Transformer derives every dense operation from one numerical recipe");
+    YVEX_TEST_ASSERT(recipe->timestep_width == 2688u && recipe->hidden_width == 5376u &&
+        recipe->attention_width == 7168u && recipe->ffn_width == 14336u &&
+        recipe->modality_count == 3u && recipe->modulation_parameters == 6u,
+        "source geometry feeds the typed program; no parallel dense runtime plan remains");
     YVEX_TEST_ASSERT(
-        dense[YVEX_TRANSFORMER_JOINT_LINEAR_MODULATION].input_width == 2688ull &&
-            dense[YVEX_TRANSFORMER_JOINT_LINEAR_MODULATION].output_width == 96768ull &&
-            dense[YVEX_TRANSFORMER_JOINT_LINEAR_MODULATION].publication_dtype == YVEX_DTYPE_F32 &&
-            dense[YVEX_TRANSFORMER_JOINT_LINEAR_QKV].input_width == 5376ull &&
-            dense[YVEX_TRANSFORMER_JOINT_LINEAR_QKV].output_width == 21504ull &&
-            dense[YVEX_TRANSFORMER_JOINT_LINEAR_ATTENTION_OUTPUT].input_width == 7168ull &&
-            dense[YVEX_TRANSFORMER_JOINT_LINEAR_ATTENTION_OUTPUT].output_width == 5376ull &&
-            dense[YVEX_TRANSFORMER_JOINT_LINEAR_GATE_UP].output_width == 28672ull &&
-            dense[YVEX_TRANSFORMER_JOINT_LINEAR_DOWN].input_width == 14336ull &&
-            dense[YVEX_TRANSFORMER_JOINT_LINEAR_DOWN].output_width == 5376ull &&
-            dense[YVEX_TRANSFORMER_JOINT_LINEAR_DOWN].publication_dtype == YVEX_DTYPE_BF16,
-        "derived dense operations preserve combined QKV, gate/up, and exact publication shapes");
-    invalid_recipe = *recipe;
-    invalid_recipe.linear_source_dtype = YVEX_DTYPE_F32;
-    YVEX_TEST_ASSERT(
-        yvex_transformer_joint_linear_requirement(
-            &invalid_recipe, YVEX_TRANSFORMER_JOINT_LINEAR_QKV, dense, &err) ==
-            YVEX_ERR_FORMAT,
-        "joint Transformer refuses an altered dense numerical contract");
-    YVEX_TEST_ASSERT(
-        recipe && recipe->schema_version == YVEX_TRANSFORMER_JOINT_SCHEMA_V4 &&
+        recipe && recipe->schema_version == YVEX_TRANSFORMER_JOINT_SCHEMA_V5 &&
             recipe->video_output.source_dtype == YVEX_DTYPE_F32 &&
             recipe->audio_output.source_dtype == YVEX_DTYPE_F32 &&
             recipe->video_output.publication_contract ==
@@ -903,6 +882,114 @@ static int test_t2va_plan(void)
     return 0;
 }
 
+static int test_keyframe_program(void)
+{
+    const yvex_minimax_h3_graph_api *graph = yvex_graph_register_minimax_h3();
+    const yvex_spatial_encoder_recipe *recipe = graph->keyframe_encoder_recipe;
+    yvex_signal_program a = {0}, b = {0};
+    yvex_error err;
+    YVEX_TEST_ASSERT(graph->text_recipe && graph->vision_recipe &&
+        graph->text_recipe->hidden_width == 5120u && graph->text_recipe->layer_capacity == 50u &&
+        graph->vision_recipe->hidden_width == 1152u && graph->vision_recipe->layer_count == 27u &&
+        graph->vision_recipe->deepstack_layer_count == 3u &&
+        graph->vision_recipe->output_width == graph->text_recipe->hidden_width,
+        "canonical importer owns compatible component source geometry");
+    YVEX_TEST_ASSERT(recipe && yvex_spatial_encoder_compile(&a, recipe, recipe->semantic_identity,
+        1u, 32u, 32u, &err) == YVEX_OK && yvex_spatial_encoder_compile(&b, recipe, recipe->semantic_identity,
+        1u, 32u, 32u, &err) == YVEX_OK, "source keyframe recipe compiles deterministically");
+    const yvex_program_physical_summary *s = yvex_program_physical_summary_get(a.physical);
+    YVEX_TEST_ASSERT(a.output_values == 192u && a.output_length == 4u &&
+        !strcmp(s->identity, yvex_program_physical_summary_get(b.physical)->identity) &&
+        a.parameter_count == b.parameter_count &&
+        !memcmp(a.parameter_names, b.parameter_names, a.parameter_count * sizeof(*a.parameter_names)),
+        "encoder moments geometry and parameter linkage are canonical");
+    unsigned int convolutions = 0u, norms = 0u, residuals = 0u;
+    for (size_t i = 0u; i < s->step_count; ++i) {
+        const char *implementation = yvex_program_physical_step_at(a.physical, i)->implementation;
+        if (!strcmp(implementation, "conv2d_slice.f32.v1")) convolutions++;
+        if (!strcmp(implementation, "spatial_group_norm_silu.f32.v1")) norms++;
+        if (!strcmp(implementation, "add.f32.v1")) residuals++;
+    }
+    YVEX_TEST_ASSERT(convolutions == 34u && norms == 25u && residuals == 12u,
+        "complete encoder computation is 34 convolutions, 25 norms and 12 residual additions");
+    printf("Keyframe encoder IR: parameters=%zu steps=%zu convolution=%u norm=%u residual=%u moments=192; "
+        "repeated physical identity and linkage exact\n", a.parameter_count, s->step_count,
+        convolutions, norms, residuals);
+    yvex_signal_program_close(&a); yvex_signal_program_close(&b);
+    for (unsigned int bad = 0u; bad < 4u; ++bad) {
+        yvex_spatial_encoder_recipe invalid = *recipe;
+        if (bad == 0u) invalid.groups = 3u;
+        if (bad == 1u) invalid.stages[0].downsample = 2;
+        if (bad == 2u) invalid.stages[0].blocks = 17u;
+        if (bad == 3u) invalid.kernel_size = 2u;
+        YVEX_TEST_ASSERT(yvex_spatial_encoder_compile(&a, &invalid, recipe->semantic_identity,
+            1u, 32u, 32u, &err) == YVEX_ERR_FORMAT && !a.physical && !a.parameter_names,
+            "invalid source encoder recipe never publishes a partial program");
+    }
+    return 0;
+}
+
+static int test_vision_entry_admission(void)
+{
+    yvex_media_conditioning_request request = {.schema_version = YVEX_MEDIA_CONDITIONING_SCHEMA_V3,
+        .condition_count = 1u};
+    yvex_runtime_av_conditioning_result result;
+    yvex_error err;
+    float output[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+    request.conditioning = output; request.conditioning_capacity = 4u;
+    memset(&result, 0x5a, sizeof(result));
+    YVEX_TEST_ASSERT(yvex_backend_minimax_h3_fl2va_condition(&request, &result, &err) == YVEX_ERR_STATE &&
+        !result.complete && strcmp(yvex_error_where(&err), "minimax-h3.vision.entry") == 0 &&
+        output[0] == 1.0f && output[3] == 4.0f,
+        "image product cannot recover a missing compiler entry from a family registry");
+    request.schema_version = 2u;
+    YVEX_TEST_ASSERT(yvex_backend_minimax_h3_fl2va_condition(&request, &result, &err) == YVEX_ERR_INVALID_ARG &&
+        !result.complete && output[0] == 1.0f && output[3] == 4.0f,
+        "old conditioning schema refuses before reading the new compiler-entry field");
+    printf("Vision compiler entry: absent-entry=refused old-schema=refused output=unchanged\n");
+    return 0;
+}
+
+static int test_keyframe_entry_admission(void)
+{
+    const yvex_component_variant_adapter *adapter =
+        yvex_graph_component_variant_find(YVEX_MINIMAX_H3_TARGET_ID);
+    yvex_error err;
+    yvex_runtime_av_keyframe_result result;
+    yvex_media_keyframe_request request = {.schema_version = YVEX_MEDIA_CONDITIONING_SCHEMA_V3,
+        .condition_count = 1u, .width = 32u, .height = 32u};
+    YVEX_TEST_ASSERT(adapter && adapter->media_execution && adapter->media_execution->keyframe_encode,
+        "product keyframe callback enters the compiler owner");
+    for (unsigned int bad = 0u; bad < 6u; ++bad) {
+        yvex_media_keyframe_request invalid = request;
+        if (bad == 0u) invalid.schema_version = 0u;
+        if (bad == 1u) invalid.condition_count = 0u;
+        if (bad == 2u) invalid.condition_count = YVEX_MEDIA_CONDITION_CAP + 1u;
+        if (bad == 3u) invalid.width = 0u;
+        if (bad == 4u) invalid.width = 31u;
+        if (bad == 5u) invalid.height = 31u;
+        memset(&result, 0xff, sizeof(result));
+        YVEX_TEST_ASSERT(adapter->media_execution->keyframe_encode(&invalid, &result, &err) ==
+            YVEX_ERR_INVALID_ARG && !result.complete,
+            "invalid keyframe population refuses before program execution and clears publication");
+    }
+    yvex_media_condition condition = {0};
+    yvex_image image = {0};
+    yvex_component_execution component = {0};
+    float channels[24] = {0}, output = -99.0f;
+    request.conditions = &condition; request.condition_images = &image;
+    request.pixel_channels = 3u; request.latent_channels = 24u;
+    request.pixel_mean = request.pixel_std = request.latent_mean = request.latent_std = channels;
+    request.video_component = &component; request.condition_latents = &output;
+    yvex_component_program_request invocation = {0};
+    memset(&result, 0xff, sizeof(result));
+    YVEX_TEST_ASSERT(yvex_backend_minimax_h3_keyframe_execute(&request, &invocation, &result, &err) ==
+        YVEX_ERR_FORMAT && !result.complete && output == -99.0f,
+        "consumer cannot reconstruct a missing encoder program from a family recipe");
+    puts("Keyframe entry: 6 compiler population refusals; missing executable refused without publication");
+    return 0;
+}
+
 static int test_fl2va_keyframe_layout(void)
 {
     const yvex_minimax_h3_graph_api *graph = yvex_graph_register_minimax_h3();
@@ -999,8 +1086,8 @@ static int test_component_admission_routing(void)
     yvex_minimax_h3_failure family_failure;
     yvex_minimax_h3_conditioning_result conditioning;
     yvex_backend_text_execution_result backend_result;
-    yvex_alias_decoder_request alias_request = {0};
-    yvex_alias_decoder_result alias_result;
+    yvex_component_program_request signal_request = {0};
+    yvex_component_program_result signal_result;
     yvex_transformer_joint_request joint_request = {0};
     yvex_transformer_joint_result joint_result;
     unsigned int token = 1u;
@@ -1035,8 +1122,6 @@ static int test_component_admission_routing(void)
         .rope_theta = architecture.encoder.rope_theta,
         .normalization_epsilon = 1.0e-6f};
     component_request = (yvex_component_text_request){
-        .recipe = &geometry,
-        .embedding_weight_name = "model.language_model.embed_tokens.weight",
         .token_ids = &token,
         .token_count = 1ull,
         .output = output,
@@ -1049,35 +1134,30 @@ static int test_component_admission_routing(void)
                          &conditioning, &err) == YVEX_ERR_INVALID_ARG &&
                          !conditioning.complete && ((unsigned char *)output)[0] == 0x5a,
                      "generic text component refuses absent admitted artifact without publication");
-    YVEX_TEST_ASSERT(yvex_component_joint_transformer_execute(
-                         NULL, NULL, 0ull, NULL, NULL, &joint_request,
+    YVEX_TEST_ASSERT(yvex_component_joint_program_execute(
+                         NULL, NULL, &joint_request,
                          &joint_result, &err) == YVEX_ERR_INVALID_ARG &&
                          !joint_result.complete,
                      "generic joint component refuses an absent resident execution recipe");
-    YVEX_TEST_ASSERT(yvex_component_alias_decoder_execute(
-                         NULL, &alias_request, &alias_result, &err) ==
-                         YVEX_ERR_INVALID_ARG &&
-                         !alias_result.complete,
-                     "generic alias decoder refuses an absent resident component");
-    rc = yvex_cuda_text_embedding_execute(
-        NULL, &geometry, NULL, 0ull, 0u, 0ull, 0ull, 0ull, NULL, 0ull,
-        &token, 1ull, output, 5120ull, &backend_result, &err);
+    YVEX_TEST_ASSERT(yvex_component_tensor_program_execute(
+                         NULL, &signal_request, &signal_result, &err) ==
+                         YVEX_ERR_STATE &&
+                         !signal_result.complete,
+                     "compiled signal program refuses an absent resident component");
+    rc = yvex_component_text_program_execute(NULL, &component_request, NULL, 0u, &backend_result, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG,
-                     "CUDA conditioning reports invalid absent materialization");
+                     "compiled conditioning refuses absent program and residency");
     YVEX_TEST_ASSERT(!backend_result.complete && ((unsigned char *)output)[0] == 0x5a,
                      "CUDA conditioning does not publish a refused execution");
     YVEX_TEST_ASSERT(strcmp(yvex_error_where(&err),
-                            "cuda.text-embedding.validate") == 0,
+                            "runtime.component.program") == 0,
                      "CUDA conditioning refuses absent materialization without publication");
     invalid_geometry = geometry;
     ++invalid_geometry.query_heads;
-    YVEX_TEST_ASSERT(yvex_cuda_text_embedding_execute(
-                         NULL, &invalid_geometry, NULL, 0ull, 0u, 0ull, 0ull, 0ull,
-                         NULL, 0ull, &token, 1ull, output, 5120ull, &backend_result,
-                         &err) == YVEX_ERR_INVALID_ARG &&
-                         strcmp(yvex_error_where(&err),
-                                "cuda.text-geometry") == 0,
-                     "CUDA conditioning refuses inconsistent family geometry");
+    yvex_program_physical *invalid_program = NULL;
+    YVEX_TEST_ASSERT(yvex_text_program_compile(&invalid_program, &invalid_geometry, 1u, 1u, NULL, 0u,
+                         &err) == YVEX_ERR_FORMAT && !invalid_program,
+                     "compiler refuses inconsistent family geometry before CUDA execution");
     YVEX_TEST_ASSERT(yvex_graph_register_minimax_h3()->text_encoder_artifact_execute(
                          NULL, NULL, NULL, YVEX_BACKEND_KIND_CUDA, &token, 1ull, 0ull,
                          output, 5120ull, 1ull, 1ull,
@@ -1182,7 +1262,9 @@ int yvex_test_minimax_h3(void)
     if (test_audio_numeric_primitives() != 0) return 1;
     if (test_video_numeric_primitives() != 0) return 1;
     if (test_t2va_plan() != 0) return 1;
-    if (test_fl2va_keyframe_layout() != 0) return 1;
+    if (test_keyframe_program() != 0 || test_keyframe_entry_admission() != 0 ||
+        test_vision_entry_admission() != 0 ||
+        test_fl2va_keyframe_layout() != 0) return 1;
     if (test_component_admission_routing() != 0) return 1;
     if (test_component_execution_plans() != 0) return 1;
     return 0;

@@ -48,3 +48,46 @@ invalid:
         "result storage is incomplete, aliased, undersized or outside representable bounds");
     return YVEX_ERR_FORMAT;
 }
+
+int yvex_cuda_device_operands(yvex_backend *backend, const yvex_device_tensor *const *sources,
+    const unsigned long long *elements, const CUdeviceptr *targets, size_t count,
+    unsigned long long *copied, yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    unsigned long long total = 0u, bytes;
+    if (!state || !sources || !elements || !targets || !count || !copied) goto invalid;
+    for (size_t i = 0u; i < count; ++i) {
+        if (!backend_tensor_owner_is(backend, sources[i]) || !sources[i]->is_written ||
+            sources[i]->dtype != YVEX_DTYPE_F32 || !elements[i] ||
+            !backend_tensor_f32_elements(sources[i], elements[i]) ||
+            !yvex_core_u64_mul(elements[i], sizeof(float), &bytes) || bytes > SIZE_MAX ||
+            !yvex_core_u64_add(total, bytes, &total) || !targets[i] || targets[i] > UINTPTR_MAX - bytes)
+            goto invalid;
+        yvex_device_tensor target = {.data = (void *)(uintptr_t)targets[i], .bytes = bytes};
+        for (size_t j = 0u; j < count; ++j)
+            if (!sources[j] || !results_disjoint(&target, sources[j])) goto invalid;
+        for (size_t j = 0u; j < i; ++j) {
+            yvex_device_tensor previous = {.data = (void *)(uintptr_t)targets[j],
+                .bytes = elements[j] * sizeof(float)};
+            if (!results_disjoint(&target, &previous)) goto invalid;
+        }
+    }
+    if (*copied > ULLONG_MAX - total) goto invalid;
+    for (size_t i = 0u; i < count; ++i) {
+        CUstream stream = yvex_cuda_launch_stream(backend);
+        CUdeviceptr source = (CUdeviceptr)sources[i]->data;
+        bytes = elements[i] * sizeof(float);
+        CUresult status = stream && state->driver.cuMemcpyDtoDAsync_v2
+            ? state->driver.cuMemcpyDtoDAsync_v2(targets[i], source, (size_t)bytes, stream)
+            : !stream ? state->driver.cuMemcpyDtoD_v2(targets[i], source, (size_t)bytes) : (CUresult)1;
+        int rc = yvex_cuda_status(&state->driver, status, "cuda.operands-copy", err);
+        if (rc != YVEX_OK) return rc;
+        *copied += bytes;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+invalid:
+    yvex_error_set(err, YVEX_ERR_FORMAT, "cuda.operands-copy",
+        "operand storage is unwritten, aliased, undersized or outside representable bounds");
+    return YVEX_ERR_FORMAT;
+}

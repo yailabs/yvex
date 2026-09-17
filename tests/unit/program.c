@@ -1,17 +1,28 @@
 /* Parameter lowering evidence uses metadata, never model payloads or execution. */
 #include "tests/test.h"
+#include "tests/support/signal_program.h"
+#include "tests/support/spatial_program.h"
+#include "tests/support/conditioning_program.h"
+#include "tests/support/joint_program.h"
 #include "tests/support/tensor_program.h"
 #include "tests/support/linear_program.h"
 #include "tests/support/mhc_program.h"
+#include "tests/support/mhc_ingress_program.h"
+#include "tests/support/shared_expert_program.h"
 #include "tests/support/program_sequence.h"
+#include "tests/support/text_program.h"
+#include "tests/support/population_program.h"
+#include "tests/support/dense_program.h"
 
 #include <yvex/internal/compilation.h>
 #include <yvex/internal/core.h>
+#include <yvex/internal/dense_program.h>
 #include <yvex/internal/execution.h>
 #include <yvex/internal/program.h>
 #include <yvex/internal/program_kernels.h>
 #include <yvex/qtype.h>
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +31,55 @@ static const char program_source[] =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 static const char program_other[] =
     "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+
+static int program_dense_projection(void)
+{
+    const unsigned long long blocks[] = {1u, 2u, 36u};
+    for (size_t test = 0u; test < 3u; ++test) {
+        yvex_dense_program_recipe r = {.semantic_identity = program_source, .rows = 6u, .output_rows = 1u,
+            .width = 2048u, .heads = 32u, .head_dimension = 64u, .rotary_dimension = 48u,
+            .ffn_width = 8192u, .block_count = blocks[test], .output_width = 3072u, .epsilon = (double)1.0e-5f};
+        yvex_program_physical *p = NULL, *decoded = NULL;
+        yvex_core_bytes wire = {.maximum = 16u * 1024u * 1024u};
+        yvex_error err;
+        YVEX_TEST_ASSERT(yvex_dense_program_compile(&p, &r, &err) == YVEX_OK &&
+            yvex_program_physical_encode(p, &wire, &err) == YVEX_OK &&
+            yvex_program_physical_decode(&decoded, wire.data, wire.count, &err) == YVEX_OK,
+            "dense component source projection and authenticated physical import");
+        const yvex_program_physical_summary *s = yvex_program_physical_summary_get(p);
+        size_t parameters = 0u, attention = 0u, norms = 0u, partitions = 0u, slices = 0u;
+        for (size_t i = 0u; i < s->step_count; ++i) {
+            const yvex_program_physical_step *op = yvex_program_physical_step_at(p, i);
+            parameters += !strcmp(op->implementation, "parameter.encoded.v1");
+            attention += !strcmp(op->implementation, "attention.full.f32.v1");
+            norms += !strcmp(op->implementation, "rms_normalize.f32.v1");
+            partitions += !strcmp(op->implementation, "split_interleaved_three.f32.v1");
+            slices += !strcmp(op->implementation, "slice_rows.f32.v1");
+        }
+        YVEX_TEST_ASSERT(s->input_count == 3u && s->result_count == 1u && s->maximum_rows == 6u &&
+            parameters == blocks[test] * 12u + 4u && attention == blocks[test] && norms == blocks[test] * 2u &&
+            partitions == blocks[test] && slices == 1u &&
+            !strcmp(s->identity, yvex_program_physical_summary_get(decoded)->identity),
+            "every block operation and exact source parameter has one canonical executable owner");
+        printf("Dense component compiler: blocks=%llu parameters=%zu attention=%zu unit_norm=%zu steps=%zu; "
+            "three typed inputs, one prefix result; physical reimport identity exact\n",
+            blocks[test], parameters, attention, norms, s->step_count);
+        free(wire.data);
+        yvex_program_physical_close(&p);
+        yvex_program_physical_close(&decoded);
+        for (unsigned int bad = 0u; bad < 5u; ++bad) {
+            yvex_dense_program_recipe invalid = r;
+            if (bad == 0u) invalid.output_rows = invalid.rows + 1u;
+            if (bad == 1u) invalid.heads++;
+            if (bad == 2u) invalid.rotary_dimension++;
+            if (bad == 3u) invalid.block_count = ULLONG_MAX;
+            if (bad == 4u) invalid.epsilon = 0.0;
+            YVEX_TEST_ASSERT(yvex_dense_program_compile(&p, &invalid, &err) == YVEX_ERR_FORMAT && !p,
+                "dense population/head/rotary/storage/numerical source negatives refuse before lowering");
+        }
+    }
+    return 0;
+}
 
 static int program_test_module(yvex_ir_module **out, int variant, yvex_error *err)
 {
@@ -275,7 +335,7 @@ static int program_test_tensor(void)
     return 0;
 }
 
-static int program_device_fixture(yvex_program_physical **out, yvex_error *err)
+static int program_device_fixture(yvex_program_physical **out, unsigned int variant, yvex_error *err)
 {
     yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
     yvex_ir_module *m = NULL;
@@ -285,6 +345,10 @@ static int program_device_fixture(yvex_program_physical **out, yvex_error *err)
         .shape = {{0u, 0u}, {YVEX_IR_NONE, 32u}}};
     yvex_ir_id dimension, type, function, block, value, op;
     unsigned int i;
+    if (variant == 1u) t.shape[0] = (yvex_ir_extent){YVEX_IR_NONE, 3u};
+    if (variant == 2u) { dim.minimum = 2u; dim.maximum = 6u; dim.multiple = 2u; }
+    if (variant == 3u) t.shape[1].extent = ULLONG_MAX / 4u;
+    if (variant == 4u) { dim.minimum = 2u; dim.maximum = 5u; dim.multiple = 2u; }
     int rc = yvex_ir_module_open(&m, "physical_lifetimes", program_source, dialects, 2u, err);
     if (rc == YVEX_OK) rc = yvex_ir_dimension_add(m, &dim, &dimension, err);
     if (rc == YVEX_OK) rc = yvex_ir_type_intern(m, &t, &type, err);
@@ -310,6 +374,60 @@ static int program_device_fixture(yvex_program_physical **out, yvex_error *err)
     yvex_program_execution_close(&execution);
     yvex_ir_module_close(&m);
     return rc;
+}
+
+static int program_test_value_layout(void)
+{
+    yvex_error err = {0};
+    unsigned int accepted = 0u, refused = 0u;
+    for (unsigned int variant = 0u; variant < 3u; ++variant) {
+        yvex_program_physical *p = NULL, *decoded = NULL;
+        yvex_core_bytes wire = {.maximum = 65536u};
+        YVEX_TEST_ASSERT(program_device_fixture(&p, variant, &err) == YVEX_OK &&
+            yvex_program_physical_encode(p, &wire, &err) == YVEX_OK &&
+            yvex_program_physical_decode(&decoded, wire.data, wire.count, &err) == YVEX_OK,
+            "physical layouts reopen from the existing authenticated schema");
+        for (unsigned long long rows = 0u; rows < 8u; ++rows) {
+            yvex_program_value_layout a, b;
+            int admitted = variant == 0u ? rows >= 1u && rows <= 3u :
+                variant == 1u ? rows == 1u : rows >= 2u && rows <= 6u && rows % 2u == 0u;
+            for (size_t value = 0u; value < 7u; ++value) {
+                memset(&a, 0xff, sizeof(a)); memset(&b, 0xff, sizeof(b));
+                int rc = yvex_program_physical_value_layout(p, value, rows, &a, &err);
+                int reopened = yvex_program_physical_value_layout(decoded, value, rows, &b, &err);
+                if (admitted) {
+                    unsigned long long expected_rows = variant == 1u ? 3u : rows;
+                    YVEX_TEST_ASSERT(rc == YVEX_OK && reopened == YVEX_OK && a.rank == 2u &&
+                        a.dims[0] == expected_rows && a.dims[1] == 32u && a.elements == expected_rows * 32u &&
+                        a.bytes == expected_rows * 128u && a.storage_scalar == YVEX_IR_F32 &&
+                        a.dynamic_rows == (variant != 1u) && a.bytes == b.bytes &&
+                        a.elements == b.elements && a.rank == b.rank && a.storage_scalar == b.storage_scalar &&
+                        a.dynamic_rows == b.dynamic_rows && !memcmp(a.dims, b.dims, sizeof(a.dims)),
+                        "compiler resolves exact fixed/dynamic BF16-in-F32 layout, preserved after import");
+                    accepted++;
+                } else {
+                    YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS && reopened == rc && !a.elements && !a.bytes &&
+                        !a.rank && !b.elements && !b.bytes, "invalid population publishes no partial layout");
+                    refused++;
+                }
+            }
+        }
+        yvex_program_value_layout layout;
+        YVEX_TEST_ASSERT(yvex_program_physical_value_layout(p, SIZE_MAX, 1u, &layout, &err) ==
+            YVEX_ERR_INVALID_ARG && !layout.bytes &&
+            yvex_program_physical_value_layout(p, 0u, 1u, NULL, &err) == YVEX_ERR_INVALID_ARG &&
+            yvex_program_physical_value_layout(NULL, 0u, 1u, &layout, &err) == YVEX_ERR_INVALID_ARG,
+            "missing program, value or destination refuses before inspection");
+        free(wire.data); yvex_program_physical_close(&decoded); yvex_program_physical_close(&p);
+    }
+    printf("Physical value layout: %u exact views, %u population refusals; "
+        "fixed/dynamic/multiple geometry; BF16 in F32; authenticated round trip\n", accepted, refused);
+    yvex_program_physical *overflow = NULL;
+    YVEX_TEST_ASSERT(program_device_fixture(&overflow, 3u, &err) != YVEX_OK && !overflow,
+        "overflowing maximum activation storage refuses during compilation, before a runtime allocation");
+    YVEX_TEST_ASSERT(program_device_fixture(&overflow, 4u, &err) != YVEX_OK && !overflow,
+        "dimension endpoints must respect the declared multiple under the existing IR contract");
+    return 0;
 }
 
 static int program_device_invoke(void *context, const yvex_program_device_invocation *r,
@@ -351,7 +469,7 @@ static int program_test_device(void)
     size_t i;
     unsigned int until_cancel = 2u;
     int rc;
-    YVEX_TEST_ASSERT(program_device_fixture(&p, &err) == YVEX_OK &&
+    YVEX_TEST_ASSERT(program_device_fixture(&p, 0u, &err) == YVEX_OK &&
         yvex_program_physical_summary_get(p)->storage_count == 2u,
         "compiler proves six SSA operations need only two non-overlapping intermediate slots");
     for (i = 0u; i < 6u; ++i)
@@ -491,6 +609,23 @@ static int program_test_token_interface(void)
             variant == 4 ? test_sequence_program(&m, &p, &err) : test_sequence_program_kind(&m, &p, 1, &err);
         if (rc != YVEX_OK) fprintf(stderr, "token interface fixture %d: %s\n", variant, yvex_error_message(&err));
         YVEX_TEST_ASSERT(rc == YVEX_OK, "token runner fixtures are verified physical programs");
+        const yvex_program_physical_summary *summary = yvex_program_physical_summary_get(p);
+        for (size_t i = 0u; i < summary->value_count; ++i) {
+            const yvex_program_physical_value *v = yvex_program_physical_value_at(p, i);
+            yvex_program_value_layout layout;
+            int layout_rc = yvex_program_physical_value_layout(p, i, summary->minimum_rows, &layout, &err);
+            if (v->parameter || v->type.kind != YVEX_IR_TENSOR)
+                YVEX_TEST_ASSERT(layout_rc == YVEX_ERR_UNSUPPORTED && !layout.bytes,
+                    "parameters, state lifetimes and scalar controls never become activation allocations");
+            else if (v->type.scalar == YVEX_IR_INDEX) {
+                yvex_backend_tensor_desc desc;
+                YVEX_TEST_ASSERT(layout_rc == YVEX_OK && layout.rank == 1u &&
+                    layout.storage_scalar == YVEX_IR_INDEX && layout.bytes == layout.elements * 4u &&
+                    yvex_program_device_descriptor(p, i, summary->minimum_rows, &desc, &err) ==
+                        YVEX_ERR_UNSUPPORTED && !desc.bytes,
+                    "host U32 indices have exact compiler geometry but are not F32 device activations");
+            } else YVEX_TEST_ASSERT(layout_rc == YVEX_OK, "token program activation has a physical carrier");
+        }
         rc = yvex_program_physical_token_interface(p, &view, &err);
         if (variant == 3) {
             YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED && !view.vocabulary_size && !view.hidden_width,
@@ -521,10 +656,165 @@ static int program_test_token_interface(void)
     return 0;
 }
 
+static int program_text_compile(void)
+{
+    const unsigned long long layers[] = {0u, 1u, 2u, 50u};
+    yvex_error err;
+    for (size_t run = 0u; run < 4u; ++run) {
+        yvex_program_physical *p = NULL, *copy = NULL;
+        yvex_core_bytes bytes = {.maximum = 16u * 1024u * 1024u};
+        int rc = yvex_text_program_compile(&p, &test_text_recipe, layers[run], 5u, NULL, 0u, &err);
+        if (rc != YVEX_OK) fprintf(stderr, "text compile: %s\n", yvex_error_message(&err));
+        YVEX_TEST_ASSERT(rc == YVEX_OK && p, "source text component lowers without backend or payload");
+        const yvex_program_physical_summary *s = yvex_program_physical_summary_get(p);
+        size_t norms = 0u, attention = 0u, tables = 0u, parameters = 0u;
+        for (size_t i = 0u; i < s->step_count; ++i) {
+            const char *op = yvex_program_physical_step_at(p, i)->implementation;
+            norms += !strcmp(op, "group_rms_norm.bf16.vector4.v1");
+            attention += !strcmp(op, "attention.full.f32acc.bf16.v1");
+            tables += !strcmp(op, "rotary_tables.f64.bf16.v1");
+            parameters += !strcmp(op, "parameter.encoded.v1");
+        }
+        YVEX_TEST_ASSERT(s->input_count == 4u && s->result_count == 1u && s->maximum_rows == 5u &&
+            norms == 4u * layers[run] && attention == layers[run] && tables == (layers[run] != 0u) &&
+            parameters == 1u + layers[run] * 11u,
+            "explicit normalization, attention, positions and parameter dependencies preserve source composition");
+        YVEX_TEST_ASSERT(yvex_program_physical_encode(p, &bytes, &err) == YVEX_OK &&
+            yvex_program_physical_decode(&copy, bytes.data, bytes.count, &err) == YVEX_OK &&
+            !strcmp(s->identity, yvex_program_physical_summary_get(copy)->identity),
+            "complete component program round-trips with deterministic physical identity");
+        printf("Text program: layers=%llu parameters=%zu norms=%zu attention=%zu tables=%zu steps=%zu slots=%zu; "
+            "binary identity exact\n", layers[run], parameters, norms, attention, tables, s->step_count, s->storage_count);
+        yvex_program_physical *retained = yvex_program_physical_retain(p, &err);
+        YVEX_TEST_ASSERT(retained == p, "immutable executable truth is shared without copying or re-lowering");
+        yvex_program_physical_close(&p);
+        YVEX_TEST_ASSERT(!p && !strcmp(yvex_program_physical_summary_get(retained)->identity,
+            yvex_program_physical_summary_get(copy)->identity), "retained program survives compiler owner release");
+        yvex_program_physical_close(&retained);
+        yvex_program_physical_close(&copy); free(bytes.data);
+    }
+    for (size_t variant = 0u; variant < 6u; ++variant) {
+        yvex_component_text_recipe r = test_text_recipe;
+        yvex_program_physical *p = NULL;
+        if (variant == 0u) r.normalization_epsilon = 0.0f;
+        if (variant == 1u) r.query_heads = 3u;
+        if (variant == 2u) r.head_dimension = 6u;
+        if (variant == 3u) r.hidden_width = 31u;
+        if (variant == 4u) r.rope_theta = 0u;
+        if (variant == 5u) r.schema_version = 99u;
+        YVEX_TEST_ASSERT(yvex_text_program_compile(&p, &r, 2u, 5u, NULL, 0u, &err) != YVEX_OK && !p,
+            "invalid geometry, numerical policy and import schema fail before execution");
+    }
+    return 0;
+}
+
+static int program_parameter_views(void)
+{
+    for (unsigned int test = 0u; test < 10u; ++test) {
+        yvex_program_physical_value v = {.parameter = 1, .qtype = YVEX_GGUF_QTYPE_F32,
+            .type = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 5u,
+                .shape = {{YVEX_IR_NONE, 8u}, {YVEX_IR_NONE, 2u}, {YVEX_IR_NONE, 3u},
+                          {YVEX_IR_NONE, 3u}, {YVEX_IR_NONE, 5u}}}};
+        unsigned long long dims[] = {8u, 2u, 3u, 15u}, rows = 99u, width = 99u, bytes = 2880u;
+        unsigned int rank = 4u, qtype = YVEX_GGUF_QTYPE_F32;
+        if (test == 1u) { dims[0] = 2u; dims[1] = 8u; }
+        if (test == 2u) { dims[2] = 5u; dims[3] = 9u; }
+        if (test == 3u) bytes--;
+        if (test == 4u) rank = 3u;
+        if (test == 5u) v.type.shape[4].symbol = 0u;
+        if (test == 6u) v.type.shape[4].extent = ULLONG_MAX;
+        if (test == 7u) qtype = YVEX_GGUF_QTYPE_Q4_0;
+        if (test == 8u) v.parameter = 0;
+        yvex_error err;
+        int rc = test == 9u ? yvex_program_physical_parameter_view(&v, rank, dims, qtype, bytes,
+            &rows, &width, &err) : yvex_program_physical_source_parameter_view(&v, rank, dims, qtype, bytes,
+            &rows, &width, &err);
+        YVEX_TEST_ASSERT(test ? rc == YVEX_ERR_FORMAT && rows == 0u && width == 0u :
+            rc == YVEX_OK && rows == 144u && width == 5u,
+            "explicit scalar source-tail import preserves leading axes; ordinary view never guesses folding");
+    }
+    printf("Source-tail parameter views: exact 8x2x3x3x5 -> 8x2x3x15; 9 malformed/profile negatives refused\n");
+    for (unsigned int test = 0u; test < 13u; ++test) {
+        yvex_program_physical_value v = {.parameter = 1, .qtype = YVEX_GGUF_QTYPE_F32,
+            .type = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 2u,
+                .shape = {{YVEX_IR_NONE, 24u}, {YVEX_IR_NONE, 16u}}}};
+        unsigned long long dims[] = {24u, 16u, 1u, 1u}, bytes = 1536u, rows = 99u, width = 99u;
+        unsigned int rank = 4u, qtype = YVEX_GGUF_QTYPE_F32;
+        if (test == 1u) rank = 2u;
+        if (test == 2u) { dims[0] = 1u; dims[1] = 24u; dims[2] = 16u; }
+        if (test == 3u) { dims[0] = 16u; dims[1] = 24u; }
+        if (test == 4u) { dims[0] = 12u; dims[1] = 32u; }
+        if (test == 5u) bytes--;
+        if (test == 6u) qtype = YVEX_GGUF_QTYPE_BF16;
+        if (test == 7u) v.parameter = 0;
+        if (test == 8u) rank = 0u;
+        if (test == 9u) v.type.rank = YVEX_IR_RANK_CAP + 1u;
+        if (test == 10u) v.type.shape[0] = (yvex_ir_extent){0u, 0u};
+        if (test == 11u) dims[2] = ULLONG_MAX;
+        if (test == 12u) dims[1] = 0u;
+        yvex_error err;
+        int rc = yvex_program_physical_parameter_view(&v, rank, dims, qtype, bytes, &rows, &width, &err);
+        YVEX_TEST_ASSERT(rc == (test < 3u ? YVEX_OK : YVEX_ERR_FORMAT), "only exact singleton-axis views admitted");
+        YVEX_TEST_ASSERT(test < 3u ? rows == 24u && width == 16u : rows == 0u && width == 0u,
+            "no transposition/factorization or partial view escapes failed cold binding");
+    }
+    printf("Physical parameter views: 3 exact singleton normalizations; 10 transpose/factorization/shape/storage "
+        "negatives refused before payload access\n");
+    return 0;
+}
+
+static int program_target_state_cleanup(void)
+{
+    yvex_ir_module *module = NULL;
+    yvex_program_physical *source = NULL;
+    yvex_sequence_state_plan before = {0};
+    yvex_error err = {0};
+    YVEX_TEST_ASSERT(test_sequence_program(&module, &source, &err) == YVEX_OK &&
+        yvex_program_physical_sequence_state(source, &before),
+        "stateful target source has compiled provider bindings");
+    const yvex_program_physical_summary *summary = yvex_program_physical_summary_get(source);
+    yvex_program_target_choice choice = {SIZE_MAX, "gated_delta.bf16.f32state.v1"};
+    for (size_t i = 0u; i < summary->step_count; ++i)
+        if (!strcmp(yvex_program_physical_step_at(source, i)->implementation, choice.implementation)) choice.step = i;
+    YVEX_TEST_ASSERT(choice.step != SIZE_MAX, "fixture contains actual recurrent target work");
+    for (size_t i = 0u; i < 8u; ++i) {
+        yvex_program_physical *target = NULL;
+        yvex_sequence_state_plan after = {0};
+        YVEX_TEST_ASSERT(yvex_program_physical_target_compile(&target, source, &choice, 1u, &err) == YVEX_OK &&
+            yvex_program_physical_sequence_state(target, &after) &&
+            !strcmp(summary->identity, yvex_program_physical_summary_get(target)->identity),
+            "repeated equivalent specialization preserves physical identity and reconstructs state once");
+        YVEX_TEST_ASSERT(before.binding_count == after.binding_count &&
+            !memcmp(before.bindings, after.bindings, before.binding_count * sizeof(*before.bindings)),
+            "state roots, geometry and identities remain exact without duplicate bindings");
+        yvex_program_physical_close(&target);
+    }
+    yvex_program_physical_close(&source);
+    yvex_ir_module_close(&module);
+    printf("Stateful target cleanup: 8 specializations; provider geometry/identity exact; "
+        "no duplicated state bindings; allocation cleanup checked by sanitizer\n");
+    return 0;
+}
+
 int yvex_test_program(void)
 {
+    if (test_shared_expert(YVEX_BACKEND_KIND_CPU)) return 1;
+    if (test_shared_target(YVEX_BACKEND_KIND_CPU)) return 1;
+    if (program_test_value_layout()) return 1;
+    if (test_spatial_programs(YVEX_BACKEND_KIND_CPU)) return 1;
+    if (program_target_state_cleanup()) return 1;
+    if (test_conditioning_program(YVEX_BACKEND_KIND_CPU)) return 1;
+    if (test_joint_compiler()) return 1;
+    if (test_signal_programs(YVEX_BACKEND_KIND_CPU)) return 1;
+    if (program_parameter_views()) return 1;
+    if (test_dense_program(YVEX_BACKEND_KIND_CPU)) return 1;
+    if (program_dense_projection() != 0) return 1;
+    if (test_program_populations(YVEX_BACKEND_KIND_CPU, 0)) return 1;
+    if (test_program_index_values(YVEX_BACKEND_KIND_CPU)) return 1;
+    if (program_text_compile() != 0) return 1;
     if (program_test_token_interface() != 0) return 1;
     if (test_mhc_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;
+    if (test_ingress_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;
     if (test_post_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;
     if (test_stream_mean_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;
     if (test_linear_execute(YVEX_BACKEND_KIND_CPU) != 0) return 1;

@@ -1184,6 +1184,12 @@ int yvex_compiled_model_plan_normalize(yvex_compiled_model_plan *plan,
 {
     if (!plan) return model_plan_refuse(err, YVEX_ERR_INVALID_ARG, "compiled import owner required");
     int rc = YVEX_OK;
+    const yvex_transformer_plan_summary *target = yvex_transformer_plan_summary_get(plan->transformer);
+    const yvex_transformer_plan_summary *draft = yvex_transformer_plan_summary_get(plan->draft_transformer);
+    if (plan->moe && target) rc = yvex_moe_plan_normalize_programs(plan->moe, parameters, target->maximum_context, err);
+    if (rc == YVEX_OK && plan->draft_moe && draft)
+        rc = yvex_moe_plan_normalize_programs(plan->draft_moe, parameters, draft->maximum_context, err);
+    if (rc != YVEX_OK) return rc;
     if (plan->transformer && !plan->final)
         rc = yvex_transformer_final_program_import(&plan->final, plan->transformer, parameters, err);
     if (rc == YVEX_OK && plan->draft_transformer && !plan->draft_final)

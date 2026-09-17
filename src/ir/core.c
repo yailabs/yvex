@@ -42,6 +42,16 @@ static int core_index(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
     return YVEX_OK;
 }
 
+/* An explicit diagnostic publication point, not a model result or state
+ * transition. Its operand must remain live until observation completes. */
+static int core_observe(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
+{
+    const yvex_ir_type *t = &m->types[core_operand_type(m, &m->operations[id], 0u)];
+    if (t->kind != YVEX_IR_TENSOR || (t->scalar != YVEX_IR_F32 && t->scalar != YVEX_IR_BF16))
+        return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "observation requires a floating computational tensor");
+    return YVEX_OK;
+}
+
 static int core_return(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
 {
     const yvex_ir_operation *op = &m->operations[id];
@@ -158,7 +168,10 @@ const yvex_ir_dialect *yvex_ir_core_dialect(void)
         {"parameter", YVEX_IR_ATTR_SYMBOL, 1}, {"source", YVEX_IR_ATTR_TEXT, 1}};
     static const yvex_ir_attribute_rule callee[] = {{"callee", YVEX_IR_ATTR_SYMBOL, 1}};
     static const yvex_ir_attribute_rule integer[] = {{"value", YVEX_IR_ATTR_U64, 1}};
+    static const yvex_ir_attribute_rule observation[] = {{"tag", YVEX_IR_ATTR_U64, 1}};
     static const yvex_ir_operation_definition operations[] = {
+        {"core.observe", 1u, 1u, 1u, 0u, 0u, 0u,
+         YVEX_IR_PUBLISH | YVEX_IR_ORDERED, observation, 1u, 0, core_observe},
         {"core.identity", 1u, 1u, 1u, 1u, 1u, 0u, YVEX_IR_PURE, NULL, 0u, 0, core_identity},
         {"core.parameter", 1u, 0u, 0u, 1u, 1u, 0u, YVEX_IR_PURE, parameter, 2u, 0, core_parameter},
         {"core.index", 1u, 0u, 0u, 1u, 1u, 0u, YVEX_IR_PURE, integer, 1u, 0, core_index},

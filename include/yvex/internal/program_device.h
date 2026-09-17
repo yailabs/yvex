@@ -11,11 +11,25 @@ extern "C" {
 #endif
 
 typedef struct yvex_program_device yvex_program_device;
+/* Backend descriptor projection of compiler-owned activation geometry. No
+ * shape resolution or precision choice belongs to this runtime adapter. */
+int yvex_program_device_descriptor(const yvex_program_physical *, size_t value,
+    unsigned long long rows, yvex_backend_tensor_desc *, yvex_error *);
 typedef struct {
     const yvex_device_tensor *tensor;
     const unsigned int *indices;
     unsigned long long index, state_handle;
 } yvex_program_device_argument;
+
+/* Exact host-U32 target values, separately owned from device activations.
+ * Inputs are borrowed read-only; an internal SSA result has a writable slot.
+ * This does not authorize writing an admitted input or publishing partial indices. */
+typedef struct {
+    const unsigned int *values;
+    unsigned int *output;
+    unsigned long long count;
+    int is_written;
+} yvex_program_index_value;
 
 typedef struct {
     const yvex_program_physical *program;
@@ -26,6 +40,7 @@ typedef struct {
     size_t step_index;
     int (*cancel_requested)(void *);
     void *cancel_context;
+    yvex_program_index_value *indices;
 } yvex_program_device_invocation;
 
 /* A static implementation table, not a dynamic plugin protocol. Each name is

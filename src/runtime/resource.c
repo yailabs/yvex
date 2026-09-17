@@ -202,6 +202,62 @@ static int resource_release(
     return rc;
 }
 
+int yvex_runtime_resource_catalog_reserve(
+    yvex_engine_resource_catalog *catalog, unsigned long long capacity,
+    unsigned long long maximum_host_bytes, unsigned long long *host_bytes, yvex_error *err)
+{
+    unsigned long long retained, peak;
+    engine_resource_slot *slots = NULL;
+    int rc = YVEX_OK;
+    if (host_bytes) *host_bytes = 0u;
+    if (!catalog || !host_bytes || !capacity || capacity > 1024u ||
+        !catalog->mutex_ready || pthread_mutex_lock(&catalog->mutex) != 0)
+        return resource_refuse(err, YVEX_ERR_INVALID_ARG, "one bounded live resource catalog is required");
+    if (catalog->summary.closing) {
+        rc = resource_refuse(err, YVEX_ERR_STATE, "closing resource catalog cannot reserve new capacity");
+        goto finish;
+    }
+    if (capacity < catalog->summary.capacity) capacity = catalog->summary.capacity;
+    if (!yvex_core_u64_mul(capacity, sizeof(*slots), &retained) ||
+        !yvex_core_u64_add(retained, sizeof(*catalog), &retained)) {
+        rc = resource_refuse(err, YVEX_ERR_BOUNDS, "resource catalog metadata overflowed");
+        goto finish;
+    }
+    peak = retained;
+    if (capacity > catalog->summary.capacity &&
+        !yvex_core_u64_add(peak, catalog->summary.capacity * sizeof(*slots), &peak)) {
+        rc = resource_refuse(err, YVEX_ERR_BOUNDS, "resource catalog relocation overflowed");
+        goto finish;
+    }
+    if (peak > SIZE_MAX || (maximum_host_bytes && peak > maximum_host_bytes)) {
+        rc = resource_refuse(err, YVEX_ERR_BOUNDS, "resource catalog metadata exceeds host budget");
+        goto finish;
+    }
+    if (capacity > catalog->summary.capacity) {
+        if (catalog->summary.generation == ULLONG_MAX) {
+            rc = resource_refuse(err, YVEX_ERR_BOUNDS, "resource catalog generation is exhausted");
+            goto finish;
+        }
+        slots = calloc((size_t)capacity, sizeof(*slots));
+        if (!slots) {
+            rc = resource_refuse(err, YVEX_ERR_NOMEM, "resource catalog relocation allocation failed");
+            goto finish;
+        }
+        if (catalog->slots) memcpy(slots, catalog->slots,
+            (size_t)catalog->summary.capacity * sizeof(*slots));
+        free(catalog->slots);
+        catalog->slots = slots;
+        /* Initial construction is not a mutation of a published catalog. */
+        catalog->summary.generation += catalog->summary.capacity != 0u;
+        catalog->summary.capacity = capacity;
+    }
+    *host_bytes = retained;
+    yvex_error_clear(err);
+finish:
+    (void)pthread_mutex_unlock(&catalog->mutex);
+    return rc;
+}
+
 int yvex_runtime_resource_catalog_open(
     yvex_engine_resource_catalog **out, unsigned long long engine_generation,
     const char *engine_identity, unsigned long long capacity, yvex_error *err)
@@ -215,11 +271,7 @@ int yvex_runtime_resource_catalog_open(
             err, YVEX_ERR_INVALID_ARG,
             "bounded engine generation and identity are required");
     catalog = calloc(1u, sizeof(*catalog));
-    if (catalog)
-        catalog->slots = calloc((size_t)capacity, sizeof(*catalog->slots));
-    if (!catalog || !catalog->slots ||
-        pthread_mutex_init(&catalog->mutex, NULL) != 0) {
-        free(catalog ? catalog->slots : NULL);
+    if (!catalog || pthread_mutex_init(&catalog->mutex, NULL) != 0) {
         free(catalog);
         return resource_refuse(
             err, YVEX_ERR_NOMEM,
@@ -227,7 +279,13 @@ int yvex_runtime_resource_catalog_open(
     }
     catalog->mutex_ready = 1;
     catalog->summary.engine_generation = engine_generation;
-    catalog->summary.capacity = capacity;
+    unsigned long long metadata;
+    int rc = yvex_runtime_resource_catalog_reserve(catalog, capacity, 0u, &metadata, err);
+    if (rc != YVEX_OK) {
+        (void)pthread_mutex_destroy(&catalog->mutex);
+        free(catalog);
+        return rc;
+    }
     yvex_core_text_copy(catalog->summary.engine_identity,
                         sizeof(catalog->summary.engine_identity),
                         engine_identity);

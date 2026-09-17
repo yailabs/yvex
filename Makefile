@@ -54,7 +54,8 @@
 	test-runtime-benchmark-chart-live update-runtime-benchmark-charts \
 	test-runtime-attention-live test-runtime-deepseek-kv-live \
 	test-runtime-deepseek-prefill-live test-runtime-deepseek-moe-live \
-	test-runtime-deepseek-transformer-live test-runtime-deepseek-decode-live \
+	test-runtime-deepseek-transformer-live test-runtime-deepseek-transformer-forensic-live \
+	test-runtime-deepseek-decode-live \
 	test-runtime-deepseek-logits-live test-runtime-deepseek-sampling-live \
 	test-runtime-deepseek-tokenizer-live test-runtime-deepseek-generation-live \
 	test-runtime test-runtime-asan test-runtime-asan-live \
@@ -173,6 +174,10 @@ DEEPSEEK_MODELS_ROOT ?= $(HOME)/lab/models/gguf
 DEEPSEEK_SOURCE_MANIFEST ?= $(DEEPSEEK_MODELS_ROOT)/deepseek/deepseek-v4-flash-dspark-source-manifest.json
 DEEPSEEK_OPERATOR_MODELS_ROOT ?= $(HOME)/lab/models
 DEEPSEEK_SELECTED_ARTIFACT ?= $(DEEPSEEK_MODELS_ROOT)/deepseek/deepseek-v4-flash-dspark-bootstrap-q2-v1.gguf
+# The legacy attention oracle admits this exact bootstrap, not an arbitrary
+# selected release representation. Keep its QA prerequisite explicit.
+DEEPSEEK_ATTENTION_ARTIFACT ?= $(DEEPSEEK_MODELS_ROOT)/deepseek/deepseek-v4-flash-dspark-bootstrap-q2-v1.gguf
+export DEEPSEEK_ATTENTION_ARTIFACT
 YVEX_QUANT_DSPARK_PRESET ?= deepseek-v4-flash-dspark-bootstrap-q2-v1
 YVEX_VARIANT_ARTIFACT ?=
 YVEX_VARIANT_BINDING_DIR ?=
@@ -259,6 +264,7 @@ OPENAI_ADAPTER_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(OPENAI_ADAPTER_SRCS))
 CUDA_ARCH_FLAG := $(if $(CUDA_EFFECTIVE_ARCH),-arch=$(CUDA_EFFECTIVE_ARCH))
 CUDA_PTX := $(patsubst %.cu,$(OBJ_DIR)/%.ptx,$(CUDA_CU_SRCS))
 CUDA_PTX_INC := $(OBJ_DIR)/generated/cuda_kernels_ptx.inc
+CUDA_EXPORT_INC := $(OBJ_DIR)/generated/cuda_kernel_exports.inc
 CUDA_NATIVE_ARCH := $(filter sm_%,$(CUDA_EFFECTIVE_ARCH))
 CUDA_CUBIN := $(if $(CUDA_NATIVE_ARCH),$(patsubst %.cu,$(OBJ_DIR)/%.cubin,$(CUDA_CU_SRCS)))
 CUDA_CUBIN_INC := $(OBJ_DIR)/generated/cuda_kernels_cubin.inc
@@ -270,7 +276,7 @@ CORE_OBJS += $(CUDA_OBJS)
 ifeq ($(NVCC_AVAILABLE),yes)
 CPPFLAGS += -DYVEX_HAVE_CUDA_KERNEL_PTX=1
 $(OBJ_DIR)/src/backend/cuda/capability.o: CPPFLAGS += -I$(OBJ_DIR)/generated
-$(OBJ_DIR)/src/backend/cuda/capability.o: $(CUDA_PTX_INC) $(CUDA_BUILD_CONFIG)
+$(OBJ_DIR)/src/backend/cuda/capability.o: $(CUDA_PTX_INC) $(CUDA_EXPORT_INC) $(CUDA_BUILD_CONFIG)
 ifneq ($(CUDA_NATIVE_ARCH),)
 CPPFLAGS += -DYVEX_HAVE_CUDA_KERNEL_CUBIN=1
 $(OBJ_DIR)/src/backend/cuda/capability.o: $(CUDA_CUBIN_INC)
@@ -344,6 +350,7 @@ ARTIFACT_LIVE_OBJ := $(OBJ_DIR)/tests/live/artifact_deepseek.o
 MATERIALIZE_LIVE_OBJ := $(OBJ_DIR)/tests/live/materialize_deepseek.o
 MINIMAX_AUDIO_LIVE_OBJ := $(OBJ_DIR)/tests/live/minimax_h3_audio.o
 MINIMAX_VIDEO_LIVE_OBJ := $(OBJ_DIR)/tests/live/minimax_h3_video.o
+PROGRAM_FORWARD_LIVE_OBJ := $(OBJ_DIR)/tests/live/program_forward.o
 MINIMAX_TEXT_LIVE_OBJ := $(OBJ_DIR)/tests/live/minimax_h3_text.o
 MINIMAX_TRANSFORMER_LIVE_OBJ := $(OBJ_DIR)/tests/live/minimax_h3_transformer.o
 ATTENTION_LIVE_OBJ := $(OBJ_DIR)/tests/live/attention_deepseek.o
@@ -365,7 +372,7 @@ RUNNER_OBJS := $(TEST_MAIN_OBJ) $(QUANT_TEST_RUNNER_OBJ) \
 	$(ARTIFACT_TEST_RUNNER_OBJ) $(CUDA_TEST_MAIN_OBJ) \
 	$(SOURCE_PAYLOAD_LIVE_OBJ) $(QUANT_LIVE_OBJ) $(ARTIFACT_LIVE_OBJ) \
 	$(MATERIALIZE_LIVE_OBJ) $(MINIMAX_AUDIO_LIVE_OBJ) $(MINIMAX_VIDEO_LIVE_OBJ) \
-	$(MINIMAX_TEXT_LIVE_OBJ) $(MINIMAX_TRANSFORMER_LIVE_OBJ) \
+	$(MINIMAX_TEXT_LIVE_OBJ) $(MINIMAX_TRANSFORMER_LIVE_OBJ) $(PROGRAM_FORWARD_LIVE_OBJ) \
 	$(ATTENTION_LIVE_OBJ) \
 	$(PREFILL_LIVE_OBJ) $(MOE_LIVE_OBJ) \
 	$(TRANSFORMER_LIVE_OBJ) $(DECODE_LIVE_OBJ) $(LOGITS_LIVE_OBJ) $(TOKENIZER_LIVE_OBJ) \
@@ -698,6 +705,7 @@ update-runtime-benchmark-charts: test-runtime-benchmark-chart-live
 
 # Keep focused harness invocations serial even when the outer make uses -j.
 test-runtime: $(TEST_RUNNER)
+	YVEX_TEST_FILTER=unit.engine_resource,unit.materialization_runtime $(TEST_RUNNER)
 	YVEX_TEST_FILTER=protocol $(TEST_RUNNER)
 	YVEX_TEST_FILTER=provider $(TEST_RUNNER)
 	YVEX_TEST_FILTER=openai $(TEST_RUNNER)
@@ -713,6 +721,7 @@ test-runtime: $(TEST_RUNNER)
 	YVEX_TEST_FILTER=runtime_transformer $(TEST_RUNNER)
 	YVEX_TEST_FILTER=runtime_prefill $(TEST_RUNNER)
 	YVEX_TEST_FILTER=runtime_profile $(TEST_RUNNER)
+	YVEX_TEST_FILTER=unit.runtime_media $(TEST_RUNNER)
 	YVEX_TEST_FILTER=runtime_state $(TEST_RUNNER)
 	YVEX_TEST_FILTER=runtime_benchmark $(TEST_RUNNER)
 	YVEX_TEST_FILTER=unit.ir,unit.program,unit.sequence_state,unit.sequence_state_session,unit.sequence_mixer,unit.selective_ssd,unit.mamba2_source $(TEST_RUNNER)
@@ -872,10 +881,29 @@ test-minimax-audio-artifact-live: $(MINIMAX_AUDIO_LIVE_RUNNER)
 		echo "MINIMAX_H3_AUDIO_ARTIFACT is required" >&2; exit 2; }
 	$(MINIMAX_AUDIO_LIVE_RUNNER) "$(MINIMAX_H3_AUDIO_ARTIFACT)"
 
+.PHONY: test-minimax-audio-program-live
+test-minimax-audio-program-live: $(MINIMAX_AUDIO_LIVE_RUNNER)
+	@test -n "$(MINIMAX_H3_AUDIO_ARTIFACT)" || { \
+		echo "MINIMAX_H3_AUDIO_ARTIFACT is required" >&2; exit 2; }
+	$(MINIMAX_AUDIO_LIVE_RUNNER) --program-preservation cpu "$(MINIMAX_H3_AUDIO_ARTIFACT)"
+	$(MINIMAX_AUDIO_LIVE_RUNNER) --program-preservation cuda "$(MINIMAX_H3_AUDIO_ARTIFACT)"
+
 test-minimax-video-artifact-live: $(MINIMAX_VIDEO_LIVE_RUNNER)
 	@test -n "$(MINIMAX_H3_VIDEO_ARTIFACT)" || { \
 		echo "MINIMAX_H3_VIDEO_ARTIFACT is required" >&2; exit 2; }
 	$(MINIMAX_VIDEO_LIVE_RUNNER) "$(MINIMAX_H3_VIDEO_ARTIFACT)"
+
+.PHONY: test-minimax-keyframe-program-live
+test-minimax-keyframe-program-live: $(MINIMAX_VIDEO_LIVE_RUNNER)
+	@test -n "$(MINIMAX_H3_VIDEO_ARTIFACT)" -a -n "$(MINIMAX_H3_KEYFRAME_IMAGE)" \
+		-a -n "$(MINIMAX_H3_KEYFRAME_REFERENCE)" || { \
+		echo "exact video artifact, keyframe image and preservation reference are required" >&2; exit 2; }
+	@set -eu; output=$$(mktemp /tmp/yvex-keyframe-program.XXXXXX); \
+		trap 'rm -f "$$output"' EXIT HUP INT TERM; \
+		$(MINIMAX_VIDEO_LIVE_RUNNER) --encode-keyframe-cuda "$(MINIMAX_H3_VIDEO_ARTIFACT)" \
+			"$(MINIMAX_H3_KEYFRAME_IMAGE)" "$$output" 32 32 "$(MINIMAX_H3_KEYFRAME_REFERENCE)"; \
+		cmp "$$output" "$(MINIMAX_H3_KEYFRAME_REFERENCE)"; \
+		printf '%s\n' 'keyframe_program_preservation values=96 max_abs=0 tolerance=0 bitwise_equal=true'
 
 test-minimax-text-conditioning-live: $(MINIMAX_TEXT_LIVE_RUNNER)
 	@test -n "$(MINIMAX_H3_TEXT_ARTIFACT)" || { \
@@ -892,7 +920,7 @@ test-minimax-text-layer-live: $(MINIMAX_TEXT_LIVE_RUNNER)
 		echo "MINIMAX_H3_TEXT_LAYER_REFERENCE is required" >&2; exit 2; }
 	$(MINIMAX_TEXT_LIVE_RUNNER) "$(MINIMAX_H3_TEXT_ARTIFACT)" 1 \
 		"$(BUILD_DIR)/tests/minimax_h3_text_layer.f32" \
-		"$(MINIMAX_H3_TEXT_LAYER_REFERENCE)" layer0
+		"$(MINIMAX_H3_TEXT_LAYER_REFERENCE)" layer0-proof
 
 test-minimax-text-encoder-live: $(MINIMAX_TEXT_LIVE_RUNNER)
 	@test -n "$(MINIMAX_H3_TEXT_ARTIFACT)" || { \
@@ -903,6 +931,20 @@ test-minimax-text-encoder-live: $(MINIMAX_TEXT_LIVE_RUNNER)
 		"$(MINIMAX_H3_TEXT_ENCODER_TOKENS)" \
 		"$(BUILD_DIR)/tests/minimax_h3_text_encoder.f32" \
 		"$(MINIMAX_H3_TEXT_ENCODER_REFERENCE)" encoder50
+
+.PHONY: test-minimax-joint-program-live
+test-minimax-joint-program-live: $(MINIMAX_TRANSFORMER_LIVE_RUNNER)
+	@test -n "$(MINIMAX_H3_TRANSFORMER_ARTIFACT)" -a -n "$(MINIMAX_H3_JOINT_PRESERVATION_ROOT)" || { \
+		echo "exact transformer artifact and joint preservation fixture root are required" >&2; exit 2; }
+	env -u YVEX_MINIMAX_H3_GRAPH_ARTIFACT YVEX_MINIMAX_H3_BLOCKS=1 \
+		$(MINIMAX_TRANSFORMER_LIVE_RUNNER) "$(MINIMAX_H3_TRANSFORMER_ARTIFACT)" \
+		"$(MINIMAX_H3_JOINT_PRESERVATION_ROOT)/omni.transformer.video.f32" \
+		"$(MINIMAX_H3_JOINT_PRESERVATION_ROOT)/omni.transformer.audio.f32" \
+		"$(MINIMAX_H3_JOINT_PRESERVATION_ROOT)/omni.transformer.conditioning.f32" \
+		"$(BUILD_DIR)/tests/minimax_joint_program_video.f32" \
+		"$(BUILD_DIR)/tests/minimax_joint_program_audio.f32" \
+		"$(MINIMAX_H3_JOINT_PRESERVATION_ROOT)/omni.transformer.video.oracle.f32" \
+		"$(MINIMAX_H3_JOINT_PRESERVATION_ROOT)/omni.transformer.audio.oracle.f32" --program-preservation
 
 test-minimax-omni-transformer-artifact-live: $(MINIMAX_TRANSFORMER_LIVE_RUNNER)
 	@test -n "$(MINIMAX_H3_TRANSFORMER_ARTIFACT)" || { \
@@ -1091,6 +1133,15 @@ test-runtime-deepseek-moe-live: cuda $(MOE_LIVE_RUNNER) $(YVEX_BIN)
 	echo "production DeepSeek MoE live: CPU hash/learned and CUDA 43-layer operator"
 
 # This serial target proves numeric-token CPU/CUDA backbone execution and operator reachability.
+test-runtime-deepseek-transformer-forensic-live: cuda $(TRANSFORMER_LIVE_RUNNER)
+	@set -eu; \
+	tmp_tag=runtime-deepseek-transformer-forensic; \
+	$(ATTENTION_OWNED_TMP_BEGIN) \
+	YVEX_TRANSFORMER_LIVE_CUDA_ONLY=1 YVEX_TRANSFORMER_LIVE_FORENSIC=1 \
+	YVEX_TRANSFORMER_LIVE_TOKENS=1 YVEX_TRANSFORMER_LIVE_CONTEXT=1 \
+		$(TRANSFORMER_LIVE_RUNNER) "$(DEEPSEEK_SELECTED_ARTIFACT)" "$(YVEX_RUNTIME_BINDING)" \
+		"$$tmp_dir/input"
+
 test-runtime-deepseek-transformer-live: cuda $(TRANSFORMER_LIVE_RUNNER) $(YVEX_BIN)
 	@set -eu; \
 	tmp_tag=runtime-deepseek-transformer-live; \
@@ -1616,6 +1667,12 @@ $(OBJ_DIR)/%.cubin: %.cu include/yvex/qtype.h src/backend/cuda/kernel_primitives
 	@$(CUOBJDUMP) --dump-sass $@ | grep -F 'Function :' >/dev/null || { \
 		echo "native CUDA image contains no SASS functions: $@" >&2; exit 1; }
 
+$(CUDA_EXPORT_INC): $(CUDA_PTX) tools/generate_cuda_exports.py
+	@mkdir -p $(@D)
+	@set -eu; tmp="$@.tmp.$$$$"; trap 'rm -f "$$tmp"' EXIT HUP INT TERM; \
+		python3 tools/generate_cuda_exports.py $(CUDA_PTX) >"$$tmp"; \
+		mv "$$tmp" "$@"; trap - EXIT HUP INT TERM
+
 $(CUDA_PTX_INC): $(CUDA_PTX)
 	@mkdir -p $(@D)
 	@tmp="$@.tmp.$$$$"; trap 'rm -f "$$tmp"' EXIT HUP INT TERM; { \
@@ -1725,6 +1782,16 @@ $(MATERIALIZE_LIVE_RUNNER): $(MATERIALIZE_LIVE_OBJ) $(LIBYVEX)
 $(MINIMAX_AUDIO_LIVE_RUNNER): $(MINIMAX_AUDIO_LIVE_OBJ) $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(MINIMAX_AUDIO_LIVE_OBJ) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+$(TEST_DIR)/program_forward: $(PROGRAM_FORWARD_LIVE_OBJ) $(LIBYVEX)
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(PROGRAM_FORWARD_LIVE_OBJ) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+.PHONY: test-program-forward-live
+test-program-forward-live: $(TEST_DIR)/program_forward
+	@test -n "$(YVEX_PROGRAM_ARTIFACT)" -a -n "$(YVEX_PROGRAM_BINDING)" -a -n "$(YVEX_PROGRAM_TARGET)" || { \
+		echo "YVEX_PROGRAM_ARTIFACT, YVEX_PROGRAM_BINDING and YVEX_PROGRAM_TARGET are required" >&2; exit 2; }
+	$(TEST_DIR)/program_forward "$(YVEX_PROGRAM_ARTIFACT)" "$(YVEX_PROGRAM_BINDING)" "$(YVEX_PROGRAM_TARGET)"
 
 $(MINIMAX_VIDEO_LIVE_RUNNER): $(MINIMAX_VIDEO_LIVE_OBJ) $(LIBYVEX)
 	@mkdir -p $(@D)

@@ -300,8 +300,49 @@ src/graph/families/minimax_h3.c
 src/model/families/minimax_h3.c'
 [ "$minimax_family_sources" = "$expected_minimax_family_sources" ] ||
     fail "MiniMax must terminate at its model, graph, and CUDA composition projections"
-if rg -n -i '(families/|deepseek|minimax|qwen)' src/backend/cuda/text_encoder.c; then
-    fail "generic CUDA text execution contains concrete family semantics"
+if [ -e src/backend/cuda/text_encoder.c ] ||
+    rg -n 'text_embedding_execute|text_encoder_execute|text_encoder_multimodal_execute' src include; then
+    fail "text components retain a parallel procedural backend execution authority"
+fi
+if rg -n -i '(families/|deepseek|minimax|qwen)' src/graph/text_program.c src/runtime/component_program.c; then
+    fail "common text compiler or component executor contains concrete family semantics"
+fi
+keyframe_compile_pattern='yvex_spatial_encoder_compile[[:space:]]*\(|keyframe_encoder_recipe'
+printf '%s\n' 'yvex_spatial_encoder_compile(&program, recipe);' |
+    rg "$keyframe_compile_pattern" >/dev/null || fail "keyframe compiler guard misses compilation"
+if printf '%s\n' 'yvex_component_tensor_program_execute(component, invocation);' |
+    rg "$keyframe_compile_pattern" >/dev/null; then
+    fail "keyframe compiler guard rejects admitted program execution"
+fi
+if rg -n "$keyframe_compile_pattern" src/backend/cuda/families/minimax_h3.c; then
+    fail "keyframe consumer reconstructs compiler-owned encoder computation"
+fi
+if rg -n 'yvex_vision_program_compile[[:space:]]*\(' src/runtime; then
+    fail "runtime reconstructs a vision program instead of consuming compiler admission"
+fi
+if rg -n 'yvex_graph_register_|vision_recipe|YVEX_VISION_(BLOCK|MERGER|EXTERNAL|WEIGHT)_' \
+    src/backend/cuda/families/minimax_h3.c; then
+    fail "media adapter reconstructs vision architecture or source parameter roles"
+fi
+if rg -n 'YVEX_VISION_(BLOCK|MERGER|EXTERNAL|WEIGHT)_' src/runtime/component.c; then
+    fail "component binding reconstructs vision parameter roles instead of compiled IDs"
+fi
+if rg -n 'YVEX_COMPONENT_TEXT_LAYER_WEIGHT_COUNT|layer_weight_name|embedding_weight_name' \
+    src/runtime/component.c include/yvex/internal/component.h; then
+    fail "component binding reconstructs text parameter roles instead of compiled IDs"
+fi
+if rg -n 'yvex_component_multimodal_text_(request|execute)' src include; then
+    fail "multimodal text retains a parallel invocation instead of the compiled text signature"
+fi
+if rg -n -- '->recipe|modality_count' src/runtime/component.c; then
+    fail "component runtime retains a source recipe or reconstructs joint index semantics"
+fi
+if rg -n 'batch_device_outputs|batch[.]device_outputs' src/runtime/scheduler.c src/runtime/private.h; then
+    fail "engine scheduler retains a parallel fused MoE residual-output path"
+fi
+if rg -n 'device_outputs?|residual_mhc_(pre|post)_function|cuda[.]moe[.]rows[.]mhc-post' \
+    src/runtime/moe.c src/backend/cuda/moe.c include/yvex/internal/moe.h; then
+    fail "batched expert execution retains a parallel residual-composition result"
 fi
 if rg -n 'yvex_runtime_component_session|yvex_runtime_component_text_artifact_execute|yvex_materialization_session_(open|commit|close)|yvex_artifact_(open|close)' \
     src/backend; then
@@ -319,12 +360,27 @@ if rg -n '"yvex[.][^"]*[.](cuda|cpu)[.-]' src/graph/families/minimax_h3.c; then
 fi
 rg -n 'yvex_runtime_component_text_artifact_execute' src/graph/families/minimax_h3.c >/dev/null ||
     fail "MiniMax text recipe bypasses the generic component lifecycle"
-rg -n 'yvex_component_joint_transformer_execute' \
+rg -n 'yvex_component_joint_program_execute' \
     src/graph/families/minimax_h3.c >/dev/null ||
     fail "MiniMax joint Transformer bypasses generic resident binding and dispatch"
-rg -n 'yvex_component_alias_decoder_execute' \
+if sed -n '/^static int t2va_omni_evaluate(/,/^}/p' src/graph/families/minimax_h3.c |
+    rg -n 'transformer_component_(execute|compile)|yvex_.*(compile|binding_open)|parameter_name'; then
+    fail "iterative component execution recompiles or resolves source linkage after cold admission"
+fi
+if sed -n '/^int yvex_component_joint_program_execute(/,/^}/p' src/runtime/component.c |
+    rg -n 'parameter_name|weight_view|component_binding_find'; then
+    fail "warm joint invocation resolves source names instead of consuming retained compiled linkage"
+fi
+rg -n 'yvex_signal_program_compile' \
     src/graph/families/minimax_h3.c >/dev/null ||
-    fail "MiniMax audio decoder bypasses generic resident binding and dispatch"
+    fail "MiniMax audio computation bypasses the signal compiler"
+if rg -n 'alias_decoder_(request|result|execute)|alias_cpu_(stage|residual)|decoder_residual_block' \
+    src include; then
+    fail "a retired procedural signal decoder remains beside compiler authority"
+fi
+if rg -n 'weight_name|residual_blocks|stage_count|alias_decoder_recipe' src/backend/cuda/convolution.c; then
+    fail "signal backend reconstructs source names or computational composition"
+fi
 if rg -n 'yvex_cuda_|yvex_backend_text_(embedding|encoder)_execute|yvex_backend_transformer_joint_cuda|yvex_backend_alias_decoder_execute' \
     src/runtime/component.c include/yvex/internal/component.h; then
     fail "generic component runtime bypasses backend-owned operation dispatch"
@@ -337,19 +393,23 @@ if rg -n 'video_output_numeric|audio_output_numeric|tile_rows|split_k|LINEAR_RED
     src/graph/families/minimax_h3.c include/yvex/internal/joint_transformer.h; then
     fail "MiniMax semantic recipe contains output-linear physical execution policy"
 fi
-if rg -n -i 'minimax' src/backend/cuda/qtype.c src/backend/cuda/joint_transformer.c \
+if rg -n -i 'minimax' src/backend/cuda/qtype.c \
     src/runtime/component.c; then
     fail "generic runtime or CUDA output-linear execution contains a MiniMax switch"
 fi
+if test -e src/backend/cuda/joint_transformer.c || test -e src/backend/cuda/joint_contract.c ||
+    rg -n 'backend_component_operations|cuda_transformer_joint|cuda_joint_dense_plan|cuda_execution_arena' src include; then
+    fail "retired component topology dispatch or joint CUDA runtime remains beside compiler authority"
+fi
 if rg -n 'encoded_bytes, row_count, row_width, row_bytes' \
     include/yvex/internal/backend.h include/yvex/internal/transformer.h \
-    include/yvex/internal/neural_operations.h \
+    include/yvex/internal/component.h \
     include/yvex/internal/joint_transformer.h; then
-    fail "component execution duplicates the canonical encoded-weight descriptor"
+    fail "component execution duplicates the canonical neural-operation weight descriptor"
 fi
-rg -n 'typedef yvex_component_encoded_weight yvex_backend_text_weight' \
-    include/yvex/internal/component.h >/dev/null ||
-    fail "text execution does not reuse the canonical component weight view"
+if rg -n 'yvex_backend_text_weight|YVEX_BACKEND_TEXT_.*WEIGHT' src include; then
+    fail "text execution retains a private weight descriptor or source-role enum"
+fi
 rg -n 'typedef struct yvex_component_encoded_weight yvex_transformer_encoded_weight' \
     include/yvex/internal/neural_operations.h >/dev/null ||
     fail "dense Transformer execution does not reuse the canonical component weight view"

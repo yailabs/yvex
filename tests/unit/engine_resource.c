@@ -17,12 +17,19 @@ static const char admission_identity[] =
 typedef struct {
     unsigned int releases;
     int fail;
+    yvex_engine_resource_catalog *grow_during_release;
 } release_probe;
 
 static int release_count(void *context, yvex_error *err)
 {
     release_probe *probe = context;
     probe->releases++;
+    if (probe->grow_during_release) {
+        unsigned long long bytes;
+        int rc = yvex_runtime_resource_catalog_reserve(
+            probe->grow_during_release, 8u, 0u, &bytes, err);
+        if (rc != YVEX_OK) return rc;
+    }
     if (probe->fail) {
         yvex_error_set(err, YVEX_ERR_STATE, "test.engine-resource",
                        "injected resource release failure");
@@ -41,6 +48,7 @@ int yvex_test_engine_resource(void)
     yvex_engine_resource_entry entries[2] = {0};
     release_probe package_probe = {0}, prepared_probe = {0};
     unsigned long long count = 0ull;
+    unsigned long long metadata = 0u;
     void *borrowed = NULL;
     yvex_error err;
 
@@ -109,6 +117,17 @@ int yvex_test_engine_resource(void)
                 YVEX_OK &&
             borrowed == &prepared_probe,
         "consumer borrows an exact resource generation");
+    YVEX_TEST_ASSERT(yvex_runtime_resource_catalog_reserve(catalog, 6u, 1u, &metadata, &err) ==
+        YVEX_ERR_BOUNDS && !metadata &&
+        yvex_runtime_resource_snapshot(catalog, &summary, entries, 2u, &count, &err) == YVEX_OK &&
+        summary.capacity == 4u && entries[1].consumer_count == 1u,
+        "failed growth preserves live metadata and the borrowed resource");
+    YVEX_TEST_ASSERT(yvex_runtime_resource_catalog_reserve(catalog, 6u, 0u, &metadata, &err) == YVEX_OK &&
+        metadata && yvex_runtime_resource_snapshot(catalog, &summary, entries, 2u, &count, &err) == YVEX_OK &&
+        summary.capacity == 6u && count == 2u && entries[1].consumer_count == 1u &&
+        entries[0].dependent_count == 1u && borrowed == &prepared_probe &&
+        entries[1].handle.generation == prepared.generation && entries[1].handle.slot == prepared.slot,
+        "metadata growth preserves resource identity, dependency and borrowed value");
     YVEX_TEST_ASSERT(
         yvex_runtime_resource_evict(catalog, &prepared, &err) ==
                 YVEX_ERR_STATE &&
@@ -118,10 +137,14 @@ int yvex_test_engine_resource(void)
         yvex_runtime_resource_drop(catalog, prepared, &err) == YVEX_OK,
         "consumer discharges the exact borrow");
     stale = prepared;
+    prepared_probe.grow_during_release = catalog;
     YVEX_TEST_ASSERT(
         yvex_runtime_resource_evict(catalog, &prepared, &err) == YVEX_OK &&
             !prepared.engine_generation && prepared_probe.releases == 1u,
         "prepared resource evicts independently from package truth");
+    YVEX_TEST_ASSERT(yvex_runtime_resource_snapshot(catalog, &summary, entries, 2u, &count, &err) == YVEX_OK &&
+        summary.capacity == 8u && count == 1u,
+        "release callback may grow metadata; release resolves its handle again after callback");
     YVEX_TEST_ASSERT(
         yvex_runtime_resource_acquire(catalog, stale, &borrowed, &err) ==
             YVEX_ERR_STATE,
@@ -147,6 +170,8 @@ int yvex_test_engine_resource(void)
             summary.failed_count == 1ull && !summary.ready_count &&
             summary.failed_release_count == 1ull,
         "failed release preserves exact ownership for a retry");
+    YVEX_TEST_ASSERT(yvex_runtime_resource_catalog_reserve(catalog, 16u, 0u, &metadata, &err) ==
+        YVEX_ERR_STATE && !metadata, "closing resource catalogs refuse growth without losing cleanup");
     package_probe.fail = 0;
     YVEX_TEST_ASSERT(
         yvex_runtime_resource_catalog_close(&catalog, &err) == YVEX_OK &&

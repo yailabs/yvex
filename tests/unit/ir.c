@@ -462,9 +462,12 @@ static int ir_reserved_contracts(void)
     forged = yvex_ir_core_dialect()->operations[0];
     YVEX_TEST_ASSERT(yvex_ir_module_open(&module, "copied", ir_source, &dialect, 1u, &error) != YVEX_OK &&
                      !module, "core operation semantics have one static owner even for equal copies");
-    forged = yvex_ir_neural_dialect()->operations[2];
-    YVEX_TEST_ASSERT(yvex_ir_module_open(&module, "neural", ir_source, &dialect, 1u, &error) != YVEX_OK &&
-                     !module, "standard neural semantics cannot be shadowed by an extension");
+    const yvex_ir_dialect *neural = yvex_ir_neural_dialect();
+    for (size_t i = 0u; i < neural->count; ++i) {
+        forged = neural->operations[i];
+        YVEX_TEST_ASSERT(yvex_ir_module_open(&module, "neural", ir_source, &dialect, 1u, &error) != YVEX_OK &&
+            !module, "every registered neural contract rejects a namesake extension, independent of namespace");
+    }
     return 0;
 }
 
@@ -649,6 +652,309 @@ static int ir_neural_constraints(void)
     return 0;
 }
 
+static int ir_component_operations(void)
+{
+    static const char *names[] = {"nn.group_rms_norm", "tensor.rotary_half", "attention.full",
+        "tensor.rotary_tables", "tensor.masked_rows"};
+    for (size_t kind = 0u; kind < 5u; ++kind) for (unsigned int bad = 0u; bad < 6u; ++bad) {
+        yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+        yvex_ir_module *m = NULL;
+        yvex_ir_type types[5];
+        yvex_ir_id ids[5], function, block, op, returned[2];
+        size_t inputs = kind == 0u ? 2u : 3u, outputs = kind == 3u ? 2u : 1u;
+        yvex_ir_attribute attrs[4] = {0};
+        size_t attribute_count = 1u;
+        yvex_error err;
+        for (size_t i = 0u; i < 5u; ++i)
+            types[i] = (yvex_ir_type){.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_BF16, .rank = 2u,
+                .shape = {{YVEX_IR_NONE, 4u}, {YVEX_IR_NONE, 8u}}};
+        if (kind == 0u) {
+            types[1].rank = 1u; types[1].shape[0].extent = 4u;
+            types[1].shape[1] = (yvex_ir_extent){0};
+            attrs[0] = (yvex_ir_attribute){.name = "epsilon", .kind = YVEX_IR_ATTR_F64, .value.real = 1.0e-6};
+        } else if (kind == 1u || kind == 2u) {
+            types[1].shape[1].extent = types[2].shape[1].extent = 4u;
+            attrs[0] = (yvex_ir_attribute){.name = "head_dimension", .kind = YVEX_IR_ATTR_U64,
+                .value.integer = 4u};
+            if (kind == 2u) {
+                attrs[1] = (yvex_ir_attribute){.name = "causal", .kind = YVEX_IR_ATTR_BOOL, .value.integer = 1u};
+                attribute_count = 2u;
+            }
+        } else if (kind == 3u) {
+            for (size_t i = 0u; i < 3u; ++i) {
+                types[i].scalar = YVEX_IR_INDEX; types[i].rank = 1u;
+                types[i].shape[1] = (yvex_ir_extent){0};
+            }
+            types[3].shape[1].extent = types[4].shape[1].extent = 4u;
+            attrs[0] = (yvex_ir_attribute){.name = "theta", .kind = YVEX_IR_ATTR_F64, .value.real = 10000.0};
+            attrs[1] = (yvex_ir_attribute){.name = "section_y", .kind = YVEX_IR_ATTR_U64, .value.integer = 1u};
+            attrs[2] = (yvex_ir_attribute){.name = "section_z", .kind = YVEX_IR_ATTR_U64, .value.integer = 1u};
+            attribute_count = 3u;
+        } else {
+            types[2].shape[1].extent = 1u;
+            attrs[0] = (yvex_ir_attribute){.name = "add", .kind = YVEX_IR_ATTR_BOOL, .value.integer = 1u};
+        }
+        if (bad == 1u) types[0].scalar = YVEX_IR_I32;
+        if (bad == 2u) types[inputs].shape[1].extent++;
+        if (bad == 3u) {
+            if (kind == 0u || kind == 3u) attrs[0].value.real = 0.0;
+            else if (kind == 2u) attrs[1].value.integer = 2u;
+            else attrs[0].value.integer = kind == 4u ? 2u : 0u;
+        }
+        if (bad == 4u) types[1].shape[0].extent = 3u;
+        if (bad == 5u) attrs[attribute_count++] =
+            (yvex_ir_attribute){.name = "unowned", .kind = YVEX_IR_ATTR_U64, .value.integer = 1u};
+        YVEX_TEST_ASSERT(yvex_ir_module_open(&m, "component_contract", ir_source, dialects, 2u, &err) == YVEX_OK,
+            "component operation contract module opens");
+        for (size_t i = 0u; i < inputs + outputs; ++i)
+            YVEX_TEST_ASSERT(yvex_ir_type_intern(m, &types[i], &ids[i], &err) == YVEX_OK,
+                "individually valid types enter operation verifier");
+        YVEX_TEST_ASSERT(yvex_ir_function_add(m, "forward", ids, inputs, ids + inputs, outputs,
+            0u, &function, &err) == YVEX_OK, "component function has explicit typed operands/results");
+        block = yvex_ir_function_at(m, function)->body;
+        yvex_ir_operation_request r = {.operation = names[kind],
+            .operands = yvex_ir_block_at(m, block)->arguments, .operand_count = inputs,
+            .result_types = ids + inputs, .result_count = outputs,
+            .attributes = attrs, .attribute_count = attribute_count};
+        int constructed = yvex_ir_operation_add(m, block, &r, &op, &err);
+        if (bad == 5u) {
+            YVEX_TEST_ASSERT(constructed == YVEX_ERR_FORMAT,
+                "undeclared attribute population refuses at construction");
+            yvex_ir_module_close(&m);
+            continue;
+        }
+        if (constructed != YVEX_OK)
+            fprintf(stderr, "%s scenario=%u construction=%d: %s\n",
+                names[kind], bad, constructed, yvex_error_message(&err));
+        YVEX_TEST_ASSERT(constructed == YVEX_OK, "operation construction precedes fail-closed verification");
+        memcpy(returned, yvex_ir_operation_at(m, op)->results, outputs * sizeof(*returned));
+        r = (yvex_ir_operation_request){.operation = "core.return", .operands = returned, .operand_count = outputs};
+        YVEX_TEST_ASSERT(yvex_ir_operation_add(m, block, &r, &op, &err) == YVEX_OK,
+            "explicit component results close function");
+        int rc = yvex_ir_seal(m, &err);
+        if (rc != (bad ? YVEX_ERR_FORMAT : YVEX_OK))
+            fprintf(stderr, "%s scenario=%u observed=%d: %s\n", names[kind], bad, rc, yvex_error_message(&err));
+        YVEX_TEST_ASSERT(rc == (bad ? YVEX_ERR_FORMAT : YVEX_OK),
+            "component scalar, result, geometry, numerical and attribute errors refuse before lowering");
+        yvex_ir_module_close(&m);
+    }
+    printf("Component operation verification: 5 valid contracts; 25 type/shape/attribute negatives refused\n");
+    return 0;
+}
+
+static int ir_visual_operations(void)
+{
+    static const char *names[] = {"nn.linear_bias", "tensor.split_three", "nn.layer_norm", "nn.gelu",
+        "nn.gelu_tanh", "tensor.rotary_half_f32", "tensor.grid_bilinear", "tensor.grid_rotary"};
+    for (size_t kind = 0u; kind < 8u; ++kind) for (unsigned int bad = 0u; bad < 5u; ++bad) {
+        yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+        yvex_ir_module *m = NULL;
+        yvex_ir_type t[6];
+        yvex_ir_id ids[6], function, block, operation, returned[3];
+        size_t inputs = 3u, outputs = 1u, attributes = 0u;
+        yvex_ir_attribute a[5] = {0};
+        yvex_error err = {0};
+        for (size_t i = 0u; i < 6u; ++i)
+            t[i] = (yvex_ir_type){.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_BF16, .rank = 2u,
+                .shape = {{YVEX_IR_NONE, 4u}, {YVEX_IR_NONE, 8u}}};
+        if (kind == 0u || kind == 2u) {
+            for (size_t i = kind == 0u ? 2u : 1u; i < 3u; ++i) {
+                t[i].rank = 1u; t[i].shape[0].extent = 8u; t[i].shape[1] = (yvex_ir_extent){0};
+            }
+            if (!kind) t[1].shape[0].extent = 8u;
+            else {
+                a[0] = (yvex_ir_attribute){.name = "epsilon", .kind = YVEX_IR_ATTR_F64, .value.real = 1.0e-6};
+                a[1] = (yvex_ir_attribute){.name = "weight_offset", .kind = YVEX_IR_ATTR_F64};
+                attributes = 2u;
+            }
+        } else if (kind == 1u) {
+            inputs = 1u; outputs = 3u; t[0].shape[1].extent = 24u;
+        } else if (kind == 3u || kind == 4u) inputs = 1u;
+        else if (kind == 5u) {
+            t[1].scalar = t[2].scalar = YVEX_IR_F32;
+            a[0] = (yvex_ir_attribute){.name = "head_dimension", .kind = YVEX_IR_ATTR_U64, .value.integer = 8u};
+            attributes = 1u;
+        } else {
+            inputs = kind == 6u ? 1u : 0u;
+            outputs = kind == 6u ? 1u : 2u;
+            t[0].shape[0].extent = 9u;
+            if (kind == 7u) t[3].scalar = t[4].scalar = YVEX_IR_F32;
+            a[0] = (yvex_ir_attribute){.name = "grid_height", .kind = YVEX_IR_ATTR_U64, .value.integer = 2u};
+            a[1] = (yvex_ir_attribute){.name = "grid_width", .kind = YVEX_IR_ATTR_U64, .value.integer = 2u};
+            a[2] = (yvex_ir_attribute){.name = "block_size", .kind = YVEX_IR_ATTR_U64, .value.integer = 1u};
+            a[3] = kind == 6u ?
+                (yvex_ir_attribute){.name = "source_side", .kind = YVEX_IR_ATTR_U64, .value.integer = 3u} :
+                (yvex_ir_attribute){.name = "theta", .kind = YVEX_IR_ATTR_F64, .value.real = 10000.0};
+            attributes = 4u;
+        }
+        if (bad == 1u) t[3].scalar = YVEX_IR_INDEX;
+        if (bad == 2u) t[3].shape[0].extent++;
+        if (bad == 3u) {
+            if (kind == 0u) t[2].shape[0].extent++;
+            else if (kind == 1u) t[4].shape[1].extent++;
+            else if (kind == 2u) a[0].value.real = 0.0;
+            else if (kind < 5u) t[3].shape[1].extent++;
+            else if (kind == 5u) a[0].value.integer = 3u;
+            else a[2].value.integer = 0u;
+        }
+        if (bad == 4u) a[attributes++] = (yvex_ir_attribute){.name = "unowned_policy", .kind = YVEX_IR_ATTR_U64};
+        YVEX_TEST_ASSERT(yvex_ir_module_open(&m, "visual_contract", ir_source, dialects, 2u, &err) == YVEX_OK,
+            "visual operation module");
+        for (size_t i = 0u; i < 6u; ++i)
+            YVEX_TEST_ASSERT(yvex_ir_type_intern(m, &t[i], ids + i, &err) == YVEX_OK, "visual logical type");
+        YVEX_TEST_ASSERT(yvex_ir_function_add(m, "forward", ids, inputs, ids + 3u, outputs,
+            0u, &function, &err) == YVEX_OK, "visual typed signature");
+        block = yvex_ir_function_at(m, function)->body;
+        yvex_ir_operation_request r = {.operation = names[kind], .operands = yvex_ir_block_at(m, block)->arguments,
+            .operand_count = inputs, .result_types = ids + 3u, .result_count = outputs,
+            .attributes = a, .attribute_count = attributes};
+        int constructed = yvex_ir_operation_add(m, block, &r, &operation, &err);
+        if (bad == 4u) {
+            YVEX_TEST_ASSERT(constructed == YVEX_ERR_FORMAT, "undeclared visual attributes refuse at construction");
+            yvex_ir_module_close(&m);
+            continue;
+        }
+        YVEX_TEST_ASSERT(constructed == YVEX_OK, "construct untrusted visual operation");
+        memcpy(returned, yvex_ir_operation_at(m, operation)->results, outputs * sizeof(*returned));
+        r = (yvex_ir_operation_request){.operation = "core.return", .operands = returned, .operand_count = outputs};
+        YVEX_TEST_ASSERT(yvex_ir_operation_add(m, block, &r, &operation, &err) == YVEX_OK, "visual explicit results");
+        int rc = yvex_ir_seal(m, &err);
+        if (rc != (bad ? YVEX_ERR_FORMAT : YVEX_OK))
+            fprintf(stderr, "%s case=%u rc=%d: %s\n", names[kind], bad, rc, yvex_error_message(&err));
+        YVEX_TEST_ASSERT(rc == (bad ? YVEX_ERR_FORMAT : YVEX_OK), "visual constraints refuse before physical execution");
+        yvex_ir_module_close(&m);
+    }
+    printf("IR visual operations: valid=8 scalar/population/geometry/attribute refusals=32\n");
+    return 0;
+}
+
+static int ir_row_construction(void)
+{
+    const char *names[] = {"tensor.copy", "tensor.zeros", "tensor.concat_rows"};
+    for (size_t kind = 0u; kind < 3u; ++kind) for (size_t bad = 0u; bad < 5u; ++bad) {
+        yvex_ir_module *m = NULL;
+        yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+        yvex_ir_type t[3];
+        yvex_ir_id ids[3], function, block, op, result, symbol;
+        yvex_error err;
+        size_t inputs = kind == 0u ? 1u : kind == 1u ? 0u : 2u;
+        YVEX_TEST_ASSERT(yvex_ir_module_open(&m, "rows", ir_source, dialects, 2u, &err) == YVEX_OK,
+            "row contract module");
+        yvex_ir_dimension dim = {.name = "variable", .minimum = 1u, .maximum = 8u, .multiple = 1u};
+        YVEX_TEST_ASSERT(yvex_ir_dimension_add(m, &dim, &symbol, &err) == YVEX_OK, "independent row symbol");
+        for (size_t i = 0u; i < 3u; ++i)
+            t[i] = (yvex_ir_type){.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 2u,
+                .shape = {{YVEX_IR_NONE, i == 2u && kind == 2u ? 8u : 4u}, {YVEX_IR_NONE, 8u}}};
+        if (bad == 1u) t[2].scalar = YVEX_IR_INDEX;
+        if (bad == 2u) { t[2].rank = 1u; t[2].shape[1] = (yvex_ir_extent){0}; }
+        if (bad == 3u) {
+            if (kind == 0u) t[2].shape[1].extent++;
+            if (kind == 1u) t[2].shape[0] = (yvex_ir_extent){symbol, 0u};
+            if (kind == 2u) t[2].shape[0].extent--;
+        }
+        for (size_t i = 0u; i < 3u; ++i)
+            YVEX_TEST_ASSERT(yvex_ir_type_intern(m, t + i, ids + i, &err) == YVEX_OK, "row types");
+        YVEX_TEST_ASSERT(yvex_ir_function_add(m, "forward", ids, inputs, ids + 2u, 1u, 0u,
+            &function, &err) == YVEX_OK, "row signature");
+        block = yvex_ir_function_at(m, function)->body;
+        yvex_ir_attribute unknown = {.name = "unowned", .kind = YVEX_IR_ATTR_U64};
+        yvex_ir_operation_request r = {.operation = names[kind], .operand_count = inputs,
+            .operands = yvex_ir_block_at(m, block)->arguments, .result_types = ids + 2u, .result_count = 1u,
+            .attributes = bad == 4u ? &unknown : NULL, .attribute_count = bad == 4u ? 1u : 0u};
+        int rc = yvex_ir_operation_add(m, block, &r, &op, &err);
+        if (bad != 4u) {
+            YVEX_TEST_ASSERT(rc == YVEX_OK, "row operation construction");
+            result = yvex_ir_operation_at(m, op)->results[0];
+            r = (yvex_ir_operation_request){.operation = "core.return", .operands = &result, .operand_count = 1u};
+            YVEX_TEST_ASSERT(yvex_ir_operation_add(m, block, &r, &op, &err) == YVEX_OK, "row result");
+            rc = yvex_ir_seal(m, &err);
+        }
+        YVEX_TEST_ASSERT(rc == (bad ? YVEX_ERR_FORMAT : YVEX_OK), "row semantics reject malformed type/extent/attributes");
+        yvex_ir_module_close(&m);
+    }
+    printf("IR row construction: 3 valid operations; 12 type/shape/attribute negatives; no runtime inference\n");
+    return 0;
+}
+
+static int ir_dense_operations(void)
+{
+    const char *names[] = {"tensor.channel_bias", "tensor.scaled_residual", "tensor.split_interleaved_three",
+        "nn.swiglu_split", "nn.rms_normalize", "tensor.slice_rows"};
+    for (size_t kind = 0u; kind < 6u; ++kind) for (unsigned int bad = 0u; bad < 6u; ++bad) {
+        yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+        yvex_ir_module *m = NULL;
+        yvex_ir_type t[6];
+        yvex_ir_id ids[6], function, block, operation, returned[3];
+        size_t inputs = kind == 0u ? 2u : kind == 1u ? 3u : 1u;
+        size_t outputs = kind == 2u ? 3u : 1u, attributes = 0u;
+        yvex_ir_attribute a[3] = {0};
+        yvex_error err;
+        for (size_t i = 0u; i < 6u; ++i)
+            t[i] = (yvex_ir_type){.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 2u,
+                .shape = {{YVEX_IR_NONE, 4u}, {YVEX_IR_NONE, 8u}}};
+        if (kind < 2u) {
+            t[inputs - 1u].rank = 1u;
+            t[inputs - 1u].shape[0].extent = 8u;
+            t[inputs - 1u].shape[1] = (yvex_ir_extent){0};
+        } else if (kind == 2u) {
+            t[0].shape[1].extent = 24u;
+            a[attributes++] = (yvex_ir_attribute){.name = "head_dimension", .kind = YVEX_IR_ATTR_U64,
+                .value.integer = 4u};
+        } else if (kind == 3u) {
+            t[0].shape[1].extent = 16u;
+            a[attributes++] = (yvex_ir_attribute){.name = "gate_first", .kind = YVEX_IR_ATTR_BOOL,
+                .value.integer = 1u};
+        } else if (kind == 4u) {
+            a[attributes++] = (yvex_ir_attribute){.name = "epsilon", .kind = YVEX_IR_ATTR_F64,
+                .value.real = 1.0e-5};
+            a[attributes++] = (yvex_ir_attribute){.name = "group_width", .kind = YVEX_IR_ATTR_U64,
+                .value.integer = 4u};
+        } else {
+            t[3].shape[0].extent = 2u;
+            a[attributes++] = (yvex_ir_attribute){.name = "start", .kind = YVEX_IR_ATTR_U64,
+                .value.integer = 1u};
+        }
+        if (bad == 1u) t[0].scalar = YVEX_IR_INDEX;
+        if (bad == 2u) t[3].shape[1].extent++;
+        if (bad == 3u) {
+            if (kind < 2u) t[inputs - 1u].shape[0].extent++;
+            else if (kind == 2u) a[0].value.integer = 3u;
+            else if (kind == 3u) a[0].value.integer = 2u;
+            else if (kind == 4u) a[0].value.real = 0.0;
+            else a[0].value.integer = 3u;
+        }
+        if (bad == 4u) t[3].scalar = YVEX_IR_BF16;
+        if (bad == 5u) a[attributes++] = (yvex_ir_attribute){.name = "unowned", .kind = YVEX_IR_ATTR_U64};
+        YVEX_TEST_ASSERT(yvex_ir_module_open(&m, "dense_contract", ir_source, dialects, 2u, &err) == YVEX_OK,
+            "dense operation module");
+        for (size_t i = 0u; i < 6u; ++i)
+            YVEX_TEST_ASSERT(yvex_ir_type_intern(m, &t[i], ids + i, &err) == YVEX_OK, "dense logical type");
+        YVEX_TEST_ASSERT(yvex_ir_function_add(m, "forward", ids, inputs, ids + 3u, outputs,
+            0u, &function, &err) == YVEX_OK, "dense explicit signature");
+        block = yvex_ir_function_at(m, function)->body;
+        yvex_ir_operation_request r = {.operation = names[kind], .operands = yvex_ir_block_at(m, block)->arguments,
+            .operand_count = inputs, .result_types = ids + 3u, .result_count = outputs,
+            .attributes = a, .attribute_count = attributes};
+        int rc = yvex_ir_operation_add(m, block, &r, &operation, &err);
+        if (bad == 5u) {
+            YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT, "unknown attribute population refused before construction");
+            yvex_ir_module_close(&m);
+            continue;
+        }
+        YVEX_TEST_ASSERT(rc == YVEX_OK, "dense untrusted operation construction");
+        memcpy(returned, yvex_ir_operation_at(m, operation)->results, outputs * sizeof(*returned));
+        r = (yvex_ir_operation_request){.operation = "core.return", .operands = returned, .operand_count = outputs};
+        YVEX_TEST_ASSERT(yvex_ir_operation_add(m, block, &r, &operation, &err) == YVEX_OK, "dense return");
+        rc = yvex_ir_seal(m, &err);
+        if (rc != (bad ? YVEX_ERR_FORMAT : YVEX_OK))
+            fprintf(stderr, "dense %s case=%u: %s\n", names[kind], bad, yvex_error_message(&err));
+        YVEX_TEST_ASSERT(rc == (bad ? YVEX_ERR_FORMAT : YVEX_OK), "dense invalid type/geometry/policy refuses at verification");
+        yvex_ir_module_close(&m);
+    }
+    printf("IR dense operations: valid=6; scalar/geometry/precision/policy/attribute refusals=30\n");
+    return 0;
+}
+
 static int ir_parameter_authority(void)
 {
     ir_fixture f;
@@ -813,12 +1119,70 @@ static int ir_shape_identity(void)
     return 0;
 }
 
+static int ir_reshape_constraints(void)
+{
+    for (unsigned int scenario = 0u; scenario < 8u; ++scenario) {
+        yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+        yvex_ir_module *m = NULL;
+        yvex_ir_dimension dimension = {.name = "rows", .minimum = 1u, .maximum = 8u, .multiple = 1u};
+        yvex_ir_type x = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 3u,
+            .shape = {{YVEX_IR_NONE, 2u}, {YVEX_IR_NONE, 3u}, {YVEX_IR_NONE, 4u}}}, y = x;
+        yvex_ir_id symbol, other, types[2], function, block, value, operation;
+        yvex_error error = {0};
+        YVEX_TEST_ASSERT(yvex_ir_module_open(&m, "reshape", ir_source, dialects, 2u, &error) == YVEX_OK,
+            "reshape module");
+        if (scenario == 2u) dimension.minimum = dimension.maximum = 2u;
+        YVEX_TEST_ASSERT(yvex_ir_dimension_add(m, &dimension, &symbol, &error) == YVEX_OK,
+            "reshape symbolic population");
+        snprintf(dimension.name, sizeof(dimension.name), "unrelated");
+        YVEX_TEST_ASSERT(yvex_ir_dimension_add(m, &dimension, &other, &error) == YVEX_OK,
+            "equal bounds do not equate independent shape symbols");
+        y.rank = 2u;
+        y.shape[0].extent = 4u;
+        y.shape[1].extent = 6u;
+        memset(y.shape + 2u, 0, sizeof(y.shape) - 2u * sizeof(y.shape[0]));
+        if (scenario == 1u || scenario == 4u || scenario == 5u) {
+            x.shape[0] = (yvex_ir_extent){symbol, 0u};
+            y.shape[0] = (yvex_ir_extent){scenario == 4u ? other : symbol, 0u};
+            y.shape[1].extent = scenario == 5u ? 6u : 12u;
+        }
+        if (scenario == 2u) x.shape[0] = (yvex_ir_extent){symbol, 0u};
+        if (scenario == 3u) y.shape[1].extent = 5u;
+        if (scenario == 6u) y.scalar = YVEX_IR_BF16;
+        if (scenario == 7u) x.scalar = y.scalar = YVEX_IR_INDEX;
+        YVEX_TEST_ASSERT(yvex_ir_type_intern(m, &x, types, &error) == YVEX_OK &&
+            yvex_ir_type_intern(m, &y, types + 1u, &error) == YVEX_OK &&
+            yvex_ir_function_add(m, "forward", types, 1u, types + 1u, 1u, 0u, &function, &error) == YVEX_OK,
+            "reshape typed signature");
+        block = yvex_ir_function_at(m, function)->body;
+        value = yvex_ir_block_at(m, block)->arguments[0];
+        yvex_ir_operation_request request = {.operation = "tensor.reshape", .operands = &value,
+            .operand_count = 1u, .result_types = types + 1u, .result_count = 1u};
+        YVEX_TEST_ASSERT(yvex_ir_operation_add(m, block, &request, &operation, &error) == YVEX_OK,
+            "construct untrusted reshape");
+        value = yvex_ir_operation_at(m, operation)->results[0];
+        request = (yvex_ir_operation_request){.operation = "core.return", .operands = &value, .operand_count = 1u};
+        YVEX_TEST_ASSERT(yvex_ir_operation_add(m, block, &request, &operation, &error) == YVEX_OK,
+            "reshape publication signature");
+        int rc = yvex_ir_seal(m, &error);
+        YVEX_TEST_ASSERT(scenario < 3u ? rc == YVEX_OK : rc == YVEX_ERR_FORMAT,
+            "equal static/symbolic/fixed volumes accepted; unequal population, symbol or precision refused");
+        yvex_ir_module_close(&m);
+    }
+    printf("IR reshape: static/symbolic/fixed populations accepted=3; volume/symbol/precision/domain refusals=5\n");
+    return 0;
+}
+
 int yvex_test_ir(void)
 {
     if (ir_state_versions() || ir_negative_programs() || ir_shapes_and_construction() ||
         ir_regions() || ir_passes() || ir_calls() || ir_identity_ordering() || ir_reserved_contracts() ||
-        ir_neural_constraints() || ir_parameter_authority() || ir_pass_failure() || ir_conditional_state() ||
-        ir_shape_identity() || ir_sequence_constraints() || ir_retained_program() || ir_call_legalization()) return 1;
+        ir_neural_constraints() || ir_component_operations() || ir_visual_operations() || ir_dense_operations() ||
+        ir_row_construction() ||
+        ir_parameter_authority() ||
+        ir_pass_failure() || ir_conditional_state() ||
+        ir_shape_identity() || ir_reshape_constraints() || ir_sequence_constraints() ||
+        ir_retained_program() || ir_call_legalization()) return 1;
     fprintf(stderr, "IR contracts: typed state/read/update/loop accepted; stale state, wrong effects, types, "
                     "dominance, shapes, arity and unknown operations refused before seal. No model execution claim.\n");
     return 0;

@@ -14,6 +14,10 @@ extern "C" {
 int yvex_cuda_device_results(yvex_backend *, const yvex_device_tensor *,
     yvex_device_tensor *const *, const unsigned long long *, const CUdeviceptr *,
     size_t, unsigned long long *, yvex_error *);
+/* The inverse transfer admits written operands and copies to caller-owned
+ * private work addresses. It neither interprets values nor commits execution. */
+int yvex_cuda_device_operands(yvex_backend *, const yvex_device_tensor *const *,
+    const unsigned long long *, const CUdeviceptr *, size_t, unsigned long long *, yvex_error *);
 #ifdef __cplusplus
 }
 #endif

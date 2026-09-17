@@ -109,11 +109,15 @@ def check_cuda_header_obligations(registry: dict, tests: list[dict]) -> None:
 
 def check_cuda_native_assets(tests: list[dict]) -> None:
     native = next(item for item in tests if item["id"] == "cuda.native")
-    assets = {"DEEPSEEK_SOURCE", "DEEPSEEK_MODELS_ROOT", "DEEPSEEK_SOURCE_MANIFEST"}
+    assets = {"DEEPSEEK_SOURCE", "DEEPSEEK_MODELS_ROOT", "DEEPSEEK_SOURCE_MANIFEST",
+              "DEEPSEEK_ATTENTION_ARTIFACT"}
     if set(native["requirements"]["assets"]) != assets or native["hermetic"]:
         raise AssertionError("CUDA live attention dependencies are not declared")
     if native["requirement_policy"] != "block" or "gb10-live-model" not in native["resources"]:
         raise AssertionError("missing live assets must block without executing the CUDA lane")
+    attention = next(item for item in tests if item["id"] == "live.deepseek.attention")
+    if not assets.issubset(attention["requirements"]["assets"]):
+        raise AssertionError("runtime attention lost its exact bootstrap artifact prerequisite")
     facts = {"tools": {"nvcc": "/test/nvcc"}, "hardware": {"cuda_present": True}}
     with tempfile.TemporaryDirectory() as directory:
         configured = dict.fromkeys(assets, directory)
@@ -136,6 +140,21 @@ def check_cuda_native_assets(tests: list[dict]) -> None:
 def main() -> int:
     source = ROOT / "config/qa/registry.json"
     registry, tests = generate_qa_registry.load_and_validate(ROOT, source)
+    runtime_body = (ROOT / "Makefile").read_text().split("\ntest-runtime:", 1)[1].split("\n\n", 1)[0]
+    runtime_filters = set()
+    for line in runtime_body.splitlines():
+        if line.strip().startswith("YVEX_TEST_FILTER="):
+            runtime_filters.update(line.strip().split("=", 1)[1].split()[0].split(","))
+    if not {"unit.engine_resource", "unit.materialization_runtime"}.issubset(runtime_filters):
+        raise AssertionError("runtime sanitizers must execute resource and component-binding lifecycle probes")
+    # These existing real component consumers now invoke CUDA SSA programs;
+    # a CPU declaration would allow concurrent live GPU qualification.
+    for identifier in ("live.minimax.text", "live.minimax.text-layer", "live.minimax.joint-program"):
+        consumer = next(item for item in tests if item["id"] == identifier)
+        if (consumer["requirements"]["hardware"] != "cuda" or
+                "nvcc" not in consumer["requirements"]["tools"] or
+                not {"cuda-device", "gb10-live-model"}.issubset(consumer["resources"])):
+            raise AssertionError(f"{identifier} lost its executable CUDA resource contract")
     build_consumers = [
         item for item in tests
         if item["runner"]["kind"] in {"c-unit", "c-cuda"} or

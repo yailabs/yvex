@@ -114,10 +114,7 @@ static int moe_test_routing(void)
     yvex_moe_layer_plan layer = {0};
     yvex_moe_layer_job job = {0};
     yvex_moe_router_result result;
-    float router[] = {1.0f, 0.0f, 0.0f, 0.0f,
-                      2.0f, 0.0f, 0.0f, 0.0f,
-                      2.0f, 0.0f, 0.0f, 0.0f,
-                      0.0f, 0.0f, 0.0f, 0.0f};
+    float logits[] = {1.0f, 2.0f, 2.0f, 0.0f};
     float bias[] = {5.0f, 0.0f, 0.0f, 0.0f};
     float input[] = {1.0f, 0.0f, 0.0f, 0.0f};
     int32_t table[] = {3, 1};
@@ -131,10 +128,9 @@ static int moe_test_routing(void)
     layer.normalize_topk_probabilities = 1;
     job.layer = &layer;
     job.expanded_input = input;
-    job.weights[YVEX_MOE_WEIGHT_ROUTER] = moe_test_weight(router, 4ull, 4ull);
     job.weights[YVEX_MOE_WEIGHT_ROUTER_BIAS] = moe_test_weight(bias, 4ull, 1ull);
     layer.router_class = YVEX_MOE_ROUTER_LEARNED_HIDDEN_STATE;
-    YVEX_TEST_ASSERT(yvex_moe_route_cpu(&job, input, &result, &err) == YVEX_OK,
+    YVEX_TEST_ASSERT(yvex_moe_route_cpu(&job, logits, &result, &err) == YVEX_OK,
                      "learned sqrt-softplus router executes");
     YVEX_TEST_ASSERT(result.selected_experts[0] == 0ull &&
                          result.selected_experts[1] == 1ull,
@@ -145,7 +141,7 @@ static int moe_test_routing(void)
                          fabs(result.selected_weights[1] - second / (first + second) * 1.5) < 1e-6,
                      "selection bias does not alter normalized routed weights");
     bias[0] = 0.0f;
-    YVEX_TEST_ASSERT(yvex_moe_route_cpu(&job, input, &result, &err) == YVEX_OK &&
+    YVEX_TEST_ASSERT(yvex_moe_route_cpu(&job, logits, &result, &err) == YVEX_OK &&
                          result.selected_experts[0] == 1ull &&
                          result.selected_experts[1] == 2ull,
                      "bias mutation changes selection and preserves deterministic ties");
@@ -158,15 +154,15 @@ static int moe_test_routing(void)
         .qtype = YVEX_GGUF_QTYPE_I32, .encoded = (const unsigned char *)table,
         .encoded_bytes = sizeof(table), .row_bytes = sizeof(table),
         .row_width = 2ull, .row_count = 1ull};
-    YVEX_TEST_ASSERT(yvex_moe_route_cpu(&job, input, &result, &err) == YVEX_OK &&
+    YVEX_TEST_ASSERT(yvex_moe_route_cpu(&job, logits, &result, &err) == YVEX_OK &&
                          result.selected_experts[0] == 3ull &&
                          result.selected_experts[1] == 1ull,
                      "hash router consumes the exact token-selected table row");
     table[1] = 3;
-    YVEX_TEST_ASSERT(yvex_moe_route_cpu(&job, input, &result, &err) == YVEX_ERR_FORMAT,
+    YVEX_TEST_ASSERT(yvex_moe_route_cpu(&job, logits, &result, &err) == YVEX_ERR_FORMAT,
                      "duplicate hash-selected experts refuse");
     job.token_id = 8u;
-    YVEX_TEST_ASSERT(yvex_moe_route_cpu(&job, input, &result, &err) == YVEX_ERR_BOUNDS,
+    YVEX_TEST_ASSERT(yvex_moe_route_cpu(&job, logits, &result, &err) == YVEX_ERR_BOUNDS,
                      "out-of-vocabulary hash input refuses");
     return 0;
 }
@@ -371,8 +367,51 @@ static int moe_test_result_views(void)
     return 0;
 }
 
+static int moe_test_scheduler_results(void)
+{
+    yvex_model_engine model = {0};
+    yvex_runtime_execution_session session = {0};
+    yvex_transformer_plan_summary transformer = {0};
+    yvex_moe_layer_plan layer = {0};
+    yvex_moe_row_batch_result result = {0};
+    yvex_runtime_transformer_block_result block_result = {0};
+    yvex_execution_batch_source source = {0};
+    yvex_execution_batch_row row = {0};
+    yvex_device_tensor device = {0};
+    yvex_moe_device_results results = {&device, &device, &device};
+    yvex_backend *backend = NULL;
+    yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CPU};
+    yvex_error err;
+    unsigned int token = 1u;
+    float sentinel = -99.0f;
+    yvex_attention_publication attention = {.complete = 1, .token_count = 1u,
+        .envelope_output = &sentinel};
+    /* Admission must reject these requests without dereferencing a MoE owner. */
+    unsigned long long opaque_owner = 0u;
+    YVEX_TEST_ASSERT(yvex_backend_open(&backend, &options, &err) == YVEX_OK, "scheduler test backend");
+    runtime_engine_moe_request request = {.model = &model, .session = &session,
+        .moe = (void *)&opaque_owner, .backend = backend, .transformer = &transformer, .layer = &layer,
+        .attention = &attention, .token_ids = &token, .row_count = 1u, .row_capacity = 1u, .admitted_width = 1u,
+        .expanded_rows = &sentinel, .combined_rows = &sentinel, .routed_rows = &sentinel,
+        .shared_rows = &sentinel, .post_rows = &sentinel, .combination_rows = &sentinel,
+        .batch_token_ids = &token, .batch_sources = &source, .batch_rows = &row,
+        .result = &result, .transformer_result = &block_result};
+    for (unsigned int bad = 0u; bad < 3u; ++bad) {
+        request.device_rows = bad == 1u ? NULL : &device;
+        request.device_results = bad == 0u ? NULL : &results;
+        request.batch_device_results = bad == 1u ? &results : NULL;
+        YVEX_TEST_ASSERT(yvex_runtime_private_engine_scheduler_moe_execute(&request, &err) ==
+            YVEX_ERR_INVALID_ARG && !result.completed && sentinel == -99.0f,
+            "scheduler refuses device populations without matching local and batch result tuples");
+    }
+    YVEX_TEST_ASSERT(yvex_backend_close_checked(&backend, &err) == YVEX_OK, "scheduler test cleanup");
+    puts("MoE scheduler: 3 mismatched device/result populations refused before execution; output unchanged");
+    return 0;
+}
+
 int yvex_test_runtime_moe(void)
 {
+    if (moe_test_scheduler_results() != 0) return 1;
     if (moe_test_result_views() != 0) return 1;
     if (moe_test_family_plan() != 0) return 1;
     if (moe_test_routing() != 0) return 1;

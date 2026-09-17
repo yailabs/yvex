@@ -93,62 +93,6 @@ int yvex_transformer_linear_requirement_validate(
     return YVEX_OK;
 }
 
-int yvex_transformer_joint_linear_requirement(
-    const yvex_transformer_joint_recipe *recipe,
-    yvex_transformer_joint_linear_slot slot,
-    yvex_transformer_linear_requirement *requirement, yvex_error *err)
-{
-    unsigned long long output_width = 0ull;
-    if (requirement) memset(requirement, 0, sizeof(*requirement));
-    if (!recipe || !requirement || slot >= YVEX_TRANSFORMER_JOINT_LINEAR_COUNT)
-        return transformer_refuse(err, YVEX_ERR_INVALID_ARG,
-                                  "one joint dense semantic slot is required");
-    requirement->operation = (yvex_transformer_linear_operation)(
-        YVEX_TRANSFORMER_LINEAR_OPERATION_MODULATION + slot);
-    requirement->publication_contract = recipe->linear_numeric_contract;
-    requirement->source_dtype = recipe->linear_source_dtype;
-    requirement->input_dtype = recipe->linear_input_dtype;
-    requirement->accumulation_dtype = recipe->linear_accumulation_dtype;
-    requirement->output_dtype = recipe->linear_output_dtype;
-    requirement->publication_dtype = recipe->linear_publication_dtype;
-    switch (slot) {
-    case YVEX_TRANSFORMER_JOINT_LINEAR_MODULATION:
-        requirement->input_width = recipe->timestep_width;
-        if (!yvex_core_u64_mul(recipe->modality_count, recipe->modulation_parameters,
-                               &output_width) ||
-            !yvex_core_u64_mul(output_width, recipe->hidden_width, &output_width))
-            return transformer_refuse(err, YVEX_ERR_BOUNDS,
-                                      "joint modulation geometry overflowed");
-        requirement->publication_dtype = recipe->linear_output_dtype;
-        break;
-    case YVEX_TRANSFORMER_JOINT_LINEAR_QKV:
-        requirement->input_width = recipe->hidden_width;
-        if (!yvex_core_u64_mul(3ull, recipe->attention_width, &output_width))
-            return transformer_refuse(err, YVEX_ERR_BOUNDS,
-                                      "joint QKV geometry overflowed");
-        break;
-    case YVEX_TRANSFORMER_JOINT_LINEAR_ATTENTION_OUTPUT:
-        requirement->input_width = recipe->attention_width;
-        output_width = recipe->hidden_width;
-        break;
-    case YVEX_TRANSFORMER_JOINT_LINEAR_GATE_UP:
-        requirement->input_width = recipe->hidden_width;
-        if (!yvex_core_u64_mul(2ull, recipe->ffn_width, &output_width))
-            return transformer_refuse(err, YVEX_ERR_BOUNDS,
-                                      "joint gate/up geometry overflowed");
-        break;
-    case YVEX_TRANSFORMER_JOINT_LINEAR_DOWN:
-        requirement->input_width = recipe->ffn_width;
-        output_width = recipe->hidden_width;
-        break;
-    default:
-        return transformer_refuse(err, YVEX_ERR_INVALID_ARG,
-                                  "unknown joint dense semantic slot");
-    }
-    requirement->output_width = output_width;
-    return yvex_transformer_linear_requirement_validate(requirement, err);
-}
-
 static int linear_physical_facts_valid(const yvex_transformer_linear_physical_plan *plan)
 {
     size_t domain_length;

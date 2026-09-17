@@ -8,19 +8,124 @@
 #include "src/backend/cuda/private.h"
 #include "src/backend/cuda/component_ops.h"
 #include "src/backend/cuda/transformer_ops.h"
+#include <yvex/internal/convolution.h>
+#include <yvex/qtype.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef YVEX_HAVE_CUDA_KERNEL_PTX
 #include <cuda_kernels_ptx.inc>
+#include <cuda_kernel_exports.inc>
 #endif
 #ifdef YVEX_HAVE_CUDA_KERNEL_CUBIN
 #include <cuda_kernels_cubin.inc>
 #endif
 
+/* Preserve the admitted F32 CUDA projection followed by channel bias. CPU
+ * retains its source-order biased accumulator under the same logical op. */
+static int cuda_linear_bias_f32(yvex_backend *backend, const unsigned char *weight,
+    unsigned long long bytes, const yvex_device_tensor *bias, unsigned long long rows,
+    unsigned long long input_width, unsigned long long output_width, const yvex_device_tensor *input,
+    yvex_device_tensor *output, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    yvex_backend_operation_facts addition = {0};
+    unsigned long long stride;
+    if (!facts || !yvex_core_u64_mul(input_width, sizeof(float), &stride)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "cuda.linear-bias", "F32 projection geometry overflowed");
+        return YVEX_ERR_BOUNDS;
+    }
+    int rc = yvex_backend_encoded_matvec(backend, weight, bytes, YVEX_GGUF_QTYPE_F32,
+        output_width, input_width, stride, rows, input, NULL, 0u, NULL,
+        output, YVEX_ENCODED_INPUT_F32, YVEX_ENCODED_REDUCTION_DEFAULT, facts, err);
+    if (rc == YVEX_OK) rc = yvex_cuda_transformer_bias(backend, output, bias, output,
+        rows, output_width, 0, &addition, err);
+    if (rc == YVEX_OK) {
+        facts->kernel_launches += addition.kernel_launches;
+        facts->queue_synchronizations += addition.queue_synchronizations;
+        facts->device_synchronizations += addition.device_synchronizations;
+        facts->active_weight_bytes += bias->bytes;
+        if (addition.temporary_bytes > facts->temporary_bytes) facts->temporary_bytes = addition.temporary_bytes;
+    } else if (output) output->is_written = 0;
+    return rc;
+}
+
+static int cuda_normalization_f32(yvex_backend *backend, const yvex_device_tensor *input,
+    const yvex_device_tensor *weight, const yvex_device_tensor *bias, yvex_device_tensor *output,
+    unsigned long long rows, unsigned long long width, double epsilon,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    if (!facts || !isfinite((float)epsilon) || (float)epsilon <= 0.0f) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "cuda.normalization", "epsilon has no admitted F32 realization");
+        return YVEX_ERR_FORMAT;
+    }
+    if (bias) return yvex_cuda_transformer_layer_norm_f32(backend, input, weight, bias,
+        output, rows, width, (float)epsilon, facts, err);
+    memset(facts, 0, sizeof(*facts));
+    int rc = yvex_backend_op_rms_norm(backend, input, weight, (float)epsilon, output, err);
+    if (rc == YVEX_OK) {
+        facts->kernel_launches = 1u;
+        facts->active_weight_bytes = weight->bytes;
+        facts->activation_bytes = input->bytes + output->bytes;
+        facts->compulsory_memory_facts_available = 1;
+    }
+    return rc;
+}
+
+/* Adapt the existing spatial kernels to the common admitted-operation ABI.
+ * Neither wrapper owns topology or chooses parameter roles. */
+static int cuda_spatial_convolution(yvex_backend *backend, const yvex_convolution_2d_geometry *g,
+    const yvex_device_tensor *input, const yvex_component_encoded_weight *weight,
+    const yvex_component_encoded_weight *bias, yvex_device_tensor *output,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    yvex_convolution_cuda_result result = {0};
+    memset(facts, 0, sizeof(*facts));
+    output->is_written = 0;
+    int rc = yvex_backend_conv2d_f32(backend, g, input, weight, bias, output, &result, err);
+    if (rc == YVEX_OK) facts->kernel_launches = result.kernel_launches;
+    return rc;
+}
+
+static int cuda_spatial_norm(yvex_backend *backend, const yvex_device_tensor *input,
+    const yvex_component_encoded_weight *weight, const yvex_component_encoded_weight *bias,
+    unsigned long long groups, float epsilon, yvex_device_tensor *output,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    yvex_convolution_cuda_result result = {0};
+    memset(facts, 0, sizeof(*facts));
+    output->is_written = 0;
+    int rc = yvex_backend_group_norm_silu_f32(backend, input, weight, bias,
+        input->dims[0], input->dims[1], input->dims[2], input->dims[3], groups, epsilon, output, &result, err);
+    if (rc == YVEX_OK) facts->kernel_launches = result.kernel_launches;
+    return rc;
+}
+
 static const yvex_backend_transformer_operations transformer_operations = {
+    .modulate_bf16 = yvex_cuda_transformer_modulate_bf16,
+    .gated_residual_bf16 = yvex_cuda_transformer_gated_residual_bf16,
+    .combine_f32 = yvex_cuda_combine_f32, .clamp_f32 = yvex_cuda_clamp_f32,
+    .clamped_swiglu_bf16 = yvex_cuda_clamped_swiglu_bf16,
+    .convolution_1d = yvex_cuda_convolution_1d,
+    .convolution_2d = cuda_spatial_convolution, .spatial_norm_silu = cuda_spatial_norm,
+    .alias_snake = yvex_cuda_alias_snake,
+    .linear_bias_f32 = cuda_linear_bias_f32,
+    .linear_bias_target = yvex_cuda_linear_bias_target,
+    .sinusoidal_embedding = yvex_cuda_transformer_timestep_embedding,
+    .normalization_f32 = cuda_normalization_f32,
+    .weighted_rms_bf16 = yvex_cuda_weighted_rms_bf16,
+    .channel_bias = yvex_cuda_transformer_bias,
+    .scaled_residual_f32 = yvex_cuda_transformer_scaled_residual_f32,
+    .split_interleaved_three = yvex_cuda_transformer_split_interleaved_three,
+    .swiglu_split_f32 = yvex_cuda_transformer_swiglu_split_f32,
+    .group_rms_norm_bf16 = yvex_cuda_transformer_rms_norm_bf16,
+    .linear_bias_bf16 = yvex_cuda_transformer_linear_bf16,
+    .layer_norm_f32 = yvex_cuda_transformer_layer_norm_f32,
+    .gelu = yvex_cuda_transformer_gelu,
+    .split_three = yvex_cuda_transformer_split_three,
     .residual_post = yvex_cuda_residual_post,
+    .residual_pre = yvex_cuda_residual_pre,
     .initial = yvex_cuda_transformer_initial,
     .feature_mean = yvex_cuda_transformer_feature_mean,
     .final = yvex_cuda_transformer_final,
@@ -34,35 +139,17 @@ static const yvex_backend_transformer_operations transformer_operations = {
     .linear_summary = yvex_cuda_transformer_linear_summary,
     .linear_release = yvex_cuda_transformer_linear_release,
     .rotary_half_f32 = yvex_cuda_transformer_rotary_half_f32,
+    .rotary_half_bf16 = yvex_cuda_transformer_rotary_half,
     .split_interleaved_two_f32 =
         yvex_cuda_decoder_split_interleaved_two_f32,
     .silu_product_bf16 = yvex_cuda_transformer_silu_product_bf16,
     .sigmoid_product_bf16 = yvex_cuda_decoder_sigmoid_product_bf16,
     .add_bf16 = yvex_cuda_transformer_add_bf16,
     .bf16_round = yvex_cuda_transformer_bf16_round,
-    .dense_decoder_execute = yvex_cuda_transformer_dense_decoder_execute,
+    .silu = yvex_cuda_transformer_silu,
+    .swiglu_split_bf16 = yvex_cuda_transformer_swiglu_split_bf16,
 };
 
-static const yvex_backend_component_operations component_operations = {
-    .text_embedding_execute = yvex_cuda_text_embedding_execute,
-    .text_encoder_execute = yvex_cuda_text_encoder_execute,
-    .text_encoder_multimodal_execute = yvex_cuda_text_encoder_multimodal_execute,
-    .joint_transformer_execute = yvex_cuda_transformer_joint_execute,
-    .joint_transformer_prepare = yvex_cuda_transformer_joint_prepare,
-    .joint_transformer_prepared_execute = yvex_cuda_transformer_joint_prepared_execute,
-    .joint_transformer_prepared_release = yvex_cuda_transformer_joint_prepared_release,
-    .alias_decoder_execute = yvex_cuda_alias_decoder_execute,
-};
-
-const yvex_backend_component_operations *yvex_cuda_component_operations_get(
-    const yvex_backend *backend)
-{
-    const yvex_cuda_backend_state *state = yvex_cuda_state(backend);
-    return backend && yvex_backend_kind_of(backend) == YVEX_BACKEND_KIND_CUDA && state &&
-                   state->kernel_bundle_state == YVEX_CUDA_KERNEL_BUNDLE_ADMITTED
-               ? &component_operations
-               : NULL;
-}
 
 const yvex_backend_transformer_operations *yvex_cuda_transformer_operations_get(
     const yvex_backend *backend)
@@ -495,12 +582,21 @@ static int cuda_resolve_required(yvex_cuda_backend_state *state,
                         "required CUDA function unavailable: %s", symbol);
         return YVEX_ERR_BACKEND;
     }
-    for (index = 0u; index < module_count; ++index) {
-        CUresult status = state->driver.cuModuleGetFunction(out, modules[index], symbol);
-        if (status == YVEX_CUDA_SUCCESS) return YVEX_OK;
-        if (status != YVEX_CUDA_ERROR_NOT_FOUND)
-            return yvex_cuda_status(&state->driver, status,
-                                    "cuda.kernels.resolve", err);
+    if (module_count != CUDA_KERNEL_EXPORT_MODULE_COUNT) {
+        yvex_error_set(err, YVEX_ERR_BACKEND, "cuda.kernels.resolve",
+                       "CUDA images disagree with their compiled export manifest");
+        return YVEX_ERR_BACKEND;
+    }
+    /* Both image forms follow the same source-manifest module order. The
+     * generated PTX exports identify the owner; the driver verifies that exact
+     * owner. A missing symbol is now a real admission failure, never a probe. */
+    for (index = 0u; index < sizeof(cuda_kernel_exports) / sizeof(cuda_kernel_exports[0]); ++index) {
+        if (strcmp(symbol, cuda_kernel_exports[index].symbol) != 0) continue;
+        unsigned int owner = cuda_kernel_exports[index].module;
+        if (owner >= module_count) break;
+        return yvex_cuda_status(&state->driver,
+            state->driver.cuModuleGetFunction(out, modules[owner], symbol),
+            "cuda.kernels.resolve", err);
     }
     yvex_error_setf(err, YVEX_ERR_BACKEND, "cuda.kernels.resolve",
                     "required CUDA function unavailable: %s", symbol);

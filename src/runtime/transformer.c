@@ -28,7 +28,7 @@ struct yvex_runtime_transformer_context {
     const yvex_program_physical *final_program, *feature_program;
     yvex_program_stage *final_stage, *final_reference, *feature_stage, *feature_reference;
     const yvex_program_physical *post_program;
-    yvex_program_stage *post_stage;
+    yvex_program_stage *post_stage, *post_reference;
     yvex_backend *reference_backend;
     int final_ready;
     yvex_program_kernel_parameter final_parameters[4];
@@ -324,7 +324,7 @@ static int transformer_runtime_globals(yvex_runtime_transformer_context *context
                                      owner->bytes, err) != YVEX_OK)
             return yvex_error_code(err);
         context->final_parameters[slot - YVEX_TRANSFORMER_WEIGHT_FINAL_FUNCTION] =
-            (yvex_program_kernel_parameter){value->tensor_id, {.encoded = owner->bytes,
+            (yvex_program_kernel_parameter){.tensor_id = value->tensor_id, .weight = {.encoded = owner->bytes,
                 .encoded_bytes = binding->encoded_bytes, .qtype = binding->qtype, .row_width = binding->row_width,
                 .row_count = binding->row_count, .row_bytes = binding->encoded_bytes / binding->row_count}};
         slot++;
@@ -360,10 +360,13 @@ static int transformer_final_open(yvex_runtime_transformer_context *c, yvex_erro
     }
     if (rc != YVEX_OK) return rc;
     rc = yvex_program_stage_open(&c->post_stage, c->post_program, NULL, 0u,
-        c->reference_backend ? c->reference_backend : c->session_view->backend, c->token_capacity,
-        cpu || c->reference_backend, c->options.maximum_host_bytes, c->options.maximum_device_bytes, err);
+        c->session_view->backend, c->token_capacity, cpu,
+        c->options.maximum_host_bytes, c->options.maximum_device_bytes, err);
+    if (rc == YVEX_OK && c->reference_backend)
+        rc = yvex_program_stage_open(&c->post_reference, c->post_program, NULL, 0u,
+            c->reference_backend, c->token_capacity, 1, c->options.maximum_host_bytes, 0u, err);
     if (rc != YVEX_OK) return rc;
-    if (!cpu && !c->reference_backend) {
+    if (!cpu) {
         yvex_device_tensor **owners[] = {&c->device_moe.combined, &c->device_moe.post, &c->device_moe.combination};
         for (i = 0u; i < 3u; ++i) {
             const yvex_ir_type *t = &yvex_program_physical_value_at(c->post_program, i + 1u)->type;
@@ -380,7 +383,7 @@ static int transformer_final_open(yvex_runtime_transformer_context *c, yvex_erro
         }
     }
     yvex_program_stage *stages[] = {c->final_stage, c->final_reference, c->feature_stage,
-        c->feature_reference, c->post_stage};
+        c->feature_reference, c->post_stage, c->post_reference};
     for (i = 0u; i < sizeof(stages) / sizeof(stages[0]); ++i) {
         yvex_program_stage_resources(stages[i], &host, &device);
         if (!yvex_core_u64_add(c->host_bytes, host, &c->host_bytes) ||
@@ -792,21 +795,14 @@ int yvex_runtime_transformer_execute_block(
     moe_request.execution_profile = context->options.execution_profile;
     moe_request.token_ids = token_ids;
     moe_request.device_rows = backend == YVEX_BACKEND_KIND_CUDA ? device_attention : NULL;
-    moe_request.device_outputs = backend == YVEX_BACKEND_KIND_CUDA ? device_output : NULL;
-    if (normal_cuda) {
+    if (backend == YVEX_BACKEND_KIND_CUDA) {
         rc = yvex_runtime_private_moe_result_views(&context->device_moe, context->token_capacity,
             0u, token_count, moe_views, &moe_results, err);
         if (rc != YVEX_OK) return rc;
         moe_request.device_results = &moe_results;
         moe_request.batch_device_results = &context->device_moe;
-        moe_request.device_outputs = NULL;
     }
     moe_request.batch_device_rows = context->device_attention;
-    if (backend == YVEX_BACKEND_KIND_CUDA)
-        moe_request.batch_device_outputs =
-            device_output->backend_allocation ==
-                    context->device_residual[0]->backend_allocation
-                ? context->device_residual[0] : context->device_residual[1];
     moe_request.expanded_rows = expanded_output == context->expanded_a
                                     ? context->expanded_b : context->expanded_a;
     moe_request.combined_rows = context->moe_combined;
@@ -832,7 +828,7 @@ int yvex_runtime_transformer_execute_block(
     moe_request.cancel_context = context->options.cancel_context;
     rc = yvex_runtime_private_engine_scheduler_moe_execute(&moe_request, err);
     if (rc != YVEX_OK) return rc;
-    if (normal_cuda) {
+    if (backend == YVEX_BACKEND_KIND_CUDA) {
         yvex_backend_operation_facts facts;
         unsigned long long post_started = yvex_core_monotonic_ns();
         rc = transformer_post_device(context, token_count, device_attention, &moe_results, device_output, &facts, err);
@@ -852,7 +848,8 @@ int yvex_runtime_transformer_execute_block(
             context->moe_post, context->moe_combination};
         float *outputs[] = {expanded_output};
         yvex_backend_operation_facts facts;
-        rc = yvex_program_stage_host(context->post_stage, token_count, inputs, 4u, outputs, 1u,
+        rc = yvex_program_stage_host(context->post_reference ? context->post_reference : context->post_stage,
+            token_count, inputs, 4u, outputs, 1u,
             context->options.cancel_requested, context->options.cancel_context, &facts, err);
         if (rc != YVEX_OK) return rc;
         yvex_sha256_init(&output_hash);
@@ -1906,6 +1903,7 @@ int yvex_runtime_transformer_context_close(yvex_runtime_transformer_context **co
     if (rc == YVEX_OK) rc = yvex_program_stage_close(&(*context)->feature_stage, err);
     if (rc == YVEX_OK) rc = yvex_program_stage_close(&(*context)->feature_reference, err);
     if (rc == YVEX_OK) rc = yvex_program_stage_close(&(*context)->post_stage, err);
+    if (rc == YVEX_OK) rc = yvex_program_stage_close(&(*context)->post_reference, err);
     if (rc == YVEX_OK) rc = yvex_backend_close_checked(&(*context)->reference_backend, err);
     if (rc != YVEX_OK) return rc;
     buffers[0] = &(*context)->device_embedding_encoded;

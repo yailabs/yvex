@@ -129,22 +129,6 @@ int yvex_transformer_feature_normalize(float *values,
                                        unsigned long long value_count,
                                        const float *weights, double epsilon,
                                        yvex_error *err);
-#define YVEX_TRANSFORMER_DENSE_DECODER_BLOCK_WEIGHT_COUNT 12u
-typedef struct yvex_component_execution yvex_component_execution;
-typedef int (*yvex_transformer_decoder_weight_name_fn)(
-    void *context, unsigned long long block, unsigned int slot,
-    char output[256], yvex_error *err);
-typedef struct {
-    yvex_transformer_decoder_weight_name_fn block_weight_name;
-    void *block_weight_name_context;
-    const char *final_norm_weight_name, *final_norm_bias_name;
-    const char *output_weight_name, *output_bias_name;
-    yvex_transformer_dense_decoder_request execution;
-} yvex_transformer_resident_decoder_request;
-int yvex_component_dense_decoder_execute(
-    const yvex_component_execution *execution,
-    const yvex_transformer_resident_decoder_request *request,
-    yvex_transformer_dense_decoder_result *result, yvex_error *err);
 
 typedef struct yvex_runtime_transformer_context yvex_runtime_transformer_context;
 typedef enum {

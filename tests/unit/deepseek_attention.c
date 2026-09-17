@@ -2476,7 +2476,7 @@ static int test_probe_version_refusal(void)
     request.probe = YVEX_ATTENTION_PROBE_UNSPECIFIED;
     YVEX_TEST_ASSERT(
         yvex_attention_probe_execute(
-            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
             YVEX_ERR_INVALID_ARG &&
             strcmp(yvex_error_where(&error), "attention.probe") == 0 &&
             result.layers_executed == 0ull,
@@ -2485,7 +2485,7 @@ static int test_probe_version_refusal(void)
     request.probe = (yvex_attention_probe_kind)(YVEX_ATTENTION_PROBE_CANONICAL_V2 + 1u);
     YVEX_TEST_ASSERT(
         yvex_attention_probe_execute(
-            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
             YVEX_ERR_INVALID_ARG &&
             strcmp(yvex_error_where(&error), "attention.probe") == 0 &&
             result.layers_executed == 0ull,
@@ -2495,7 +2495,7 @@ static int test_probe_version_refusal(void)
     yvex_error_clear(&error);
     YVEX_TEST_ASSERT(
         yvex_attention_probe_execute(
-            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
             YVEX_ERR_INVALID_ARG && result.layers_executed == 0ull,
         "direct graph API refuses unknown backend before publication");
     request.backend = YVEX_BACKEND_KIND_CPU;
@@ -2503,7 +2503,7 @@ static int test_probe_version_refusal(void)
     yvex_error_clear(&error);
     YVEX_TEST_ASSERT(
         yvex_attention_probe_execute(
-            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
             YVEX_ERR_INVALID_ARG && result.layers_executed == 0ull,
         "direct graph API refuses unknown scope before publication");
     request.scope = YVEX_ATTENTION_PROBE_SCOPE_QUICK;
@@ -2511,7 +2511,7 @@ static int test_probe_version_refusal(void)
     yvex_error_clear(&error);
     YVEX_TEST_ASSERT(
         yvex_attention_probe_execute(
-            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
             YVEX_ERR_INVALID_ARG && result.layers_executed == 0ull,
         "direct graph API refuses unknown operation scope before publication");
     request.operation_scope = YVEX_ATTENTION_OPERATION_CORE;
@@ -2519,7 +2519,7 @@ static int test_probe_version_refusal(void)
     yvex_error_clear(&error);
     YVEX_TEST_ASSERT(
         yvex_attention_execute(
-            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
                 YVEX_ERR_INVALID_ARG &&
             strcmp(yvex_error_message(&error), "canonical V2 probe request is invalid") == 0,
         "attention probe refuses an invalid device timing policy");
@@ -2532,7 +2532,7 @@ static int test_probe_version_refusal(void)
     yvex_error_clear(&error);
     YVEX_TEST_ASSERT(
         yvex_attention_execute(
-            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
                 YVEX_ERR_INVALID_ARG &&
             strcmp(yvex_error_message(&error),
                    "sealed attention owners and execution API are required") == 0,
@@ -2541,7 +2541,7 @@ static int test_probe_version_refusal(void)
     yvex_error_clear(&error);
     YVEX_TEST_ASSERT(
         yvex_attention_execute(
-            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
                 YVEX_ERR_INVALID_ARG &&
             strcmp(yvex_error_message(&error), "canonical V2 probe request is invalid") == 0,
         "device-only input refuses CPU execution");
@@ -2550,7 +2550,7 @@ static int test_probe_version_refusal(void)
     yvex_error_clear(&error);
     YVEX_TEST_ASSERT(
         yvex_attention_execute(
-            NULL, NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
+            NULL, NULL, NULL, NULL, &request, &result, NULL, &error) ==
                 YVEX_ERR_INVALID_ARG &&
             strcmp(yvex_error_message(&error), "canonical V2 probe request is invalid") == 0,
         "device-only input refuses full host evidence without materialization");

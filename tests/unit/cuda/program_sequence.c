@@ -111,8 +111,8 @@ static int sequence_parameters(sequence_fixture *f, yvex_error *err)
             mapped[cursor + 2u * index + 1u] = (unsigned char)(bits >> 8u);
         }
         if (f->weight_count >= 64u) return YVEX_ERR_BOUNDS;
-        f->weights[f->weight_count] = (yvex_program_kernel_parameter){f->weight_count,
-            {.encoded = mapped + cursor, .encoded_bytes = n * 2u, .row_count = n / width,
+        f->weights[f->weight_count] = (yvex_program_kernel_parameter){.tensor_id = f->weight_count,
+            .weight = {.encoded = mapped + cursor, .encoded_bytes = n * 2u, .row_count = n / width,
              .row_width = width, .row_bytes = width * 2u, .qtype = YVEX_GGUF_QTYPE_BF16}};
         f->weight_count++;
         cursor += n * 2u;

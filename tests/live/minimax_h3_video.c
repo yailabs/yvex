@@ -8,6 +8,7 @@
 #include <yvex/gguf.h>
 #include <yvex/internal/artifact.h>
 #include <yvex/internal/component.h>
+#include <yvex/internal/family_catalog.h>
 #include <yvex/internal/families/minimax_h3.h>
 #include <yvex/internal/image.h>
 #include <yvex/internal/latent.h>
@@ -235,7 +236,7 @@ static int keyframe_encode(
     if (rc == YVEX_OK)
         rc = yvex_runtime_component_session_borrow(session, &component, err);
     request = (yvex_media_keyframe_request){
-        .schema_version = YVEX_MEDIA_CONDITIONING_SCHEMA_V2,
+        .schema_version = YVEX_MEDIA_CONDITIONING_SCHEMA_V3,
         .conditions = &condition,
         .condition_images = &image,
         .condition_count = 1ull,
@@ -255,7 +256,8 @@ static int keyframe_encode(
         .observer_context = &observer,
     };
     if (rc == YVEX_OK)
-        rc = yvex_backend_minimax_h3_keyframe_encode(&request, &result, err);
+        rc = yvex_graph_component_variant_find(YVEX_MINIMAX_H3_TARGET_ID)
+            ->media_execution->keyframe_encode(&request, &result, err);
     yvex_error_clear(&cleanup);
     cleanup_rc = yvex_runtime_component_session_close(&session, &cleanup);
     if (cleanup_rc != YVEX_OK) {

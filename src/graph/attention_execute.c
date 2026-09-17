@@ -18,7 +18,7 @@ static void graph_cpu_options_default(yvex_attention_cpu_options *options)
     *options = cpu_options_template;
 }
 static int graph_execution_admit(
-    const yvex_attention_plan *plan, const void *family_ir,
+    const yvex_attention_plan *plan,
     yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
     const yvex_attention_cpu_options *options, const char *cancel_stage,
     const yvex_attention_layer_plan **layer, yvex_attention_failure *failure,
@@ -28,7 +28,6 @@ static int graph_execution_admit(
     const char *logical_identity = options && options->logical_model_identity
                                        ? options->logical_model_identity
                                        : summary ? summary->logical_model_identity : NULL;
-    (void)family_ir;
     if (!yvex_sha256_hex_valid(logical_identity))
         return yvex_attention_reject(
             failure, YVEX_ATTENTION_FAILURE_DESCRIPTOR, NULL,
@@ -131,7 +130,6 @@ static const cpu_rolling_recipe cpu_rolling_recipes[CPU_ROLLING_COUNT] = {
 };
 typedef struct {
     const yvex_attention_plan *plan;
-    const void *family_ir;
     yvex_materialization_session *session;
     const yvex_runtime_descriptor *descriptor;
     yvex_attention_cpu_options defaults;
@@ -257,7 +255,7 @@ if (!context->plan || !context->session ||
         "attention CPU chunk requires plan, session, descriptor, explicit input, and result");
 context->layer_index = context->opts->layer_index;
 context->rc = graph_execution_admit(
-    context->plan, context->family_ir, context->session, context->descriptor,
+    context->plan, context->session, context->descriptor,
     context->opts,
     "attention CPU execution cancelled before mutation",
     &context->layer_plan, context->failure, context->err);
@@ -1269,7 +1267,7 @@ yvex_attention_result_outputs_publish(
 yvex_error_clear(context->err);
 if (context->failure) memset(context->failure, 0, sizeof(*context->failure));
 }
-static int graph_cpu_chunk_execute(const yvex_attention_plan *plan, const void *family_ir,
+static int graph_cpu_chunk_execute(const yvex_attention_plan *plan,
     yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
     const yvex_attention_cpu_options *options, yvex_attention_cpu_result *result,
     yvex_attention_failure *failure, yvex_error *err)
@@ -1279,7 +1277,6 @@ static int graph_cpu_chunk_execute(const yvex_attention_plan *plan, const void *
     int rc;
     memset(&context, 0, sizeof(context));
     context.plan = plan;
-    context.family_ir = family_ir;
     context.session = session;
     context.descriptor = descriptor;
     context.opts = options;
@@ -1407,7 +1404,7 @@ if (!context->plan || !context->session ||
         "CUDA attention requires an explicit host or device input and backend");
 context->token_count = context->opts->token_count ? context->opts->token_count : 1ull;
 context->rc = graph_execution_admit(
-    context->plan, context->family_ir, context->session, context->descriptor, context->opts,
+    context->plan, context->session, context->descriptor, context->opts,
     "CUDA attention cancelled before graph dispatch", &context->layer, context->failure, context->err);
 if (context->rc != YVEX_OK) return context->rc;
 context->rc = graph_history_admit(
@@ -1647,7 +1644,7 @@ context->result->cuda_tensor_core_launches =
     context->cuda_output.accelerated_matrix_launches;
     return YVEX_OK;
 }
-static int graph_cuda_request_execute(const yvex_attention_plan *plan, const void *family_ir,
+static int graph_cuda_request_execute(const yvex_attention_plan *plan,
     yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
     yvex_backend *backend, const yvex_attention_cpu_options *options,
     yvex_attention_cpu_result *result, yvex_attention_failure *failure, yvex_error *err)
@@ -1656,7 +1653,6 @@ static int graph_cuda_request_execute(const yvex_attention_plan *plan, const voi
     int rc;
     memset(&context, 0, sizeof(context));
     context.plan = plan;
-    context.family_ir = family_ir;
     context.session = session;
     context.descriptor = descriptor;
     context.backend = backend;
@@ -1684,7 +1680,7 @@ const yvex_graph_execution_api yvex_attention_execution_api = {
 
 int yvex_attention_probe_execute(
     const yvex_graph_execution_api *family, const yvex_attention_plan *plan,
-    const void *family_ir, yvex_materialization_session *session,
+    yvex_materialization_session *session,
     const yvex_runtime_descriptor *descriptor,
     const yvex_attention_probe_request *request,
     yvex_attention_probe_result *result,
@@ -1696,6 +1692,6 @@ int yvex_attention_probe_execute(
                        "canonical probe cannot borrow an activation input");
         return YVEX_ERR_INVALID_ARG;
     }
-    return yvex_attention_execute(family, plan, family_ir, session, descriptor,
+    return yvex_attention_execute(family, plan, session, descriptor,
                                   request, result, failure, err);
 }

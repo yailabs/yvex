@@ -247,10 +247,556 @@ invalid:
     return YVEX_ERR_FORMAT;
 }
 
+static int cpu_storage_disjoint(const yvex_device_tensor *a, const yvex_device_tensor *b)
+{
+    uintptr_t start = (uintptr_t)a->data, other = (uintptr_t)b->data;
+    return a->bytes <= UINTPTR_MAX - start && b->bytes <= UINTPTR_MAX - other &&
+        (start + a->bytes <= other || other + b->bytes <= start);
+}
+
+/* Checked numerical operands, independent of model topology and source names. */
+static int cpu_neural_admit(yvex_backend *backend, const yvex_device_tensor *const *inputs,
+    const unsigned long long *input_sizes, size_t input_count, yvex_device_tensor *const *outputs,
+    const unsigned long long *output_sizes, size_t output_count,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    if (!facts) goto invalid;
+    memset(facts, 0, sizeof(*facts));
+    for (size_t i = 0u; i < input_count; ++i)
+        if (!backend_tensor_owner_is(backend, inputs[i]) || !inputs[i]->is_written ||
+            !input_sizes[i] || !backend_tensor_f32_elements(inputs[i], input_sizes[i]) ||
+            !yvex_core_u64_add(facts->activation_bytes, inputs[i]->bytes, &facts->activation_bytes)) goto invalid;
+    for (size_t i = 0u; i < output_count; ++i) {
+        if (!backend_tensor_owner_is(backend, outputs[i]) || !output_sizes[i] ||
+            !backend_tensor_f32_elements(outputs[i], output_sizes[i]) || outputs[i]->borrowed_host ||
+            !yvex_core_u64_add(facts->activation_bytes, outputs[i]->bytes, &facts->activation_bytes)) goto invalid;
+        uintptr_t start = (uintptr_t)outputs[i]->data;
+        if (outputs[i]->bytes > UINTPTR_MAX - start) goto invalid;
+        for (size_t j = 0u; j < input_count + i; ++j) {
+            const yvex_device_tensor *other = j < input_count ? inputs[j] : outputs[j - input_count];
+            if (!cpu_storage_disjoint(outputs[i], other)) goto invalid;
+        }
+    }
+    for (size_t i = 0u; i < output_count; ++i) outputs[i]->is_written = 0;
+    facts->compulsory_memory_facts_available = 1;
+    return YVEX_OK;
+invalid:
+    yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.neural", "incompatible numerical operands, population or alias");
+    return YVEX_ERR_FORMAT;
+}
+
+static int cpu_neural_publish(yvex_device_tensor *const *outputs, size_t count, yvex_error *err)
+{
+    for (size_t i = 0u; i < count; ++i)
+        for (unsigned long long j = 0u; j < outputs[i]->bytes / sizeof(float); ++j)
+            if (!isfinite(((const float *)outputs[i]->data)[j])) {
+                yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.neural", "non-finite numerical result is unpublished");
+                return YVEX_ERR_FORMAT;
+            }
+    for (size_t i = 0u; i < count; ++i) outputs[i]->is_written = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+static int cpu_neural_bounds(yvex_error *err)
+{
+    yvex_error_set(err, YVEX_ERR_BOUNDS, "cpu.neural", "numerical population or parameter extent overflowed");
+    return YVEX_ERR_BOUNDS;
+}
+
+static int cpu_sinusoidal_embedding(yvex_backend *backend, const yvex_device_tensor *input,
+    yvex_device_tensor *output, unsigned long long rows, unsigned long long half,
+    float period, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long count;
+    if (!rows || !half || !isfinite(period) || period <= 1.0f ||
+        !yvex_core_u64_mul(rows, half, &count) || !yvex_core_u64_mul(count, 2u, &count))
+        return cpu_neural_bounds(err);
+    int rc = cpu_neural_admit(backend, &input, &rows, 1u, &output, &count, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    const float *x = (const float *)input->data;
+    float *y = (float *)output->data;
+    for (unsigned long long row = 0u; row < rows; ++row)
+        for (unsigned long long lane = 0u; lane < half; ++lane) {
+            float exponent = -logf(period) * (float)lane / (float)half;
+            float angle = x[row] * expf(exponent);
+            y[row * half * 2u + lane] = cosf(angle);
+            y[row * half * 2u + half + lane] = sinf(angle);
+        }
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_linear_bias_f32(yvex_backend *backend, const unsigned char *encoded,
+    unsigned long long bytes, const yvex_device_tensor *bias, unsigned long long rows,
+    unsigned long long input_width, unsigned long long output_width, const yvex_device_tensor *input,
+    yvex_device_tensor *output, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long sizes[2], result, expected;
+    if (!encoded || !rows || !input_width || !output_width ||
+        !yvex_core_u64_mul(rows, input_width, sizes) || !yvex_core_u64_mul(rows, output_width, &result) ||
+        !yvex_core_u64_mul(input_width, output_width, &expected) ||
+        !yvex_core_u64_mul(expected, sizeof(float), &expected) || expected != bytes || bytes > SIZE_MAX) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.linear-bias", "bounded exact F32 weight geometry required");
+        return YVEX_ERR_FORMAT;
+    }
+    sizes[1] = output_width;
+    int rc = cpu_neural_admit(backend, (const yvex_device_tensor *[]){input, bias}, sizes, 2u,
+        &output, &result, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    const float *x = (const float *)input->data, *w = (const float *)encoded, *b = (const float *)bias->data;
+    float *y = (float *)output->data;
+    /* Source CPU contract: bias initializes the sequential F32 accumulator. */
+    for (unsigned long long row = 0u; row < rows; ++row)
+        for (unsigned long long column = 0u; column < output_width; ++column) {
+            float sum = b[column];
+            for (unsigned long long k = 0u; k < input_width; ++k)
+                sum += x[row * input_width + k] * w[column * input_width + k];
+            y[row * output_width + column] = sum;
+        }
+    facts->active_weight_bytes = bytes + bias->bytes;
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_normalization_f32(yvex_backend *backend, const yvex_device_tensor *input,
+    const yvex_device_tensor *weight, const yvex_device_tensor *bias, yvex_device_tensor *output,
+    unsigned long long rows, unsigned long long width, double epsilon,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long sizes[3];
+    if (!rows || !width || !isfinite(epsilon) || epsilon <= 0.0 || !yvex_core_u64_mul(rows, width, sizes)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.normalization", "bounded geometry and positive F64 epsilon required");
+        return YVEX_ERR_FORMAT;
+    }
+    sizes[1] = sizes[2] = width;
+    int rc = cpu_neural_admit(backend, (const yvex_device_tensor *[]){input, weight, bias}, sizes, bias ? 3u : 2u,
+        &output, sizes, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    const float *x = (const float *)input->data, *w = (const float *)weight->data;
+    const float *b = bias ? (const float *)bias->data : NULL;
+    float *y = (float *)output->data;
+    for (unsigned long long row = 0u; row < rows; ++row) {
+        double mean = 0.0, variance = 0.0;
+        if (bias) {
+            for (unsigned long long k = 0u; k < width; ++k) mean += x[row * width + k];
+            mean /= (double)width;
+        }
+        for (unsigned long long k = 0u; k < width; ++k) {
+            double v = (double)x[row * width + k] - mean;
+            variance += v * v;
+        }
+        double inverse = 1.0 / sqrt(variance / (double)width + epsilon);
+        for (unsigned long long k = 0u; k < width; ++k) {
+            double v = ((double)x[row * width + k] - mean) * inverse * (double)w[k];
+            if (bias) v += (double)b[k];
+            y[row * width + k] = (float)v;
+        }
+    }
+    facts->active_weight_bytes = weight->bytes + (bias ? bias->bytes : 0u);
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_weighted_rms_bf16(yvex_backend *backend, const yvex_device_tensor *input,
+    const yvex_device_tensor *weight, yvex_device_tensor *output,
+    unsigned long long rows, unsigned long long width, double epsilon,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    int rc = cpu_normalization_f32(backend, input, weight, NULL, output, rows, width, epsilon, facts, err);
+    if (rc != YVEX_OK) return rc;
+    output->is_written = 0;
+    float *y = (float *)output->data;
+    for (unsigned long long i = 0u; i < rows * width; ++i)
+        y[i] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(y[i]));
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_scaled_residual_f32(yvex_backend *backend, const yvex_device_tensor *input,
+    const yvex_device_tensor *update, const yvex_device_tensor *scale, yvex_device_tensor *output,
+    unsigned long long rows, unsigned long long width, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long sizes[3];
+    if (!rows || !width || !yvex_core_u64_mul(rows, width, sizes)) return cpu_neural_bounds(err);
+    sizes[1] = sizes[0]; sizes[2] = width;
+    int rc = cpu_neural_admit(backend, (const yvex_device_tensor *[]){input, update, scale}, sizes, 3u,
+        &output, sizes, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    for (unsigned long long i = 0u; i < sizes[0]; ++i)
+        ((float *)output->data)[i] = ((const float *)input->data)[i] +
+            ((const float *)update->data)[i] * ((const float *)scale->data)[i % width];
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_split_interleaved_three(yvex_backend *backend, const yvex_device_tensor *input,
+    yvex_device_tensor *q, yvex_device_tensor *k, yvex_device_tensor *v, unsigned long long rows,
+    unsigned long long heads, unsigned long long head, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long width, size, sizes[3], full;
+    if (!rows || !heads || !head || !yvex_core_u64_mul(heads, head, &width) ||
+        !yvex_core_u64_mul(rows, width, &size) || !yvex_core_u64_mul(size, 3u, &full)) return cpu_neural_bounds(err);
+    sizes[0] = sizes[1] = sizes[2] = size;
+    yvex_device_tensor *outputs[] = {q, k, v};
+    int rc = cpu_neural_admit(backend, &input, &full, 1u, outputs, sizes, 3u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    for (unsigned long long i = 0u; i < size; ++i)
+        for (unsigned long long part = 0u; part < 3u; ++part)
+            ((float *)outputs[part]->data)[i] =
+                ((const float *)input->data)[i / head * head * 3u + part * head + i % head];
+    return cpu_neural_publish(outputs, 3u, err);
+}
+
+static int cpu_swiglu_split_f32(yvex_backend *backend, const yvex_device_tensor *input,
+    yvex_device_tensor *output, unsigned long long rows, unsigned long long width, int gate_first,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long size, full;
+    if (!rows || !width || (gate_first != 0 && gate_first != 1) ||
+        !yvex_core_u64_mul(rows, width, &size) || !yvex_core_u64_mul(size, 2u, &full)) return cpu_neural_bounds(err);
+    int rc = cpu_neural_admit(backend, &input, &full, 1u, &output, &size, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    for (unsigned long long i = 0u; i < size; ++i) {
+        const float *row = (const float *)input->data + i / width * width * 2u;
+        float gate = row[(gate_first ? 0u : width) + i % width];
+        float value = row[(gate_first ? width : 0u) + i % width];
+        ((float *)output->data)[i] = gate / (1.0f + expf(-gate)) * value;
+    }
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_rotary_half_f32(yvex_backend *backend, yvex_device_tensor *value,
+    const yvex_device_tensor *cosine, const yvex_device_tensor *sine, unsigned long long rows,
+    unsigned long long heads, unsigned long long head, unsigned long long rotary,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long width, count, table;
+    if (!facts || !rows || !heads || !head || !rotary || rotary > head || (rotary & 1u) ||
+        !yvex_core_u64_mul(heads, head, &width) || !yvex_core_u64_mul(rows, width, &count) ||
+        !yvex_core_u64_mul(rows, rotary, &table) || !backend_tensor_owner_is(backend, value) ||
+        !backend_tensor_f32_elements(value, count) || !value->is_written || value->borrowed_host ||
+        !backend_tensor_owner_is(backend, cosine) || !backend_tensor_f32_elements(cosine, table) ||
+        !cosine->is_written || !backend_tensor_owner_is(backend, sine) ||
+        !backend_tensor_f32_elements(sine, table) || !sine->is_written) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.rotary", "bounded written tensors and even rotary geometry required");
+        return YVEX_ERR_FORMAT;
+    }
+    const yvex_device_tensor *tables[] = {cosine, sine};
+    for (size_t i = 0u; i < 2u; ++i) {
+        if (!cpu_storage_disjoint(value, tables[i])) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.rotary", "rotary tables must not alias mutable values");
+            return YVEX_ERR_FORMAT;
+        }
+    }
+    memset(facts, 0, sizeof(*facts));
+    value->is_written = 0;
+    for (unsigned long long row = 0u; row < rows; ++row)
+        for (unsigned long long h = 0u; h < heads; ++h)
+            for (unsigned long long lane = 0u; lane < rotary / 2u; ++lane) {
+                float *x = (float *)value->data + row * width + h * head;
+                float a = x[lane], b = x[rotary / 2u + lane];
+                float c = ((const float *)cosine->data)[row * rotary + lane];
+                float s = ((const float *)sine->data)[row * rotary + lane];
+                x[lane] = a * c - b * s;
+                x[rotary / 2u + lane] = b * c + a * s;
+            }
+    facts->activation_bytes = value->bytes + cosine->bytes + sine->bytes;
+    facts->compulsory_memory_facts_available = 1;
+    return cpu_neural_publish(&value, 1u, err);
+}
+
+static int cpu_attention_workspace(const yvex_transformer_attention_requirement *r,
+    unsigned long long *bytes, yvex_error *err)
+{
+    unsigned long long end, qwidth, kwidth;
+    if (bytes) *bytes = 0u;
+    if (!r || !bytes || !r->query_tokens || !r->key_value_tokens || !r->query_heads ||
+        !r->key_value_heads || r->query_heads % r->key_value_heads || !r->head_dimension ||
+        !yvex_core_u64_add(r->query_start, r->query_tokens, &end) || end > r->key_value_tokens ||
+        !yvex_core_u64_mul(r->query_heads, r->head_dimension, &qwidth) ||
+        !yvex_core_u64_mul(r->key_value_heads, r->head_dimension, &kwidth) ||
+        (r->query_token_stride && r->query_token_stride < qwidth) ||
+        (r->key_token_stride && r->key_token_stride < kwidth) ||
+        (r->value_token_stride && r->value_token_stride < kwidth) ||
+        !yvex_core_u64_mul(r->key_value_tokens, sizeof(float), bytes) || *bytes > SIZE_MAX) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.attention", "bounded exact attention geometry required");
+        return YVEX_ERR_FORMAT;
+    }
+    if (!r->deterministic || r->layout != YVEX_TRANSFORMER_ATTENTION_LAYOUT_TOKEN_HEAD_DIM ||
+        (r->mask != YVEX_TRANSFORMER_ATTENTION_MASK_FULL && r->mask != YVEX_TRANSFORMER_ATTENTION_MASK_CAUSAL) ||
+        r->numeric_contract != YVEX_TRANSFORMER_ATTENTION_NUMERIC_EXACT_F32 ||
+        r->query_dtype != YVEX_DTYPE_F32 || r->key_dtype != YVEX_DTYPE_F32 ||
+        r->value_dtype != YVEX_DTYPE_F32 || r->output_dtype != YVEX_DTYPE_F32) {
+        *bytes = 0u;
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "cpu.attention", "only deterministic F32 attention is admitted");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    return YVEX_OK;
+}
+
+static int cpu_full_attention(yvex_backend *backend, const yvex_transformer_attention_request *request,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_transformer_attention_requirement *r = request ? &request->requirement : NULL;
+    unsigned long long bytes, sizes[3], result, widths[3], strides[3];
+    int rc = cpu_attention_workspace(r, &bytes, err);
+    if (rc != YVEX_OK) return rc;
+    widths[0] = r->query_heads * r->head_dimension;
+    widths[1] = widths[2] = r->key_value_heads * r->head_dimension;
+    strides[0] = r->query_token_stride ? r->query_token_stride : widths[0];
+    strides[1] = r->key_token_stride ? r->key_token_stride : widths[1];
+    strides[2] = r->value_token_stride ? r->value_token_stride : widths[2];
+    for (size_t i = 0u; i < 3u; ++i)
+        if (!yvex_core_u64_mul((i ? r->key_value_tokens : r->query_tokens) - 1u, strides[i], sizes + i) ||
+            !yvex_core_u64_add(sizes[i], widths[i], sizes + i)) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "cpu.attention", "strided attention extent overflowed");
+            return YVEX_ERR_BOUNDS;
+        }
+    if (!yvex_core_u64_mul(r->query_tokens, widths[0], &result)) return cpu_neural_bounds(err);
+    yvex_device_tensor *output = request->output, *scratch = request->workspace, *owned = NULL;
+    rc = cpu_neural_admit(backend, (const yvex_device_tensor *[]){request->query, request->key, request->value},
+        sizes, 3u, &output, &result, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    yvex_backend_tensor_desc d = {.name = "attention-scores", .dtype = YVEX_DTYPE_F32,
+        .rank = 1u, .dims = {r->key_value_tokens}, .bytes = bytes};
+    if (scratch && (!backend_tensor_owner_is(backend, scratch) || scratch->bytes < bytes ||
+        scratch->dtype != YVEX_DTYPE_F32 || scratch->borrowed_host ||
+        !cpu_storage_disjoint(scratch, output) || !cpu_storage_disjoint(scratch, request->query) ||
+        !cpu_storage_disjoint(scratch, request->key) || !cpu_storage_disjoint(scratch, request->value))) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.attention", "attention workspace is not independently owned");
+        return YVEX_ERR_FORMAT;
+    }
+    if (!scratch) {
+        rc = yvex_backend_tensor_alloc(backend, &d, &owned, err);
+        scratch = owned;
+    }
+    if (rc != YVEX_OK) return rc;
+    const float *q = (const float *)request->query->data, *k = (const float *)request->key->data;
+    const float *v = (const float *)request->value->data;
+    float *scores = (float *)scratch->data, *y = (float *)output->data;
+    float scale = 1.0f / sqrtf((float)r->head_dimension);
+    memset(y, 0, (size_t)result * sizeof(float));
+    for (unsigned long long row = 0u; row < r->query_tokens && rc == YVEX_OK; ++row) {
+        unsigned long long keys = r->mask == YVEX_TRANSFORMER_ATTENTION_MASK_CAUSAL ?
+            r->query_start + row + 1u : r->key_value_tokens;
+        for (unsigned long long head = 0u; head < r->query_heads; ++head) {
+            unsigned long long kvhead = head / (r->query_heads / r->key_value_heads);
+            float maximum = -INFINITY, sum = 0.0f;
+            for (unsigned long long key = 0u; key < keys; ++key) {
+                float score = 0.0f;
+                for (unsigned long long lane = 0u; lane < r->head_dimension; ++lane)
+                    score += q[row * strides[0] + head * r->head_dimension + lane] *
+                        k[key * strides[1] + kvhead * r->head_dimension + lane];
+                scores[key] = score * scale;
+                if (scores[key] > maximum) maximum = scores[key];
+            }
+            for (unsigned long long key = 0u; key < keys; ++key) {
+                scores[key] = expf(scores[key] - maximum);
+                sum += scores[key];
+            }
+            if (!isfinite(sum) || sum <= 0.0f) { rc = YVEX_ERR_FORMAT; break; }
+            for (unsigned long long key = 0u; key < keys; ++key) {
+                float probability = scores[key] / sum;
+                for (unsigned long long lane = 0u; lane < r->head_dimension; ++lane)
+                    y[row * widths[0] + head * r->head_dimension + lane] +=
+                        probability * v[key * strides[2] + kvhead * r->head_dimension + lane];
+            }
+        }
+    }
+    yvex_error cleanup;
+    int cleanup_rc = owned ? yvex_backend_tensor_release(backend, &owned, &cleanup) : YVEX_OK;
+    if (cleanup_rc != YVEX_OK) { if (err) *err = cleanup; return cleanup_rc; }
+    facts->temporary_bytes = bytes;
+    if (rc != YVEX_OK) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "cpu.attention", "attention softmax is not finite");
+        return rc;
+    }
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_residual_pre(yvex_backend *backend, const yvex_mhc_device_request *r,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    int rc = yvex_mhc_pre_admit(backend, r, facts, err);
+    if (rc != YVEX_OK) return rc;
+    yvex_mhc_pre_request request = {
+        .geometry = r->geometry, .residual = (const float *)r->inputs[0]->data,
+        .linear_mixes = (const float *)r->inputs[1]->data,
+        .scale = (const float *)r->inputs[2]->data, .base = (const float *)r->inputs[3]->data,
+        .rows = r->rows, .residual_stride = r->geometry.streams * r->geometry.width,
+        .mix_stride = (r->geometry.streams + 2u) * r->geometry.streams,
+        .collapsed = (float *)r->outputs[0]->data, .post = (float *)r->outputs[1]->data,
+        .combination = (float *)r->outputs[2]->data, .collapsed_stride = r->geometry.width,
+        .post_stride = r->geometry.streams, .combination_stride = r->geometry.streams * r->geometry.streams};
+    rc = yvex_mhc_pre_f32(&request, err);
+    return rc == YVEX_OK ? cpu_neural_publish(r->outputs, 3u, err) : rc;
+}
+
+static int cpu_combine_f32(yvex_backend *backend, const yvex_device_tensor *const *inputs,
+    size_t count, int mean, yvex_device_tensor *output, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    int rc = yvex_neural_elementwise_admit(backend, inputs, count, output, facts, err);
+    if (rc != YVEX_OK) return rc;
+    float *y = (float *)output->data;
+    for (size_t i = 0u; i < output->bytes / sizeof(float); ++i) {
+        float sum = mean ? 0.0f : ((const float *)inputs[0]->data)[i];
+        for (size_t j = mean ? 0u : 1u; j < count; ++j) sum += ((const float *)inputs[j]->data)[i];
+        y[i] = mean ? sum / (float)count : sum;
+    }
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_clamp_f32(yvex_backend *backend, const yvex_device_tensor *input,
+    yvex_device_tensor *output, float lower, float upper, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    if (!isfinite(lower) || !isfinite(upper) || lower > upper) return cpu_neural_bounds(err);
+    int rc = yvex_neural_elementwise_admit(backend, &input, 1u, output, facts, err);
+    if (rc != YVEX_OK) return rc;
+    for (size_t i = 0u; i < output->bytes / sizeof(float); ++i)
+        ((float *)output->data)[i] = fmaxf(lower, fminf(upper, ((const float *)input->data)[i]));
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_convolution_1d(yvex_backend *backend, const yvex_convolution_1d_request *r,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    int rc = yvex_convolution_1d_admit(backend, r, facts, err);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_convolution_1d_f32(&r->geometry, (const float *)r->input->data,
+        r->input->bytes / sizeof(float), (const float *)r->weight->encoded,
+        r->weight->encoded_bytes / sizeof(float), r->bias ? (const float *)r->bias->encoded : NULL,
+        r->bias ? r->bias->encoded_bytes / sizeof(float) : 0u,
+        r->gain ? (const float *)r->gain->encoded : NULL,
+        r->gain ? r->gain->encoded_bytes / sizeof(float) : 0u,
+        (float *)r->output->data, r->output->bytes / sizeof(float), err);
+    if (rc == YVEX_OK) r->output->is_written = 1;
+    return rc;
+}
+
+static int cpu_clamped_swiglu_bf16(yvex_backend *backend, const yvex_device_tensor *gate,
+    const yvex_device_tensor *up, yvex_device_tensor *output, double limit,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    if (output) output->is_written = 0;
+    if (facts) memset(facts, 0, sizeof(*facts));
+    if (!isfinite(limit) || limit <= 0.0) return cpu_neural_bounds(err);
+    const yvex_device_tensor *inputs[] = {gate, up};
+    int rc = yvex_neural_elementwise_admit(backend, inputs, 2u, output, facts, err);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_clamped_swiglu_bf16((const float *)gate->data, (const float *)up->data,
+        output->bytes / sizeof(float), limit, 1.0f, (float *)output->data, err);
+    return rc == YVEX_OK ? cpu_neural_publish(&output, 1u, err) : rc;
+}
+
+static int cpu_alias_snake(yvex_backend *backend, const yvex_alias_snake_request *r,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    int rc = yvex_alias_snake_admit(backend, r, facts, err);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_signal_alias_snake_f32((const float *)r->input->data, r->batch, r->channels, r->length,
+        (const float *)r->alpha->encoded, (const float *)r->beta->encoded,
+        (const float *)r->up_filter->encoded, (const float *)r->down_filter->encoded,
+        (float *)r->output->data, (float *)r->workspace->data, r->workspace->bytes / sizeof(float), err);
+    if (rc == YVEX_OK) r->output->is_written = 1;
+    return rc;
+}
+
+static int cpu_bf16_round(yvex_backend *backend, yvex_device_tensor *value,
+    unsigned long long count, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    if (!facts || !count || !backend_tensor_owner_is(backend, value) ||
+        !backend_tensor_f32_elements(value, count) || !value->is_written) return cpu_neural_bounds(err);
+    memset(facts, 0, sizeof(*facts));
+    for (unsigned long long i = 0u; i < count; ++i) {
+        float *x = (float *)value->data + i;
+        *x = yvex_quant_bf16_decode(yvex_quant_bf16_encode(*x));
+    }
+    return cpu_neural_publish(&value, 1u, err);
+}
+
+static int cpu_silu(yvex_backend *backend, const yvex_device_tensor *input,
+    yvex_device_tensor *output, unsigned long long count, int bf16,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    if (!count || (bf16 != 0 && bf16 != 1)) return cpu_neural_bounds(err);
+    int rc = cpu_neural_admit(backend, &input, &count, 1u, &output, &count, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    for (unsigned long long i = 0u; i < count; ++i) {
+        float x = ((const float *)input->data)[i], y = x / (1.0f + expf(-x));
+        ((float *)output->data)[i] = bf16 ? yvex_quant_bf16_decode(yvex_quant_bf16_encode(y)) : y;
+    }
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_indexed_conditioning(yvex_backend *backend, const yvex_device_tensor *input,
+    const yvex_device_tensor *table, const unsigned int *indices, const yvex_device_tensor *update,
+    yvex_device_tensor *output, unsigned long long rows, unsigned long long width,
+    unsigned long long table_rows, unsigned long long parameters, unsigned int first, unsigned int scale,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long count, table_count;
+    if (!rows || !width || !table_rows || !parameters || first >= parameters ||
+        (!update && scale >= parameters) || !indices ||
+        !yvex_core_u64_mul(rows, width, &count) ||
+        !yvex_core_u64_mul(table_rows, parameters, &table_count) ||
+        !yvex_core_u64_mul(table_count, width, &table_count)) return cpu_neural_bounds(err);
+    for (unsigned long long row = 0u; row < rows; ++row)
+        if (indices[row] >= table_rows) return cpu_neural_bounds(err);
+    int rc = cpu_neural_admit(backend, (const yvex_device_tensor *[]){input, table, update},
+        (unsigned long long[]){count, table_count, count}, update ? 3u : 2u,
+        &output, &count, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    const float *x = (const float *)input->data, *t = (const float *)table->data;
+    const float *u = update ? (const float *)update->data : NULL;
+    float *y = (float *)output->data;
+    for (unsigned long long i = 0u; i < count; ++i) {
+        unsigned long long base = (unsigned long long)indices[i / width] * parameters * width + i % width;
+        float value;
+        if (update) {
+            value = yvex_quant_bf16_decode(yvex_quant_bf16_encode(t[base + first * width] * u[i]));
+            value = x[i] + value;
+        } else {
+            float factor = yvex_quant_bf16_decode(yvex_quant_bf16_encode(1.0f + t[base + scale * width]));
+            value = yvex_quant_bf16_decode(yvex_quant_bf16_encode(x[i] * factor));
+            value += t[base + first * width];
+        }
+        y[i] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(value));
+    }
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_modulate_bf16(yvex_backend *backend, const yvex_device_tensor *input,
+    const yvex_device_tensor *table, const unsigned int *indices, yvex_device_tensor *output,
+    unsigned long long rows, unsigned long long width, unsigned long long table_rows,
+    unsigned long long parameters, unsigned int shift, unsigned int scale,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    return cpu_indexed_conditioning(backend, input, table, indices, NULL, output,
+        rows, width, table_rows, parameters, shift, scale, facts, err);
+}
+
+static int cpu_gated_residual_bf16(yvex_backend *backend, const yvex_device_tensor *input,
+    const yvex_device_tensor *table, const unsigned int *indices, const yvex_device_tensor *update,
+    yvex_device_tensor *output, unsigned long long rows, unsigned long long width,
+    unsigned long long table_rows, unsigned long long parameters, unsigned int gate,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    return cpu_indexed_conditioning(backend, input, table, indices, update, output,
+        rows, width, table_rows, parameters, gate, 0u, facts, err);
+}
+
 static const yvex_backend_transformer_operations *cpu_transformer_operations(const yvex_backend *backend)
 {
     static const yvex_backend_transformer_operations operations = {
-        .feature_mean = cpu_stream_mean, .final = cpu_mhc_head, .residual_post = cpu_residual_post};
+        .bf16_round = cpu_bf16_round, .silu = cpu_silu,
+        .modulate_bf16 = cpu_modulate_bf16, .gated_residual_bf16 = cpu_gated_residual_bf16,
+        .combine_f32 = cpu_combine_f32, .clamp_f32 = cpu_clamp_f32,
+        .clamped_swiglu_bf16 = cpu_clamped_swiglu_bf16,
+        .convolution_1d = cpu_convolution_1d, .alias_snake = cpu_alias_snake,
+        .feature_mean = cpu_stream_mean, .final = cpu_mhc_head, .residual_post = cpu_residual_post,
+        .residual_pre = cpu_residual_pre,
+        .linear_bias_f32 = cpu_linear_bias_f32, .normalization_f32 = cpu_normalization_f32,
+        .weighted_rms_bf16 = cpu_weighted_rms_bf16,
+        .sinusoidal_embedding = cpu_sinusoidal_embedding,
+        .scaled_residual_f32 = cpu_scaled_residual_f32, .split_interleaved_three = cpu_split_interleaved_three,
+        .swiglu_split_f32 = cpu_swiglu_split_f32, .rotary_half_f32 = cpu_rotary_half_f32,
+        .attention_workspace_required = cpu_attention_workspace, .attention_execute = cpu_full_attention};
     (void)backend;
     return &operations;
 }

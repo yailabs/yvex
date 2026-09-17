@@ -15,18 +15,20 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/family_catalog.h>
 #include <yvex/internal/families/minimax_h3.h>
+#include <yvex/internal/text_program.h>
+#include <yvex/internal/program_stage.h>
 #include <yvex/internal/image.h>
 #include <yvex/internal/multimodal.h>
 #include "src/backend/cuda/component_ops.h"
 
-enum { TEXT_HIDDEN = 5120u };
+enum { TEXT_HIDDEN = 5120u, TEXT_PARAMETER_COUNT = 12u };
 /* The independent PyTorch CPU/CUDA BF16 oracle pair differs by these measured bounds. */
 static const float layer_oracle_max_absolute = 0.046875f;
 static const double layer_oracle_max_rmse = 0.002315;
 static const float encoder_oracle_max_absolute = 0.375f;
 static const double encoder_oracle_max_rmse = 0.026718;
 
-static const char *const layer_weight_names[YVEX_BACKEND_TEXT_WEIGHT_COUNT] = {
+static const char *const layer_weight_names[TEXT_PARAMETER_COUNT] = {
     "model.language_model.embed_tokens.weight",
     "model.language_model.layers.0.input_layernorm.weight",
     "model.language_model.layers.0.self_attn.q_proj.weight",
@@ -55,16 +57,16 @@ static const yvex_materialized_tensor_binding *binding_find(
 static int proof_weights_load(
     yvex_materialization_session *session, unsigned char **arena_out,
     unsigned long long *arena_bytes_out,
-    yvex_backend_text_weight weights[YVEX_BACKEND_TEXT_WEIGHT_COUNT],
+    yvex_component_encoded_weight weights[TEXT_PARAMETER_COUNT],
     char identity[65], yvex_error *err)
 {
-    const yvex_materialized_tensor_binding *bindings[YVEX_BACKEND_TEXT_WEIGHT_COUNT];
+    const yvex_materialized_tensor_binding *bindings[TEXT_PARAMETER_COUNT];
     yvex_materialization_failure failure;
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     unsigned char *arena;
     unsigned long long index, total = 0ull, cursor = 0ull;
-    for (index = 0ull; index < YVEX_BACKEND_TEXT_WEIGHT_COUNT; ++index) {
+    for (index = 0ull; index < TEXT_PARAMETER_COUNT; ++index) {
         bindings[index] = binding_find(session, layer_weight_names[index]);
         if (!bindings[index] || !bindings[index]->row_count ||
             !yvex_core_u64_add(total, bindings[index]->encoded_bytes, &total)) {
@@ -87,7 +89,7 @@ static int proof_weights_load(
     }
     yvex_sha256_init(&hash);
     if (!yvex_sha256_update_text(&hash, "yvex.minimax-h3.text-layer-zero.proof.v1")) goto failed;
-    for (index = 0ull; index < YVEX_BACKEND_TEXT_WEIGHT_COUNT; ++index) {
+    for (index = 0ull; index < TEXT_PARAMETER_COUNT; ++index) {
         const yvex_materialized_tensor_binding *binding = bindings[index];
         if (binding->encoded_bytes > SIZE_MAX ||
             yvex_materialization_session_read(
@@ -129,6 +131,7 @@ static int layer_proof_execute(
     yvex_minimax_h3_architecture architecture;
     yvex_component_text_recipe geometry;
     yvex_backend_text_execution_result backend_result = {0};
+    yvex_program_physical *program = NULL;
     yvex_minimax_h3_failure architecture_failure;
     yvex_complete_artifact_admission admission;
     yvex_artifact_admission_failure admission_failure;
@@ -136,7 +139,7 @@ static int layer_proof_execute(
     yvex_materialization_failure materialization_failure;
     yvex_materialization_plan *plan = NULL;
     yvex_materialization_session *session = NULL;
-    yvex_backend_text_weight weights[YVEX_BACKEND_TEXT_WEIGHT_COUNT] = {{0}};
+    yvex_component_encoded_weight weights[TEXT_PARAMETER_COUNT] = {{0}};
     yvex_backend_options backend_options = {0};
     yvex_backend_tensor_desc descriptor = {0};
     yvex_backend *backend = NULL;
@@ -204,10 +207,19 @@ static int layer_proof_execute(
         rc = yvex_backend_resident_attach(backend, arena, arena_bytes, resident, 1ull, err);
         attached = rc == YVEX_OK;
     }
-    if (rc == YVEX_OK)
-        rc = yvex_cuda_text_encoder_execute(
-            backend, &geometry, weights, 1ull, identity, arena_bytes, token, 1ull,
-            output, TEXT_HIDDEN, &backend_result, err);
+    if (rc == YVEX_OK) rc = yvex_text_program_compile(&program, &geometry, 1u, 1u, NULL, 0u, err);
+    yvex_program_stage *retained_stage = NULL;
+    yvex_component_execution execution = {.schema_version = YVEX_COMPONENT_EXECUTION_SCHEMA_V2,
+        .backend = backend, .resident_encoded_bytes = arena_bytes, .program_stage = &retained_stage};
+    memcpy(execution.residency_identity, identity, sizeof(execution.residency_identity));
+    yvex_component_text_request request = {.program = program, .token_ids = token,
+        .token_count = 1u, .output = output, .output_capacity = TEXT_HIDDEN,
+        .maximum_device_bytes = 512u * 1024u * 1024u};
+    if (rc == YVEX_OK) rc = yvex_component_text_program_execute(&execution, &request, weights,
+        TEXT_PARAMETER_COUNT, &backend_result, err);
+    yvex_program_physical_close(&program);
+    release_rc = yvex_program_stage_close(&retained_stage, &cleanup);
+    if (release_rc != YVEX_OK) { if (err) *err = cleanup; return release_rc; }
     if (rc == YVEX_OK) {
         *result = (yvex_minimax_h3_conditioning_result){
             .token_count = backend_result.token_count,
@@ -558,7 +570,7 @@ static int multimodal_execute(
     if (rc == YVEX_OK)
         rc = yvex_runtime_component_session_borrow(session, &component, &err);
     request = (yvex_media_conditioning_request){
-        .schema_version = YVEX_MEDIA_CONDITIONING_SCHEMA_V2,
+        .schema_version = YVEX_MEDIA_CONDITIONING_SCHEMA_V3,
         .prompt = prompt,
         .tokenizer = model.tokenizer,
         .conditions = &condition,
@@ -579,7 +591,7 @@ static int multimodal_execute(
         .vision_observer_context = &observer,
     };
     if (rc == YVEX_OK)
-        rc = yvex_backend_minimax_h3_fl2va_condition(&request, &result, &err);
+        rc = yvex_graph_register_minimax_h3()->condition(&request, &result, &err);
     yvex_error_clear(&cleanup);
     cleanup_rc = yvex_runtime_component_session_close(&session, &cleanup);
     if (cleanup_rc != YVEX_OK) {

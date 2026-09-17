@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 static int ir_attribute_valid(const yvex_ir_module *m, const yvex_ir_attribute *a)
@@ -130,8 +131,12 @@ static int ir_block_verify(const yvex_ir_module *m, yvex_ir_id block_id,
         if (!op || visited[id] || op->block != block_id ||
             op->region_count != op->definition->regions ||
             !ir_attributes_verify(m, op) ||
-            (yvex_ir_operation_effects(m, id) & ~m->functions[block->function].effects))
-            return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "operation ownership, attributes or effects are invalid");
+            (yvex_ir_operation_effects(m, id) & ~m->functions[block->function].effects)) {
+            char reason[256];
+            snprintf(reason, sizeof(reason), "operation %u (%s): ownership, attributes or effects are invalid",
+                id, op && op->definition ? op->definition->name : "unresolved");
+            return yvex_ir_refuse(err, YVEX_ERR_FORMAT, reason);
+        }
         visited[id] = 1u;
         for (index = 0u; index < op->operand_count; ++index)
             if (!ir_visible(m, op->operands[index], id))

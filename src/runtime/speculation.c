@@ -530,7 +530,7 @@ static int speculation_project_target_features(yvex_runtime_speculation_context 
                 context->hidden_width, context->policy.concatenated_feature_width,
                 context->feature_projection.row_bytes, token_count, &input, NULL, 0ull, NULL, &projected,
                 context->feature_projection.binding->qtype == YVEX_GGUF_QTYPE_BF16 ?
-                    YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32, &facts, err);
+                    YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32, YVEX_ENCODED_REDUCTION_DEFAULT, &facts, err);
         if (rc == YVEX_OK)
             rc = yvex_backend_op_rms_norm(
                 context->device_backend, &projected, context->device_feature_norm,
@@ -783,7 +783,7 @@ static int speculation_draft_one(
             context->vocabulary_size, context->policy.markov_rank, context->markov_output.row_bytes,
             1ull, &markov_input, NULL, 0ull, &additive, &adjusted_output,
             context->markov_output.binding->qtype == YVEX_GGUF_QTYPE_BF16 ?
-                YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32, &device_facts, err);
+                YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32, YVEX_ENCODED_REDUCTION_DEFAULT, &device_facts, err);
     if (rc == YVEX_OK && context->device_draft_selection)
         context->device_adjusted_logits->is_written = 1;
     if (rc == YVEX_OK && context->device_draft_selection)
@@ -834,7 +834,7 @@ static int speculation_draft_one(
             context->confidence.encoded_bytes, context->confidence.binding->qtype,
             1ull, context->confidence.binding->row_width, context->confidence.row_bytes,
             1ull, &pre_normalized, &markov_input, context->hidden_width, NULL,
-            &device_confidence, YVEX_ENCODED_INPUT_F32, &confidence_facts, err);
+            &device_confidence, YVEX_ENCODED_INPUT_F32, YVEX_ENCODED_REDUCTION_DEFAULT, &confidence_facts, err);
     if (rc == YVEX_OK && context->device_draft_selection)
         rc = yvex_backend_tensor_read(context->device_backend, &device_confidence,
                                       confidence, sizeof(*confidence), err);

@@ -1,7 +1,18 @@
 /* Compiler-owned tensor work versus an independent scalar BF16 oracle. */
 #include "tests/test.h"
+#include "tests/support/signal_program.h"
+#include "tests/support/spatial_program.h"
+#include "tests/support/conditioning_program.h"
+#include "tests/support/joint_program.h"
 #include "tests/support/linear_program.h"
 #include "tests/support/mhc_program.h"
+#include "tests/support/mhc_ingress_program.h"
+#include "tests/support/shared_expert_program.h"
+#include "tests/support/mhc_cuda_control.h"
+#include "tests/support/text_program.h"
+#include "tests/support/population_program.h"
+#include "tests/support/vision_program.h"
+#include "tests/support/dense_program.h"
 #include <yvex/internal/program_kernels.h>
 #include <yvex/qtype.h>
 #include <math.h>
@@ -9,6 +20,75 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+typedef struct {
+    const yvex_component_encoded_weight *weights;
+    uint32_t seen;
+    int missing;
+} text_binding_probe;
+
+static int text_binding_name(void *opaque, unsigned long long id, char name[256], yvex_error *err)
+{
+    text_binding_probe *probe = opaque;
+    (void)err;
+    if (id >= 23u || (probe->seen & (1u << id))) return YVEX_ERR_FORMAT;
+    probe->seen |= 1u << id;
+    if (probe->missing && id == 22u) return YVEX_ERR_STATE;
+    snprintf(name, 256u, "text_parameter_%llu", id);
+    return YVEX_OK;
+}
+
+static int text_binding_weight(void *opaque, const char *name, yvex_component_encoded_weight *out, yvex_error *err)
+{
+    text_binding_probe *probe = opaque;
+    unsigned long long id;
+    char tail;
+    (void)err;
+    if (sscanf(name, "text_parameter_%llu%c", &id, &tail) != 1 || id >= 23u) return YVEX_ERR_FORMAT;
+    *out = probe->weights[id];
+    return YVEX_OK;
+}
+
+static int text_binding_workspace(void *opaque, unsigned long long bytes, yvex_error *err)
+{
+    (void)opaque; (void)bytes; (void)err;
+    return YVEX_OK;
+}
+
+static int text_compiled_binding(const yvex_component_execution *original,
+    const yvex_component_text_request *input, const yvex_component_encoded_weight *weights, const float *expected)
+{
+    text_binding_probe probe = {.weights = weights};
+    yvex_component_execution component = *original;
+    yvex_component_text_request request = *input;
+    yvex_runtime_av_conditioning_result result;
+    yvex_error err;
+    component.materialization = (yvex_materialization_session *)&probe;
+    component.owner_context = &probe;
+    component.weight_view = text_binding_weight;
+    component.workspace_reserve = text_binding_workspace;
+    request.parameter_name = text_binding_name;
+    request.parameter_context = &probe;
+    YVEX_TEST_ASSERT(yvex_component_text_execute(&component, &request, &result, &err) == YVEX_OK &&
+        result.complete && !*component.program_stage && result.hidden_width == 32u && result.layer_count == 2u &&
+        probe.seen == (1u << 23u) - 1u && !memcmp(request.output, expected, 96u * sizeof(float)),
+        "text binding uses each compiled ID once, preserves all results and derives report geometry from IR");
+    for (unsigned int failure = 0u; failure < 6u; ++failure) {
+        probe.seen = 0u; probe.missing = failure == 0u;
+        request.program = failure == 1u ? NULL : input->program;
+        request.parameter_name = failure == 2u ? NULL : text_binding_name;
+        request.maximum_host_bytes = failure == 3u ? 1u : 0u;
+        request.output_capacity = failure == 4u ? 95u : 96u;
+        request.token_count = failure == 5u ? 4u : input->token_count;
+        memset(request.output, 0x5a, 96u * sizeof(float));
+        YVEX_TEST_ASSERT(yvex_component_text_execute(&component, &request, &result, &err) != YVEX_OK &&
+            !result.complete && !*component.program_stage && ((unsigned char *)request.output)[0] == 0x5a,
+            "missing binding/program/resolver, host budget, output and population bounds refuse unpublished");
+    }
+    printf("text_compiled_binding multimodal=%d parameters=23 source_recipe=absent role_resolver=absent "
+        "values=96 max_abs=0 tolerance=0 negatives=6 unpublished=true\n", input->multimodal != NULL);
+    return 0;
+}
 
 typedef struct {
     yvex_backend *backend;
@@ -277,9 +357,161 @@ static int program_cuda_failures(program_fixture *f)
     return 0;
 }
 
+static int program_cuda_text(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_backend_options options = {.kind = YVEX_BACKEND_KIND_CUDA};
+    yvex_device_tensor *resident = NULL;
+    unsigned char *arena = NULL;
+    yvex_program_physical *program = NULL;
+    yvex_component_encoded_weight weights[23] = {0};
+    unsigned long long rows[] = {13u, 1u, 32u, 16u, 16u, 32u, 1u, 1u, 1u, 64u, 64u, 32u};
+    unsigned long long widths[] = {32u, 32u, 32u, 32u, 32u, 32u, 8u, 8u, 32u, 32u, 32u, 64u};
+    unsigned int tokens[] = {1u, 4u, 7u};
+    float expected[96], observed[96], maximum = 0.0f;
+    yvex_backend_text_execution_result result = {0};
+    yvex_program_stage *retained_stage = NULL;
+    yvex_component_execution component = {.schema_version = YVEX_COMPONENT_EXECUTION_SCHEMA_V2,
+        .program_stage = &retained_stage};
+    yvex_component_text_request request = {.token_ids = tokens,
+        .token_count = 3u, .output = observed, .output_capacity = 96u};
+    yvex_backend_tensor_desc descriptor = {.name = "text-program-weights", .dtype = YVEX_DTYPE_I8, .rank = 1u};
+    yvex_backend_memory_stats before, after;
+    yvex_error err;
+    int rc = yvex_backend_open(&backend, &options, &err);
+    if (rc == YVEX_ERR_UNSUPPORTED) return 77;
+    YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_backend_get_memory_stats(backend, &before, &err) == YVEX_OK,
+        "observe text program backend allocation baseline");
+    for (size_t i = 0u; i < 23u; ++i) {
+        size_t slot = i ? (i - 1u) % 11u + 1u : 0u;
+        weights[i] = (yvex_component_encoded_weight){.row_count = rows[slot], .row_width = widths[slot],
+            .row_bytes = widths[slot] * 2u, .encoded_bytes = rows[slot] * widths[slot] * 2u,
+            .qtype = YVEX_GGUF_QTYPE_BF16};
+        descriptor.bytes += weights[i].encoded_bytes;
+    }
+    descriptor.dims[0] = descriptor.bytes;
+    YVEX_TEST_ASSERT(yvex_backend_resident_alloc(backend, &descriptor, &resident, &arena, &err) == YVEX_OK &&
+        yvex_backend_resident_attach(backend, arena, descriptor.bytes, resident, 1u, &err) == YVEX_OK,
+        "one exact BF16 arena supplies both execution paths");
+    unsigned long long offset = 0u;
+    for (size_t i = 0u; i < 23u; ++i) {
+        weights[i].encoded = arena + offset;
+        for (unsigned long long j = 0u; j < weights[i].encoded_bytes / 2u; ++j) {
+            float x = weights[i].row_count == 1u ? 1.0f + (float)(j % 3u) / 8.0f :
+                (float)((int)((j + i * 3u) % 17u) - 8) / 32.0f;
+            uint32_t bits;
+            memcpy(&bits, &x, sizeof(bits));
+            arena[offset + 2u * j] = (unsigned char)(bits >> 16u);
+            arena[offset + 2u * j + 1u] = (unsigned char)(bits >> 24u);
+        }
+        offset += weights[i].encoded_bytes;
+    }
+    memcpy(expected, test_text_preserved, sizeof(expected));
+    YVEX_TEST_ASSERT(yvex_text_program_compile(&program, &test_text_recipe, 2u, 3u, NULL, 0u, &err) == YVEX_OK,
+        "compile complete text stack before runtime");
+    request.program = program;
+    component.backend = backend; component.resident_encoded_bytes = descriptor.bytes;
+    snprintf(component.residency_identity, sizeof(component.residency_identity), "%s", test_text_recipe.semantic_identity);
+    rc = yvex_component_text_program_execute(&component, &request, weights, 23u, &result, &err);
+    if (rc != YVEX_OK) fprintf(stderr, "text program CUDA: %s\n", yvex_error_message(&err));
+    YVEX_TEST_ASSERT(rc == YVEX_OK && !retained_stage && result.complete && result.token_count == 3u &&
+        result.hidden_width == 32u && result.layer_count == 2u, "complete component executes through physical SSA");
+    for (size_t i = 0u; i < 96u; ++i) {
+        float error = fabsf(observed[i] - expected[i]);
+        if (error > maximum) maximum = error;
+        if (!isfinite(observed[i]) || error != 0.0f)
+            fprintf(stderr, "text preservation index=%zu expected=%.9g observed=%.9g abs=%.9g\n",
+                i, (double)expected[i], (double)observed[i], (double)error);
+        YVEX_TEST_ASSERT(isfinite(observed[i]) && error == 0.0f, "text migration preserves each BF16 result exactly");
+    }
+    printf("Text program CUDA: layers=2 tokens=3 values=96 old[0]=%.9g new[0]=%.9g max_abs=%g tolerance=0; "
+        "retired launches=69 SSA launches=%llu; cross-implementation preservation, not upstream conformance\n",
+        (double)expected[0], (double)observed[0], (double)maximum, result.kernel_launches);
+    if (text_compiled_binding(&component, &request, weights, expected)) return 1;
+    for (unsigned int failure = 0u; failure < 5u; ++failure) {
+        memset(observed, 0x5a, sizeof(observed));
+        if (failure < 2u) YVEX_TEST_ASSERT(setenv("YVEX_TEST_CUDA_LINEAR_PLAN_FAILURE",
+            failure ? "execute" : "compile", 1) == 0, "arm component operation failure");
+        if (failure == 2u) request.maximum_host_bytes = 1u;
+        if (failure == 3u) request.maximum_device_bytes = 1u;
+        if (failure == 4u) request.cancelled = test_mhc_cancel;
+        rc = yvex_component_text_program_execute(&component, &request, weights, 23u, &result, &err);
+        YVEX_TEST_ASSERT(rc != YVEX_OK && !retained_stage && !result.complete &&
+            ((unsigned char *)observed)[0] == 0x5a,
+            "compile/execute/budget/cancellation failures publish no component result and discharge resources");
+        if (failure < 2u) YVEX_TEST_ASSERT(unsetenv("YVEX_TEST_CUDA_LINEAR_PLAN_FAILURE") == 0,
+            "disarm component operation failure");
+        request.maximum_host_bytes = request.maximum_device_bytes = 0u;
+        request.cancelled = NULL;
+    }
+    yvex_program_kernel_parameter bindings[23];
+    for (size_t i = 0u; i < 23u; ++i)
+        bindings[i] = (yvex_program_kernel_parameter){.tensor_id = i, .weight = weights[i]};
+    YVEX_TEST_ASSERT(yvex_program_stage_open(&retained_stage, program, bindings, 23u,
+        backend, 3u, 1, 0u, 0u, &err) == YVEX_OK, "stage retains sealed program lifetime");
+    yvex_program_physical_close(&program);
+    unsigned int regular_positions[] = {0u, 1u, 2u};
+    yvex_program_host_input arguments[] = {{.indices = tokens}, {.indices = regular_positions},
+        {.indices = regular_positions}, {.indices = regular_positions}};
+    yvex_backend_operation_facts facts;
+    YVEX_TEST_ASSERT(yvex_program_stage_host_inputs(retained_stage, 3u, arguments, 4u,
+        (float *[]){observed}, 1u, NULL, NULL, &facts, &err) == YVEX_OK &&
+        !memcmp(test_text_preserved, observed, sizeof(observed)) &&
+        yvex_program_stage_close(&retained_stage, &err) == YVEX_OK && !retained_stage,
+        "compiled text executes exactly after importer relinquishes its program reference");
+    unsigned long long positions[] = {0u, 1u, 2u, 0u, 2u, 3u, 0u, 3u, 4u};
+    unsigned int visual_index = 1u;
+    float visual[32], deepstack[96];
+    yvex_backend_text_multimodal_input multimodal = {.position_ids = positions, .position_capacity = 9u,
+        .visual_token_indices = &visual_index, .visual_token_count = 1u, .visual_embeddings = visual,
+        .visual_embedding_capacity = 32u, .deepstack_embeddings = deepstack, .deepstack_layer_count = 3u,
+        .deepstack_embedding_capacity = 96u, .mrope_sections = {2u, 1u, 1u},
+        .vision_execution_identity = test_text_recipe.semantic_identity};
+    for (size_t i = 0u; i < 32u; ++i) visual[i] = (float)((int)(i % 11u) - 5) / 16.0f;
+    for (size_t i = 0u; i < 96u; ++i) deepstack[i] = (float)((int)(i % 7u) - 3) / 32.0f;
+    memcpy(expected, test_multimodal_preserved, sizeof(expected));
+    YVEX_TEST_ASSERT(yvex_text_program_compile(&program, &test_text_recipe, 2u, 3u,
+        multimodal.mrope_sections, 3u, &err) == YVEX_OK, "visual row and layer interactions compile into SSA");
+    request.program = program; request.multimodal = &multimodal;
+    rc = yvex_component_text_program_execute(&component, &request, weights, 23u, &result, &err);
+    if (rc != YVEX_OK) fprintf(stderr, "multimodal text program: %s\n", yvex_error_message(&err));
+    YVEX_TEST_ASSERT(rc == YVEX_OK && result.complete && !memcmp(expected, observed, sizeof(expected)),
+        "multimodal embedding replacement, per-axis RoPE and deepstack additions preserve every output bit");
+    printf("Multimodal text CUDA: layers=2 tokens=3 visual_rows=1 results=96 expected[0]=%.9g observed[0]=%.9g "
+        "max_abs=0 tolerance=0; explicit initial replacement and two layer injections\n",
+        (double)expected[0], (double)observed[0]);
+    if (text_compiled_binding(&component, &request, weights, expected)) return 1;
+    visual_index = 3u;
+    memset(observed, 0x5a, sizeof(observed));
+    YVEX_TEST_ASSERT(yvex_component_text_program_execute(&component, &request, weights, 23u, &result, &err) ==
+        YVEX_ERR_FORMAT && !result.complete && ((unsigned char *)observed)[0] == 0x5a,
+        "visual index outside executable population refuses without publication");
+    yvex_program_physical_close(&program);
+    YVEX_TEST_ASSERT(yvex_backend_resident_detach(backend, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &resident, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &after, &err) == YVEX_OK &&
+        after.allocated_bytes == before.allocated_bytes && yvex_backend_close_checked(&backend, &err) == YVEX_OK,
+        "component program preparation, invocation and residency return to allocation baseline");
+    return 0;
+}
+
 int yvex_cuda_test_program(void)
 {
+    if (test_conditioning_program(YVEX_BACKEND_KIND_CUDA)) return 1;
+    if (test_joint_compiler() || test_joint_execution()) return 1;
+    if (test_spatial_programs(YVEX_BACKEND_KIND_CUDA) ||
+        test_signal_programs(YVEX_BACKEND_KIND_CUDA) || test_dense_program(YVEX_BACKEND_KIND_CUDA) ||
+        test_vision_program() || test_program_populations(YVEX_BACKEND_KIND_CUDA, 0) ||
+        test_program_populations(YVEX_BACKEND_KIND_CUDA, 1) ||
+        test_program_index_values(YVEX_BACKEND_KIND_CUDA)) return 1;
+    int text = program_cuda_text();
+    if (text) return text;
     if (test_mhc_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
+    if (test_shared_expert(YVEX_BACKEND_KIND_CUDA)) return 1;
+    if (test_shared_target(YVEX_BACKEND_KIND_CUDA)) return 1;
+    if (test_ingress_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
+    if (test_mhc_cuda_control(YVEX_GGUF_QTYPE_F32) != 0 ||
+        test_mhc_cuda_control(YVEX_GGUF_QTYPE_BF16) != 0) return 1;
     if (test_post_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
     if (test_stream_mean_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;
     if (test_linear_execute(YVEX_BACKEND_KIND_CUDA) != 0) return 1;

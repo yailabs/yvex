@@ -3,6 +3,7 @@
  * family.  Family recipes retain tensor names, shapes, schedules, and failure projection.
  */
 #include "src/graph/private.h"
+#include <yvex/internal/vision_program.h>
 
 static void component_execution_open(
     yvex_graph_component_execution *execution, yvex_materialization_session *session,
@@ -234,4 +235,63 @@ const yvex_graph_component_api *yvex_graph_component_api_get(void)
         component_buffer_open, component_buffer_close, component_binding_find,
         component_tensor_load_f32, component_name_build, rectified_flow_step};
     return &api;
+}
+
+/* Source roles are normalized to parameter ordinals at cold compilation.
+ * The runtime resolves only these IDs against the admitted resource domain. */
+static int vision_source_parameter(void *context, unsigned long long ordinal,
+    char name[256], yvex_error *err)
+{
+    const yvex_vision_request *r = context;
+    unsigned long long blocks = r->recipe->layer_count * YVEX_VISION_BLOCK_WEIGHT_COUNT;
+    unsigned long long item = 0u;
+    unsigned int slot;
+    int group;
+    if (ordinal < YVEX_VISION_EXTERNAL_WEIGHT_COUNT) {
+        group = YVEX_VISION_WEIGHT_EXTERNAL;
+        slot = (unsigned int)ordinal;
+    } else {
+        ordinal -= YVEX_VISION_EXTERNAL_WEIGHT_COUNT;
+        if (ordinal < blocks) {
+            group = YVEX_VISION_WEIGHT_BLOCK;
+            item = ordinal / YVEX_VISION_BLOCK_WEIGHT_COUNT;
+            slot = (unsigned int)(ordinal % YVEX_VISION_BLOCK_WEIGHT_COUNT);
+        } else {
+            ordinal -= blocks;
+            item = ordinal / YVEX_VISION_MERGER_WEIGHT_COUNT;
+            slot = (unsigned int)(ordinal % YVEX_VISION_MERGER_WEIGHT_COUNT);
+            if (item > r->recipe->deepstack_layer_count) {
+                yvex_error_set(err, YVEX_ERR_FORMAT, "compiler.vision-binding",
+                    "compiled parameter is outside source projection");
+                return YVEX_ERR_FORMAT;
+            }
+            group = item ? YVEX_VISION_WEIGHT_DEEPSTACK : YVEX_VISION_WEIGHT_MERGER;
+            if (item) --item;
+        }
+    }
+    return r->weight_name(r->weight_name_context, group, item, slot, name, err);
+}
+
+int yvex_component_vision_execute(const yvex_component_execution *component,
+    const yvex_vision_request *request, yvex_vision_result *result, yvex_error *err)
+{
+    yvex_vision_program *program = NULL;
+    if (result) memset(result, 0, sizeof(*result));
+    if (!request || !request->weight_name || !result) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "compiler.vision-entry",
+            "vision source request, parameter resolver and result required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    int rc = yvex_vision_program_compile(&program, request->recipe,
+        request->grid_height, request->grid_width, request->observe != NULL, err);
+    if (rc == YVEX_OK) {
+        yvex_vision_request source = *request, invocation = *request;
+        invocation.recipe = NULL;
+        invocation.weight_name = NULL;
+        invocation.weight_name_context = NULL;
+        rc = yvex_component_vision_program_execute(component, program, &invocation,
+            vision_source_parameter, &source, result, err);
+    }
+    yvex_vision_program_close(&program);
+    return rc;
 }

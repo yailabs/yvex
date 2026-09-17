@@ -10,6 +10,11 @@ extern "C" {
 
 const yvex_backend_transformer_operations *yvex_cuda_transformer_operations_get(
     const yvex_backend *backend);
+int yvex_cuda_residual_pre(yvex_backend *, const yvex_mhc_device_request *,
+    yvex_backend_operation_facts *, yvex_error *);
+int yvex_cuda_weighted_rms_bf16(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
+    yvex_device_tensor *, unsigned long long, unsigned long long, double,
+    yvex_backend_operation_facts *, yvex_error *);
 int yvex_cuda_residual_post(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
     const yvex_device_tensor *, const yvex_device_tensor *, unsigned long long, unsigned long long,
     unsigned long long, yvex_device_tensor *, yvex_backend_operation_facts *, yvex_error *);
@@ -23,6 +28,10 @@ int yvex_cuda_transformer_linear_f32(
     const unsigned char *, unsigned long long, unsigned long long,
     unsigned long long, unsigned long long, const yvex_device_tensor *,
     yvex_device_tensor *, const yvex_transformer_linear_physical_plan *,
+    yvex_backend_operation_facts *, yvex_error *);
+int yvex_cuda_linear_bias_target(yvex_backend *, const char *, const unsigned char *, unsigned long long,
+    const unsigned char *, unsigned long long, unsigned long long, unsigned long long,
+    unsigned long long, const yvex_device_tensor *, yvex_device_tensor *,
     yvex_backend_operation_facts *, yvex_error *);
 int yvex_cuda_transformer_linear_workspace_required(
     const yvex_transformer_linear_compile_request *, unsigned long long *, yvex_error *);
@@ -73,9 +82,6 @@ int yvex_cuda_gated_delta_execute(
     const yvex_gated_delta_device_request *request,
     yvex_gated_delta_device_result *result,
     yvex_backend_operation_facts *facts, yvex_error *err);
-int yvex_cuda_transformer_dense_decoder_execute(
-    yvex_backend *backend, const yvex_transformer_dense_decoder_request *request,
-    yvex_transformer_dense_decoder_result *result, yvex_error *err);
 int yvex_cuda_transformer_rotary_half(
     yvex_backend *backend, yvex_device_tensor *values,
     const yvex_device_tensor *cosines, const yvex_device_tensor *sines,
@@ -88,14 +94,6 @@ int yvex_cuda_transformer_rotary_half_f32(
     unsigned long long tokens, unsigned long long heads, unsigned long long head_dim,
     unsigned long long rotary_dim, yvex_backend_operation_facts *facts,
     yvex_error *err);
-int yvex_cuda_transformer_gqa(
-    yvex_backend *backend, const yvex_device_tensor *query,
-    const yvex_device_tensor *key, const yvex_device_tensor *value,
-    yvex_device_tensor *output, unsigned long long query_tokens,
-    unsigned long long key_value_tokens, unsigned long long query_start,
-    unsigned long long query_heads, unsigned long long kv_heads,
-    unsigned long long head_dim, int causal,
-    yvex_backend_operation_facts *facts, yvex_error *err);
 int yvex_cuda_transformer_gqa_strided(
     yvex_backend *backend, const yvex_device_tensor *query,
     const yvex_device_tensor *key, const yvex_device_tensor *value,
@@ -114,6 +112,8 @@ int yvex_cuda_transformer_silu_product_bf16(
     const yvex_device_tensor *up, yvex_device_tensor *output,
     unsigned long long count, yvex_backend_operation_facts *facts,
     yvex_error *err);
+int yvex_cuda_clamped_swiglu_bf16(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
+    yvex_device_tensor *, double, yvex_backend_operation_facts *, yvex_error *);
 int yvex_cuda_decoder_split_interleaved_two_f32(
     yvex_backend *backend, const yvex_device_tensor *input,
     yvex_device_tensor *first, yvex_device_tensor *second,

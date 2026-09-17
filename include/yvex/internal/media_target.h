@@ -14,6 +14,7 @@ extern "C" {
 #define YVEX_MEDIA_TARGET_TIER_CAP 5u
 
 typedef struct yvex_artifact yvex_artifact;
+typedef struct yvex_program_physical yvex_program_physical;
 typedef struct yvex_component_text_recipe yvex_component_text_recipe;
 typedef struct yvex_gguf yvex_gguf;
 typedef struct yvex_tensor_table yvex_tensor_table;
@@ -31,6 +32,8 @@ typedef struct yvex_runtime_av_latent_context yvex_runtime_av_latent_context;
 typedef struct yvex_runtime_latent_result yvex_runtime_latent_result;
 typedef struct yvex_runtime_latent_evaluator_result yvex_runtime_latent_evaluator_result;
 typedef struct yvex_component_execution yvex_component_execution;
+typedef struct yvex_vision_request yvex_vision_request;
+typedef struct yvex_vision_result yvex_vision_result;
 typedef struct yvex_tokenizer yvex_tokenizer;
 typedef struct yvex_image yvex_image;
 typedef struct yvex_runtime_av_video_decode_options yvex_runtime_av_video_decode_options;
@@ -42,7 +45,7 @@ typedef struct yvex_transformer_linear_requirement yvex_transformer_linear_requi
 
 #define YVEX_MEDIA_CONDITION_SCHEMA_V1 1u
 #define YVEX_MEDIA_CONDITION_CAP 2u
-#define YVEX_MEDIA_CONDITIONING_SCHEMA_V2 2u
+#define YVEX_MEDIA_CONDITIONING_SCHEMA_V3 3u
 
 typedef enum {
     YVEX_MEDIA_CONDITION_IMAGE = 1
@@ -77,6 +80,16 @@ typedef struct {
     unsigned long long condition_count, width, height, layer_count;
     unsigned long long maximum_prompt_tokens;
     const yvex_component_execution *text_component;
+    const yvex_program_physical *text_program;
+    /* Compiler-supplied parameter linkage; the product adapter does not
+     * interpret source roles or fetch a family recipe during execution. */
+    int (*text_parameter_name)(void *, unsigned long long, char[256], yvex_error *);
+    void *text_parameter_context;
+    /* Cold compiler entry after image preparation establishes exact geometry.
+     * Source schema/roles stay with the importer; the adapter supplies only
+     * computational inputs, output storage and observation requests. */
+    int (*vision_entry)(const yvex_component_execution *, const yvex_vision_request *,
+        yvex_vision_result *, yvex_error *);
     float *conditioning;
     unsigned int *text_tags;
     unsigned long long conditioning_capacity, text_tag_capacity;

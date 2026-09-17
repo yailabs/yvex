@@ -5,6 +5,7 @@
  * token-local MoE math and plan admission.
  */
 #include <yvex/internal/moe.h>
+#include <yvex/internal/neural_operations.h>
 #include "src/graph/private.h"
 #include <float.h>
 #include <limits.h>
@@ -17,6 +18,7 @@
 struct yvex_moe_plan {
     yvex_moe_plan_summary summary;
     yvex_moe_layer_plan *layers;
+    yvex_program_physical **ingress, **shared;
 };
 static const yvex_tensor_role moe_slot_roles[YVEX_MOE_WEIGHT_COUNT] = {
     YVEX_TENSOR_ROLE_FFN_NORM, YVEX_TENSOR_ROLE_HC_FFN_FUNCTION,
@@ -396,9 +398,48 @@ const yvex_moe_layer_plan *yvex_moe_plan_layer_at(const yvex_moe_plan *plan,
 void yvex_moe_plan_close(yvex_moe_plan **plan)
 {
     if (!plan || !*plan) return;
+    for (unsigned long long i = 0u; (*plan)->ingress && i < (*plan)->summary.layer_count; ++i)
+        yvex_program_physical_close(&(*plan)->ingress[i]);
+    free((*plan)->ingress);
+    for (unsigned long long i = 0u; (*plan)->shared && i < (*plan)->summary.layer_count; ++i)
+        yvex_program_physical_close(&(*plan)->shared[i]);
+    free((*plan)->shared);
     free((*plan)->layers);
     free(*plan);
     *plan = NULL;
+}
+
+
+int yvex_moe_plan_normalize_programs(yvex_moe_plan *plan, const yvex_physical_execution_ir *parameters,
+    unsigned long long maximum_rows, yvex_error *err)
+{
+    const yvex_physical_execution_summary *physical = yvex_physical_execution_ir_summary(parameters);
+    if (!plan || !physical || !maximum_rows)
+        return moe_refuse(err, YVEX_ERR_INVALID_ARG, "ingress import requires authenticated physical parameters");
+    if (!plan->ingress) plan->ingress = calloc((size_t)plan->summary.layer_count, sizeof(*plan->ingress));
+    if (!plan->shared) plan->shared = calloc((size_t)plan->summary.layer_count, sizeof(*plan->shared));
+    if (!plan->ingress || !plan->shared)
+        return moe_refuse(err, YVEX_ERR_NOMEM, "program directory allocation failed");
+    int rc = YVEX_OK;
+    for (unsigned long long i = 0u; rc == YVEX_OK && i < plan->summary.layer_count; ++i) {
+        if (!plan->ingress[i]) rc = yvex_moe_ingress_program_import(&plan->ingress[i], plan->layers + i,
+            plan->summary.logical_model_identity, physical->identity, maximum_rows, err);
+        if (rc == YVEX_OK) rc = yvex_program_physical_parameters_validate(plan->ingress[i], parameters, err);
+        if (rc == YVEX_OK && !plan->shared[i]) rc = yvex_moe_shared_program_import(&plan->shared[i], plan->layers + i,
+            plan->summary.logical_model_identity, physical->identity, maximum_rows, err);
+        if (rc == YVEX_OK) rc = yvex_program_physical_parameters_validate(plan->shared[i], parameters, err);
+    }
+    return rc;
+}
+
+const yvex_program_physical *yvex_moe_plan_ingress(const yvex_moe_plan *plan, unsigned long long ordinal)
+{
+    return plan && plan->ingress && ordinal < plan->summary.layer_count ? plan->ingress[ordinal] : NULL;
+}
+
+const yvex_program_physical *yvex_moe_plan_shared(const yvex_moe_plan *plan, unsigned long long ordinal)
+{
+    return plan && plan->shared && ordinal < plan->summary.layer_count ? plan->shared[ordinal] : NULL;
 }
 
 static int moe_decode_flat(const yvex_moe_weight_view *weight, float *out,
@@ -442,57 +483,6 @@ static int moe_matvec(const yvex_moe_weight_view *weight, const float *input,
     return YVEX_OK;
 }
 
-int yvex_moe_ffn_prepare_cpu(const yvex_moe_layer_job *job, float *normalized,
-                             float *post, float *combination, yvex_error *err)
-{
-    const yvex_moe_layer_plan *layer = job ? job->layer : NULL;
-    yvex_attention_layer_plan geometry = {0};
-    yvex_attention_mhc_pre_args pre;
-    yvex_attention_failure failure;
-    float mix[64], scale[3], base[64], norm[16384];
-    if (!job || !layer || !job->expanded_input || !normalized || !post || !combination ||
-        layer->mhc_mixing_rows > 64ull || layer->hidden_width > 16384ull)
-        return moe_refuse(err, YVEX_ERR_INVALID_ARG, "MoE FFN ingress arguments are invalid");
-    if (moe_matvec(&job->weights[YVEX_MOE_WEIGHT_MHC_FUNCTION], job->expanded_input,
-                   mix, err) != YVEX_OK ||
-        !moe_decode_flat(&job->weights[YVEX_MOE_WEIGHT_MHC_SCALE], scale, 3ull) ||
-        !moe_decode_flat(&job->weights[YVEX_MOE_WEIGHT_MHC_BASE], base,
-                         layer->mhc_mixing_rows) ||
-        !moe_decode_flat(&job->weights[YVEX_MOE_WEIGHT_FFN_NORM], norm,
-                         layer->hidden_width))
-        return yvex_error_is_set(err) ? yvex_error_code(err)
-                                      : moe_refuse(err, YVEX_ERR_FORMAT,
-                                                   "MoE FFN coefficients cannot be decoded");
-    geometry.layer_index = layer->layer_index;
-    geometry.compute_contract = YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1;
-    geometry.residual_stream_count = layer->residual_streams;
-    geometry.residual_stream_width = layer->hidden_width;
-    geometry.residual_expanded_width = layer->expanded_width;
-    geometry.mhc_mixing_rows = layer->mhc_mixing_rows;
-    geometry.mhc_mixing_columns = layer->expanded_width;
-    geometry.mhc_base_width = layer->mhc_mixing_rows;
-    geometry.mhc_scale_width = 3ull;
-    geometry.mhc_sinkhorn_iterations = layer->mhc_sinkhorn_iterations;
-    geometry.rms_norm_epsilon = layer->rms_epsilon;
-    geometry.mhc_epsilon = layer->mhc_epsilon;
-    geometry.mhc_residual_post_multiplier = layer->mhc_post_multiplier;
-    geometry.mhc_attention_pre_and_post = 1;
-    pre = (yvex_attention_mhc_pre_args){
-        &geometry, job->expanded_input, mix, scale, base, 1ull, layer->expanded_width,
-        layer->mhc_mixing_rows, normalized, post, combination, layer->hidden_width,
-        layer->residual_streams, layer->residual_streams * layer->residual_streams};
-    memset(&failure, 0, sizeof(failure));
-    if (yvex_attention_mhc_pre(&pre, &failure, err) != YVEX_OK ||
-        !yvex_attention_rms_norm(normalized, layer->hidden_width, norm, layer->rms_epsilon) ||
-        !yvex_attention_compute_round(YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
-                                      normalized, layer->hidden_width))
-        return yvex_error_is_set(err) ? yvex_error_code(err)
-                                      : moe_refuse(err, YVEX_ERR_FORMAT,
-                                                   "MoE FFN ingress produced invalid numerics");
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
 static double moe_score(double value)
 {
     double softplus = value > 0.0 ? value + log1p(exp(-value)) : log1p(exp(value));
@@ -516,19 +506,23 @@ static void moe_topk(const float *scores, unsigned long long count, unsigned lon
     }
 }
 
-int yvex_moe_route_cpu(const yvex_moe_layer_job *job, const float *normalized,
+int yvex_moe_route_cpu(const yvex_moe_layer_job *job, const float *logits,
                        yvex_moe_router_result *result, yvex_error *err)
 {
     const yvex_moe_layer_plan *layer = job ? job->layer : NULL;
-    float bias[256];
+    float bias[256], admitted_logits[256];
     unsigned long long expert, rank;
     double total = 0.0;
-    if (result) memset(result, 0, sizeof(*result));
-    if (!job || !layer || !normalized || !result || layer->routed_experts > 256ull ||
-        layer->experts_per_token > YVEX_MOE_MAX_SELECTED)
+    if (!job || !layer || !logits || !result || layer->routed_experts > 256ull ||
+        layer->experts_per_token > YVEX_MOE_MAX_SELECTED) {
+        if (result) memset(result, 0, sizeof(*result));
         return moe_refuse(err, YVEX_ERR_INVALID_ARG, "MoE router arguments are invalid");
-    if (moe_matvec(&job->weights[YVEX_MOE_WEIGHT_ROUTER], normalized,
-                   result->router_logits, err) != YVEX_OK) return yvex_error_code(err);
+    }
+    /* Projection is compiled computation. Selection consumes its published
+     * logits; it cannot inspect or reconstruct the projection parameter. */
+    memcpy(admitted_logits, logits, (size_t)layer->routed_experts * sizeof(float));
+    memset(result, 0, sizeof(*result));
+    memcpy(result->router_logits, admitted_logits, (size_t)layer->routed_experts * sizeof(float));
     for (expert = 0ull; expert < layer->routed_experts; ++expert) {
         double score = moe_score(result->router_logits[expert]);
         if (!isfinite(score)) return moe_refuse(err, YVEX_ERR_FORMAT,
@@ -590,7 +584,7 @@ int yvex_moe_expert_cpu(const yvex_moe_layer_plan *layer,
                         float route_weight, float *output, yvex_error *err)
 {
     float gate_values[4096], up_values[4096], intermediate[4096];
-    unsigned long long index, width;
+    unsigned long long width;
     int rc;
     if (!layer || !gate || !up || !down || !input || !output || !isfinite(route_weight) ||
         gate->row_count != up->row_count || down->row_width != gate->row_count ||
@@ -601,17 +595,9 @@ int yvex_moe_expert_cpu(const yvex_moe_layer_plan *layer,
         return moe_refuse(err, YVEX_ERR_BOUNDS, "MoE expert width exceeds bounded scratch");
     if ((rc = moe_matvec(gate, input, gate_values, err)) != YVEX_OK ||
         (rc = moe_matvec(up, input, up_values, err)) != YVEX_OK) return rc;
-    for (index = 0ull; index < width; ++index) {
-        double g = fmin(gate_values[index], layer->activation_limit);
-        double u = fmax(-layer->activation_limit,
-                        fmin(up_values[index], layer->activation_limit));
-        double silu = g >= 0.0 ? g / (1.0 + exp(-g)) : g * exp(g) / (1.0 + exp(g));
-        intermediate[index] = (float)(silu * u * route_weight);
-    }
-    if (!yvex_attention_compute_round(YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,
-                                      intermediate, width)) {
-        return moe_refuse(err, YVEX_ERR_FORMAT, "MoE SwiGLU intermediate is non-finite");
-    }
+    rc = yvex_clamped_swiglu_bf16(gate_values, up_values, width,
+        layer->activation_limit, route_weight, intermediate, err);
+    if (rc != YVEX_OK) return rc;
     rc = moe_matvec(down, intermediate, output, err);
     if (rc == YVEX_OK &&
         !yvex_attention_compute_round(YVEX_ATTENTION_COMPUTE_BF16_F32_RNE_V1,

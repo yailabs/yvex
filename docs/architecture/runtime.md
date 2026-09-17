@@ -98,9 +98,32 @@ borrowed device results. SSA values, provider state versions and producer
 publication generations remain different lifetimes. DeepSeek target/draft final
 mHC and normalization now execute a two-result physical program, including the
 CPU full-evidence path; tensor-stage resources and transport do not rebuild
-compiler semantics. DeepSeek's remaining layer composition and MiniMax
-component consumers are not yet cut over to this owner; see the
+compiler semantics. MiniMax dense text, including visual row replacement and
+deep-stack injection, also consumes physical SSA through the common component
+program executor. MiniMax vision, visual dense/prefix and audio signal programs
+use that same owner; their procedural execution loops are removed. Signal
+execution allocates bounded reusable scratch, binds parameters once and
+dispatches compiler-selected convolution, activation and combination operations.
+MiniMax joint computation uses compiled prepare/step/forward programs. Generic
+prepared resources retain typed results across steps. Multiple identity-bound
+prepared programs may coexist for one fixed request; session leases retain all
+used entries and prevent incompatible request replacement and premature close.
+Catalog growth preserves live handles, dependencies and borrows. Full diagnostic
+execution, retained preparations and their metadata share one session budget.
+Outputs remain staged
+until execution, identity and cleanup succeed. DeepSeek's remaining layer
+composition is not yet cut over; see the
 [compiler boundary](compilation.md#typed-computational-programs).
+
+Component-program execution stages host results until computation, identity,
+cancellation and checked cleanup succeed. Internal component execution v2
+provides a session-owned stage slot: failed cleanup remains reachable and blocks
+another invocation. Executable resource owners retain immutable physical program
+truth independently of the importing caller. This does not retain borrowed
+weight storage, a backend, mutable state or device-result publication generations.
+Internal conditioning request v3 requires a compiled text program; the old
+procedural text backend entrypoints are absent. Public ABI, protocol and OpenAI
+capacity/preflight semantics are unchanged by this internal cutover.
 
 Media conditioning storage and result validation use the admitted component's
 output width, projected at cold profile construction and frozen in the engine
@@ -109,8 +132,8 @@ missing, overflowing or over-budget geometry before opening components, and
 rejects changed engine geometry or incompatible component results before latent
 execution/publication. Internal media execution recipe v2 and generation request
 v3 require this explicit boundary; older transient layouts are refused, not
-filled from a family default. This removes a runtime geometry authority, not
-the still-open MiniMax neural-program cutover. No public wire version changes.
+filled from a family default. This removes a runtime geometry authority;
+complete iterative/component qualification remains distinct. No public wire version changes.
 
 Compilation, source acquisition, model catalogs, server transport, and
 application request parsing are outside the engine. Family callbacks are absent
@@ -290,6 +313,16 @@ obligations, specialization implementation class, real populations, and
 publication provenance. CUDA owns equivalent implementation details: kernel
 entrypoint inside the admitted class, tile/warp/grid geometry, shared-memory and
 register strategy, stream/event mechanics, and graph capture/replay.
+
+Synchronous CUDA tensor copies, host input/output and zeroing enqueue on the
+owning execution stream before waiting for completion. Waiting only after a
+default-stream transfer does not order it with a producer or previous storage
+user on a nonblocking session stream. Synchronous host input/output refuses
+active graph capture: caller-owned host storage cannot be borrowed for later
+replay, and host output cannot be published before execution. Standalone operation
+status storage likewise has its own lifetime: it cannot consume or rewind an
+enclosing executor's temporary arena. Shared status transactions retain their
+explicit begin/completion owner.
 
 CUDA does not branch on a family name, recover expert compatibility, select a
 numerically different activation representation, or reconstruct a missing

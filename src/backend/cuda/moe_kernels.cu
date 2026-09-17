@@ -71,9 +71,12 @@ extern "C" __global__ void yvex_moe_route(
                 int used = 0;
                 for (unsigned long long prior = 0ull; prior < rank; ++prior)
                     if (selected[prior] == candidate) used = 1;
-                double candidate_score = (double)scores[candidate] + (double)bias[candidate];
-                double chosen_score = chosen == ~0ull
-                    ? -INFINITY : (double)scores[chosen] + (double)bias[chosen];
+                /* Correction is an F32 operation before ranking, as in the
+                 * source Gate and the row-parallel implementation. Promoting
+                 * this sum to F64 changes which experts win rounded ties. */
+                float candidate_score = __fadd_rn(scores[candidate], bias[candidate]);
+                float chosen_score = chosen == ~0ull
+                    ? -INFINITY : __fadd_rn(scores[chosen], bias[chosen]);
                 if (!used && (chosen == ~0ull || candidate_score > chosen_score ||
                               (candidate_score == chosen_score && candidate < chosen)))
                     chosen = candidate;

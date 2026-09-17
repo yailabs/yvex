@@ -213,7 +213,6 @@ typedef struct {
 } attention_cuda_weights;
 typedef struct {
     const yvex_attention_plan *plan;
-    const void *family_ir;
     yvex_materialization_session *session;
     const yvex_runtime_descriptor *descriptor;
     yvex_backend *backend;
@@ -523,41 +522,14 @@ int yvex_attention_fp8_fake_quant_block(const float *input, unsigned long long c
 int yvex_attention_fp4_fake_quant_block(const float *input, unsigned long long count, float *dequantized,
     unsigned char *codes, unsigned char *scale_code, yvex_attention_failure *failure, yvex_error *err);
 
-int yvex_graph_linear_source_f32(
-    const float *input, unsigned long long input_count, unsigned long long rows,
-    unsigned long long input_width, const float *weight,
-    unsigned long long weight_count, const float *bias,
-    unsigned long long bias_count, unsigned long long output_width,
-    float *output, unsigned long long output_count, yvex_error *err);
-int yvex_graph_layer_norm_f32(float *values, unsigned long long rows,
-                              unsigned long long width, const float *weight,
-                              const float *bias, double epsilon, yvex_error *err);
-int yvex_graph_silu_gate_f32(const float *fused, unsigned long long rows,
-                             unsigned long long width, float *output,
-                             yvex_error *err);
-int yvex_graph_full_attention_f32(
-    const float *qkv, unsigned long long rows, unsigned long long heads,
-    unsigned long long head_width, float *output, float *scratch,
-    unsigned long long scratch_count, yvex_error *err);
 int yvex_graph_f32_execution_identity(
     const char *domain, const char *artifact_identity,
     const unsigned long long *geometry, unsigned long long geometry_count,
     const float *input, unsigned long long input_count,
     const float *output, unsigned long long output_count, char identity[65]);
-int yvex_graph_interleaved_qk_norm_f32(
-    float *qkv, unsigned long long rows, unsigned long long heads,
-    unsigned long long head_width, double epsilon, yvex_error *err);
 int yvex_graph_rope_3d_row_f32(
     unsigned long long token, unsigned long long frames,
     unsigned long long height, unsigned long long width,
     unsigned long long frequencies, float base,
     float *cosines, float *sines, yvex_error *err);
-int yvex_graph_rope_3d_interleaved_qk_f32(
-    float *qkv, unsigned long long rows, unsigned long long frames,
-    unsigned long long height, unsigned long long width,
-    unsigned long long heads, unsigned long long head_width,
-    unsigned long long frequencies, float base, yvex_error *err);
-int yvex_graph_scaled_residual_f32(
-    float *hidden, const float *delta, const float *scale,
-    unsigned long long rows, unsigned long long width, yvex_error *err);
 #endif

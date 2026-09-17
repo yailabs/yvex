@@ -97,6 +97,16 @@ static int test_linear_cancel(void *context)
     return ++*calls >= 2u;
 }
 
+static int test_linear_unexpected_read(void *context, unsigned long long id,
+    unsigned long long offset, void *output, size_t bytes, yvex_error *err)
+{
+    unsigned int *calls = context;
+    (void)id; (void)offset; (void)output; (void)bytes;
+    ++*calls;
+    yvex_error_set(err, YVEX_ERR_IO, "test.linear.source", "refused source must never be read");
+    return YVEX_ERR_IO;
+}
+
 static int test_linear_execute(yvex_backend_kind kind)
 {
     static const yvex_program_device_kernel implementation = {"linear.encoded.f32.v1", test_linear_invoke};
@@ -190,6 +200,29 @@ static int test_linear_execute(yvex_backend_kind kind)
     YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, input, x, sizeof(x), &err) == YVEX_OK &&
         yvex_program_device_run(vm, 3u, &argument, 1u, &output, 1u, NULL, NULL, &result, &err) == YVEX_OK &&
         output->is_written, "cancelled or refused invocation does not poison reusable execution");
+    unsigned int reads = 0u;
+    parameter.read = test_linear_unexpected_read;
+    parameter.read_context = &reads;
+    YVEX_TEST_ASSERT(yvex_program_kernels_open(&rejected, p, &parameter, 1u, backend, 0u, 0u, &err) ==
+        YVEX_ERR_FORMAT && !rejected && !reads,
+        "resident and reader parameter authorities are mutually exclusive before execution");
+    parameter.weight.encoded = NULL;
+    parameter.read = NULL;
+    parameter.read_context = NULL;
+    YVEX_TEST_ASSERT(yvex_program_kernels_open(&rejected, p, &parameter, 1u, backend, 0u, 0u, &err) ==
+        YVEX_ERR_FORMAT && !rejected && !reads, "absent parameter residency fails closed");
+    if (kind == YVEX_BACKEND_KIND_CUDA) {
+        parameter.read = test_linear_unexpected_read;
+        parameter.read_context = &reads;
+        YVEX_TEST_ASSERT(yvex_program_kernels_open(&rejected, p, &parameter, 1u, backend, 0u, 0u, &err) ==
+            YVEX_ERR_FORMAT && !rejected && !reads, "CPU source callbacks do not imply CUDA residency");
+    }
+    parameter = (yvex_program_kernel_parameter){.tensor_id = 7u,
+        .weight = {.encoded = mapped, .encoded_bytes = 192u, .row_width = 32u,
+            .row_count = 3u, .row_bytes = 64u, .qtype = YVEX_GGUF_QTYPE_BF16}};
+    YVEX_TEST_ASSERT(yvex_program_kernels_open(&rejected, p, &parameter, 1u, backend, 0u, 0u, &err) ==
+        YVEX_OK && yvex_program_kernels_close(&rejected, &err) == YVEX_OK,
+        "fully initialized resident binding remains reusable after admission refusals");
     parameter.weight.row_bytes--;
     YVEX_TEST_ASSERT(yvex_program_kernels_open(&rejected, p, &parameter, 1u, backend, 0u, 0u, &err) ==
         YVEX_ERR_FORMAT && !rejected, "block geometry mismatch fails at parameter binding");
@@ -203,7 +236,8 @@ static int test_linear_execute(yvex_backend_kind kind)
         before.allocated_bytes == after.allocated_bytes && yvex_backend_close_checked(&backend, &err) == YVEX_OK,
         "all allocations return to the exact baseline");
     printf("Linear program %s: independent sparse oracle values=9 first expected=1.001953125 observed=%.9g "
-        "max_abs=%g tolerance=0; cancellation=unpublished; allocation_delta=0\n",
+        "max_abs=%g tolerance=0; residency_negatives=unpublished callback_reads=0; "
+        "cancellation=unpublished; allocation_delta=0\n",
         kind == YVEX_BACKEND_KIND_CPU ? "CPU" : "CUDA", (double)actual[0], (double)maximum);
     yvex_program_physical_close(&copy);
     yvex_program_physical_close(&p);
@@ -225,7 +259,7 @@ static int test_program_storage_classes(void)
         {"tensor.add", 1u, 1u, YVEX_ERR_UNSUPPORTED},
         {"tensor.add", 2u, 1u, YVEX_ERR_UNSUPPORTED},
         {"nn.silu_product", 1u, 1u, YVEX_ERR_UNSUPPORTED},
-        {"nn.linear_residual", 2u, 3u, YVEX_ERR_UNSUPPORTED}};
+        {"nn.linear_residual", 2u, 3u, YVEX_OK}};
     for (size_t test = 0u; test < sizeof(cases) / sizeof(cases[0]); ++test) {
         yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
         yvex_ir_module *m = NULL;
@@ -278,8 +312,8 @@ static int test_program_storage_classes(void)
         yvex_program_execution_close(&execution);
         yvex_ir_module_close(&m);
     }
-    puts("Physical storage classes: 1 compatible program; 8 unmaterialized operand cases and 1 "
-         "static/dynamic population mismatch refused before runtime; no invalid execution attempted");
+    puts("Physical storage classes: 2 compatible programs including independent static rows; "
+         "8 unmaterialized operand cases refused before runtime; no invalid execution attempted");
     return 0;
 }
 

@@ -361,13 +361,13 @@ typedef struct yvex_graph_execution_api {
                                  unsigned long long *selection_key,
                                  yvex_error *err);
     void (*cpu_options_default)(yvex_attention_cpu_options *options);
-    int (*cuda_token_execute)(const yvex_attention_plan *plan, const void *family_ir,
+    int (*cuda_token_execute)(const yvex_attention_plan *plan,
                               yvex_materialization_session *session,
                               const yvex_runtime_descriptor *descriptor, yvex_backend *backend,
                               const yvex_attention_cpu_options *options,
                               yvex_attention_cpu_result *result, yvex_attention_failure *failure,
                               yvex_error *err);
-    int (*cpu_chunk_execute)(const yvex_attention_plan *plan, const void *family_ir,
+    int (*cpu_chunk_execute)(const yvex_attention_plan *plan,
                              yvex_materialization_session *session,
                              const yvex_runtime_descriptor *descriptor,
                              const yvex_attention_cpu_options *options,
@@ -567,7 +567,7 @@ int yvex_attention_probe_history_open(yvex_attention_probe_history **out,
     const yvex_attention_history_view **view, yvex_error *err);
 void yvex_attention_probe_history_close(yvex_attention_probe_history **history);
 int yvex_attention_probe_execute(const yvex_graph_execution_api *family,
-                                 const yvex_attention_plan *plan, const void *family_ir,
+                                 const yvex_attention_plan *plan,
                                  yvex_materialization_session *session,
                                  const yvex_runtime_descriptor *descriptor,
                                  const yvex_attention_probe_request *request,
@@ -575,7 +575,7 @@ int yvex_attention_probe_execute(const yvex_graph_execution_api *family,
                                  yvex_attention_failure *failure, yvex_error *err);
 int yvex_attention_execute(
     const yvex_graph_execution_api *family, const yvex_attention_plan *plan,
-    const void *family_ir, yvex_materialization_session *session,
+    yvex_materialization_session *session,
     const yvex_runtime_descriptor *descriptor,
     const yvex_attention_execution_request *request,
     yvex_attention_probe_result *result,

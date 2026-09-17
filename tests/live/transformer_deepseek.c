@@ -42,7 +42,8 @@ static int live_execution_open(live_execution *execution, yvex_model_engine *mod
     options.context_capacity = context_capacity;
     options.workspace_token_capacity = context_capacity < 4ull
                                            ? context_capacity : 4ull;
-    options.evidence_level = YVEX_ATTENTION_EVIDENCE_NONE;
+    options.evidence_level = getenv("YVEX_TRANSFORMER_LIVE_FORENSIC")
+                                ? YVEX_ATTENTION_EVIDENCE_FULL : YVEX_ATTENTION_EVIDENCE_NONE;
     if (yvex_runtime_session_open(&execution->session, model, &session_request,
                                   &failure, err) != YVEX_OK)
         return yvex_error_code(err);
@@ -399,7 +400,8 @@ int main(int argc, char **argv)
     unsigned long long comparison_tokens = cuda_only && token_text
                                                ? strtoull(token_text, NULL, 10)
                                                : cuda_only ? 32ull : 2ull;
-    unsigned long long comparison_chunk = cuda_only ? 4ull : 2ull;
+    unsigned long long comparison_chunk = cuda_only && comparison_tokens < 4ull
+                                              ? comparison_tokens : cuda_only ? 4ull : 2ull;
     unsigned long long context_capacity = cuda_only && context_text
                                               ? strtoull(context_text, NULL, 10)
                                               : comparison_tokens;
@@ -518,7 +520,8 @@ int main(int argc, char **argv)
         first_layer = plan ? plan->layer_count : 0ull;
         state_match = strcmp(cuda.result.persistent_state_digest,
                              cuda_steps.result.persistent_state_digest) == 0;
-        if (!cuda_chunk_match || !state_match) {
+        if (!cuda_chunk_match || !state_match ||
+            (getenv("YVEX_TRANSFORMER_LIVE_FORENSIC") && (maximum != 0.0 || rmse != 0.0))) {
             fprintf(stderr,
                     "transformer_live cuda_chunk first=%llu wide=%.9g steps=%.9g "
                     "max_abs=%.9g rmse=%.9g state=%d\n",
@@ -568,8 +571,10 @@ int main(int argc, char **argv)
     }
     if (rc != YVEX_OK) live_fail(step, rc, &err);
     else if (cuda_only)
-        printf("cuda_chunk_equivalence=pass tokens=%llu layers=43\n",
-               comparison_tokens);
+        printf("cuda_chunk_equivalence=pass tokens=%llu layers=43 "
+               "evidence=%s max_abs=%.17g rmse=%.17g state_match=%d\n",
+               comparison_tokens, getenv("YVEX_TRANSFORMER_LIVE_FORENSIC") ? "full" : "normal",
+               maximum, rmse, state_match);
     else
         printf("transformer_layers=43 chunks=1 tokens=2 swa=2 csa=21 hca=20 "
                "hash=6 learned=80 routed=516 shared=86 max_abs=%.17g rmse=%.17g\n"

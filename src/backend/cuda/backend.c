@@ -1034,15 +1034,24 @@ static int cuda_tensor_write(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
+    if (yvex_cuda_capture_active(backend)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_tensor_write",
+            "synchronous host input cannot borrow caller storage for captured execution");
+        return YVEX_ERR_STATE;
+    }
     tensor->is_written = 0;
     rc = yvex_cuda_set_current(backend, "yvex_backend_tensor_write", err);
     if (rc != YVEX_OK) {
         return rc;
     }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuMemcpyHtoD_v2(yvex_cuda_tensor_ptr(tensor),
-                                                         src, (size_t)len),
-                          "yvex_backend_tensor_write", err);
+    /* Order mutation after prior users of this storage, including work on
+     * the nonblocking session stream. The completion barrier alone does not
+     * establish an order between default-stream and session-stream work. */
+    CUstream stream = yvex_cuda_launch_stream(backend);
+    CUresult copied = stream && state->driver.cuMemcpyHtoDAsync_v2
+        ? state->driver.cuMemcpyHtoDAsync_v2(yvex_cuda_tensor_ptr(tensor), src, (size_t)len, stream)
+        : !stream ? state->driver.cuMemcpyHtoD_v2(yvex_cuda_tensor_ptr(tensor), src, (size_t)len) : (CUresult)1;
+    rc = yvex_cuda_status(&state->driver, copied, "yvex_backend_tensor_write", err);
     if (rc != YVEX_OK) {
         return rc;
     }
@@ -1072,14 +1081,22 @@ static int cuda_tensor_read(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
+    if (yvex_cuda_capture_active(backend)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_tensor_read",
+            "synchronous host output cannot be published before captured execution");
+        return YVEX_ERR_STATE;
+    }
     rc = yvex_cuda_set_current(backend, "yvex_backend_tensor_read", err);
     if (rc != YVEX_OK) {
         return rc;
     }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuMemcpyDtoH_v2(dst, yvex_cuda_tensor_ptr(tensor),
-                                                         (size_t)len),
-                          "yvex_backend_tensor_read", err);
+    /* Host publication must consume the completed producer, not race it and
+     * wait afterward. Use the same ordered stream as executable tensor work. */
+    CUstream stream = yvex_cuda_launch_stream(backend);
+    CUresult copied = stream && state->driver.cuMemcpyDtoHAsync_v2
+        ? state->driver.cuMemcpyDtoHAsync_v2(dst, yvex_cuda_tensor_ptr(tensor), (size_t)len, stream)
+        : !stream ? state->driver.cuMemcpyDtoH_v2(dst, yvex_cuda_tensor_ptr(tensor), (size_t)len) : (CUresult)1;
+    rc = yvex_cuda_status(&state->driver, copied, "yvex_backend_tensor_read", err);
     if (rc != YVEX_OK) {
         return rc;
     }
@@ -1102,12 +1119,14 @@ static int cuda_tensor_zero(yvex_backend *backend, yvex_device_tensor *tensor,
                                       "cuda.tensor.zero", err);
     if (rc == YVEX_OK) rc = yvex_cuda_set_current(backend, "cuda.tensor.zero", err);
     tensor->is_written = 0;
-    if (rc == YVEX_OK)
-        rc = yvex_cuda_status(
-            &state->driver,
-            state->driver.cuMemsetD8_v2(
-                yvex_cuda_tensor_ptr(tensor), 0u, (size_t)tensor->bytes),
-            "cuda.tensor.zero", err);
+    if (rc == YVEX_OK) {
+        CUstream stream = yvex_cuda_launch_stream(backend);
+        CUresult cleared = stream && state->driver.cuMemsetD8Async
+            ? state->driver.cuMemsetD8Async(yvex_cuda_tensor_ptr(tensor), 0u, (size_t)tensor->bytes, stream)
+            : !stream ? state->driver.cuMemsetD8_v2(yvex_cuda_tensor_ptr(tensor), 0u, (size_t)tensor->bytes)
+                      : (CUresult)1;
+        rc = yvex_cuda_status(&state->driver, cleared, "cuda.tensor.zero", err);
+    }
     if (rc == YVEX_OK)
         rc = yvex_cuda_synchronize(
             backend, YVEX_BACKEND_VARIANT_TENSOR_ZERO,
@@ -1138,11 +1157,16 @@ static int cuda_tensor_copy(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuMemcpyDtoD_v2(yvex_cuda_tensor_ptr(dst),
-                                                         yvex_cuda_tensor_ptr(src),
-                                                         (size_t)src->bytes),
-                          "yvex_backend_tensor_copy", err);
+    /* The source may have been published by queued session work. A barrier
+     * after a default-stream copy cannot order that copy after its producer
+     * on a nonblocking stream. Enqueue in the producer's execution order. */
+    CUstream stream = yvex_cuda_launch_stream(backend);
+    CUresult copied = stream && state->driver.cuMemcpyDtoDAsync_v2
+        ? state->driver.cuMemcpyDtoDAsync_v2(yvex_cuda_tensor_ptr(dst), yvex_cuda_tensor_ptr(src),
+            (size_t)src->bytes, stream)
+        : !stream ? state->driver.cuMemcpyDtoD_v2(yvex_cuda_tensor_ptr(dst), yvex_cuda_tensor_ptr(src),
+            (size_t)src->bytes) : (CUresult)1;
+    rc = yvex_cuda_status(&state->driver, copied, "yvex_backend_tensor_copy", err);
     if (rc != YVEX_OK) {
         return rc;
     }
@@ -1592,7 +1616,6 @@ static const yvex_backend_vtable cuda_vtable = {
     .sampling_operations = yvex_cuda_sampling_operations_get,
     .moe_operations = yvex_cuda_moe_operations_get,
     .transformer_operations = yvex_cuda_transformer_operations_get,
-    .component_operations = yvex_cuda_component_operations_get,
     .encoded_operations = yvex_cuda_encoded_operations_get,
 };
 static int shared_owner_acquire(yvex_backend *owner, yvex_error *err)

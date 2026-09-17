@@ -1238,7 +1238,7 @@ static int conditioning_execute(generation_state *state, yvex_error *err)
         rc = host_allocate(state, request->maximum_prompt_tokens, sizeof(unsigned int),
                            (void **)&state->text_tags, "conditioning tags", err);
     conditioning = (yvex_media_conditioning_request){
-        .schema_version = YVEX_MEDIA_CONDITIONING_SCHEMA_V2,
+        .schema_version = YVEX_MEDIA_CONDITIONING_SCHEMA_V3,
         .prompt = request->prompt, .tokenizer = text->tokenizer,
         .conditions = request->conditions, .condition_images = state->condition_images,
         .condition_count = request->condition_count, .width = request->width,
@@ -1287,7 +1287,7 @@ static int conditioning_execute(generation_state *state, yvex_error *err)
         rc = host_allocate(state, state->condition_latent_values, sizeof(float),
                            (void **)&state->condition_latents, "keyframe latents", err);
     keyframes = (yvex_media_keyframe_request){
-        .schema_version = YVEX_MEDIA_CONDITIONING_SCHEMA_V2,
+        .schema_version = YVEX_MEDIA_CONDITIONING_SCHEMA_V3,
         .conditions = request->conditions, .condition_images = state->condition_images,
         .condition_count = request->condition_count, .width = request->width,
         .height = request->height, .posterior_seed = request->keyframe_encode_seed,

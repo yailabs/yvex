@@ -8,9 +8,56 @@
   },
   "change_classes": [
     {
+      "id": "keyframe-program-consumer",
+      "patterns": ["src/graph/families/minimax_h3.c", "src/backend/cuda/families/minimax_h3.c",
+                   "tests/live/minimax_h3_video.c", "tests/unit/minimax_h3.c"],
+      "lanes": ["fast", "structural", "runtime", "sanitizer"],
+      "tests": ["unit.minimax_h3", "cuda.program", "live.minimax.keyframe-program"],
+      "reason": "compiler-owned keyframe invocation must preserve exact neural output and fail closed without an executable program"
+    },
+    {
+      "id": "joint-program-consumer",
+      "patterns": ["src/graph/joint_program.c", "include/yvex/internal/joint_program.h",
+                   "src/runtime/program_stage.c", "src/graph/program_physical.c",
+                   "src/runtime/component.c", "tests/support/observation_program.h",
+                   "tests/support/joint_program.h", "tests/live/minimax_h3_transformer.c"],
+      "lanes": ["fast", "structural", "numeric", "runtime", "sanitizer"],
+      "tests": ["unit.program", "cuda.program", "live.minimax.joint-program"],
+      "reason": "typed preparation/step composition and target lowering require exact resident-asset preservation"
+    },
+    {
+      "id": "signal-program-consumer",
+      "patterns": ["src/graph/signal_program.c", "include/yvex/internal/signal_program.h",
+                   "src/backend/signal.c", "src/backend/cuda/convolution.c", "tests/support/signal_program.h",
+                   "src/runtime/component_program.c", "tests/live/minimax_h3_audio.c"],
+      "lanes": ["fast", "structural", "numeric", "runtime", "sanitizer"],
+      "tests": ["unit.program", "cuda.program", "live.minimax.audio-program"],
+      "reason": "signal composition cutover requires exact-artifact per-backend preservation and primitive oracles"
+    },
+    {
+      "id": "artifact-program-forward",
+      "patterns": ["src/runtime/decoder.c", "src/graph/decoder_import.c", "src/runtime/program_*.c",
+                   "tests/live/program_forward.c"],
+      "lanes": ["fast", "structural", "runtime"],
+      "tests": ["live.program-forward"],
+      "reason": "migrated token-program consumers require exact artifact-backed execution, replay and lifecycle evidence"
+    },
+    {
       "id": "typed-computational-ir",
       "patterns": ["src/ir/**", "include/yvex/internal/ir.h", "tests/unit/ir.c", "src/graph/decoder_import.c",
-                   "src/graph/program*.c", "include/yvex/internal/program.h", "tests/unit/program.c",
+                   "src/graph/program*.c", "src/graph/text_program.c", "include/yvex/internal/text_program.h",
+                   "src/runtime/component_program.c", "tests/support/text_program.h", "tests/support/population_program.h",
+                   "src/graph/vision_program.c", "src/runtime/vision_program.c",
+                   "include/yvex/internal/vision_program.h", "tests/support/vision_program.h",
+                   "src/graph/dense_program.c", "include/yvex/internal/dense_program.h", "tests/support/dense_program.h",
+                   "src/graph/signal_program.c", "include/yvex/internal/signal_program.h", "tests/support/signal_program.h",
+                   "src/backend/signal.c", "src/graph/joint_program.c", "include/yvex/internal/joint_program.h",
+                   "tests/support/joint_program.h", "tests/support/conditioning_program.h",
+                   "tests/support/observation_program.h", "tests/support/mhc_ingress_program.h", "src/graph/moe_program.c",
+                   "tests/support/mhc_cuda_control.h", "tests/support/moe_backend_program.h", "src/runtime/moe_program.c",
+                   "tests/support/dense_reference.h", "tests/support/numeric_reference.h",
+                   "tests/support/shared_expert_program.h",
+                   "include/yvex/internal/program.h", "tests/unit/program.c",
                    "src/runtime/program_*.c", "include/yvex/internal/program_*.h",
                    "tests/unit/cuda/program*.c", "tests/support/program_sequence.h", "tests/support/tensor_program.h"],
       "lanes": ["fast", "structural", "numeric", "runtime", "sanitizer"],
@@ -68,6 +115,14 @@
       "reason": "quantized representations require independent numeric and sanitizer evidence"
     },
     {
+      "id": "transformer-program-publication",
+      "patterns": ["src/runtime/transformer.c", "src/runtime/scheduler.c", "src/runtime/moe.c",
+                   "src/backend/cuda/moe.c", "include/yvex/internal/moe.h", "tests/live/transformer_deepseek.c"],
+      "lanes": ["fast", "structural", "runtime", "sanitizer"],
+      "tests": ["live.deepseek.transformer-forensic", "live.deepseek.generation"],
+      "reason": "normal and forensic execution must consume compiled results while retaining independent reference views"
+    },
+    {
       "id": "family-deepseek",
       "patterns": ["src/model/families/deepseek*.c", "src/graph/families/deepseek*.c", "src/backend/cuda/families/deepseek*.cu"],
       "lanes": ["fast", "structural", "numeric", "runtime"],
@@ -78,8 +133,8 @@
       "id": "family-minimax",
       "patterns": ["src/model/families/minimax*.c", "src/graph/families/minimax*.c", "src/backend/cuda/families/minimax*.cu"],
       "lanes": ["fast", "structural", "numeric", "runtime"],
-      "tests": ["live.minimax.audio", "live.minimax.latent",
-                "live.minimax.omni-transformer-artifact", "live.minimax.text",
+      "tests": ["live.minimax.audio", "live.minimax.audio-program", "live.minimax.latent",
+                "live.minimax.omni-transformer-artifact", "live.minimax.text", "live.minimax.text-layer",
                 "live.minimax.tokenizer", "live.minimax.video"],
       "reason": "MiniMax semantic lowering requires its distinct bounded live vertical"
     },
@@ -151,7 +206,8 @@
     {
       "id": "backend-cuda",
       "patterns": ["src/backend/cuda/*.c", "src/backend/cuda/*.h", "include/yvex/internal/cuda.h",
-                   "include/yvex/internal/neural_operations.h"],
+                   "include/yvex/internal/neural_operations.h", "tools/generate_cuda_exports.py",
+                   "tests/test_cuda_exports.py"],
       "lanes": ["fast", "structural", "numeric", "cuda", "sanitizer"],
       "tests": ["cuda.native", "live.deepseek.generation", "live.deepseek.logits"],
       "reason": "CUDA backend changes require native parity, faults, cleanup, and production reachability"

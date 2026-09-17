@@ -8,8 +8,8 @@
 
 #include <yvex/api.h>
 #include <yvex/internal/backend.h>
+#include "src/backend/cuda/private.h"
 
-#include "src/backend/cuda/component_ops.h"
 #include "tests/test.h"
 
 static void make_desc(yvex_backend_tensor_desc *desc,
@@ -88,6 +88,83 @@ static int assert_virtual_pages(yvex_backend *backend)
     return 0;
 }
 
+static CUresult (*copy_default_driver)(CUdeviceptr, CUdeviceptr, size_t);
+static CUresult (*copy_stream_driver)(CUdeviceptr, CUdeviceptr, size_t, CUstream);
+static unsigned int copy_default_calls, copy_stream_calls;
+static CUstream copy_observed_stream;
+
+static CUresult observe_default_copy(CUdeviceptr dst, CUdeviceptr src, size_t bytes)
+{
+    copy_default_calls++;
+    return copy_default_driver(dst, src, bytes);
+}
+
+static CUresult observe_stream_copy(CUdeviceptr dst, CUdeviceptr src, size_t bytes, CUstream stream)
+{
+    copy_stream_calls++; copy_observed_stream = stream;
+    return copy_stream_driver(dst, src, bytes, stream);
+}
+
+static CUresult (*host_write_driver)(CUdeviceptr, const void *, size_t, CUstream);
+static CUresult (*host_read_driver)(void *, CUdeviceptr, size_t, CUstream);
+static CUresult (*zero_stream_driver)(CUdeviceptr, unsigned char, size_t, CUstream);
+static CUstream movement_stream;
+static unsigned int movement_calls[3], movement_wrong_stream;
+
+static CUresult observe_host_write(CUdeviceptr dst, const void *src, size_t bytes, CUstream stream)
+{
+    movement_calls[0]++; movement_wrong_stream += stream != movement_stream;
+    return host_write_driver(dst, src, bytes, stream);
+}
+
+static CUresult observe_host_read(void *dst, CUdeviceptr src, size_t bytes, CUstream stream)
+{
+    movement_calls[1]++; movement_wrong_stream += stream != movement_stream;
+    return host_read_driver(dst, src, bytes, stream);
+}
+
+static CUresult observe_zero_stream(CUdeviceptr dst, unsigned char value, size_t bytes, CUstream stream)
+{
+    movement_calls[2]++; movement_wrong_stream += stream != movement_stream;
+    return zero_stream_driver(dst, value, bytes, stream);
+}
+
+static int assert_session_movement(yvex_backend *backend, yvex_device_tensor *tensor)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_device_tensor view = *tensor;
+    float input[] = {1.0f, -2.0f, 3.0f, -4.0f}, output[4] = {0}, cleared[4];
+    yvex_error err;
+    view.bytes = sizeof(input); view.rank = 1u; view.dims[0] = 4u;
+    memset(cleared, 0xff, sizeof(cleared));
+    host_write_driver = state->driver.cuMemcpyHtoDAsync_v2;
+    host_read_driver = state->driver.cuMemcpyDtoHAsync_v2;
+    zero_stream_driver = state->driver.cuMemsetD8Async;
+    movement_stream = yvex_cuda_launch_stream(backend);
+    memset(movement_calls, 0, sizeof(movement_calls)); movement_wrong_stream = 0u;
+    state->driver.cuMemcpyHtoDAsync_v2 = observe_host_write;
+    state->driver.cuMemcpyDtoHAsync_v2 = observe_host_read;
+    state->driver.cuMemsetD8Async = observe_zero_stream;
+    int rc = yvex_backend_tensor_write(backend, &view, input, sizeof(input), &err);
+    if (rc == YVEX_OK) rc = yvex_backend_tensor_read(backend, &view, output, sizeof(output), &err);
+    if (rc == YVEX_OK) rc = yvex_backend_tensor_zero(backend, &view, &err);
+    if (rc == YVEX_OK) rc = yvex_backend_tensor_read(backend, &view, cleared, sizeof(cleared), &err);
+    state->driver.cuMemcpyHtoDAsync_v2 = host_write_driver;
+    state->driver.cuMemcpyDtoHAsync_v2 = host_read_driver;
+    state->driver.cuMemsetD8Async = zero_stream_driver;
+    printf("CUDA session movement: write=%u read=%u zero=%u wrong_stream=%u "
+        "values=%g,%g,%g,%g cleared=%g,%g,%g,%g\n", movement_calls[0], movement_calls[1],
+        movement_calls[2], movement_wrong_stream, output[0], output[1], output[2], output[3],
+        cleared[0], cleared[1], cleared[2], cleared[3]);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && movement_stream && movement_calls[0] == 1u &&
+        movement_calls[1] == 2u && movement_calls[2] == 1u && !movement_wrong_stream,
+        "host movement and zeroing must follow the session producer stream before their completion barrier");
+    YVEX_TEST_ASSERT(memcmp(input, output, sizeof(input)) == 0 &&
+        cleared[0] == 0.0f && cleared[1] == 0.0f && cleared[2] == 0.0f && cleared[3] == 0.0f,
+        "host publication and zeroing preserve exact tensor contents");
+    return 0;
+}
+
 static int assert_shared_stream_copy(yvex_backend *owner)
 {
     enum { SHARED_COPY_VALUES = 1024 * 256 };
@@ -112,10 +189,29 @@ static int assert_shared_stream_copy(yvex_backend *owner)
             yvex_backend_tensor_alloc(source_backend, &desc, &replacement, &err) == YVEX_OK &&
             yvex_backend_tensor_alloc(destination_backend, &desc, &destination, &err) == YVEX_OK,
         "allocate cross-stream source and destination tensors");
+    YVEX_TEST_ASSERT(assert_session_movement(source_backend, source) == 0,
+        "tensor movement has one authoritative session execution order");
     YVEX_TEST_ASSERT(
         yvex_backend_tensor_write(source_backend, source, input, desc.bytes, &err) == YVEX_OK &&
             yvex_backend_tensor_write(source_backend, replacement, replacement_values,
-                                      desc.bytes, &err) == YVEX_OK &&
+                                      desc.bytes, &err) == YVEX_OK,
+        "prepare immutable source controls");
+    yvex_cuda_backend_state *state = yvex_cuda_state(source_backend);
+    copy_default_driver = state->driver.cuMemcpyDtoD_v2;
+    copy_stream_driver = state->driver.cuMemcpyDtoDAsync_v2;
+    copy_default_calls = copy_stream_calls = 0u; copy_observed_stream = NULL;
+    state->driver.cuMemcpyDtoD_v2 = observe_default_copy;
+    state->driver.cuMemcpyDtoDAsync_v2 = observe_stream_copy;
+    int copied = yvex_backend_tensor_copy(source_backend, replacement, source, &err);
+    state->driver.cuMemcpyDtoD_v2 = copy_default_driver;
+    state->driver.cuMemcpyDtoDAsync_v2 = copy_stream_driver;
+    printf("CUDA synchronous copy ordering: default_calls=%u stream_calls=%u same_producer_stream=%d\n",
+        copy_default_calls, copy_stream_calls, copy_observed_stream == yvex_cuda_launch_stream(source_backend));
+    YVEX_TEST_ASSERT(copied == YVEX_OK && copy_default_calls == 0u && copy_stream_calls == 1u &&
+        copy_observed_stream == yvex_cuda_launch_stream(source_backend),
+        "synchronous copy must enqueue after its producer, not copy on default stream before waiting");
+    YVEX_TEST_ASSERT(
+            yvex_backend_tensor_write(source_backend, replacement, replacement_values, desc.bytes, &err) == YVEX_OK &&
             yvex_backend_tensor_copy_shared_async(
                 destination_backend, destination, source, &err) == YVEX_OK &&
             yvex_backend_tensor_copy_async(
@@ -134,66 +230,6 @@ static int assert_shared_stream_copy(yvex_backend *owner)
     return 0;
 }
 
-static int assert_execution_arena(yvex_backend *backend)
-{
-    yvex_backend_tensor_desc device[2];
-    yvex_backend_memory_stats before, retained, released;
-    yvex_cuda_execution_arena *arena = NULL;
-    yvex_cuda_execution_arena_summary summary = {0};
-    const unsigned long long host_bytes[2] = {64ull, 128ull};
-    yvex_cuda_execution_arena_plan plan = {
-        device, host_bytes, 2u, 2u};
-    yvex_device_tensor *first, *second;
-    yvex_backend_tensor_desc active;
-    yvex_error err;
-    float input[4] = {1.0f, 2.0f, 3.0f, 4.0f}, output[4] = {0};
-    unsigned char *first_host, *second_host;
-    make_desc(device + 0, "arena-first", 2ull, 2ull);
-    make_desc(device + 1, "arena-second", 2ull, 2ull);
-    YVEX_TEST_ASSERT(
-        yvex_backend_get_memory_stats(backend, &before, &err) == YVEX_OK &&
-            yvex_cuda_execution_arena_open(
-                &arena, backend, &plan, &summary, &err) == YVEX_OK &&
-            arena && summary.device_region_count == 2u &&
-            summary.host_region_count == 2u && summary.allocation_count == 2ull,
-        "open one admitted execution arena");
-    first = yvex_cuda_execution_arena_device(arena, 0u);
-    second = yvex_cuda_execution_arena_device(arena, 1u);
-    first_host = yvex_cuda_execution_arena_host(arena, 0u);
-    second_host = yvex_cuda_execution_arena_host(arena, 1u);
-    YVEX_TEST_ASSERT(
-        first && second && first->data != second->data && first_host &&
-            second_host && first_host != second_host &&
-            yvex_backend_tensor_write(
-                backend, second, input, sizeof(input), &err) == YVEX_OK &&
-            yvex_backend_tensor_read(
-                backend, second, output, sizeof(output), &err) == YVEX_OK &&
-            memcmp(input, output, sizeof(input)) == 0,
-        "arena exposes stable non-overlapping device and host views");
-    make_desc(&active, "arena-active", 1ull, 2ull);
-    second = yvex_cuda_execution_arena_device_bind(
-        arena, 1u, &active, &err);
-    YVEX_TEST_ASSERT(
-        second && second->bytes == sizeof(float) * 2ull &&
-            yvex_backend_tensor_write(
-                backend, second, input, sizeof(float) * 2ull, &err) == YVEX_OK,
-        "arena rebinds an active view within its admitted capacity");
-    first_host[0] = 0x5au;
-    second_host[0] = 0xa5u;
-    YVEX_TEST_ASSERT(
-        first_host[0] == 0x5au && second_host[0] == 0xa5u &&
-            yvex_backend_get_memory_stats(backend, &retained, &err) == YVEX_OK &&
-            retained.allocated_bytes == before.allocated_bytes + summary.device_bytes &&
-            retained.allocation_events == before.allocation_events + 1ull,
-        "arena retains one physical device allocation across view use");
-    YVEX_TEST_ASSERT(
-        yvex_cuda_execution_arena_close(&arena, &err) == YVEX_OK && !arena &&
-            yvex_backend_get_memory_stats(backend, &released, &err) == YVEX_OK &&
-            released.allocated_bytes == before.allocated_bytes &&
-            released.release_events == before.release_events + 1ull,
-        "arena cleanup balances backend ownership");
-    return 0;
-}
 
 int yvex_cuda_test_tensor(void)
 {
@@ -222,8 +258,6 @@ int yvex_cuda_test_tensor(void)
                      "CUDA virtual page ownership is transactional");
     YVEX_TEST_ASSERT(assert_shared_stream_copy(backend) == 0,
                      "CUDA shared physical owner supports ordered row movement");
-    YVEX_TEST_ASSERT(assert_execution_arena(backend) == 0,
-                     "CUDA execution arena owns persistent non-overlapping views");
 
     rc = yvex_backend_get_memory_stats(backend, &stats, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "initial stats");

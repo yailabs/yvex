@@ -198,7 +198,7 @@ not be satisfied with fictitious roles to manufacture READY.
 The native program-language foundation is owned by
 [`include/yvex/internal/ir.h`](../../include/yvex/internal/ir.h) and
 [`src/ir/module.c`](../../src/ir/module.c). It is **not yet the complete serving-runtime cutover**:
-DeepSeek and MiniMax still consume their existing compiled execution records;
+DeepSeek's remaining layer composition still consumes historical execution records;
 the Qwen token-forward runner now consumes complete physical SSA work for
 embedding, normalization, mixers, FFN and residual composition. It no longer
 walks decoder layers or resolves parameter roles during execution. Attention
@@ -214,10 +214,25 @@ are migrated and qualified.
 | --- | --- | --- |
 | Qwen 3.5 | Forward and output entries share compiler lineage; slot-based runner; generation, state-capacity and logits consumers use the derived program signature; legacy decoder import normalized at binding admission; bounded recurrent/hybrid CUDA tests and exact-artifact CUDA generation | Whole-model before/after preservation and upstream conformance; remaining provider/report views and ownership cutover |
 | DeepSeek V4 / DSpark | Output projection, final mHC/RMSNorm, feature reduction and residual post consume physical SSA normalized at cold admission; normal CUDA MoE returns independently retained operands to the compiled post stage | Migrate complete heterogeneous attention, MoE computation and target/draft dependencies; finish deferred target scheduling and qualify integrated composition |
-| MiniMax H3 | Existing component/intake regression consumer | Migrate neural component composition without absorbing media I/O; qualify affected consumers |
+| MiniMax H3 | Text, multimodal text, vision, visual dense/prefix, audio signal and joint prepare/step/forward compile to physical SSA; common component owners execute admitted work; old joint/text/vision/audio/dense procedural backend executors removed | Finish iterative/composition ownership audit and complete asset-dependent trajectory qualification; bounded component preservation is not full-model or upstream conformance |
 | Mamba2 | Pure SSM representable without attention/KV | Preserve representability only here; A01 executable repair remains queued and PARTIAL |
 
 ### Cutover acceptance boundary
+
+The [signal compiler](../../src/graph/signal_program.c) projects source-declared
+channel-first convolutions, normalized/transposed convolutions, alias-free
+Snake activations, residual branches, ordered means and output clamping into
+typed operations. Static channel/sample geometry and a bounded batch symbol
+determine operand/result storage. Source parameter names are resolved at cold
+binding only; the backend receives admitted operations and encoded weights,
+not decoder stages or tensor-name templates. One bounded scratch allocation is
+reused across signal operations. The prior CPU and CUDA complete alias-decoder
+interfaces and procedural loops are removed.
+
+The current audio recipe projects seven upsampling stages and 914 parameters.
+An exact-artifact, one-frame before/after replay preserves all 800 F32 samples
+bitwise on each backend. This establishes bounded migration preservation, not
+upstream conformance, arbitrary-duration audio qualification or a speedup.
 
 The adopted end-to-end target is **not yet the implemented serving pipeline**:
 
@@ -462,6 +477,145 @@ conformance. The CPU storage/dispatch fixture additionally refuses publication
 when cancellation is observed during the final operation, even after all
 values were computed. It proves VM contracts, not production CPU model kernels.
 
+### Spatial and dense component programs
+
+The spatial encoder in [`signal_program.c`](../../src/graph/signal_program.c)
+projects source-declared stages into `signal.conv2d_slice`,
+`nn.spatial_group_norm_silu` and residual SSA operations. Convolution consumes
+an explicit O/I/T/H/W parameter and a selected temporal plane; stride, padding,
+channel contraction and output geometry are compiler-verified. GroupNorm owns
+per-sample channel groups, affine parameters, epsilon and SiLU. The admitted
+CUDA implementations reuse the existing kernels; CPU spatial implementation
+is not claimed and fails closed during preparation.
+
+MiniMax's keyframe encoder now imports 34 convolutions, 25 normalizations and
+12 residual additions through this program, replacing its procedural CUDA
+encoder loop. Image decoding/resizing and the existing seeded posterior sample
+are outside this migrated encoder scope. Exact 96-value artifact-backed
+preservation is not independent model conformance.
+
+The keyframe product callback specializes that source recipe before invoking
+the consumer. It lends a completed physical program and cold parameter linkage
+through the common component invocation. The consumer binds prepared pixels
+and posterior outputs; it neither retrieves the encoder recipe nor compiles
+its stages. The compiled owner lives through the synchronous invocation and
+is released afterward. The remaining multimodal conditioning adapter is still
+a separate mixed-owner boundary, not claimed as fully cut over here.
+
+Cold parameter admission distinguishes ordinary singleton-axis views from the
+source-order compatibility package's declared
+`preserve-leading-three-fold-trailing-v1` policy. For that scalar-only profile,
+the compiler checks the leading axes and the exact product of the contiguous
+tail before recovering the logical row view. Equal element counts alone never
+admit a transpose, another factorization or quantized-block reinterpretation.
+
+[`vision_program.c`](../../src/graph/vision_program.c) imports patch projection,
+learned position interpolation, spatial rotary tables, attention blocks and
+normal/deepstack mergers. `encode` returns four typed tensors; `inspect` also
+returns declared intermediate observations. Inspection does not introduce a
+second layer executor. Spatial dimensions specialize during cold component
+admission; runtime binds parameters and invokes the resulting program per image.
+The compiler entrypoint also owns source-role-to-parameter-ID translation.
+The component resource binder walks admitted physical parameter IDs, not layer
+or merger recipes; its invocation receives neither the source recipe nor the
+role resolver. Missing compiled parameters fail before execution/publication.
+The former CUDA vision executor and its backend entrypoint are removed.
+
+[`dense_program.c`](../../src/graph/dense_program.c) imports the admitted F32
+visual dense component into explicit RMS normalization, projection, channel
+bias, interleaved Q/K/V partition, unweighted grouped normalization, partial
+rotary, full attention, scaled residual and SwiGLU operations. Final LayerNorm
+and prefix-row output projection are compiler-owned too. The numerical
+contracts distinguish a separately rounded F32 projection/bias from a bias
+inside an accumulated projection; BF16 vision/text publication remains distinct.
+The CUDA dense decoder loop, resident-decoder request and backend execution
+entrypoint are removed. CPU visual composition and source-backed neural prefix
+preparation consume the same compiler programs; payload streaming remains a
+materialization owner.
+
+[`component_program.c`](../../src/runtime/component_program.c) binds admitted
+parameter IDs through the component's cold resource boundary and executes typed
+tensor signatures. It verifies capacities and output aliasing, stages results,
+checks finiteness, binds result identity to program/residency/input/output, and
+publishes only after successful cleanup and the final cancellation check. A
+failed checked release remains reachable in the session's cleanup slot. It
+does not reconstruct blocks or semantic parameter roles.
+
+Static population changes, including merge reshapes and output slices, are
+verified before execution. Target dispatch and prepared matrix implementations
+use each operation's result population, rather than imposing the entrypoint's
+row count on every operation. Parameter physical formats remain separate from
+logical tensor types. Physical-program binary v1 identifies each newly admitted
+implementation by name; readers lacking it refuse, without reinterpreting an
+older numerical contract. No public ABI or protocol version changes here.
+
+`yvex_program_physical_value_layout` is the compiler-owned invocation view of
+activation geometry: fixed extents, the admitted population/multiple, element
+count and physical byte count. It distinguishes BF16/F32 in F32 storage from
+host-U32 index streams; parameter references and state handles are not activation
+allocations. Maximum executable storage is checked during physical verification.
+The device executor, tensor stages, prepared links and MoE result carriers use
+this view rather than independently resolving shapes. Runtime still validates
+actual backing, disjoint views and resource budgets. The view adds no persisted
+schema, resource reservation or model-context claim.
+
+### Joint preparation and executable composition
+
+[`joint_program.c`](../../src/graph/joint_program.c) imports conditioned joint
+computation into three typed functions: `prepare`, `step` and `forward`.
+Component calls inline during legalization. Explicit values carry text refinement,
+rotary tables, indexed modality partitions, timestep conditioning, attention,
+gated residuals and output projections. The model step consumes retained
+preparation results through typed operand links; it does not infer them from
+family names. Runtime owns retention, resource leases and transactions, not the
+neural dependency order. The old complete joint CUDA executor, backend operation
+table, dense-slot reconstruction and private execution arena are removed.
+
+Cold component linkage retains the immutable physical program and its resident
+component session. It resolves unique compiled parameter IDs to admitted weight
+views once, authenticates that mapping with the program/residency identity, and
+charges all retained directories against the component host budget. Session
+retirement refuses while a binding is live. Invocation accepts this binding,
+not a source-name callback; physical operand compatibility remains stage admission's
+responsibility. Prepared-resource identity v4 and joint-result identity v2 include
+this linkage, preventing reuse across different admitted parameter mappings.
+These are internal transient identity domains, not artifact or wire schemas.
+
+The MiniMax iterative adapter compiles and binds only the exact one/two/three-time
+signatures required by the admitted sigma schedule before entering the runtime
+transaction. Each iteration selects one retained program; it does not compile,
+pad timesteps, or resolve parameter names. Distinct time signatures remain distinct
+executable identities, not permission to reuse incompatible prepared resources.
+The session retains a bounded collection of these exact prepared programs.
+Fixed request identity (layout, condition, positions and partitions) is distinct
+from preparation/step and parameter-binding identity. Different time signatures
+may coexist within one transaction; changing the fixed request is refused.
+Each prepared entry has its own resource handles, borrowed lifetime and checked
+cleanup. Catalog growth preserves existing handles and accounts for peak metadata
+relocation; all retained programs share the session's host/device budgets.
+Internal component resource summary v2 reports aggregate retained resources,
+program count and metadata bytes, while its selected identity names one program.
+Artifact-backed profiles 1/2/3, revisited in reverse order, preserve 768 values
+exactly against corresponding full invocations. This removes warm source
+interpretation and qualifies multi-profile retention, not an entire denoising
+trajectory or upstream conformance. Full trajectory lanes remain independent.
+
+Source recipe v5 is a transient importer contract. Earlier recipe layouts refuse
+before geometry access; this is not a new artifact or public protocol schema.
+Physical target specialization admits only registered implementations preserving
+operation semantics and precision. Semantic/execution/parameter identities remain
+unchanged while physical identity changes. Derived provider views are replaced
+and released when target verification rebuilds them, not retained as another
+state topology.
+
+`core.observe` is an ordered publication effect with a typed tensor operand and
+no computational result. Lowering preserves its dependency and last use. An
+explicit runtime sink receives a borrowed observation; missing sinks, callback
+refusal and cancellation prevent final publication. Inspection does not turn
+all intermediate tensors into retained function results. The selected joint
+CPU/CUDA numerical contracts remain explicit; exact pre-cutover fingerprints
+prove preservation, not independent or complete-model conformance.
+
 ### Physical tensor execution and schema import
 
 [`program_tensor.c`](../../src/graph/program_tensor.c) legalizes a bounded pure
@@ -559,8 +713,71 @@ existing scalar dot owner; CUDA uses the existing encoded projection with its
 additive operand and BF16 publication. The bounded independent oracle includes
 `1.001953125 - 1 = 0.001953125`, which double rounding would replace with zero,
 plus cancellation, nonfinite refusal and allocation cleanup. This is a
-qualified operation required by the existing MiniMax text computation, not a
-claim that its remaining procedural text/component composition has migrated.
+qualified operation used by the compiled MiniMax text component; it does not
+qualify the remaining vision, latent or VAE computation.
+
+### Compiled text components
+
+[`text_program.c`](../../src/graph/text_program.c) imports source-declared dense
+text geometry into explicit embedding, grouped RMS normalization, Q/K/V
+projections, positional tables, attention, residual and gated-FFN operations.
+The 50-block structural probe lowers to 1,303 physical instructions with 11
+reusable storage slots. Runtime binds exact encoded parameter handles once;
+it does not walk a parallel text layer plan. The importer recipe is a cold
+source interpretation, not an executable backend descriptor.
+
+Text and vision share a cold parameter-directory binder driven by the physical
+program's parameter IDs. Text invocation carries no recipe, layer count,
+embedding name or layer-role callback. Source parameter naming stays in the
+importer; the product adapter receives that linkage with its compiled program.
+The vision source recipe and parameter-name interpretation also stay in the
+architecture importer. After product image preparation establishes the exact
+grid, an explicitly supplied cold compiler entry verifies and lowers that
+population before component resource binding. The product adapter cannot fetch
+a recipe from the family registry or replace the source projection. Missing
+compiler entry refuses before preprocessing or output publication; neural
+execution still uses the common physical SSA consumer.
+Runtime validates result geometry against the compiled signature, then executes
+exact resident views. The separate multimodal text request/dispatcher and
+backend text weight-role enum are removed; multimodal tensors extend the same
+invocation. Missing bindings, invalid populations and resource budgets refuse
+without output publication.
+
+Multimodal inputs retain separate position streams, visual rows and deep-stack
+contributions. `tensor.masked_rows` makes initial replacement and per-block
+addition explicit dependencies; inactive rows remain bit-identical. Its
+currently admitted implementation uses bounded host staging, preserving the
+previous exact behavior rather than claiming a new GPU acceleration.
+`tensor.rotary_tables` owns the declared interleaved position policy;
+`tensor.rotary_half` preserves the distinct product/publication rounding points.
+`attention.full` consumes a complete admitted sequence, optionally causal; it
+does not imply retained-prefix or cross-request state support.
+
+Compiler verification rejects malformed groups, populations, scalar/result
+types and attributes before lowering. Artifact-backed first-layer evidence and
+bounded two-layer before/after preservation are different evidence classes;
+neither is complete multimodal model or upstream family qualification.
+
+### Computed index values
+
+`tensor.index_linearize` represents exact bounded Cartesian coordinates as an
+SSA index stream: `major * minor_extent + minor`. The semantic verifier checks
+types, equal populations and nonempty nonoverflowing domains. Physical lowering
+admits `index_linearize.host.u32.v1` only when the complete domain fits U32;
+larger domains fail closed rather than converting through floating point.
+These intermediate values use compiler-planned, last-use-reusable host slots
+separate from device activations, with explicit produced/unpublished state and
+aggregate host-budget accounting. They can feed other index operations and
+indexed tensor consumers. External index-valued results and general device
+index production are not claimed by this implementation.
+
+The joint component's `step` entrypoint consumes raw modality tags and timestep
+indices, then computes their table coordinates in the compiled program. Runtime
+no longer computes that formula or reads a joint source recipe: input/result
+geometry comes from admitted signatures, while partition/capacity validation,
+resource retention and output publication remain runtime responsibilities.
+Prepared-resource identity uses the compiled prepare/step identities and exact
+runtime inputs, not a second copy of the source architecture.
 
 Every admitted physical operation also declares which operand positions consume
 encoded parameters and which require materialized values. Logical tensor type
@@ -570,16 +787,77 @@ combination before execution, including a constant substituted for a linear
 input/residual or a runtime activation substituted for an immutable weight.
 This does not prohibit such logical programs; they need an explicit constant
 materialization or another admitted implementation, neither inferred by runtime.
-The current row-based executor also requires activation populations to agree
-with its admitted entrypoint population. A static leading extent is accepted
-only when it equals the entrypoint's fixed population; it cannot silently stand
-in for a variable invocation population. More general independent populations
-require additional lowering rather than unchecked runtime geometry.
+Each operation consumes its compiler-verified row population, not an assumed
+copy of the entrypoint population. Fixed leading extents remain fixed; the
+single admitted dynamic row symbol resolves only at invocation. Linear
+specializations are keyed by population as well as channel geometry.
+`tensor.reshape` preserves the proven element product and precision; unrelated
+symbols with equal bounds do not become equivalent. The CPU/CUDA population
+fixture executes 8 → 4 → 2 rows through distinct projections, including binary
+reimport and repeated invocation. Multiple independent dynamic row symbols
+still require additional lowering.
 
 The bounded operator command lifecycle lives in
 [`transformer_operator.c`](../../src/runtime/transformer_operator.c), separate
 from engine/session computation. None of these changes migrates the remaining
 attention/MoE topology or claims independent whole-model conformance.
+
+`mhc.residual_pre` makes BF16 residual streams and F32 affine mixing results
+explicit operands, alongside immutable scale/base parameters. It returns three
+values: a BF16 collapsed row, F32 post gates and an F32 source-to-target matrix.
+The verifier owns row identity, stream/channel geometry, three-scale geometry,
+positive epsilons/multiplier and Sinkhorn iteration count. Physical lowering
+selects `mhc.residual_pre.bf16.v1`; CPU and CUDA execute the same admitted
+operation interface. The retained CUDA kernel uses prepared scratch because
+it rounds residual storage in-place: a pure operation must not modify a borrowed
+SSA operand. Scratch preparation follows the actual invocation population,
+not the model's symbolic context horizon; growth accounts replacement overlap
+and preserves the old allocation if the new budget cannot admit it.
+
+Cold binding normalization compiles each MoE ingress into explicit reshape,
+encoded affine projection, precision conversion, `mhc.residual_pre`,
+`nn.weighted_rms`, exact BF16-value expansion to F32 and router projection.
+CPU and CUDA runtime consumers invoke that program
+through the common stage executor; the former scalar and CUDA ingress
+composition paths are removed. `nn.weighted_rms` declares BF16 input/result, F32 logical weights and
+F64 epsilon/inverse/scaling. Physical lowering separately admits F32 or BF16
+encoded weights. It preserves CPU's source-order F64 reduction and CUDA's
+retained 256-lane F32 reduction with F64 overflow recovery, then F32-to-BF16
+publication. It is not interchangeable with the ordinary F32-epsilon RMS
+implementation. These are explicitly different backend numerical contracts,
+not a claim of whole-model CPU/CUDA agreement.
+
+The optional `nn.linear` reduction obligation `YVEX_IR_REDUCTION_ROW_DOT`
+lowers to `linear.row_dot.f32.v1`. Input precision and reduction selection are
+independent: this logical F32 operation admits F32 and BF16 encoded parameters
+and retains the encoded row-dot implementation,
+not a matrix-library reassociation. Other linear programs keep their admitted
+matrix implementations. The physical identity binds this choice; incompatible
+parameter precision or an implementation that drops the obligation fails closed.
+
+Session-owned stages bind ingress parameters at cold admission and retain
+independent normalized/gate/mixing/router-logit result carriers. The CUDA
+selection/expert consumer takes those four typed operands; it neither binds the
+five ingress/projection weights nor allocates the old affine/gate scratch.
+CPU selection likewise consumes compiled logits instead of projecting weights.
+Compiled operands are dynamic
+inputs to kernel replay, not captured addresses. The stage's parameter footprint
+and router/expert work contribute separately to execution accounting.
+
+Remaining MoE routing, expert and outer attention/target/draft orchestration
+are not yet owned by a complete physical forward program. This is an ingress
+and router-projection consumer cutover, not full DeepSeek topology cutover or
+upstream conformance.
+
+The retained router's correction addition is F32 before ranking, matching
+the source Gate's F32 scores and bias. CPU, single-row CUDA and row-parallel
+CUDA must share that precision boundary; widening only the single-row sum to
+F64 changes rounded ties and can select different experts. Equal corrected
+scores use YVEX's explicit low-ordinal ordering (not an upstream `topk` tie
+guarantee). Routing weights use the uncorrected scores. The CUDA MoE lane
+checks sub-ULP/visible bias, exact ties, ordered hash routing and malformed
+selection/numerics independently of the model fixture. This bounded arithmetic
+check is not official-vector or whole-model conformance.
 
 `mhc.residual_post` makes residual, core result, post gates and source-to-target
 mixing four explicit F32 operands with common row identity. Its pure computation
@@ -589,7 +867,7 @@ existing CUDA residual kernel without changing its equations. Stream/channel
 geometry, mixing orientation, result geometry and precision are compiler-verified.
 The old `yvex_transformer_deferred_post` graph numerical API is removed. CPU and
 full-evidence DeepSeek block execution invoke the compiled four-input program.
-Normal CUDA execution also calls that stage: MoE transfers its core result,
+Normal and full-evidence CUDA execution call the device stage: MoE transfers its core result,
 post gates and mixing matrix to three disjoint caller-owned carriers before
 workspace reuse. The runtime slices admitted carrier populations; compatible
 multi-session scheduling gathers/scatters all three results without rebuilding
@@ -597,9 +875,24 @@ their numerical meaning. The post stage consumes these plus the residual input.
 Queued copies are not transaction commit; deferred status remains owned by the
 existing MoE phase completion and enclosing state transaction.
 
-The legacy fused post remains for full-evidence device execution and direct
-backend compatibility consumers, not as the normal CUDA block's computational
-authority. This is a residual-post consumer cutover, not the whole MoE/attention
+The engine scheduler accepts matching input/result populations and has no
+recombined-output destination or alternate fused-post branch. Device batches
+always gather/scatter the three typed results; residual composition remains
+the compiled post program's responsibility.
+
+The internal MoE row-batch schema v2 removes the recombined destination from
+the runtime and CUDA operation contract too. Older row schemas fail before
+layout-dependent reads. Batched expert execution publishes only core, gates
+and mixing; the separate typed residual program consumes them after successful
+completion. This is an internal call-record change, not a wire or artifact
+schema change. Standalone encoded projections own their temporary status and
+packing storage and cannot consume or rewind an enclosing operation's arena.
+
+Full evidence retains a separate CPU reference stage alongside device execution;
+it does not choose a different device composition. Both the single-row and
+batched backend fused-post branches and their recombined-output fields are
+removed; direct numerical fixtures also consume the typed residual program.
+This is a residual-post consumer cutover, not the whole MoE/attention
 program cutover. The standalone post's per-operation CUDA synchronization is
 still a target/schedule integration obligation; no speedup is claimed.
 

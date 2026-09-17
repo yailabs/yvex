@@ -12,7 +12,7 @@
 #define CONVOLUTION_TEST_BLOCK 256u
 
 typedef struct {
-    yvex_graph_conv1d_geometry geometry;
+    yvex_convolution_1d_geometry geometry;
     int bias, scale;
 } convolution_case;
 
@@ -40,7 +40,7 @@ static void convolution_reference(
     const float *bias, const float *scale, unsigned long long output_length,
     float *output)
 {
-    const yvex_graph_conv1d_geometry *geometry = &test->geometry;
+    const yvex_convolution_1d_geometry *geometry = &test->geometry;
     unsigned long long batch_index, output_channel, output_position;
 
     for (batch_index = 0ull; batch_index < geometry->batch; ++batch_index)
@@ -112,7 +112,7 @@ static void convolution_reference(
 
 static int run_convolution_case(yvex_backend *backend, const convolution_case *test)
 {
-    const yvex_graph_conv1d_geometry *geometry = &test->geometry;
+    const yvex_convolution_1d_geometry *geometry = &test->geometry;
     yvex_backend_tensor_desc descriptor = {0};
     yvex_device_tensor *arena = NULL;
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
@@ -129,7 +129,7 @@ static int run_convolution_case(yvex_backend *backend, const convolution_case *t
     yvex_error err;
 
     YVEX_TEST_ASSERT(
-        yvex_graph_conv1d_output_length(geometry, &output_length, &err) == YVEX_OK,
+        yvex_convolution_1d_output_length(geometry, &output_length, &err) == YVEX_OK,
         "derive generic convolution test output length");
     input_count = geometry->batch * geometry->input_channels * geometry->input_length;
     weight_count = geometry->input_channels * geometry->output_channels * geometry->kernel_size;

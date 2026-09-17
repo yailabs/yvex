@@ -388,7 +388,8 @@ static int test_mhc_execute(yvex_backend_kind kind)
         yvex_program_physical_encode(copy, &again, &err) == YVEX_OK && bytes.count == again.count &&
         !memcmp(bytes.data, again.data, bytes.count), "mHC canonical physical bytes and two-result identity roundtrip");
     for (i = 0u; i < 4u; ++i)
-        parameters[i] = (yvex_program_kernel_parameter){32u + i, {.encoded = (const unsigned char *)weights[i],
+        parameters[i] = (yvex_program_kernel_parameter){.tensor_id = 32u + i,
+            .weight = {.encoded = (const unsigned char *)weights[i],
             .encoded_bytes = widths[i] * counts[i] * sizeof(float), .qtype = YVEX_GGUF_QTYPE_F32,
             .row_width = widths[i], .row_count = counts[i], .row_bytes = widths[i] * sizeof(float)}};
     for (row = 0u; row < 3u; ++row) {

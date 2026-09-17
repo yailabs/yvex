@@ -568,10 +568,12 @@ static int path_join_selected(char *out, size_t out_size,
                               const char *models_root)
 {
     int written;
+    const char *exact = getenv("DEEPSEEK_ATTENTION_ARTIFACT");
 
     if (!out || !out_size || !models_root) return 0;
-    written = snprintf(out, out_size, "%s/deepseek/%s", models_root,
-                       YVEX_SELECTED_DEEPSEEK_ARTIFACT_FILENAME);
+    if (exact && exact[0]) written = snprintf(out, out_size, "%s", exact);
+    else written = snprintf(out, out_size, "%s/deepseek/%s", models_root,
+                            YVEX_SELECTED_DEEPSEEK_ARTIFACT_FILENAME);
     return written >= 0 && (size_t)written < out_size;
 }
 
@@ -758,7 +760,7 @@ static int run_reference_compare(
     production_options.publication = &production;
     production_options.trace = NULL;
     rc = attention_execution_api()->cpu_chunk_execute(
-        plan, ir, session, descriptor, &production_options,
+        plan, session, descriptor, &production_options,
         production_result, failure, err);
     if (rc != YVEX_OK) goto cleanup;
     if (!production.owned || !production.complete ||
@@ -897,7 +899,7 @@ static int run_real_mutation_proof(
             ATTENTION_CPU_RELATIVE_TOLERANCE))
         return YVEX_ERR_STATE;
     rc = attention_execution_api()->cpu_chunk_execute(
-        plan, ir, session, descriptor, &production_options, &result,
+        plan, session, descriptor, &production_options, &result,
         failure, err);
     if (rc != YVEX_OK) goto cleanup;
     if (!yvex_test_attention_reference_execute(
@@ -1001,7 +1003,7 @@ static int run_cuda_reference_compare(
     production_options.publication = &production;
     production_options.trace = NULL;
     rc = attention_execution_api()->cuda_token_execute(
-        plan, ir, session, descriptor, backend, &production_options,
+        plan, session, descriptor, backend, &production_options,
         production_result, failure, err);
     if (rc != YVEX_OK) goto cleanup;
     if (!production.owned || !production.complete ||
@@ -1229,7 +1231,6 @@ static int attention_cuda_workspace_prepare(
  * trace becomes observable after rollback. */
 static int run_cuda_fault_case(
     const yvex_attention_plan *plan,
-    const yvex_deepseek_v4_ir *ir,
     yvex_materialization_session *session,
     const yvex_runtime_descriptor *descriptor,
     const yvex_attention_cpu_options *base_options,
@@ -1276,7 +1277,7 @@ static int run_cuda_fault_case(
         return 0;
     }
     rc = attention_execution_api()->cuda_token_execute(
-        plan, ir, session, descriptor, backend, &options, &result, &failure,
+        plan, session, descriptor, backend, &options, &result, &failure,
         err);
     if (environment) (void)unsetenv(environment);
     passed = rc != YVEX_OK && !result.executed && !trace.owned &&
@@ -1656,7 +1657,7 @@ static void live_history_bind_next_state(
  * backend core. Replaying that captured input through the same backend must reproduce every
  * core projection and state delta exactly; CPU/CUDA are not treated as mutual numeric oracles. */
 static int run_cuda_core_input_regression(
-    const yvex_attention_plan *plan, const yvex_deepseek_v4_ir *ir,
+    const yvex_attention_plan *plan,
     yvex_materialization_session *session, const yvex_runtime_descriptor *descriptor,
     yvex_backend *backend, const yvex_attention_summary *summary,
     unsigned long long csa_layer, yvex_attention_failure *failure, yvex_error *err)
@@ -1703,11 +1704,11 @@ static int run_cuda_core_input_regression(
     options.history = &history.view;
     options.publication = &cpu_trace;
     rc = attention_execution_api()->cpu_chunk_execute(
-        plan, ir, session, descriptor, &options, &cpu_result, failure, err);
+        plan, session, descriptor, &options, &cpu_result, failure, err);
     if (rc != YVEX_OK) goto cleanup;
     options.publication = &cuda_trace;
     rc = attention_execution_api()->cuda_token_execute(
-        plan, ir, session, descriptor, backend, &options, &cuda_result, failure, err);
+        plan, session, descriptor, backend, &options, &cuda_result, failure, err);
     if (rc != YVEX_OK) goto cleanup;
     if (!cpu_trace.complete || !cuda_trace.complete || !cpu_trace.input || !cuda_trace.input ||
         !cpu_trace.index_weights || !cuda_trace.index_weights ||
@@ -1750,12 +1751,12 @@ static int run_cuda_core_input_regression(
     direct_options.input_stride = layer->hidden_dimension;
     direct_options.publication = &cpu_direct_trace;
     rc = attention_execution_api()->cpu_chunk_execute(
-        plan, ir, session, descriptor, &direct_options, &cpu_result, failure, err);
+        plan, session, descriptor, &direct_options, &cpu_result, failure, err);
     if (rc != YVEX_OK) goto cleanup;
     direct_options.input = cuda_trace.input;
     direct_options.publication = &cuda_direct_trace;
     rc = attention_execution_api()->cuda_token_execute(
-        plan, ir, session, descriptor, backend, &direct_options,
+        plan, session, descriptor, backend, &direct_options,
         &cuda_result, failure, err);
     if (rc != YVEX_OK) goto cleanup;
     if (!attention_reference_contract_init(
@@ -2646,7 +2647,7 @@ static int run_cuda_live_suite(
 #endif
 
     rc = run_cuda_core_input_regression(
-        plan, ir, session, descriptor, backend, summary, csa_layer, failure, err);
+        plan, session, descriptor, backend, summary, csa_layer, failure, err);
     if (rc != YVEX_OK) {
         fprintf(stderr,
                 "attention_cuda_core_input_regression_failed rc=%d failure=%u "
@@ -2672,7 +2673,7 @@ static int run_cuda_live_suite(
 
     options.input = NULL;
     rc = attention_execution_api()->cpu_chunk_execute(
-        plan, ir, session, descriptor, &options, &cpu_result, failure, err);
+        plan, session, descriptor, &options, &cpu_result, failure, err);
     if (rc != YVEX_ERR_INVALID_ARG || cpu_result.executed ||
         failure->code != YVEX_ATTENTION_FAILURE_INVALID_ARGUMENT) {
         rc = YVEX_ERR_STATE;
@@ -2681,14 +2682,14 @@ static int run_cuda_live_suite(
     options.input = input;
     options.token_position = 1ull;
     rc = attention_execution_api()->cpu_chunk_execute(
-        plan, ir, session, descriptor, &options, &cpu_result, failure, err);
+        plan, session, descriptor, &options, &cpu_result, failure, err);
     if (rc != YVEX_ERR_STATE || cpu_result.executed ||
         failure->code != YVEX_ATTENTION_FAILURE_HISTORY) {
         rc = YVEX_ERR_STATE;
         goto cleanup;
     }
     rc = attention_execution_api()->cuda_token_execute(
-        plan, ir, session, descriptor, backend, &options, &cuda_result,
+        plan, session, descriptor, backend, &options, &cuda_result,
         failure, err);
     if (rc != YVEX_ERR_STATE || cuda_result.executed ||
         failure->code != YVEX_ATTENTION_FAILURE_HISTORY) {
@@ -2706,7 +2707,7 @@ static int run_cuda_live_suite(
         memset(&failed_trace, 0, sizeof(failed_trace));
         options.trace = &failed_trace;
         rc = attention_execution_api()->cuda_token_execute(
-            plan, ir, session, descriptor, backend, &options, &cuda_result,
+            plan, session, descriptor, backend, &options, &cuda_result,
             failure, err);
         options.trace = NULL;
         input[0] = finite_input;
@@ -2736,7 +2737,7 @@ static int run_cuda_live_suite(
         }
         options.trace = &failed_trace;
         rc = attention_execution_api()->cuda_token_execute(
-            plan, ir, session, descriptor, backend, &options, &cuda_result,
+            plan, session, descriptor, backend, &options, &cuda_result,
             failure, err);
         (void)unsetenv("YVEX_TEST_CUDA_ATTENTION_FAILURE");
         options.trace = NULL;
@@ -2781,18 +2782,18 @@ static int run_cuda_live_suite(
     if (cuda_result.payload_bytes_read > peak_encoded_weight_staging_bytes)
         peak_encoded_weight_staging_bytes = cuda_result.payload_bytes_read;
     if (!run_cuda_fault_case(
-            plan, ir, session, descriptor, &options,
+            plan, session, descriptor, &options,
             "YVEX_TEST_CUDA_SYNC_FAILURE", "encoded-attention", 0ull,
             YVEX_ATTENTION_FAILURE_BACKEND, err) ||
         !run_cuda_fault_case(
-            plan, ir, session, descriptor, &options,
+            plan, session, descriptor, &options,
             "YVEX_TEST_CUDA_CLEANUP_FAILURE", "encoded-attention", 0ull,
             YVEX_ATTENTION_FAILURE_CLEANUP, err) ||
         !run_cuda_fault_case(
-            plan, ir, session, descriptor, &options, NULL, NULL, 1ull,
+            plan, session, descriptor, &options, NULL, NULL, 1ull,
             YVEX_ATTENTION_FAILURE_CANCELLED, err) ||
         !run_cuda_fault_case(
-            plan, ir, session, descriptor, &options, NULL, NULL, 6ull,
+            plan, session, descriptor, &options, NULL, NULL, 6ull,
             YVEX_ATTENTION_FAILURE_CANCELLED, err) ||
         !run_cuda_bundle_refusal(err) ||
         !run_cuda_workspace_cleanup_fault(plan, err)) {
@@ -2820,7 +2821,7 @@ static int run_cuda_live_suite(
         stale.main_rolling_state.current_fill++;
         options.history = &stale;
         rc = attention_execution_api()->cpu_chunk_execute(
-            plan, ir, session, descriptor, &options, &cpu_result, failure,
+            plan, session, descriptor, &options, &cpu_result, failure,
             err);
         if (rc != YVEX_ERR_STATE || cpu_result.executed ||
             failure->code != YVEX_ATTENTION_FAILURE_HISTORY) {
@@ -2828,7 +2829,7 @@ static int run_cuda_live_suite(
             goto cleanup;
         }
         rc = attention_execution_api()->cuda_token_execute(
-            plan, ir, session, descriptor, backend, &options, &cuda_result,
+            plan, session, descriptor, backend, &options, &cuda_result,
             failure, err);
         if (rc != YVEX_ERR_STATE || cuda_result.executed ||
             failure->code != YVEX_ATTENTION_FAILURE_HISTORY) {
@@ -2839,7 +2840,7 @@ static int run_cuda_live_suite(
         stale.main_rolling_state.previous_fill--;
         options.history = &stale;
         rc = attention_execution_api()->cuda_token_execute(
-            plan, ir, session, descriptor, backend, &options, &cuda_result,
+            plan, session, descriptor, backend, &options, &cuda_result,
             failure, err);
         if (rc != YVEX_ERR_STATE || cuda_result.executed ||
             failure->code != YVEX_ATTENTION_FAILURE_HISTORY) {

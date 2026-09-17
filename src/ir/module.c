@@ -73,13 +73,16 @@ static int ir_builtin_definition_valid(const yvex_ir_operation_definition *op)
     const yvex_ir_dialect *builtins[] = {
         yvex_ir_core_dialect(), yvex_ir_neural_dialect(), yvex_ir_sequence_dialect()};
     size_t dialect, index;
-    if (strncmp(op->name, "core.", 5u) && strncmp(op->name, "state.", 6u) &&
-        strncmp(op->name, "tensor.", 7u) && strncmp(op->name, "nn.", 3u) &&
-        strncmp(op->name, "attention.", 10u) && strncmp(op->name, "sequence.", 9u)) return 1;
+    int reserved_namespace = 0;
     for (dialect = 0u; dialect < sizeof(builtins) / sizeof(builtins[0]); ++dialect)
-        for (index = 0u; index < builtins[dialect]->count; ++index)
-            if (op == &builtins[dialect]->operations[index]) return 1;
-    return 0;
+        for (index = 0u; index < builtins[dialect]->count; ++index) {
+            const yvex_ir_operation_definition *canonical = &builtins[dialect]->operations[index];
+            if (!strcmp(op->name, canonical->name)) return op == canonical;
+            const char *dot = strchr(canonical->name, '.');
+            if (dot && !strncmp(op->name, canonical->name, (size_t)(dot - canonical->name) + 1u))
+                reserved_namespace = 1;
+        }
+    return !reserved_namespace;
 }
 
 static int ir_dialects_valid(const yvex_ir_dialect *dialects, size_t count)

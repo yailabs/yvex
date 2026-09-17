@@ -10,6 +10,11 @@ typedef struct yvex_program_kernels yvex_program_kernels;
 typedef struct {
     unsigned long long tensor_id;
     yvex_component_encoded_weight weight;
+    /* Alternative to a resident encoded span. CPU executes a bounded read
+     * into invocation-owned staging; metadata and tensor ID are bound cold.
+     * The immutable source and callback context outlive the stage. */
+    int (*read)(void *, unsigned long long, unsigned long long, void *, size_t, yvex_error *);
+    void *read_context;
 } yvex_program_kernel_parameter;
 int yvex_program_kernels_open(yvex_program_kernels **, const yvex_program_physical *,
     const yvex_program_kernel_parameter *, size_t parameter_count, yvex_backend *, unsigned long long host_limit,

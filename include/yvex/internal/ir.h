@@ -19,6 +19,10 @@ typedef uint32_t yvex_ir_id;
 
 typedef struct yvex_ir_module yvex_ir_module;
 
+/* Optional nn.linear numerical obligation. Absence permits the ordinary
+ * admitted contraction; ROW_DOT preserves independently reduced parameter rows. */
+typedef enum { YVEX_IR_REDUCTION_ROW_DOT = 1 } yvex_ir_reduction_class;
+
 /* Symbols are positive admitted dimensions, not anonymous dynamic question marks.
  * Their identity is shared by every type/constraint that uses that dimension. */
 typedef struct {

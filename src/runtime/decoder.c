@@ -213,8 +213,8 @@ static int decoder_physical_open(yvex_runtime_decoder_execution_context *c, yvex
         rc = yvex_runtime_residency_binding_view(c->model_view->residency, b, &encoded, &bytes, err);
         if (rc == YVEX_OK && (!b->row_count || bytes != b->encoded_bytes || bytes % b->row_count))
             rc = decoder_refuse(err, YVEX_ERR_FORMAT, "runtime.program.parameters", "inexact parameter rows");
-        if (rc == YVEX_OK) parameters[i] = (yvex_program_kernel_parameter){row->tensor_id,
-            {.encoded = encoded, .encoded_bytes = bytes, .row_count = b->row_count,
+        if (rc == YVEX_OK) parameters[i] = (yvex_program_kernel_parameter){.tensor_id = row->tensor_id,
+            .weight = {.encoded = encoded, .encoded_bytes = bytes, .row_count = b->row_count,
              .row_width = b->row_width, .row_bytes = bytes / b->row_count, .qtype = b->qtype}};
     }
     if (rc == YVEX_OK) rc = yvex_program_kernels_open(&c->program_kernels, c->physical,

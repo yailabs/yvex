@@ -121,6 +121,12 @@ typedef struct yvex_engine_resource_catalog yvex_engine_resource_catalog;
 int yvex_runtime_resource_catalog_open(
     yvex_engine_resource_catalog **out, unsigned long long engine_generation,
     const char *engine_identity, unsigned long long capacity, yvex_error *err);
+/* Grow metadata without changing existing handles, borrows or dependencies.
+ * The optional budget covers peak catalog metadata during relocation (zero
+ * means unbounded); host_bytes reports retained metadata on success. */
+int yvex_runtime_resource_catalog_reserve(
+    yvex_engine_resource_catalog *, unsigned long long capacity,
+    unsigned long long maximum_host_bytes, unsigned long long *host_bytes, yvex_error *);
 int yvex_runtime_resource_register(
     yvex_engine_resource_catalog *catalog,
     const yvex_engine_resource_request *request,

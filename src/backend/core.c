@@ -123,13 +123,6 @@ const struct yvex_backend_transformer_operations *yvex_backend_transformer_opera
                : NULL;
 }
 
-const struct yvex_backend_component_operations *yvex_backend_component_operations_get(
-    const yvex_backend *backend)
-{
-    return backend && backend->vtable && backend->vtable->component_operations
-               ? backend->vtable->component_operations(backend)
-               : NULL;
-}
 
 static const yvex_backend_encoded_operations *backend_encoded_operations(
     const yvex_backend *backend)
@@ -147,6 +140,7 @@ int yvex_backend_encoded_matvec(
     const yvex_device_tensor *input, const yvex_device_tensor *input_tail,
     unsigned long long input_head_width, const yvex_device_tensor *additive,
     yvex_device_tensor *output, yvex_encoded_input_policy input_policy,
+    yvex_encoded_reduction_policy reduction_policy,
     yvex_backend_operation_facts *facts, yvex_error *err)
 {
     const yvex_backend_encoded_operations *operations =
@@ -157,7 +151,7 @@ int yvex_backend_encoded_matvec(
     return operations->matvec(
         backend, resident_encoded, encoded_bytes, qtype, row_count, row_width,
         row_bytes, input_rows, input, input_tail, input_head_width, additive,
-        output, input_policy, facts, err);
+        output, input_policy, reduction_policy, facts, err);
 }
 
 int yvex_backend_encoded_gather(

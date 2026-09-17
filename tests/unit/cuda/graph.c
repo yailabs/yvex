@@ -442,6 +442,8 @@ typedef struct {
     unsigned long long position;
     unsigned int prepare_count;
     int prepare_failure;
+    int probe_host_movement;
+    unsigned int host_movement_refusals;
 } rope_graph_fixture;
 
 typedef struct {
@@ -462,6 +464,19 @@ static int enqueue_rope_fixture(void *opaque, int enqueue_kernels, yvex_error *e
     float inverse_root = 0.1f;
     void *params[5];
 
+    if (fixture->probe_host_movement && yvex_cuda_capture_active(fixture->backend)) {
+        float host[8] = {123.0f};
+        yvex_error refusal;
+        int read = yvex_backend_tensor_read(fixture->backend, fixture->input, host, sizeof(host), &refusal);
+        int write = yvex_backend_tensor_write(fixture->backend, fixture->input, host, sizeof(host), &refusal);
+        if (read != YVEX_ERR_STATE || write != YVEX_ERR_STATE || host[0] != 123.0f ||
+            !fixture->input->is_written) {
+            yvex_error_set(err, YVEX_ERR_STATE, "cuda.test.capture-host-movement",
+                "synchronous host I/O must refuse capture without changing host or tensor publication");
+            return YVEX_ERR_STATE;
+        }
+        fixture->host_movement_refusals += 2u;
+    }
     if (!enqueue_kernels) {
         input = yvex_cuda_tensor_ptr(fixture->input);
         output = yvex_cuda_tensor_ptr(fixture->output);
@@ -665,7 +680,8 @@ static int test_shared_graph_completion(yvex_backend *backend)
         yvex_backend_tensor_write(backend, input, input_data, sizeof(input_data), &err) == YVEX_OK,
         "write shared-stream graph input");
     fixture = (rope_graph_fixture){
-        .backend = backend, .input = input, .output = graph_output, .position = 7ull
+        .backend = backend, .input = input, .output = graph_output, .position = 7ull,
+        .probe_host_movement = 1
     };
     rc = yvex_cuda_graph_execute(
         backend, "cuda-shared-stream-rope-v1", NULL, enqueue_rope_fixture, &fixture,
@@ -678,6 +694,10 @@ static int test_shared_graph_completion(yvex_backend *backend)
             info.synchronize_count == 0ull && info.last_replay_elapsed_ns == 0ull &&
             info.last_device_elapsed_ns == 0ull,
         "shared-stream graph capture leaves completion to its transaction owner");
+    YVEX_TEST_ASSERT(fixture.host_movement_refusals == 2u,
+        "capture rejects borrowed host input and premature host output without invalidating the graph");
+    printf("CUDA graph host I/O: capture_refusals=%u host_unchanged=1 tensor_publication_unchanged=1\n",
+        fixture.host_movement_refusals);
     rc = yvex_cuda_launch_synchronize(
         backend, YVEX_BACKEND_VARIANT_ROPE_F32, &device_wide,
         "cuda.test.shared-graph.capture", &err);

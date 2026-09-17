@@ -5,6 +5,8 @@
 #include <yvex/internal/artifact.h>
 #include <yvex/internal/families/deepseek_v4.h>
 #include <yvex/internal/runtime.h>
+#include <yvex/internal/component.h>
+#include <yvex/internal/program_physical.h>
 
 #include <limits.h>
 #include <pthread.h>
@@ -153,6 +155,154 @@ static int open_fixture(yvex_artifact **artifact,
     return 0;
 }
 
+static int fixture_program_name(void *context, unsigned long long id, char name[256], yvex_error *err)
+{
+    (void)err;
+    if (id != 0u) return YVEX_ERR_FORMAT;
+    snprintf(name, 256u, "%s", context ? "missing.weight" : "token_embd.weight");
+    return YVEX_OK;
+}
+
+typedef struct { unsigned int calls, mode; } fixture_binding_names;
+static int fixture_binding_name(void *context, unsigned long long id, char name[256], yvex_error *err)
+{
+    fixture_binding_names *names = context;
+    names->calls++;
+    if (names->mode == 2u) { memset(name, 'x', 256u); return YVEX_OK; }
+    return fixture_program_name(names->mode == 1u ? names : NULL, id, name, err);
+}
+
+static int fixture_program_binding_lifetime(const yvex_program_physical *program)
+{
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    yvex_tensor_table *tensors = NULL;
+    yvex_complete_artifact_admission admission;
+    yvex_runtime_component_session *session = NULL;
+    yvex_component_execution execution = {0};
+    yvex_component_program_binding *bindings[32] = {0}, *refused = NULL;
+    fixture_binding_names names = {0};
+    yvex_error err;
+    YVEX_TEST_ASSERT(open_fixture(&artifact, &gguf, &tensors) == 0, "cold-binding exact fixture");
+    fill_fixture_admission(artifact, tensors, &admission);
+    snprintf(admission.logical_component_identity, sizeof(admission.logical_component_identity),
+        "%s", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+    YVEX_TEST_ASSERT(yvex_runtime_component_session_open(&session, &admission, artifact, gguf, tensors,
+        YVEX_BACKEND_KIND_CPU, 8192u, 0u, &err) == YVEX_OK &&
+        yvex_runtime_component_session_borrow(session, &execution, &err) == YVEX_OK,
+        "cold binding has a real admitted component, no CUDA requirement");
+    for (names.mode = 1u; names.mode <= 2u; ++names.mode)
+        YVEX_TEST_ASSERT(yvex_component_program_binding_open(&refused, &execution, program,
+            fixture_binding_name, &names, &err) == YVEX_ERR_FORMAT && !refused,
+            "missing or unterminated source linkage fails without retaining a binding");
+    names = (fixture_binding_names){0};
+    unsigned int count = 0u;
+    int rc = YVEX_OK;
+    while (count < 32u) {
+        rc = yvex_component_program_binding_open(bindings + count, &execution, program,
+            fixture_binding_name, &names, &err);
+        if (rc != YVEX_OK) break;
+        count++;
+    }
+    YVEX_TEST_ASSERT(count > 1u && count < 32u && rc == YVEX_ERR_BOUNDS && !bindings[count] && names.calls == count,
+        "all retained parameter directories share one budget; refusal precedes source resolution");
+    YVEX_TEST_ASSERT(yvex_runtime_component_session_close(&session, &err) == YVEX_ERR_STATE && session,
+        "compiled bindings prevent premature component retirement");
+    for (unsigned int i = 0u; i < count; ++i) yvex_component_program_binding_close(bindings + i);
+    YVEX_TEST_ASSERT(names.calls == count && yvex_component_program_binding_open(&bindings[0], &execution,
+        program, fixture_binding_name, &names, &err) == YVEX_OK && names.calls == count + 1u,
+        "close releases the exact budget and never re-resolves source names");
+    yvex_component_program_binding_close(&bindings[0]);
+    yvex_component_program_binding_close(&bindings[0]);
+    YVEX_TEST_ASSERT(yvex_runtime_component_session_close(&session, &err) == YVEX_OK && !session,
+        "component retirement succeeds after the final binding closes");
+    printf("Compiled component binding: 128-byte source; %u simultaneous bindings within 8192 bytes; "
+        "one source resolution each; overflow/missing/unterminated/early-retirement refused; budget recovered\n", count);
+    yvex_tensor_table_close(tensors); yvex_gguf_close(gguf); yvex_artifact_close(artifact);
+    return 0;
+}
+
+static int fixture_materialized_program(yvex_materialization_session *session)
+{
+    const char *identity = yvex_materialization_session_summary(session)->plan_identity;
+    yvex_ir_module *module = NULL;
+    yvex_program_execution *execution = NULL;
+    yvex_program_physical *program = NULL;
+    yvex_ir_id types[3], function, block, op, parameter, value, operands[2];
+    yvex_error err;
+    yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+    int rc = yvex_ir_module_open(&module, "materialized", identity, dialects, 2u, &err);
+    yvex_ir_dimension population = {.name = "rows", .minimum = 1u, .maximum = 1u, .multiple = 1u};
+    yvex_ir_id rows;
+    if (rc == YVEX_OK) rc = yvex_ir_dimension_add(module, &population, &rows, &err);
+    for (size_t i = 0u; i < 3u && rc == YVEX_OK; ++i) {
+        yvex_ir_type t = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 2u,
+            .shape = {{YVEX_IR_NONE, i == 1u ? 8u : 1u}, {YVEX_IR_NONE, i == 2u ? 8u : 4u}}};
+        if (i != 1u) t.shape[0] = (yvex_ir_extent){rows, 0u};
+        rc = yvex_ir_type_intern(module, &t, types + i, &err);
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_function_add(module, "forward", types, 1u, types + 2u,
+        1u, 0u, &function, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "materialized program signature");
+    block = yvex_ir_function_at(module, function)->body;
+    yvex_ir_attribute attrs[] = {{.name = "source", .kind = YVEX_IR_ATTR_TEXT},
+        {.name = "parameter", .kind = YVEX_IR_ATTR_SYMBOL, .value.text = "token_embd.weight"}};
+    snprintf(attrs[0].value.text, sizeof(attrs[0].value.text), "%s", identity);
+    yvex_ir_operation_request r = {.operation = "core.parameter", .result_types = types + 1u,
+        .result_count = 1u, .attributes = attrs, .attribute_count = 2u};
+    rc = yvex_ir_operation_add(module, block, &r, &op, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "exact parameter reference");
+    parameter = yvex_ir_operation_at(module, op)->results[0];
+    operands[0] = yvex_ir_block_at(module, block)->arguments[0]; operands[1] = parameter;
+    r = (yvex_ir_operation_request){.operation = "nn.linear", .operands = operands,
+        .operand_count = 2u, .result_types = types + 2u, .result_count = 1u};
+    rc = yvex_ir_operation_add(module, block, &r, &op, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "materialized linear operation");
+    value = yvex_ir_operation_at(module, op)->results[0];
+    r = (yvex_ir_operation_request){.operation = "core.return", .operands = &value, .operand_count = 1u};
+    rc = yvex_ir_operation_add(module, block, &r, &op, &err);
+    if (rc == YVEX_OK) rc = yvex_ir_seal(module, &err);
+    if (rc == YVEX_OK) rc = yvex_program_execution_compile(&execution, module, &err);
+    yvex_program_parameter_binding binding = {.semantic_value = parameter, .tensor_id = 0u, .qtype = 0u};
+    if (rc == YVEX_OK) rc = yvex_program_physical_compile(&program, execution, "forward",
+        &binding, 1u, identity, &err);
+    if (rc != YVEX_OK) fprintf(stderr, "materialized lowering: %s: %s\n",
+        yvex_error_where(&err), yvex_error_message(&err));
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "materialized parameter lowers independently of payload");
+    YVEX_TEST_ASSERT(fixture_program_binding_lifetime(program) == 0, "compiled linkage ownership and budget");
+    float input[] = {1.0f, -2.0f, 3.0f, -4.0f}, output[8];
+    const float *inputs[] = {input}; float *outputs[] = {output};
+    unsigned long long input_capacity[] = {4u}, output_capacity[] = {8u};
+    yvex_component_program_request request = {.program = program, .rows = 1u, .inputs = inputs,
+        .input_count = 1u, .input_capacity = input_capacity, .outputs = outputs, .output_count = 1u,
+        .output_capacity = output_capacity, .parameter_name = fixture_program_name,
+        .host_limit = 1024u * 1024u, .device_limit = 1024u * 1024u};
+    yvex_component_program_result result;
+    for (size_t run = 0u; run < 5u; ++run) {
+        int refused = run == 1u || run >= 3u;
+        request.parameter_context = run == 1u ? &request : NULL;
+        request.parameter_axis_order = run == 3u ? YVEX_COMPONENT_PARAMETER_SOURCE_ORDER :
+            run == 4u ? (yvex_component_parameter_axis_order)99 : YVEX_COMPONENT_PARAMETER_GGUF_ORDER;
+        for (size_t i = 0u; i < 8u; ++i) output[i] = -77.0f;
+        rc = yvex_component_materialized_program_execute(session, &request, &result, &err);
+        if (rc != (refused ? YVEX_ERR_FORMAT : YVEX_OK))
+            fprintf(stderr, "materialized program: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        YVEX_TEST_ASSERT(rc == (refused ? YVEX_ERR_FORMAT : YVEX_OK), "exact source binding or typed refusal");
+        for (size_t i = 0u; i < 8u; ++i)
+            YVEX_TEST_ASSERT(output[i] == (refused ? -77.0f : 0.0f), "fixture zero matrix oracle or no publication");
+        YVEX_TEST_ASSERT(refused ? !result.complete :
+            result.complete && result.parameter_reads == 1u && result.parameter_bytes == 128u &&
+            result.host_bytes > 128u && result.device_bytes == 0u &&
+            yvex_sha256_hex_valid(result.execution_identity), "source reads and CPU resources are truthful");
+    }
+    printf("Materialized program: exact 128-byte F32 fixture, 8 outputs max_abs=0 tolerance=0; "
+        "missing binding and wrong/unknown axis order unpublished; repeat exact; no resident component required\n");
+    yvex_program_physical_close(&program);
+    yvex_program_execution_close(&execution);
+    yvex_ir_module_close(&module);
+    return 0;
+}
+
 static int test_materialization_fixture(void)
 {
     yvex_artifact *artifact = NULL;
@@ -266,6 +416,7 @@ static int test_materialization_fixture(void)
         rc == YVEX_ERR_FORMAT && !descriptor &&
             descriptor_failure.code == YVEX_RUNTIME_DESCRIPTOR_FAILURE_ARCHITECTURE,
         "runtime descriptor refuses a terminal projection that changes semantic role");
+    if (fixture_materialized_program(session)) return 1;
     yvex_materialization_session_close(session);
     yvex_materialization_plan_close(plan);
     yvex_tensor_table_close(tensors);

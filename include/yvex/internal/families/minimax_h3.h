@@ -8,6 +8,9 @@
 #include <yvex/internal/source_catalog.h>
 #include <yvex/internal/source_payload.h>
 typedef struct yvex_transform_ir yvex_transform_ir;
+typedef struct yvex_spatial_encoder_recipe yvex_spatial_encoder_recipe;
+typedef struct yvex_component_text_recipe yvex_component_text_recipe;
+typedef struct yvex_vision_recipe yvex_vision_recipe;
 typedef struct yvex_transform_binding yvex_transform_binding;
 typedef struct yvex_artifact yvex_artifact;
 typedef struct yvex_gguf yvex_gguf;
@@ -17,6 +20,7 @@ typedef struct yvex_artifact_admission_failure yvex_artifact_admission_failure;
 typedef struct yvex_materialization_session yvex_materialization_session;
 typedef struct yvex_backend yvex_backend;
 typedef struct yvex_component_execution yvex_component_execution;
+typedef struct yvex_component_program_request yvex_component_program_request;
 typedef struct yvex_runtime_latent_result yvex_runtime_latent_result;
 typedef struct yvex_runtime_latent_evaluator_result yvex_runtime_latent_evaluator_result;
 typedef struct yvex_runtime_av_layout_output yvex_runtime_av_layout_output;
@@ -24,7 +28,6 @@ typedef struct yvex_runtime_av_layout_result yvex_runtime_av_layout_result;
 typedef struct yvex_component_encoded_weight yvex_minimax_h3_encoded_weight;
 typedef struct yvex_transformer_joint_recipe yvex_transformer_joint_recipe;
 typedef struct yvex_transformer_linear_physical_plan yvex_transformer_linear_physical_plan;
-typedef struct yvex_transformer_joint_block_result yvex_minimax_h3_omni_result;
 typedef struct yvex_transformer_joint_request yvex_minimax_h3_omni_transformer_request;
 typedef struct yvex_transformer_joint_result yvex_minimax_h3_omni_transformer_result;
 #define YVEX_MINIMAX_H3_TARGET_ID YVEX_SOURCE_MINIMAX_H3_TARGET_ID
@@ -458,6 +461,7 @@ typedef struct {
         unsigned long long output_capacity,
         unsigned long long maximum_host_bytes, unsigned long long maximum_device_bytes,
         yvex_minimax_h3_conditioning_result *result, yvex_error *err);
+    int (*condition)(const yvex_media_conditioning_request *, yvex_runtime_av_conditioning_result *, yvex_error *);
     int (*transformer_component_execute)(const yvex_component_execution *,
         const yvex_minimax_h3_omni_transformer_request *,
         yvex_minimax_h3_omni_transformer_result *, yvex_error *);
@@ -476,6 +480,9 @@ typedef struct {
     int (*video_vae_decode_backend)(const yvex_component_execution *,
         const yvex_minimax_h3_video_decode_options *, yvex_minimax_h3_video_decode_result *,
         yvex_minimax_h3_component_execution_failure *, yvex_error *);
+    const yvex_spatial_encoder_recipe *keyframe_encoder_recipe;
+    const yvex_component_text_recipe *text_recipe;
+    const yvex_vision_recipe *vision_recipe;
 } yvex_minimax_h3_graph_api;
 const yvex_minimax_h3_api *yvex_model_register_minimax_h3(void);
 const yvex_minimax_h3_transform_api *yvex_model_minimax_h3_transform_api(void);
@@ -485,7 +492,8 @@ int yvex_model_minimax_h3_media_target_profile(
 int yvex_backend_minimax_h3_fl2va_condition(
     const yvex_media_conditioning_request *, yvex_runtime_av_conditioning_result *,
     yvex_error *);
-int yvex_backend_minimax_h3_keyframe_encode(
-    const yvex_media_keyframe_request *, yvex_runtime_av_keyframe_result *, yvex_error *);
+int yvex_backend_minimax_h3_keyframe_execute(
+    const yvex_media_keyframe_request *, const yvex_component_program_request *,
+    yvex_runtime_av_keyframe_result *, yvex_error *);
 const yvex_minimax_h3_graph_api *yvex_graph_register_minimax_h3(void);
 #endif /* INCLUDE_YVEX_INTERNAL_FAMILIES_MINIMAX_H3_H_INCLUDED */

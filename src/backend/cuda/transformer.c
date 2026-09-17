@@ -11,6 +11,8 @@
 
 enum {
     TRANSFORMER_BLOCK = 128u,
+    MHC_PRE_BLOCK = 256u,
+    WEIGHTED_RMS_BLOCK = 256u,
     GQA_HEAD_DIMENSION_MAX = 256u,
     GQA_QUERIES_PER_BLOCK = 4u,
     GQA_BLAS_BLOCK = 256u,
@@ -67,6 +69,10 @@ static int status_transaction_open(yvex_backend *backend, yvex_cuda_work *work,
         work->status_deferred = rc == YVEX_OK;
         return rc;
     }
+    /* A standalone operation does not own the enclosing executor's arena.
+     * Its status must survive independently until this operation completes;
+     * neither consume nor rewind another producer's workspace cursor. */
+    work->raw_only = 1;
     return yvex_cuda_work_allocate(
         work, &work->status, sizeof(int), NULL, 1, stage, NULL, err);
 }
@@ -299,6 +305,46 @@ int yvex_cuda_transformer_feature_mean(
     return rc;
 }
 
+int yvex_cuda_residual_pre(yvex_backend *backend, const yvex_mhc_device_request *r,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_cuda_work work;
+    int rc = yvex_mhc_pre_admit(backend, r, facts, err);
+    if (rc != YVEX_OK) return rc;
+    unsigned long long streams = r->geometry.streams, width = r->geometry.width;
+    unsigned long long mixing = (streams + 2u) * streams, rows = r->rows;
+    if (!state || rows > UINT_MAX || streams > MHC_PRE_BLOCK)
+        return cuda_transformer_refuse(err, YVEX_ERR_UNSUPPORTED, "cuda.mhc-pre",
+            "mHC geometry has no admitted launch implementation");
+    /* The retained numerical kernel rounds its input in place. Operate on
+     * prepared scratch so the pure IR operation never mutates an SSA operand. */
+    rc = yvex_backend_tensor_copy(backend, r->workspace, r->inputs[0], err);
+    if (rc != YVEX_OK) return rc;
+    rc = status_transaction_open(backend, &work, 0, "cuda.mhc-pre.status", err);
+    CUdeviceptr residual = (CUdeviceptr)r->workspace->data, mix = (CUdeviceptr)r->inputs[1]->data;
+    CUdeviceptr scale = (CUdeviceptr)r->inputs[2]->data, base = (CUdeviceptr)r->inputs[3]->data;
+    CUdeviceptr collapsed = (CUdeviceptr)r->outputs[0]->data, post = (CUdeviceptr)r->outputs[1]->data;
+    CUdeviceptr matrix = (CUdeviceptr)r->outputs[2]->data;
+    double epsilon = r->geometry.rms_epsilon, mhc = r->geometry.epsilon, multiplier = r->geometry.post_multiplier;
+    unsigned long long iterations = r->geometry.sinkhorn_iterations;
+    if (rc == YVEX_OK) {
+        void *args[] = {&residual, &mix, &scale, &base, &streams, &width, &mixing, &iterations,
+            &epsilon, &mhc, &multiplier, &collapsed, &post, &matrix, &rows, &work.status};
+        unsigned int shared_bytes = (unsigned int)((streams + 1u + MHC_PRE_BLOCK) * sizeof(double));
+        rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+            state->residual_mhc_pre_function, (unsigned int)rows, MHC_PRE_BLOCK,
+            shared_bytes, args, "cuda.mhc-pre", err);
+    }
+    rc = status_transaction_close(&work, 1, 0, rc, facts, "cuda.mhc-pre.status", err);
+    if (rc == YVEX_OK) {
+        for (size_t i = 0u; i < 3u; ++i) r->outputs[i]->is_written = 1;
+        facts->kernel_launches = 1u;
+        facts->d2d_bytes += r->inputs[0]->bytes;
+    }
+    return rc;
+}
+
 int yvex_cuda_transformer_final(
     yvex_backend *backend, const yvex_device_tensor *expanded,
     const yvex_device_tensor *function, const yvex_device_tensor *base,
@@ -378,6 +424,55 @@ static int transformer_tensor(const yvex_backend *backend, const yvex_device_ten
     return backend_tensor_owner_is(backend, tensor) &&
            (!require_written || tensor->is_written) && tensor->dtype == YVEX_DTYPE_F32 &&
            backend_tensor_f32_elements(tensor, elements);
+}
+
+int yvex_cuda_weighted_rms_bf16(yvex_backend *backend, const yvex_device_tensor *input,
+    const yvex_device_tensor *weight, yvex_device_tensor *output,
+    unsigned long long rows, unsigned long long width, double epsilon,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_cuda_work work;
+    unsigned long long count;
+    if (facts) memset(facts, 0, sizeof(*facts));
+    if (!state || !facts || !rows || rows > UINT_MAX || !width ||
+        !isfinite(epsilon) || epsilon <= 0.0 || !yvex_core_u64_mul(rows, width, &count) ||
+        !transformer_tensor(backend, input, count, 1) ||
+        !transformer_tensor(backend, weight, width, 1) ||
+        !transformer_tensor(backend, output, count, 0))
+        return cuda_transformer_refuse(err, YVEX_ERR_FORMAT, "cuda.weighted-rms",
+            "exact written F32 storage and positive F64 epsilon required");
+    const yvex_device_tensor *sources[] = {input, weight};
+    for (size_t i = 0u; i < 2u; ++i) {
+        uintptr_t a = (uintptr_t)output->data, b = (uintptr_t)sources[i]->data;
+        if (a <= b ? b - a < output->bytes : a - b < sources[i]->bytes)
+            return cuda_transformer_refuse(err, YVEX_ERR_FORMAT, "cuda.weighted-rms",
+                "pure normalization cannot alias an operand");
+    }
+    output->is_written = 0;
+    int rc = yvex_backend_tensor_copy(backend, output, input, err);
+    output->is_written = 0;
+    if (rc != YVEX_OK) return rc;
+    rc = status_transaction_open(backend, &work, 0, "cuda.weighted-rms.status", err);
+    if (rc != YVEX_OK) return rc;
+    CUdeviceptr values = (CUdeviceptr)output->data, weights = (CUdeviceptr)weight->data;
+    unsigned int qtype = YVEX_GGUF_QTYPE_F32;
+    void *args[] = {&values, &width, &weights, &qtype, &epsilon, &rows, &work.status};
+    /* Same admitted 256-lane F32 reduction (including overflow recovery),
+     * F64 inverse/scale and BF16 publication as encoded weighted norm. */
+    rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+        state->attention_weighted_norm_function, (unsigned int)rows, WEIGHTED_RMS_BLOCK,
+        WEIGHTED_RMS_BLOCK * sizeof(double), args, "cuda.weighted-rms", err);
+    rc = status_transaction_close(&work, 1, 0, rc, facts, "cuda.weighted-rms.status", err);
+    if (rc == YVEX_OK) {
+        output->is_written = 1;
+        facts->kernel_launches = 1u;
+        facts->d2d_bytes += input->bytes;
+        facts->active_weight_bytes = weight->bytes;
+        facts->activation_bytes = input->bytes + output->bytes;
+        facts->compulsory_memory_facts_available = 1;
+    }
+    return rc;
 }
 
 static int transformer_launch(yvex_backend *backend, CUfunction function,
@@ -806,21 +901,6 @@ int yvex_cuda_transformer_gqa_strided(
     return rc;
 }
 
-int yvex_cuda_transformer_gqa(
-    yvex_backend *backend, const yvex_device_tensor *query,
-    const yvex_device_tensor *key, const yvex_device_tensor *value,
-    yvex_device_tensor *output, unsigned long long query_tokens,
-    unsigned long long key_value_tokens, unsigned long long query_start,
-    unsigned long long query_heads, unsigned long long kv_heads,
-    unsigned long long head_dim, int causal, yvex_backend_operation_facts *facts,
-    yvex_error *err)
-{
-    return yvex_cuda_transformer_gqa_strided(
-        backend, query, key, value, output, query_tokens, key_value_tokens,
-        query_start, query_heads, kv_heads, head_dim, 0ull, 0ull, 0ull,
-        causal, facts, err);
-}
-
 int yvex_cuda_transformer_silu_product_bf16(
     yvex_backend *backend, const yvex_device_tensor *gate,
     const yvex_device_tensor *up, yvex_device_tensor *output,
@@ -851,6 +931,35 @@ int yvex_cuda_transformer_silu_product_bf16(
             "cuda.transformer.silu-product-bf16", facts, err);
     }
     if (rc == YVEX_OK) output->is_written = 1;
+    return rc;
+}
+
+int yvex_cuda_clamped_swiglu_bf16(yvex_backend *backend, const yvex_device_tensor *gate,
+    const yvex_device_tensor *up, yvex_device_tensor *output, double limit,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    if (output) output->is_written = 0;
+    if (facts) memset(facts, 0, sizeof(*facts));
+    const yvex_device_tensor *inputs[] = {gate, up};
+    int rc = yvex_neural_elementwise_admit(backend, inputs, 2u, output, facts, err);
+    if (rc != YVEX_OK) return rc;
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    unsigned long long count = output->bytes / sizeof(float), tasks;
+    if (!state || !state->moe_swiglu_function || !isfinite(limit) || limit <= 0.0 ||
+        !yvex_core_u64_add(count, TRANSFORMER_BLOCK - 1u, &tasks) || tasks / TRANSFORMER_BLOCK > UINT_MAX)
+        return cuda_transformer_refuse(err, YVEX_ERR_UNSUPPORTED, "cuda.clamped-swiglu",
+            "positive finite limit and admitted launch required");
+    yvex_cuda_work work;
+    rc = status_transaction_open(backend, &work, 0, "cuda.clamped-swiglu.status", err);
+    CUdeviceptr g = yvex_cuda_tensor_ptr(gate), u = yvex_cuda_tensor_ptr(up), y = yvex_cuda_tensor_ptr(output);
+    float weight = 1.0f;
+    if (rc == YVEX_OK) {
+        void *args[] = {&g, &u, &count, &limit, &weight, &y, &work.status};
+        rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, state->moe_swiglu_function,
+            (unsigned int)(tasks / TRANSFORMER_BLOCK), TRANSFORMER_BLOCK, 0u, args, "cuda.clamped-swiglu", err);
+    }
+    rc = status_transaction_close(&work, !work.status_deferred, 0, rc, facts, "cuda.clamped-swiglu.status", err);
+    if (rc == YVEX_OK) { output->is_written = 1; facts->kernel_launches = 1u; }
     return rc;
 }
 
@@ -1421,535 +1530,5 @@ int yvex_cuda_transformer_rms_norm_bf16(
                                 "cuda.transformer.rms-norm-bf16", facts, err);
     }
     if (rc == YVEX_OK) output->is_written = 1;
-    return rc;
-}
-
-typedef enum {
-    DENSE_HIDDEN = 0,
-    DENSE_NORM,
-    DENSE_VECTOR,
-    DENSE_ONES,
-    DENSE_QKV,
-    DENSE_QUERY,
-    DENSE_KEY,
-    DENSE_VALUE,
-    DENSE_COSINE,
-    DENSE_SINE,
-    DENSE_ATTENTION,
-    DENSE_UPDATE,
-    DENSE_FUSED,
-    DENSE_GATED,
-    DENSE_BIAS,
-    DENSE_OUTPUT,
-    DENSE_DEVICE_COUNT
-} dense_decoder_device_slot;
-
-typedef struct {
-    yvex_backend *backend;
-    const yvex_transformer_dense_decoder_request *request;
-    yvex_device_tensor *device[DENSE_DEVICE_COUNT];
-    yvex_backend_operation_facts facts;
-    unsigned long long device_bytes;
-} dense_decoder_run;
-
-static int dense_refuse(yvex_error *err, yvex_status status,
-                        const char *stage, const char *message)
-{
-    yvex_error_set(err, status, stage, message);
-    return status;
-}
-
-static int dense_facts_add(dense_decoder_run *run,
-                           const yvex_backend_operation_facts *part)
-{
-    return run && part && part->compulsory_memory_facts_available &&
-           yvex_core_u64_add(run->facts.kernel_launches, part->kernel_launches,
-                             &run->facts.kernel_launches) &&
-           yvex_core_u64_add(run->facts.h2d_bytes, part->h2d_bytes,
-                             &run->facts.h2d_bytes) &&
-           yvex_core_u64_add(run->facts.d2h_bytes, part->d2h_bytes,
-                             &run->facts.d2h_bytes);
-}
-
-static int dense_weight_valid(const yvex_transformer_encoded_weight *weight,
-                              unsigned long long rows, unsigned long long width)
-{
-    unsigned long long row_bytes, bytes;
-    return weight && weight->encoded && weight->qtype == YVEX_GGUF_QTYPE_F32 &&
-           weight->row_count == rows && weight->row_width == width &&
-           yvex_core_u64_mul(width, sizeof(float), &row_bytes) &&
-           row_bytes == weight->row_bytes &&
-           yvex_core_u64_mul(rows, row_bytes, &bytes) && bytes == weight->encoded_bytes;
-}
-
-static int dense_request_valid(const yvex_transformer_dense_decoder_request *request)
-{
-    unsigned long long block, width3, ffn2, output_values;
-    if (!request || !request->block_weights || !request->final_norm_weight ||
-        !request->final_norm_bias || !request->output_weight || !request->output_bias ||
-        !request->hidden || !request->cosines || !request->sines || !request->output ||
-        !request->rows || !request->output_rows || request->output_rows > request->rows ||
-        !request->width || !request->heads || !request->head_dim ||
-        request->heads > ULLONG_MAX / request->head_dim ||
-        request->heads * request->head_dim != request->width ||
-        !request->rotary_dim || request->rotary_dim > request->head_dim ||
-        (request->rotary_dim & 1ull) || !request->ffn_width || !request->block_count ||
-        !request->output_width || !isfinite(request->epsilon) || request->epsilon <= 0.0f ||
-        !yvex_core_u64_mul(request->width, 3ull, &width3) ||
-        !yvex_core_u64_mul(request->ffn_width, 2ull, &ffn2) ||
-        !yvex_core_u64_mul(request->output_rows, request->output_width, &output_values) ||
-        request->output_capacity < output_values ||
-        !dense_weight_valid(request->final_norm_weight, 1ull, request->width) ||
-        !dense_weight_valid(request->final_norm_bias, 1ull, request->width) ||
-        !dense_weight_valid(request->output_weight, request->output_width, request->width) ||
-        !dense_weight_valid(request->output_bias, 1ull, request->output_width)) return 0;
-    for (block = 0ull; block < request->block_count; ++block) {
-        const yvex_transformer_encoded_weight *weights =
-            request->block_weights + block * YVEX_TRANSFORMER_DENSE_DECODER_BLOCK_WEIGHT_COUNT;
-        if (!dense_weight_valid(weights + YVEX_TRANSFORMER_DENSE_NORM1, 1ull, request->width) ||
-            !dense_weight_valid(weights + YVEX_TRANSFORMER_DENSE_QKV_WEIGHT, width3,
-                                request->width) ||
-            !dense_weight_valid(weights + YVEX_TRANSFORMER_DENSE_QKV_BIAS, 1ull, width3) ||
-            !dense_weight_valid(weights + YVEX_TRANSFORMER_DENSE_ATTENTION_WEIGHT,
-                                request->width, request->width) ||
-            !dense_weight_valid(weights + YVEX_TRANSFORMER_DENSE_ATTENTION_BIAS,
-                                1ull, request->width) ||
-            !dense_weight_valid(weights + YVEX_TRANSFORMER_DENSE_SCALE1, 1ull, request->width) ||
-            !dense_weight_valid(weights + YVEX_TRANSFORMER_DENSE_NORM2, 1ull, request->width) ||
-            !dense_weight_valid(weights + YVEX_TRANSFORMER_DENSE_FF1_WEIGHT,
-                                ffn2, request->width) ||
-            !dense_weight_valid(weights + YVEX_TRANSFORMER_DENSE_FF1_BIAS, 1ull, ffn2) ||
-            !dense_weight_valid(weights + YVEX_TRANSFORMER_DENSE_FF2_WEIGHT,
-                                request->width, request->ffn_width) ||
-            !dense_weight_valid(weights + YVEX_TRANSFORMER_DENSE_FF2_BIAS,
-                                1ull, request->width) ||
-            !dense_weight_valid(weights + YVEX_TRANSFORMER_DENSE_SCALE2,
-                                1ull, request->width)) return 0;
-    }
-    return 1;
-}
-
-static int dense_tensor_allocate(dense_decoder_run *run, dense_decoder_device_slot slot,
-                                 const char *name, unsigned long long rows,
-                                 unsigned long long width, int rank_one, yvex_error *err)
-{
-    yvex_backend_tensor_desc descriptor = {0};
-    unsigned long long elements, bytes, next;
-    if (!run || slot >= DENSE_DEVICE_COUNT || !name || !rows || !width ||
-        !yvex_core_u64_mul(rows, width, &elements) ||
-        !yvex_core_u64_mul(elements, sizeof(float), &bytes) ||
-        !yvex_core_u64_add(run->device_bytes, bytes, &next))
-        return dense_refuse(err, YVEX_ERR_BOUNDS, "cuda.dense-decoder.allocate",
-                            "dense decoder activation geometry overflowed");
-    descriptor.name = name;
-    descriptor.dtype = YVEX_DTYPE_F32;
-    descriptor.rank = rank_one ? 1u : 2u;
-    descriptor.dims[0] = rank_one ? width : rows;
-    descriptor.dims[1] = rank_one ? 0ull : width;
-    descriptor.bytes = bytes;
-    if (yvex_backend_tensor_alloc(run->backend, &descriptor, &run->device[slot], err) != YVEX_OK)
-        return yvex_error_code(err);
-    run->device_bytes = next;
-    return YVEX_OK;
-}
-
-static int dense_devices_prepare(dense_decoder_run *run, yvex_error *err)
-{
-    const yvex_transformer_dense_decoder_request *r = run->request;
-    unsigned long long width3, ffn2, bias_width;
-    int rc;
-    if (!yvex_core_u64_mul(r->width, 3ull, &width3) ||
-        !yvex_core_u64_mul(r->ffn_width, 2ull, &ffn2))
-        return dense_refuse(err, YVEX_ERR_BOUNDS, "cuda.dense-decoder.allocate",
-                            "dense decoder workspace geometry overflowed");
-    bias_width = width3 > ffn2 ? width3 : ffn2;
-    if (r->output_width > bias_width) bias_width = r->output_width;
-#define ALLOC(slot, name, rows, width, rank_one) \
-    if (rc == YVEX_OK) rc = dense_tensor_allocate(run, slot, name, rows, width, rank_one, err)
-    rc = dense_tensor_allocate(run, DENSE_HIDDEN, "dense-hidden", r->rows, r->width, 0, err);
-    ALLOC(DENSE_NORM, "dense-norm", r->rows, r->width, 0);
-    ALLOC(DENSE_VECTOR, "dense-vector", 1ull, r->width, 1);
-    ALLOC(DENSE_ONES, "dense-ones", 1ull, r->head_dim, 1);
-    ALLOC(DENSE_QKV, "dense-qkv", r->rows, width3, 0);
-    ALLOC(DENSE_QUERY, "dense-query", r->rows * r->heads, r->head_dim, 0);
-    ALLOC(DENSE_KEY, "dense-key", r->rows * r->heads, r->head_dim, 0);
-    ALLOC(DENSE_VALUE, "dense-value", r->rows * r->heads, r->head_dim, 0);
-    ALLOC(DENSE_COSINE, "dense-cosine", r->rows, r->rotary_dim, 0);
-    ALLOC(DENSE_SINE, "dense-sine", r->rows, r->rotary_dim, 0);
-    ALLOC(DENSE_ATTENTION, "dense-attention", r->rows, r->width, 0);
-    ALLOC(DENSE_UPDATE, "dense-update", r->rows, r->width, 0);
-    ALLOC(DENSE_FUSED, "dense-fused", r->rows, ffn2, 0);
-    ALLOC(DENSE_GATED, "dense-gated", r->rows, r->ffn_width, 0);
-    ALLOC(DENSE_BIAS, "dense-bias", 1ull, bias_width, 1);
-    ALLOC(DENSE_OUTPUT, "dense-output", r->output_rows, r->output_width, 0);
-#undef ALLOC
-    return rc;
-}
-
-static int dense_devices_release(dense_decoder_run *run, int rc, yvex_error *err)
-{
-    unsigned int count = DENSE_DEVICE_COUNT;
-    while (count) {
-        yvex_error cleanup;
-        int cleanup_rc;
-        --count;
-        if (!run->device[count]) continue;
-        yvex_error_clear(&cleanup);
-        cleanup_rc = yvex_backend_tensor_release(
-            run->backend, &run->device[count], &cleanup);
-        if (cleanup_rc != YVEX_OK) {
-            rc = cleanup_rc;
-            if (err) *err = cleanup;
-        }
-    }
-    return rc;
-}
-
-static int dense_gather(dense_decoder_run *run,
-                        const yvex_transformer_encoded_weight *weight,
-                        yvex_device_tensor *output, yvex_error *err)
-{
-    static const unsigned int row = 0u;
-    yvex_backend_operation_facts facts;
-    int rc = yvex_backend_encoded_gather(
-        run->backend, weight->encoded, weight->encoded_bytes, weight->qtype,
-        weight->row_count, weight->row_width, weight->row_bytes,
-        &row, 1ull, output, &facts, err);
-    if (rc == YVEX_OK && !dense_facts_add(run, &facts))
-        rc = dense_refuse(err, YVEX_ERR_BOUNDS, "cuda.dense-decoder.facts",
-                          "dense decoder gather accounting overflowed");
-    return rc;
-}
-
-static int dense_project(dense_decoder_run *run,
-                         const yvex_transformer_encoded_weight *weight,
-                         unsigned long long rows, const yvex_device_tensor *input,
-                         yvex_device_tensor *output, yvex_error *err)
-{
-    yvex_backend_operation_facts facts;
-    int rc = yvex_backend_encoded_matvec(
-        run->backend, weight->encoded, weight->encoded_bytes, weight->qtype,
-        weight->row_count, weight->row_width, weight->row_bytes, rows,
-        input, NULL, 0ull, NULL, output,
-        weight->qtype == YVEX_GGUF_QTYPE_BF16 ? YVEX_ENCODED_INPUT_BF16 : YVEX_ENCODED_INPUT_F32, &facts, err);
-    if (rc == YVEX_OK && !dense_facts_add(run, &facts))
-        rc = dense_refuse(err, YVEX_ERR_BOUNDS, "cuda.dense-decoder.facts",
-                          "dense decoder projection accounting overflowed");
-    return rc;
-}
-
-static int dense_primitive(dense_decoder_run *run, int rc,
-                           const yvex_backend_operation_facts *facts,
-                           yvex_error *err)
-{
-    if (rc == YVEX_OK && !dense_facts_add(run, facts))
-        return dense_refuse(err, YVEX_ERR_BOUNDS, "cuda.dense-decoder.facts",
-                            "dense decoder primitive accounting overflowed");
-    return rc;
-}
-
-static int dense_norm(dense_decoder_run *run,
-                      const yvex_transformer_encoded_weight *weight,
-                      yvex_device_tensor *input, yvex_device_tensor *output,
-                      yvex_error *err)
-{
-    int rc = dense_gather(run, weight, run->device[DENSE_VECTOR], err);
-    if (rc == YVEX_OK)
-        rc = yvex_backend_op_rms_norm(
-            run->backend, input, run->device[DENSE_VECTOR],
-            run->request->epsilon, output, err);
-    if (rc == YVEX_OK) run->facts.kernel_launches++;
-    return rc;
-}
-
-static int dense_bias(dense_decoder_run *run,
-                      const yvex_transformer_encoded_weight *weight,
-                      yvex_device_tensor *values, unsigned long long width,
-                      yvex_error *err)
-{
-    yvex_backend_operation_facts facts;
-    yvex_device_tensor bias_view = {0};
-    int rc = dense_gather(run, weight, run->device[DENSE_BIAS], err);
-    if (rc == YVEX_OK && !yvex_backend_tensor_f32_subview(
-            run->device[DENSE_BIAS], 0ull, width, &bias_view))
-        rc = dense_refuse(err, YVEX_ERR_FORMAT, "cuda.dense-decoder.bias-input",
-                          "dense decoder bias prefix is outside its owned tensor");
-    if (rc == YVEX_OK)
-        rc = yvex_cuda_transformer_bias(
-            run->backend, values, &bias_view, values,
-            run->request->rows, width, 0, &facts, err);
-    if (rc != YVEX_OK)
-        yvex_error_setf(err, (yvex_status)rc, "cuda.dense-decoder.bias",
-                        "bias application failed for %s at width %llu",
-                        yvex_device_tensor_name(values), width);
-    return dense_primitive(run, rc, &facts, err);
-}
-
-static int dense_attention(dense_decoder_run *run,
-                           const yvex_transformer_encoded_weight *weights,
-                           yvex_error *err)
-{
-    const yvex_transformer_dense_decoder_request *r = run->request;
-    yvex_backend_operation_facts facts;
-    unsigned long long qkv_width;
-    int rc;
-    if (!yvex_core_u64_mul(r->width, 3ull, &qkv_width))
-        return dense_refuse(err, YVEX_ERR_BOUNDS, "cuda.dense-decoder.attention",
-                            "dense decoder QKV width overflowed");
-    rc = dense_project(run, weights + YVEX_TRANSFORMER_DENSE_QKV_WEIGHT,
-                       r->rows, run->device[DENSE_NORM], run->device[DENSE_QKV], err);
-    if (rc == YVEX_OK)
-        rc = dense_bias(run, weights + YVEX_TRANSFORMER_DENSE_QKV_BIAS,
-                        run->device[DENSE_QKV], qkv_width, err);
-    if (rc == YVEX_OK)
-        rc = yvex_cuda_transformer_split_interleaved_three(
-            run->backend, run->device[DENSE_QKV], run->device[DENSE_QUERY],
-            run->device[DENSE_KEY], run->device[DENSE_VALUE], r->rows,
-            r->heads, r->head_dim, &facts, err);
-    rc = dense_primitive(run, rc, &facts, err);
-    if (rc == YVEX_OK)
-        rc = yvex_backend_op_rms_norm(
-            run->backend, run->device[DENSE_QUERY], run->device[DENSE_ONES],
-            r->epsilon, run->device[DENSE_QUERY], err);
-    if (rc == YVEX_OK) {
-        run->facts.kernel_launches++;
-        rc = yvex_backend_op_rms_norm(
-            run->backend, run->device[DENSE_KEY], run->device[DENSE_ONES],
-            r->epsilon, run->device[DENSE_KEY], err);
-    }
-    if (rc == YVEX_OK) run->facts.kernel_launches++;
-    if (rc == YVEX_OK)
-        rc = yvex_cuda_transformer_rotary_half_f32(
-            run->backend, run->device[DENSE_QUERY], run->device[DENSE_COSINE],
-            run->device[DENSE_SINE], r->rows, r->heads, r->head_dim,
-            r->rotary_dim, &facts, err);
-    rc = dense_primitive(run, rc, &facts, err);
-    if (rc == YVEX_OK)
-        rc = yvex_cuda_transformer_rotary_half_f32(
-            run->backend, run->device[DENSE_KEY], run->device[DENSE_COSINE],
-            run->device[DENSE_SINE], r->rows, r->heads, r->head_dim,
-            r->rotary_dim, &facts, err);
-    rc = dense_primitive(run, rc, &facts, err);
-    if (rc == YVEX_OK)
-        rc = yvex_cuda_transformer_gqa(
-            run->backend, run->device[DENSE_QUERY], run->device[DENSE_KEY],
-            run->device[DENSE_VALUE], run->device[DENSE_ATTENTION],
-            r->rows, r->rows, 0ull,
-            r->heads, r->heads, r->head_dim, 0, &facts, err);
-    return dense_primitive(run, rc, &facts, err);
-}
-
-static int dense_mlp(dense_decoder_run *run,
-                     const yvex_transformer_encoded_weight *weights,
-                     yvex_error *err)
-{
-    const yvex_transformer_dense_decoder_request *r = run->request;
-    yvex_backend_operation_facts facts;
-    unsigned long long fused_width;
-    int rc;
-    if (!yvex_core_u64_mul(r->ffn_width, 2ull, &fused_width))
-        return dense_refuse(err, YVEX_ERR_BOUNDS, "cuda.dense-decoder.mlp",
-                            "dense decoder FFN width overflowed");
-    rc = dense_project(run, weights + YVEX_TRANSFORMER_DENSE_FF1_WEIGHT,
-                       r->rows, run->device[DENSE_NORM], run->device[DENSE_FUSED], err);
-    if (rc == YVEX_OK)
-        rc = dense_bias(run, weights + YVEX_TRANSFORMER_DENSE_FF1_BIAS,
-                        run->device[DENSE_FUSED], fused_width, err);
-    if (rc == YVEX_OK)
-        rc = yvex_cuda_transformer_swiglu_split_f32(
-            run->backend, run->device[DENSE_FUSED], run->device[DENSE_GATED],
-            r->rows, r->ffn_width, 1, &facts, err);
-    rc = dense_primitive(run, rc, &facts, err);
-    if (rc == YVEX_OK)
-        rc = dense_project(run, weights + YVEX_TRANSFORMER_DENSE_FF2_WEIGHT,
-                           r->rows, run->device[DENSE_GATED], run->device[DENSE_UPDATE], err);
-    if (rc == YVEX_OK)
-        rc = dense_bias(run, weights + YVEX_TRANSFORMER_DENSE_FF2_BIAS,
-                        run->device[DENSE_UPDATE], r->width, err);
-    return rc;
-}
-
-static int dense_block_execute(dense_decoder_run *run, unsigned long long block,
-                               yvex_error *err)
-{
-    const yvex_transformer_dense_decoder_request *r = run->request;
-    const yvex_transformer_encoded_weight *weights =
-        r->block_weights + block * YVEX_TRANSFORMER_DENSE_DECODER_BLOCK_WEIGHT_COUNT;
-    yvex_backend_operation_facts facts;
-    int rc;
-    if (r->cancel_requested && r->cancel_requested(r->cancel_context))
-        return dense_refuse(err, YVEX_ERR_CANCELLED, "cuda.dense-decoder.cancel",
-                            "dense decoder execution was cancelled between blocks");
-    rc = dense_norm(run, weights + YVEX_TRANSFORMER_DENSE_NORM1,
-                    run->device[DENSE_HIDDEN], run->device[DENSE_NORM], err);
-    if (rc == YVEX_OK) rc = dense_attention(run, weights, err);
-    if (rc == YVEX_OK)
-        rc = dense_project(run, weights + YVEX_TRANSFORMER_DENSE_ATTENTION_WEIGHT,
-                           r->rows, run->device[DENSE_ATTENTION],
-                           run->device[DENSE_UPDATE], err);
-    if (rc == YVEX_OK)
-        rc = dense_bias(run, weights + YVEX_TRANSFORMER_DENSE_ATTENTION_BIAS,
-                        run->device[DENSE_UPDATE], r->width, err);
-    if (rc == YVEX_OK)
-        rc = dense_gather(run, weights + YVEX_TRANSFORMER_DENSE_SCALE1,
-                          run->device[DENSE_VECTOR], err);
-    if (rc == YVEX_OK)
-        rc = yvex_cuda_transformer_scaled_residual_f32(
-            run->backend, run->device[DENSE_HIDDEN], run->device[DENSE_UPDATE],
-            run->device[DENSE_VECTOR], run->device[DENSE_HIDDEN],
-            r->rows, r->width, &facts, err);
-    rc = dense_primitive(run, rc, &facts, err);
-    if (rc == YVEX_OK)
-        rc = dense_norm(run, weights + YVEX_TRANSFORMER_DENSE_NORM2,
-                        run->device[DENSE_HIDDEN], run->device[DENSE_NORM], err);
-    if (rc == YVEX_OK) rc = dense_mlp(run, weights, err);
-    if (rc == YVEX_OK)
-        rc = dense_gather(run, weights + YVEX_TRANSFORMER_DENSE_SCALE2,
-                          run->device[DENSE_VECTOR], err);
-    if (rc == YVEX_OK)
-        rc = yvex_cuda_transformer_scaled_residual_f32(
-            run->backend, run->device[DENSE_HIDDEN], run->device[DENSE_UPDATE],
-            run->device[DENSE_VECTOR], run->device[DENSE_HIDDEN],
-            r->rows, r->width, &facts, err);
-    return dense_primitive(run, rc, &facts, err);
-}
-
-static int dense_inputs_write(dense_decoder_run *run, yvex_error *err)
-{
-    const yvex_transformer_dense_decoder_request *r = run->request;
-    unsigned long long hidden_values, rotary_values, index;
-    float *ones;
-    int rc;
-    if (!yvex_core_u64_mul(r->rows, r->width, &hidden_values) ||
-        !yvex_core_u64_mul(r->rows, r->rotary_dim, &rotary_values) ||
-        r->head_dim > SIZE_MAX / sizeof(float))
-        return dense_refuse(err, YVEX_ERR_BOUNDS, "cuda.dense-decoder.input",
-                            "dense decoder input geometry overflowed");
-    ones = (float *)malloc((size_t)r->head_dim * sizeof(float));
-    if (!ones)
-        return dense_refuse(err, YVEX_ERR_NOMEM, "cuda.dense-decoder.input",
-                            "dense decoder Q/K normalization vector allocation failed");
-    for (index = 0ull; index < r->head_dim; ++index) ones[index] = 1.0f;
-    rc = yvex_backend_tensor_write(
-        run->backend, run->device[DENSE_HIDDEN], r->hidden,
-        hidden_values * sizeof(float), err);
-    if (rc == YVEX_OK)
-        rc = yvex_backend_tensor_write(
-            run->backend, run->device[DENSE_COSINE], r->cosines,
-            rotary_values * sizeof(float), err);
-    if (rc == YVEX_OK)
-        rc = yvex_backend_tensor_write(
-            run->backend, run->device[DENSE_SINE], r->sines,
-            rotary_values * sizeof(float), err);
-    if (rc == YVEX_OK)
-        rc = yvex_backend_tensor_write(
-            run->backend, run->device[DENSE_ONES], ones,
-            r->head_dim * sizeof(float), err);
-    free(ones);
-    if (rc == YVEX_OK) {
-        run->facts.h2d_bytes =
-            (hidden_values + rotary_values * 2ull + r->head_dim) * sizeof(float);
-    }
-    return rc;
-}
-
-static int dense_output_execute(dense_decoder_run *run, float *staged,
-                                yvex_error *err)
-{
-    const yvex_transformer_dense_decoder_request *r = run->request;
-    yvex_backend_operation_facts facts;
-    yvex_device_tensor bias_view = {0};
-    unsigned long long values, index;
-    int rc = dense_gather(run, r->final_norm_weight, run->device[DENSE_VECTOR], err);
-    if (rc == YVEX_OK)
-        rc = dense_gather(run, r->final_norm_bias, run->device[DENSE_BIAS], err);
-    if (rc == YVEX_OK && !yvex_backend_tensor_f32_subview(
-            run->device[DENSE_BIAS], 0ull, r->width, &bias_view))
-        rc = dense_refuse(err, YVEX_ERR_FORMAT, "cuda.dense-decoder.final-bias",
-                          "dense decoder final norm bias prefix is invalid");
-    if (rc == YVEX_OK)
-        rc = yvex_cuda_transformer_layer_norm_f32(
-            run->backend, run->device[DENSE_HIDDEN], run->device[DENSE_VECTOR],
-            &bias_view, run->device[DENSE_NORM], r->rows,
-            r->width, r->epsilon, &facts, err);
-    rc = dense_primitive(run, rc, &facts, err);
-    if (rc == YVEX_OK)
-        rc = dense_project(run, r->output_weight, r->output_rows,
-                           run->device[DENSE_NORM], run->device[DENSE_OUTPUT], err);
-    if (rc == YVEX_OK)
-        rc = dense_gather(run, r->output_bias, run->device[DENSE_BIAS], err);
-    if (rc == YVEX_OK && !yvex_backend_tensor_f32_subview(
-            run->device[DENSE_BIAS], 0ull, r->output_width, &bias_view))
-        rc = dense_refuse(err, YVEX_ERR_FORMAT, "cuda.dense-decoder.output-bias",
-                          "dense decoder output bias prefix is invalid");
-    if (rc == YVEX_OK)
-        rc = yvex_cuda_transformer_bias(
-            run->backend, run->device[DENSE_OUTPUT], &bias_view,
-            run->device[DENSE_OUTPUT], r->output_rows, r->output_width,
-            0, &facts, err);
-    rc = dense_primitive(run, rc, &facts, err);
-    if (!yvex_core_u64_mul(r->output_rows, r->output_width, &values))
-        return dense_refuse(err, YVEX_ERR_BOUNDS, "cuda.dense-decoder.output",
-                            "dense decoder output geometry overflowed");
-    if (rc == YVEX_OK)
-        rc = yvex_backend_tensor_read(
-            run->backend, run->device[DENSE_OUTPUT], staged,
-            values * sizeof(float), err);
-    if (rc == YVEX_OK) {
-        run->facts.d2h_bytes += values * sizeof(float);
-        for (index = 0ull; index < values; ++index)
-            if (!isfinite(staged[index]))
-                return dense_refuse(err, YVEX_ERR_FORMAT, "cuda.dense-decoder.output",
-                                    "dense decoder output contains a non-finite value");
-    }
-    return rc;
-}
-
-int yvex_cuda_transformer_dense_decoder_execute(
-    yvex_backend *backend, const yvex_transformer_dense_decoder_request *request,
-    yvex_transformer_dense_decoder_result *result, yvex_error *err)
-{
-    dense_decoder_run run = {0};
-    unsigned long long output_values, block;
-    float *staged = NULL;
-    int rc;
-    if (result) memset(result, 0, sizeof(*result));
-    if (!backend || !result || !dense_request_valid(request) ||
-        yvex_backend_kind_of(backend) != YVEX_BACKEND_KIND_CUDA)
-        return dense_refuse(err, YVEX_ERR_INVALID_ARG, "cuda.dense-decoder.validate",
-                            "one valid resident F32 dense decoder request is required");
-    if (!yvex_core_u64_mul(request->output_rows, request->output_width, &output_values) ||
-        output_values > SIZE_MAX / sizeof(float) ||
-        !(staged = (float *)malloc((size_t)output_values * sizeof(float))))
-        return dense_refuse(err, YVEX_ERR_NOMEM, "cuda.dense-decoder.output",
-                            "dense decoder transactional output allocation failed");
-    run.backend = backend;
-    run.request = request;
-    run.facts.compulsory_memory_facts_available = 1;
-    rc = dense_devices_prepare(&run, err);
-    if (rc == YVEX_OK) rc = dense_inputs_write(&run, err);
-    for (block = 0ull; rc == YVEX_OK && block < request->block_count; ++block)
-        rc = dense_block_execute(&run, block, err);
-    if (rc == YVEX_OK && request->cancel_requested &&
-        request->cancel_requested(request->cancel_context))
-        rc = dense_refuse(err, YVEX_ERR_CANCELLED, "cuda.dense-decoder.cancel",
-                          "dense decoder execution was cancelled before publication");
-    if (rc == YVEX_OK) rc = dense_output_execute(&run, staged, err);
-    if (rc == YVEX_OK) {
-        memcpy(request->output, staged, (size_t)output_values * sizeof(float));
-        result->rows = request->rows;
-        result->output_rows = request->output_rows;
-        result->block_count = request->block_count;
-        result->output_values = output_values;
-        result->kernel_launches = run.facts.kernel_launches;
-        result->h2d_bytes = run.facts.h2d_bytes;
-        result->d2h_bytes = run.facts.d2h_bytes;
-        result->device_bytes = run.device_bytes;
-        result->complete = 1;
-        yvex_error_clear(err);
-    }
-    rc = dense_devices_release(&run, rc, err);
-    free(staged);
-    if (rc != YVEX_OK) memset(result, 0, sizeof(*result));
     return rc;
 }

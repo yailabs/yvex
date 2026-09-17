@@ -901,7 +901,7 @@ static int runtime_attention_phase_lane_execute(
         probe.first_failing_coordinate = YVEX_ATTENTION_NO_LAYER;
         request.token_position = lane->start_position + (decode_steps ? step : 0ull);
         request.token_count = decode_steps ? 1ull : token_count;
-        rc = yvex_attention_probe_execute(graph, view ? view->attention : NULL, NULL,
+        rc = yvex_attention_probe_execute(graph, view ? view->attention : NULL,
             view ? view->materialization : NULL,
             view ? view->descriptor : NULL, &request, &probe, failure, err);
         if (rc != YVEX_OK)
@@ -1248,7 +1248,7 @@ int yvex_runtime_attention_probe_execute(yvex_runtime_execution_session *session
     acquired = rc == YVEX_OK && !staged;
     if (rc == YVEX_OK)
         rc = yvex_attention_execute(
-            view->graph, attention, NULL, view->materialization,
+            view->graph, attention, view->materialization,
             view->descriptor, &execution, &probe, &failure, err);
     if (rc != YVEX_OK && err && !yvex_error_is_set(err))
         yvex_error_set(err, (yvex_status)rc, "runtime.attention.execute",
