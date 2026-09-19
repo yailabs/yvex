@@ -127,6 +127,8 @@ int yvex_program_physical_token_interface(const yvex_program_physical *,
 /* Derived operation/provider views. Numeric geometry comes only from verified
  * instruction attributes; provider handles are state input slots, not layers. */
 const yvex_gated_delta_plan *yvex_program_physical_delta_at(const yvex_program_physical *, size_t step);
+const yvex_selective_ssd_geometry *yvex_program_physical_ssd_at(
+    const yvex_program_physical *, size_t step);
 int yvex_program_physical_sequence_state(const yvex_program_physical *, yvex_sequence_state_plan *);
 
 #ifdef __cplusplus

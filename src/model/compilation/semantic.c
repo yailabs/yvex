@@ -544,7 +544,7 @@ int yvex_semantic_model_ir_seal(
         (request->schema_version == YVEX_SEMANTIC_MODEL_IR_SCHEMA_V1 &&
          request->decoder_layer_count) ||
         (request->schema_version == YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2 &&
-         !request->decoder_layer_count))
+         !request->decoder_layer_count && !request->program))
         return semantic_refuse(
             err, YVEX_ERR_INVALID_ARG,
             "complete immutable semantic facts and balanced payload ownership are required");
@@ -595,7 +595,8 @@ int yvex_semantic_model_ir_seal(
     model->draft_attention_layer_count = request->draft_attention_layer_count;
     model->decoder_layer_count = request->decoder_layer_count;
     if (rc == YVEX_OK && request->schema_version ==
-                             YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2)
+                             YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2 &&
+        request->decoder_layer_count)
         rc = semantic_decoder_validate(model, err);
     if (rc == YVEX_OK)
         rc = semantic_composite_build(model, request->composite, err);

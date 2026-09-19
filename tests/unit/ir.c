@@ -603,6 +603,80 @@ static int ir_sequence_constraints(void)
     return 0;
 }
 
+static int ir_selective_ssd_constraints(void)
+{
+    unsigned int scenario;
+    for (scenario = 0u; scenario < 8u; ++scenario) {
+        yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_sequence_dialect()};
+        yvex_ir_module *module = NULL;
+        yvex_ir_type types[10] = {0};
+        yvex_ir_id type_ids[12], function, block, operation, results[3];
+        yvex_ir_attribute attributes[] = {
+            {.name = "heads", .kind = YVEX_IR_ATTR_U64, .value.integer = 4u},
+            {.name = "head_dimension", .kind = YVEX_IR_ATTR_U64, .value.integer = 2u},
+            {.name = "state_dimension", .kind = YVEX_IR_ATTR_U64, .value.integer = 2u},
+            {.name = "groups", .kind = YVEX_IR_ATTR_U64, .value.integer = 2u},
+            {.name = "convolution_kernel", .kind = YVEX_IR_ATTR_U64, .value.integer = 3u},
+            {.name = "normalization_groups", .kind = YVEX_IR_ATTR_U64, .value.integer = 1u},
+            {.name = "epsilon", .kind = YVEX_IR_ATTR_F64, .value.real = 1.0e-5},
+            {.name = "time_step_minimum", .kind = YVEX_IR_ATTR_F64, .value.real = 0.0},
+            {.name = "time_step_maximum", .kind = YVEX_IR_ATTR_F64, .value.real = 0.0},
+            {.name = "time_step_unbounded", .kind = YVEX_IR_ATTR_BOOL, .value.integer = 1u},
+            {.name = "norm_before_gate", .kind = YVEX_IR_ATTR_BOOL, .value.integer = 0u}};
+        const uint64_t shapes[10][3] = {
+            {2u,28u}, {16u,1u,3u}, {16u}, {4u}, {4u}, {4u}, {8u}, {16u,3u}, {4u,2u,2u}, {2u,8u}};
+        const uint32_t ranks[] = {2u,3u,1u,1u,1u,1u,1u,2u,3u,2u};
+        uint32_t effects = YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE;
+        yvex_ir_operation_request request = {.operation = "sequence.selective_ssd", .operand_count = 9u,
+            .result_count = 3u, .result_types = type_ids + 9u,
+            .attributes = attributes, .attribute_count = sizeof(attributes) / sizeof(attributes[0])};
+        yvex_error error;
+        uint32_t index, axis;
+        int rc;
+        for (index = 0u; index < 10u; ++index) {
+            types[index].kind = index == 7u || index == 8u ? YVEX_IR_STATE : YVEX_IR_TENSOR;
+            types[index].scalar = YVEX_IR_F32;
+            types[index].rank = ranks[index];
+            for (axis = 0u; axis < ranks[index]; ++axis)
+                types[index].shape[axis] = (yvex_ir_extent){YVEX_IR_NONE, shapes[index][axis]};
+        }
+        snprintf(types[7].domain, sizeof(types[7].domain), "convolution.causal");
+        snprintf(types[8].domain, sizeof(types[8].domain), "ssm.selective");
+        if (scenario == 1u) types[0].shape[1].extent++;
+        if (scenario == 2u) types[1].scalar = YVEX_IR_BF16;
+        if (scenario == 3u) snprintf(types[8].domain, sizeof(types[8].domain), "attention.causal_kv");
+        if (scenario == 4u) attributes[3].value.integer = 3u;
+        if (scenario == 5u) effects = YVEX_IR_READ_STATE;
+        if (scenario == 7u) types[9].shape[1].extent++;
+        YVEX_TEST_ASSERT(yvex_ir_module_open(&module, "selective_ssd", ir_source,
+                                             dialects, 2u, &error) == YVEX_OK, "SSD module");
+        for (index = 0u; index < 10u; ++index)
+            YVEX_TEST_ASSERT(yvex_ir_type_intern(module, &types[index], &type_ids[index], &error) == YVEX_OK,
+                             "SSD operand and result types");
+        type_ids[10] = type_ids[7];
+        type_ids[11] = type_ids[8];
+        YVEX_TEST_ASSERT(yvex_ir_function_add(module, "forward", type_ids, 9u, type_ids + 9u, 3u,
+                                              effects, &function, &error) == YVEX_OK,
+                         "explicit pure-SSM signature");
+        block = yvex_ir_function_at(module, function)->body;
+        request.operands = yvex_ir_block_at(module, block)->arguments;
+        YVEX_TEST_ASSERT(yvex_ir_operation_add(module, block, &request, &operation, &error) == YVEX_OK,
+                         "construct untrusted selective SSD operation");
+        memcpy(results, yvex_ir_operation_at(module, operation)->results, sizeof(results));
+        if (scenario == 6u) results[1] = request.operands[7];
+        request = (yvex_ir_operation_request){.operation = "core.return", .operands = results,
+                                              .operand_count = 3u};
+        YVEX_TEST_ASSERT(yvex_ir_operation_add(module, block, &request, &operation, &error) == YVEX_OK,
+                         "publish SSD output and successor state");
+        rc = yvex_ir_seal(module, &error);
+        YVEX_TEST_ASSERT(scenario == 0u ? rc == YVEX_OK : rc != YVEX_OK,
+                         "accept valid SSD; reject geometry, precision, domain, effects, stale state and result shape");
+        yvex_ir_module_close(&module);
+    }
+    printf("IR selective SSD: valid=1; rejected geometry/type/domain/effect/stale-state cases=7\n");
+    return 0;
+}
+
 static int ir_neural_constraints(void)
 {
     unsigned int scenario;
@@ -1182,6 +1256,7 @@ int yvex_test_ir(void)
         ir_parameter_authority() ||
         ir_pass_failure() || ir_conditional_state() ||
         ir_shape_identity() || ir_reshape_constraints() || ir_sequence_constraints() ||
+        ir_selective_ssd_constraints() ||
         ir_retained_program() || ir_call_legalization()) return 1;
     fprintf(stderr, "IR contracts: typed state/read/update/loop accepted; stale state, wrong effects, types, "
                     "dominance, shapes, arity and unknown operations refused before seal. No model execution claim.\n");

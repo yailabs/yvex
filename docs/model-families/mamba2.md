@@ -1,6 +1,8 @@
-# Mamba2 source and recurrent-state boundary
+# Mamba2 pure-SSM compiler boundary
 
-Status: partial; source admission and CPU component evidence, not a launchable model.
+Status: PARTIAL; source authority and the common CPU compiler/runtime boundary
+are qualified, but no complete artifact, executable binding, loaded engine or
+hosted generation is claimed.
 
 The reference is `mistralai/Mamba-Codestral-7B-v0.1`, acquired through
 `yvex model pull` at immutable Hugging Face revision
@@ -9,86 +11,108 @@ The reference is `mistralai/Mamba-Codestral-7B-v0.1`, acquired through
 sidecars: 14,574,191,162 acquired bytes, including 14,570,807,296 tensor bytes.
 The alternative consolidated payload is not part of this acquisition.
 
-The provider inventory now separates a standalone Safetensors candidate from
-a complete numbered shard population in the same directory. Selection excludes
-the other payload, including with broad include patterns. This is provisional
-representation evidence, not proof that two representations are numerically
-equivalent. Source admission still authenticates the index, provider hashes,
-headers and exact tensor population. Incomplete or duplicate shard populations
-fail closed. `model pull --resume --clear-stale-locks` exposes the existing
-bounded stale-lock recovery; dry runs never delete locks. Resume retains
-completed files; reuse of incomplete byte ranges depends on the provider CLI.
+Source verification authenticates the index, provider hashes, headers and
+exact tensor population. It admits 579 BF16 tensors: three global roles and
+nine roles per layer across 64 layers. Incomplete or duplicate shard
+populations, Mamba1 declarations, hybrid/attention topology and inconsistent
+group/head/state geometry fail closed. The acquired geometry is hidden 4096,
+intermediate 8192, vocabulary 32768, 128 heads of width 64, state dimension
+128, eight groups and convolution kernel four. These are source-derived facts,
+not runtime switches.
 
-## Implemented owners
+## Source-owned execution policy
 
-[The family interpreter](../../src/model/families/mamba2.c) authenticates the
-configuration/params/tokenizer/generation metadata and derives a pure Mamba2
-signature. It validates 579 BF16 tensors in both directions: three global
-roles and nine per layer, across 64 layers. Required shapes, dtypes, layers
-and source ranges are checked; unexpected attention tensors cannot be renamed
-into an SSM role. Mamba1, hybrid declarations and inconsistent group/head
-geometry are refused.
+[The architecture importer](../../src/model/families/mamba2.c) preserves raw
+metadata conflicts while resolving only the facts justified by the exact
+source and its authoritative model implementation:
 
-The acquired geometry is hidden 4096, intermediate 8192, vocabulary 32768,
-128 heads of width 64, state dimension 128, eight groups and convolution
-kernel four. These are source-derived facts, not runtime name switches.
+- tokenizer vocabulary and tokenizer configuration own token identity: UNK 0,
+  BOS 1, EOS 2 and no PAD token;
+- generation policy admits BOS insertion and EOS termination only when the
+  declared generation EOS agrees with tokenizer identity;
+- the conflicting `config.json` BOS/EOS/PAD values do not override tokenizer
+  identity, and an impossible PAD declaration is not manufactured into a
+  usable token;
+- the exact source has no admitted chat template; absent or explicit-null
+  template metadata means no template, while a non-null unowned template is
+  rejected;
+- the examined official Mistral implementation at revision
+  `9eaeb91c17450e09021b6065a1d5cc69876507c8` selects state-spaces Mamba2 with
+  the source `n_groups`; that recipe establishes gate-before-normalization with
+  grouped RMS reduction for this target. The conflicting
+  `norm_before_gate=true` source field remains recorded rather than silently
+  becoming execution policy.
 
-[Semantic SSD geometry](../../include/yvex/internal/semantic_decoder.h)
-describes projected gate/x/B/C/dt partitions, scalar decay, time-step bounds
-and explicit gated-normalization policy. The
-[portable CPU lowering](../../src/graph/state_space.c) performs an F32 serial
-scan over caller-owned candidate state. Single-token execution consumes only
-the previous state; it does not replay the prefix. This is not a chunk-parallel
-SSD kernel or a CUDA implementation.
+Tokenizer truth and generation output policy are separate compiler facts.
+Neither frontend convenience nor a backend is allowed to adjudicate them.
+Malformed special-token declarations, conflicting generation EOS, a declared
+PAD not present in the vocabulary and unsupported normalization/gating policy
+fail during import.
 
-[Common sequence state](../../src/runtime/sequence_state.c) now consumes a
-sealed F32 layout and transition identity instead of requiring a gated-delta
-plan. It retains allocation, two-bank transactions, isolation, reset, cleanup
-and resource summaries for both existing delta consumers and SSD fixtures.
-No separate SSM session, allocator, runtime, resource ledger or KV cache exists.
-Per layer, the reference geometry requires 40,960 convolution and 1,048,576
-recurrent F32 values. Across 64 layers this derives 10 MiB convolution plus
-256 MiB recurrence per committed bank, with an equal candidate bank. These
-are derived full-model geometry, **not measured hosted-model allocations**.
-CPU workspace is separately caller-owned and requires convolution-width F32
-values; it is not persistent state.
+## Compiler and runtime ownership
 
-## Evidence and promotion barrier
+The importer projects the exact source into a typed pure-SSM module. Its
+`forward` entry takes tokens, positions and explicit convolution/recurrent
+state values, then returns hidden values and successor state versions. Its
+`output` entry applies the source-owned final normalization and LM-head
+projection. The program contains token embedding, repeated Mamba2/SSD blocks,
+final normalization and output projection without invented attention, KV,
+RoPE or dense-FFN roles.
 
-The normal unit catalog contains source-contract adversaries and scan versus
-retained-step state/outputs, transactional abort after partial mutation,
-session isolation, reset, cleanup and current/candidate byte checks. The
-external [reference helper](../../tests/reference/selective_ssd.py) can compare
-both final state classes and mixer output with Transformers `Mamba2Mixer`.
-It only reads an already acquired local snapshot; Transformers is never a
-production execution dependency. Tests with first-layer real BF16 tensors
-expanded to F32 pass at absolute tolerance `3e-6` plus relative `3e-5`.
-This does not qualify a complete block, LM-head logits, text, or all-layer
-numerical behavior.
+[`sequence.selective_ssd`](../../src/ir/sequence.c) owns the typed operation,
+geometry verifier, state effects and successor-state contract. Common physical
+lowering selects the current portable `selective_ssd.cpu.f32state.v1`
+implementation. Common physical SSA execution, parameter bindings and
+[sequence state](../../src/runtime/sequence_state.c) own invocation and
+transactional state. There is no Mamba-specific session, allocator, decoder
+loop, runtime resource ledger or KV cache.
 
-The acquired metadata contains unresolved execution-authority disagreements:
+The exact acquired program compiles all 64 layers and 579 parameters into 900
+forward instructions plus two output instructions with 64 state bindings.
+This proves compiler-language and physical-program coverage. It does **not**
+prove that a complete package/binding can be opened by an engine or that all
+layers reproduce an independent whole-model oracle.
 
-- `config.json` declares BOS/EOS/PAD 0/0/0; `generation_config.json` declares
-  0/2/1; tokenizer vocabulary uses UNK/BOS/EOS 0/1/2 and declares no pad token.
-  The two SentencePiece assets are byte-identical. No chat template is invented.
-- `config.json` declares normalization before gating. The examined Transformers
-  implementation uses gate-before-normalization with a global RMS reduction;
-  the Mistral/mamba-ssm recipe uses grouped gate-before-normalization. The
-  component oracle establishes the Transformers variant only. Source inspection
-  preserves the conflicting declarations; it does not silently choose a
-  whole-model numerical policy.
+## Numerical and lifecycle evidence
 
-[The source promotion gate](../../src/graph/families/mamba2.c) therefore publishes
-no executable descriptor. `yvex model prepare mamba-codestral-7b-v0.1` reports
-exact role coverage and refuses READY. There is no complete artifact, physical
-decoder plan, deployment profile, loaded Mamba engine or hosted chat evidence.
-The remaining generic integration must admit an SSM-only decoder without a
-mandatory dense FFN or nonzero rotary/KV workspace; the current decoder owners
-still impose those requirements. It also needs complete artifact lowering,
-tokenizer/output-policy adjudication, and all-layer/logit/session qualification.
-An attention-shaped placeholder would misrepresent this boundary.
+[The reference helper](../../tests/reference/selective_ssd.py) compares the
+first acquired layer with the pinned Mistral/Mamba-SSM semantics. With real
+BF16 source tensors expanded to F32, 16,384 output values agree at maximum
+absolute error `2.86102295e-6`; 40,960 convolution-state values agree exactly;
+and 1,048,576 recurrent-state values have maximum absolute error
+`5.7220459e-6`. The registered acceptance is absolute `3e-6` plus relative
+`3e-5`. The larger state absolute difference remains within the relative term.
+This is a first-layer component oracle, not complete-block or all-layer
+conformance.
 
-Mamba source admission requires no family-specific public ABI. The existing decoder
-serialization remains unchanged: common state layouts are derived from its
-authenticated transition geometry on import. A02-A09, YAI roles, performance
-optimization and release benchmarks receive no support claim from this work.
+A bounded two-layer physical-program fixture proves exact chunk-versus-single
+continuation for hidden and state values, output-head execution, candidate
+state abort after cancellation, retry and commit. Common state tests preserve
+session isolation, reset, cleanup and stale transition/state refusal. Single
+token continuation consumes retained state and does not replay the prefix.
+
+Per layer, source geometry requires 40,960 convolution and 1,048,576 recurrent
+F32 values. Across 64 layers this derives 10 MiB convolution plus 256 MiB
+recurrence per committed bank, with an equal candidate bank. These are derived
+geometry, **not measured hosted allocations**. Workspace, weights, persistent
+state and candidate state remain distinct resource facts.
+
+## Remaining promotion boundary
+
+The repair does not publish a complete artifact, runtime binding, deployment
+profile, loaded Mamba engine or hosted text result. The catalog's durable
+source-manifest association also requires rebinding to the verified canonical
+source location before artifact production; exact-source qualification used a
+temporary manifest and did not rewrite acquisition authority.
+
+The next evidence boundary must join the compiler-owned program to a complete
+artifact/binding, retain source/executable/state identities, execute the exact
+all-layer and LM-head path, and qualify prompt continuation and hosted bounded
+generation under the explicit tokenizer/output policy. Missing independent
+whole-model and upstream evidence remains BLOCKED or NOT RUN, never inferred
+from the component result. A01 therefore remains PARTIAL.
+
+No public ABI or wire protocol changed. The internal adapter, Semantic Model
+IR and physical-program schemas use their existing version owners. This work
+does not implement Program N, chunk-parallel SSD, CUDA SSM, behavior evaluation,
+performance qualification or release support.

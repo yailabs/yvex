@@ -17,7 +17,27 @@ from transformers.models.mamba2.configuration_mamba2 import Mamba2Config
 from transformers.models.mamba2.modeling_mamba2 import Mamba2Mixer
 
 
-def real_component(root, target):
+class GroupedRMSNormGated(torch.nn.Module):
+    """State-spaces Mamba2 recipe: gate first, then RMS within ngroups."""
+
+    def __init__(self, width, groups, epsilon):
+        super().__init__()
+        self.groups = groups
+        self.epsilon = epsilon
+        self.weight = torch.nn.Parameter(torch.ones(width), requires_grad=False)
+
+    def forward(self, hidden_states, gate=None):
+        source_dtype = hidden_states.dtype
+        values = hidden_states.float()
+        if gate is not None:
+            values = values * torch.nn.functional.silu(gate.float())
+        shape = values.shape
+        values = values.reshape(*shape[:-1], self.groups, shape[-1] // self.groups)
+        values = values * torch.rsqrt(values.square().mean(-1, keepdim=True) + self.epsilon)
+        return (values.reshape(shape) * self.weight.float()).to(source_dtype)
+
+
+def real_component(root, target, mistral_recipe=False):
     """Read only the already acquired local snapshot. No provider/network fallback."""
     from safetensors import safe_open
     config_data = json.loads((root / "config.json").read_text())
@@ -34,6 +54,9 @@ def real_component(root, target):
         mixer = Mamba2Mixer(config, 0)
     mixer.in_proj = torch.nn.Identity()
     mixer.out_proj = torch.nn.Identity()
+    if mistral_recipe:
+        mixer.norm = GroupedRMSNormGated(config.hidden_size * config.expand,
+                                         config.n_groups, config.layer_norm_epsilon)
     for name in ("conv1d.weight", "conv1d.bias", "A_log", "D", "dt_bias", "norm.weight"):
         value = torch.nn.Parameter(tensor("backbone.layers.0.mixer." + name), requires_grad=False)
         parent, _, leaf = name.rpartition(".")
@@ -57,17 +80,22 @@ def real_component(root, target):
                   mixer.dt_bias, mixer.norm.weight, output, conv, state]
         # Plain bounded diagnostic fixture; no checkpoint data is added to Git.
         with target.open("w") as out:
+            normalization_groups = config.n_groups if mistral_recipe else 1
             out.write(f"{config.num_heads} {config.head_dim} {config.state_size} {config.n_groups} "
-                      f"{config.conv_kernel} 2 1 0 {config.layer_norm_epsilon:.17g}\n")
+                      f"{config.conv_kernel} 2 {normalization_groups} 0 {config.layer_norm_epsilon:.17g}\n")
             for array in arrays:
                 for value in array.flatten().tolist():
                     out.write(f"{value:.9g}\n")
-    print(json.dumps({"oracle": "transformers.Mamba2Mixer.torch_forward", "mode": "real-layer-0-component",
+    oracle = ("Transformers Mamba2 recurrence plus state-spaces grouped RMS-gated recipe"
+              if mistral_recipe else "transformers.Mamba2Mixer.torch_forward")
+    print(json.dumps({"oracle": oracle, "mode": "real-layer-0-component",
                       "repository": "mistralai/Mamba-Codestral-7B-v0.1",
                       "local_source": str(root), "tokens": [1, 42], "dtype": "source-BF16-expanded-F32",
-                      "normalization_groups": 1, "norm_before_gate": False,
+                      "normalization_groups": config.n_groups if mistral_recipe else 1,
+                      "norm_before_gate": False,
                       "source_config_norm_before_gate": config_data.get("norm_before_gate"),
-                      "normalization_authority_resolved": False,
+                      "normalization_authority_resolved": mistral_recipe,
+                      "recipe": "mistral-inference/state-spaces-mamba2" if mistral_recipe else "transformers",
                       "transformers": transformers.__version__, "torch": torch.__version__,
                       "implementation_sha256": hashlib.sha256(pathlib.Path(inspect.getfile(Mamba2Mixer)).read_bytes()).hexdigest(),
                       "fixture_sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
@@ -75,8 +103,9 @@ def real_component(root, target):
 
 
 def main():
-    if len(sys.argv) == 4 and sys.argv[1] == "--acquired-source":
-        real_component(pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]))
+    if len(sys.argv) == 4 and sys.argv[1] in ("--acquired-source", "--acquired-source-mistral"):
+        real_component(pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]),
+                       mistral_recipe=sys.argv[1] == "--acquired-source-mistral")
         return
     torch.set_num_threads(1)
     torch.manual_seed(0)

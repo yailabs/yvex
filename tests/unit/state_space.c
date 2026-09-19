@@ -157,11 +157,14 @@ static int ssd_real_component(void)
         ssd_error_report("output", output, values[7], sizes[7]);
         ssd_error_report("conv", conv, values[8], sizes[8]);
         ssd_error_report("state", state, values[9], sizes[9]);
-        /* This measures policy disagreement, not correctness of the alternative. */
-        q.normalization_groups = q.groups;
-        valid = yvex_selective_ssd_geometry_seal(&g, &q, &err) == YVEX_OK &&
-            yvex_selective_ssd_execute_cpu(&g, &request, &result, &err) == YVEX_OK;
-        if (valid) ssd_error_report("grouped-policy-difference", output, values[7], sizes[7]);
+        /* When the supplied oracle is the older global-normalization variant,
+         * retain the measured policy disagreement without promoting it. */
+        if (q.normalization_groups != q.groups) {
+            q.normalization_groups = q.groups;
+            valid = yvex_selective_ssd_geometry_seal(&g, &q, &err) == YVEX_OK &&
+                yvex_selective_ssd_execute_cpu(&g, &request, &result, &err) == YVEX_OK;
+            if (valid) ssd_error_report("grouped-policy-difference", output, values[7], sizes[7]);
+        }
     }
 cleanup:
     fclose(fp);

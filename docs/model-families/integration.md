@@ -24,12 +24,13 @@ and media publication have different terminal semantics.
 
 ## Promotion path
 
-![Family interpretation seals roles, topology, state and numerical meaning into admitted records consumed by the common execution owners; Mamba2 remains below the executable-plan boundary.](../diagrams/family_boundary.svg)
+![Family interpretation seals roles, topology, state and numerical meaning into admitted records consumed by the common execution owners; Mamba2 has reached the common CPU physical-program boundary but remains below artifact and hosted execution.](../diagrams/family_boundary.svg)
 
 *Figure 4 — Family integration boundary. Families supply irreducible semantics;
 common owners validate, seal and execute admitted plans without another family
 runtime. The lower panel identifies existing architectural pressure, not equal
-support: Mamba2 has no executable descriptor and MiniMax retains its full-scale
+support: Mamba2 has a compiler-owned pure-SSM CPU physical program but no
+artifact/binding or hosted engine, and MiniMax retains its full-scale
 numerical/quality gap.* [Editable source](../diagrams/family_boundary.json).
 
 The [compilation figure](../architecture/compilation.md#pipeline) owns the
@@ -267,7 +268,7 @@ same hosted path exposed to the operator.
 | [DeepSeek-V4-Flash-DSpark](deepseek-v4-flash.md) | Source-to-hosted text; target-verified speculation | No release quality/performance promotion |
 | Qwen3.8-27B | Admitted BF16 text specialization, hybrid recurrent/full-attention decode, hosted sessions | No vision, other modalities, or release claim |
 | [MiniMax-H3 FL2VA](minimax-h3.md) | Four component artifacts, composite iterative execution, synchronized-media publication | Bounded component conformance is not full-scale numerical/behavioral correctness |
-| [Mamba2](mamba2.md) | Exact acquired source/roles, transactional state, CPU selective-SSD component numerics | Partial; no complete artifact/decoder, READY, or hosted generation |
+| [Mamba2](mamba2.md) | Exact acquired source/roles and token/numerical policy, typed pure-SSM program, common CPU physical SSA and transactional state | Partial; no complete artifact/binding, READY, all-layer oracle, or hosted generation |
 | Gemma | Source/header and candidate-role observations | Not an executable family |
 
 Qwen's current text target is `Qwen/Qwen3.8-27B`, revision

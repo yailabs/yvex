@@ -13,7 +13,24 @@ extern "C" {
 #define YVEX_MAMBA2_TARGET "mamba-codestral-7b-v0.1"
 #define YVEX_MAMBA2_REPOSITORY "mistralai/Mamba-Codestral-7B-v0.1"
 #define YVEX_MAMBA2_REVISION "4f086c08c1e0f07bdc50ca25125dbbf7475d21da"
+#define YVEX_MAMBA2_ADAPTER_ID 0x4d414d424132ull
+#define YVEX_MAMBA2_ADAPTER_VERSION 1ull
 #define YVEX_MAMBA2_LAYER_CAP 256u
+
+typedef enum {
+    YVEX_MAMBA2_TOKEN_AUTHORITY_NONE = 0,
+    /* The immutable SentencePiece vocabulary and tokenizer configuration own
+     * lexical special-token identity. Generation metadata may select a stop
+     * token only when it agrees with that vocabulary. */
+    YVEX_MAMBA2_TOKEN_AUTHORITY_MISTRAL_TOKENIZER_V1
+} yvex_mamba2_token_authority;
+
+typedef enum {
+    YVEX_MAMBA2_NORMALIZATION_AUTHORITY_NONE = 0,
+    /* Pinned Mistral inference recipe plus the state-spaces Mamba2 operation:
+     * gate before grouped RMS normalization. */
+    YVEX_MAMBA2_NORMALIZATION_AUTHORITY_MISTRAL_RECIPE_V1
+} yvex_mamba2_normalization_authority;
 
 typedef enum {
     YVEX_MAMBA2_ROLE_UNKNOWN = 0,
@@ -39,9 +56,14 @@ typedef struct {
     unsigned long long config_bos, config_eos, config_pad;
     unsigned long long generation_bos, generation_eos, generation_pad;
     unsigned long long tokenizer_bos, tokenizer_eos, tokenizer_unk;
+    unsigned long long effective_bos, effective_eos, effective_pad;
     double normalization_epsilon;
     int residual_in_f32, declared_norm_before_gate, token_policy_conflict;
-    int normalization_policy_conflict, architecture_complete;
+    int normalization_policy_conflict, tokenizer_add_bos, tokenizer_add_eos;
+    int tokenizer_has_pad, tokenizer_assets_match, chat_template_present;
+    int token_policy_resolved, normalization_policy_resolved, architecture_complete;
+    yvex_mamba2_token_authority token_authority;
+    yvex_mamba2_normalization_authority normalization_authority;
     char source_revision[65], architecture_identity[65];
 } yvex_mamba2_architecture;
 
@@ -70,8 +92,8 @@ typedef struct {
 } yvex_mamba2_api;
 
 const yvex_mamba2_api *yvex_model_register_mamba2(void);
-/* Imported computational program only. Unresolved source obligations prevent
- * executable legalization; constructing it does not publish a deployment. */
+/* Imported computational program only. Source authority must be resolved;
+ * constructing it does not publish a deployment or hosted-model claim. */
 int yvex_mamba2_program_build(yvex_ir_module **, const yvex_mamba2_architecture *,
                                const char *source_identity, yvex_error *);
 

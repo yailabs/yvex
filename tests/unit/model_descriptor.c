@@ -660,6 +660,21 @@ static int test_native_execution_lineage(const yvex_semantic_model_ir_request *s
                          yvex_program_execution_compile(&executions[i], modules[i], &err) == YVEX_OK,
                          "seal and lower lineage fixtures without a standalone dense_ffn entrypoint");
     }
+    request = (yvex_semantic_model_ir_request){
+        .schema_version = YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2,
+        .family_adapter_id = source_request->family_adapter_id,
+        .family_adapter_version = source_request->family_adapter_version,
+        .target_id = "native-program-only",
+        .source_model_identity = source_request->source_model_identity,
+        .logical_model_identity = source_request->logical_model_identity,
+        .semantic_payload_identity = yvex_ir_identity(modules[0]),
+        .program = modules[0]};
+    YVEX_TEST_ASSERT(yvex_semantic_model_ir_seal(&model, &request, &err) == YVEX_OK &&
+                     yvex_semantic_model_ir_summary_get(model)->decoder_layer_count == 0u &&
+                     yvex_semantic_model_ir_program(model),
+                     "v2 semantic authority may be a verified typed program without a decoder-shaped second truth");
+    yvex_semantic_model_ir_close(&model);
+    request = *source_request;
     request.program = modules[0];
     YVEX_TEST_ASSERT(yvex_semantic_model_ir_seal(&model, &request, &err) == YVEX_OK,
                      "bind source metadata to immutable typed program");

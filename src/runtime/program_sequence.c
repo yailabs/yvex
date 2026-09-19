@@ -2,6 +2,7 @@
  * FFN composition or source interpretation is present here. */
 #include <yvex/internal/program_sequence.h>
 #include <yvex/internal/stateful_attention.h>
+#include <yvex/internal/state_space.h>
 #include <yvex/internal/quant_numeric.h>
 
 #include <limits.h>
@@ -21,10 +22,32 @@ struct yvex_program_sequence {
     const yvex_attention_layer_plan **attention;
     const char *attention_identity;
     yvex_device_tensor *scratch[SEQUENCE_SCRATCH_COUNT];
-    float *rope, *state;
+    float *rope, *state, *ssd_workspace;
     unsigned long long *positions;
     unsigned long long capacity, rope_width, kv_width, host_bytes, device_bytes;
 };
+
+static int sequence_refuse(yvex_error *, yvex_status, const char *);
+
+static int sequence_ssd_scratch_open(yvex_program_sequence *c,
+    unsigned long long host_limit, yvex_error *err)
+{
+    unsigned long long width = 0u, bytes, total;
+    for (size_t i = 0u; i < c->summary->step_count; ++i) {
+        const yvex_selective_ssd_geometry *g = yvex_program_physical_ssd_at(c->program, i);
+        if (g && g->convolution_width > width) width = g->convolution_width;
+    }
+    if (!width) return YVEX_OK;
+    if (!yvex_core_u64_mul(width, sizeof(float), &bytes) ||
+        !yvex_core_u64_add(c->host_bytes, bytes, &total) || total > SIZE_MAX ||
+        (host_limit && total > host_limit))
+        return sequence_refuse(err, YVEX_ERR_BOUNDS, "SSD host workspace exceeds admission");
+    c->ssd_workspace = malloc((size_t)bytes);
+    if (!c->ssd_workspace)
+        return sequence_refuse(err, YVEX_ERR_NOMEM, "SSD host workspace allocation failed");
+    c->host_bytes = total;
+    return YVEX_OK;
+}
 
 static int sequence_refuse(yvex_error *err, yvex_status status, const char *why)
 {
@@ -145,6 +168,10 @@ int yvex_program_sequence_open(yvex_program_sequence **out, const yvex_program_p
         if (!strcmp(implementation, "gated_delta.bf16.f32state.v1") &&
             (!c->ops || !c->ops->bf16_round || !c->ops->gated_delta_execute || !session->sequence_state))
             rc = sequence_refuse(err, YVEX_ERR_UNSUPPORTED, "compiled recurrence requires an admitted state backend");
+        if (!strcmp(implementation, "selective_ssd.cpu.f32state.v1") &&
+            (yvex_backend_kind_of(session->backend) != YVEX_BACKEND_KIND_CPU || !session->sequence_state))
+            rc = sequence_refuse(err, YVEX_ERR_UNSUPPORTED,
+                "selective SSD baseline requires common host sequence state and the CPU backend");
         if (!strcmp(implementation, "gated_causal.bf16.v1") &&
             (!c->ops || !c->ops->bf16_round || !c->ops->rotary_half_f32 ||
              !c->ops->split_interleaved_two_f32 || !c->ops->sigmoid_product_bf16 ||
@@ -152,6 +179,7 @@ int yvex_program_sequence_open(yvex_program_sequence **out, const yvex_program_p
             rc = sequence_refuse(err, YVEX_ERR_UNSUPPORTED, "compiled attention requires an admitted state backend");
     }
     if (rc == YVEX_OK) rc = sequence_attention_bind(c, model, widths, err);
+    if (rc == YVEX_OK) rc = sequence_ssd_scratch_open(c, host_limit, err);
     if (rc == YVEX_OK) rc = sequence_scratch_open(c, widths, host_limit, device_limit, err);
     if (rc != YVEX_OK) (void)yvex_program_sequence_close(&c, NULL);
     *out = c;
@@ -302,6 +330,64 @@ static int sequence_delta(yvex_program_sequence *c, const yvex_program_device_in
     return rc;
 }
 
+static int sequence_ssd(yvex_program_sequence *c, const yvex_program_device_invocation *r,
+    const yvex_program_sequence_request *options, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_program_physical_step *s = r->step;
+    const yvex_selective_ssd_geometry *geometry = yvex_program_physical_ssd_at(c->program, r->step_index);
+    yvex_ir_id root = yvex_program_physical_value_at(c->program, s->operands[7])->state_root;
+    yvex_ir_id recurrent = yvex_program_physical_value_at(c->program, s->operands[8])->state_root;
+    yvex_sequence_state_view committed = {0};
+    yvex_sequence_state_output candidate = {0};
+    yvex_selective_ssd_cpu_request request = {0};
+    yvex_selective_ssd_cpu_result result = {0};
+    const yvex_device_tensor *weights[6];
+    yvex_device_tensor *output = &r->values[s->results[0]];
+    int rc;
+    if (!geometry || !c->ssd_workspace || r->arguments[root].state_handle != root ||
+        r->arguments[recurrent].state_handle != recurrent || !r->values[s->operands[0]].is_written)
+        return sequence_refuse(err, YVEX_ERR_FORMAT, "selective SSD state or projection binding is incompatible");
+    for (unsigned int i = 0u; i < 6u; ++i) {
+        weights[i] = yvex_program_kernels_small_weight(c->kernels, s->operands[i + 1u]);
+        if (!weights[i] || !weights[i]->is_written || !weights[i]->data)
+            return sequence_refuse(err, YVEX_ERR_STATE, "selective SSD parameters are not host-resident F32 values");
+    }
+    rc = yvex_sequence_state_layer(c->session->sequence_state, root, &committed, &candidate, err);
+    request.token_count = r->rows;
+    request.projection = (const float *)(const void *)r->values[s->operands[0]].data;
+    request.projection_capacity = r->values[s->operands[0]].bytes / sizeof(float);
+    request.convolution_weight = (const float *)(const void *)weights[0]->data;
+    request.convolution_weight_capacity = weights[0]->bytes / sizeof(float);
+    request.convolution_bias = (const float *)(const void *)weights[1]->data;
+    request.convolution_bias_capacity = weights[1]->bytes / sizeof(float);
+    request.decay_log = (const float *)(const void *)weights[2]->data;
+    request.decay_log_capacity = weights[2]->bytes / sizeof(float);
+    request.skip = (const float *)(const void *)weights[3]->data;
+    request.skip_capacity = weights[3]->bytes / sizeof(float);
+    request.time_bias = (const float *)(const void *)weights[4]->data;
+    request.time_bias_capacity = weights[4]->bytes / sizeof(float);
+    request.normalization_weight = (const float *)(const void *)weights[5]->data;
+    request.normalization_weight_capacity = weights[5]->bytes / sizeof(float);
+    request.state = committed;
+    request.next_state = candidate;
+    request.workspace = c->ssd_workspace;
+    request.workspace_capacity = geometry->convolution_width;
+    request.output = (float *)(void *)output->data;
+    request.output_capacity = output->bytes / sizeof(float);
+    request.cancel_requested = options->cancel_requested;
+    request.cancel_context = options->cancel_context;
+    if (rc == YVEX_OK) rc = yvex_selective_ssd_execute_cpu(geometry, &request, &result, err);
+    if (rc == YVEX_OK) rc = yvex_sequence_state_stage(c->session->sequence_state, root, err);
+    output->is_written = rc == YVEX_OK;
+    if (rc == YVEX_OK) {
+        facts->activation_bytes = output->bytes;
+        facts->state_bytes = (geometry->convolution_state_values + geometry->recurrent_state_values) * sizeof(float);
+        facts->temporary_bytes = geometry->convolution_width * sizeof(float);
+        facts->compulsory_memory_facts_available = 1;
+    }
+    return rc;
+}
+
 int yvex_program_sequence_invoke(yvex_program_sequence *c, const yvex_program_device_invocation *r,
     const yvex_program_sequence_request *options, yvex_backend_operation_facts *facts, yvex_error *err)
 {
@@ -311,6 +397,8 @@ int yvex_program_sequence_invoke(yvex_program_sequence *c, const yvex_program_de
         return sequence_refuse(err, YVEX_ERR_INVALID_ARG, "state operation requires its bound physical invocation");
     if (!strcmp(r->step->implementation, "gated_delta.bf16.f32state.v1"))
         return sequence_delta(c, r, options, facts, err);
+    if (!strcmp(r->step->implementation, "selective_ssd.cpu.f32state.v1"))
+        return sequence_ssd(c, r, options, facts, err);
     if (!strcmp(r->step->implementation, "gated_causal.bf16.v1"))
         return sequence_attention(c, r, options, facts, err);
     return sequence_refuse(err, YVEX_ERR_UNSUPPORTED, "operation has no admitted state implementation");
@@ -333,7 +421,7 @@ int yvex_program_sequence_close(yvex_program_sequence **out, yvex_error *err)
         rc = yvex_backend_tensor_release(c->session->backend, &c->scratch[i], err);
         if (rc != YVEX_OK) return rc;
     }
-    free(c->positions); free(c->state); free(c->rope); free(c->attention); free(c);
+    free(c->ssd_workspace); free(c->positions); free(c->state); free(c->rope); free(c->attention); free(c);
     *out = NULL;
     return YVEX_OK;
 }

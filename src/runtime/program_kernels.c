@@ -415,6 +415,7 @@ static int kernel_instructions_bind(yvex_program_kernels *c, yvex_error *err)
             !strcmp(s->implementation, "grid_bilinear.f64weights.bf16.v1") ||
             !strcmp(s->implementation, "masked_rows.host.bf16.v1") ||
             !strcmp(s->implementation, "rotary_tables.f64.bf16.v1") ||
+            !strcmp(s->implementation, "embedding.encoded.f32.v1") ||
             !strcmp(s->implementation, "linear.encoded.f32.v1") ||
             !strcmp(s->implementation, "linear.row_dot.f32.v1")) continue;
         if (!strcmp(s->implementation, "linear_residual.bf16.f32add.v1")) {
@@ -442,6 +443,11 @@ static int kernel_instructions_bind(yvex_program_kernels *c, yvex_error *err)
             if (!c->ops || !c->ops->residual_pre)
                 return kernel_refuse(err, YVEX_ERR_UNSUPPORTED, "mHC ingress has no admitted backend implementation");
             for (j = 2u; rc == YVEX_OK && j < 4u; ++j) rc = kernel_small_prepare(c, s->operands[j], 0.0, err);
+            continue;
+        }
+        if (!strcmp(s->implementation, "selective_ssd.cpu.f32state.v1")) {
+            for (j = 1u; rc == YVEX_OK && j < 7u; ++j)
+                rc = kernel_small_prepare(c, s->operands[j], 0.0, err);
             continue;
         }
         if (!strcmp(s->implementation, "weighted_rms.f64scale.bf16.v1")) {
@@ -738,6 +744,54 @@ static int kernel_linear_cpu(const yvex_component_encoded_weight *w,
     facts->compulsory_memory_facts_available = 1;
     output->is_written = 1;
     return YVEX_OK;
+}
+
+static int kernel_embedding_cpu(const yvex_component_encoded_weight *w,
+    const yvex_program_device_invocation *r, const yvex_program_index_value *indices,
+    yvex_device_tensor *output, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_gguf_qtype_geometry *geometry = yvex_gguf_qtype_geometry_find(w->qtype);
+    float *values = (float *)(void *)output->data;
+    unsigned long long expected;
+    if (!geometry || !geometry->block_size || !geometry->bytes_per_block || !w->encoded ||
+        !indices || !indices->is_written || indices->count != r->rows || !indices->values || !output->data ||
+        !yvex_core_u64_mul(r->rows, w->row_width, &expected) ||
+        expected != output->bytes / sizeof(float) || w->row_width % geometry->block_size)
+        return kernel_refuse(err, YVEX_ERR_FORMAT, "encoded CPU embedding geometry is incompatible");
+    output->is_written = 0;
+    for (unsigned long long row = 0u; row < r->rows; ++row) {
+        unsigned int selected = indices->values[row];
+        if (r->cancel_requested && r->cancel_requested(r->cancel_context))
+            return kernel_refuse(err, YVEX_ERR_CANCELLED, "embedding CPU gather cancelled");
+        if (selected >= w->row_count)
+            return kernel_refuse(err, YVEX_ERR_BOUNDS, "embedding token exceeds admitted vocabulary");
+        const unsigned char *source = w->encoded + (unsigned long long)selected * w->row_bytes;
+        for (unsigned long long block = 0u; block < w->row_width / geometry->block_size; ++block) {
+            yvex_quant_failure failure = {0};
+            int rc = yvex_quant_decode_block(w->qtype, source + block * geometry->bytes_per_block,
+                geometry->bytes_per_block, values + row * w->row_width + block * geometry->block_size,
+                geometry->block_size, &failure, err);
+            if (rc != YVEX_OK) return rc;
+        }
+    }
+    if (!yvex_core_u64_mul(r->rows, w->row_bytes, &facts->active_weight_bytes))
+        return kernel_refuse(err, YVEX_ERR_BOUNDS, "embedding access accounting overflowed");
+    facts->activation_bytes = output->bytes;
+    facts->compulsory_memory_facts_available = 1;
+    output->is_written = 1;
+    return YVEX_OK;
+}
+
+static int kernel_embedding(yvex_program_kernels *c, const yvex_program_device_invocation *r,
+    yvex_device_tensor *output, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_program_physical_step *s = r->step;
+    const yvex_component_encoded_weight *w = &c->weights[s->operands[1]];
+    if (yvex_backend_kind_of(c->backend) == YVEX_BACKEND_KIND_CPU)
+        return kernel_embedding_cpu(w, r, &r->indices[s->operands[0]], output, facts, err);
+    return yvex_backend_encoded_gather(c->backend, w->encoded, w->encoded_bytes, w->qtype,
+        w->row_count, w->row_width, w->row_bytes, r->indices[s->operands[0]].values,
+        r->rows, output, facts, err);
 }
 
 static int kernel_linear_residual(yvex_program_kernels *c, const yvex_program_device_invocation *r,
@@ -1480,12 +1534,9 @@ int yvex_program_kernels_invoke(yvex_program_kernels *c, const yvex_program_devi
             return kernel_refuse(err, YVEX_ERR_STATE, "linear invocation requires exact prepared population");
         return c->ops->linear_execute(c->backend, &request, facts, err);
     }
-    if (!strcmp(s->implementation, "embedding.bf16.v1")) {
-        const yvex_component_encoded_weight *w = &c->weights[s->operands[1]];
-        return yvex_backend_encoded_gather(c->backend, w->encoded, w->encoded_bytes, w->qtype,
-            w->row_count, w->row_width, w->row_bytes, r->indices[s->operands[0]].values,
-            r->rows, output, facts, err);
-    }
+    if (!strcmp(s->implementation, "embedding.bf16.v1") ||
+        !strcmp(s->implementation, "embedding.encoded.f32.v1"))
+        return kernel_embedding(c, r, output, facts, err);
     if (!strcmp(s->implementation, "silu_product.bf16.v1"))
         return c->ops->silu_product_bf16(c->backend, input, &r->values[s->operands[1]], output,
             output->bytes / sizeof(float), facts, err);

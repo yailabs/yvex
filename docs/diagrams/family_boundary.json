@@ -1,6 +1,6 @@
 {
   "schema":1,"number":4,"title":"Family semantics terminate at admitted plans",
-  "description":"Family interpretation provides tensor roles, topology, state geometry and numerical obligations to shared compiler sealing. Runtime mechanisms consume admitted records. Existing architecture consumers have different evidence depths; Mamba2 remains source and SSD component only, with no executable descriptor or hosted engine.",
+  "description":"Family interpretation provides tensor roles, topology, state geometry and numerical obligations to shared compiler sealing. Runtime mechanisms consume admitted records. Existing architecture consumers have different evidence depths; Mamba2 reaches the common CPU physical-program boundary but has no complete artifact binding or hosted engine.",
   "size":[1200,930],"owner":"docs/model-families/integration.md",
   "authority":["docs/model-families/integration.md","src/graph/families/mamba2.c","src/runtime/sequence_state.c","config/source_owners.tsv"],
   "panels":[
@@ -15,7 +15,7 @@
     {"id":"deepseek","box":[40,530,262,218],"kind":"semantic","title":"DeepSeek","lines":["sparse expert work","verified speculation","target / draft state","hosted text evidence"]},
     {"id":"qwen","box":[326,530,262,218],"kind":"semantic","title":"Qwen hybrid","lines":["attention + recurrence","KV / recurrent / conv","hosted text evidence","no vision qualification"]},
     {"id":"minimax","box":[612,530,262,218],"kind":"semantic","title":"MiniMax composite","lines":["multiple components","iterative execution","typed media publication","full-scale evidence gap"]},
-    {"id":"mamba","box":[898,530,262,218],"kind":"evidence","title":"Mamba2: PARTIAL","lines":["pure SSM source roles","SSD transaction fixture","CPU component oracle","STOP: no executable plan","no READY / hosted engine"]}
+    {"id":"mamba","box":[898,530,262,218],"kind":"evidence","title":"Mamba2: PARTIAL","lines":["token / norm authority","typed pure-SSM program","common CPU physical SSA","STOP: no artifact binding","no READY / hosted engine"]}
   ],
   "edges":[
     {"kind":"flow","points":[[376,276],[444,276]]},

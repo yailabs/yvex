@@ -19,6 +19,7 @@ struct yvex_program_physical {
     yvex_program_physical_step *steps;
     yvex_ir_id *results;
     yvex_gated_delta_plan **delta;
+    yvex_selective_ssd_geometry **ssd;
     yvex_sequence_state_binding *sequence;
     size_t sequence_count;
 };
@@ -66,6 +67,7 @@ static const physical_rule physical_rules[] = {
     {"nn.swiglu_split", "swiglu_split.f32.v1", 0u, 0u},
     {"nn.rms_normalize", "rms_normalize.f32.v1", 0u, 0u},
     {"nn.embedding", "embedding.bf16.v1", 0u, 0x02u},
+    {"nn.embedding", "embedding.encoded.f32.v1", 0u, 0x02u},
     {"nn.linear", "linear.bf16.f32acc.v1", 0u, 0x02u},
     {"nn.linear", "linear.encoded.f32.v1", 0u, 0x02u},
     {"nn.linear", "linear.row_dot.f32.v1", 0u, 0x02u},
@@ -100,6 +102,8 @@ static const physical_rule physical_rules[] = {
     {"nn.silu_product", "silu_product.bf16.v1", 0u, 0u},
     {"tensor.add", "add.bf16.v1", 0u, 0u},
     {"tensor.add", "add.f32.v1", 0u, 0u},
+    {"sequence.selective_ssd", "selective_ssd.cpu.f32state.v1",
+     YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x7eu},
     {"sequence.gated_delta", "gated_delta.bf16.f32state.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0xf0u},
     {"attention.gated_causal", "gated_causal.bf16.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x18u}};
 
@@ -157,7 +161,8 @@ int yvex_program_physical_token_interface(const yvex_program_physical *p,
     hidden = &p->values[p->results[0]].type;
     if (tokens->kind != YVEX_IR_TENSOR || tokens->scalar != YVEX_IR_INDEX || tokens->rank != 1u ||
         position->kind != YVEX_IR_SCALAR || position->scalar != YVEX_IR_INDEX || position->rank ||
-        hidden->kind != YVEX_IR_TENSOR || hidden->scalar != YVEX_IR_BF16 || hidden->rank != 2u ||
+        hidden->kind != YVEX_IR_TENSOR ||
+        (hidden->scalar != YVEX_IR_BF16 && hidden->scalar != YVEX_IR_F32) || hidden->rank != 2u ||
         hidden->shape[0].symbol != tokens->shape[0].symbol ||
         hidden->shape[0].extent != tokens->shape[0].extent ||
         hidden->shape[1].symbol != YVEX_IR_NONE) goto incompatible;
@@ -178,8 +183,10 @@ int yvex_program_physical_token_interface(const yvex_program_physical *p,
     for (i = 0u; i < p->summary.step_count; ++i) {
         const yvex_program_physical_step *s = &p->steps[i];
         view.recurrent_operations += !strcmp(s->implementation, "gated_delta.bf16.f32state.v1");
+        view.recurrent_operations += !strcmp(s->implementation, "selective_ssd.cpu.f32state.v1");
         view.attention_operations += !strcmp(s->implementation, "gated_causal.bf16.v1");
-        if (!strcmp(s->implementation, "embedding.bf16.v1")) {
+        if (!strcmp(s->implementation, "embedding.bf16.v1") ||
+            !strcmp(s->implementation, "embedding.encoded.f32.v1")) {
             const yvex_program_physical_value *weight = &p->values[s->operands[1]];
             if (s->operands[0] != 0u || !weight->parameter) goto incompatible;
             if (!embeddings || weight->type.shape[0].extent < view.vocabulary_size)
@@ -240,7 +247,8 @@ static int physical_numeric_verify(const yvex_program_physical *p,
     const physical_rule *rule = physical_rule_find(s->implementation, 1);
     int q8 = !strcmp(s->implementation, "linear.row_dot.q8.v1");
     int row_dot = q8 || !strcmp(s->implementation, "linear.row_dot.f32.v1");
-    int encoded = row_dot || !strcmp(s->implementation, "linear.encoded.f32.v1");
+    int encoded = row_dot || !strcmp(s->implementation, "linear.encoded.f32.v1") ||
+        !strcmp(s->implementation, "embedding.encoded.f32.v1");
     int residual = !strcmp(s->implementation, "linear_residual.bf16.f32add.v1");
     size_t length = strlen(s->implementation);
     int f32 = !encoded && length >= 7u && !strcmp(s->implementation + length - 7u, ".f32.v1") &&
@@ -254,6 +262,15 @@ static int physical_numeric_verify(const yvex_program_physical *p,
             return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
                 "operand storage class requires another physical implementation");
     if (!strcmp(s->implementation, "parameter.encoded.v1")) return YVEX_OK;
+    if (!strcmp(s->implementation, "selective_ssd.cpu.f32state.v1")) {
+        for (i = 1u; i < 7u; ++i) {
+            unsigned int qtype = p->values[s->operands[i]].qtype;
+            if (qtype != YVEX_GGUF_QTYPE_F32 && qtype != YVEX_GGUF_QTYPE_BF16)
+                return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
+                    "selective SSD parameters require losslessly decoded F32/BF16 source values");
+        }
+        return YVEX_OK; /* Semantic verification owns every geometry and state relation. */
+    }
     if (!strcmp(s->implementation, "index_linearize.host.u32.v1")) {
         const yvex_ir_attribute *a = yvex_program_physical_attribute(s, "major_extent");
         const yvex_ir_attribute *b = yvex_program_physical_attribute(s, "minor_extent");
@@ -326,7 +343,15 @@ static int physical_numeric_verify(const yvex_program_physical *p,
         p->values[s->operands[1]].type.shape[0].extent % 4u)
         return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
             "vector-four normalization requires complete groups of four channels");
-    if ((encoded || residual) && (s->operand_count != (residual ? 3u : 2u) || s->result_count != 1u ||
+    if (!strcmp(s->implementation, "embedding.encoded.f32.v1") &&
+        (s->operand_count != 2u || s->result_count != 1u ||
+         p->values[s->operands[0]].type.rank != 1u ||
+         p->values[s->operands[1]].type.rank != 2u ||
+         p->values[s->results[0]].type.rank != 2u))
+        return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
+            "encoded embedding requires indices, an immutable matrix and matrix output");
+    if (((encoded && strcmp(s->implementation, "embedding.encoded.f32.v1")) || residual) &&
+        (s->operand_count != (residual ? 3u : 2u) || s->result_count != 1u ||
         p->values[s->operands[0]].type.rank != 2u ||
         p->values[s->results[0]].type.rank != 2u))
         return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
@@ -418,10 +443,13 @@ static int physical_state_roots_verify(const yvex_program_physical *p, yvex_erro
 static void physical_state_clear(yvex_program_physical *p)
 {
     for (size_t i = 0u; p->delta && i < p->summary.step_count; ++i) free(p->delta[i]);
+    for (size_t i = 0u; p->ssd && i < p->summary.step_count; ++i) free(p->ssd[i]);
     free(p->sequence);
     free(p->delta);
+    free(p->ssd);
     p->sequence = NULL;
     p->delta = NULL;
+    p->ssd = NULL;
     p->sequence_count = 0u;
 }
 
@@ -432,8 +460,9 @@ static int physical_state_lower(yvex_program_physical *p, yvex_error *err)
      * derived provider views, never overwrite their owning allocations. */
     physical_state_clear(p);
     p->delta = calloc(p->summary.step_count, sizeof(*p->delta));
+    p->ssd = calloc(p->summary.step_count, sizeof(*p->ssd));
     p->sequence = calloc(p->summary.input_count, sizeof(*p->sequence));
-    if (!p->delta || !p->sequence)
+    if (!p->delta || !p->ssd || !p->sequence)
         return physical_refuse(err, YVEX_ERR_NOMEM, "state implementation projection allocation failed");
     for (i = 0u; i < p->summary.step_count; ++i) {
         const yvex_program_physical_step *s = &p->steps[i];
@@ -445,6 +474,36 @@ static int physical_state_lower(yvex_program_physical *p, yvex_error *err)
         yvex_gated_delta_plan *d;
         yvex_ir_id root;
         int rc;
+        if (!strcmp(s->implementation, "selective_ssd.cpu.f32state.v1")) {
+            yvex_selective_ssd_requirement requirement = {.schema_version = YVEX_SELECTIVE_SSD_SCHEMA_V1};
+            yvex_selective_ssd_geometry *geometry = p->ssd[i] = calloc(1u, sizeof(*geometry));
+            if (!geometry) return physical_refuse(err, YVEX_ERR_NOMEM, "SSD implementation allocation failed");
+            requirement.heads = yvex_program_physical_attribute(s, "heads")->value.integer;
+            requirement.head_dimension = yvex_program_physical_attribute(s, "head_dimension")->value.integer;
+            requirement.state_dimension = yvex_program_physical_attribute(s, "state_dimension")->value.integer;
+            requirement.groups = yvex_program_physical_attribute(s, "groups")->value.integer;
+            requirement.convolution_kernel =
+                yvex_program_physical_attribute(s, "convolution_kernel")->value.integer;
+            requirement.normalization_groups =
+                yvex_program_physical_attribute(s, "normalization_groups")->value.integer;
+            requirement.normalization_epsilon = yvex_program_physical_attribute(s, "epsilon")->value.real;
+            requirement.time_step_minimum =
+                yvex_program_physical_attribute(s, "time_step_minimum")->value.real;
+            requirement.time_step_maximum =
+                yvex_program_physical_attribute(s, "time_step_maximum")->value.real;
+            requirement.time_step_unbounded =
+                (int)yvex_program_physical_attribute(s, "time_step_unbounded")->value.integer;
+            requirement.norm_before_gate =
+                (int)yvex_program_physical_attribute(s, "norm_before_gate")->value.integer;
+            root = p->values[s->operands[7]].state_root;
+            rc = yvex_selective_ssd_geometry_seal(geometry, &requirement, err);
+            if (rc == YVEX_OK) rc = yvex_sequence_state_binding_seal(
+                &p->sequence[p->sequence_count], root, geometry->convolution_state_values,
+                geometry->recurrent_state_values, geometry->identity, err);
+            if (rc != YVEX_OK) return rc;
+            p->sequence_count++;
+            continue;
+        }
         if (strcmp(s->implementation, "gated_delta.bf16.f32state.v1")) continue;
         r.query_heads = r.key_heads = yvex_program_physical_attribute(s, "key_heads")->value.integer;
         r.value_heads = yvex_program_physical_attribute(s, "value_heads")->value.integer;
@@ -911,6 +970,12 @@ const yvex_ir_attribute *yvex_program_physical_attribute(const yvex_program_phys
 const yvex_gated_delta_plan *yvex_program_physical_delta_at(const yvex_program_physical *p, size_t i)
 {
     return p && p->delta && i < p->summary.step_count ? p->delta[i] : NULL;
+}
+
+const yvex_selective_ssd_geometry *yvex_program_physical_ssd_at(
+    const yvex_program_physical *p, size_t i)
+{
+    return p && p->ssd && i < p->summary.step_count ? p->ssd[i] : NULL;
 }
 
 int yvex_program_physical_sequence_state(const yvex_program_physical *p, yvex_sequence_state_plan *out)

@@ -2,121 +2,18 @@
 #include <yvex/internal/families/mamba2.h>
 
 #include <errno.h>
+#include <limits.h>
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static const yvex_ir_type *mamba_program_input(
-    const yvex_ir_module *m, const yvex_ir_operation *op, uint32_t index)
-{
-    return yvex_ir_type_at(m, yvex_ir_value_at(m, op->operands[index])->type);
-}
-
-static int mamba_program_shape(const yvex_ir_type *type, yvex_ir_type_kind kind,
-    uint32_t rank, const unsigned long long *shape, const char *domain)
-{
-    uint32_t index;
-    if (!type || type->kind != kind || type->scalar != YVEX_IR_F32 || type->rank != rank ||
-        (domain && strcmp(type->domain, domain))) return 0;
-    for (index = 0u; index < rank; ++index)
-        if (type->shape[index].symbol != YVEX_IR_NONE || type->shape[index].extent != shape[index]) return 0;
-    return 1;
-}
-
-static int mamba_program_mixer_verify(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
-{
-    const yvex_ir_operation *op = yvex_ir_operation_at(m, id);
-    const yvex_ir_type *input = mamba_program_input(m, op, 0u);
-    const yvex_ir_attribute *heads = yvex_ir_attribute_get(m, id, "heads");
-    const yvex_ir_attribute *head = yvex_ir_attribute_get(m, id, "head_dimension");
-    const yvex_ir_attribute *state = yvex_ir_attribute_get(m, id, "state_dimension");
-    const yvex_ir_attribute *groups = yvex_ir_attribute_get(m, id, "groups");
-    const yvex_ir_attribute *kernel = yvex_ir_attribute_get(m, id, "convolution_kernel");
-    yvex_selective_ssd_requirement requirement = {.schema_version = YVEX_SELECTIVE_SSD_SCHEMA_V1};
-    yvex_selective_ssd_geometry geometry;
-    unsigned long long shapes[10][3], hidden;
-    const uint32_t ranks[] = {2u, 3u, 1u, 1u, 1u, 1u, 1u, 2u, 2u, 3u};
-    uint32_t index;
-    int rc;
-    if (!input || input->kind != YVEX_IR_TENSOR || input->scalar != YVEX_IR_F32 || input->rank != 2u ||
-        input->shape[1].symbol != YVEX_IR_NONE || !heads || !head || !state || !groups || !kernel) goto invalid;
-    requirement.heads = heads->value.integer;
-    requirement.head_dimension = head->value.integer;
-    requirement.state_dimension = state->value.integer;
-    requirement.groups = groups->value.integer;
-    requirement.convolution_kernel = kernel->value.integer;
-    requirement.normalization_groups = yvex_ir_attribute_get(m, id, "normalization_groups")->value.integer;
-    requirement.normalization_epsilon = yvex_ir_attribute_get(m, id, "epsilon")->value.real;
-    requirement.time_step_minimum = yvex_ir_attribute_get(m, id, "time_step_minimum")->value.real;
-    requirement.time_step_maximum = yvex_ir_attribute_get(m, id, "time_step_maximum")->value.real;
-    requirement.time_step_unbounded = (int)yvex_ir_attribute_get(m, id, "time_step_unbounded")->value.integer;
-    requirement.norm_before_gate = (int)yvex_ir_attribute_get(m, id, "norm_before_gate")->value.integer;
-    rc = yvex_selective_ssd_geometry_seal(&geometry, &requirement, err);
-    if (rc != YVEX_OK) return rc;
-    hidden = input->shape[1].extent;
-    {
-        const unsigned long long expected[10][3] = {
-            {geometry.projection_width, hidden, 0u}, {geometry.convolution_width, 1u, requirement.convolution_kernel},
-            {geometry.convolution_width, 0u, 0u}, {requirement.heads, 0u, 0u},
-            {requirement.heads, 0u, 0u}, {requirement.heads, 0u, 0u}, {geometry.width, 0u, 0u},
-            {hidden, geometry.width, 0u}, {geometry.convolution_width, requirement.convolution_kernel, 0u},
-            {requirement.heads, requirement.head_dimension, requirement.state_dimension}};
-        memcpy(shapes, expected, sizeof(shapes));
-    }
-    for (index = 0u; index < 10u; ++index)
-        if (!mamba_program_shape(mamba_program_input(m, op, index + 1u),
-                                 index < 8u ? YVEX_IR_TENSOR : YVEX_IR_STATE, ranks[index], shapes[index],
-                                 index < 8u ? NULL : index == 8u ? "convolution.causal" : "ssm.selective"))
-            goto invalid;
-    if (yvex_ir_value_at(m, op->operands[0])->type != yvex_ir_value_at(m, op->results[0])->type ||
-        yvex_ir_value_at(m, op->operands[9])->type != yvex_ir_value_at(m, op->results[1])->type ||
-        yvex_ir_value_at(m, op->operands[10])->type != yvex_ir_value_at(m, op->results[2])->type) goto invalid;
-    return YVEX_OK;
-invalid:
-    yvex_error_set(err, YVEX_ERR_FORMAT, "mamba2.program", "selective-SSD program operand/state geometry mismatch");
-    return YVEX_ERR_FORMAT;
-}
-
-static int mamba_obligation_verify(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
-{
-    const yvex_ir_attribute *name = yvex_ir_attribute_get(m, id, "authority");
-    if (!name || (!name->value.text[0])) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "mamba2.program", "source obligation must identify its authority");
-        return YVEX_ERR_FORMAT;
-    }
-    return YVEX_OK;
-}
-
-static const yvex_ir_dialect *mamba_program_dialect(void)
-{
-    static const yvex_ir_attribute_rule mixer[] = {
-        {"heads", YVEX_IR_ATTR_U64, 1}, {"head_dimension", YVEX_IR_ATTR_U64, 1},
-        {"state_dimension", YVEX_IR_ATTR_U64, 1}, {"groups", YVEX_IR_ATTR_U64, 1},
-        {"convolution_kernel", YVEX_IR_ATTR_U64, 1}, {"normalization_groups", YVEX_IR_ATTR_U64, 1},
-        {"epsilon", YVEX_IR_ATTR_F64, 1}, {"time_step_minimum", YVEX_IR_ATTR_F64, 1},
-        {"time_step_maximum", YVEX_IR_ATTR_F64, 1}, {"time_step_unbounded", YVEX_IR_ATTR_BOOL, 1},
-        {"norm_before_gate", YVEX_IR_ATTR_BOOL, 1}};
-    static const yvex_ir_attribute_rule obligation[] = {
-        {"authority", YVEX_IR_ATTR_SYMBOL, 1}, {"conflict", YVEX_IR_ATTR_BOOL, 1}};
-    /* This operation names the Mamba2 mixer computation, including source-weight
-     * roles, selective SSD, causal convolution and gated normalization. It does
-     * not own allocation, session lifetime, dispatch or numerical qualification. */
-    static const yvex_ir_operation_definition operations[] = {
-        {"mamba2.mixer", 1u, 11u, 11u, 3u, 3u, 0u, YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE,
-         mixer, 11u, 0, mamba_program_mixer_verify},
-        {"mamba2.source_obligation", 1u, 0u, 0u, 0u, 0u, 0u, YVEX_IR_ORDERED,
-         obligation, 2u, 0, mamba_obligation_verify}};
-    static const yvex_ir_dialect dialect = {operations, sizeof(operations) / sizeof(operations[0])};
-    return &dialect;
-}
-
 typedef struct {
     yvex_ir_module *module;
     const yvex_mamba2_architecture *architecture;
     const char *source_identity;
-    yvex_ir_id block, tensor, parameters[12], convolution, recurrent;
+    yvex_ir_id block, hidden, projection, mixed, logits, parameters[10], convolution, recurrent;
     int rc;
     yvex_error *error;
 } mamba_program_builder;
@@ -159,20 +56,19 @@ static yvex_ir_id mamba_program_norm(mamba_program_builder *b, yvex_ir_id input,
     attributes[0].value.real = b->architecture->normalization_epsilon;
     operands[0] = input;
     operands[1] = mamba_program_parameter(b, weight, b->parameters[1]);
-    op = mamba_program_emit(b, "nn.rms_norm", operands, 2u, &b->tensor, 1u, attributes, 2u);
+    op = mamba_program_emit(b, "nn.rms_norm", operands, 2u, &b->hidden, 1u, attributes, 2u);
     return mamba_program_value(b, op, 0u);
 }
 
-static int mamba_program_types(mamba_program_builder *b, yvex_ir_id *tokens)
+static int mamba_program_types(mamba_program_builder *b, yvex_ir_id *tokens, yvex_ir_id *position)
 {
     const yvex_mamba2_architecture *a = b->architecture;
     const yvex_selective_ssd_requirement *r = &a->mixer.requirement;
-    const unsigned long long shapes[12][3] = {
+    const unsigned long long shapes[10][3] = {
         {a->vocabulary_size, a->hidden_size, 0u}, {a->hidden_size, 0u, 0u},
         {a->mixer.projection_width, a->hidden_size, 0u}, {a->mixer.convolution_width, 1u, r->convolution_kernel},
         {a->mixer.convolution_width, 0u, 0u}, {r->heads, 0u, 0u}, {r->heads, 0u, 0u}, {r->heads, 0u, 0u},
-        {a->mixer.width, 0u, 0u}, {a->hidden_size, a->mixer.width, 0u},
-        {a->mixer.convolution_width, r->convolution_kernel, 0u}, {r->heads, r->head_dimension, r->state_dimension}};
+        {a->mixer.width, 0u, 0u}, {a->hidden_size, a->mixer.width, 0u}};
     yvex_ir_dimension sequence = {.name = "sequence", .minimum = 1u, .maximum = 1048576u, .multiple = 1u};
     yvex_ir_type type = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_INDEX, .rank = 1u};
     yvex_ir_id symbol;
@@ -180,21 +76,33 @@ static int mamba_program_types(mamba_program_builder *b, yvex_ir_id *tokens)
     int rc = yvex_ir_dimension_add(b->module, &sequence, &symbol, b->error);
     type.shape[0] = (yvex_ir_extent){symbol, 0u};
     if (rc == YVEX_OK) rc = yvex_ir_type_intern(b->module, &type, tokens, b->error);
-    type.scalar = YVEX_IR_F32;
-    type.rank = 2u;
-    type.shape[1] = (yvex_ir_extent){YVEX_IR_NONE, a->hidden_size};
-    if (rc == YVEX_OK) rc = yvex_ir_type_intern(b->module, &type, &b->tensor, b->error);
-    for (index = 0u; rc == YVEX_OK && index < 12u; ++index) {
-        type = (yvex_ir_type){.kind = index < 10u ? YVEX_IR_TENSOR : YVEX_IR_STATE,
+    type = (yvex_ir_type){.kind = YVEX_IR_SCALAR, .scalar = YVEX_IR_INDEX};
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(b->module, &type, position, b->error);
+    type = (yvex_ir_type){.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 2u,
+        .shape = {{symbol, 0u}, {YVEX_IR_NONE, a->hidden_size}}};
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(b->module, &type, &b->hidden, b->error);
+    type.shape[1].extent = a->mixer.projection_width;
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(b->module, &type, &b->projection, b->error);
+    type.shape[1].extent = a->mixer.width;
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(b->module, &type, &b->mixed, b->error);
+    type.shape[1].extent = a->vocabulary_size;
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(b->module, &type, &b->logits, b->error);
+    for (index = 0u; rc == YVEX_OK && index < 10u; ++index) {
+        type = (yvex_ir_type){.kind = YVEX_IR_TENSOR,
             .scalar = YVEX_IR_F32, .rank = shapes[index][2] ? 3u : shapes[index][1] ? 2u : 1u};
         for (dim = 0u; dim < type.rank; ++dim) type.shape[dim] = (yvex_ir_extent){YVEX_IR_NONE, shapes[index][dim]};
-        if (index >= 10u)
-            yvex_core_text_copy(type.domain, sizeof(type.domain),
-                                index == 10u ? "convolution.causal" : "ssm.selective");
         rc = yvex_ir_type_intern(b->module, &type, &b->parameters[index], b->error);
     }
-    b->convolution = b->parameters[10];
-    b->recurrent = b->parameters[11];
+    type = (yvex_ir_type){.kind = YVEX_IR_STATE, .scalar = YVEX_IR_F32, .rank = 2u,
+        .shape = {{YVEX_IR_NONE, a->mixer.convolution_width},
+                  {YVEX_IR_NONE, r->convolution_kernel}}};
+    yvex_core_text_copy(type.domain, sizeof(type.domain), "convolution.causal");
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(b->module, &type, &b->convolution, b->error);
+    type = (yvex_ir_type){.kind = YVEX_IR_STATE, .scalar = YVEX_IR_F32, .rank = 3u,
+        .shape = {{YVEX_IR_NONE, r->heads}, {YVEX_IR_NONE, r->head_dimension},
+                  {YVEX_IR_NONE, r->state_dimension}}};
+    yvex_core_text_copy(type.domain, sizeof(type.domain), "ssm.selective");
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(b->module, &type, &b->recurrent, b->error);
     return rc;
 }
 
@@ -216,94 +124,109 @@ static yvex_ir_id mamba_program_layer(mamba_program_builder *b, unsigned long lo
         {.name = "time_step_maximum", .kind = YVEX_IR_ATTR_F64, .value.real = r->time_step_maximum},
         {.name = "time_step_unbounded", .kind = YVEX_IR_ATTR_BOOL, .value.integer = (uint64_t)r->time_step_unbounded},
         {.name = "norm_before_gate", .kind = YVEX_IR_ATTR_BOOL, .value.integer = (uint64_t)r->norm_before_gate}};
-    yvex_ir_id operands[11], types[] = {b->tensor, b->convolution, b->recurrent}, op, residual[2];
+    yvex_ir_id operands[9], types[] = {b->mixed, b->convolution, b->recurrent};
+    yvex_ir_id projection_operands[2], output_operands[2], op, residual[2];
     char name[96];
     uint32_t index;
     snprintf(name, sizeof(name), "backbone.layers.%llu.norm.weight", layer);
-    operands[0] = mamba_program_norm(b, input, name);
-    for (index = 0u; index < 8u; ++index) {
+    projection_operands[0] = mamba_program_norm(b, input, name);
+    snprintf(name, sizeof(name), "backbone.layers.%llu.mixer.%s", layer, suffix[0]);
+    projection_operands[1] = mamba_program_parameter(b, name, b->parameters[2]);
+    op = mamba_program_emit(b, "nn.linear", projection_operands, 2u, &b->projection, 1u, NULL, 0u);
+    operands[0] = mamba_program_value(b, op, 0u);
+    for (index = 1u; index < 7u; ++index) {
         snprintf(name, sizeof(name), "backbone.layers.%llu.mixer.%s", layer, suffix[index]);
-        operands[index + 1u] = mamba_program_parameter(b, name, b->parameters[index + 2u]);
+        operands[index] = mamba_program_parameter(b, name, b->parameters[index + 2u]);
     }
-    operands[9] = *convolution;
-    operands[10] = *recurrent;
-    op = mamba_program_emit(b, "mamba2.mixer", operands, 11u, types, 3u,
+    operands[7] = *convolution;
+    operands[8] = *recurrent;
+    op = mamba_program_emit(b, "sequence.selective_ssd", operands, 9u, types, 3u,
                             attributes, sizeof(attributes) / sizeof(attributes[0]));
     *convolution = mamba_program_value(b, op, 1u);
     *recurrent = mamba_program_value(b, op, 2u);
+    snprintf(name, sizeof(name), "backbone.layers.%llu.mixer.%s", layer, suffix[7]);
+    output_operands[0] = mamba_program_value(b, op, 0u);
+    output_operands[1] = mamba_program_parameter(b, name, b->parameters[9]);
+    op = mamba_program_emit(b, "nn.linear", output_operands, 2u, &b->hidden, 1u, NULL, 0u);
     residual[0] = input;
     residual[1] = mamba_program_value(b, op, 0u);
     return mamba_program_value(b, mamba_program_emit(b, "tensor.add", residual, 2u,
-                                                     &b->tensor, 1u, NULL, 0u), 0u);
+                                                     &b->hidden, 1u, NULL, 0u), 0u);
 }
 
 int yvex_mamba2_program_build(yvex_ir_module **out, const yvex_mamba2_architecture *a,
                                const char *source_identity, yvex_error *err)
 {
-    yvex_ir_dialect dialects[3] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect(), *mamba_program_dialect()};
+    yvex_ir_dialect dialects[3] = {
+        *yvex_ir_core_dialect(), *yvex_ir_neural_dialect(), *yvex_ir_sequence_dialect()};
     mamba_program_builder builder = {.architecture = a, .source_identity = source_identity, .error = err};
-    yvex_ir_id *arguments = NULL, *results = NULL, *outputs = NULL, tokens, function, hidden, op;
-    size_t count, layer;
-    yvex_ir_type output_type;
+    yvex_ir_id *arguments = NULL, *results = NULL, *outputs = NULL;
+    yvex_ir_id tokens, position, function, hidden, op, output_arguments[1], output_results[1];
+    size_t input_count, result_count, layer;
     if (out) *out = NULL;
     if (!out || !a || !a->architecture_complete || !a->hidden_size || !a->vocabulary_size ||
         !a->layer_count || a->layer_count > YVEX_MAMBA2_LAYER_CAP ||
+        !a->token_policy_resolved || !a->normalization_policy_resolved ||
         !yvex_sha256_hex_valid(a->architecture_identity) ||
         !yvex_sha256_hex_valid(source_identity) ||
         yvex_selective_ssd_geometry_validate(&a->mixer, err) != YVEX_OK) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "mamba2.program", "source-authoritative geometry is required");
         return YVEX_ERR_FORMAT;
     }
-    count = 1u + 2u * (size_t)a->layer_count;
-    arguments = calloc(count, sizeof(*arguments));
-    results = calloc(count, sizeof(*results));
-    outputs = calloc(count, sizeof(*outputs));
+    input_count = 2u + 2u * (size_t)a->layer_count;
+    result_count = 1u + 2u * (size_t)a->layer_count;
+    arguments = calloc(input_count, sizeof(*arguments));
+    results = calloc(result_count, sizeof(*results));
+    outputs = calloc(result_count, sizeof(*outputs));
     builder.rc = arguments && results && outputs ? YVEX_OK : YVEX_ERR_NOMEM;
     if (builder.rc != YVEX_OK)
         yvex_error_set(err, YVEX_ERR_NOMEM, "mamba2.program", "program signature allocation failed");
     if (builder.rc == YVEX_OK)
         builder.rc = yvex_ir_module_open(&builder.module, "mamba2", source_identity, dialects, 3u, err);
-    if (builder.rc == YVEX_OK) builder.rc = mamba_program_types(&builder, &tokens);
+    if (builder.rc == YVEX_OK) builder.rc = mamba_program_types(&builder, &tokens, &position);
     if (builder.rc != YVEX_OK) goto done;
     arguments[0] = tokens;
-    output_type = *yvex_ir_type_at(builder.module, builder.tensor);
-    output_type.shape[1].extent = a->vocabulary_size;
-    builder.rc = yvex_ir_type_intern(builder.module, &output_type, &results[0], err);
+    arguments[1] = position;
+    results[0] = builder.hidden;
     for (layer = 0u; layer < a->layer_count; ++layer) {
-        arguments[1u + 2u * layer] = results[1u + 2u * layer] = builder.convolution;
-        arguments[2u + 2u * layer] = results[2u + 2u * layer] = builder.recurrent;
+        arguments[2u + 2u * layer] = results[1u + 2u * layer] = builder.convolution;
+        arguments[3u + 2u * layer] = results[2u + 2u * layer] = builder.recurrent;
     }
     if (builder.rc == YVEX_OK)
-        builder.rc = yvex_ir_function_add(builder.module, "forward", arguments, count, results, count,
+        builder.rc = yvex_ir_function_add(builder.module, "forward", arguments, input_count,
+                                           results, result_count,
                                            YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE | YVEX_IR_ORDERED, &function, err);
     if (builder.rc != YVEX_OK) goto done;
     builder.block = yvex_ir_function_at(builder.module, function)->body;
-    memcpy(outputs, yvex_ir_block_at(builder.module, builder.block)->arguments, count * sizeof(*outputs));
-    {
-        yvex_ir_attribute obligation[] = {
-            {.name = "authority", .kind = YVEX_IR_ATTR_SYMBOL, .value.text = "source.normalization"},
-            {.name = "conflict", .kind = YVEX_IR_ATTR_BOOL,
-             .value.integer = (uint64_t)a->normalization_policy_conflict}};
-        mamba_program_emit(&builder, "mamba2.source_obligation", NULL, 0u, NULL, 0u, obligation, 2u);
-        yvex_core_text_copy(obligation[0].value.text, sizeof(obligation[0].value.text), "source.tokenizer");
-        obligation[1].value.integer = (uint64_t)a->token_policy_conflict;
-        mamba_program_emit(&builder, "mamba2.source_obligation", NULL, 0u, NULL, 0u, obligation, 2u);
+    outputs[0] = yvex_ir_block_at(builder.module, builder.block)->arguments[0];
+    for (layer = 0u; layer < a->layer_count; ++layer) {
+        outputs[1u + 2u * layer] = yvex_ir_block_at(builder.module, builder.block)->arguments[2u + 2u * layer];
+        outputs[2u + 2u * layer] = yvex_ir_block_at(builder.module, builder.block)->arguments[3u + 2u * layer];
     }
     {
         yvex_ir_id inputs[] = {outputs[0], mamba_program_parameter(&builder,
                                      "backbone.embeddings.weight", builder.parameters[0])};
-        op = mamba_program_emit(&builder, "nn.embedding", inputs, 2u, &builder.tensor, 1u, NULL, 0u);
+        op = mamba_program_emit(&builder, "nn.embedding", inputs, 2u, &builder.hidden, 1u, NULL, 0u);
         hidden = mamba_program_value(&builder, op, 0u);
     }
     for (layer = 0u; builder.rc == YVEX_OK && layer < a->layer_count; ++layer)
         hidden = mamba_program_layer(&builder, layer, hidden, &outputs[1u + 2u * layer], &outputs[2u + 2u * layer]);
     hidden = mamba_program_norm(&builder, hidden, "backbone.norm_f.weight");
-    {
-        yvex_ir_id inputs[] = {hidden, mamba_program_parameter(&builder, "lm_head.weight", builder.parameters[0])};
-        op = mamba_program_emit(&builder, "nn.linear", inputs, 2u, &results[0], 1u, NULL, 0u);
-        outputs[0] = mamba_program_value(&builder, op, 0u);
+    outputs[0] = hidden;
+    mamba_program_emit(&builder, "core.return", outputs, result_count, NULL, 0u, NULL, 0u);
+    output_arguments[0] = builder.hidden;
+    output_results[0] = builder.logits;
+    if (builder.rc == YVEX_OK) builder.rc = yvex_ir_function_add(builder.module, "output",
+        output_arguments, 1u, output_results, 1u, 0u, &function, err);
+    if (builder.rc == YVEX_OK) {
+        yvex_ir_id inputs[2];
+        builder.block = yvex_ir_function_at(builder.module, function)->body;
+        inputs[0] = yvex_ir_block_at(builder.module, builder.block)->arguments[0];
+        inputs[1] = mamba_program_parameter(&builder, "lm_head.weight", builder.parameters[0]);
+        op = mamba_program_emit(&builder, "nn.linear", inputs, 2u, &builder.logits, 1u, NULL, 0u);
+        hidden = mamba_program_value(&builder, op, 0u);
+        mamba_program_emit(&builder, "core.return", &hidden, 1u, NULL, 0u, NULL, 0u);
     }
-    mamba_program_emit(&builder, "core.return", outputs, count, NULL, 0u, NULL, 0u);
     if (builder.rc == YVEX_OK) builder.rc = yvex_ir_seal(builder.module, err);
     if (builder.rc == YVEX_OK) {
         yvex_ir_pass passes[] = {*yvex_ir_canonical_pass(), *yvex_ir_dead_code_pass()};
@@ -346,6 +269,15 @@ static int mamba_double(yvex_json *json, double *value)
     errno = 0;
     *value = strtod(text, &end);
     return !errno && !*end && isfinite(*value);
+}
+
+static int mamba_json_null(yvex_json *json)
+{
+    if (!json) return 0;
+    yvex_json_space(json);
+    if ((size_t)(json->end - json->cursor) < 4u || memcmp(json->cursor, "null", 4u)) return 0;
+    json->cursor += 4u;
+    return 1;
 }
 
 static int mamba_field_read(yvex_json *json, const mamba_field *field, void *object)
@@ -510,6 +442,82 @@ static int mamba_generation_parse(const char *data, size_t length, yvex_mamba2_a
         yvex_json_complete(&json) && seen == 7u;
 }
 
+static int mamba_tokenizer_config_parse(const char *data, size_t length,
+    yvex_mamba2_architecture *a)
+{
+    yvex_json json;
+    yvex_json_iter object;
+    yvex_json_item item;
+    char key[YVEX_JSON_KEY_CAP], value[64];
+    unsigned int seen = 0u;
+    yvex_json_init(&json, data, length);
+    if (!yvex_json_iter_begin(&json, &object, YVEX_JSON_COLLECTION_OBJECT)) return 0;
+    while ((item = yvex_json_object_member(&object, key, sizeof(key))) == YVEX_JSON_ITEM_READY) {
+        if (!strcmp(key, "add_bos_token")) {
+            if ((seen & 1u) || !yvex_json_bool(&json, &a->tokenizer_add_bos)) return 0;
+            seen |= 1u;
+        } else if (!strcmp(key, "add_eos_token")) {
+            if ((seen & 2u) || !yvex_json_bool(&json, &a->tokenizer_add_eos)) return 0;
+            seen |= 2u;
+        } else if (!strcmp(key, "bos_token") || !strcmp(key, "eos_token") ||
+                   !strcmp(key, "unk_token")) {
+            unsigned int bit = !strcmp(key, "bos_token") ? 4u : !strcmp(key, "eos_token") ? 8u : 16u;
+            const char *expected = bit == 4u ? "<s>" : bit == 8u ? "</s>" : "<unk>";
+            if ((seen & bit) || !yvex_json_string(&json, value, sizeof(value)) || strcmp(value, expected)) return 0;
+            seen |= bit;
+        } else if (!strcmp(key, "pad_token")) {
+            if ((seen & 32u) || !mamba_json_null(&json)) return 0;
+            seen |= 32u;
+        } else if (!strcmp(key, "chat_template")) {
+            if ((seen & 64u) || !mamba_json_null(&json)) return 0;
+            seen |= 64u;
+        } else if (!strcmp(key, "tokenizer_class")) {
+            if ((seen & 128u) || !yvex_json_string(&json, value, sizeof(value)) ||
+                strcmp(value, "LlamaTokenizer")) return 0;
+            seen |= 128u;
+        } else if (!yvex_json_skip_value(&json)) return 0;
+    }
+    /* The pinned source omits chat_template entirely. An explicit null and an
+     * absent member both mean that no source-authored chat template exists;
+     * any non-null declaration remains unsupported and fails above. */
+    return item == YVEX_JSON_ITEM_END && !object.trailing_separator && yvex_json_complete(&json) &&
+        (seen == 191u || seen == 255u) && a->tokenizer_add_bos && !a->tokenizer_add_eos;
+}
+
+static int mamba_special_token_value(yvex_json *json, const char *expected)
+{
+    yvex_json_iter object;
+    yvex_json_item item;
+    char key[YVEX_JSON_KEY_CAP], value[64];
+    int content = 0;
+    if (!yvex_json_iter_begin(json, &object, YVEX_JSON_COLLECTION_OBJECT)) return 0;
+    while ((item = yvex_json_object_member(&object, key, sizeof(key))) == YVEX_JSON_ITEM_READY) {
+        if (!strcmp(key, "content")) {
+            if (content++ || !yvex_json_string(json, value, sizeof(value)) || strcmp(value, expected)) return 0;
+        } else if (!yvex_json_skip_value(json)) return 0;
+    }
+    return item == YVEX_JSON_ITEM_END && !object.trailing_separator && content == 1;
+}
+
+static int mamba_special_tokens_parse(const char *data, size_t length)
+{
+    yvex_json json;
+    yvex_json_iter object;
+    yvex_json_item item;
+    char key[YVEX_JSON_KEY_CAP];
+    unsigned int seen = 0u;
+    yvex_json_init(&json, data, length);
+    if (!yvex_json_iter_begin(&json, &object, YVEX_JSON_COLLECTION_OBJECT)) return 0;
+    while ((item = yvex_json_object_member(&object, key, sizeof(key))) == YVEX_JSON_ITEM_READY) {
+        unsigned int bit = !strcmp(key, "bos_token") ? 1u : !strcmp(key, "eos_token") ? 2u :
+            !strcmp(key, "unk_token") ? 4u : 0u;
+        const char *expected = bit == 1u ? "<s>" : bit == 2u ? "</s>" : "<unk>";
+        if (!bit || (seen & bit) || !mamba_special_token_value(&json, expected)) return 0;
+        seen |= bit;
+    }
+    return item == YVEX_JSON_ITEM_END && !object.trailing_separator && yvex_json_complete(&json) && seen == 7u;
+}
+
 static int mamba_vocab(yvex_json *json, yvex_mamba2_architecture *a)
 {
     yvex_json_iter object;
@@ -579,10 +587,14 @@ static int mamba_identity(yvex_mamba2_architecture *a)
         a->hidden_size, a->layer_count, a->vocabulary_size, a->expansion, a->chunk_size,
         a->config_bos, a->config_eos, a->config_pad, a->generation_bos, a->generation_eos,
         a->generation_pad, a->tokenizer_bos, a->tokenizer_eos, a->tokenizer_unk,
-        (unsigned long long)a->residual_in_f32, (unsigned long long)a->declared_norm_before_gate};
+        a->effective_bos, a->effective_eos, a->effective_pad,
+        (unsigned long long)a->residual_in_f32, (unsigned long long)a->declared_norm_before_gate,
+        (unsigned long long)a->tokenizer_add_bos, (unsigned long long)a->tokenizer_add_eos,
+        (unsigned long long)a->tokenizer_has_pad, (unsigned long long)a->tokenizer_assets_match,
+        (unsigned long long)a->token_authority, (unsigned long long)a->normalization_authority};
     size_t i;
     yvex_sha256_init(&hash);
-    if (!yvex_sha256_update_text(&hash, "yvex.mamba2.source-topology.v1") ||
+    if (!yvex_sha256_update_text(&hash, "yvex.mamba2.source-topology.v2") ||
         !yvex_sha256_update_text(&hash, a->source_revision) ||
         !yvex_sha256_update_text(&hash, a->mixer.identity)) return 0;
     for (i = 0; i < sizeof(values) / sizeof(values[0]); ++i)
@@ -595,10 +607,11 @@ static int mamba_identity(yvex_mamba2_architecture *a)
 static int mamba_open(const yvex_source_verification *verification,
                       yvex_mamba2_architecture *a, yvex_error *err)
 {
-    const char *const files[] = {"config.json", "params.json", "generation_config.json", "tokenizer.json"};
-    yvex_source_metadata_blob blobs[4] = {0};
-    const char *data[4] = {0};
-    size_t lengths[4] = {0};
+    const char *const files[] = {"config.json", "params.json", "generation_config.json", "tokenizer.json",
+        "tokenizer_config.json", "special_tokens_map.json", "tokenizer.model", "tokenizer.model.v3"};
+    yvex_source_metadata_blob blobs[8] = {0};
+    const char *data[8] = {0};
+    size_t lengths[8] = {0};
     mamba_config config = {0};
     yvex_selective_ssd_requirement r = {.schema_version = YVEX_SELECTIVE_SSD_SCHEMA_V1};
     unsigned long long width;
@@ -610,9 +623,10 @@ static int mamba_open(const yvex_source_verification *verification,
     if (strcmp(verification->repository_id, YVEX_MAMBA2_REPOSITORY) ||
         strcmp(verification->revision, YVEX_MAMBA2_REVISION))
         return mamba_refuse(err, YVEX_ERR_FORMAT, "source is not the acquired immutable reference revision");
-    for (i = 0; i < 4u; ++i) {
+    for (i = 0; i < 8u; ++i) {
         if (yvex_source_provenance_metadata_read(verification, files[i],
-                i == 3u ? 8u * 1024u * 1024u : 65536u, &blobs[i], err) != YVEX_OK)
+                i == 3u ? 8u * 1024u * 1024u : i == 4u ? 256u * 1024u :
+                i >= 6u ? 1024u * 1024u : 65536u, &blobs[i], err) != YVEX_OK)
             goto cleanup;
         data[i] = (const char *)blobs[i].bytes;
         lengths[i] = blobs[i].byte_count;
@@ -620,7 +634,7 @@ static int mamba_open(const yvex_source_verification *verification,
     if (!mamba_config_parse(data[0], lengths[0], &config, &r) ||
         strcmp(config.model_type, "mamba2") || strcmp(config.activation, "silu") ||
         strcmp(config.dtype, "bfloat16") || !config.rms_norm || !config.residual_f32 ||
-        config.tied || config.bias || !config.conv_bias || !config.hidden_size ||
+        config.tied || config.bias || !config.conv_bias || !config.norm_before_gate || !config.hidden_size ||
         !config.layers || config.layers > YVEX_MAMBA2_LAYER_CAP || !config.vocabulary ||
         config.vocabulary > 1048576u || !config.chunk || config.epsilon <= 0.0 ||
         config.bos >= config.vocabulary || config.eos >= config.vocabulary ||
@@ -639,24 +653,44 @@ static int mamba_open(const yvex_source_verification *verification,
     r.heads = config.heads; r.head_dimension = config.head_dimension;
     r.state_dimension = config.state_dimension; r.groups = config.groups;
     r.convolution_kernel = config.kernel; r.normalization_epsilon = config.epsilon;
-    /* Descriptive candidate: Mistral's params.json recipe uses Mamba2's grouped gated
-     * normalization defaults. Preserve conflicting HF declarations explicitly; this
-     * source inspection does not resolve them into an executable numeric contract. */
+    /* The pinned model's official Mistral inference path delegates to the
+     * state-spaces Mamba2 operation. That operation's declared default is
+     * gate-before grouped RMS normalization. The converted HF config remains
+     * recorded as a conflicting declaration, but is not numerical authority. */
     r.normalization_groups = config.groups;
     r.norm_before_gate = 0;
     if (yvex_selective_ssd_geometry_seal(&a->mixer, &r, err) != YVEX_OK ||
         a->mixer.width != width || !mamba_generation_parse(data[2], lengths[2], a) ||
-        !mamba_tokenizer_parse(data[3], lengths[3], a)) goto cleanup;
+        !mamba_tokenizer_parse(data[3], lengths[3], a) ||
+        !mamba_tokenizer_config_parse(data[4], lengths[4], a) ||
+        !mamba_special_tokens_parse(data[5], lengths[5]) ||
+        lengths[6] != lengths[7] || memcmp(data[6], data[7], lengths[6])) goto cleanup;
+    a->tokenizer_assets_match = 1;
+    a->tokenizer_has_pad = 0;
+    a->chat_template_present = 0;
     a->token_policy_conflict = a->config_bos != a->tokenizer_bos ||
         a->generation_bos != a->tokenizer_bos || a->config_eos != a->tokenizer_eos ||
-        a->generation_eos != a->tokenizer_eos;
+        a->generation_eos != a->tokenizer_eos || a->config_pad != a->tokenizer_unk ||
+        a->generation_pad == a->tokenizer_bos;
     a->normalization_policy_conflict = config.norm_before_gate != r.norm_before_gate;
+    if (a->config_bos != a->tokenizer_unk || a->config_eos != a->tokenizer_unk ||
+        a->config_pad != a->tokenizer_unk || a->generation_bos != a->tokenizer_unk ||
+        a->generation_eos != a->tokenizer_eos || a->generation_pad != a->tokenizer_bos ||
+        a->tokenizer_bos == a->tokenizer_eos ||
+        a->tokenizer_bos == a->tokenizer_unk || a->tokenizer_eos == a->tokenizer_unk) goto cleanup;
+    a->effective_bos = a->tokenizer_bos;
+    a->effective_eos = a->tokenizer_eos;
+    a->effective_pad = ULLONG_MAX;
+    a->token_authority = YVEX_MAMBA2_TOKEN_AUTHORITY_MISTRAL_TOKENIZER_V1;
+    a->normalization_authority = YVEX_MAMBA2_NORMALIZATION_AUTHORITY_MISTRAL_RECIPE_V1;
+    a->token_policy_resolved = 1;
+    a->normalization_policy_resolved = 1;
     yvex_core_text_copy(a->source_revision, sizeof(a->source_revision), verification->revision);
     if (!mamba_identity(a)) goto cleanup;
     a->architecture_complete = 1;
     rc = YVEX_OK;
 cleanup:
-    for (i = 0; i < 4u; ++i) yvex_source_metadata_blob_release(&blobs[i]);
+    for (i = 0; i < 8u; ++i) yvex_source_metadata_blob_release(&blobs[i]);
     if (rc != YVEX_OK) {
         memset(a, 0, sizeof(*a));
         return mamba_refuse(err, rc, "Mamba2 configuration, tokenizer or cross-source geometry is invalid");
