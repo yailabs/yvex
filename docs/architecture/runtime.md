@@ -86,6 +86,13 @@ owns:
 - engine-wide executable caches and compatible-work scheduler;
 - sessions attached to this exact generation.
 
+The canonical package mapping in this list is the artifact-owned
+materialization session: it authenticates tensor bindings and bounded package
+access used by PEIR and the binding. Backend/model weight materialization is a
+separate engine-resource lifecycle that prepares executable host/device
+resources from those admitted bindings. Neither mechanism changes the other's
+identity or silently publishes a new package representation.
+
 The migrated token-forward consumer uses compiled physical SSA work rather
 than walking decoder layers. The engine retains immutable work; its execution
 context binds parameter resources, prepares numerical implementations and owns
@@ -328,9 +335,9 @@ explicit begin/completion owner.
 
 CUDA does not branch on a family name, recover expert compatibility, select a
 numerically different activation representation, or reconstruct a missing
-physical plan from dimensions. An explicit CUDA request refuses when no
-admitted implementation exists. `auto` may retry only an already-admitted
-numerically equivalent strategy.
+physical computational or package plan from dimensions. An explicit CUDA
+request refuses when no admitted implementation exists. `auto` may retry only
+an already-admitted numerically equivalent strategy.
 
 Exact MiniMax output-linear requirements remain source/package numerical facts.
 Runtime component specialization resolves them to exact generic linear

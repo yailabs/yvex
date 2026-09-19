@@ -67,20 +67,31 @@ domain facts -> typed results/events -> client render -> client I/O
 ```
 
 Source owners establish provenance, retained tensor inventories, bounded
-payload access, and trust. Compilation owners derive artifact-neutral
-transformations and physical policy. GGUF and artifact owners serialize,
-parse, authenticate, and admit complete artifacts. Runtime owners import the
-binding, prepare immutable model resources, and isolate mutable execution
-sessions. Graph and backend owners execute already-admitted operations; they do
-not reconstruct model topology.
+payload access, and trust. Compilation has coordinated computational and
+parameter/package lanes. Graph owners lower family semantics through the sealed
+Semantic Model IR and any retained native typed program into execution and
+physical computational programs. Model-compilation owners derive
+artifact-neutral parameter transformations and representation policy. The
+lanes join when symbolic computational parameter references resolve through
+Transformation IR lineage to exact PEIR package terminals. GGUF and artifact
+owners serialize, parse, authenticate, admit, and map complete artifacts.
+Runtime owners import the authenticated binding, specialize it for a real
+deployment, prepare immutable executable resources, and isolate mutable
+execution sessions. Backends execute admitted operations; they do not
+reconstruct model topology.
 
-The product levels are verified source, logical model, family projection,
-Transformation IR, quantization decisions, physical variant, Physical
-Execution IR, complete artifact, admission, materialization, runtime binding,
-deployment specialization, model-engine generation, mutable session, executable
-batch, request transaction, workload evidence, benchmark, and release
-qualification. These levels are identities and lifecycle boundaries, not
-aliases for directories.
+The product levels therefore form a fork and join rather than one sequence.
+The computation lane contains the sealed semantic aggregate, optional retained
+native typed module, and symbolic execution lowering.
+The parameter/package lane contains Transformation IR, transform binding,
+artifact lowering and representation decisions, emitted artifact, admission,
+artifact materialization, and PEIR package truth. Program-parameter join
+reconnects them before physical computational program construction, compiled
+model planning, runtime binding and deployment specialization, model-engine
+generation, mutable session, executable batch,
+request transaction, workload evidence, benchmark, and release qualification.
+These levels are identities and lifecycle boundaries, not aliases for
+directories, and current family completeness differs.
 
 ## Authority boundaries
 
@@ -90,11 +101,11 @@ aliases for directories.
 | Remote provider discovery and remote representation records | `src/accounts/`, `src/model/remote.c`, `include/yvex/catalog.h` |
 | Local acquired-source and admitted-package catalogs | `src/model/catalog.c`, `src/model/artifacts/`, `include/yvex/catalog.h` |
 | Family source facts, coverage and logical lowering | `src/model/families/` |
-| Artifact-neutral transformation and physical policy | `src/model/compilation/`, model compilation owners |
+| Artifact-neutral parameter transformation, transform binding and representation policy | `src/model/compilation/`, model compilation owners |
 | GGUF container, qtypes, writer, layout | `src/gguf/` |
-| Artifact snapshot, integrity, admission, and bounded artifact ranges | `src/artifact/` |
-| Backend-owned weight materialization | `src/model/materialization.c`, `include/yvex/materialization.h` |
-| Semantic/executable graph and state protocols | `src/graph/` |
+| Artifact snapshot, integrity, admission, bounded ranges, and package mapping/materialization session | `src/artifact/`, `include/yvex/internal/artifact.h` |
+| Backend/model executable weight materialization | `src/model/materialization.c`, `include/yvex/materialization.h` |
+| Semantic Model IR, native typed programs, execution lowering, physical programs and state protocols | `src/model/compilation/`, `src/ir/`, `src/graph/` |
 | Runtime binding, model engines, specialization, sessions, residency, scheduler | `src/runtime/` |
 | Device capability, memory, kernels, launch graphs | `src/backend/` |
 | Autoregressive composition | `src/runtime/generation.c` and typed generation owners |

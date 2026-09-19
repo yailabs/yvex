@@ -29,16 +29,26 @@ Known storage geometry does not imply a decoder, quantizer, emitter, compute
 kernel, complete artifact, or supported artifact.
 
 The logical model is independent of this artifact contract. An immutable
-transformation plan derives a physical model variant from exact logical source
-contributions under explicit format, precision, hardware, memory, quality, and
-workload constraints. An artifact serializes one such variant; GGUF is the
-v0.1.0 release lowering, not the identity of the logical model.
+Transformation IR describes exact logical source-to-terminal derivation. The
+current quant plan/physical variant selects one parameter representation under
+explicit policy, calibration and backend-compute feasibility; it is not a live
+deployment optimizer. An artifact serializes one such variant; GGUF is the
+v0.1.0 release lowering, not the identity of the logical model. Admission proves
+the emitted package and its lineage; it does not decide which representation
+should exist.
 
-A versioned Physical Execution IR is a downstream projection, not an artifact
-mutation. It binds terminal tensor and physical-variant identities to consumer,
-kernel layout, placement, activation, shape, backend and fallback decisions.
-If a backend needs a derived packed asset, that asset binds both the canonical
-artifact and Physical Execution IR identities and is never trusted by path.
+A versioned Physical Execution IR (PEIR) is a downstream package projection,
+not an artifact mutation or a deployment plan. PEIR v5 binds each authenticated
+terminal tensor and physical-variant identity to its canonical role and
+coordinates, qtype, row geometry, encoded range, alignment, consumer, stable
+package layout, sharing class, and terminal identity. It contains no live
+backend, device, activation, kernel, placement, fallback, or residency choice.
+
+Deployment specialization later combines those package facts with one real
+backend and device. Backend-owned executable materialization may create derived
+packed resources inside that deployment lifetime. Such resources are not PEIR
+or canonical artifact bytes unless separately published and authenticated as a
+package asset; they are never trusted by path.
 
 Current DeepSeek physical variants and their admitted evidence are recorded in
 the [family technical record](../model-families/deepseek-v4-flash.md).

@@ -127,10 +127,21 @@ Program P is not a GGUF picker or merely a quantizer. It should turn immutable
 source plus an execution objective into a reproducible physical recipe whose
 quality, resource use and performance are measured together.
 
-The implemented deterministic lower half is verified source → semantic family
-projection → Transformation IR → physical policy/variant → artifact construction
-→ admission → runtime binding. Semantic breadth remains partial. The missing
-strategic layer is the search/optimization loop **above physical policy**.
+That future recipe coordinates three coupled but separately owned decision
+spaces: parameter/package representation, physical computational realization
+and target choice, and deployment/resource realization. Program P may search
+or coordinate candidates across those spaces, but their identities remain
+distinct. It does not absorb model semantics, artifact admission, runtime
+residency or backend-local equivalent implementation choices.
+
+The implemented deterministic parameter/package lane is verified source →
+family semantic projection → Transformation IR → transform binding/artifact
+lowering → quant plan/physical variant → artifact construction → admission and
+materialization → PEIR package truth. It joins the separately lowered symbolic
+computational program to construct a parameter-bound physical program before
+the compiled model plan and runtime binding.
+Semantic breadth remains partial. The missing strategic layer is coordinated
+search/optimization across the separately owned physical decision spaces.
 
 ```text
 Immutable source: Safetensors + configuration + tokenizer
@@ -149,9 +160,12 @@ Immutable source: Safetensors + configuration + tokenizer
 ```
 
 This is a **target search architecture**, not an implemented automatic service.
-Search may choose legal representations and admitted implementations; it may
-not invent kernels, change source meaning or move backend placement authority
-into family interpretation.
+Search may propose legal representations, admitted computational target choices
+and deployment/resource candidates. Deterministic owners must still emit,
+identify, admit and execute each selected result at its own boundary. Search may
+not invent kernels, change source meaning, redefine artifact truth, take runtime
+residency ownership or move backend-local placement authority into family
+interpretation.
 
 | Optimization dimension | Candidate decision space |
 | --- | --- |
@@ -1265,9 +1279,13 @@ additional language assumptions.
 
 ### P — Physical Model Compiler
 
-**Purpose:** source plus workload/hardware/quality constraints become a measured reproducible artifact.
+**Purpose:** source plus workload/hardware/quality constraints become measured,
+reproducible parameter, computational-target and deployment/resource choices
+with separate identities and owners.
 
-**Established foundation:** semantic projection, Transformation IR, physical policy/variant, GGUF writer, admission and measurement.
+**Established foundation:** semantic projection, Transformation IR and binding,
+quant plan/physical variant, GGUF writer, admission/materialization, PEIR package
+truth, physical computational programs, runtime specialization and measurement.
 
 **Open maturity boundaries:** sensitivity/calibration, feasibility filtering, candidate builds, Pareto selection and recipe evidence; future B1 weight/E precision/layout, derived materializations and target/backend compatibility.
 
@@ -1275,7 +1293,9 @@ additional language assumptions.
 
 **Material advance:** reproducible constrained search feeds deterministic construction and independent final qualification.
 
-**Does not own:** model suitability, task selection, runtime residency, N's cognitive-state realization meaning or the release gate itself.
+**Does not own:** model semantics or suitability, task selection, artifact
+admission truth, runtime residency/lifetimes, backend-local equivalent launch
+choices, N's cognitive-state realization meaning or the release gate itself.
 
 **Additional unscheduled A11 target:** Conditional-table row qtype/layout, file-backed and cacheable representations, runtime-state qtype/layout and phase-specific representation choices require admitted backend compatibility.
 

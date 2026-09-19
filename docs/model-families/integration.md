@@ -105,6 +105,14 @@ runtime consumes the sealed compiled plan and common graph capability. Family
 adapter callbacks terminate at compilation and are not resolved again by
 model-open or generation.
 
+The model-family projection may contribute the sealed Semantic Model IR
+aggregate and its source-to-terminal Transformation IR recipe; the graph-family
+projection may contribute a native typed `yvex_ir_module` or another admitted
+canonical schedule. Those products are distinct even when one aggregate retains
+the typed module. Generic compilation owns execution lowering, parameter join,
+PEIR validation and physical program construction. A family does not own GGUF,
+artifact materialization, deployment specialization or a parallel runtime.
+
 Across those projections the family may own:
 
 - architecture class and layer schedule;

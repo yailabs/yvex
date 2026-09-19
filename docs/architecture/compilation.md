@@ -8,12 +8,14 @@ artifact requirements are in the [Artifact and Admission Contract](../contracts/
 
 ## Pipeline
 
-![Source facts become sealed transformation and physical plans, an admitted artifact and binding, a READY deployment and finally a generation-scoped loaded engine.](../diagrams/physical_compilation.svg)
+![Family interpretation projects coordinated computation and parameter-package compilation lanes. Exact parameter lineage and PEIR package terminals join the physical computational program before runtime binding and deployment specialization.](../diagrams/physical_compilation.svg)
 
-*Figure 2 — Source-to-engine promotion. Source, artifact, binding, deployment
-and engine are distinct identities/lifetimes. READY is current compatibility;
-load revalidates resources and seals specialization for a real device. Missing
-semantics or resources refuse at their owner, never imply the next stage.*
+*Figure 2 — Coordinated compilation lanes and source-to-engine promotion.
+Computation meaning and parameter/package derivation remain distinct until the
+identity-preserving parameter join. Package truth, runtime binding, deployment
+specialization and engine resources are also distinct identities/lifetimes.
+Missing semantics or resources refuse at their owner, never imply the next
+stage.*
 [Editable source](../diagrams/physical_compilation.json).
 
 ## Source intake and trust
@@ -42,6 +44,19 @@ roles. The transformation plan then binds every terminal output tensor to its
 ordered source contributions and typed operations. Plan construction is
 artifact-neutral and payload-free.
 
+Current compilation has two coordinated concerns. The **computation lane**
+projects family semantics into a sealed Semantic Model IR, may retain a native
+typed `yvex_ir_module`, lowers legal entrypoints to `yvex_program_execution`,
+then joins exact package parameters before selecting admitted implementations
+in `yvex_program_physical`. The **parameter/package lane** projects verified
+source through Transformation IR,
+transform binding, artifact lowering, representation/quant decisions, writer,
+admission and artifact materialization into PEIR package terminal truth. The
+lanes join when each symbolic computational parameter resolves through its
+Transformation IR lineage to one exact PEIR/package realization. They do not
+form an undifferentiated IR-to-GGUF pipeline, and family coverage is not
+identical.
+
 Each family projects immutable source and terminal recipes through the bounded
 compiler sink. The generic compilation owner alone allocates mutable builder
 state, assigns canonical value and node ordinals, validates expected source and
@@ -58,10 +73,22 @@ repeating family constants. Synthetic descriptor tests vary the principal
 dimensions and mutate the source projection after sealing to prove that the
 common path remains model-derived and immutable.
 
+`yvex_semantic_model_ir` and `yvex_ir_module` are not synonyms. The former is
+the sealed model-semantic aggregate: it carries family adapter identity,
+execution descriptor, numeric contract, attention/decoder/composite facts,
+references and semantic identities. The latter is the native typed
+computational-language object with dimensions, types, functions, blocks,
+operations, values, effects and explicit state; a Semantic Model IR may retain
+one as its `program`. Qwen and MiniMax currently use native typed programs for
+their admitted computational paths, DeepSeek retains a canonical operator
+schedule alongside sealed semantic and derived implementation records, and
+Mamba2 establishes representability without an admitted executable target.
+
 The compiler-facing family adapter supplies one bounded graph compiler and the
 family's operator-composition callback. Family projectors are consumed only
 while sealing Semantic Model IR. Generic graph lowering reads the sealed
-attention topology and converts it into graph-owned physical plan records;
+attention topology and converts it into derived attention, MoE and transformer
+implementation-plan records;
 generic graph code does not enumerate a process-global family registry or
 choose a transformer-shaped composition. Family projection callbacks are
 absent from runtime model-open and execution.
@@ -73,11 +100,13 @@ qtype policy from source names.
 
 ## Physical policy
 
-A physical variant resolves storage dtype/qtype, row geometry, layout,
-alignment, aggregation, and placement constraints for every terminal tensor.
-The policy is part of the variant identity. Quantization codecs and qtype
+A physical variant resolves physical class, storage qtype, tensor and row
+geometry, encoded size, approximation/calibration obligations, policy identity,
+and backend-compute availability for every terminal tensor. The requested
+backend currently filters candidate feasibility; it does not turn the variant
+into a device-specific deployment optimization. Quantization codecs and qtype
 geometry are canonical owners, while selection of a qtype for one tensor is a
-physical-policy decision.
+parameter-representation decision.
 
 Writer and runtime owners consume the resolved variant. They do not pick a
 different representation for convenience.
@@ -114,12 +143,18 @@ facts, every required tensor role, qtype support, source/derivation/variant
 identities, and exact file identity. Structural GGUF validity is necessary but
 not sufficient.
 
-Materialization consumes terminal roles and package decisions to produce checked
-file-backed, host-canonical, CUDA-addressable-host, device, or staged resources.
-It does not import a concrete model family, choose a deployment implementation,
-infer consumers from tensor names, execute a graph, or establish support for a
-model. A derived representation remains a typed engine resource unless its
-bytes are intentionally published as a separately authenticated package asset.
+Artifact materialization builds and commits an authenticated package mapping:
+checked tensor bindings and bounded access to file-backed package ranges used by
+the runtime descriptor, PEIR construction and runtime binding. It does not
+import a concrete model family, choose a deployment implementation, infer
+consumers from tensor names, execute a graph, or establish model support.
+
+Backend/model weight materialization is a separate later mechanism. It turns
+admitted package bindings into host, CUDA-addressable-host, device, staged, or
+derived executable resources for an engine deployment. Its resources do not
+become artifact materialization records or PEIR facts. A derived representation
+becomes package truth only if it is deliberately emitted and admitted as a
+separately authenticated asset.
 
 ## Runtime binding
 
@@ -250,36 +285,51 @@ scope. Individual model architectures and operations still require their own
 qualification; the pipeline does not claim universal family support.
 
 ```text
-verified source -> import -> Semantic Model IR -> Program / Execution IR
-                                                    |
-                     Transformation IR + target machine
-                                                    |
-                                                    v
-                     Physical IR -> Target / Schedule IR
-                                                    |
-                                                    v
-                     executable binding -> runtime
-                                              |
-                                   state providers + backends
-                                              |
-                                    typed results + evidence
+verified source -> family interpretation
+                        |                 |
+                        v                 v
+             sealed Semantic Model IR    Transformation IR
+                        |                 -> transform binding / artifact lowering
+             retained native typed       -> representation plan / writer
+             program when present        -> artifact admission / materialization
+                        |                 -> PEIR package terminal truth
+             execution lowering                    |
+                        +------------+--------------+
+                                     v
+                      exact program-parameter join
+                                     |
+                      physical computational program
+                                     |
+                          compiled model plan
+                                     |
+                            runtime binding
+                                     |
+                 deployment specialization / engine
+                                     |
+                      state providers + backends
+                                     |
+                       typed results + evidence
 ```
 
 | Boundary | Required unique authority | Current cutover evidence |
 | --- | --- | --- |
 | Verified source / import | Source identity, configuration, tokenizer, parameter roles and component relationships | Mamba2 source inspection and Qwen text compilation project typed programs |
-| Semantic Model IR | Modules/functions/blocks, operations/values/types, shapes/attributes/effects and explicit state dependencies | Qwen programs, DeepSeek typed semantic topology/numeric obligations, MiniMax component programs and pure-SSM representability are compiler-owned. |
-| Program / Execution IR | Legalized components, entrypoints, dependencies and state flow | Physical SSA owns Qwen/MiniMax program work; the canonical operator graph owns DeepSeek target/draft schedule, state edges and layer dependencies. Executable general regions remain later breadth. |
-| Transformation IR + machine | Parameter derivation and target feasibility, without changing model meaning | Exact source constants join through sealed identity transforms; general transform legalization and target matching remain pending |
-| Physical IR | Dtype/qtype, layout, packing, alignment and sharing | Parameter joins and BF16 forward operations with distinct recurrent/KV state handles exist; general representation lowering remains pending |
-| Target / Schedule IR | Admitted physical work, dependencies, populations and placement | Serial SSA instructions, last-use reuse and exact populations own physical programs; DeepSeek runtime resolves each attention/MoE layer pair from the retained canonical graph rather than a family topology. |
+| Semantic Model IR | Sealed family/model aggregate, semantic identities, numeric obligations and optional retained native program | Qwen and MiniMax retain typed programs; DeepSeek retains semantic topology plus its operator schedule; pure-SSM representability is compiler-owned. |
+| Native typed program | Functions/blocks, operations/values/types, shapes/attributes/effects and explicit state dependencies, without payload or backend ownership | Current Qwen and MiniMax computational paths use `yvex_ir_module`; not every family exposes the same native-program breadth. |
+| Program Execution IR | Legalized entrypoints, compact value slots, producer dependencies, serial effect ordering and last-use boundaries while parameters remain symbolic | Qwen and MiniMax binding compilation consume this verified lowering. Calls require legalization and general executable regions/parallel scheduling remain later breadth. |
+| Transformation IR / binding / artifact lowering | Source-to-terminal parameter derivation and identity-bound source ranges, without model computation or payload reads during planning | Exact source constants retain sealed derivation; generic transform legalization remains bounded. |
+| Parameter representation plan | Dtype/qtype, row geometry, packing, alignment and package layout decisions | Current quant plan/physical variant is an implemented representation recipe, not a complete automatic Program P result. |
+| PEIR package terminal truth | Authenticated terminal roles, identities, qtypes, row geometry, encoded ranges, layout and sharing | Built from admitted artifact materialization and runtime-descriptor facts; no backend/device/activation/kernel/residency decision. |
+| Program-parameter join | One identity-preserving package realization for each used computational parameter | Transformation terminal lineage and PEIR decisions resolve symbolic constants before invocation; payload lookup is not deferred to execution. |
+| Physical computational program / target choice | Admitted operation implementations, dependencies, exact populations and physical value contracts after exact parameter join | Serial physical SSA owns Qwen/MiniMax program work; DeepSeek runtime resolves scheduled attention/MoE work from the retained canonical graph and separately authenticated implementation plans. |
 | Executable binding / runtime | Authenticate immutable execution truth; own engines/runners/sessions/scheduling/lifetimes | Runtime binding v16 and model-plan v8 carry canonical schedules plus physical programs/plans. Historical v3-v7 forms import at the schema boundary; warm execution does not invoke family importers. |
 | State providers / backends / evidence | Physical state mechanisms and CPU/CUDA execution publish typed results and observations | Existing owners and producer-owned transient-result lifetimes preserved |
 
-The retained canonical graph and physical plans answer different questions:
-the graph owns executable topology, dependencies and state flow; physical plans
-own admitted parameter/state geometry and numerical implementation facts. The
-runtime cross-checks rather than reconstructs these facts. Generation repetition
+The retained canonical graph, PEIR and physical computational programs answer
+different questions: the graph owns executable topology, dependencies and state
+flow; PEIR owns authenticated package terminal truth; physical programs and
+derived implementation plans own admitted computational work and numerical
+contracts. The runtime cross-checks rather than reconstructs these facts. Generation repetition
 remains runner policy above model forward computation. Native Cognitive State
 remains OPEN: typed computational state does not introduce semantic-state
 ingress or YAI authority into this compiler.
@@ -321,8 +371,9 @@ a runtime device-result publication generation, engine lease or checkpoint.
 | Parameter physical projection | Source-bound program constants joined to transformation terminals and physical package decisions | Compiler-owned terminal handles and a distinct identity; no payload access or target schedule |
 | Tensor program v1 | Verified pure rank-2 BF16 instructions, operand/result slots and admissible row populations | Retained bounded operator consumer and model-plan v5 import; not independently serialized in native v7 |
 | Physical program v1 | Typed token/tensor/state slots, exact parameter handles, admitted implementation contracts and serial dependencies | Native model-plan v8 forward/output/component consumers; older decoder/output compatibility normalizes once after binding authentication |
-| Operator schedule v1 | Canonical operation nodes, data/order/state edges, target/draft populations and semantic lineage | Model-plan v8 persists the exact schedule; DeepSeek runtime resolves layer work from it while physical plans supply admitted implementation facts |
-| Existing package physical / target forms | Representation, admitted package storage and deployment implementation selection | PEIR/binding/specialization remain distinct from program meaning and backend launch mechanics |
+| Operator schedule v1 | Canonical operation nodes, data/order/state edges, target/draft populations and semantic lineage | Model-plan v8 persists the exact schedule; DeepSeek runtime resolves layer work from it while separately authenticated implementation plans supply admitted numerical contracts |
+| PEIR v5 package projection | Authenticated terminal roles, qtypes, encoded ranges, stable layout and sharing | Persisted in runtime binding; contains no deployment specialization or backend launch choice |
+| Physical program / target specialization | Parameter-bound computational work and admitted implementation substitutions | Physical-program identity remains distinct from PEIR, deployment specialization and backend-local launch mechanics |
 
 Semantic tensors contain scalar type and logical shape, not GGUF qtypes, CUDA
 layouts or alignment. Types include scalars, tensors, semantic-domain state,
@@ -642,9 +693,12 @@ Semantic identity, execution identity and physical-program identity remain
 separate. Unsupported types, effects, operations, shapes or duplicate output
 bindings refuse during compilation/import.
 
-Compiled model-plan **v7** persists the physical token-forward and optional output
-programs inside runtime binding v16, without a redundant standalone FFN program. Its
-version is independent from package PEIR v5 and physical-program binary v1.
+Compiled model-plan **v8** persists the physical token-forward and optional output
+programs plus the canonical operator schedule inside runtime binding v16, without
+a redundant standalone FFN program. Model-plan v7 introduced the physical
+forward/output representation and remains an authenticated import format; v8 is
+the current native producer. Its version is independent from package PEIR v5
+and physical-program binary v1.
 Field encoding and semantic/execution/parameter/physical identities are separate;
 the complete Semantic IR module is not persisted in the binding.
 [`decoder_import.c`](../../src/graph/decoder_import.c) translates authenticated
