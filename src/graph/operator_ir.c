@@ -3,6 +3,8 @@
 
 #include <yvex/internal/graph.h>
 
+#include <limits.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -10,6 +12,7 @@
 #define OPERATOR_GRAPH_MAX_EDGES 4194304ull
 
 struct yvex_operator_graph_ir {
+    atomic_uint references;
     yvex_operator_graph_summary summary;
     yvex_operator_node *nodes;
     yvex_operator_edge *edges;
@@ -166,6 +169,7 @@ int yvex_operator_graph_ir_seal(
     graph = (yvex_operator_graph_ir *)calloc(1u, sizeof(*graph));
     if (!graph) return operator_refuse(err, YVEX_ERR_NOMEM,
                                        "operator graph allocation failed");
+    atomic_init(&graph->references, 1u);
     graph->nodes = (yvex_operator_node *)calloc(
         (size_t)request->node_count, sizeof(*graph->nodes));
     graph->edges = request->edge_count
@@ -230,16 +234,318 @@ const yvex_operator_node *yvex_operator_graph_ir_node_at(
                ? &graph->nodes[index] : NULL;
 }
 
+const yvex_operator_edge *yvex_operator_graph_ir_edge_at(
+    const yvex_operator_graph_ir *graph, unsigned long long index)
+{
+    return graph && index < graph->summary.edge_count
+               ? &graph->edges[index] : NULL;
+}
+
+yvex_operator_graph_ir *yvex_operator_graph_ir_retain(
+    const yvex_operator_graph_ir *graph, yvex_error *err)
+{
+    yvex_operator_graph_ir *owner = (yvex_operator_graph_ir *)graph;
+    unsigned int previous;
+    if (!owner) {
+        operator_refuse(err, YVEX_ERR_INVALID_ARG,
+                        "operator graph retain requires one sealed owner");
+        return NULL;
+    }
+    previous = atomic_fetch_add_explicit(
+        &owner->references, 1u, memory_order_relaxed);
+    if (!previous || previous == UINT_MAX) {
+        (void)atomic_fetch_sub_explicit(
+            &owner->references, 1u, memory_order_relaxed);
+        operator_refuse(err, YVEX_ERR_STATE,
+                        "operator graph reference count is invalid");
+        return NULL;
+    }
+    yvex_error_clear(err);
+    return owner;
+}
+
+static int operator_wire_put_u64(yvex_core_bytes *bytes,
+                                 unsigned long long value)
+{
+    unsigned char encoded[8];
+    unsigned int index;
+    for (index = 0u; index < 8u; ++index)
+        encoded[index] = (unsigned char)(value >> (index * 8u));
+    return yvex_core_bytes_append(bytes, encoded, sizeof(encoded));
+}
+
+static int operator_wire_get_u64(const unsigned char *data, size_t count,
+                                 size_t *offset,
+                                 unsigned long long *value)
+{
+    unsigned long long decoded = 0ull;
+    unsigned int index;
+    if (!data || !offset || !value || *offset > count ||
+        count - *offset < 8u) return 0;
+    for (index = 0u; index < 8u; ++index)
+        decoded |= (unsigned long long)data[*offset + index] << (index * 8u);
+    *offset += 8u;
+    *value = decoded;
+    return 1;
+}
+
+static int operator_wire_put_identity(yvex_core_bytes *bytes,
+                                      const char *identity)
+{
+    return yvex_sha256_hex_valid(identity) &&
+           yvex_core_bytes_append(bytes, identity, YVEX_SHA256_HEX_BYTES - 1u);
+}
+
+static int operator_wire_get_identity(
+    const unsigned char *data, size_t count, size_t *offset,
+    char identity[YVEX_SHA256_HEX_BYTES])
+{
+    if (!data || !offset || !identity || *offset > count ||
+        count - *offset < YVEX_SHA256_HEX_BYTES - 1u) return 0;
+    memset(identity, 0, YVEX_SHA256_HEX_BYTES);
+    memcpy(identity, data + *offset, YVEX_SHA256_HEX_BYTES - 1u);
+    *offset += YVEX_SHA256_HEX_BYTES - 1u;
+    return yvex_sha256_hex_valid(identity);
+}
+
+int yvex_operator_graph_ir_encode(
+    const yvex_operator_graph_ir *graph, yvex_core_bytes *bytes,
+    yvex_error *err)
+{
+    static const char domain[] = "yvex.operator-graph.v1";
+    const yvex_operator_graph_summary *summary =
+        yvex_operator_graph_ir_summary(graph);
+    unsigned long long index;
+    if (!summary || !bytes ||
+        !operator_wire_put_u64(bytes, sizeof(domain) - 1u) ||
+        !yvex_core_bytes_append(bytes, domain, sizeof(domain) - 1u) ||
+        !operator_wire_put_u64(bytes, summary->schema_version) ||
+        !operator_wire_put_u64(bytes, summary->family_adapter_id) ||
+        !operator_wire_put_u64(bytes, summary->family_adapter_version) ||
+        !operator_wire_put_u64(bytes, summary->maximum_context) ||
+        !operator_wire_put_u64(bytes, summary->node_count) ||
+        !operator_wire_put_u64(bytes, summary->edge_count) ||
+        !operator_wire_put_u64(bytes, summary->target_layer_count) ||
+        !operator_wire_put_u64(bytes, summary->draft_layer_count) ||
+        !operator_wire_put_u64(bytes, summary->state_class_mask) ||
+        !operator_wire_put_identity(bytes, summary->semantic_model_identity) ||
+        !operator_wire_put_identity(bytes, summary->identity))
+        return operator_refuse(err, YVEX_ERR_NOMEM,
+                               "operator graph encoding failed");
+    for (index = 0ull; index < summary->node_count; ++index) {
+        const yvex_operator_node *node = &graph->nodes[index];
+        const unsigned long long values[] = {
+            node->schema_version, node->ordinal, node->kind, node->scope,
+            node->layer_index, node->predictor_index, node->input_width,
+            node->output_width, node->state_read_mask,
+            node->state_write_mask, node->numeric_contract};
+        size_t value;
+        for (value = 0u; value < sizeof(values) / sizeof(values[0]); ++value)
+            if (!operator_wire_put_u64(bytes, values[value])) goto failure;
+        if (!operator_wire_put_identity(bytes, node->attribute_identity) ||
+            !operator_wire_put_identity(bytes, node->identity)) goto failure;
+    }
+    for (index = 0ull; index < summary->edge_count; ++index) {
+        const yvex_operator_edge *edge = &graph->edges[index];
+        const unsigned long long values[] = {
+            edge->schema_version, edge->ordinal, edge->source_node,
+            edge->target_node, edge->kind, edge->state_class};
+        size_t value;
+        for (value = 0u; value < sizeof(values) / sizeof(values[0]); ++value)
+            if (!operator_wire_put_u64(bytes, values[value])) goto failure;
+        if (!operator_wire_put_identity(bytes, edge->identity)) goto failure;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+failure:
+    return operator_refuse(err, YVEX_ERR_NOMEM,
+                           "operator graph encoding failed");
+}
+
+int yvex_operator_graph_ir_decode(
+    yvex_operator_graph_ir **out, const unsigned char *data, size_t count,
+    yvex_error *err)
+{
+    static const char domain[] = "yvex.operator-graph.v1";
+    yvex_operator_graph_ir *graph = NULL;
+    unsigned long long values[11], length, index, observed_state = 0ull;
+    char expected[YVEX_SHA256_HEX_BYTES];
+    size_t offset = 0u, value;
+    int rc = YVEX_OK;
+    if (out) *out = NULL;
+    if (!out || !data || !operator_wire_get_u64(data, count, &offset, &length) ||
+        length != sizeof(domain) - 1u || offset > count ||
+        count - offset < length || memcmp(data + offset, domain, (size_t)length))
+        return operator_refuse(err, YVEX_ERR_FORMAT,
+                               "operator graph header is malformed");
+    offset += (size_t)length;
+    for (value = 0u; value < 9u; ++value)
+        if (!operator_wire_get_u64(data, count, &offset, &values[value]))
+            return operator_refuse(err, YVEX_ERR_FORMAT,
+                                   "operator graph summary is truncated");
+    if (values[0] != YVEX_OPERATOR_GRAPH_SCHEMA_V1 || !values[1] ||
+        !values[2] || !values[3] || !values[4] ||
+        values[4] > OPERATOR_GRAPH_MAX_NODES ||
+        values[5] > OPERATOR_GRAPH_MAX_EDGES ||
+        values[4] > SIZE_MAX / sizeof(*graph->nodes) ||
+        values[5] > SIZE_MAX / sizeof(*graph->edges))
+        return operator_refuse(err, YVEX_ERR_FORMAT,
+                               "operator graph summary is invalid");
+    graph = calloc(1u, sizeof(*graph));
+    if (!graph) return operator_refuse(err, YVEX_ERR_NOMEM,
+                                       "operator graph allocation failed");
+    atomic_init(&graph->references, 1u);
+    graph->summary.schema_version = (unsigned int)values[0];
+    graph->summary.family_adapter_id = values[1];
+    graph->summary.family_adapter_version = values[2];
+    graph->summary.maximum_context = values[3];
+    graph->summary.node_count = values[4];
+    graph->summary.edge_count = values[5];
+    graph->summary.target_layer_count = values[6];
+    graph->summary.draft_layer_count = values[7];
+    graph->summary.state_class_mask = values[8];
+    graph->nodes = calloc((size_t)graph->summary.node_count,
+                          sizeof(*graph->nodes));
+    graph->edges = graph->summary.edge_count
+                       ? calloc((size_t)graph->summary.edge_count,
+                                sizeof(*graph->edges))
+                       : NULL;
+    if (!graph->nodes || (graph->summary.edge_count && !graph->edges)) {
+        rc = YVEX_ERR_NOMEM;
+        goto failure;
+    }
+    if (
+        !operator_wire_get_identity(data, count, &offset,
+                                    graph->summary.semantic_model_identity) ||
+        !operator_wire_get_identity(data, count, &offset, expected)) {
+        rc = YVEX_ERR_FORMAT;
+        goto failure;
+    }
+    for (index = 0ull; rc == YVEX_OK &&
+         index < graph->summary.node_count; ++index) {
+        yvex_operator_node *node = &graph->nodes[index];
+        char encoded[YVEX_SHA256_HEX_BYTES];
+        for (value = 0u; value < 11u; ++value)
+            if (!operator_wire_get_u64(data, count, &offset, &values[value])) {
+                rc = YVEX_ERR_FORMAT;
+                break;
+            }
+        if (rc != YVEX_OK || values[0] > UINT_MAX || values[2] > UINT_MAX ||
+            values[3] > UINT_MAX || values[10] > UINT_MAX ||
+            !operator_wire_get_identity(data, count, &offset,
+                                        node->attribute_identity) ||
+            !operator_wire_get_identity(data, count, &offset, encoded)) {
+            rc = YVEX_ERR_FORMAT;
+            break;
+        }
+        node->schema_version = (unsigned int)values[0];
+        node->ordinal = values[1]; node->kind = (yvex_operator_kind)values[2];
+        node->scope = (yvex_tensor_scope)values[3];
+        node->layer_index = values[4]; node->predictor_index = values[5];
+        node->input_width = values[6]; node->output_width = values[7];
+        node->state_read_mask = values[8]; node->state_write_mask = values[9];
+        node->numeric_contract = (yvex_operator_numeric_contract)values[10];
+        rc = operator_node_seal(
+            node, graph->summary.semantic_model_identity, err);
+        if (rc == YVEX_OK && strcmp(node->identity, encoded)) rc = YVEX_ERR_FORMAT;
+        observed_state |= node->state_read_mask | node->state_write_mask;
+    }
+    for (index = 0ull; rc == YVEX_OK && index < graph->summary.edge_count; ++index) {
+        yvex_operator_edge *edge = &graph->edges[index];
+        char encoded[YVEX_SHA256_HEX_BYTES];
+        for (value = 0u; value < 6u; ++value)
+            if (!operator_wire_get_u64(data, count, &offset, &values[value])) {
+                rc = YVEX_ERR_FORMAT;
+                break;
+            }
+        if (rc != YVEX_OK || values[0] > UINT_MAX || values[4] > UINT_MAX ||
+            values[5] > UINT_MAX ||
+            !operator_wire_get_identity(data, count, &offset, encoded)) {
+            rc = YVEX_ERR_FORMAT;
+            break;
+        }
+        edge->schema_version = (unsigned int)values[0];
+        edge->ordinal = values[1]; edge->source_node = values[2];
+        edge->target_node = values[3];
+        edge->kind = (yvex_operator_edge_kind)values[4];
+        edge->state_class = (yvex_model_state_class)values[5];
+        rc = operator_edge_seal(
+            edge, graph->nodes, graph->summary.node_count, err);
+        if (rc == YVEX_OK && strcmp(edge->identity, encoded)) rc = YVEX_ERR_FORMAT;
+    }
+    if (rc == YVEX_OK && (offset != count ||
+        observed_state != graph->summary.state_class_mask)) rc = YVEX_ERR_FORMAT;
+    if (rc == YVEX_OK) rc = operator_graph_identity(graph, err);
+    if (rc == YVEX_OK && strcmp(graph->summary.identity, expected))
+        rc = YVEX_ERR_FORMAT;
+    if (rc == YVEX_OK) {
+        *out = graph;
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+failure:
+    yvex_operator_graph_ir_close(&graph);
+    return operator_refuse(err, rc == YVEX_ERR_NOMEM ? rc : YVEX_ERR_FORMAT,
+                           "operator graph encoding is inconsistent");
+}
+
+int yvex_operator_graph_ir_transformer_layer(
+    const yvex_operator_graph_ir *graph, int draft,
+    unsigned long long layer_ordinal,
+    const yvex_operator_node **attention,
+    const yvex_operator_node **feed_forward, yvex_error *err)
+{
+    unsigned long long index, ordinal = 0ull;
+    if (attention) *attention = NULL;
+    if (feed_forward) *feed_forward = NULL;
+    if (!graph || (draft != 0 && draft != 1) || !attention || !feed_forward)
+        return operator_refuse(err, YVEX_ERR_INVALID_ARG,
+                               "execution schedule layer query is invalid");
+    for (index = 0ull; index < graph->summary.node_count; ++index) {
+        const yvex_operator_node *node = &graph->nodes[index];
+        int node_draft = node->scope == YVEX_TENSOR_SCOPE_DRAFT;
+        if (node_draft != draft || node->kind != YVEX_OPERATOR_ATTENTION)
+            continue;
+        if (ordinal++ != layer_ordinal) continue;
+        *attention = node;
+        if (index + 1ull < graph->summary.node_count &&
+            graph->nodes[index + 1ull].kind == YVEX_OPERATOR_MOE &&
+            graph->nodes[index + 1ull].scope == node->scope &&
+            graph->nodes[index + 1ull].layer_index == node->layer_index)
+            *feed_forward = &graph->nodes[index + 1ull];
+        break;
+    }
+    if (!*attention || !*feed_forward)
+        return operator_refuse(err, YVEX_ERR_FORMAT,
+                               "compiled schedule lacks an attention/MoE layer pair");
+    for (index = 0ull; index < graph->summary.edge_count; ++index) {
+        const yvex_operator_edge *edge = &graph->edges[index];
+        if (edge->kind == YVEX_OPERATOR_EDGE_DATA &&
+            edge->source_node == (*attention)->ordinal &&
+            edge->target_node == (*feed_forward)->ordinal) {
+            yvex_error_clear(err);
+            return YVEX_OK;
+        }
+    }
+    *attention = NULL;
+    *feed_forward = NULL;
+    return operator_refuse(err, YVEX_ERR_FORMAT,
+                           "compiled schedule layer dependency is absent");
+}
+
 void yvex_operator_graph_ir_close(yvex_operator_graph_ir **graph)
 {
     yvex_operator_graph_ir *owner;
     if (!graph || !*graph) return;
     owner = *graph;
+    *graph = NULL;
+    if (atomic_fetch_sub_explicit(
+            &owner->references, 1u, memory_order_acq_rel) != 1u)
+        return;
     free(owner->edges);
     free(owner->nodes);
     memset(owner, 0, sizeof(*owner));
     free(owner);
-    *graph = NULL;
 }
 
 typedef struct {

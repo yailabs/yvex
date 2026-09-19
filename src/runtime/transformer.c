@@ -9,6 +9,7 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/device_view.h>
 #include <yvex/internal/execution_observation.h>
+#include <yvex/internal/operator_graph.h>
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/runtime.h>
 #include <yvex/internal/program_stage.h>
@@ -25,6 +26,7 @@ struct yvex_runtime_transformer_context {
     yvex_runtime_transformer_options options;
     yvex_runtime_moe_context *moe;
     const yvex_transformer_plan *plan;
+    const yvex_operator_graph_ir *schedule;
     const yvex_program_physical *final_program, *feature_program;
     yvex_program_stage *final_stage, *final_reference, *feature_stage, *feature_reference;
     const yvex_program_physical *post_program;
@@ -97,6 +99,16 @@ static int transformer_runtime_refuse(yvex_error *err, yvex_status status, const
 {
     yvex_error_set(err, status, "runtime.transformer", reason);
     return status;
+}
+static unsigned long long transformer_schedule_layer_count(
+    const yvex_runtime_transformer_context *context)
+{
+    const yvex_operator_graph_summary *summary =
+        yvex_operator_graph_ir_summary(context ? context->schedule : NULL);
+    return !summary ? 0ull
+                    : context->options.tensor_scope == YVEX_TENSOR_SCOPE_DRAFT
+                          ? summary->draft_layer_count
+                          : summary->target_layer_count;
 }
 static const yvex_backend_transformer_operations *transformer_backend_operations(
     const yvex_backend *backend, yvex_error *err)
@@ -751,6 +763,7 @@ int yvex_runtime_transformer_execute_block(
     const yvex_transformer_plan_summary *s = context ? yvex_transformer_plan_summary_get(context->plan) : NULL;
     const yvex_moe_plan *moe_plan = context ? yvex_runtime_moe_context_plan(context->moe) : NULL;
     const yvex_moe_layer_plan *layer = moe_plan ? yvex_moe_plan_layer_at(moe_plan, layer_ordinal) : NULL;
+    const yvex_operator_node *attention_work = NULL, *moe_work = NULL;
     yvex_sha256 output_hash, identity_hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     runtime_engine_moe_request moe_request = {0};
@@ -762,7 +775,19 @@ int yvex_runtime_transformer_execute_block(
     int normal_cuda;
     int rc = YVEX_OK;
     if (result) memset(result, 0, sizeof(*result));
+    if (context && yvex_operator_graph_ir_transformer_layer(
+            context->schedule,
+            context->options.tensor_scope == YVEX_TENSOR_SCOPE_DRAFT,
+            layer_ordinal, &attention_work, &moe_work, err) != YVEX_OK)
+        return yvex_error_code(err);
     if (!context || !s || !layer || !token_ids || !token_count || !attention ||
+        !attention_work || !moe_work ||
+        attention_work->layer_index != layer->layer_index ||
+        moe_work->layer_index != layer->layer_index ||
+        attention_work->input_width != s->hidden_width ||
+        attention_work->output_width != s->hidden_width ||
+        moe_work->input_width != s->hidden_width ||
+        moe_work->output_width != s->hidden_width ||
         provenance > YVEX_EXECUTION_BATCH_COMPILED_COMPATIBLE ||
         phase >= YVEX_EXECUTION_PHASE_COUNT || !attention->complete ||
         attention->layer_index != layer->layer_index ||
@@ -977,9 +1002,10 @@ static int transformer_layer_evidence(void *opaque, yvex_backend_kind backend,
     chunk->activation.layer_ordinal = chunk->layer_ordinal;
     rc = transformer_feature_capture(chunk, chunk->layer_ordinal - 1ull, err);
     if (rc != YVEX_OK) return rc;
-    if (chunk->layer_ordinal == s->layer_count)
+    if (chunk->layer_ordinal == transformer_schedule_layer_count(context))
         chunk->result->final_weight_bytes += context->final_weight_bytes;
-    if (chunk->layer_ordinal == s->layer_count && backend == YVEX_BACKEND_KIND_CUDA) {
+    if (chunk->layer_ordinal == transformer_schedule_layer_count(context) &&
+        backend == YVEX_BACKEND_KIND_CUDA) {
         unsigned long long expanded_bytes = chunk->token_count * s->expanded_width * sizeof(float);
         unsigned long long hidden_bytes = chunk->token_count * s->hidden_width * sizeof(float);
         unsigned long long started_ns = yvex_core_monotonic_ns();
@@ -1041,7 +1067,7 @@ static int transformer_layer_evidence(void *opaque, yvex_backend_kind backend,
                         facts.device_synchronizations), rc, err);
         return rc;
     }
-    if (chunk->layer_ordinal == s->layer_count)
+    if (chunk->layer_ordinal == transformer_schedule_layer_count(context))
         return transformer_final_host(chunk, err);
     return YVEX_OK;
 }
@@ -1458,9 +1484,12 @@ int yvex_runtime_transformer_context_open(yvex_runtime_transformer_context **out
     context->plan = options->tensor_scope == YVEX_TENSOR_SCOPE_DRAFT
                         ? context->model_view->draft_transformer
                         : context->model_view->transformer;
+    context->schedule = yvex_compiled_model_plan_operator_graph(
+        context->model_view->compiled_plan);
     plan_summary = yvex_transformer_plan_summary_get(context->plan);
     if (rc == YVEX_OK &&
-        (!plan_summary ||
+        (!plan_summary || !context->schedule ||
+         transformer_schedule_layer_count(context) != plan_summary->layer_count ||
          strcmp(plan_summary->transformer_plan_identity,
                 options->tensor_scope == YVEX_TENSOR_SCOPE_DRAFT
                     ? context->model_view->binding->draft_transformer_plan_identity
@@ -1844,9 +1873,10 @@ int yvex_runtime_transformer_execute(yvex_runtime_transformer_context *context,
         if (request->backend == YVEX_BACKEND_KIND_CUDA)
             rc = transformer_moe_complete(&chunk, 0, rc, err);
         if (rc == YVEX_OK &&
-            (chunk.layer_ordinal != plan->layer_count ||
+            (chunk.layer_ordinal != transformer_schedule_layer_count(context) ||
              chunk.feature_next != request->feature_layer_count ||
-                              attention_result.layers_executed != plan->layer_count))
+             attention_result.layers_executed !=
+                 transformer_schedule_layer_count(context)))
             rc = transformer_runtime_refuse(err, YVEX_ERR_STATE,
                                             "transformer chunk skipped one or more layers");
         if (rc == YVEX_OK) {

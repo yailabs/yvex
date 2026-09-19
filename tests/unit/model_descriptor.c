@@ -448,6 +448,40 @@ static int test_compiled_session_state(const yvex_compiled_model_plan *plan)
     return 0;
 }
 
+static int test_operator_graph_wire(const yvex_operator_graph_ir *graph)
+{
+    yvex_operator_graph_ir *decoded = NULL, *rejected = NULL, *retained = NULL;
+    yvex_core_bytes wire = {.maximum = 1024u * 1024u};
+    const yvex_operator_graph_summary *expected =
+        yvex_operator_graph_ir_summary(graph);
+    yvex_error err = {0};
+    YVEX_TEST_ASSERT(
+        expected &&
+            yvex_operator_graph_ir_encode(graph, &wire, &err) == YVEX_OK &&
+            wire.count != 0u &&
+            yvex_operator_graph_ir_decode(
+                &decoded, wire.data, wire.count, &err) == YVEX_OK &&
+            strcmp(yvex_operator_graph_ir_summary(decoded)->identity,
+                   expected->identity) == 0 &&
+            yvex_operator_graph_ir_summary(decoded)->node_count ==
+                expected->node_count &&
+            yvex_operator_graph_ir_summary(decoded)->edge_count ==
+                expected->edge_count &&
+            yvex_operator_graph_ir_edge_at(decoded, 0ull) != NULL &&
+            (retained = yvex_operator_graph_ir_retain(decoded, &err)) == decoded,
+        "operator execution graph roundtrips with canonical identity and ownership");
+    yvex_operator_graph_ir_close(&retained);
+    wire.data[wire.count - 1u] ^= 1u;
+    YVEX_TEST_ASSERT(
+        yvex_operator_graph_ir_decode(
+            &rejected, wire.data, wire.count, &err) == YVEX_ERR_FORMAT &&
+            rejected == NULL,
+        "operator execution graph refuses mutated authenticated work");
+    yvex_operator_graph_ir_close(&decoded);
+    free(wire.data);
+    return 0;
+}
+
 static int test_compiled_forward_import(const yvex_decoder_plan *decoder,
     const yvex_program_physical *program, const yvex_physical_execution_ir *parameters, unsigned int schema)
 {
@@ -819,6 +853,8 @@ static int test_hybrid_decoder_semantics(void)
             yvex_operator_graph_ir_node_at(graph, 3ull)->state_write_mask ==
                 YVEX_MODEL_STATE_CLASS_BIT(YVEX_MODEL_STATE_SWA_RING),
         "hybrid operator graph preserves dense, KV, and recurrent ownership");
+    YVEX_TEST_ASSERT(test_operator_graph_wire(graph) == 0,
+                     "operator execution graph persistence contracts");
     YVEX_TEST_ASSERT(
         yvex_decoder_plan_compile(&plan, model, graph, &err) == YVEX_OK &&
             yvex_decoder_plan_summary_get(plan)->layer_count == 2ull &&

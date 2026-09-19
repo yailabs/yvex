@@ -106,6 +106,23 @@ const yvex_operator_graph_summary *yvex_operator_graph_ir_summary(
     const yvex_operator_graph_ir *graph);
 const yvex_operator_node *yvex_operator_graph_ir_node_at(
     const yvex_operator_graph_ir *graph, unsigned long long index);
+const yvex_operator_edge *yvex_operator_graph_ir_edge_at(
+    const yvex_operator_graph_ir *graph, unsigned long long index);
+yvex_operator_graph_ir *yvex_operator_graph_ir_retain(
+    const yvex_operator_graph_ir *graph, yvex_error *err);
+int yvex_operator_graph_ir_encode(
+    const yvex_operator_graph_ir *graph, yvex_core_bytes *bytes,
+    yvex_error *err);
+int yvex_operator_graph_ir_decode(
+    yvex_operator_graph_ir **out, const unsigned char *data, size_t count,
+    yvex_error *err);
+int yvex_operator_graph_ir_transformer_layer(
+    const yvex_operator_graph_ir *graph, int draft,
+    unsigned long long layer_ordinal,
+    const yvex_operator_node **attention,
+    const yvex_operator_node **feed_forward, yvex_error *err);
+const yvex_operator_graph_ir *yvex_compiled_model_plan_operator_graph(
+    const yvex_compiled_model_plan *plan);
 void yvex_operator_graph_ir_close(yvex_operator_graph_ir **graph);
 
 #ifdef __cplusplus

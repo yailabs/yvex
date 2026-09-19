@@ -1722,8 +1722,12 @@ static int test_prepare_reopen_import(const binding_fixture *fixture, const char
     {
         const yvex_operator_graph_summary *operators =
             yvex_operator_graph_ir_summary(fixture->operator_graph);
+        const yvex_operator_graph_ir *compiled_operators =
+            yvex_compiled_model_plan_operator_graph(fixture->compiled_plan);
         const yvex_operator_node *attention_node =
             yvex_operator_graph_ir_node_at(fixture->operator_graph, 1ull);
+        const yvex_operator_node *scheduled_attention = NULL;
+        const yvex_operator_node *scheduled_moe = NULL;
         YVEX_TEST_ASSERT(
             operators && operators->maximum_context == 4ull &&
                 operators->target_layer_count == 1ull &&
@@ -1733,8 +1737,17 @@ static int test_prepare_reopen_import(const binding_fixture *fixture, const char
                     YVEX_MODEL_STATE_CLASS_BIT(YVEX_MODEL_STATE_SWA_RING) &&
                 attention_node && attention_node->kind == YVEX_OPERATOR_ATTENTION &&
                 attention_node->state_read_mask ==
-                    YVEX_MODEL_STATE_CLASS_BIT(YVEX_MODEL_STATE_SWA_RING),
-            "canonical operator graph owns target topology and mutable state edges");
+                    YVEX_MODEL_STATE_CLASS_BIT(YVEX_MODEL_STATE_SWA_RING) &&
+                compiled_operators &&
+                strcmp(yvex_operator_graph_ir_summary(compiled_operators)->identity,
+                       operators->identity) == 0 &&
+                yvex_operator_graph_ir_transformer_layer(
+                    compiled_operators, 0, 0ull, &scheduled_attention,
+                    &scheduled_moe, &err) == YVEX_OK &&
+                scheduled_attention->kind == YVEX_OPERATOR_ATTENTION &&
+                scheduled_moe->kind == YVEX_OPERATOR_MOE &&
+                scheduled_attention->layer_index == scheduled_moe->layer_index,
+            "compiled execution graph owns target topology, state, and layer scheduling");
     }
     YVEX_TEST_ASSERT(fixture_binding_request(fixture, directory, &request),
                      "runtime binding request declares adapter capabilities");

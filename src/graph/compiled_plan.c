@@ -21,6 +21,7 @@
 #define MODEL_PLAN_SCHEMA_V5 5u
 #define MODEL_PLAN_SCHEMA_V6 6u
 #define MODEL_PLAN_SCHEMA_V7 7u
+#define MODEL_PLAN_SCHEMA_V8 8u
 #define MODEL_PLAN_MAX_LAYERS 65536ull
 
 typedef struct {
@@ -31,6 +32,7 @@ typedef struct {
 struct yvex_compiled_model_plan {
     unsigned int schema;
     char operator_graph_identity[YVEX_SHA256_HEX_BYTES];
+    yvex_operator_graph_ir *operator_graph;
     yvex_program_tensor_plan *dense_ffn;
     yvex_program_physical *forward, *output, *final, *draft_final, *feature, *draft_feature;
     yvex_program_physical *post, *draft_post;
@@ -581,6 +583,7 @@ void yvex_compiled_model_plan_close(yvex_compiled_model_plan **owner)
     yvex_program_physical_close(&plans->draft_feature);
     yvex_program_physical_close(&plans->post);
     yvex_program_physical_close(&plans->draft_post);
+    yvex_operator_graph_ir_close(&plans->operator_graph);
     yvex_decoder_plan_close(&plans->decoder);
     yvex_transformer_plan_close(&plans->draft_transformer);
     yvex_transformer_plan_close(&plans->transformer);
@@ -700,7 +703,7 @@ static int compiled_output_program_valid(const yvex_compiled_model_plan *plan)
     const yvex_transformer_plan_summary *t = yvex_transformer_plan_summary_get(plan->transformer);
     unsigned long long rows = d ? d->maximum_context : t ? t->maximum_context : 0u;
     if (!plan->output_head.schema_version) return !s;
-    if (!s) return plan->schema < MODEL_PLAN_SCHEMA_V7;
+    if (!s) return t != NULL || plan->schema < MODEL_PLAN_SCHEMA_V7;
     if (s->minimum_rows != 1u || s->row_multiple != 1u || s->maximum_rows != rows ||
         yvex_output_head_program_validate(plan->output, &plan->output_head, NULL, NULL) != YVEX_OK) return 0;
     return plan->schema < MODEL_PLAN_SCHEMA_V7 || (forward &&
@@ -713,7 +716,8 @@ static int compiled_ffn_signature_valid(const yvex_compiled_model_plan *plan)
     const yvex_decoder_plan_summary *d = yvex_decoder_plan_summary_get(plan->decoder);
     const yvex_program_tensor_summary *p = yvex_program_tensor_summary_get(plan->dense_ffn);
     const yvex_program_tensor_value *a, *gate, *up, *down, *output;
-    if (plan->schema >= MODEL_PLAN_SCHEMA_V6) return !p && compiled_forward_signature_valid(plan);
+    if (plan->schema >= MODEL_PLAN_SCHEMA_V6)
+        return !p && (!d || compiled_forward_signature_valid(plan));
     if (!d) return !p;
     if (!p || p->input_count != 4u || p->result_count != 1u || p->minimum_rows != 1u ||
         p->maximum_rows != d->maximum_context || p->row_multiple != 1u) return 0;
@@ -834,6 +838,12 @@ int yvex_compiled_model_plan_build(
         yvex_core_text_copy(plan->operator_graph_identity,
                             sizeof(plan->operator_graph_identity),
                             operators->identity);
+        plan->operator_graph = yvex_operator_graph_ir_retain(
+            request->operator_graph, err);
+        if (!plan->operator_graph) {
+            yvex_compiled_model_plan_close(&plan);
+            return yvex_error_code(err);
+        }
     }
     if (semantic &&
         semantic->schema_version == YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2) {
@@ -871,6 +881,7 @@ int yvex_compiled_model_plan_build(
             rc = YVEX_OK;
         if (rc == YVEX_OK) rc = compiled_forward_build(plan, request, err);
         if (rc == YVEX_OK) {
+            plan->schema = MODEL_PLAN_SCHEMA_V8;
             *out = plan;
             yvex_error_clear(err);
         } else {
@@ -882,6 +893,7 @@ int yvex_compiled_model_plan_build(
                         request->capabilities.transformer_ready ||
                         request->capabilities.logits_ready;
     if (!compile_execution) {
+        plan->schema = MODEL_PLAN_SCHEMA_V8;
         *out = plan;
         yvex_error_clear(err);
         return YVEX_OK;
@@ -928,7 +940,10 @@ int yvex_compiled_model_plan_build(
             request->materialization, request->descriptor,
             request->draft_attention, plan->draft_moe,
             YVEX_TENSOR_SCOPE_DRAFT, err);
-    if (rc == YVEX_OK) *out = plan;
+    if (rc == YVEX_OK) {
+        plan->schema = MODEL_PLAN_SCHEMA_V8;
+        *out = plan;
+    }
     else yvex_compiled_model_plan_close(&plan);
     return rc;
 }
@@ -964,6 +979,7 @@ int yvex_compiled_model_plan_encode(
     int draft_present = plans && plans->draft_moe && plans->draft_transformer;
     int decoder_present = plans && plans->decoder;
     int output_present = plans && plans->output_head.schema_version;
+    int native_graph = plans && plans->schema == MODEL_PLAN_SCHEMA_V8;
     if (!plans || !bytes ||
         (plans->moe != NULL) != (plans->transformer != NULL) ||
         (plans->draft_moe != NULL) != (plans->draft_transformer != NULL) ||
@@ -971,7 +987,12 @@ int yvex_compiled_model_plan_encode(
         !compiled_output_matches_producer(plans) || !compiled_output_program_valid(plans) ||
         !compiled_ffn_signature_valid(plans) ||
         !yvex_sha256_hex_valid(plans->operator_graph_identity) ||
-        !plan_put_text(bytes, plans->schema == MODEL_PLAN_SCHEMA_V7 ? "yvex.compiled-model-plan.v7" :
+        (native_graph &&
+         (!plans->operator_graph ||
+          strcmp(yvex_operator_graph_ir_summary(plans->operator_graph)->identity,
+                 plans->operator_graph_identity))) ||
+        !plan_put_text(bytes, plans->schema == MODEL_PLAN_SCHEMA_V8 ? "yvex.compiled-model-plan.v8" :
+                       plans->schema == MODEL_PLAN_SCHEMA_V7 ? "yvex.compiled-model-plan.v7" :
                        plans->schema == MODEL_PLAN_SCHEMA_V6 ? "yvex.compiled-model-plan.v6" :
                        plans->schema == MODEL_PLAN_SCHEMA_V5 ?
                        "yvex.compiled-model-plan.v5" : "yvex.compiled-model-plan.v4") ||
@@ -1001,7 +1022,8 @@ int yvex_compiled_model_plan_encode(
         free(program.data);
         if (rc != YVEX_OK) return rc;
     }
-    if (plans->schema >= MODEL_PLAN_SCHEMA_V6) {
+    if (plans->schema == MODEL_PLAN_SCHEMA_V6 ||
+        plans->schema == MODEL_PLAN_SCHEMA_V7) {
         yvex_core_bytes program = {.maximum = 256u * 1024u * 1024u};
         int rc = yvex_program_physical_encode(plans->forward, &program, err);
         if (rc == YVEX_OK && (!plan_put_u64(bytes, program.count) ||
@@ -1017,6 +1039,44 @@ int yvex_compiled_model_plan_encode(
             (program.count && !yvex_core_bytes_append(bytes, program.data, program.count))))
             rc = model_plan_refuse(err, YVEX_ERR_NOMEM, "compiled output program encoding failed");
         free(program.data);
+        if (rc != YVEX_OK) return rc;
+    }
+    if (plans->schema == MODEL_PLAN_SCHEMA_V8) {
+        yvex_core_bytes program = {.maximum = 256u * 1024u * 1024u};
+        yvex_core_bytes graph = {.maximum = 256u * 1024u * 1024u};
+        int rc = plans->forward
+                     ? yvex_program_physical_encode(
+                           plans->forward, &program, err)
+                     : YVEX_OK;
+        if (rc == YVEX_OK &&
+            (!plan_put_u64(bytes, program.count) ||
+             (program.count && !yvex_core_bytes_append(
+                                   bytes, program.data, program.count))))
+            rc = model_plan_refuse(
+                err, YVEX_ERR_NOMEM,
+                "compiled forward program encoding failed");
+        free(program.data);
+        program = (yvex_core_bytes){.maximum = 256u * 1024u * 1024u};
+        if (rc == YVEX_OK && plans->output)
+            rc = yvex_program_physical_encode(plans->output, &program, err);
+        if (rc == YVEX_OK &&
+            (!plan_put_u64(bytes, program.count) ||
+             (program.count && !yvex_core_bytes_append(
+                                   bytes, program.data, program.count))))
+            rc = model_plan_refuse(
+                err, YVEX_ERR_NOMEM,
+                "compiled output program encoding failed");
+        free(program.data);
+        if (rc == YVEX_OK)
+            rc = yvex_operator_graph_ir_encode(
+                plans->operator_graph, &graph, err);
+        if (rc == YVEX_OK &&
+            (!plan_put_u64(bytes, graph.count) || !graph.count ||
+             !yvex_core_bytes_append(bytes, graph.data, graph.count)))
+            rc = model_plan_refuse(
+                err, YVEX_ERR_NOMEM,
+                "compiled execution graph encoding failed");
+        free(graph.data);
         if (rc != YVEX_OK) return rc;
     }
     yvex_error_clear(err);
@@ -1051,6 +1111,8 @@ int yvex_compiled_model_plan_decode(
         expected_schema = MODEL_PLAN_SCHEMA_V6;
     else if (strcmp(domain, "yvex.compiled-model-plan.v7") == 0)
         expected_schema = MODEL_PLAN_SCHEMA_V7;
+    else if (strcmp(domain, "yvex.compiled-model-plan.v8") == 0)
+        expected_schema = MODEL_PLAN_SCHEMA_V8;
     if (!expected_schema || !plan_get_u64(&cursor, &schema) ||
         schema != expected_schema)
         return model_plan_refuse(err, YVEX_ERR_FORMAT,
@@ -1110,22 +1172,49 @@ int yvex_compiled_model_plan_decode(
         rc = legacy_decoder_ffn_import(&plan->dense_ffn, plan->decoder, err);
     if (rc == YVEX_OK && schema >= MODEL_PLAN_SCHEMA_V6) {
         unsigned long long length;
-        if (!plan_get_u64(&cursor, &length) || length > cursor.count - cursor.offset)
+        if (!plan_get_u64(&cursor, &length) ||
+            (schema < MODEL_PLAN_SCHEMA_V8 && !length) ||
+            length > cursor.count - cursor.offset)
             rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "compiled forward program extent is malformed");
-        else {
+        else if (length) {
             rc = yvex_program_physical_decode(&plan->forward, cursor.data + cursor.offset, (size_t)length, err);
             if (rc == YVEX_OK) cursor.offset += (size_t)length;
         }
     }
-    if (rc == YVEX_OK && schema == MODEL_PLAN_SCHEMA_V7) {
+    if (rc == YVEX_OK &&
+        (schema == MODEL_PLAN_SCHEMA_V7 || schema == MODEL_PLAN_SCHEMA_V8)) {
         unsigned long long length = 0u;
-        if (!plan_get_u64(&cursor, &length) || (length != 0u) != (output_present != 0u) ||
+        if (!plan_get_u64(&cursor, &length) ||
+            (schema == MODEL_PLAN_SCHEMA_V7 &&
+             (length != 0u) != (output_present != 0u)) ||
+            (schema == MODEL_PLAN_SCHEMA_V8 && decoder_present &&
+             (length != 0u) != (output_present != 0u)) ||
             length > cursor.count - cursor.offset)
             rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "compiled output program extent is malformed");
         else if (length) {
             rc = yvex_program_physical_decode(&plan->output, cursor.data + cursor.offset, (size_t)length, err);
             if (rc == YVEX_OK) cursor.offset += (size_t)length;
         }
+    }
+    if (rc == YVEX_OK && schema == MODEL_PLAN_SCHEMA_V8) {
+        unsigned long long length = 0ull;
+        if (!plan_get_u64(&cursor, &length) || !length ||
+            length > cursor.count - cursor.offset)
+            rc = model_plan_refuse(
+                err, YVEX_ERR_FORMAT,
+                "compiled execution graph extent is malformed");
+        else {
+            rc = yvex_operator_graph_ir_decode(
+                &plan->operator_graph, cursor.data + cursor.offset,
+                (size_t)length, err);
+            if (rc == YVEX_OK) cursor.offset += (size_t)length;
+        }
+        if (rc == YVEX_OK &&
+            strcmp(yvex_operator_graph_ir_summary(plan->operator_graph)->identity,
+                   plan->operator_graph_identity))
+            rc = model_plan_refuse(
+                err, YVEX_ERR_FORMAT,
+                "compiled execution graph identity is inconsistent");
     }
     if (rc == YVEX_OK && !compiled_output_program_valid(plan))
         rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "output program differs from its producer signature/lineage");
@@ -1491,4 +1580,10 @@ const char *yvex_compiled_model_plan_operator_graph_identity(
 {
     return plan && yvex_sha256_hex_valid(plan->operator_graph_identity)
                ? plan->operator_graph_identity : NULL;
+}
+
+const yvex_operator_graph_ir *yvex_compiled_model_plan_operator_graph(
+    const yvex_compiled_model_plan *plan)
+{
+    return plan ? plan->operator_graph : NULL;
 }
