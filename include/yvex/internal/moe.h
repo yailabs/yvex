@@ -344,7 +344,8 @@ int yvex_runtime_moe_programs_host(yvex_runtime_moe_programs *, unsigned long lo
     const float *input, float *const outputs[5], unsigned long long *read_bytes,
     yvex_backend_operation_facts *, yvex_error *);
 int yvex_runtime_moe_programs_device(yvex_runtime_moe_programs *, unsigned long long ordinal,
-    unsigned long long rows, int batched, const yvex_device_tensor *, const float *host_input, yvex_moe_device_ingress *,
+    unsigned long long rows, int batched, const yvex_device_tensor *,
+    const float *host_input, yvex_moe_device_ingress *,
     unsigned long long *encoded_bytes, yvex_backend_operation_facts *, yvex_error *);
 void yvex_runtime_moe_programs_resources(const yvex_runtime_moe_programs *,
     unsigned long long *host, unsigned long long *device);

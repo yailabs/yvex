@@ -706,9 +706,10 @@ static int compiled_output_program_valid(const yvex_compiled_model_plan *plan)
     if (!s) return t != NULL || plan->schema < MODEL_PLAN_SCHEMA_V7;
     if (s->minimum_rows != 1u || s->row_multiple != 1u || s->maximum_rows != rows ||
         yvex_output_head_program_validate(plan->output, &plan->output_head, NULL, NULL) != YVEX_OK) return 0;
-    return plan->schema < MODEL_PLAN_SCHEMA_V7 || (forward &&
+    if (plan->schema < MODEL_PLAN_SCHEMA_V7 || (t && !forward)) return 1;
+    return forward &&
         !strcmp(s->semantic_identity, forward->semantic_identity) &&
-        !strcmp(s->execution_identity, forward->execution_identity));
+        !strcmp(s->execution_identity, forward->execution_identity);
 }
 
 static int compiled_ffn_signature_valid(const yvex_compiled_model_plan *plan)
