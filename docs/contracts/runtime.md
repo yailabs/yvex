@@ -84,10 +84,11 @@ resources.
 
 ## Package and specialization
 
-The engine authenticates package facts from runtime binding v15 and PEIR v5.
+The engine authenticates package facts from runtime binding v16 and PEIR v5.
 Package facts include model/operator identities, terminal tensor roles and
-encoded ranges, canonical qtype/layout, compiled plans, tokenizer/conversation
-policy, and numerical obligations.
+encoded ranges, canonical qtype/layout, the retained canonical operator
+schedule, compiled physical plans/programs, tokenizer/conversation policy, and
+numerical obligations.
 
 The engine then seals a backend/device specialization. It binds package
 decisions to admitted implementation classes, activation representations, real
@@ -101,10 +102,12 @@ accumulation/reduction contract is not an equivalent-choice detail. No explicit
 CUDA request falls back to CPU, and no explicit exact request silently changes
 implementation class.
 
-Current v14 runtime bindings remain readable only through their explicit
-authenticated compatibility importer. Legacy records that describe canonical
-package storage are normalized to PEIR v5; a v14 derived-layout requirement that
-cannot be represented truthfully refuses. V14 bytes are never decoded as v15.
+Current v14 and v15 runtime bindings remain readable only through their
+explicit authenticated compatibility importers. Legacy records that describe
+canonical package storage are normalized to PEIR v5; a derived-layout
+requirement that cannot be represented truthfully refuses. Older bytes are
+never decoded as v16, and bindings that predate the canonical operator graph
+require an explicit rebuild rather than an invented schedule.
 
 ## Resource admission and accounting
 

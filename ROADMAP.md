@@ -7,11 +7,11 @@ Status: living public project control
 | Axis | Current truth |
 | --- | --- |
 | Project target | Native, harness-independent model compilation and execution substrate. |
-| Active engineering boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` — typed multi-level model/program IR and consumer cutover before A01 resumes. |
-| Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` and its qualification COMPLETE at producer-owned device-result validity: expired borrows fail closed; source-stable QA and exact bounded performance replay retained. Earlier identity/platform repairs preserved. |
+| Active engineering boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` — broad source-stable replay and independent evidence for the completed universal-IR consumer cutover. |
+| Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` COMPLETE: current admitted Qwen, DeepSeek/DSpark and MiniMax computation is compiler-owned; runtime consumes authenticated program/schedule truth. The `.0` producer-owned device-result lifetime remains preserved. |
 | Architecture Spectrum | A01 PARTIAL, repair queued behind refoundation .1 and qualification; A02–A11 PLANNED. |
 | Adopted state architecture target | N.B1 — Slow-Update Dual-Stream is the official primary research target: primary R plus persistent Experiential Computational State E; unfinished deliberation L remains distinct. YAI owns semantic authority; YVEX owns computational realization. Program N and B1 post-training remain OPEN/unscheduled, not implemented. |
-| Most important structural gap | Physical forward/output programs and selected DeepSeek stages execute through SSA, including normal CUDA residual post with caller-owned MoE operands. Complete DeepSeek/DSpark layer composition, deferred target scheduling and MiniMax neural composition still require migration before .1 closes. Qwen generation, state-capacity and output consumers use the compiled signature; bounded execution of its exact local artifact passes, but whole-model preservation remains unqualified. A01 tokenizer/normalization and whole-model barriers remain. |
+| Most important structural gap | The compiler cutover is complete at the currently admitted execution scope, but independent whole-model conformance and comparable post-cutover replay remain open. Exact Qwen preservation, official DeepSeek/Qwen references, the known DeepSeek CPU/CUDA logits gap and A01 tokenizer/normalization barriers belong to qualification or later family evidence, not another parallel runtime authority. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media. Evidence depths differ. |
 | External execution characterization | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Retained as a measured limitation, not a refoundation .1 closure gate; no downstream-safe claim. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
@@ -19,7 +19,7 @@ Status: living public project control
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
 | Release qualification | BLOCKED. |
 | Current branch | `models2`; branch epochs coordinate integration, not model ownership. |
-| Next decision point | Qualify the .1 compiler/runtime cutover, then replay comparable controls before A01 repair. No IR target or before/after agreement establishes upstream conformance or release qualification. |
+| Next decision point | Complete `.1.QUALIFICATION.0`, including comparable replay and available upstream/reference evidence, before resuming A01. No internal agreement establishes upstream conformance or release qualification. |
 
 <!-- maturity-counts:start -->
 <!-- Generated from System Maturity by tests/documentation_architecture.py. -->
@@ -62,14 +62,14 @@ below describe desired breadth; they are not additional maturity claims.
 | --- | :---: | --- | --- | --- | --- |
 | Source provenance and immutable intake | 🟢 ESTABLISHED | Immutable revisions, inventory, retained payload and verification have common owners. | Preserve the same trust model as providers and representations grow. | C / R | [Source contract][storage]; [verification tests][source-tests] |
 | Logical model identity | 🟢 ESTABLISHED | Source-declared relations separate logical model, original selector, representation, artifact, deployment, working set and engine; catalog family exceptions removed. | Extend explicit relations without family/name inference or silent ambiguity. | R / C | [Lifecycle][lifecycle]; [catalog tests][catalog-tests] |
-| Semantic Model IR | 🟡 PARTIAL | Typed programs, state/effect verification, Qwen forward lowering and pure-SSM representability exist; not every executable consumer uses this authority. | Express heterogeneous R/E values, state-consuming/producing blocks, versions, multi-result computation and trainable roles without family runtimes or compulsory Transformer structure; add token-derived indexed parameter access and shared cross-layer state dependencies. | C | [Compilation][compilation]; [Mamba2 barrier][mamba] |
-| Operator composition / graph language | 🟡 PARTIAL | Shared lowering and execution owners serve several families and component schedules. | Compile dual-stream R/E augmentation, cross-state interaction, gates/merge and update barriers through common model semantics; no family cognitive runtime. Also express phase-asymmetric programs and explicit state/result boundaries. | C / D | [Family boundary][families]; [decoder plan][decoder-plan] |
+| Semantic Model IR | 🟡 PARTIAL | Typed programs, state/effect verification, current Qwen forward execution, DeepSeek heterogeneous schedule ownership, MiniMax component programs and pure-SSM representability use common compiler levels. Broader architecture language remains incomplete. | Express heterogeneous R/E values, state-consuming/producing blocks, versions, multi-result computation and trainable roles without family runtimes or compulsory Transformer structure; add token-derived indexed parameter access and shared cross-layer state dependencies. | C | [Compilation][compilation]; [Mamba2 barrier][mamba] |
+| Operator composition / graph language | 🟡 PARTIAL | Canonical operator graphs and physical SSA own current admitted composition; binding v16/model-plan v8 authenticate the schedule consumed by runtime rather than preserving a family execution universe. | Compile dual-stream R/E augmentation, cross-state interaction, gates/merge and update barriers through common model semantics; no family cognitive runtime. Also express phase-asymmetric programs and explicit state/result boundaries. | C / D | [Family boundary][families]; [decoder plan][decoder-plan] |
 | Transformation IR | 🟢 ESTABLISHED | Typed, ordered, artifact-neutral transformations precede payload materialization. | Remain the unique transformation authority as representations expand. | C / P | [Compilation][compilation] |
 | Physical policy | 🟡 PARTIAL | Per-terminal dtype/qtype, layout and alignment decisions exist for admitted recipes. | Broaden compiler-owned physical decisions without downstream reconstruction, including conditional tables, file-backed row representations and quantized runtime state. | P | [Compilation][compilation] |
 | Physical Execution IR | 🟢 ESTABLISHED | Package physical records are sealed separately from deployment implementation choices. | Preserve authenticated consumption as semantic operations broaden. | C / P / R | [Artifact contract][artifacts]; [compilation][compilation] |
 | Artifact emission | 🟢 ESTABLISHED | Transactional GGUF construction publishes admitted package representations. | Preserve deterministic construction and rollback across broader representations. | P | [Artifact contract][artifacts]; [writer tests][writer-tests] |
 | Artifact admission | 🟢 ESTABLISHED | Integrity, roles, identities and binding constraints fail closed. | Extend coverage without weakening integrity or mandatory semantic checks. | P / R | [Artifact contract][artifacts]; [integrity tests][integrity-tests] |
-| Runtime binding | 🟢 ESTABLISHED | Authenticated package truth is consumed without rebuilding compiler plans. | Preserve package meaning versus runtime specialization. | R / P | [Runtime contract][runtime-contract] |
+| Runtime binding | 🟢 ESTABLISHED | Authenticated package and execution truth, including the canonical operator schedule, is reopened without family import or runtime compiler reconstruction. | Preserve package meaning versus runtime specialization. | R / P | [Runtime contract][runtime-contract] |
 | Existing quantized representation import | 🟡 PARTIAL | Multiple GGUF qtypes and low-precision execution paths are admitted. | Broader format coverage without per-format runtime redesign. | P | [Compilation][compilation]; [DeepSeek][deepseek] |
 | Quantization synthesis | 🟡 PARTIAL | Mixed per-tensor policy and bounded calibration-informed recipes can be constructed. | Generic sensitivity/calibration-driven synthesis with reproducible decision provenance. | P | [GB10 targets][gb10]; [compilation][compilation] |
 | Physical Model Compiler search | 🔴 OPEN | Deterministic lower layers exist; recipe exploration remains bounded/manual engineering. | Hardware/workload/quality-aware search and reproducible Pareto selection. | P | [GB10 targets][gb10]; [compilation][compilation] |
@@ -795,10 +795,11 @@ fusion research such as projection+read, read+gate, gate+residual merge,
 update+normalization or projection-cache materialization. Fusion may change
 implementation details, never model mathematics.
 
-Refoundation .1 establishes universal typed computational authority, explicit
+Refoundation .1 established universal typed computational authority, explicit
 state/effects, a common compiler/runtime boundary and family-independent
-execution ownership. It must finish against its existing criterion; B1 does
-not add operators, implementation work or closure gates to .1.
+execution ownership at the currently admitted scope. Its qualification wave
+now owns broad replay; B1 added no operators, implementation work or closure
+gates to that cutover.
 
 #### Generic provider and program ownership
 
@@ -1216,9 +1217,18 @@ that borrow boundary: workspace reuse expires prior values without another
 allocation/registry or persisted identity. The [runtime contract][runtime-contract]
 retains serialized use and producer-lifetime limits; this is not a concurrent lease.
 
-**Open maturity boundaries:** Transformer-shaped composition and structural overhead requiring measurement.
+**Open maturity boundaries:** broader architecture forms, remaining structural
+overhead and independent qualification beyond the completed current-consumer
+cutover.
 
-**Current pressure:** refoundation .1 replaces decoder-shaped computational authority with a typed multi-level IR and migrates real consumers. It also separates exact model/checkpoint identity from architecture import and executable program ownership; historical `families` containers are not permanent vertical runtimes. A01 and dual-stream C/S/N targets challenge the language without authorizing N implementation. The completed .0 borrow repair remains complete.
+**Current pressure:** `.1.QUALIFICATION.0` must replay the completed cutover
+source-stably and preserve the known numerical/evidence gaps. Refoundation .1
+separated exact model/checkpoint identity, architecture import, program
+semantics, physical lowering, runtime lifetime and backend implementation;
+historical `families` containers are importers or irreducible operation owners,
+not vertical runtimes. A01 and dual-stream C/S/N targets remain later pressure
+without authorizing N implementation. The completed .0 borrow repair remains
+complete.
 
 **Material advance:** remove a demonstrated ownership defect with negative/lifecycle QA and exact performance replay where relevant.
 
@@ -1232,11 +1242,20 @@ retains serialized use and producer-lifetime limits; this is not a concurrent le
 
 **Purpose:** seal model meaning before runtime execution.
 
-**Established foundation:** family interpretation, tensor roles, Transformation IR and authenticated package plans.
+**Established foundation:** family interpretation, tensor roles,
+Transformation IR, native typed modules/functions/regions/SSA, verified
+state/effects, canonical execution schedules, physical programs and
+authenticated executable bindings consumed by current admitted runtimes.
 
-**Open maturity boundaries:** SSM-only topology, normalization/tokenizer authority and broader operators/state/output heads. Future R/E semantics, read/update blocks, StateProfile-compatible entrypoints, root effects, dependency DAG/barriers and trainable augmentation roles extend the existing target language; they are not added to refoundation .1.
+**Open maturity boundaries:** qualified SSM-only execution,
+normalization/tokenizer authority and broader operators/state/output heads.
+Future R/E semantics, read/update blocks, StateProfile-compatible entrypoints,
+root effects, dependency DAG/barriers and trainable augmentation roles extend
+the language; they were not implemented by refoundation .1.
 
-**Current pressure:** A01's source-only barrier; later spectrum families test different assumptions.
+**Current pressure:** `.1.QUALIFICATION.0` independently tests the new compiler
+lineage; A01's source-only barrier and later spectrum families then test
+additional language assumptions.
 
 **Material advance:** another computational shape compiles through shared mechanisms without backend reconstruction.
 
@@ -1589,27 +1608,28 @@ decision. This is neither the maturity matrix nor the release scope.
 | 2 | `NATIVE.COGNITIVE.STATE.ALIGNMENT.0` | COMPLETE | R / N / Q | Adopted dual-stream target and evidence-reporting discipline; no implementation promotion | Freeze semantic/computational ownership and refoundation-before-A01 ordering in public control. | `MAINTENANCE.ARCHITECTURE.REASSESSMENT.0` |
 | 3 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` | COMPLETE | R | Unique device-result validity owner; no N implementation or A01 promotion | Producer publication generations invalidate borrowed values before workspace reuse; consumers reject stale results without changing family numerics or public ABI/protocol. | `NATIVE.COGNITIVE.STATE.ALIGNMENT.0` |
 | 4 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.QUALIFICATION.0` | COMPLETE | Q / R | Source-stable lifecycle, numerical component and bounded replay evidence | Mapped QA, stale-result/RNG negative tests and sanitizer lanes qualified; three warm fixed-output controls per clean tree preserve model/binding/kernel/output identity. Characterization only; upstream/full-model conformance remains open. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` |
-| 5 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` | ACTIVE | R / C | Typed computational language, explicit state/effects, program/component and physical/target lowering boundaries | Migrate real consumers to verified IR; retire superseded authority. Separate source/catalog model identities, architecture import recipes and lowered execution; qualify consumer migration before removing historical family containers. Represent pure SSM without claiming A01 execution or N. Preserve numerics and .0 publication lifetimes. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.QUALIFICATION.0` |
-| 6 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` | NEXT | Q / R / C | Broad consumer evidence and comparable post-cutover replay | Qualify compiler refusals, migrated families, transactions, CPU/CUDA and sanitizers; replay exact controls and retain the independent full-model conformance gap. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` |
+| 5 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` | COMPLETE | R / C | Typed computational language, explicit state/effects, program/component and physical/target lowering boundaries | Current Qwen forward/output, DeepSeek/DSpark target/draft schedule and MiniMax neural components use compiler-owned execution truth; runtime consumes authenticated binding v16/model-plan v8 schedule/programs. Source/catalog, importer, program, physical, runtime and backend authorities are distinct. Pure SSM remains representable without claiming A01 execution or N. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.QUALIFICATION.0` |
+| 6 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` | ACTIVE | Q / R / C | Broad consumer evidence and comparable post-cutover replay | Qualify compiler refusals, migrated families, transactions, CPU/CUDA and sanitizers; replay exact controls and retain the independent full-model conformance gap. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` |
 | 7 | `SPECTRUM.MAMBA2.REPAIR.0` | BLOCKED | C / S | Pure-SSM language, tokenizer authority, recurrent execution; A01 evidence remains PARTIAL | Resume after .1 qualification; resolve source/normalization authority and SSM-only executable boundary before earning the next evidence stage. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` |
 | 8 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
 | 9 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
 | 10 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
 | 11 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
 
-Active Next: MAINTENANCE.ARCHITECTURE.REFOUNDATION.1
+Active Next: MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0
 
-The bounded .0 refoundation and its qualification remain complete. The selected
-order is now **.1 typed compiler/runtime cutover → .1 qualification/replay →
-A01 repair**. Blocking A01's temporal row does not demote its PARTIAL evidence
-or change `repair_same_boundary`. DeepSeek optimization stays PARTIAL pending
-explicit resumption; upstream/whole-model conformance remains Program Q work.
+The bounded .0 refoundation, its qualification and the `.1` universal-IR
+consumer cutover are complete. The selected order is now **.1
+qualification/replay → A01 repair**. Blocking A01's temporal row does not
+demote its PARTIAL evidence or change `repair_same_boundary`. DeepSeek
+optimization stays PARTIAL pending explicit resumption; upstream/whole-model
+conformance remains Program Q work.
 
 The [current consumer matrix](docs/architecture/compilation.md#current-consumer-cutover)
-distinguishes Qwen's physical forward/output runner, shared output projection
-and DeepSeek's final mHC, target-feature reduction and CPU/full-evidence
-four-input residual-post programs from remaining DeepSeek/DSpark device-native
-composition and MiniMax neural computational migration.
+records the completed authority cutover: Qwen executes physical SSA;
+DeepSeek/DSpark executes physical implementation plans under the canonical
+operator schedule retained in the binding; MiniMax neural components use typed
+component programs while media/product I/O remains outside neural IR.
 Exact Qwen artifact-backed preservation is a separate evidence obligation:
 the registered BF16 representation has been acquired through canonical pull and
 is locally READY. Its compiled forward/output consumer has completed a bounded
@@ -1617,10 +1637,11 @@ real CUDA generation (15 prompt tokens, two sampled tokens, EOS, no prefix reuse
 That execution does not establish before/after whole-model preservation or
 upstream conformance; those obligations remain unqualified. Mamba remains
 representability evidence.
-The `.1` progression decision remains `repair_same_boundary`. Official DeepSeek
-vectors and authoritative upstream Qwen conformance have not been executed;
-the pre-existing whole-model DeepSeek CPU/CUDA discrepancy (max absolute error
-approximately 9.982168) is not resolved by migration-preservation tests.
+The `.1` progression decision is `proceed` into its mandatory qualification
+boundary, not directly into A01. Official DeepSeek vectors and authoritative
+upstream Qwen conformance have not been executed; the pre-existing whole-model
+DeepSeek CPU/CUDA discrepancy (max absolute error approximately 9.982168) is
+not resolved by migration-preservation tests.
 
 The .1 boundary also owns truthful public execution-capacity admission (R / X):
 discovery and deterministic preflight must describe the exact engine/tokenizer
@@ -1679,7 +1700,7 @@ not just its first prefix or isolated kernel.
 `downstream_safe=false` for this external workload, independently of whether
 the compiler cutover earns its own progression. Capacity preflight does not
 qualify execution latency; neither a selector test nor a first response closes
-External Golden or the remaining universal consumer cutover. YAI owns its
+External Golden or the completed universal consumer cutover. YAI owns its
 external free/Workflow verdict; no timeout increase, truncated content, implicit
 fallback or model-specific workaround may substitute for execution evidence.
 
@@ -1705,7 +1726,7 @@ to implement every OPEN row.
 
 | Horizon | Engineering objective | Programs | Exit condition |
 | --- | --- | --- | --- |
-| Now | Establish typed model/program IR and migrate execution before A01 | R / C / S | Verified computational, physical and target boundaries; qualified consumer cutover and replay precede A01 repair. No N runtime implementation. |
+| Now | Qualify the completed typed compiler/runtime consumer cutover before A01 | Q / R / C / S | Source-stable compiler refusals, family consumers, transactions, CPU/CUDA and comparable replay are recorded without hiding upstream/full-model gaps. No N runtime implementation. |
 | Near | Broaden model language and physical representation foundations | C / P | Common architectures compile through shared semantics and reproducible recipes. |
 | Near | Prepare persistent-state language and realization/lifecycle boundaries | C / S / N | Future state-capable models need not create another runtime; semantic authority remains external. |
 | Near | Mature single-node sequence runtime | S / G | Typed paging, inflight scheduling, chunked prefill and reusable prefixes qualified. |
@@ -1752,9 +1773,9 @@ platform qualification. [MLC quick start][mlc]
 | State-target alignment, COMPLETE | N / R / Q | Strategic adoption and evidence rules only; N remains OPEN | Non-KV state is pressure, not cognitive support | No release evidence or gate changes |
 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0`, COMPLETE | R | Producer-owned result validity; preserves C / S / N separation, does not implement N | A01 remains PARTIAL; no family promotion | No automatic gate closure |
 | Post-refoundation qualification and exact replay, COMPLETE | Q / R | Changed borrow contracts and bounded comparable performance; full-model conformance still open | Generic prerequisite qualified before A01 repair | Evidence only at measured scope, not release qualification |
-| `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1`, ACTIVE | R / C | Typed values, shapes, operations, effects, programs and explicit lowering; no N implementation | Pure-SSM representability is required, not A01 execution | Preserve numerics; no automatic release promotion |
+| `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1`, COMPLETE | R / C | Typed values, shapes, operations, effects, programs, canonical schedules and explicit lowering; no N implementation | Pure-SSM representability established, not A01 execution | Preserved claimed-scope numerics; no automatic release promotion |
 | .1 real Golden prefill characterization | R / S / Q | Long-context execution and measured residual bottlenecks; characterization, not a .1 closure gate | Existing DeepSeek execution pressure, not A01 progression | Full request still fails; no downstream-safe claim or behavior, benchmark or release gate promotion |
-| .1 qualification/replay, NEXT | Q / R / C | Compiler refusal, migrated consumer and comparable execution evidence | Precedes queued A01 repair | No upstream conformance inferred from internal parity |
+| `.1.QUALIFICATION.0`, ACTIVE | Q / R / C | Compiler refusal, migrated consumer and comparable execution evidence | Precedes queued A01 repair | No upstream conformance inferred from internal parity |
 | `SPECTRUM.MAMBA2.REPAIR.0`, queued | C / S | Semantic IR, composition, non-KV state, tokenizer | A01 directly pressures generic state and informs N; no automatic N promotion | Indirect; no v0.1 promotion or scope expansion |
 | Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |
 | Explicit DeepSeek optimization resumption | Q / S / R | Baseline, resource/structural performance evidence | Existing DeepSeek control, not a new Axx | Predecessor of evaluation |

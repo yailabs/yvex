@@ -110,9 +110,11 @@ prepared programs may coexist for one fixed request; session leases retain all
 used entries and prevent incompatible request replacement and premature close.
 Catalog growth preserves live handles, dependencies and borrows. Full diagnostic
 execution, retained preparations and their metadata share one session budget.
-Outputs remain staged
-until execution, identity and cleanup succeed. DeepSeek's remaining layer
-composition is not yet cut over; see the
+Outputs remain staged until execution, identity and cleanup succeed. DeepSeek
+target/draft layer composition is scheduled from the canonical operator graph
+retained in model-plan v8; attention, MoE and transformer plans provide derived
+physical implementation facts. The runtime cross-checks those facts and does
+not reconstruct topology from a family identifier. See the
 [compiler boundary](compilation.md#typed-computational-programs).
 
 Component-program execution stages host results until computation, identity,

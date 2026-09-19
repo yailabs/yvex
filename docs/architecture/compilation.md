@@ -137,8 +137,10 @@ through target and optional draft transformer plans as a typed context
 envelope. A selected startup or request capacity is instead a workload fact:
 runtime may admit it only inside the compiled envelope, then the generic
 capacity planner evaluates state geometry, artifact bytes, hardware facts and
-resource reserve. The current 4096-token DeepSeek profile is one such selected
-workload, not the model's semantic limit.
+resource reserve. A deployment-selected context profile is one such workload
+fact, not the model's semantic limit. The public capacity contract reports the
+exact loaded deployment rather than projecting a repository default as
+execution truth.
 
 Runtime binding v16 persists the canonical operator graph identity, Physical
 Execution IR v5 package records, and pointer-free compiled tokenizer,
@@ -197,25 +199,34 @@ not be satisfied with fictitious roles to manufacture READY.
 
 The native program-language foundation is owned by
 [`include/yvex/internal/ir.h`](../../include/yvex/internal/ir.h) and
-[`src/ir/module.c`](../../src/ir/module.c). It is **not yet the complete serving-runtime cutover**:
-DeepSeek's remaining layer composition still consumes historical execution records;
-the Qwen token-forward runner now consumes complete physical SSA work for
-embedding, normalization, mixers, FFN and residual composition. It no longer
-walks decoder layers or resolves parameter roles during execution. Attention
-provider plans and runner/output report records remain derived consumers. The
-output head now executes a separate physical SSA entry on CPU and CUDA; the
-operator graph and decoder record formats above have not all been retired.
-Refoundation .1 remains active until those consumers and lowering boundaries
-are migrated and qualified.
+[`src/ir/module.c`](../../src/ir/module.c). The current admitted serving paths
+now have one compiler-owned computational lineage. Qwen token-forward and
+output execution consume physical SSA. DeepSeek target/draft execution consumes
+the canonical operator schedule retained by model-plan v8 while its attention,
+MoE and transformer plans remain derived physical implementation records.
+MiniMax neural components consume typed physical programs; media and product I/O
+remain outside neural IR. Attention/state providers and runner/result records
+remain derived lifecycle views and do not reconstruct topology. Refoundation
+.1 completed this current-consumer authority cutover; `.1.QUALIFICATION.0` owns
+the broader replay and independent evidence campaign.
 
 ### Current consumer cutover
 
-| Consumer | Implemented IR boundary | Remaining closure boundary |
+| Consumer | Compiler/runtime authority after refoundation .1 | Remaining evidence or later breadth |
 | --- | --- | --- |
-| Qwen 3.5 | Forward and output entries share compiler lineage; slot-based runner; generation, state-capacity and logits consumers use the derived program signature; legacy decoder import normalized at binding admission; bounded recurrent/hybrid CUDA tests and exact-artifact CUDA generation | Whole-model before/after preservation and upstream conformance; remaining provider/report views and ownership cutover |
-| DeepSeek V4 / DSpark | Output projection, final mHC/RMSNorm, feature reduction and residual post consume physical SSA normalized at cold admission; normal CUDA MoE returns independently retained operands to the compiled post stage | Migrate complete heterogeneous attention, MoE computation and target/draft dependencies; finish deferred target scheduling and qualify integrated composition |
-| MiniMax H3 | Text, multimodal text, vision, visual dense/prefix, audio signal and joint prepare/step/forward compile to physical SSA; common component owners execute admitted work; old joint/text/vision/audio/dense procedural backend executors removed | Finish iterative/composition ownership audit and complete asset-dependent trajectory qualification; bounded component preservation is not full-model or upstream conformance |
+| Qwen 3.5 | Forward/output entries share compiler lineage; the slot runner executes physical SSA and legacy decoder bytes normalize only at cold admission. Attention providers and reports are one-way derived views. | Whole-model before/after preservation and authoritative upstream conformance. |
+| DeepSeek V4 / DSpark | Canonical operator graph owns embedding, heterogeneous attention/MoE pairs, target/draft data and state dependencies, final/output and draft projections. Binding v16/model-plan v8 retains it; runtime schedules from it and uses separately authenticated physical implementation plans. | Official/reference conformance, the known whole-model CPU/CUDA discrepancy and performance qualification; no second family runtime remains. |
+| MiniMax H3 | Text, multimodal text, vision, visual dense/prefix, audio signal and joint prepare/step/forward compile to physical SSA; common component owners execute admitted work; old procedural neural executors are removed. | Asset-dependent trajectory/full-scale qualification; bounded component preservation is not full-model or upstream conformance. |
 | Mamba2 | Pure SSM representable without attention/KV | Preserve representability only here; A01 executable repair remains queued and PARTIAL |
+
+The ownership cutover is explicit per architecture consumer:
+
+| Family | Source identity | Architecture importer | Semantic / execution owner | Physical / target owner | Runtime consumer | Historical computational authority | Qualification depth |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| DeepSeek V4 / DSpark | Source/catalog revision, selector, representation and target/draft relation | `model/families/deepseek_v4.c` interprets source schema; `graph/families/deepseek_v4.c` projects canonical semantics | Semantic Model IR plus retained operator graph own target/draft topology, dataflow, state and ordering | Transformation IR, PEIR and typed attention/MoE/transformer programs and plans | Generic transformer/generation owners resolve the retained graph and invoke admitted work | Family containers retain import and irreducible operation policy only; no warm family topology owner | Real target/draft, generation, CPU/CUDA and OpenAI regressions; official vectors not executed; whole-model backend gap remains OPEN |
+| Qwen 3.5 | Source/catalog revision, selector and representation | Qwen model/graph importers project source topology | Native typed forward/output module and physical SSA own current text computation | Parameter projection, physical program and exact recurrent/attention state bindings | Slot-based program runner and generic state providers | Legacy decoder schemas are cold-import compatibility only; procedural forward loop removed | Recurrent/hybrid numerical lanes and bounded exact-artifact generation; upstream conformance not executed |
+| MiniMax H3 | Source/catalog component and representation identities | MiniMax model/graph importers project neural component interfaces | Typed text, vision, audio and joint component programs | Physical component programs and admitted backend operations | Common component executor and runtime lifecycle | Family code retains import and irreducible fused-operation meaning; old neural procedural loops removed | Bounded component preservation; full asset-dependent trajectory and upstream evidence remain open |
+| Mamba2 | Exact source/catalog snapshot | Mamba2 source/graph importer | Pure-SSM topology is representable without fictitious attention, KV, RoPE or dense FFN | No claimed executable artifact/target lowering | None claimed by refoundation .1 | No Transformer-shaped dependency introduced | Representation/source scope only; A01 remains PARTIAL and blocked behind qualification |
 
 ### Cutover acceptance boundary
 
@@ -234,7 +245,9 @@ An exact-artifact, one-frame before/after replay preserves all 800 F32 samples
 bitwise on each backend. This establishes bounded migration preservation, not
 upstream conformance, arbitrary-duration audio qualification or a speedup.
 
-The adopted end-to-end target is **not yet the implemented serving pipeline**:
+The following is the implemented ownership pipeline at the currently admitted
+scope. Individual model architectures and operations still require their own
+qualification; the pipeline does not claim universal family support.
 
 ```text
 verified source -> import -> Semantic Model IR -> Program / Execution IR
@@ -255,20 +268,21 @@ verified source -> import -> Semantic Model IR -> Program / Execution IR
 | Boundary | Required unique authority | Current cutover evidence |
 | --- | --- | --- |
 | Verified source / import | Source identity, configuration, tokenizer, parameter roles and component relationships | Mamba2 source inspection and Qwen text compilation project typed programs |
-| Semantic Model IR | Modules/functions/blocks, operations/values/types, shapes/attributes/effects and explicit state dependencies | Qwen forward/output and bounded DeepSeek output/final/feature computations are migrated; complete heterogeneous and component consumers remain pending |
-| Program / Execution IR | Legalized components, entrypoints, dependencies and state flow | Direct-call legalization and straight-line dependencies are implemented; executable regions remain pending |
+| Semantic Model IR | Modules/functions/blocks, operations/values/types, shapes/attributes/effects and explicit state dependencies | Qwen programs, DeepSeek typed semantic topology/numeric obligations, MiniMax component programs and pure-SSM representability are compiler-owned. |
+| Program / Execution IR | Legalized components, entrypoints, dependencies and state flow | Physical SSA owns Qwen/MiniMax program work; the canonical operator graph owns DeepSeek target/draft schedule, state edges and layer dependencies. Executable general regions remain later breadth. |
 | Transformation IR + machine | Parameter derivation and target feasibility, without changing model meaning | Exact source constants join through sealed identity transforms; general transform legalization and target matching remain pending |
 | Physical IR | Dtype/qtype, layout, packing, alignment and sharing | Parameter joins and BF16 forward operations with distinct recurrent/KV state handles exist; general representation lowering remains pending |
-| Target / Schedule IR | Admitted physical work, dependencies, populations and placement | Serial SSA instructions, last-use storage reuse and exact row populations bind static implementations; general schedule cutover pending |
-| Executable binding / runtime | Authenticate immutable execution truth; own engines/runners/sessions/scheduling/lifetimes | Compiled model-plan v7 carries physical forward/output work; legacy decoder/output containers normalize at cold binding import, not warm execution; other consumers remain pending |
+| Target / Schedule IR | Admitted physical work, dependencies, populations and placement | Serial SSA instructions, last-use reuse and exact populations own physical programs; DeepSeek runtime resolves each attention/MoE layer pair from the retained canonical graph rather than a family topology. |
+| Executable binding / runtime | Authenticate immutable execution truth; own engines/runners/sessions/scheduling/lifetimes | Runtime binding v16 and model-plan v8 carry canonical schedules plus physical programs/plans. Historical v3-v7 forms import at the schema boundary; warm execution does not invoke family importers. |
 | State providers / backends / evidence | Physical state mechanisms and CPU/CUDA execution publish typed results and observations | Existing owners and producer-owned transient-result lifetimes preserved |
 
-A second graph serialized alongside decoder plans is not the accepted end state.
-Each migrated consumer must use the new lowered authority, and superseded
-internal semantic owners must be removed. Generation repetition remains runner
-policy above model forward computation. Native Cognitive State remains OPEN:
-typed computational state does not introduce semantic-state ingress or YAI
-authority into this compiler.
+The retained canonical graph and physical plans answer different questions:
+the graph owns executable topology, dependencies and state flow; physical plans
+own admitted parameter/state geometry and numerical implementation facts. The
+runtime cross-checks rather than reconstructs these facts. Generation repetition
+remains runner policy above model forward computation. Native Cognitive State
+remains OPEN: typed computational state does not introduce semantic-state
+ingress or YAI authority into this compiler.
 
 ### Representation and ownership
 
@@ -299,15 +313,16 @@ a runtime device-result publication generation, engine lease or checkpoint.
 
 | Computational form | Implemented meaning | Persistence / consumers |
 | --- | --- | --- |
-| Imported program | Family/source interpretation as typed operations, parameter references and explicit state dependencies | Mamba2 source inspection and Qwen text projection; Mamba2 source obligations remain unresolved |
+| Imported program | Family/source interpretation as typed operations, parameter references and explicit state dependencies | Qwen and MiniMax program projection plus Mamba2 source inspection; Mamba2 executable obligations remain unresolved |
 | Canonical program | Same module infrastructure after verified alias and dead-pure-value passes | Immutable compiler object, canonical diagnostic text and semantic identity |
-| Straight-line execution form | Entry-local value slots, producer dependencies, serial effect order and last-use boundaries | Qwen binding compilation consumes this verified lowering; backend/region schedule cutover is not claimed |
+| Straight-line execution form | Entry-local value slots, producer dependencies, serial effect order and last-use boundaries | Qwen and MiniMax binding compilation consume this verified lowering; general executable-region breadth is not claimed |
 | IR binary v1 | Explicit-field encoding reopened through constructors, static dialect resolution and the verifier | Internal serialization contract tested by roundtrip/truncation; not embedded in current v16 runtime bindings |
 | Existing Transformation IR | Parameter derivation, ordered source contributions and provenance | Existing source-to-package authority; not replaced by program operations |
 | Parameter physical projection | Source-bound program constants joined to transformation terminals and physical package decisions | Compiler-owned terminal handles and a distinct identity; no payload access or target schedule |
 | Tensor program v1 | Verified pure rank-2 BF16 instructions, operand/result slots and admissible row populations | Retained bounded operator consumer and model-plan v5 import; not independently serialized in native v7 |
-| Physical program v1 | Typed token/tensor/state slots, exact parameter handles, admitted implementation contracts and serial dependencies | Native model-plan v7 forward/output consumers; older decoder/output compatibility normalized once after binding authentication |
-| Existing package physical / target forms | Representation, admitted package storage and deployment implementation selection | PEIR/binding/specialization retained; universal operation/state schedule lowering remains pending |
+| Physical program v1 | Typed token/tensor/state slots, exact parameter handles, admitted implementation contracts and serial dependencies | Native model-plan v8 forward/output/component consumers; older decoder/output compatibility normalizes once after binding authentication |
+| Operator schedule v1 | Canonical operation nodes, data/order/state edges, target/draft populations and semantic lineage | Model-plan v8 persists the exact schedule; DeepSeek runtime resolves layer work from it while physical plans supply admitted implementation facts |
+| Existing package physical / target forms | Representation, admitted package storage and deployment implementation selection | PEIR/binding/specialization remain distinct from program meaning and backend launch mechanics |
 
 Semantic tensors contain scalar type and logical shape, not GGUF qtypes, CUDA
 layouts or alignment. Types include scalars, tensors, semantic-domain state,
@@ -686,11 +701,12 @@ resources and host/device transport without building IR or selecting family
 semantics. Input arity comes from the physical entrypoint, not a single-input
 runner assumption. Each input has an explicit typed device argument or its own
 host staging view; all staging and descriptor storage is admitted at open, with
-no argument-array allocation during invocation. Host publication waits for all result transfers and cancellation
-checks; device-result publication generations remain the enclosing runtime's
-authority. The full-evidence CPU reference path consumes the same compiled
-operation through a CPU backend. This is the final-head cutover, not migration
-of the remaining DeepSeek attention/MoE layer loop or DSpark orchestration.
+no argument-array allocation during invocation. Host publication waits for all
+result transfers and cancellation checks; device-result publication generations
+remain the enclosing runtime's authority. The full-evidence CPU reference path
+consumes the same compiled operation through a CPU backend. This operation is
+one node in the compiler-owned DeepSeek target/draft schedule; the physical
+stage does not own or reconstruct that schedule.
 
 Target features consumed by draft execution use `tensor.stream_mean`, a pure
 F32 `[rows, streams, width]` to F32 `[rows, width]` reduction. Ordered stream
@@ -844,10 +860,10 @@ Compiled operands are dynamic
 inputs to kernel replay, not captured addresses. The stage's parameter footprint
 and router/expert work contribute separately to execution accounting.
 
-Remaining MoE routing, expert and outer attention/target/draft orchestration
-are not yet owned by a complete physical forward program. This is an ingress
-and router-projection consumer cutover, not full DeepSeek topology cutover or
-upstream conformance.
+MoE routing, experts and outer attention/target/draft orchestration remain
+distinct admitted physical operations rather than one monolithic forward SSA
+program. Their ordering and dependencies are owned by the canonical operator
+graph retained in model-plan v8; this separation is not upstream conformance.
 
 The retained router's correction addition is F32 before ranking, matching
 the source Gate's F32 scores and bias. CPU, single-row CUDA and row-parallel
@@ -892,9 +908,9 @@ Full evidence retains a separate CPU reference stage alongside device execution;
 it does not choose a different device composition. Both the single-row and
 batched backend fused-post branches and their recombined-output fields are
 removed; direct numerical fixtures also consume the typed residual program.
-This is a residual-post consumer cutover, not the whole MoE/attention
-program cutover. The standalone post's per-operation CUDA synchronization is
-still a target/schedule integration obligation; no speedup is claimed.
+The canonical schedule owns where this program follows MoE work. The
+standalone post still has per-operation CUDA synchronization; no speedup is
+claimed.
 
 Production token-forward execution and the independent BF16 CUDA fixture both
 use [`program_device.c`](../../src/runtime/program_device.c) with

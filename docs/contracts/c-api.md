@@ -242,12 +242,14 @@ The internal runtime is family-neutral. Its main objects are:
 
 Model-execution descriptor schema v1 is a non-installed fieldwise projection
 of source/family context, attention, MoE, output, DSpark and state facts.
-Runtime binding v15 persists and authenticates it together with the canonical
-operator graph identity, Physical Execution IR v5 package decisions, compiled
-model plan, and pointer-free tokenizer/conversation policy. The explicit v14
-reader authenticates legacy bytes and normalizes only canonical package records
-to PEIR v5; an unsupported legacy derived-layout requirement refuses. Bindings
-v7 through v13 remain explicit rebuild boundaries.
+Runtime binding v16 persists and authenticates it together with the canonical
+operator graph and identity, Physical Execution IR v5 package decisions,
+compiled model plan, and pointer-free tokenizer/conversation policy. The
+explicit v14/v15 readers authenticate legacy bytes and normalize only canonical
+package records to PEIR v5; an unsupported legacy derived-layout requirement
+refuses. Bindings v7 through v13 remain explicit rebuild boundaries, and a
+binding without the retained operator schedule must be rebuilt rather than
+receiving an inferred topology.
 Hardware-profile,
 workload-profile, capacity-plan and phase-roofline schemas begin at v1 as
 internal contracts. Server options schema v4 owns host/listener policy
