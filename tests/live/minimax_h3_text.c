@@ -538,7 +538,7 @@ static int multimodal_execute(
     yvex_image image = {0};
     float *output = NULL;
     unsigned int *tags = NULL;
-    unsigned long long maximum_tokens = 256ull, output_values;
+    unsigned long long maximum_tokens = 256ull, output_values, host_budget = 0ull;
     char output_path[1024];
     yvex_error err, cleanup;
     int rc, cleanup_rc;
@@ -559,13 +559,17 @@ static int multimodal_execute(
         rc = yvex_graph_register_minimax_h3()->component_admit(
             "text_encoder", model.artifact, model.gguf, model.table, NULL,
             &admission, NULL, &failure, &err);
+    if (rc == YVEX_OK &&
+        !yvex_core_u64_add(admission.payload_bytes, 64ull * 1024ull * 1024ull,
+                           &host_budget))
+        rc = YVEX_ERR_BOUNDS;
     if (rc == YVEX_OK)
         rc = yvex_image_decode_file(&image, image_path,
                                     256ull * 1024ull * 1024ull, &err);
     if (rc == YVEX_OK)
         rc = yvex_runtime_component_session_open(
             &session, &admission, model.artifact, model.gguf, model.table,
-            YVEX_BACKEND_KIND_CUDA, admission.payload_bytes,
+            YVEX_BACKEND_KIND_CUDA, host_budget,
             80ull * 1024ull * 1024ull * 1024ull, &err);
     if (rc == YVEX_OK)
         rc = yvex_runtime_component_session_borrow(session, &component, &err);

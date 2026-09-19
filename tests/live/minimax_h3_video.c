@@ -212,7 +212,7 @@ static int keyframe_encode(
     yvex_media_keyframe_request request = {0};
     encoder_observer observer = {moments_path, moments_reference_path};
     yvex_image image = {0};
-    unsigned long long values;
+    unsigned long long values, host_budget = 0ull;
     float *output = NULL;
     yvex_error cleanup;
     int rc, cleanup_rc;
@@ -229,10 +229,14 @@ static int keyframe_encode(
         rc = yvex_graph_register_minimax_h3()->component_admit(
             "video_vae", artifact, gguf, tensors, NULL, &admission, NULL,
             &failure, err);
+    if (rc == YVEX_OK &&
+        !yvex_core_u64_add(admission.payload_bytes, 64ull * 1024ull * 1024ull,
+                           &host_budget))
+        rc = YVEX_ERR_BOUNDS;
     if (rc == YVEX_OK)
         rc = yvex_runtime_component_session_open(
             &session, &admission, artifact, gguf, tensors, YVEX_BACKEND_KIND_CUDA,
-            admission.payload_bytes, 16ull * 1024ull * 1024ull * 1024ull, err);
+            host_budget, 16ull * 1024ull * 1024ull * 1024ull, err);
     if (rc == YVEX_OK)
         rc = yvex_runtime_component_session_borrow(session, &component, err);
     request = (yvex_media_keyframe_request){
@@ -389,6 +393,7 @@ int main(int argc, char **argv)
         yvex_artifact_admission_failure failure;
         unsigned long long latent_values = 24ull * 37ull * 2ull * 2ull;
         unsigned long long output_values = 3ull * 124ull * 32ull * 32ull;
+        unsigned long long host_budget = 0ull;
         float *latent = malloc((size_t)(latent_values * sizeof(float)));
         float *output = malloc((size_t)(output_values * sizeof(float)));
         if (!latent || !output ||
@@ -401,10 +406,14 @@ int main(int argc, char **argv)
         if (rc == YVEX_OK)
             rc = yvex_graph_register_minimax_h3()->component_admit(
                 "video_vae", artifact, gguf, tensors, NULL, &component, NULL, &failure, &err);
+        if (rc == YVEX_OK &&
+            !yvex_core_u64_add(component.payload_bytes, 64ull * 1024ull * 1024ull,
+                               &host_budget))
+            rc = YVEX_ERR_BOUNDS;
         if (rc == YVEX_OK)
             rc = yvex_runtime_component_session_open(
                 &context.session, &component, artifact, gguf, tensors, YVEX_BACKEND_KIND_CUDA,
-                component.payload_bytes, 16ull * 1024ull * 1024ull * 1024ull, &err);
+                host_budget, 16ull * 1024ull * 1024ull * 1024ull, &err);
         if (rc == YVEX_OK)
             rc = yvex_runtime_component_session_borrow(
                 context.session, &context.component, &err);
@@ -448,6 +457,7 @@ int main(int argc, char **argv)
         yvex_runtime_component_session *session = NULL;
         yvex_component_execution component_execution = {0};
         unsigned long long patches = frames * height * width;
+        unsigned long long host_budget = 0ull;
         size_t latent_values = (size_t)(patches * 24ull);
         size_t output_values = (size_t)(patches * 3072ull);
         float *latent = (float *)malloc(latent_values * sizeof(*latent));
@@ -473,11 +483,15 @@ int main(int argc, char **argv)
             rc = yvex_graph_register_minimax_h3()->component_admit(
                 "video_vae", artifact, gguf, tensors, NULL, &admission, NULL,
                 &admission_failure, &err);
+        if (rc == YVEX_OK &&
+            !yvex_core_u64_add(admission.payload_bytes, 64ull * 1024ull * 1024ull,
+                               &host_budget))
+            rc = YVEX_ERR_BOUNDS;
         if (rc == YVEX_OK)
             rc = yvex_runtime_component_session_open(
                 &session, &admission, artifact, gguf, tensors,
                 cuda ? YVEX_BACKEND_KIND_CUDA : YVEX_BACKEND_KIND_CPU,
-                admission.payload_bytes,
+                host_budget,
                 cuda ? 16ull * 1024ull * 1024ull * 1024ull : 0ull, &err);
         if (rc == YVEX_OK)
             rc = yvex_runtime_component_session_borrow(

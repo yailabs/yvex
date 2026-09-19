@@ -547,10 +547,33 @@ check-cuda: cuda-info test-cuda smoke-cuda test-attention-cuda
 	@echo "yvex check-cuda: ok"
 
 test-cuda-no-nvcc: tests/test_cuda_failclosed.sh
-	$(MAKE) BUILD_DIR=build/no-nvcc \
-		YVEX_BIN=build/no-nvcc/yvex \
-		NVCC=__yvex_nvcc_unavailable__ all
-	YVEX_BIN=build/no-nvcc/yvex sh tests/test_cuda_failclosed.sh
+	@set -eu; \
+		tmp_parent=$${TMPDIR:-/tmp}; \
+		case "$$tmp_parent" in /*) ;; *) echo "no-NVCC temp parent must be absolute: $$tmp_parent" >&2; exit 1;; esac; \
+		test -d "$$tmp_parent" && test ! -L "$$tmp_parent"; \
+		tmp_parent=$$(cd "$$tmp_parent" && pwd -P); \
+		tmp_dir=$$(mktemp -d "$$tmp_parent/yvex-no-nvcc-replai.XXXXXX"); \
+		case "$$tmp_dir" in "$$tmp_parent"/yvex-no-nvcc-replai.*) ;; *) echo "no-NVCC temp ownership mismatch: $$tmp_dir" >&2; exit 1;; esac; \
+		cleanup_no_nvcc_tmp() { \
+			status=$$?; \
+			trap - EXIT HUP INT TERM; \
+			case "$$tmp_dir" in "$$tmp_parent"/yvex-no-nvcc-replai.*) ;; *) echo "refusing unowned no-NVCC cleanup: $$tmp_dir" >&2; exit 1;; esac; \
+			if test -e "$$tmp_dir"; then \
+				test -d "$$tmp_dir" && test ! -L "$$tmp_dir" || { echo "refusing unsafe no-NVCC cleanup: $$tmp_dir" >&2; exit 1; }; \
+				find "$$tmp_dir" -xdev -mindepth 1 -delete || exit 1; \
+				rmdir "$$tmp_dir" || exit 1; \
+			fi; \
+			exit $$status; \
+		}; \
+		trap cleanup_no_nvcc_tmp EXIT; \
+		trap 'exit 129' HUP; \
+		trap 'exit 130' INT; \
+		trap 'exit 143' TERM; \
+		$(MAKE) BUILD_DIR=build/no-nvcc \
+			YVEX_BIN=build/no-nvcc/yvex \
+			REPLAI_PREFIX="$$tmp_dir/replai" \
+			NVCC=__yvex_nvcc_unavailable__ all; \
+		YVEX_BIN=build/no-nvcc/yvex sh tests/test_cuda_failclosed.sh
 
 test-core: $(TEST_RUNNER)
 	$(TEST_RUNNER)

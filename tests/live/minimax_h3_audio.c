@@ -260,6 +260,7 @@ static int decode_cuda(const audio_arguments *arguments, const yvex_artifact *ar
     yvex_component_execution component = {0};
     struct timespec begin, end;
     yvex_error cleanup;
+    unsigned long long host_budget = 0ull;
     size_t latent_values, output_values;
     float *latent = NULL, *output = NULL;
     int rc = YVEX_ERR_BOUNDS;
@@ -288,10 +289,14 @@ static int decode_cuda(const audio_arguments *arguments, const yvex_artifact *ar
     rc = yvex_graph_register_minimax_h3()->component_admit(
         "audio_vae", artifact, gguf, tensors, NULL, &admission, NULL,
         &admission_failure, err);
+    if (rc == YVEX_OK &&
+        !yvex_core_u64_add(admission.payload_bytes, 64ull * 1024ull * 1024ull,
+                           &host_budget))
+        rc = YVEX_ERR_BOUNDS;
     if (rc == YVEX_OK)
         rc = yvex_runtime_component_session_open(
             &session, &admission, artifact, gguf, tensors, YVEX_BACKEND_KIND_CUDA,
-            admission.payload_bytes, 16ull * 1024ull * 1024ull * 1024ull, err);
+            host_budget, 16ull * 1024ull * 1024ull * 1024ull, err);
     if (rc == YVEX_OK)
         rc = yvex_runtime_component_session_borrow(session, &component, err);
     if (rc == YVEX_OK)

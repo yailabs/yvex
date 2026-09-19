@@ -7,11 +7,11 @@ Status: living public project control
 | Axis | Current truth |
 | --- | --- |
 | Project target | Native, harness-independent model compilation and execution substrate. |
-| Active engineering boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` — broad source-stable replay and independent evidence for the completed universal-IR consumer cutover. |
-| Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` COMPLETE: current admitted Qwen, DeepSeek/DSpark and MiniMax computation is compiler-owned; runtime consumes authenticated program/schedule truth. The `.0` producer-owned device-result lifetime remains preserved. |
-| Architecture Spectrum | A01 PARTIAL, repair queued behind refoundation .1 and qualification; A02–A11 PLANNED. |
+| Active engineering boundary | `SPECTRUM.MAMBA2.REPAIR.0` — repair the existing A01 tokenizer/normalization and pure-SSM executable boundary. Temporal activation does not promote its evidence. |
+| Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` COMPLETE and independently qualified at its claimed scope: current admitted Qwen, DeepSeek/DSpark and MiniMax computation is compiler-owned; runtime consumes authenticated program/schedule truth. The `.0` producer-owned device-result lifetime remains preserved. |
+| Architecture Spectrum | A01 PARTIAL / active repair; A02–A11 PLANNED. |
 | Adopted state architecture target | N.B1 — Slow-Update Dual-Stream is the official primary research target: primary R plus persistent Experiential Computational State E; unfinished deliberation L remains distinct. YAI owns semantic authority; YVEX owns computational realization. Program N and B1 post-training remain OPEN/unscheduled, not implemented. |
-| Most important structural gap | The compiler cutover is complete at the currently admitted execution scope, but independent whole-model conformance and comparable post-cutover replay remain open. Exact Qwen preservation, official DeepSeek/Qwen references, the known DeepSeek CPU/CUDA logits gap and A01 tokenizer/normalization barriers belong to qualification or later family evidence, not another parallel runtime authority. |
+| Most important structural gap | A01 still lacks authoritative tokenizer/normalization ownership and a qualified pure-SSM executable boundary. Independent whole-model conformance also remains open: official DeepSeek/Qwen references were unavailable, and the known DeepSeek CPU/CUDA logits gap was retained rather than hidden. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media. Evidence depths differ. |
 | External execution characterization | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Retained as a measured limitation, not a refoundation .1 closure gate; no downstream-safe claim. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
@@ -19,7 +19,7 @@ Status: living public project control
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
 | Release qualification | BLOCKED. |
 | Current branch | `models2`; branch epochs coordinate integration, not model ownership. |
-| Next decision point | Complete `.1.QUALIFICATION.0`, including comparable replay and available upstream/reference evidence, before resuming A01. No internal agreement establishes upstream conformance or release qualification. |
+| Next decision point | Repair A01 through the common compiler/runtime authority without fictitious Transformer roles, then decide its next evidence stage. No internal agreement establishes upstream conformance or release qualification. |
 
 <!-- maturity-counts:start -->
 <!-- Generated from System Maturity by tests/documentation_architecture.py. -->
@@ -1451,7 +1451,7 @@ maturity**. Planned references are not acquisition or executable support claims.
 
 | ID | Computational pressure | Reference target | What it tries to falsify | Current public state |
 | --- | --- | --- | --- | --- |
-| A01 | Pure SSM | `mistralai/Mamba-Codestral-7B-v0.1` | Transformer-shaped decoder and computational-state-equals-KV assumptions | PARTIAL / repair queued after refoundation .1 qualification |
+| A01 | Pure SSM | `mistralai/Mamba-Codestral-7B-v0.1` | Transformer-shaped decoder and computational-state-equals-KV assumptions | PARTIAL / active repair |
 | A02 | Pure recurrent | RWKV7-1.5B | Sequence state must be attention/SSM-shaped | PLANNED |
 | A03 | Encoder-decoder | FLAN-T5 | Decoder-only lifecycle; missing retained encoder state/cross-attention | PLANNED |
 | A04 | Diffusion language model | LLaDA-8B-Instruct | Autoregressive-only generation | PLANNED |
@@ -1629,19 +1629,19 @@ decision. This is neither the maturity matrix nor the release scope.
 | 3 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` | COMPLETE | R | Unique device-result validity owner; no N implementation or A01 promotion | Producer publication generations invalidate borrowed values before workspace reuse; consumers reject stale results without changing family numerics or public ABI/protocol. | `NATIVE.COGNITIVE.STATE.ALIGNMENT.0` |
 | 4 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.QUALIFICATION.0` | COMPLETE | Q / R | Source-stable lifecycle, numerical component and bounded replay evidence | Mapped QA, stale-result/RNG negative tests and sanitizer lanes qualified; three warm fixed-output controls per clean tree preserve model/binding/kernel/output identity. Characterization only; upstream/full-model conformance remains open. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.0` |
 | 5 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` | COMPLETE | R / C | Typed computational language, explicit state/effects, program/component and physical/target lowering boundaries | Current Qwen forward/output, DeepSeek/DSpark target/draft schedule and MiniMax neural components use compiler-owned execution truth; runtime consumes authenticated binding v16/model-plan v8 schedule/programs. Source/catalog, importer, program, physical, runtime and backend authorities are distinct. Pure SSM remains representable without claiming A01 execution or N. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.QUALIFICATION.0` |
-| 6 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` | ACTIVE | Q / R / C | Broad consumer evidence and comparable post-cutover replay | Qualify compiler refusals, migrated families, transactions, CPU/CUDA and sanitizers; replay exact controls and retain the independent full-model conformance gap. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` |
-| 7 | `SPECTRUM.MAMBA2.REPAIR.0` | BLOCKED | C / S | Pure-SSM language, tokenizer authority, recurrent execution; A01 evidence remains PARTIAL | Resume after .1 qualification; resolve source/normalization authority and SSM-only executable boundary before earning the next evidence stage. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` |
+| 6 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` | COMPLETE | Q / R / C | Broad consumer evidence and comparable post-cutover replay | Compiler refusals, migrated-family controls, transactions, CPU/CUDA and sanitizer lanes qualify the claimed cutover. Independent full-model/upstream gaps remain explicit. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` |
+| 7 | `SPECTRUM.MAMBA2.REPAIR.0` | ACTIVE | C / S | Pure-SSM language, tokenizer authority, recurrent execution; A01 evidence remains PARTIAL | Resolve source/normalization authority and the SSM-only executable boundary before earning the next evidence stage. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` |
 | 8 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
 | 9 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
 | 10 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
 | 11 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
 
-Active Next: MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0
+Active Next: SPECTRUM.MAMBA2.REPAIR.0
 
-The bounded .0 refoundation, its qualification and the `.1` universal-IR
-consumer cutover are complete. The selected order is now **.1
-qualification/replay → A01 repair**. Blocking A01's temporal row does not
-demote its PARTIAL evidence or change `repair_same_boundary`. DeepSeek
+The bounded .0 refoundation, its qualification, the `.1` universal-IR
+consumer cutover and `.1` qualification are complete. A01 repair is now the
+sole active boundary. Temporal activation does not promote its PARTIAL evidence
+or change `repair_same_boundary`. DeepSeek
 optimization stays PARTIAL pending explicit resumption; upstream/whole-model
 conformance remains Program Q work.
 
@@ -1650,18 +1650,39 @@ records the completed authority cutover: Qwen executes physical SSA;
 DeepSeek/DSpark executes physical implementation plans under the canonical
 operator schedule retained in the binding; MiniMax neural components use typed
 component programs while media/product I/O remains outside neural IR.
-Exact Qwen artifact-backed preservation is a separate evidence obligation:
-the registered BF16 representation has been acquired through canonical pull and
-is locally READY. Its compiled forward/output consumer has completed a bounded
-real CUDA generation (15 prompt tokens, two sampled tokens, EOS, no prefix reuse).
-That execution does not establish before/after whole-model preservation or
-upstream conformance; those obligations remain unqualified. Mamba remains
-representability evidence.
-The `.1` progression decision is `proceed` into its mandatory qualification
-boundary, not directly into A01. Official DeepSeek vectors and authoritative
-upstream Qwen conformance have not been executed; the pre-existing whole-model
-DeepSeek CPU/CUDA discrepancy (max absolute error approximately 9.982168) is
-not resolved by migration-preservation tests.
+Exact Qwen artifact-backed replay is qualified at migration-preservation scope:
+the registered BF16 representation is locally READY, physical SSA executes
+1,732 steps over 14 reusable slots, and a fresh-session replay compared 10,240
+values exactly (`max_abs=0`, tolerance zero) while cancellation, stale-result
+and cleanup refusals remained closed. This is same-implementation determinism,
+not whole-model before/after evidence or upstream conformance.
+
+DeepSeek target-only and DSpark generation, schedule consumption, state
+preservation and output-head component oracles pass on CPU/CUDA. Given the same
+admitted hidden input, the CUDA output-head reference comparison observed
+`max_abs=7.62939453125e-06`; the retained broader CPU/CUDA comparison still
+observed `max_abs=9.982114791870117`, consistent with the pre-existing
+approximately 9.982168 gap. It is therefore retained as OPEN independent
+full-model conformance evidence, not normalized away or classified as a
+compiler-cutover regression. Official DeepSeek vectors and authoritative
+upstream Qwen conformance were not available for reproducible execution.
+
+MiniMax audio CPU/CUDA programs reproduce their exact retained fixtures
+bitwise; text-layer CUDA observes `max_abs=0.03125` within its registered
+tolerance; joint-program replay preserves 128 execution values and 768 profile
+values exactly while malformed capacity, target, aliasing, transaction and
+cancellation cases fail closed. The exact complete 50-block fixture set is not
+configured, so full-scale/whole-model evidence remains
+`BLOCKED_BY_ASSET_IDENTITY`; bounded component preservation is not promoted.
+Mamba remains representability evidence only.
+
+The source-stable mapped campaign, including compiler/program negatives,
+binary/import refusal, transaction, rollback, cancellation, stale publication,
+CPU/CUDA and ASan/LSan/UBSan lanes, qualifies the current cutover at exactly
+that scope. A no-NVCC lane initially encountered a stale external dependency
+prefix rather than a product failure; the lane now owns an empty verified
+prefix and passes two consecutive builds. Missing upstream references, live
+assets and performance baselines remain BLOCKED/NOT RUN, never PASS.
 
 The .1 boundary also owns truthful public execution-capacity admission (R / X):
 discovery and deterministic preflight must describe the exact engine/tokenizer
@@ -1795,8 +1816,8 @@ platform qualification. [MLC quick start][mlc]
 | Post-refoundation qualification and exact replay, COMPLETE | Q / R | Changed borrow contracts and bounded comparable performance; full-model conformance still open | Generic prerequisite qualified before A01 repair | Evidence only at measured scope, not release qualification |
 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1`, COMPLETE | R / C | Typed values, shapes, operations, effects, programs, canonical schedules and explicit lowering; no N implementation | Pure-SSM representability established, not A01 execution | Preserved claimed-scope numerics; no automatic release promotion |
 | .1 real Golden prefill characterization | R / S / Q | Long-context execution and measured residual bottlenecks; characterization, not a .1 closure gate | Existing DeepSeek execution pressure, not A01 progression | Full request still fails; no downstream-safe claim or behavior, benchmark or release gate promotion |
-| `.1.QUALIFICATION.0`, ACTIVE | Q / R / C | Compiler refusal, migrated consumer and comparable execution evidence | Precedes queued A01 repair | No upstream conformance inferred from internal parity |
-| `SPECTRUM.MAMBA2.REPAIR.0`, queued | C / S | Semantic IR, composition, non-KV state, tokenizer | A01 directly pressures generic state and informs N; no automatic N promotion | Indirect; no v0.1 promotion or scope expansion |
+| `.1.QUALIFICATION.0`, COMPLETE | Q / R / C | Compiler refusal, migrated consumer and comparable execution evidence; independent full-model/upstream gaps retained | Qualified the compiler cutover without promoting A01 | No upstream conformance or release evidence inferred from internal parity |
+| `SPECTRUM.MAMBA2.REPAIR.0`, ACTIVE | C / S | Semantic IR, composition, non-KV state, tokenizer | A01 directly pressures generic state and informs N; evidence remains PARTIAL until its own repair qualifies | Indirect; no v0.1 promotion or scope expansion |
 | Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |
 | Explicit DeepSeek optimization resumption | Q / S / R | Baseline, resource/structural performance evidence | Existing DeepSeek control, not a new Axx | Predecessor of evaluation |
 | Model-language breadth after A01 | C / O / D / M | Components, heads, tokenizer and modality semantics | A02–A11 selected by pressure | General substrate, not automatically v0.1 |
