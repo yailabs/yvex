@@ -310,7 +310,7 @@ static int pull_remote_download(int argc, char **argv,
                                 const char *models_root)
 {
     char *download_argv[180];
-    char expected[32], expected_value[32], selected_shards[32];
+    char expected[32], selected_shards[32];
     char derived_name[YVEX_REMOTE_NAME_CAP];
     const char *name;
     const char *prepare_selector;
@@ -360,11 +360,8 @@ static int pull_remote_download(int argc, char **argv,
     for (index = 0u; index < options->exclude_count; ++index)
         PULL_ARG("--exclude", options->exclude[index]);
     if (options->auth) PULL_ARG("--auth", options->auth);
-    if (representation->size_known && representation->size_bytes) {
-        snprintf(expected_value, sizeof(expected_value), "%llu",
-                 representation->size_bytes);
-        PULL_ARG("--expected-bytes", expected_value);
-    }
+    /* Representation bytes exclude selected sidecars, so they are not a
+     * truthful denominator for the complete acquisition operation. */
     if (representation->file_count) {
         snprintf(selected_shards, sizeof(selected_shards), "%llu",
                  representation->file_count);

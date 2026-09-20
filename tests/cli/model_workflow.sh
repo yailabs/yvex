@@ -398,6 +398,7 @@ assert item["target_id"] == "pulled-h3"
 assert item["lifecycle"] == "complete"
 assert item["active"] is False
 assert item["completed_files"] >= 2 and item["committed_bytes"] > 0
+assert item["expected_bytes"] is None
 assert item["inflight_selected_bytes"] is None
 PY
 "$YVEX_BIN" model list --models-root "$MODELS_ROOT" --registry "$REGISTRY" \
