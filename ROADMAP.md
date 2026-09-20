@@ -7,28 +7,28 @@ Status: living public project control
 | Axis | Current truth |
 | --- | --- |
 | Project target | Native, harness-independent model compilation and execution substrate. |
-| Active engineering boundary | `DECISION.READOUT.ZERO.DECODE.0` — qualify one finite-candidate computational readout from an already-loaded admitted backbone and shared/prefetched computation, with zero generated tokens, no sampling loop, no new trainable weights and no second full backbone. |
+| Active engineering boundary | `PROJECT_CONTROL.POST.DECISION.READOUT.RECONCILIATION.0` — reconcile the qualified V0 readout against the live output-runner roadmap and select one bounded successor without implicitly starting V1, YAI integration, Program N, A11 or GB10 optimization. |
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` COMPLETE and independently qualified at its claimed scope: current admitted Qwen, DeepSeek/DSpark and MiniMax computation is compiler-owned; runtime consumes authenticated program/schedule truth. The `.0` producer-owned device-result lifetime remains preserved. |
 | Architecture Spectrum | A01 PARTIAL / exact artifact-executable; A02–A11 PLANNED. No next vertical is active. |
 | Adopted state architecture target | N.B1 — Slow-Update Dual-Stream is the official primary research target: primary R plus persistent Experiential Computational State E; unfinished deliberation L remains distinct. YAI owns semantic authority; YVEX owns computational realization. Program N and B1 post-training remain OPEN/unscheduled, not implemented. |
-| Adopted decision architecture target | YAI owns the semantic Decision Plane; YVEX owns computational Decision Readout and the future broader Decision Core. One resident backbone should support multiple qualified readouts. Model scores never acquire semantic authority or canonical admission. |
-| Most important structural gap | YVEX has complete logits, sampling and compiler-owned output heads, but no generic typed finite-candidate readout over shared computation. A01 also lacks an independent all-layer/whole-model oracle and source-owned hosted conversation template; independent DeepSeek/Qwen conformance remains open. |
-| Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media; exact Mamba2 pure-SSM CPU artifact execution at token/runtime scope. Evidence depths differ. |
+| Adopted decision architecture target | YAI owns the semantic Decision Plane; YVEX owns computational Decision Readout and the future broader Decision Core. V0 now qualifies one internal finite-candidate readout over one exact resident Mamba2 backbone; model scores still acquire no semantic authority or canonical admission. |
+| Most important structural gap | Decision Readout now exists at one exact internal CPU/model scope, but cross-model breadth, calibration, learned heads and any selected application consumer remain open. A01 also lacks an independent all-layer/whole-model oracle and source-owned hosted conversation template; independent DeepSeek/Qwen conformance remains open. |
+| Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media; exact Mamba2 pure-SSM CPU artifact execution plus bounded zero-generation finite-candidate readout. Evidence depths differ. |
 | External execution characterization | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Retained as a measured limitation, not a refoundation .1 closure gate; no downstream-safe claim. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
 | Behavior evaluation | BLOCKED / not ready. |
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
 | Release qualification | BLOCKED. |
 | Current branch | `models2`; branch epochs coordinate integration, not model ownership. |
-| Next decision point | Execute and qualify the bounded zero-decode V0 readout experiment. The reference model remains unselected until implementation archaeology chooses one admitted model by evidence suitability. A11, another Spectrum vertical, DeepSeek optimization and Program N remain unselected for resumption. |
+| Next decision point | Reconcile the completed V0 evidence and choose one bounded successor. V1/calibration, YAI integration, I07, A11, another Spectrum vertical, DeepSeek optimization and Program N remain unselected. |
 
 <!-- maturity-counts:start -->
 <!-- Generated from System Maturity by tests/documentation_architecture.py. -->
 | Maturity state | Meaning | Current count |
 | --- | --- | ---: |
 | 🟢 ESTABLISHED | Generic owner and claimed boundary implemented and qualified at the stated scope. | 32 |
-| 🟡 PARTIAL | Real foundation; genericity, breadth, portability, performance or evidence incomplete. | 42 |
-| 🔴 OPEN | Generic capability absent or not yet claimable. | 60 |
+| 🟡 PARTIAL | Real foundation; genericity, breadth, portability, performance or evidence incomplete. | 43 |
+| 🔴 OPEN | Generic capability absent or not yet claimable. | 59 |
 | ⚪ LATER | Intentionally outside the current maturity horizon. | 14 |
 <!-- maturity-counts:end -->
 
@@ -1056,7 +1056,7 @@ most of its state and change only a small fraction.
 | Embed | 🔴 OPEN | Internal token embeddings/conditioning are not an embedding-output runner. | First-class vector result, identity and I/O admission. | O | [Runtime contract][runtime-contract]; [family integration][families] |
 | Pool | 🔴 OPEN | No generic pooling result owner. | Source-authored pooling semantics and typed output. | O / C | [Family integration][families] |
 | Score | 🔴 OPEN | No general sequence/pair scoring runner. | Exact score definition, token alignment and result identity. | O | [Runtime contract][runtime-contract] |
-| Decision / option readout | 🔴 OPEN | Complete logits, sampling distributions and component scores do not establish a generic finite-candidate readout over shared/current computation. | Execute one exact candidate population through an admitted model/readout identity; preserve shared-state correctness; publish typed scores with explicit semantics; qualify zero-generated-token behavior and keep relative distributions distinct from calibrated probability. | O / C / Q | [Decision Readout target](#decision-readout-decision-core-target); [runtime contract][runtime-contract] |
+| Decision / option readout | 🟡 PARTIAL | Internal readout schema v1 scores exact token candidates over one captured common prefix with raw log-likelihood, separate mean log-probability and an uncalibrated relative distribution. One exact Mamba2 CPU artifact qualifies shared-state isolation, full replay, order invariance, cancellation/retry, zero sampling and zero generated tokens. | Qualify compatible shared-prefix readout across broader admitted model/state classes and capability advertisement without converting internal token scoring into semantic authority, calibration or a public application ABI. | O / C / Q | [Decision Readout target](#decision-readout-decision-core-target); [runtime contract][runtime-contract] |
 | Classify | 🔴 OPEN | No admitted generic classification-head runner. | Label/head semantics and typed result independent of commands. | O / C | [Family integration][families] |
 | Rerank | 🔴 OPEN | No generic pair/cross-encoder request and score path. | Pair construction, score semantics and reproducible ranking evidence. | O | [Runtime contract][runtime-contract] |
 | Reward | 🔴 OPEN | No general sequence/token reward output. | Source-defined reward heads and token/sequence identity. | O / C | [Family integration][families] |
@@ -1099,9 +1099,10 @@ semantic authority.
 | V5 | Native System-One realization and/or dedicated specialized decision model | Requires independent usefulness, calibration and systems evidence; no current claim. |
 
 These levels are an evidence/research ladder, not six scheduled milestones.
-V0 is the selected bounded experiment; its model is deliberately not frozen by
-project control and must be chosen later from admitted YVEX models by evidence
-suitability.
+V0 selected Mamba-Codestral-7B-v0.1 only after live artifact archaeology showed
+it was the smallest exact READY/launchable model with tokenizer, output logits
+and common recurrent-prefix ownership. That qualified reference does not make
+Decision Readout family-specific or schedule V1.
 
 V0 explicitly does not implement calibration, a learned probe/head, a dedicated
 decision model, R/E or StateProfile, a YAI contract, semantic Decision
@@ -1157,10 +1158,11 @@ current performance claim.
 The external pressure is a real bounded YAI semantic Decision Plane and typed
 candidate frontier, but YAI's `CognitiveDecisionRequest v1`,
 `CognitiveDecisionDistribution v1` and `CognitiveDecisionFrontier v1` remain
-YAI-owned application/domain contracts. YVEX has no Decision Readout producer
-today, so a shared public producer/consumer ABI is premature. I07 remains
-UNSELECTED. Only a real YVEX producer plus an actually selected YAI consumer
-would trigger normal BOUNDARY/Interlock evaluation.
+YAI-owned application/domain contracts. YVEX now has one internal computational
+Decision Readout producer, but YAI has not selected it as a consumer; a shared
+public producer/consumer ABI therefore remains premature. I07 remains
+UNSELECTED. Only an actually selected cross-project consumer would trigger
+normal BOUNDARY/Interlock evaluation.
 
 ### Multimodal execution
 
@@ -1380,11 +1382,13 @@ semantics, read/update blocks, StateProfile-compatible entrypoints, root
 effects, dependency DAG/barriers and trainable augmentation roles extend the
 language; they were not implemented by refoundation .1 or A01.
 
-**Current pressure:** A01 now qualifies exact pure-SSM artifact execution at
-its PARTIAL scope. The selected V0 Decision Readout must express shared/current
-computation, finite candidates, score-producing work, typed multi-candidate
-results and exact readout identity without a family branch or semantic Decision
-authority. The completed acquisition lifecycle wave did not reopen family scope.
+**Current pressure:** A01 qualifies exact pure-SSM artifact execution at its
+PARTIAL scope. Decision Readout V0 now composes the existing compiler-owned
+forward/output programs with common runtime prefix/state and a typed
+multi-candidate result; no Semantic Model IR, PEIR, model-plan or binding schema
+change was required. Broader readout/state classes remain compiler pressure,
+not a reason to manufacture a new family operation. The completed acquisition
+lifecycle wave did not reopen family scope.
 
 **Material advance:** another computational shape compiles through shared mechanisms without backend reconstruction.
 
@@ -1498,16 +1502,20 @@ recipe search. Computational updates return proposals/evidence, not semantic tru
 
 **Purpose:** model execution independent of chat.
 
-**Established foundation:** shared autoregressive generation and bounded latent iteration.
+**Established foundation:** shared autoregressive generation, bounded latent
+iteration and one exact internal finite-candidate readout over a common
+recurrent prefix.
 
 **Open maturity boundaries:** embedding, pooling, sequence/pair scoring,
-finite-candidate Decision Readout, classification, reranking, reward and general
-iterative results.
+finite-candidate Decision Readout breadth beyond the qualified V0 model/state
+class, classification, reranking, reward and general iterative results.
 
-**Current pressure:** `DECISION.READOUT.ZERO.DECODE.0` is the selected bounded
-consumer: one already-loaded admitted backbone, shared/prefetched computation,
-finite candidates, explicit score semantics and zero generated tokens. A08
-retrieval and A04/A10 non-autoregressive expectations remain separate.
+**Current pressure:** `DECISION.READOUT.ZERO.DECODE.0` qualified one already-open
+Mamba2 backbone, one recurrent prefix, exact token candidates, explicit score
+semantics and zero sampling/generated tokens. Post-V0 project control must
+choose any successor; V1, YAI integration and universal model breadth are not
+implicit. A08 retrieval and A04/A10 non-autoregressive expectations remain
+separate.
 
 **Material advance:** a qualified typed non-chat result through existing engine/session owners.
 
@@ -1553,11 +1561,13 @@ the transfer; real consumers and missing platform evidence remain separate.
 
 **Open maturity boundaries:** upstream conformance, independent full-model quality, release benchmark and release qualification; future B1 surgery parity, held-out post-training/state-usefulness evaluation, explicit Q0–Q4/D0 controls and numerical/lifecycle/ablation evidence.
 
-**Current pressure:** Decision Readout V0 requires exact score semantics,
-candidate/readout/model identities, shared-state preservation, proof that no
-tokens or sampling loop were produced, and bounded latency/resource evidence.
-Future calibration must use independent evidence; selection/calibration data
-cannot qualify itself. v0.1 dependencies, incomplete MiniMax full-scale evidence
+**Current pressure:** Decision Readout V0 now retains an independent long-double
+log-sum-exp oracle over real admitted logits, exact full-prefix replay, order and
+state-isolation controls, zero-generation counters, sanitizer evidence and
+bounded latency/resource characterization. This is readout arithmetic and
+lifecycle evidence, not upstream whole-model conformance or a performance
+advantage. Future calibration must use independent evidence; selection/
+calibration data cannot qualify itself. v0.1 dependencies, incomplete MiniMax full-scale evidence
 and authoritative full-model conformance remain separate. The exact
 post-refoundation warm control is retained as characterization, not a release
 benchmark. DeepSeek official/reference vectors and Qwen pinned upstream
@@ -1780,13 +1790,14 @@ decision. This is neither the maturity matrix nor the release scope.
 | 9 | `PROJECT_CONTROL.POST.A01.RECONCILIATION.0` | COMPLETE | R / Q | Project-control selection only; no maturity promotion | Live ownership and real V4.1 evidence select one bounded acquisition lifecycle wave; no production implementation occurred in reconciliation. | `SPECTRUM.MAMBA2.QUALIFICATION.0` |
 | 10 | `MAINTENANCE.SOURCE.ACQUISITION.LIFECYCLE.0` | COMPLETE | R / X / Q | Supervised source acquisition, truthful typed progress/health and operator projection; no source-support promotion | Source-owned operation v1 and status v2 supervise immutable transfers across client/terminal loss. Deterministic lifecycle/refusal QA plus a pinned 487,753-byte real HF acquisition qualify identity-bound stop/resume/reconciliation, bounded stall detection, provider policy and TTY/log/JSON projection while unknown provider facts remain unknown and source verification remains separate. | `PROJECT_CONTROL.POST.A01.RECONCILIATION.0` |
 | 11 | `PROJECT_CONTROL.POST.ACQUISITION.RECONCILIATION.0` | COMPLETE | R / Q | Decision Readout/Core target adopted and one bounded successor selected; no implementation or maturity promotion | Reconciled the established acquisition boundary with live compiler/runtime/output ownership; fixed YAI Decision Plane versus YVEX computational readout authority; selected V0 only after confirming no smaller prerequisite. | `MAINTENANCE.SOURCE.ACQUISITION.LIFECYCLE.0` |
-| 12 | `DECISION.READOUT.ZERO.DECODE.0` | ACTIVE | O / C / Q | First finite-candidate computational readout; maturity remains OPEN until implementation and qualification | One already-loaded admitted model produces a typed finite-candidate scoring result from shared/prefetched computational prefix/state with zero generated tokens, no autoregressive sampling loop, no new trainable weights and no second full backbone. Exact model/readout/candidate identities, declared score semantics, shared-state correctness, zero-generation behavior and bounded latency/resource evidence are qualified. No calibration, System-One, semantic Decision authority, YAI ABI or R/E dependence is claimed. | `PROJECT_CONTROL.POST.ACQUISITION.RECONCILIATION.0` |
-| 13 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
-| 14 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
-| 15 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
-| 16 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
+| 12 | `DECISION.READOUT.ZERO.DECODE.0` | COMPLETE | O / C / Q | Decision / option readout advances to PARTIAL at one exact internal model/state scope | One already-loaded Mamba2 CPU artifact produces a typed finite-candidate result from one captured common recurrent prefix. Independent score arithmetic, full-prefix replay, order/isolation, cancellation/retry, exact identities and bounded resource/latency evidence qualify zero sampling, zero generated tokens, one backbone and no calibration or semantic authority. | `PROJECT_CONTROL.POST.ACQUISITION.RECONCILIATION.0` |
+| 13 | `PROJECT_CONTROL.POST.DECISION.READOUT.RECONCILIATION.0` | ACTIVE | R / O / Q | Project-control reconciliation only; no maturity promotion or implementation is implied | Reconcile the qualified one-model V0 result against live output-runner breadth and select exactly one bounded successor without implicitly starting V1/calibration, YAI integration/I07, Program N, A11, another Spectrum vertical or GB10 optimization. | `DECISION.READOUT.ZERO.DECODE.0` |
+| 14 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
+| 15 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
+| 16 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
+| 17 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
 
-Active Next: DECISION.READOUT.ZERO.DECODE.0
+Active Next: PROJECT_CONTROL.POST.DECISION.READOUT.RECONCILIATION.0
 
 The bounded .0 refoundation, its qualification, the `.1` universal-IR
 consumer cutover and `.1` qualification are complete. The A01 repair resolved
@@ -1820,13 +1831,32 @@ roughly 510 GB V4.1 transfer remains motivating evidence, not a mutated fixture.
 Acquisition completion still does not establish model support, artifact
 readiness or release qualification.
 
-Post-acquisition reconciliation is complete. Live archaeology found no smaller
-prerequisite between the existing typed program/output-head/logits/state
-foundations and a bounded finite-candidate consumer, so
-`DECISION.READOUT.ZERO.DECODE.0` is the sole ACTIVE wave. Selection implements
-nothing by itself: it does not start A11 or another Spectrum vertical, change
-source verification, start Program N, resume GB10 optimization, create a YAI
-ABI, add calibration/head weights or claim System-One behavior.
+Decision Readout V0 is complete at one exact internal model/state scope. Live
+archaeology selected the already-admitted Mamba-Codestral-7B-v0.1 CPU artifact
+because its immutable artifact, binding, tokenizer, output program and common
+recurrent state were all available through ordinary ownership. Internal schema
+v1 scores exact token candidates by summed log-likelihood, publishes separate
+mean token log-probability and an explicitly uncalibrated finite-population
+relative distribution, and binds model, artifact, binding, engine, tokenizer,
+prefix, candidate population, score policy, readout and result identities.
+
+The exact live control used prefix `[1]` and candidates `[3]`, `[4]`, `[3,4]`
+and `[3]`. One prefix forward fed five teacher-forced candidate steps and two
+logits rows with one backbone, zero sampler calls and zero generated tokens.
+The multi-token score was `-31.875254551685494` versus independent long-double
+reference `-31.8752545516854968536` (`max_abs=3.144468487706128e-15`, tolerance
+`1e-12`); order and full-prefix replay differences were zero. Shared committed
+state identity was unchanged across success and cancellation. The standalone
+bounded CPU run observed 27.763 seconds prefix time, 137.920 seconds candidate
+time and 165.683 seconds total, with 14,574,491,136 mapped model bytes and
+557,842,432 bytes each for shared and branch state. This is characterization,
+not a benchmark or performance-advantage claim.
+
+Mapped final-tree QA recorded 118 PASS, zero FAIL/ERROR/SKIP and 28 BLOCKED
+external-tool/asset lanes; runtime and quant sanitizer lanes passed. The next
+sole ACTIVE boundary is project-control reconciliation. It does not implicitly
+start V1, YAI/I07, Program N, A11, another Spectrum vertical or GB10
+optimization.
 
 The [current consumer matrix](docs/architecture/compilation.md#current-consumer-cutover)
 records the completed authority cutover: Qwen executes physical SSA;
@@ -2005,7 +2035,8 @@ platform qualification. [MLC quick start][mlc]
 | `PROJECT_CONTROL.POST.A01.RECONCILIATION.0`, COMPLETE | R / X / Q | Separated established immutable intake from OPEN supervised acquisition lifecycle; no implementation promotion | Real V4.1 acquisition is an operational source consumer, not A11 execution evidence | No release gate change |
 | `MAINTENANCE.SOURCE.ACQUISITION.LIFECYCLE.0`, COMPLETE | R / X / Q | Source-owned supervised operation, typed lifecycle/health/progress, safe reconciliation and presentation projections | Reliable immutable source intake without starting A11 or another Spectrum vertical | Infrastructure reliability only; source completion is not model/release qualification |
 | `PROJECT_CONTROL.POST.ACQUISITION.RECONCILIATION.0`, COMPLETE | R / Q | Decision Plane/Readout/Core ownership adopted; one bounded successor selected without implementation or maturity promotion | No Spectrum promotion by project-control selection | No release gate change |
-| `DECISION.READOUT.ZERO.DECODE.0`, ACTIVE | O / C / Q | OPEN finite-candidate readout target over shared/current computation; explicit score semantics and zero-generation evidence | Uses one later-selected admitted model as pressure, not a new Spectrum vertical | Computational capability only; no behavior, calibration, System-One or release claim |
+| `DECISION.READOUT.ZERO.DECODE.0`, COMPLETE | O / C / Q | PARTIAL finite-candidate readout at one exact internal Mamba2 recurrent-state scope; explicit score semantics and zero-generation evidence | Uses one selected admitted model as pressure, not a new Spectrum vertical or universal family claim | Computational capability only; no behavior, calibration, System-One or release claim |
+| `PROJECT_CONTROL.POST.DECISION.READOUT.RECONCILIATION.0`, ACTIVE | R / O / Q | Reconcile V0 evidence and select one bounded successor; no implementation or maturity promotion | No Spectrum vertical is selected by reconciliation | No release gate change |
 | Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |
 | Explicit DeepSeek optimization resumption | Q / S / R | Baseline, resource/structural performance evidence | Existing DeepSeek control, not a new Axx | Predecessor of evaluation |
 | Model-language breadth after A01 | C / O / D / M | Components, heads, tokenizer and modality semantics | A02–A11 selected by pressure | General substrate, not automatically v0.1 |
@@ -2054,16 +2085,16 @@ release_qualification_ready=0
 | Release qualification ready | false | Independent version-specific gates open. |
 | Mamba2 hosted conversation / independent whole-model conformance | false | The catalog representation is READY and exact artifact-backed token execution is qualified, but the source owns no chat template and no independent all-layer/whole-model oracle was executed. |
 | Universal selected-domain provider in-flight byte/rate/retry observability | false | Supervision is established, but provider adapters preserve UNKNOWN when no stable machine signal can bind these facts to the selected immutable population. |
-| Production Decision Readout producer | false | The target and V0 wave are selected; no finite-candidate runner/result has been implemented. |
+| Universal/public Decision Readout producer | false | One internal Mamba2 CPU V0 runner/result is qualified, but broader compatible model/state classes, a public application surface and a selected external consumer are absent. |
 | Production Score runner | false | Complete logits and internal component scoring do not establish a general sequence/pair scoring runner. |
 | Calibrated decision probability / confidence | false | No calibration transform, artifact or independent calibration evidence exists; softmax over disclosed options is only a relative distribution. |
 | System-One computational claim | false | No independently qualified specialized Decision Core or usefulness evidence exists. |
 | Learned decision probe/head | false | No trained readout parameters, physical object or exact backbone/head composition exists. |
 | Dedicated decision model | false | The V0 target deliberately reuses one already-loaded admitted backbone; a future specialized model remains allowed but unselected. |
 | R/E-aware Decision Core | false | Decision Readout V0–V3 is independent of Program N; no E, StateProfile readout or State Read consumer is implemented. |
-| Public YAI ↔ YVEX decision ABI | false | YAI semantic request/frontier/distribution contracts remain YAI-owned; no real YVEX producer/selected consumer pair exists. I07 is UNSELECTED. |
+| Public YAI ↔ YVEX decision ABI | false | YAI semantic request/frontier/distribution contracts remain YAI-owned; an internal YVEX producer exists but no YAI consumer has selected it. I07 is UNSELECTED. |
 | Adaptive cognitive router / Minimum Sufficient Cognition policy | false | YAI owns selection among deterministic logic, readout, generation and human/review; YVEX exposes computational capability only. |
-| Decision Readout performance advantage | false | The alignment contains no runtime execution or measurement; future evidence must compare time-to-qualified-solution and resources under controlled identities. |
+| Decision Readout performance advantage | false | V0 has bounded one-model CPU latency/resource characterization, not a controlled generation comparison or benchmark; future evidence must compare time-to-qualified-solution and resources under controlled identities. |
 | Generic multimodal execution / full MiniMax quality | false | Typed transport and bounded composite output are weaker evidence. |
 | Physical Model Compiler automatic search | false | Manual recipes/synthesis foundations are not search/selection. |
 | macOS product terminal qualification | false | Portable structure is not platform evidence. |
