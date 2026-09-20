@@ -930,14 +930,16 @@ LIVE_ROOT="$ROOT/download-live"
 YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=1 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire gemma-4-12b-it --models-root "$LIVE_ROOT" --auth required --progress plain --tick-seconds 1 --audit > "$ROOT/download-live.out" 2>&1 &
 LIVE_PID=$!
 sleep 1
-grep 'model-download: start target=gemma-4-12b-it' "$ROOT/download-live.out"
-grep 'stage: download running' "$ROOT/download-live.out"
+grep 'acquisition: state=' "$ROOT/download-live.out"
 wait "$LIVE_PID"
-grep 'tick: elapsed=' "$ROOT/download-live.out"
+grep 'acquisition: state=complete' "$ROOT/download-live.out"
 grep 'files=' "$ROOT/download-live.out"
-grep 'bytes=' "$ROOT/download-live.out"
-grep 'fake-hf: resolving repo' "$ROOT/download-live.out"
-grep 'fake-hf: downloading shard' "$ROOT/download-live.out"
+grep 'committed=' "$ROOT/download-live.out"
+grep 'provider_write_activity=' "$ROOT/download-live.out"
+grep 'fake-hf: resolving repo' \
+  "$LIVE_ROOT/evidence/build/acquisition/gemma-4-12b-it.acquisition.supervisor.log"
+grep 'fake-hf: downloading shard' \
+  "$LIVE_ROOT/evidence/build/acquisition/gemma-4-12b-it.acquisition.supervisor.log"
 grep 'progress_mode: plain' "$ROOT/download-live.out"
 grep 'tick_seconds: 1' "$ROOT/download-live.out"
 grep 'stdout_streamed: true' "$ROOT/download-live.out"
@@ -964,30 +966,24 @@ SIGNAL_ROOT="$ROOT/download-signal"
 YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=5 YVEX_FAKE_HF_STEPS=8 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire gemma-4-12b-it --models-root "$SIGNAL_ROOT" --progress plain --tick-seconds 1 --audit > "$ROOT/download-signal.out" 2>&1 &
 SIGNAL_PID=$!
 sleep 1
-kill -INT "$SIGNAL_PID"
+kill -TERM "$SIGNAL_PID"
 set +e
 wait "$SIGNAL_PID"
 SIGNAL_RC=$?
 set -e
 test "$SIGNAL_RC" -ne 0
-grep 'status: model-download-interrupted' "$ROOT/download-signal.out"
-grep 'stage: download interrupted' "$ROOT/download-signal.out"
-grep 'signal: SIGINT' "$ROOT/download-signal.out"
-grep 'child_signal_forwarded: true' "$ROOT/download-signal.out"
-grep 'child_exit_status: interrupted' "$ROOT/download-signal.out"
-grep 'orphan_check_performed: true' "$ROOT/download-signal.out"
-grep 'orphan_check_status: pass' "$ROOT/download-signal.out"
-grep 'partial_source_preserved: true' "$ROOT/download-signal.out"
-grep 'lock_cleanup: not-attempted' "$ROOT/download-signal.out"
-grep 'lock_files_deleted: false' "$ROOT/download-signal.out"
-grep 'provider_pid:' "$ROOT/download-signal.out"
-grep 'provider_process_group:' "$ROOT/download-signal.out"
-PROVIDER_PID=$(awk '/provider_pid:/ { print $2; exit }' "$ROOT/download-signal.out")
-PROVIDER_PGID=$(awk '/provider_process_group:/ { print $2; exit }' "$ROOT/download-signal.out")
-test -n "$PROVIDER_PID"
-test -n "$PROVIDER_PGID"
-! kill -0 "$PROVIDER_PID" 2>/dev/null
-! ps -o pid= -g "$PROVIDER_PGID" | grep .
+"$YVEX_BIN" source status gemma-4-12b-it --models-root "$SIGNAL_ROOT" \
+  --output json > "$ROOT/download-signal-detached.json"
+grep '"active":true' "$ROOT/download-signal-detached.json"
+grep '"lifecycle":"downloading"' "$ROOT/download-signal-detached.json"
+"$YVEX_BIN" source stop gemma-4-12b-it --models-root "$SIGNAL_ROOT" \
+  --output json > "$ROOT/download-signal-stop.json"
+grep '"lifecycle":"stopped"' "$ROOT/download-signal-stop.json"
+grep '"reason":"operator-stop"' "$ROOT/download-signal-stop.json"
+grep 'status: model-download-interrupted' \
+  "$SIGNAL_ROOT/evidence/build/acquisition/gemma-4-12b-it.acquisition.supervisor.log"
+grep 'signal: SIGTERM' \
+  "$SIGNAL_ROOT/evidence/build/acquisition/gemma-4-12b-it.acquisition.supervisor.log"
 test -f "$SIGNAL_ROOT/evidence/build/acquisition/gemma-4-12b-it.download.stdout.log"
 test -f "$SIGNAL_ROOT/evidence/build/acquisition/gemma-4-12b-it.download.stderr.log"
 test -f "$SIGNAL_ROOT/source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08/config.json"
@@ -1005,16 +1001,12 @@ done
 test -f "$CONTROL_ROOT/evidence/build/gemma/gemma-4-12b-it.download.active.json"
 
 "$YVEX_BIN" source status gemma-4-12b-it --models-root "$CONTROL_ROOT" --audit > "$ROOT/download-control-status-running.out"
-grep 'status: model-download-status' "$ROOT/download-control-status-running.out"
-grep 'receipt_status: active' "$ROOT/download-control-status-running.out"
-grep 'provider_process_alive: true' "$ROOT/download-control-status-running.out"
-grep 'stop_available: true' "$ROOT/download-control-status-running.out"
-grep 'resume_available: false' "$ROOT/download-control-status-running.out"
+grep 'state       downloading' "$ROOT/download-control-status-running.out"
+grep 'health      ' "$ROOT/download-control-status-running.out"
 
 "$YVEX_BIN" source stop gemma-4-12b-it --models-root "$CONTROL_ROOT" --audit > "$ROOT/download-control-stop.out"
-grep 'status: model-download-stopped' "$ROOT/download-control-stop.out"
-grep 'child_signal_forwarded: true' "$ROOT/download-control-stop.out"
-grep 'cleanup: preserved-partial-source' "$ROOT/download-control-stop.out"
+grep 'state       stopped' "$ROOT/download-control-stop.out"
+grep 'reason      operator-stop' "$ROOT/download-control-stop.out"
 set +e
 wait "$CONTROL_PID"
 CONTROL_RC=$?
@@ -1023,16 +1015,16 @@ test "$CONTROL_RC" -ne 0
 test -f "$CONTROL_ROOT/source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08/config.json"
 
 "$YVEX_BIN" source status gemma-4-12b-it --models-root "$CONTROL_ROOT" --audit > "$ROOT/download-control-status-stopped.out"
-grep 'provider_process_alive: false' "$ROOT/download-control-status-stopped.out"
-grep 'last_receipt_status: stopped' "$ROOT/download-control-status-stopped.out"
-grep 'resume_available: true' "$ROOT/download-control-status-stopped.out"
+grep 'state       stopped' "$ROOT/download-control-status-stopped.out"
+grep 'reason      operator-stop' "$ROOT/download-control-status-stopped.out"
 
 YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source resume gemma-4-12b-it --models-root "$CONTROL_ROOT" --auth required --progress log --tick-seconds 1 --audit > "$ROOT/download-control-resume.out" 2>&1
 grep 'status: model-download-resume-pass' "$ROOT/download-control-resume.out"
 grep 'stage: download pass' "$ROOT/download-control-resume.out"
 test -f "$CONTROL_ROOT/evidence/build/gemma/gemma-4-12b-it.download.last.json"
 "$YVEX_BIN" source status gemma-4-12b-it --models-root "$CONTROL_ROOT" --audit > "$ROOT/download-control-status-resumed.out"
-grep 'last_receipt_status: pass' "$ROOT/download-control-status-resumed.out"
+grep 'state       complete' "$ROOT/download-control-status-resumed.out"
+grep 'reason      selected-source-complete' "$ROOT/download-control-status-resumed.out"
 
 STALE_ROOT="$ROOT/download-control-stale"
 mkdir -p "$STALE_ROOT/evidence/build/gemma" "$STALE_ROOT/source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08"

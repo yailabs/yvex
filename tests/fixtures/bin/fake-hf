@@ -231,10 +231,70 @@ if [ -z "$local_dir" ]; then
   exit 2
 fi
 
+if [ -n "${YVEX_FAKE_HF_EXPECT_CACHE_ROOT:-}" ]; then
+  expected_hub=$YVEX_FAKE_HF_EXPECT_CACHE_ROOT/cache/provider/huggingface/hub
+  expected_xet=$YVEX_FAKE_HF_EXPECT_CACHE_ROOT/cache/provider/huggingface/xet
+  if [ "${HF_HUB_CACHE:-}" != "$expected_hub" ] ||
+     [ "${HF_XET_CACHE:-}" != "$expected_xet" ]; then
+    printf 'fake-hf: provider cache policy mismatch\n' >&2
+    exit 45
+  fi
+fi
+if [ -n "${YVEX_FAKE_HF_EXPECT_HUB_CACHE:-}" ] &&
+   [ "${HF_HUB_CACHE:-}" != "$YVEX_FAKE_HF_EXPECT_HUB_CACHE" ]; then
+  printf 'fake-hf: explicit hub cache policy mismatch\n' >&2
+  exit 47
+fi
+if [ -n "${YVEX_FAKE_HF_EXPECT_XET_CACHE:-}" ] &&
+   [ "${HF_XET_CACHE:-}" != "$YVEX_FAKE_HF_EXPECT_XET_CACHE" ]; then
+  printf 'fake-hf: explicit xet cache policy mismatch\n' >&2
+  exit 48
+fi
+if [ -n "${YVEX_FAKE_HF_EXPECT_HIGH_PERFORMANCE:-}" ] &&
+   [ "${HF_XET_HIGH_PERFORMANCE:-}" != "$YVEX_FAKE_HF_EXPECT_HIGH_PERFORMANCE" ]; then
+  printf 'fake-hf: high-performance override mismatch\n' >&2
+  exit 46
+fi
+
 mkdir -p "$local_dir"
+
+# The supervisor-crash fixture needs a provider that remains alive after its
+# owning supervisor disappears.  Redirect its human stream before the crash so
+# a broken supervisor pipe cannot terminate the fixture with SIGPIPE; structured
+# provider events and payload writes remain observable through their own files.
+if [ "${YVEX_FAKE_HF_ORPHAN_SURVIVE:-0}" = 1 ]; then
+  exec >/dev/null 2>/dev/null
+fi
+
 step_delay=${YVEX_FAKE_HF_STEP_DELAY:-0}
 steps=${YVEX_FAKE_HF_STEPS:-3}
 fail_at=${YVEX_FAKE_HF_FAIL_AT_STEP:-0}
+retry_before=${YVEX_FAKE_HF_RETRY_BEFORE:-0}
+partial_path=
+provider_event_sequence=0
+if [ "${YVEX_FAKE_HF_PARTIAL_OBJECT:-0}" = 1 ]; then
+  partial_path=$local_dir/.cache/huggingface/download/model.incomplete
+  mkdir -p "$(dirname "$partial_path")"
+  printf 'provider-owned partial object\n' > "$partial_path"
+fi
+
+provider_event() {
+  kind=$1
+  object=$2
+  retry=$3
+  test "${YVEX_FAKE_HF_DISABLE_EVENTS:-0}" != 1 || return 0
+  test -n "${YVEX_PROVIDER_EVENT_PATH:-}" || return 0
+  provider_event_sequence=$((provider_event_sequence + 1))
+  event_pending=$YVEX_PROVIDER_EVENT_PATH.pending.$$
+  printf '{"schema":"yvex.provider.acquisition.event.v1","sequence":%s,"kind":"%s","object":"%s","retry_count":%s}\n' \
+    "$provider_event_sequence" "$kind" "$object" "$retry" > "$event_pending"
+  mv "$event_pending" "$YVEX_PROVIDER_EVENT_PATH"
+}
+
+if [ "$retry_before" != 0 ]; then
+  provider_event retry model-00001-of-00002.safetensors 1
+  sleep "$retry_before"
+fi
 
 fake_hf_step() {
   step=$1
@@ -288,6 +348,7 @@ PYDATA
 fi
 
 printf 'fake-hf: resolving repo\n'
+provider_event progress config.json 0
 printf 'fake-hf: stderr resolving repo\n' >&2
 printf '{}\n' > "$local_dir/config.json"
 printf '{}\n' > "$local_dir/tokenizer.json"
@@ -296,6 +357,7 @@ printf '# fake model card\n' > "$local_dir/README.md"
 fake_hf_step 1
 
 printf 'fake-hf: downloading shard 1\n'
+provider_event progress model-00001-of-00002.safetensors 0
 if [ "$gguf_download" -eq 1 ]; then
   if [ -n "${YVEX_FAKE_HF_DOWNLOAD_SOURCE:-}" ]; then
     cp "$YVEX_FAKE_HF_DOWNLOAD_SOURCE" "$local_dir/model-Q4_K_M.gguf"
@@ -308,6 +370,7 @@ fi
 fake_hf_step 2
 
 printf 'fake-hf: downloading shard 2\n'
+provider_event progress model-00002-of-00002.safetensors 0
 if [ "$gguf_download" -eq 0 ]; then
   fake_hf_write_shard "$local_dir/model-00002-of-00002.safetensors" "layers.0.attn.q_proj.weight" 32
 fi
@@ -316,9 +379,14 @@ fake_hf_step 3
 i=4
 while [ "$i" -le "$steps" ]; do
   printf 'fake-hf: verifying step %s\n' "$i"
+  provider_event progress "verification-step-$i" 0
   fake_hf_step "$i"
   i=$((i + 1))
 done
+
+if [ -n "$partial_path" ]; then
+  rm -f "$partial_path"
+fi
 
 if [ "${YVEX_FAKE_HF_LOCAL_CACHE:-0}" = "1" ]; then
   mkdir -p "$local_dir/.cache/huggingface/download"

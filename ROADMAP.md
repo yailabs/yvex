@@ -7,7 +7,7 @@ Status: living public project control
 | Axis | Current truth |
 | --- | --- |
 | Project target | Native, harness-independent model compilation and execution substrate. |
-| Active engineering boundary | `MAINTENANCE.SOURCE.ACQUISITION.LIFECYCLE.0` — establish supervised, identity-bound acquisition lifecycle and truthful progress/health facts beneath CLI presentation. This project-control selection does not itself implement or qualify the boundary. |
+| Active engineering boundary | `PROJECT_CONTROL.POST.ACQUISITION.RECONCILIATION.0` — reconcile the established supervised-acquisition boundary with live project state and select one bounded next wave; no substantial implementation starts implicitly. |
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` COMPLETE and independently qualified at its claimed scope: current admitted Qwen, DeepSeek/DSpark and MiniMax computation is compiler-owned; runtime consumes authenticated program/schedule truth. The `.0` producer-owned device-result lifetime remains preserved. |
 | Architecture Spectrum | A01 PARTIAL / exact artifact-executable; A02–A11 PLANNED. No next vertical is active. |
 | Adopted state architecture target | N.B1 — Slow-Update Dual-Stream is the official primary research target: primary R plus persistent Experiential Computational State E; unfinished deliberation L remains distinct. YAI owns semantic authority; YVEX owns computational realization. Program N and B1 post-training remain OPEN/unscheduled, not implemented. |
@@ -19,15 +19,15 @@ Status: living public project control
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
 | Release qualification | BLOCKED. |
 | Current branch | `models2`; branch epochs coordinate integration, not model ownership. |
-| Next decision point | Implement and qualify the bounded acquisition lifecycle wave. A11, another Spectrum vertical, DeepSeek optimization and Program N remain unselected for resumption. |
+| Next decision point | Select one bounded post-acquisition engineering wave from live evidence. A11, another Spectrum vertical, DeepSeek optimization and Program N remain unselected for resumption. |
 
 <!-- maturity-counts:start -->
 <!-- Generated from System Maturity by tests/documentation_architecture.py. -->
 | Maturity state | Meaning | Current count |
 | --- | --- | ---: |
-| 🟢 ESTABLISHED | Generic owner and claimed boundary implemented and qualified at the stated scope. | 31 |
+| 🟢 ESTABLISHED | Generic owner and claimed boundary implemented and qualified at the stated scope. | 32 |
 | 🟡 PARTIAL | Real foundation; genericity, breadth, portability, performance or evidence incomplete. | 42 |
-| 🔴 OPEN | Generic capability absent or not yet claimable. | 60 |
+| 🔴 OPEN | Generic capability absent or not yet claimable. | 59 |
 | ⚪ LATER | Intentionally outside the current maturity horizon. | 14 |
 <!-- maturity-counts:end -->
 
@@ -61,7 +61,7 @@ below describe desired breadth; they are not additional maturity claims.
 | Capability | State | Current YVEX truth | Boundary required for promotion | Program | Evidence / owner |
 | --- | :---: | --- | --- | --- | --- |
 | Source provenance and immutable intake | 🟢 ESTABLISHED | Immutable revisions, inventory, retained payload and verification have common owners. | Preserve the same trust model as providers and representations grow. | C / R | [Source contract][storage]; [verification tests][source-tests] |
-| Supervised source acquisition lifecycle | 🔴 OPEN | Exact provider selection, receipts, safe lock refusal, explicit stop/resume and verified finalization exist, but the long transfer is still owned by a foreground CLI process. PID liveness, committed bytes and provider-internal partial objects do not establish transfer health or useful in-flight progress. | Move operation state beneath CLI into an identity-bound supervisor; qualify terminal-independent lifetime, typed lifecycle/health/progress, safe reconciliation and distinct TTY/log/JSON projections without weakening source verification. | R / X / Q | [Source contract][storage]; [command architecture][commands]; [QA authority][qa] |
+| Supervised source acquisition lifecycle | 🟢 ESTABLISHED | Source-owned operation v1 binds immutable target, generation and authenticated supervisor/provider identities. A detached acquisition supervisor survives client/terminal loss; lifecycle, health and non-overlapping nullable progress feed TTY/log/status-v2 projections. Stop/resume, retry, stall, crash/reboot reconciliation, PID reuse and legacy-v1 refusal are qualified; real pinned HF acquisition completed and reopened without weakening source verification. | Preserve operation/source separation and fail-closed process/lock identity as providers broaden; selected-domain in-flight bytes and retry facts remain unknown when an adapter lacks a stable machine signal. | R / X / Q | [Source contract][storage]; [command architecture][commands]; [QA authority][qa] |
 | Logical model identity | 🟢 ESTABLISHED | Source-declared relations separate logical model, original selector, representation, artifact, deployment, working set and engine; catalog family exceptions removed. | Extend explicit relations without family/name inference or silent ambiguity. | R / C | [Lifecycle][lifecycle]; [catalog tests][catalog-tests] |
 | Semantic Model IR | 🟡 PARTIAL | Typed programs, state/effect verification, current Qwen forward execution, DeepSeek heterogeneous schedule ownership, MiniMax component programs and Mamba2 pure-SSM CPU execution use common compiler levels. Broader architecture language remains incomplete. | Express heterogeneous R/E values, state-consuming/producing blocks, versions, multi-result computation and trainable roles without family runtimes or compulsory Transformer structure; add token-derived indexed parameter access and shared cross-layer state dependencies. | C | [Compilation][compilation]; [Mamba2 boundary][mamba] |
 | Operator composition / graph language | 🟡 PARTIAL | Canonical operator graphs and physical SSA own current admitted composition; binding v17/model-plan v8 authenticate the schedule consumed by runtime rather than preserving a family execution universe. Binding v17 additionally authenticates program-owned absence of attention. | Compile dual-stream R/E augmentation, cross-state interaction, gates/merge and update barriers through common model semantics; no family cognitive runtime. Also express phase-asymmetric programs and explicit state/result boundaries. | C / D | [Family boundary][families]; [decoder plan][decoder-plan] |
@@ -1233,14 +1233,16 @@ allocation/registry or persisted identity. The [runtime contract][runtime-contra
 retains serialized use and producer-lifetime limits; this is not a concurrent lease.
 
 **Open maturity boundaries:** broader architecture forms, remaining structural
-overhead, supervised source-acquisition ownership and independent qualification
-beyond the completed current-consumer cutover.
+overhead and independent qualification beyond the completed current-consumer
+and supervised-acquisition cutovers.
 
-**Current pressure:** `MAINTENANCE.SOURCE.ACQUISITION.LIFECYCLE.0` must move
-long-running provider-operation truth out of the foreground CLI without
-duplicating verified-source authority. Refoundation .1 and A01 remain complete
-at their earned scopes; dual-stream C/S/N targets remain later pressure without
-authorizing N implementation. The completed .0 borrow repair remains complete.
+**Current pressure:** the completed `MAINTENANCE.SOURCE.ACQUISITION.LIFECYCLE.0`
+moves long-running provider-operation truth out of the foreground CLI without
+duplicating verified-source authority. Post-acquisition project control must
+select the next bounded pressure explicitly. Refoundation .1 and A01 remain
+complete at their earned scopes; dual-stream C/S/N targets remain later
+pressure without authorizing N implementation. The completed .0 borrow repair
+remains complete.
 
 **Material advance:** remove a demonstrated ownership defect with negative/lifecycle QA and exact performance replay where relevant.
 
@@ -1267,7 +1269,7 @@ language; they were not implemented by refoundation .1 or A01.
 
 **Current pressure:** A01 now qualifies exact pure-SSM artifact execution at
 its PARTIAL scope. Further model-language breadth remains unscheduled; the
-active acquisition lifecycle wave does not reopen compiler or family scope.
+completed acquisition lifecycle wave did not reopen compiler or family scope.
 
 **Material advance:** another computational shape compiles through shared mechanisms without backend reconstruction.
 
@@ -1648,53 +1650,53 @@ decision. This is neither the maturity matrix nor the release scope.
 | 7 | `SPECTRUM.MAMBA2.REPAIR.0` | COMPLETE | C / S | Source-owned token/numerical policy and pure-SSM compiler/runtime execution; A01 evidence remains PARTIAL | Exact source compiles all 64 layers without attention/KV/RoPE/dense FFN; portable CPU physical SSA uses common transactional state. Artifact/hosted claims remain excluded. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` |
 | 8 | `SPECTRUM.MAMBA2.QUALIFICATION.0` | COMPLETE | Q / C / S | A01 artifact and exact model execution at earned scope; A01 remains PARTIAL | Canonical source-manifest rebinding, deterministic artifact/binding admission and internal all-layer/output/session execution are qualified. Independent whole-model numerics and hosted conversation remain unclaimed. | `SPECTRUM.MAMBA2.REPAIR.0` |
 | 9 | `PROJECT_CONTROL.POST.A01.RECONCILIATION.0` | COMPLETE | R / Q | Project-control selection only; no maturity promotion | Live ownership and real V4.1 evidence select one bounded acquisition lifecycle wave; no production implementation occurred in reconciliation. | `SPECTRUM.MAMBA2.QUALIFICATION.0` |
-| 10 | `MAINTENANCE.SOURCE.ACQUISITION.LIFECYCLE.0` | ACTIVE | R / X / Q | Supervised source acquisition, truthful typed progress/health and operator projection; no source-support promotion by selection | An identity-bound non-CLI owner supervises long transfers across terminal loss; durable operation state distinguishes lifecycle, liveness and health; non-overlapping committed/in-flight/file/shard/provider-partial facts remain measured or unknown; bounded stall detection, safe stop/resume/reboot reconciliation, provider policy and TTY/log/JSON projections are qualified without weakening immutable verification. | `PROJECT_CONTROL.POST.A01.RECONCILIATION.0` |
-| 11 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
-| 12 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
-| 13 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
-| 14 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
+| 10 | `MAINTENANCE.SOURCE.ACQUISITION.LIFECYCLE.0` | COMPLETE | R / X / Q | Supervised source acquisition, truthful typed progress/health and operator projection; no source-support promotion | Source-owned operation v1 and status v2 supervise immutable transfers across client/terminal loss. Deterministic lifecycle/refusal QA plus a pinned 487,753-byte real HF acquisition qualify identity-bound stop/resume/reconciliation, bounded stall detection, provider policy and TTY/log/JSON projection while unknown provider facts remain unknown and source verification remains separate. | `PROJECT_CONTROL.POST.A01.RECONCILIATION.0` |
+| 11 | `PROJECT_CONTROL.POST.ACQUISITION.RECONCILIATION.0` | ACTIVE | R / Q | Project-control selection only; no maturity promotion | Reconcile the established acquisition lifecycle and live project/source state, then select exactly one bounded next wave without implicitly starting A11, another Spectrum vertical, GB10 optimization or Program N. | `MAINTENANCE.SOURCE.ACQUISITION.LIFECYCLE.0` |
+| 12 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
+| 13 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
+| 14 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
+| 15 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
 
-Active Next: MAINTENANCE.SOURCE.ACQUISITION.LIFECYCLE.0
+Active Next: PROJECT_CONTROL.POST.ACQUISITION.RECONCILIATION.0
 
 The bounded .0 refoundation, its qualification, the `.1` universal-IR
 consumer cutover and `.1` qualification are complete. The A01 repair resolved
 source policy and pure-SSM compiler/runtime authority; its qualification now
 closes exact artifact/binding and internal all-layer/output/session execution.
 A01 remains PARTIAL because independent all-layer/whole-model conformance and
-hosted conversation are unavailable. Post-A01 reconciliation is complete and
-selects one acquisition lifecycle implementation boundary. Selection alone
-changes no production code or implemented maturity state. DeepSeek optimization stays
+hosted conversation are unavailable. Post-A01 reconciliation and the selected
+acquisition lifecycle implementation are complete. DeepSeek optimization stays
 PARTIAL pending explicit resumption; upstream/whole-model conformance remains
 Program Q work.
 
-The live acquisition path already pins immutable repository/revision and file
-selection, writes active/final receipts, holds an identity-derived source lock,
-preserves completed payload on interruption, refuses stale locks until explicit
-cleanup, verifies the completed source and supports stop/resume plus plain,
-log, live and JSON projections. Those are retained foundations. They do not
-make the foreground CLI/provider child a supervised operation: the CLI process
-still owns the provider event loop, status schema v1 reduces activity to
-PID/process matches, `bytes` counts promoted source files, and `partial_files`
-mixes provider/cache objects rather than incomplete selected files.
+Source now owns a durable operation record distinct from verified source and
+provider cache. Its identity binds provider, repository, immutable revision,
+selection, canonical location and generation; boot ID plus process start ticks
+authenticate supervisor/provider control and reject PID reuse. A double-forked
+supervisor owns one transfer independently of the invoking CLI/terminal. Status
+v2 separates lifecycle from health and preserves nullable, non-overlapping
+committed, provider-activity, selected-file/shard and provider-partial facts.
+Selected-domain in-flight bytes and retry facts remain unknown when the provider
+offers no stable machine signal; human provider logs are audit evidence, not
+canonical progress.
 
-The selected wave therefore has one primary owner: R/Source owns durable
-identity-bound acquisition operation and truthful transfer facts; X renders
-those facts without owning or scraping the transfer; Q owns interruption,
-reconciliation, slow-versus-stalled and projection evidence. S is not selected:
-provider-process lifetime is not model sequence/session state. Closure requires
-positive and fail-closed evidence for terminal disconnect, provider retry/death,
-intentional stop, reboot-style stale operation recovery, exact-selection resume,
-non-overlapping byte/file/shard facts, bounded stall classification and stable
-TTY/log/JSON meaning. A 510 GB production transfer is motivating evidence, not
-a mandatory fixture; deterministic provider controls must reproduce the same
-lifecycle transitions. Provider logs may remain diagnostics, never canonical
-progress authority.
+Deterministic controls qualify terminal disconnect/reattach, structured retry,
+slow progress, bounded stall, provider and supervisor loss, explicit stop and
+exact-generation resume, PID reuse, stale/malformed state, lock refusal,
+TTY/NO_COLOR/log/JSON projections and finalization. A real immutable HF source
+(`hf-internal-testing/tiny-random-gpt2@71034c5d8bde858ff824298bdedc65515b97d2b9`)
+completed 487,753 selected bytes across seven files including one Safetensors
+object, then reopened through the normal verification receipt. The existing
+roughly 510 GB V4.1 transfer remains motivating evidence, not a mutated fixture.
+Acquisition completion still does not establish model support, artifact
+readiness or release qualification.
 
-This wave does not implement A11 or new model support, change immutable source
-verification/promotion, redesign model storage, build a generic job scheduler,
-depend on REPLAI/APEX, start Program N, resume GB10 optimization, invent a
-percentage from overlapping byte domains, auto-delete unverified locks, or
-freeze illustrative CLI verbs/layout before the typed owner exists.
+The active post-acquisition project-control boundary owns only selection of one
+next bounded wave from live state. It does not implement A11 or new model
+support, change immutable source verification/promotion, build a generic job
+scheduler, depend on REPLAI/APEX, start Program N, resume GB10 optimization,
+invent a percentage from overlapping byte domains or auto-delete unverified
+locks.
 
 The [current consumer matrix](docs/architecture/compilation.md#current-consumer-cutover)
 records the completed authority cutover: Qwen executes physical SSA;
@@ -1871,7 +1873,8 @@ platform qualification. [MLC quick start][mlc]
 | `SPECTRUM.MAMBA2.REPAIR.0`, COMPLETE | C / S | Semantic IR, pure-SSM composition, non-KV state and tokenizer/numerical policy | A01 directly pressured generic state; exact source compiles through common CPU execution without fake Transformer roles, while A01 remains PARTIAL | Indirect; no v0.1 promotion or scope expansion |
 | `SPECTRUM.MAMBA2.QUALIFICATION.0`, COMPLETE | Q / C / S | Exact source/artifact/binding admission and internal all-layer/output/session execution | A01 advances to exact artifact-executable while remaining PARTIAL; independent whole-model and hosted claims remain open; N is unaffected | Indirect; not a v0.1 gate |
 | `PROJECT_CONTROL.POST.A01.RECONCILIATION.0`, COMPLETE | R / X / Q | Separated established immutable intake from OPEN supervised acquisition lifecycle; no implementation promotion | Real V4.1 acquisition is an operational source consumer, not A11 execution evidence | No release gate change |
-| `MAINTENANCE.SOURCE.ACQUISITION.LIFECYCLE.0`, ACTIVE | R / X / Q | Non-CLI acquisition owner, typed lifecycle/health/progress, safe reconciliation and presentation projections | Enables reliable future source intake without starting A11 or another Spectrum vertical | Infrastructure reliability only; source completion is not model/release qualification |
+| `MAINTENANCE.SOURCE.ACQUISITION.LIFECYCLE.0`, COMPLETE | R / X / Q | Source-owned supervised operation, typed lifecycle/health/progress, safe reconciliation and presentation projections | Reliable immutable source intake without starting A11 or another Spectrum vertical | Infrastructure reliability only; source completion is not model/release qualification |
+| `PROJECT_CONTROL.POST.ACQUISITION.RECONCILIATION.0`, ACTIVE | R / Q | Selection only; established acquisition is reconciled with current project/source state | No Spectrum promotion by infrastructure reuse | No release gate change until a later selected wave earns it |
 | Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |
 | Explicit DeepSeek optimization resumption | Q / S / R | Baseline, resource/structural performance evidence | Existing DeepSeek control, not a new Axx | Predecessor of evaluation |
 | Model-language breadth after A01 | C / O / D / M | Components, heads, tokenizer and modality semantics | A02–A11 selected by pressure | General substrate, not automatically v0.1 |

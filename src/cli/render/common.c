@@ -162,6 +162,14 @@ static const yvex_render_field_spec download_audit_identity_fields[] = {
     DOWNLOAD_FIELD("credential_source", YVEX_RENDER_FIELD_TEXT_ARRAY, credential_source, "unknown"),
     DOWNLOAD_FIELD("accounts_state_path", YVEX_RENDER_FIELD_TEXT_ARRAY, accounts_state_path,
                    "unknown"),
+    DOWNLOAD_FIELD("hf_hub_cache", YVEX_RENDER_FIELD_TEXT_ARRAY, hf_hub_cache, "unknown"),
+    DOWNLOAD_FIELD("hf_hub_cache_source", YVEX_RENDER_FIELD_TEXT_ARRAY,
+                   hf_hub_cache_source, "unknown"),
+    DOWNLOAD_FIELD("hf_xet_cache", YVEX_RENDER_FIELD_TEXT_ARRAY, hf_xet_cache, "unknown"),
+    DOWNLOAD_FIELD("hf_xet_cache_source", YVEX_RENDER_FIELD_TEXT_ARRAY,
+                   hf_xet_cache_source, "unknown"),
+    DOWNLOAD_FIELD("hf_xet_high_performance", YVEX_RENDER_FIELD_TEXT_ARRAY,
+                   hf_xet_high_performance, "provider-default"),
 };
 
 static const yvex_render_field_spec download_normal_identity_fields[] = {
@@ -1474,6 +1482,12 @@ int model_download_write_json_sidecar(const char *path, const char *schema,
     write_field(fp, "", "credential_source", report->credential_source, 1);
     write_field(fp, "", "account_hint", report->account_hint, 1);
     write_field(fp, "", "accounts_state_path", report->accounts_state_path, 1);
+    write_field(fp, "", "hf_hub_cache", report->hf_hub_cache, 1);
+    write_field(fp, "", "hf_hub_cache_source", report->hf_hub_cache_source, 1);
+    write_field(fp, "", "hf_xet_cache", report->hf_xet_cache, 1);
+    write_field(fp, "", "hf_xet_cache_source", report->hf_xet_cache_source, 1);
+    write_field(fp, "", "hf_xet_high_performance",
+                report->hf_xet_high_performance, 1);
     write_field(fp, "", "hf_cli_path", report->hf_cli_path, 1);
     yvex_cli_out_writef(fp, "  \"hf_exit_code\": %d,\n", report->hf_exit_code);
     yvex_cli_out_writef(fp, "  \"provider_exit_code\": %d,\n", report->provider_exit_code);

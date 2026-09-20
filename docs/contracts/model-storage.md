@@ -58,8 +58,11 @@ The configured root has these durable projections:
 | `registry/` | Existing acquisition records, provenance and immutable runtime bindings |
 | `evidence/fixtures/` | Selected component proofs, separate from full model residency |
 | `evidence/build/` | Preparation and acquisition evidence |
+| `evidence/build/<family>/*.acquisition.operation.json` | Atomic supervised-acquisition operation state, never source provenance |
+| `evidence/build/acquisition/` | Provider streams and supervisor audit records for acquisition operations |
 | `evidence/calibration/` | Retained quantization inputs |
 | `cache/hf/<org>/<repo>/<revision>[-<selection>]/` | Provider download state, linked by the corresponding source `.cache` |
+| `cache/provider/huggingface/{hub,xet}/` | YVEX-selected provider caches; advanced environment overrides remain explicit |
 | `cache/` | Other provider and runtime caches |
 | `tmp/imports/`, `tmp/prepare/`, `tmp/acquisitions/` | In-progress owned operations and identity-scoped leases |
 | `inbox/` | Optional intake surface, with no automatic catalog admission |
@@ -84,6 +87,82 @@ consumer and provenance review; normal downloads do not rearrange that history.
 `registry/` under the model root contains acquisition, provenance and binding
 material. The configured artifact registry remains the catalog authority;
 directory scans do not create a second registry or establish lineage.
+
+## Supervised acquisition operations
+
+A provider transfer is a durable source operation, not the lifetime of the
+terminal that started it. `model pull` and the advanced `source acquire`
+surface start or resume an identity-bound supervisor and then attach as a
+client. The supervisor owns the provider process in a separate process session;
+loss of the invoking CLI, terminal or SSH connection does not signal the
+transfer. A later `model status`, `source status`, stop or resume invocation
+reopens the same durable operation.
+
+The durable `yvex.source.acquisition.operation.v1` record binds provider,
+repository, immutable revision, selection identity, canonical source path,
+operation generation and a random content-hashed operation identity. Supervisor
+and provider process identities additionally bind boot ID and process start
+ticks. PID and process-group values are diagnostics and control coordinates,
+not operation identity; a reused PID cannot authenticate stop, resume or
+health. Publication is an fsync-and-rename transaction in the evidence/control
+domain. It is not a source manifest, verified-source record or registry.
+
+Lifecycle and health are independent facts. Lifecycle is one of `starting`,
+`downloading`, `retrying`, `finalizing`, `stopped`, `failed` or `complete`.
+Health is `unknown`, `healthy`, `degraded`, `stalled` or `not-applicable`.
+A live process proves only process liveness. Fresh selected-object or provider
+activity can establish progress freshness; no observable admitted signal leaves
+health unknown. A provider retry is degraded rather than stalled. An expired
+bounded progress window is stalled, while a slow provider that continues to
+advance remains healthy.
+
+Progress facts keep their domains separate:
+
+- `expected_bytes` is the selected payload size when the catalog knows it;
+- `committed_bytes` counts regular bytes already visible in the canonical
+  source directory;
+- `provider_activity_bytes` and its rates describe process write activity and
+  are diagnostic, not selected payload bytes;
+- `inflight_selected_bytes` and selected-payload rates remain unknown unless a
+  provider adapter can prove their selected, non-overlapping domain;
+- selected/completed/incomplete files, shards and sidecars are independent
+  nullable facts;
+- provider partial and lock objects are provider internals, not incomplete
+  selected-file counts;
+- retry count and current object exist only when a stable machine provider
+  event supplies them; the authenticated provider-start event may establish
+  event freshness, but later process I/O updates progress freshness only and
+  never masquerades as another provider event.
+
+Unknown is serialized as JSON `null` and rendered as `unknown`, never as zero.
+No percentage is calculated from committed bytes plus provider cache or process
+I/O because those domains can overlap. Provider-oriented human logs are audit
+evidence and are not parsed into canonical progress.
+
+The machine status projection is `yvex.model.acquisition.status.v2`. Its
+`active`, `bytes` and `partial_files` compatibility fields retain the exact v1
+meanings: process liveness, committed canonical bytes and provider-internal
+objects. New consumers use the typed lifecycle, health and nullable progress
+fields. Existing `yvex.model.acquisition.status.v1` operations without a v2
+operation record remain read-only: YVEX reports their legacy state but never
+silently reparents or reinterprets a running provider. An operator may stop the
+legacy process through its existing explicit identity-bound path and then
+resume under supervision.
+
+Reconciliation authenticates process identity before control. A disappeared
+supervisor becomes stopped/interrupted/resumable; an authenticated orphan
+provider must be stopped explicitly before resume. Stop publishes terminal
+state only after the exact provider or supervisor is gone. Unauthenticated or
+unowned locks remain refused. Completed selected bytes and safe provider state
+are retained for exact immutable resume. Provider cache roots default beneath
+the selected models root; `HF_HUB_CACHE` and `HF_XET_CACHE` remain explicit
+advanced overrides, and high-performance Xet mode is not forced globally.
+
+Transfer completion and source verification are separate authorities. The
+supervisor may enter `complete` only after the normal download/finalization
+path publishes the selected population. Source manifests, tensor inventories,
+content verification and later artifact admission retain their existing owners
+and refusals.
 
 ## Importing material obtained elsewhere
 

@@ -175,6 +175,34 @@ component execution and measurement live under `bench`; read-only engineering
 evidence lives under `inspect`. Offline commands neither require nor start a
 host.
 
+Remote `model pull` is terminal-attached but terminal-independent. The command
+starts or reopens one source-owned supervised acquisition and renders its typed
+state; it does not parent the provider for the duration of the transfer. The
+detached supervisor is a narrow acquisition worker, not the hosted runtime, a
+generic daemon or a job scheduler. It owns one immutable provider/repository/
+revision/selection generation and exits at a terminal acquisition state.
+
+`model status` and the advanced `source status` reopen the durable operation.
+`model stop`/`source stop` authenticate the supervisor or provider process
+identity before signaling, and resume creates a new operation generation for
+the same immutable target. Legacy v1 foreground acquisitions remain observable
+and explicitly controllable but are never silently adopted by the supervisor.
+
+All acquisition presentation consumes `yvex.model.acquisition.status.v2`:
+
+- a color-capable TTY receives an in-place, width-bounded state surface;
+- redirected/plain/log output is append-only and emitted on meaningful state
+  or progress changes;
+- JSON contains typed lifecycle, health, nullable progress and compatibility
+  facts with no ANSI or canonical presentation strings.
+
+Rendering does not inspect `/proc`, provider logs or cache directories. The
+source/provider adapter supplies process activity and stable structured events;
+the source operation owns reconciliation and durable truth; CLI code only
+parses intent, attaches, controls and renders. Provider human output remains an
+audit stream. Completion of acquisition still does not replace source
+verification, compilation, artifact admission or model support.
+
 ## Protocol planes
 
 Native commands and chat use private local protocol v21 over a UID-owned Unix

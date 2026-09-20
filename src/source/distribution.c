@@ -1311,7 +1311,7 @@ int yvex_source_acquisition_lock(const char *models_root, const char *repository
         return distribution_refuse(err, YVEX_ERR_BOUNDS, "source.acquire", "acquisition lock path exceeds bound");
     rc = yvex_core_mkdir_parent(path, "source.acquire", err);
     if (rc != YVEX_OK) return rc;
-    fd = open(path, O_RDWR | O_CREAT | O_NOFOLLOW, 0600);
+    fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
     if (fd < 0) return distribution_refuse(err, YVEX_ERR_IO, "source.acquire", "cannot open acquisition lease");
     do { rc = flock(fd, LOCK_EX); } while (rc < 0 && errno == EINTR);
     if (rc != 0) {

@@ -393,10 +393,12 @@ test -f "$pulled_source/.cache/huggingface/download/config.json.metadata"
 python3 - "$ROOT/hf-status.json" <<'PY'
 import json, sys
 item = json.load(open(sys.argv[1], encoding="utf-8"))
-assert item["schema"] == "yvex.model.acquisition.status.v1"
-assert item["model"] == "pulled-h3"
+assert item["schema"] == "yvex.model.acquisition.status.v2"
+assert item["target_id"] == "pulled-h3"
+assert item["lifecycle"] == "complete"
 assert item["active"] is False
-assert item["files"] >= 2 and item["bytes"] > 0
+assert item["completed_files"] >= 2 and item["committed_bytes"] > 0
+assert item["inflight_selected_bytes"] is None
 PY
 "$YVEX_BIN" model list --models-root "$MODELS_ROOT" --registry "$REGISTRY" \
     --json >"$ROOT/models-after-hf-pull.json"

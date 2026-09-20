@@ -26,6 +26,7 @@
 #include <yvex/internal/core.h>
 
 static volatile sig_atomic_t model_download_provider_signal_seen;
+static volatile sig_atomic_t model_download_provider_last_signal;
 
 static int model_download_write_all_fd(int fd, const void *buf, size_t len);
 static void model_download_mirror_provider_bytes(int fd,
@@ -188,6 +189,50 @@ static int model_download_path_under(const char *path, const char *dir)
     }
     return strncmp(path, dir, dir_len) == 0 &&
            (path[dir_len] == '\0' || path[dir_len] == '/');
+}
+
+int model_download_provider_policy(yvex_model_download_report *report,
+                                   yvex_error *err)
+{
+    const char *hub = getenv("HF_HUB_CACHE");
+    const char *xet = getenv("HF_XET_CACHE");
+    const char *high = getenv("HF_XET_HIGH_PERFORMANCE");
+    int count;
+    if (!report || !report->models_root[0]) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source.provider.policy",
+                       "models root is required for provider policy");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (hub && hub[0]) {
+        count = snprintf(report->hf_hub_cache, sizeof(report->hf_hub_cache), "%s", hub);
+        snprintf(report->hf_hub_cache_source, sizeof(report->hf_hub_cache_source),
+                 "environment");
+    } else {
+        count = snprintf(report->hf_hub_cache, sizeof(report->hf_hub_cache),
+                         "%s/cache/provider/huggingface/hub", report->models_root);
+        snprintf(report->hf_hub_cache_source, sizeof(report->hf_hub_cache_source),
+                 "models-root");
+    }
+    if (count < 0 || (size_t)count >= sizeof(report->hf_hub_cache)) goto bounds;
+    if (xet && xet[0]) {
+        count = snprintf(report->hf_xet_cache, sizeof(report->hf_xet_cache), "%s", xet);
+        snprintf(report->hf_xet_cache_source, sizeof(report->hf_xet_cache_source),
+                 "environment");
+    } else {
+        count = snprintf(report->hf_xet_cache, sizeof(report->hf_xet_cache),
+                         "%s/cache/provider/huggingface/xet", report->models_root);
+        snprintf(report->hf_xet_cache_source, sizeof(report->hf_xet_cache_source),
+                 "models-root");
+    }
+    if (count < 0 || (size_t)count >= sizeof(report->hf_xet_cache)) goto bounds;
+    snprintf(report->hf_xet_high_performance,
+             sizeof(report->hf_xet_high_performance), "%s",
+             high && high[0] ? high : "provider-default");
+    return YVEX_OK;
+bounds:
+    yvex_error_set(err, YVEX_ERR_BOUNDS, "source.provider.policy",
+                   "provider cache path exceeds capacity");
+    return YVEX_ERR_BOUNDS;
 }
 
 int model_download_source_path_allowed(const yvex_operator_paths *operator_paths,
@@ -725,12 +770,13 @@ static int provider_stream_iteration(provider_stream_state *state)
         }
         state->kill_signal_sent = 1;
     }
-    if (state->effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_OFF &&
-        state->tick_seconds > 0ull && now != (time_t)-1 &&
+    if (state->tick_seconds > 0ull && now != (time_t)-1 &&
         state->next_tick != (time_t)-1 && now >= state->next_tick &&
         !state->child_exited) {
-        model_download_print_tick_progress(state->local_source_dir, state->started_at,
-                                           state->report, state->effective_mode);
+        model_acquisition_provider_observe(state->report);
+        if (state->effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_OFF)
+            model_download_print_tick_progress(state->local_source_dir, state->started_at,
+                                               state->report, state->effective_mode);
         state->next_tick = now + (time_t)state->tick_seconds;
     }
     if (state->tick_seconds > 0ull && now != (time_t)-1 &&
@@ -836,8 +882,13 @@ static int provider_process_run_streaming(const char *const *args,
         close(state.stderr_pipe[1]);
         close(state.stdout_log_fd);
         close(state.stderr_log_fd);
-        if (yvex_provider_child_environment(options->auth_mode == YVEX_MODEL_DOWNLOAD_AUTH_NEVER,
-                                             token_value) != 0) _exit(127);
+        if (yvex_provider_child_environment(
+                options->auth_mode == YVEX_MODEL_DOWNLOAD_AUTH_NEVER,
+                token_value, report->hf_hub_cache, report->hf_xet_cache) != 0)
+            _exit(127);
+        if (report->provider_event_path[0] &&
+            setenv("YVEX_PROVIDER_EVENT_PATH", report->provider_event_path, 1) != 0)
+            _exit(127);
         execv(args[0], (char *const *)args);
         _exit(127);
     }
@@ -847,6 +898,7 @@ static int provider_process_run_streaming(const char *const *args,
     state.pgid = getpgid(state.pid);
     if (state.pgid <= 0) state.pgid = state.pid;
     report->provider_process_group = state.pgid;
+    model_acquisition_provider_started(report, state.pid, state.pgid);
     if ((!options || !options->dry_run) && report->active_receipt_path[0]) {
         yvex_error receipt_err;
         yvex_error_clear(&receipt_err);
@@ -871,6 +923,7 @@ static int provider_process_run_streaming(const char *const *args,
         model_download_record_child_exit_status(report, state.child_status);
     }
     provider_stream_close(&state);
+    model_acquisition_provider_observe(report);
     model_download_orphan_check(report);
     if (WIFEXITED(state.child_status)) return WEXITSTATUS(state.child_status);
     if (WIFSIGNALED(state.child_status)) return 128 + WTERMSIG(state.child_status);
@@ -1045,7 +1098,14 @@ static void model_download_provider_signal_handler(int signo)
     if ((signo == SIGINT || signo == SIGTERM) &&
         model_download_provider_signal_seen == 0) {
         model_download_provider_signal_seen = signo;
+        model_download_provider_last_signal = signo;
     }
+}
+
+int model_download_provider_was_interrupted(void)
+{
+    return model_download_provider_last_signal == SIGINT ||
+           model_download_provider_last_signal == SIGTERM;
 }
 
 static int model_download_install_provider_signal_handlers(struct sigaction *old_int,
@@ -1059,6 +1119,7 @@ static int model_download_install_provider_signal_handlers(struct sigaction *old
     sigemptyset(&action.sa_mask);
 
     model_download_provider_signal_seen = 0;
+    model_download_provider_last_signal = 0;
     if (sigaction(SIGINT, &action, old_int) != 0) {
         yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
                         "cannot install SIGINT handler: %s", strerror(errno));

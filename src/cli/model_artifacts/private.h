@@ -22,6 +22,7 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/graph.h>
 #include <yvex/internal/source.h>
+#include <yvex/internal/source_acquisition.h>
 #include <yvex/registry.h>
 #include <yvex/source.h>
 #include <yvex/tokenizer.h>
@@ -258,6 +259,39 @@ void fullmodel_print_largest(const fullmodel_largest_tensor *top,
 int model_download_finish(const yvex_cli_models_download_options *options,
                           yvex_model_download_report *report);
 
+/* Detached acquisition client/supervisor projection. Source owns durable truth. */
+int model_acquisition_worker_active(void);
+int model_acquisition_operation_matches_report(
+    const yvex_source_acquisition_operation *operation,
+    const yvex_model_download_report *report, const char *selection_identity);
+int model_acquisition_supervisor_start(
+    int arg_count, char **args, const yvex_cli_models_download_options *options,
+    const yvex_model_download_report *report, const char *selection_identity,
+    yvex_error *err);
+int model_acquisition_attach(
+    const yvex_cli_models_download_options *options,
+    const yvex_model_download_report *report, yvex_error *err);
+int model_acquisition_worker_begin(const yvex_model_download_report *report,
+                                   yvex_error *err);
+void model_acquisition_provider_started(const yvex_model_download_report *report,
+                                        pid_t pid, pid_t process_group);
+void model_acquisition_provider_observe(const yvex_model_download_report *report);
+void model_acquisition_worker_finalizing(const yvex_model_download_report *report);
+void model_acquisition_worker_finish(const yvex_model_download_report *report,
+                                     int command_status);
+int model_acquisition_status_read(
+    const yvex_model_download_report *report,
+    yvex_source_acquisition_operation *operation, int reconcile,
+    yvex_error *err);
+void model_acquisition_status_render(
+    const yvex_cli_models_download_options *options,
+    const yvex_model_download_report *report,
+    const yvex_source_acquisition_operation *operation);
+int model_acquisition_stop_supervisor(
+    const yvex_cli_models_download_options *options,
+    const yvex_model_download_report *report,
+    yvex_source_acquisition_operation *operation, yvex_error *err);
+
 int path_exists(const char *path);
 int is_path_like_reference(const char *input);
 void model_artifact_append_role(char *out, size_t out_cap, const char *role);
@@ -346,6 +380,8 @@ const char *model_download_effective_include_at(
 const char *model_download_effective_exclude_at(
     const yvex_cli_models_download_options *options, unsigned int index);
 void model_download_report_init(yvex_model_download_report *report);
+int model_download_provider_policy(yvex_model_download_report *report,
+                                   yvex_error *err);
 int model_download_source_path_allowed(const yvex_operator_paths *paths,
                                        const char *source_dir,
                                        yvex_model_download_report *report);
@@ -363,6 +399,7 @@ int model_download_run_hf(const yvex_cli_models_download_options *options,
                           yvex_model_download_report *report,
                           const char *token_value,
                           yvex_error *err);
+int model_download_provider_was_interrupted(void);
 int model_download_run_github(const yvex_cli_models_download_options *options,
                               const yvex_model_download_report *report,
                               yvex_error *err);

@@ -101,6 +101,17 @@
       "reason": "common utility changes can affect every composed owner"
     },
     {
+      "id": "source-acquisition-lifecycle",
+      "patterns": ["src/source/acquisition.c", "include/yvex/internal/source_acquisition.h",
+                   "src/cli/model_artifacts/acquisition.c", "src/cli/model_artifacts/download.c",
+                   "src/cli/commands/model_artifacts.c", "src/accounts/provider.c",
+                   "include/yvex/internal/provider.h", "tests/source_acquisition_lifecycle.sh",
+                   "tests/unit/source_acquisition.c"],
+      "lanes": ["fast", "structural", "runtime", "sanitizer"],
+      "tests": ["unit.source_acquisition", "integration.source-acquisition", "integration.cli"],
+      "reason": "durable operation identity, detached supervision, progress health and process-control refusal require unit, subprocess and product CLI evidence"
+    },
+    {
       "id": "artifact-source-manifest",
       "patterns": ["src/artifact/**", "src/source/**", "src/gguf/core.c", "tools/generate_source_manifest.py", "config/source_owners.tsv"],
       "lanes": ["fast", "structural", "numeric", "runtime"],

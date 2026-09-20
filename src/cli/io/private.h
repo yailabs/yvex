@@ -203,6 +203,8 @@ typedef struct yvex_cli_models_download_options {
     unsigned int include_count, exclude_count;
     int selection_restored;
     unsigned long long max_workers;
+    unsigned long long expected_bytes, selected_shards;
+    int expected_bytes_known, selected_shards_known;
     yvex_model_download_auth_mode auth_mode;
     int dry_run;
     int no_manifest;
@@ -220,8 +222,7 @@ typedef struct yvex_cli_models_download_options {
     int cleanup_all_provider_cache;
     yvex_models_output_mode output_mode;
     yvex_model_download_progress_mode progress_mode;
-    unsigned long long tick_seconds;
-    unsigned long long timeout_seconds;
+    unsigned long long tick_seconds, timeout_seconds, stall_seconds;
 } yvex_cli_models_download_options;
 typedef struct yvex_model_download_source_scan {
     unsigned long long file_count;
@@ -255,11 +256,9 @@ typedef struct yvex_model_download_report {
     char native_inventory_path[YVEX_PATH_CAP];
     char download_report_path[YVEX_PATH_CAP];
     char registry_path[YVEX_PATH_CAP];
-    char receipt_path[YVEX_PATH_CAP];
-    char active_receipt_path[YVEX_PATH_CAP];
-    char last_receipt_path[YVEX_PATH_CAP];
-    char stdout_log_path[YVEX_PATH_CAP];
-    char stderr_log_path[YVEX_PATH_CAP];
+    char receipt_path[YVEX_PATH_CAP], active_receipt_path[YVEX_PATH_CAP], last_receipt_path[YVEX_PATH_CAP];
+    char stdout_log_path[YVEX_PATH_CAP], stderr_log_path[YVEX_PATH_CAP], operation_path[YVEX_PATH_CAP];
+    char supervisor_log_path[YVEX_PATH_CAP], provider_event_path[YVEX_PATH_CAP];
     char hf_cli_path[YVEX_PATH_CAP];
     char hf_cli_source[32];
     char provider_cli_path[YVEX_PATH_CAP];
@@ -269,6 +268,8 @@ typedef struct yvex_model_download_report {
     char credential_source[64];
     char account_hint[128];
     char accounts_state_path[YVEX_PATH_CAP];
+    char hf_hub_cache[YVEX_PATH_CAP], hf_xet_cache[YVEX_PATH_CAP];
+    char hf_hub_cache_source[32], hf_xet_cache_source[32], hf_xet_high_performance[32];
     char token_env_name[64];
     char source_payload_digest[65], representation_format[YVEX_REMOTE_FORMAT_CAP];
     char representation_precision[YVEX_REMOTE_PRECISION_CAP];

@@ -336,7 +336,8 @@ int yvex_provider_capture(yvex_account_capture_options *options,
         (void)dup2(stderr_pipe[1], STDERR_FILENO);
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
-        if (yvex_provider_child_environment(anonymous, NULL) != 0) _exit(127);
+        if (yvex_provider_child_environment(anonymous, NULL, NULL, NULL) != 0)
+            _exit(127);
         if (offline && setenv("HF_HUB_OFFLINE", "1", 1) != 0) _exit(127);
         execv(options->args[0], (char *const *)options->args);
         _exit(127);
@@ -695,9 +696,15 @@ int yvex_accounts_capture_provider_command(yvex_account_capture_options *options
     return yvex_provider_capture(options, 0, 0, err);
 }
 
-int yvex_provider_child_environment(int anonymous, const char *token)
+int yvex_provider_child_environment(int anonymous, const char *token,
+                                    const char *hf_hub_cache,
+                                    const char *hf_xet_cache)
 {
     if (setenv("HF_HUB_DISABLE_UPDATE_CHECK", "1", 1)) return -1;
+    if (hf_hub_cache && hf_hub_cache[0] &&
+        setenv("HF_HUB_CACHE", hf_hub_cache, 1)) return -1;
+    if (hf_xet_cache && hf_xet_cache[0] &&
+        setenv("HF_XET_CACHE", hf_xet_cache, 1)) return -1;
     if (anonymous) {
         if (unsetenv("HF_TOKEN") || unsetenv("HUGGING_FACE_HUB_TOKEN")) return -1;
         return setenv("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1", 1);

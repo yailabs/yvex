@@ -213,6 +213,16 @@ static const input_option_spec download_options[] = {
      offsetof(yvex_cli_models_download_options, max_workers), 0u, NULL, 0u, 0ull, 0,
      INPUT_VALUE_STANDARD,
      "yvex: models download --max-workers requires a positive integer\n"},
+    {.flag = "--expected-bytes", INPUT_OPTION_POSITIVE_U64,
+     offsetof(yvex_cli_models_download_options, expected_bytes),
+     offsetof(yvex_cli_models_download_options, expected_bytes_known), NULL, 0u, 0ull, 0,
+     INPUT_VALUE_STANDARD,
+     "yvex: models download --expected-bytes requires a positive integer\n"},
+    {.flag = "--selected-shards", INPUT_OPTION_POSITIVE_U64,
+     offsetof(yvex_cli_models_download_options, selected_shards),
+     offsetof(yvex_cli_models_download_options, selected_shards_known), NULL, 0u, 0ull, 0,
+     INPUT_VALUE_STANDARD,
+     "yvex: models download --selected-shards requires a positive integer\n"},
     {.flag = "--progress", INPUT_OPTION_CHOICE_INT,
      offsetof(yvex_cli_models_download_options, progress_mode), 0u, progress_choices, 0u, 0ull, 0,
      INPUT_VALUE_STANDARD,
@@ -225,6 +235,10 @@ static const input_option_spec download_options[] = {
      offsetof(yvex_cli_models_download_options, timeout_seconds), 0u, NULL, 0u, 0ull, 0,
      INPUT_VALUE_STANDARD,
      "yvex: models download --timeout-seconds requires a positive integer\n"},
+    {.flag = "--stall-seconds", INPUT_OPTION_POSITIVE_U64,
+     offsetof(yvex_cli_models_download_options, stall_seconds), 0u, NULL, 0u,
+     86400ull, 0, INPUT_VALUE_STANDARD,
+     "yvex: models download --stall-seconds requires a positive integer\n"},
     {.flag = "--output", INPUT_OPTION_OUTPUT, offsetof(yvex_cli_models_download_options, output_mode), 0u,
      NULL, 0u, 0ull, 0, INPUT_VALUE_STANDARD,
      "yvex: models download unsupported output mode: %s\n", INPUT_ERROR_VALUE},
@@ -595,6 +609,7 @@ int parse_models_download_options_from(int arg_count, char **args, int start_ind
     options->progress_mode = YVEX_MODEL_DOWNLOAD_PROGRESS_AUTO;
     options->tick_seconds = 2ull;
     options->timeout_seconds = 5ull;
+    options->stall_seconds = 300ull;
 
     if (arg_count > start_index &&
         (strcmp(args[start_index], "--help") == 0 || strcmp(args[start_index], "-h") == 0)) {

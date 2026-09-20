@@ -728,6 +728,7 @@
         "--auth",
         "--cli",
         "--family",
+        "--expected-bytes",
         "--github-source",
         "--max-workers",
         "--models-root",
@@ -739,6 +740,8 @@
         "--repo",
         "--revision",
         "--source",
+        "--selected-shards",
+        "--stall-seconds",
         "--tick-seconds",
         "--timeout-seconds",
         "--token-env"
