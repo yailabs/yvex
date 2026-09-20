@@ -191,8 +191,13 @@ static int program_parameters_resolve(yvex_program_parameters *result,
         if (low + 1u < count && !strcmp(map[low + 1u].source->source_name, symbol->value.text))
             return program_refuse(err, YVEX_ERR_FORMAT, "parameter realization is ambiguous");
         if (!program_parameter_type(yvex_ir_type_at(module,
-                yvex_ir_value_at(module, op->results[0])->type), &map[low]))
-            return program_refuse(err, YVEX_ERR_FORMAT, "parameter semantic type or physical geometry disagrees");
+                yvex_ir_value_at(module, op->results[0])->type), &map[low])) {
+            yvex_error_setf(
+                err, YVEX_ERR_FORMAT, "compiler.program.parameters",
+                "parameter semantic type or physical geometry disagrees: %s",
+                symbol->value.text);
+            return YVEX_ERR_FORMAT;
+        }
         result->parameters[result->count] = (yvex_program_parameter){
             op->results[0], map[low].terminal->canonical_ordinal};
         identities[result->count++] = (program_identity_entry){

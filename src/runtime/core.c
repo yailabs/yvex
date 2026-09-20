@@ -628,7 +628,8 @@ static int runtime_model_capabilities_bind(
     capabilities->cuda_piecewise_graph_implemented &= cuda_ready;
     capabilities->cuda_full_graph_implemented &= cuda_ready;
     capabilities->attention_state_delta_ready =
-        capabilities->attention_state_delta_ready && attention->state_delta_contract_ready;
+        capabilities->attention_state_delta_ready && attention &&
+        attention->state_delta_contract_ready;
     return YVEX_OK;
 }
 
@@ -657,7 +658,8 @@ static void runtime_model_summary_bind(
     model->summary.attention_layer_count = model->binding_summary.layer_count;
     model->summary.draft_attention_layer_count =
         model->binding_summary.draft_layer_count;
-    model->summary.attention_binding_count = attention->required_binding_count;
+    model->summary.attention_binding_count =
+        attention ? attention->required_binding_count : 0ull;
     model->summary.draft_attention_binding_count =
         draft_attention ? draft_attention->required_binding_count : 0ull;
     {
@@ -688,7 +690,11 @@ static int runtime_model_residency_open(
     unsigned long long started;
     int rc;
     *failure_spec = &open_residency;
-    if (!attention_summary->required_binding_count) return YVEX_OK;
+    if (!descriptor_summary || !descriptor_summary->tensor_count) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "runtime.model.residency",
+                       "runtime descriptor exposes no resident tensor inventory");
+        return YVEX_ERR_FORMAT;
+    }
     started = yvex_core_monotonic_ns();
     rc = runtime_model_progress(request, YVEX_RUNTIME_LIFECYCLE_RESIDENCY,
                                 0ull, descriptor_summary->tensor_count, err);
@@ -744,9 +750,12 @@ static int runtime_model_residency_open(
         request, YVEX_RUNTIME_LIFECYCLE_RESIDENCY,
         summary.binding_count, descriptor_summary->tensor_count, err);
     if (rc != YVEX_OK) return rc;
-    model->summary.capabilities.attention_weight_residency_ready = 1;
-    model->summary.capabilities.attention_envelope_ready =
-        model->summary.capabilities.attention_envelope_ready && summary.envelope_complete;
+    if (attention_summary) {
+        model->summary.capabilities.attention_weight_residency_ready = 1;
+        model->summary.capabilities.attention_envelope_ready =
+            model->summary.capabilities.attention_envelope_ready &&
+            summary.envelope_complete;
+    }
     resource.kind = summary.mapped_package_bytes
                         ? YVEX_ENGINE_RESOURCE_PACKAGE_MAPPING
                         : YVEX_ENGINE_RESOURCE_PREPARED_GROUP;
@@ -998,13 +1007,15 @@ int yvex_model_engine_open(yvex_model_engine **out, const yvex_model_engine_open
             1ull, 0ull, err, YVEX_ERR_FORMAT);
     attention_summary = yvex_attention_plan_summary(model->attention);
     draft_attention_summary = yvex_attention_plan_summary(model->draft_attention);
-    if (!descriptor_summary || !attention_summary ||
+    if (!descriptor_summary ||
         strcmp(descriptor_summary->runtime_descriptor_identity,
                model->binding_summary.runtime_descriptor_identity) != 0 ||
         strcmp(yvex_physical_execution_ir_summary(model->physical_execution)->identity,
                model->binding_summary.physical_execution_identity) != 0 ||
-        strcmp(attention_summary->attention_plan_identity,
-               model->binding_summary.attention_plan_identity) != 0 ||
+        (model->binding_summary.layer_count &&
+         (!attention_summary ||
+          strcmp(attention_summary->attention_plan_identity,
+                 model->binding_summary.attention_plan_identity) != 0)) ||
         (model->binding_summary.draft_layer_count &&
          (!draft_attention_summary ||
           strcmp(draft_attention_summary->attention_plan_identity,
@@ -1625,6 +1636,75 @@ static int runtime_session_state_open(
     return YVEX_OK;
 }
 
+/*
+ * Decide whether one authenticated executable program requires the attention
+ * lifecycle.  Absence is legal only when the physical token interface says
+ * that no attention operation exists; a missing plan must never silently
+ * disable attention for an attention-bearing program.
+ */
+static int runtime_model_attention_required(
+    const yvex_model_engine *model, int *required, yvex_error *err)
+{
+    const yvex_program_physical *program;
+    yvex_program_token_interface interface;
+    int rc;
+
+    if (required) *required = 0;
+    if (!model || !required || !model->view.compiled_plan) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "runtime.session.attention",
+                       "authenticated compiled model is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (model->attention) {
+        *required = 1;
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    if (model->draft_attention) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "runtime.session.attention",
+                       "draft attention cannot exist without target attention");
+        return YVEX_ERR_FORMAT;
+    }
+    program = yvex_compiled_model_plan_forward(model->view.compiled_plan);
+    memset(&interface, 0, sizeof(interface));
+    rc = program
+             ? yvex_program_physical_token_interface(program, &interface, err)
+             : YVEX_ERR_STATE;
+    if (!program || rc != YVEX_OK || interface.attention_operations) {
+        if (rc == YVEX_OK || !program)
+            yvex_error_set(
+                err, YVEX_ERR_FORMAT, "runtime.session.attention",
+                "attention-free runtime requires an explicit attention-free physical program");
+        return rc == YVEX_OK ? YVEX_ERR_FORMAT : rc;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+static int runtime_session_publish(
+    yvex_runtime_execution_session **out, yvex_runtime_execution_session *session,
+    yvex_model_engine *model, yvex_model_engine_failure *failure,
+    yvex_error *err)
+{
+    int publishable = pthread_mutex_lock(&model->lifecycle_mutex) == 0;
+    if (publishable) {
+        publishable = model->summary.valid && !model->close_requested;
+        if (publishable) {
+            session->summary.open = 1;
+            publishable = runtime_model_session_register_locked(model, session);
+            if (publishable) *out = session;
+        }
+        (void)pthread_mutex_unlock(&model->lifecycle_mutex);
+    }
+    if (!publishable)
+        return yvex_runtime_private_reject(
+            failure, YVEX_MODEL_ENGINE_FAILURE_BUSY,
+            "runtime-model-draining", 0ull, 1ull, "model began draining", err,
+            YVEX_ERR_STATE);
+    if (failure) memset(failure, 0, sizeof(*failure));
+    return yvex_runtime_private_success(err);
+}
+
 int yvex_runtime_session_open(yvex_runtime_execution_session **out,
                               yvex_model_engine *model,
                               const yvex_runtime_session_open_request *request,
@@ -1639,7 +1719,7 @@ int yvex_runtime_session_open(yvex_runtime_execution_session **out,
     yvex_backend_options backend_options;
     unsigned long long workspace_bytes = 0ull, draft_workspace_bytes = 0ull;
     unsigned long long admitted_host_bytes = 0ull, state_budget;
-    int rc, publishable, uploaded = 0;
+    int attention_required = 0, rc, uploaded = 0;
     if (out) *out = NULL;
     if (!out || !model || !request ||
         (request->backend != YVEX_BACKEND_KIND_CPU &&
@@ -1693,9 +1773,16 @@ int yvex_runtime_session_open(yvex_runtime_execution_session **out,
         if (rc != YVEX_OK) return runtime_session_open_fail(out, session, rc, failure, err);
         residency = &residency_storage;
     }
-    rc = yvex_attention_workspace_capacity_resolve(graph, model->attention,
-                                                   &workspace_bytes, err);
-    if (rc == YVEX_OK && model->draft_attention)
+    rc = runtime_model_attention_required(model, &attention_required, err);
+    if (rc == YVEX_OK && !attention_required && state_factory) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "runtime.session.attention",
+                       "attention-free program cannot consume an attention state factory");
+        rc = YVEX_ERR_INVALID_ARG;
+    }
+    if (rc == YVEX_OK && attention_required)
+        rc = yvex_attention_workspace_capacity_resolve(
+            graph, model->attention, &workspace_bytes, err);
+    if (rc == YVEX_OK && attention_required && model->draft_attention)
         rc = yvex_attention_workspace_capacity_resolve(
             graph, model->draft_attention, &draft_workspace_bytes, err);
     if (draft_workspace_bytes > workspace_bytes)
@@ -1712,17 +1799,20 @@ int yvex_runtime_session_open(yvex_runtime_execution_session **out,
             err, rc == YVEX_OK ? YVEX_ERR_BOUNDS : (yvex_status)rc);
         return runtime_session_open_fail(out, session, rc, failure, err);
     }
-    rc = yvex_attention_workspace_open(&session->attention_workspace, workspace_bytes, err);
-    if (rc != YVEX_OK) {
-        rc = yvex_runtime_private_reject(
-            failure, YVEX_MODEL_ENGINE_FAILURE_GRAPH, "attention-workspace",
-            workspace_bytes, 0ull, "attention workspace cold preparation failed",
-            err, (yvex_status)rc);
-        return runtime_session_open_fail(out, session, rc, failure, err);
+    if (attention_required) {
+        rc = yvex_attention_workspace_open(
+            &session->attention_workspace, workspace_bytes, err);
+        if (rc != YVEX_OK) {
+            rc = yvex_runtime_private_reject(
+                failure, YVEX_MODEL_ENGINE_FAILURE_GRAPH, "attention-workspace",
+                workspace_bytes, 0ull, "attention workspace cold preparation failed",
+                err, (yvex_status)rc);
+            return runtime_session_open_fail(out, session, rc, failure, err);
+        }
+        session->view.attention_workspace = session->attention_workspace;
+        session->summary.workspace_bytes = workspace_bytes;
+        session->summary.workspace_generation = 1ull;
     }
-    session->view.attention_workspace = session->attention_workspace;
-    session->summary.workspace_bytes = workspace_bytes;
-    session->summary.workspace_generation = 1ull;
     state_budget = request->maximum_host_bytes ? request->maximum_host_bytes - admitted_host_bytes
                                                : 0ull;
     rc = yvex_runtime_private_session_sequence_state_open(
@@ -1731,8 +1821,10 @@ int yvex_runtime_session_open(yvex_runtime_execution_session **out,
         &admitted_host_bytes, failure, err);
     if (rc != YVEX_OK)
         return runtime_session_open_fail(out, session, rc, failure, err);
-    rc = runtime_session_state_open(session, model, state_factory,
-                                    state_budget, failure, err);
+    rc = attention_required
+             ? runtime_session_state_open(session, model, state_factory,
+                                          state_budget, failure, err)
+             : YVEX_OK;
     if (rc != YVEX_OK)
         return runtime_session_open_fail(out, session, rc, failure, err);
     memset(&backend_options, 0, sizeof(backend_options));
@@ -1804,25 +1896,10 @@ int yvex_runtime_session_open(yvex_runtime_execution_session **out,
     rc = yvex_model_engine_validate(model, failure, err);
     if (rc != YVEX_OK)
         return runtime_session_open_fail(out, session, rc, failure, err);
-    publishable = pthread_mutex_lock(&model->lifecycle_mutex) == 0;
-    if (publishable) {
-        publishable = model->summary.valid && !model->close_requested;
-        if (publishable) {
-            session->summary.open = 1;
-            publishable = runtime_model_session_register_locked(model, session);
-            if (publishable) *out = session;
-        }
-        (void)pthread_mutex_unlock(&model->lifecycle_mutex);
-    }
-    if (!publishable) {
-        rc = yvex_runtime_private_reject(
-            failure, YVEX_MODEL_ENGINE_FAILURE_BUSY,
-            "runtime-model-draining", 0ull, 1ull, "model began draining", err,
-            YVEX_ERR_STATE);
-        return runtime_session_open_fail(out, session, rc, failure, err);
-    }
-    if (failure) memset(failure, 0, sizeof(*failure));
-    return yvex_runtime_private_success(err);
+    rc = runtime_session_publish(out, session, model, failure, err);
+    return rc == YVEX_OK
+               ? rc
+               : runtime_session_open_fail(out, session, rc, failure, err);
 }
 
 int yvex_runtime_session_close(yvex_runtime_execution_session **session_ptr, yvex_error *err) {
@@ -1874,113 +1951,4 @@ int yvex_runtime_session_close(yvex_runtime_execution_session **session_ptr, yve
  */
 const yvex_runtime_session_view *yvex_runtime_session_view_get(const yvex_runtime_execution_session *session) {
     return session ? &session->view : NULL;
-}
-/* Close one runtime lease in dependency order without losing retry ownership. */
-int yvex_runtime_cleanup_lease_close(yvex_runtime_cleanup_lease **lease_ptr, yvex_error *err) {
-    yvex_runtime_cleanup_lease *lease;
-    int rc;
-    if (!lease_ptr || !*lease_ptr) return yvex_runtime_private_success(err);
-    lease = *lease_ptr;
-    if (lease->dependent_context && !lease->dependent_release) {
-        yvex_error_set(err, YVEX_ERR_STATE, "runtime.cleanup.dependent", "dependent cleanup operation is unavailable");
-        return YVEX_ERR_STATE;
-    }
-    if (lease->dependent_context) {
-        rc = lease->dependent_release(&lease->dependent_context, err);
-        if (rc != YVEX_OK) return rc;
-        if (lease->dependent_context) {
-            yvex_error_set(err, YVEX_ERR_STATE, "runtime.cleanup.dependent",
-                           "dependent cleanup reported success while retaining ownership");
-            return YVEX_ERR_STATE;
-        }
-        lease->dependent_release = NULL;
-    }
-    rc = yvex_runtime_session_close(&lease->session, err);
-    if (rc != YVEX_OK) return rc;
-    yvex_model_engine_close(&lease->model);
-    if (lease->model) {
-        yvex_error_set(err, YVEX_ERR_STATE, "runtime.cleanup.model-close",
-                       "runtime model cleanup retained ownership for retry");
-        return YVEX_ERR_STATE;
-    }
-    free(lease);
-    *lease_ptr = NULL;
-    return yvex_runtime_private_success(err);
-}
-
-int yvex_runtime_cleanup_lease_adopt(yvex_runtime_cleanup_lease *lease, void *context,
-    yvex_runtime_cleanup_release_fn release, yvex_error *err) {
-    if (!lease || !context || !release || lease->dependent_context || lease->dependent_release) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "runtime.cleanup.adopt",
-                       "one empty cleanup lease dependent slot is required");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    lease->dependent_context = context;
-    lease->dependent_release = release;
-    return yvex_runtime_private_success(err);
-}
-
-int yvex_runtime_cleanup_lease_acquire(
-    yvex_runtime_cleanup_lease **out, const yvex_model_engine_open_request *model_request,
-    const yvex_runtime_session_open_request *session_request,
-    yvex_model_engine **borrowed_model,
-    yvex_runtime_execution_session **borrowed_session,
-    yvex_model_engine_failure *failure, yvex_error *err) {
-    yvex_runtime_cleanup_lease *lease;
-    yvex_error primary, cleanup;
-    int rc, cleanup_rc;
-    if (borrowed_model) *borrowed_model = NULL;
-    if (borrowed_session) *borrowed_session = NULL;
-    if (!out || *out || !model_request || !borrowed_model ||
-        (session_request && !borrowed_session))
-        return yvex_runtime_private_reject(
-            failure, YVEX_MODEL_ENGINE_FAILURE_INVALID_ARGUMENT,
-            "cleanup-lease", 1ull,
-            out && !*out && model_request && borrowed_model &&
-                    (!session_request || borrowed_session) ? 1ull : 0ull,
-            "empty cleanup lease, model request, and borrowed outputs are required",
-            err, YVEX_ERR_INVALID_ARG);
-    lease = (yvex_runtime_cleanup_lease *)calloc(1u, sizeof(*lease));
-    if (!lease)
-        return yvex_runtime_private_reject(
-            failure, YVEX_MODEL_ENGINE_FAILURE_ALLOCATION, "cleanup-lease",
-            1ull, 0ull, "lease allocation failed", err, YVEX_ERR_NOMEM);
-    *out = lease;
-    rc = yvex_model_engine_open(&lease->model, model_request, failure, err);
-    if (rc == YVEX_OK) *borrowed_model = lease->model;
-    if (rc == YVEX_OK && session_request)
-        rc = yvex_runtime_cleanup_lease_session_open(
-            lease, session_request, borrowed_session, failure, err);
-    if (rc == YVEX_OK) return YVEX_OK;
-    *borrowed_model = NULL;
-    if (borrowed_session) *borrowed_session = NULL;
-    primary = err ? *err : (yvex_error){0};
-    yvex_error_clear(&cleanup);
-    cleanup_rc = yvex_runtime_cleanup_lease_close(out, &cleanup);
-    if (cleanup_rc != YVEX_OK) {
-        yvex_runtime_private_failure_record(
-            failure, YVEX_MODEL_ENGINE_FAILURE_CLEANUP, "cleanup-lease", 0ull, 1ull,
-            "runtime acquisition cleanup retained ownership for retry");
-        if (err) *err = cleanup;
-        return cleanup_rc;
-    }
-    if (err) *err = primary;
-    return rc;
-}
-
-int yvex_runtime_cleanup_lease_session_open(
-    yvex_runtime_cleanup_lease *lease, const yvex_runtime_session_open_request *request,
-    yvex_runtime_execution_session **borrowed_session,
-    yvex_model_engine_failure *failure, yvex_error *err) {
-    int rc;
-    if (borrowed_session) *borrowed_session = NULL;
-    if (!lease || !lease->model || lease->session || !request || !borrowed_session)
-        return yvex_runtime_private_reject(
-            failure, YVEX_MODEL_ENGINE_FAILURE_INVALID_ARGUMENT,
-            "cleanup-lease-session", 1ull, 0ull,
-            "model-owning cleanup lease and session request are required", err,
-            YVEX_ERR_INVALID_ARG);
-    rc = yvex_runtime_session_open(&lease->session, lease->model, request, failure, err);
-    if (rc == YVEX_OK) *borrowed_session = lease->session;
-    return rc;
 }

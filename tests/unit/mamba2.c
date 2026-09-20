@@ -2,7 +2,11 @@
 #include "tests/test.h"
 #include <yvex/internal/families/mamba2.h>
 #include <yvex/internal/backend.h>
+#include <yvex/internal/core.h>
+#include <yvex/internal/decoder_execution.h>
+#include <yvex/internal/deployment.h>
 #include <yvex/internal/family_catalog.h>
+#include <yvex/internal/compilation.h>
 #include <yvex/internal/program.h>
 #include <yvex/internal/program_device.h>
 #include <yvex/internal/program_kernels.h>
@@ -10,7 +14,9 @@
 #include <yvex/internal/program_sequence.h>
 #include <yvex/internal/quant_numeric.h>
 #include <yvex/internal/sequence_state.h>
+#include <yvex/internal/logits.h>
 #include <yvex/internal/graph.h>
+#include <yvex/internal/runtime.h>
 #include <yvex/internal/source_catalog.h>
 #include <yvex/qtype.h>
 #include <errno.h>
@@ -466,8 +472,8 @@ static int mamba_contract(const char *root)
         "missing required tensor prevents complete coverage");
     table->count++;
     yvex_native_weight_table_close(table);
-    YVEX_TEST_ASSERT(!yvex_graph_execution_find(0, 0, YVEX_MAMBA2_TARGET),
-        "family inspection does not advertise executable capability");
+    YVEX_TEST_ASSERT(yvex_graph_execution_find(0, 0, YVEX_MAMBA2_TARGET),
+        "family catalog publishes the compiler-owned pure-SSM execution boundary");
     verification.revision[0] = '0';
     YVEX_TEST_ASSERT(api->open(&verification, &a, &err) != YVEX_OK, "revision drift rejected");
     snprintf(verification.revision, sizeof(verification.revision), "%s", YVEX_MAMBA2_REVISION);
@@ -571,6 +577,483 @@ static int mamba_acquired_program(const yvex_mamba2_architecture *architecture,
     return 0;
 }
 
+typedef struct {
+    int requested;
+} mamba_exact_cancellation;
+
+static int mamba_exact_cancel(void *context)
+{
+    return ((mamba_exact_cancellation *)context)->requested;
+}
+
+static int mamba_exact_input_identity(
+    unsigned int token, unsigned long long position,
+    char output[YVEX_SHA256_HEX_CAP])
+{
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(&hash, "yvex.test.mamba2.exact-token.v1") ||
+        !yvex_sha256_update_u64(&hash, token) ||
+        !yvex_sha256_update_u64(&hash, position) ||
+        !yvex_sha256_final(&hash, digest))
+        return 0;
+    yvex_sha256_hex(digest, output);
+    return 1;
+}
+
+static int mamba_exact_profile(
+    const yvex_runtime_session_summary *session,
+    yvex_execution_workload_profile *workload,
+    yvex_runtime_execution_profile *profile, yvex_error *err)
+{
+    yvex_runtime_execution_profile_request request = {0};
+    workload->schema_version = YVEX_EXECUTION_WORKLOAD_PROFILE_SCHEMA_V1;
+    workload->kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY;
+    workload->minimum_session_context = 4u;
+    workload->requested_session_context = 4u;
+    workload->concurrent_sequences = 1u;
+    workload->logical_batch_tokens = 1u;
+    workload->prefill_chunk_tokens = 1u;
+    workload->attention_microbatch_rows = 1u;
+    workload->moe_row_tile = 1u;
+    workload->output_head_rows = 1u;
+    workload->system_reserve_bytes = YVEX_EXECUTION_MINIMUM_SYSTEM_RESERVE;
+    workload->latency_priority = 1;
+    strcpy(workload->name, "mamba2-exact-qualification");
+    if (yvex_execution_workload_profile_seal(workload, err) != YVEX_OK)
+        return yvex_error_code(err);
+    request.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
+    request.engine_generation = session->engine_generation;
+    request.engine_specialization_identity =
+        session->engine_specialization_identity;
+    request.kernel_bundle_identity = session->engine_specialization_identity;
+    request.workload_profile_identity = workload->identity;
+    request.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
+    request.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
+    request.execution_class = YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE;
+    request.attention_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
+    request.moe_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
+    request.sampling_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
+    return yvex_runtime_execution_profile_seal(&request, profile, err);
+}
+
+static int mamba_exact_token(
+    yvex_runtime_decoder_execution_context *decoder,
+    yvex_runtime_logits_context *logits, unsigned int token,
+    unsigned long long position,
+    yvex_runtime_decoder_execution_result *execution,
+    yvex_runtime_logits_row_result *row, float *values,
+    unsigned long long value_count, yvex_error *err)
+{
+    yvex_runtime_decoder_execution_request request = {0};
+    yvex_runtime_logits_source source;
+    char identity[YVEX_SHA256_HEX_CAP];
+    int rc;
+    if (!mamba_exact_input_identity(token, position, identity))
+        return YVEX_ERR_STATE;
+    request.token_ids = &token;
+    request.token_start = position;
+    request.token_count = 1u;
+    request.input_identity = identity;
+    rc = yvex_runtime_decoder_execution_execute(
+        decoder, &request, execution, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_logits_source_from_decoder(
+            logits, &source, execution,
+            position ? YVEX_LOGITS_SOURCE_DECODE : YVEX_LOGITS_SOURCE_PREFILL,
+            0u, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_logits_project(
+            logits, &source, YVEX_BACKEND_KIND_CPU, values, value_count,
+            row, err);
+    return rc;
+}
+
+static int mamba_exact_tokenizer(const yvex_tokenizer *tokenizer,
+                                 yvex_error *err)
+{
+    static const unsigned char text[] = "Hello world";
+    const unsigned int expected[] = {1u, 23325u, 2294u};
+    yvex_tokenizer_encode_options encode_options = {
+        .add_bos = 1, .maximum_tokens = 8u};
+    yvex_tokenizer_decode_options decode_options = {
+        .skip_special_tokens = 1, .require_complete_utf8 = 1};
+    yvex_tokenizer_encode_result encoded = {0};
+    yvex_tokenizer_decode_result decoded = {0};
+    yvex_tokenizer_decoder *decoder = NULL;
+    yvex_tokenizer_fragment fragment = {0};
+    yvex_tokenizer_token_classification eos = {0};
+    const char *chat = NULL;
+    unsigned long long chat_bytes = 0u;
+    unsigned int id;
+    int rc = yvex_tokenizer_encode(
+        tokenizer, text, sizeof(text) - 1u, &encode_options, &encoded, err);
+    if (rc == YVEX_OK &&
+        (encoded.tokens.len != 3u ||
+         memcmp(encoded.tokens.ids, expected, sizeof(expected)) != 0)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "test.mamba2.tokenizer",
+                       "pinned tokenizer encode vector drifted");
+        rc = YVEX_ERR_FORMAT;
+    }
+    if (rc == YVEX_OK)
+        rc = yvex_tokenizer_decode(
+            tokenizer, encoded.tokens.ids, encoded.tokens.len,
+            &decode_options, &decoded, err);
+    if (rc == YVEX_OK &&
+        (decoded.byte_count != sizeof(text) - 1u ||
+         memcmp(decoded.bytes, text, sizeof(text) - 1u) != 0)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "test.mamba2.tokenizer",
+                       "pinned tokenizer decode vector drifted");
+        rc = YVEX_ERR_FORMAT;
+    }
+    if (rc == YVEX_OK)
+        rc = yvex_tokenizer_decoder_open(
+            &decoder, tokenizer, &decode_options, err);
+    if (rc == YVEX_OK)
+        rc = yvex_tokenizer_decoder_push(decoder, expected[0], &fragment, err);
+    if (rc == YVEX_OK && fragment.byte_count) rc = YVEX_ERR_FORMAT;
+    yvex_tokenizer_fragment_clear(&fragment);
+    if (rc == YVEX_OK)
+        rc = yvex_tokenizer_decoder_push(decoder, expected[1], &fragment, err);
+    if (rc == YVEX_OK &&
+        (fragment.byte_count != 5u || memcmp(fragment.bytes, "Hello", 5u)))
+        rc = YVEX_ERR_FORMAT;
+    yvex_tokenizer_fragment_clear(&fragment);
+    if (rc == YVEX_OK)
+        rc = yvex_tokenizer_decoder_push(decoder, expected[2], &fragment, err);
+    if (rc == YVEX_OK &&
+        (fragment.byte_count != 6u || memcmp(fragment.bytes, " world", 6u)))
+        rc = YVEX_ERR_FORMAT;
+    yvex_tokenizer_fragment_clear(&fragment);
+    if (rc == YVEX_OK &&
+        (yvex_tokenizer_bos_id(tokenizer, &id) != YVEX_OK || id != 1u ||
+         yvex_tokenizer_eos_id(tokenizer, &id) != YVEX_OK || id != 2u ||
+         yvex_tokenizer_unk_id(tokenizer, &id) != YVEX_OK || id != 0u ||
+         yvex_tokenizer_pad_id(tokenizer, &id) != YVEX_ERR_UNSUPPORTED ||
+         yvex_tokenizer_chat_template(tokenizer, &chat, &chat_bytes) !=
+             YVEX_ERR_UNSUPPORTED || chat || chat_bytes ||
+         yvex_tokenizer_token_classify(tokenizer, 2u, &eos, err) != YVEX_OK ||
+         !eos.eos || !eos.stop)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "test.mamba2.tokenizer",
+                       "pinned special-token/output policy drifted");
+        rc = YVEX_ERR_FORMAT;
+    }
+    yvex_tokenizer_decoder_close(&decoder);
+    yvex_tokenizer_decode_result_clear(&decoded);
+    yvex_tokenizer_encode_result_clear(&encoded);
+    return rc;
+}
+
+static int mamba_exact_result_valid(
+    const yvex_program_physical_summary *forward,
+    const yvex_program_physical_summary *output,
+    const yvex_runtime_decoder_execution_result *first,
+    const yvex_runtime_decoder_execution_result *repeated,
+    const yvex_runtime_decoder_execution_result *retry,
+    const yvex_runtime_logits_row_result *first_row,
+    const yvex_runtime_logits_row_result *repeated_row,
+    const yvex_runtime_logits_row_result *retry_row,
+    const yvex_sequence_state_summary *initial,
+    const yvex_sequence_state_summary *after_first,
+    const yvex_sequence_state_summary *after_reset,
+    const yvex_sequence_state_summary *after_retry,
+    const yvex_runtime_session_summary *isolated,
+    int cancelled, int stale)
+{
+    return forward && output && forward->step_count == 900u &&
+        output->step_count == 2u && first->completed && repeated->completed &&
+        retry->completed && first->layers_executed == 64u &&
+        !first->attention_layers && first->recurrent_layers == 64u &&
+        first->position_after == 1u && repeated->layers_executed == 64u &&
+        repeated->position_after == 1u && retry->layers_executed == 64u &&
+        retry->position_after == 2u && first_row->completed &&
+        first_row->vocabulary_size == 32768u &&
+        first_row->finite_count == 32768u && repeated_row->completed &&
+        repeated_row->finite_count == 32768u && retry_row->completed &&
+        retry_row->finite_count == 32768u &&
+        strcmp(first_row->raw_logits_digest,
+               repeated_row->raw_logits_digest) == 0 &&
+        initial->binding_count == 64u && !initial->committed_position &&
+        after_first->committed_position == 1u &&
+        after_reset->committed_position == 0u &&
+        after_retry->committed_position == 2u &&
+        cancelled == YVEX_ERR_CANCELLED && stale == YVEX_ERR_STATE &&
+        isolated->sequence_state_binding_count == 64u &&
+        isolated->sequence_state_generation == initial->generation;
+}
+
+typedef struct {
+    yvex_runtime_execution_session *session;
+    yvex_runtime_decoder_execution_context *decoder;
+    yvex_runtime_logits_context *logits;
+    const yvex_runtime_session_view *session_view;
+    yvex_model_engine_failure *failure;
+    mamba_exact_cancellation cancellation;
+    yvex_sequence_state_summary initial;
+    yvex_sequence_state_summary after_first;
+    yvex_sequence_state_summary after_reset;
+    yvex_sequence_state_summary after_retry;
+    yvex_runtime_decoder_execution_result first;
+    yvex_runtime_decoder_execution_result repeated;
+    yvex_runtime_decoder_execution_result retry;
+    yvex_runtime_logits_row_result first_row;
+    yvex_runtime_logits_row_result repeated_row;
+    yvex_runtime_logits_row_result retry_row;
+    float *first_logits;
+    float *repeated_logits;
+    float *retry_logits;
+    const char *stage;
+    int cancelled;
+    int stale;
+} mamba_exact_run;
+
+static int mamba_exact_run_execute(mamba_exact_run *run, yvex_error *err)
+{
+    int rc;
+    run->stage = "initial-state";
+    rc = yvex_sequence_state_summary_copy(
+        run->session_view->sequence_state, &run->initial, err);
+    run->first_logits = calloc(32768u, sizeof(*run->first_logits));
+    run->repeated_logits = calloc(32768u, sizeof(*run->repeated_logits));
+    run->retry_logits = calloc(32768u, sizeof(*run->retry_logits));
+    if (rc == YVEX_OK &&
+        (!run->first_logits || !run->repeated_logits || !run->retry_logits)) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "test.mamba2.exact-runtime",
+                       "cannot allocate exact logits evidence buffers");
+        rc = YVEX_ERR_NOMEM;
+    }
+    if (rc == YVEX_OK) {
+        run->stage = "first-token";
+        rc = mamba_exact_token(
+            run->decoder, run->logits, 1u, 0u, &run->first,
+            &run->first_row, run->first_logits, 32768u, err);
+    }
+    if (rc == YVEX_OK) {
+        run->stage = "first-state";
+        rc = yvex_sequence_state_summary_copy(
+            run->session_view->sequence_state, &run->after_first, err);
+    }
+    if (rc == YVEX_OK) {
+        run->stage = "state-reset";
+        rc = yvex_runtime_session_reset_persistent_state(
+            run->session, run->failure, err);
+    }
+    if (rc == YVEX_OK) {
+        run->stage = "reset-state";
+        rc = yvex_sequence_state_summary_copy(
+            run->session_view->sequence_state, &run->after_reset, err);
+    }
+    if (rc == YVEX_OK) {
+        run->stage = "repeated-token";
+        rc = mamba_exact_token(
+            run->decoder, run->logits, 1u, 0u, &run->repeated,
+            &run->repeated_row, run->repeated_logits, 32768u, err);
+    }
+    if (rc == YVEX_OK) {
+        unsigned int token = 3u;
+        char identity[YVEX_SHA256_HEX_CAP];
+        yvex_runtime_decoder_execution_request request = {0};
+        yvex_runtime_decoder_execution_result result = {0};
+        run->stage = "cancelled-token";
+        run->cancellation.requested = 1;
+        mamba_exact_input_identity(token, 1u, identity);
+        request.token_ids = &token;
+        request.token_start = 1u;
+        request.token_count = 1u;
+        request.input_identity = identity;
+        run->cancelled = yvex_runtime_decoder_execution_execute(
+            run->decoder, &request, &result, err);
+        run->cancellation.requested = 0;
+        if (run->cancelled == YVEX_ERR_CANCELLED)
+            yvex_error_clear(err);
+        else
+            rc = run->cancelled;
+    }
+    if (rc == YVEX_OK) {
+        run->stage = "retry-token";
+        rc = mamba_exact_token(
+            run->decoder, run->logits, 3u, 1u, &run->retry,
+            &run->retry_row, run->retry_logits, 32768u, err);
+    }
+    if (rc == YVEX_OK) {
+        run->stage = "retry-state";
+        rc = yvex_sequence_state_summary_copy(
+            run->session_view->sequence_state, &run->after_retry, err);
+    }
+    if (rc == YVEX_OK) {
+        unsigned int token = 4u;
+        char identity[YVEX_SHA256_HEX_CAP];
+        yvex_runtime_decoder_execution_request request = {0};
+        yvex_runtime_decoder_execution_result result = {0};
+        run->stage = "stale-position";
+        mamba_exact_input_identity(token, 0u, identity);
+        request.token_ids = &token;
+        request.token_count = 1u;
+        request.input_identity = identity;
+        run->stale = yvex_runtime_decoder_execution_execute(
+            run->decoder, &request, &result, err);
+        if (run->stale == YVEX_ERR_STATE)
+            yvex_error_clear(err);
+        else
+            rc = run->stale;
+    }
+    return rc;
+}
+
+static int mamba_acquired_runtime(const char *artifact, const char *binding)
+{
+    yvex_model_engine_open_request model_request = {0};
+    yvex_runtime_session_open_request session_request = {0};
+    yvex_runtime_decoder_execution_options decoder_options = {0};
+    yvex_runtime_logits_options logits_options = {0};
+    yvex_model_engine *model = NULL;
+    yvex_runtime_execution_session *session = NULL, *isolated = NULL;
+    yvex_runtime_decoder_execution_context *decoder = NULL;
+    yvex_runtime_logits_context *logits = NULL;
+    yvex_model_engine_failure failure = {0};
+    yvex_model_engine_summary model_summary = {0};
+    yvex_runtime_session_summary session_summary = {0}, isolated_summary = {0};
+    yvex_execution_workload_profile workload = {0};
+    yvex_runtime_execution_profile profile = {0};
+    mamba_exact_run run = {.cancelled = YVEX_ERR, .stale = YVEX_ERR};
+    const yvex_runtime_session_view *session_view;
+    const yvex_model_engine_view *model_view;
+    const yvex_program_physical_summary *forward, *output;
+    unsigned long long started = yvex_core_monotonic_ns(), completed;
+    yvex_error err;
+    const char *stage = "model-open";
+    int rc = YVEX_OK, passed = 0;
+
+    model_request.artifact_path = artifact;
+    model_request.runtime_binding_path = binding;
+    model_request.target_id = YVEX_MAMBA2_TARGET;
+    model_request.residency_backend = YVEX_BACKEND_KIND_CPU;
+    session_request.backend = YVEX_BACKEND_KIND_CPU;
+    yvex_error_clear(&err);
+    rc = yvex_model_engine_open(
+        &model, &model_request, &failure, &err);
+    if (rc != YVEX_OK) goto close;
+    {
+        stage = "model-summary";
+        rc = yvex_model_engine_summary_copy(model, &model_summary, &err);
+        if (rc == YVEX_OK) {
+            stage = "session-open";
+            rc = yvex_runtime_session_open(
+                &session, model, &session_request, &failure, &err);
+        }
+        if (rc == YVEX_OK) {
+            stage = "session-summary";
+            rc = yvex_runtime_session_summary_copy(
+                session, &session_summary, &err);
+        }
+        if (rc == YVEX_OK) {
+            stage = "execution-profile";
+            rc = mamba_exact_profile(
+                &session_summary, &workload, &profile, &err);
+        }
+        decoder_options.context_capacity = 4u;
+        decoder_options.token_capacity = 1u;
+        decoder_options.execution_profile = &profile;
+        decoder_options.cancel_requested = mamba_exact_cancel;
+        decoder_options.cancel_context = &run.cancellation;
+        logits_options.maximum_rows = 1u;
+        logits_options.evidence_profile = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
+        logits_options.execution_profile = &profile;
+        if (rc == YVEX_OK) {
+            stage = "decoder-open";
+            rc = yvex_runtime_decoder_execution_context_open(
+                &decoder, model, session, &decoder_options, &err);
+        }
+        if (rc == YVEX_OK) {
+            stage = "logits-open";
+            rc = yvex_runtime_logits_context_open_program(
+                &logits, model, session, &logits_options, &err);
+        }
+        session_view = yvex_runtime_session_view_get(session);
+        model_view = yvex_model_engine_view_get(model);
+        forward = model_view
+                      ? yvex_program_physical_summary_get(
+                            yvex_compiled_model_plan_forward(
+                                model_view->compiled_plan))
+                      : NULL;
+        output = model_view
+                     ? yvex_program_physical_summary_get(
+                           yvex_compiled_model_plan_output(
+                               model_view->compiled_plan))
+                     : NULL;
+        if (rc == YVEX_OK) {
+            stage = "exact-tokenizer";
+            rc = mamba_exact_tokenizer(model_view->tokenizer, &err);
+        }
+        if (rc == YVEX_OK) {
+            run.session = session;
+            run.decoder = decoder;
+            run.logits = logits;
+            run.session_view = session_view;
+            run.failure = &failure;
+            rc = mamba_exact_run_execute(&run, &err);
+            stage = run.stage;
+        }
+        if (rc == YVEX_OK) {
+            stage = "isolated-session-open";
+            rc = yvex_runtime_session_open(
+                &isolated, model, &session_request, &failure, &err);
+        }
+        if (rc == YVEX_OK) {
+            stage = "isolated-session-summary";
+            rc = yvex_runtime_session_summary_copy(
+                isolated, &isolated_summary, &err);
+        }
+        if (rc == YVEX_OK) {
+            stage = "final-session-summary";
+            rc = yvex_runtime_session_summary_copy(
+                session, &session_summary, &err);
+        }
+        passed = rc == YVEX_OK && mamba_exact_result_valid(
+            forward, output, &run.first, &run.repeated, &run.retry,
+            &run.first_row, &run.repeated_row, &run.retry_row, &run.initial,
+            &run.after_first, &run.after_reset, &run.after_retry,
+            &isolated_summary, run.cancelled, run.stale);
+        if (!passed && rc == YVEX_OK) {
+            yvex_error_set(&err, YVEX_ERR_STATE, "test.mamba2.exact-runtime",
+                           "exact all-layer/output/session evidence was incomplete");
+            rc = YVEX_ERR_STATE;
+        }
+        if (rc != YVEX_OK)
+            fprintf(stderr, "exact Mamba2 runtime stage=%s: %s: %s\n",
+                    stage, yvex_error_where(&err), yvex_error_message(&err));
+    }
+    completed = yvex_core_monotonic_ns();
+    if (passed)
+        printf("acquired-mamba2-runtime: forward_steps=900 output_steps=2 "
+               "layers=64 attention=0 KV=0 RoPE=0 dense_FFN=0 "
+               "vocabulary=32768 finite=32768 positions=0->1/reset->0->1->2 "
+               "cancel=%d stale=%d logits=%s mapped_bytes=%llu "
+               "resident_host_bytes=%llu committed_state_bytes=%llu "
+               "candidate_state_bytes=%llu elapsed=%.3fs\n",
+               run.cancelled, run.stale, run.first_row.raw_logits_digest,
+               model_summary.mapped_package_bytes,
+               model_summary.resident_host_bytes,
+               session_summary.sequence_committed_state_bytes,
+               session_summary.sequence_candidate_state_bytes,
+               (double)(completed - started) / 1000000000.0);
+
+close:
+    if (!passed && rc != YVEX_OK)
+        fprintf(stderr, "exact Mamba2 runtime stage=%s status=%d where=%s reason=%s\n",
+                stage, rc, yvex_error_where(&err), yvex_error_message(&err));
+    free(run.retry_logits);
+    free(run.repeated_logits);
+    free(run.first_logits);
+    (void)yvex_runtime_logits_context_close(&logits, NULL);
+    (void)yvex_runtime_decoder_execution_context_close(&decoder, NULL);
+    (void)yvex_runtime_session_close(&isolated, NULL);
+    (void)yvex_runtime_session_close(&session, NULL);
+    yvex_model_engine_close(&model);
+    return passed ? 0 : 1;
+}
+
 static int mamba_acquired_contract(void)
 {
     const char *source = getenv("YVEX_MAMBA2_SOURCE");
@@ -612,10 +1095,17 @@ static int mamba_acquired_contract(void)
         rc == YVEX_OK ? yvex_semantic_model_ir_summary_get(products.semantic_model) : NULL;
     YVEX_TEST_ASSERT(rc == YVEX_OK && semantic && semantic->schema_version == YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2 &&
         semantic->family_adapter_id == YVEX_MAMBA2_ADAPTER_ID && semantic->decoder_layer_count == 0u &&
-        semantic->execution_descriptor.schema_version == 0u &&
+        semantic->execution_descriptor.schema_version ==
+            YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2 &&
+        semantic->execution_descriptor.layer_count == 64u &&
+        semantic->execution_descriptor.sequence_mixer_layers == 64u &&
+        !semantic->execution_descriptor.attention_heads &&
+        !semantic->execution_descriptor.kv_heads &&
+        !semantic->execution_descriptor.head_width &&
+        !semantic->execution_descriptor.dense_ffn_width &&
         yvex_semantic_model_ir_program(products.semantic_model) &&
         yvex_sha256_hex_valid(products.derivation_identity),
-        "canonical family source gate publishes program-owned semantics without a decoder-shaped descriptor");
+        "canonical family source gate publishes program-owned pure-SSM execution semantics");
     yvex_family_source_products_release(&products);
     YVEX_TEST_ASSERT(mamba_acquired_program(
                          &architecture, &inventory, verification.manifest_payload_identity, &err) == 0,
@@ -629,6 +1119,62 @@ static int mamba_acquired_contract(void)
            architecture.mixer.recurrent_state_values, architecture.layer_count,
            architecture.token_policy_conflict, architecture.token_authority,
            architecture.normalization_policy_conflict, architecture.normalization_authority);
+    {
+        const char *artifact = getenv("YVEX_MAMBA2_ARTIFACT");
+        const char *durable_binding = getenv("YVEX_MAMBA2_BINDING");
+        const char *plan = getenv("YVEX_MAMBA2_PHYSICAL_PLAN");
+        const yvex_graph_execution_binding *execution =
+            yvex_graph_execution_find(0u, 0u, YVEX_MAMBA2_TARGET);
+        yvex_compilation_runtime_binding_request request = {0};
+        yvex_runtime_binding_summary summary = {0};
+        yvex_runtime_binding_failure failure = {0};
+        yvex_runtime_binding *binding = NULL;
+        char directory[] = "build/tests/mamba2-binding.XXXXXX";
+        char path[YVEX_PATH_CAP] = {0};
+        int published = 0;
+
+        if (artifact && artifact[0] && plan && plan[0]) {
+            YVEX_TEST_ASSERT(execution && execution->compiler && mkdtemp(directory),
+                             "exact binding test owner created");
+            request.source_path = source;
+            request.models_root = options.models_root;
+            request.source_manifest_path = options.manifest_path;
+            request.artifact_path = artifact;
+            request.directory = directory;
+            request.quant_preset_name = "mamba-codestral-source-faithful-v1";
+            request.physical_variant_plan_path = plan;
+            request.family_adapter_id = YVEX_MAMBA2_ADAPTER_ID;
+            request.family_adapter_version = YVEX_MAMBA2_ADAPTER_VERSION;
+            request.source_stream_count = 1u;
+            rc = yvex_runtime_binding_compile_publish(
+                execution->compiler, &request, path, &published, &err);
+            if (rc != YVEX_OK)
+                fprintf(stderr, "exact Mamba2 binding: %s: %s\n",
+                        err.where, yvex_error_message(&err));
+            YVEX_TEST_ASSERT(
+                rc == YVEX_OK && published &&
+                yvex_runtime_binding_open(&binding, path, &summary, NULL,
+                                          &failure, &err) == YVEX_OK &&
+                summary.schema_version == YVEX_RUNTIME_BINDING_SCHEMA_CURRENT &&
+                summary.tensor_count == 579u && !summary.layer_count &&
+                summary.recurrent_layer_count == 64u &&
+                !summary.attention_plan_identity[0] &&
+                summary.semantic_maximum_context == 1048576u,
+                "exact artifact reopens through attention-optional executable binding");
+            printf("acquired-mamba2-binding: schema=%u tensors=%llu attention=%llu "
+                   "recurrent=%llu artifact=%s binding=%s\n",
+                   summary.schema_version, summary.tensor_count, summary.layer_count,
+                   summary.recurrent_layer_count, summary.artifact_identity,
+                   summary.identity);
+            yvex_runtime_binding_close(binding);
+            (void)unlink(path);
+            (void)rmdir(directory);
+        }
+        if (artifact && artifact[0] && durable_binding && durable_binding[0])
+            YVEX_TEST_ASSERT(
+                mamba_acquired_runtime(artifact, durable_binding) == 0,
+                "exact artifact executes all layers/output through the common runtime");
+    }
     return 0;
 }
 

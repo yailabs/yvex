@@ -10,6 +10,7 @@
 
 #include <limits.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <yvex/internal/core.h>
@@ -23,25 +24,6 @@ typedef struct {
     const unsigned char *bytes;
     unsigned long long count, offset;
 } tokenizer_span;
-
-typedef struct {
-    unsigned int token_id;
-    yvex_token_append_state state;
-} token_sequence_row;
-
-struct yvex_token_sequence {
-    token_sequence_row *rows;
-    unsigned long long count, capacity, generation;
-    int transaction_active;
-};
-
-struct yvex_token_sequence_transaction {
-    yvex_token_sequence *sequence;
-    token_sequence_row *rows;
-    unsigned long long base_count, base_generation;
-    unsigned long long count, capacity, generation;
-    int prepared;
-};
 
 static uint64_t lookup_hash(const void *data, size_t count)
 {
@@ -221,10 +203,26 @@ static int byte_tokens_build(yvex_tokenizer *tokenizer, yvex_error *err)
     unsigned int byte;
     for (byte = 0u; byte < 256u; ++byte) {
         unsigned char encoded[4];
-        size_t count = utf8_put(byte_codepoint(byte), encoded);
-        if (!vocab_lookup(tokenizer, encoded, count, &tokenizer->byte_token_ids[byte])) {
+        char fallback[7];
+        const void *unit = encoded;
+        size_t count;
+        if (tokenizer->compiled_policy.model_policy ==
+            YVEX_TOKENIZER_MODEL_BPE_METASPACE) {
+            int written = snprintf(fallback, sizeof(fallback), "<0x%02X>", byte);
+            if (written != 6) return YVEX_ERR_STATE;
+            unit = fallback;
+            count = 6u;
+        } else {
+            count = utf8_put(byte_codepoint(byte), encoded);
+        }
+        if (!vocab_lookup(tokenizer, unit, count, &tokenizer->byte_token_ids[byte])) {
             yvex_error_setf(err, YVEX_ERR_FORMAT, "tokenizer.plan.bytelevel",
-                            "ByteLevel initial unit %u is absent from vocabulary", byte);
+                            "%s byte unit %u is absent from vocabulary",
+                            tokenizer->compiled_policy.model_policy ==
+                                    YVEX_TOKENIZER_MODEL_BPE_METASPACE
+                                ? "Metaspace fallback"
+                                : "ByteLevel initial",
+                            byte);
             return YVEX_ERR_FORMAT;
         }
     }
@@ -806,8 +804,20 @@ int yvex_tokenizer_execution_seal(yvex_tokenizer *tokenizer, const yvex_gguf *gg
          tokenizer->pad.id != policy->pad_token_id ||
          tokenizer->unk.present != policy->unk_present ||
          tokenizer->unk.id != policy->unk_token_id)) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "tokenizer.plan.specials",
-                       "special-token facts differ from the compiled tokenizer policy");
+        yvex_error_setf(
+            err, YVEX_ERR_FORMAT, "tokenizer.plan.specials",
+            "special-token facts differ from compiled policy: count=%llu/%llu "
+            "bos=%d:%u/%d:%u eos=%d:%u/%d:%u pad=%d:%u/%d:%u "
+            "unk=%d:%u/%d:%u",
+            tokenizer->plan.special_token_count, policy->special_token_count,
+            tokenizer->bos.present, tokenizer->bos.id,
+            policy->bos_present, policy->bos_token_id,
+            tokenizer->eos.present, tokenizer->eos.id,
+            policy->eos_present, policy->eos_token_id,
+            tokenizer->pad.present, tokenizer->pad.id,
+            policy->pad_present, policy->pad_token_id,
+            tokenizer->unk.present, tokenizer->unk.id,
+            policy->unk_present, policy->unk_token_id);
         rc = YVEX_ERR_FORMAT;
     }
     if (rc == YVEX_OK) {
@@ -1086,7 +1096,7 @@ static int bpe_piece(const yvex_tokenizer *tokenizer, const unsigned char *bytes
                      unsigned long long maximum, yvex_error *err)
 {
     unsigned int *symbols;
-    unsigned long long symbol_count = count, index;
+    unsigned long long symbol_count = 0u, index;
     int rc = YVEX_OK;
 
     if (!count)
@@ -1098,8 +1108,36 @@ static int bpe_piece(const yvex_tokenizer *tokenizer, const unsigned char *bytes
         yvex_error_set(err, YVEX_ERR_NOMEM, "tokenizer.encode.bpe", "piece workspace allocation failed");
         return YVEX_ERR_NOMEM;
     }
-    for (index = 0u; index < count; ++index)
-        symbols[index] = tokenizer->byte_token_ids[bytes[index]];
+    if (tokenizer->plan.model_policy == YVEX_TOKENIZER_MODEL_BPE_METASPACE) {
+        unsigned long long offset = 0u;
+        while (offset < count) {
+            unsigned long long start = offset;
+            uint32_t point;
+            unsigned int token;
+            if (!yvex_tokenizer_utf8_next(bytes, count, &offset, &point)) {
+                free(symbols);
+                yvex_error_set(err, YVEX_ERR_FORMAT, "tokenizer.encode.metaspace",
+                               "Metaspace input is not canonical UTF-8");
+                return YVEX_ERR_FORMAT;
+            }
+            if (vocab_lookup(tokenizer, bytes + start,
+                             (size_t)(offset - start), &token)) {
+                symbols[symbol_count++] = token;
+            } else if (tokenizer->plan.byte_fallback) {
+                while (start < offset)
+                    symbols[symbol_count++] =
+                        tokenizer->byte_token_ids[bytes[start++]];
+            } else {
+                free(symbols);
+                yvex_error_set(err, YVEX_ERR_FORMAT, "tokenizer.encode.metaspace",
+                               "Metaspace scalar is absent from vocabulary");
+                return YVEX_ERR_FORMAT;
+            }
+        }
+    } else {
+        for (index = 0u; index < count; ++index)
+            symbols[symbol_count++] = tokenizer->byte_token_ids[bytes[index]];
+    }
     while (symbol_count > 1u) {
         const tokenizer_merge_slot *best = NULL;
         unsigned long long write = 0u;
@@ -1175,8 +1213,26 @@ static int ordinary_encode(const yvex_tokenizer *tokenizer, const unsigned char 
                            unsigned long long count, yvex_tokens *tokens,
                            unsigned long long maximum, yvex_error *err)
 {
+    static const unsigned char metaspace[] = {0xe2u, 0x96u, 0x81u};
     tokenizer_span span = {bytes, count, 0u};
     int qwen2_pretokenizer = strcmp(tokenizer->compiled_policy.tokenizer_pre, "qwen2") == 0;
+
+    if (tokenizer->plan.model_policy == YVEX_TOKENIZER_MODEL_BPE_METASPACE) {
+        byte_builder normalized = {0};
+        unsigned long long index;
+        int rc = YVEX_OK;
+        if (count && bytes[0] != ' ')
+            rc = builder_append(&normalized, metaspace, sizeof(metaspace), err);
+        for (index = 0u; rc == YVEX_OK && index < count; ++index)
+            rc = bytes[index] == ' '
+                     ? builder_append(&normalized, metaspace, sizeof(metaspace), err)
+                     : builder_append(&normalized, bytes + index, 1u, err);
+        if (rc == YVEX_OK)
+            rc = bpe_piece(tokenizer, normalized.data, normalized.count,
+                           tokens, maximum, err);
+        free(normalized.data);
+        return rc;
+    }
 
     while (span.offset < span.count) {
         unsigned long long end = next_piece(&span, span.offset, qwen2_pretokenizer);
@@ -1702,297 +1758,4 @@ void yvex_rendered_prompt_free(yvex_rendered_prompt *prompt)
         return;
     free(prompt->text);
     memset(prompt, 0, sizeof(*prompt));
-}
-
-static int sequence_identity(const yvex_token_sequence *sequence,
-                             yvex_token_sequence_summary *summary)
-{
-    yvex_sha256 ids_hash, state_hash;
-    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
-    unsigned long long index;
-    yvex_sha256_init(&ids_hash);
-    yvex_sha256_init(&state_hash);
-    if (!yvex_sha256_update_text(&ids_hash, "yvex.tokenizer.append.ids.v1") ||
-        !yvex_sha256_update_text(&state_hash, "yvex.tokenizer.append.state.v1") ||
-        !yvex_sha256_update_u64_be(&ids_hash, sequence->count) ||
-        !yvex_sha256_update_u64_be(&state_hash, sequence->count) ||
-        !yvex_sha256_update_u64_be(&state_hash, sequence->generation))
-        return 0;
-    for (index = 0u; index < sequence->count; ++index)
-        if (!yvex_sha256_update_u64_be(&ids_hash, sequence->rows[index].token_id) ||
-            !yvex_sha256_update_u64_be(&state_hash, sequence->rows[index].token_id) ||
-            !yvex_sha256_update_u64_be(&state_hash, sequence->rows[index].state))
-            return 0;
-    if (!yvex_sha256_final(&ids_hash, digest))
-        return 0;
-    yvex_sha256_hex(digest, summary->token_ids_identity);
-    if (!yvex_sha256_final(&state_hash, digest))
-        return 0;
-    yvex_sha256_hex(digest, summary->state_identity);
-    return 1;
-}
-
-int yvex_token_sequence_open(yvex_token_sequence **out,
-                             unsigned long long capacity,
-                             yvex_error *err)
-{
-    yvex_token_sequence *sequence;
-    if (!out || !capacity || capacity > SIZE_MAX / sizeof(token_sequence_row)) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "tokenizer.append.open", "bounded nonzero capacity is required");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    *out = NULL;
-    sequence = calloc(1u, sizeof(*sequence));
-    if (sequence)
-        sequence->rows = calloc((size_t)capacity, sizeof(*sequence->rows));
-    if (!sequence || !sequence->rows) {
-        free(sequence ? sequence->rows : NULL);
-        free(sequence);
-        yvex_error_set(err, YVEX_ERR_NOMEM, "tokenizer.append.open", "token directory allocation failed");
-        return YVEX_ERR_NOMEM;
-    }
-    sequence->capacity = capacity;
-    *out = sequence;
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-int yvex_token_sequence_append(yvex_token_sequence *sequence,
-                               unsigned int token_id,
-                               unsigned long long vocabulary_size,
-                               unsigned long long *ordinal,
-                               yvex_error *err)
-{
-    unsigned long long next_count, next_generation;
-    if (!sequence || !ordinal || sequence->transaction_active ||
-        token_id >= vocabulary_size || sequence->count >= sequence->capacity) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "tokenizer.append", "token ID or directory capacity is invalid");
-        return YVEX_ERR_BOUNDS;
-    }
-    if (!yvex_core_u64_add(sequence->count, 1u, &next_count) ||
-        !yvex_core_u64_add(sequence->generation, 1u, &next_generation)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "tokenizer.append", "token directory counter overflow");
-        return YVEX_ERR_BOUNDS;
-    }
-    *ordinal = sequence->count;
-    sequence->rows[sequence->count].token_id = token_id;
-    sequence->rows[sequence->count].state = YVEX_TOKEN_APPEND_PROPOSED;
-    sequence->count = next_count;
-    sequence->generation = next_generation;
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-int yvex_token_sequence_transaction_begin(
-    yvex_token_sequence *sequence, unsigned long long maximum_rows,
-    yvex_token_sequence_transaction **out, yvex_error *err)
-{
-    yvex_token_sequence_transaction *transaction;
-    if (out) *out = NULL;
-    if (!sequence || !out || !maximum_rows || sequence->transaction_active ||
-        maximum_rows > sequence->capacity - sequence->count ||
-        maximum_rows > SIZE_MAX / sizeof(token_sequence_row)) {
-        yvex_error_set(err, YVEX_ERR_STATE, "tokenizer.append.transaction.begin",
-                       "token sequence cannot admit the requested transaction");
-        return YVEX_ERR_STATE;
-    }
-    transaction = calloc(1u, sizeof(*transaction));
-    if (transaction)
-        transaction->rows = calloc((size_t)maximum_rows,
-                                   sizeof(*transaction->rows));
-    if (!transaction || !transaction->rows) {
-        free(transaction ? transaction->rows : NULL);
-        free(transaction);
-        yvex_error_set(err, YVEX_ERR_NOMEM, "tokenizer.append.transaction.begin",
-                       "token transaction allocation failed");
-        return YVEX_ERR_NOMEM;
-    }
-    transaction->sequence = sequence;
-    transaction->base_count = sequence->count;
-    transaction->base_generation = sequence->generation;
-    transaction->generation = sequence->generation;
-    transaction->capacity = maximum_rows;
-    sequence->transaction_active = 1;
-    *out = transaction;
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-int yvex_token_sequence_transaction_append(
-    yvex_token_sequence_transaction *transaction, unsigned int token_id,
-    unsigned long long vocabulary_size, unsigned long long *ordinal,
-    yvex_error *err)
-{
-    unsigned long long next_generation;
-    if (!transaction || transaction->prepared || !ordinal ||
-        token_id >= vocabulary_size || transaction->count >= transaction->capacity ||
-        !yvex_core_u64_add(transaction->generation, 1ull, &next_generation)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "tokenizer.append.transaction.append",
-                       "staged token or transaction extent is invalid");
-        return YVEX_ERR_BOUNDS;
-    }
-    *ordinal = transaction->base_count + transaction->count;
-    transaction->rows[transaction->count].token_id = token_id;
-    transaction->rows[transaction->count].state = YVEX_TOKEN_APPEND_PROPOSED;
-    transaction->count++;
-    transaction->generation = next_generation;
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-int yvex_token_sequence_transaction_transition(
-    yvex_token_sequence_transaction *transaction, unsigned long long ordinal,
-    yvex_token_append_state expected, yvex_token_append_state next,
-    yvex_error *err)
-{
-    unsigned long long local, next_generation;
-    if (!transaction || transaction->prepared || ordinal < transaction->base_count) {
-        yvex_error_set(err, YVEX_ERR_STATE, "tokenizer.append.transaction.transition",
-                       "staged append transition is stale");
-        return YVEX_ERR_STATE;
-    }
-    local = ordinal - transaction->base_count;
-    if (local >= transaction->count || transaction->rows[local].state != expected ||
-        next != (yvex_token_append_state)(expected + 1) ||
-        !yvex_core_u64_add(transaction->generation, 1ull, &next_generation)) {
-        yvex_error_set(err, YVEX_ERR_STATE, "tokenizer.append.transaction.transition",
-                       "staged append transition is non-contiguous");
-        return YVEX_ERR_STATE;
-    }
-    transaction->rows[local].state = next;
-    transaction->generation = next_generation;
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-int yvex_token_sequence_transaction_prepare(
-    yvex_token_sequence_transaction *transaction, yvex_error *err)
-{
-    yvex_token_sequence *sequence = transaction ? transaction->sequence : NULL;
-    if (!transaction || transaction->prepared || !transaction->count || !sequence ||
-        !sequence->transaction_active || sequence->count != transaction->base_count ||
-        sequence->generation != transaction->base_generation ||
-        transaction->count > sequence->capacity - sequence->count) {
-        yvex_error_set(err, YVEX_ERR_STATE, "tokenizer.append.transaction.prepare",
-                       "token transaction no longer matches its base state");
-        return YVEX_ERR_STATE;
-    }
-    transaction->prepared = 1;
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-void yvex_token_sequence_transaction_publish(
-    yvex_token_sequence_transaction **transaction)
-{
-    yvex_token_sequence_transaction *owner = transaction ? *transaction : NULL;
-    yvex_token_sequence *sequence;
-    if (!owner || !owner->prepared) return;
-    sequence = owner->sequence;
-    memcpy(sequence->rows + owner->base_count, owner->rows,
-           (size_t)owner->count * sizeof(*owner->rows));
-    sequence->count = owner->base_count + owner->count;
-    sequence->generation = owner->generation;
-    sequence->transaction_active = 0;
-    free(owner->rows);
-    memset(owner, 0, sizeof(*owner));
-    free(owner);
-    *transaction = NULL;
-}
-
-void yvex_token_sequence_transaction_abort(
-    yvex_token_sequence_transaction **transaction)
-{
-    yvex_token_sequence_transaction *owner = transaction ? *transaction : NULL;
-    if (!owner) return;
-    if (owner->sequence) owner->sequence->transaction_active = 0;
-    free(owner->rows);
-    memset(owner, 0, sizeof(*owner));
-    free(owner);
-    *transaction = NULL;
-}
-
-int yvex_token_sequence_transition(yvex_token_sequence *sequence,
-                                   unsigned long long ordinal,
-                                   yvex_token_append_state expected,
-                                   yvex_token_append_state next,
-                                   yvex_error *err)
-{
-    unsigned long long next_generation;
-    if (!sequence || sequence->transaction_active || ordinal >= sequence->count ||
-        sequence->rows[ordinal].state != expected ||
-        next != (yvex_token_append_state)(expected + 1)) {
-        yvex_error_set(err, YVEX_ERR_STATE, "tokenizer.append.transition",
-                       "append transition is non-contiguous or stale");
-        return YVEX_ERR_STATE;
-    }
-    if (!yvex_core_u64_add(sequence->generation, 1u, &next_generation)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "tokenizer.append.transition",
-                       "token directory generation overflow");
-        return YVEX_ERR_BOUNDS;
-    }
-    sequence->rows[ordinal].state = next;
-    sequence->generation = next_generation;
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-int yvex_token_sequence_summary_get(const yvex_token_sequence *sequence,
-                                    yvex_token_sequence_summary *summary,
-                                    yvex_error *err)
-{
-    if (!sequence || !summary) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "tokenizer.append.summary", "sequence and summary are required");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    memset(summary, 0, sizeof(*summary));
-    summary->schema_version = YVEX_TOKENIZER_APPEND_SCHEMA_V1;
-    summary->count = sequence->count;
-    summary->capacity = sequence->capacity;
-    summary->generation = sequence->generation;
-    if (!sequence_identity(sequence, summary)) {
-        yvex_error_set(err, YVEX_ERR_STATE, "tokenizer.append.summary", "append identity derivation failed");
-        return YVEX_ERR_STATE;
-    }
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-/*
- * Reuse one generation-local token directory for a later turn without reallocating it.
- *
- * Generation overflow preserves prior rows.
- */
-int yvex_token_sequence_reset(yvex_token_sequence *sequence,
-                              yvex_error *err)
-{
-    unsigned long long next_generation;
-
-    if (!sequence || sequence->transaction_active) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "tokenizer.append.reset",
-                       "token directory is required");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    if (!yvex_core_u64_add(sequence->generation, 1u, &next_generation)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "tokenizer.append.reset",
-                       "token directory generation overflow");
-        return YVEX_ERR_BOUNDS;
-    }
-    memset(sequence->rows, 0,
-           (size_t)sequence->capacity * sizeof(*sequence->rows));
-    sequence->count = 0u;
-    sequence->generation = next_generation;
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
-/* Release one token directory deterministically and clear caller ownership. */
-void yvex_token_sequence_close(yvex_token_sequence **sequence)
-{
-    if (!sequence || !*sequence)
-        return;
-    free((*sequence)->rows);
-    memset(*sequence, 0, sizeof(**sequence));
-    free(*sequence);
-    *sequence = NULL;
 }

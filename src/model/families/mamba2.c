@@ -89,7 +89,7 @@ static int mamba_program_types(mamba_program_builder *b, yvex_ir_id *tokens, yve
     if (rc == YVEX_OK) rc = yvex_ir_type_intern(b->module, &type, &b->logits, b->error);
     for (index = 0u; rc == YVEX_OK && index < 10u; ++index) {
         type = (yvex_ir_type){.kind = YVEX_IR_TENSOR,
-            .scalar = YVEX_IR_F32, .rank = shapes[index][2] ? 3u : shapes[index][1] ? 2u : 1u};
+            .scalar = YVEX_IR_BF16, .rank = shapes[index][2] ? 3u : shapes[index][1] ? 2u : 1u};
         for (dim = 0u; dim < type.rank; ++dim) type.shape[dim] = (yvex_ir_extent){YVEX_IR_NONE, shapes[index][dim]};
         rc = yvex_ir_type_intern(b->module, &type, &b->parameters[index], b->error);
     }

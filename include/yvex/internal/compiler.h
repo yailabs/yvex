@@ -26,6 +26,7 @@ extern "C" {
 #define YVEX_SPECULATION_FAMILY_POLICY_SCHEMA_V1 1u
 #define YVEX_COMPILED_CONTEXT_ENVELOPE_SCHEMA_V1 1u
 #define YVEX_COMPILED_CONTEXT_ENVELOPE_SCHEMA_V2 2u
+#define YVEX_COMPILED_CONTEXT_ENVELOPE_SCHEMA_V3 3u
 #define YVEX_SPECULATION_MAX_BLOCK 8u
 #define YVEX_SPECULATION_MAX_FEATURE_LAYERS YVEX_MODEL_EXECUTION_FEATURE_LAYER_CAP
 #define YVEX_SPECULATION_IDENTITY_CAP (YVEX_SHA256_HEX_BYTES + 1u)
@@ -424,7 +425,7 @@ typedef struct yvex_family_binding_pipeline {
                              const void *lowering_context,
                              const struct yvex_quant_policy *policy,
                              const char *imatrix_identity, yvex_error *err);
-    const char *tokenizer_architecture, *tokenizer_pre;
+    const char *tokenizer_architecture, *tokenizer_model, *tokenizer_pre;
     const char *imatrix_source_identity;
     const char *imatrix_dataset_identity;
     const char *imatrix_producer;
@@ -541,6 +542,7 @@ typedef struct {
     char model_execution_identity[YVEX_SHA256_HEX_BYTES];
     char target_transformer_identity[YVEX_SHA256_HEX_BYTES];
     char target_decoder_identity[YVEX_SHA256_HEX_BYTES];
+    char target_program_identity[YVEX_SHA256_HEX_BYTES];
     char draft_transformer_identity[YVEX_SHA256_HEX_BYTES];
 } yvex_compiled_context_envelope;
 int yvex_compiled_model_plan_build(

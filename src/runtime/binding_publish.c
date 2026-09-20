@@ -46,7 +46,7 @@ int yvex_runtime_binding_compile_publish(
     if (rc == YVEX_OK &&
         (!products.admission || !products.physical_compatibility ||
          !products.materialization || !products.runtime_descriptor ||
-         !products.operator_graph || !products.attention_plan ||
+         !products.operator_graph ||
          !products.physical_execution || !products.compiled_plan ||
          !products.capabilities ||
          !products.transformer_policy || !products.logits_policy ||

@@ -83,8 +83,9 @@ one as its `program`. Qwen and MiniMax use native typed programs for their
 admitted computational paths, DeepSeek retains a canonical operator schedule
 alongside sealed semantic and derived implementation records, and Mamba2
 lowers an exact pure-SSM source program to the common portable CPU
-physical-program boundary. Mamba2 artifact, binding and hosted execution remain
-unadmitted.
+physical-program boundary. Its exact artifact and binding now execute all 64
+layers plus the LM head through that program; hosted conversation and
+independent whole-model conformance remain unadmitted.
 
 The compiler-facing family adapter supplies one bounded graph compiler and the
 family's operator-composition callback. Family projectors are consumed only
@@ -179,20 +180,22 @@ fact, not the model's semantic limit. The public capacity contract reports the
 exact loaded deployment rather than projecting a repository default as
 execution truth.
 
-Runtime binding v16 persists the canonical operator graph identity, Physical
+Runtime binding v17 persists the canonical operator graph identity, Physical
 Execution IR v5 package records, and pointer-free compiled tokenizer,
 conversation, and model/operator plans. Source-owned syntax and exact tokenizer
 component identities enter through the family compiler adapter; tokenizer,
 runtime, and server consume the authenticated record without enumerating a
-concrete family.
+concrete family. Version 17 makes attention presence explicit so a verified
+pure-SSM program can authenticate absence rather than fabricate an empty
+attention plan.
 
-The v16 reader also authenticates accepted v14/v15 bindings. It imports a v14
+The v17 reader also authenticates accepted v14/v15/v16 bindings. It imports a v14
 physical record only when the legacy record names canonical package storage and
 does not require its retired derived-layout/runtime-policy fields; the importer
 then normalizes that package truth to PEIR v5 before engine specialization.
 Unsupported legacy derived assets fail closed. Bindings v7 through v13 remain
 explicit rebuild boundaries because they predate the canonical operator graph.
-Old bytes are never reinterpreted as v16.
+Old bytes are never reinterpreted as v17.
 
 The non-persisted runtime execution profile binds an exact engine generation
 and specialization to workload, kernel bundle, generation mode, evidence class,
@@ -229,9 +232,10 @@ duplicating bytes for multiple plans.
 
 The typed architecture is not yet a complete deployed decoder for every
 sequence mixer. Mamba2 now has source-owned token/numerical policy, typed
-pure-SSM forward/output programs and common CPU physical execution, but no
-admitted artifact/engine binding. Mandatory FFN or rotary/KV assumptions may
-not be satisfied with fictitious roles to manufacture READY.
+pure-SSM forward/output programs, an admitted artifact/engine binding and
+exact internal all-layer CPU execution. Mandatory FFN or rotary/KV assumptions
+may not be satisfied with fictitious roles to manufacture support; hosted
+conversation remains unavailable without a source-owned template.
 
 ## Typed computational programs
 
@@ -253,9 +257,9 @@ the broader replay and independent evidence campaign.
 | Consumer | Compiler/runtime authority after refoundation .1 | Remaining evidence or later breadth |
 | --- | --- | --- |
 | Qwen 3.5 | Forward/output entries share compiler lineage; the slot runner executes physical SSA and legacy decoder bytes normalize only at cold admission. Attention providers and reports are one-way derived views. | Whole-model before/after preservation and authoritative upstream conformance. |
-| DeepSeek V4 / DSpark | Canonical operator graph owns embedding, heterogeneous attention/MoE pairs, target/draft data and state dependencies, final/output and draft projections. Binding v16/model-plan v8 retains it; runtime schedules from it and uses separately authenticated physical implementation plans. | Official/reference conformance, the known whole-model CPU/CUDA discrepancy and performance qualification; no second family runtime remains. |
+| DeepSeek V4 / DSpark | Canonical operator graph owns embedding, heterogeneous attention/MoE pairs, target/draft data and state dependencies, final/output and draft projections. Binding v17/model-plan v8 retains it; runtime schedules from it and uses separately authenticated physical implementation plans. | Official/reference conformance, the known whole-model CPU/CUDA discrepancy and performance qualification; no second family runtime remains. |
 | MiniMax H3 | Text, multimodal text, vision, visual dense/prefix, audio signal and joint prepare/step/forward compile to physical SSA; common component owners execute admitted work; old procedural neural executors are removed. | Asset-dependent trajectory/full-scale qualification; bounded component preservation is not full-model or upstream conformance. |
-| Mamba2 | Exact pure-SSM forward/output program lowers to common CPU physical SSA and common transactional state without attention/KV/RoPE/dense FFN | Complete artifact/binding, all-layer independent numerics and hosted execution remain open; A01 stays PARTIAL |
+| Mamba2 | Exact pure-SSM forward/output program, artifact and binding execute common CPU physical SSA and transactional state without attention/KV/RoPE/dense FFN | Independent all-layer/whole-model numerics and hosted conversation remain open; A01 stays PARTIAL |
 
 The ownership cutover is explicit per architecture consumer:
 
@@ -264,7 +268,7 @@ The ownership cutover is explicit per architecture consumer:
 | DeepSeek V4 / DSpark | Source/catalog revision, selector, representation and target/draft relation | `model/families/deepseek_v4.c` interprets source schema; `graph/families/deepseek_v4.c` projects canonical semantics | Semantic Model IR plus retained operator graph own target/draft topology, dataflow, state and ordering | Transformation IR, PEIR and typed attention/MoE/transformer programs and plans | Generic transformer/generation owners resolve the retained graph and invoke admitted work | Family containers retain import and irreducible operation policy only; no warm family topology owner | Real target/draft, generation, CPU/CUDA and OpenAI regressions; official vectors not executed; whole-model backend gap remains OPEN |
 | Qwen 3.5 | Source/catalog revision, selector and representation | Qwen model/graph importers project source topology | Native typed forward/output module and physical SSA own current text computation | Parameter projection, physical program and exact recurrent/attention state bindings | Slot-based program runner and generic state providers | Legacy decoder schemas are cold-import compatibility only; procedural forward loop removed | Recurrent/hybrid numerical lanes and bounded exact-artifact generation; upstream conformance not executed |
 | MiniMax H3 | Source/catalog component and representation identities | MiniMax model/graph importers project neural component interfaces | Typed text, vision, audio and joint component programs | Physical component programs and admitted backend operations | Common component executor and runtime lifecycle | Family code retains import and irreducible fused-operation meaning; old neural procedural loops removed | Bounded component preservation; full asset-dependent trajectory and upstream evidence remain open |
-| Mamba2 | Exact source/catalog snapshot | Mamba2 source/graph importer resolves source/token/numerical policy | Typed forward/output module and explicit convolution/recurrent state dependencies | Common physical-program lowering selects portable CPU selective SSD; no complete artifact/binding | Common physical SSA and sequence-state transaction owners in bounded qualification | No Transformer-shaped dependency or family runtime introduced | Exact-source compiler/first-layer/component scope; A01 remains PARTIAL pending artifact and model qualification |
+| Mamba2 | Exact source/catalog snapshot and durable manifest | Mamba2 source/graph importer resolves source/token/numerical policy | Typed forward/output module and explicit convolution/recurrent state dependencies | Common physical-program lowering selects portable CPU selective SSD; artifact/binding authenticate 579 parameters and 64 state bindings | Common physical SSA and sequence-state transactions execute all 64 layers and LM head | No Transformer-shaped dependency or family runtime introduced | Exact artifact/runtime determinism plus independent first-layer component scope; whole-model conformance and hosted conversation remain open |
 
 ### Cutover acceptance boundary
 
@@ -325,7 +329,7 @@ verified source -> family interpretation
 | PEIR package terminal truth | Authenticated terminal roles, identities, qtypes, row geometry, encoded ranges, layout and sharing | Built from admitted artifact materialization and runtime-descriptor facts; no backend/device/activation/kernel/residency decision. |
 | Program-parameter join | One identity-preserving package realization for each used computational parameter | Transformation terminal lineage and PEIR decisions resolve symbolic constants before invocation; payload lookup is not deferred to execution. |
 | Physical computational program / target choice | Admitted operation implementations, dependencies, exact populations and physical value contracts after exact parameter join | Serial physical SSA owns Qwen/MiniMax program work; DeepSeek runtime resolves scheduled attention/MoE work from the retained canonical graph and separately authenticated implementation plans. |
-| Executable binding / runtime | Authenticate immutable execution truth; own engines/runners/sessions/scheduling/lifetimes | Runtime binding v16 and model-plan v8 carry canonical schedules plus physical programs/plans. Historical v3-v7 forms import at the schema boundary; warm execution does not invoke family importers. |
+| Executable binding / runtime | Authenticate immutable execution truth; own engines/runners/sessions/scheduling/lifetimes | Runtime binding v17 and model-plan v8 carry canonical schedules plus physical programs/plans; v17 also records explicit attention absence. Historical forms import only at the schema boundary; warm execution does not invoke family importers. |
 | State providers / backends / evidence | Physical state mechanisms and CPU/CUDA execution publish typed results and observations | Existing owners and producer-owned transient-result lifetimes preserved |
 
 The retained canonical graph, PEIR and physical computational programs answer
@@ -366,10 +370,10 @@ a runtime device-result publication generation, engine lease or checkpoint.
 
 | Computational form | Implemented meaning | Persistence / consumers |
 | --- | --- | --- |
-| Imported program | Family/source interpretation as typed operations, parameter references and explicit state dependencies | Qwen and MiniMax program projection plus Mamba2 exact-source pure-SSM forward/output; Mamba2 artifact/binding obligations remain unresolved |
+| Imported program | Family/source interpretation as typed operations, parameter references and explicit state dependencies | Qwen and MiniMax program projection plus exact-source Mamba2 pure-SSM forward/output retained through artifact and binding |
 | Canonical program | Same module infrastructure after verified alias and dead-pure-value passes | Immutable compiler object, canonical diagnostic text and semantic identity |
 | Straight-line execution form | Entry-local value slots, producer dependencies, serial effect order and last-use boundaries | Qwen and MiniMax binding compilation consume this verified lowering; general executable-region breadth is not claimed |
-| IR binary v1 | Explicit-field encoding reopened through constructors, static dialect resolution and the verifier | Internal serialization contract tested by roundtrip/truncation; not embedded in current v16 runtime bindings |
+| IR binary v1 | Explicit-field encoding reopened through constructors, static dialect resolution and the verifier | Internal serialization contract tested by roundtrip/truncation; not embedded in current v17 runtime bindings |
 | Existing Transformation IR | Parameter derivation, ordered source contributions and provenance | Existing source-to-package authority; not replaced by program operations |
 | Parameter physical projection | Source-bound program constants joined to transformation terminals and physical package decisions | Compiler-owned terminal handles and a distinct identity; no payload access or target schedule |
 | Tensor program v1 | Verified pure rank-2 BF16 instructions, operand/result slots and admissible row populations | Retained bounded operator consumer and model-plan v5 import; not independently serialized in native v7 |
@@ -697,7 +701,7 @@ separate. Unsupported types, effects, operations, shapes or duplicate output
 bindings refuse during compilation/import.
 
 Compiled model-plan **v8** persists the physical token-forward and optional output
-programs plus the canonical operator schedule inside runtime binding v16, without
+programs plus the canonical operator schedule inside runtime binding v17, without
 a redundant standalone FFN program. Model-plan v7 introduced the physical
 forward/output representation and remains an authenticated import format; v8 is
 the current native producer. Its version is independent from package PEIR v5
@@ -1004,10 +1008,12 @@ The source-owned Mamba2 projection additionally checks real audited mixer
 geometry, parameter roles and source-owned token/numerical policy. Its imported
 `forward` has hidden plus separate convolution/SSM successor-state results; its
 `output` owns final normalization and vocabulary logits. The exact 64-layer
-source compiles to common physical SSA, while artifact/engine admission remains
-unsupported. This is compiler/runtime component execution, not complete model
-numerics, hosted execution or A01 support. The program's sequence-symbol bound
-is an inspection envelope, not a qualified context capacity.
+source compiles to common physical SSA, and artifact/engine admission is
+qualified through the exact source-faithful artifact and binding. This is
+internal exact-artifact execution plus first-layer independent component
+evidence, not independent whole-model numerics, hosted conversation or release
+support. The program's sequence-symbol bound is an inspection envelope, not a
+qualified context capacity.
 
 ## Repository boundary
 

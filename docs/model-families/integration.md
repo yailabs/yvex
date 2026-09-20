@@ -24,14 +24,14 @@ and media publication have different terminal semantics.
 
 ## Promotion path
 
-![Family interpretation seals roles, topology, state and numerical meaning into admitted records consumed by the common execution owners; Mamba2 has reached the common CPU physical-program boundary but remains below artifact and hosted execution.](../diagrams/family_boundary.svg)
+![Family interpretation seals roles, topology, state and numerical meaning into admitted records consumed by common execution owners; Mamba2 now reaches exact CPU artifact execution while hosted conversation and whole-model conformance remain open.](../diagrams/family_boundary.svg)
 
 *Figure 4 — Family integration boundary. Families supply irreducible semantics;
 common owners validate, seal and execute admitted plans without another family
 runtime. The lower panel identifies existing architectural pressure, not equal
-support: Mamba2 has a compiler-owned pure-SSM CPU physical program but no
-artifact/binding or hosted engine, and MiniMax retains its full-scale
-numerical/quality gap.* [Editable source](../diagrams/family_boundary.json).
+support: Mamba2 has exact artifact-backed pure-SSM CPU execution but no hosted
+conversation or independent whole-model oracle, and MiniMax retains its
+full-scale numerical/quality gap.* [Editable source](../diagrams/family_boundary.json).
 
 The [compilation figure](../architecture/compilation.md#pipeline) owns the
 source-to-engine sequence; the [evidence ladder](../development/agentic-engineering.md#classify-evidence)
@@ -268,7 +268,7 @@ same hosted path exposed to the operator.
 | [DeepSeek-V4-Flash-DSpark](deepseek-v4-flash.md) | Source-to-hosted text; target-verified speculation | No release quality/performance promotion |
 | Qwen3.8-27B | Admitted BF16 text specialization, hybrid recurrent/full-attention decode, hosted sessions | No vision, other modalities, or release claim |
 | [MiniMax-H3 FL2VA](minimax-h3.md) | Four component artifacts, composite iterative execution, synchronized-media publication | Bounded component conformance is not full-scale numerical/behavioral correctness |
-| [Mamba2](mamba2.md) | Exact acquired source/roles and token/numerical policy, typed pure-SSM program, common CPU physical SSA and transactional state | Partial; no complete artifact/binding, READY, all-layer oracle, or hosted generation |
+| [Mamba2](mamba2.md) | Exact acquired source, deterministic artifact/binding, 64-layer pure-SSM CPU execution, finite LM-head output and common transactional state | Partial; independent all-layer/whole-model oracle and hosted conversation remain unavailable |
 | Gemma | Source/header and candidate-role observations | Not an executable family |
 
 Qwen's current text target is `Qwen/Qwen3.8-27B`, revision

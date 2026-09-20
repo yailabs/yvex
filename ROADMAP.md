@@ -7,19 +7,19 @@ Status: living public project control
 | Axis | Current truth |
 | --- | --- |
 | Project target | Native, harness-independent model compilation and execution substrate. |
-| Active engineering boundary | `SPECTRUM.MAMBA2.QUALIFICATION.0` — join the repaired pure-SSM compiler path to exact artifact/binding and model-level evidence. A01 remains PARTIAL. |
+| Active engineering boundary | `PROJECT_CONTROL.POST.A01.RECONCILIATION.0` — separately reconcile acquisition UX/reliability evidence and select the next bounded wave; no implementation is authorized by selection alone. |
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` COMPLETE and independently qualified at its claimed scope: current admitted Qwen, DeepSeek/DSpark and MiniMax computation is compiler-owned; runtime consumes authenticated program/schedule truth. The `.0` producer-owned device-result lifetime remains preserved. |
-| Architecture Spectrum | A01 PARTIAL / compiler-executable, qualification active; A02–A11 PLANNED. |
+| Architecture Spectrum | A01 PARTIAL / exact artifact-executable; A02–A11 PLANNED. No next vertical is active. |
 | Adopted state architecture target | N.B1 — Slow-Update Dual-Stream is the official primary research target: primary R plus persistent Experiential Computational State E; unfinished deliberation L remains distinct. YAI owns semantic authority; YVEX owns computational realization. Program N and B1 post-training remain OPEN/unscheduled, not implemented. |
-| Most important structural gap | A01 now has source-owned tokenizer/normalization policy and a pure-SSM common CPU compiler/runtime boundary, but no complete artifact/binding, all-layer independent oracle or hosted execution. Independent DeepSeek/Qwen whole-model conformance also remains open. |
-| Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media. Evidence depths differ. |
+| Most important structural gap | A01 now has exact artifact/binding and internal all-layer/output/session execution, but no independent all-layer/whole-model oracle or source-owned hosted conversation template. Independent DeepSeek/Qwen whole-model conformance also remains open. |
+| Executable foundation | DeepSeek source-to-hosted text and speculation; admitted Qwen hybrid text; bounded MiniMax composite media; exact Mamba2 pure-SSM CPU artifact execution at token/runtime scope. Evidence depths differ. |
 | External execution characterization | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Retained as a measured limitation, not a refoundation .1 closure gate; no downstream-safe claim. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
 | Behavior evaluation | BLOCKED / not ready. |
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
 | Release qualification | BLOCKED. |
 | Current branch | `models2`; branch epochs coordinate integration, not model ownership. |
-| Next decision point | Qualify A01 artifact/binding and exact model execution without weakening source identity or inferring whole-model conformance from its first-layer oracle. No internal agreement establishes upstream conformance or release qualification. |
+| Next decision point | Reconcile post-A01 acquisition UX/reliability evidence against this live roadmap before selecting another substantial wave. No implementation boundary is preselected. |
 
 <!-- maturity-counts:start -->
 <!-- Generated from System Maturity by tests/documentation_architecture.py. -->
@@ -63,7 +63,7 @@ below describe desired breadth; they are not additional maturity claims.
 | Source provenance and immutable intake | 🟢 ESTABLISHED | Immutable revisions, inventory, retained payload and verification have common owners. | Preserve the same trust model as providers and representations grow. | C / R | [Source contract][storage]; [verification tests][source-tests] |
 | Logical model identity | 🟢 ESTABLISHED | Source-declared relations separate logical model, original selector, representation, artifact, deployment, working set and engine; catalog family exceptions removed. | Extend explicit relations without family/name inference or silent ambiguity. | R / C | [Lifecycle][lifecycle]; [catalog tests][catalog-tests] |
 | Semantic Model IR | 🟡 PARTIAL | Typed programs, state/effect verification, current Qwen forward execution, DeepSeek heterogeneous schedule ownership, MiniMax component programs and Mamba2 pure-SSM CPU execution use common compiler levels. Broader architecture language remains incomplete. | Express heterogeneous R/E values, state-consuming/producing blocks, versions, multi-result computation and trainable roles without family runtimes or compulsory Transformer structure; add token-derived indexed parameter access and shared cross-layer state dependencies. | C | [Compilation][compilation]; [Mamba2 boundary][mamba] |
-| Operator composition / graph language | 🟡 PARTIAL | Canonical operator graphs and physical SSA own current admitted composition; binding v16/model-plan v8 authenticate the schedule consumed by runtime rather than preserving a family execution universe. | Compile dual-stream R/E augmentation, cross-state interaction, gates/merge and update barriers through common model semantics; no family cognitive runtime. Also express phase-asymmetric programs and explicit state/result boundaries. | C / D | [Family boundary][families]; [decoder plan][decoder-plan] |
+| Operator composition / graph language | 🟡 PARTIAL | Canonical operator graphs and physical SSA own current admitted composition; binding v17/model-plan v8 authenticate the schedule consumed by runtime rather than preserving a family execution universe. Binding v17 additionally authenticates program-owned absence of attention. | Compile dual-stream R/E augmentation, cross-state interaction, gates/merge and update barriers through common model semantics; no family cognitive runtime. Also express phase-asymmetric programs and explicit state/result boundaries. | C / D | [Family boundary][families]; [decoder plan][decoder-plan] |
 | Transformation IR | 🟢 ESTABLISHED | Typed, ordered, artifact-neutral transformations precede payload materialization. | Remain the unique transformation authority as representations expand. | C / P | [Compilation][compilation] |
 | Physical policy | 🟡 PARTIAL | Per-terminal dtype/qtype, layout and alignment decisions exist for admitted recipes. | Broaden compiler-owned physical decisions without downstream reconstruction, including conditional tables, file-backed row representations and quantized runtime state. | P | [Compilation][compilation] |
 | Physical Execution IR | 🟢 ESTABLISHED | Package physical records are sealed separately from deployment implementation choices. | Preserve authenticated consumption as semantic operations broaden. | C / P / R | [Artifact contract][artifacts]; [compilation][compilation] |
@@ -1451,7 +1451,7 @@ maturity**. Planned references are not acquisition or executable support claims.
 
 | ID | Computational pressure | Reference target | What it tries to falsify | Current public state |
 | --- | --- | --- | --- | --- |
-| A01 | Pure SSM | `mistralai/Mamba-Codestral-7B-v0.1` | Transformer-shaped decoder and computational-state-equals-KV assumptions | PARTIAL / compiler-executable; qualification active |
+| A01 | Pure SSM | `mistralai/Mamba-Codestral-7B-v0.1` | Transformer-shaped decoder and computational-state-equals-KV assumptions | PARTIAL / exact artifact-executable; qualification complete |
 | A02 | Pure recurrent | RWKV7-1.5B | Sequence state must be attention/SSM-shaped | PLANNED |
 | A03 | Encoder-decoder | FLAN-T5 | Decoder-only lifecycle; missing retained encoder state/cross-attention | PLANNED |
 | A04 | Diffusion language model | LLaDA-8B-Instruct | Autoregressive-only generation | PLANNED |
@@ -1465,10 +1465,15 @@ maturity**. Planned references are not acquisition or executable support claims.
 
 A01 has pinned acquisition, complete source roles, source-owned tokenizer and
 grouped gate-before-normalization policy, a typed 64-layer pure-SSM program,
-common CPU physical SSA, common transactional recurrent state and first-layer
-component numerics. It still refuses READY: durable source-manifest rebinding,
-complete artifact/binding, independent all-layer/LM-head evidence, deployment,
-load and hosted generation remain unclosed. [Mamba2][mamba] owns that boundary.
+common CPU physical SSA and common transactional recurrent state. The durable
+source manifest now binds the canonical immutable source; a deterministic
+14,574,491,136-byte artifact and authenticated binding v17 reopen through the
+normal engine path. Internal exact-artifact execution runs 900 forward plus two
+output instructions, all 64 state bindings and 32,768 finite logits with
+reset/cancel/retry/isolation/stale-state evidence. The catalog representation
+is READY at that scope. Independent all-layer/whole-model numerics and hosted
+conversation remain unqualified; the pinned source owns no chat template and
+YVEX refuses to invent one. [Mamba2][mamba] owns that boundary.
 Its broader pressure is that persistent computational state must not mean
 Transformer KV. Future N realizations may consume attention, SSM, recurrent,
 convolution, latent or architecture-native state without sharing storage geometry.
@@ -1633,21 +1638,25 @@ decision. This is neither the maturity matrix nor the release scope.
 | 5 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` | COMPLETE | R / C | Typed computational language, explicit state/effects, program/component and physical/target lowering boundaries | Current Qwen forward/output, DeepSeek/DSpark target/draft schedule and MiniMax neural components use compiler-owned execution truth; runtime consumes authenticated binding v16/model-plan v8 schedule/programs. Source/catalog, importer, program, physical, runtime and backend authorities are distinct. Pure SSM remains representable without claiming A01 execution or N. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.QUALIFICATION.0` |
 | 6 | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` | COMPLETE | Q / R / C | Broad consumer evidence and comparable post-cutover replay | Compiler refusals, migrated-family controls, transactions, CPU/CUDA and sanitizer lanes qualify the claimed cutover. Independent full-model/upstream gaps remain explicit. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` |
 | 7 | `SPECTRUM.MAMBA2.REPAIR.0` | COMPLETE | C / S | Source-owned token/numerical policy and pure-SSM compiler/runtime execution; A01 evidence remains PARTIAL | Exact source compiles all 64 layers without attention/KV/RoPE/dense FFN; portable CPU physical SSA uses common transactional state. Artifact/hosted claims remain excluded. | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1.QUALIFICATION.0` |
-| 8 | `SPECTRUM.MAMBA2.QUALIFICATION.0` | ACTIVE | Q / C / S | A01 artifact, model-level numerical and hosted evidence at earned scope | Rebind the verified source manifest, admit the exact artifact/binding, and qualify all-layer/output/session execution before any READY or hosted claim. | `SPECTRUM.MAMBA2.REPAIR.0` |
-| 9 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
-| 10 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
-| 11 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
-| 12 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
+| 8 | `SPECTRUM.MAMBA2.QUALIFICATION.0` | COMPLETE | Q / C / S | A01 artifact and exact model execution at earned scope; A01 remains PARTIAL | Canonical source-manifest rebinding, deterministic artifact/binding admission and internal all-layer/output/session execution are qualified. Independent whole-model numerics and hosted conversation remain unclaimed. | `SPECTRUM.MAMBA2.REPAIR.0` |
+| 9 | `PROJECT_CONTROL.POST.A01.RECONCILIATION.0` | ACTIVE | R / Q | Project-control selection only; no maturity promotion | Reconcile existing acquisition UX/reliability evidence against the live post-A01 roadmap and select one bounded next wave without starting it implicitly. | `SPECTRUM.MAMBA2.QUALIFICATION.0` |
+| 10 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
+| 11 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
+| 12 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
+| 13 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
 
-Active Next: SPECTRUM.MAMBA2.QUALIFICATION.0
+Active Next: PROJECT_CONTROL.POST.A01.RECONCILIATION.0
 
 The bounded .0 refoundation, its qualification, the `.1` universal-IR
 consumer cutover and `.1` qualification are complete. The A01 repair resolved
-source policy and pure-SSM compiler/runtime authority without promoting A01
-beyond PARTIAL. Its artifact/model qualification is now the sole active
-boundary. DeepSeek
-optimization stays PARTIAL pending explicit resumption; upstream/whole-model
-conformance remains Program Q work.
+source policy and pure-SSM compiler/runtime authority; its qualification now
+closes exact artifact/binding and internal all-layer/output/session execution.
+A01 remains PARTIAL because independent all-layer/whole-model conformance and
+hosted conversation are unavailable. The sole active boundary is a separate
+project-control reconciliation; it does not authorize acquisition UX changes
+or preselect another implementation wave. DeepSeek optimization stays PARTIAL
+pending explicit resumption; upstream/whole-model conformance remains Program
+Q work.
 
 The [current consumer matrix](docs/architecture/compilation.md#current-consumer-cutover)
 records the completed authority cutover: Qwen executes physical SSA;
@@ -1771,7 +1780,7 @@ to implement every OPEN row.
 
 | Horizon | Engineering objective | Programs | Exit condition |
 | --- | --- | --- | --- |
-| Now | Qualify the repaired A01 pure-SSM compiler boundary at artifact/model scope | Q / C / S | Exact artifact/binding, all-layer/output/session evidence and honest hosted posture are recorded without inferring whole-model conformance from component agreement. No N runtime implementation. |
+| Now | Reconcile post-A01 project-control evidence before selecting another implementation boundary | R / Q | Acquisition UX/reliability evidence and remaining roadmap pressures are reviewed separately; no new vertical, N work or substantial wave begins implicitly. |
 | Near | Broaden model language and physical representation foundations | C / P | Common architectures compile through shared semantics and reproducible recipes. |
 | Near | Prepare persistent-state language and realization/lifecycle boundaries | C / S / N | Future state-capable models need not create another runtime; semantic authority remains external. |
 | Near | Mature single-node sequence runtime | S / G | Typed paging, inflight scheduling, chunked prefill and reusable prefixes qualified. |
@@ -1822,7 +1831,7 @@ platform qualification. [MLC quick start][mlc]
 | .1 real Golden prefill characterization | R / S / Q | Long-context execution and measured residual bottlenecks; characterization, not a .1 closure gate | Existing DeepSeek execution pressure, not A01 progression | Full request still fails; no downstream-safe claim or behavior, benchmark or release gate promotion |
 | `.1.QUALIFICATION.0`, COMPLETE | Q / R / C | Compiler refusal, migrated consumer and comparable execution evidence; independent full-model/upstream gaps retained | Qualified the compiler cutover without promoting A01 | No upstream conformance or release evidence inferred from internal parity |
 | `SPECTRUM.MAMBA2.REPAIR.0`, COMPLETE | C / S | Semantic IR, pure-SSM composition, non-KV state and tokenizer/numerical policy | A01 directly pressured generic state; exact source compiles through common CPU execution without fake Transformer roles, while A01 remains PARTIAL | Indirect; no v0.1 promotion or scope expansion |
-| `SPECTRUM.MAMBA2.QUALIFICATION.0`, ACTIVE | Q / C / S | Artifact/binding admission, all-layer/output/session evidence | A01 evidence may advance only from exact-source model qualification; N remains unaffected | Indirect; not a v0.1 gate |
+| `SPECTRUM.MAMBA2.QUALIFICATION.0`, COMPLETE | Q / C / S | Exact source/artifact/binding admission and internal all-layer/output/session execution | A01 advances to exact artifact-executable while remaining PARTIAL; independent whole-model and hosted claims remain open; N is unaffected | Indirect; not a v0.1 gate |
 | Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |
 | Explicit DeepSeek optimization resumption | Q / S / R | Baseline, resource/structural performance evidence | Existing DeepSeek control, not a new Axx | Predecessor of evaluation |
 | Model-language breadth after A01 | C / O / D / M | Components, heads, tokenizer and modality semantics | A02–A11 selected by pressure | General substrate, not automatically v0.1 |
@@ -1869,7 +1878,7 @@ release_qualification_ready=0
 | Full model evaluation ready | false | Independent behavior/quality gate open. |
 | Full release benchmark ready | false | Release benchmark incomplete. |
 | Release qualification ready | false | Independent version-specific gates open. |
-| Mamba2 READY / hosted generation | false | Source policy and pure-SSM compiler execution are resolved, but durable manifest/artifact/binding, all-layer independent numerics and hosted execution remain open. |
+| Mamba2 hosted conversation / independent whole-model conformance | false | The catalog representation is READY and exact artifact-backed token execution is qualified, but the source owns no chat template and no independent all-layer/whole-model oracle was executed. |
 | Generic multimodal execution / full MiniMax quality | false | Typed transport and bounded composite output are weaker evidence. |
 | Physical Model Compiler automatic search | false | Manual recipes/synthesis foundations are not search/selection. |
 | macOS product terminal qualification | false | Portable structure is not platform evidence. |

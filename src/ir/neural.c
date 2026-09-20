@@ -390,7 +390,8 @@ static int neural_embedding(const yvex_ir_module *m, yvex_ir_id id, yvex_error *
     if (tokens->kind != YVEX_IR_TENSOR || tokens->scalar != YVEX_IR_INDEX ||
         !neural_float_tensor(weight) || weight->rank != 2u ||
         !neural_float_tensor(output) || output->rank != tokens->rank + 1u ||
-        output->scalar != weight->scalar ||
+        (output->scalar != weight->scalar &&
+         !(weight->scalar == YVEX_IR_BF16 && output->scalar == YVEX_IR_F32)) ||
         !yvex_ir_extent_equal(output->shape[tokens->rank], weight->shape[1]))
         return yvex_ir_refuse(err, YVEX_ERR_FORMAT, "embedding requires index tensor and [vocabulary, width] weights");
     for (index = 0u; index < tokens->rank; ++index)
@@ -407,7 +408,9 @@ static int neural_norm(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
     int rc = neural_unary(m, id, err);
     if (rc != YVEX_OK) return rc;
     if (!epsilon || epsilon->value.real <= 0.0 || !neural_float_tensor(weight) ||
-        weight->rank != 1u || weight->scalar != input->scalar ||
+        weight->rank != 1u ||
+        (weight->scalar != input->scalar &&
+         !(input->scalar == YVEX_IR_F32 && weight->scalar == YVEX_IR_BF16)) ||
         !yvex_ir_extent_equal(input->shape[input->rank - 1u], weight->shape[0]))
         return yvex_ir_refuse(err, YVEX_ERR_FORMAT,
                               "normalization requires positive epsilon and exact channel weights");

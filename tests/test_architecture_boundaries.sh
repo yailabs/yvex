@@ -760,6 +760,7 @@ physical_variant_api_consumers=$(rg -l 'yvex_graph_physical_variant_api_get' src
     LC_ALL=C sort)
 if [ "$physical_variant_api_consumers" != 'src/graph/binding_compile.c
 src/graph/families/deepseek_v4.c
+src/graph/families/mamba2.c
 src/graph/families/minimax_h3.c
 src/graph/families/qwen3_5.c' ]; then
     printf '%s\n' "$physical_variant_api_consumers" >&2

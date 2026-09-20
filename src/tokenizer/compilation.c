@@ -143,7 +143,7 @@ int yvex_tokenizer_family_policy_validate(
         !policy->family_adapter_id || !policy->family_adapter_version ||
         policy->tokenizer_kind <= YVEX_TOKENIZER_KIND_UNKNOWN ||
         policy->tokenizer_kind > YVEX_TOKENIZER_KIND_FIXTURE_SIMPLE ||
-        policy->model_policy > YVEX_TOKENIZER_MODEL_BPE_BYTELEVEL ||
+        policy->model_policy > YVEX_TOKENIZER_MODEL_BPE_METASPACE ||
         (policy->prompt_policy != YVEX_TOKENIZER_PROMPT_CONVERSATION &&
          policy->prompt_policy != YVEX_TOKENIZER_PROMPT_VERBATIM) ||
         !policy->vocabulary_size || !policy->base_vocabulary_size ||

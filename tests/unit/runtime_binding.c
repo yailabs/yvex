@@ -969,7 +969,7 @@ static int test_binding_readdress(const char *path, unsigned char *file, size_t 
         !test_binding_u64(file, count, 8u, &schema) ||
         schema != YVEX_RUNTIME_BINDING_SCHEMA_CURRENT)
         return 0;
-    domain = "yvex.runtime.binding.v16";
+    domain = "yvex.runtime.binding.v17";
     yvex_sha256_init(&hash);
     if (!yvex_sha256_update_text(&hash, domain) ||
         !yvex_sha256_update_u64(&hash, schema) ||

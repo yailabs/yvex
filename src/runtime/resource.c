@@ -1,4 +1,6 @@
 /* Own live engine resources without changing immutable package or specialization identity. */
+#include "src/runtime/private.h"
+
 #include <yvex/internal/core.h>
 #include <yvex/internal/engine_resource.h>
 
@@ -577,4 +579,127 @@ int yvex_runtime_resource_catalog_close(
     *catalog = NULL;
     yvex_error_clear(err);
     return YVEX_OK;
+}
+
+int yvex_runtime_cleanup_lease_close(
+    yvex_runtime_cleanup_lease **lease_ptr, yvex_error *err)
+{
+    yvex_runtime_cleanup_lease *lease;
+    int rc;
+    if (!lease_ptr || !*lease_ptr) return yvex_runtime_private_success(err);
+    lease = *lease_ptr;
+    if (lease->dependent_context && !lease->dependent_release) {
+        yvex_error_set(err, YVEX_ERR_STATE, "runtime.cleanup.dependent",
+                       "dependent cleanup operation is unavailable");
+        return YVEX_ERR_STATE;
+    }
+    if (lease->dependent_context) {
+        rc = lease->dependent_release(&lease->dependent_context, err);
+        if (rc != YVEX_OK) return rc;
+        if (lease->dependent_context) {
+            yvex_error_set(
+                err, YVEX_ERR_STATE, "runtime.cleanup.dependent",
+                "dependent cleanup reported success while retaining ownership");
+            return YVEX_ERR_STATE;
+        }
+        lease->dependent_release = NULL;
+    }
+    rc = yvex_runtime_session_close(&lease->session, err);
+    if (rc != YVEX_OK) return rc;
+    yvex_model_engine_close(&lease->model);
+    if (lease->model) {
+        yvex_error_set(err, YVEX_ERR_STATE, "runtime.cleanup.model-close",
+                       "runtime model cleanup retained ownership for retry");
+        return YVEX_ERR_STATE;
+    }
+    free(lease);
+    *lease_ptr = NULL;
+    return yvex_runtime_private_success(err);
+}
+
+int yvex_runtime_cleanup_lease_adopt(
+    yvex_runtime_cleanup_lease *lease, void *context,
+    yvex_runtime_cleanup_release_fn release, yvex_error *err)
+{
+    if (!lease || !context || !release || lease->dependent_context ||
+        lease->dependent_release) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "runtime.cleanup.adopt",
+                       "one empty cleanup lease dependent slot is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    lease->dependent_context = context;
+    lease->dependent_release = release;
+    return yvex_runtime_private_success(err);
+}
+
+int yvex_runtime_cleanup_lease_acquire(
+    yvex_runtime_cleanup_lease **out,
+    const yvex_model_engine_open_request *model_request,
+    const yvex_runtime_session_open_request *session_request,
+    yvex_model_engine **borrowed_model,
+    yvex_runtime_execution_session **borrowed_session,
+    yvex_model_engine_failure *failure, yvex_error *err)
+{
+    yvex_runtime_cleanup_lease *lease;
+    yvex_error primary, cleanup;
+    int rc, cleanup_rc;
+    if (borrowed_model) *borrowed_model = NULL;
+    if (borrowed_session) *borrowed_session = NULL;
+    if (!out || *out || !model_request || !borrowed_model ||
+        (session_request && !borrowed_session))
+        return yvex_runtime_private_reject(
+            failure, YVEX_MODEL_ENGINE_FAILURE_INVALID_ARGUMENT,
+            "cleanup-lease", 1ull,
+            out && !*out && model_request && borrowed_model &&
+                    (!session_request || borrowed_session)
+                ? 1ull : 0ull,
+            "empty cleanup lease, model request, and borrowed outputs are required",
+            err, YVEX_ERR_INVALID_ARG);
+    lease = (yvex_runtime_cleanup_lease *)calloc(1u, sizeof(*lease));
+    if (!lease)
+        return yvex_runtime_private_reject(
+            failure, YVEX_MODEL_ENGINE_FAILURE_ALLOCATION, "cleanup-lease",
+            1ull, 0ull, "lease allocation failed", err, YVEX_ERR_NOMEM);
+    *out = lease;
+    rc = yvex_model_engine_open(&lease->model, model_request, failure, err);
+    if (rc == YVEX_OK) *borrowed_model = lease->model;
+    if (rc == YVEX_OK && session_request)
+        rc = yvex_runtime_cleanup_lease_session_open(
+            lease, session_request, borrowed_session, failure, err);
+    if (rc == YVEX_OK) return YVEX_OK;
+    *borrowed_model = NULL;
+    if (borrowed_session) *borrowed_session = NULL;
+    primary = err ? *err : (yvex_error){0};
+    yvex_error_clear(&cleanup);
+    cleanup_rc = yvex_runtime_cleanup_lease_close(out, &cleanup);
+    if (cleanup_rc != YVEX_OK) {
+        yvex_runtime_private_failure_record(
+            failure, YVEX_MODEL_ENGINE_FAILURE_CLEANUP, "cleanup-lease", 0ull,
+            1ull, "runtime acquisition cleanup retained ownership for retry");
+        if (err) *err = cleanup;
+        return cleanup_rc;
+    }
+    if (err) *err = primary;
+    return rc;
+}
+
+int yvex_runtime_cleanup_lease_session_open(
+    yvex_runtime_cleanup_lease *lease,
+    const yvex_runtime_session_open_request *request,
+    yvex_runtime_execution_session **borrowed_session,
+    yvex_model_engine_failure *failure, yvex_error *err)
+{
+    int rc;
+    if (borrowed_session) *borrowed_session = NULL;
+    if (!lease || !lease->model || lease->session || !request ||
+        !borrowed_session)
+        return yvex_runtime_private_reject(
+            failure, YVEX_MODEL_ENGINE_FAILURE_INVALID_ARGUMENT,
+            "cleanup-lease-session", 1ull, 0ull,
+            "model-owning cleanup lease and session request are required", err,
+            YVEX_ERR_INVALID_ARG);
+    rc = yvex_runtime_session_open(
+        &lease->session, lease->model, request, failure, err);
+    if (rc == YVEX_OK) *borrowed_session = lease->session;
+    return rc;
 }

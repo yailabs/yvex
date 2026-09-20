@@ -144,6 +144,107 @@ static int logits_program_run(yvex_runtime_logits_context *c, const yvex_device_
     if (rc == YVEX_OK) { output->is_written = result.is_written; *facts = observed.backend; }
     return rc;
 }
+
+/* Project one runner-facing output contract from already authenticated
+ * physical SSA. This is a one-way view: it never recreates model topology or
+ * becomes persisted compiler authority. */
+static int logits_program_plan_project(
+    yvex_runtime_logits_context *context, const char *producer_identity,
+    unsigned long long producer_hidden_width,
+    unsigned long long producer_vocabulary_size, yvex_error *err)
+{
+    const yvex_program_physical *forward = yvex_compiled_model_plan_forward(
+        context->model_view->compiled_plan);
+    const yvex_program_physical *output = yvex_compiled_model_plan_output(
+        context->model_view->compiled_plan);
+    const yvex_program_physical_summary *forward_summary =
+        yvex_program_physical_summary_get(forward);
+    const yvex_program_physical_summary *output_summary =
+        yvex_program_physical_summary_get(output);
+    const yvex_program_physical_value *input =
+        yvex_program_physical_value_at(output, 0u);
+    const yvex_program_physical_value *weight =
+        yvex_program_physical_value_at(output, 1u);
+    const yvex_program_physical_value *result =
+        yvex_program_physical_value_at(output, 2u);
+    const yvex_program_physical_step *linear =
+        yvex_program_physical_step_at(output, 1u);
+    const yvex_runtime_binding_summary *binding_summary =
+        context->model_view->binding;
+    const yvex_materialized_tensor_binding *binding =
+        weight ? yvex_materialization_session_tensor_at(
+                     context->model_view->materialization, weight->tensor_id)
+               : NULL;
+    yvex_runtime_logits_plan_summary *plan = &context->plan.summary;
+    unsigned long long blocks, row_bytes;
+
+    if (!forward_summary || !output_summary || !binding_summary || !input ||
+        !weight || !result || !linear || strcmp(output_summary->entry, "output") ||
+        output_summary->input_count != 1u || output_summary->value_count != 3u ||
+        output_summary->step_count != 2u || output_summary->result_count != 1u ||
+        yvex_program_physical_result_at(output, 0u) != 2u || input->parameter ||
+        !weight->parameter || input->type.kind != YVEX_IR_TENSOR ||
+        weight->type.kind != YVEX_IR_TENSOR || result->type.kind != YVEX_IR_TENSOR ||
+        input->type.rank != 2u || weight->type.rank != 2u || result->type.rank != 2u ||
+        input->type.shape[1].extent != producer_hidden_width ||
+        weight->type.shape[1].extent != producer_hidden_width ||
+        weight->type.shape[0].extent != producer_vocabulary_size ||
+        result->type.shape[1].extent != producer_vocabulary_size ||
+        strcmp(linear->implementation, "linear.encoded.f32.v1") ||
+        strcmp(forward_summary->identity, producer_identity) ||
+        strcmp(output_summary->semantic_identity,
+               forward_summary->semantic_identity) ||
+        strcmp(output_summary->execution_identity,
+               forward_summary->execution_identity) ||
+        !binding || binding->tensor_id != weight->tensor_id ||
+        binding->role != YVEX_TENSOR_ROLE_OUTPUT_HEAD ||
+        binding->scope != YVEX_TENSOR_SCOPE_GLOBAL ||
+        binding->row_width != producer_hidden_width ||
+        binding->row_count != producer_vocabulary_size ||
+        binding->qtype != weight->qtype || !binding->block_size ||
+        binding->row_width % binding->block_size ||
+        !yvex_core_u64_mul(binding->row_width / binding->block_size,
+                           binding->bytes_per_block, &row_bytes) ||
+        !yvex_core_u64_mul(row_bytes, binding->row_count, &blocks) ||
+        blocks != binding->encoded_bytes)
+        return logits_refuse(
+            err, YVEX_ERR_FORMAT,
+            "compiled output program contradicts its authenticated binding");
+
+    memset(plan, 0, sizeof(*plan));
+    plan->schema_version = YVEX_OUTPUT_HEAD_PLAN_SCHEMA_CURRENT;
+    plan->producer_kind = YVEX_EXECUTION_PLAN_DECODER;
+    plan->family_adapter_id = binding_summary->family_adapter_id;
+    plan->family_adapter_version = binding_summary->family_adapter_version;
+    plan->output_head_tensor_id = binding->tensor_id;
+    plan->row_width = binding->row_width;
+    plan->row_count = binding->row_count;
+    plan->row_bytes = row_bytes;
+    plan->encoded_bytes = binding->encoded_bytes;
+    plan->vocabulary_size = producer_vocabulary_size;
+    plan->hidden_width = producer_hidden_width;
+    plan->role = binding->role;
+    plan->qtype = binding->qtype;
+    plan->separate_output_head = 1;
+    yvex_runtime_identity_copy(plan->artifact_identity,
+                               binding_summary->artifact_identity);
+    yvex_runtime_identity_copy(plan->materialization_identity,
+                               binding_summary->materialization_identity);
+    yvex_runtime_identity_copy(plan->logical_model_identity,
+                               binding_summary->logical_model_identity);
+    yvex_runtime_identity_copy(plan->runtime_numeric_identity,
+                               binding_summary->runtime_numeric_identity);
+    yvex_runtime_identity_copy(plan->runtime_descriptor_identity,
+                               binding_summary->runtime_descriptor_identity);
+    yvex_runtime_identity_copy(plan->decoder_plan_identity,
+                               forward_summary->identity);
+    /* For a direct compiler program the physical output identity is the exact
+     * executable output contract; there is no parallel output-head plan. */
+    yvex_runtime_identity_copy(plan->output_head_plan_identity,
+                               output_summary->identity);
+    context->plan.binding = binding;
+    return YVEX_OK;
+}
 /*
  * Open one reusable logits context over borrowed model/session owners.
  *
@@ -198,7 +299,13 @@ static int logits_context_open(
                            "logits model/session pairing is invalid");
         goto failure;
     }
-    {
+    if (producer_kind == YVEX_EXECUTION_PLAN_DECODER &&
+        !context->model_view->output_head) {
+        rc = logits_program_plan_project(
+            context, producer_identity, producer_hidden_width,
+            producer_vocabulary_size, err);
+        if (rc != YVEX_OK) goto failure;
+    } else {
         const yvex_runtime_logits_plan_summary *compiled =
             context->model_view->output_head;
         const char *compiled_producer =
@@ -353,15 +460,19 @@ int yvex_runtime_logits_context_open_program(
     const yvex_model_engine_view *view = yvex_model_engine_view_get(model);
     const yvex_runtime_logits_plan_summary *producer = view ? view->output_head : NULL;
     const yvex_program_physical *program = view ? yvex_compiled_model_plan_forward(view->compiled_plan) : NULL;
+    const yvex_program_physical_summary *program_summary =
+        yvex_program_physical_summary_get(program);
     yvex_program_token_interface signature;
-    if (!producer || producer->producer_kind != YVEX_EXECUTION_PLAN_DECODER || !program)
+    if (!program ||
+        (producer && producer->producer_kind != YVEX_EXECUTION_PLAN_DECODER))
         return logits_refuse(err, YVEX_ERR_INVALID_ARG,
                              "compiled token-forward logits producer is unavailable");
     int rc = yvex_program_physical_token_interface(program, &signature, err);
     if (rc != YVEX_OK) return rc;
     return logits_context_open(
         out, model, session, YVEX_EXECUTION_PLAN_DECODER,
-        producer->decoder_plan_identity, signature.hidden_width,
+        producer ? producer->decoder_plan_identity : program_summary->identity,
+        signature.hidden_width,
         signature.vocabulary_size, options, err);
 }
 const yvex_runtime_logits_plan_summary *yvex_runtime_logits_plan_summary_get(
@@ -753,13 +864,30 @@ static int logits_source_validate(const yvex_runtime_logits_context *context,
     return YVEX_OK;
 }
 static int logits_project_cpu(yvex_runtime_logits_context *context,
-                              const float *hidden, yvex_error *err)
+                              const yvex_runtime_logits_source *source,
+                              yvex_error *err)
 {
-    yvex_backend_operation_facts facts;
-    int rc = yvex_backend_tensor_write(context->session_view->backend, context->device_hidden,
-        hidden, context->device_hidden->bytes, err);
+    yvex_backend_operation_facts facts = {0};
+    yvex_device_tensor borrowed;
+    const yvex_device_tensor *hidden = context->device_hidden;
+    int rc;
+    if (source->device_values_available) {
+        if (!yvex_backend_tensor_f32_subview(
+                source->device_hidden.tensor,
+                source->device_hidden.element_offset,
+                context->plan.summary.hidden_width, &borrowed))
+            return logits_refuse(err, YVEX_ERR_FORMAT,
+                                 "CPU hidden row cannot be borrowed");
+        hidden = &borrowed;
+        rc = YVEX_OK;
+    } else {
+        rc = yvex_backend_tensor_write(
+            context->session_view->backend, context->device_hidden,
+            source->normalized_hidden, context->device_hidden->bytes, err);
+    }
     if (rc == YVEX_OK)
-        rc = logits_program_run(context, context->device_hidden, context->device_logits, 1u, &facts, err);
+        rc = logits_program_run(
+            context, hidden, context->device_logits, 1u, &facts, err);
     if (rc == YVEX_OK) rc = yvex_backend_tensor_read(context->session_view->backend, context->device_logits,
         context->candidate, context->device_logits->bytes, err);
     return rc;
@@ -1311,12 +1439,8 @@ int yvex_runtime_logits_project(
         context->options.cancel_requested(context->options.cancel_context))
         rc = logits_refuse(err, YVEX_ERR_CANCELLED,
                            "logits projection was cancelled before execution");
-    if (rc == YVEX_OK && backend == YVEX_BACKEND_KIND_CPU &&
-        !source->host_values_available)
-        rc = logits_refuse(err, YVEX_ERR_UNSUPPORTED,
-                           "CPU logits require an explicit host hidden row");
     if (rc == YVEX_OK && backend == YVEX_BACKEND_KIND_CPU)
-        rc = logits_project_cpu(context, source->normalized_hidden, err);
+        rc = logits_project_cpu(context, source, err);
     else if (rc == YVEX_OK && backend == YVEX_BACKEND_KIND_CUDA)
         rc = logits_project_cuda(context, source, result, err);
     if (rc == YVEX_OK)

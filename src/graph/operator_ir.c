@@ -969,3 +969,112 @@ int yvex_operator_graph_ir_build_decoder(
     free(builder.nodes);
     return rc;
 }
+
+int yvex_operator_graph_ir_build_program(
+    yvex_operator_graph_ir **out,
+    const yvex_semantic_model_ir *semantic_model,
+    const yvex_attention_plan *attention,
+    const yvex_attention_plan *draft_attention, yvex_error *err)
+{
+    const yvex_semantic_model_ir_summary *semantic =
+        yvex_semantic_model_ir_summary_get(semantic_model);
+    const yvex_model_execution_descriptor *model =
+        semantic ? &semantic->execution_descriptor : NULL;
+    const yvex_ir_module *program =
+        yvex_semantic_model_ir_program(semantic_model);
+    transformer_graph_builder builder = {0};
+    yvex_operator_graph_request request = {0};
+    unsigned long long node_capacity, edge_capacity, layer;
+    size_t operation, selective_ssd = 0u;
+    int rc = YVEX_OK;
+
+    if (out) *out = NULL;
+    if (!out || !semantic || !model || !program || attention || draft_attention ||
+        semantic->schema_version != YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2 ||
+        model->schema_version != YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2 ||
+        strcmp(model->identity, semantic->semantic_payload_identity) ||
+        semantic->decoder_layer_count || semantic->attention_layer_count ||
+        model->sequence_mixer_layers != model->layer_count ||
+        model->attention_heads || model->kv_heads || model->head_width ||
+        model->dense_ffn_width)
+        return operator_refuse(
+            err, YVEX_ERR_INVALID_ARG,
+            "program graph requires one sealed pure stateful program");
+    for (operation = 0u; operation < yvex_ir_operation_count(program); ++operation) {
+        const yvex_ir_operation *op =
+            yvex_ir_operation_at(program, (yvex_ir_id)operation);
+        selective_ssd += op &&
+                         strcmp(op->definition->name,
+                                "sequence.selective_ssd") == 0;
+    }
+    if (selective_ssd != model->layer_count)
+        return operator_refuse(
+            err, YVEX_ERR_FORMAT,
+            "typed program stateful-operation population is inconsistent");
+    if (!yvex_core_u64_add(model->layer_count, 3ull, &node_capacity) ||
+        !yvex_core_u64_mul(
+            node_capacity, 1ull + 2ull * YVEX_MODEL_STATE_CLASS_COUNT,
+            &edge_capacity) ||
+        node_capacity > SIZE_MAX / sizeof(*builder.nodes) ||
+        edge_capacity > SIZE_MAX / sizeof(*builder.edges))
+        return operator_refuse(err, YVEX_ERR_BOUNDS,
+                               "program graph extent overflowed");
+    builder.nodes = calloc((size_t)node_capacity, sizeof(*builder.nodes));
+    builder.edges = calloc((size_t)edge_capacity, sizeof(*builder.edges));
+    if (!builder.nodes || !builder.edges) {
+        free(builder.edges);
+        free(builder.nodes);
+        return operator_refuse(err, YVEX_ERR_NOMEM,
+                               "program graph workspace allocation failed");
+    }
+    builder.node_capacity = node_capacity;
+    builder.edge_capacity = edge_capacity;
+    builder.target_previous = YVEX_OPERATOR_GRAPH_NO_NODE;
+    builder.draft_previous = YVEX_OPERATOR_GRAPH_NO_NODE;
+    builder.attribute_identity = model->identity;
+    if (!transformer_node_add(
+            &builder, YVEX_OPERATOR_EMBEDDING, YVEX_TENSOR_SCOPE_GLOBAL,
+            YVEX_ATTENTION_NO_LAYER, 0ull, 1ull, model->hidden_width, 0ull))
+        rc = YVEX_ERR_STATE;
+    for (layer = 0ull; rc == YVEX_OK && layer < model->layer_count; ++layer)
+        if (!transformer_node_add(
+                &builder, YVEX_OPERATOR_STATEFUL_SEQUENCE_MIXER,
+                YVEX_TENSOR_SCOPE_MAIN_LAYER, layer, 0ull,
+                model->hidden_width, model->hidden_width,
+                YVEX_MODEL_STATE_CLASS_BIT(
+                    YVEX_MODEL_STATE_RECURRENT_SEQUENCE)))
+            rc = YVEX_ERR_STATE;
+    if (rc == YVEX_OK &&
+        (!transformer_node_add(
+             &builder, YVEX_OPERATOR_NORMALIZATION,
+             YVEX_TENSOR_SCOPE_GLOBAL, YVEX_ATTENTION_NO_LAYER, 0ull,
+             model->hidden_width, model->output_input_width, 0ull) ||
+         !transformer_node_add(
+             &builder, YVEX_OPERATOR_OUTPUT_PROJECTION,
+             YVEX_TENSOR_SCOPE_GLOBAL, YVEX_ATTENTION_NO_LAYER, 0ull,
+             model->output_input_width, model->output_vocabulary_size, 0ull)))
+        rc = YVEX_ERR_STATE;
+    request = (yvex_operator_graph_request){
+        .semantic_model = semantic_model,
+        .nodes = builder.nodes,
+        .node_count = builder.node_count,
+        .edges = builder.edges,
+        .edge_count = builder.edge_count,
+        .target_layer_count = model->layer_count};
+    if (rc == YVEX_OK)
+        rc = yvex_operator_graph_ir_seal(out, &request, err);
+    else
+        rc = operator_refuse(err, YVEX_ERR_STATE,
+                             "stateful program operator composition failed");
+    if (rc == YVEX_OK &&
+        yvex_operator_graph_ir_summary(*out)->state_class_mask !=
+            model->persistent_state_class_mask) {
+        yvex_operator_graph_ir_close(out);
+        rc = operator_refuse(
+            err, YVEX_ERR_STATE,
+            "program graph state classes disagree with model semantics");
+    }
+    free(builder.edges);
+    free(builder.nodes);
+    return rc;
+}

@@ -186,8 +186,8 @@ its default branch does not change the pinned dependency.
 
 The [family boundary table](../model-families/integration.md#current-family-boundaries)
 distinguishes DeepSeek and Qwen text execution, MiniMax composite media
-execution, and Mamba2's compiler-owned pure-SSM CPU boundary without artifact
-or hosted execution. Their shared owners
+execution, and Mamba2's exact artifact-backed pure-SSM CPU execution without
+hosted conversation or independent whole-model conformance. Their shared owners
 do not make their evidence stages interchangeable.
 
 The [runtime architecture](runtime.md) owns generation, selection,

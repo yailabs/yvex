@@ -57,17 +57,21 @@ int yvex_compiled_graph_identities(
     if (semantic) semantic[0] = '\0';
     if (executable) executable[0] = '\0';
     if (!yvex_sha256_hex_valid(operator_graph_identity) || !materialization ||
-        !descriptor || !attention || !semantic || !executable)
+        !descriptor || !semantic || !executable)
         return 0;
     yvex_core_text_copy(semantic_value, sizeof(semantic_value),
                         operator_graph_identity);
     yvex_sha256_init(&hash);
-    if (!yvex_sha256_update_text(&hash, "yvex.runtime.executable-graph.v2") ||
+    if (!yvex_sha256_update_text(
+            &hash, attention ? "yvex.runtime.executable-graph.v2"
+                             : "yvex.runtime.executable-program.v1") ||
         !yvex_sha256_update_text(&hash, semantic_value) ||
         !yvex_sha256_update_text(&hash, descriptor->runtime_descriptor_identity) ||
         !yvex_sha256_update_text(&hash, materialization->plan_identity) ||
-        !yvex_sha256_update_u64(&hash, attention->required_binding_count) ||
-        !yvex_sha256_update_u64(&hash, attention->payload_bytes_bound) ||
+        !yvex_sha256_update_u64(
+            &hash, attention ? attention->required_binding_count : 0ull) ||
+        !yvex_sha256_update_u64(
+            &hash, attention ? attention->payload_bytes_bound : 0ull) ||
         !yvex_sha256_update_u64(&hash, draft_attention
                                            ? draft_attention->required_binding_count
                                            : 0ull) ||
@@ -683,9 +687,18 @@ static int compiled_forward_signature_valid(const yvex_compiled_model_plan *plan
     const yvex_decoder_plan_summary *d = yvex_decoder_plan_summary_get(plan->decoder);
     const yvex_program_physical_summary *s = yvex_program_physical_summary_get(plan->forward);
     yvex_program_token_interface interface;
-    if (!s || !d || strcmp(s->entry, "forward") ||
-        s->minimum_rows != 1u || s->maximum_rows != d->maximum_context || s->row_multiple != 1u ||
+    const yvex_operator_graph_summary *operators =
+        yvex_operator_graph_ir_summary(plan->operator_graph);
+    if (!s || strcmp(s->entry, "forward") || s->minimum_rows != 1u ||
+        !s->maximum_rows || s->row_multiple != 1u ||
         yvex_program_physical_token_interface(plan->forward, &interface, NULL) != YVEX_OK) return 0;
+    if (!d)
+        return operators && !plan->transformer &&
+               interface.hidden_width && interface.vocabulary_size &&
+               interface.state_inputs == 2u * interface.recurrent_operations &&
+               interface.attention_operations == 0u &&
+               interface.recurrent_operations == operators->target_layer_count;
+    if (s->maximum_rows != d->maximum_context) return 0;
     /* These persisted compatibility/report views may not contradict the program.
      * They are not used to construct its operations or parameter bindings. */
     return interface.hidden_width == d->hidden_width && interface.vocabulary_size == d->vocabulary_size &&
@@ -702,7 +715,36 @@ static int compiled_output_program_valid(const yvex_compiled_model_plan *plan)
     const yvex_decoder_plan_summary *d = yvex_decoder_plan_summary_get(plan->decoder);
     const yvex_transformer_plan_summary *t = yvex_transformer_plan_summary_get(plan->transformer);
     unsigned long long rows = d ? d->maximum_context : t ? t->maximum_context : 0u;
-    if (!plan->output_head.schema_version) return !s;
+    if (!plan->output_head.schema_version) {
+        const yvex_program_physical_value *input, *weight, *output;
+        const yvex_program_physical_step *linear;
+        if (!plan->operator_graph) return !s;
+        if (!forward) return !s;
+        input = yvex_program_physical_value_at(plan->output, 0u);
+        weight = yvex_program_physical_value_at(plan->output, 1u);
+        output = yvex_program_physical_value_at(plan->output, 2u);
+        linear = yvex_program_physical_step_at(plan->output, 1u);
+        return s && !strcmp(s->entry, "output") &&
+               s->minimum_rows == 1u && s->maximum_rows == forward->maximum_rows &&
+               s->row_multiple == 1u && s->input_count == 1u &&
+               s->value_count == 3u && s->step_count == 2u &&
+               s->result_count == 1u &&
+               yvex_program_physical_result_at(plan->output, 0u) == 2u &&
+               input && weight && output && linear && !input->parameter &&
+               input->type.kind == YVEX_IR_TENSOR && input->type.rank == 2u &&
+               input->type.scalar == YVEX_IR_F32 && weight->parameter &&
+               weight->type.kind == YVEX_IR_TENSOR && weight->type.rank == 2u &&
+               output->type.kind == YVEX_IR_TENSOR && output->type.rank == 2u &&
+               output->type.scalar == YVEX_IR_F32 &&
+               input->type.shape[1].extent == weight->type.shape[1].extent &&
+               output->type.shape[1].extent == weight->type.shape[0].extent &&
+               !strcmp(linear->implementation, "linear.encoded.f32.v1") &&
+               linear->operand_count == 2u && linear->result_count == 1u &&
+               linear->operands[0] == 0u && linear->operands[1] == 1u &&
+               linear->results[0] == 2u &&
+               !strcmp(s->semantic_identity, forward->semantic_identity) &&
+               !strcmp(s->execution_identity, forward->execution_identity);
+    }
     if (!s) return t != NULL || plan->schema < MODEL_PLAN_SCHEMA_V7;
     if (s->minimum_rows != 1u || s->row_multiple != 1u || s->maximum_rows != rows ||
         yvex_output_head_program_validate(plan->output, &plan->output_head, NULL, NULL) != YVEX_OK) return 0;
@@ -770,14 +812,42 @@ static int compiled_forward_build(yvex_compiled_model_plan *plan, const yvex_com
         rc = yvex_program_physical_parameters_validate(plan->forward, r->program_physical_parameters, err);
     if (rc == YVEX_OK && !compiled_forward_signature_valid(plan))
         rc = model_plan_refuse(err, YVEX_ERR_FORMAT, "compiled forward contradicts the retained producer view");
-    if (rc == YVEX_OK && plan->output_head.schema_version)
+    if (rc == YVEX_OK &&
+        (plan->output_head.schema_version ||
+         (!plan->decoder && !plan->transformer)))
         rc = yvex_program_physical_compile(&plan->output, r->program, "output", bindings, count,
             physical->identity, err);
-    if (rc == YVEX_OK && plan->output)
+    if (rc == YVEX_OK && plan->output_head.schema_version && plan->output)
         rc = yvex_output_head_program_validate(plan->output, &plan->output_head, r->program_physical_parameters, err);
+    if (rc == YVEX_OK && plan->output &&
+        yvex_program_physical_parameters_validate(
+            plan->output, r->program_physical_parameters, err) != YVEX_OK)
+        rc = yvex_error_code(err);
+    if (rc == YVEX_OK && !compiled_output_program_valid(plan))
+        rc = model_plan_refuse(
+            err, YVEX_ERR_FORMAT,
+            "compiled output contradicts the program lineage");
     free(bindings);
     if (rc == YVEX_OK) plan->schema = MODEL_PLAN_SCHEMA_V7;
     return rc;
+}
+
+static int native_execution_ir_matches(
+    const yvex_compiled_model_plan_request *request,
+    const yvex_semantic_model_ir_summary *semantic, yvex_error *err)
+{
+    const char *model;
+    const char *program;
+    if (!semantic || semantic->schema_version != YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2)
+        return YVEX_OK;
+    model = yvex_ir_identity(
+        yvex_semantic_model_ir_program(request->semantic_model));
+    program = yvex_ir_identity(yvex_program_execution_module(request->program));
+    return model && program && !strcmp(model, program)
+               ? YVEX_OK
+               : model_plan_refuse(
+                     err, YVEX_ERR_FORMAT,
+                     "native model-plan requires matching execution IR");
 }
 
 int yvex_compiled_model_plan_build(
@@ -793,15 +863,10 @@ int yvex_compiled_model_plan_build(
     if (!out || !request)
         return model_plan_refuse(err, YVEX_ERR_INVALID_ARG, "compiled model-plan request and output are required");
     semantic = yvex_semantic_model_ir_summary_get(request->semantic_model);
-    if (semantic && semantic->schema_version == YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2) {
-        const char *model = yvex_ir_identity(yvex_semantic_model_ir_program(request->semantic_model));
-        const char *program = yvex_ir_identity(yvex_program_execution_module(request->program));
-        if (!model || !program || strcmp(model, program))
-            return model_plan_refuse(err, YVEX_ERR_FORMAT, "native model-plan requires matching execution IR");
-    }
+    rc = native_execution_ir_matches(request, semantic, err);
+    if (rc != YVEX_OK) return rc;
     if (!request->materialization ||
-        !request->operator_graph || !request->descriptor ||
-        !request->attention || !request->graph)
+        !request->operator_graph || !request->descriptor || !request->graph)
         return model_plan_refuse(err, YVEX_ERR_INVALID_ARG,
                                  "compiled model-plan inputs are required");
     plan = (yvex_compiled_model_plan *)calloc(1u, sizeof(*plan));
@@ -818,7 +883,12 @@ int yvex_compiled_model_plan_build(
             yvex_attention_plan_summary(request->attention);
         const yvex_attention_summary *draft =
             yvex_attention_plan_summary(request->draft_attention);
-        if (!operators || !descriptor || !attention ||
+        int program_only = semantic &&
+            semantic->schema_version == YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2 &&
+            !semantic->decoder_layer_count &&
+            semantic->execution_descriptor.sequence_mixer_layers ==
+                semantic->execution_descriptor.layer_count;
+        if (!operators || !descriptor || (!attention && !program_only) ||
             operators->family_adapter_id != request->family_adapter_id ||
             operators->family_adapter_version != request->family_adapter_version ||
             ((!semantic ||
@@ -826,8 +896,11 @@ int yvex_compiled_model_plan_build(
              operators->target_layer_count != attention->layer_count) ||
             (semantic &&
              semantic->schema_version == YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2 &&
-             (operators->target_layer_count != semantic->decoder_layer_count ||
-              attention->layer_count != semantic->attention_layer_count)) ||
+             (operators->target_layer_count !=
+                  (program_only ? semantic->execution_descriptor.layer_count
+                                : semantic->decoder_layer_count) ||
+              (attention ? attention->layer_count : 0ull) !=
+                  semantic->attention_layer_count)) ||
             operators->draft_layer_count != (draft ? draft->layer_count : 0ull) ||
             operators->maximum_context !=
                 descriptor->model_execution.maximum_context) {
@@ -848,6 +921,33 @@ int yvex_compiled_model_plan_build(
     }
     if (semantic &&
         semantic->schema_version == YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2) {
+        if (!semantic->decoder_layer_count) {
+            const yvex_model_execution_descriptor *execution =
+                &semantic->execution_descriptor;
+            if (request->attention || request->draft_attention ||
+                execution->schema_version !=
+                    YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2 ||
+                execution->sequence_mixer_layers != execution->layer_count ||
+                execution->attention_heads || execution->kv_heads ||
+                execution->head_width || execution->dense_ffn_width ||
+                request->capabilities.moe_plan_ready ||
+                request->capabilities.transformer_ready ||
+                request->capabilities.logits_ready) {
+                yvex_compiled_model_plan_close(&plan);
+                return model_plan_refuse(
+                    err, YVEX_ERR_FORMAT,
+                    "program-only execution carries an incompatible legacy plan");
+            }
+            rc = compiled_forward_build(plan, request, err);
+            if (rc == YVEX_OK) {
+                plan->schema = MODEL_PLAN_SCHEMA_V8;
+                *out = plan;
+                yvex_error_clear(err);
+            } else {
+                yvex_compiled_model_plan_close(&plan);
+            }
+            return rc;
+        }
         rc = yvex_decoder_plan_compile(
             &plan->decoder, request->semantic_model,
             request->operator_graph, err);
@@ -1339,6 +1439,25 @@ int yvex_compiled_model_plan_admit(
         yvex_transformer_plan_summary_get(plans->draft_transformer);
     decoder = yvex_decoder_plan_summary_get(plans->decoder);
     output = &plans->output_head;
+    if (!decoder && !moe && !transformer && plans->forward) {
+        const yvex_operator_graph_summary *operators =
+            yvex_operator_graph_ir_summary(plans->operator_graph);
+        const yvex_program_physical_summary *forward =
+            yvex_program_physical_summary_get(plans->forward);
+        return operators && forward && plans->output &&
+               !draft_moe && !draft_transformer &&
+               !output->schema_version &&
+               !admission->capabilities->moe_plan_ready &&
+               !admission->capabilities->transformer_ready &&
+               !admission->capabilities->logits_ready &&
+               admission->decoder_layer_count == 0ull &&
+               admission->layer_count == 0ull &&
+               admission->recurrent_layer_count ==
+                   operators->target_layer_count &&
+               admission->semantic_maximum_context == forward->maximum_rows &&
+               compiled_forward_signature_valid(plans) &&
+               compiled_output_program_valid(plans);
+    }
     if (decoder) {
         return yvex_compiled_model_plan_context_envelope(
                    plans, admission->model_execution_identity,
@@ -1425,25 +1544,32 @@ int yvex_compiled_model_plan_context_envelope(
             yvex_compiled_model_plan_transformer(plan, 1));
     const yvex_decoder_plan_summary *decoder =
         yvex_decoder_plan_summary_get(yvex_compiled_model_plan_decoder(plan));
+    const yvex_program_physical_summary *program =
+        yvex_program_physical_summary_get(yvex_compiled_model_plan_forward(plan));
     unsigned long long target_maximum;
     if (envelope) memset(envelope, 0, sizeof(*envelope));
     if (!envelope || !yvex_sha256_hex_valid(model_execution_identity) ||
-        !semantic_maximum_context || (!!target == !!decoder) ||
+        !semantic_maximum_context ||
+        ((target != NULL) + (decoder != NULL) + (program != NULL) != 1) ||
         (target &&
          (target->maximum_context != semantic_maximum_context ||
           !yvex_sha256_hex_valid(target->transformer_plan_identity))) ||
         (decoder &&
          (decoder->maximum_context != semantic_maximum_context ||
           !yvex_sha256_hex_valid(decoder->decoder_plan_identity) || draft)) ||
+        (program &&
+         (program->maximum_rows != semantic_maximum_context ||
+          !yvex_sha256_hex_valid(program->identity) || draft)) ||
         (draft && (draft->maximum_context != semantic_maximum_context ||
                    !yvex_sha256_hex_valid(draft->transformer_plan_identity))))
         return model_plan_refuse(
             err, YVEX_ERR_FORMAT,
             "compiled context envelope does not match semantic model capability");
-    target_maximum = target ? target->maximum_context : decoder->maximum_context;
-    envelope->schema_version = YVEX_COMPILED_CONTEXT_ENVELOPE_SCHEMA_V2;
-    envelope->target_kind = target ? YVEX_EXECUTION_PLAN_TRANSFORMER
-                                   : YVEX_EXECUTION_PLAN_DECODER;
+    target_maximum = target ? target->maximum_context :
+        decoder ? decoder->maximum_context : program->maximum_rows;
+    envelope->schema_version = YVEX_COMPILED_CONTEXT_ENVELOPE_SCHEMA_V3;
+    envelope->target_kind = target ? YVEX_EXECUTION_PLAN_TRANSFORMER :
+        decoder ? YVEX_EXECUTION_PLAN_DECODER : YVEX_EXECUTION_PLAN_PROGRAM;
     envelope->semantic_maximum_context = semantic_maximum_context;
     envelope->target_maximum_context = target_maximum;
     envelope->draft_available = draft != NULL;
@@ -1456,9 +1582,10 @@ int yvex_compiled_model_plan_context_envelope(
                             sizeof(envelope->target_transformer_identity),
                             target->transformer_plan_identity);
     else
-        yvex_core_text_copy(envelope->target_decoder_identity,
-                            sizeof(envelope->target_decoder_identity),
-                            decoder->decoder_plan_identity);
+        yvex_core_text_copy(
+            decoder ? envelope->target_decoder_identity : envelope->target_program_identity,
+            decoder ? sizeof(envelope->target_decoder_identity) : sizeof(envelope->target_program_identity),
+            decoder ? decoder->decoder_plan_identity : program->identity);
     if (draft)
         yvex_core_text_copy(envelope->draft_transformer_identity,
                             sizeof(envelope->draft_transformer_identity),
@@ -1472,7 +1599,7 @@ int yvex_compiled_context_envelope_admit(
     unsigned long long requested_context, int require_draft, yvex_error *err)
 {
     unsigned long long maximum;
-    int legacy, transformer_target, decoder_target;
+    int legacy, transformer_target, decoder_target, program_target;
     if (!envelope) return model_plan_refuse(
         err, YVEX_ERR_INVALID_ARG,
         "compiled context admission requires one bounded runtime request");
@@ -1484,18 +1611,29 @@ int yvex_compiled_context_envelope_admit(
          envelope->target_kind == YVEX_EXECUTION_PLAN_TRANSFORMER);
     decoder_target = !legacy &&
         envelope->target_kind == YVEX_EXECUTION_PLAN_DECODER;
+    program_target = envelope->schema_version ==
+        YVEX_COMPILED_CONTEXT_ENVELOPE_SCHEMA_V3 &&
+        envelope->target_kind == YVEX_EXECUTION_PLAN_PROGRAM;
     if ((!legacy && envelope->schema_version !=
-                        YVEX_COMPILED_CONTEXT_ENVELOPE_SCHEMA_V2) ||
-        (!transformer_target && !decoder_target) ||
+                        YVEX_COMPILED_CONTEXT_ENVELOPE_SCHEMA_V2 &&
+         envelope->schema_version != YVEX_COMPILED_CONTEXT_ENVELOPE_SCHEMA_V3) ||
+        (!transformer_target && !decoder_target && !program_target) ||
         !envelope->semantic_maximum_context || !envelope->target_maximum_context ||
         envelope->semantic_maximum_context != envelope->target_maximum_context ||
         !yvex_sha256_hex_valid(envelope->model_execution_identity) ||
         (transformer_target &&
          (!yvex_sha256_hex_valid(envelope->target_transformer_identity) ||
-          envelope->target_decoder_identity[0])) ||
+          envelope->target_decoder_identity[0] || envelope->target_program_identity[0])) ||
         (decoder_target &&
          (!yvex_sha256_hex_valid(envelope->target_decoder_identity) ||
           envelope->target_transformer_identity[0] ||
+          envelope->target_program_identity[0] ||
+          envelope->draft_available || envelope->draft_maximum_context ||
+          envelope->draft_transformer_identity[0])) ||
+        (program_target &&
+         (!yvex_sha256_hex_valid(envelope->target_program_identity) ||
+          envelope->target_transformer_identity[0] ||
+          envelope->target_decoder_identity[0] ||
           envelope->draft_available || envelope->draft_maximum_context ||
           envelope->draft_transformer_identity[0])) ||
         (envelope->draft_available &&

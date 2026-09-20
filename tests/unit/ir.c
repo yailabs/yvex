@@ -643,7 +643,7 @@ static int ir_selective_ssd_constraints(void)
         snprintf(types[7].domain, sizeof(types[7].domain), "convolution.causal");
         snprintf(types[8].domain, sizeof(types[8].domain), "ssm.selective");
         if (scenario == 1u) types[0].shape[1].extent++;
-        if (scenario == 2u) types[1].scalar = YVEX_IR_BF16;
+        if (scenario == 2u) types[1].scalar = YVEX_IR_I32;
         if (scenario == 3u) snprintf(types[8].domain, sizeof(types[8].domain), "attention.causal_kv");
         if (scenario == 4u) attributes[3].value.integer = 3u;
         if (scenario == 5u) effects = YVEX_IR_READ_STATE;

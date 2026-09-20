@@ -98,6 +98,14 @@ static const gguf_role_name gguf_role_names[YVEX_TENSOR_ROLE_COUNT] = {
         "yvex.seq_mix.output_norm.weight", 1, YVEX_GGUF_NAME_YVEX_EXTENSION},
     [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_OUTPUT] = {
         "yvex.seq_mix.output.weight", 1, YVEX_GGUF_NAME_YVEX_EXTENSION},
+    [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_BLOCK_NORM] = {
+        "yvex.seq_mix.block_norm.weight", 1, YVEX_GGUF_NAME_YVEX_EXTENSION},
+    [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_INPUT_PROJECTION] = {
+        "yvex.seq_mix.input.weight", 1, YVEX_GGUF_NAME_YVEX_EXTENSION},
+    [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_CONVOLUTION_BIAS] = {
+        "yvex.seq_mix.conv.bias", 1, YVEX_GGUF_NAME_YVEX_EXTENSION},
+    [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_SKIP] = {
+        "yvex.seq_mix.skip", 1, YVEX_GGUF_NAME_YVEX_EXTENSION},
 };
 
 static const char *gguf_role_name_lookup(

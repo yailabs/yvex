@@ -240,12 +240,12 @@ The internal runtime is family-neutral. Its main objects are:
 | `yvex_runtime_execution_session` | mutable backend context, reusable workspace, committed target state, bounded speculative candidate state, cancellation and CUDA Graph registry |
 | execution profile | generation-bound selection of one engine specialization, workload, kernel bundle, mode, evidence class, and typed operation resolutions |
 
-Model-execution descriptor schema v1 is a non-installed fieldwise projection
-of source/family context, attention, MoE, output, DSpark and state facts.
-Runtime binding v16 persists and authenticates it together with the canonical
+Model-execution descriptor schema v2 is a non-installed fieldwise projection
+of source/family context, optional attention geometry, MoE, output, DSpark and
+state facts. Runtime binding v17 persists and authenticates it together with the canonical
 operator graph and identity, Physical Execution IR v5 package decisions,
 compiled model plan, and pointer-free tokenizer/conversation policy. The
-explicit v14/v15 readers authenticate legacy bytes and normalize only canonical
+explicit v14/v15/v16 readers authenticate legacy bytes and normalize only canonical
 package records to PEIR v5; an unsupported legacy derived-layout requirement
 refuses. Bindings v7 through v13 remain explicit rebuild boundaries, and a
 binding without the retained operator schedule must be rebuilt rather than

@@ -23,8 +23,10 @@
 #define BINDING_MAGIC_V14 "YVRBND14"
 #define BINDING_MAGIC_V15 "YVRBND15"
 #define BINDING_MAGIC_V16 "YVRBND16"
+#define BINDING_MAGIC_V17 "YVRBND17"
 #define BINDING_SCHEMA_V14 14u
 #define BINDING_SCHEMA_V15 15u
+#define BINDING_SCHEMA_V16 16u
 #define BINDING_MAGIC_BYTES 8u
 #define BINDING_HEADER_BYTES (BINDING_MAGIC_BYTES + 16u + 64u)
 #define BINDING_MAX_BYTES (64u * 1024u * 1024u)
@@ -68,6 +70,18 @@ static const yvex_runtime_binding_failure_code binding_file_codes[] = {
     YVEX_RUNTIME_BINDING_FAILURE_FORMAT,
 };
 #define binding_reject yvex_runtime_private_binding_refuse
+
+static int binding_program_only_execution(
+    const yvex_model_execution_descriptor *execution)
+{
+    return execution &&
+           execution->schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2 &&
+           execution->layer_count &&
+           execution->sequence_mixer_layers == execution->layer_count &&
+           !execution->attention_heads && !execution->kv_heads &&
+           !execution->head_width && !execution->dense_ffn_width &&
+           !execution->draft_layer_count;
+}
 static int bytes_put_u64(binding_bytes *bytes, unsigned long long value)
 {
     unsigned char encoded[8];
@@ -914,10 +928,11 @@ static int prepare_validate(const yvex_runtime_binding_prepare_request *request,
     const physical_summary *physical;
     const char *compiled_graph;
     const char *compatibility_mismatch;
+    int program_only;
     if (!request || !request->directory || !request->directory[0] ||
         !request->admission || !request->operator_graph ||
         !request->physical_execution || !request->compiled_plan ||
-        !request->materialization || !request->runtime_descriptor || !request->attention_plan ||
+        !request->materialization || !request->runtime_descriptor ||
         !request->family_adapter_id || !request->family_adapter_version ||
         !request->artifact_format || !request->artifact_format[0] ||
         strlen(request->artifact_format) >= sizeof(((yvex_runtime_binding_summary *)0)->artifact_format) ||
@@ -944,6 +959,8 @@ static int prepare_validate(const yvex_runtime_binding_prepare_request *request,
         yvex_compiled_model_plan_decoder(request->compiled_plan));
     attention = yvex_attention_plan_summary(request->attention_plan);
     draft_attention = yvex_attention_plan_summary(request->draft_attention_plan);
+    program_only = descriptor &&
+        binding_program_only_execution(&descriptor->model_execution);
     if (!descriptor || !operators ||
         operators->family_adapter_id != request->family_adapter_id ||
         operators->family_adapter_version != request->family_adapter_version ||
@@ -978,9 +995,11 @@ static int prepare_validate(const yvex_runtime_binding_prepare_request *request,
         !descriptor || descriptor->status != YVEX_RUNTIME_DESCRIPTOR_STATUS_READY ||
         ((decoder && !yvex_runtime_private_binding_decoder_matches(
                          decoder, descriptor, operators->identity, attention)) ||
-         (!decoder && descriptor->model_execution.schema_version !=
-                          YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V1)) ||
-        !yvex_runtime_private_binding_attention_ready(attention) ||
+         (!decoder && !program_only &&
+          descriptor->model_execution.schema_version !=
+              YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V1)) ||
+        (!program_only && !yvex_runtime_private_binding_attention_ready(attention)) ||
+        (program_only && (request->attention_plan || request->draft_attention_plan)) ||
         (descriptor && descriptor->draft_layer_count &&
          !yvex_runtime_private_binding_attention_ready(draft_attention)))
         return binding_reject(
@@ -990,13 +1009,17 @@ static int prepare_validate(const yvex_runtime_binding_prepare_request *request,
     if (materialization->tensor_count == 0ull ||
         materialization->tensor_count > BINDING_MAX_RECORDS ||
         descriptor->tensor_count != materialization->tensor_count ||
-        attention->layer_count == 0ull || attention->layer_count > BINDING_MAX_LAYERS ||
-        attention->required_binding_count == 0ull || attention->missing_binding_count != 0ull ||
-        attention->qtype_compute_refusal_count != 0ull ||
-        yvex_attention_plan_layer_count(request->attention_plan) != attention->layer_count ||
-        attention->tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER ||
-        (!decoder && descriptor->layer_count &&
-         attention->layer_count != descriptor->layer_count) ||
+        (!program_only &&
+         (!attention || attention->layer_count == 0ull ||
+          attention->layer_count > BINDING_MAX_LAYERS ||
+          attention->required_binding_count == 0ull ||
+          attention->missing_binding_count != 0ull ||
+          attention->qtype_compute_refusal_count != 0ull ||
+          yvex_attention_plan_layer_count(request->attention_plan) !=
+              attention->layer_count ||
+          attention->tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER ||
+          (!decoder && descriptor->layer_count &&
+           attention->layer_count != descriptor->layer_count))) ||
         (descriptor->draft_layer_count &&
          (!draft_attention || draft_attention->tensor_scope != YVEX_TENSOR_SCOPE_DRAFT ||
           draft_attention->layer_count != descriptor->draft_layer_count ||
@@ -1123,10 +1146,10 @@ static int binding_body_write(const yvex_runtime_binding_prepare_request *reques
     logical = request->logical_transform_identity;
     capabilities = &request->capabilities;
     tensor_count = materialization->tensor_count;
-    layer_count = attention->layer_count;
+    layer_count = attention ? attention->layer_count : 0ull;
     draft_layer_count = draft_attention ? draft_attention->layer_count : 0ull;
     if (!yvex_runtime_capabilities_identity(capabilities, capability_identity) ||
-        !bytes_put_text(body, "yvex.runtime.binding.payload.v16") ||
+        !bytes_put_text(body, "yvex.runtime.binding.payload.v17") ||
         !bytes_put_u64(body, YVEX_RUNTIME_BINDING_SCHEMA_CURRENT) ||
         !bytes_put_u64(body, adapter_id) || !bytes_put_u64(body, adapter_version) ||
         !bytes_put_text(body, format) || !bytes_put_u64(body, format_version) ||
@@ -1170,13 +1193,16 @@ static int binding_body_write(const yvex_runtime_binding_prepare_request *reques
         !bytes_put_u64(body, compiled_plans->count) ||
         !yvex_core_bytes_append(body, compiled_plans->data,
                                 compiled_plans->count)) return 0;
-    if (!fields_write(body, attention, attention_summary_fields,
-                      FIELD_COUNT(attention_summary_fields)) ||
-        !bytes_put_u64(body, layer_count)) return 0;
-    for (i = 0ull; i < layer_count; ++i) {
-        const yvex_attention_layer_plan *record =
-            yvex_attention_plan_layer_at(request->attention_plan, i);
-        if (!record || !write_attention_layer(body, record)) return 0;
+    if (!bytes_put_u64(body, attention != NULL)) return 0;
+    if (attention) {
+        if (!fields_write(body, attention, attention_summary_fields,
+                          FIELD_COUNT(attention_summary_fields)) ||
+            !bytes_put_u64(body, layer_count)) return 0;
+        for (i = 0ull; i < layer_count; ++i) {
+            const yvex_attention_layer_plan *record =
+                yvex_attention_plan_layer_at(request->attention_plan, i);
+            if (!record || !write_attention_layer(body, record)) return 0;
+        }
     }
     if (!bytes_put_u64(body, draft_attention != NULL)) return 0;
     if (!draft_attention) return 1;
@@ -1199,8 +1225,10 @@ static int binding_identity(unsigned int schema, const unsigned char *body, size
                              ? "yvex.runtime.binding.v14"
                          : schema == BINDING_SCHEMA_V15
                              ? "yvex.runtime.binding.v15"
+                         : schema == BINDING_SCHEMA_V16
+                             ? "yvex.runtime.binding.v16"
                          : schema == YVEX_RUNTIME_BINDING_SCHEMA_CURRENT
-                             ? "yvex.runtime.binding.v16" : NULL;
+                             ? "yvex.runtime.binding.v17" : NULL;
     yvex_sha256_init(&hash);
     if (!domain || !yvex_sha256_update_text(&hash, domain) ||
         !yvex_sha256_update_u64(&hash, schema) ||
@@ -1214,12 +1242,50 @@ static int build_file(const binding_bytes *body, const char *identity, binding_b
     if (!body || !identity || !file) return 0;
     file->maximum = BINDING_MAX_BYTES;
     file->initial_capacity = 4096u;
-    return yvex_core_bytes_append(file, BINDING_MAGIC_V16, BINDING_MAGIC_BYTES) &&
+    return yvex_core_bytes_append(file, BINDING_MAGIC_V17, BINDING_MAGIC_BYTES) &&
            bytes_put_u64(file, YVEX_RUNTIME_BINDING_SCHEMA_CURRENT) &&
            bytes_put_u64(file, (unsigned long long)body->count) &&
            yvex_core_bytes_append(file, identity, 64u) &&
            yvex_core_bytes_append(file, body->data, body->count);
 }
+
+static void parsed_plan_summary_finish(yvex_runtime_binding *binding)
+{
+    const yvex_transformer_plan_summary *transformer =
+        yvex_transformer_plan_summary_get(
+            yvex_compiled_model_plan_transformer(binding->plan, 0));
+    const yvex_transformer_plan_summary *draft_transformer =
+        yvex_transformer_plan_summary_get(
+            yvex_compiled_model_plan_transformer(binding->plan, 1));
+    const yvex_decoder_plan_summary *decoder =
+        yvex_decoder_plan_summary_get(
+            yvex_compiled_model_plan_decoder(binding->plan));
+    const yvex_runtime_logits_plan_summary *output =
+        yvex_compiled_model_plan_output_head(binding->plan);
+    if (transformer)
+        yvex_runtime_identity_copy(
+            binding->summary.transformer_plan_identity,
+            transformer->transformer_plan_identity);
+    if (draft_transformer)
+        yvex_runtime_identity_copy(
+            binding->summary.draft_transformer_plan_identity,
+            draft_transformer->transformer_plan_identity);
+    if (decoder) {
+        binding->summary.decoder_layer_count = decoder->layer_count;
+        binding->summary.recurrent_layer_count = decoder->recurrent_layer_count;
+        yvex_runtime_identity_copy(binding->summary.decoder_plan_identity,
+                                   decoder->decoder_plan_identity);
+    } else if (binding_program_only_execution(
+                   &binding->descriptor.model_execution)) {
+        binding->summary.recurrent_layer_count =
+            binding->descriptor.model_execution.layer_count;
+    }
+    if (output)
+        yvex_runtime_identity_copy(
+            binding->summary.output_head_plan_identity,
+            output->output_head_plan_identity);
+}
+
 static binding_parse_result parse_body(yvex_runtime_binding *binding,
                                        const unsigned char *data, size_t count,
                                        unsigned int expected_schema)
@@ -1231,7 +1297,8 @@ static binding_parse_result parse_body(yvex_runtime_binding *binding,
     char capability_identity[YVEX_SHA256_HEX_CAP];
     char format[16];
     unsigned long long schema, family_id, family_version, format_version;
-    unsigned long long material_count, runtime_count, layer_count, draft_present;
+    unsigned long long material_count, runtime_count, layer_count = 0ull;
+    unsigned long long attention_present = 1ull, draft_present;
     unsigned long long tokenizer_policy_bytes, compiled_plan_bytes;
     unsigned long long draft_layer_count = 0ull, i;
     if (!cursor_text(&cursor, domain, sizeof(domain)) ||
@@ -1240,7 +1307,9 @@ static binding_parse_result parse_body(yvex_runtime_binding *binding,
                            ? "yvex.runtime.binding.payload.v14"
                        : expected_schema == BINDING_SCHEMA_V15
                            ? "yvex.runtime.binding.payload.v15"
-                           : "yvex.runtime.binding.payload.v16") != 0 ||
+                       : expected_schema == BINDING_SCHEMA_V16
+                           ? "yvex.runtime.binding.payload.v16"
+                           : "yvex.runtime.binding.payload.v17") != 0 ||
         !cursor_u64(&cursor, &family_id) || !family_id ||
         !cursor_u64(&cursor, &family_version) || !family_version ||
         !cursor_text(&cursor, format, sizeof(format)) || !format[0] ||
@@ -1324,19 +1393,25 @@ static binding_parse_result parse_body(yvex_runtime_binding *binding,
             (size_t)compiled_plan_bytes, NULL) != YVEX_OK)
         return BINDING_PARSE_FORMAT;
     cursor.offset += (size_t)compiled_plan_bytes;
-    if (!record_read(&cursor, &binding->attention, sizeof(binding->attention),
-                     attention_summary_fields, FIELD_COUNT(attention_summary_fields)) ||
-        !cursor_u64(&cursor, &layer_count))
+    if (expected_schema >= YVEX_RUNTIME_BINDING_SCHEMA_CURRENT &&
+        (!cursor_u64(&cursor, &attention_present) || attention_present > 1ull))
         return BINDING_PARSE_FORMAT;
-    if (layer_count > BINDING_MAX_LAYERS ||
-        !record_count_fits(&cursor, layer_count, sizeof(*binding->layers)))
-        return BINDING_PARSE_BOUNDS;
-    binding->layers = (yvex_attention_layer_plan *)calloc((size_t)layer_count,
-                                                           sizeof(*binding->layers));
-    if (!binding->layers) return BINDING_PARSE_ALLOCATION;
-    for (i = 0ull; i < layer_count; ++i)
-        if (!read_attention_layer(&cursor, &binding->layers[i]))
+    if (attention_present) {
+        if (!record_read(&cursor, &binding->attention,
+                         sizeof(binding->attention), attention_summary_fields,
+                         FIELD_COUNT(attention_summary_fields)) ||
+            !cursor_u64(&cursor, &layer_count))
             return BINDING_PARSE_FORMAT;
+        if (!layer_count || layer_count > BINDING_MAX_LAYERS ||
+            !record_count_fits(&cursor, layer_count, sizeof(*binding->layers)))
+            return BINDING_PARSE_BOUNDS;
+        binding->layers = (yvex_attention_layer_plan *)calloc(
+            (size_t)layer_count, sizeof(*binding->layers));
+        if (!binding->layers) return BINDING_PARSE_ALLOCATION;
+        for (i = 0ull; i < layer_count; ++i)
+            if (!read_attention_layer(&cursor, &binding->layers[i]))
+                return BINDING_PARSE_FORMAT;
+    }
     if (!cursor_u64(&cursor, &draft_present) || draft_present > 1ull)
         return BINDING_PARSE_FORMAT;
     if (draft_present) {
@@ -1373,39 +1448,7 @@ static binding_parse_result parse_body(yvex_runtime_binding *binding,
     yvex_runtime_identity_copy(binding->summary.moe_plan_identity, moe_identity);
     yvex_runtime_identity_copy(binding->summary.draft_moe_plan_identity,
                                draft_moe_identity);
-    {
-        const yvex_transformer_plan_summary *transformer =
-            yvex_transformer_plan_summary_get(
-                yvex_compiled_model_plan_transformer(binding->plan, 0));
-        const yvex_transformer_plan_summary *draft_transformer =
-            yvex_transformer_plan_summary_get(
-                yvex_compiled_model_plan_transformer(binding->plan, 1));
-        const yvex_decoder_plan_summary *decoder =
-            yvex_decoder_plan_summary_get(
-                yvex_compiled_model_plan_decoder(binding->plan));
-        const yvex_runtime_logits_plan_summary *output =
-            yvex_compiled_model_plan_output_head(binding->plan);
-        if (transformer)
-            yvex_runtime_identity_copy(
-                binding->summary.transformer_plan_identity,
-                transformer->transformer_plan_identity);
-        if (draft_transformer)
-            yvex_runtime_identity_copy(
-                binding->summary.draft_transformer_plan_identity,
-                draft_transformer->transformer_plan_identity);
-        if (decoder) {
-            binding->summary.decoder_layer_count = decoder->layer_count;
-            binding->summary.recurrent_layer_count =
-                decoder->recurrent_layer_count;
-            yvex_runtime_identity_copy(
-                binding->summary.decoder_plan_identity,
-                decoder->decoder_plan_identity);
-        }
-        if (output)
-            yvex_runtime_identity_copy(
-                binding->summary.output_head_plan_identity,
-                output->output_head_plan_identity);
-    }
+    parsed_plan_summary_finish(binding);
     yvex_runtime_identity_copy(binding->summary.execution_capability_identity,
                                capability_identity);
     return cursor.offset == cursor.count ? BINDING_PARSE_OK : BINDING_PARSE_FORMAT;
@@ -1451,8 +1494,9 @@ static void summary_finish(yvex_runtime_binding_summary *summary,
         yvex_runtime_identity_copy(summary->model_execution_identity,
                                    descriptor->model_execution.identity);
     summary->semantic_maximum_context = descriptor->model_execution.maximum_context;
-    yvex_runtime_identity_copy(summary->attention_plan_identity,
-                               attention->attention_plan_identity);
+    if (attention)
+        yvex_runtime_identity_copy(summary->attention_plan_identity,
+                                   attention->attention_plan_identity);
     if (draft_attention)
         yvex_runtime_identity_copy(summary->draft_attention_plan_identity,
                                    draft_attention->attention_plan_identity);
@@ -1518,8 +1562,10 @@ static int binding_file_decode(yvex_runtime_binding **out,
            memcmp(magic, BINDING_MAGIC_V14, sizeof(magic)) == 0) ||
           (schema == BINDING_SCHEMA_V15 &&
            memcmp(magic, BINDING_MAGIC_V15, sizeof(magic)) == 0) ||
+          (schema == BINDING_SCHEMA_V16 &&
+           memcmp(magic, BINDING_MAGIC_V16, sizeof(magic)) == 0) ||
           (schema == YVEX_RUNTIME_BINDING_SCHEMA_CURRENT &&
-           memcmp(magic, BINDING_MAGIC_V16, sizeof(magic)) == 0))) {
+           memcmp(magic, BINDING_MAGIC_V17, sizeof(magic)) == 0))) {
         rc = binding_reject(failure, YVEX_RUNTIME_BINDING_FAILURE_SCHEMA,
                             "schema-version", path, 0ull,
                             YVEX_RUNTIME_BINDING_SCHEMA_CURRENT, schema,
@@ -1605,7 +1651,7 @@ static int binding_file_decode(yvex_runtime_binding **out,
     if (rc != YVEX_OK) goto done;
     summary_finish(&binding->summary, &binding->admission,
                    &binding->materialization, &binding->descriptor,
-                   &binding->attention,
+                   binding->summary.layer_count ? &binding->attention : NULL,
                    binding->summary.draft_layer_count
                        ? &binding->draft_attention : NULL,
                    binding->summary.logical_transform_identity,

@@ -326,9 +326,11 @@ static int writer_tokenizer_metadata_add(
     writer_metadata *metadata, unsigned int *count,
     const yvex_gguf_tokenizer_summary *tokenizer, const unsigned char *raw_json,
     size_t raw_json_bytes, const unsigned char *raw_config, size_t raw_config_bytes,
-    const char *prompt_policy, int standalone)
+    const char *tokenizer_model, const char *prompt_policy, int standalone,
+    int unk_present, unsigned int unk_token_id)
 {
-    int ok = writer_meta_text_reconcile(metadata, count, "tokenizer.ggml.model", "gpt2") &&
+    int ok = tokenizer_model && tokenizer_model[0] &&
+        writer_meta_text_reconcile(metadata, count, "tokenizer.ggml.model", tokenizer_model) &&
         writer_meta_text_reconcile(metadata, count, "tokenizer.ggml.pre",
                                    tokenizer->pre_tokenizer) &&
         writer_meta_dynamic_array(metadata, count, "tokenizer.ggml.tokens",
@@ -349,6 +351,10 @@ static int writer_tokenizer_metadata_add(
     if (ok && tokenizer->pad_token_present)
         ok = writer_meta_u32_reconcile(metadata, count, "tokenizer.ggml.padding_token_id",
                                        tokenizer->pad_token_id);
+    if (ok && unk_present)
+        ok = writer_meta_u32_reconcile(metadata, count,
+                                       "tokenizer.ggml.unknown_token_id",
+                                       unk_token_id);
     return ok && writer_meta_bool_reconcile(metadata, count, "tokenizer.ggml.add_bos_token",
                                             tokenizer->add_bos_token) &&
            writer_meta_bool_reconcile(metadata, count, "tokenizer.ggml.add_eos_token",
@@ -934,7 +940,8 @@ static int writer_component_metadata_build(writer_component_context *context) {
     return ok && (!context->tokenizer || writer_tokenizer_metadata_add(
         context->metadata, &context->metadata_count, context->tokenizer,
         context->raw_json, context->raw_json_bytes, context->raw_config,
-        context->raw_config_bytes, input->tokenizer->prompt_policy, 1));
+        context->raw_config_bytes, "gpt2", input->tokenizer->prompt_policy, 1,
+        0, 0u));
 }
 
 static writer_fixture_tensor_status writer_component_tensors_build(
@@ -1120,7 +1127,11 @@ typedef struct {
     const yvex_gguf_writer_lowering_api *lowering;
     const void *lowering_context;
     const yvex_source_verification *verification;
+    const char *tokenizer_model;
     const char *tokenizer_architecture;
+    const char *tokenizer_prompt_policy;
+    unsigned int tokenizer_unk_token_id;
+    int tokenizer_unk_present;
     unsigned long long tokenizer_vocabulary_size;
     const yvex_quant_plan_summary *quant;
     yvex_gguf_writer_lowering_summary mapping;
@@ -1288,7 +1299,11 @@ static int writer_complete_add_tokenizer_metadata(writer_complete_context *conte
            writer_tokenizer_metadata_add(
                metadata, count, context->tokenizer, context->raw_json,
                context->raw_json_bytes, context->raw_config,
-               context->raw_config_bytes, NULL, 0);
+               context->raw_config_bytes, context->tokenizer_model,
+               context->tokenizer_prompt_policy,
+               context->tokenizer_prompt_policy != NULL,
+               context->tokenizer_unk_present,
+               context->tokenizer_unk_token_id);
 }
 
 /*
@@ -1474,7 +1489,9 @@ static int writer_complete_plan_finish(writer_complete_context *context) {
 static int writer_plan_build_complete(
     yvex_gguf_writer_plan **out, const yvex_quant_plan *quant_plan,
     const yvex_gguf_writer_lowering_api *lowering, const void *lowering_context,
-    const yvex_source_verification *verification, const char *tokenizer_architecture,
+    const yvex_source_verification *verification, const char *tokenizer_model,
+    const char *tokenizer_architecture, const char *tokenizer_prompt_policy,
+    int tokenizer_unk_present, unsigned int tokenizer_unk_token_id,
     unsigned long long tokenizer_vocabulary_size,
     const yvex_gguf_writer_plan_options *options, yvex_gguf_writer_failure *failure,
     yvex_error *err) {
@@ -1486,7 +1503,11 @@ static int writer_plan_build_complete(
     context.lowering = lowering;
     context.lowering_context = lowering_context;
     context.verification = verification;
+    context.tokenizer_model = tokenizer_model;
     context.tokenizer_architecture = tokenizer_architecture;
+    context.tokenizer_prompt_policy = tokenizer_prompt_policy;
+    context.tokenizer_unk_present = tokenizer_unk_present;
+    context.tokenizer_unk_token_id = tokenizer_unk_token_id;
     context.tokenizer_vocabulary_size = tokenizer_vocabulary_size
                                             ? tokenizer_vocabulary_size
                                             : verification
@@ -1498,6 +1519,7 @@ static int writer_plan_build_complete(
     if (out)
         *out = NULL;
     if (!out || !quant_plan || !lowering || !lowering_context || !verification ||
+        !tokenizer_model || !tokenizer_model[0] ||
         !tokenizer_architecture || !tokenizer_architecture[0] ||
         !context.tokenizer_vocabulary_size ||
         !lowering->summary || !lowering->tensor_at || !lowering->metadata_at ||
@@ -1576,7 +1598,11 @@ int yvex_gguf_writer_plan_build(yvex_gguf_writer_plan **out,
             out, request->quant_plan, request->input.complete.lowering,
             request->input.complete.lowering_context,
             request->input.complete.verification,
+            request->input.complete.tokenizer_model,
             request->input.complete.tokenizer_architecture,
+            request->input.complete.tokenizer_prompt_policy,
+            request->input.complete.tokenizer_unk_present,
+            request->input.complete.tokenizer_unk_token_id,
             request->input.complete.tokenizer_vocabulary_size,
             request->options, failure, err);
     case YVEX_GGUF_WRITER_INPUT_TENSOR_PROOF:

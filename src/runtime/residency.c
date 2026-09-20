@@ -331,29 +331,31 @@ static int residency_add_record(yvex_runtime_residency *residency,
 static int residency_records_prepare(
     yvex_runtime_residency *residency, const yvex_runtime_descriptor *descriptor,
     const yvex_runtime_descriptor_summary *descriptor_summary,
-    const yvex_model_engine_summary *model_summary,
     const yvex_attention_plan *plan, const yvex_attention_summary *attention,
+    int output_head_required,
     yvex_runtime_residency_failure *failure, yvex_error *err)
 {
     unsigned long long core_qtypes[YVEX_RUNTIME_DESCRIPTOR_QTYPE_CAP] = {0};
     unsigned long long core_bytes = 0ull;
     unsigned long long index, ordinal = 0ull;
     int rc = YVEX_OK;
-    residency->summary.expected_core_binding_count = attention->required_binding_count;
+    residency->summary.expected_core_binding_count =
+        attention ? attention->required_binding_count : 0ull;
     residency->summary.expected_envelope_binding_count =
-        attention->required_envelope_binding_count;
+        attention ? attention->required_envelope_binding_count : 0ull;
     for (index = 0ull; rc == YVEX_OK && index < descriptor_summary->tensor_count; ++index) {
         const yvex_runtime_tensor_binding *binding =
             yvex_runtime_descriptor_tensor_at(descriptor, index);
         yvex_attention_binding_class attention_class =
-            yvex_attention_plan_binding_classify(plan, binding);
+            plan ? yvex_attention_plan_binding_classify(plan, binding)
+                 : YVEX_ATTENTION_BINDING_NOT_REQUIRED;
         residency_binding_class binding_class;
         int selected = 1;
         if (attention_class == YVEX_ATTENTION_BINDING_CORE)
             binding_class = RESIDENCY_BINDING_CORE;
         else if (attention_class == YVEX_ATTENTION_BINDING_ENVELOPE)
             binding_class = RESIDENCY_BINDING_ENVELOPE;
-        else if (model_summary->capabilities.output_head_binding_ready && binding &&
+        else if (output_head_required && binding &&
                  binding->role == YVEX_TENSOR_ROLE_OUTPUT_HEAD &&
                  binding->scope == YVEX_TENSOR_SCOPE_GLOBAL)
             binding_class = RESIDENCY_BINDING_OUTPUT_HEAD;
@@ -368,11 +370,12 @@ static int residency_records_prepare(
         const yvex_runtime_tensor_binding *binding =
             yvex_runtime_descriptor_tensor_at(descriptor, index);
         yvex_attention_binding_class attention_class =
-            yvex_attention_plan_binding_classify(plan, binding);
+            plan ? yvex_attention_plan_binding_classify(plan, binding)
+                 : YVEX_ATTENTION_BINDING_NOT_REQUIRED;
         int accelerator_binding =
             attention_class == YVEX_ATTENTION_BINDING_CORE ||
             attention_class == YVEX_ATTENTION_BINDING_ENVELOPE ||
-            (model_summary->capabilities.output_head_binding_ready && binding &&
+            (output_head_required && binding &&
              binding->role == YVEX_TENSOR_ROLE_OUTPUT_HEAD &&
              binding->scope == YVEX_TENSOR_SCOPE_GLOBAL);
         if (!accelerator_binding)
@@ -380,30 +383,34 @@ static int residency_records_prepare(
                                       ordinal++, &core_bytes, core_qtypes, failure, err);
     }
     residency->summary.expected_output_head_binding_count =
-        model_summary->capabilities.output_head_binding_ready ? 1ull : 0ull;
+        output_head_required ? 1ull : 0ull;
     residency->summary.expected_model_binding_count =
         descriptor_summary->tensor_count - residency->summary.expected_core_binding_count -
         residency->summary.expected_envelope_binding_count -
         residency->summary.expected_output_head_binding_count;
     if (rc == YVEX_OK &&
-        (residency->summary.core_binding_count != attention->required_binding_count ||
-         residency->summary.envelope_binding_count != attention->required_envelope_binding_count ||
+        (residency->summary.core_binding_count !=
+             residency->summary.expected_core_binding_count ||
+         residency->summary.envelope_binding_count !=
+             residency->summary.expected_envelope_binding_count ||
          residency->summary.output_head_binding_count !=
              residency->summary.expected_output_head_binding_count ||
          residency->summary.model_binding_count !=
              residency->summary.expected_model_binding_count ||
          residency->summary.binding_count != descriptor_summary->tensor_count ||
          residency->summary.encoded_bytes != descriptor_summary->payload_bytes ||
-         core_bytes != attention->payload_bytes_bound))
+         core_bytes != (attention ? attention->payload_bytes_bound : 0ull)))
         rc = residency_reject(failure, YVEX_RUNTIME_RESIDENCY_FAILURE_PLAN, NULL,
                               descriptor_summary->tensor_count,
                               residency->summary.binding_count,
                               "full-model resident accounting differs from the descriptor",
                               YVEX_ERR_FORMAT, err);
     for (index = 0ull; rc == YVEX_OK && index < YVEX_RUNTIME_DESCRIPTOR_QTYPE_CAP; ++index)
-        if (core_qtypes[index] != attention->qtype_binding_counts[index])
+        if (core_qtypes[index] !=
+            (attention ? attention->qtype_binding_counts[index] : 0ull))
             rc = residency_reject(failure, YVEX_RUNTIME_RESIDENCY_FAILURE_PLAN, NULL,
-                                  attention->qtype_binding_counts[index], core_qtypes[index],
+                                  attention ? attention->qtype_binding_counts[index] : 0ull,
+                                  core_qtypes[index],
                                   "resident core qtype accounting differs from the plan",
                                   YVEX_ERR_FORMAT, err);
     return rc;
@@ -574,7 +581,7 @@ failed:
  */
 static int residency_identity_build(yvex_runtime_residency *residency,
                                     const yvex_model_engine_summary *model,
-                                    const yvex_attention_summary *attention,
+                                    const char *execution_identity,
                                     yvex_error *err)
 {
     yvex_sha256 hash;
@@ -586,7 +593,7 @@ static int residency_identity_build(yvex_runtime_residency *residency,
         !yvex_sha256_update_text(&hash, model->runtime_model_identity) ||
         !yvex_sha256_update_text(&hash, model->artifact_identity) ||
         !yvex_sha256_update_text(&hash, model->materialization_identity) ||
-        !yvex_sha256_update_text(&hash, attention->attention_plan_identity) ||
+        !yvex_sha256_update_text(&hash, execution_identity) ||
         !yvex_sha256_update_u64(&hash, residency->summary.model_binding_count) ||
         !yvex_sha256_update_u64(&hash, residency->summary.core_binding_count) ||
         !yvex_sha256_update_u64(&hash, residency->summary.envelope_binding_count) ||
@@ -919,6 +926,14 @@ int yvex_runtime_residency_prepare(yvex_runtime_residency **out, yvex_model_engi
         yvex_runtime_descriptor_summary_get(descriptor);
     const yvex_attention_plan *plan = view ? view->attention : NULL;
     const yvex_attention_summary *attention = yvex_attention_plan_summary(plan);
+    const yvex_program_physical *program =
+        view && view->compiled_plan
+            ? yvex_compiled_model_plan_forward(view->compiled_plan) : NULL;
+    const yvex_program_physical *output_program =
+        view && view->compiled_plan
+            ? yvex_compiled_model_plan_output(view->compiled_plan) : NULL;
+    yvex_program_token_interface program_interface = {0};
+    const char *execution_identity = NULL;
     yvex_materialization_session *materialization = view ? view->materialization : NULL;
     yvex_runtime_residency *residency = NULL;
     yvex_materialization_read_provider provider;
@@ -937,12 +952,26 @@ int yvex_runtime_residency_prepare(yvex_runtime_residency **out, yvex_model_engi
         }
         return rc;
     }
+    execution_identity = attention
+                             ? attention->attention_plan_identity
+                             : model_summary.executable_graph_identity;
     if (!model_summary.sealed || !model_summary.valid ||
-        !descriptor_summary || !plan || !attention || !materialization)
+        !descriptor_summary || !materialization ||
+        ((plan == NULL) != (attention == NULL)))
         return residency_reject(failure, YVEX_RUNTIME_RESIDENCY_FAILURE_MODEL,
                                 NULL, 1ull, 0ull,
                                 "sealed runtime model facts are required for residency",
                                 YVEX_ERR_STATE, err);
+    if (!attention &&
+        (!program || yvex_program_physical_token_interface(
+                         program, &program_interface, err) != YVEX_OK ||
+         program_interface.attention_operations ||
+         !yvex_sha256_hex_valid(execution_identity)))
+        return residency_reject(
+            failure, YVEX_RUNTIME_RESIDENCY_FAILURE_MODEL, NULL, 0ull,
+            program_interface.attention_operations,
+            "attention-free residency requires an authenticated attention-free physical program",
+            YVEX_ERR_FORMAT, err);
     residency = (yvex_runtime_residency *)calloc(1u, sizeof(*residency));
     if (!residency)
         return residency_reject(failure, YVEX_RUNTIME_RESIDENCY_FAILURE_ALLOCATION,
@@ -969,8 +998,10 @@ int yvex_runtime_residency_prepare(yvex_runtime_residency **out, yvex_model_engi
                                 YVEX_ERR_NOMEM, err);
     }
     rc = residency_records_prepare(
-        residency, descriptor, descriptor_summary, &model_summary,
-        plan, attention, failure, err);
+        residency, descriptor, descriptor_summary, plan, attention,
+        output_program != NULL ||
+            model_summary.capabilities.output_head_binding_ready,
+        failure, err);
     if (rc == YVEX_OK)
         rc = residency_layout_plan(residency, view->physical_execution, failure, err);
     if (rc == YVEX_OK) {
@@ -996,7 +1027,8 @@ int yvex_runtime_residency_prepare(yvex_runtime_residency **out, yvex_model_engi
             residency, model_summary.artifact_identity,
             model_summary.materialization_identity, err);
     if (rc == YVEX_OK)
-        rc = residency_identity_build(residency, &model_summary, attention, err);
+        rc = residency_identity_build(
+            residency, &model_summary, execution_identity, err);
     if (rc == YVEX_OK) residency->summary.generation = 1ull;
     if (rc == YVEX_OK && (model->opening_backend || residency->execution.backend))
         rc = residency_claim_cuda(residency, &model->opening_backend, err);

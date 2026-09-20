@@ -118,11 +118,23 @@ static int command_tokenizer(int arg_count, char **args)
         yvex_cli_out_writef(stdout, "tokenizer_config_identity: %s\n", plan->tokenizer_config_identity);
         yvex_cli_out_writef(stdout, "tokenizer_plan_identity: %s\n", plan->tokenizer_plan_identity);
         yvex_cli_out_writef(
-            stdout, "chat_template: %s\n",
+            stdout, "prompt_policy: %s\n",
             plan->prompt_policy == YVEX_TOKENIZER_PROMPT_CONVERSATION
                 ? "conversation-family-policy" : "verbatim-no-special");
+        {
+            const char *chat_template = NULL;
+            unsigned long long chat_template_bytes = 0u;
+            yvex_cli_out_writef(
+                stdout, "chat_template: %s\n",
+                yvex_tokenizer_chat_template(
+                    ctx.tokenizer, &chat_template,
+                    &chat_template_bytes) == YVEX_OK &&
+                        chat_template && chat_template_bytes
+                    ? "present" : "absent");
+        }
     } else {
         yvex_cli_out_writef(stdout, "runtime_support: unavailable\n");
+        yvex_cli_out_writef(stdout, "prompt_policy: unavailable\n");
         yvex_cli_out_writef(stdout, "chat_template: absent\n");
     }
     (void)print_special_id_line("bos_token_id", yvex_tokenizer_bos_id, ctx.tokenizer);

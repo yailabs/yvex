@@ -25,6 +25,13 @@ static int sequence_static(const yvex_ir_type *type, yvex_ir_type_kind kind,
     return 1;
 }
 
+static int sequence_static_float_parameter(const yvex_ir_type *type,
+                                             const uint64_t *shape, uint32_t rank)
+{
+    return sequence_static(type, YVEX_IR_TENSOR, YVEX_IR_BF16, shape, rank, NULL) ||
+           sequence_static(type, YVEX_IR_TENSOR, YVEX_IR_F32, shape, rank, NULL);
+}
+
 static int sequence_rows(const yvex_ir_type *type, yvex_ir_extent rows, uint64_t width)
 {
     return type->kind == YVEX_IR_TENSOR && type->scalar == YVEX_IR_BF16 && type->rank == 2u &&
@@ -84,18 +91,15 @@ static int sequence_ssd_verify(const yvex_ir_module *m, yvex_ir_id id, yvex_erro
     convolution_weight[0] = convolution_width;
     convolution_weight[1] = 1u;
     convolution_weight[2] = kernel->value.integer;
-    if (!sequence_static(sequence_operand(m, op, 1u), YVEX_IR_TENSOR, YVEX_IR_F32,
-                         convolution_weight, 3u, NULL)) goto invalid;
+    if (!sequence_static_float_parameter(sequence_operand(m, op, 1u),
+                                         convolution_weight, 3u)) goto invalid;
     vector[0] = convolution_width;
-    if (!sequence_static(sequence_operand(m, op, 2u), YVEX_IR_TENSOR, YVEX_IR_F32,
-                         vector, 1u, NULL)) goto invalid;
+    if (!sequence_static_float_parameter(sequence_operand(m, op, 2u), vector, 1u)) goto invalid;
     vector[0] = heads->value.integer;
     for (uint32_t index = 3u; index < 6u; ++index)
-        if (!sequence_static(sequence_operand(m, op, index), YVEX_IR_TENSOR, YVEX_IR_F32,
-                             vector, 1u, NULL)) goto invalid;
+        if (!sequence_static_float_parameter(sequence_operand(m, op, index), vector, 1u)) goto invalid;
     vector[0] = width;
-    if (!sequence_static(sequence_operand(m, op, 6u), YVEX_IR_TENSOR, YVEX_IR_F32,
-                         vector, 1u, NULL)) goto invalid;
+    if (!sequence_static_float_parameter(sequence_operand(m, op, 6u), vector, 1u)) goto invalid;
     convolution_state[0] = convolution_width;
     convolution_state[1] = kernel->value.integer;
     recurrent[0] = heads->value.integer;

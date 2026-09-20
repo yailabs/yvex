@@ -1021,6 +1021,7 @@ static const yvex_family_binding_pipeline qwen_binding_pipeline = {
     .quant_plan_default = qwen_quant_default,
     .quant_plan_policy = qwen_quant_policy,
     .tokenizer_architecture = YVEX_QWEN3_5_FAMILY_KEY,
+    .tokenizer_model = "gpt2",
     .tokenizer_pre = "qwen2"};
 
 static const yvex_family_compiler_adapter qwen_compiler = {

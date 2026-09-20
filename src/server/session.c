@@ -1434,7 +1434,7 @@ static int session_turn_prompt_set(
     const yvex_client_request *request,
     const yvex_model_engine_view *model_view,
     yvex_prompt_message prompt_messages[SESSION_MAX_MESSAGES + 1u],
-    yvex_runtime_generation_request *prompt)
+    yvex_runtime_generation_request *prompt, yvex_error *err)
 {
     memset(prompt, 0, sizeof(*prompt));
     prompt->schema_version = YVEX_RUNTIME_GENERATION_SCHEMA_V3;
@@ -1444,7 +1444,12 @@ static int session_turn_prompt_set(
     } else {
         const yvex_conversation_protocol *conversation =
             session_conversation_protocol(model_view->tokenizer);
-        if (!conversation) return YVEX_ERR_STATE;
+        if (!conversation) {
+            yvex_error_set(err, YVEX_ERR_UNSUPPORTED,
+                           "server.session.prompt",
+                           "model has no admitted conversation template");
+            return YVEX_ERR_UNSUPPORTED;
+        }
         memcpy(prompt_messages, session->messages,
                (size_t)session->message_count * sizeof(*prompt_messages));
         memset(&prompt_messages[session->message_count], 0,
@@ -1476,13 +1481,23 @@ static int session_turn_sink_set(
     turn_sink *sink, server_session_registry *registry,
     server_session *session, const yvex_client_request *request,
     const yvex_model_engine_view *model_view, const char *request_id,
-    double queue_seconds, server_message_emit emit, void *emit_context)
+    double queue_seconds, server_message_emit emit, void *emit_context,
+    yvex_error *err)
 {
     const yvex_tokenizer_plan_summary *tokenizer =
         yvex_tokenizer_plan_summary_get(model_view->tokenizer);
     const yvex_conversation_protocol *conversation =
         session_conversation_protocol(model_view->tokenizer);
-    if (!tokenizer || !conversation) return YVEX_ERR_STATE;
+    if (!tokenizer) {
+        yvex_error_set(err, YVEX_ERR_STATE, "server.session.output",
+                       "model tokenizer is unavailable");
+        return YVEX_ERR_STATE;
+    }
+    if (!conversation) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "server.session.output",
+                       "model has no admitted conversation template");
+        return YVEX_ERR_UNSUPPORTED;
+    }
     memset(sink, 0, sizeof(*sink));
     sink->registry = registry;
     sink->session = session;
@@ -1564,7 +1579,7 @@ static int session_turn(server_session_registry *registry,
     resolved_request.reasoning_policy = reasoning;
     request = &resolved_request;
     rc = session_turn_prompt_set(registry, session, request, model_view,
-                                 prompt_messages, &prompt);
+                                 prompt_messages, &prompt, err);
     if (rc != YVEX_OK) return rc;
     if (session->committed_count)
         rc = session_prompt_extends_prefix(
@@ -1575,7 +1590,8 @@ static int session_turn(server_session_registry *registry,
         rc = session_generation_open(registry, session, request, &policy, err);
     if (rc != YVEX_OK) return rc;
     rc = session_turn_sink_set(&sink, registry, session, request, model_view,
-                               request_id, queue_seconds, emit, emit_context);
+                               request_id, queue_seconds, emit, emit_context,
+                               err);
     if (rc != YVEX_OK) return rc;
     rc = yvex_tokenizer_reasoning_stream_open(
         &sink.reasoning_stream, model_view->tokenizer,

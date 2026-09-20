@@ -85,6 +85,7 @@ static int pipeline_valid(const yvex_family_compiler_adapter *adapter)
            pipeline->runtime_descriptor_build &&
            pipeline->quant_plan_default && pipeline->quant_plan_policy &&
            pipeline->tokenizer_architecture && pipeline->tokenizer_architecture[0] &&
+           pipeline->tokenizer_model && pipeline->tokenizer_model[0] &&
            pipeline->tokenizer_pre && pipeline->tokenizer_pre[0];
 }
 
@@ -190,7 +191,7 @@ static int binding_compiler_graph(binding_compiler *compiler, yvex_error *err)
         rc = compiler->pipeline->runtime_descriptor_build(
             &compiler->descriptor, &compiler->admission, compiler->materialization,
             compiler->source.lowering_context, compiler->semantic_model, err);
-    if (rc == YVEX_OK)
+    if (rc == YVEX_OK && compiler->graph->plan_build)
         rc = compiler->graph->plan_build(
             &compiler->attention, compiler->semantic_model, compiler->materialization,
             compiler->descriptor, &compiler->attention_failure, err);
@@ -373,6 +374,12 @@ static int binding_compiler_writer_build(
     yvex_gguf_writer_plan_options options;
     yvex_gguf_writer_plan_request writer = {0};
 
+    if (!compiler->adapter->tokenizer_policy(
+            &compiler->tokenizer_policy, err)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "compilation.runtime-binding",
+                       "family tokenizer policy compilation failed");
+        return YVEX_ERR_STATE;
+    }
     if (!vocabulary_size) {
         yvex_error_set(err, YVEX_ERR_STATE, "compilation.runtime-binding",
                        "sealed runtime vocabulary is required for artifact emission");
@@ -387,7 +394,17 @@ static int binding_compiler_writer_build(
     writer.input.complete.lowering = yvex_gguf_writer_artifact_lowering_api();
     writer.input.complete.lowering_context = compiler->source.lowering_context;
     writer.input.complete.verification = compiler->source.verification;
+    writer.input.complete.tokenizer_model = compiler->pipeline->tokenizer_model;
     writer.input.complete.tokenizer_architecture = compiler->pipeline->tokenizer_pre;
+    writer.input.complete.tokenizer_prompt_policy =
+        compiler->tokenizer_policy.prompt_policy ==
+                YVEX_TOKENIZER_PROMPT_CONVERSATION
+            ? NULL
+            : compiler->tokenizer_policy.direct_prompt_name;
+    writer.input.complete.tokenizer_unk_present =
+        compiler->tokenizer_policy.unk_present;
+    writer.input.complete.tokenizer_unk_token_id =
+        compiler->tokenizer_policy.unk_token_id;
     writer.input.complete.tokenizer_vocabulary_size = vocabulary_size;
     return yvex_gguf_writer_plan_build(
         &compiler->writer, &writer, &compiler->writer_failure, err);
@@ -434,7 +451,8 @@ static int binding_compiler_prepare(
         !compiler->adapter->speculation_policy(
             yvex_runtime_descriptor_summary_get(compiler->descriptor),
             &compiler->speculation_policy) ||
-        !compiler->adapter->tokenizer_policy(&compiler->tokenizer_policy, err)) {
+        yvex_tokenizer_family_policy_validate(
+            &compiler->tokenizer_policy, err) != YVEX_OK) {
         yvex_error_set(err, YVEX_ERR_STATE, "compilation.runtime-binding",
                        "family execution envelope compilation failed");
         return YVEX_ERR_STATE;

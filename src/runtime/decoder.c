@@ -115,15 +115,16 @@ static int decoder_physical_invoke(void *opaque, const yvex_program_device_invoc
     yvex_runtime_decoder_execution_context *c = opaque;
     const char *name = r->step->implementation;
     int delta = !strcmp(name, "gated_delta.bf16.f32state.v1");
+    int ssd = !strcmp(name, "selective_ssd.cpu.f32state.v1");
     int attention = !strcmp(name, "gated_causal.bf16.v1");
     unsigned long long started = yvex_core_monotonic_ns();
     int rc;
-    if (delta || attention) {
+    if (delta || ssd || attention) {
         yvex_program_sequence_request options = {c->program_request->input_identity,
             c->options.cancel_requested, c->options.cancel_context};
         rc = yvex_program_sequence_invoke(c->program_sequence, r, &options, facts, err);
         if (rc == YVEX_OK) {
-            c->program_result->recurrent_layers += (unsigned int)delta;
+            c->program_result->recurrent_layers += (unsigned int)(delta || ssd);
             c->program_result->attention_layers += (unsigned int)attention;
             c->program_result->layers_executed++;
         }
@@ -167,9 +168,17 @@ static int decoder_remaining(yvex_runtime_decoder_execution_context *c, unsigned
 static int decoder_physical_open(yvex_runtime_decoder_execution_context *c, yvex_error *err)
 {
     static const yvex_program_device_kernel implementations[] = {
-        {"embedding.bf16.v1", decoder_physical_invoke}, {"linear.bf16.f32acc.v1", decoder_physical_invoke},
-        {"rms_norm.bf16.v1", decoder_physical_invoke}, {"silu_product.bf16.v1", decoder_physical_invoke},
-        {"add.bf16.v1", decoder_physical_invoke}, {"gated_delta.bf16.f32state.v1", decoder_physical_invoke},
+        {"embedding.bf16.v1", decoder_physical_invoke},
+        {"embedding.encoded.f32.v1", decoder_physical_invoke},
+        {"linear.bf16.f32acc.v1", decoder_physical_invoke},
+        {"linear.encoded.f32.v1", decoder_physical_invoke},
+        {"rms_norm.bf16.v1", decoder_physical_invoke},
+        {"rms_norm.f32.v1", decoder_physical_invoke},
+        {"silu_product.bf16.v1", decoder_physical_invoke},
+        {"add.bf16.v1", decoder_physical_invoke},
+        {"add.f32.v1", decoder_physical_invoke},
+        {"gated_delta.bf16.f32state.v1", decoder_physical_invoke},
+        {"selective_ssd.cpu.f32state.v1", decoder_physical_invoke},
         {"gated_causal.bf16.v1", decoder_physical_invoke}};
     const yvex_program_physical_summary *s = yvex_program_physical_summary_get(c->physical);
     const yvex_program_physical_value *output = yvex_program_physical_value_at(c->physical,
@@ -267,6 +276,9 @@ int yvex_runtime_decoder_execution_context_open(
     const yvex_runtime_decoder_execution_options *options, yvex_error *err)
 {
     yvex_runtime_decoder_execution_context *context;
+    const yvex_program_physical *output;
+    const yvex_program_physical_summary *program;
+    const yvex_program_physical_value *output_input, *output_result;
     int rc = YVEX_OK;
     if (out) *out = NULL;
     if (!out || !model || !session || !options || !options->context_capacity ||
@@ -287,27 +299,53 @@ int yvex_runtime_decoder_execution_context_open(
     context->options = *options;
     const yvex_runtime_logits_plan_summary *producer = context->model_view ? context->model_view->output_head : NULL;
     const yvex_runtime_binding_summary *binding = context->model_view ? context->model_view->binding : NULL;
-    /* The persisted output binding retains its producer lineage. It supplies no
-     * execution topology: geometry and state populations come from physical IR. */
-    context->report_identity = producer ? producer->decoder_plan_identity : NULL;
     context->physical = context->model_view ?
         yvex_compiled_model_plan_forward(context->model_view->compiled_plan) : NULL;
+    output = context->model_view
+                 ? yvex_compiled_model_plan_output(
+                       context->model_view->compiled_plan)
+                 : NULL;
+    program = yvex_program_physical_summary_get(context->physical);
+    output_input = yvex_program_physical_value_at(output, 0u);
+    output_result = yvex_program_physical_value_at(output, 2u);
+    /* Compatibility plans retain their exact producer identity. A native
+     * compiler program reports its authenticated physical identity directly;
+     * no decoder-shaped semantic view is reconstructed. */
+    context->report_identity = producer ? producer->decoder_plan_identity
+                                        : program ? program->identity : NULL;
     if (!context->model_view || !context->session_view ||
-        context->session_view->engine != model || !producer || !binding || !context->physical ||
-        producer->producer_kind != YVEX_EXECUTION_PLAN_DECODER ||
-        !yvex_sha256_hex_valid(context->report_identity) ||
-        binding->semantic_maximum_context < options->context_capacity ||
-        yvex_backend_kind_of(context->session_view->backend) !=
-            YVEX_BACKEND_KIND_CUDA ||
-        !context->session_view->sequence_state ||
-        pthread_mutex_init(&context->mutex, NULL) != 0)
+        context->session_view->engine != model)
         rc = decoder_refuse(err, YVEX_ERR_STATE, "runtime.decoder.open",
-                            "admitted CUDA decoder resources are unavailable");
+                            "runtime model and session views are not paired");
+    else if (!binding || !context->physical || !output)
+        rc = decoder_refuse(err, YVEX_ERR_STATE, "runtime.decoder.open",
+                            "compiled forward/output program is unavailable");
+    else if ((producer && producer->producer_kind != YVEX_EXECUTION_PLAN_DECODER) ||
+             !yvex_sha256_hex_valid(context->report_identity))
+        rc = decoder_refuse(err, YVEX_ERR_FORMAT, "runtime.decoder.open",
+                            "compiled output producer lineage is invalid");
+    else if (binding->semantic_maximum_context < options->context_capacity)
+        rc = decoder_refuse(err, YVEX_ERR_BOUNDS, "runtime.decoder.open",
+                            "decoder context exceeds the compiler-owned envelope");
+    else if (!context->session_view->sequence_state)
+        rc = decoder_refuse(err, YVEX_ERR_STATE, "runtime.decoder.open",
+                            "compiled recurrent state provider is unavailable");
+    else if (pthread_mutex_init(&context->mutex, NULL) != 0)
+        rc = decoder_refuse(err, YVEX_ERR_STATE, "runtime.decoder.open",
+                            "decoder lifecycle synchronization is unavailable");
     else
         context->mutex_ready = 1;
     if (rc == YVEX_OK) rc = decoder_physical_open(context, err);
-    if (rc == YVEX_OK && (producer->hidden_width != context->interface.hidden_width ||
-        producer->vocabulary_size != context->interface.vocabulary_size))
+    if (rc == YVEX_OK &&
+        ((producer &&
+          (producer->hidden_width != context->interface.hidden_width ||
+           producer->vocabulary_size != context->interface.vocabulary_size)) ||
+         (!producer &&
+          (!output_input || !output_result || output_input->type.rank != 2u ||
+           output_result->type.rank != 2u ||
+           output_input->type.shape[1].extent != context->interface.hidden_width ||
+           output_result->type.shape[1].extent !=
+               context->interface.vocabulary_size))))
         rc = decoder_refuse(err, YVEX_ERR_FORMAT, "runtime.program.output",
             "output binding contradicts the admitted computational signature");
     if (rc != YVEX_OK) {
@@ -448,12 +486,17 @@ static int decoder_state_summary(
         context && context->session_view
             ? context->session_view->attention_state_provider
             : NULL;
-    if (!provider || !provider->summary ||
-        provider->summary(provider->context, attention, err) != YVEX_OK ||
+    if (!context || !attention || !sequence || !context->session_view ||
         yvex_sequence_state_summary_copy(context->session_view->sequence_state,
                                          sequence, err) != YVEX_OK)
         return decoder_refuse(err, YVEX_ERR_STATE, "runtime.decoder.state",
                               "mixed decoder sequence state is unavailable");
+    memset(attention, 0, sizeof(*attention));
+    if (!context->interface.attention_operations) return YVEX_OK;
+    if (!provider || !provider->summary ||
+        provider->summary(provider->context, attention, err) != YVEX_OK)
+        return decoder_refuse(err, YVEX_ERR_STATE, "runtime.decoder.state",
+                              "attention-bearing decoder state is unavailable");
     return YVEX_OK;
 }
 
@@ -472,6 +515,7 @@ static int decoder_prepare_attention_state(
         return decoder_refuse(
             err, YVEX_ERR_INVALID_ARG, "runtime.decoder.state-prepare",
             "decoder state preparation requires complete execution facts");
+    if (!context->interface.attention_operations) return YVEX_OK;
     if (attention->prepared_layer_count) return YVEX_OK;
     if (request->token_start)
         return decoder_refuse(
@@ -500,19 +544,22 @@ static int decoder_request_validate(
     const yvex_graph_attention_state_summary *attention,
     const yvex_sequence_state_summary *sequence, yvex_error *err)
 {
+    int attention_required;
     unsigned long long index, end;
+    attention_required = context && context->interface.attention_operations;
     if (!context || !request || !request->token_ids || !request->token_count ||
         request->token_count > context->options.token_capacity ||
         !yvex_sha256_hex_valid(request->input_identity) ||
         !yvex_core_u64_add(request->token_start, request->token_count, &end) ||
         end > context->options.context_capacity ||
-        !attention || attention->transaction_active ||
-        attention->prepared_layer_count != attention->layer_count ||
-        !attention->position_consistent ||
-        attention->next_position != request->token_start ||
-        attention->capacity < end ||
         !sequence || sequence->transaction_active ||
-        sequence->committed_position != request->token_start)
+        sequence->committed_position != request->token_start ||
+        (attention_required &&
+         (!attention || attention->transaction_active ||
+          attention->prepared_layer_count != attention->layer_count ||
+          !attention->position_consistent ||
+          attention->next_position != request->token_start ||
+          attention->capacity < end)))
         return decoder_refuse(
             err, YVEX_ERR_STATE, "runtime.decoder.request",
             "decoder input must extend the exact committed mixed-state position");
@@ -528,21 +575,29 @@ static int decoder_request_validate(
 static int decoder_persistent_identity(
     const yvex_graph_attention_state_summary *attention,
     const yvex_sequence_state_summary *sequence,
+    int attention_required,
     char output[YVEX_SHA256_HEX_CAP])
 {
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     yvex_sha256_init(&hash);
-    if (!attention || !sequence || !output ||
-        !yvex_sha256_hex_valid(attention->state_content_identity) ||
+    if (!sequence || !output ||
+        (attention_required &&
+         (!attention ||
+          !yvex_sha256_hex_valid(attention->state_content_identity))) ||
         !yvex_sha256_hex_valid(sequence->plan_identity) ||
         !yvex_sha256_update_text(
-            &hash, "yvex.runtime.decoder.mixed-state.v1") ||
-        !yvex_sha256_update_text(&hash, attention->state_content_identity) ||
+            &hash, attention_required
+                       ? "yvex.runtime.decoder.mixed-state.v1"
+                       : "yvex.runtime.decoder.sequence-state.v1") ||
+        (attention_required &&
+         !yvex_sha256_update_text(&hash, attention->state_content_identity)) ||
         !yvex_sha256_update_text(&hash, sequence->plan_identity) ||
-        !yvex_sha256_update_u64(&hash, attention->generation) ||
+        (attention_required &&
+         !yvex_sha256_update_u64(&hash, attention->generation)) ||
         !yvex_sha256_update_u64(&hash, sequence->generation) ||
-        !yvex_sha256_update_u64(&hash, attention->next_position) ||
+        (attention_required &&
+         !yvex_sha256_update_u64(&hash, attention->next_position)) ||
         !yvex_sha256_update_u64(&hash, sequence->committed_position) ||
         !yvex_sha256_final(&hash, digest))
         return 0;
@@ -623,6 +678,7 @@ static int decoder_publish_result(
     yvex_runtime_identity_copy(result->input_identity,
                                run->request->input_identity);
     if (!decoder_persistent_identity(attention, sequence,
+                                     context->interface.attention_operations != 0u,
                                      result->persistent_state_identity))
         return decoder_refuse(err, YVEX_ERR_STATE,
                               "runtime.decoder.result",
@@ -707,9 +763,13 @@ static int decoder_execute_locked(
         rc = decoder_state_summary(context, &attention_after, &sequence_after,
                                    err);
     if (rc == YVEX_OK &&
-        (attention_after.next_position !=
+        ((context->interface.attention_operations &&
+          attention_after.next_position !=
+              request->token_start + request->token_count) ||
+         sequence_after.committed_position !=
              request->token_start + request->token_count ||
-         sequence_after.committed_position != attention_after.next_position ||
+         (context->interface.attention_operations &&
+          sequence_after.committed_position != attention_after.next_position) ||
          result->layers_executed != context->interface.attention_operations + context->interface.recurrent_operations ||
          result->attention_layers != context->interface.attention_operations ||
          result->recurrent_layers != context->interface.recurrent_operations))

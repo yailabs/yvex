@@ -74,7 +74,8 @@ typedef struct {
 
 typedef enum {
     YVEX_TOKENIZER_MODEL_FIXTURE = 0,
-    YVEX_TOKENIZER_MODEL_BPE_BYTELEVEL
+    YVEX_TOKENIZER_MODEL_BPE_BYTELEVEL,
+    YVEX_TOKENIZER_MODEL_BPE_METASPACE
 } yvex_tokenizer_model_policy;
 
 typedef enum {

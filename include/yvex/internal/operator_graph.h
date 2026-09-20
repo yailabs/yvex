@@ -102,6 +102,11 @@ int yvex_operator_graph_ir_build_decoder(
     const yvex_semantic_model_ir *semantic_model,
     const struct yvex_attention_plan *attention,
     const struct yvex_attention_plan *draft_attention, yvex_error *err);
+int yvex_operator_graph_ir_build_program(
+    yvex_operator_graph_ir **out,
+    const yvex_semantic_model_ir *semantic_model,
+    const struct yvex_attention_plan *attention,
+    const struct yvex_attention_plan *draft_attention, yvex_error *err);
 const yvex_operator_graph_summary *yvex_operator_graph_ir_summary(
     const yvex_operator_graph_ir *graph);
 const yvex_operator_node *yvex_operator_graph_ir_node_at(

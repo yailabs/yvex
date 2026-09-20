@@ -208,10 +208,16 @@ static int model_execution_request_validate(
     unsigned long long attention_layers;
     const char *identities[YVEX_MODEL_EXECUTION_IDENTITY_COUNT];
     size_t index;
-    int routed_complete, dense_complete, schema_v2;
+    int routed_complete, dense_complete, pure_sequence, schema_v2;
 
     schema_v2 = request &&
                 request->schema_version == YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V2;
+    pure_sequence = schema_v2 && request && request->layer_count &&
+                    request->sequence_mixer_layers == request->layer_count &&
+                    !request->swa_layers && !request->csa_layers &&
+                    !request->hca_layers && !request->attention_heads &&
+                    !request->kv_heads && !request->head_width &&
+                    !request->dense_ffn_width;
     routed_complete = request && request->routed_experts && request->experts_per_row &&
                       request->experts_per_row <= request->routed_experts &&
                       request->routed_ffn_width &&
@@ -223,7 +229,7 @@ static int model_execution_request_validate(
     dense_complete = request && !request->routed_experts && !request->experts_per_row &&
                      !request->shared_experts && !request->routed_ffn_width &&
                      !request->shared_ffn_width && !request->hash_router_layer_count &&
-                     (schema_v2 ? request->dense_ffn_width != 0ull
+                     (schema_v2 ? (request->dense_ffn_width != 0ull || pure_sequence)
                                 : request->dense_ffn_width == 0ull) &&
                      request->routed_scaling_factor == 0.0 &&
                      request->activation_limit == 0.0;
@@ -235,7 +241,11 @@ static int model_execution_request_validate(
     if (!request->maximum_context || !request->original_context ||
         request->original_context > request->maximum_context ||
         request->rope_scaling > YVEX_MODEL_ROPE_SCALING_YARN ||
-        !request->rope_theta || !request->rope_scaling_factor ||
+        (!pure_sequence && (!request->rope_theta || !request->rope_scaling_factor)) ||
+        (pure_sequence &&
+         (request->rope_scaling != YVEX_MODEL_ROPE_SCALING_NONE ||
+          request->rope_theta || request->rope_scaling_factor ||
+          request->rope_beta_fast || request->rope_beta_slow)) ||
         (request->rope_scaling == YVEX_MODEL_ROPE_SCALING_YARN &&
          (!request->compressed_rope_theta ||
           request->rope_beta_fast <= request->rope_beta_slow)) ||
@@ -244,7 +254,8 @@ static int model_execution_request_validate(
         return model_execution_refuse(
             err, YVEX_ERR_INVALID_ARG, "source-derived context or RoPE geometry is invalid");
     if (!request->layer_count || !request->hidden_width || !request->vocabulary_size ||
-        !request->attention_heads || !request->kv_heads || !request->head_width)
+        (!pure_sequence &&
+         (!request->attention_heads || !request->kv_heads || !request->head_width)))
         return model_execution_refuse(
             err, YVEX_ERR_INVALID_ARG, "source-derived model geometry is incomplete");
     if (!isfinite(request->normalization_epsilon) ||
@@ -1284,7 +1295,13 @@ static const char *const tensor_role_names[YVEX_TENSOR_ROLE_COUNT] = {
         "sequence_mixer_qkv_projection",
     [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_OUTPUT_GATE] = "sequence_mixer_output_gate",
     [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_OUTPUT_NORM] = "sequence_mixer_output_norm",
-    [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_OUTPUT] = "sequence_mixer_output"
+    [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_OUTPUT] = "sequence_mixer_output",
+    [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_BLOCK_NORM] = "sequence_mixer_block_norm",
+    [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_INPUT_PROJECTION] =
+        "sequence_mixer_input_projection",
+    [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_CONVOLUTION_BIAS] =
+        "sequence_mixer_convolution_bias",
+    [YVEX_TENSOR_ROLE_SEQUENCE_MIXER_SKIP] = "sequence_mixer_skip"
 };
 
 const char *yvex_tensor_role_name(yvex_tensor_role role)

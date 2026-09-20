@@ -363,11 +363,17 @@ static int physical_numeric_verify(const yvex_program_physical *p,
             (v->type.scalar == YVEX_IR_BF16 || v->type.scalar == YVEX_IR_F32)) continue;
         int decoded_norm = !strcmp(s->implementation, "rms_norm.f32.v1") &&
             (v->qtype == YVEX_GGUF_QTYPE_F32 || v->qtype == YVEX_GGUF_QTYPE_BF16);
-        if ((!encoded && v->type.scalar != (f32 ? YVEX_IR_F32 : YVEX_IR_BF16)) ||
+        if ((!encoded && !decoded_norm &&
+             v->type.scalar != (f32 ? YVEX_IR_F32 : YVEX_IR_BF16)) ||
             (v->parameter && !encoded && !decoded_norm &&
              v->qtype != (f32 ? YVEX_GGUF_QTYPE_F32 : YVEX_GGUF_QTYPE_BF16)))
-            return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
-                "operand precision requires another physical implementation");
+            {
+                yvex_error_setf(err, YVEX_ERR_UNSUPPORTED,
+                    "compiler.program.physical",
+                    "operand precision requires another physical implementation: %s",
+                    s->implementation);
+                return YVEX_ERR_UNSUPPORTED;
+            }
     }
     for (i = 0u; i < s->result_count; ++i) {
         const yvex_program_physical_value *v = &p->values[s->results[i]];

@@ -144,7 +144,11 @@ typedef struct {
     const yvex_gguf_writer_lowering_api *lowering;
     const void *lowering_context;
     const yvex_source_verification *verification;
+    const char *tokenizer_model;
     const char *tokenizer_architecture;
+    const char *tokenizer_prompt_policy;
+    unsigned int tokenizer_unk_token_id;
+    int tokenizer_unk_present;
     unsigned long long tokenizer_vocabulary_size;
 } yvex_gguf_writer_complete_input;
 typedef struct {

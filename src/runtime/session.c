@@ -63,14 +63,20 @@ int yvex_runtime_device_view_bind(
     yvex_model_engine_summary model_summary;
     yvex_runtime_session_summary session_summary;
     yvex_runtime_residency_summary residency;
-    yvex_graph_attention_state_summary state;
-    if (!out || !model_view || !session_view || !provider || !provider->summary ||
+    yvex_graph_attention_state_summary state = {0};
+    yvex_sequence_state_summary sequence = {0};
+    if (!out || !model_view || !session_view ||
         !profile || !tensor || !publication ||
         yvex_model_engine_summary_copy(model, &model_summary, err) != YVEX_OK ||
         yvex_runtime_session_summary_copy(session, &session_summary, err) != YVEX_OK ||
         yvex_runtime_residency_snapshot(model_view->residency, &residency,
                                         NULL, NULL, err) != YVEX_OK ||
-        provider->summary(provider->context, &state, err) != YVEX_OK ||
+        (provider
+             ? (!provider->summary ||
+                provider->summary(provider->context, &state, err) != YVEX_OK)
+             : (!session_view->sequence_state ||
+                yvex_sequence_state_summary_copy(
+                    session_view->sequence_state, &sequence, err) != YVEX_OK)) ||
         !runtime_execution_profile_matches(profile, model, session)) {
         yvex_error_set(err, YVEX_ERR_STATE, "runtime.execution.device-view",
                        "device value generations are unavailable");
@@ -85,8 +91,10 @@ int yvex_runtime_device_view_bind(
     out->tensor = tensor;
     out->element_offset = offset;
     out->resource_generation = residency.generation;
-    out->session_generation = session_summary.workspace_generation;
-    out->state_generation = state.generation;
+    out->session_generation = session_summary.workspace_generation
+                                  ? session_summary.workspace_generation
+                                  : session_summary.sequence_state_generation;
+    out->state_generation = provider ? state.generation : sequence.generation;
     out->rows = rows;
     out->columns = columns;
     out->element_bytes = sizeof(float);
@@ -851,13 +859,17 @@ int yvex_runtime_session_reset_persistent_state(yvex_runtime_execution_session *
             0ull, "runtime session workspace lock is unavailable", err,
             YVEX_ERR_STATE);
     if (!session->summary.open || session->summary.busy || session->closing ||
-        !session->state_residency || !session->attention_state_provider_ready) {
+        (!session->attention_state_provider_ready && !session->sequence_state) ||
+        (session->attention_state_provider_ready && !session->state_residency)) {
         rc = yvex_runtime_private_reject(
             failure, YVEX_MODEL_ENGINE_FAILURE_BUSY, "session-state", 0ull,
             1ull, "idle open session is required", err, YVEX_ERR_STATE);
     } else {
-        rc = yvex_runtime_state_residency_reset(session->state_residency, err);
-        if (rc == YVEX_OK)
+        rc = session->state_residency
+                 ? yvex_runtime_state_residency_reset(
+                       session->state_residency, err)
+                 : YVEX_OK;
+        if (rc == YVEX_OK && session->attention_state_provider_ready)
             rc = session->attention_state_provider.reset(
                 session->attention_state_provider.context, &state_failure, err);
         if (rc == YVEX_OK && session->draft_state_residency)

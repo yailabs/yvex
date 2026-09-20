@@ -229,6 +229,31 @@ static int prepare_plan_matches_artifact(
            plan->encoded_bytes == admission->payload_bytes;
 }
 
+static const char *prepare_plan_artifact_mismatch(
+    const yvex_quant_plan_file_summary *plan,
+    const yvex_complete_artifact_admission *admission)
+{
+    if (!plan || !plan->complete) return "physical-plan";
+    if (!admission || !admission->complete) return "artifact-admission";
+    if (strcmp(plan->profile_identity, admission->profile_identity))
+        return "profile-identity";
+    if (strcmp(plan->physical_variant_identity, admission->profile_identity))
+        return "physical-variant-identity";
+    if (strcmp(plan->payload_plan_identity, admission->payload_plan_identity))
+        return "payload-plan-identity";
+    if (strcmp(plan->required_payload_identity, admission->payload_identity))
+        return "payload-identity";
+    if (strcmp(plan->transform_identity, admission->transform_identity))
+        return "transform-identity";
+    if (plan->source_snapshot_identity != admission->source_snapshot_identity)
+        return "source-snapshot-identity";
+    if (plan->mapping_identity != admission->mapping_identity)
+        return "mapping-identity";
+    if (plan->encoded_bytes != admission->payload_bytes)
+        return "encoded-bytes";
+    return NULL;
+}
+
 static int prepare_plan_discover(
     const char *directory, const yvex_complete_artifact_admission *admission,
     yvex_quant_plan_file_summary *selected, char out[YVEX_PATH_CAP])
@@ -303,7 +328,10 @@ static int prepare_artifact_imatrix_matches(
 
     if (!gguf || !plan) return 0;
     value = yvex_gguf_metadata_find(gguf, "yvex.quant.imatrix.identity");
-    if (!strcmp(plan->imatrix_identity, "none")) return value == NULL;
+    if (!strcmp(plan->imatrix_identity, "none"))
+        return value == NULL ||
+               (yvex_gguf_value_as_string(value, &text, &count) == YVEX_OK &&
+                count == 4ull && !memcmp(text, "none", 4u));
     expected = strlen(plan->imatrix_identity);
     return value && yvex_gguf_value_as_string(value, &text, &count) == YVEX_OK &&
            count == expected && memcmp(text, plan->imatrix_identity, expected) == 0;
@@ -818,8 +846,11 @@ static int prepare_existing_artifact(const model_prepare_plan *plan, yvex_error 
         rc = plan->execution->compiler->binding_pipeline->artifact_admit(artifact, &admission, &failure, err);
     if (rc == YVEX_OK && (!prepare_plan_matches_artifact(&sealed, &admission) ||
                          !prepare_artifact_imatrix_matches(gguf, &sealed))) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "model.prepare",
-            "existing output does not match the exact transformation plan");
+        const char *field = prepare_plan_artifact_mismatch(&sealed, &admission);
+        yvex_error_setf(
+            err, YVEX_ERR_FORMAT, "model.prepare",
+            "existing output does not match the exact transformation plan: %s",
+            field ? field : "imatrix-identity");
         rc = YVEX_ERR_FORMAT;
     }
     yvex_gguf_close(gguf);

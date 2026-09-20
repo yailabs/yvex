@@ -30,7 +30,8 @@ typedef struct yvex_logits_family_policy {
 typedef enum {
     YVEX_EXECUTION_PLAN_UNKNOWN = 0,
     YVEX_EXECUTION_PLAN_TRANSFORMER,
-    YVEX_EXECUTION_PLAN_DECODER
+    YVEX_EXECUTION_PLAN_DECODER,
+    YVEX_EXECUTION_PLAN_PROGRAM
 } yvex_execution_plan_kind;
 
 typedef struct yvex_runtime_logits_plan_summary {

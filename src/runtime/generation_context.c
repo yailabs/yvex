@@ -322,13 +322,23 @@ static int generation_capacity_graph_geometry(
     layer_counts[0] = binding->summary.layer_count;
     layer_counts[1] = binding->summary.draft_layer_count;
     generation_capacity_geometry_initialize(geometry);
+    if ((!layers[0] || !layer_counts[0]) && program) {
+        yvex_program_token_interface interface;
+        if (yvex_program_physical_token_interface(
+                program, &interface, err) != YVEX_OK)
+            return yvex_error_code(err);
+        if (interface.attention_operations)
+            return generation_context_refuse(
+                err, YVEX_ERR_STATE,
+                "attention-bearing program has no admitted attention plan");
+    }
     for (plan_index = 0ull; plan_index < 2ull; ++plan_index) {
         yvex_graph_attention_capacity_request request = {0};
         yvex_graph_attention_capacity_plan *capacity = NULL;
         int rc;
         if (!summaries[plan_index] || !layers[plan_index] ||
             !layer_counts[plan_index]) {
-            if (!plan_index)
+            if (!plan_index && !program)
                 return generation_context_refuse(
                     err, YVEX_ERR_STATE,
                     "model state geometry requires an unavailable attention plan");
@@ -858,9 +868,17 @@ static int generation_attention_workspace(
             YVEX_ATTENTION_EVIDENCE_NONE;
     if (workspace) *workspace = 0ull;
     if (context && yvex_compiled_model_plan_forward(
-                       context->model_view->compiled_plan))
+                       context->model_view->compiled_plan)) {
+        yvex_program_token_interface interface;
+        int rc = yvex_program_physical_token_interface(
+            yvex_compiled_model_plan_forward(
+                context->model_view->compiled_plan),
+            &interface, err);
+        if (rc != YVEX_OK) return rc;
+        if (!interface.attention_operations) return YVEX_OK;
         return generation_decoder_attention_workspace(
             context, backend, workspace, err);
+    }
     if (!binding || !capacity || !physical_rows || !workspace)
         return generation_context_refuse(
             err, YVEX_ERR_INVALID_ARG,
@@ -1405,6 +1423,12 @@ static int generation_execution_owners_open(
             &context->transformer, context->model, context->session,
             &transformer, workspace_bytes, err);
     }
+    if (rc != YVEX_OK && !yvex_error_is_set(err))
+        return generation_context_refuse(
+            err, rc,
+            decoder_producer
+                ? "compiled token-forward execution owner refused without a diagnostic"
+                : "Transformer execution owner refused without a diagnostic");
     logits.maximum_rows = options->mode == YVEX_GENERATION_MODE_SPECULATIVE
                               ? YVEX_SPECULATION_MAX_BLOCK + 1ull
                               : options->compatible_operation_batching
@@ -1425,6 +1449,9 @@ static int generation_execution_owners_open(
             &context->logits, context->model, context->session,
             yvex_runtime_transformer_context_plan(context->transformer),
             &logits, err);
+    if (rc != YVEX_OK && !yvex_error_is_set(err))
+        return generation_context_refuse(
+            err, rc, "compiled output execution owner refused without a diagnostic");
     *logits_plan = rc == YVEX_OK
                        ? yvex_runtime_logits_plan_summary_get(context->logits)
                        : NULL;
@@ -1445,6 +1472,9 @@ static int generation_execution_owners_open(
     rc = yvex_runtime_sampling_context_open(
         &context->sampling, *logits_plan, &context->options.sampling_policy,
         &sampling, err);
+    if (rc != YVEX_OK && !yvex_error_is_set(err))
+        return generation_context_refuse(
+            err, rc, "sampling execution owner refused without a diagnostic");
     if (rc != YVEX_OK || options->mode != YVEX_GENERATION_MODE_SPECULATIVE)
         return rc;
     speculation.backend = options->backend;
@@ -1579,10 +1609,17 @@ int yvex_runtime_generation_context_open(
     if (rc != YVEX_OK) goto failure;
     rc = generation_execution_profile_build(context, err);
     if (rc != YVEX_OK) goto failure;
-    if (context->capacity_plan.schema_version) {
+    if (context->capacity_plan.schema_version &&
+        yvex_runtime_session_view_get(session)->attention_state_provider) {
         rc = yvex_runtime_session_configure_persistent_pages(
             session, &context->capacity_plan, &state_failure, err);
         if (rc != YVEX_OK) goto failure;
+    } else if (context->capacity_plan.schema_version &&
+               context->model_view->attention) {
+        rc = generation_context_refuse(
+            err, YVEX_ERR_STATE,
+            "attention execution has no admitted persistent-state provider");
+        goto failure;
     }
     rc = generation_execution_owners_open(
         context, &context->options, &logits_plan, &execution_workspace, err);
