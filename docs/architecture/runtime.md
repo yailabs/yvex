@@ -221,6 +221,17 @@ Audit and forensic profiles may request bounded host evidence
 or full reference intermediates. Those adapters are explicit and are not
 reachable as a silent production fallback.
 
+Finite-candidate Decision Readout is a separate internal Output Runner above
+the same compiler-owned forward and output programs. It prefills one exact
+prefix once, captures it through the common runtime prefix owner, forks
+isolated candidate sessions, and advances supplied candidate tokens under
+teacher forcing. Complete logits feed stable raw log-likelihood arithmetic;
+the sampling and generation owners are not entered. The typed result binds the
+model, artifact, binding, engine, tokenizer, prefix, candidate population,
+score policy and readout implementation. Any finite-set normalization remains
+explicitly uncalibrated. Candidate semantics and admission remain outside
+YVEX, and this path adds neither a family runtime nor a second backbone.
+
 ## Scheduling and executable work
 
 Scheduling has two scopes:

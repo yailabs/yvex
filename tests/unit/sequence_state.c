@@ -103,10 +103,13 @@ int yvex_test_sequence_state(void)
     yvex_gated_delta_plan mixer;
     yvex_sequence_state_binding bindings[2];
     yvex_sequence_state_plan plan;
-    yvex_sequence_state *state = NULL, *forked = NULL;
+    yvex_sequence_state *state = NULL, *forked = NULL, *restored = NULL;
     yvex_sequence_state_summary summary;
     yvex_sequence_state_geometry geometry;
     yvex_sequence_state_view committed;
+    char source_identity[YVEX_SHA256_HEX_CAP] = {0};
+    char fork_identity[YVEX_SHA256_HEX_CAP] = {0};
+    char restored_identity[YVEX_SHA256_HEX_CAP] = {0};
     yvex_error err;
 
     if (sequence_state_measure_refusals() != 0) return 1;
@@ -162,10 +165,23 @@ int yvex_test_sequence_state(void)
 
     YVEX_TEST_ASSERT(
         yvex_sequence_state_fork(&forked, state, &err) == YVEX_OK &&
+            yvex_sequence_state_open(&restored, &plan, &err) == YVEX_OK &&
+            yvex_sequence_state_restore(restored, state, &err) == YVEX_OK &&
+            yvex_sequence_state_committed_identity(
+                state, source_identity, &err) == YVEX_OK &&
+            yvex_sequence_state_committed_identity(
+                forked, fork_identity, &err) == YVEX_OK &&
+            yvex_sequence_state_committed_identity(
+                restored, restored_identity, &err) == YVEX_OK &&
+            strcmp(source_identity, fork_identity) == 0 &&
+            strcmp(source_identity, restored_identity) == 0 &&
             yvex_sequence_state_committed(forked, 3ull, &committed, &err) ==
                 YVEX_OK &&
             committed.convolution[0] == 3.0f,
-        "fork receives exact committed mixed sequence state");
+        "fork and restore receive exact identity-bound committed sequence state");
+    YVEX_TEST_ASSERT(
+        yvex_sequence_state_restore(restored, state, &err) == YVEX_ERR_STATE,
+        "restore refuses a non-pristine destination instead of merging state");
 
     YVEX_TEST_ASSERT(
         yvex_sequence_state_begin(state, 2ull, 1ull, &err) == YVEX_OK &&
@@ -190,10 +206,14 @@ int yvex_test_sequence_state(void)
 
     YVEX_TEST_ASSERT(
         yvex_sequence_state_reset(state, &err) == YVEX_OK &&
+            yvex_sequence_state_committed_identity(
+                state, source_identity, &err) == YVEX_OK &&
+            strcmp(source_identity, fork_identity) != 0 &&
             yvex_sequence_state_committed(state, 3ull, &committed, &err) ==
                 YVEX_OK &&
             committed.convolution[0] == 0.0f && committed.recurrent[0] == 0.0f,
-        "reset clears recurrent and convolution state together");
+        "reset clears state and changes content identity without mutating forks");
+    yvex_sequence_state_close(&restored);
     yvex_sequence_state_close(&forked);
     YVEX_TEST_ASSERT(
         yvex_sequence_state_invalidate(state, &err) == YVEX_OK &&
@@ -202,7 +222,9 @@ int yvex_test_sequence_state(void)
             summary.invalidated,
         "engine invalidation makes retained recurrent state unusable");
     yvex_sequence_state_close(&state);
-    YVEX_TEST_ASSERT(!forked && !state, "close releases recurrent state owners");
+    YVEX_TEST_ASSERT(
+        !restored && !forked && !state,
+        "close releases restored, forked, and source recurrent state owners");
 
     bindings[1].layer_index = 1ull;
     YVEX_TEST_ASSERT(

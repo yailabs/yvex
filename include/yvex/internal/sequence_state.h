@@ -45,6 +45,12 @@ int yvex_sequence_state_attach_device(
 int yvex_sequence_state_fork(
     yvex_sequence_state **out, const yvex_sequence_state *source,
     yvex_error *err);
+int yvex_sequence_state_restore(
+    yvex_sequence_state *destination, const yvex_sequence_state *source,
+    yvex_error *err);
+int yvex_sequence_state_committed_identity(
+    const yvex_sequence_state *state,
+    char output[YVEX_SHA256_HEX_CAP], yvex_error *err);
 int yvex_sequence_state_begin(
     yvex_sequence_state *state, unsigned long long token_start,
     unsigned long long token_count, yvex_error *err);

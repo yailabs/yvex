@@ -583,7 +583,7 @@ int yvex_sequence_state_fork(
     yvex_sequence_state_plan plan;
     yvex_sequence_state_binding *bindings;
     yvex_sequence_state *child = NULL;
-    size_t binding_bytes, state_bytes;
+    size_t binding_bytes;
     unsigned long long index;
     int rc;
 
@@ -611,11 +611,76 @@ int yvex_sequence_state_fork(
     rc = yvex_sequence_state_open(&child, &plan, err);
     free(bindings);
     if (rc != YVEX_OK) return rc;
-    state_bytes = (size_t)source->bank_values * sizeof(float);
-    memcpy(child->banks[0], source->banks[source->committed_bank], state_bytes);
-    child->committed_position = source->committed_position;
-    child->generation = source->generation;
+    rc = yvex_sequence_state_restore(child, source, err);
+    if (rc != YVEX_OK) {
+        yvex_sequence_state_close(&child);
+        return rc;
+    }
     *out = child;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_sequence_state_restore(
+    yvex_sequence_state *destination, const yvex_sequence_state *source,
+    yvex_error *err)
+{
+    size_t bytes;
+
+    if (!destination || !source || destination == source ||
+        destination->invalidated || source->invalidated ||
+        destination->transaction_active || source->transaction_active ||
+        destination->storage_backend != YVEX_BACKEND_KIND_CPU ||
+        source->storage_backend != YVEX_BACKEND_KIND_CPU ||
+        destination->committed_position || destination->generation ||
+        destination->binding_count != source->binding_count ||
+        destination->bank_values != source->bank_values ||
+        strcmp(destination->plan_identity, source->plan_identity) != 0 ||
+        source->bank_values > SIZE_MAX / sizeof(float))
+        return sequence_state_refuse(
+            err, YVEX_ERR_STATE,
+            "compatible pristine recurrent destination state is required");
+    bytes = (size_t)source->bank_values * sizeof(float);
+    memcpy(destination->banks[0], source->banks[source->committed_bank], bytes);
+    memset(destination->banks[1], 0, bytes);
+    destination->committed_bank = 0u;
+    destination->committed_position = source->committed_position;
+    destination->generation = source->generation;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_sequence_state_committed_identity(
+    const yvex_sequence_state *state,
+    char output[YVEX_SHA256_HEX_CAP], yvex_error *err)
+{
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    size_t bytes;
+
+    if (output) output[0] = '\0';
+    if (!state || !output || state->invalidated || state->transaction_active ||
+        state->storage_backend != YVEX_BACKEND_KIND_CPU ||
+        state->bank_values > SIZE_MAX / sizeof(float) ||
+        !yvex_sha256_hex_valid(state->plan_identity))
+        return sequence_state_refuse(
+            err, YVEX_ERR_STATE,
+            "idle host-authored recurrent state is required for identity");
+    bytes = (size_t)state->bank_values * sizeof(float);
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(
+            &hash, "yvex.runtime.sequence-state-content.v1") ||
+        !yvex_sha256_update_text(&hash, state->plan_identity) ||
+        !yvex_sha256_update_u64(&hash, state->committed_position) ||
+        !yvex_sha256_update_u64(&hash, state->generation) ||
+        !yvex_sha256_update_u64(&hash, state->bank_values) ||
+        !yvex_sha256_update(
+            &hash, state->banks[state->committed_bank], bytes) ||
+        !yvex_sha256_final(&hash, digest))
+        return sequence_state_refuse(
+            err, YVEX_ERR_STATE,
+            "recurrent committed-state identity could not seal");
+    yvex_sha256_hex(digest, output);
     yvex_error_clear(err);
     return YVEX_OK;
 }

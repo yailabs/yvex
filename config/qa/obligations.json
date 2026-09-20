@@ -192,6 +192,17 @@
       "reason": "binding changes require deterministic serialization, stale-version refusal, and executable reopen"
     },
     {
+      "id": "decision-readout",
+      "patterns": ["src/runtime/decision_readout.c", "include/yvex/internal/decision_readout.h",
+                   "src/runtime/prefix.c", "include/yvex/internal/runtime_prefix.h",
+                   "src/runtime/sequence_state.c", "include/yvex/internal/sequence_state.h",
+                   "tests/unit/decision_readout.c", "tests/live/decision_readout_mamba2.c"],
+      "lanes": ["fast", "structural", "numeric", "runtime", "sanitizer", "live"],
+      "tests": ["unit.decision_readout", "unit.sequence_state",
+                "unit.runtime_binding", "live.mamba2.decision-readout"],
+      "reason": "finite-candidate readout requires independent likelihood arithmetic, shared-state isolation, stale refusal, zero sampling and one exact live model vertical"
+    },
+    {
       "id": "runtime-transaction",
       "patterns": ["src/runtime/session.c", "src/runtime/state*.c", "src/runtime/prefix.c", "src/graph/state*.c", "include/yvex/internal/graph_state.h"],
       "lanes": ["fast", "runtime", "sanitizer"],

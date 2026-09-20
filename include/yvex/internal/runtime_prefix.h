@@ -10,6 +10,9 @@ extern "C" {
 #endif
 
 #define YVEX_RUNTIME_SESSION_PREFIX_SCHEMA_V1 1u
+#define YVEX_RUNTIME_SESSION_PREFIX_SCHEMA_V2 2u
+#define YVEX_RUNTIME_SESSION_PREFIX_SCHEMA_CURRENT \
+    YVEX_RUNTIME_SESSION_PREFIX_SCHEMA_V2
 
 typedef struct yvex_runtime_execution_session yvex_runtime_execution_session;
 typedef struct yvex_model_engine_failure yvex_model_engine_failure;
@@ -19,9 +22,13 @@ typedef struct {
     unsigned int schema_version;
     unsigned long long scope_count, committed_sequence_length;
     unsigned long long shared_bytes, mapped_bytes, reference_count;
+    unsigned long long sequence_state_bytes, sequence_state_binding_count;
+    unsigned long long sequence_state_generation;
     char runtime_model_identity[YVEX_SHA256_HEX_CAP];
     char target_prefix_identity[YVEX_SHA256_HEX_CAP];
     char draft_prefix_identity[YVEX_SHA256_HEX_CAP];
+    char sequence_plan_identity[YVEX_SHA256_HEX_CAP];
+    char sequence_prefix_identity[YVEX_SHA256_HEX_CAP];
     char prefix_identity[YVEX_SHA256_HEX_CAP];
 } yvex_runtime_session_prefix_summary;
 

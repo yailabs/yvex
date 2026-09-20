@@ -221,7 +221,38 @@ same initial state.
 
 An idle committed provider may expose a bounded immutable in-memory prefix.
 Attach checks layout, capacity, identity, and empty destination state before
-copy-on-write sharing. This is not a durable cross-process prefix cache.
+copy-on-write sharing. Prefix schema v2 admits the common recurrent sequence
+state as well as attention state: capture authenticates the exact committed
+position, plan and content; attach restores only into an identity-compatible
+pristine state owner. This is not a durable cross-process prefix cache.
+
+## Finite-candidate decision readout
+
+The internal Decision Readout v1 runner is a Program O computational consumer,
+not generation or semantic decision authority. It binds one already-open exact
+model, artifact, runtime binding, engine generation and tokenizer to one
+immutable shared prefix. Each opaque candidate identity names an explicit,
+non-empty token sequence. Candidate branches attach the same common runtime
+prefix into isolated sessions; they never share mutable state with each other
+or publish state into the source session.
+
+For candidate tokens `c1..ck` and prefix `P`, the primary score is the raw
+teacher-forced log-likelihood `sum_i log p(ci | P,c1..c(i-1))`, computed from
+the complete unmodified vocabulary logits with stable log-sum-exp. The result
+also reports token count and mean token log-probability as a distinct derived
+quantity. Normalization across the exact disclosed candidate population is an
+uncalibrated relative distribution. It is not confidence or calibrated
+probability.
+
+Known candidate tokens advance candidate-local state without invoking sampling,
+RNG, emitted-token publication or an autoregressive selection loop. Results
+report prefix forwards, teacher-forced forwards, logits rows, sampling calls,
+generated tokens and non-overlapping mapped/resident/state/workspace facts.
+Cancellation publishes no partial candidate result. Stale engine, binding,
+tokenizer or prefix identity, invalid tokens, context overflow, malformed
+scores and non-finite logits fail closed. This internal v1 contract introduces
+no public ABI, protocol route, calibration state, learned head, second model or
+YAI semantic contract.
 
 ## Scheduling and executable batches
 

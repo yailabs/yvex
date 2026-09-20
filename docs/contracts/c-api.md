@@ -508,6 +508,18 @@ The logits API publishes raw F32 values and field-wise plan, source, residency,
 backend, row, and aggregate identities. It neither repeats final norm nor owns
 persistent state, sampling, tokenizer, or generation policy.
 
+`include/yvex/internal/decision_readout.h` owns internal Decision Readout schema
+v1. It accepts exact token-domain finite candidates over one captured common
+runtime prefix and publishes raw candidate log-likelihood, separately named
+mean token log-probability, and an optional uncalibrated relative candidate
+distribution. Its identities authenticate the admitted model/artifact/binding,
+engine generation, tokenizer, compiled forward/output programs, shared prefix,
+ordered opaque candidate population, score policy and result. Resource facts
+keep mapped package, prepared storage, host/device residency, shared/candidate
+state, workspace and logits buffers separate. The header is non-installed: it
+does not establish a public C ABI, wire route, sampling policy, calibration,
+semantic Decision authority or application ranking contract.
+
 ### Internal Real-Logits Sampling Boundary
 
 `include/yvex/internal/sampling.h` owns the non-installed family-neutral

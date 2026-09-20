@@ -43,6 +43,7 @@ include/yvex/internal/evidence.h	runtime	runtime.evidence	generic	private	intern
 include/yvex/internal/execution_transaction.h	runtime	runtime.execution_transaction	generic	private	internal-abi	runtime,graph,tests	interface	none
 include/yvex/internal/family_catalog.h	graph	graph.family_catalog	generic	private	internal-abi	graph.family,graph	interface	none
 include/yvex/internal/generation.h	runtime	runtime.generation	generic	private	internal-abi	runtime,cli,tests	interface	none
+include/yvex/internal/decision_readout.h	runtime	runtime.decision_readout	generic	private	internal-abi	runtime,tests	interface	none
 include/yvex/internal/logits.h	runtime	runtime.logits	generic	private	internal-abi	runtime,cli,tests	interface	none
 include/yvex/internal/sampling.h	runtime	runtime.sampling	generic	private	internal-abi	runtime,cli,tests	interface	none
 include/yvex/internal/latent.h	runtime	runtime.latent	generic	private	internal-abi	runtime,graph,tests	interface	none
@@ -334,6 +335,7 @@ src/graph/worklist.c	graph	graph.expert_worklist	generic	private	reusable-algori
 src/runtime/speculation.c	runtime	runtime.speculation	generic	private	proposal-verification-acceptance	runtime,generation,tests	implementation	none
 src/runtime/logits.c	runtime	runtime.logits	generic	private	transactional-execution	runtime,backend,cli,tests	implementation	none
 src/runtime/logits_operator.c	runtime	runtime.logits_operator	generic	private	reusable-algorithm	runtime,cli,tests	implementation	none
+src/runtime/decision_readout.c	runtime	runtime.decision_readout	generic	private	transactional-execution	runtime,tests	implementation	none
 src/runtime/prefix.c	runtime	runtime.session_prefix	generic	private	resource-lifecycle	runtime,server,tests	implementation	none
 src/runtime/sampling.c	runtime	runtime.sampling	generic	private	transactional-execution	runtime,cli,tests	implementation	none
 src/runtime/sampling_operator.c	runtime	runtime.sampling_operator	generic	private	reusable-algorithm	runtime,cli,tests	implementation	none

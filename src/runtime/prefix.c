@@ -1,4 +1,4 @@
-/* Coordinate graph-owned shared backing across two isolated runtime sessions. */
+/* Share exact committed attention or recurrent state across isolated sessions. */
 #include "src/runtime/private.h"
 
 #include <limits.h>
@@ -10,6 +10,7 @@
 struct yvex_runtime_session_prefix {
     unsigned int schema_version;
     yvex_attention_state_prefix *target, *draft;
+    yvex_sequence_state *sequence;
     yvex_attention_state_recipe *target_recipes, *draft_recipes;
     unsigned long long target_recipe_count, draft_recipe_count;
     yvex_execution_capacity_plan target_capacity, draft_capacity;
@@ -33,30 +34,37 @@ static int prefix_identity(
     yvex_runtime_session_prefix_summary *summary)
 {
     yvex_attention_state_prefix_summary target = {0}, draft = {0};
+    yvex_sequence_state_summary sequence = {0};
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     yvex_error err;
-    unsigned long long shared, mapped, references, layer;
+    unsigned long long shared = 0ull, mapped = 0ull, references = 0ull;
+    unsigned long long committed = 0ull, layer, scopes = 0ull;
+    char sequence_identity[YVEX_SHA256_HEX_CAP] = {0};
 
     if (!prefix || prefix->schema_version !=
-                       YVEX_RUNTIME_SESSION_PREFIX_SCHEMA_V1 ||
-        !prefix->target ||
-        yvex_attention_state_prefix_summary_copy(prefix->target, &target,
-                                                 &err) != YVEX_OK ||
-        !yvex_sha256_hex_valid(prefix->runtime_model_identity) ||
-        prefix->target_recipe_count != target.layer_count ||
-        (target.layer_count && !prefix->target_recipes) ||
-        strcmp(target.capacity_plan_identity,
-               prefix->target_capacity.identity) != 0)
+                       YVEX_RUNTIME_SESSION_PREFIX_SCHEMA_CURRENT ||
+        (!prefix->target && !prefix->sequence) ||
+        !yvex_sha256_hex_valid(prefix->runtime_model_identity))
         return 0;
-    shared = target.shared_bytes;
-    mapped = target.mapped_bytes;
-    references = target.reference_count;
+    if (prefix->target) {
+        if (yvex_attention_state_prefix_summary_copy(prefix->target, &target,
+                                                     &err) != YVEX_OK ||
+            prefix->target_recipe_count != target.layer_count ||
+            (target.layer_count && !prefix->target_recipes) ||
+            strcmp(target.capacity_plan_identity,
+                   prefix->target_capacity.identity) != 0)
+            return 0;
+        shared = target.shared_bytes;
+        mapped = target.mapped_bytes;
+        references = target.reference_count;
+        committed = target.committed_sequence_length;
+        scopes++;
+    }
     if (prefix->draft) {
         if (yvex_attention_state_prefix_summary_copy(prefix->draft, &draft,
                                                      &err) != YVEX_OK ||
-            target.committed_sequence_length !=
-                draft.committed_sequence_length ||
+            !prefix->target || committed != draft.committed_sequence_length ||
             prefix->draft_recipe_count != draft.layer_count ||
             (draft.layer_count && !prefix->draft_recipes) ||
             strcmp(draft.capacity_plan_identity,
@@ -66,12 +74,24 @@ static int prefix_identity(
             return 0;
         if (draft.reference_count < references)
             references = draft.reference_count;
+        scopes++;
+    }
+    if (prefix->sequence) {
+        if (yvex_sequence_state_summary_copy(
+                prefix->sequence, &sequence, &err) != YVEX_OK ||
+            yvex_sequence_state_committed_identity(
+                prefix->sequence, sequence_identity, &err) != YVEX_OK ||
+            (scopes && committed != sequence.committed_position) ||
+            !yvex_core_u64_add(shared, sequence.host_state_bytes, &shared))
+            return 0;
+        committed = sequence.committed_position;
+        scopes++;
+        if (!references) references = 1ull;
     }
     memset(summary, 0, sizeof(*summary));
-    summary->schema_version = YVEX_RUNTIME_SESSION_PREFIX_SCHEMA_V1;
-    summary->scope_count = prefix->draft ? 2ull : 1ull;
-    summary->committed_sequence_length =
-        target.committed_sequence_length;
+    summary->schema_version = YVEX_RUNTIME_SESSION_PREFIX_SCHEMA_CURRENT;
+    summary->scope_count = scopes;
+    summary->committed_sequence_length = committed;
     summary->shared_bytes = shared;
     summary->mapped_bytes = mapped;
     summary->reference_count = references;
@@ -82,18 +102,34 @@ static int prefix_identity(
     if (prefix->draft)
         yvex_runtime_identity_copy(summary->draft_prefix_identity,
                                    draft.prefix_identity);
+    if (prefix->sequence) {
+        summary->sequence_state_bytes = sequence.host_state_bytes;
+        summary->sequence_state_binding_count = sequence.binding_count;
+        summary->sequence_state_generation = sequence.generation;
+        yvex_runtime_identity_copy(summary->sequence_plan_identity,
+                                   sequence.plan_identity);
+        yvex_runtime_identity_copy(summary->sequence_prefix_identity,
+                                   sequence_identity);
+    }
     yvex_sha256_init(&hash);
     if (!yvex_sha256_update_text(&hash,
-                                 "yvex.runtime.session-prefix.v1") ||
+                                 "yvex.runtime.session-prefix.v2") ||
         !yvex_sha256_update_u64(&hash, summary->schema_version) ||
         !yvex_sha256_update_u64(&hash, summary->scope_count) ||
         !yvex_sha256_update_u64(
             &hash, summary->committed_sequence_length) ||
         !yvex_sha256_update_u64(&hash, summary->shared_bytes) ||
         !yvex_sha256_update_u64(&hash, summary->mapped_bytes) ||
+        !yvex_sha256_update_u64(&hash, summary->sequence_state_bytes) ||
+        !yvex_sha256_update_u64(
+            &hash, summary->sequence_state_binding_count) ||
+        !yvex_sha256_update_u64(
+            &hash, summary->sequence_state_generation) ||
         !yvex_sha256_update_text(&hash, summary->runtime_model_identity) ||
         !yvex_sha256_update_text(&hash, summary->target_prefix_identity) ||
-        !yvex_sha256_update_text(&hash, summary->draft_prefix_identity))
+        !yvex_sha256_update_text(&hash, summary->draft_prefix_identity) ||
+        !yvex_sha256_update_text(&hash, summary->sequence_plan_identity) ||
+        !yvex_sha256_update_text(&hash, summary->sequence_prefix_identity))
         return 0;
     for (layer = 0ull; layer < prefix->target_recipe_count; ++layer)
         if (!yvex_sha256_hex_valid(prefix->target_recipes[layer].identity) ||
@@ -184,6 +220,7 @@ int yvex_runtime_session_prefix_capture(
     yvex_attention_state_prefix_summary target = {0}, draft = {0};
     yvex_model_engine_summary model = {0};
     unsigned long long remaining;
+    yvex_sequence_state_summary sequence = {0};
     int rc = YVEX_OK, draft_pristine = 0;
 
     if (out) *out = NULL;
@@ -196,15 +233,9 @@ int yvex_runtime_session_prefix_capture(
                              err);
     if (!source->summary.open || source->summary.busy || source->closing ||
         source->summary.invalidated ||
-        !source->attention_state_provider_ready) {
+        (!source->attention_state_provider_ready && !source->sequence_state)) {
         rc = prefix_refuse(failure, YVEX_ERR_STATE,
                            "source session cannot publish a prefix", err);
-        goto done;
-    }
-    if (source->sequence_state) {
-        rc = prefix_refuse(
-            failure, YVEX_ERR_UNSUPPORTED,
-            "session prefix does not yet encode recurrent sequence state", err);
         goto done;
     }
     prefix = calloc(1u, sizeof(*prefix));
@@ -213,7 +244,7 @@ int yvex_runtime_session_prefix_capture(
                            "session prefix allocation failed", err);
         goto done;
     }
-    prefix->schema_version = YVEX_RUNTIME_SESSION_PREFIX_SCHEMA_V1;
+    prefix->schema_version = YVEX_RUNTIME_SESSION_PREFIX_SCHEMA_CURRENT;
     rc = yvex_model_engine_summary_copy(source->engine, &model, err);
     if (rc != YVEX_OK || !yvex_sha256_hex_valid(model.runtime_model_identity)) {
         rc = prefix_refuse(failure, YVEX_ERR_STATE,
@@ -222,19 +253,22 @@ int yvex_runtime_session_prefix_capture(
     }
     yvex_runtime_identity_copy(prefix->runtime_model_identity,
                                model.runtime_model_identity);
-    rc = prefix_provider_capture(
-        &source->attention_state_provider, maximum_shared_bytes,
-        &prefix->target_capacity, &prefix->target,
-        &prefix->target_recipes, &prefix->target_recipe_count,
-        &target, err);
-    if (rc != YVEX_OK) goto done;
-    if (target.shared_bytes > maximum_shared_bytes) {
-        rc = prefix_refuse(failure, YVEX_ERR_BOUNDS,
-                           "target prefix exceeded the shared byte budget",
-                           err);
-        goto done;
+    remaining = maximum_shared_bytes;
+    if (source->attention_state_provider_ready) {
+        rc = prefix_provider_capture(
+            &source->attention_state_provider, remaining,
+            &prefix->target_capacity, &prefix->target,
+            &prefix->target_recipes, &prefix->target_recipe_count,
+            &target, err);
+        if (rc != YVEX_OK) goto done;
+        if (target.shared_bytes > remaining) {
+            rc = prefix_refuse(failure, YVEX_ERR_BOUNDS,
+                               "target prefix exceeded the shared byte budget",
+                               err);
+            goto done;
+        }
+        remaining -= target.shared_bytes;
     }
-    remaining = maximum_shared_bytes - target.shared_bytes;
     if (source->draft_attention_state_provider_ready) {
         rc = yvex_runtime_private_attention_state_pristine(
             &source->draft_attention_state_provider, &draft_pristine, err);
@@ -252,13 +286,38 @@ int yvex_runtime_session_prefix_capture(
                 &prefix->draft_recipes, &prefix->draft_recipe_count,
                 &draft, err);
             if (rc != YVEX_OK) goto done;
-            if (target.committed_sequence_length !=
-                draft.committed_sequence_length) {
+            if (!prefix->target || target.committed_sequence_length !=
+                                       draft.committed_sequence_length) {
                 rc = prefix_refuse(failure, YVEX_ERR_STATE,
                                    "target and draft prefixes diverged", err);
                 goto done;
             }
+            if (draft.shared_bytes > remaining) {
+                rc = prefix_refuse(
+                    failure, YVEX_ERR_BOUNDS,
+                    "draft prefix exceeded the shared byte budget", err);
+                goto done;
+            }
+            remaining -= draft.shared_bytes;
         }
+    }
+    if (source->sequence_state) {
+        rc = yvex_sequence_state_summary_copy(
+            source->sequence_state, &sequence, err);
+        if (rc != YVEX_OK || !sequence.fork_supported ||
+            sequence.host_state_bytes > remaining) {
+            rc = prefix_refuse(
+                failure,
+                rc == YVEX_OK ? YVEX_ERR_BOUNDS : (yvex_status)rc,
+                rc == YVEX_OK
+                    ? "recurrent prefix exceeded the shared byte budget"
+                    : "recurrent prefix is not forkable",
+                err);
+            goto done;
+        }
+        rc = yvex_sequence_state_fork(
+            &prefix->sequence, source->sequence_state, err);
+        if (rc != YVEX_OK) goto done;
     }
     if (!prefix_identity(prefix, &prefix->summary) ||
         prefix->summary.shared_bytes > maximum_shared_bytes) {
@@ -341,6 +400,7 @@ int yvex_runtime_session_prefix_attach(
 {
     yvex_model_engine_summary model = {0};
     yvex_runtime_session_prefix_summary current = {0};
+    yvex_sequence_state_summary destination_sequence = {0};
     int rc, draft_pristine = 0;
 
     if (summary) memset(summary, 0, sizeof(*summary));
@@ -357,12 +417,21 @@ int yvex_runtime_session_prefix_attach(
         rc = yvex_runtime_private_attention_state_pristine(
             &destination->draft_attention_state_provider,
             &draft_pristine, err);
+    if (rc == YVEX_OK && destination->sequence_state)
+        rc = yvex_sequence_state_summary_copy(
+            destination->sequence_state, &destination_sequence, err);
     if (rc != YVEX_OK || !destination->summary.open ||
         destination->summary.busy || destination->closing ||
-        destination->summary.invalidated || destination->sequence_state ||
+        destination->summary.invalidated ||
         destination->state_residency ||
         destination->draft_state_residency ||
-        !destination->attention_state_provider_ready ||
+        (!!prefix->target != !!destination->attention_state_provider_ready) ||
+        (!!prefix->sequence != !!destination->sequence_state) ||
+        (prefix->sequence &&
+         (destination_sequence.committed_position ||
+          destination_sequence.generation ||
+          strcmp(destination_sequence.plan_identity,
+                 current.sequence_plan_identity) != 0)) ||
         (prefix->draft &&
          !destination->draft_attention_state_provider_ready) ||
         (!prefix->draft &&
@@ -375,15 +444,20 @@ int yvex_runtime_session_prefix_attach(
                            err);
         goto done;
     }
-    rc = prefix_provider_attach(&destination->attention_state_provider,
-                                &prefix->target_capacity, prefix->target,
-                                prefix->target_recipes,
-                                prefix->target_recipe_count, err);
+    rc = prefix->target
+             ? prefix_provider_attach(
+                   &destination->attention_state_provider,
+                   &prefix->target_capacity, prefix->target,
+                   prefix->target_recipes, prefix->target_recipe_count, err)
+             : YVEX_OK;
     if (rc == YVEX_OK && prefix->draft)
         rc = prefix_provider_attach(
             &destination->draft_attention_state_provider,
             &prefix->draft_capacity, prefix->draft,
             prefix->draft_recipes, prefix->draft_recipe_count, err);
+    if (rc == YVEX_OK && prefix->sequence)
+        rc = yvex_sequence_state_restore(
+            destination->sequence_state, prefix->sequence, err);
     if (rc != YVEX_OK) {
         yvex_error cleanup;
         destination->summary.invalidated = 1;
@@ -399,6 +473,23 @@ int yvex_runtime_session_prefix_attach(
                            "attached prefix identity changed", err);
         goto done;
     }
+    if (destination->sequence_state) {
+        rc = yvex_sequence_state_summary_copy(
+            destination->sequence_state, &destination_sequence, err);
+        if (rc != YVEX_OK) goto done;
+        destination->summary.sequence_state_binding_count =
+            destination_sequence.binding_count;
+        destination->summary.sequence_state_generation =
+            destination_sequence.generation;
+        destination->summary.sequence_committed_state_bytes =
+            destination_sequence.committed_state_bytes;
+        destination->summary.sequence_candidate_state_bytes =
+            destination_sequence.candidate_state_bytes;
+        destination->summary.sequence_host_state_bytes =
+            destination_sequence.host_state_bytes;
+        destination->summary.sequence_device_state_bytes =
+            destination_sequence.device_state_bytes;
+    }
     if (failure) memset(failure, 0, sizeof(*failure));
     yvex_error_clear(err);
 done:
@@ -413,6 +504,7 @@ void yvex_runtime_session_prefix_close(yvex_runtime_session_prefix **owner)
     *owner = NULL;
     yvex_attention_state_prefix_close(&prefix->draft);
     yvex_attention_state_prefix_close(&prefix->target);
+    yvex_sequence_state_close(&prefix->sequence);
     free(prefix->draft_recipes);
     free(prefix->target_recipes);
     memset(prefix, 0, sizeof(*prefix));

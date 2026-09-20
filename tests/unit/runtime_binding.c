@@ -4074,7 +4074,7 @@ static int test_runtime_probe_consumer_boundary(
             session, 1ull << 20u, &prefix, &prefix_summary,
             &model_failure, &err) == YVEX_OK &&
             prefix && prefix_summary.schema_version ==
-                          YVEX_RUNTIME_SESSION_PREFIX_SCHEMA_V1 &&
+                          YVEX_RUNTIME_SESSION_PREFIX_SCHEMA_CURRENT &&
             prefix_summary.scope_count == 1ull &&
             prefix_summary.committed_sequence_length == 1ull &&
             prefix_summary.shared_bytes &&
