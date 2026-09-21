@@ -1546,18 +1546,19 @@ int yvex_compiled_model_plan_context_envelope(
         yvex_decoder_plan_summary_get(yvex_compiled_model_plan_decoder(plan));
     const yvex_program_physical_summary *program =
         yvex_program_physical_summary_get(yvex_compiled_model_plan_forward(plan));
+    int standalone_program = !target && !decoder && program;
     unsigned long long target_maximum;
     if (envelope) memset(envelope, 0, sizeof(*envelope));
     if (!envelope || !yvex_sha256_hex_valid(model_execution_identity) ||
         !semantic_maximum_context ||
-        ((target != NULL) + (decoder != NULL) + (program != NULL) != 1) ||
+        ((target != NULL) + (decoder != NULL) + standalone_program != 1) ||
         (target &&
          (target->maximum_context != semantic_maximum_context ||
           !yvex_sha256_hex_valid(target->transformer_plan_identity))) ||
         (decoder &&
          (decoder->maximum_context != semantic_maximum_context ||
           !yvex_sha256_hex_valid(decoder->decoder_plan_identity) || draft)) ||
-        (program &&
+        (standalone_program &&
          (program->maximum_rows != semantic_maximum_context ||
           !yvex_sha256_hex_valid(program->identity) || draft)) ||
         (draft && (draft->maximum_context != semantic_maximum_context ||

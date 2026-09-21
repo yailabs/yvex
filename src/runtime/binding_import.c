@@ -507,6 +507,90 @@ static int binding_program_only(const yvex_runtime_binding *binding)
            !execution->draft_layer_count && !binding->summary.layer_count;
 }
 
+static const char *binding_canonical_records_mismatch(
+    const yvex_runtime_binding *binding,
+    const yvex_decoder_plan_summary *decoder, int program_only)
+{
+    if (binding->summary.tensor_count != binding->admission.tensor_count ||
+        binding->summary.tensor_count != binding->materialization.tensor_count ||
+        binding->summary.tensor_count != binding->descriptor.tensor_count)
+        return "tensor-count";
+    if (binding->summary.layer_count != binding->attention.layer_count)
+        return "attention-layer-count";
+    if (binding->summary.draft_layer_count != binding->descriptor.draft_layer_count ||
+        binding->summary.draft_layer_count != binding->draft_attention.layer_count)
+        return "draft-layer-count";
+    if (decoder &&
+        (binding->summary.decoder_layer_count != decoder->layer_count ||
+         binding->summary.recurrent_layer_count != decoder->recurrent_layer_count ||
+         strcmp(binding->summary.decoder_plan_identity,
+                decoder->decoder_plan_identity) != 0 ||
+         !yvex_runtime_private_binding_decoder_matches(
+             decoder, &binding->descriptor,
+             yvex_compiled_model_plan_operator_graph_identity(binding->plan),
+             &binding->attention) || binding->summary.draft_layer_count))
+        return "decoder-plan";
+    if (!decoder &&
+        (binding->summary.decoder_layer_count ||
+         binding->summary.recurrent_layer_count !=
+             (program_only ? binding->descriptor.model_execution.layer_count : 0ull) ||
+         binding->summary.decoder_plan_identity[0]))
+        return "decoder-absence";
+    if (!binding->summary.tensor_count || (!binding->summary.layer_count && !program_only))
+        return "record-count";
+    if (!yvex_runtime_private_binding_admission_ready(&binding->admission) ||
+        !yvex_sha256_hex_is_valid(binding->admission.transform_identity))
+        return "artifact-admission";
+    if (!yvex_sha256_hex_is_valid(binding->summary.logical_transform_identity))
+        return "logical-transform";
+    if (binding->materialization.committed || binding->materialization.cleanup_complete ||
+        binding->materialization.status != YVEX_MATERIALIZATION_STATUS_PLANNED ||
+        binding->materialization.access_calls ||
+        binding->materialization.payload_bytes_accessed ||
+        binding->materialization.full_walks ||
+        binding->materialization.snapshot_drift_count ||
+        binding->materialization.committed_bindings ||
+        binding->materialization.aborted_bindings)
+        return "materialization-state";
+    if (binding->descriptor.status != YVEX_RUNTIME_DESCRIPTOR_STATUS_READY)
+        return "runtime-descriptor-state";
+    if (!decoder && !program_only &&
+        binding->descriptor.model_execution.schema_version !=
+            YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V1)
+        return "model-execution-schema";
+    if (!yvex_sha256_hex_is_valid(binding->descriptor.model_execution.identity) ||
+        strcmp(binding->descriptor.logical_model_identity,
+               binding->descriptor.model_execution.logical_model_identity) != 0)
+        return "model-execution-identity";
+    if (binding->descriptor.layer_count != binding->descriptor.model_execution.layer_count ||
+        binding->descriptor.draft_layer_count !=
+            binding->descriptor.model_execution.draft_layer_count ||
+        binding->descriptor.vocabulary_size !=
+            binding->descriptor.model_execution.vocabulary_size)
+        return "model-execution-geometry";
+    if (!binding_policies_valid(binding)) return "execution-policies";
+    if (!compiled_plan_valid(binding)) return "compiled-model-plan";
+    if (!program_only &&
+        (!yvex_runtime_private_binding_attention_ready(&binding->attention) ||
+         binding->attention.tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER ||
+         !binding->attention.required_binding_count ||
+         binding->attention.missing_binding_count ||
+         binding->attention.qtype_compute_refusal_count))
+        return "attention-plan";
+    if (!yvex_runtime_private_binding_identity_chain_valid(
+            &binding->admission, &binding->materialization,
+            &binding->descriptor, program_only ? NULL : &binding->attention))
+        return "identity-chain";
+    if (binding->summary.draft_layer_count &&
+        (!yvex_runtime_private_binding_attention_ready(&binding->draft_attention) ||
+         binding->draft_attention.tensor_scope != YVEX_TENSOR_SCOPE_DRAFT ||
+         !yvex_runtime_private_binding_identity_chain_valid(
+             &binding->admission, &binding->materialization,
+             &binding->descriptor, &binding->draft_attention)))
+        return "draft-attention-plan";
+    return NULL;
+}
+
 int yvex_runtime_private_binding_validate(
     const yvex_runtime_binding *binding, const char **field,
     yvex_runtime_binding_failure_code *code)
@@ -517,6 +601,7 @@ int yvex_runtime_private_binding_validate(
     const yvex_decoder_plan *decoder_plan;
     const yvex_decoder_plan_summary *decoder;
     const char *compatibility;
+    const char *records_mismatch;
     unsigned long long index;
     int program_only;
 
@@ -564,69 +649,12 @@ int yvex_runtime_private_binding_validate(
         *code = YVEX_RUNTIME_BINDING_FAILURE_COMPATIBILITY;
         return 0;
     }
-    if (binding->summary.tensor_count != binding->admission.tensor_count ||
-        binding->summary.tensor_count != binding->materialization.tensor_count ||
-        binding->summary.tensor_count != binding->descriptor.tensor_count ||
-        binding->summary.layer_count != binding->attention.layer_count ||
-        binding->summary.draft_layer_count != binding->descriptor.draft_layer_count ||
-        binding->summary.draft_layer_count != binding->draft_attention.layer_count ||
-        (decoder &&
-         (binding->summary.decoder_layer_count != decoder->layer_count ||
-          binding->summary.recurrent_layer_count != decoder->recurrent_layer_count ||
-          strcmp(binding->summary.decoder_plan_identity,
-                 decoder->decoder_plan_identity) != 0 ||
-          !yvex_runtime_private_binding_decoder_matches(
-              decoder, &binding->descriptor,
-              yvex_compiled_model_plan_operator_graph_identity(binding->plan),
-              &binding->attention) || binding->summary.draft_layer_count)) ||
-        (!decoder &&
-         (binding->summary.decoder_layer_count ||
-          binding->summary.recurrent_layer_count !=
-              (program_only ? binding->descriptor.model_execution.layer_count : 0ull) ||
-          binding->summary.decoder_plan_identity[0])) ||
-        !binding->summary.tensor_count || (!binding->summary.layer_count && !program_only) ||
-        !yvex_runtime_private_binding_admission_ready(&binding->admission) ||
-        !yvex_sha256_hex_is_valid(binding->admission.transform_identity) ||
-        !yvex_sha256_hex_is_valid(binding->summary.logical_transform_identity) ||
-        binding->materialization.committed || binding->materialization.cleanup_complete ||
-        binding->materialization.status != YVEX_MATERIALIZATION_STATUS_PLANNED ||
-        binding->materialization.access_calls ||
-        binding->materialization.payload_bytes_accessed ||
-        binding->materialization.full_walks ||
-        binding->materialization.snapshot_drift_count ||
-        binding->materialization.committed_bindings ||
-        binding->materialization.aborted_bindings ||
-        binding->descriptor.status != YVEX_RUNTIME_DESCRIPTOR_STATUS_READY ||
-        (!decoder && !program_only &&
-         binding->descriptor.model_execution.schema_version !=
-             YVEX_MODEL_EXECUTION_DESCRIPTOR_SCHEMA_V1) ||
-        !yvex_sha256_hex_is_valid(binding->descriptor.model_execution.identity) ||
-        strcmp(binding->descriptor.logical_model_identity,
-               binding->descriptor.model_execution.logical_model_identity) != 0 ||
-        binding->descriptor.layer_count != binding->descriptor.model_execution.layer_count ||
-        binding->descriptor.draft_layer_count !=
-            binding->descriptor.model_execution.draft_layer_count ||
-        binding->descriptor.vocabulary_size !=
-            binding->descriptor.model_execution.vocabulary_size ||
-        !binding_policies_valid(binding) ||
-        !compiled_plan_valid(binding) ||
-        (!program_only &&
-         (!yvex_runtime_private_binding_attention_ready(&binding->attention) ||
-          binding->attention.tensor_scope != YVEX_TENSOR_SCOPE_MAIN_LAYER ||
-          !binding->attention.required_binding_count ||
-          binding->attention.missing_binding_count ||
-          binding->attention.qtype_compute_refusal_count)) ||
-        !yvex_runtime_private_binding_identity_chain_valid(
-            &binding->admission, &binding->materialization,
-            &binding->descriptor,
-            program_only ? NULL : &binding->attention) ||
-        (binding->summary.draft_layer_count &&
-         (!yvex_runtime_private_binding_attention_ready(&binding->draft_attention) ||
-          binding->draft_attention.tensor_scope != YVEX_TENSOR_SCOPE_DRAFT ||
-          !yvex_runtime_private_binding_identity_chain_valid(
-              &binding->admission, &binding->materialization,
-              &binding->descriptor, &binding->draft_attention))))
+    records_mismatch = binding_canonical_records_mismatch(
+        binding, decoder, program_only);
+    if (records_mismatch) {
+        *field = records_mismatch;
         return 0;
+    }
     if (!yvex_compiled_graph_identities(
             yvex_compiled_model_plan_operator_graph_identity(binding->plan),
             &binding->materialization, &binding->descriptor,

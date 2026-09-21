@@ -4118,9 +4118,11 @@ static int test_runtime_probe_consumer_boundary(
             !draft_state.committed_sequence_length,
         "attached target prefix preserves content and leaves optional draft pristine");
     YVEX_TEST_ASSERT(
-        yvex_runtime_session_prepare_persistent_state(
-            forked_session, capacity, &model_failure, &err) == YVEX_OK,
-        "forked prefix seals its independent runtime residency before execution");
+        yvex_runtime_state_residency_summary_copy(
+            yvex_runtime_session_view_get(forked_session)->state_residency,
+            &state_residency, &err) == YVEX_OK &&
+            state_residency.sealed,
+        "prefix attach seals its independent runtime residency before execution");
     yvex_runtime_session_prefix_close(&prefix);
     YVEX_TEST_ASSERT(
         yvex_runtime_session_reset_persistent_state(

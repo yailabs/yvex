@@ -227,6 +227,8 @@ static int gated_delta_device_state_lifecycle(
     yvex_runtime_transaction_participant participant;
     float *convolution = NULL, *recurrent = NULL, *observed = NULL;
     unsigned long long convolution_values, recurrent_values, index;
+    char source_identity[YVEX_SHA256_HEX_CAP] = {0};
+    char fork_identity[YVEX_SHA256_HEX_CAP] = {0};
     yvex_error err;
 
     if (yvex_gated_delta_plan_seal(&mixer, requirement, &err) != YVEX_OK)
@@ -252,12 +254,9 @@ static int gated_delta_device_state_lifecycle(
             summary.device_attached && summary.device_authoritative &&
             summary.device_state_bytes ==
                 2ull * (summary.convolution_state_bytes +
-                        summary.recurrent_state_bytes),
+                        summary.recurrent_state_bytes) &&
+            summary.fork_supported,
         "CUDA sequence state owns two exact backend banks");
-    YVEX_TEST_ASSERT(
-        yvex_sequence_state_fork(&forked, state, &err) == YVEX_ERR_UNSUPPORTED &&
-            !forked,
-        "device-authored recurrent fork refuses until exact copy semantics exist");
     YVEX_TEST_ASSERT(
         yvex_sequence_state_begin(state, 0ull, 1ull, &err) == YVEX_OK &&
             yvex_sequence_state_device_layer(
@@ -295,6 +294,27 @@ static int gated_delta_device_state_lifecycle(
                 &participant, 1u, YVEX_OK, &err) == YVEX_OK,
         "CUDA candidate recurrence publishes through the common transaction");
     YVEX_TEST_ASSERT(
+        yvex_sequence_state_fork(&forked, state, &err) == YVEX_OK &&
+            yvex_sequence_state_committed_identity(
+                state, source_identity, &err) == YVEX_OK &&
+            yvex_sequence_state_committed_identity(
+                forked, fork_identity, &err) == YVEX_OK &&
+            strcmp(source_identity, fork_identity) == 0 &&
+            yvex_sequence_state_begin(forked, 1ull, 1ull, &err) == YVEX_OK &&
+            yvex_sequence_state_device_layer(
+                forked, 3ull, &committed, &candidate, &err) == YVEX_OK &&
+            committed.convolution && committed.recurrent &&
+            yvex_backend_tensor_read(
+                backend, committed.convolution, observed,
+                convolution_values * sizeof(float), &err) == YVEX_OK &&
+            observed[0] == 1.25f &&
+            yvex_sequence_state_participant(
+                forked, &participant, &err) == YVEX_OK &&
+            yvex_runtime_transaction_resolve(
+                &participant, 1u, YVEX_ERR_CANCELLED, &err) ==
+                YVEX_ERR_CANCELLED,
+        "device-authored recurrent fork preserves exact committed state");
+    YVEX_TEST_ASSERT(
         yvex_sequence_state_begin(state, 1ull, 1ull, &err) == YVEX_OK &&
             yvex_sequence_state_device_layer(
                 state, 3ull, &committed, &candidate, &err) == YVEX_OK &&
@@ -323,8 +343,10 @@ static int gated_delta_device_state_lifecycle(
                 YVEX_ERR_CANCELLED,
         "reset clears both device banks and restores position zero");
     YVEX_TEST_ASSERT(
-        yvex_sequence_state_close_checked(&state, &err) == YVEX_OK && !state,
-        "close releases both CUDA recurrent banks before the backend");
+        yvex_sequence_state_close_checked(&forked, &err) == YVEX_OK &&
+            yvex_sequence_state_close_checked(&state, &err) == YVEX_OK &&
+            !forked && !state,
+        "close releases source and fork CUDA recurrent banks before the backend");
     free(observed);
     free(recurrent);
     free(convolution);

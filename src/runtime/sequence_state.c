@@ -590,13 +590,11 @@ int yvex_sequence_state_fork(
     if (out) *out = NULL;
     if (!out || !source || source->invalidated || source->transaction_active ||
         source->binding_count > SIZE_MAX / sizeof(*bindings) ||
-        source->bank_values > SIZE_MAX / sizeof(float))
+        source->bank_values > SIZE_MAX / sizeof(float) ||
+        (source->storage_backend == YVEX_BACKEND_KIND_CUDA &&
+         (!source->device_attached || !source->backend)))
         return sequence_state_refuse(
             err, YVEX_ERR_STATE, "idle recurrent source state is required for fork");
-    if (source->storage_backend != YVEX_BACKEND_KIND_CPU)
-        return sequence_state_refuse(
-            err, YVEX_ERR_UNSUPPORTED,
-            "device-authored recurrent state fork is not implemented");
     binding_bytes = (size_t)source->binding_count * sizeof(*bindings);
     bindings = malloc(binding_bytes);
     if (!bindings)
@@ -608,9 +606,15 @@ int yvex_sequence_state_fork(
         .schema_version = YVEX_SEQUENCE_STATE_SCHEMA_V1,
         .bindings = bindings,
         .binding_count = source->binding_count};
-    rc = yvex_sequence_state_open(&child, &plan, err);
+    rc = yvex_sequence_state_open_for_backend(
+        &child, &plan, source->storage_backend, err);
     free(bindings);
-    if (rc != YVEX_OK) return rc;
+    if (rc == YVEX_OK && source->storage_backend == YVEX_BACKEND_KIND_CUDA)
+        rc = yvex_sequence_state_attach_device(child, source->backend, err);
+    if (rc != YVEX_OK) {
+        yvex_sequence_state_close(&child);
+        return rc;
+    }
     rc = yvex_sequence_state_restore(child, source, err);
     if (rc != YVEX_OK) {
         yvex_sequence_state_close(&child);
@@ -626,23 +630,41 @@ int yvex_sequence_state_restore(
     yvex_error *err)
 {
     size_t bytes;
+    int rc = YVEX_OK;
 
     if (!destination || !source || destination == source ||
         destination->invalidated || source->invalidated ||
         destination->transaction_active || source->transaction_active ||
-        destination->storage_backend != YVEX_BACKEND_KIND_CPU ||
-        source->storage_backend != YVEX_BACKEND_KIND_CPU ||
+        destination->storage_backend != source->storage_backend ||
         destination->committed_position || destination->generation ||
         destination->binding_count != source->binding_count ||
         destination->bank_values != source->bank_values ||
         strcmp(destination->plan_identity, source->plan_identity) != 0 ||
+        (source->storage_backend == YVEX_BACKEND_KIND_CUDA &&
+         (!source->device_attached || !destination->device_attached ||
+          !source->backend || !destination->backend)) ||
         source->bank_values > SIZE_MAX / sizeof(float))
         return sequence_state_refuse(
             err, YVEX_ERR_STATE,
             "compatible pristine recurrent destination state is required");
     bytes = (size_t)source->bank_values * sizeof(float);
-    memcpy(destination->banks[0], source->banks[source->committed_bank], bytes);
-    memset(destination->banks[1], 0, bytes);
+    if (source->storage_backend == YVEX_BACKEND_KIND_CPU) {
+        memcpy(destination->banks[0], source->banks[source->committed_bank],
+               bytes);
+        memset(destination->banks[1], 0, bytes);
+    } else {
+        rc = destination->backend == source->backend
+                 ? yvex_backend_tensor_copy(
+                       destination->backend, destination->device_banks[0],
+                       source->device_banks[source->committed_bank], err)
+                 : yvex_backend_tensor_copy_shared_async(
+                       destination->backend, destination->device_banks[0],
+                       source->device_banks[source->committed_bank], err);
+        if (rc != YVEX_OK) {
+            destination->invalidated = 1;
+            return rc;
+        }
+    }
     destination->committed_bank = 0u;
     destination->committed_position = source->committed_position;
     destination->generation = source->generation;
@@ -656,17 +678,37 @@ int yvex_sequence_state_committed_identity(
 {
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    unsigned char *device_copy = NULL;
+    const void *committed;
     size_t bytes;
+    int rc;
 
     if (output) output[0] = '\0';
     if (!state || !output || state->invalidated || state->transaction_active ||
-        state->storage_backend != YVEX_BACKEND_KIND_CPU ||
+        (state->storage_backend == YVEX_BACKEND_KIND_CUDA &&
+         (!state->device_attached || !state->backend)) ||
         state->bank_values > SIZE_MAX / sizeof(float) ||
         !yvex_sha256_hex_valid(state->plan_identity))
         return sequence_state_refuse(
             err, YVEX_ERR_STATE,
-            "idle host-authored recurrent state is required for identity");
+            "idle authoritative recurrent state is required for identity");
     bytes = (size_t)state->bank_values * sizeof(float);
+    committed = state->banks[state->committed_bank];
+    if (state->storage_backend == YVEX_BACKEND_KIND_CUDA) {
+        device_copy = malloc(bytes);
+        if (!device_copy)
+            return sequence_state_refuse(
+                err, YVEX_ERR_NOMEM,
+                "recurrent device-state identity allocation failed");
+        rc = yvex_backend_tensor_read(
+            state->backend, state->device_banks[state->committed_bank],
+            device_copy, bytes, err);
+        if (rc != YVEX_OK) {
+            free(device_copy);
+            return rc;
+        }
+        committed = device_copy;
+    }
     yvex_sha256_init(&hash);
     if (!yvex_sha256_update_text(
             &hash, "yvex.runtime.sequence-state-content.v1") ||
@@ -674,12 +716,14 @@ int yvex_sequence_state_committed_identity(
         !yvex_sha256_update_u64(&hash, state->committed_position) ||
         !yvex_sha256_update_u64(&hash, state->generation) ||
         !yvex_sha256_update_u64(&hash, state->bank_values) ||
-        !yvex_sha256_update(
-            &hash, state->banks[state->committed_bank], bytes) ||
-        !yvex_sha256_final(&hash, digest))
+        !yvex_sha256_update(&hash, committed, bytes) ||
+        !yvex_sha256_final(&hash, digest)) {
+        free(device_copy);
         return sequence_state_refuse(
             err, YVEX_ERR_STATE,
             "recurrent committed-state identity could not seal");
+    }
+    free(device_copy);
     yvex_sha256_hex(digest, output);
     yvex_error_clear(err);
     return YVEX_OK;
@@ -722,7 +766,8 @@ int yvex_sequence_state_summary_copy(
         state->storage_backend == YVEX_BACKEND_KIND_CUDA &&
         state->device_attached;
     summary->device_attached = state->device_attached;
-    summary->fork_supported = summary->host_authoritative;
+    summary->fork_supported = summary->host_authoritative ||
+                              summary->device_authoritative;
     yvex_core_text_copy(summary->plan_identity, sizeof(summary->plan_identity),
                         state->plan_identity);
     summary->transaction_active = state->transaction_active;

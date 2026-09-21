@@ -266,7 +266,7 @@ same hosted path exposed to the operator.
 | Family/target | Accepted boundary | Evidence limit |
 | --- | --- | --- |
 | [DeepSeek-V4-Flash-DSpark](deepseek-v4-flash.md) | Source-to-hosted text; target-verified speculation | No release quality/performance promotion |
-| Qwen3.8-27B | Admitted BF16 text specialization, hybrid recurrent/full-attention decode, hosted sessions | No vision, other modalities, or release claim |
+| Qwen3.8-27B | Exact published BF16 text specialization, current binding v17, target-only CUDA hybrid recurrent/full-attention forward, complete logits and common prefix capture/attach | No Decision Readout breadth, vision, upstream whole-model conformance, behavior, benchmark or release claim |
 | [MiniMax-H3 FL2VA](minimax-h3.md) | Four component artifacts, composite iterative execution, synchronized-media publication | Bounded component conformance is not full-scale numerical/behavioral correctness |
 | [Mamba2](mamba2.md) | Exact acquired source, deterministic artifact/binding, 64-layer pure-SSM CPU execution, finite LM-head output and common transactional state | Partial; independent all-layer/whole-model oracle and hosted conversation remain unavailable |
 | Gemma | Source/header and candidate-role observations | Not an executable family |
@@ -280,6 +280,18 @@ Qwen's current text target is `Qwen/Qwen3.8-27B`, revision
 admitted text artifact. Source presence does not publish input capability.
 [Adapter tests](../../tests/unit/qwen_adapter.c) and
 [architecture tests](../../tests/unit/qwen3_5_architecture.c) guard that boundary.
+
+The unchanged 53,815,809,152-byte BF16 GGUF artifact
+`1fce07008eaa78e04eedd1a031144f48eb6af617f2b5c508811ba91dca7e00f1`
+is associated with immutable published release
+`yailabs/Qwen3.8-27B-Text-GGUF@066eb288bffd5a07c0d5ca584114a1f3fcfd13a8`
+and a fresh authenticated binding v17. Ordinary target-only CUDA execution
+consumes the 1,732-step compiler-owned forward and two-step output programs,
+produces 248,320 finite logits, and captures/attaches common prefix schema v2
+with all 16 attention and 48 recurrent layers represented. Malformed retained
+v16 canonical records remain refused. This qualifies the ordinary Qwen
+execution prerequisite only: no Qwen Decision Readout ran, and no upstream
+whole-model conformance claim follows.
 
 These are current evidence summaries, not a universal family compatibility
 matrix. Runtime capability comes from the exact admitted specialization.

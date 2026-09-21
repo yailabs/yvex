@@ -29,6 +29,14 @@ static int prefix_refuse(yvex_model_engine_failure *failure,
     return status;
 }
 
+static unsigned long long prefix_sequence_bytes(
+    const yvex_sequence_state_summary *summary)
+{
+    if (summary->host_authoritative) return summary->host_state_bytes;
+    if (summary->device_authoritative) return summary->device_state_bytes;
+    return 0ull;
+}
+
 static int prefix_identity(
     const yvex_runtime_session_prefix *prefix,
     yvex_runtime_session_prefix_summary *summary)
@@ -40,6 +48,7 @@ static int prefix_identity(
     yvex_error err;
     unsigned long long shared = 0ull, mapped = 0ull, references = 0ull;
     unsigned long long committed = 0ull, layer, scopes = 0ull;
+    unsigned long long sequence_bytes = 0ull;
     char sequence_identity[YVEX_SHA256_HEX_CAP] = {0};
 
     if (!prefix || prefix->schema_version !=
@@ -82,7 +91,8 @@ static int prefix_identity(
             yvex_sequence_state_committed_identity(
                 prefix->sequence, sequence_identity, &err) != YVEX_OK ||
             (scopes && committed != sequence.committed_position) ||
-            !yvex_core_u64_add(shared, sequence.host_state_bytes, &shared))
+            !(sequence_bytes = prefix_sequence_bytes(&sequence)) ||
+            !yvex_core_u64_add(shared, sequence_bytes, &shared))
             return 0;
         committed = sequence.committed_position;
         scopes++;
@@ -103,7 +113,7 @@ static int prefix_identity(
         yvex_runtime_identity_copy(summary->draft_prefix_identity,
                                    draft.prefix_identity);
     if (prefix->sequence) {
-        summary->sequence_state_bytes = sequence.host_state_bytes;
+        summary->sequence_state_bytes = sequence_bytes;
         summary->sequence_state_binding_count = sequence.binding_count;
         summary->sequence_state_generation = sequence.generation;
         yvex_runtime_identity_copy(summary->sequence_plan_identity,
@@ -302,17 +312,26 @@ int yvex_runtime_session_prefix_capture(
         }
     }
     if (source->sequence_state) {
+        unsigned long long sequence_bytes;
         rc = yvex_sequence_state_summary_copy(
             source->sequence_state, &sequence, err);
-        if (rc != YVEX_OK || !sequence.fork_supported ||
-            sequence.host_state_bytes > remaining) {
+        if (rc != YVEX_OK) {
             rc = prefix_refuse(
-                failure,
-                rc == YVEX_OK ? YVEX_ERR_BOUNDS : (yvex_status)rc,
-                rc == YVEX_OK
-                    ? "recurrent prefix exceeded the shared byte budget"
-                    : "recurrent prefix is not forkable",
-                err);
+                failure, (yvex_status)rc,
+                "recurrent prefix summary is unavailable", err);
+            goto done;
+        }
+        sequence_bytes = prefix_sequence_bytes(&sequence);
+        if (!sequence.fork_supported || !sequence_bytes) {
+            rc = prefix_refuse(
+                failure, YVEX_ERR_UNSUPPORTED,
+                "recurrent prefix storage is not forkable", err);
+            goto done;
+        }
+        if (sequence_bytes > remaining) {
+            rc = prefix_refuse(
+                failure, YVEX_ERR_BOUNDS,
+                "recurrent prefix exceeded the shared byte budget", err);
             goto done;
         }
         rc = yvex_sequence_state_fork(
@@ -392,6 +411,55 @@ static int prefix_provider_attach(
     return rc;
 }
 
+static int prefix_capacity_rebuild(
+    const yvex_attention_plan *attention,
+    const yvex_attention_state_recipe *recipes,
+    unsigned long long recipe_count,
+    yvex_graph_attention_capacity_plan **out, yvex_error *err)
+{
+    yvex_graph_attention_capacity_request request = {0};
+    const yvex_graph_attention_capacity_summary *summary;
+    unsigned long long layer;
+    int rc;
+
+    if (out) *out = NULL;
+    if (!attention || !recipes || !recipe_count || !out ||
+        recipes[0].final_position <= recipes[0].initial_position)
+        return prefix_refuse(
+            NULL, YVEX_ERR_FORMAT,
+            "prefix attention capacity is incomplete", err);
+    request.scope = YVEX_ATTENTION_PROBE_SCOPE_FULL;
+    request.history_tokens = recipes[0].initial_position;
+    request.start_position = recipes[0].initial_position;
+    request.token_count = recipes[0].final_position -
+                          recipes[0].initial_position;
+    request.execution_count = 1ull;
+    request.use_requested_position = 1;
+    rc = yvex_graph_attention_capacity_plan_build(
+        out, attention, &request, err);
+    summary = rc == YVEX_OK
+                  ? yvex_graph_attention_capacity_plan_summary(*out)
+                  : NULL;
+    if (rc == YVEX_OK &&
+        (!summary || summary->layer_count != recipe_count ||
+         summary->selected_layer_count != recipe_count))
+        rc = prefix_refuse(
+            NULL, YVEX_ERR_FORMAT,
+            "prefix attention capacity coverage changed", err);
+    for (layer = 0ull; rc == YVEX_OK && layer < recipe_count; ++layer) {
+        const yvex_graph_attention_capacity_layer *capacity =
+            yvex_graph_attention_capacity_plan_layer(*out, layer);
+        if (!capacity || !capacity->selected ||
+            strcmp(capacity->recipe.identity, recipes[layer].identity) != 0)
+            rc = prefix_refuse(
+                NULL, YVEX_ERR_FORMAT,
+                "prefix attention capacity recipe changed", err);
+    }
+    if (rc != YVEX_OK)
+        yvex_graph_attention_capacity_plan_close(out);
+    return rc;
+}
+
 int yvex_runtime_session_prefix_attach(
     yvex_runtime_execution_session *destination,
     const yvex_runtime_session_prefix *prefix,
@@ -399,6 +467,9 @@ int yvex_runtime_session_prefix_attach(
     yvex_model_engine_failure *failure, yvex_error *err)
 {
     yvex_model_engine_summary model = {0};
+    const yvex_model_engine_view *model_view;
+    yvex_graph_attention_capacity_plan *target_capacity = NULL;
+    yvex_graph_attention_capacity_plan *draft_capacity = NULL;
     yvex_runtime_session_prefix_summary current = {0};
     yvex_sequence_state_summary destination_sequence = {0};
     int rc, draft_pristine = 0;
@@ -412,6 +483,9 @@ int yvex_runtime_session_prefix_attach(
     rc = prefix_identity(prefix, &current) ? YVEX_OK : YVEX_ERR_FORMAT;
     if (rc == YVEX_OK)
         rc = yvex_model_engine_summary_copy(destination->engine, &model, err);
+    model_view = rc == YVEX_OK
+                     ? yvex_model_engine_view_get(destination->engine)
+                     : NULL;
     if (rc == YVEX_OK && !prefix->draft &&
         destination->draft_attention_state_provider_ready)
         rc = yvex_runtime_private_attention_state_pristine(
@@ -444,17 +518,36 @@ int yvex_runtime_session_prefix_attach(
                            err);
         goto done;
     }
+    if (prefix->target)
+        rc = prefix_capacity_rebuild(
+            model_view ? model_view->attention : NULL,
+            prefix->target_recipes, prefix->target_recipe_count,
+            &target_capacity, err);
+    if (rc == YVEX_OK && prefix->draft)
+        rc = prefix_capacity_rebuild(
+            model_view ? model_view->draft_attention : NULL,
+            prefix->draft_recipes, prefix->draft_recipe_count,
+            &draft_capacity, err);
     rc = prefix->target
+             && rc == YVEX_OK
              ? prefix_provider_attach(
                    &destination->attention_state_provider,
                    &prefix->target_capacity, prefix->target,
                    prefix->target_recipes, prefix->target_recipe_count, err)
-             : YVEX_OK;
+             : rc;
+    if (rc == YVEX_OK && target_capacity)
+        rc = yvex_runtime_private_session_prepare_persistent_scope_state_locked(
+            destination, YVEX_TENSOR_SCOPE_GLOBAL, target_capacity,
+            failure, err);
     if (rc == YVEX_OK && prefix->draft)
         rc = prefix_provider_attach(
             &destination->draft_attention_state_provider,
             &prefix->draft_capacity, prefix->draft,
             prefix->draft_recipes, prefix->draft_recipe_count, err);
+    if (rc == YVEX_OK && draft_capacity)
+        rc = yvex_runtime_private_session_prepare_persistent_scope_state_locked(
+            destination, YVEX_TENSOR_SCOPE_DRAFT, draft_capacity,
+            failure, err);
     if (rc == YVEX_OK && prefix->sequence)
         rc = yvex_sequence_state_restore(
             destination->sequence_state, prefix->sequence, err);
@@ -493,6 +586,8 @@ int yvex_runtime_session_prefix_attach(
     if (failure) memset(failure, 0, sizeof(*failure));
     yvex_error_clear(err);
 done:
+    yvex_graph_attention_capacity_plan_close(&draft_capacity);
+    yvex_graph_attention_capacity_plan_close(&target_capacity);
     (void)pthread_mutex_unlock(&destination->lifecycle_mutex);
     return rc;
 }

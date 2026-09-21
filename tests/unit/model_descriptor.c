@@ -488,6 +488,9 @@ static int test_compiled_forward_import(const yvex_decoder_plan *decoder,
     yvex_core_bytes wire = {.maximum = 1024u * 1024u}, payload = {.maximum = 1024u * 1024u};
     yvex_core_bytes again = {.maximum = 1024u * 1024u};
     yvex_compiled_model_plan *plan = NULL, *rejected = NULL;
+    yvex_compiled_context_envelope envelope;
+    const yvex_decoder_plan_summary *decoder_summary =
+        yvex_decoder_plan_summary_get(decoder);
     yvex_error err = {0};
     size_t payload_offset;
     YVEX_TEST_ASSERT(compiled_fixture_text(&wire, schema == 7u ?
@@ -508,6 +511,16 @@ static int test_compiled_forward_import(const yvex_decoder_plan *decoder,
         yvex_compiled_model_plan_encode(plan, &again, &err) == YVEX_OK &&
         again.count == wire.count && !memcmp(wire.data, again.data, wire.count),
         "whole executable reopens against exact physical bindings and roundtrips without rebuilding computation");
+    YVEX_TEST_ASSERT(
+        decoder_summary &&
+            yvex_compiled_model_plan_context_envelope(
+                plan, decoder_summary->model_execution_identity,
+                decoder_summary->maximum_context, &envelope, &err) == YVEX_OK &&
+            envelope.target_kind == YVEX_EXECUTION_PLAN_DECODER &&
+            strcmp(envelope.target_decoder_identity,
+                   decoder_summary->decoder_plan_identity) == 0 &&
+            !envelope.target_program_identity[0],
+        "decoder context owns its nested forward program without inventing a second target");
     YVEX_TEST_ASSERT(test_compiled_session_state(plan) == 0,
         "runtime state consumes reopened physical program authority");
     YVEX_TEST_ASSERT(yvex_compiled_model_plan_decode(&rejected, wire.data, wire.count - 1u, &err) != YVEX_OK &&
