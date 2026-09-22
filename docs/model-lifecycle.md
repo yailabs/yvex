@@ -191,6 +191,11 @@ the cache does not independently fingerprint every rebuilt executable.
 An unchanged verified ready representation is reused. A changed policy or input
 must resolve a different plan; existing conflicting output is rejected. A
 missing or stale verification receipt never authorizes reuse based on filename.
+If a family selects an existing local representation for binding recovery,
+`model prepare` first checks its exact artifact, sealed physical plan, policy,
+and authenticated source manifest, even when the original source is available.
+It publishes a fresh current binding without rewriting the representation or
+turning an older malformed binding into launch authority.
 
 ## Runtime and local removal
 

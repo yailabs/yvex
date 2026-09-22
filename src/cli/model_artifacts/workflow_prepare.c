@@ -612,11 +612,14 @@ static int prepare_plan_build(const model_prepare_options *options,
     yvex_quant_policy *policy = NULL;
     yvex_quant_policy_summary summary;
     const char *target;
+    unsigned long long artifact_index;
+    int source_available, selected_rebind_present = 0;
     int rc;
 
     memset(plan, 0, sizeof(*plan));
     plan->model = yvex_model_library_at(library, model_index);
     plan->source = prepare_exact_source(library, model_index, &plan->source_identity);
+    source_available = plan->source && plan->source_identity;
     target = plan->model && plan->model->runtime_target[0]
                  ? plan->model->runtime_target
                  : plan->source_identity ? plan->source_identity->target_id : NULL;
@@ -647,7 +650,22 @@ static int prepare_plan_build(const model_prepare_options *options,
                        "model has no exact acquired source-to-ready compiler binding");
         return YVEX_ERR_UNSUPPORTED;
     }
-    if (!plan->source || !plan->source_identity) {
+    for (artifact_index = 0ull;
+         artifact_index < yvex_model_library_artifact_count(library, model_index);
+         ++artifact_index) {
+        const yvex_model_artifact_fact *artifact =
+            yvex_model_library_artifact_at(library, model_index, artifact_index);
+        if (artifact && artifact->path[0] &&
+            access(artifact->path, R_OK) == 0 &&
+            plan->deployment->rebind_artifact_identity &&
+            !strcmp(artifact->identity,
+                    plan->deployment->rebind_artifact_identity)) {
+            selected_rebind_present = 1;
+            break;
+        }
+    }
+    if (!source_available ||
+        (selected_rebind_present && !options->quant && !options->imatrix)) {
         if (options->quant || options->imatrix) {
             yvex_error_set(
                 err, YVEX_ERR_UNSUPPORTED, "model.prepare",

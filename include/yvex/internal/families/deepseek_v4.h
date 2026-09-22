@@ -22,7 +22,7 @@
 #define YVEX_DEEPSEEK_LEGACY_ARTIFACT_TRANSFORM_IDENTITY \
     "cb857e6be90168ddde621c1352b0d45084901c683520f1eb1241d5559e01b7b5"
 #define YVEX_DEEPSEEK_REBIND_ARTIFACT_IDENTITY \
-    "59c4649b19bb9f3eb7c01559e12ae52c3d4fbd067957e35de0a1a851759c7cc1"
+    "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f"
 typedef struct yvex_source_verification yvex_source_verification;
 typedef struct yvex_source_tensor_snapshot yvex_source_tensor_snapshot;
 typedef struct yvex_source_payload_plan yvex_source_payload_plan;
