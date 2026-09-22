@@ -502,6 +502,36 @@ typedef struct {
     yvex_runtime_state_residency *draft_state_residency;
     yvex_sequence_state *sequence_state;
 } yvex_runtime_session_view;
+
+#define YVEX_RUNTIME_SESSION_COMMITTED_STATE_SCHEMA_V1 1u
+typedef struct {
+    unsigned int schema_version;
+    yvex_backend_kind backend;
+    unsigned long long engine_generation, session_ordinal;
+    unsigned long long active_domain_count;
+    int target_attention_present, draft_attention_present, recurrent_present;
+    unsigned long long target_attention_generation;
+    unsigned long long target_attention_committed_sequence_length;
+    unsigned long long target_attention_layer_count;
+    unsigned long long draft_attention_generation;
+    unsigned long long draft_attention_committed_sequence_length;
+    unsigned long long draft_attention_layer_count;
+    unsigned long long recurrent_generation, recurrent_committed_position;
+    unsigned long long recurrent_binding_count;
+    char runtime_model_identity[YVEX_SHA256_HEX_CAP];
+    char runtime_binding_identity[YVEX_SHA256_HEX_CAP];
+    char engine_specialization_identity[YVEX_SHA256_HEX_CAP];
+    char session_lineage_identity[YVEX_SHA256_HEX_CAP];
+    char target_attention_layout_identity[YVEX_SHA256_HEX_CAP];
+    char target_attention_capacity_identity[YVEX_SHA256_HEX_CAP];
+    char target_attention_content_identity[YVEX_SHA256_HEX_CAP];
+    char draft_attention_layout_identity[YVEX_SHA256_HEX_CAP];
+    char draft_attention_capacity_identity[YVEX_SHA256_HEX_CAP];
+    char draft_attention_content_identity[YVEX_SHA256_HEX_CAP];
+    char recurrent_plan_identity[YVEX_SHA256_HEX_CAP];
+    char recurrent_content_identity[YVEX_SHA256_HEX_CAP];
+    char identity[YVEX_SHA256_HEX_CAP];
+} yvex_runtime_session_committed_state_summary;
 /* A cleanup failure may retain an unpublished closing session in out; retry close discharges it. */
 int yvex_runtime_session_open(yvex_runtime_execution_session **out, yvex_model_engine *model,
     const yvex_runtime_session_open_request *request, yvex_model_engine_failure *failure,
@@ -514,6 +544,9 @@ int yvex_runtime_session_prepare_attention_workspace(yvex_runtime_execution_sess
     yvex_model_engine_failure *failure, yvex_error *err);
 int yvex_runtime_session_summary_copy(const yvex_runtime_execution_session *session,
                                       yvex_runtime_session_summary *out, yvex_error *err);
+int yvex_runtime_session_committed_state_summary_copy(
+    const yvex_runtime_execution_session *session,
+    yvex_runtime_session_committed_state_summary *out, yvex_error *err);
 int yvex_runtime_session_close(yvex_runtime_execution_session **session, yvex_error *err);
 const yvex_runtime_session_view *yvex_runtime_session_view_get(const yvex_runtime_execution_session *session);
 int yvex_runtime_device_view_bind(yvex_execution_device_view *out, yvex_execution_device_value_kind kind,

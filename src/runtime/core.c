@@ -189,21 +189,36 @@ static int runtime_model_session_reserve(yvex_model_engine *model,
     return YVEX_OK;
 }
 
-static int runtime_model_session_register_locked(
-    yvex_model_engine *model, yvex_runtime_execution_session *session) {
+int yvex_runtime_private_session_lineage_identity(
+    const char *runtime_model_identity, unsigned long long session_ordinal,
+    char output[YVEX_SHA256_HEX_CAP]) {
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+
+    if (!yvex_sha256_hex_valid(runtime_model_identity) || !session_ordinal ||
+        !output)
+        return 0;
+    output[0] = '\0';
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(&hash, "yvex.runtime.batch-source.v1") ||
+        !yvex_sha256_update_text(&hash, runtime_model_identity) ||
+        !yvex_sha256_update_u64(&hash, session_ordinal) ||
+        !yvex_sha256_final(&hash, digest))
+        return 0;
+    yvex_sha256_hex(digest, output);
+    return 1;
+}
+
+static int runtime_model_session_register_locked(
+    yvex_model_engine *model, yvex_runtime_execution_session *session) {
     if (!yvex_core_u64_add(model->next_session_ordinal, 1ull,
                            &model->next_session_ordinal))
         return 0;
     session->batch_source_ordinal = model->next_session_ordinal;
-    yvex_sha256_init(&hash);
-    if (!yvex_sha256_update_text(&hash, "yvex.runtime.batch-source.v1") ||
-        !yvex_sha256_update_text(&hash, model->summary.runtime_model_identity) ||
-        !yvex_sha256_update_u64(&hash, session->batch_source_ordinal) ||
-        !yvex_sha256_final(&hash, digest))
+    if (!yvex_runtime_private_session_lineage_identity(
+            model->summary.runtime_model_identity,
+            session->batch_source_ordinal, session->batch_source_identity))
         return 0;
-    yvex_sha256_hex(digest, session->batch_source_identity);
     session->engine_next = model->sessions;
     if (model->sessions) model->sessions->engine_previous = session;
     model->sessions = session;

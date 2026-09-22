@@ -587,22 +587,18 @@ static int readout_source_state_identity(
     const yvex_decision_readout_context *context,
     char output[YVEX_SHA256_HEX_CAP], yvex_error *err)
 {
-    const yvex_runtime_session_view *view =
-        yvex_runtime_session_view_get(context->source.session);
+    yvex_runtime_session_committed_state_summary state = {0};
+
     if (output) output[0] = '\0';
-    if (!view || !output)
+    if (!context || !context->source.session || !output)
         return readout_refuse(
             err, YVEX_ERR_STATE, "runtime.decision-readout.state",
             "readout source session state is unavailable");
-    if (view->sequence_state)
-        return yvex_sequence_state_committed_identity(
-            view->sequence_state, output, err);
-    return readout_identity_text(
-               "yvex.decision-readout.attention-state.v1", output)
-               ? YVEX_OK
-               : readout_refuse(
-                     err, YVEX_ERR_STATE, "runtime.decision-readout.state",
-                     "readout source state identity could not seal");
+    if (yvex_runtime_session_committed_state_summary_copy(
+            context->source.session, &state, err) != YVEX_OK)
+        return yvex_error_code(err);
+    yvex_runtime_identity_copy(output, state.identity);
+    return YVEX_OK;
 }
 
 int yvex_decision_readout_prefix_prepare(

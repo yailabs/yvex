@@ -111,6 +111,9 @@ int yvex_runtime_private_binding_identity_chain_valid(
     const yvex_materialization_summary *materialization,
     const yvex_runtime_descriptor_summary *descriptor,
     const yvex_attention_summary *attention);
+int yvex_runtime_private_session_lineage_identity(
+    const char *runtime_model_identity, unsigned long long session_ordinal,
+    char output[YVEX_SHA256_HEX_CAP]);
 int yvex_runtime_private_binding_decoder_matches(
     const yvex_decoder_plan_summary *decoder,
     const yvex_runtime_descriptor_summary *descriptor,

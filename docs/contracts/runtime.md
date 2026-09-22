@@ -226,6 +226,17 @@ state as well as attention state: capture authenticates the exact committed
 position, plan and content; attach restores only into an identity-compatible
 pristine state owner. This is not a durable cross-process prefix cache.
 
+Internal committed-session-state observation schema v1 is the common mutable
+session authority, distinct from an immutable captured prefix. Under the
+session lifecycle lock it composes, in canonical target-attention,
+draft-attention, recurrent order, every active domain's canonical committed
+content identity, extent and generation with exact model, binding,
+specialization, engine generation and session lineage. Presence and role are
+identity-significant. An active transaction, staged/candidate publication,
+invalid provider, inconsistent hybrid target extent, stale lineage or closing
+session refuses instead of publishing a cross-time identity. The composition
+does not hash pointers, allocation order, paths or timestamps.
+
 ## Finite-candidate decision readout
 
 The internal Decision Readout v1 runner is a Program O computational consumer,
@@ -234,7 +245,10 @@ model, artifact, runtime binding, engine generation and tokenizer to one
 immutable shared prefix. Each opaque candidate identity names an explicit,
 non-empty token sequence. Candidate branches attach the same common runtime
 prefix into isolated sessions; they never share mutable state with each other
-or publish state into the source session.
+or publish state into the source session. The runner observes the common
+committed-session-state identity before and after all branches and refuses the
+result if either observation is unavailable or any active attention/recurrent
+domain changed.
 
 For candidate tokens `c1..ck` and prefix `P`, the primary score is the raw
 teacher-forced log-likelihood `sum_i log p(ci | P,c1..c(i-1))`, computed from

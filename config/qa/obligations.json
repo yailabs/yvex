@@ -217,7 +217,9 @@
     },
     {
       "id": "runtime-transaction",
-      "patterns": ["src/runtime/session.c", "src/runtime/state*.c", "src/runtime/prefix.c", "src/graph/state*.c", "include/yvex/internal/graph_state.h"],
+      "patterns": ["src/runtime/session.c", "src/runtime/session_summary.c",
+                   "src/runtime/state*.c", "src/runtime/prefix.c",
+                   "src/graph/state*.c", "include/yvex/internal/graph_state.h"],
       "lanes": ["fast", "runtime", "sanitizer"],
       "tests": ["unit.runtime_state", "integration.tiny-vertical"],
       "reason": "mutable state requires reset, cancellation, rollback, cleanup, and composed lifecycle evidence"

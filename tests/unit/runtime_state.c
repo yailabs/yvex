@@ -2427,6 +2427,395 @@ static int test_state_pages(const state_plan_fixture *fixture)
     return 0;
 }
 
+static void session_identity_text(
+    char output[YVEX_SHA256_HEX_CAP], char value)
+{
+    memset(output, value, YVEX_SHA256_HEX_CAP - 1u);
+    output[YVEX_SHA256_HEX_CAP - 1u] = '\0';
+}
+
+static int session_identity_summary(
+    void *context, yvex_graph_attention_state_summary *out, yvex_error *err)
+{
+    if (!context || !out) return YVEX_ERR_INVALID_ARG;
+    *out = *(const yvex_graph_attention_state_summary *)context;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+static int session_identity_open(
+    yvex_runtime_execution_session *session, yvex_model_engine *engine,
+    yvex_engine_specialization *specialization, yvex_backend **backend,
+    yvex_error *err)
+{
+    memset(session, 0, sizeof(*session));
+    memset(engine, 0, sizeof(*engine));
+    memset(specialization, 0, sizeof(*specialization));
+    if (yvex_backend_open_cpu(backend, err) != YVEX_OK ||
+        pthread_mutex_init(&session->lifecycle_mutex, NULL) != 0)
+        return 0;
+    session->lifecycle_mutex_ready = 1;
+    engine->summary.sealed = engine->summary.valid = 1;
+    engine->summary.engine_generation = 11ull;
+    engine->summary.attention_layer_count = 1ull;
+    engine->summary.draft_attention_layer_count = 1ull;
+    engine->binding_summary.recurrent_layer_count = 1ull;
+    session_identity_text(engine->summary.runtime_model_identity, 'a');
+    session_identity_text(engine->summary.runtime_binding_identity, 'b');
+    specialization->summary.schema_version =
+        YVEX_ENGINE_SPECIALIZATION_SCHEMA_V1;
+    specialization->summary.backend = YVEX_BACKEND_KIND_CPU;
+    session_identity_text(specialization->summary.identity, 'c');
+    engine->specializations[YVEX_BACKEND_KIND_CPU] = specialization;
+    session->engine = engine;
+    session->engine_registered = 1;
+    session->engine_reserved = 1;
+    session->specialization = specialization;
+    session->backend = *backend;
+    session->summary.open = 1;
+    session->summary.backend = YVEX_BACKEND_KIND_CPU;
+    session->summary.engine_generation = engine->summary.engine_generation;
+    yvex_runtime_identity_copy(
+        session->summary.engine_specialization_identity,
+        specialization->summary.identity);
+    session->batch_source_ordinal = 7ull;
+    if (!yvex_runtime_private_session_lineage_identity(
+            engine->summary.runtime_model_identity,
+            session->batch_source_ordinal, session->batch_source_identity))
+        return 0;
+    session->view.engine = engine;
+    session->view.backend = *backend;
+    return 1;
+}
+
+static int session_identity_sequence_open(
+    yvex_sequence_state **state, const char *plan_identity, yvex_error *err)
+{
+    yvex_sequence_state_binding binding;
+    yvex_sequence_state_plan plan;
+
+    if (yvex_sequence_state_binding_seal(
+            &binding, 0ull, 2ull, 4ull, plan_identity, err) != YVEX_OK)
+        return 0;
+    plan = (yvex_sequence_state_plan){
+        .schema_version = YVEX_SEQUENCE_STATE_SCHEMA_V1,
+        .bindings = &binding, .binding_count = 1ull};
+    return yvex_sequence_state_open(state, &plan, err) == YVEX_OK;
+}
+
+static int session_identity_mutation_controls(
+    yvex_runtime_execution_session *session, yvex_sequence_state *sequence,
+    yvex_attention_failure *failure, yvex_error *err)
+{
+    yvex_runtime_session_committed_state_summary first, second, third;
+    yvex_attention_state_provider swapped;
+    char stable_identity[YVEX_SHA256_HEX_CAP];
+
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &first, err) == YVEX_OK &&
+            first.schema_version ==
+                YVEX_RUNTIME_SESSION_COMMITTED_STATE_SCHEMA_V1 &&
+            first.active_domain_count == 3ull &&
+            first.target_attention_present &&
+            first.draft_attention_present && first.recurrent_present &&
+            yvex_runtime_session_committed_state_summary_copy(
+                session, &second, err) == YVEX_OK &&
+            strcmp(first.identity, second.identity) == 0,
+        "unchanged hybrid committed state has one stable common identity");
+    yvex_runtime_identity_copy(stable_identity, first.identity);
+
+    session->draft_attention_state_provider_ready = 0;
+    session->view.draft_attention_state_provider = NULL;
+    session->engine->summary.draft_attention_layer_count = 0ull;
+    YVEX_TEST_ASSERT(
+        session->attention_state_provider.reset(
+            session->attention_state_provider.context, failure, err) ==
+                YVEX_OK &&
+            yvex_runtime_session_committed_state_summary_copy(
+                session, &second, err) == YVEX_OK &&
+            strcmp(stable_identity, second.identity) != 0 &&
+            yvex_sequence_state_reset(sequence, err) == YVEX_OK &&
+            yvex_runtime_session_committed_state_summary_copy(
+                session, &third, err) == YVEX_OK &&
+            strcmp(second.identity, third.identity) != 0,
+        "hybrid attention-only and recurrent-only committed mutations change identity");
+
+    session->sequence_state = NULL;
+    session->view.sequence_state = NULL;
+    session->engine->binding_summary.recurrent_layer_count = 0ull;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &first, err) == YVEX_OK &&
+            session->attention_state_provider.reset(
+                session->attention_state_provider.context, failure, err) ==
+                YVEX_OK &&
+            yvex_runtime_session_committed_state_summary_copy(
+                session, &second, err) == YVEX_OK &&
+            first.target_attention_present && !first.recurrent_present &&
+            strcmp(first.identity, second.identity) != 0,
+        "attention-only committed mutation cannot reuse a placeholder identity");
+    session->attention_state_provider_ready = 0;
+    session->view.attention_state_provider = NULL;
+    session->engine->summary.attention_layer_count = 0ull;
+    session->sequence_state = sequence;
+    session->view.sequence_state = sequence;
+    session->engine->binding_summary.recurrent_layer_count = 1ull;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &first, err) == YVEX_OK &&
+            yvex_sequence_state_reset(sequence, err) == YVEX_OK &&
+            yvex_runtime_session_committed_state_summary_copy(
+                session, &second, err) == YVEX_OK &&
+            !first.target_attention_present && first.recurrent_present &&
+            strcmp(first.identity, second.identity) != 0,
+        "recurrent-only committed mutation changes the common identity");
+
+    session->attention_state_provider_ready = 1;
+    session->view.attention_state_provider = &session->attention_state_provider;
+    session->engine->summary.attention_layer_count = 1ull;
+    session->draft_attention_state_provider_ready = 1;
+    session->view.draft_attention_state_provider =
+        &session->draft_attention_state_provider;
+    session->engine->summary.draft_attention_layer_count = 1ull;
+    YVEX_TEST_ASSERT(
+        session->draft_attention_state_provider.reset(
+            session->draft_attention_state_provider.context, failure, err) ==
+                YVEX_OK &&
+            yvex_runtime_session_committed_state_summary_copy(
+                session, &first, err) == YVEX_OK,
+        "observe independently tagged target and draft domains");
+    swapped = session->attention_state_provider;
+    session->attention_state_provider = session->draft_attention_state_provider;
+    session->draft_attention_state_provider = swapped;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &second, err) == YVEX_OK &&
+            strcmp(first.identity, second.identity) != 0,
+        "target and draft role order is identity-significant");
+    swapped = session->attention_state_provider;
+    session->attention_state_provider = session->draft_attention_state_provider;
+    session->draft_attention_state_provider = swapped;
+    return 0;
+}
+
+static int session_identity_refusal_controls(
+    yvex_runtime_execution_session *session, yvex_sequence_state *sequence,
+    const yvex_attention_layer_plan *layer,
+    yvex_attention_failure *failure, yvex_error *err)
+{
+    yvex_runtime_session_committed_state_summary observed;
+    yvex_graph_attention_state_summary malformed;
+    yvex_attention_state_provider saved_target;
+    yvex_runtime_transaction_participant participant;
+    char content_identity[YVEX_SHA256_HEX_CAP];
+    char lineage_identity[YVEX_SHA256_HEX_CAP];
+
+    session_identity_text(content_identity, 'e');
+    session->draft_attention_state_provider_ready = 0;
+    session->view.draft_attention_state_provider = NULL;
+    session->engine->summary.draft_attention_layer_count = 0ull;
+    YVEX_TEST_ASSERT(
+        state_apply_token(
+            &session->attention_state_provider, layer, 0ull, 0,
+            content_identity) &&
+            yvex_runtime_session_committed_state_summary_copy(
+                session, &observed, err) == YVEX_ERR_STATE &&
+            session->attention_state_provider.reset(
+                session->attention_state_provider.context, failure, err) ==
+                YVEX_OK,
+        "hybrid target/recurrent extent mismatch fails closed");
+    YVEX_TEST_ASSERT(
+        state_begin(&session->attention_state_provider, layer,
+                    0ull, 1ull, NULL, failure, err) == YVEX_OK &&
+            yvex_runtime_session_committed_state_summary_copy(
+                session, &observed, err) == YVEX_ERR_STATE &&
+            session->attention_state_provider.abort(
+                session->attention_state_provider.context, failure, err) ==
+                YVEX_OK &&
+            yvex_sequence_state_begin(sequence, 0ull, 1ull, err) == YVEX_OK &&
+            yvex_runtime_session_committed_state_summary_copy(
+                session, &observed, err) == YVEX_ERR_STATE &&
+            yvex_sequence_state_participant(
+                sequence, &participant, err) == YVEX_OK &&
+            participant.abort(participant.context, err) == YVEX_OK,
+        "active attention or recurrent transaction refuses observation");
+    YVEX_TEST_ASSERT(
+        state_begin(&session->attention_state_provider, layer,
+                    0ull, 1ull, NULL, failure, err) == YVEX_OK &&
+            state_apply_token(
+                &session->attention_state_provider, layer, 0ull, 1,
+                content_identity) &&
+            yvex_runtime_session_committed_state_summary_copy(
+                session, &observed, err) == YVEX_ERR_STATE &&
+            session->attention_state_provider.abort(
+                session->attention_state_provider.context, failure, err) ==
+                YVEX_OK,
+        "staged incomplete attention publication refuses observation");
+
+    session->sequence_state = NULL;
+    session->view.sequence_state = NULL;
+    session->engine->binding_summary.recurrent_layer_count = 0ull;
+    YVEX_TEST_ASSERT(
+        session->attention_state_provider.summary(
+            session->attention_state_provider.context, &malformed, err) ==
+                YVEX_OK,
+        "capture valid attention authority for malformed-summary control");
+    saved_target = session->attention_state_provider;
+    malformed.state_content_identity[0] = '\0';
+    session->attention_state_provider = (yvex_attention_state_provider){
+        .schema_version = YVEX_ATTENTION_STATE_PROVIDER_SCHEMA_V8,
+        .context = &malformed, .summary = session_identity_summary};
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &observed, err) == YVEX_ERR_STATE,
+        "malformed attention content identity fails at the common owner");
+    malformed = *(const yvex_graph_attention_state_summary *)
+        saved_target.context;
+    malformed.position_consistent = 0;
+    session->attention_state_provider = (yvex_attention_state_provider){
+        .schema_version = YVEX_ATTENTION_STATE_PROVIDER_SCHEMA_V8,
+        .context = &malformed, .summary = session_identity_summary};
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &observed, err) == YVEX_ERR_STATE,
+        "inconsistent attention position fails at the common owner");
+    session->attention_state_provider = saved_target;
+    session->attention_state_provider_ready = 0;
+    session->view.attention_state_provider = NULL;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &observed, err) == YVEX_ERR_STATE,
+        "missing required attention domain fails at the common owner");
+    session->attention_state_provider_ready = 1;
+    session->view.attention_state_provider =
+        &session->attention_state_provider;
+
+    session->summary.engine_generation++;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &observed, err) == YVEX_ERR_STATE,
+        "stale engine generation fails closed");
+    session->summary.engine_generation = session->engine->summary.engine_generation;
+    yvex_runtime_identity_copy(lineage_identity, session->batch_source_identity);
+    session->batch_source_identity[0] =
+        session->batch_source_identity[0] == '0' ? '1' : '0';
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &observed, err) == YVEX_ERR_STATE,
+        "stale session lineage identity fails closed");
+    yvex_runtime_identity_copy(session->batch_source_identity,
+                               lineage_identity);
+    session->summary.busy = 1;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &observed, err) == YVEX_ERR_STATE,
+        "busy session cannot publish a cross-time observation");
+    session->summary.busy = 0;
+    session->summary.invalidated = 1;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &observed, err) == YVEX_ERR_STATE,
+        "invalidated session fails closed");
+    session->summary.invalidated = 0;
+    session->closing = 1;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &observed, err) == YVEX_ERR_STATE,
+        "closing session fails closed");
+    session->closing = 0;
+    session->summary.open = 0;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &observed, err) == YVEX_ERR_STATE,
+        "closed session fails closed");
+    session->summary.open = 1;
+    session->view.engine = NULL;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_session_committed_state_summary_copy(
+            session, &observed, err) == YVEX_ERR_STATE,
+        "model/session ownership mismatch fails closed");
+    session->view.engine = session->engine;
+    YVEX_TEST_ASSERT(
+        session->attention_state_provider.invalidate(
+            session->attention_state_provider.context, err) == YVEX_OK &&
+            yvex_runtime_session_committed_state_summary_copy(
+                session, &observed, err) == YVEX_ERR_STATE,
+        "invalid attention provider cannot publish committed identity");
+    session->attention_state_provider_ready = 0;
+    session->engine->summary.attention_layer_count = 0ull;
+    session->sequence_state = sequence;
+    session->view.sequence_state = sequence;
+    session->engine->binding_summary.recurrent_layer_count = 1ull;
+    YVEX_TEST_ASSERT(
+        yvex_sequence_state_invalidate(sequence, err) == YVEX_OK &&
+            yvex_runtime_session_committed_state_summary_copy(
+                session, &observed, err) == YVEX_ERR_STATE,
+        "invalid recurrent provider cannot publish committed identity");
+    return 0;
+}
+
+static int test_session_committed_state_identity(
+    const state_plan_fixture *fixture)
+{
+    state_plan_fixture single = *fixture;
+    yvex_runtime_execution_session session;
+    yvex_model_engine engine;
+    yvex_engine_specialization specialization;
+    yvex_backend *backend = NULL;
+    yvex_sequence_state *sequence = NULL;
+    yvex_attention_failure failure;
+    yvex_error err;
+
+    single.layers[0] = fixture->layers[0];
+    single.layers[0].layer_index = 0ull;
+    single.plan.layers = single.layers;
+    single.plan.layer_count = single.plan.summary.layer_count = 1ull;
+    single.plan.summary.swa_layer_count = 1ull;
+    single.plan.summary.csa_layer_count = 0ull;
+    single.plan.summary.hca_layer_count = 0ull;
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(
+        session_identity_open(
+            &session, &engine, &specialization, &backend, &err) &&
+            state_open(&session.attention_state_provider, &single.plan,
+                       1024ull * 1024ull, &failure, &err) == YVEX_OK &&
+            state_prepare(&session.attention_state_provider, &single.layers[0],
+                          single.plan.summary.attention_plan_identity) &&
+            state_open(&session.draft_attention_state_provider, &single.plan,
+                       1024ull * 1024ull, &failure, &err) == YVEX_OK &&
+            state_prepare(
+                &session.draft_attention_state_provider, &single.layers[0],
+                single.plan.summary.attention_plan_identity) &&
+            session_identity_sequence_open(
+                &sequence, single.plan.summary.attention_plan_identity, &err),
+        "open canonical attention, draft, and recurrent state owners");
+    session.attention_state_provider_ready = 1;
+    session.draft_attention_state_provider_ready = 1;
+    session.sequence_state = sequence;
+    session.view.attention_state_provider = &session.attention_state_provider;
+    session.view.draft_attention_state_provider =
+        &session.draft_attention_state_provider;
+    session.view.sequence_state = sequence;
+    if (session_identity_mutation_controls(
+            &session, sequence, &failure, &err) != 0 ||
+        session_identity_refusal_controls(
+            &session, sequence, &single.layers[0], &failure, &err) != 0)
+        return 1;
+
+    session.sequence_state = NULL;
+    state_close(&session.attention_state_provider);
+    state_close(&session.draft_attention_state_provider);
+    yvex_sequence_state_close(&sequence);
+    yvex_backend_close(backend);
+    backend = NULL;
+    YVEX_TEST_ASSERT(
+        pthread_mutex_destroy(&session.lifecycle_mutex) == 0 && !backend &&
+            !sequence,
+        "session identity fixture closes every state owner");
+    return 0;
+}
+
 int yvex_test_runtime_state(void)
 {
     state_plan_fixture fixture;
@@ -2453,6 +2842,7 @@ int yvex_test_runtime_state(void)
     if (test_prepare_failure_is_atomic(&fixture) != 0) return 1;
     if (test_batch_publication_is_atomic(&fixture) != 0) return 1;
     if (test_deferred_state_publication(&fixture) != 0) return 1;
+    if (test_session_committed_state_identity(&fixture) != 0) return 1;
     YVEX_TEST_ASSERT(state_phase_equivalence(&fixture, 0ull, 6ull),
                      "SWA chunk and ordered decode preserve rollover state exactly");
     YVEX_TEST_ASSERT(state_phase_equivalence(&fixture, 1ull, 2052ull),

@@ -396,6 +396,48 @@ static int qwen_resource_evidence(const qwen_run *run, yvex_error *err)
     return rc;
 }
 
+static int qwen_committed_state_observation(
+    const qwen_run *run, yvex_error *err)
+{
+    yvex_runtime_session_committed_state_summary first = {0}, second = {0};
+    yvex_graph_attention_state_summary attention = {0};
+    yvex_sequence_state_summary sequence = {0};
+    char recurrent_identity[YVEX_SHA256_HEX_CAP] = {0};
+    int rc = yvex_runtime_session_committed_state_summary_copy(
+        run->session, &first, err);
+
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_session_committed_state_summary_copy(
+            run->session, &second, err);
+    if (rc == YVEX_OK)
+        rc = qwen_state_identity(
+            run, &attention, &sequence, recurrent_identity, err);
+    if (rc == YVEX_OK &&
+        (first.schema_version !=
+             YVEX_RUNTIME_SESSION_COMMITTED_STATE_SCHEMA_V1 ||
+         first.active_domain_count != 2ull ||
+         !first.target_attention_present || first.draft_attention_present ||
+         !first.recurrent_present ||
+         first.target_attention_committed_sequence_length != 1ull ||
+         first.recurrent_committed_position != 1ull ||
+         strcmp(first.target_attention_content_identity,
+                attention.state_content_identity) ||
+         strcmp(first.recurrent_content_identity, recurrent_identity) ||
+         strcmp(first.identity, second.identity)))
+        rc = qwen_refuse(
+            err, "common committed-state owner did not observe stable hybrid state");
+    if (rc == YVEX_OK)
+        printf("qwen_session_state schema=%u identity=%s domains=%llu "
+               "target_attention=true draft_attention=false recurrent=true "
+               "extent=%llu recurrent_position=%llu stable=true "
+               "decision_readout=not-invoked\n",
+               first.schema_version, first.identity,
+               first.active_domain_count,
+               first.target_attention_committed_sequence_length,
+               first.recurrent_committed_position);
+    return rc;
+}
+
 static int qwen_compare(const qwen_run *direct, const qwen_run *attached,
                         double *maximum, yvex_error *err)
 {
@@ -436,6 +478,8 @@ static int qwen_hybrid_prefix(yvex_model_engine *model, yvex_error *err)
 
     if (rc == YVEX_OK) rc = qwen_run_token(&direct, 1u, 0ull, err);
     if (rc == YVEX_OK) rc = qwen_resource_evidence(&direct, err);
+    if (rc == YVEX_OK)
+        rc = qwen_committed_state_observation(&direct, err);
     if (rc == YVEX_OK)
         rc = yvex_runtime_session_prefix_capture(
             direct.session, QWEN_PREFIX_BUDGET, &prefix, &captured,
