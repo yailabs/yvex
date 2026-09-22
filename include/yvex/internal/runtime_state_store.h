@@ -15,6 +15,8 @@ extern "C" {
 typedef struct {
     unsigned int schema_version;
     yvex_runtime_sampling_checkpoint sampling;
+    /* Cross-generation plan compatibility; the current execution-profile
+     * identity remains engine-generation-bound and is not persisted here. */
     char generation_plan_identity[YVEX_SHA256_HEX_CAP];
     char checkpoint_identity[YVEX_SHA256_HEX_CAP];
 } yvex_runtime_generation_checkpoint;

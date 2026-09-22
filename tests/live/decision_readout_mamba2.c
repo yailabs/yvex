@@ -52,11 +52,12 @@ static int live_oracle_input_identity(
 }
 
 static int live_oracle_profile(
-    const yvex_runtime_session_summary *session,
+    yvex_model_engine *model, yvex_runtime_execution_session *session,
     yvex_execution_workload_profile *workload,
     yvex_runtime_execution_profile *profile, yvex_error *err)
 {
-    yvex_runtime_execution_profile_request request = {0};
+    yvex_runtime_execution_profile_derivation derivation = {0};
+    int rc;
     workload->schema_version = YVEX_EXECUTION_WORKLOAD_PROFILE_SCHEMA_V1;
     workload->kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY;
     workload->minimum_session_context = 1ull;
@@ -72,19 +73,26 @@ static int live_oracle_profile(
     strcpy(workload->name, "decision-readout-independent-oracle");
     if (yvex_execution_workload_profile_seal(workload, err) != YVEX_OK)
         return yvex_error_code(err);
-    request.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
-    request.engine_generation = session->engine_generation;
-    request.engine_specialization_identity =
-        session->engine_specialization_identity;
-    request.kernel_bundle_identity = session->engine_specialization_identity;
-    request.workload_profile_identity = workload->identity;
-    request.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
-    request.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
-    request.execution_class = YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE;
-    request.attention_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
-    request.moe_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
-    request.sampling_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
-    return yvex_runtime_execution_profile_seal(&request, profile, err);
+    derivation.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
+    derivation.model = model;
+    derivation.session = session;
+    derivation.workload = workload;
+    derivation.backend = YVEX_BACKEND_KIND_CPU;
+    derivation.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
+    derivation.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
+    derivation.sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED;
+    rc = yvex_runtime_execution_profile_derive(
+        &derivation, profile, err);
+    if (rc == YVEX_OK &&
+        (profile->execution_class != YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE ||
+         profile->attention_resolution != YVEX_EXECUTION_RESOLUTION_EXACT ||
+         profile->moe_resolution != YVEX_EXECUTION_RESOLUTION_EXACT ||
+         profile->sampling_resolution != YVEX_EXECUTION_RESOLUTION_EXACT)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "decision-readout.live",
+                       "Mamba CPU execution-profile posture changed");
+        return YVEX_ERR_STATE;
+    }
+    return rc;
 }
 
 static int live_oracle_token(
@@ -132,7 +140,6 @@ static int live_independent_oracle(
     yvex_runtime_execution_session *session = NULL;
     yvex_runtime_decoder_execution_context *decoder = NULL;
     yvex_runtime_logits_context *logits = NULL;
-    yvex_runtime_session_summary session_summary = {0};
     yvex_execution_workload_profile workload = {0};
     yvex_runtime_execution_profile profile = {0};
     float *values = NULL;
@@ -145,11 +152,8 @@ static int live_independent_oracle(
     rc = yvex_runtime_session_open(
         &session, model, &session_request, &failure, err);
     if (rc == YVEX_OK)
-        rc = yvex_runtime_session_summary_copy(
-            session, &session_summary, err);
-    if (rc == YVEX_OK)
         rc = live_oracle_profile(
-            &session_summary, &workload, &profile, err);
+            model, session, &workload, &profile, err);
     decoder_options.context_capacity = 8ull;
     decoder_options.token_capacity = 1ull;
     decoder_options.execution_profile = &profile;

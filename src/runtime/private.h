@@ -393,25 +393,9 @@ static inline int runtime_execution_profile_matches(
     const yvex_model_engine *model,
     const yvex_runtime_execution_session *session)
 {
-    const yvex_engine_specialization *specialization;
-    if (!profile || !model || !session || !model->summary.sealed ||
-        !model->summary.valid || session->engine != model ||
-        session->summary.backend > YVEX_BACKEND_KIND_CUDA)
-        return 0;
-    specialization = model->specializations[session->summary.backend];
-    return specialization && session->specialization == specialization &&
-           profile->schema_version == YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1 &&
-           yvex_sha256_hex_valid(profile->identity) &&
-           yvex_sha256_hex_valid(profile->engine_specialization_identity) &&
-           yvex_sha256_hex_valid(profile->kernel_bundle_identity) &&
-           yvex_sha256_hex_valid(profile->workload_profile_identity) &&
-           profile->engine_generation &&
-           profile->engine_generation == model->summary.engine_generation &&
-           profile->engine_generation == session->summary.engine_generation &&
-           strcmp(profile->engine_specialization_identity,
-                  specialization->summary.identity) == 0 &&
-           strcmp(profile->engine_specialization_identity,
-                  session->summary.engine_specialization_identity) == 0;
+    yvex_error ignored = {0};
+    return yvex_runtime_execution_profile_admit(
+               profile, model, session, &ignored) == YVEX_OK;
 }
 
 typedef struct {

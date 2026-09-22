@@ -2039,7 +2039,7 @@ static int test_compiled_model_binding_v16(const char *root)
     yvex_runtime_generation_context *generation = NULL;
     yvex_runtime_generation_options generation_options = {0};
     yvex_runtime_session_open_request session_request = {0};
-    yvex_runtime_execution_profile_request profile_request = {0};
+    yvex_runtime_execution_profile_derivation profile_derivation = {0};
     yvex_runtime_execution_profile profile, mismatched_profile;
     yvex_execution_workload_profile profile_workload = {0};
     yvex_model_engine_summary model_summary;
@@ -2124,27 +2124,36 @@ static int test_compiled_model_binding_v16(const char *root)
     YVEX_TEST_ASSERT(
         yvex_execution_workload_profile_seal(&profile_workload, &err) == YVEX_OK,
         "v16 profile test owns one sealed runtime workload");
-    profile_request.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
-    profile_request.engine_generation = session_summary.engine_generation;
-    profile_request.engine_specialization_identity =
-        session_summary.engine_specialization_identity;
-    profile_request.kernel_bundle_identity =
-        session_summary.engine_specialization_identity;
-    profile_request.workload_profile_identity = profile_workload.identity;
-    profile_request.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
-    profile_request.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
-    profile_request.execution_class = YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE;
-    profile_request.attention_resolution =
-        YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
-    profile_request.moe_resolution =
-        YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
-    profile_request.sampling_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
+    profile_derivation.schema_version =
+        YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
+    profile_derivation.model = model;
+    profile_derivation.session = session;
+    profile_derivation.workload = &profile_workload;
+    profile_derivation.backend = YVEX_BACKEND_KIND_CPU;
+    profile_derivation.generation_mode =
+        YVEX_EXECUTION_GENERATION_TARGET_ONLY;
+    profile_derivation.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
+    profile_derivation.sampling_requirement =
+        YVEX_EXECUTION_SAMPLING_NOT_INVOKED;
     YVEX_TEST_ASSERT(
-        yvex_runtime_execution_profile_seal(
-            &profile_request, &profile, &err) == YVEX_OK &&
+        yvex_runtime_execution_profile_derive(
+            &profile_derivation, &profile, &err) == YVEX_OK &&
             runtime_execution_profile_matches(
-                &profile, model, session),
-        "runtime workload profile binds to its admitted engine generation");
+                &profile, model, session) &&
+            yvex_sha256_hex_valid(profile.kernel_bundle_identity) &&
+            strcmp(profile.kernel_bundle_identity,
+                   session_summary.engine_specialization_identity) != 0 &&
+            profile.execution_class == YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE &&
+            profile.attention_resolution ==
+                (summary.capabilities.attention_core_ready
+                     ? YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED
+                     : YVEX_EXECUTION_RESOLUTION_EXACT) &&
+            profile.moe_resolution ==
+                (summary.capabilities.moe_block_ready
+                     ? YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED
+                     : YVEX_EXECUTION_RESOLUTION_EXACT) &&
+            profile.sampling_resolution == YVEX_EXECUTION_RESOLUTION_EXACT,
+        "runtime workload profile derives the admitted portable execution facts");
     mismatched_profile = profile;
     mismatched_profile.engine_generation++;
     YVEX_TEST_ASSERT(
@@ -2158,6 +2167,27 @@ static int test_compiled_model_binding_v16(const char *root)
         !runtime_execution_profile_matches(
             &mismatched_profile, model, session),
         "runtime workload profile refuses a different engine specialization");
+    mismatched_profile = profile;
+    memset(mismatched_profile.kernel_bundle_identity, 'a',
+           YVEX_SHA256_HEX_CAP - 1u);
+    mismatched_profile.kernel_bundle_identity[YVEX_SHA256_HEX_CAP - 1u] = '\0';
+    YVEX_TEST_ASSERT(
+        !runtime_execution_profile_matches(
+            &mismatched_profile, model, session),
+        "runtime workload profile refuses a different kernel bundle");
+    profile_workload.logical_batch_tokens++;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_execution_profile_derive(
+            &profile_derivation, &mismatched_profile, &err) ==
+            YVEX_ERR_INVALID_ARG,
+        "runtime workload profile refuses a stale workload identity");
+    profile_workload.logical_batch_tokens--;
+    profile_derivation.backend = YVEX_BACKEND_KIND_CUDA;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_execution_profile_derive(
+            &profile_derivation, &mismatched_profile, &err) == YVEX_ERR_STATE,
+        "runtime workload profile refuses a backend contradiction");
+    profile_derivation.backend = YVEX_BACKEND_KIND_CPU;
     generation_options.schema_version = YVEX_RUNTIME_GENERATION_SCHEMA_V6;
     generation_options.backend = YVEX_BACKEND_KIND_CPU;
     generation_options.mode = YVEX_GENERATION_MODE_TARGET_ONLY;
@@ -4830,6 +4860,186 @@ static int test_runtime_cuda_session_cleanup_retry(
     return 0;
 }
 
+static int test_profile_reseal(
+    yvex_runtime_execution_profile *profile, yvex_error *err)
+{
+    yvex_runtime_execution_profile source = *profile;
+    yvex_runtime_execution_profile_request request = {
+        .schema_version = source.schema_version,
+        .engine_generation = source.engine_generation,
+        .engine_specialization_identity = source.engine_specialization_identity,
+        .kernel_bundle_identity = source.kernel_bundle_identity,
+        .workload_profile_identity = source.workload_profile_identity,
+        .generation_mode = source.generation_mode,
+        .evidence = source.evidence,
+        .execution_class = source.execution_class,
+        .attention_resolution = source.attention_resolution,
+        .moe_resolution = source.moe_resolution,
+        .sampling_resolution = source.sampling_resolution};
+    return yvex_runtime_execution_profile_seal(&request, profile, err);
+}
+
+static int test_runtime_cuda_execution_profile(
+    const binding_fixture *fixture,
+    const yvex_runtime_binding_prepare_result *prepared)
+{
+    yvex_model_engine *model = NULL;
+    yvex_runtime_execution_session *session = NULL;
+    yvex_runtime_session_open_request session_request = {
+        .backend = YVEX_BACKEND_KIND_CUDA};
+    yvex_model_engine_failure failure = {0};
+    yvex_execution_workload_profile workload = {
+        .schema_version = YVEX_EXECUTION_WORKLOAD_PROFILE_SCHEMA_V1,
+        .kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY,
+        .minimum_session_context = 1ull,
+        .requested_session_context = 4ull,
+        .concurrent_sequences = 1ull,
+        .logical_batch_tokens = 1ull,
+        .prefill_chunk_tokens = 1ull,
+        .attention_microbatch_rows = 1ull,
+        .moe_row_tile = 1ull,
+        .output_head_rows = 1ull,
+        .system_reserve_bytes = YVEX_EXECUTION_MINIMUM_SYSTEM_RESERVE,
+        .latency_priority = 1};
+    yvex_runtime_execution_profile_derivation derivation = {0};
+    yvex_runtime_execution_profile profile = {0}, contradicted = {0};
+    yvex_backend_cuda_attention_graph_summary cuda = {0};
+    yvex_backend_cuda_graph_capability graph = {0};
+    const yvex_runtime_session_view *session_view;
+    const yvex_model_engine_view *model_view;
+    yvex_execution_resolution expected_attention, expected_moe;
+    char wrong_identity[YVEX_SHA256_HEX_CAP];
+    yvex_error err = {0};
+    int rc, ready = 0;
+
+    YVEX_TEST_ASSERT(runtime_cuda_test_ready(&ready) == YVEX_OK && ready,
+                     "CUDA execution-profile fixture requires the native bundle");
+    YVEX_TEST_ASSERT(runtime_model_open_fixture(
+                         fixture, prepared, &model, &failure, &err) == YVEX_OK &&
+                         yvex_runtime_session_open(
+                             &session, model, &session_request,
+                             &failure, &err) == YVEX_OK,
+                     "CUDA execution-profile engine and session open");
+    yvex_core_text_copy(workload.name, sizeof(workload.name),
+                        "runtime-profile-cuda");
+    derivation.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
+    derivation.model = model;
+    derivation.session = session;
+    derivation.workload = &workload;
+    derivation.backend = YVEX_BACKEND_KIND_CUDA;
+    derivation.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
+    derivation.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
+    derivation.sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED;
+    session_view = yvex_runtime_session_view_get(session);
+    model_view = yvex_model_engine_view_get(model);
+    YVEX_TEST_ASSERT(
+        yvex_execution_workload_profile_seal(&workload, &err) == YVEX_OK &&
+            yvex_backend_cuda_attention_graph_summary_get(
+                session_view->backend, &cuda, &err) == YVEX_OK &&
+            yvex_backend_cuda_graph_query(
+                session_view->backend, &graph, &err) == YVEX_OK,
+        "CUDA execution-profile backend facts are available");
+    expected_attention =
+        cuda.kernel_bundle_native &&
+                model_view->binding->capabilities.cuda_full_graph_implemented &&
+                graph.state == YVEX_BACKEND_CUDA_GRAPH_OPEN &&
+                graph.edge_inventory_available && graph.async_memory_available &&
+                graph.async_copy_available && graph.pinned_host_memory_available
+            ? YVEX_EXECUTION_RESOLUTION_EXACT
+            : YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
+    expected_moe =
+        cuda.kernel_bundle_native &&
+                model_view->binding->capabilities.moe_block_ready &&
+                yvex_backend_moe_operations_get(session_view->backend) != NULL
+            ? YVEX_EXECUTION_RESOLUTION_EXACT
+            : YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_execution_profile_derive(
+            &derivation, &profile, &err) == YVEX_OK &&
+            yvex_runtime_execution_profile_admit(
+                &profile, model, session, &err) == YVEX_OK &&
+            strcmp(profile.kernel_bundle_identity,
+                   cuda.cuda_build_identity) == 0 &&
+            profile.execution_class ==
+                (cuda.kernel_bundle_native
+                     ? YVEX_EXECUTION_CLASS_DEVICE_NATIVE
+                     : YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE) &&
+            profile.attention_resolution == expected_attention &&
+            profile.moe_resolution == expected_moe &&
+            profile.sampling_resolution == YVEX_EXECUTION_RESOLUTION_EXACT,
+        "CUDA execution profile derives current bundle and operation resolutions");
+    printf("runtime-profile-cuda kernel=%s class=%u attention=%u moe=%u "
+           "sampling=%u result=PASS\n",
+           profile.kernel_bundle_identity, (unsigned int)profile.execution_class,
+           (unsigned int)profile.attention_resolution,
+           (unsigned int)profile.moe_resolution,
+           (unsigned int)profile.sampling_resolution);
+    contradicted = profile;
+    memset(wrong_identity, 'a', YVEX_SHA256_HEX_CAP - 1u);
+    wrong_identity[YVEX_SHA256_HEX_CAP - 1u] = '\0';
+    yvex_runtime_identity_copy(
+        contradicted.kernel_bundle_identity, wrong_identity);
+    YVEX_TEST_ASSERT(
+        test_profile_reseal(&contradicted, &err) == YVEX_OK &&
+            yvex_runtime_execution_profile_admit(
+                &contradicted, model, session, &err) == YVEX_ERR_STATE,
+        "CUDA execution profile refuses a foreign kernel bundle");
+    contradicted = profile;
+    contradicted.engine_generation++;
+    YVEX_TEST_ASSERT(
+        test_profile_reseal(&contradicted, &err) == YVEX_OK &&
+            yvex_runtime_execution_profile_admit(
+                &contradicted, model, session, &err) == YVEX_ERR_STATE,
+        "CUDA execution profile refuses a stale engine generation");
+    contradicted = profile;
+    yvex_runtime_identity_copy(
+        contradicted.engine_specialization_identity, wrong_identity);
+    YVEX_TEST_ASSERT(
+        test_profile_reseal(&contradicted, &err) == YVEX_OK &&
+            yvex_runtime_execution_profile_admit(
+                &contradicted, model, session, &err) == YVEX_ERR_STATE,
+        "CUDA execution profile refuses a foreign specialization");
+    contradicted = profile;
+    contradicted.execution_class =
+        profile.execution_class == YVEX_EXECUTION_CLASS_DEVICE_NATIVE
+            ? YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE
+            : YVEX_EXECUTION_CLASS_DEVICE_NATIVE;
+    YVEX_TEST_ASSERT(
+        test_profile_reseal(&contradicted, &err) == YVEX_OK &&
+            yvex_runtime_execution_profile_admit(
+                &contradicted, model, session, &err) == YVEX_ERR_STATE,
+        "CUDA execution profile refuses a contradictory execution class");
+    if (expected_attention != YVEX_EXECUTION_RESOLUTION_EXACT) {
+        contradicted = profile;
+        contradicted.attention_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
+        YVEX_TEST_ASSERT(
+            test_profile_reseal(&contradicted, &err) == YVEX_OK &&
+                yvex_runtime_execution_profile_admit(
+                    &contradicted, model, session, &err) == YVEX_ERR_STATE,
+            "CUDA execution profile refuses false exact attention");
+    }
+    if (expected_moe != YVEX_EXECUTION_RESOLUTION_EXACT) {
+        contradicted = profile;
+        contradicted.moe_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
+        YVEX_TEST_ASSERT(
+            test_profile_reseal(&contradicted, &err) == YVEX_OK &&
+                yvex_runtime_execution_profile_admit(
+                    &contradicted, model, session, &err) == YVEX_ERR_STATE,
+            "CUDA execution profile refuses false exact MoE");
+    }
+    contradicted = profile;
+    contradicted.identity[0] = contradicted.identity[0] == '0' ? '1' : '0';
+    YVEX_TEST_ASSERT(
+        yvex_runtime_execution_profile_admit(
+            &contradicted, model, session, &err) == YVEX_ERR_INVALID_ARG,
+        "CUDA execution profile refuses malformed sealing");
+    rc = yvex_runtime_session_close(&session, &err);
+    yvex_model_engine_close(&model);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && !session,
+                     "CUDA execution-profile owners close cleanly");
+    return 0;
+}
+
 static int test_runtime_cuda_workspace_transaction(
     const binding_fixture *fixture, const yvex_runtime_binding_prepare_result *prepared)
 {
@@ -5176,6 +5386,7 @@ static int runtime_binding_suite(int cuda_only)
         if (test_runtime_paged_state_cuda_pack(&fixture, &prepared) != 0) goto done;
         if (test_runtime_model_cuda_residency_claim(&fixture, &prepared) != 0) goto done;
         if (test_runtime_cuda_session_cleanup_retry(&fixture, &prepared) != 0) goto done;
+        if (test_runtime_cuda_execution_profile(&fixture, &prepared) != 0) goto done;
         if (test_runtime_cuda_workspace_transaction(&fixture, &prepared) != 0) goto done;
     } else {
         if (test_deployment_compatibility(&fixture, &prepared) != 0) goto done;

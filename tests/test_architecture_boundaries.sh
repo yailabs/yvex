@@ -435,6 +435,17 @@ fi
 if rg -n 'YVEX_EXECUTION_RESOLUTION_' src/backend; then
     fail "a backend selects execution capability policy"
 fi
+for profile_consumer in \
+        src/runtime/generation_context.c \
+        src/runtime/decision_readout.c; do
+    if ! rg -q 'yvex_runtime_execution_profile_derive' "$profile_consumer"; then
+        fail "generation and Decision Readout must share runtime execution-profile derivation"
+    fi
+done
+if rg -n 'request\.(kernel_bundle_identity|execution_class|attention_resolution|moe_resolution|sampling_resolution)' \
+        src/runtime/decision_readout.c; then
+    fail "Decision Readout manufactures engine/backend execution-profile truth"
+fi
 
 # Concrete dispatch, placement mappings and backend allocation state remain a
 # source-local backend implementation contract. Runtime and graph consumers use

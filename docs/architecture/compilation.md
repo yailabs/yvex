@@ -199,8 +199,19 @@ Old bytes are never reinterpreted as v17.
 
 The non-persisted runtime execution profile binds an exact engine generation
 and specialization to workload, kernel bundle, generation mode, evidence class,
-and typed operation resolutions. It is built inside the opened engine/session
-lifetime. It is not a second permanent execution plan.
+and typed operation resolutions. One runtime-specialization owner derives it
+inside the opened engine/session lifetime from the authenticated binding and
+current backend facts. Generation and other output runners request workloads;
+they do not promote attention, MoE or sampling capability. CUDA profiles bind
+the CUDA build identity and distinguish admitted full-graph/native execution
+from compatible eager/degraded execution. Consumers re-admit the sealed profile
+against the current engine and backend and refuse stale, malformed or stronger
+claims. It is not a second permanent execution plan.
+
+Durable generation checkpoints bind a plan-compatibility projection rather
+than the current engine-generation profile identity. After engine reopen, the
+new generation derives and admits its own exact profile before restoring the
+compatible sampler/checkpoint state; a stale profile itself is never reused.
 
 Artifact drift, binding drift, unsupported qtypes, missing roles, resource
 overflow, or incompatible runtime requirements refuse before model execution.

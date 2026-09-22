@@ -78,12 +78,28 @@ static int qwen_input_identity(unsigned int token, unsigned long long position,
     return 1;
 }
 
-static int qwen_profile(qwen_run *run, yvex_error *err)
+static int qwen_profile_reseal(
+    yvex_runtime_execution_profile *profile, yvex_error *err)
 {
-    const yvex_runtime_session_view *view =
-        yvex_runtime_session_view_get(run->session);
-    yvex_runtime_session_summary session = {0};
-    yvex_backend_cuda_attention_graph_summary cuda = {0};
+    yvex_runtime_execution_profile source = *profile;
+    yvex_runtime_execution_profile_request request = {
+        .schema_version = source.schema_version,
+        .engine_generation = source.engine_generation,
+        .engine_specialization_identity = source.engine_specialization_identity,
+        .kernel_bundle_identity = source.kernel_bundle_identity,
+        .workload_profile_identity = source.workload_profile_identity,
+        .generation_mode = source.generation_mode,
+        .evidence = source.evidence,
+        .execution_class = source.execution_class,
+        .attention_resolution = source.attention_resolution,
+        .moe_resolution = source.moe_resolution,
+        .sampling_resolution = source.sampling_resolution};
+    return yvex_runtime_execution_profile_seal(&request, profile, err);
+}
+
+static int qwen_profile(qwen_run *run, yvex_model_engine *model,
+                        yvex_error *err)
+{
     yvex_execution_workload_profile workload = {
         .schema_version = YVEX_EXECUTION_WORKLOAD_PROFILE_SCHEMA_V1,
         .kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY,
@@ -97,34 +113,59 @@ static int qwen_profile(qwen_run *run, yvex_error *err)
         .output_head_rows = 1ull,
         .system_reserve_bytes = YVEX_EXECUTION_MINIMUM_SYSTEM_RESERVE,
         .latency_priority = 1};
-    yvex_runtime_execution_profile_request request = {0};
+    yvex_runtime_execution_profile_derivation derivation = {0};
+    yvex_runtime_execution_profile contradicted = {0};
     int rc;
 
     yvex_core_text_copy(workload.name, sizeof(workload.name),
                         "qwen-hybrid-prefix-admission");
-    rc = yvex_runtime_session_summary_copy(run->session, &session, err);
-    if (rc == YVEX_OK)
-        rc = yvex_execution_workload_profile_seal(&workload, err);
-    if (rc == YVEX_OK)
-        rc = yvex_backend_cuda_attention_graph_summary_get(
-            view->backend, &cuda, err);
+    rc = yvex_execution_workload_profile_seal(&workload, err);
     if (rc != YVEX_OK) return rc;
-    request.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
-    request.engine_generation = session.engine_generation;
-    request.engine_specialization_identity =
-        session.engine_specialization_identity;
-    request.kernel_bundle_identity = cuda.cuda_build_identity;
-    request.workload_profile_identity = workload.identity;
-    request.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
-    request.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
-    request.execution_class = cuda.kernel_bundle_native
-                                  ? YVEX_EXECUTION_CLASS_DEVICE_NATIVE
-                                  : YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE;
-    request.attention_resolution =
-        YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
-    request.moe_resolution = YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
-    request.sampling_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
-    return yvex_runtime_execution_profile_seal(&request, &run->profile, err);
+    derivation.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
+    derivation.model = model;
+    derivation.session = run->session;
+    derivation.workload = &workload;
+    derivation.backend = YVEX_BACKEND_KIND_CUDA;
+    derivation.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
+    derivation.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
+    derivation.sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED;
+    rc = yvex_runtime_execution_profile_derive(
+        &derivation, &run->profile, err);
+    if (rc == YVEX_OK &&
+        (run->profile.execution_class != YVEX_EXECUTION_CLASS_DEVICE_NATIVE ||
+         run->profile.generation_mode !=
+             YVEX_EXECUTION_GENERATION_TARGET_ONLY ||
+         run->profile.attention_resolution !=
+             YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED ||
+         run->profile.moe_resolution !=
+             YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED ||
+         run->profile.sampling_resolution != YVEX_EXECUTION_RESOLUTION_EXACT))
+        return qwen_refuse(
+            err, "derived Qwen CUDA execution posture is not admitted");
+    contradicted = run->profile;
+    contradicted.attention_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
+    if (rc == YVEX_OK &&
+        (qwen_profile_reseal(&contradicted, err) != YVEX_OK ||
+         yvex_runtime_execution_profile_admit(
+             &contradicted, model, run->session, err) != YVEX_ERR_STATE))
+        return qwen_refuse(err, "false exact Qwen attention was admitted");
+    contradicted = run->profile;
+    contradicted.moe_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
+    if (rc == YVEX_OK &&
+        (qwen_profile_reseal(&contradicted, err) != YVEX_OK ||
+         yvex_runtime_execution_profile_admit(
+             &contradicted, model, run->session, err) != YVEX_ERR_STATE))
+        return qwen_refuse(err, "false exact Qwen MoE was admitted");
+    if (rc == YVEX_OK) yvex_error_clear(err);
+    if (rc == YVEX_OK)
+        printf("qwen_profile identity=%s kernel_bundle=%s class=%u "
+               "attention=%u moe=%u sampling=%u result=PASS\n",
+               run->profile.identity, run->profile.kernel_bundle_identity,
+               (unsigned int)run->profile.execution_class,
+               (unsigned int)run->profile.attention_resolution,
+               (unsigned int)run->profile.moe_resolution,
+               (unsigned int)run->profile.sampling_resolution);
+    return rc;
 }
 
 static int qwen_capacity_configure(qwen_run *run, yvex_model_engine *model,
@@ -169,7 +210,7 @@ static int qwen_run_open(qwen_run *run, yvex_model_engine *model,
     int rc = yvex_runtime_session_open(
         &run->session, model, &session, &failure, err);
     if (rc == YVEX_OK) rc = qwen_capacity_configure(run, model, err);
-    if (rc == YVEX_OK) rc = qwen_profile(run, err);
+    if (rc == YVEX_OK) rc = qwen_profile(run, model, err);
     decoder.execution_profile = &run->profile;
     logits.execution_profile = &run->profile;
     if (rc == YVEX_OK)

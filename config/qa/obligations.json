@@ -203,6 +203,19 @@
       "reason": "finite-candidate readout requires independent likelihood arithmetic, shared-state isolation, stale refusal, zero sampling and one exact live model vertical"
     },
     {
+      "id": "runtime-execution-profile",
+      "patterns": ["src/runtime/specialization.c", "src/runtime/generation_context.c",
+                   "src/runtime/decision_readout.c", "include/yvex/internal/runtime.h",
+                   "tests/unit/runtime_execution.c", "tests/unit/runtime_binding.c",
+                   "tests/live/qwen_admission.c"],
+      "lanes": ["fast", "structural", "runtime", "cuda", "sanitizer", "live"],
+      "tests": ["unit.runtime_execution", "unit.runtime_binding",
+                "unit.runtime_generation", "unit.decision_readout",
+                "cuda.runtime_binding", "live.mamba2.decision-readout",
+                "live.qwen.admission"],
+      "reason": "engine-bound execution profiles require shared generation/readout derivation, current backend identity and resolution refusals, CPU preservation, and one exact eager-compatible CUDA engine observation"
+    },
+    {
       "id": "runtime-transaction",
       "patterns": ["src/runtime/session.c", "src/runtime/state*.c", "src/runtime/prefix.c", "src/graph/state*.c", "include/yvex/internal/graph_state.h"],
       "lanes": ["fast", "runtime", "sanitizer"],

@@ -1174,74 +1174,23 @@ static int generation_stops_open(yvex_runtime_generation_context *context,
 static int generation_execution_profile_build(
     yvex_runtime_generation_context *context, yvex_error *err)
 {
-    const yvex_runtime_binding_summary *binding = context->model_view->binding;
-    const yvex_runtime_session_view *session_view = yvex_runtime_session_view_get(context->session);
-    yvex_model_engine_summary model;
-    yvex_runtime_session_summary session;
-    yvex_runtime_execution_profile_request request = {0};
-    yvex_backend_cuda_attention_graph_summary cuda = {0};
-    yvex_backend_cuda_graph_capability graph = {0};
-    const char *kernel_bundle = YVEX_BUILD_IDENTITY;
-    int rc;
-
-    if (!binding || !session_view || !session_view->backend ||
-        yvex_model_engine_summary_copy(context->model, &model, err) != YVEX_OK ||
-        yvex_runtime_session_summary_copy(context->session, &session, err) != YVEX_OK ||
-        !session.engine_generation || session.engine_generation != model.engine_generation ||
-        session.backend != context->options.backend ||
-        !yvex_sha256_hex_valid(session.engine_specialization_identity) ||
-        !yvex_sha256_hex_valid(context->workload_profile.identity))
-        return generation_context_refuse(
-            err, YVEX_ERR_STATE, "execution profile owners are unavailable");
-    if (context->options.backend == YVEX_BACKEND_KIND_CUDA) {
-        rc = yvex_backend_cuda_attention_graph_summary_get(
-            session_view->backend, &cuda, err);
-        if (rc != YVEX_OK || !yvex_sha256_hex_valid(cuda.cuda_build_identity))
-            return generation_context_refuse(
-                err, YVEX_ERR_STATE, "CUDA kernel bundle identity is unavailable");
-        rc = yvex_backend_cuda_graph_query(session_view->backend, &graph, err);
-        if (rc != YVEX_OK)
-            return generation_context_refuse(
-                err, YVEX_ERR_STATE, "CUDA graph capability is unavailable");
-        kernel_bundle = cuda.cuda_build_identity;
-    }
-    request.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
-    request.engine_generation = session.engine_generation;
-    request.engine_specialization_identity = session.engine_specialization_identity;
-    request.kernel_bundle_identity = kernel_bundle;
-    request.workload_profile_identity = context->workload_profile.identity;
-    request.generation_mode = context->options.mode == YVEX_GENERATION_MODE_SPECULATIVE
-                                  ? YVEX_EXECUTION_GENERATION_SPECULATIVE
-                                  : YVEX_EXECUTION_GENERATION_TARGET_ONLY;
-    request.evidence = context->options.evidence_profile;
-    request.execution_class =
-        context->options.backend == YVEX_BACKEND_KIND_CUDA &&
-                cuda.kernel_bundle_native &&
-                context->options.evidence_profile == YVEX_EXECUTION_EVIDENCE_PRODUCTION
-            ? YVEX_EXECUTION_CLASS_DEVICE_NATIVE
-            : YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE;
-    request.sampling_resolution =
-        context->options.sampling_policy.strategy == YVEX_SAMPLING_STRATEGY_GREEDY ||
-                generation_device_stochastic(context, session_view->backend)
-            ? YVEX_EXECUTION_RESOLUTION_EXACT
-            : YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
-    request.moe_resolution =
-        context->options.backend == YVEX_BACKEND_KIND_CUDA &&
-                cuda.kernel_bundle_native &&
-                context->options.evidence_profile == YVEX_EXECUTION_EVIDENCE_PRODUCTION &&
-                yvex_backend_moe_operations_get(session_view->backend) != NULL
-            ? YVEX_EXECUTION_RESOLUTION_EXACT
-            : YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
-    request.attention_resolution =
-        context->options.backend == YVEX_BACKEND_KIND_CUDA &&
-                binding->capabilities.cuda_full_graph_implemented &&
-                graph.state == YVEX_BACKEND_CUDA_GRAPH_OPEN &&
-                graph.edge_inventory_available && graph.async_memory_available &&
-                graph.async_copy_available && graph.pinned_host_memory_available
-            ? YVEX_EXECUTION_RESOLUTION_EXACT
-            : YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
-    return yvex_runtime_execution_profile_seal(
-        &request, &context->execution_profile, err);
+    yvex_runtime_execution_profile_derivation derivation = {0};
+    derivation.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
+    derivation.model = context->model;
+    derivation.session = context->session;
+    derivation.workload = &context->workload_profile;
+    derivation.backend = context->options.backend;
+    derivation.generation_mode =
+        context->options.mode == YVEX_GENERATION_MODE_SPECULATIVE
+            ? YVEX_EXECUTION_GENERATION_SPECULATIVE
+            : YVEX_EXECUTION_GENERATION_TARGET_ONLY;
+    derivation.evidence = context->options.evidence_profile;
+    derivation.sampling_requirement =
+        context->options.sampling_policy.strategy == YVEX_SAMPLING_STRATEGY_GREEDY
+            ? YVEX_EXECUTION_SAMPLING_GREEDY
+            : YVEX_EXECUTION_SAMPLING_STOCHASTIC;
+    return yvex_runtime_execution_profile_derive(
+        &derivation, &context->execution_profile, err);
 }
 
 static int generation_plan_build(yvex_runtime_generation_context *context,
@@ -1766,6 +1715,18 @@ static int generation_checkpoint_identity(
     return 1;
 }
 
+static int generation_checkpoint_plan_identity(
+    const yvex_runtime_generation_plan_summary *plan,
+    char output[YVEX_SHA256_HEX_CAP])
+{
+    yvex_runtime_generation_plan_summary compatible;
+    if (!plan || !output) return 0;
+    compatible = *plan;
+    memset(compatible.execution_profile_identity, 0,
+           sizeof(compatible.execution_profile_identity));
+    return yvex_runtime_generation_plan_identity(&compatible, output);
+}
+
 int yvex_runtime_generation_context_checkpoint(
     yvex_runtime_generation_context *context,
     yvex_runtime_generation_checkpoint *checkpoint, yvex_error *err)
@@ -1779,10 +1740,14 @@ int yvex_runtime_generation_context_checkpoint(
     rc = yvex_runtime_private_generation_enter(context, err);
     if (rc != YVEX_OK) return rc;
     checkpoint->schema_version = YVEX_RUNTIME_GENERATION_CHECKPOINT_SCHEMA_V1;
-    yvex_runtime_identity_copy(checkpoint->generation_plan_identity,
-                               context->plan.generation_plan_identity);
-    rc = yvex_runtime_sampling_context_checkpoint(
-        context->sampling, &checkpoint->sampling, err);
+    if (!generation_checkpoint_plan_identity(
+            &context->plan, checkpoint->generation_plan_identity))
+        rc = generation_context_refuse(
+            err, YVEX_ERR_STATE,
+            "generation checkpoint plan compatibility identity failed");
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_sampling_context_checkpoint(
+            context->sampling, &checkpoint->sampling, err);
     if (rc == YVEX_OK &&
         !generation_checkpoint_identity(checkpoint,
                                         checkpoint->checkpoint_identity))
@@ -1799,6 +1764,7 @@ int yvex_runtime_generation_context_restore(
     const yvex_runtime_generation_checkpoint *checkpoint, yvex_error *err)
 {
     char identity[YVEX_SHA256_HEX_CAP];
+    char compatible_plan[YVEX_SHA256_HEX_CAP];
     int rc;
     if (!context || !checkpoint)
         return generation_context_refuse(err, YVEX_ERR_INVALID_ARG,
@@ -1807,8 +1773,10 @@ int yvex_runtime_generation_context_restore(
     if (rc != YVEX_OK) return rc;
     if (checkpoint->schema_version !=
             YVEX_RUNTIME_GENERATION_CHECKPOINT_SCHEMA_V1 ||
+        !generation_checkpoint_plan_identity(
+            &context->plan, compatible_plan) ||
         strcmp(checkpoint->generation_plan_identity,
-               context->plan.generation_plan_identity) != 0 ||
+               compatible_plan) != 0 ||
         !generation_checkpoint_identity(checkpoint, identity) ||
         strcmp(identity, checkpoint->checkpoint_identity) != 0)
         rc = generation_context_refuse(

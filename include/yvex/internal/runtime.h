@@ -62,6 +62,31 @@ typedef struct yvex_runtime_execution_profile {
 int yvex_runtime_execution_profile_seal(
     const yvex_runtime_execution_profile_request *request,
     yvex_runtime_execution_profile *profile, yvex_error *err);
+struct yvex_model_engine;
+struct yvex_runtime_execution_session;
+typedef enum {
+    YVEX_EXECUTION_SAMPLING_NOT_INVOKED = 0,
+    YVEX_EXECUTION_SAMPLING_GREEDY,
+    YVEX_EXECUTION_SAMPLING_STOCHASTIC
+} yvex_execution_sampling_requirement;
+typedef struct {
+    unsigned int schema_version;
+    struct yvex_model_engine *model;
+    struct yvex_runtime_execution_session *session;
+    const yvex_execution_workload_profile *workload;
+    yvex_backend_kind backend;
+    yvex_execution_generation_mode generation_mode;
+    yvex_execution_evidence_profile evidence;
+    yvex_execution_sampling_requirement sampling_requirement;
+} yvex_runtime_execution_profile_derivation;
+int yvex_runtime_execution_profile_derive(
+    const yvex_runtime_execution_profile_derivation *derivation,
+    yvex_runtime_execution_profile *profile, yvex_error *err);
+int yvex_runtime_execution_profile_admit(
+    const yvex_runtime_execution_profile *profile,
+    const struct yvex_model_engine *model,
+    const struct yvex_runtime_execution_session *session,
+    yvex_error *err);
 #define YVEX_RUNTIME_REASON_CAP 256u
 #define YVEX_RUNTIME_BINDING_SCHEMA_CURRENT 17u
 #define YVEX_RUNTIME_BINDING_SUFFIX ".yvex-runtime-binding"

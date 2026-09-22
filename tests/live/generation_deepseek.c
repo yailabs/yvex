@@ -1094,26 +1094,9 @@ static int live_execution_profile(
     yvex_backend_kind backend, yvex_sampling_strategy strategy,
     yvex_runtime_execution_profile *profile, yvex_error *err)
 {
-    const yvex_model_engine_view *model_view = yvex_model_engine_view_get(model);
-    const yvex_runtime_session_view *session_view = yvex_runtime_session_view_get(session);
-    const yvex_runtime_binding_summary *binding = model_view ? model_view->binding : NULL;
-    yvex_backend_cuda_attention_graph_summary cuda = {0};
-    yvex_backend_cuda_graph_capability graph = {0};
-    yvex_runtime_session_summary summary;
-    yvex_runtime_execution_profile_request request = {0};
+    yvex_runtime_execution_profile_derivation derivation = {0};
     yvex_execution_workload_profile workload = {0};
-    const char *kernel_bundle = YVEX_BUILD_IDENTITY;
-    int rc;
-
-    if (!model_view || !session_view || !session_view->backend || !binding || !profile ||
-        yvex_runtime_session_summary_copy(session, &summary, err) != YVEX_OK ||
-        !summary.engine_generation ||
-        !yvex_sha256_hex_valid(summary.engine_specialization_identity)) {
-        if (!yvex_error_is_set(err))
-            yvex_error_set(err, YVEX_ERR_STATE, "generation_live.profile",
-                           "runtime workload profile owners are unavailable");
-        return yvex_error_is_set(err) ? yvex_error_code(err) : YVEX_ERR_STATE;
-    }
+    if (!model || !session || !profile) return YVEX_ERR_INVALID_ARG;
     workload.schema_version = YVEX_EXECUTION_WORKLOAD_PROFILE_SCHEMA_V1;
     workload.kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY;
     workload.minimum_session_context = workload.requested_session_context = 64ull;
@@ -1126,46 +1109,19 @@ static int live_execution_profile(
     yvex_core_text_copy(workload.name, sizeof(workload.name), "manual-generation");
     if (yvex_execution_workload_profile_seal(&workload, err) != YVEX_OK)
         return yvex_error_code(err);
-    if (backend == YVEX_BACKEND_KIND_CUDA) {
-        rc = yvex_backend_cuda_attention_graph_summary_get(
-            session_view->backend, &cuda, err);
-        if (rc != YVEX_OK || !yvex_sha256_hex_valid(cuda.cuda_build_identity))
-            return rc != YVEX_OK ? rc : YVEX_ERR_STATE;
-        rc = yvex_backend_cuda_graph_query(session_view->backend, &graph, err);
-        if (rc != YVEX_OK) return rc;
-        kernel_bundle = cuda.cuda_build_identity;
-    }
-    request.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
-    request.engine_generation = summary.engine_generation;
-    request.engine_specialization_identity = summary.engine_specialization_identity;
-    request.kernel_bundle_identity = kernel_bundle;
-    request.workload_profile_identity = workload.identity;
-    request.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
-    request.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
-    request.execution_class =
-        backend == YVEX_BACKEND_KIND_CUDA && cuda.kernel_bundle_native
-            ? YVEX_EXECUTION_CLASS_DEVICE_NATIVE
-            : YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE;
-    request.sampling_resolution =
-        strategy == YVEX_SAMPLING_STRATEGY_GREEDY ||
-                (backend == YVEX_BACKEND_KIND_CUDA &&
-                 yvex_backend_sampling_operations_get(session_view->backend) != NULL)
-            ? YVEX_EXECUTION_RESOLUTION_EXACT
-            : YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
-    request.moe_resolution =
-        backend == YVEX_BACKEND_KIND_CUDA && cuda.kernel_bundle_native &&
-                yvex_backend_moe_operations_get(session_view->backend) != NULL
-            ? YVEX_EXECUTION_RESOLUTION_EXACT
-            : YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
-    request.attention_resolution =
-        backend == YVEX_BACKEND_KIND_CUDA &&
-                binding->capabilities.cuda_full_graph_implemented &&
-                graph.state == YVEX_BACKEND_CUDA_GRAPH_OPEN &&
-                graph.edge_inventory_available && graph.async_memory_available &&
-                graph.async_copy_available && graph.pinned_host_memory_available
-            ? YVEX_EXECUTION_RESOLUTION_EXACT
-            : YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
-    return yvex_runtime_execution_profile_seal(&request, profile, err);
+    derivation.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
+    derivation.model = model;
+    derivation.session = session;
+    derivation.workload = &workload;
+    derivation.backend = backend;
+    derivation.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
+    derivation.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
+    derivation.sampling_requirement =
+        strategy == YVEX_SAMPLING_STRATEGY_GREEDY
+            ? YVEX_EXECUTION_SAMPLING_GREEDY
+            : YVEX_EXECUTION_SAMPLING_STOCHASTIC;
+    return yvex_runtime_execution_profile_derive(
+        &derivation, profile, err);
 }
 
 static int live_manual_execute(yvex_model_engine *model,

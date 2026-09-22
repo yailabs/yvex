@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <build_commit.h>
+
 static int specialization_refuse(yvex_error *err, yvex_status status,
                                  const char *reason)
 {
@@ -30,6 +32,16 @@ static int execution_resolution_executable(yvex_execution_resolution resolution)
     return resolution == YVEX_EXECUTION_RESOLUTION_EXACT ||
            resolution == YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
 }
+
+typedef struct {
+    unsigned long long engine_generation;
+    char engine_specialization_identity[YVEX_SHA256_HEX_CAP];
+    char kernel_bundle_identity[YVEX_SHA256_HEX_CAP];
+    yvex_execution_class execution_class;
+    yvex_execution_resolution attention_resolution;
+    yvex_execution_resolution moe_resolution;
+    int stochastic_sampling_exact;
+} execution_profile_facts;
 
 int yvex_runtime_execution_profile_seal(
     const yvex_runtime_execution_profile_request *request,
@@ -54,6 +66,8 @@ int yvex_runtime_execution_profile_seal(
             "complete engine workload profile facts are required");
     yvex_sha256_init(&hash);
     if (!yvex_sha256_update_text(&hash, "yvex.runtime-execution-profile.v1") ||
+        !yvex_sha256_update_u64(&hash, request->schema_version) ||
+        !yvex_sha256_update_u64(&hash, request->engine_generation) ||
         !yvex_sha256_update_text(&hash, request->engine_specialization_identity) ||
         !yvex_sha256_update_text(&hash, request->kernel_bundle_identity) ||
         !yvex_sha256_update_text(&hash, request->workload_profile_identity) ||
@@ -92,6 +106,219 @@ identity_failed:
     return specialization_refuse(
         err, YVEX_ERR_STATE,
         "engine workload profile identity derivation failed");
+}
+
+static int workload_profile_sealed(
+    const yvex_execution_workload_profile *workload)
+{
+    yvex_execution_workload_profile canonical;
+    char identity[YVEX_SHA256_HEX_CAP];
+    yvex_error ignored = {0};
+    if (!workload || !yvex_sha256_hex_valid(workload->identity)) return 0;
+    canonical = *workload;
+    yvex_runtime_identity_copy(identity, workload->identity);
+    return yvex_execution_workload_profile_seal(&canonical, &ignored) == YVEX_OK &&
+           strcmp(identity, canonical.identity) == 0;
+}
+
+static int execution_profile_facts_open(
+    const yvex_model_engine *model,
+    const yvex_runtime_execution_session *session,
+    yvex_backend_kind backend, yvex_execution_evidence_profile evidence,
+    execution_profile_facts *facts, yvex_error *err)
+{
+    const yvex_model_engine_view *model_view = yvex_model_engine_view_get(model);
+    const yvex_runtime_session_view *session_view =
+        yvex_runtime_session_view_get(session);
+    const yvex_engine_specialization *specialization;
+    yvex_model_engine_summary model_summary = {0};
+    yvex_runtime_session_summary session_summary = {0};
+    yvex_backend_cuda_attention_graph_summary cuda = {0};
+    yvex_backend_cuda_graph_capability graph = {0};
+    int rc;
+
+    if (facts) memset(facts, 0, sizeof(*facts));
+    if (!model || !session || !facts || backend > YVEX_BACKEND_KIND_CUDA ||
+        evidence > YVEX_EXECUTION_EVIDENCE_FORENSIC || !model_view ||
+        !model_view->binding || !session_view || session_view->engine != model ||
+        !session_view->backend || yvex_backend_kind_of(session_view->backend) != backend ||
+        yvex_model_engine_summary_copy(model, &model_summary, err) != YVEX_OK ||
+        yvex_runtime_session_summary_copy(session, &session_summary, err) != YVEX_OK)
+        return specialization_refuse(
+            err, YVEX_ERR_STATE,
+            "opened engine, session, backend, and binding facts are required");
+    specialization = model->specializations[backend];
+    if (!model_summary.sealed || !model_summary.valid || !specialization ||
+        session->specialization != specialization ||
+        session_summary.backend != backend || !session_summary.engine_generation ||
+        session_summary.engine_generation != model_summary.engine_generation ||
+        !yvex_sha256_hex_valid(session_summary.engine_specialization_identity) ||
+        strcmp(session_summary.engine_specialization_identity,
+               specialization->summary.identity) != 0)
+        return specialization_refuse(
+            err, YVEX_ERR_STATE,
+            "engine generation and specialization facts are stale");
+    facts->engine_generation = session_summary.engine_generation;
+    yvex_runtime_identity_copy(
+        facts->engine_specialization_identity,
+        session_summary.engine_specialization_identity);
+    if (backend == YVEX_BACKEND_KIND_CPU) {
+        if (!yvex_sha256_hex_valid(YVEX_BUILD_IDENTITY))
+            return specialization_refuse(
+                err, YVEX_ERR_STATE,
+                "portable runtime build identity is unavailable");
+        yvex_runtime_identity_copy(
+            facts->kernel_bundle_identity, YVEX_BUILD_IDENTITY);
+        facts->execution_class = YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE;
+        facts->attention_resolution =
+            model_view->binding->capabilities.attention_core_ready
+                ? YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED
+                : YVEX_EXECUTION_RESOLUTION_EXACT;
+        facts->moe_resolution =
+            model_view->binding->capabilities.moe_block_ready
+                ? YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED
+                : YVEX_EXECUTION_RESOLUTION_EXACT;
+        facts->stochastic_sampling_exact = 0;
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    rc = yvex_backend_cuda_attention_graph_summary_get(
+        session_view->backend, &cuda, err);
+    if (rc != YVEX_OK || !yvex_sha256_hex_valid(cuda.cuda_build_identity))
+        return specialization_refuse(
+            err, YVEX_ERR_STATE,
+            "CUDA kernel bundle identity is unavailable");
+    rc = yvex_backend_cuda_graph_query(session_view->backend, &graph, err);
+    if (rc != YVEX_OK)
+        return specialization_refuse(
+            err, YVEX_ERR_STATE,
+            "CUDA graph capability facts are unavailable");
+    yvex_runtime_identity_copy(
+        facts->kernel_bundle_identity, cuda.cuda_build_identity);
+    facts->execution_class =
+        cuda.kernel_bundle_native && evidence == YVEX_EXECUTION_EVIDENCE_PRODUCTION
+            ? YVEX_EXECUTION_CLASS_DEVICE_NATIVE
+            : YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE;
+    facts->attention_resolution =
+        facts->execution_class == YVEX_EXECUTION_CLASS_DEVICE_NATIVE &&
+                model_view->binding->capabilities.cuda_full_graph_implemented &&
+                graph.state == YVEX_BACKEND_CUDA_GRAPH_OPEN &&
+                graph.edge_inventory_available && graph.async_memory_available &&
+                graph.async_copy_available && graph.pinned_host_memory_available
+            ? YVEX_EXECUTION_RESOLUTION_EXACT
+            : YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
+    facts->moe_resolution =
+        facts->execution_class == YVEX_EXECUTION_CLASS_DEVICE_NATIVE &&
+                model_view->binding->capabilities.moe_block_ready &&
+                yvex_backend_moe_operations_get(session_view->backend) != NULL
+            ? YVEX_EXECUTION_RESOLUTION_EXACT
+            : YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
+    facts->stochastic_sampling_exact =
+        evidence == YVEX_EXECUTION_EVIDENCE_PRODUCTION &&
+        yvex_backend_sampling_operations_get(session_view->backend) != NULL;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+static int execution_profile_sealed(
+    const yvex_runtime_execution_profile *profile)
+{
+    yvex_runtime_execution_profile_request request = {0};
+    yvex_runtime_execution_profile canonical = {0};
+    yvex_error ignored = {0};
+    if (!profile) return 0;
+    request.schema_version = profile->schema_version;
+    request.engine_generation = profile->engine_generation;
+    request.engine_specialization_identity =
+        profile->engine_specialization_identity;
+    request.kernel_bundle_identity = profile->kernel_bundle_identity;
+    request.workload_profile_identity = profile->workload_profile_identity;
+    request.generation_mode = profile->generation_mode;
+    request.evidence = profile->evidence;
+    request.execution_class = profile->execution_class;
+    request.attention_resolution = profile->attention_resolution;
+    request.moe_resolution = profile->moe_resolution;
+    request.sampling_resolution = profile->sampling_resolution;
+    return yvex_runtime_execution_profile_seal(
+               &request, &canonical, &ignored) == YVEX_OK &&
+           canonical.resolution == profile->resolution &&
+           strcmp(canonical.identity, profile->identity) == 0;
+}
+
+int yvex_runtime_execution_profile_derive(
+    const yvex_runtime_execution_profile_derivation *derivation,
+    yvex_runtime_execution_profile *profile, yvex_error *err)
+{
+    execution_profile_facts facts = {0};
+    yvex_runtime_execution_profile_request request = {0};
+    int rc;
+    if (profile) memset(profile, 0, sizeof(*profile));
+    if (!derivation || !profile ||
+        derivation->schema_version != YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1 ||
+        !derivation->model || !derivation->session ||
+        !workload_profile_sealed(derivation->workload) ||
+        derivation->backend > YVEX_BACKEND_KIND_CUDA ||
+        derivation->generation_mode > YVEX_EXECUTION_GENERATION_SPECULATIVE ||
+        derivation->evidence > YVEX_EXECUTION_EVIDENCE_FORENSIC ||
+        derivation->sampling_requirement > YVEX_EXECUTION_SAMPLING_STOCHASTIC)
+        return specialization_refuse(
+            err, YVEX_ERR_INVALID_ARG,
+            "complete sealed execution-profile derivation facts are required");
+    rc = execution_profile_facts_open(
+        derivation->model, derivation->session, derivation->backend,
+        derivation->evidence, &facts, err);
+    if (rc != YVEX_OK) return rc;
+    request.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
+    request.engine_generation = facts.engine_generation;
+    request.engine_specialization_identity =
+        facts.engine_specialization_identity;
+    request.kernel_bundle_identity = facts.kernel_bundle_identity;
+    request.workload_profile_identity = derivation->workload->identity;
+    request.generation_mode = derivation->generation_mode;
+    request.evidence = derivation->evidence;
+    request.execution_class = facts.execution_class;
+    request.attention_resolution = facts.attention_resolution;
+    request.moe_resolution = facts.moe_resolution;
+    request.sampling_resolution =
+        derivation->sampling_requirement != YVEX_EXECUTION_SAMPLING_STOCHASTIC ||
+                facts.stochastic_sampling_exact
+            ? YVEX_EXECUTION_RESOLUTION_EXACT
+            : YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
+    return yvex_runtime_execution_profile_seal(&request, profile, err);
+}
+
+int yvex_runtime_execution_profile_admit(
+    const yvex_runtime_execution_profile *profile,
+    const yvex_model_engine *model,
+    const yvex_runtime_execution_session *session,
+    yvex_error *err)
+{
+    execution_profile_facts facts = {0};
+    yvex_backend_kind backend;
+    int rc;
+    if (!profile || !model || !session || !execution_profile_sealed(profile))
+        return specialization_refuse(
+            err, YVEX_ERR_INVALID_ARG,
+            "one sealed execution profile is required");
+    backend = session->summary.backend;
+    rc = execution_profile_facts_open(
+        model, session, backend, profile->evidence, &facts, err);
+    if (rc != YVEX_OK) return rc;
+    if (profile->engine_generation != facts.engine_generation ||
+        strcmp(profile->engine_specialization_identity,
+               facts.engine_specialization_identity) != 0 ||
+        strcmp(profile->kernel_bundle_identity,
+               facts.kernel_bundle_identity) != 0 ||
+        profile->execution_class != facts.execution_class ||
+        (profile->attention_resolution == YVEX_EXECUTION_RESOLUTION_EXACT &&
+         facts.attention_resolution != YVEX_EXECUTION_RESOLUTION_EXACT) ||
+        (profile->moe_resolution == YVEX_EXECUTION_RESOLUTION_EXACT &&
+         facts.moe_resolution != YVEX_EXECUTION_RESOLUTION_EXACT))
+        return specialization_refuse(
+            err, YVEX_ERR_STATE,
+            "execution profile contradicts the opened engine or backend");
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 typedef struct {

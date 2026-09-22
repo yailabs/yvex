@@ -337,8 +337,8 @@ static int execution_test_profile(void)
     YVEX_TEST_ASSERT(
         yvex_runtime_execution_profile_seal(&request, &second, &err) == YVEX_OK &&
             second.engine_generation == 2ull &&
-            strcmp(first.identity, second.identity) == 0,
-        "process-local engine handles must not mutate workload identity");
+            strcmp(first.identity, second.identity) != 0,
+        "engine generation must mutate the identity-bound execution profile");
     request.engine_generation = 1ull;
     request.engine_specialization_identity = changed_identity;
     YVEX_TEST_ASSERT(
@@ -352,6 +352,18 @@ static int execution_test_profile(void)
             strcmp(first.identity, second.identity) != 0,
         "resource workload identity must mutate execution identity");
     request.workload_profile_identity = identity;
+    request.kernel_bundle_identity = changed_identity;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_execution_profile_seal(&request, &second, &err) == YVEX_OK &&
+            strcmp(first.identity, second.identity) != 0,
+        "kernel bundle identity must mutate execution identity");
+    request.kernel_bundle_identity = identity;
+    request.generation_mode = YVEX_EXECUTION_GENERATION_SPECULATIVE;
+    YVEX_TEST_ASSERT(
+        yvex_runtime_execution_profile_seal(&request, &second, &err) == YVEX_OK &&
+            strcmp(first.identity, second.identity) != 0,
+        "generation mode must mutate execution identity");
+    request.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
     request.attention_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
     YVEX_TEST_ASSERT(yvex_runtime_execution_profile_seal(
                          &request, &second, &err) == YVEX_OK &&
@@ -369,6 +381,12 @@ static int execution_test_profile(void)
     YVEX_TEST_ASSERT(yvex_runtime_execution_profile_seal(
                          &request, &second, &err) == YVEX_ERR_INVALID_ARG,
                      "non-executable capability resolution should refuse profile admission");
+    request.attention_resolution =
+        YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED;
+    request.sampling_resolution = YVEX_EXECUTION_RESOLUTION_UNSUPPORTED;
+    YVEX_TEST_ASSERT(yvex_runtime_execution_profile_seal(
+                         &request, &second, &err) == YVEX_ERR_INVALID_ARG,
+                     "incompatible sampling resolution should refuse profile admission");
     return 0;
 }
 

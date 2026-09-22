@@ -177,12 +177,9 @@ int yvex_decision_readout_relative_distribution(
 static int readout_profile_open(yvex_decision_readout_context *context,
                                 yvex_error *err)
 {
-    yvex_runtime_session_summary session = {0};
-    yvex_runtime_execution_profile_request request = {0};
+    yvex_runtime_execution_profile_derivation derivation = {0};
     yvex_execution_workload_profile *workload = &context->workload;
-    int rc = yvex_runtime_session_summary_copy(
-        context->source.session, &session, err);
-    if (rc != YVEX_OK) return rc;
+    int rc;
     workload->schema_version = YVEX_EXECUTION_WORKLOAD_PROFILE_SCHEMA_V1;
     workload->kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY;
     workload->minimum_session_context = 1ull;
@@ -199,22 +196,16 @@ static int readout_profile_open(yvex_decision_readout_context *context,
                         "decision-readout-zero-decode-v0");
     rc = yvex_execution_workload_profile_seal(workload, err);
     if (rc != YVEX_OK) return rc;
-    request.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
-    request.engine_generation = session.engine_generation;
-    request.engine_specialization_identity =
-        session.engine_specialization_identity;
-    request.kernel_bundle_identity = session.engine_specialization_identity;
-    request.workload_profile_identity = workload->identity;
-    request.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
-    request.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
-    request.execution_class = context->options.backend == YVEX_BACKEND_KIND_CPU
-                                  ? YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE
-                                  : YVEX_EXECUTION_CLASS_DEVICE_NATIVE;
-    request.attention_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
-    request.moe_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
-    request.sampling_resolution = YVEX_EXECUTION_RESOLUTION_EXACT;
-    return yvex_runtime_execution_profile_seal(
-        &request, &context->profile, err);
+    derivation.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
+    derivation.model = context->model;
+    derivation.session = context->source.session;
+    derivation.workload = workload;
+    derivation.backend = context->options.backend;
+    derivation.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
+    derivation.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
+    derivation.sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED;
+    return yvex_runtime_execution_profile_derive(
+        &derivation, &context->profile, err);
 }
 
 static int readout_run_contexts_open(
