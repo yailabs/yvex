@@ -7,12 +7,12 @@ Status: living public project control
 | Axis | Current truth |
 | --- | --- |
 | Project target | Native, harness-independent model compilation and execution substrate. |
-| Active engineering boundary | `PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0` — reconcile the completed execution-profile and committed-session-state prerequisites against the remaining Qwen breadth obligations and select exactly one bounded successor. No breadth, calibration or integration starts implicitly. |
+| Active engineering boundary | `DECISION.READOUT.QWEN.BREADTH.0` — qualify unchanged Decision Readout schema v1 on the exact admitted Qwen CUDA hybrid attention-plus-recurrent state class. Selection does not execute breadth, calibration or integration. |
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` COMPLETE and independently qualified at its claimed scope: current admitted Qwen, DeepSeek/DSpark and MiniMax computation is compiler-owned; runtime consumes authenticated program/schedule truth. The `.0` producer-owned device-result lifetime remains preserved. |
 | Architecture Spectrum | A01 PARTIAL / exact artifact-executable; A02–A11 PLANNED. No next vertical is active. |
 | Adopted state architecture target | N.B1 — Slow-Update Dual-Stream is the official primary research target: primary R plus persistent Experiential Computational State E; unfinished deliberation L remains distinct. YAI owns semantic authority; YVEX owns computational realization. Program N and B1 post-training remain OPEN/unscheduled, not implemented. |
 | Adopted decision architecture target | YAI owns the semantic Decision Plane; YVEX owns computational Decision Readout and the future broader Decision Core. V0 now qualifies one internal finite-candidate readout over one exact resident Mamba2 backbone; model scores still acquire no semantic authority or canonical admission. |
-| Most important structural gap | Decision Readout exists at one exact internal Mamba2 CPU/recurrent-state scope. Its execution profile and mutable source-session before/after identity are now common runtime truths: the latter composes exact target/draft attention and recurrent committed domains plus engine/session lineage and refuses in-flight, stale or inconsistent observation. Qwen finite-candidate breadth has still not executed, and complete hybrid candidate/device resource accounting remains qualification/characterization work rather than an admission invariant. |
+| Most important structural gap | Decision Readout exists at one exact internal Mamba2 CPU/recurrent-state scope. Its execution profile and mutable source-session before/after identity are common runtime truths. Qwen finite-candidate breadth has not executed. Live ownership archaeology found no remaining smaller correctness prerequisite: complete hybrid candidate/device resource accounting is result characterization to repair and qualify inside the selected breadth experiment, not an admission invariant or a new authority. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; exact Qwen3.8-27B BF16 target-only CUDA tokenizer/forward/full-logits plus common hybrid-prefix execution; bounded MiniMax composite media; exact Mamba2 pure-SSM CPU artifact execution plus bounded zero-generation finite-candidate readout. Evidence depths differ. |
 | External execution characterization | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Retained as a measured limitation, not a refoundation .1 closure gate; no downstream-safe claim. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
@@ -20,7 +20,7 @@ Status: living public project control
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
 | Release qualification | BLOCKED. |
 | Current branch | `models2`; branch epochs coordinate integration, not model ownership. |
-| Next decision point | Complete `PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0`: determine whether the actual Qwen hybrid-state breadth experiment can own the remaining candidate/device characterization or whether another smaller prerequisite exists. This selection performs no Qwen candidate scoring, breadth implementation, resource-accounting promotion, V1/calibration, YAI integration, I07, A11, another Spectrum vertical, DeepSeek optimization or Program N work. |
+| Next decision point | Execute only the bounded `DECISION.READOUT.QWEN.BREADTH.0` experiment: preserve schema v1 and the common runtime owner while qualifying exact Qwen CUDA hybrid-state scoring, isolation, replay, arithmetic, zero-generation and truthful branch-resource characterization. Do not add calibration, public/YAI authority, Program N, A11, another Spectrum vertical or GB10 optimization. |
 
 <!-- maturity-counts:start -->
 <!-- Generated from System Maturity by tests/documentation_architecture.py. -->
@@ -1566,8 +1566,10 @@ attention roles, recurrent state, committed extents and engine/session lineage
 are identity-significant, while in-flight or inconsistent state refuses. Qwen
 ordinary hybrid observation confirms both target attention and recurrent state
 through this owner without invoking Decision Readout. Candidate/device resource
-reporting remains bounded breadth qualification work; V1, YAI integration and
-universal model breadth are not implicit.
+reporting remains bounded breadth qualification work: the selected Qwen breadth
+wave must derive one non-overlapping branch-physical peak from existing typed
+session facts rather than treating host-only sequence bytes as hybrid CUDA
+state. V1, YAI integration and universal model breadth are not implicit.
 A08 retrieval and A04/A10 non-autoregressive expectations remain separate.
 
 **Material advance:** a qualified typed non-chat result through existing engine/session owners.
@@ -1633,12 +1635,14 @@ control retained independent long-double score error
 `3.144468487706128e-15`, zero order/replay difference, zero sampling and zero
 generated tokens. Qwen ordinary admission retained bitwise direct-versus-
 attached logits and explicitly reported `decision_readout=not-invoked`; this is
-profile evidence, not breadth. Project-control archaeology now separates a
-correctness prerequisite from characterization: one common session-state
-identity must detect attention or recurrent mutation before candidate scoring,
-whereas complete hybrid/device candidate bytes can be repaired and measured in
-the breadth qualification itself. Future calibration must use independent
-evidence; selection/calibration data cannot qualify itself. v0.1 dependencies,
+profile evidence, not breadth. The completed common session-state identity now
+detects attention or recurrent mutation before candidate scoring. Subsequent
+project-control archaeology established that complete hybrid/device candidate
+bytes are characterization metadata with sufficient existing typed runtime
+authorities, so their bounded producer repair and measurement belong inside the
+selected breadth qualification rather than another prerequisite. Future
+calibration must use independent evidence; selection/calibration data cannot
+qualify itself. v0.1 dependencies,
 incomplete MiniMax full-scale evidence
 and authoritative full-model conformance remain separate. The exact
 post-refoundation warm control is retained as characterization, not a release
@@ -1869,13 +1873,14 @@ decision. This is neither the maturity matrix nor the release scope.
 | 16 | `DECISION.READOUT.EXECUTION.PROFILE.0` | COMPLETE | O / S / Q | Prerequisite only; Decision / option readout remains PARTIAL | One runtime-specialization owner now derives and re-admits generation/readout profiles from exact opened model, session, binding and backend facts. CPU Mamba retained its exact V0 oracle/order/replay/zero-generation evidence. Qwen ordinary CUDA bound build identity `3028627c3fd9220cd498998200fc61f336d4893797776bc5b5e0a104fd5215ae`, DEVICE_NATIVE execution, COMPATIBLE_DEGRADED attention/MoE and EXACT not-invoked sampling; false stronger, stale, foreign and malformed profiles refused. No Qwen candidate scoring or breadth claim occurred. | `PROJECT_CONTROL.POST.QWEN.ADMISSION.RECONCILIATION.0` |
 | 17 | `PROJECT_CONTROL.POST.DECISION.READOUT.PROFILE.RECONCILIATION.0` | COMPLETE | R / O / S / Q | Project-control selection only; no maturity promotion or production implementation | Live ownership archaeology proved that prefix v2 already authenticates the immutable hybrid snapshot and session summaries already expose typed attention/recurrent resource domains, but the readout's mutable source-session identity can miss attention mutation. It selected one smaller common session-state identity prerequisite; no Qwen candidates, breadth, resource producer repair, calibration, YAI/I07, Program N, A11, another Spectrum vertical or GB10 optimization started. | `DECISION.READOUT.EXECUTION.PROFILE.0` |
 | 18 | `DECISION.READOUT.SESSION.STATE.IDENTITY.0` | COMPLETE | O / S / Q | Correctness prerequisite only; Decision / option readout remains PARTIAL | Internal committed-session-state schema v1 composes exact model/binding/specialization, engine generation, authenticated session lineage and canonical target-attention, draft-attention, then recurrent committed facts under the session lifecycle lock. Real owner-level mutation/refusal controls close attention-only, recurrent-only and hybrid false-pass classes; Decision Readout delegates its before/after invariant to this owner and exact Mamba CPU V0 remains numerically unchanged. Ordinary Qwen hybrid observation reports both active domains with `decision_readout=not-invoked`; candidate/device accounting and breadth remain open. | `PROJECT_CONTROL.POST.DECISION.READOUT.PROFILE.RECONCILIATION.0` |
-| 19 | `PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0` | ACTIVE | R / O / S / Q | Project-control selection only; no maturity promotion or production implementation | Reconcile the complete truthful execution-profile and committed-source-session identity prerequisites against the remaining Qwen breadth and candidate/device characterization obligations; select exactly one bounded successor without executing breadth, promoting resource accounting, or starting calibration, YAI/I07, Program N, A11, another Spectrum vertical or GB10 optimization. | `DECISION.READOUT.SESSION.STATE.IDENTITY.0` |
-| 20 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
-| 21 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
-| 22 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
-| 23 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
+| 19 | `PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0` | COMPLETE | R / O / S / Q | Project-control selection only; no maturity promotion or production implementation | Live ownership archaeology found no remaining smaller correctness prerequisite. Existing session summaries already own non-overlapping attention and sequence resource domains; incomplete Qwen branch bytes are characterization metadata that the bounded breadth wave can repair and qualify before publication. It selected that experiment without constructing or scoring Qwen candidates or changing resource code. | `DECISION.READOUT.SESSION.STATE.IDENTITY.0` |
+| 20 | `DECISION.READOUT.QWEN.BREADTH.0` | ACTIVE | O / S / Q | Selected cross-model/state-class qualification; Decision / option readout remains PARTIAL until evidence earns any promotion | Unchanged Decision Readout schema v1 and common runtime owner score one finite explicit candidate population on the exact admitted Qwen3.8-27B BF16 CUDA engine from one captured hybrid target-attention-plus-recurrent prefix. Same likelihood/mean/uncalibrated-relative semantics, independent arithmetic, full-prefix replay, order/isolation, source-state preservation, cancellation/retry, actual admitted profile, zero sampling, zero generated tokens, one resident backbone and bounded latency/resource evidence qualify. `peak_candidate_state_bytes` must truthfully aggregate non-overlapping branch-physical attention and authoritative sequence host/device domains without counting shared prefix, virtual capacity or logical bank decompositions twice. No family-specific readout logic, calibration, public/YAI ABI, Program N or performance advantage is claimed. | `PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0` |
+| 21 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
+| 22 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
+| 23 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
+| 24 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
 
-Active Next: PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0
+Active Next: DECISION.READOUT.QWEN.BREADTH.0
 
 The bounded .0 refoundation, its qualification, the `.1` universal-IR
 consumer cutover and `.1` qualification are complete. The A01 repair resolved
@@ -1996,13 +2001,20 @@ this owner; its former recurrent-only/constant-attention observation is gone.
 
 The resource gap is different. `peak_candidate_state_bytes` currently samples
 only `sequence_host_state_bytes`; that is truthful for Mamba CPU because the
-field covers both host recurrent banks, but would report zero for Qwen CUDA.
-The ordinary Qwen session summary separately observed 313,786,368 device
-sequence-state bytes (156,893,184 committed plus 156,893,184 candidate) and
-656,192 allocated / 655,360 resident attention-state bytes. Existing typed
-session facts and the broad readout field can support a non-overlapping producer
-repair without another schema, but the exact aggregate and bounded measurement
-belong to breadth qualification/characterization rather than admission.
+field covers both physically owned host recurrent banks, but would report zero
+for Qwen CUDA. It is the maximum total mutable physical state owned by one
+candidate branch, not an incremental delta above the shared prefix and not a
+sum over candidates. The ordinary Qwen session summary separately observed
+313,786,368 device sequence-state bytes (156,893,184 committed plus 156,893,184
+candidate) and 656,192 allocated / 655,360 resident attention-state bytes.
+Committed/candidate and recurrent/convolution values are logical decompositions
+of the authoritative host-or-device sequence allocation; attention allocated
+bytes already include its private resident pages and metadata, while virtual
+capacity is not physical residency. Prefix v2 separately owns immutable shared
+backing. These existing typed facts and the broad readout field therefore
+support a non-overlapping producer repair without another schema or authority,
+but the exact peak must be measured during candidate execution. This is breadth
+qualification/characterization, not a prerequisite to execute score arithmetic.
 
 `DECISION.READOUT.SESSION.STATE.IDENTITY.0` is COMPLETE. Owner-level controls
 prove stable repeat observation, role-sensitive target/draft composition and
@@ -2013,12 +2025,15 @@ independent numerical, order, replay and zero-generation contracts. The
 ordinary Qwen admission lane observes target attention plus recurrent state
 through the new owner and still prints `decision_readout=not-invoked`.
 
-`PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0` is the
-sole ACTIVE boundary. It must decide whether the actual Qwen breadth experiment
-is now the smallest material uncertainty or whether candidate/device accounting
-requires a smaller owner repair. It starts no Qwen candidate scoring or breadth
-implementation. The later breadth wave, if separately selected, must still
-repair and qualify complete hybrid candidate/device resource reporting.
+`PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0` is
+COMPLETE. No remaining family-neutral correctness or ownership defect blocks a
+bounded experiment: ordinary Qwen supplies the exact engine, full logits,
+hybrid prefix/state, truthful execution profile and committed-state observation,
+while Decision Readout retains one common schema, candidate path and score
+contract. `DECISION.READOUT.QWEN.BREADTH.0` is the sole ACTIVE boundary. It must
+repair and qualify complete non-overlapping hybrid candidate/device resource
+reporting as part of the result evidence before publishing breadth. Selection
+constructed no candidates, invoked no Qwen readout and changed no resource code.
 
 The [current consumer matrix](docs/architecture/compilation.md#current-consumer-cutover)
 records the completed authority cutover: Qwen executes physical SSA;
@@ -2204,7 +2219,8 @@ platform qualification. [MLC quick start][mlc]
 | `DECISION.READOUT.EXECUTION.PROFILE.0`, COMPLETE | O / S / Q | One common engine/backend-derived profile owner with current kernel identity, truthful resolution and fail-closed re-admission; Decision Readout remains PARTIAL | Qwen supplied admitted hybrid CUDA pressure, not family-specific readout logic or Axx promotion | Prerequisite evidence only; no readout breadth, behavior, benchmark or release promotion |
 | `PROJECT_CONTROL.POST.DECISION.READOUT.PROFILE.RECONCILIATION.0`, COMPLETE | R / O / S / Q | Distinguished missing mutable hybrid identity correctness from incomplete candidate/device characterization; selected one smaller identity prerequisite without implementation | No Spectrum promotion or family implementation followed | No release gate change |
 | `DECISION.READOUT.SESSION.STATE.IDENTITY.0`, COMPLETE | O / S / Q | One common committed-session-state identity spans exact target/draft attention and recurrent domains; Decision Readout remains PARTIAL | Ordinary Qwen hybrid observation uses existing state owners with `decision_readout=not-invoked`; no Axx promotion | Correctness prerequisite only; no release gate change |
-| `PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0`, ACTIVE | R / O / S / Q | Reconcile complete profile/state-identity prerequisites with remaining breadth/resource evidence and select one bounded successor | No family implementation or Spectrum promotion begins during selection | No release gate change |
+| `PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0`, COMPLETE | R / O / S / Q | Existing typed resource authorities make hybrid branch bytes breadth characterization rather than a smaller admission prerequisite; one experiment selected without implementation | No family implementation or Spectrum promotion occurred during selection | No release gate change |
+| `DECISION.READOUT.QWEN.BREADTH.0`, ACTIVE | O / S / Q | Qualify unchanged schema v1 on exact Qwen CUDA hybrid state, including truthful non-overlapping candidate/device resource evidence; no maturity promotion is pre-authorized | Existing Qwen supplies the second materially distinct admitted state class; no new Spectrum vertical | Computational evidence only; no behavior, calibration, benchmark or release promotion |
 | Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |
 | Explicit DeepSeek optimization resumption | Q / S / R | Baseline, resource/structural performance evidence | Existing DeepSeek control, not a new Axx | Predecessor of evaluation |
 | Model-language breadth after A01 | C / O / D / M | Components, heads, tokenizer and modality semantics | A02–A11 selected by pressure | General substrate, not automatically v0.1 |
@@ -2253,7 +2269,7 @@ release_qualification_ready=0
 | Release qualification ready | false | Independent version-specific gates open. |
 | Mamba2 hosted conversation / independent whole-model conformance | false | The catalog representation is READY and exact artifact-backed token execution is qualified, but the source owns no chat template and no independent all-layer/whole-model oracle was executed. |
 | Universal selected-domain provider in-flight byte/rate/retry observability | false | Supervision is established, but provider adapters preserve UNKNOWN when no stable machine signal can bind these facts to the selected immutable population. |
-| Cross-model Decision Readout breadth | false | One internal Mamba2 CPU V0 runner/result is qualified. Qwen's exact hybrid-state ordinary runtime, common truthful execution profile and common committed-source-session identity are complete, but no second-model readout has executed. Post-boundary project control must select the next wave; complete candidate/device accounting remains future breadth qualification. |
+| Cross-model Decision Readout breadth | false | One internal Mamba2 CPU V0 runner/result is qualified. Qwen's exact hybrid-state ordinary runtime, common truthful execution profile and common committed-source-session identity are complete, and its bounded breadth wave is selected, but no second-model readout has executed. Complete candidate/device accounting remains an obligation of that selected qualification. |
 | Universal/public Decision Readout producer | false | Broader compatible model/state classes, a public application surface and a selected external consumer are absent. Completed Qwen admission adds none of them. |
 | Production Score runner | false | Complete logits and internal component scoring do not establish a general sequence/pair scoring runner. |
 | Calibrated decision probability / confidence | false | No calibration transform, artifact or independent calibration evidence exists; softmax over disclosed options is only a relative distribution. |
