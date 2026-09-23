@@ -130,6 +130,24 @@ Sequence state, reusable workspace, and transient allocations are session or
 execution resources, not model-package meaning. Live free bytes may admit or
 refuse a resource action but never enter semantic/package identity.
 
+The common runtime capacity owner derives hardware, workload, physical-row and
+state-class plans from the admitted binding and opened backend. Generation,
+finite-candidate readout and ordinary decoder qualification consume this same
+policy; persistent-page admission does not require opening a generation runner.
+Startup preflight uses the same planner before residency, including transient
+preparation bytes. Stale engine/session pairing, invalid workload and insufficient
+live reserve refuse before a usable plan is published.
+
+One session resource projection feeds both hosted telemetry and readout.
+Physical state is attention allocated bytes plus authoritative sequence host
+and device allocations. Committed/candidate and recurrent/convolution bytes
+are decompositions, not additional allocations. Attention resident/page-table
+bytes decompose allocated bytes; virtual address capacity is separate. Immutable
+prefix backing is reported by prefix v2, not added again as branch-private
+state. Overflow publishes no partial aggregate. Foreign observers of a busy
+session use its last published sequence resource summary instead of reading the
+lock-free mutable provider across an execution lease.
+
 Each engine generation owns a bounded resource catalog. Canonical mappings,
 component resources, prepared tensors/groups/layouts, backend handles,
 executable caches, sequence state, workspace, and temporaries are distinct
@@ -225,6 +243,14 @@ copy-on-write sharing. Prefix schema v2 admits the common recurrent sequence
 state as well as attention state: capture authenticates the exact committed
 position, plan and content; attach restores only into an identity-compatible
 pristine state owner. This is not a durable cross-process prefix cache.
+An immutable CUDA sequence snapshot owns an independent execution handle over
+the same physical engine context. It must survive retirement of the source
+session's executor; neither its state tensors nor its cleanup may borrow that
+executor's lifetime. Failed snapshot cleanup retains the non-null owner for
+retry. Engine context retirement still refuses while such children remain.
+New physical state pages are initialized in session execution order and become
+published only after initialization completes, including before rollback can
+unmap their storage.
 
 Internal committed-session-state observation schema v1 is the common mutable
 session authority, distinct from an immutable captured prefix. Under the
@@ -258,15 +284,30 @@ quantity. Normalization across the exact disclosed candidate population is an
 uncalibrated relative distribution. It is not confidence or calibrated
 probability.
 
+Candidate token IDs belong to the authenticated tokenizer domain. The admitted
+output head may contain padding rows beyond that domain: they remain in the
+full-logits normalization but cannot be supplied as candidate or prefix tokens.
+Tokenizer size and output-head width are not interchangeable identities.
+
 Known candidate tokens advance candidate-local state without invoking sampling,
 RNG, emitted-token publication or an autoregressive selection loop. Results
 report prefix forwards, teacher-forced forwards, logits rows, sampling calls,
 generated tokens and non-overlapping mapped/resident/state/workspace facts.
+The branch-state peak is the maximum physical allocation observed after prefix
+attach and after each committed candidate token, across sequential branches.
+It is neither total process residency, transient intra-kernel peak, nor marginal
+allocation above the prefix. Workspace retains the existing typed allocation
+high-water semantics; mapped model bytes are not measured device residency.
 Cancellation publishes no partial candidate result. Stale engine, binding,
 tokenizer or prefix identity, invalid tokens, context overflow, malformed
 scores and non-finite logits fail closed. This internal v1 contract introduces
 no public ABI, protocol route, calibration state, learned head, second model or
 YAI semantic contract.
+
+Candidate cleanup failure retains its decoder/logits/session owners in the
+readout context, invalidates reuse and withholds the result. Close releases in
+dependency order and may be retried. Failed context construction likewise
+returns any retained cleanup owner rather than leaking unreachable resources.
 
 ## Scheduling and executable batches
 
@@ -335,6 +376,11 @@ Cancellation before commit discards the candidate. Cancellation after an atomic
 accepted-prefix commit reports that prefix. Engine draining stops new leases,
 requests cancellation of active work, and waits for bounded completion before
 resource release. It does not invalidate another engine or stop the host.
+
+Generation and sampling release their ACTIVE predicate under the same drain
+mutex used by close's check-and-wait, even before CLOSING becomes visible.
+This prevents a concurrent close from missing the final release wakeup. A
+second interrupt is not a substitute for correct drain synchronization.
 
 ## Failure and recovery
 

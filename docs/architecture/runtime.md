@@ -159,6 +159,21 @@ choices are not package or specialization identity.
 
 ## Sessions and transactional state
 
+Execution capacity is runner-independent. `src/runtime/capacity.c` consumes
+compiler-owned state geometry, residency and live backend facts; generation and
+Decision Readout only supply bounded workload requirements. Ordinary hybrid
+prefix qualification therefore needs no temporary generation context. This
+keeps persistent pages, row geometry and reserve policy below Output Runners
+without introducing another state provider or family runtime.
+
+`src/runtime/session_summary.c` owns typed sequence-resource projection and
+non-overlapping session resource aggregation for both the host and readout.
+Sequence execution is protected by the session lease; foreign busy observers
+consume the last published sequence summary, while the execution owner or an
+idle observer may refresh it. Attention provider summaries retain their own
+locks. This resource observation is distinct from the stricter, all-domain
+committed-state identity, which refuses in-flight observations.
+
 Each execution session borrows one engine and owns mutable state: attention
 providers, backend state residency, workspace, committed position, cancellation
 state, and a unique batch-source lineage. Server sessions add token ledger,
