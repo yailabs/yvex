@@ -22,6 +22,7 @@ typedef enum {
     CANDIDATE_STORAGE_INDEXER_KV,
     CANDIDATE_STORAGE_INDEXER_POSITIONS,
     CANDIDATE_STORAGE_TOKEN_IDS,
+    CANDIDATE_STORAGE_SOURCE_ACTIVATION,
     CANDIDATE_STORAGE_MAIN_KV_CHECKPOINTS,
     CANDIDATE_STORAGE_MAIN_SCORE_CHECKPOINTS,
     CANDIDATE_STORAGE_INDEXER_KV_CHECKPOINTS,
@@ -127,6 +128,13 @@ static int candidate_storage_prepare(
                                     : 0ull,
                                 1ull, sizeof(*publication->token_ids),
                                 &required[CANDIDATE_STORAGE_TOKEN_IDS]) &&
+        candidate_storage_bytes(publication->source_activation &&
+                                        !publication->token_ids
+                                    ? publication->token_count
+                                    : 0ull,
+                                publication->source_activation_stride,
+                                sizeof(*publication->source_activation),
+                                &required[CANDIDATE_STORAGE_SOURCE_ACTIVATION]) &&
         candidate_storage_bytes(publication->next_main_rolling_state.present
                                     ? rolling_rows
                                     : 0ull,
@@ -152,6 +160,8 @@ static int candidate_storage_prepare(
                                 sizeof(float),
                                 &required[CANDIDATE_STORAGE_INDEXER_SCORE_CHECKPOINTS]);
     if (!valid ||
+        (publication->source_activation && !publication->token_ids &&
+         !publication->source_activation_stride) ||
         (publication->compressed_count &&
          (!publication->compressed_kv || !publication->compressed_positions ||
           !publication->compressed_stride)) ||
@@ -267,6 +277,7 @@ static int candidate_delta_assign(
 {
     yvex_attention_candidate_delta *delta;
     yvex_attention_publication *copy;
+    float *source_copy = NULL;
     int allocated = 0;
     if (!owner || !publication || !publication->complete ||
         publication->device_completion_pending ||
@@ -308,6 +319,7 @@ static int candidate_delta_assign(
     copy->raw_kv = copy->compressed_kv = copy->indexer_kv = NULL;
     copy->compressed_positions = copy->indexer_positions = NULL;
     copy->token_ids = NULL;
+    copy->source_activation = NULL;
     copy->main_rolling_kv_checkpoints = NULL;
     copy->main_rolling_score_checkpoints = NULL;
     copy->indexer_rolling_kv_checkpoints = NULL;
@@ -342,6 +354,11 @@ static int candidate_delta_assign(
              delta, CANDIDATE_STORAGE_TOKEN_IDS, (void **)&copy->token_ids,
              publication->token_ids, publication->token_count,
              sizeof(*copy->token_ids))) ||
+        (publication->source_activation && !publication->token_ids &&
+         !candidate_store_floats(
+             delta, CANDIDATE_STORAGE_SOURCE_ACTIVATION, &source_copy,
+             publication->source_activation, publication->token_count,
+             publication->source_activation_stride)) ||
         !(publication->prefix_addressable
               ? candidate_copy_rolling(
                     delta, publication,
@@ -381,6 +398,7 @@ static int candidate_delta_assign(
         return candidate_refuse(err, YVEX_ERR_NOMEM,
                                 "candidate delta storage allocation failed");
     }
+    copy->source_activation = source_copy;
     if (!publication->prefix_addressable) {
         if (copy->next_main_rolling_state.present) {
             copy->next_main_rolling_state.kv_state =

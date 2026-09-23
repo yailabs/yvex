@@ -225,12 +225,15 @@ static int live_cpu_suite(yvex_model_engine *model,
     OPEN_SESSION(cancelled);
     OPEN_SESSION(failed);
 #undef OPEN_SESSION
+    if (rc != YVEX_OK) live_fail("cpu-session-open", rc, err);
     if (rc == YVEX_OK)
         rc = live_execute(model, whole, full, YVEX_BACKEND_KIND_CPU, 2ull,
                           &whole_result, NULL, err);
+    if (rc != YVEX_OK) live_fail("cpu-whole-execute", rc, err);
     if (rc == YVEX_OK)
         rc = live_execute(model, chunked, full, YVEX_BACKEND_KIND_CPU, 1ull,
                           &chunked_result, NULL, err);
+    if (rc != YVEX_OK) live_fail("cpu-chunked-execute", rc, err);
     if (rc == YVEX_OK &&
         (strcmp(whole_result.tensor_output_digest,
                 chunked_result.tensor_output_digest) != 0 ||
@@ -358,13 +361,23 @@ static int live_cuda_suite(yvex_model_engine *model,
          cuda_result.layers_executed != 86ull ||
          cpu_result.bindings_executed != 1268ull ||
          cuda_result.bindings_executed != 1268ull)) {
+        fprintf(stderr,
+                "prefill_live cpu_output=%s cuda_output=%s "
+                "cpu_state=%s cuda_state=%s cpu_layers=%llu "
+                "cuda_layers=%llu cpu_bindings=%llu cuda_bindings=%llu\n",
+                cpu_result.tensor_output_digest,
+                cuda_result.tensor_output_digest,
+                cpu_result.persistent_state_digest,
+                cuda_result.persistent_state_digest,
+                cpu_result.layers_executed, cuda_result.layers_executed,
+                cpu_result.bindings_executed, cuda_result.bindings_executed);
         yvex_error_set(err, YVEX_ERR_FORMAT, "test.prefill.cpu-cuda",
                        "CPU and CUDA output/state or scale counters differ");
         rc = YVEX_ERR_FORMAT;
     }
     if (rc == YVEX_OK)
         printf("prefill_cpu_cuda_output_equal=1\n"
-               "prefill_cpu_cuda_state_equal=1\n"
+               "prefill_cpu_cuda_state_lineage_equal=1\n"
                "prefill_chunks=2\n"
                "prefill_layers_per_chunk=43\n"
                "prefill_bindings_per_chunk=634\n");
@@ -422,7 +435,8 @@ int main(int argc, char **argv)
     if (rc == YVEX_OK)
         rc = yvex_runtime_activation_input_write(
             argv[3], &full.summary, full.records, full.payload, &err);
-    if (rc == YVEX_OK)
+    if (rc != YVEX_OK) live_fail("input-setup", rc, &err);
+    if (rc == YVEX_OK && !getenv("YVEX_PREFILL_CUDA_ONLY"))
         rc = live_cpu_suite(
             model, &full, &prefix_a, &prefix_b, &suffix, &err);
     if (rc == YVEX_OK && !getenv("YVEX_PREFILL_CPU_ONLY"))

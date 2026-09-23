@@ -5,6 +5,7 @@
  */
 #include "tests/test.h"
 
+#include <limits.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -272,6 +273,58 @@ static int test_state_recipe_identity(const state_plan_fixture *fixture)
             yvex_attention_state_recipe_seal(&changed, &err) == YVEX_OK &&
             strcmp(baseline, changed.identity) != 0,
         "family selection-key mutation changes the state recipe identity");
+    return 0;
+}
+
+static int test_activation_state_identity_rows(void)
+{
+    yvex_attention_state_recipe recipe = {0};
+    yvex_attention_publication publication = {0};
+    char prior[YVEX_SHA256_HEX_CAP], plan[YVEX_SHA256_HEX_CAP];
+    char whole[YVEX_SHA256_HEX_CAP], first[YVEX_SHA256_HEX_CAP];
+    char split[YVEX_SHA256_HEX_CAP], changed[YVEX_SHA256_HEX_CAP];
+    float values[] = {0.25f, -0.5f, 1.0f, 0.75f, 0.0f, -1.0f};
+
+    (void)snprintf(prior, sizeof(prior), "%064x", 1);
+    (void)snprintf(plan, sizeof(plan), "%064x", 2);
+    (void)snprintf(recipe.identity, sizeof(recipe.identity), "%064x", 3);
+    publication.source_activation = values;
+    publication.source_activation_stride = 3ull;
+    publication.token_position = 7ull;
+    publication.token_count = 2ull;
+    YVEX_TEST_ASSERT(
+        yvex_graph_state_advance_identity(prior, &recipe, plan,
+                                          &publication, whole),
+        "tokenless activation rows have a committed state identity");
+    publication.token_count = 1ull;
+    YVEX_TEST_ASSERT(
+        yvex_graph_state_advance_identity(prior, &recipe, plan,
+                                          &publication, first),
+        "the first activation row has a committed state identity");
+    publication.source_activation = values + 3;
+    publication.token_position = 8ull;
+    YVEX_TEST_ASSERT(
+        yvex_graph_state_advance_identity(first, &recipe, plan,
+                                          &publication, split) &&
+            strcmp(whole, split) == 0,
+        "activation-state identity is independent of chunk boundaries");
+    values[3] += 0.125f;
+    YVEX_TEST_ASSERT(
+        yvex_graph_state_advance_identity(first, &recipe, plan,
+                                          &publication, changed) &&
+            strcmp(whole, changed) != 0,
+        "an exact activation-row mutation changes committed state identity");
+    values[3] = NAN;
+    YVEX_TEST_ASSERT(
+        !yvex_graph_state_advance_identity(first, &recipe, plan,
+                                           &publication, changed),
+        "non-finite activation rows cannot seal a committed state identity");
+    values[3] = 0.75f;
+    publication.source_activation_stride = ULLONG_MAX;
+    YVEX_TEST_ASSERT(
+        !yvex_graph_state_advance_identity(first, &recipe, plan,
+                                           &publication, changed),
+        "overflowing activation geometry cannot seal a committed state identity");
     return 0;
 }
 
@@ -2822,6 +2875,7 @@ int yvex_test_runtime_state(void)
 
     state_plan_open(&fixture);
     if (test_state_recipe_identity(&fixture) != 0) return 1;
+    if (test_activation_state_identity_rows() != 0) return 1;
     if (test_direct_kv_state_width(&fixture) != 0) return 1;
     if (test_workspace_recipe_identity() != 0) return 1;
     if (test_workspace_capture_geometry(&fixture) != 0) return 1;

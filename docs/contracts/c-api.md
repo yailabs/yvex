@@ -386,6 +386,10 @@ chunk commits one complete persistent-state generation and advances position
 once. Failure or cancellation aborts the failing chunk while preserving the
 exact earlier committed prefix. CPU and CUDA eager consume the same activation
 contract and session-owned provider; CUDA never falls back to CPU.
+Because this input contract contains activations rather than token IDs, the
+attention-state owner seals each exact finite F32 activation row in position
+order. Its committed identity is independent of chunk boundaries; it neither
+guesses token IDs nor substitutes one execution identity for an entire chunk.
 
 The result publishes activation-input identity, chunk/layer/class counts,
 attention-output digest, persistent-state digest, committed prefix, position
@@ -393,6 +397,10 @@ and generation transitions, and execution identity. It is not a complete
 transformer hidden state. Prompt text, tokenization, embedding, FFN/MoE,
 cross-layer transformer composition, model decode, and generation remain
 outside this API.
+The persistent-state digest authenticates admitted logical input lineage and
+committed extents; equality across backends does not by itself prove bytewise
+equality of their numerical state. Output comparison is a separate numerical
+gate.
 
 ### Internal MoE Execution Boundary
 

@@ -1336,6 +1336,10 @@ static int attention_probe_backend_execute(
             cuda ? "CUDA attention publication evidence was incomplete"
                  : "CPU attention publication evidence was incomplete");
     run->publication.token_ids = context->request->token_ids;
+    if (context->request->activation_view && options->input) {
+        run->publication.source_activation = options->input;
+        run->publication.source_activation_stride = options->input_stride;
+    }
     if (context->request->evidence) {
         rc = context->request->evidence(
             context->request->evidence_context,
@@ -1832,9 +1836,8 @@ int yvex_attention_execute(
           (request->backend != YVEX_BACKEND_KIND_CUDA ||
            request->compare_backends ||
            request->evidence_level == YVEX_ATTENTION_EVIDENCE_FULL))) ||
-        (request->state_provider &&
-         (request->activation_view || request->device_view) &&
-         !request->token_ids) ||
+        (request->state_provider && request->device_view &&
+         !request->activation_view && !request->token_ids) ||
         (request->backend != YVEX_BACKEND_KIND_CPU &&
          request->backend != YVEX_BACKEND_KIND_CUDA) ||
         (request->scope != YVEX_ATTENTION_PROBE_SCOPE_QUICK &&

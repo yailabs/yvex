@@ -6,7 +6,9 @@
  */
 #include <yvex/internal/graph_state.h>
 
+#include <limits.h>
 #include <stdint.h>
+#include <math.h>
 #include <string.h>
 
 #include <yvex/internal/core.h>
@@ -166,20 +168,35 @@ int yvex_graph_state_advance_identity(
     char output[YVEX_SHA256_HEX_CAP])
 {
     const int token_backed = publication && publication->token_ids != NULL;
-    const unsigned long long rows = token_backed ? publication->token_count : 1ull;
+    const int activation_backed = publication && !token_backed &&
+                                  publication->source_activation != NULL;
+    const unsigned long long rows = token_backed || activation_backed
+                                        ? publication->token_count : 1ull;
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     char current[YVEX_SHA256_HEX_CAP];
-    unsigned long long row;
+    unsigned long long row, column;
     if (!yvex_sha256_hex_valid(prior_identity) || !recipe ||
         !yvex_sha256_hex_valid(plan_identity) || !publication || !output ||
-        (!token_backed && !yvex_sha256_hex_valid(publication->execution_identity)))
+        (!token_backed && !activation_backed &&
+         !yvex_sha256_hex_valid(publication->execution_identity)) ||
+        ((token_backed || activation_backed) && !publication->token_count) ||
+        (activation_backed && publication->token_position >
+                                  ULLONG_MAX - publication->token_count) ||
+        (activation_backed && (!publication->source_activation_stride ||
+                               publication->source_activation_stride >
+                                   SIZE_MAX / sizeof(float) ||
+                               publication->token_count >
+                                   SIZE_MAX / sizeof(float) /
+                                       publication->source_activation_stride)))
         return 0;
     yvex_core_text_copy(current, sizeof(current), prior_identity);
     for (row = 0ull; row < rows; ++row) {
         yvex_sha256_init(&hash);
         if (!yvex_sha256_update_text(
                 &hash, token_backed ? "yvex.graph.attention.state.v5"
+                                    : activation_backed
+                                          ? "yvex.graph.attention.activation-state.v1"
                                     : "yvex.graph.attention.state.v4") ||
             !yvex_sha256_update_text(&hash, plan_identity) ||
             !yvex_sha256_update_text(&hash, recipe->identity) ||
@@ -189,13 +206,29 @@ int yvex_graph_state_advance_identity(
                         &hash, publication->token_position + row) &&
                         yvex_sha256_update_u64(&hash,
                                                publication->token_ids[row])
+                  : activation_backed
+                        ? yvex_sha256_update_u64(
+                              &hash, publication->token_position + row) &&
+                              yvex_sha256_update_u64(
+                                  &hash, publication->source_activation_stride)
                   : yvex_sha256_update_text(
                         &hash, publication->execution_identity) &&
                         yvex_sha256_update_u64(&hash,
                                                publication->token_position +
-                                                   publication->token_count)) ||
-            !yvex_sha256_final(&hash, digest))
+                                                   publication->token_count)))
             return 0;
+        if (activation_backed) {
+            const float *values = publication->source_activation +
+                                  row * publication->source_activation_stride;
+            for (column = 0ull;
+                 column < publication->source_activation_stride; ++column) {
+                uint32_t bits;
+                if (!isfinite(values[column])) return 0;
+                memcpy(&bits, &values[column], sizeof(bits));
+                if (!yvex_sha256_update_u64(&hash, bits)) return 0;
+            }
+        }
+        if (!yvex_sha256_final(&hash, digest)) return 0;
         yvex_sha256_hex(digest, current);
     }
     yvex_core_text_copy(output, YVEX_SHA256_HEX_CAP, current);

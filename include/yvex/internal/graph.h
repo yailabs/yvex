@@ -1,9 +1,5 @@
-/*
- * Expose the minimum graph contract required by runtime, backend, and operator adapters.
- *
- * Cross-owner consumers use explicit immutable contracts and never graph-private implementation
- * state. Graph execution is not persistent runtime KV, transformer composition, or generation.
- */
+/* Graph contracts for runtime/backend/operator consumers are explicit and immutable.
+ * Graph execution is not runtime KV, transformer composition, or generation. */
 #ifndef INCLUDE_YVEX_INTERNAL_GRAPH_H_INCLUDED
 #define INCLUDE_YVEX_INTERNAL_GRAPH_H_INCLUDED
 #include <stddef.h>
@@ -172,6 +168,9 @@ typedef struct yvex_attention_publication {
     unsigned int evidence_level;
     char execution_identity[YVEX_SHA256_HEX_CAP];
     const unsigned int *token_ids;
+    /* Exact host activation rows for tokenless committed-state identity. */
+    const float *source_activation;
+    unsigned long long source_activation_stride;
     unsigned long long layer_index, device_state_staged_bytes;
     yvex_attention_class attention_class;
     unsigned long long token_position, token_count, hidden_width, q_rank;

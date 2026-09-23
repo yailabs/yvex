@@ -1157,10 +1157,20 @@ int yvex_runtime_activation_prefill_execute(
     }
     if (rc == YVEX_OK)
         rc = yvex_runtime_activation_input_validate(input, err);
-    if (activation_prefill_state_summary(session, &after, err) != YVEX_OK) {
-        if (rc == YVEX_OK) rc = yvex_error_code(err);
-        memset(&after, 0, sizeof(after));
+    {
+        yvex_error observation_error = {0};
+        int observation_rc = activation_prefill_state_summary(
+            session, &after, &observation_error);
+        if (observation_rc != YVEX_OK && rc == YVEX_OK) {
+            rc = observation_rc;
+            if (err) *err = observation_error;
+        }
+        if (observation_rc != YVEX_OK)
+            memset(&after, 0, sizeof(after));
     }
+    if (rc != YVEX_OK && err && !yvex_error_is_set(err))
+        activation_refuse(err, (yvex_status)rc,
+                          "activation prefill failed without a diagnostic");
     result->committed_prefix = result->position_after = after.next_position;
     result->generation_after = after.generation;
     yvex_runtime_identity_copy(
