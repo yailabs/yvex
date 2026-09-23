@@ -25,7 +25,7 @@ struct yvex_decision_readout_context {
     yvex_execution_workload_profile workload;
     yvex_runtime_execution_profile profile;
     yvex_decision_readout_context_summary summary;
-    readout_run source;
+    readout_run source, candidate;
     pthread_mutex_t mutex;
     int mutex_ready, busy, prefix_prepared, invalidated;
 };
@@ -178,28 +178,36 @@ static int readout_profile_open(yvex_decision_readout_context *context,
                                 yvex_error *err)
 {
     yvex_runtime_execution_profile_derivation derivation = {0};
-    yvex_execution_workload_profile *workload = &context->workload;
-    int rc;
-    workload->schema_version = YVEX_EXECUTION_WORKLOAD_PROFILE_SCHEMA_V1;
-    workload->kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY;
-    workload->minimum_session_context = 1ull;
-    workload->requested_session_context = context->options.context_capacity;
-    workload->concurrent_sequences = 1ull;
-    workload->logical_batch_tokens = 1ull;
-    workload->prefill_chunk_tokens = context->options.maximum_prefix_tokens;
-    workload->attention_microbatch_rows = 1ull;
-    workload->moe_row_tile = 1ull;
-    workload->output_head_rows = 1ull;
-    workload->system_reserve_bytes = YVEX_EXECUTION_MINIMUM_SYSTEM_RESERVE;
-    workload->latency_priority = 1;
-    yvex_core_text_copy(workload->name, sizeof(workload->name),
-                        "decision-readout-zero-decode-v0");
-    rc = yvex_execution_workload_profile_seal(workload, err);
+    yvex_runtime_capacity_options options = {
+        .backend = context->options.backend,
+        .mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY,
+        .workload_kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY,
+        .evidence_profile = YVEX_EXECUTION_EVIDENCE_PRODUCTION,
+        .sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED,
+        .context_capacity = context->options.context_capacity,
+        .prefill_chunk_tokens = context->options.maximum_prefix_tokens,
+        .concurrent_sequences = 1ull,
+        .maximum_host_bytes = context->options.maximum_host_bytes,
+        .maximum_device_bytes = context->options.maximum_device_bytes,
+    };
+    yvex_runtime_capacity capacity = {0};
+    yvex_graph_attention_capacity_plan *attention_capacity = NULL;
+    yvex_model_engine_failure failure = {0};
+    const yvex_runtime_session_view *view =
+        yvex_runtime_session_view_get(context->source.session);
+    int rc = yvex_runtime_capacity_derive(context->model, context->source.session,
+        &options, &capacity, &attention_capacity, err);
+    yvex_graph_attention_capacity_plan_close(&attention_capacity);
     if (rc != YVEX_OK) return rc;
+    if (view && view->attention_state_provider)
+        rc = yvex_runtime_session_configure_persistent_pages(
+            context->source.session, &capacity.capacity_plan, &failure, err);
+    if (rc != YVEX_OK) return rc;
+    context->workload = capacity.workload_profile;
     derivation.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
     derivation.model = context->model;
     derivation.session = context->source.session;
-    derivation.workload = workload;
+    derivation.workload = &context->workload;
     derivation.backend = context->options.backend;
     derivation.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
     derivation.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
@@ -259,19 +267,11 @@ static int readout_run_open(
 
 static int readout_run_close(readout_run *run, yvex_error *err)
 {
-    yvex_error cleanup;
     int rc = yvex_runtime_logits_context_close(&run->logits, err);
-    int current = yvex_runtime_decoder_execution_context_close(
-        &run->decoder, &cleanup);
-    if (rc == YVEX_OK && current != YVEX_OK) {
-        rc = current;
-        if (err) *err = cleanup;
-    }
-    current = yvex_runtime_session_close(&run->session, &cleanup);
-    if (rc == YVEX_OK && current != YVEX_OK) {
-        rc = current;
-        if (err) *err = cleanup;
-    }
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_decoder_execution_context_close(&run->decoder, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_session_close(&run->session, err);
     return rc;
 }
 
@@ -393,10 +393,11 @@ int yvex_decision_readout_context_open(
                     : NULL;
     if (rc == YVEX_OK &&
         (!interface || !interface->vocabulary_size ||
-         interface->vocabulary_size != tokenizer->vocabulary_size))
+         !tokenizer->vocabulary_size ||
+         interface->vocabulary_size < tokenizer->vocabulary_size))
         rc = readout_refuse(
             err, YVEX_ERR_FORMAT, "runtime.decision-readout.open",
-            "compiled forward and tokenizer vocabulary disagree");
+            "compiled logits do not cover the admitted tokenizer domain");
     if (rc == YVEX_OK && pthread_mutex_init(&context->mutex, NULL) != 0)
         rc = readout_refuse(
             err, YVEX_ERR_STATE, "runtime.decision-readout.open",
@@ -436,7 +437,9 @@ int yvex_decision_readout_context_open(
     }
     if (rc != YVEX_OK) {
         yvex_error primary = err ? *err : (yvex_error){0};
+        context->invalidated = 1;
         (void)yvex_decision_readout_context_close(&context, NULL);
+        *out = context; /* Failed cleanup retains its owner for a close retry. */
         if (err) *err = primary;
         return rc;
     }
@@ -621,7 +624,8 @@ int yvex_decision_readout_prefix_prepare(
             err, YVEX_ERR_INVALID_ARG, "runtime.decision-readout.prefix",
             "one bounded explicit prefix token sequence is required");
     for (index = 0ull; index < prefix_token_count; ++index)
-        if (prefix_tokens[index] >= context->summary.vocabulary_size)
+        if (prefix_tokens[index] >= yvex_tokenizer_plan_summary_get(
+                context->model_view->tokenizer)->vocabulary_size)
             return readout_refuse(
                 err, YVEX_ERR_BOUNDS, "runtime.decision-readout.prefix",
                 "prefix token exceeds the admitted vocabulary");
@@ -710,6 +714,7 @@ int yvex_decision_readout_prefix_prepare(
     }
 done:
     yvex_decision_readout_prefix_close(&prefix);
+    if (prefix) *out = prefix;
     readout_unlock(context);
     return rc;
 }
@@ -770,7 +775,8 @@ static int readout_candidates_validate(
                 "candidate population extent overflowed");
         for (token = 0ull; token < current->token_count; ++token) {
             if (current->token_ids[token] >=
-                context->summary.vocabulary_size)
+                yvex_tokenizer_plan_summary_get(
+                    context->model_view->tokenizer)->vocabulary_size)
                 return readout_refuse(
                     err, YVEX_ERR_BOUNDS, "runtime.decision-readout.execute",
                     "candidate token exceeds the admitted vocabulary");
@@ -821,6 +827,25 @@ static int readout_candidate_result_identity(
     return 1;
 }
 
+static int readout_resources_observe(
+    const readout_run *run, unsigned long long *state_bytes,
+    unsigned long long *workspace_bytes, yvex_error *err)
+{
+    yvex_runtime_session_summary session = {0};
+    yvex_execution_resource_summary resources = {
+        .schema_version = YVEX_EXECUTION_RESOURCE_SCHEMA_V1};
+    int rc = yvex_runtime_session_summary_copy(run->session, &session, err);
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_session_resources_accumulate(&resources, &session, err);
+    if (rc == YVEX_OK) {
+        if (resources.session_physical_state_bytes > *state_bytes)
+            *state_bytes = resources.session_physical_state_bytes;
+        if (resources.workspace_peak_bytes > *workspace_bytes)
+            *workspace_bytes = resources.workspace_peak_bytes;
+    }
+    return rc;
+}
+
 static int readout_candidate_execute(
     yvex_decision_readout_context *context,
     const yvex_decision_readout_prefix *prefix,
@@ -832,8 +857,7 @@ static int readout_candidate_execute(
     yvex_runtime_session_prefix_summary attached = {0};
     yvex_runtime_decoder_execution_result execution = {0};
     yvex_runtime_logits_row_result row = {0};
-    yvex_runtime_session_summary session = {0};
-    readout_run run = {0};
+    readout_run *run = &context->candidate;
     float *next_logits = NULL;
     const float *current_logits = prefix->logits;
     unsigned long long token, logits_bytes;
@@ -851,7 +875,7 @@ static int readout_candidate_execute(
                 "candidate logits row allocation failed");
     }
     rc = readout_run_open(
-        context, prefix->runtime, &run, candidate->token_count,
+        context, prefix->runtime, run, candidate->token_count,
         &attached, err);
     if (rc == YVEX_OK &&
         strcmp(attached.prefix_identity,
@@ -859,6 +883,8 @@ static int readout_candidate_execute(
         rc = readout_refuse(
             err, YVEX_ERR_STATE, "runtime.decision-readout.candidate",
             "candidate branch attached a different shared prefix");
+    if (rc == YVEX_OK)
+        rc = readout_resources_observe(run, state_bytes, workspace_bytes, err);
     memset(result, 0, sizeof(*result));
     if (rc == YVEX_OK)
         yvex_core_text_copy(result->candidate_id,
@@ -876,12 +902,12 @@ static int readout_candidate_execute(
             result->candidate_log_likelihood += log_probability;
             if (token + 1ull < candidate->token_count)
                 rc = readout_decoder_logits(
-                    context, &run, &candidate->token_ids[token],
+                    context, run, &candidate->token_ids[token],
                     prefix->summary.prefix_token_count + token, 1ull, 0ull,
                     next_logits, &execution, &row, err);
             else
                 rc = readout_decoder_advance(
-                    &run, &candidate->token_ids[token],
+                    run, &candidate->token_ids[token],
                     prefix->summary.prefix_token_count + token, 1ull,
                     &execution, err);
         }
@@ -889,9 +915,9 @@ static int readout_candidate_execute(
             current_logits = next_logits;
             (*logits_rows)++;
         }
+        if (rc == YVEX_OK)
+            rc = readout_resources_observe(run, state_bytes, workspace_bytes, err);
     }
-    if (rc == YVEX_OK)
-        rc = yvex_runtime_session_summary_copy(run.session, &session, err);
     if (rc == YVEX_OK) {
         result->token_count = candidate->token_count;
         result->teacher_forced_tokens = candidate->token_count;
@@ -906,18 +932,13 @@ static int readout_candidate_execute(
             rc = readout_refuse(
                 err, YVEX_ERR_FORMAT, "runtime.decision-readout.candidate",
                 "candidate score or token identity is invalid");
-        if (session.sequence_host_state_bytes > *state_bytes)
-            *state_bytes = session.sequence_host_state_bytes;
-        if (session.workspace_peak_bytes > *workspace_bytes)
-            *workspace_bytes = session.workspace_peak_bytes;
-        if (session.host_workspace_peak_bytes > *workspace_bytes)
-            *workspace_bytes = session.host_workspace_peak_bytes;
     }
     {
         yvex_error primary = err ? *err : (yvex_error){0};
         yvex_error cleanup = {0};
-        int close_rc = readout_run_close(&run, &cleanup);
+        int close_rc = readout_run_close(run, &cleanup);
         free(next_logits);
+        if (close_rc != YVEX_OK) context->invalidated = 1;
         if (rc == YVEX_OK && close_rc != YVEX_OK) {
             rc = close_rc;
             if (err) *err = cleanup;
@@ -1159,8 +1180,9 @@ void yvex_decision_readout_prefix_close(
 {
     yvex_decision_readout_prefix *prefix = owner ? *owner : NULL;
     if (!prefix) return;
-    *owner = NULL;
     yvex_runtime_session_prefix_close(&prefix->runtime);
+    if (prefix->runtime) return;
+    *owner = NULL;
     free(prefix->logits);
     memset(prefix, 0, sizeof(*prefix));
     free(prefix);
@@ -1189,7 +1211,8 @@ int yvex_decision_readout_context_close(
                 "idle readout context is required for close");
         }
     }
-    rc = readout_run_close(&context->source, err);
+    rc = readout_run_close(&context->candidate, err);
+    if (rc == YVEX_OK) rc = readout_run_close(&context->source, err);
     if (rc != YVEX_OK) {
         if (locked) (void)pthread_mutex_unlock(&context->mutex);
         return rc;

@@ -672,6 +672,46 @@ static int tiny_capacity_progress_collect(
     return 1;
 }
 
+static int tiny_common_capacity(yvex_model_engine *model,
+    yvex_runtime_execution_session *session, yvex_error *err)
+{
+    yvex_runtime_capacity_options options = {
+        .backend = YVEX_BACKEND_KIND_CPU,
+        .mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY,
+        .workload_kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY,
+        .evidence_profile = YVEX_EXECUTION_EVIDENCE_PRODUCTION,
+        .sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED,
+        .context_capacity = 8ull, .prefill_chunk_tokens = 1ull};
+    yvex_runtime_capacity first = {0}, second = {0};
+    yvex_graph_attention_capacity_plan *attention = NULL;
+    unsigned long long generation = session->summary.engine_generation;
+    int rc = yvex_runtime_capacity_derive(model, session, &options, &first, &attention, err);
+    yvex_graph_attention_capacity_plan_close(&attention);
+    if (rc != YVEX_OK) return rc;
+    options.concurrent_sequences = 1ull;
+    rc = yvex_runtime_capacity_derive(model, session, &options, &second, &attention, err);
+    yvex_graph_attention_capacity_plan_close(&attention);
+    if (rc != YVEX_OK || first.sampling_workspace_bytes || first.physical_rows != 1ull ||
+        strcmp(first.capacity_plan.identity, second.capacity_plan.identity))
+        return YVEX_ERR_STATE;
+    session->summary.engine_generation++;
+    rc = yvex_runtime_capacity_derive(model, session, &options, &second, &attention, err);
+    session->summary.engine_generation = generation;
+    if (rc != YVEX_ERR_STATE || attention || second.capacity_plan.schema_version)
+        return YVEX_ERR_STATE;
+    options.backend = YVEX_BACKEND_KIND_CUDA;
+    rc = yvex_runtime_capacity_derive(model, session, &options, &second, &attention, err);
+    if (rc != YVEX_ERR_STATE || attention || second.capacity_plan.schema_version)
+        return YVEX_ERR_STATE;
+    options.backend = YVEX_BACKEND_KIND_CPU;
+    options.sampling_requirement = (yvex_execution_sampling_requirement)99;
+    rc = yvex_runtime_capacity_derive(model, session, &options, &second, &attention, err);
+    if (rc != YVEX_ERR_STATE || attention || second.capacity_plan.schema_version)
+        return YVEX_ERR_STATE;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 static int tiny_generation_capacity_refusal(
     const char *artifact_path, const char *binding_path, yvex_error *err)
 {
@@ -761,6 +801,7 @@ static int tiny_generation_capacity_refusal(
     if (rc == YVEX_OK)
         rc = yvex_runtime_session_open(
             &session, model, &session_request, &failure, err);
+    if (rc == YVEX_OK) rc = tiny_common_capacity(model, session, err);
     if (rc == YVEX_OK) {
         injected_system = setenv(
             "YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES",
@@ -777,7 +818,7 @@ static int tiny_generation_capacity_refusal(
         rc = yvex_runtime_generation_context_open(
             &generation, model, session, &options, err);
         if (rc == YVEX_ERR_BOUNDS && !generation &&
-            strcmp(yvex_error_where(err), "runtime.generation") == 0 &&
+            strcmp(yvex_error_where(err), "runtime.capacity") == 0 &&
             strcmp(yvex_error_message(err),
                    "live process memory cannot preserve the admitted runtime reserve") == 0) {
             rc = YVEX_OK;

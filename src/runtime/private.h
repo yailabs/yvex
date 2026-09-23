@@ -18,6 +18,7 @@
 #include <yvex/internal/graph.h>
 #include <yvex/internal/logits.h>
 #include <yvex/internal/runtime.h>
+#include <yvex/internal/runtime_capacity.h>
 #include <yvex/internal/engine_scheduler.h>
 static inline yvex_attention_evidence_level runtime_attention_evidence(
     yvex_execution_evidence_profile profile)
@@ -444,12 +445,7 @@ struct yvex_runtime_generation_context {
     yvex_runtime_generation_options options;
     yvex_runtime_generation_plan_summary plan;
     yvex_runtime_execution_profile execution_profile;
-    yvex_execution_hardware_profile hardware_profile;
-    yvex_backend_bandwidth_evidence bandwidth_evidence;
-    yvex_execution_workload_profile workload_profile;
-    yvex_execution_capacity_plan capacity_plan;
-    unsigned long long system_capacity_bytes, system_reserve_bytes;
-    unsigned long long sampling_workspace_bytes;
+    yvex_runtime_capacity capacity;
     yvex_execution_phase_measurement phase_measurements[YVEX_EXECUTION_ROOFLINE_PHASE_COUNT];
     unsigned long long phase_measurement_count;
     unsigned int *additional_stops;
@@ -490,6 +486,10 @@ int yvex_runtime_private_success(yvex_error *err);
 int yvex_runtime_private_memory_capacity(
     unsigned long long *total_bytes, unsigned long long *available_bytes,
     int *process_limited);
+/* Caller holds the lifecycle lock or unpublished-session construction lease. */
+void yvex_runtime_private_session_sequence_summary_bind(
+    yvex_runtime_session_summary *summary,
+    const yvex_sequence_state_summary *sequence);
 unsigned long long yvex_runtime_private_system_reserve(
     unsigned long long capacity_bytes);
 int yvex_runtime_private_weight_placement_select(

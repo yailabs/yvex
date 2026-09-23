@@ -45,6 +45,7 @@ int yvex_runtime_session_prefix_attach(
     const yvex_runtime_session_prefix *prefix,
     yvex_runtime_session_prefix_summary *summary,
     yvex_model_engine_failure *failure, yvex_error *err);
+/* Retains a non-NULL cleanup-only owner if a backend release fails; retry close. */
 void yvex_runtime_session_prefix_close(yvex_runtime_session_prefix **prefix);
 
 #ifdef __cplusplus

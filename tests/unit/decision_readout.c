@@ -4,6 +4,8 @@
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
+#include <limits.h>
+#include <string.h>
 
 #include <yvex/internal/decision_readout.h>
 
@@ -90,9 +92,38 @@ static int decision_readout_distribution(void)
     return 0;
 }
 
+static int decision_readout_resources(void)
+{
+    yvex_runtime_session_summary cpu = {.sequence_host_state_bytes = 128ull,
+        .sequence_committed_state_bytes = 64ull, .sequence_candidate_state_bytes = 64ull};
+    yvex_runtime_session_summary hybrid = {.sequence_device_state_bytes = 128ull,
+        .sequence_committed_state_bytes = 64ull, .sequence_candidate_state_bytes = 64ull,
+        .attention_state_allocated_bytes = 40ull, .attention_state_resident_bytes = 32ull,
+        .attention_state_page_table_bytes = 8ull, .attention_state_virtual_bytes = 4096ull,
+        .workspace_bytes = 4ull, .host_workspace_bytes = 8ull,
+        .device_workspace_bytes = 16ull};
+    yvex_execution_resource_summary result = {.schema_version = YVEX_EXECUTION_RESOURCE_SCHEMA_V1};
+    yvex_execution_resource_summary before;
+    yvex_error err;
+    YVEX_TEST_ASSERT(yvex_runtime_session_resources_accumulate(&result, &cpu, &err) == YVEX_OK &&
+        result.session_physical_state_bytes == 128ull,
+        "CPU committed/candidate logical decomposition is not counted twice");
+    YVEX_TEST_ASSERT(yvex_runtime_session_resources_accumulate(&result, &hybrid, &err) == YVEX_OK &&
+        result.session_physical_state_bytes == 296ull && result.workspace_current_bytes == 28ull &&
+        result.session_attention_virtual_bytes == 4096ull,
+        "hybrid device state plus attention allocation excludes resident/virtual aliases");
+    before = result;
+    hybrid.sequence_device_state_bytes = ULLONG_MAX;
+    YVEX_TEST_ASSERT(yvex_runtime_session_resources_accumulate(&result, &hybrid, &err) == YVEX_ERR_BOUNDS &&
+        memcmp(&result, &before, sizeof(result)) == 0,
+        "overflow refuses without publishing partial multi-session totals");
+    return 0;
+}
+
 int yvex_test_decision_readout(void)
 {
     if (decision_readout_score_math() != 0) return 1;
     if (decision_readout_distribution() != 0) return 1;
+    if (decision_readout_resources() != 0) return 1;
     return 0;
 }

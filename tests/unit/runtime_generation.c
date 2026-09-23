@@ -5,8 +5,10 @@
  */
 #include "tests/test.h"
 
+#include <errno.h>
 #include <pthread.h>
 #include <string.h>
+#include <time.h>
 
 #include <yvex/internal/generation.h>
 
@@ -1233,8 +1235,83 @@ static int generation_test_program_input_identity(void)
     return 0;
 }
 
+typedef struct {
+    yvex_runtime_generation_context *context;
+    pthread_mutex_t mutex;
+    pthread_cond_t condition;
+    int entered, returned;
+} generation_release_probe;
+
+static void *generation_release_probe_run(void *opaque)
+{
+    generation_release_probe *probe = opaque;
+    (void)pthread_mutex_lock(&probe->mutex);
+    probe->entered = 1;
+    (void)pthread_cond_broadcast(&probe->condition);
+    (void)pthread_mutex_unlock(&probe->mutex);
+    yvex_runtime_private_generation_leave(probe->context, YVEX_OK, 1);
+    (void)pthread_mutex_lock(&probe->mutex);
+    probe->returned = 1;
+    (void)pthread_cond_broadcast(&probe->condition);
+    (void)pthread_mutex_unlock(&probe->mutex);
+    return NULL;
+}
+
+static int generation_test_release_close_interleaving(void)
+{
+    yvex_runtime_generation_context context = {0};
+    generation_release_probe probe = {.context = &context};
+    struct timespec deadline;
+    pthread_t worker;
+    int wait_rc = 0, released_without_lock;
+    YVEX_TEST_ASSERT(pthread_mutex_init(&context.drain_mutex, NULL) == 0 &&
+        pthread_cond_init(&context.drain_condition, NULL) == 0 &&
+        pthread_mutex_init(&probe.mutex, NULL) == 0 &&
+        pthread_cond_init(&probe.condition, NULL) == 0,
+        "generation release/close synchronization opens");
+    context.drain_mutex_ready = context.drain_condition_ready = 1;
+    atomic_init(&context.lifecycle, YVEX_GENERATION_LIFECYCLE_ACTIVE);
+    /* Hold close's predicate lock BEFORE publishing CLOSING. The old leave
+     * bypassed this lock, allowing close to miss the ACTIVE transition. */
+    (void)pthread_mutex_lock(&context.drain_mutex);
+    YVEX_TEST_ASSERT(pthread_create(&worker, NULL,
+        generation_release_probe_run, &probe) == 0, "release worker starts");
+    (void)pthread_mutex_lock(&probe.mutex);
+    while (!probe.entered)
+        (void)pthread_cond_wait(&probe.condition, &probe.mutex);
+    (void)clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec++;
+    while (!probe.returned && wait_rc == 0)
+        wait_rc = pthread_cond_timedwait(&probe.condition, &probe.mutex, &deadline);
+    released_without_lock = probe.returned;
+    (void)pthread_mutex_unlock(&probe.mutex);
+    (void)atomic_fetch_or_explicit(&context.lifecycle,
+        YVEX_GENERATION_LIFECYCLE_CLOSING, memory_order_acq_rel);
+    /* A timed wait bounds a broken wakeup instead of hanging the test suite. */
+    (void)clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += 5;
+    while (atomic_load_explicit(&context.lifecycle, memory_order_acquire) &
+           YVEX_GENERATION_LIFECYCLE_ACTIVE) {
+        if (pthread_cond_timedwait(&context.drain_condition,
+                                  &context.drain_mutex, &deadline) != 0)
+            break;
+    }
+    (void)pthread_mutex_unlock(&context.drain_mutex);
+    (void)pthread_join(worker, NULL);
+    (void)pthread_cond_destroy(&probe.condition);
+    (void)pthread_mutex_destroy(&probe.mutex);
+    (void)pthread_cond_destroy(&context.drain_condition);
+    (void)pthread_mutex_destroy(&context.drain_mutex);
+    YVEX_TEST_ASSERT(!released_without_lock && wait_rc == ETIMEDOUT &&
+        atomic_load_explicit(&context.lifecycle, memory_order_acquire) ==
+            YVEX_GENERATION_LIFECYCLE_CLOSING && context.execution_count == 1,
+        "leave cannot bypass close's predicate lock; close receives ACTIVE wakeup");
+    return 0;
+}
+
 int yvex_test_runtime_generation(void)
 {
+    if (generation_test_release_close_interleaving() != 0) return 1;
     if (generation_test_program_input_identity() != 0) return 1;
     if (generation_test_engine_scheduling() != 0) return 1;
     if (generation_test_bounded_batch_coalescing() != 0) return 1;

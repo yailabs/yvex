@@ -93,6 +93,8 @@ typedef struct {
     unsigned long long resident_host_model_bytes;
     unsigned long long resident_device_model_bytes;
     unsigned long long shared_prefix_state_bytes;
+    /* Maximum branch-owned physical allocation observed after attach and each
+     * committed token; not a process/device peak or an incremental prefix cost. */
     unsigned long long peak_candidate_state_bytes, peak_workspace_bytes;
     unsigned long long logits_buffer_bytes;
     unsigned long long prefix_nanoseconds, candidate_nanoseconds;
@@ -123,6 +125,8 @@ int yvex_decision_readout_relative_distribution(
 int yvex_decision_readout_context_open(
     yvex_decision_readout_context **out, yvex_model_engine *model,
     const yvex_decision_readout_options *options, yvex_error *err);
+/* On failed cleanup, open may return a non-NULL invalidated owner. Close must
+ * be retried; execution cannot reuse retained failed candidate resources. */
 int yvex_decision_readout_context_summary_copy(
     const yvex_decision_readout_context *context,
     yvex_decision_readout_context_summary *summary, yvex_error *err);

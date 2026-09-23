@@ -117,9 +117,9 @@ static int live_decode_run(live_decode *execution,
         .chunk_tokens = 1ull,
         .backend = backend,
         .phase = YVEX_TRANSFORMER_PHASE_PREFILL};
-    yvex_runtime_transformer_output prefill_output;
+    yvex_runtime_transformer_output prefill_output = {0};
     yvex_runtime_decode_request decode_request = {.backend = backend};
-    yvex_runtime_decode_output decode_output;
+    yvex_runtime_decode_output decode_output = {0};
     int rc;
     execution->prefill_hidden = (float *)calloc((size_t)width, sizeof(float));
     execution->decode_hidden = (float *)calloc((size_t)(2ull * width), sizeof(float));
@@ -207,7 +207,7 @@ static int live_reference_run(live_decode *execution,
         .chunk_tokens = 1ull,
         .backend = YVEX_BACKEND_KIND_CPU,
         .phase = YVEX_TRANSFORMER_PHASE_PREFILL};
-    yvex_runtime_transformer_output output;
+    yvex_runtime_transformer_output output = {0};
     execution->prefill_hidden = (float *)calloc((size_t)(3ull * width), sizeof(float));
     if (!execution->prefill_hidden) return YVEX_ERR_NOMEM;
     output.normalized_hidden = execution->prefill_hidden;
@@ -235,9 +235,9 @@ static int live_partial_run(live_decode *execution,
         .chunk_tokens = 1ull,
         .backend = YVEX_BACKEND_KIND_CPU,
         .phase = YVEX_TRANSFORMER_PHASE_PREFILL};
-    yvex_runtime_transformer_output prefill_output;
+    yvex_runtime_transformer_output prefill_output = {0};
     yvex_runtime_decode_request decode_request = {.backend = YVEX_BACKEND_KIND_CPU};
-    yvex_runtime_decode_output decode_output;
+    yvex_runtime_decode_output decode_output = {0};
     int rc;
     execution->prefill_hidden = (float *)calloc((size_t)width, sizeof(float));
     execution->decode_hidden = (float *)calloc((size_t)(3ull * width), sizeof(float));

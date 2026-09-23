@@ -1,6 +1,8 @@
 /* Immutable model resources and isolated mutable sequence state remain explicit in this runtime ABI. */
 #ifndef INCLUDE_YVEX_INTERNAL_RUNTIME_H_INCLUDED
 #define INCLUDE_YVEX_INTERNAL_RUNTIME_H_INCLUDED
+
+#include <yvex/execution.h>
 #include <string.h>
 #include <yvex/artifact.h>
 #include <yvex/backend.h>
@@ -492,6 +494,11 @@ typedef struct {
     char engine_specialization_identity[YVEX_SHA256_HEX_CAP];
     char residency_identity[YVEX_SHA256_HEX_CAP], workspace_identity[YVEX_SHA256_HEX_CAP];
 } yvex_runtime_session_summary;
+/* Add one session's non-overlapping physical allocations; logical decompositions
+ * and virtual capacity remain separate. Failure leaves the destination intact. */
+int yvex_runtime_session_resources_accumulate(
+    yvex_execution_resource_summary *total,
+    const yvex_runtime_session_summary *session, yvex_error *err);
 typedef struct {
     const yvex_model_engine *engine;
     yvex_backend *backend;

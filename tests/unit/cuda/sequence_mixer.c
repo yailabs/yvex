@@ -215,8 +215,9 @@ static int gated_delta_cancelled(void *context)
 }
 
 static int gated_delta_device_state_lifecycle(
-    yvex_backend *backend, const yvex_gated_delta_requirement *requirement)
+    yvex_backend *owner, const yvex_gated_delta_requirement *requirement)
 {
+    yvex_backend *backend = NULL;
     yvex_gated_delta_plan mixer;
     yvex_sequence_state_binding binding;
     yvex_sequence_state_plan plan;
@@ -231,6 +232,9 @@ static int gated_delta_device_state_lifecycle(
     char fork_identity[YVEX_SHA256_HEX_CAP] = {0};
     yvex_error err;
 
+    YVEX_TEST_ASSERT(yvex_backend_open_shared_cuda(
+        &backend, owner, 0ull, &err) == YVEX_OK,
+        "source state uses a session-local executor");
     if (yvex_gated_delta_plan_seal(&mixer, requirement, &err) != YVEX_OK)
         return 1;
     YVEX_TEST_ASSERT(yvex_sequence_state_binding_seal(
@@ -305,7 +309,7 @@ static int gated_delta_device_state_lifecycle(
                 forked, 3ull, &committed, &candidate, &err) == YVEX_OK &&
             committed.convolution && committed.recurrent &&
             yvex_backend_tensor_read(
-                backend, committed.convolution, observed,
+                committed.convolution->owner, committed.convolution, observed,
                 convolution_values * sizeof(float), &err) == YVEX_OK &&
             observed[0] == 1.25f &&
             yvex_sequence_state_participant(
@@ -343,10 +347,23 @@ static int gated_delta_device_state_lifecycle(
                 YVEX_ERR_CANCELLED,
         "reset clears both device banks and restores position zero");
     YVEX_TEST_ASSERT(
-        yvex_sequence_state_close_checked(&forked, &err) == YVEX_OK &&
-            yvex_sequence_state_close_checked(&state, &err) == YVEX_OK &&
-            !forked && !state,
-        "close releases source and fork CUDA recurrent banks before the backend");
+        yvex_sequence_state_close_checked(&state, &err) == YVEX_OK && !state &&
+            yvex_backend_close_checked(&backend, &err) == YVEX_OK && !backend &&
+            yvex_sequence_state_committed_identity(
+                forked, fork_identity, &err) == YVEX_OK &&
+            strcmp(source_identity, fork_identity) == 0,
+        "immutable CUDA fork survives source session executor close");
+    YVEX_TEST_ASSERT(setenv("YVEX_TEST_CUDA_CLEANUP_FAILURE", "tensor-alloc", 1) == 0,
+        "inject snapshot storage release failure");
+    int close_rc = yvex_sequence_state_close_checked(&forked, &err);
+    YVEX_TEST_ASSERT(unsetenv("YVEX_TEST_CUDA_CLEANUP_FAILURE") == 0,
+        "remove snapshot storage release failure");
+    YVEX_TEST_ASSERT(close_rc == YVEX_ERR_BACKEND && forked &&
+        yvex_sequence_state_committed_identity(forked, fork_identity, &err) != YVEX_OK &&
+        yvex_sequence_state_close_checked(&forked, &err) == YVEX_OK && !forked,
+        "failed snapshot release retains an invalidated owner and closes on retry");
+    printf("CUDA recurrent fork lifetime: source_executor=closed snapshot_identity=unchanged "
+        "cleanup_failure=retained retry=complete\n");
     free(observed);
     free(recurrent);
     free(convolution);

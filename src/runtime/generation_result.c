@@ -542,12 +542,12 @@ int yvex_runtime_private_generation_result_finish(
         context->phase_measurement_count) {
         yvex_execution_roofline_ledger_request request = {
             .schema_version = YVEX_EXECUTION_PHASE_ROOFLINE_SCHEMA_V1,
-            .hardware = &context->hardware_profile,
+            .hardware = &context->capacity.hardware_profile,
             .artifact_identity =
                 context->model_view->binding->artifact_identity,
             .execution_profile_identity = context->execution_profile.identity,
             .kernel_bundle_identity = context->plan.kernel_bundle_identity,
-            .workload_profile_identity = context->workload_profile.identity,
+            .workload_profile_identity = context->capacity.workload_profile.identity,
             .measurements = context->phase_measurements,
             .measurement_count = context->phase_measurement_count};
         finish_rc = yvex_execution_roofline_ledger_build(

@@ -704,7 +704,42 @@ assert engines[sys.argv[3]]["state"] == "failed"
 assert engines[sys.argv[3]]["generation"] > int(sys.argv[4])
 PY
 
-HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" host stop >/dev/null
+# Reopen an ordinary engine and leave a real, detached execution session alive.
+# Ctrl-C must drain this ownership, not only the zero-engine host fixture.
+python3 - "$registry" "$artifact" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+value = json.loads(path.read_text())
+value["models"][0]["path"] = sys.argv[2]
+path.write_text(json.dumps(value))
+PY
+HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" engine load "$profile" \
+    >"$root/load.shutdown.out"
+HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session new shutdown \
+    --model "$profile" >"$root/session.shutdown.out"
+HOME="$home" XDG_RUNTIME_DIR="$runtime" "$NATIVE_TURN" \
+    --model "$profile" --session shutdown --reasoning none --strategy greedy \
+    --max-new-tokens 1 a >"$root/turn.shutdown.out" 2>"$root/turn.shutdown.err"
+grep -Fx 'ok' "$root/turn.shutdown.out" >/dev/null
+python3 - "$server_pid" <<'PY'
+import os, pathlib, signal, sys, time
+pid = int(sys.argv[1])
+started = time.monotonic()
+os.kill(pid, signal.SIGINT)
+while time.monotonic() - started < 10:
+    try:
+        state = pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+    except FileNotFoundError:
+        break
+    if state == "Z":
+        break
+    time.sleep(.02)
+else:
+    # Exact fixture child only: avoid an indefinite wait in the failure trap.
+    os.kill(pid, signal.SIGKILL)
+    raise SystemExit("FAIL: SIGINT did not drain the detached tiny session in 10 s")
+print(f"shutdown detached-session SIGINT elapsed={time.monotonic()-started:.3f}s")
+PY
 wait "$server_pid"
 server_pid=
 wait "$log_pid"

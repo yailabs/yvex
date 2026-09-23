@@ -200,7 +200,9 @@ typedef int (*yvex_backend_state_resolve_fn)(
     const void *context, const void *host, unsigned long long bytes,
     unsigned long long *device_address);
 int yvex_backend_close_admit(yvex_backend *backend, yvex_error *err);
-/* Admission failure publishes only a FAILED cleanup owner when checked rollback also fails. */
+/* A live primary or shared executor identifies the physical context. The new
+ * executor retains that primary owner independently of the supplied executor.
+ * Admission failure publishes only a FAILED owner if checked rollback fails. */
 int yvex_backend_open_shared_cuda(yvex_backend **out, yvex_backend *context_owner,
                                   unsigned long long memory_limit_bytes, yvex_error *err);
 const yvex_backend_sampling_operations *yvex_backend_sampling_operations_get(

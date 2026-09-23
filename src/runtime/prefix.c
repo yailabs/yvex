@@ -352,6 +352,7 @@ int yvex_runtime_session_prefix_capture(
 done:
     (void)pthread_mutex_unlock(&source->lifecycle_mutex);
     yvex_runtime_session_prefix_close(&prefix);
+    if (prefix) *out = prefix; /* Retain failed rollback ownership for retry. */
     return rc;
 }
 
@@ -570,18 +571,8 @@ int yvex_runtime_session_prefix_attach(
         rc = yvex_sequence_state_summary_copy(
             destination->sequence_state, &destination_sequence, err);
         if (rc != YVEX_OK) goto done;
-        destination->summary.sequence_state_binding_count =
-            destination_sequence.binding_count;
-        destination->summary.sequence_state_generation =
-            destination_sequence.generation;
-        destination->summary.sequence_committed_state_bytes =
-            destination_sequence.committed_state_bytes;
-        destination->summary.sequence_candidate_state_bytes =
-            destination_sequence.candidate_state_bytes;
-        destination->summary.sequence_host_state_bytes =
-            destination_sequence.host_state_bytes;
-        destination->summary.sequence_device_state_bytes =
-            destination_sequence.device_state_bytes;
+        yvex_runtime_private_session_sequence_summary_bind(
+            &destination->summary, &destination_sequence);
     }
     if (failure) memset(failure, 0, sizeof(*failure));
     yvex_error_clear(err);
@@ -596,10 +587,11 @@ void yvex_runtime_session_prefix_close(yvex_runtime_session_prefix **owner)
 {
     yvex_runtime_session_prefix *prefix = owner ? *owner : NULL;
     if (!prefix) return;
+    if (yvex_sequence_state_close_checked(&prefix->sequence, NULL) != YVEX_OK)
+        return;
     *owner = NULL;
     yvex_attention_state_prefix_close(&prefix->draft);
     yvex_attention_state_prefix_close(&prefix->target);
-    yvex_sequence_state_close(&prefix->sequence);
     free(prefix->draft_recipes);
     free(prefix->target_recipes);
     memset(prefix, 0, sizeof(*prefix));

@@ -256,6 +256,29 @@ static unsigned long long live_first_layer_mismatch(
     return layer;
 }
 
+static void live_report_layer_differences(
+    const live_execution *cpu, const live_execution *cuda,
+    unsigned long long layer_count, unsigned long long row_count,
+    unsigned long long hidden_width)
+{
+    unsigned long long layer, row;
+    for (layer = 0ull; layer < layer_count; ++layer) {
+        for (row = 0ull; row < row_count; ++row) {
+            unsigned long long offset =
+                (row * layer_count + layer) * hidden_width;
+            unsigned long long first;
+            double left, right, maximum, rmse;
+            int matched = live_values_compare(
+                cpu->features + offset, cuda->features + offset,
+                hidden_width, &maximum, &rmse, &first, &left, &right);
+            fprintf(stderr,
+                    "transformer_live layer=%llu row=%llu matched=%d "
+                    "first=%llu cpu=%.9g cuda=%.9g max_abs=%.9g rmse=%.9g\n",
+                    layer, row, matched, first, left, right, maximum, rmse);
+        }
+    }
+}
+
 static int live_argmax_compare(
     yvex_model_engine *model, const live_execution *cpu,
     const live_execution *cuda, unsigned int *cpu_token,
@@ -551,6 +574,10 @@ int main(int argc, char **argv)
                                  &cpu_margin, &cuda_margin, &logit_maximum,
                                  &logit_rmse, &probability_tv, &err);
         if (rc == YVEX_OK && (!hidden_match || !state_match)) {
+            if (cpu.features && cuda.features)
+                live_report_layer_differences(
+                    &cpu, &cuda, plan->layer_count, 2ull,
+                    plan->hidden_width);
             fprintf(stderr,
                     "transformer_live numeric first=%llu cpu=%.9g cuda=%.9g max_abs=%.9g "
                     "rmse=%.9g first_layer=%llu layer_max=%.9g layer_rmse=%.9g "
@@ -572,9 +599,11 @@ int main(int argc, char **argv)
     if (rc != YVEX_OK) live_fail(step, rc, &err);
     else if (cuda_only)
         printf("cuda_chunk_equivalence=pass tokens=%llu layers=43 "
-               "evidence=%s max_abs=%.17g rmse=%.17g state_match=%d\n",
+               "evidence=%s max_abs=%.17g rmse=%.17g state_match=%d "
+               "hidden_digest=%s routing_digest=%s\n",
                comparison_tokens, getenv("YVEX_TRANSFORMER_LIVE_FORENSIC") ? "full" : "normal",
-               maximum, rmse, state_match);
+               maximum, rmse, state_match,
+               cuda.result.normalized_hidden_digest, cuda.result.routing_digest);
     else
         printf("transformer_layers=43 chunks=1 tokens=2 swa=2 csa=21 hca=20 "
                "hash=6 learned=80 routed=516 shared=86 max_abs=%.17g rmse=%.17g\n"

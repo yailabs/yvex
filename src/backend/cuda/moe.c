@@ -284,9 +284,12 @@ static int moe_cuda_sync_status(yvex_backend_moe_execution *execution,
         execution->device_synchronizations++;
         if (completed > started) execution->synchronization_ns += completed - started;
     }
-    if (rc == YVEX_OK && execution->host_status)
-        rc = moe_cuda_refuse(err, YVEX_ERR_BACKEND,
-                             "CUDA MoE kernel reported invalid or non-finite numerics");
+    if (rc == YVEX_OK && execution->host_status) {
+        yvex_error_setf(err, YVEX_ERR_BACKEND, "cuda.moe",
+            "CUDA MoE kernel reported device status %d (invalid or non-finite numerics)",
+            execution->host_status);
+        rc = YVEX_ERR_BACKEND;
+    }
     return rc;
 }
 

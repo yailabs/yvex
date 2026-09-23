@@ -685,6 +685,7 @@ static int cuda_tensor_commit(yvex_backend *backend, yvex_device_tensor *tensor,
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
     cuda_virtual_allocation *allocation =
         tensor ? (cuda_virtual_allocation *)tensor->backend_allocation : NULL;
+    yvex_cuda_work initialization = {.backend = backend, .state = state};
     CUmemAllocationProp properties;
     CUmemAccessDesc access;
     size_t first, last, page, missing = 0u, committed = 0u;
@@ -751,11 +752,22 @@ static int cuda_tensor_commit(yvex_backend *backend, yvex_device_tensor *tensor,
                 "cuda.tensor.commit.access", err);
         }
         if (rc == YVEX_OK)
-            rc = yvex_cuda_status(
-                &state->driver,
-                state->driver.cuMemsetD8_v2(
-                    address, 0u, allocation->granularity),
+            rc = yvex_cuda_work_initialize(
+                &initialization, address, allocation->granularity, NULL, 1,
                 "cuda.tensor.commit.zero", err);
+    }
+    /* A default-stream memset is not ordered with a nonblocking session
+     * stream. Publish only initialized pages, and drain before rollback can
+     * unmap a page whose initialization was already submitted. */
+    if (committed) {
+        yvex_error completion;
+        int synchronized = yvex_cuda_synchronize(
+            backend, YVEX_BACKEND_VARIANT_TENSOR_ZERO,
+            "cuda.tensor.commit.zero_sync", &completion);
+        if (rc == YVEX_OK && synchronized != YVEX_OK) {
+            rc = synchronized;
+            if (err) *err = completion;
+        }
     }
     if (rc != YVEX_OK) {
         yvex_error primary = *err, cleanup;
@@ -1811,7 +1823,9 @@ failed:
                               err ? *err : (yvex_error){0}, err);
 }
 /*
- * Create session-local CUDA state that borrows one model-owned context.
+ * Create independent CUDA execution state over the same model-owned context.
+ * A live shared executor may identify that context, but is never the new
+ * executor's lifetime owner.
  *
  * Publishes only a failed cleanup owner when rollback cannot release its module.
  */
@@ -1826,11 +1840,19 @@ int yvex_backend_open_shared_cuda(yvex_backend **out,
     int rc;
     if (out) *out = NULL;
     if (!out || !context_owner || context_owner->kind != YVEX_BACKEND_KIND_CUDA ||
-        context_owner->resource_owner != context_owner) {
+        !context_owner->resource_owner) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cuda.shared.open",
                        "one owning CUDA context is required");
         return YVEX_ERR_INVALID_ARG;
     }
+    if (context_owner->status == YVEX_BACKEND_STATUS_FAILED ||
+        (atomic_load_explicit(&context_owner->lifecycle, memory_order_acquire) &
+         YVEX_BACKEND_LIFECYCLE_CLOSING)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "cuda.shared.open",
+                       "a live CUDA execution owner is required");
+        return YVEX_ERR_STATE;
+    }
+    context_owner = context_owner->resource_owner;
     backend = (yvex_backend *)calloc(1u, sizeof(*backend));
     state = (yvex_cuda_backend_state *)calloc(1u, sizeof(*state));
     if (!backend || !state) {

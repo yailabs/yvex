@@ -444,53 +444,6 @@ int yvex_server_sessions_occupancy(server_session_registry *registry,
     return YVEX_OK;
 }
 
-static int session_resource_accumulate(
-    yvex_execution_resource_summary *total,
-    const yvex_runtime_session_summary *session)
-{
-    unsigned long long workspace_current = 0ull, workspace_peak = 0ull;
-    unsigned long long attention_peak, host_peak;
-#define ADD(field, value) \
-    do { if (!yvex_core_u64_add(total->field, (value), &total->field)) return 0; } while (0)
-    attention_peak = session->workspace_peak_bytes > session->workspace_bytes
-                         ? session->workspace_peak_bytes
-                         : session->workspace_bytes;
-    host_peak = session->host_workspace_peak_bytes >
-                        session->host_workspace_bytes
-                    ? session->host_workspace_peak_bytes
-                    : session->host_workspace_bytes;
-    if (!yvex_core_u64_add(session->workspace_bytes,
-                           session->host_workspace_bytes, &workspace_current) ||
-        !yvex_core_u64_add(workspace_current,
-                           session->device_workspace_bytes, &workspace_current) ||
-        !yvex_core_u64_add(attention_peak, host_peak, &workspace_peak) ||
-        !yvex_core_u64_add(workspace_peak,
-                           session->device_workspace_bytes, &workspace_peak))
-        return 0;
-    ADD(session_attention_allocated_bytes,
-        session->attention_state_allocated_bytes);
-    ADD(session_attention_resident_bytes,
-        session->attention_state_resident_bytes);
-    ADD(session_attention_virtual_bytes,
-        session->attention_state_virtual_bytes);
-    ADD(session_attention_page_table_bytes,
-        session->attention_state_page_table_bytes);
-    ADD(session_recurrent_state_bytes,
-        session->sequence_recurrent_state_bytes);
-    ADD(session_convolution_state_bytes,
-        session->sequence_convolution_state_bytes);
-    ADD(session_candidate_state_bytes,
-        session->sequence_candidate_state_bytes);
-    ADD(session_physical_state_bytes,
-        session->attention_state_allocated_bytes);
-    ADD(session_physical_state_bytes, session->sequence_host_state_bytes);
-    ADD(session_physical_state_bytes, session->sequence_device_state_bytes);
-    ADD(workspace_current_bytes, workspace_current);
-    ADD(workspace_peak_bytes, workspace_peak);
-#undef ADD
-    return 1;
-}
-
 int yvex_server_sessions_resource_summary(
     server_session_registry *registry,
     yvex_execution_resource_summary *resources, yvex_error *err)
@@ -516,11 +469,10 @@ int yvex_server_sessions_resource_summary(
             (void)pthread_mutex_unlock(&registry->mutex);
             return yvex_error_code(err);
         }
-        if (!session_resource_accumulate(resources, &summary)) {
+        if (yvex_runtime_session_resources_accumulate(
+                resources, &summary, err) != YVEX_OK) {
             (void)pthread_mutex_unlock(&registry->mutex);
-            yvex_error_set(err, YVEX_ERR_BOUNDS, "server.session.resources",
-                           "session resource total overflowed");
-            return YVEX_ERR_BOUNDS;
+            return yvex_error_code(err);
         }
         saw_session = 1;
     }

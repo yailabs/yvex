@@ -65,6 +65,16 @@
       "reason": "typed program ownership requires compiler refusals, deterministic passes/identity, lifetime safety and migrated production consumers"
     },
     {
+      "id": "runtime-execution-capacity",
+      "patterns": ["src/runtime/capacity.c", "include/yvex/internal/runtime_capacity.h",
+                   "src/runtime/generation_context.c"],
+      "lanes": ["fast", "structural", "runtime", "sanitizer"],
+      "tests": ["integration.tiny-vertical", "unit.runtime_generation", "unit.decision_readout",
+                "live.mamba2.decision-readout", "live.qwen.admission", "live.qwen.decision-readout",
+                "live.deepseek.generation"],
+      "reason": "one common capacity policy must preserve generation admission and standalone recurrent/hybrid output runners without a generation bootstrap"
+    },
+    {
       "id": "public-execution-capacity",
       "patterns": ["src/runtime/prompt.c", "include/yvex/execution.h", "tests/live/openai_capacity.py"],
       "lanes": ["fast", "structural", "runtime", "sanitizer"],
@@ -196,10 +206,11 @@
       "patterns": ["src/runtime/decision_readout.c", "include/yvex/internal/decision_readout.h",
                    "src/runtime/prefix.c", "include/yvex/internal/runtime_prefix.h",
                    "src/runtime/sequence_state.c", "include/yvex/internal/sequence_state.h",
-                   "tests/unit/decision_readout.c", "tests/live/decision_readout_mamba2.c"],
+                   "tests/unit/decision_readout.c", "tests/live/decision_readout.c"],
       "lanes": ["fast", "structural", "numeric", "runtime", "sanitizer", "live"],
       "tests": ["unit.decision_readout", "unit.sequence_state",
-                "unit.runtime_binding", "live.mamba2.decision-readout"],
+                "unit.runtime_binding", "live.mamba2.decision-readout",
+                "live.qwen.decision-readout"],
       "reason": "finite-candidate readout requires independent likelihood arithmetic, shared-state isolation, stale refusal, zero sampling and one exact live model vertical"
     },
     {

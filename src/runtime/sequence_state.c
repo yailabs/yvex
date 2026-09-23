@@ -20,7 +20,7 @@ struct yvex_sequence_state {
     unsigned char *staged;
     float *banks[2];
     yvex_device_tensor *device_banks[2];
-    yvex_backend *backend;
+    yvex_backend *backend, *owned_backend;
     unsigned long long bank_values, convolution_values, recurrent_values;
     unsigned long long binding_count, committed_position, candidate_tokens;
     unsigned long long generation, staged_layers;
@@ -609,15 +609,23 @@ int yvex_sequence_state_fork(
     rc = yvex_sequence_state_open_for_backend(
         &child, &plan, source->storage_backend, err);
     free(bindings);
-    if (rc == YVEX_OK && source->storage_backend == YVEX_BACKEND_KIND_CUDA)
-        rc = yvex_sequence_state_attach_device(child, source->backend, err);
-    if (rc != YVEX_OK) {
-        yvex_sequence_state_close(&child);
-        return rc;
+    if (rc == YVEX_OK && source->storage_backend == YVEX_BACKEND_KIND_CUDA) {
+        yvex_backend_memory_stats memory = {0};
+        rc = yvex_backend_get_memory_stats(source->backend, &memory, err);
+        if (rc == YVEX_OK)
+            rc = yvex_backend_open_shared_cuda(
+                &child->owned_backend, source->backend,
+                memory.memory_limit_bytes, err);
+        if (rc == YVEX_OK)
+            rc = yvex_sequence_state_attach_device(
+                child, child->owned_backend, err);
     }
-    rc = yvex_sequence_state_restore(child, source, err);
+    if (rc == YVEX_OK) rc = yvex_sequence_state_restore(child, source, err);
     if (rc != YVEX_OK) {
+        yvex_error primary = err ? *err : (yvex_error){0};
         yvex_sequence_state_close(&child);
+        *out = child;
+        if (err) *err = primary;
         return rc;
     }
     *out = child;
@@ -790,6 +798,7 @@ int yvex_sequence_state_close_checked(
         return YVEX_OK;
     }
     state = *state_pointer;
+    state->invalidated = 1;
     for (bank = 0u; bank < 2u; ++bank)
         if (state->device_banks[bank]) {
             int release = state->backend
@@ -807,6 +816,11 @@ int yvex_sequence_state_close_checked(
             }
         }
     if (rc != YVEX_OK) return rc;
+    if (state->owned_backend) {
+        rc = yvex_backend_close_checked(&state->owned_backend, err);
+        if (rc != YVEX_OK) return rc;
+        state->backend = NULL;
+    }
     free(state->banks[0]);
     free(state->banks[1]);
     free(state->staged);

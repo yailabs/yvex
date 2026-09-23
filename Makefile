@@ -326,7 +326,7 @@ DECODE_LIVE_RUNNER := $(TEST_DIR)/decode_deepseek
 LOGITS_LIVE_RUNNER := $(TEST_DIR)/logits_deepseek
 TOKENIZER_LIVE_RUNNER := $(TEST_DIR)/tokenizer_deepseek
 GENERATION_LIVE_RUNNER := $(TEST_DIR)/generation_deepseek
-DECISION_READOUT_LIVE_RUNNER := $(TEST_DIR)/decision_readout_mamba2
+DECISION_READOUT_LIVE_RUNNER := $(TEST_DIR)/decision_readout
 QWEN_ADMISSION_LIVE_RUNNER := $(TEST_DIR)/qwen_admission
 OPENAI_FAKE_HOST := $(TEST_DIR)/openai_host
 OPENAI_ADAPTER_HOST := $(TEST_DIR)/openai_adapter
@@ -363,7 +363,7 @@ DECODE_LIVE_OBJ := $(OBJ_DIR)/tests/live/decode_deepseek.o
 LOGITS_LIVE_OBJ := $(OBJ_DIR)/tests/live/logits_deepseek.o
 TOKENIZER_LIVE_OBJ := $(OBJ_DIR)/tests/live/tokenizer_deepseek.o
 GENERATION_LIVE_OBJ := $(OBJ_DIR)/tests/live/generation_deepseek.o
-DECISION_READOUT_LIVE_OBJ := $(OBJ_DIR)/tests/live/decision_readout_mamba2.o
+DECISION_READOUT_LIVE_OBJ := $(OBJ_DIR)/tests/live/decision_readout.o
 QWEN_ADMISSION_LIVE_OBJ := $(OBJ_DIR)/tests/live/qwen_admission.o
 $(GENERATION_LIVE_OBJ): CPPFLAGS += -I$(BUILD_DIR)/generated
 $(GENERATION_LIVE_OBJ): $(BUILD_COMMIT_HEADER)
@@ -1878,6 +1878,13 @@ test-decision-readout-mamba2-live: $(DECISION_READOUT_LIVE_RUNNER)
 		"$(YVEX_DECISION_READOUT_ARTIFACT)" \
 		"$(YVEX_DECISION_READOUT_BINDING)" \
 		"$${YVEX_DECISION_READOUT_TARGET:-mamba-codestral-7b-v0.1}"
+
+.PHONY: test-decision-readout-qwen-live
+test-decision-readout-qwen-live: $(DECISION_READOUT_LIVE_RUNNER)
+	@test -n "$(YVEX_QWEN_ARTIFACT)" -a -n "$(YVEX_QWEN_BINDING)" || { \
+		echo "YVEX_QWEN_ARTIFACT and YVEX_QWEN_BINDING are required" >&2; exit 2; }
+	$(DECISION_READOUT_LIVE_RUNNER) \
+		"$(YVEX_QWEN_ARTIFACT)" "$(YVEX_QWEN_BINDING)" qwen3.8-27b cuda
 
 $(QWEN_ADMISSION_LIVE_RUNNER): $(QWEN_ADMISSION_LIVE_OBJ) $(LIBYVEX)
 	@mkdir -p $(@D)

@@ -58,6 +58,38 @@ static void session_state_execution_begin(
     session->execution_owner_ready = 1;
 }
 
+typedef struct {
+    yvex_runtime_execution_session *session;
+    yvex_runtime_session_summary summary;
+    int status;
+} session_observer;
+
+static void *session_state_observe(void *opaque)
+{
+    session_observer *observer = opaque;
+    yvex_error err;
+    observer->status = yvex_runtime_session_summary_copy(
+        observer->session, &observer->summary, &err);
+    return NULL;
+}
+
+static int session_state_busy_observation(yvex_runtime_execution_session *session)
+{
+    session_observer observer = {.session = session};
+    pthread_t thread;
+    unsigned long long published = session->summary.sequence_state_generation;
+    /* A distinguishable last publication proves foreign readers do not query
+     * the mutable lock-free sequence provider under somebody else's lease. */
+    session->summary.sequence_state_generation = 77ull;
+    if (pthread_create(&thread, NULL, session_state_observe, &observer) != 0)
+        return 0;
+    (void)pthread_join(thread, NULL);
+    session->summary.sequence_state_generation = published;
+    return observer.status == YVEX_OK && observer.summary.busy &&
+           observer.summary.sequence_state_generation == 77ull &&
+           observer.summary.sequence_host_state_bytes == session->summary.sequence_host_state_bytes;
+}
+
 int yvex_test_sequence_state_session(void)
 {
     yvex_gated_delta_plan mixer;
@@ -124,6 +156,8 @@ int yvex_test_sequence_state_session(void)
     session_state_execution_begin(&session);
     YVEX_TEST_ASSERT(session_state_stage(state, 1ull, 8.0f, &err),
                      "stage cancellable recurrent extension");
+    YVEX_TEST_ASSERT(session_state_busy_observation(&session),
+                     "foreign resource observation uses the last sequence publication while busy");
     yvex_error_set(&err, YVEX_ERR_CANCELLED, "test.sequence-state",
                    "injected cancellation");
     YVEX_TEST_ASSERT(

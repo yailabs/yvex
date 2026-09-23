@@ -1,15 +1,20 @@
 /* Exact artifact-backed finite-candidate scoring with no sampler or generation. */
 #include <yvex/internal/decision_readout.h>
 #include <yvex/internal/decoder_execution.h>
-#include <yvex/internal/families/mamba2.h>
 #include <yvex/internal/logits.h>
 #include <yvex/internal/runtime.h>
+#include <yvex/internal/runtime_capacity.h>
+#include <yvex/internal/graph_state.h>
 #include <yvex/tokenizer.h>
 
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* One harness and numerical contract for recurrent CPU and hybrid CUDA. */
+static yvex_backend_kind live_backend = YVEX_BACKEND_KIND_CPU;
+static unsigned long long live_vocabulary = 32768ull;
 
 typedef struct {
     unsigned long long calls, cancel_on_call;
@@ -58,32 +63,35 @@ static int live_oracle_profile(
 {
     yvex_runtime_execution_profile_derivation derivation = {0};
     int rc;
-    workload->schema_version = YVEX_EXECUTION_WORKLOAD_PROFILE_SCHEMA_V1;
-    workload->kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY;
-    workload->minimum_session_context = 1ull;
-    workload->requested_session_context = 8ull;
-    workload->concurrent_sequences = 1ull;
-    workload->logical_batch_tokens = 1ull;
-    workload->prefill_chunk_tokens = 1ull;
-    workload->attention_microbatch_rows = 1ull;
-    workload->moe_row_tile = 1ull;
-    workload->output_head_rows = 1ull;
-    workload->system_reserve_bytes = YVEX_EXECUTION_MINIMUM_SYSTEM_RESERVE;
-    workload->latency_priority = 1;
-    strcpy(workload->name, "decision-readout-independent-oracle");
-    if (yvex_execution_workload_profile_seal(workload, err) != YVEX_OK)
-        return yvex_error_code(err);
+    yvex_runtime_capacity_options options = {
+        .backend = live_backend,
+        .mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY,
+        .workload_kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY,
+        .context_capacity = 8ull, .prefill_chunk_tokens = 1ull,
+        .evidence_profile = YVEX_EXECUTION_EVIDENCE_PRODUCTION,
+        .sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED};
+    yvex_runtime_capacity capacity = {0};
+    yvex_graph_attention_capacity_plan *attention = NULL;
+    yvex_model_engine_failure failure = {0};
+    const yvex_runtime_session_view *view = yvex_runtime_session_view_get(session);
+    rc = yvex_runtime_capacity_derive(model, session, &options, &capacity, &attention, err);
+    yvex_graph_attention_capacity_plan_close(&attention);
+    if (rc == YVEX_OK && view && view->attention_state_provider)
+        rc = yvex_runtime_session_configure_persistent_pages(
+            session, &capacity.capacity_plan, &failure, err);
+    if (rc != YVEX_OK) return rc;
+    *workload = capacity.workload_profile;
     derivation.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
     derivation.model = model;
     derivation.session = session;
     derivation.workload = workload;
-    derivation.backend = YVEX_BACKEND_KIND_CPU;
+    derivation.backend = live_backend;
     derivation.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
     derivation.evidence = YVEX_EXECUTION_EVIDENCE_PRODUCTION;
     derivation.sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED;
     rc = yvex_runtime_execution_profile_derive(
         &derivation, profile, err);
-    if (rc == YVEX_OK &&
+    if (rc == YVEX_OK && live_backend == YVEX_BACKEND_KIND_CPU &&
         (profile->execution_class != YVEX_EXECUTION_CLASS_PORTABLE_REFERENCE ||
          profile->attention_resolution != YVEX_EXECUTION_RESOLUTION_EXACT ||
          profile->moe_resolution != YVEX_EXECUTION_RESOLUTION_EXACT ||
@@ -92,6 +100,12 @@ static int live_oracle_profile(
                        "Mamba CPU execution-profile posture changed");
         return YVEX_ERR_STATE;
     }
+    if (rc == YVEX_OK && live_backend == YVEX_BACKEND_KIND_CUDA &&
+        (profile->execution_class != YVEX_EXECUTION_CLASS_DEVICE_NATIVE ||
+         profile->attention_resolution != YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED ||
+         profile->moe_resolution != YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED ||
+         profile->sampling_resolution != YVEX_EXECUTION_RESOLUTION_EXACT))
+        return YVEX_ERR_STATE;
     return rc;
 }
 
@@ -123,7 +137,7 @@ static int live_oracle_token(
             0ull, err);
     if (rc == YVEX_OK)
         rc = yvex_runtime_logits_project(
-            logits, &source, YVEX_BACKEND_KIND_CPU, values, value_count,
+            logits, &source, live_backend, values, value_count,
             &row, err);
     return rc;
 }
@@ -148,7 +162,7 @@ static int live_independent_oracle(
     if (expected) *expected = 0.0L;
     if (!model || !prefix_tokens || !candidate || !candidate->token_count ||
         !expected) return YVEX_ERR_INVALID_ARG;
-    session_request.backend = YVEX_BACKEND_KIND_CPU;
+    session_request.backend = live_backend;
     rc = yvex_runtime_session_open(
         &session, model, &session_request, &failure, err);
     if (rc == YVEX_OK)
@@ -167,7 +181,7 @@ static int live_independent_oracle(
         rc = yvex_runtime_logits_context_open_program(
             &logits, model, session, &logits_options, err);
     if (rc == YVEX_OK) {
-        values = malloc(32768u * sizeof(*values));
+        values = malloc((size_t)live_vocabulary * sizeof(*values));
         if (!values) {
             yvex_error_set(
                 err, YVEX_ERR_NOMEM, "test.decision-readout.oracle",
@@ -177,15 +191,30 @@ static int live_independent_oracle(
     }
     if (rc == YVEX_OK)
         rc = live_oracle_token(
-            decoder, logits, prefix_tokens[0], 0ull, values, 32768ull, err);
+            decoder, logits, prefix_tokens[0], 0ull, values, live_vocabulary, err);
+    if (rc == YVEX_OK) {
+        yvex_runtime_session_committed_state_summary state = {0};
+        rc = yvex_runtime_session_committed_state_summary_copy(session, &state, err);
+        if (rc == YVEX_OK &&
+            (!state.recurrent_present || state.draft_attention_present ||
+             state.target_attention_present != (live_backend == YVEX_BACKEND_KIND_CUDA)))
+            rc = YVEX_ERR_STATE;
+        if (rc == YVEX_OK)
+            printf("replay_state domains=%llu attention=%d recurrent=%d kernel=%s "
+                   "attention_resolution=%u moe_resolution=%u identity=%s\n",
+                   state.active_domain_count, state.target_attention_present,
+                   state.recurrent_present, profile.kernel_bundle_identity,
+                   (unsigned int)profile.attention_resolution,
+                   (unsigned int)profile.moe_resolution, state.identity);
+    }
     for (token = 0ull; rc == YVEX_OK && token < candidate->token_count;
          ++token) {
         *expected += live_reference_log_probability(
-            values, 32768ull, candidate->token_ids[token]);
+            values, live_vocabulary, candidate->token_ids[token]);
         if (token + 1ull < candidate->token_count)
             rc = live_oracle_token(
                 decoder, logits, candidate->token_ids[token], token + 1ull,
-                values, 32768ull, err);
+                values, live_vocabulary, err);
     }
     free(values);
     (void)yvex_runtime_logits_context_close(&logits, NULL);
@@ -215,14 +244,14 @@ static yvex_decision_readout_options live_options(
 {
     yvex_decision_readout_options options = {0};
     options.schema_version = YVEX_DECISION_READOUT_SCHEMA_V1;
-    options.backend = YVEX_BACKEND_KIND_CPU;
+    options.backend = live_backend;
     options.score_policy = YVEX_DECISION_READOUT_SCORE_LOG_LIKELIHOOD;
     options.context_capacity = 8ull;
     options.maximum_prefix_tokens = 2ull;
     options.maximum_candidate_count = 8ull;
     options.maximum_candidate_tokens = 6ull;
     options.maximum_prefix_state_bytes = 1ull << 30u;
-    options.maximum_host_bytes = 16ull << 30u;
+    options.maximum_host_bytes = 96ull << 30u;
     options.expected_engine_generation = model->engine_generation;
     options.expected_runtime_model_identity = model->runtime_model_identity;
     options.expected_runtime_binding_identity =
@@ -328,40 +357,30 @@ static int live_replay_candidates(
     yvex_error *err)
 {
     unsigned long long index;
+    (void)model_summary;
+    (void)tokenizer;
+    (void)cancel;
     if (maximum_difference) *maximum_difference = 0.0;
     for (index = 0ull; index < candidate_count; ++index) {
-        live_readout replay = {0};
-        yvex_decision_readout_result result = {0};
+        long double replay = 0.0L;
         const yvex_decision_readout_candidate_result *expected =
             live_candidate_find(shared, candidates[index].candidate_id);
-        int rc = live_readout_open(
-            &replay, model, model_summary, tokenizer, cancel,
-            prefix_tokens, 1ull, err);
-        if (rc == YVEX_OK)
-            rc = yvex_decision_readout_execute(
-                replay.context, replay.prefix,
-                replay.prefix_summary.prefix_identity, &candidates[index],
-                1ull, &result, err);
+        int rc = live_independent_oracle(
+            model, prefix_tokens, &candidates[index], &replay, err);
         if (rc == YVEX_OK &&
-            (!expected || result.candidate_count != 1ull ||
-             fabs(result.candidates[0].candidate_log_likelihood -
-                  expected->candidate_log_likelihood) > 1e-12)) {
+            (!expected || fabsl(replay -
+                  (long double)expected->candidate_log_likelihood) > 1e-12L)) {
             yvex_error_set(err, YVEX_ERR_STATE,
                            "test.decision-readout.replay",
                            "shared-prefix and full-prefix replay scores differ");
             rc = YVEX_ERR_STATE;
         }
         if (rc == YVEX_OK && maximum_difference) {
-            double difference = fabs(
-                result.candidates[0].candidate_log_likelihood -
-                expected->candidate_log_likelihood);
+            double difference = (double)fabsl(replay -
+                (long double)expected->candidate_log_likelihood);
             if (difference > *maximum_difference)
                 *maximum_difference = difference;
         }
-        yvex_decision_readout_result_release(&result);
-        if (live_readout_close(&replay, rc == YVEX_OK ? err : NULL) !=
-                YVEX_OK && rc == YVEX_OK)
-            rc = YVEX_ERR_STATE;
         if (rc != YVEX_OK) return rc;
     }
     return YVEX_OK;
@@ -452,6 +471,33 @@ static int live_context_refusals(
     return ok ? YVEX_OK : YVEX_ERR_STATE;
 }
 
+static int live_cleanup_retry(live_readout *run,
+    const yvex_decision_readout_candidate *candidate, yvex_error *err)
+{
+    yvex_decision_readout_result result = {0};
+    int rc, ok;
+    if (setenv("YVEX_TEST_RUNTIME_SESSION_CLEANUP_FAILURE", "1", 1) != 0)
+        return YVEX_ERR_IO;
+    rc = yvex_decision_readout_execute(run->context, run->prefix,
+        run->prefix_summary.prefix_identity, candidate, 1ull, &result, err);
+    ok = rc == YVEX_ERR_STATE && !result.completed && !result.candidates &&
+         yvex_decision_readout_execute(run->context, run->prefix,
+            run->prefix_summary.prefix_identity, candidate, 1ull, &result, err) ==
+                YVEX_ERR_STATE &&
+         yvex_decision_readout_context_close(&run->context, err) == YVEX_ERR_STATE &&
+         run->context != NULL;
+    (void)unsetenv("YVEX_TEST_RUNTIME_SESSION_CLEANUP_FAILURE");
+    rc = yvex_decision_readout_context_close(&run->context, err);
+    yvex_decision_readout_result_release(&result);
+    if (!ok || rc != YVEX_OK || run->context) {
+        yvex_error_set(err, YVEX_ERR_STATE, "test.decision-readout.cleanup",
+            "failed candidate cleanup lost ownership or published a result");
+        return YVEX_ERR_STATE;
+    }
+    printf("cleanup retained=true publication=false reuse=refused retry=closed\n");
+    return YVEX_OK;
+}
+
 int main(int argc, char **argv)
 {
     const unsigned int prefix_tokens[] = {1u};
@@ -483,26 +529,39 @@ int main(int argc, char **argv)
     yvex_error err;
     int rc = YVEX_OK, passed = 0;
 
-    if (argc != 4) {
-        fprintf(stderr, "usage: %s ARTIFACT BINDING TARGET\n", argv[0]);
+    if (argc != 4 && argc != 5) {
+        fprintf(stderr, "usage: %s ARTIFACT BINDING TARGET [cuda]\n", argv[0]);
         return 2;
+    }
+    if (argc == 5) {
+        if (strcmp(argv[4], "cuda")) return 2;
+        live_backend = YVEX_BACKEND_KIND_CUDA;
+        live_vocabulary = 248320ull;
     }
     model_request.artifact_path = argv[1];
     model_request.runtime_binding_path = argv[2];
     model_request.target_id = argv[3];
-    model_request.residency_backend = YVEX_BACKEND_KIND_CPU;
+    model_request.residency_backend = live_backend;
     rc = yvex_model_engine_open(&model, &model_request, &failure, &err);
     if (rc == YVEX_OK)
         rc = yvex_model_engine_summary_copy(model, &model_summary, &err);
     view = rc == YVEX_OK ? yvex_model_engine_view_get(model) : NULL;
     tokenizer = view ? yvex_tokenizer_plan_summary_get(view->tokenizer) : NULL;
-    if (rc == YVEX_OK &&
+    if (rc == YVEX_OK && live_backend == YVEX_BACKEND_KIND_CPU &&
         (!tokenizer || tokenizer->vocabulary_size != 32768ull ||
          !tokenizer->bos_present || tokenizer->bos_token_id != 1u ||
          !tokenizer->eos_present || tokenizer->eos_token_id != 2u ||
          tokenizer->pad_present)) {
         yvex_error_set(&err, YVEX_ERR_FORMAT, "test.decision-readout.tokenizer",
                        "exact Mamba2 tokenizer policy is incompatible");
+        rc = YVEX_ERR_FORMAT;
+    }
+    if (rc == YVEX_OK && live_backend == YVEX_BACKEND_KIND_CUDA &&
+        (!tokenizer || tokenizer->vocabulary_size != 248077ull ||
+         strcmp(model_summary.artifact_identity,
+            "1fce07008eaa78e04eedd1a031144f48eb6af617f2b5c508811ba91dca7e00f1"))) {
+        yvex_error_set(&err, YVEX_ERR_FORMAT, "test.decision-readout.tokenizer",
+                       "exact Qwen artifact/tokenizer domain is incompatible");
         rc = YVEX_ERR_FORMAT;
     }
     if (rc == YVEX_OK)
@@ -582,6 +641,7 @@ int main(int argc, char **argv)
             run.context, run.prefix, run.prefix_summary.prefix_identity,
             candidates, 4ull, &retry, &err);
     }
+    if (rc == YVEX_OK) rc = live_cleanup_retry(&run, &candidates[0], &err);
     passed = rc == YVEX_OK && live_results_equal(&canonical, &retry, 1e-12) &&
              canonical.completed && canonical.relative_distribution_available &&
              !canonical.calibrated && canonical.sampling_invocation_count == 0ull &&
@@ -589,6 +649,7 @@ int main(int argc, char **argv)
              canonical.resident_backbone_count == 1ull &&
              canonical.prefix_forward_count == 1ull &&
              canonical.teacher_forced_forward_count == 5ull &&
+             canonical.peak_candidate_state_bytes > 0ull &&
              canonical.logits_row_count == 2ull &&
              strcmp(canonical.shared_state_identity_before,
                     canonical.shared_state_identity_after) == 0 &&

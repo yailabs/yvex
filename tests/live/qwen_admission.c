@@ -2,7 +2,7 @@
 #include <yvex/internal/backend.h>
 #include <yvex/internal/compiler.h>
 #include <yvex/internal/decoder_execution.h>
-#include <yvex/internal/generation.h>
+#include <yvex/internal/runtime_capacity.h>
 #include <yvex/internal/graph_state.h>
 #include <yvex/internal/logits.h>
 #include <yvex/internal/runtime.h>
@@ -171,27 +171,23 @@ static int qwen_profile(qwen_run *run, yvex_model_engine *model,
 static int qwen_capacity_configure(qwen_run *run, yvex_model_engine *model,
                                    yvex_error *err)
 {
-    yvex_runtime_generation_context *capacity_owner = NULL;
-    yvex_runtime_generation_options options = {
-        .schema_version = YVEX_RUNTIME_GENERATION_SCHEMA_V6,
+    yvex_runtime_capacity_options options = {
         .backend = YVEX_BACKEND_KIND_CUDA,
-        .mode = YVEX_GENERATION_MODE_TARGET_ONLY,
+        .mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY,
         .workload_kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY,
         .context_capacity = 4ull,
         .prefill_chunk_tokens = 1ull,
-        .maximum_new_tokens = 1ull,
-        .maximum_output_bytes = 16ull,
         .evidence_profile = YVEX_EXECUTION_EVIDENCE_PRODUCTION,
-        .sampling_policy = {
-            .schema_version = YVEX_RUNTIME_SAMPLING_SCHEMA_V1,
-            .strategy = YVEX_SAMPLING_STRATEGY_GREEDY,
-            .temperature = 1.0,
-            .top_p = 1.0,
-            .typical_p = 1.0}};
-    int rc = yvex_runtime_generation_context_open(
-        &capacity_owner, model, run->session, &options, err);
+        .sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED};
+    yvex_runtime_capacity capacity = {0};
+    yvex_graph_attention_capacity_plan *attention = NULL;
+    yvex_model_engine_failure failure = {0};
+    int rc = yvex_runtime_capacity_derive(model, run->session, &options,
+                                         &capacity, &attention, err);
+    yvex_graph_attention_capacity_plan_close(&attention);
     if (rc == YVEX_OK)
-        rc = yvex_runtime_generation_context_close(&capacity_owner, err);
+        rc = yvex_runtime_session_configure_persistent_pages(
+            run->session, &capacity.capacity_plan, &failure, err);
     return rc;
 }
 

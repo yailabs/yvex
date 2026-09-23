@@ -1435,6 +1435,20 @@ static int cuda_encoded_policy(unsigned int qtype, yvex_encoded_input_policy inp
     return YVEX_OK;
 }
 
+static void cuda_encoded_matvec_status_error(
+    yvex_error *err, int status, unsigned int qtype,
+    unsigned long long rows, unsigned long long width,
+    unsigned long long input_rows, int tensorcore, int q8,
+    int split, int additive)
+{
+    yvex_error_setf(
+        err, YVEX_ERR_FORMAT, "cuda.encoded-matvec",
+        "encoded CUDA projection status=%d qtype=%u rows=%llu width=%llu "
+        "input_rows=%llu tensorcore=%d q8=%d split=%d additive=%d",
+        status, qtype, rows, width, input_rows,
+        tensorcore, q8, split, additive);
+}
+
 /*
  * Project one resident encoded matrix through the generic CUDA qtype matvec.
  *
@@ -1613,8 +1627,9 @@ static int cuda_encoded_matvec(
             state->driver.cuMemcpyDtoH_v2(&host_status, status, sizeof(host_status)),
             "cuda.encoded-matvec.status", err);
     if (rc == YVEX_OK && host_status) {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "cuda.encoded-matvec",
-                       "encoded CUDA projection produced invalid numerics");
+        cuda_encoded_matvec_status_error(
+            err, host_status, qtype, row_count, row_width, input_rows,
+            tensorcore_path, q8_path, split_input, additive != NULL);
         rc = YVEX_ERR_FORMAT;
     }
     yvex_error_clear(&cleanup);

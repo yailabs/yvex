@@ -129,6 +129,24 @@ static CUresult observe_zero_stream(CUdeviceptr dst, unsigned char value, size_t
     return zero_stream_driver(dst, value, bytes, stream);
 }
 
+static int assert_page_initialization_order(yvex_backend *backend)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    zero_stream_driver = state->driver.cuMemsetD8Async;
+    movement_stream = yvex_cuda_launch_stream(backend);
+    memset(movement_calls, 0, sizeof(movement_calls));
+    movement_wrong_stream = 0u;
+    state->driver.cuMemsetD8Async = observe_zero_stream;
+    int rc = assert_virtual_pages(backend);
+    state->driver.cuMemsetD8Async = zero_stream_driver;
+    printf("CUDA page initialization: stream_zeros=%u wrong_stream=%u\n",
+        movement_calls[2], movement_wrong_stream);
+    YVEX_TEST_ASSERT(rc == 0 && movement_stream && movement_calls[2] == 2u &&
+        movement_wrong_stream == 0u,
+        "new state pages must initialize on the consumer session stream, not the default stream");
+    return 0;
+}
+
 static int assert_session_movement(yvex_backend *backend, yvex_device_tensor *tensor)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
@@ -254,7 +272,7 @@ int yvex_cuda_test_tensor(void)
         return 77;
     }
     YVEX_TEST_ASSERT(rc == YVEX_OK, "open cuda backend");
-    YVEX_TEST_ASSERT(assert_virtual_pages(backend) == 0,
+    YVEX_TEST_ASSERT(assert_page_initialization_order(backend) == 0,
                      "CUDA virtual page ownership is transactional");
     YVEX_TEST_ASSERT(assert_shared_stream_copy(backend) == 0,
                      "CUDA shared physical owner supports ordered row movement");

@@ -875,24 +875,22 @@ static int sampling_transaction_enter(yvex_runtime_sampling_context *context, yv
 static void sampling_leave(yvex_runtime_sampling_context *context, int rc,
                            unsigned long long completed)
 {
-    unsigned int observed;
     if (!context) return;
     context->summary.successful_samples += completed;
     if (rc != YVEX_OK) {
         context->summary.failure_count++;
         if (rc == YVEX_ERR_CANCELLED) context->summary.cancellation_count++;
     }
-    observed = atomic_load_explicit(&context->lifecycle, memory_order_acquire);
-    if (observed & SAMPLING_LIFECYCLE_CLOSING) {
-        if (context->drain_mutex_ready &&
-            pthread_mutex_lock(&context->drain_mutex) == 0) {
-            (void)atomic_fetch_and_explicit(&context->lifecycle, ~SAMPLING_LIFECYCLE_ACTIVE,
-                                            memory_order_release);
-            if (context->drain_condition_ready)
-                (void)pthread_cond_broadcast(&context->drain_condition);
-            (void)pthread_mutex_unlock(&context->drain_mutex);
-            return;
-        }
+    /* The ACTIVE predicate and its wakeup share close's drain lock, including
+     * the transition where close has not published CLOSING yet. */
+    if (context->drain_mutex_ready &&
+        pthread_mutex_lock(&context->drain_mutex) == 0) {
+        (void)atomic_fetch_and_explicit(&context->lifecycle, ~SAMPLING_LIFECYCLE_ACTIVE,
+                                        memory_order_release);
+        if (context->drain_condition_ready)
+            (void)pthread_cond_broadcast(&context->drain_condition);
+        (void)pthread_mutex_unlock(&context->drain_mutex);
+        return;
     }
     (void)atomic_fetch_and_explicit(&context->lifecycle, ~SAMPLING_LIFECYCLE_ACTIVE,
                                     memory_order_release);

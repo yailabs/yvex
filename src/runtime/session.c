@@ -263,14 +263,7 @@ int yvex_runtime_private_session_sequence_state_open(
     if (bounded && session->summary.backend == YVEX_BACKEND_KIND_CPU)
         *state_budget -= bytes;
     session->view.sequence_state = session->sequence_state;
-    session->summary.sequence_state_binding_count = summary.binding_count;
-    session->summary.sequence_state_generation = summary.generation;
-    session->summary.sequence_committed_state_bytes =
-        summary.committed_state_bytes;
-    session->summary.sequence_candidate_state_bytes =
-        summary.candidate_state_bytes;
-    session->summary.sequence_host_state_bytes = summary.host_state_bytes;
-    session->summary.sequence_device_state_bytes = summary.device_state_bytes;
+    yvex_runtime_private_session_sequence_summary_bind(&session->summary, &summary);
     return YVEX_OK;
 }
 
@@ -296,8 +289,7 @@ int yvex_runtime_private_session_sequence_state_attach(
     rc = yvex_sequence_state_summary_copy(
         session->sequence_state, &summary, err);
     if (rc != YVEX_OK) return rc;
-    session->summary.sequence_host_state_bytes = summary.host_state_bytes;
-    session->summary.sequence_device_state_bytes = summary.device_state_bytes;
+    yvex_runtime_private_session_sequence_summary_bind(&session->summary, &summary);
     return YVEX_OK;
 }
 
@@ -1064,14 +1056,7 @@ static int runtime_sequence_state_summary_record(
     rc = yvex_sequence_state_summary_copy(
         session->sequence_state, &summary, err);
     if (rc != YVEX_OK) return rc;
-    session->summary.sequence_state_binding_count = summary.binding_count;
-    session->summary.sequence_state_generation = summary.generation;
-    session->summary.sequence_committed_state_bytes =
-        summary.committed_state_bytes;
-    session->summary.sequence_candidate_state_bytes =
-        summary.candidate_state_bytes;
-    session->summary.sequence_host_state_bytes = summary.host_state_bytes;
-    session->summary.sequence_device_state_bytes = summary.device_state_bytes;
+    yvex_runtime_private_session_sequence_summary_bind(&session->summary, &summary);
     if (out) *out = summary;
     return YVEX_OK;
 }

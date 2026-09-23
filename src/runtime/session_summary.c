@@ -19,6 +19,50 @@ static int committed_state_refuse(yvex_error *err, yvex_status status,
     return status;
 }
 
+int yvex_runtime_session_resources_accumulate(
+    yvex_execution_resource_summary *total,
+    const yvex_runtime_session_summary *session, yvex_error *err)
+{
+    yvex_execution_resource_summary pending;
+    unsigned long long workspace, peak, attention_peak, host_peak;
+    if (!total || !session ||
+        total->schema_version != YVEX_EXECUTION_RESOURCE_SCHEMA_V1)
+        return summary_refuse(err, YVEX_ERR_INVALID_ARG,
+                              "typed session resource destination is required");
+    pending = *total;
+    attention_peak = session->workspace_peak_bytes > session->workspace_bytes
+                         ? session->workspace_peak_bytes : session->workspace_bytes;
+    host_peak = session->host_workspace_peak_bytes > session->host_workspace_bytes
+                    ? session->host_workspace_peak_bytes : session->host_workspace_bytes;
+    if (!yvex_core_u64_add(session->workspace_bytes,
+                           session->host_workspace_bytes, &workspace) ||
+        !yvex_core_u64_add(workspace, session->device_workspace_bytes, &workspace) ||
+        !yvex_core_u64_add(attention_peak, host_peak, &peak) ||
+        !yvex_core_u64_add(peak, session->device_workspace_bytes, &peak))
+        return summary_refuse(err, YVEX_ERR_BOUNDS, "session workspace totals overflowed");
+#define ADD(field, value) \
+    do { if (!yvex_core_u64_add(pending.field, (value), &pending.field)) \
+        return summary_refuse(err, YVEX_ERR_BOUNDS, "session resource totals overflowed"); } while (0)
+    ADD(session_attention_allocated_bytes, session->attention_state_allocated_bytes);
+    ADD(session_attention_resident_bytes, session->attention_state_resident_bytes);
+    ADD(session_attention_virtual_bytes, session->attention_state_virtual_bytes);
+    ADD(session_attention_page_table_bytes, session->attention_state_page_table_bytes);
+    ADD(session_recurrent_state_bytes, session->sequence_recurrent_state_bytes);
+    ADD(session_convolution_state_bytes, session->sequence_convolution_state_bytes);
+    ADD(session_candidate_state_bytes, session->sequence_candidate_state_bytes);
+    ADD(session_physical_state_bytes, session->attention_state_allocated_bytes);
+    ADD(session_physical_state_bytes, session->sequence_host_state_bytes);
+    ADD(session_physical_state_bytes, session->sequence_device_state_bytes);
+    ADD(workspace_current_bytes, workspace);
+    ADD(workspace_peak_bytes, peak);
+#undef ADD
+    pending.available |= YVEX_EXECUTION_RESOURCE_SESSION_AVAILABLE |
+                         YVEX_EXECUTION_RESOURCE_WORKSPACE_AVAILABLE;
+    *total = pending;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 static int committed_attention_observe(
     const yvex_attention_state_provider *provider, int provider_ready,
     int *present, unsigned long long *generation,
@@ -204,23 +248,18 @@ static int attention_summary_add(
     return YVEX_OK;
 }
 
-static int sequence_summary_bind(
-    const yvex_sequence_state *state, yvex_runtime_session_summary *summary,
-    yvex_error *err)
+void yvex_runtime_private_session_sequence_summary_bind(
+    yvex_runtime_session_summary *summary,
+    const yvex_sequence_state_summary *sequence)
 {
-    yvex_sequence_state_summary sequence = {0};
-    if (!state) return YVEX_OK;
-    if (yvex_sequence_state_summary_copy(state, &sequence, err) != YVEX_OK)
-        return yvex_error_code(err);
-    summary->sequence_state_binding_count = sequence.binding_count;
-    summary->sequence_state_generation = sequence.generation;
-    summary->sequence_committed_state_bytes = sequence.committed_state_bytes;
-    summary->sequence_candidate_state_bytes = sequence.candidate_state_bytes;
-    summary->sequence_host_state_bytes = sequence.host_state_bytes;
-    summary->sequence_device_state_bytes = sequence.device_state_bytes;
-    summary->sequence_recurrent_state_bytes = sequence.recurrent_state_bytes;
-    summary->sequence_convolution_state_bytes = sequence.convolution_state_bytes;
-    return YVEX_OK;
+    summary->sequence_state_binding_count = sequence->binding_count;
+    summary->sequence_state_generation = sequence->generation;
+    summary->sequence_committed_state_bytes = sequence->committed_state_bytes;
+    summary->sequence_candidate_state_bytes = sequence->candidate_state_bytes;
+    summary->sequence_host_state_bytes = sequence->host_state_bytes;
+    summary->sequence_device_state_bytes = sequence->device_state_bytes;
+    summary->sequence_recurrent_state_bytes = sequence->recurrent_state_bytes;
+    summary->sequence_convolution_state_bytes = sequence->convolution_state_bytes;
 }
 
 int yvex_runtime_session_summary_copy(
@@ -251,10 +290,22 @@ int yvex_runtime_session_summary_copy(
             session->draft_attention_state_provider_ready > 0
                 ? &session->draft_attention_state_provider : NULL,
             out, err);
-    if (rc == YVEX_OK)
-        rc = sequence_summary_bind(session->sequence_state, out, err);
+    /* Sequence providers execute under the session lease, not an inner mutex.
+     * Foreign observers retain the last published resource snapshot while busy. */
+    if (rc == YVEX_OK && session->sequence_state &&
+        (!session->summary.busy ||
+         (session->execution_owner_ready &&
+          pthread_equal(session->execution_owner, pthread_self())))) {
+        yvex_sequence_state_summary sequence = {0};
+        rc = yvex_sequence_state_summary_copy(session->sequence_state, &sequence, err);
+        if (rc == YVEX_OK) {
+            yvex_runtime_private_session_sequence_summary_bind(out, &sequence);
+            yvex_runtime_private_session_sequence_summary_bind(&mutable_session->summary, &sequence);
+        }
+    }
     (void)pthread_mutex_unlock(&mutable_session->lifecycle_mutex);
     if (rc == YVEX_OK) yvex_error_clear(err);
+    else memset(out, 0, sizeof(*out));
     return rc;
 }
 
