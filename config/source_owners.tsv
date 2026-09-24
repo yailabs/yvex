@@ -123,6 +123,7 @@ src/backend/cuda/families/minimax_h3.c	backend.cuda.family	backend.cuda.family.m
 src/backend/cuda/execution_arena.c	backend.cuda	backend.cuda.execution_arena	backend	private	resource-lifecycle	backend.cuda	implementation	none
 src/backend/cuda/info.c	backend.cuda	backend.cuda.info	backend	private	reusable-algorithm	backend,graph	implementation	none
 src/backend/cuda/kernel_primitives.h	backend.cuda	backend.cuda.kernel_primitives	backend	private	platform-interface	backend.cuda.kernels,backend.cuda.moe_kernels,backend.cuda.sampling_kernels,backend.cuda.tensorcore,backend.cuda.transformer	interface	none
+src/backend/cuda/sampling_layout.h	backend.cuda	backend.cuda.sampling_layout	backend	private	platform-interface	backend.cuda.sampling,backend.cuda.sampling_kernels	interface	none
 src/backend/cuda/kernels.cu	backend.cuda	backend.cuda.kernels	backend	private	backend-kernel	backend,graph	backend-kernel	none
 src/backend/cuda/moe_kernels.cu	backend.cuda	backend.cuda.moe_kernels	backend	private	backend-kernel	backend,graph	backend-kernel	none
 src/backend/cuda/sampling_kernels.cu	backend.cuda	backend.cuda.sampling_kernels	backend	private	backend-kernel	runtime,generation	backend-kernel	none

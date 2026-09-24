@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <yvex/internal/backend.h>
+#include <yvex/internal/neural_operations.h>
 #include <yvex/internal/quant_numeric.h>
 #include "src/backend/cuda/private.h"
 #include "tests/test.h"
@@ -19,6 +20,81 @@ typedef struct {
     float before_canary, outputs[MOE_ROWS_PAIRS * MOE_ROWS_WIDTH], after_canary;
     int status;
 } moe_rows_storage;
+
+typedef struct {
+    float gate, up, input, route_weight, output;
+    unsigned long long selected;
+    int status;
+} moe_grouped_scalar_storage;
+
+static int moe_grouped_swiglu_precision(yvex_backend *backend)
+{
+    moe_grouped_scalar_storage host = {
+        .gate = 0.4303571283817291f, .up = 1.6795454025268555f,
+        .input = 1.0f, .route_weight = 0.9476000070571899f,
+        .output = -123.0f, .selected = 0u};
+    moe_grouped_scalar_storage observed;
+    yvex_backend_tensor_desc desc = {
+        .name = "moe-grouped-swiglu-precision", .dtype = YVEX_DTYPE_I8,
+        .rank = 1u, .dims = {sizeof(host)}, .bytes = sizeof(host)};
+    yvex_device_tensor *arena = NULL;
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    yvex_error err = {0};
+    float reference = 0.0f;
+    unsigned long long row_bytes = sizeof(float), expert_bytes = sizeof(float);
+    unsigned long long topk = 1u, experts = 1u, input_extent = 1u, intermediate_width = 1u;
+    unsigned int qtype = YVEX_GGUF_QTYPE_F32;
+    int q8_input = 0, device_wide = 0;
+    double limit = 7.0;
+    YVEX_TEST_ASSERT(yvex_clamped_swiglu_bf16(&host.gate, &host.up, 1u, limit,
+        host.route_weight, &reference, &err) == YVEX_OK,
+        "canonical scalar F64/BF16 grouped expert oracle is available");
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &arena, &err) == YVEX_OK &&
+        yvex_backend_tensor_write(backend, arena, &host, sizeof(host), &err) == YVEX_OK,
+        "upload grouped expert precision fixture");
+    CUdeviceptr base = yvex_cuda_activation_pointer(backend, arena);
+    CUdeviceptr gate = base + offsetof(moe_grouped_scalar_storage, gate);
+    CUdeviceptr up = base + offsetof(moe_grouped_scalar_storage, up);
+    CUdeviceptr input = base + offsetof(moe_grouped_scalar_storage, input);
+    CUdeviceptr weight = base + offsetof(moe_grouped_scalar_storage, route_weight);
+    CUdeviceptr output = base + offsetof(moe_grouped_scalar_storage, output);
+    CUdeviceptr selected = base + offsetof(moe_grouped_scalar_storage, selected);
+    CUdeviceptr status = base + offsetof(moe_grouped_scalar_storage, status);
+    void *params[] = {&gate, &row_bytes, &expert_bytes, &qtype,
+        &up, &row_bytes, &expert_bytes, &qtype, &selected, &weight,
+        &topk, &experts, &input, &input_extent, &q8_input,
+        &intermediate_width, &limit, &output, &status};
+    int rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+        state->moe_grouped_up_function, 1u, 256u, 0u, params,
+        "cuda.test.moe-grouped-swiglu", &err);
+    if (rc == YVEX_OK) rc = yvex_cuda_launch_synchronize(backend,
+        YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, &device_wide,
+        "cuda.test.moe-grouped-swiglu", &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_backend_tensor_read(backend, arena,
+        &observed, sizeof(observed), &err) == YVEX_OK,
+        "read grouped expert precision result");
+    YVEX_TEST_ASSERT(observed.status == 0 && observed.output == reference,
+        "grouped expert uses canonical F64 math before one BF16 publication");
+    printf("moe grouped SiLU precision: expected=%.9g observed=%.9g tolerance=0 status=%d\n",
+        reference, observed.output, observed.status);
+    host.gate = NAN;
+    host.output = -123.0f;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, &host, sizeof(host), &err) == YVEX_OK,
+        "reset grouped expert nonfinite fixture");
+    rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+        state->moe_grouped_up_function, 1u, 256u, 0u, params,
+        "cuda.test.moe-grouped-swiglu-nonfinite", &err);
+    if (rc == YVEX_OK) rc = yvex_cuda_launch_synchronize(backend,
+        YVEX_BACKEND_VARIANT_ATTENTION_ENCODED, &device_wide,
+        "cuda.test.moe-grouped-swiglu-nonfinite", &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_backend_tensor_read(backend, arena,
+        &observed, sizeof(observed), &err) == YVEX_OK &&
+        observed.status != 0 && observed.output == -123.0f,
+        "nonfinite grouped expert input refuses without publishing output");
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
+        "release grouped expert precision fixture");
+    return 0;
+}
 
 static void moe_rows_input(moe_rows_storage *s, unsigned int qtype,
                            unsigned long long blocks, unsigned int bytes, unsigned int scenario)
@@ -234,6 +310,7 @@ int yvex_cuda_test_moe_rows(void)
     int rc = yvex_backend_open(&backend, &options, &err);
     if (rc == YVEX_ERR_UNSUPPORTED) return 77;
     YVEX_TEST_ASSERT(rc == YVEX_OK, "open expert CUDA backend");
+    if (moe_grouped_swiglu_precision(backend)) return 1;
     for (unsigned int scenario = 0u; scenario < 7u; ++scenario)
         if (moe_route_precision(backend, scenario)) return 1;
     for (int up_stage = 0; up_stage <= 1; ++up_stage)

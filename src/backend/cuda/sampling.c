@@ -5,7 +5,7 @@
  * transition and publishes it only after these bounded facts pass validation.
  */
 #include "src/backend/cuda/private.h"
-#include "src/backend/cuda/kernel_primitives.h"
+#include "src/backend/cuda/sampling_layout.h"
 
 #include <yvex/internal/sampling.h>
 

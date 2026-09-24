@@ -121,13 +121,10 @@ static int dot_case(yvex_backend *backend, unsigned int qtype, unsigned int scen
     if (!failure) for (unsigned int i = 0u; i < (mode == 2u ? DOT_ROWS : DOT_ROWS * DOT_TOKENS); ++i) {
         double value = expected[mode == 3u ? i % DOT_ROWS : i];
         if (mode == 2u) {
-            float g = scenario == 3u ? 10.0f : fminf((float)value, 10.0f);
-            float u = scenario == 3u ? 10.0f : fmaxf(-10.0f, fminf((float)value, 10.0f));
-            float silu = g >= 0.0f ? g / (1.0f + expf(-g)) : g * expf(g) / (1.0f + expf(g));
-            float result = silu * u;
-            uint32_t bits; memcpy(&bits, &result, 4u);
-            bits = (bits + 0x7fffu + ((bits >> 16u) & 1u)) & 0xffff0000u;
-            memcpy(&result, &bits, 4u); value = result;
+            double g = fmin(value, limit), u = fmax(-limit, fmin(value, limit));
+            double silu = g >= 0.0 ? g / (1.0 + exp(-g)) : g * exp(g) / (1.0 + exp(g));
+            float result = (float)(silu * u);
+            value = yvex_quant_bf16_decode(yvex_quant_bf16_encode(result));
         }
         double difference = fabs((double)after.output[i] - value);
         if (difference > maximum_error) maximum_error = difference;

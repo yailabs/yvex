@@ -516,16 +516,6 @@ static __device__ int qtype_matvec_pair(
         (unsigned long long)blockIdx.x, rows, input_rows, row, input_row);
 }
 
-static __device__ float qtype_dot_recover_f64(
-    const unsigned char *row, const float *input, unsigned long long width,
-    unsigned int qtype)
-{
-    double recovered = 0.0;
-    for (unsigned long long i = 0ull; i < width; ++i)
-        recovered += (double)qtype_value(row, i, qtype) * (double)input[i];
-    return (float)recovered;
-}
-
 extern "C" __global__ void yvex_qtype_matvec(
     const unsigned char *encoded,
     unsigned long long row_bytes,

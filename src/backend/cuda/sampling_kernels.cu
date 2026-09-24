@@ -6,6 +6,7 @@
  * never become host authority.
  */
 #include "src/backend/cuda/kernel_primitives.h"
+#include "src/backend/cuda/sampling_layout.h"
 
 static __device__ void sampling_sum_add(double *sum, double *correction,
                                         double value)

@@ -11,8 +11,12 @@ static __device__ float moe_warp_dot(
     unsigned long long row_bytes, unsigned int qtype, int q8_input, int *status,
     const unsigned short *grid_table = nullptr)
 {
-    if (!q8_input)
-        return qtype_warp_dot(weight, (const float *)activation, extent, qtype, status);
+    if (!q8_input) {
+        float sum = qtype_warp_dot(weight, (const float *)activation, extent, qtype, status);
+        if (!(threadIdx.x & 31u) && !isfinite(sum) && !*status)
+            sum = qtype_dot_recover_f64(weight, (const float *)activation, extent, qtype);
+        return sum;
+    }
     /* Specialize common encoded row geometry, not a model or recipe. Constant
      * block counts let CUDA eliminate dynamic group rounds and address divisions.
      * Every path uses the same dot primitive, lane order and exceptional recovery. */
@@ -37,6 +41,23 @@ static __device__ float moe_warp_dot(
         sum = (float)recovered;
     }
     return sum;
+}
+
+/* The compiled clamped-SwiGLU operation specifies F64 math followed by one
+ * F32-to-BF16 publication. Grouped expert kernels must use the same rule as
+ * the standalone operation; F32 exp/product changes BF16 ties. */
+static __device__ int moe_clamped_swiglu_bf16_value(
+    float gate, float up, double limit, float route_weight, float *out)
+{
+    if (!out || !isfinite(gate) || !isfinite(up) || !isfinite(limit) ||
+        limit <= 0.0 || !isfinite(route_weight)) return 0;
+    double g = fmin((double)gate, limit);
+    double u = fmax(-limit, fmin((double)up, limit));
+    double silu = g >= 0.0 ? g / (1.0 + exp(-g)) : g * exp(g) / (1.0 + exp(g));
+    float value = (float)(silu * u * (double)route_weight);
+    if (!isfinite(value)) return 0;
+    *out = float_to_bf16_rne(value);
+    return isfinite(*out);
 }
 extern "C" __global__ void yvex_moe_route(
     const float *logits, const float *bias, const unsigned long long *hash_experts,
@@ -147,11 +168,10 @@ extern "C" __global__ void yvex_moe_grouped_up(
     u = moe_warp_dot(up_row, input, input_extent, up_row_bytes,
                      up_qtype, q8_input, status);
     if (!lane && !*status) {
-        g = fminf(g, (float)limit); u = fmaxf((float)-limit, fminf(u, (float)limit));
-        float silu = g >= 0.0f ? g / (1.0f + expf(-g)) : g * expf(g) / (1.0f + expf(g));
         float route_weight = weights ? weights[rank] : 1.0f;
-        float value = float_to_bf16_rne(silu * u * route_weight);
-        if (!isfinite(value)) atomicCAS(status, 0, 1);
+        float value;
+        if (!moe_clamped_swiglu_bf16_value(g, u, limit, route_weight, &value))
+            atomicCAS(status, 0, 1);
         else intermediate[rank * intermediate_width + row] = value;
     }
 }
@@ -527,13 +547,10 @@ extern "C" __global__ void yvex_moe_grouped_up_rows(
     u = moe_warp_dot(up_row, activation, input_extent, up_row_bytes,
                      up_qtype, q8_input, status, grid_table);
     if (!lane && !*status) {
-        g = fminf(g, (float)limit);
-        u = fmaxf((float)-limit, fminf(u, (float)limit));
-        float silu = g >= 0.0f ? g / (1.0f + expf(-g))
-                               : g * expf(g) / (1.0f + expf(g));
         float route_weight = weights ? weights[source_pair] : 1.0f;
-        float value = float_to_bf16_rne(silu * u * route_weight);
-        if (!isfinite(value)) atomicCAS(status, 0, 1);
+        float value;
+        if (!moe_clamped_swiglu_bf16_value(g, u, limit, route_weight, &value))
+            atomicCAS(status, 0, 1);
         else intermediate[ordered_pair * intermediate_width + output_row] = value;
     }
 }
@@ -654,11 +671,9 @@ extern "C" __global__ void yvex_moe_swiglu(
         atomicCAS(status, 0, 2);
         return;
     }
-    double g = fmin((double)gate[index], limit);
-    double u = fmax(-limit, fmin((double)up[index], limit));
-    double silu = g >= 0.0 ? g / (1.0 + exp(-g)) : g * exp(g) / (1.0 + exp(g));
-    float value = float_to_bf16_rne((float)(silu * u * route_weight));
-    if (!isfinite(value)) atomicCAS(status, 0, 1);
+    float value;
+    if (!moe_clamped_swiglu_bf16_value(gate[index], up[index], limit, route_weight, &value))
+        atomicCAS(status, 0, 1);
     else output[index] = value;
 }
 

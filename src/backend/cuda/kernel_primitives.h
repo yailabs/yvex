@@ -7,44 +7,6 @@
 #ifndef SRC_BACKEND_CUDA_KERNEL_PRIMITIVES_H_INCLUDED
 #define SRC_BACKEND_CUDA_KERNEL_PRIMITIVES_H_INCLUDED
 #include <yvex/qtype.h>
-enum {
-    YVEX_CUDA_SAMPLING_TOP_K_COUNT = 0,
-    YVEX_CUDA_SAMPLING_MIN_P_COUNT,
-    YVEX_CUDA_SAMPLING_TYPICAL_COUNT,
-    YVEX_CUDA_SAMPLING_TOP_P_COUNT,
-    YVEX_CUDA_SAMPLING_COUNT_FIELDS
-};
-enum {
-    YVEX_CUDA_SAMPLING_SELECTED_PROBABILITY = 0,
-    YVEX_CUDA_SAMPLING_MIN_P_THRESHOLD,
-    YVEX_CUDA_SAMPLING_ENTROPY,
-    YVEX_CUDA_SAMPLING_TYPICAL_MASS,
-    YVEX_CUDA_SAMPLING_TOP_P_MASS,
-    YVEX_CUDA_SAMPLING_NORMALIZATION_ERROR,
-    YVEX_CUDA_SAMPLING_STATISTIC_FIELDS
-};
-enum {
-    YVEX_CUDA_SAMPLING_SELECTED_LOGIT = 0,
-    YVEX_CUDA_SAMPLING_MAXIMUM_LOGIT,
-    YVEX_CUDA_SAMPLING_VALUE_FIELDS
-};
-enum {
-    YVEX_CUDA_SAMPLING_SELECTED_TOKEN = 0,
-    YVEX_CUDA_SAMPLING_NUMERIC_FALLBACK,
-    YVEX_CUDA_SAMPLING_SELECTION_FIELDS
-};
-enum {
-    YVEX_CUDA_SPECULATION_PROPOSED_COUNT = 0,
-    YVEX_CUDA_SPECULATION_ACCEPTED_COUNT,
-    YVEX_CUDA_SPECULATION_REJECTED_COUNT,
-    YVEX_CUDA_SPECULATION_COMMITTED_COUNT,
-    YVEX_CUDA_SPECULATION_REJECTION_INDEX,
-    YVEX_CUDA_SPECULATION_ALL_ACCEPTED,
-    YVEX_CUDA_SPECULATION_CORRECTION_PRESENT,
-    YVEX_CUDA_SPECULATION_BONUS_PRESENT,
-    YVEX_CUDA_SPECULATION_CORRECTION_TOKEN,
-    YVEX_CUDA_SPECULATION_RESULT_FIELDS
-};
 #ifdef __CUDACC__
 static __device__ float f16_bits_to_float(unsigned int h)
 {
@@ -254,6 +216,17 @@ static __device__ float qtype_warp_dot(const unsigned char *row, const float *ve
         if (__any_sync(0xffffffffu, invalid) && !lane) atomicCAS(status, 0, 1);
     }
     return sum;
+}
+/* Recover only an exceptional parallel reduction. Decoded F32 weight values
+ * and F32 activation operands remain exact inputs to the serial F64 sum. */
+static __device__ float qtype_dot_recover_f64(
+    const unsigned char *row, const float *input, unsigned long long width,
+    unsigned int qtype)
+{
+    double recovered = 0.0;
+    for (unsigned long long i = 0ull; i < width; ++i)
+        recovered += (double)qtype_value(row, i, qtype) * (double)input[i];
+    return (float)recovered;
 }
 #define YVEX_CUDA_Q8_K_BLOCK 256ull
 #define YVEX_CUDA_Q8_K_BYTES 292ull
