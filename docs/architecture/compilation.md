@@ -947,6 +947,14 @@ checks sub-ULP/visible bias, exact ties, ordered hash routing and malformed
 selection/numerics independently of the model fixture. This bounded arithmetic
 check is not official-vector or whole-model conformance.
 
+The compiled `clamped_swiglu.f64math.bf16.v1` expert operation uses one
+F64 nonlinear/product evaluation and one BF16 publication. The CUDA row,
+grouped and matrix-tile consumers share that value rule; their dot-product
+implementations may still have distinct admitted reduction error. Both CPU
+and CUDA refuse non-finite gate/up operands before a clamp can mask them.
+Component agreement does not establish whole-model CPU/CUDA agreement when
+small early errors change a later routed expert population.
+
 `mhc.residual_post` makes residual, core result, post gates and source-to-target
 mixing four explicit F32 operands with common row identity. Its pure computation
 uses ordered F64 multiply/add, F32 conversion and BF16 round-to-nearest-even

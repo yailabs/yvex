@@ -2117,6 +2117,20 @@ DeepSeek CPU/CUDA control still fails (`first_layer=3`, final hidden
 not a before/after numerical comparison. Intermittent CUDA non-finite behavior
 is not yet qualified as resolved.
 
+The matrix-tile grouped-up CUDA consumer still had a separate F32 `expf`
+SwiGLU implementation after the row paths had been corrected. It now consumes
+the same compiled F64/BF16 value helper; its existing four-row matrix-tile
+fixture exercises the path. The CPU scalar owner now refuses non-finite gate/up
+operands before `fmin`/`fmax` can mask a NaN; a later-index NaN control proves
+the bounded refusal occurs before output publication. Focused CPU MoE and CUDA
+MoE/dot/worklist controls pass. A post-correction full-evidence two-token
+DeepSeek CPU/CUDA comparison still fails: first out-of-tolerance layer 4,
+final hidden `max_abs=0.53125`, CPU/CUDA argmax `339/339`, finite-population
+logit total variation `0.0721083894`, against the declared absolute/relative
+hidden tolerance `8e-3`/`8e-3`. This is a real remaining whole-model gate;
+the matrix-tile and scalar refusal repairs do not establish that the reported
+intermittent CUDA non-finite execution has been eliminated.
+
 `MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0` is the sole ACTIVE
 boundary; post-consolidation reconciliation is NEXT, not started.
 Decision / option readout stays PARTIAL; general Score, Prompt
