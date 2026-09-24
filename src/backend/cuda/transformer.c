@@ -171,7 +171,8 @@ int yvex_cuda_transformer_initial(
         embedding->bytes < embedding_bytes ||
         !backend_tensor_owner_is(backend, expanded) || expanded->dtype != YVEX_DTYPE_F32 ||
         expanded->bytes < expanded_bytes ||
-        count > UINT_MAX * (unsigned long long)TRANSFORMER_BLOCK)
+        expanded_count > UINT_MAX * (unsigned long long)TRANSFORMER_BLOCK ||
+        !state->attention_bf16_round_function)
         return cuda_transformer_refuse(err, YVEX_ERR_FORMAT, "cuda.transformer.initial",
                                        "CUDA transformer embedding geometry is incompatible");
     rc = status_transaction_open(
@@ -200,6 +201,17 @@ int yvex_cuda_transformer_initial(
             rc = yvex_cuda_status(&state->driver, copied,
                                   "cuda.transformer.initial.repeat", err);
         }
+    /* The embedding row remains decoded F32. The repeated residual is the
+     * admitted BF16 publication, matching the portable initial program. */
+    if (rc == YVEX_OK) {
+        grid = (unsigned int)((expanded_count + TRANSFORMER_BLOCK - 1ull) /
+                              TRANSFORMER_BLOCK);
+        void *params[] = {&expanded_ptr, &expanded_count, &work.status};
+        rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                              state->attention_bf16_round_function, grid,
+                              TRANSFORMER_BLOCK, 0u, params,
+                              "cuda.transformer.initial.round", err);
+    }
     rc = status_transaction_close(
         &work, !work.status_deferred, 0, rc, facts,
         "cuda.transformer.initial.status", err);
@@ -207,7 +219,7 @@ int yvex_cuda_transformer_initial(
         embedding->is_written = 1;
         expanded->is_written = 1;
         facts->d2d_bytes = expanded_bytes;
-        facts->kernel_launches = 1ull;
+        facts->kernel_launches = 2ull;
         facts->active_weight_bytes = encoded_required;
         facts->activation_bytes = activation_bytes;
         facts->compulsory_memory_facts_available = 1;

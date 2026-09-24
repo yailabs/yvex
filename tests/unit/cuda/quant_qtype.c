@@ -879,8 +879,9 @@ static int quant_cuda_f32_gemm(yvex_backend *backend)
             ROWS, WIDTH, WIDTH * sizeof(float), INPUT_ROWS, input, NULL, 0u, NULL, output,
             bad ? YVEX_ENCODED_INPUT_Q8 : YVEX_ENCODED_INPUT_F32,
             bad ? YVEX_ENCODED_REDUCTION_ROW : (yvex_encoded_reduction_policy)2, &facts, &err);
-        YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG && facts.kernel_launches == 0u,
-            "unknown or precision-incompatible reduction refuses before device execution");
+        YVEX_TEST_ASSERT(rc == (bad ? YVEX_ERR_UNSUPPORTED : YVEX_ERR_INVALID_ARG) &&
+                             facts.kernel_launches == 0u,
+            "unknown reduction and unavailable Q8 row geometry refuse before device execution");
     }
     rc = yvex_backend_encoded_matvec(backend, mapped, sizeof(weights), YVEX_GGUF_QTYPE_F32,
         ROWS, WIDTH, WIDTH * sizeof(float), INPUT_ROWS, input, NULL, 0u, NULL, output,
@@ -1792,7 +1793,7 @@ static int quant_cuda_transformer_facts(yvex_backend *backend)
     yvex_device_tensor *workspace_device = NULL;
     unsigned char *row = NULL, *encoded = NULL;
     unsigned char workspace[256] = {0};
-    float source[TOKENS * HIDDEN] = {0};
+    float source[TOKENS * HIDDEN], decoded[TOKENS * HIDDEN];
     float embedding[TOKENS * HIDDEN], expanded[TOKENS * HIDDEN * STREAMS];
     float function[STREAMS * STREAMS * HIDDEN] = {0};
     float base[STREAMS] = {0}, scale[1] = {1.0f}, norm[HIDDEN];
@@ -1800,10 +1801,11 @@ static int quant_cuda_transformer_facts(yvex_backend *backend)
     float resident_features[TOKENS * HIDDEN * 2] = {0};
     float reference_pre[TOKENS * HIDDEN], reference_output[TOKENS * HIDDEN];
     yvex_backend_operation_facts facts;
+    yvex_quant_failure quant_failure;
     yvex_error err;
     size_t row_bytes = 0u, current_bytes = 0u;
     unsigned long long index;
-    int rc;
+    int rc, rounding_observed = 0;
 
     const yvex_backend_transformer_operations *operations =
         yvex_backend_transformer_operations_get(backend);
@@ -1812,6 +1814,8 @@ static int quant_cuda_transformer_facts(yvex_backend *backend)
                      "CUDA publishes admitted transformer operations");
 
     for (index = 0ull; index < HIDDEN; ++index) norm[index] = 1.0f;
+    for (index = 0ull; index < TOKENS * HIDDEN; ++index)
+        source[index] = 0.125f + (float)(index % 19ull) * 0.0017f;
     for (index = 0ull; index < TOKENS; ++index) {
         YVEX_TEST_ASSERT(quant_cuda_encode_row(
                              YVEX_GGUF_QTYPE_Q8_0, source + index * HIDDEN,
@@ -1823,6 +1827,11 @@ static int quant_cuda_transformer_facts(yvex_backend *backend)
         }
         YVEX_TEST_ASSERT(encoded && current_bytes == row_bytes,
                          "transformer embedding encoding has stable rows");
+        YVEX_TEST_ASSERT(yvex_quant_decode_block(
+                             YVEX_GGUF_QTYPE_Q8_0, row, current_bytes,
+                             decoded + index * HIDDEN, HIDDEN,
+                             &quant_failure, &err) == YVEX_OK,
+                         "transformer embedding reference decodes exact encoded row");
         memcpy(encoded + index * row_bytes, row, row_bytes);
         free(row);
         row = NULL;
@@ -1842,15 +1851,24 @@ static int quant_cuda_transformer_facts(yvex_backend *backend)
         rc == YVEX_OK && facts.compulsory_memory_facts_available &&
             facts.active_weight_bytes == TOKENS * row_bytes && !facts.state_bytes &&
             facts.activation_bytes == sizeof(embedding) + sizeof(expanded) &&
-            facts.temporary_bytes == sizeof(int) &&
+            facts.temporary_bytes == sizeof(int) && facts.kernel_launches == 2ull &&
             yvex_backend_tensor_read(backend, embedding_device, embedding,
                                      sizeof(embedding), &err) == YVEX_OK &&
             yvex_backend_tensor_read(backend, expanded_device, expanded,
                                      sizeof(expanded), &err) == YVEX_OK,
         "transformer initial reports exact compulsory memory spans");
-    for (index = 0ull; index < TOKENS * HIDDEN * STREAMS; ++index)
-        YVEX_TEST_ASSERT(expanded[index] == 0.0f,
-                         "transformer initial publishes finite repeated streams");
+    for (index = 0ull; index < TOKENS * HIDDEN * STREAMS; ++index) {
+        unsigned long long token = index / (HIDDEN * STREAMS);
+        unsigned long long lane = index % HIDDEN;
+        float raw = decoded[token * HIDDEN + lane];
+        float rounded = yvex_quant_bf16_decode(yvex_quant_bf16_encode(raw));
+        if (rounded != raw) rounding_observed = 1;
+        YVEX_TEST_ASSERT(embedding[token * HIDDEN + lane] == raw &&
+                             expanded[index] == rounded,
+                         "transformer initial keeps raw embedding and publishes BF16 residual");
+    }
+    YVEX_TEST_ASSERT(rounding_observed,
+                     "nonzero embedding fixture detects missing residual BF16 rounding");
 
     for (index = 0ull; index < TOKENS * HIDDEN * STREAMS; ++index)
         expanded[index] = (float)((index / HIDDEN) * 4ull + index % HIDDEN);

@@ -2073,6 +2073,19 @@ numerical gate. Snapshot-executor lifetime, state-page initialization order
 and shutdown wakeup repairs retain their bounded lifecycle evidence, not a
 claim that DeepSeek numerical correctness is repaired.
 
+The CUDA transformer initial residual previously copied decoded F32 embeddings
+into every mHC stream while the portable initial program published BF16/RNE
+streams. The common CUDA path now rounds only the repeated residual, retaining
+the raw decoded embedding. A nonzero encoded-row component oracle verifies both
+publications. On the exact two-token DeepSeek transformer control, the first
+CPU/CUDA layer outside the declared tolerance moved from layer 3 to layer 4,
+final hidden `max_abs` fell from `1.125` to `0.53125`, finite-population logit
+total variation from `0.334954` to `0.0721083894`, and CPU/CUDA argmax changed
+from `339/295` to `339/339`. This is a bounded improvement, not a pass: the
+declared hidden tolerance still fails (`max_abs=0.53125`), and the second token
+selects expert `101` on CPU versus `91` on CUDA at layer 4. Intermittent
+non-finite CUDA behavior and independent upstream conformance remain open.
+
 `MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0` is the sole ACTIVE
 boundary; post-consolidation reconciliation is NEXT, not started.
 Decision / option readout stays PARTIAL; general Score, Prompt
