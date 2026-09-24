@@ -176,6 +176,7 @@ static int offline_invoke(yvex_operator_offline_adapter adapter, int argc, char 
     case YVEX_OPERATOR_OFFLINE_MATERIALIZE: return yvex_materialize_command(argc, argv);
     case YVEX_OPERATOR_OFFLINE_MATERIALIZE_GATE:
         return yvex_materialize_gate_command(argc, argv);
+    case YVEX_OPERATOR_OFFLINE_MANAGEMENT: return yvex_cli_management_command(argc, argv);
     case YVEX_OPERATOR_OFFLINE_METADATA: return yvex_metadata_command(argc, argv);
     case YVEX_OPERATOR_OFFLINE_MODEL_GATE: return yvex_model_gate_command(argc, argv);
     case YVEX_OPERATOR_OFFLINE_MODEL_TARGET: return yvex_model_target_command(argc, argv);

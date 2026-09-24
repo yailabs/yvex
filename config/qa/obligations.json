@@ -315,6 +315,13 @@
       "reason": "operator grammar changes require generated-authority and executable CLI acceptance"
     },
     {
+      "id": "remote-management-bootstrap",
+      "patterns": ["src/cli/io/management.c", "tests/integration/remote_management.sh", "docs/contracts/remote-management.md"],
+      "lanes": ["runtime", "structural"],
+      "tests": ["integration.remote-management", "structural.operator-registry"],
+      "reason": "remote identity and forced-command transport require authentication and refusal evidence"
+    },
+    {
       "id": "server",
       "patterns": ["src/server/**", "include/yvex/server.h", "include/yvex/internal/server.h"],
       "lanes": ["fast", "runtime", "sanitizer"],

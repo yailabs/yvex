@@ -14,6 +14,7 @@ Status: living public project control
 | Adopted decision architecture target | YAI owns the semantic Decision Plane; YVEX owns computational Decision Readout and the future broader Decision Core. Internal schema v1 is qualified on exact Mamba2 CPU recurrent and Qwen CUDA hybrid state; scores acquire no semantic authority or canonical admission. |
 | Most important structural gap | Two materially distinct state classes now share one readout, capacity policy, execution-profile policy and committed-source-state owner. DeepSeek CPU/CUDA output diverges beyond the declared internal numerical gate, and intermittent CUDA non-finite execution remains unresolved. Universal readout/model breadth, independent upstream whole-model conformance and production performance remain unearned. Observed branch-allocation maxima are not device/process peak measurements. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; exact Qwen3.8-27B BF16 target-only CUDA tokenizer/forward/full-logits plus common hybrid-prefix and finite-candidate readout execution; bounded MiniMax composite media; exact Mamba2 pure-SSM CPU artifact execution plus bounded zero-generation finite-candidate readout. Evidence depths differ. |
+| Remote management bootstrap | A separate bounded v1 SSH forced-command identity/enrollment/status slice is implemented for any YVEX machine with the required OpenSSH/Ed25519 deployment. Exon → Spark is a disposable two-client fixture, not a persistent endpoint or production remote-governance claim. Mutating operations and a durable operation journal remain open. |
 | External execution characterization | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Retained as a measured limitation, not a refoundation .1 closure gate; no downstream-safe claim. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
 | Behavior evaluation | BLOCKED / not ready. |
@@ -1221,8 +1222,8 @@ tokenizer kind is explicitly weaker than executing its processor.
 | Linux terminal execution | 🟢 ESTABLISHED | Private POSIX adapter and REPLAI have real PTY/lifetime evidence. | Preserve submission, interrupt, restoration and cleanup. | X | [Editor ADR][editor]; [terminal tests][terminal-tests] |
 | macOS terminal execution | 🔴 OPEN | Portable/POSIX structure is not executed macOS qualification. | Real platform build and interaction/lifecycle qualification. | X | [Platform boundary][system]; [editor ADR][editor] |
 | Windows Console/ConPTY execution | 🔴 OPEN | No qualified Windows product terminal backend. | Platform mechanics beneath the same semantic contract, independently tested. | X | [Platform boundary][system] |
-| Remote production transport | 🔴 OPEN | Local/loopback is not production remote serving. | Authenticated operational transport and deployment evidence. | X | [Compatibility scope][openai]; [local protocol][protocol] |
-| Authentication | 🔴 OPEN | No qualified remote request-identity/security owner. | Authentication/authorization contract if remote scope is admitted. | X | [Compatibility scope][openai] |
+| Remote production transport | 🔴 OPEN | A restricted SSH identity/status bootstrap has bounded two-machine fixture evidence, but no supervised production management endpoint or mutating operation contract. Local/loopback inference is not remote serving. | Persistent secure deployment, governed lifecycle operations and reliability evidence. | X | [Remote management bootstrap][remote-management]; [Compatibility scope][openai] |
+| Authentication | 🔴 OPEN | Bootstrap v1 authenticates pinned SSH host and enrolled Ed25519 client keys at its narrow scope; broad product remote request authorization remains unqualified. | Persistent listener security audit, authorization for governed operations and key-rotation/revocation evidence. | X | [Remote management bootstrap][remote-management] |
 | TLS | 🔴 OPEN | No qualified product transport-security boundary. | Secure lifecycle and negative evidence if remote scope is admitted. | X | [Compatibility scope][openai] |
 | Multi-tenant isolation | ⚪ LATER | Session isolation is not a tenant/security boundary. | Tenant identity, resource/security isolation and operational evidence. | X / S | [Runtime contract][runtime-contract]; [release scope][release] |
 
@@ -1249,7 +1250,7 @@ meaning, generation cancellation and semantic rendering.
 | Full-model release benchmark | 🔴 OPEN | Bounded characterization does not close release performance evidence. | Latency, throughput, memory and reliability after evaluation. | Q | [Release doctrine][doctrine]; [v0.1][release] |
 | Release qualification | 🔴 OPEN | Required version-specific gates have not closed together. | Every mandatory gate, claim audit and exact release identity. | Q | [Release doctrine][doctrine]; [v0.1][release] |
 | Reproducible artifact release | 🟡 PARTIAL | Source/build/publication and verified rehydration exist; no qualified final v0.1 variant. | Reproducible selected recipe/artifact and independent final qualification. | P / Q | [Model release contract][model-release]; [lifecycle][lifecycle] |
-| Remote operational qualification | 🔴 OPEN | Local operation supplies no production remote evidence. | Security/reliability/operator qualification if remote scope is admitted. | Q / X | [Release nonclaims][release] |
+| Remote operational qualification | 🔴 OPEN | A disposable Exon → Spark forced-command fixture qualifies identity/status and refusal mechanics only; no persistent production operation has been qualified. | Security/reliability/operator qualification for governed remote lifecycle. | Q / X | [Remote management bootstrap][remote-management]; [Release nonclaims][release] |
 
 Software QA, including bounded numerical tests, is not a declaration that the
 official DeepSeek full-model test vectors have been run and passed. Every
@@ -1884,6 +1885,16 @@ decision. This is neither the maturity matrix nor the release scope.
 
 Active Next: MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0
 
+Separate completed slice: `MANAGEMENT.REMOTE.IDENTITY.ENROLLMENT.0` (X / Q)
+implements a public v1 restricted-SSH device/peer identity, local explicit
+enrollment/revocation and read-only device/host status contract. Its isolated
+two-client fixture can run from Exon to Spark while the inference host is off.
+The slice is independent of the sole ACTIVE runtime consolidation boundary;
+it does not close remote production transport, generic authentication,
+mutating governance, YAI integration or release qualification. The next
+remote-control slice remains unselected until a durable idempotent operation
+journal and supervised deployment are designed and qualified.
+
 The bounded .0 refoundation, its qualification, the `.1` universal-IR
 consumer cutover and `.1` qualification are complete. The A01 repair resolved
 source policy and pure-SSM compiler/runtime authority; its qualification now
@@ -2387,8 +2398,8 @@ release_qualification_ready=0
 | Physical Model Compiler automatic search | false | Manual recipes/synthesis foundations are not search/selection. |
 | macOS product terminal qualification | false | Portable structure is not platform evidence. |
 | Windows/ConPTY product qualification | false | No qualified product backend/path. |
-| Public remote serving | false | Local/loopback is not authenticated production service. |
-| Authentication/TLS | false | No implemented/qualified product security boundary. |
+| Public remote serving | false | The restricted SSH identity/status bootstrap is not a production management or inference deployment. |
+| Authentication/TLS | false at broad product scope | Bootstrap SSH key authentication is bounded; no qualified production remote authorization/TLS boundary exists. |
 | Distributed execution | false / LATER | Single-node is the admitted substrate. |
 | Disaggregated serving | false / LATER | Distributed identity/state/failure semantics must precede it. |
 | Generic semantic-state ingress | false | Content inputs do not implement a semantic-state lowering boundary. |
@@ -2525,6 +2536,7 @@ H classifications. Git owns previous versions; this file owns the present.
 [runtime-contract]: docs/contracts/runtime.md
 [events]: docs/contracts/events-telemetry.md
 [protocol]: docs/contracts/local-protocol.md
+[remote-management]: docs/contracts/remote-management.md
 [c-api]: docs/contracts/c-api.md
 [model-release]: docs/contracts/model-release.md
 [lifecycle]: docs/model-lifecycle.md

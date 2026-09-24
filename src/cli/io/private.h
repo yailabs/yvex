@@ -554,6 +554,7 @@ int yvex_cli_out_writef(FILE *fp, const char *fmt, ...);
 int yvex_cli_out_vwritef(FILE *fp, const char *fmt, va_list ap);
 int yvex_cli_completion_command(int argc, char **argv, size_t consumed);
 void yvex_cli_client_request_init(yvex_client_request *request, yvex_client_operation operation);
+int yvex_cli_management_command(int argc, char **argv);
 int yvex_cli_client_request_open(yvex_client **client, const yvex_client_request *request, yvex_error *err);
 int yvex_client_render_help_path(size_t path_count, const char *const *path,
                                  int advanced, int json);
@@ -592,7 +593,6 @@ void yvex_cli_out_kv_str(FILE *fp, const char *key, const char *value);
 void yvex_cli_out_kv_bool(FILE *fp, const char *key, int value);
 int yvex_cli_out_fields(FILE *fp, const void *object, const yvex_cli_field_spec *fields,
                         size_t field_count);
-
 #ifdef __cplusplus
 }
 #endif

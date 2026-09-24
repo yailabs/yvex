@@ -50,6 +50,15 @@ engine generations. Each loaded engine owns its immutable runtime model,
 scheduler, sessions, state, and resources. HTTP and native clients bind work to
 an exact alias and generation rather than a process-global model pointer.
 
+The [restricted remote-management bootstrap](../contracts/remote-management.md)
+is a separate, optionally supervised OpenSSH listener on any supported host.
+Its forced `yvex management protocol` process is finite and can answer exact
+device identity and local host status while the inference host is stopped.
+It authenticates enrolled client keys through OpenSSH and reads host facts
+through the existing private local protocol; it neither exposes that socket
+remotely nor creates a second host lifecycle. Mutating remote control and a
+production deployment qualification are not yet implemented.
+
 ## Subsystem direction
 
 The implemented dependency direction is:
