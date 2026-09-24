@@ -2093,6 +2093,29 @@ after the top-k expert population differs. This diagnostic identifies the
 MoE numerical path and routing sensitivity; it does not establish which
 whole-model output is authoritative, justify a looser gate, or close the
 intermittent non-finite failure. The temporary instrumentation was removed.
+The CUDA grouped MoE expert paths previously evaluated clamped SwiGLU with
+F32 `expf`/products while the compiled `clamped_swiglu.f64math.bf16.v1`
+operation and portable expert path require F64 arithmetic before one BF16
+publication. The grouped and standalone CUDA paths now use one implementation
+of that declared rule and refuse non-finite ingress before clamping. A bounded
+grouped-kernel fixture gives expected/observed `0.416015625/0.416015625`
+with zero tolerance and verifies refusal without output publication. This
+also exposed a finite-overflow seam: ordinary CUDA row dots recovered an
+exceptional F32 reduction by rescanning decoded operands in F64, but the
+grouped MoE F32-input path returned the non-finite intermediate directly to
+its nonlinear clamp. One common CUDA dot-recovery primitive now serves both
+paths, and the grouped path recovers before clamping. The decoded-F64 fixture
+proves zero output from a finite canceling dot with an overflowing F32 partial
+sum (`max_abs=0`, tolerance `0`), while non-finite operands still refuse
+without publication. These are bounded component facts; they do not establish
+that the intermittent real-model non-finite case is resolved. The ordinary
+two-token
+DeepSeek CPU/CUDA control still fails (`first_layer=3`, final hidden
+`max_abs=0.984375`, CPU/CUDA argmax `339/295`, total variation
+`0.248446461`). A separate pre-correction F64-forensic execution also failed
+(`first_layer=4`, final hidden `max_abs=0.53125`); the two execution modes are
+not a before/after numerical comparison. Intermittent CUDA non-finite behavior
+is not yet qualified as resolved.
 
 `MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0` is the sole ACTIVE
 boundary; post-consolidation reconciliation is NEXT, not started.
