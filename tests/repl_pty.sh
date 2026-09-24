@@ -244,23 +244,25 @@ printf '/attachments\r' >&3
 wait_for "$root/explicit.typescript" 'attachments · 2 staged for next turn'
 printf 'hello\r' >&3
 wait_for "$root/explicit.typescript" 'hello from yvex'
-wait_for "$root/explicit.typescript" 'output adaptive · envelope 256'
-wait_for "$root/explicit.typescript" 'stop EOS'
 printf '/attachments\r' >&3
 wait_for "$root/explicit.typescript" 'attachments · none staged'
 printf '/quit\r' >&3
 finish_console
 assert_linear_terminal "$root/explicit.typescript"
+! grep -F 'generation 6 tokens · decode wall' "$root/explicit.typescript" >/dev/null
+! grep -F 'output adaptive · envelope' "$root/explicit.typescript" >/dev/null
+! grep -F 'stop EOS · session' "$root/explicit.typescript" >/dev/null
 
 # Omitted completion length stays adaptive/server-owned; an explicit limit is
 # carried separately and its terminal stop is distinguishable from EOS.
 start_console envelope 24 100 'chat --session envelope --max-new-tokens 3' nocolor
 printf 'explicit envelope\r' >&3
-wait_for "$root/envelope.typescript" 'output explicit 3 · envelope 3'
-wait_for "$root/envelope.typescript" 'stop maximum tokens'
+wait_for "$root/envelope.typescript" 'hello from yvex'
 printf '/quit\r' >&3
 finish_console
 assert_linear_terminal "$root/envelope.typescript"
+! grep -F 'output explicit 3 · envelope 3' "$root/envelope.typescript" >/dev/null
+! grep -F 'stop maximum tokens · session' "$root/envelope.typescript" >/dev/null
 
 # A fragment without a newline is visible while the provider is still working;
 # rendering adds neither an artificial typewriter delay nor line buffering.

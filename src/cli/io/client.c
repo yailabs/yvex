@@ -789,8 +789,12 @@ static int generation_turn(const client_engine_binding *engine,
                                "terminal stream finalization failed");
                 break;
             }
-            yvex_cli_out_turn_complete(status_output, &message,
-                                       context_capacity, &style);
+            /* The interactive transcript owns the answer, not a telemetry
+             * dump.  Structured measurements remain on the typed message;
+             * one-shot commands retain their terminal metrics on stderr. */
+            if (!conversation || message.media_result.available)
+                yvex_cli_out_turn_complete(status_output, &message,
+                                           context_capacity, &style);
             break;
         } else if (message.kind == YVEX_CLIENT_MESSAGE_ERROR) {
             generation_progress_finish(&progress_active, 1);
