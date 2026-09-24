@@ -473,12 +473,10 @@ extern "C" __global__ void yvex_moe_grouped_up_tensorcore(
         for (unsigned int column = 0u; column < population; ++column) {
             unsigned long long ordered_pair = offset + column;
             unsigned long long source_pair = order[ordered_pair];
-            float g = fminf(gate_totals[column], (float)limit);
-            float u = fmaxf((float)-limit, fminf(up_totals[column], (float)limit));
-            float silu = g >= 0.0f ? g / (1.0f + expf(-g))
-                                   : g * expf(g) / (1.0f + expf(g));
-            float value = float_to_bf16_rne(silu * u * weights[source_pair]);
-            if (!isfinite(value)) atomicCAS(status, 0, 1);
+            float value;
+            if (!cuda_clamped_swiglu_bf16_value(gate_totals[column], up_totals[column],
+                                                limit, weights[source_pair], &value))
+                atomicCAS(status, 0, 1);
             else intermediate[ordered_pair * intermediate_width + row_base + lane] = value;
         }
 }

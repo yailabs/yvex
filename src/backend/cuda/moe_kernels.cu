@@ -43,22 +43,6 @@ static __device__ float moe_warp_dot(
     return sum;
 }
 
-/* The compiled clamped-SwiGLU operation specifies F64 math followed by one
- * F32-to-BF16 publication. Grouped expert kernels must use the same rule as
- * the standalone operation; F32 exp/product changes BF16 ties. */
-static __device__ int moe_clamped_swiglu_bf16_value(
-    float gate, float up, double limit, float route_weight, float *out)
-{
-    if (!out || !isfinite(gate) || !isfinite(up) || !isfinite(limit) ||
-        limit <= 0.0 || !isfinite(route_weight)) return 0;
-    double g = fmin((double)gate, limit);
-    double u = fmax(-limit, fmin((double)up, limit));
-    double silu = g >= 0.0 ? g / (1.0 + exp(-g)) : g * exp(g) / (1.0 + exp(g));
-    float value = (float)(silu * u * (double)route_weight);
-    if (!isfinite(value)) return 0;
-    *out = float_to_bf16_rne(value);
-    return isfinite(*out);
-}
 extern "C" __global__ void yvex_moe_route(
     const float *logits, const float *bias, const unsigned long long *hash_experts,
     unsigned int router_class, unsigned long long routed_experts,
@@ -170,7 +154,7 @@ extern "C" __global__ void yvex_moe_grouped_up(
     if (!lane && !*status) {
         float route_weight = weights ? weights[rank] : 1.0f;
         float value;
-        if (!moe_clamped_swiglu_bf16_value(g, u, limit, route_weight, &value))
+        if (!cuda_clamped_swiglu_bf16_value(g, u, limit, route_weight, &value))
             atomicCAS(status, 0, 1);
         else intermediate[rank * intermediate_width + row] = value;
     }
@@ -549,7 +533,7 @@ extern "C" __global__ void yvex_moe_grouped_up_rows(
     if (!lane && !*status) {
         float route_weight = weights ? weights[source_pair] : 1.0f;
         float value;
-        if (!moe_clamped_swiglu_bf16_value(g, u, limit, route_weight, &value))
+        if (!cuda_clamped_swiglu_bf16_value(g, u, limit, route_weight, &value))
             atomicCAS(status, 0, 1);
         else intermediate[ordered_pair * intermediate_width + output_row] = value;
     }
@@ -672,7 +656,7 @@ extern "C" __global__ void yvex_moe_swiglu(
         return;
     }
     float value;
-    if (!moe_clamped_swiglu_bf16_value(gate[index], up[index], limit, route_weight, &value))
+    if (!cuda_clamped_swiglu_bf16_value(gate[index], up[index], limit, route_weight, &value))
         atomicCAS(status, 0, 1);
     else output[index] = value;
 }

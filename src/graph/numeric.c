@@ -18,6 +18,15 @@ int yvex_clamped_swiglu_bf16(const float *gate, const float *up, unsigned long l
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "numeric.clamped-swiglu", "invalid operands or numerical policy");
         return YVEX_ERR_INVALID_ARG;
     }
+    /* fmin/fmax can replace a NaN operand with the finite clamp bound. Refuse
+     * the entire input population before publishing any output element. */
+    for (unsigned long long i = 0u; i < count; ++i) {
+        if (!isfinite(gate[i]) || !isfinite(up[i])) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, "numeric.clamped-swiglu",
+                           "non-finite gate or up input");
+            return YVEX_ERR_FORMAT;
+        }
+    }
     for (unsigned long long i = 0u; i < count; ++i) {
         double g = fmin(gate[i], limit), u = fmax(-limit, fmin(up[i], limit));
         double silu = g >= 0.0 ? g / (1.0 + exp(-g)) : g * exp(g) / (1.0 + exp(g));

@@ -201,6 +201,24 @@ static int moe_test_expert(void)
                      "encoded selected expert executes");
     YVEX_TEST_ASSERT(output[0] == expected[0] && output[1] == expected[1],
                      "selected expert matches independent BF16 SwiGLU equation");
+    {
+        const float bad_gate[] = {1.0f, NAN};
+        float good_up[] = {2.0f, 3.0f};
+        float refused[] = {-91.0f, -92.0f};
+        YVEX_TEST_ASSERT(yvex_clamped_swiglu_bf16(
+            bad_gate, good_up, 2ull, layer.activation_limit, route_weight,
+            refused, &err) == YVEX_ERR_FORMAT &&
+            refused[0] == -91.0f && refused[1] == -92.0f,
+            "non-finite later gate refuses before any CPU SwiGLU publication");
+        good_up[1] = INFINITY;
+        refused[0] = -91.0f;
+        refused[1] = -92.0f;
+        YVEX_TEST_ASSERT(yvex_clamped_swiglu_bf16(
+            gate, good_up, 2ull, layer.activation_limit, route_weight,
+            refused, &err) == YVEX_ERR_FORMAT &&
+            refused[0] == -91.0f && refused[1] == -92.0f,
+            "non-finite later up refuses before any CPU SwiGLU publication");
+    }
     up_view.row_count = 1ull;
     YVEX_TEST_ASSERT(yvex_moe_expert_cpu(&layer, &gate_view, &up_view, &down_view,
                                          input, route_weight, output, &err) == YVEX_ERR_INVALID_ARG,

@@ -59,6 +59,21 @@ static __device__ float float_to_bf16_rne(float value)
     if (lower > 0x8000u || (lower == 0x8000u && (upper & 1u))) upper++;
     return __uint_as_float(upper << 16);
 }
+/* The compiled clamped-SwiGLU operation specifies F64 arithmetic followed
+ * by one F32-to-BF16 publication across row and matrix-tile implementations. */
+static __device__ int cuda_clamped_swiglu_bf16_value(
+    float gate, float up, double limit, float route_weight, float *out)
+{
+    if (!out || !isfinite(gate) || !isfinite(up) || !isfinite(limit) ||
+        limit <= 0.0 || !isfinite(route_weight)) return 0;
+    double g = fmin((double)gate, limit);
+    double u = fmax(-limit, fmin((double)up, limit));
+    double silu = g >= 0.0 ? g / (1.0 + exp(-g)) : g * exp(g) / (1.0 + exp(g));
+    float value = (float)(silu * u * (double)route_weight);
+    if (!isfinite(value)) return 0;
+    *out = float_to_bf16_rne(value);
+    return isfinite(*out);
+}
 static __device__ float e8m0_bits_to_float(unsigned int bits)
 {
     if (bits == 0xffu) return __uint_as_float(0x7fc00000u);
