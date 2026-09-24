@@ -2085,6 +2085,14 @@ from `339/295` to `339/339`. This is a bounded improvement, not a pass: the
 declared hidden tolerance still fails (`max_abs=0.53125`), and the second token
 selects expert `101` on CPU versus `91` on CUDA at layer 4. Intermittent
 non-finite CUDA behavior and independent upstream conformance remain open.
+Temporary same-input stage diagnostics localized the first post-repair
+CPU/CUDA difference: layer 1 attention-envelope values agree exactly over
+32,768 values, while the ensuing MoE combined values differ by at most
+`0.0009765625` over 8,192 values. Layer 4 MoE reaches `0.0690917969`
+after the top-k expert population differs. This diagnostic identifies the
+MoE numerical path and routing sensitivity; it does not establish which
+whole-model output is authoritative, justify a looser gate, or close the
+intermittent non-finite failure. The temporary instrumentation was removed.
 
 `MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0` is the sole ACTIVE
 boundary; post-consolidation reconciliation is NEXT, not started.
