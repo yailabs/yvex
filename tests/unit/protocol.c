@@ -121,6 +121,40 @@ static int test_request_roundtrip(void)
     return 0;
 }
 
+static int test_load_context_roundtrip(void)
+{
+    unsigned char frame[2048], *prompt = NULL;
+    yvex_content_part *content = NULL;
+    yvex_provider_request *provider = NULL;
+    yvex_client_request request = {0}, decoded;
+    unsigned long long count = 0ull;
+    yvex_error err;
+    request.schema_version = YVEX_LOCAL_PROTOCOL_VERSION;
+    request.operation = YVEX_CLIENT_OP_ENGINE_LOAD;
+    strcpy(request.model_alias, "fixture");
+    request.load_context_capacity = 32768ull;
+    YVEX_TEST_ASSERT(yvex_protocol_request_encode(
+                         &request, frame, sizeof(frame), &count, &err) == YVEX_OK,
+                     "variable load context encodes");
+    YVEX_TEST_ASSERT(yvex_protocol_request_decode(
+                         frame, count, &decoded, &prompt, &content, &provider,
+                         &err) == YVEX_OK && decoded.load_context_capacity == 32768ull &&
+                         decoded.operation == YVEX_CLIENT_OP_ENGINE_LOAD,
+                     "exact variable load context survives local protocol");
+    request.operation = YVEX_CLIENT_OP_ENGINE_UNLOAD;
+    YVEX_TEST_ASSERT(yvex_protocol_request_encode(
+                         &request, frame, sizeof(frame), &count, &err) ==
+                         YVEX_ERR_INVALID_ARG,
+                     "non-load operation refuses context override");
+    request.operation = YVEX_CLIENT_OP_ENGINE_LOAD;
+    request.schema_version = YVEX_LOCAL_PROTOCOL_VERSION - 1u;
+    YVEX_TEST_ASSERT(yvex_protocol_request_encode(
+                         &request, frame, sizeof(frame), &count, &err) ==
+                         YVEX_ERR_INVALID_ARG,
+                     "stale protocol refuses new load request");
+    return 0;
+}
+
 static int test_content_request_roundtrip(void)
 {
     static const unsigned char transcript[] = "heard text";
@@ -880,7 +914,7 @@ typedef struct {
 static void *stale_peer_main(void *opaque)
 {
     static const unsigned char response[12] = {
-        'Y', 'V', 'X', 'P', 0u, 19u, 0u, 2u, 0u, 0u, 0u, 0u};
+        'Y', 'V', 'X', 'P', 0u, 21u, 0u, 2u, 0u, 0u, 0u, 0u};
     stale_peer *peer = opaque;
     unsigned char header[12], discard[4096];
     unsigned int length;
@@ -929,8 +963,8 @@ static int test_stale_frame_refusal(void)
                      "stale peer thread");
     rc = yvex_client_connect(&client, path, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT && client == NULL &&
-                         strstr(yvex_error_message(&err), "version 21") != NULL,
-                     "immediately prior v20 frame explicitly refuses");
+                         strstr(yvex_error_message(&err), "version 22") != NULL,
+                     "immediately prior v21 frame explicitly refuses");
     YVEX_TEST_ASSERT(pthread_join(thread, NULL) == 0, "stale peer join");
     (void)close(peer.listener);
     (void)unlink(path);
@@ -1332,6 +1366,7 @@ int yvex_test_protocol(void)
 {
     if (test_execution_preflight_contract() != 0) return 1;
     if (test_request_roundtrip() != 0) return 1;
+    if (test_load_context_roundtrip() != 0) return 1;
     if (test_content_request_roundtrip() != 0) return 1;
     if (test_all_operation_roundtrips() != 0) return 1;
     if (test_schema_refusals() != 0) return 1;

@@ -16,6 +16,7 @@ typedef struct {
 
 typedef struct {
     const char *model, *variant;
+    unsigned long long context_capacity;
     int json;
 } model_runtime_options;
 
@@ -37,6 +38,13 @@ static int model_runtime_options_parse(int argc, char **argv, size_t consumed,
             if (out->variant || index + 1u >= (size_t)argc || !argv[index + 1u][0])
                 return 2;
             out->variant = argv[++index];
+        } else if (!strcmp(argv[index], "--ctx")) {
+            char *end = NULL;
+            if (out->context_capacity || index + 1u >= (size_t)argc ||
+                argv[index + 1u][0] == '-') return 2;
+            errno = 0;
+            out->context_capacity = strtoull(argv[++index], &end, 10);
+            if (errno || !end || *end || !out->context_capacity) return 2;
         } else if (!strcmp(argv[index], "--json")) out->json = 1;
         else if (argv[index][0] == '-') return 2;
         else if (!out->model) out->model = argv[index];
@@ -47,6 +55,7 @@ static int model_runtime_options_parse(int argc, char **argv, size_t consumed,
 
 static int model_request(yvex_client_operation operation, const char *alias,
                          unsigned long long generation,
+                         unsigned long long context_capacity,
                          yvex_server_engine_summary *engine, yvex_error *err)
 {
     yvex_client_request request;
@@ -56,6 +65,7 @@ static int model_request(yvex_client_operation operation, const char *alias,
     yvex_cli_client_request_init(&request, operation);
     snprintf(request.model_alias, sizeof(request.model_alias), "%s", alias);
     request.engine_generation = generation;
+    request.load_context_capacity = context_capacity;
     rc = yvex_cli_client_request_open(&client, &request, err);
     if (rc == YVEX_OK) rc = yvex_client_receive(client, &message, err);
     if (rc == YVEX_OK && message.kind == YVEX_CLIENT_MESSAGE_ERROR) {
@@ -391,7 +401,8 @@ int yvex_cli_model_load_command(int argc, char **argv, size_t consumed)
     if (rc) return rc;
     rc = yvex_cli_model_profile_select(options.model, options.variant, 0, &model);
     if (rc) return rc;
-    rc = model_request(YVEX_CLIENT_OP_ENGINE_LOAD, model.profile_alias, 0u, &engine,
+    rc = model_request(YVEX_CLIENT_OP_ENGINE_LOAD, model.profile_alias, 0u,
+                       options.context_capacity, &engine,
                        &err);
     if (rc != YVEX_OK) return model_runtime_error(&err);
     if (options.json) model_runtime_json("load", &model, &engine);
@@ -426,7 +437,7 @@ static int model_unloaded_hit(const model_runtime_options *options,
     *handled = 1;
     *model = selected.model;
     rc = model_request(YVEX_CLIENT_OP_ENGINE_UNLOAD, selected.engine.alias,
-                       selected.engine.generation, engine, &err);
+                       selected.engine.generation, 0ull, engine, &err);
     return rc == YVEX_OK ? 0 : model_runtime_error(&err);
 }
 
@@ -440,6 +451,7 @@ int yvex_cli_model_unload_command(int argc, char **argv, size_t consumed)
     int handled = 0;
     int rc = model_runtime_options_parse(argc, argv, consumed, &options);
     if (rc) return rc;
+    if (options.context_capacity) return 2;
     rc = model_unloaded_hit(&options, &model, &engine, &handled);
     if (handled) {
         if (rc) return rc;
@@ -451,7 +463,7 @@ int yvex_cli_model_unload_command(int argc, char **argv, size_t consumed)
                                       &model);
     if (rc) return rc;
     rc = model_request(YVEX_CLIENT_OP_ENGINE_UNLOAD, binding.alias,
-                       binding.generation, &engine, &err);
+                       binding.generation, 0ull, &engine, &err);
     if (rc != YVEX_OK) return model_runtime_error(&err);
     if (options.json) model_runtime_json("unload", &model, &engine);
     else model_runtime_human("UNLOADED", &model, &engine);

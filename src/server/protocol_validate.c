@@ -211,6 +211,8 @@ int yvex_server_protocol_request_fields_valid(
     const yvex_client_request *request)
 {
     return request &&
+           (request->operation == YVEX_CLIENT_OP_ENGINE_LOAD ||
+            !request->load_context_capacity) &&
            (request->operation != YVEX_CLIENT_OP_EXECUTION_PREFLIGHT ||
             (request->model_alias[0] && request->engine_generation &&
              request->provider_request && !request->session_name[0] && !request->prompt_bytes &&

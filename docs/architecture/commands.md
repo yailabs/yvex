@@ -138,7 +138,11 @@ representations. With no model on a TTY it renders a small linear model
 selector; if that model has several valid deployments it renders a second
 variant selector. Numeric rows are temporary conveniences. Before the native
 request, the CLI has resolved one exact profile identity; the host then creates
-an immutable process-local engine generation. Non-TTY ambiguity fails and
+an immutable process-local engine generation. `model load MODEL --ctx N` and
+advanced `engine load PROFILE --ctx N` request a load-only text context through
+the typed local protocol; common runtime capacity admission checks the compiled
+model limit and available resources. Neither command resizes a loaded engine.
+Non-TTY ambiguity fails and
 requires `MODEL` and `--variant` rather than guessing.
 Each launchable profile also carries the same directional input/output
 capability summary later published by its engine, so an orchestrator can select
@@ -205,7 +209,7 @@ verification, compilation, artifact admission or model support.
 
 ## Protocol planes
 
-Native commands and chat use private local protocol v21 over a UID-owned Unix
+Native commands and chat use private local protocol v22 over a UID-owned Unix
 socket. That protocol carries YVEX engine generations, sessions, KV identity,
 lifecycle, ordered typed content/provenance, model leases and directional
 capabilities, typed progress, cancellation, resource facts, and telemetry.

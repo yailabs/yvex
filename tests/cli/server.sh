@@ -133,9 +133,23 @@ contains "$OUT_DIR/help.out" '--openai'
 "$YVEX_BIN" engine list --help >"$OUT_DIR/models-help.out"
 "$YVEX_BIN" model load --help >"$OUT_DIR/model-load-help.out"
 contains "$OUT_DIR/load-help.out" 'usage: yvex engine load [PROFILE]'
+contains "$OUT_DIR/load-help.out" '--ctx'
 contains "$OUT_DIR/unload-help.out" 'usage: yvex engine unload ENGINE'
 contains "$OUT_DIR/models-help.out" 'usage: yvex engine list [options]'
 contains "$OUT_DIR/model-load-help.out" 'usage: yvex model load [MODEL]'
+contains "$OUT_DIR/model-load-help.out" '--ctx'
+
+set +e
+run_client model load tiny --ctx 0 >"$OUT_DIR/ctx-zero.out" 2>"$OUT_DIR/ctx-zero.err"
+ctx_zero_status=$?
+run_client engine load tiny --ctx nope >"$OUT_DIR/ctx-text.out" 2>"$OUT_DIR/ctx-text.err"
+ctx_text_status=$?
+run_client model unload tiny --ctx 8 >"$OUT_DIR/ctx-unload.out" 2>"$OUT_DIR/ctx-unload.err"
+ctx_unload_status=$?
+set -e
+test "$ctx_zero_status" -eq 2
+test "$ctx_text_status" -eq 2
+test "$ctx_unload_status" -eq 2
 
 set +e
 run_client engine load >"$OUT_DIR/load-nontty.out" 2>"$OUT_DIR/load-nontty.err"
@@ -216,14 +230,14 @@ while test "$attempt" -lt 100; do
 done
 test "$ready" -eq 1 || fail 'persistent host did not become ready'
 contains "$OUT_DIR/host.out" 'YVEX HOST · verified inference runtime'
-contains "$OUT_DIR/host.out" 'protocol 21'
+contains "$OUT_DIR/host.out" 'protocol 22'
 contains "$OUT_DIR/host.out" '0/2 engines · 2 workers'
 contains "$OUT_DIR/host.out" 'events lifecycle · progress · resources'
 contains "$OUT_DIR/host.out" 'host ready · Ctrl-C to stop'
 not_contains "$OUT_DIR/host.out" '█'
 not_contains "$OUT_DIR/host.out" '▀'
 contains "$OUT_DIR/status.json" '"schema":"yvex.host.status.v1"'
-contains "$OUT_DIR/status.json" '"protocol":21'
+contains "$OUT_DIR/status.json" '"protocol":22'
 contains "$OUT_DIR/status.json" '"status":2'
 contains "$OUT_DIR/status.json" '"host_ready":true'
 contains "$OUT_DIR/status.json" '"engine_count":0'
@@ -359,7 +373,7 @@ server_pid=
 contains "$OUT_DIR/server-terminal.typescript" 'YVEX 0.1.0 · HOST'
 contains "$OUT_DIR/server-terminal.typescript" '▀▀█▄ █ ▄█▀▀'
 contains "$OUT_DIR/server-terminal.typescript" 'HOST     0/2 engines · 2 workers'
-contains "$OUT_DIR/server-terminal.typescript" 'PROTOCOL 21'
+contains "$OUT_DIR/server-terminal.typescript" 'PROTOCOL 22'
 contains "$OUT_DIR/server-terminal.typescript" 'NATIVE'
 not_contains "$OUT_DIR/server-terminal.typescript" 'LOAD   deepseek4-v4-flash-dspark · g1'
 contains "$OUT_DIR/server-terminal.typescript" 'FAIL'
@@ -451,7 +465,7 @@ for width, colored in [(40, False), (60, False), (76, False), (80, False),
                         for c in line)
             assert cells < width, (width, cells, line)
         for fact in ('YVEX 0.1.0 · HOST', 'verified inference runtime',
-                     'HOST     0/2 engines · 2 workers', 'PROTOCOL 21',
+                     'HOST     0/2 engines · 2 workers', 'PROTOCOL 22',
                      'OPENAI   disabled', 'lifecycle', 'progress', 'resources'):
             assert fact in banner, (width, fact)
         native = next(line.split('NATIVE   ', 1)[1] for line in lines if 'NATIVE   ' in line)

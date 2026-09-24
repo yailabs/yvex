@@ -1,5 +1,4 @@
-/* Local clients and the persistent host exchange bounded versioned frames. Engine
- * generations own executable resources; the host owns routing and admission. */
+/* Bounded local client/host frames; engine generations own execution resources. */
 #ifndef YVEX_SERVER_H
 #define YVEX_SERVER_H
 #include <yvex/artifact.h>
@@ -11,7 +10,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define YVEX_LOCAL_PROTOCOL_VERSION 21u
+#define YVEX_LOCAL_PROTOCOL_VERSION 22u
 #define YVEX_CLIENT_MEDIA_CONDITION_SCHEMA_V1 1u
 #define YVEX_CLIENT_MEDIA_CONDITION_CAP 2u
 #define YVEX_CLIENT_MEDIA_RESULT_SCHEMA_V1 1u
@@ -23,7 +22,8 @@ extern "C" {
 #define YVEX_CLIENT_MEDIA_EXECUTION_SEED 8u
 #define YVEX_SERVER_OPTIONS_SCHEMA_V3 3u
 #define YVEX_SERVER_OPTIONS_SCHEMA_V4 4u
-#define YVEX_SERVER_OPTIONS_SCHEMA_CURRENT YVEX_SERVER_OPTIONS_SCHEMA_V4
+#define YVEX_SERVER_OPTIONS_SCHEMA_V5 5u
+#define YVEX_SERVER_OPTIONS_SCHEMA_CURRENT YVEX_SERVER_OPTIONS_SCHEMA_V5
 #define YVEX_SERVER_ENGINE_SCHEMA_V1 1u
 #define YVEX_SERVER_ENGINE_SCHEMA_V2 2u
 #define YVEX_SERVER_ENGINE_SCHEMA_V3 3u
@@ -52,8 +52,8 @@ extern "C" {
 #define YVEX_SERVER_IMPLEMENTATION_MAXIMUM_ENGINES 64u
 typedef struct yvex_server yvex_server;
 typedef struct yvex_client yvex_client;
-typedef int (*yvex_server_model_loader)(
-    void *context, yvex_server *server, const char *alias, yvex_error *err);
+typedef int (*yvex_server_model_loader)(void *context, yvex_server *server,
+    const char *alias, unsigned long long context_capacity, yvex_error *err);
 typedef enum {
     YVEX_SERVER_STATUS_CONFIGURED = 0,
     YVEX_SERVER_STATUS_STARTING,
@@ -462,6 +462,8 @@ typedef struct {
     unsigned long long request_number;
     char model_alias[YVEX_SERVER_MODEL_ALIAS_CAP];
     unsigned long long engine_generation;
+    /* Zero selects the admitted registry default; nonzero is a load-only override. */
+    unsigned long long load_context_capacity;
     char session_name[YVEX_SERVER_SESSION_NAME_CAP];
     char fork_session_name[YVEX_SERVER_SESSION_NAME_CAP];
     char state_path[YVEX_SERVER_STATE_PATH_CAP];
@@ -548,8 +550,7 @@ typedef struct {
     yvex_server_event event;
     yvex_execution_measurement measurement;
 } yvex_client_message;
-int yvex_server_create(yvex_server **out, const yvex_server_options *options,
-                       yvex_error *err);
+int yvex_server_create(yvex_server **out, const yvex_server_options *options, yvex_error *err);
 int yvex_server_start(yvex_server *server, yvex_error *err);
 int yvex_server_engine_load(
     yvex_server *server, const yvex_server_engine_options *options,
@@ -574,8 +575,7 @@ const char *yvex_server_event_kind_name(yvex_server_event_kind kind);
 const char *yvex_server_session_state_name(yvex_server_session_state state);
 void yvex_server_close(yvex_server **server);
 int yvex_client_connect(yvex_client **out, const char *socket_path, yvex_error *err);
-int yvex_client_timeout_set(yvex_client *client, unsigned long long milliseconds,
-                            yvex_error *err);
+int yvex_client_timeout_set(yvex_client *client, unsigned long long milliseconds, yvex_error *err);
 int yvex_client_send(yvex_client *client, const yvex_client_request *request, yvex_error *err);
 int yvex_client_receive(yvex_client *client, yvex_client_message *message, yvex_error *err);
 void yvex_client_close(yvex_client **client);

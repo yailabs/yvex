@@ -67,7 +67,7 @@ RECORDS = {
         "include/yvex/server.h", "YVEX_RUNTIME_METRICS_SCHEMA_VERSION", 4, 432,
         "42020b2d0f4ece74479eb10d97cd64986304dc413368451666c16498462f088a"),
     "yvex_server_options": (
-        "include/yvex/server.h", "YVEX_SERVER_OPTIONS_SCHEMA_CURRENT", 4, 88,
+        "include/yvex/server.h", "YVEX_SERVER_OPTIONS_SCHEMA_CURRENT", 5, 88,
         "8073cc5ab362027b9e7696e4dc66012adb523204bfc7c306c66ac398a2ab05ab"),
     "yvex_server_engine_options": (
         "include/yvex/server.h", "YVEX_SERVER_ENGINE_SCHEMA_CURRENT", 4, 176,
@@ -97,10 +97,10 @@ RECORDS = {
         "include/yvex/server.h", "YVEX_CLIENT_MEDIA_CONDITION_SCHEMA_V1", 1, 524,
         "15b251a93051e0f0cf0c70e1a14c2cdcb019b54d7e27851b6c36b02bcac9802b"),
     "yvex_client_request": (
-        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 21, 2112,
-        "824d78fe45c3c871a151937d368e7d652873f3265b6f2edac2f11ce6d4dca87e"),
+        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 22, 2120,
+        "ec8504a565fad81fb7297bcf2fc3dbaa3f4065c8480c0a5d49fddc3264722d28"),
     "yvex_client_message": (
-        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 21, 11344,
+        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 22, 11344,
         "89817068a9a56a76a5a55c2fbe22497200a34ddf8873f8a91da2a66ac9f4404e"),
     "yvex_tokenizer_plan_summary": (
         "include/yvex/tokenizer.h", "YVEX_TOKENIZER_PLAN_SCHEMA_CURRENT", 5, 872,
@@ -184,6 +184,7 @@ def compiler_source() -> str:
         'ABI_ASSERT(sizeof(double) == 8, "public ABI requires 64-bit double");',
         'ABI_ASSERT(YVEX_SERVER_OPTIONS_SCHEMA_V3 == 3u, "legacy v3 identity changed");',
         'ABI_ASSERT(YVEX_SERVER_OPTIONS_SCHEMA_V4 == 4u, "server options v4 identity changed");',
+        'ABI_ASSERT(YVEX_SERVER_OPTIONS_SCHEMA_V5 == 5u, "server options v5 identity changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_SCHEMA_V1 == 1u, "legacy engine v1 identity changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_SCHEMA_V2 == 2u, "engine v2 identity changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_SCHEMA_V3 == 3u, "engine v3 identity changed");',
@@ -211,7 +212,7 @@ def compiler_source() -> str:
         '"prompt conversation value changed");',
         'ABI_ASSERT(YVEX_TOKENIZER_PROMPT_VERBATIM == 2, '
         '"prompt verbatim value changed");',
-        'ABI_ASSERT(YVEX_LOCAL_PROTOCOL_VERSION == 21u, "local protocol identity changed");',
+        'ABI_ASSERT(YVEX_LOCAL_PROTOCOL_VERSION == 22u, "local protocol identity changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_NONE == 0, "engine-kind none value changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_TEXT == 1, "engine-kind text value changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_MEDIA == 2, "engine-kind media value changed");',

@@ -252,13 +252,14 @@ binding without the retained operator schedule must be rebuilt rather than
 receiving an inferred topology.
 Hardware-profile,
 workload-profile, capacity-plan and phase-roofline schemas begin at v1 as
-internal contracts. Server options schema v4 owns host/listener policy
-independently from `yvex_server_engine_options`; engine schema v2 separates
+internal contracts. Server options schema v5 owns host/listener policy and the
+context-aware model-loader callback independently from
+`yvex_server_engine_options`; engine schema v2 separates
 engine kind from text execution strategy while retaining alias, package,
 backend, capacity, memory, and generation facts. Engine schema v1 is refused
 before the added fields are read.
 The source-authored conversation boundary admits provider request/wire schema
-v4, tokenizer plan v5, tokenizer provider result v2, and local protocol v21.
+v4, tokenizer plan v5, tokenizer provider result v2, and local protocol v22.
 Runtime event schema v6, generation plan schema v7, and generation result
 schema v5 are current. Generation plan ABI v5 added the workload-profile identity
 required to bind phase evidence to the compiled workload. Generation result
@@ -647,7 +648,7 @@ unknown enums, inconsistent availability, impossible rate denominators, invalid
 current/peak relations, and UMA claims that confuse device addressability with
 measured physical page residency.
 
-## Application Provider And Local Protocol v21
+## Application Provider And Local Protocol v22
 
 `<yvex/provider.h>` is the installed transport-neutral application request and
 result ABI. Provider schema v3 represents an omitted completion
@@ -662,13 +663,13 @@ reasoning, at most one assistant tool call, and its original field semantics.
 Clone and wire-decode publish only a complete owned request graph. The provider
 owner neither parses HTTP nor renders model-family prompt syntax.
 
-`<yvex/server.h>` protocol v21 carries the sealed provider request through the
+`<yvex/server.h>` protocol v22 carries the sealed provider request through the
 private Unix socket. Provider output messages distinguish assistant text,
 explicit reasoning, function calls, usage, terminal completion, and failure.
 Typed events bind the provider adapter, provider-request identity, and external
 correlation ID while excluding prompt and output content.
 
-Protocol v21 carries host status/stop, engine load/list/unload, exact
+Protocol v22 carries host status/stop, engine load/list/unload, exact
 alias/generation routing, separate engine kind and semantic execution strategy,
 speculative lifecycle events,
 accepted-prefix facts, exact proposal/verification/commit accounting, turn

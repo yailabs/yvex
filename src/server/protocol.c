@@ -40,6 +40,7 @@ enum {
     TAG_MEDIA_FIRST_IMAGE,
     TAG_MEDIA_LAST_IMAGE,
     TAG_MEDIA_EXECUTION,
+    TAG_LOAD_CONTEXT_CAPACITY,
     TAG_MESSAGE_KIND = 32,
     TAG_STATUS,
     TAG_REASON,
@@ -603,6 +604,8 @@ int yvex_protocol_request_encode(const yvex_client_request *request,
         !writer_text(&writer, TAG_MODEL_ALIAS, request->model_alias) ||
         !writer_u64(&writer, TAG_ENGINE_GENERATION,
                     request->engine_generation) ||
+        !writer_u64(&writer, TAG_LOAD_CONTEXT_CAPACITY,
+                    request->load_context_capacity) ||
         !writer_text(&writer, TAG_SESSION_NAME, request->session_name) ||
         !writer_field(&writer, TAG_PROMPT, request->prompt,
                       request->prompt_bytes) ||
@@ -695,6 +698,9 @@ int yvex_protocol_request_decode(const unsigned char *input,
             break;
         case TAG_ENGINE_GENERATION:
             valid = reader_u64(bytes, count, &candidate.engine_generation);
+            break;
+        case TAG_LOAD_CONTEXT_CAPACITY:
+            valid = reader_u64(bytes, count, &candidate.load_context_capacity);
             break;
         case TAG_SESSION_NAME:
             valid = reader_text(bytes, count, candidate.session_name,

@@ -894,6 +894,9 @@
       {"name": "--variant", "takes_value": true, "value_type": "text"},
       {"name": "--json", "takes_value": false, "value_type": "boolean"}
     ],
+    "cli_model_load_context": [
+      {"name": "--ctx", "takes_value": true, "value_type": "u64"}
+    ],
     "cli_model_pull": [
       {
         "enum_values": ["safetensors", "gguf"],
@@ -4385,7 +4388,8 @@
       ],
       "daemon_requirement": "required",
       "flag_sets": [
-        "cli_model_runtime"
+        "cli_model_runtime",
+        "cli_model_load_context"
       ],
       "lane": "runtime-client",
       "model_requirement": "registry-model",
@@ -5958,6 +5962,9 @@
         "load"
       ],
       "daemon_requirement": "required",
+      "flag_sets": [
+        "cli_model_load_context"
+      ],
       "lane": "runtime-client",
       "model_requirement": "registry-model",
       "operation_id": "engine.load",

@@ -1,8 +1,8 @@
-# Local Protocol v21
+# Local Protocol v22
 
 Status: normative private protocol contract
 
-Schema/version: `YVEX_LOCAL_PROTOCOL_VERSION = 21`.
+Schema/version: `YVEX_LOCAL_PROTOCOL_VERSION = 22`.
 
 Authority: `include/yvex/server.h` and `src/server/protocol.c`. This document
 explains the wire and lifecycle contract; code remains authoritative for exact
@@ -17,18 +17,18 @@ Unix-domain socket and is not a public network API.
 
 ## Framing and negotiation
 
-Every connection negotiates version 21 and exchanges bounded typed frames.
+Every connection negotiates version 22 and exchanges bounded typed frames.
 Lengths, enums, strings, arrays, message/tool fields, and correlations are
 validated before dispatch. Oversized, truncated, duplicate, unknown, or
 malformed fields refuse without entering the server scheduler.
 
-Every earlier version, including v20, is refused explicitly. There is no private
+Every earlier version, including v21, is refused explicitly. There is no private
 pre-v0.1 compatibility decoder. Unknown operations and response kinds fail
 closed.
 
 ## Operations
 
-Protocol v21 carries host status/stop, engine load/list/unload, demand-active
+Protocol v22 carries host status/stop, engine load/list/unload, demand-active
 model lease acquire/release, model and memory
 facts for each engine generation, text or media engine kind, target-only or
 speculative text execution strategy,
@@ -44,6 +44,15 @@ request to continue on a replacement generation. A load or unload operation is
 host administration. An explicit ensure-active operation may invoke that same
 lifecycle owner and returns an exact lease; it is never inferred from a
 generation request or from content.
+
+`ENGINE_LOAD` may carry `load_context_capacity`. Zero selects the registered
+deployment default; a positive value selects a per-engine-generation
+token context. The loader passes that exact request to the ordinary model,
+capacity and backend admission owners. It cannot increase the compiled model's
+semantic maximum or bypass the current hardware/resource envelope. A loaded
+alias is not silently resized: it must be unloaded explicitly before a new
+generation with another context can be admitted. Other operations refuse a
+nonzero load-context field. Media engines refuse the token-context override.
 
 The removed model/artifact facade operation values are absent. Artifact
 inspection is an offline-engine operation; live model inspection comes from
@@ -154,7 +163,7 @@ request fail before scheduler admission. Conditions are request-owned and do
 not alter engine identity or persist in a later turn.
 
 The admitted tokenizer contract classifies source-authored explicit reasoning
-separately from final text. Protocol v21 permits an omitted policy to remain
+separately from final text. Protocol v22 permits an omitted policy to remain
 `source-default` until the exact loaded model resolves it; concrete `disabled`,
 `low`, `enabled`, and `maximum` choices remain request facts. Provider request
 v4 independently carries source-default/drop/preserve reasoning-history policy.
@@ -225,7 +234,7 @@ accepted prefix, confidence facts, separate draft/verification/commit timing,
 effective committed rate, and policy identity. Exact seconds are never
 reconstructed from rounded rates.
 
-Protocol v21 retains measurement schema v1. Each record identifies
+Protocol v22 retains measurement schema v1. Each record identifies
 its phase scope, host/device clock, top-level/nested/enclosing/overlapping
 composition, work unit, and availability. A cumulative rate uses the complete
 declared work/duration denominator; rolling decode uses its own recent work and
@@ -302,7 +311,7 @@ summed into a synthetic total.
 
 ## Non-claims
 
-Protocol v21 is not a public remote API, authentication protocol, TLS transport,
+Protocol v22 is not a public remote API, authentication protocol, TLS transport,
 stable cross-version SDK promise, distributed serving protocol, or model
 quality contract. Versioned checkpoints preserve the admitted model and
 semantic-session state across restart; the in-memory fork does not create a

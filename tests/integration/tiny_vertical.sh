@@ -545,7 +545,7 @@ grep -Fx 'ok' "$root/run.after-restore.out" >/dev/null
 grep -E '[1-9][0-9]* reused' "$root/run.after-restore.err" >/dev/null
 
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" engine load "$second_profile" \
-    >"$root/load.parallel"
+    --ctx 4 >"$root/load.parallel"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" engine list --json \
     >"$root/models.parallel.json"
 python3 - "$root/models.parallel.json" "$profile" "$second_profile" \
@@ -555,6 +555,9 @@ catalog = json.loads(pathlib.Path(sys.argv[1]).read_text())
 engines = {engine["alias"]: engine for engine in catalog["engines"]}
 assert set(engines) == {sys.argv[2], sys.argv[3]}
 assert all(engine["state"] == "loaded" for engine in engines.values())
+assert engines[sys.argv[3]]["context_capacity"] == 4
+assert engines[sys.argv[3]]["maximum_new_tokens"] == 4
+assert engines[sys.argv[2]]["context_capacity"] == 8
 assert engines[sys.argv[2]]["generation"] == int(sys.argv[4])
 assert engines[sys.argv[2]]["generation"] != engines[sys.argv[3]]["generation"]
 PY
@@ -713,8 +716,17 @@ value = json.loads(path.read_text())
 value["models"][0]["path"] = sys.argv[2]
 path.write_text(json.dumps(value))
 PY
-HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" engine load "$profile" \
-    >"$root/load.shutdown.out"
+HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" model load tiny-executable \
+    --ctx 4 >"$root/load.shutdown.out"
+HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" engine list --json \
+    >"$root/models.shutdown.json"
+python3 - "$root/models.shutdown.json" <<'PY'
+import json, pathlib, sys
+engine, = [row for row in json.loads(pathlib.Path(sys.argv[1]).read_text())["engines"]
+           if row["state"] == "loaded"]
+assert engine["context_capacity"] == 4
+assert engine["maximum_new_tokens"] == 4
+PY
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session new shutdown \
     --model "$profile" >"$root/session.shutdown.out"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$NATIVE_TURN" \

@@ -353,13 +353,22 @@ static int runtime_adapter_session_bound(yvex_operator_runtime_adapter adapter)
     default: return 0;
     }
 }
-static int engine_control(yvex_client_operation operation, const char *alias)
+static int engine_control(yvex_client_operation operation, const char *alias,
+                          int argc, char **argv, size_t consumed)
 {
     yvex_client_request request;
     yvex_client_message message;
     yvex_client *client = NULL;
     yvex_error err;
+    unsigned long long context_capacity = 0ull;
+    size_t index;
     int rc;
+    if (operation == YVEX_CLIENT_OP_ENGINE_LOAD)
+        for (index = consumed + 1u; index < (size_t)argc; ++index)
+            if (!strcmp(argv[index], "--ctx")) {
+                if (context_capacity || index + 1u >= (size_t)argc ||
+                    !parse_u64(argv[++index], &context_capacity, 0)) return 2;
+            }
     request_init(&request, operation);
     if (!alias || !alias[0]) {
         fputs(operation == YVEX_CLIENT_OP_ENGINE_LOAD
@@ -370,6 +379,7 @@ static int engine_control(yvex_client_operation operation, const char *alias)
         return 2;
     }
     snprintf(request.model_alias, sizeof(request.model_alias), "%s", alias);
+    request.load_context_capacity = context_capacity;
     if (operation == YVEX_CLIENT_OP_ENGINE_UNLOAD) {
         rc = engine_generation_resolve(alias, &request.engine_generation, &err);
         if (rc != YVEX_OK) return client_error(&err);
@@ -1671,9 +1681,11 @@ int yvex_client_dispatch(const yvex_operator_descriptor *operation, int argc,
         return host_status(json);
     }
     case YVEX_OPERATOR_RUNTIME_ENGINE_LOAD:
-        return engine_control(YVEX_CLIENT_OP_ENGINE_LOAD, name);
+        return engine_control(YVEX_CLIENT_OP_ENGINE_LOAD, name,
+                              argc, argv, consumed);
     case YVEX_OPERATOR_RUNTIME_ENGINE_UNLOAD:
-        return engine_control(YVEX_CLIENT_OP_ENGINE_UNLOAD, name);
+        return engine_control(YVEX_CLIENT_OP_ENGINE_UNLOAD, name,
+                              argc, argv, consumed);
     case YVEX_OPERATOR_RUNTIME_MODEL_LOAD:
         return yvex_cli_model_load_command(argc, argv, consumed);
     case YVEX_OPERATOR_RUNTIME_MODEL_UNLOAD:

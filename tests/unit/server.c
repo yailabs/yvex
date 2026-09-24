@@ -452,6 +452,11 @@ static int test_model_open_refusal(void)
                                 "unsupported server-options schema") != NULL,
                      "legacy v3 server-options layout refuses before reinterpretation");
     test_options(&options);
+    options.schema_version = YVEX_SERVER_OPTIONS_SCHEMA_V4;
+    rc = yvex_server_create(&server, &options, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG && !server,
+                     "legacy v4 loader semantics refuse before reinterpretation");
+    test_options(&options);
     options.socket_path = "/tmp/yvex-unsafe.sock";
     rc = yvex_server_create(&server, &options, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && server, "unsafe socket host create");

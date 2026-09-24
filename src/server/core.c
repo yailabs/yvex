@@ -177,7 +177,7 @@ static int server_options_admit(yvex_server *server,
     if (!options)
         return server_refuse(err, YVEX_ERR_INVALID_ARG,
                              "runtime-host options are required");
-    /* Classify the public layout before reading any field absent from legacy v3. */
+    /* Reject legacy layouts and loader semantics before consuming options. */
     if (options->schema_version != YVEX_SERVER_OPTIONS_SCHEMA_CURRENT)
         return server_refuse(err, YVEX_ERR_INVALID_ARG,
                              "unsupported server-options schema");
@@ -927,7 +927,7 @@ static int engine_load_control(yvex_server *server, int fd,
             engines, count, request->model_alias);
     rc = server->options.model_loader(
         server->options.model_loader_context, server,
-        request->model_alias, err);
+        request->model_alias, request->load_context_capacity, err);
     if (rc != YVEX_OK) {
         yvex_error ignored;
         unsigned long long current_generation = 0ull;
@@ -977,7 +977,7 @@ static int engine_model_lease_control(yvex_server *server, int fd,
         if (rc == YVEX_ERR_STATE && server->options.model_loader) {
             rc = server->options.model_loader(
                 server->options.model_loader_context, server,
-                request->model_alias, err);
+                request->model_alias, 0ull, err);
             if (rc == YVEX_OK)
                 rc = yvex_server_engine_manager_model_lease_acquire(
                     server->engines, request->model_alias, identity,

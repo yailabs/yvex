@@ -1,5 +1,5 @@
 #!/bin/sh
-# Exercises production HTTP/SSE translation over the real local protocol v21 codec.
+# Exercises production HTTP/SSE translation over the real local protocol v22 codec.
 set -eu
 
 YVEX_OPENAI_ADAPTER=${YVEX_OPENAI_ADAPTER:-build/tests/openai_adapter}
@@ -343,4 +343,4 @@ closed=$(grep -c '^session.close ' "$root/host.err" || true)
 test "$created" -gt 0
 test "$created" = "$closed"
 
-echo 'OpenAI adapter integration: protocol-v21 Chat/Responses/SSE/tool/state/cleanup/refusal passed'
+echo 'OpenAI adapter integration: protocol-v22 Chat/Responses/SSE/tool/state/cleanup/refusal passed'

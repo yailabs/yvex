@@ -439,7 +439,9 @@ static void host_options_defaults(yvex_server_options *options)
 }
 
 static int registered_model_load(void *opaque, yvex_server *server,
-                                 const char *alias, yvex_error *err)
+                                 const char *alias,
+                                 unsigned long long requested_context_capacity,
+                                 yvex_error *err)
 {
     cli_server_loader_context *context = opaque;
     cli_server_profile profile;
@@ -459,6 +461,14 @@ static int registered_model_load(void *opaque, yvex_server *server,
     if (rc != YVEX_OK) return rc;
     media_requested = !strcmp(profile.engine_kind, "media");
     engine_profile_defaults(&selected, &profile);
+    if (requested_context_capacity) {
+        if (media_requested) {
+            yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "server.model-loader",
+                           "token context override is unavailable for media engines");
+            return YVEX_ERR_UNSUPPORTED;
+        }
+        selected.context_capacity = requested_context_capacity;
+    }
     selected.maximum_new_tokens = media_requested ? 0ull
                                                   : selected.context_capacity;
     selected.trace_level = context->host.trace_level;

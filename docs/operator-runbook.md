@@ -26,7 +26,10 @@ and finite offline engineering operations.
 
 Loading a model requires one complete registry startup profile. A text runtime
 binds one admitted GGUF to its exact runtime binding, target, backend, and
-context capacity. A composite runtime instead binds an installed component root
+default context capacity. A text load may request a different bounded context
+with `--ctx N`; the server checks the compiled model limit and current resource
+envelope before creating a new engine generation. A composite runtime instead
+binds an installed component root
 to its target, backend, and capability mode without inventing a singular
 artifact or text-runtime binding. Inspect the product catalog first:
 
@@ -177,6 +180,13 @@ exact profile and creates one exact generation. Detailed source, artifact,
 profile, and engine commands remain available through `help --advanced` for
 compiler work and qualification.
 
+For a 32k text-context test, use `./yvex model load MODEL --ctx 32768` on a
+host running the matching local protocol. `./yvex engine list --json` then
+reports the actual admitted `context_capacity`. This does **not** resize a
+loaded engine or silently unload it: close sessions and explicitly unload the
+old generation first, then request the new one. A 32k request can still refuse
+because of the compiled model maximum or available host/device resources.
+
 Before admitting a GB10 performance result, inspect the compiled CUDA image and
 run the bounded bandwidth fixture:
 
@@ -299,7 +309,8 @@ status expose real completed stages without inventing a percentage. A failed
 load releases its partial engine resources and leaves the host, socket, OpenAI
 listener, other engines, and telemetry alive. Package context, parallel
 capacity, prefill chunk, generation mode, and backend come from the admitted
-startup profile. When compatible execution width exists, independent active
+startup profile, except that a load-only `--ctx` may select a bounded context
+for the new text-engine generation. When compatible execution width exists, independent active
 workers may rendezvous at the engine scheduler for real MoE or output-head
 rows; same-session mutation remains serialized. This is compatible-operation
 batching, not global ready-sequence continuous batching.
@@ -590,7 +601,7 @@ model; a session is not synonymous with a KV cache:
 
 Client disconnect and detach do not close the engine. A partial or cancelled
 turn can retain model-committed state and is never silently marked complete.
-Protocol v21 reports the exact engine generation, committed position,
+Protocol v22 reports the exact engine generation, committed position,
 token/text counts, state generations, failure class, and reset requirement.
 Reset clears sequence/component state, tokens, transcript, decoder, and RNG policy without
 closing the engine or host.
