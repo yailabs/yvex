@@ -56,6 +56,25 @@ extern "C" __global__ void yvex_attention_bf16_pair(
         second_sum += __shfl_down_sync(0xffffffffu, second_sum, offset);
     }
     if (!lane) {
+        /* Finite terms may overflow a lane's F32 partial sum before later
+         * terms cancel. Recover exceptional rows from decoded operands, but
+         * never turn an invalid input into an admitted finite result. */
+        if (!isfinite(first_sum) || !isfinite(second_sum)) {
+            double first_recovered = 0.0, second_recovered = 0.0;
+            for (unsigned long long i = 0ull; i < row_width; ++i) {
+                float value = input[i];
+                float first_weight = bf16_bits_to_float(qtype_load_u16(first + i * 2ull));
+                float second_weight = bf16_bits_to_float(qtype_load_u16(second + i * 2ull));
+                if (!isfinite(value) || !isfinite(first_weight) || !isfinite(second_weight)) {
+                    atomicCAS(status, 0, 1);
+                    return;
+                }
+                first_recovered += (double)first_weight * (double)value;
+                second_recovered += (double)second_weight * (double)value;
+            }
+            first_sum = (float)first_recovered;
+            second_sum = (float)second_recovered;
+        }
         if (!isfinite(first_sum) || !isfinite(second_sum)) atomicCAS(status, 0, 1);
         else {
             first_out[row_index] = first_sum;

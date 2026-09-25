@@ -82,7 +82,6 @@ static int dot_case(yvex_backend *backend, unsigned int qtype, unsigned int scen
     yvex_error err;
     CUdeviceptr base, weight, input, output, status, selected, route, absent = 0ull;
     if (dot_fixture(&before, qtype, scenario, expected, &bytes)) return 1;
-    if (mode == 3u && scenario == 3u) failure = 1; /* Paired projection has no overflow recovery. */
     expert_bytes = bytes * rows;
     if (mode == 3u) {
         memcpy(before.weights + expert_bytes, before.weights, (size_t)expert_bytes);
