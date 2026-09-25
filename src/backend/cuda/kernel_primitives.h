@@ -232,17 +232,6 @@ static __device__ float qtype_warp_dot(const unsigned char *row, const float *ve
     }
     return sum;
 }
-/* Recover only an exceptional parallel reduction. Decoded F32 weight values
- * and F32 activation operands remain exact inputs to the serial F64 sum. */
-static __device__ float qtype_dot_recover_f64(
-    const unsigned char *row, const float *input, unsigned long long width,
-    unsigned int qtype)
-{
-    double recovered = 0.0;
-    for (unsigned long long i = 0ull; i < width; ++i)
-        recovered += (double)qtype_value(row, i, qtype) * (double)input[i];
-    return (float)recovered;
-}
 #define YVEX_CUDA_Q8_K_BLOCK 256ull
 #define YVEX_CUDA_Q8_K_BYTES 292ull
 static __device__ int q8_k_sum(const unsigned char *block, unsigned int index)

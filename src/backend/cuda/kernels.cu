@@ -6,6 +6,7 @@
  * execution.
  */
 #include "src/backend/cuda/kernel_primitives.h"
+#include "src/backend/cuda/dot_recovery.h"
 extern "C" __global__ void yvex_embed_f32(
     const float *embedding, const unsigned int *token_ids, float *out,
     unsigned long long hidden_size, unsigned long long vocab_size,
@@ -605,9 +606,13 @@ extern "C" __global__ void yvex_qtype_matvec(
     }
     /* A finite dot can overflow before opposite terms cancel. The exceptional row alone
        uses FP64; ordinary rows retain their parallel F32 execution order. */
-    if (!q8_input && !isfinite(sum) && *status == 0)
-        sum = qtype_dot_recover_f64(
-            row_data, (const float *)input, row_width, qtype);
+    if (!isfinite(sum) && *status == 0)
+        sum = q8_input
+            ? qtype_q8_dot_recover_f64(
+                row_data, (const unsigned char *)input,
+                row_width / YVEX_CUDA_Q8_K_BLOCK,
+                row_bytes / (row_width / YVEX_CUDA_Q8_K_BLOCK), qtype, status)
+            : qtype_dot_recover_f64(row_data, (const float *)input, row_width, qtype);
     float value = additive
         ? __fadd_rn(sum, additive[input_row * output_stride + row]) : sum;
     if (!isfinite(value)) atomicCAS(status, 0, 1);
@@ -663,6 +668,9 @@ extern "C" __global__ void yvex_mxfp4_q8_rows(
     float sum = q8_warp_dot(row_data, activation, blocks, weight_block,
                             YVEX_GGUF_QTYPE_MXFP4);
     if (lane) return;
+    if (!isfinite(sum) && *status == 0)
+        sum = qtype_q8_dot_recover_f64(row_data, activation, blocks,
+                                       weight_block, YVEX_GGUF_QTYPE_MXFP4, status);
     if (!isfinite(sum)) atomicCAS(status, 0, 1);
     else out[input_row * output_stride + row] =
         output_bf16 ? float_to_bf16_rne(sum) : sum;

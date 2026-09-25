@@ -1534,6 +1534,33 @@ static int assert_moe_row_dot_overflow(yvex_backend *backend)
     memcpy(&device_status, observed + STATUS_OFFSET, sizeof(device_status));
     YVEX_TEST_ASSERT(device_status == 0 && isfinite(result) && fabsf(result) <= 1.0e30f,
                      "sparse-row MoE preserves finite cancellation after block overflow");
+    {
+        const float sentinel = 12345.0f;
+        unsigned long long row_width = Q8_BLOCKS * 256ull, start_row = 0ull;
+        unsigned long long row_count = 1ull, input_rows = 1ull, output_stride = 1ull;
+        int block_row = 0, forensic = 0, output_bf16 = 0;
+        CUdeviceptr additive = 0ull;
+        memcpy(host + OUTPUT_OFFSET, &sentinel, sizeof(sentinel));
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, arena, host, sizeof(host), &err) == YVEX_OK,
+                         "reset direct Q8 row-dot overflow fixture");
+        void *params[] = {&down, &row_bytes, &row_width, &start_row, &row_count,
+                          &input_rows, &qtype, &activation, &row_width, &q8_input,
+                          &block_row, &forensic, &additive, &output, &output_stride,
+                          &output_bf16, &status};
+        rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                              state->qtype_matvec_function, 1u, 256u, 0u, params,
+                              "cuda.test.q8-row-dot-overflow", &err);
+        if (rc == YVEX_OK)
+            rc = yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+                                              &device_wide, "cuda.test.q8-row-dot-overflow", &err);
+        YVEX_TEST_ASSERT(rc == YVEX_OK &&
+                         yvex_backend_tensor_read(backend, arena, observed, sizeof(observed), &err) == YVEX_OK,
+                         "read direct Q8 row-dot overflow result");
+        memcpy(&result, observed + OUTPUT_OFFSET, sizeof(result));
+        memcpy(&device_status, observed + STATUS_OFFSET, sizeof(device_status));
+        YVEX_TEST_ASSERT(device_status == 0 && result == 0.0f,
+                         "direct Q8 row-dot recovers finite exact cancellation");
+    }
     YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK,
                      "release sparse-row MoE overflow fixture");
     return 0;

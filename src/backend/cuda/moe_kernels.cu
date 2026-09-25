@@ -5,6 +5,7 @@
  * arithmetic remains shared through the CUDA kernel-primitives interface.
  */
 #include "src/backend/cuda/kernel_primitives.h"
+#include "src/backend/cuda/dot_recovery.h"
 #include <yvex/internal/execution_batch.h>
 static __device__ float moe_warp_dot(
     const unsigned char *weight, const unsigned char *activation, unsigned long long extent,
@@ -26,20 +27,10 @@ static __device__ float moe_warp_dot(
     else if (qtype == YVEX_GGUF_QTYPE_Q2_K && extent == 8ull && row_bytes == 8ull * 84ull)
         sum = q8_warp_dot(weight, activation, 8ull, 84ull, YVEX_GGUF_QTYPE_Q2_K);
     else sum = q8_warp_dot(weight, activation, extent, row_bytes / extent, qtype, grid_table);
-    /* Only the exceptional row pays for serial FP64 recovery; finite rows retain DP4A order. */
-    if (!(threadIdx.x & 31u) && !isfinite(sum)) {
-        double recovered = 0.0;
-        for (unsigned long long i = 0ull; i < extent * YVEX_CUDA_Q8_K_BLOCK; ++i) {
-            const unsigned char *q8 = activation +
-                (i / YVEX_CUDA_Q8_K_BLOCK) * YVEX_CUDA_Q8_K_BYTES;
-            int quantized = (int)(signed char)q8[4ull + i % YVEX_CUDA_Q8_K_BLOCK];
-            float decoded = qtype_value(weight, i, qtype);
-            float scale = __uint_as_float(qtype_load_u32(q8));
-            if (!isfinite(decoded) || !isfinite(scale)) { atomicCAS(status, 0, 1); return 0.0f; }
-            recovered += (double)decoded * scale * quantized;
-        }
-        sum = (float)recovered;
-    }
+    /* Finite rows retain their DP4A order; exceptional rows share one decoded oracle. */
+    if (!(threadIdx.x & 31u) && !isfinite(sum) && !*status)
+        sum = qtype_q8_dot_recover_f64(weight, activation, extent,
+                                       row_bytes / extent, qtype, status);
     return sum;
 }
 
