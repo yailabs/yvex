@@ -470,8 +470,8 @@ int yvex_cuda_weighted_rms_bf16(yvex_backend *backend, const yvex_device_tensor 
     CUdeviceptr values = (CUdeviceptr)output->data, weights = (CUdeviceptr)weight->data;
     unsigned int qtype = YVEX_GGUF_QTYPE_F32;
     void *args[] = {&values, &width, &weights, &qtype, &epsilon, &rows, &work.status};
-    /* Same admitted 256-lane F32 reduction (including overflow recovery),
-     * F64 inverse/scale and BF16 publication as encoded weighted norm. */
+    /* Same admitted 256-lane F64 square reduction, F64 inverse/scale and
+     * BF16 publication as encoded weighted norm. */
     rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
         state->attention_weighted_norm_function, (unsigned int)rows, WEIGHTED_RMS_BLOCK,
         WEIGHTED_RMS_BLOCK * sizeof(double), args, "cuda.weighted-rms", err);

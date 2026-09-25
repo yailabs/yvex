@@ -144,7 +144,6 @@ extern "C" __global__ void yvex_attention_reduce(
     __shared__ double maximum;
     __shared__ double denominator;
     __shared__ double probability;
-    __shared__ double renormalization;
     __shared__ int active;
     unsigned long long task = (unsigned long long)blockIdx.x;
     unsigned long long ordinal = query_heads ? task / query_heads : token_count;
@@ -186,7 +185,7 @@ extern "C" __global__ void yvex_attention_reduce(
     if (thread == 0u) {
         active = *status == 0;
         maximum = (double)sinks[head];
-        denominator = 1.0;
+        denominator = 0.0;
     }
     __syncthreads();
     if (!active) return;
@@ -200,56 +199,52 @@ extern "C" __global__ void yvex_attention_reduce(
          lane += (unsigned long long)blockDim.x)
         out[(ordinal * query_heads + head) * head_dim + lane] = 0.0f;
     __syncthreads();
-    /* Candidates retain source order, but a stable online softmax keeps each
-       dot product single-use. When a new maximum arrives, every output lane
-       and the accumulated denominator are renormalized before that candidate
-       is incorporated. */
-    for (unsigned long long pass = 0ull; pass < 2ull; ++pass) {
-        unsigned long long count = pass == 0ull ? local_count : compressed_count;
-        for (unsigned long long candidate = 0ull; candidate < count; ++candidate) {
-            int visible;
-            const float *row = attention_reduce_row(
-                &rows, pass, ordinal, candidate, local_offset, &visible);
-            if (!visible) continue;
-            double dot = 0.0;
-            for (unsigned long long base = 0ull; base < head_dim;
-                 base += (unsigned long long)blockDim.x) {
-                unsigned long long lane = base + (unsigned long long)thread;
-                dot_terms[thread] = lane < head_dim
-                    ? __dmul_rn((double)q[lane], (double)row[lane]) : 0.0;
-                __syncthreads();
+    /* Forensic reduction follows the CPU two-pass maximum and F32 destination
+       accumulation contract. Native execution retains its separate online path. */
+    for (unsigned int stage = 0u; stage < 2u; ++stage) {
+        if (stage == 1u && thread == 0u)
+            denominator = exp((double)sinks[head] - maximum);
+        __syncthreads();
+        for (unsigned long long pass = 0ull; pass < 2ull; ++pass) {
+            unsigned long long count = pass == 0ull ? local_count : compressed_count;
+            for (unsigned long long candidate = 0ull; candidate < count; ++candidate) {
+                int visible;
+                const float *row = attention_reduce_row(
+                    &rows, pass, ordinal, candidate, local_offset, &visible);
+                if (!visible) continue;
+                double dot = 0.0;
+                for (unsigned long long base = 0ull; base < head_dim;
+                     base += (unsigned long long)blockDim.x) {
+                    unsigned long long lane = base + (unsigned long long)thread;
+                    dot_terms[thread] = lane < head_dim
+                        ? __dmul_rn((double)q[lane], (double)row[lane]) : 0.0;
+                    __syncthreads();
+                    if (thread == 0u) {
+                        unsigned long long tile = head_dim - base;
+                        if (tile > (unsigned long long)blockDim.x) tile = blockDim.x;
+                        for (unsigned long long i = 0ull; i < tile; ++i)
+                            dot = __dadd_rn(dot, dot_terms[i]);
+                    }
+                    __syncthreads();
+                }
                 if (thread == 0u) {
-                    unsigned long long tile = head_dim - base;
-                    if (tile > (unsigned long long)blockDim.x) tile = blockDim.x;
-                    for (unsigned long long i = 0ull; i < tile; ++i)
-                        dot = __dadd_rn(dot, dot_terms[i]);
+                    double score = __dmul_rn(dot, scale);
+                    if (stage == 0u && score > maximum) maximum = score;
+                    if (stage == 1u) {
+                        probability = exp(__dadd_rn(score, -maximum));
+                        denominator = __dadd_rn(denominator, probability);
+                    }
                 }
                 __syncthreads();
+                if (stage == 1u)
+                    for (unsigned long long lane = (unsigned long long)thread; lane < head_dim;
+                         lane += (unsigned long long)blockDim.x) {
+                        unsigned long long offset =
+                            (ordinal * query_heads + head) * head_dim + lane;
+                        out[offset] += (float)__dmul_rn(probability, (double)row[lane]);
+                    }
+                __syncthreads();
             }
-            if (thread == 0u) {
-                double score = __dmul_rn(dot, scale);
-                if (score > maximum) {
-                    renormalization = exp(__dadd_rn(maximum, -score));
-                    maximum = score;
-                    probability = 1.0;
-                    denominator = __dadd_rn(
-                        __dmul_rn(denominator, renormalization), probability);
-                } else {
-                    renormalization = 1.0;
-                    probability = exp(__dadd_rn(score, -maximum));
-                    denominator = __dadd_rn(denominator, probability);
-                }
-            }
-            __syncthreads();
-            for (unsigned long long lane = (unsigned long long)thread; lane < head_dim;
-                 lane += (unsigned long long)blockDim.x) {
-                unsigned long long offset =
-                    (ordinal * query_heads + head) * head_dim + lane;
-                out[offset] = (float)__dadd_rn(
-                    __dmul_rn((double)out[offset], renormalization),
-                    __dmul_rn(probability, (double)row[lane]));
-            }
-            __syncthreads();
         }
     }
     if (thread == 0u && (!isfinite(denominator) || denominator <= 0.0)) {

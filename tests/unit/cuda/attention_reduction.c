@@ -119,7 +119,7 @@ static void reduction_inputs(reduction_storage *s, reduction_case *c)
 }
 
 static int reduction_check(yvex_backend *backend, unsigned long long width,
-                           unsigned int attention_class, unsigned int scenario)
+                           unsigned int attention_class, unsigned int scenario, int exact)
 {
     reduction_storage *host = calloc(1u, sizeof(*host)), *observed = calloc(1u, sizeof(*observed));
     reduction_case c = {.width = width, .attention_class = attention_class, .scenario = scenario};
@@ -147,7 +147,8 @@ static int reduction_check(yvex_backend *backend, unsigned long long width,
         &c.stride, &selected, &counts, &c.topk, &sinks, &c.heads, &c.width, &c.window, &c.ratio,
         &c.attention_class, &c.start, &c.tokens, &c.block_visible, &output, &status};
     rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
-        state->attention_reduce_native_function, (unsigned int)(c.heads * c.tokens), 256u, 0u,
+        exact ? state->attention_reduce_function : state->attention_reduce_native_function,
+        (unsigned int)(c.heads * c.tokens), 256u, exact ? 256u * sizeof(double) : 0u,
         params, "cuda.test.attention-reduction", &err);
     if (rc == YVEX_OK) rc = yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
         &device_wide, "cuda.test.attention-reduction", &err);
@@ -180,8 +181,9 @@ static int reduction_check(yvex_backend *backend, unsigned long long width,
         "output allocation canaries retained");
     for (unsigned long long i = c.heads * c.tokens * width; i < REDUCTION_VALUES; ++i)
         YVEX_TEST_ASSERT(observed->output[i] == 12345.0f, "output stays within admitted shape");
-    printf("attention reduction: class=%u width=%llu scenario=%u values=%llu status=%d max_abs=%.12g "
-           "worst_error_over_tolerance=%.9g analytic_exact=%s\n", attention_class, width, scenario,
+    printf("attention reduction: mode=%s class=%u width=%llu scenario=%u values=%llu status=%d max_abs=%.12g "
+           "worst_error_over_tolerance=%.9g analytic_exact=%s\n", exact ? "forensic" : "native",
+           attention_class, width, scenario,
            c.heads * c.tokens * width, observed->status, maximum_error, worst_ratio, scenario ? "n/a" : "true");
     YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &arena, &err) == YVEX_OK, "release reduction fixture");
     free(host); free(observed);
@@ -201,9 +203,14 @@ int yvex_cuda_test_attention_reduction(void)
     for (size_t i = 0u; i < sizeof(widths) / sizeof(widths[0]); ++i)
         for (unsigned int attention_class = 0u; attention_class < 3u; ++attention_class)
             for (unsigned int scenario = 0u; scenario < 3u; ++scenario)
-                if (reduction_check(backend, widths[i], attention_class, scenario)) return 1;
+                if (reduction_check(backend, widths[i], attention_class, scenario, 0)) return 1;
     for (unsigned int scenario = 3u; scenario <= 7u; ++scenario)
-        if (reduction_check(backend, 512ull, 1u, scenario)) return 1;
+        if (reduction_check(backend, 512ull, 1u, scenario, 0)) return 1;
+    for (unsigned int attention_class = 0u; attention_class < 3u; ++attention_class)
+        for (unsigned int scenario = 0u; scenario < 3u; ++scenario)
+            if (reduction_check(backend, 512ull, attention_class, scenario, 1)) return 1;
+    for (unsigned int scenario = 3u; scenario <= 7u; ++scenario)
+        if (reduction_check(backend, 512ull, 1u, scenario, 1)) return 1;
     yvex_backend_close(backend);
     return 0;
 }

@@ -909,11 +909,11 @@ CPU and CUDA runtime consumers invoke that program
 through the common stage executor; the former scalar and CUDA ingress
 composition paths are removed. `nn.weighted_rms` declares BF16 input/result, F32 logical weights and
 F64 epsilon/inverse/scaling. Physical lowering separately admits F32 or BF16
-encoded weights. It preserves CPU's source-order F64 reduction and CUDA's
-retained 256-lane F32 reduction with F64 overflow recovery, then F32-to-BF16
-publication. It is not interchangeable with the ordinary F32-epsilon RMS
-implementation. These are explicitly different backend numerical contracts,
-not a claim of whole-model CPU/CUDA agreement.
+encoded weights. CPU uses source-order F64 squares; CUDA uses a 256-lane F64
+square reduction. Both retain F64 inverse/scaling and F32-to-BF16 publication.
+The reduction orders remain distinct, so this does not claim general
+whole-model CPU/CUDA agreement. The operation is not interchangeable with
+ordinary F32-epsilon RMS.
 
 The optional `nn.linear` reduction obligation `YVEX_IR_REDUCTION_ROW_DOT`
 lowers to `linear.row_dot.f32.v1`. Input precision and reduction selection are
@@ -954,6 +954,13 @@ implementations may still have distinct admitted reduction error. Both CPU
 and CUDA refuse non-finite gate/up operands before a clamp can mask them.
 Component agreement does not establish whole-model CPU/CUDA agreement when
 small early errors change a later routed expert population.
+
+The decoded-F32 CUDA row-matvec path now accumulates its dot in source-order
+F64 before F32 publication; Q8-activation and grouped/native rows retain their
+separately admitted reductions. Full-evidence attention reduction uses the
+CPU-compatible two-pass maximum and F32 destination accumulation; native
+attention retains its online reduction. These are execution-class facts, not
+a claim that the Q8/native production path is numerically identical to CPU.
 
 `mhc.residual_post` makes residual, core result, post gates and source-to-target
 mixing four explicit F32 operands with common row identity. Its pure computation

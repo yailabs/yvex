@@ -5,6 +5,7 @@
  */
 #include <yvex/internal/transformer.h>
 #include <yvex/internal/runtime.h>
+#include <yvex/internal/runtime_capacity.h>
 #include <yvex/internal/logits.h>
 #include <math.h>
 #include <stdio.h>
@@ -18,6 +19,8 @@
 typedef struct {
     yvex_runtime_execution_session *session;
     yvex_runtime_transformer_context *context;
+    yvex_runtime_execution_profile profile;
+    yvex_runtime_capacity capacity;
     float *hidden, *features;
     yvex_runtime_transformer_result result;
 } live_execution;
@@ -36,7 +39,12 @@ static int live_execution_open(live_execution *execution, yvex_model_engine *mod
 {
     yvex_runtime_session_open_request session_request = {0};
     yvex_runtime_transformer_options options = {0};
+    yvex_runtime_capacity_options capacity_options = {0};
+    yvex_runtime_execution_profile_derivation derivation = {0};
+    yvex_graph_attention_capacity_plan *attention_capacity = NULL;
     yvex_model_engine_failure failure = {0};
+    const yvex_runtime_session_view *session_view;
+    int rc;
     memset(execution, 0, sizeof(*execution));
     session_request.backend = backend;
     options.context_capacity = context_capacity;
@@ -47,6 +55,66 @@ static int live_execution_open(live_execution *execution, yvex_model_engine *mod
     if (yvex_runtime_session_open(&execution->session, model, &session_request,
                                   &failure, err) != YVEX_OK)
         return yvex_error_code(err);
+    if (getenv("YVEX_TRANSFORMER_LIVE_ADMITTED_PROFILE")) {
+        yvex_execution_evidence_profile evidence =
+            options.evidence_level == YVEX_ATTENTION_EVIDENCE_FULL
+                ? YVEX_EXECUTION_EVIDENCE_FORENSIC
+                : YVEX_EXECUTION_EVIDENCE_PRODUCTION;
+        capacity_options.backend = backend;
+        capacity_options.mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
+        capacity_options.workload_kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY;
+        capacity_options.evidence_profile = evidence;
+        capacity_options.sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED;
+        capacity_options.context_capacity = context_capacity;
+        capacity_options.prefill_chunk_tokens = options.workspace_token_capacity;
+        capacity_options.concurrent_sequences = 1ull;
+        rc = yvex_runtime_capacity_derive(model, execution->session, &capacity_options,
+                                          &execution->capacity, &attention_capacity, err);
+        yvex_graph_attention_capacity_plan_close(&attention_capacity);
+        session_view = yvex_runtime_session_view_get(execution->session);
+        if (rc == YVEX_OK && session_view && session_view->attention_state_provider)
+            rc = yvex_runtime_session_configure_persistent_pages(
+                execution->session, &execution->capacity.capacity_plan, &failure, err);
+        derivation.schema_version = YVEX_RUNTIME_EXECUTION_PROFILE_SCHEMA_V1;
+        derivation.model = model;
+        derivation.session = execution->session;
+        derivation.workload = &execution->capacity.workload_profile;
+        derivation.backend = backend;
+        derivation.generation_mode = YVEX_EXECUTION_GENERATION_TARGET_ONLY;
+        derivation.evidence = evidence;
+        derivation.sampling_requirement = YVEX_EXECUTION_SAMPLING_NOT_INVOKED;
+        if (rc == YVEX_OK)
+            rc = yvex_runtime_execution_profile_derive(&derivation,
+                                                         &execution->profile, err);
+        if (rc == YVEX_OK && backend == YVEX_BACKEND_KIND_CUDA &&
+            (getenv("YVEX_TRANSFORMER_LIVE_DEGRADE_ATTENTION") ||
+             getenv("YVEX_TRANSFORMER_LIVE_DEGRADE_MOE"))) {
+            yvex_runtime_execution_profile source = execution->profile;
+            yvex_runtime_execution_profile *profile = &execution->profile;
+            yvex_runtime_execution_profile_request request = {
+                .schema_version = source.schema_version,
+                .engine_generation = source.engine_generation,
+                .engine_specialization_identity = source.engine_specialization_identity,
+                .kernel_bundle_identity = source.kernel_bundle_identity,
+                .workload_profile_identity = source.workload_profile_identity,
+                .generation_mode = source.generation_mode,
+                .evidence = source.evidence,
+                .execution_class = source.execution_class,
+                .attention_resolution = getenv("YVEX_TRANSFORMER_LIVE_DEGRADE_ATTENTION")
+                                            ? YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED
+                                            : source.attention_resolution,
+                .moe_resolution = getenv("YVEX_TRANSFORMER_LIVE_DEGRADE_MOE")
+                                      ? YVEX_EXECUTION_RESOLUTION_COMPATIBLE_DEGRADED
+                                      : source.moe_resolution,
+                .sampling_resolution = source.sampling_resolution};
+            rc = yvex_runtime_execution_profile_seal(&request, profile, err);
+            if (rc == YVEX_OK)
+                rc = yvex_runtime_execution_profile_admit(profile, model,
+                                                           execution->session, err);
+        }
+        if (rc != YVEX_OK) return rc;
+        options.execution_profile = &execution->profile;
+    }
     return yvex_runtime_transformer_context_open(
         &execution->context, model, execution->session, &options, NULL, err);
 }
@@ -417,6 +485,8 @@ int main(int argc, char **argv)
     float cpu_margin = 0.0f, cuda_margin = 0.0f;
     unsigned int cpu_token = 0u, cuda_token = 0u;
     int cuda_only = getenv("YVEX_TRANSFORMER_LIVE_CUDA_ONLY") != NULL;
+    int cross_backend_state_comparable =
+        getenv("YVEX_TRANSFORMER_LIVE_ADMITTED_PROFILE") == NULL;
     int capture_features = !cuda_only;
     const char *token_text = getenv("YVEX_TRANSFORMER_LIVE_TOKENS");
     const char *context_text = getenv("YVEX_TRANSFORMER_LIVE_CONTEXT");
@@ -573,25 +643,28 @@ int main(int argc, char **argv)
         rc = live_argmax_compare(model, &cpu, &cuda, &cpu_token, &cuda_token,
                                  &cpu_margin, &cuda_margin, &logit_maximum,
                                  &logit_rmse, &probability_tv, &err);
-        if (rc == YVEX_OK && (!hidden_match || !state_match)) {
+        if (rc == YVEX_OK && (!hidden_match ||
+                             (cross_backend_state_comparable && !state_match))) {
             if (cpu.features && cuda.features)
                 live_report_layer_differences(
                     &cpu, &cuda, plan->layer_count, 2ull,
                     plan->hidden_width);
             fprintf(stderr,
                     "transformer_live numeric first=%llu cpu=%.9g cuda=%.9g max_abs=%.9g "
-                    "rmse=%.9g first_layer=%llu layer_max=%.9g layer_rmse=%.9g "
+                    "rmse=%.9g state_comparable=%d first_layer=%llu layer_max=%.9g layer_rmse=%.9g "
                     "cpu_token=%u cuda_token=%u cpu_margin=%.9g cuda_margin=%.9g "
                     "logit_max=%.9g logit_rmse=%.9g tv=%.9g\n",
                     first_mismatch, first_left, first_right, maximum, rmse,
+                    cross_backend_state_comparable,
                     first_layer, layer_maximum, layer_rmse, cpu_token, cuda_token,
                     cpu_margin, cuda_margin, logit_maximum, logit_rmse,
                     probability_tv);
             yvex_error_setf(
                 &err, YVEX_ERR_FORMAT, "test.transformer.cpu-cuda",
-                "CPU/CUDA hidden comparison failed (state=%d first_layer=%llu "
+                "CPU/CUDA hidden comparison failed (state=%d comparable=%d first_layer=%llu "
                 "max_abs=%.9g rmse=%.9g cpu_token=%u cuda_token=%u tv=%.9g)",
-                state_match, first_layer, maximum, rmse, cpu_token, cuda_token,
+                state_match, cross_backend_state_comparable, first_layer,
+                maximum, rmse, cpu_token, cuda_token,
                 probability_tv);
             rc = YVEX_ERR_FORMAT;
         }
@@ -615,6 +688,11 @@ int main(int argc, char **argv)
                cuda_token, logit_maximum, logit_rmse, probability_tv,
                cpu.result.normalized_hidden_digest, cuda.result.normalized_hidden_digest,
                cuda.result.persistent_state_digest);
+    if (rc == YVEX_OK && !cuda_only)
+        printf("cross_backend_state_identity=%s\n",
+               cross_backend_state_comparable
+                   ? (state_match ? "equal" : "mismatch")
+                   : "not-comparable-layout-bound");
     yvex_transformer_input_close(&empty_input);
     yvex_transformer_input_close(&cli_input);
     yvex_transformer_input_close(&input);

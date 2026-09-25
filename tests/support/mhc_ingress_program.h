@@ -150,20 +150,20 @@ static int test_weighted_rms(yvex_backend *backend)
         x[2u * WIDTH + i] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(i % 2u ? 1e-25f : -1e-25f));
     }
     /* Test-owned retained reduction contract, not upstream conformance:
-     * CUDA uses 256 F32 FMA lanes/tree, with serial F64 overflow recovery.
-     * CPU retains source-order F64 reduction. Both scale using F64 epsilon. */
+     * CUDA uses 256 F64 lanes/tree; CPU retains source-order F64 reduction.
+     * Both scale using F64 epsilon. */
     for (unsigned int row = 0u; row < ROWS; ++row) {
         double sum = 0.0;
         if (cuda) {
-            float lanes[256] = {0};
+            double lanes[256] = {0};
             for (unsigned int lane = 0u; lane < 256u; ++lane)
                 for (unsigned int i = lane; i < WIDTH; i += 256u)
-                    lanes[lane] = fmaf(x[row * WIDTH + i], x[row * WIDTH + i], lanes[lane]);
+                    lanes[lane] += (double)x[row * WIDTH + i] * x[row * WIDTH + i];
             for (unsigned int offset = 128u; offset; offset >>= 1u)
                 for (unsigned int lane = 0u; lane < offset; ++lane) lanes[lane] += lanes[lane + offset];
             sum = lanes[0];
         }
-        if (!cuda || !isfinite(sum)) {
+        if (!cuda) {
             sum = 0.0;
             for (unsigned int i = 0u; i < WIDTH; ++i) sum += (double)x[row * WIDTH + i] * x[row * WIDTH + i];
         }
@@ -200,7 +200,7 @@ static int test_weighted_rms(yvex_backend *backend)
         (float *[]){actual}, 1u, NULL, NULL, &facts, &err) == YVEX_ERR_FORMAT && actual[0] == 123.0f,
         "nonfinite weighted RMS input does not publish results");
     printf("weighted RMS %s: values=%u width=%u epsilon=1e-50 max_abs=%.12g tolerance=0 "
-        "square_overflow=recovered invalid_input=unpublished compiler_negatives=4\n",
+        "square_overflow=avoided invalid_input=unpublished compiler_negatives=4\n",
         cuda ? "CUDA" : "CPU", COUNT, WIDTH, maximum);
     YVEX_TEST_ASSERT(yvex_program_stage_close(&stage, &err) == YVEX_OK, "weighted RMS cleanup");
     yvex_program_physical_close(&program); free(data);

@@ -566,7 +566,9 @@ extern "C" __global__ void yvex_qtype_matvec(
         ? (const void *)((const unsigned char *)vector +
                          input_row * (row_width / YVEX_CUDA_Q8_K_BLOCK) * YVEX_CUDA_Q8_K_BYTES)
         : (const void *)((const float *)vector + input_row * input_stride);
-    if (forensic_numeric) {
+    /* This decoded-input row path follows source-order F64 accumulation.
+       Q8 activation retains its separately admitted quantized reduction. */
+    if (forensic_numeric || !q8_input) {
         if ((block_row ? threadIdx.x : lane) != 0u) return;
         sum = qtype_dot_recover_f64(
             row_data, (const float *)input, row_width, qtype);
@@ -604,8 +606,8 @@ extern "C" __global__ void yvex_qtype_matvec(
         }
         if (lane) return;
     }
-    /* A finite dot can overflow before opposite terms cancel. The exceptional row alone
-       uses FP64; ordinary rows retain their parallel F32 execution order. */
+    /* A finite Q8 dot can overflow before opposite terms cancel. Recover only
+       that exceptional row in F64; decoded F32 rows already used F64 above. */
     if (!isfinite(sum) && *status == 0)
         sum = q8_input
             ? qtype_q8_dot_recover_f64(
@@ -827,14 +829,14 @@ extern "C" __global__ void yvex_qtype_gather(
     else out[index] = value;
 }
 
-/* Recover finite BF16-range values when their ordinary F32 square sum overflows. The rare
-   recovery is serial and double-precision so the established parallel fast path is unchanged. */
-static __device__ double finite_square_sum_f32(
-    const float *values, unsigned long long count, float *square_terms,
+/* Preserve the F64 square-sum numerical class while parallelizing independent
+   terms. The shared reduction is used by weighted attention and mHC RMS. */
+static __device__ double finite_square_sum_f64(
+    const float *values, unsigned long long count, double *square_terms,
     int *status, int *active)
 {
     unsigned int lane = threadIdx.x;
-    float square_sum = 0.0f;
+    double square_sum = 0.0;
     for (unsigned long long i = (unsigned long long)lane; i < count;
          i += (unsigned long long)blockDim.x) {
         float value = values[i];
@@ -842,7 +844,7 @@ static __device__ double finite_square_sum_f32(
             atomicCAS(status, 0, 1);
             atomicExch(active, 0);
         } else {
-            square_sum = fmaf(value, value, square_sum);
+            square_sum += (double)value * (double)value;
         }
     }
     square_terms[lane] = square_sum;
@@ -853,12 +855,6 @@ static __device__ double finite_square_sum_f32(
         __syncthreads();
     }
     if (!*active) return 0.0;
-    if (lane == 0u && !isfinite(square_terms[0])) {
-        double recovered = 0.0;
-        for (unsigned long long i = 0ull; i < count; ++i)
-            recovered += (double)values[i] * (double)values[i];
-        return recovered;
-    }
     return (double)square_terms[0];
 }
 
@@ -867,7 +863,7 @@ extern "C" __global__ void yvex_attention_weighted_norm(
     unsigned int weight_qtype, double epsilon, unsigned long long vectors,
     int *status)
 {
-    extern __shared__ float scratch_terms[];
+    extern __shared__ double scratch_terms[];
     __shared__ double inverse;
     __shared__ int active;
     if (!status) return;
@@ -880,7 +876,7 @@ extern "C" __global__ void yvex_attention_weighted_norm(
     __syncthreads();
     if (!active) return;
     values += (unsigned long long)blockIdx.x * count;
-    double total = finite_square_sum_f32(
+    double total = finite_square_sum_f64(
         values, count, scratch_terms, status, &active);
     if (!active) return;
     if (threadIdx.x == 0u) {
@@ -1269,7 +1265,7 @@ extern "C" __global__ void yvex_residual_mhc_pre(
     combination += batch * streams * streams;
     double *pre_weights = shared;
     double *inverse = shared + streams;
-    float *square_terms = (float *)(inverse + 1);
+    double *square_terms = inverse + 1;
     for (unsigned long long lane = (unsigned long long)thread; lane < expanded;
          lane += (unsigned long long)blockDim.x) {
         float value = float_to_bf16_rne(residual[lane]);
@@ -1281,7 +1277,7 @@ extern "C" __global__ void yvex_residual_mhc_pre(
     }
     __syncthreads();
     if (!active) return;
-    double total = finite_square_sum_f32(
+    double total = finite_square_sum_f64(
         residual, expanded, square_terms, status, &active);
     if (!active) return;
     if (thread == 0u) {
