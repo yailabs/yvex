@@ -324,7 +324,9 @@ static void *live_position_monitor_main(void *opaque)
     while (!atomic_load_explicit(&cancel->stop, memory_order_acquire)) {
         yvex_graph_attention_state_summary summary;
         yvex_error err;
-        if (live_state(cancel->session, &summary, &err) != YVEX_OK ||
+        /* An in-flight transaction is not a committed-state observation.
+         * Only the exact committed position may arm this cancellation. */
+        if (live_state(cancel->session, &summary, &err) == YVEX_OK &&
             summary.next_position >= cancel->cancel_at_position) {
             atomic_store_explicit(&cancel->cancel, 1, memory_order_release);
             break;
@@ -754,24 +756,50 @@ static int live_partial_progress_proof(
          cancelled.tokens[0].detokenized !=
              cancelled.tokens[0].text_published ||
          cancelled.result.generated_text_bytes !=
-             cancelled.tokens[0].text_byte_count))
+             cancelled.tokens[0].text_byte_count)) {
+        fprintf(stderr, "partial_cancel status=%d cancelled=%d partial=%d stop=%d sampled=%llu committed=%llu position=%llu token_committed=%d published=%llu bytes=%llu\n",
+                status, cancelled.result.cancelled, cancelled.result.partial,
+                cancelled.result.stop_reason,
+                cancelled.result.sampled_token_count,
+                cancelled.result.model_committed_token_count,
+                cancelled.result.final_position, cancelled.tokens[0].model_committed,
+                cancelled.result.text_published_token_count,
+                cancelled.result.generated_text_bytes);
         rc = YVEX_ERR_FORMAT;
+    }
     if (rc == YVEX_OK)
         rc = live_partial_execute(model, backend, policy, 0,
                                   &output_failed, &status, err);
-    if (rc == YVEX_OK &&
-        (status != YVEX_ERR_NOMEM || !output_failed.result.failed ||
-         !output_failed.result.partial ||
-         output_failed.result.stop_reason != YVEX_GENERATION_STOP_OUTPUT_FAILURE ||
-         output_failed.result.sampled_token_count != 1ull ||
-         output_failed.result.model_committed_token_count != 1ull ||
-         output_failed.result.text_published_token_count ||
-         output_failed.result.generated_text_bytes ||
-         output_failed.result.final_position != 2ull ||
-         !output_failed.tokens[0].model_committed ||
-         !output_failed.tokens[0].detokenized ||
-         output_failed.tokens[0].text_published))
-        rc = YVEX_ERR_FORMAT;
+    if (rc == YVEX_OK) {
+        unsigned long long sampled = output_failed.result.sampled_token_count;
+        unsigned long long published = output_failed.result.text_published_token_count;
+        if (status != YVEX_ERR_NOMEM || !output_failed.result.failed ||
+            !output_failed.result.partial ||
+            output_failed.result.stop_reason != YVEX_GENERATION_STOP_OUTPUT_FAILURE ||
+            !sampled || sampled > 2ull ||
+            output_failed.result.model_committed_token_count != sampled ||
+            output_failed.result.final_position != 1ull + sampled ||
+            published >= sampled || output_failed.result.generated_text_bytes > 1ull)
+            rc = YVEX_ERR_FORMAT;
+        for (unsigned long long i = 0ull; rc == YVEX_OK && i < sampled; ++i)
+            if (!output_failed.tokens[i].model_committed ||
+                !output_failed.tokens[i].detokenized ||
+                output_failed.tokens[i].text_published != (i < published))
+                rc = YVEX_ERR_FORMAT;
+    }
+    if (rc == YVEX_ERR_FORMAT) {
+        fprintf(stderr, "partial_output status=%d failed=%d partial=%d stop=%d sampled=%llu committed=%llu position=%llu token_committed=%d detokenized=%d token_published=%d text_published=%llu bytes=%llu\n",
+                status, output_failed.result.failed, output_failed.result.partial,
+                output_failed.result.stop_reason,
+                output_failed.result.sampled_token_count,
+                output_failed.result.model_committed_token_count,
+                output_failed.result.final_position,
+                output_failed.tokens[0].model_committed,
+                output_failed.tokens[0].detokenized,
+                output_failed.tokens[0].text_published,
+                output_failed.result.text_published_token_count,
+                output_failed.result.generated_text_bytes);
+    }
     if (rc != YVEX_OK && !yvex_error_message(err)[0])
         yvex_error_set(err, rc, "generation_live",
                        "post-commit partial-progress proof failed");
