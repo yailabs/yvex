@@ -7,12 +7,12 @@ Status: living public project control
 | Axis | Current truth |
 | --- | --- |
 | Project target | Native, harness-independent model compilation and execution substrate. |
-| Active engineering boundary | `MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0` — common capacity, resources and lifecycle are implemented; DeepSeek CPU/CUDA numerical divergence and intermittent non-finite CUDA execution withhold closure. |
+| Active engineering boundary | `PROJECT_CONTROL.POST.RUNTIME.EXECUTION.CONSOLIDATION.0` — reconcile the qualified common substrate and its remaining evidence limits; no new implementation wave is selected. |
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` COMPLETE and independently qualified at its claimed scope: current admitted Qwen, DeepSeek/DSpark and MiniMax computation is compiler-owned; runtime consumes authenticated program/schedule truth. The `.0` producer-owned device-result lifetime remains preserved. |
 | Architecture Spectrum | A01 PARTIAL / exact artifact-executable; A02–A11 PLANNED. No next vertical is active. |
 | Adopted state architecture target | N.B1 — Slow-Update Dual-Stream is the official primary research target: primary R plus persistent Experiential Computational State E; unfinished deliberation L remains distinct. YAI owns semantic authority; YVEX owns computational realization. Program N and B1 post-training remain OPEN/unscheduled, not implemented. |
 | Adopted decision architecture target | YAI owns the semantic Decision Plane; YVEX owns computational Decision Readout and the future broader Decision Core. Internal schema v1 is qualified on exact Mamba2 CPU recurrent and Qwen CUDA hybrid state; scores acquire no semantic authority or canonical admission. |
-| Most important structural gap | Two materially distinct state classes now share one readout, capacity policy, execution-profile policy and committed-source-state owner. DeepSeek CPU/CUDA output diverges beyond the declared internal numerical gate, and intermittent CUDA non-finite execution remains unresolved. Universal readout/model breadth, independent upstream whole-model conformance and production performance remain unearned. Observed branch-allocation maxima are not device/process peak measurements. |
+| Most important structural gap | Two materially distinct state classes share one readout, capacity policy, execution-profile policy and committed-source-state owner. Exact DeepSeek CPU/CUDA decoded-forensic execution now agrees at the bounded two-token full-evidence scope; production Q8 activation is a different numerical class, not a CPU-parity claim. Intermittent non-finite CUDA execution has not recurred in the bounded live controls, but long-horizon reliability, independent upstream whole-model conformance and production performance remain unearned. Observed branch-allocation maxima are not device/process peak measurements. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; exact Qwen3.8-27B BF16 target-only CUDA tokenizer/forward/full-logits plus common hybrid-prefix and finite-candidate readout execution; bounded MiniMax composite media; exact Mamba2 pure-SSM CPU artifact execution plus bounded zero-generation finite-candidate readout. Evidence depths differ. |
 | Variable text context | `model load` and `engine load` accept a positive `--ctx` for a new text-engine generation through local protocol v22 and the common capacity/backend admission path. An isolated admitted Mamba CPU engine opened with 32,768 tokens against a 4,096-token registry default; this does not establish DeepSeek 32k resource fit or resize an already-loaded generation. |
 | Remote management bootstrap | A separate bounded v1 SSH forced-command identity/enrollment/status slice is implemented for any YVEX machine with the required OpenSSH/Ed25519 deployment. Exon → Spark is a disposable two-client fixture, not a persistent endpoint or production remote-governance claim. Mutating operations and a durable operation journal remain open. |
@@ -22,7 +22,7 @@ Status: living public project control
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
 | Release qualification | BLOCKED. |
 | Current branch | `models2`; branch epochs coordinate integration, not model ownership. |
-| Next decision point | Reconcile the completed bounded Qwen readout breadth with the still-open DeepSeek CUDA numerical gate in common runtime qualification. Do not automatically select calibration, public/YAI authority, Program N, A11, another Spectrum vertical or GB10 optimization. |
+| Next decision point | Reconcile the completed common runtime consolidation against remaining production-Q8 numerical authority, long-horizon reliability, model breadth and release evidence. Do not automatically select calibration, public/YAI authority, Program N, A11, another Spectrum vertical or GB10 optimization. |
 
 <!-- maturity-counts:start -->
 <!-- Generated from System Maturity by tests/documentation_architecture.py. -->
@@ -1877,14 +1877,14 @@ decision. This is neither the maturity matrix nor the release scope.
 | 18 | `DECISION.READOUT.SESSION.STATE.IDENTITY.0` | COMPLETE | O / S / Q | Correctness prerequisite only; Decision / option readout remains PARTIAL | Internal committed-session-state schema v1 composes exact model/binding/specialization, engine generation, authenticated session lineage and canonical target-attention, draft-attention, then recurrent committed facts under the session lifecycle lock. Real owner-level mutation/refusal controls close attention-only, recurrent-only and hybrid false-pass classes; Decision Readout delegates its before/after invariant to this owner and exact Mamba CPU V0 remains numerically unchanged. Ordinary Qwen hybrid observation reports both active domains with `decision_readout=not-invoked`; candidate/device accounting and breadth remain open. | `PROJECT_CONTROL.POST.DECISION.READOUT.PROFILE.RECONCILIATION.0` |
 | 19 | `PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0` | COMPLETE | R / O / S / Q | Project-control selection only; no maturity promotion or production implementation | Live ownership archaeology found no remaining smaller correctness prerequisite. Existing session summaries already own non-overlapping attention and sequence resource domains; incomplete Qwen branch bytes are characterization metadata that the bounded breadth wave can repair and qualify before publication. It selected that experiment without constructing or scoring Qwen candidates or changing resource code. | `DECISION.READOUT.SESSION.STATE.IDENTITY.0` |
 | 20 | `DECISION.READOUT.QWEN.BREADTH.0` | COMPLETE | O / S / Q | Second exact model/state-class readout qualified; Decision / option readout remains PARTIAL | Common schema-v1 likelihood readout executes the exact Qwen BF16 CUDA model over hybrid attention/recurrent prefix state. Independent arithmetic and replay meet `1e-12`, order/retry preserve scores, source state remains unchanged, sampling/generated counts are zero and one backbone is resident. Full-logits padding remains in normalization while candidate IDs stay tokenizer-bound. No universal family, calibration or public producer claim follows. | `PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0` |
-| 21 | `MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0` | ACTIVE | R / O / S / Q | Common execution capacity, resource truth and retained cleanup; load-only variable text context uses local protocol v22 and server options v5; no persisted binding or maturity promotion | Generation, readout and ordinary decoder qualification consume one runtime capacity owner; shared session-resource projection replaces duplicate arithmetic. Foreign busy observation must not read mutable sequence state. Cleanup retains retryable ownership and refuses publication/reuse on failure. Tiny compiled execution, recurrent CPU and hybrid CUDA consumers must qualify the boundary; DeepSeek CPU/CUDA numerical divergence and intermittent CUDA non-finite execution must be resolved before closure. | `DECISION.READOUT.SESSION.STATE.IDENTITY.0`; Qwen breadth pressure |
-| 22 | `PROJECT_CONTROL.POST.RUNTIME.EXECUTION.CONSOLIDATION.0` | NEXT | R / O / S / Q | Project-control reconciliation only | Assess the qualified common substrate and remaining breadth/evidence limits; select one justified next boundary without implicitly starting new capability, calibration, YAI/I07, N/B1, A11, release work or GB10 optimization. | `DECISION.READOUT.QWEN.BREADTH.0`; `MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0` |
+| 21 | `MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0` | COMPLETE | R / O / S / Q | Common execution capacity, resource truth and retained cleanup; load-only variable text context uses local protocol v22 and server options v5; no persisted binding or maturity promotion | Generation, readout and ordinary decoder qualification consume one runtime capacity owner; shared session-resource projection replaces duplicate arithmetic. Foreign busy observation does not read mutable sequence state; cleanup retains retryable ownership and refuses publication/reuse on failure. Tiny compiled execution, recurrent CPU and hybrid CUDA consumers qualified the boundary. DeepSeek decoded-forensic CPU/CUDA full-evidence execution agrees exactly over two tokens after source-order F64 dot, F64 RMS and two-pass attention reductions; bounded repeated production CUDA and generation controls are finite. Production Q8 remains a distinct numerical class, not a CPU-equivalence or long-horizon claim. | `DECISION.READOUT.SESSION.STATE.IDENTITY.0`; Qwen breadth pressure |
+| 22 | `PROJECT_CONTROL.POST.RUNTIME.EXECUTION.CONSOLIDATION.0` | ACTIVE | R / O / S / Q | Project-control reconciliation only | Assess the qualified common substrate and remaining breadth/evidence limits; select one justified next boundary without implicitly starting new capability, calibration, YAI/I07, N/B1, A11, release work or GB10 optimization. | `DECISION.READOUT.QWEN.BREADTH.0`; `MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0` |
 | 23 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
 | 24 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
 | 25 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
 | 26 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
 
-Active Next: MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0
+Active Next: PROJECT_CONTROL.POST.RUNTIME.EXECUTION.CONSOLIDATION.0
 
 Separate completed slice: `MANAGEMENT.REMOTE.IDENTITY.ENROLLMENT.0` (X / Q)
 implements a public v1 restricted-SSH device/peer identity, local explicit
@@ -2152,12 +2152,36 @@ MoE/dot/worklist controls pass. A post-correction full-evidence two-token
 DeepSeek CPU/CUDA comparison still fails: first out-of-tolerance layer 4,
 final hidden `max_abs=0.53125`, CPU/CUDA argmax `339/339`, finite-population
 logit total variation `0.0721083894`, against the declared absolute/relative
-hidden tolerance `8e-3`/`8e-3`. This is a real remaining whole-model gate;
-the matrix-tile and scalar refusal repairs do not establish that the reported
-intermittent CUDA non-finite execution has been eliminated.
+hidden tolerance `8e-3`/`8e-3`. At that pre-correction checkpoint this remained
+a real internal whole-model gate; the matrix-tile and scalar refusal repairs
+alone did not establish that the reported intermittent CUDA non-finite
+execution had been eliminated.
 
-`MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0` is the sole ACTIVE
-boundary; post-consolidation reconciliation is NEXT, not started.
+The DeepSeek numerical gate exposed three independently necessary CUDA
+differences in the decoded-forensic class: decoded F32 row matvec accumulated
+in parallel F32 rather than source-order F64; weighted-attention/mHC square
+sums used F32 rather than F64; and forensic attention used online rather than
+the CPU two-pass maximum/accumulation order. The common CUDA owners now express
+the declared forensic class without a DeepSeek family branch. In the admitted
+two-token full-evidence control, all 43 layers, final hidden values and all
+logits agree with CPU exactly (`max_abs=0`, `rmse=0`, argmax `339/339`,
+finite-population total variation `0`). Same-backend chunk/whole state
+identities agree; CPU-versus-CUDA persistent attention-state digests are
+layout-bound and deliberately not compared. Removing any one of the three
+corrections left a nonzero hidden error (`0.65625`, `0.28125`, `0.0625`,
+respectively), so their interaction is an observed numerical cause, not a
+post-hoc tolerance increase. The native attention reduction and Q8 activation
+remain separate execution classes. Production CUDA completed two bounded
+128-token whole/chunk controls with identical within-CUDA state/hidden digests
+and finite output, and the live target-only/DSpark generation lane completed;
+these controls do not prove CPU equivalence for Q8 or absence of all future
+non-finite cases. The earlier failing observations above remain historical
+pre-correction evidence, not current qualification.
+
+`MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0` is COMPLETE at this bounded
+scope. `PROJECT_CONTROL.POST.RUNTIME.EXECUTION.CONSOLIDATION.0` is the sole
+ACTIVE boundary; no further implementation wave has begun.
+
 Decision / option readout stays PARTIAL; general Score, Prompt
 logprobs, Classify, Rerank and Reward are not promoted. I07 remains unselected.
 
@@ -2347,8 +2371,8 @@ platform qualification. [MLC quick start][mlc]
 | `DECISION.READOUT.SESSION.STATE.IDENTITY.0`, COMPLETE | O / S / Q | One common committed-session-state identity spans exact target/draft attention and recurrent domains; Decision Readout remains PARTIAL | Ordinary Qwen hybrid observation uses existing state owners with `decision_readout=not-invoked`; no Axx promotion | Correctness prerequisite only; no release gate change |
 | `PROJECT_CONTROL.POST.DECISION.READOUT.SESSION.STATE.RECONCILIATION.0`, COMPLETE | R / O / S / Q | Existing typed resource authorities make hybrid branch bytes breadth characterization rather than a smaller admission prerequisite; one experiment selected without implementation | No family implementation or Spectrum promotion occurred during selection | No release gate change |
 | `DECISION.READOUT.QWEN.BREADTH.0`, COMPLETE | O / S / Q | Same schema v1 qualifies exact Qwen CUDA hybrid readout arithmetic, replay, order, cancellation/retry, source isolation and zero-generation evidence | Second materially distinct admitted state class; no new Spectrum vertical | Computational evidence only; no behavior, calibration, benchmark or release promotion |
-| `MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0`, ACTIVE | R / O / S / Q | Qualify common capacity, resources, variable text context and retryable cleanup; resolve DeepSeek CPU/CUDA numerical divergence and intermittent CUDA non-finite execution before closure | Existing compiler/binding/state providers remain authoritative | Local protocol v22 and server options v5; no persisted binding, maturity or release-scope change |
-| `PROJECT_CONTROL.POST.RUNTIME.EXECUTION.CONSOLIDATION.0`, NEXT | R / O / S / Q | Reconcile qualified substrate and remaining evidence limits before selecting further implementation | No new vertical selected | No release gate change |
+| `MAINTENANCE.RUNTIME.EXECUTION.CONSOLIDATION.0`, COMPLETE | R / O / S / Q | Common capacity, resources, variable text context and retryable cleanup qualified; bounded DeepSeek decoded-forensic CPU/CUDA parity and finite production CUDA replay established without equating Q8 to CPU | Existing compiler/binding/state providers remain authoritative | Local protocol v22 and server options v5; no persisted binding, maturity or release-scope change |
+| `PROJECT_CONTROL.POST.RUNTIME.EXECUTION.CONSOLIDATION.0`, ACTIVE | R / O / S / Q | Reconcile qualified substrate and remaining evidence limits before selecting further implementation | No new vertical selected | No release gate change |
 | Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |
 | Explicit DeepSeek optimization resumption | Q / S / R | Baseline, resource/structural performance evidence | Existing DeepSeek control, not a new Axx | Predecessor of evaluation |
 | Model-language breadth after A01 | C / O / D / M | Components, heads, tokenizer and modality semantics | A02–A11 selected by pressure | General substrate, not automatically v0.1 |
