@@ -2,6 +2,10 @@
 
 Status: temporary non-canonical research ledger
 
+The workflow restrictions in this ledger apply only to a separately selected
+TEMP research task. They are not persistent instructions for ordinary YVEX
+engineering and do not override `AGENTS.md` or `ROADMAP.md`.
+
 > This file is a versioned research surface, not a YVEX authority.
 >
 > It exists to preserve repository archaeology, architectural reconstruction,
@@ -17,7 +21,7 @@ Status: temporary non-canonical research ledger
 >
 > `ROADMAP.md` remains the sole live macro project-control authority.
 >
-> During the current research phase, the complete YVEX repository is read-only
+> During that selected research task, the complete YVEX repository is read-only
 > except for this exact path:
 >
 > ```text

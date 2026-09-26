@@ -1,6 +1,6 @@
 # Source and Module Ownership
 
-[AGENTS](../../AGENTS.md#source-layout-and-ownership) owns mandatory admission,
+[AGENTS](../../AGENTS.md#source-and-execution-ownership) owns mandatory admission,
 dependency, visibility, and size rules. This document explains how to maintain
 the source/build ownership projection. It is not another per-file registry or
 capability table.

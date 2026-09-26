@@ -1,9 +1,9 @@
 # Contributing to YVEX
 
-Read [AGENTS](AGENTS.md) for mandatory repository rules,
-[ROADMAP](ROADMAP.md) for current macro state, and the
-[engineering method](docs/development/agentic-engineering.md) for how
-evidence-driven deliveries are designed and reviewed.
+[AGENTS](AGENTS.md) owns repository rules. Consult [ROADMAP](ROADMAP.md) for
+current macro state and the [engineering method](docs/development/agentic-engineering.md)
+when framing or reviewing a substantial delivery; task-relevant technical
+owners are linked from the [documentation map](docs/README.md).
 
 For usage help see [SUPPORT](SUPPORT.md). Report vulnerabilities privately
 through [SECURITY](SECURITY.md), not a public issue or pull request.
@@ -105,6 +105,6 @@ summary. Independent repository verification and the distinction between
 published facts and local runtime evidence are explained in the
 [engineering method](docs/development/agentic-engineering.md#verify-the-delivery).
 
-Follow [AGENTS closure rules](AGENTS.md#project-control-and-closure) for source
+Follow [AGENTS closure rules](AGENTS.md#evidence-and-completion) for source
 stability and downstream safety. License and attribution obligations remain
 in [LICENSE](LICENSE) and [NOTICE](NOTICE.md).

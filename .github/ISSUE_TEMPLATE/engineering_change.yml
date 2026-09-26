@@ -4,40 +4,19 @@ title: "change: "
 body:
   - type: markdown
     attributes:
-      value: Proposals must start from current implementation evidence and one semantic owner. Hypothetical capability scaffolding is not admitted.
+      value: Frame the work as outcome, authority, freedom, invariants, then completion. Link current evidence; leave implementation choices open unless a real boundary constrains them. ROADMAP.md alone owns active project state.
   - type: textarea
-    id: problem
+    id: outcome
     attributes:
-      label: Problem and evidence
-      description: Describe the current behavior and cite the code, tests, audit, or measured evidence that establishes the problem.
+      label: Outcome
+      description: What observable after-state should exist, and what current problem will it resolve?
     validations:
       required: true
   - type: textarea
-    id: boundary
+    id: authority
     attributes:
-      label: Owning boundary
-      description: Name the semantic owner, affected interfaces, and downstream consumer.
-    validations:
-      required: true
-  - type: textarea
-    id: after_state
-    attributes:
-      label: Executable after-state
-      description: State the operator/API path, lifecycle, side effects, refusal, and cleanup behavior.
-    validations:
-      required: true
-  - type: textarea
-    id: tests
-    attributes:
-      label: Acceptance and tests
-      description: List positive, failure, cleanup, conformance, and live evidence required in proportion to the boundary.
-    validations:
-      required: true
-  - type: textarea
-    id: non_claims
-    attributes:
-      label: Non-claims
-      description: State explicitly which higher capabilities remain unsupported.
+      label: Authority
+      description: Link live code or measured evidence, the likely semantic owner and the real consumer. Treat historical checkpoints as leads, not current truth.
     validations:
       required: true
   - type: dropdown
@@ -51,12 +30,22 @@ body:
         - Independent defect repair
     validations:
       required: true
-  - type: checkboxes
-    id: boundaries
+  - type: textarea
+    id: freedom
     attributes:
-      label: Boundary checks
-      options:
-        - label: This does not introduce a compatibility executable, duplicate runtime, duplicate registry, or unsupported family abstraction.
-          required: true
-        - label: Any new file, header, or subsystem meets the ownership and admission rules in AGENTS.md.
-          required: true
+      label: Engineering freedom
+      description: Which choices are delegated? Leave blank when normal owner-local implementation and safe validation are unrestricted.
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Invariants and non-claims
+      description: State compatibility, ownership, safety or resource boundaries that must hold, and higher claims this issue must not imply.
+    validations:
+      required: true
+  - type: textarea
+    id: completion
+    attributes:
+      label: Completion and blocker
+      description: Name the verifiable finish line, relevant refusal/cleanup evidence and what genuine blocker would stop the work. Do not prescribe a mechanical test itinerary.
+    validations:
+      required: true

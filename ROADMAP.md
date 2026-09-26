@@ -2602,7 +2602,7 @@ H classifications. Git owns previous versions; this file owns the present.
 [state-checkpoints]: include/yvex/internal/runtime_state_store.h
 [state-tests]: tests/unit/runtime_state.c
 [state-residency]: src/runtime/state_residency.c
-[quality-reporting]: AGENTS.md#quality-first-closure-reporting
+[quality-reporting]: AGENTS.md#evidence-and-completion
 [state-pages]: src/graph/state_pages.c
 [state-prefix]: src/graph/state_prefix.c
 [sampling]: src/runtime/sampling.c
