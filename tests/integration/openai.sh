@@ -161,6 +161,67 @@ timeout_status=$(curl -sS -o "$root/timeout.json" -w '%{http_code}' \
     -d '{"model":"deepseek4-v4-flash-dspark","messages":[{"role":"user","content":"TIMEOUT"}],"temperature":0}')
 test "$timeout_status" = 504
 
+# A 500 ms idle budget must permit 1.5 s of real progress without any output.
+# SSE comments preserve liveness without becoming text, tokens or usage.
+python3 - "$base" <<'PY'
+import concurrent.futures, http.client, json, socket, sys, time, urllib.parse
+endpoint = urllib.parse.urlsplit(sys.argv[1])
+def post(marker, stream=False, route='/v1/chat/completions'):
+    client = http.client.HTTPConnection(endpoint.hostname, endpoint.port, timeout=5)
+    body = {'model': 'deepseek4-v4-flash-dspark', 'stream': stream}
+    if route.endswith('responses'):
+        body.update(input=marker, store=False)
+    else:
+        body['messages'] = [{'role': 'user', 'content': marker}]
+    started = time.monotonic()
+    client.request('POST', route, json.dumps(body), {'Content-Type': 'application/json'})
+    response = client.getresponse()
+    status, data = response.status, response.read()
+    client.close()
+    return status, data, time.monotonic() - started
+for marker, stream, route in (
+    ('SLOW_PREFILL', False, '/v1/chat/completions'),
+    ('SLOW_DECODE', False, '/v1/chat/completions'),
+    ('SLOW_PREFILL', True, '/v1/chat/completions'),
+    ('SLOW_PREFILL', True, '/v1/responses'),
+):
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        pending = pool.submit(post, marker, stream, route)
+        time.sleep(0.25)
+        for path in ('/health', '/v1/models'):
+            client = http.client.HTTPConnection(endpoint.hostname, endpoint.port, timeout=1)
+            client.request('GET', path)
+            response = client.getresponse()
+            assert response.status == 200, response.status
+            response.read(); client.close()
+        assert not pending.done(), 'discovery waited for computation to finish'
+        status, data, elapsed = pending.result()
+    assert status == 200 and elapsed > 1, (status, data, elapsed)
+    if stream:
+        assert b': yvex execution progress\n\n' in data, data
+        assert b'hello from yvex' in data, data
+    else:
+        assert json.loads(data)['choices'][0]['message']['content'] == 'hello from yvex'
+for marker, expected in [('STALLED_PROGRESS', 504), ('FOREIGN_PROGRESS', 409)]:
+    status, data, _ = post(marker)
+    assert status == expected, (marker, status, data)
+# A stream that stops progressing terminates as an SSE error, never fake output.
+status, data, _ = post('STALLED_PROGRESS', True)
+assert status == 200 and b'event: error' in data and b'hello from yvex' not in data
+print('Progress: prefill/decode exceed idle budget; concurrent discovery; stall/foreign refusal')
+PY
+
+if curl --max-time 0.2 -fsS -N -H 'Content-Type: application/json' \
+    "$base/v1/chat/completions" \
+    -d '{"model":"deepseek4-v4-flash-dspark","messages":[{"role":"user","content":"SLOW_PREFILL_DISCONNECT"}],"stream":true}' \
+    >"$root/prefill-disconnect.sse" 2>"$root/prefill-disconnect.err"; then
+    echo 'prefill disconnect fixture unexpectedly completed' >&2
+    exit 1
+fi
+grep -F ': yvex execution progress' "$root/prefill-disconnect.sse" >/dev/null
+! grep -F 'hello from yvex' "$root/prefill-disconnect.sse" >/dev/null
+curl -fsS "$base/health" >/dev/null
+
 # A vanished HTTP consumer must trigger the typed daemon cancellation path
 # before the gateway accepts another request.
 if curl --max-time 0.2 -fsS -N -H 'Content-Type: application/json' \
@@ -299,6 +360,28 @@ assert timeout['error']['type']=='server_error'
 assert timeout['error']['code']=='gateway_timeout'
 PY
 
+# Saturated HTTP ingress refuses promptly rather than blocking accept/drain.
+python3 - "$port" <<'PY'
+import http.client, socket, sys, time
+port = int(sys.argv[1])
+held = []
+try:
+    for _ in range(32):
+        client = socket.create_connection(('127.0.0.1', port), timeout=2)
+        client.sendall(b'GET /health HTTP/1.1\r\n')
+        held.append(client)
+    time.sleep(0.1)
+    client = http.client.HTTPConnection('127.0.0.1', port, timeout=2)
+    client.request('GET', '/health')
+    response = client.getresponse()
+    assert response.status == 503, response.status
+    response.read(); client.close()
+finally:
+    for client in held:
+        client.close()
+print('Transport saturation: explicit 503 within 2 s, no hidden accept queue wait')
+PY
+
 kill "$gateway_pid"
 wait "$gateway_pid"
 gateway_pid=
@@ -322,7 +405,7 @@ for request, rows in groups.items():
     end = rows[-1]
     assert end[0] == 'client.disconnected' and end[5] > 0, (request, rows)
     if end[1] == 'http:invalid':
-        assert len(rows) == 1 and end[3] == 400
+        assert len(rows) == 1 and (end[3] == 400 or (end[3], end[4]) == (503, 3))
     else:
         assert len(rows) == 2 and rows[0][0] == 'request.received', (request, rows)
         assert rows[0][1:3] == end[1:3] and rows[0][3:6] == (0, 0, 0.0)
@@ -331,6 +414,8 @@ peers = json.loads((root/'access-peers.json').read_text())
 for peer in peers:
     assert any(row[1:5] == ('http:GET /v1/models', peer, 200, 0) for row in closed)
 assert any(row[1] == 'http:unsupported' and row[3] == 404 for row in closed)
+assert sum(row[1] == 'http:invalid' and (row[3], row[4]) == (503, 3)
+           for row in closed) == 32, 'every incomplete ingress client was released'
 assert any(row[1] == 'http:GET /v1/models/{id}' and row[3] == 404 for row in closed)
 assert {200, 400, 404, 409, 422, 429, 504} <= {row[3] for row in closed}
 assert any(row[1] == 'http:POST /v1/chat/completions' and row[3] == 200 and

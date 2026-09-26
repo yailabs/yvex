@@ -108,7 +108,7 @@ static int event_append_locked(server_telemetry *telemetry,
     if (!found) return 0;
     if (telemetry->events[slot].sequence == telemetry->drop_notice_sequence)
         telemetry->drop_notice_sequence = 0u;
-    event->sequence = telemetry->next_sequence++;
+    if (!event->sequence) event->sequence = telemetry->next_sequence++;
     if (!event_identity(event)) return 0;
     if (telemetry->retained_count < telemetry->capacity)
         telemetry->retained_count++;
@@ -411,6 +411,18 @@ int yvex_server_telemetry_emit_provider(
                        "telemetry is closing");
         return YVEX_ERR_STATE;
     }
+    /* The direct execution observer must receive the original sealed fact,
+     * even when the bounded history coalesces or substitutes a drop notice. */
+    if (emitted) {
+        event.sequence = telemetry->next_sequence++;
+        if (!event_identity(&event)) {
+            (void)pthread_mutex_unlock(&telemetry->mutex);
+            yvex_error_set(err, YVEX_ERR_STATE, "server.telemetry.emit",
+                           "direct event identity derivation failed");
+            return YVEX_ERR_STATE;
+        }
+        *emitted = event;
+    }
     ring_full = telemetry->retained_count == telemetry->capacity;
     if (ring_full) {
         int replaceable_slot = 0;
@@ -420,6 +432,7 @@ int yvex_server_telemetry_emit_provider(
             (void)event_oldest_slot_locked(telemetry, 1, &replaceable_slot);
             if (!telemetry->drop_notice_sequence && replaceable_slot) {
                 event_drop_notice(telemetry, &event);
+                event.sequence = 0ull;
                 creating_drop_notice = 1;
             }
         }
@@ -440,10 +453,7 @@ int yvex_server_telemetry_emit_provider(
     if (append_rc == 1) {
         if (creating_drop_notice)
             telemetry->drop_notice_sequence = event.sequence;
-        if (emitted) *emitted = event;
         (void)pthread_cond_broadcast(&telemetry->condition);
-    } else if (emitted) {
-        memset(emitted, 0, sizeof(*emitted));
     }
     (void)pthread_mutex_unlock(&telemetry->mutex);
     yvex_error_clear(err);

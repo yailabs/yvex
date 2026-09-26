@@ -513,16 +513,19 @@ static int test_bounded_telemetry_overflow(void)
     yvex_server_event event;
     yvex_server_metrics metrics;
     yvex_error err;
-    unsigned long long cursor = 0u, index;
+    unsigned long long cursor = 0u, index, direct_sequence = 0ull;
     int rc, saw_drop = 0, saw_terminal = 0;
     rc = yvex_server_telemetry_open(&telemetry, 2u, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "bounded telemetry open");
     for (index = 0u; index < 4u; ++index) {
-        rc = yvex_server_telemetry_emit(
+        rc = yvex_server_telemetry_emit_provider(
             telemetry, NULL, YVEX_SERVER_EVENT_GENERATION_PROGRESS,
             YVEX_SERVER_SEVERITY_DEBUG, "s", "r", "t", "decode",
-            index, 0u, 0u, 0.0, 0.0, &err);
+            index, 0u, 0u, 0.0, 0.0, NULL, NULL, NULL, &event, &err);
         YVEX_TEST_ASSERT(rc == YVEX_OK, "bounded telemetry publish");
+        YVEX_TEST_ASSERT(event.kind == YVEX_SERVER_EVENT_GENERATION_PROGRESS &&
+                             event.value_a == index,
+                         "drop notice cannot replace a direct execution fact");
     }
     rc = yvex_server_telemetry_metrics_copy(telemetry, &metrics, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && metrics.telemetry_dropped == 2u,
@@ -533,11 +536,19 @@ static int test_bounded_telemetry_overflow(void)
         4u, 9u, YVEX_GENERATION_STOP_EOS, 1.0, 4.0, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "terminal telemetry retained under pressure");
     for (index = 0u; index < 1024u; ++index) {
-        rc = yvex_server_telemetry_emit(
+        rc = yvex_server_telemetry_emit_provider(
             telemetry, NULL, YVEX_SERVER_EVENT_GENERATION_PROGRESS,
             YVEX_SERVER_SEVERITY_DEBUG, "s", "r", "t", "decode",
-            index + 4u, index + 9u, 0u, 1.0, 4.0, &err);
+            index + 4u, index + 9u, 0u, 1.0, 4.0, NULL, NULL, NULL,
+            &event, &err);
         YVEX_TEST_ASSERT(rc == YVEX_OK, "pressure progress coalescing");
+        YVEX_TEST_ASSERT(event.schema_version == YVEX_RUNTIME_EVENT_SCHEMA_VERSION &&
+                             event.kind == YVEX_SERVER_EVENT_GENERATION_PROGRESS &&
+                             event.value_a == index + 4u &&
+                             event.sequence > direct_sequence &&
+                             yvex_sha256_hex_valid(event.event_identity),
+                         "direct progress survives full history without replacement");
+        direct_sequence = event.sequence;
     }
     rc = yvex_server_telemetry_metrics_copy(telemetry, &metrics, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && metrics.telemetry_dropped == 1027u,

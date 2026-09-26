@@ -65,8 +65,33 @@ The loopback listener is owned by the persistent host and remains available
 with zero engines. Use the [startup procedure](operator-runbook.md#first-verified-startup)
 to prepare/load an exact model; profile resolution is not inferred from
 display-name similarity. The foreground terminal remains a log stream.
-Adapter-to-runtime frame I/O has a bounded 600000 ms default timeout; local
-operators may override it with `--openai-timeout-ms` for their admitted workload.
+Adapter-to-runtime frame I/O has a bounded 600000 ms default **inactivity**
+timeout; local operators may override it with `--openai-timeout-ms` for their
+admitted workload. The session forwards actual tokenizer/prefill and committed
+decode progress over the existing typed control-event channel for provider
+requests as well as native turns. Receiving progress permits a long-running
+request to continue without publishing model output. No timer fabricates
+execution progress: a silent/stalled runtime still times out, triggers
+cancellation/cleanup and returns 504 before response headers, or a terminal SSE
+failure after streaming headers. Replies from another request refuse.
+
+Streaming responses project execution events as content-free SSE comments
+(`: yvex execution progress`), which do not create content, usage or completion
+events. Buffered responses remain one final JSON object. A caller's total
+deadline is independent: progress inside YVEX cannot extend a buffered client's
+deadline. Clients must choose an admitted workload budget or consume streaming
+with their own appropriate inactivity/total-deadline policy. Timeout is not
+proof that work never executed and is not permission for automatic replay.
+Direct progress delivery is independent of bounded telemetry history retention;
+a full log ring cannot replace execution progress with a drop notice or an
+empty event on the request connection.
+
+HTTP ingress admits up to 32 transport connections independently of inference
+worker count. Model work still uses the canonical engine scheduler and bounded
+queue. Health/discovery can proceed alongside a long generation; saturation of
+the transport bound returns 503 promptly rather than parking the accept loop
+behind an inference request. This is bounded control-plane reachability, not
+an unbounded concurrency or throughput claim.
 
 SDKs use `base_url=http://127.0.0.1:8001/v1` and any local non-secret API-key
 placeholder.
@@ -86,6 +111,16 @@ Embeddings, audio, images, files, batches, fine-tuning, moderation, Realtime,
 hosted tools, legacy Assistants, and all other paths refuse.
 
 ## Execution capacity and preflight
+
+Consumer Recall or memory selection is outside YVEX. The caller supplies the
+authorized context; YVEX owns its exact tokenization, capacity admission and
+execution without semantic truncation. Capacity compatibility does not promise
+a first-token latency. Chat Completions uses a new ephemeral session on each
+request, so repeated context is re-prefilled. The existing Responses continuation
+can retain a session by exact response/model/generation identity; it does not
+provide a cross-request semantic Recall cache or allow reuse across arbitrary
+changed prefixes. Consumers must not equate Recall identity with reusable
+computational state.
 
 Profile v3 adds capacity discovery and token preflight; it does not increase a
 deployment's admitted context or silently truncate input. Model objects bind

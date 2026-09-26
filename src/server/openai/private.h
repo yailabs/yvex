@@ -112,6 +112,7 @@ int openai_http_sse_event(int fd, const char *event,
                           const unsigned char *json,
                           unsigned long long count, yvex_error *err);
 int openai_http_sse_done(int fd, yvex_error *err);
+int openai_http_sse_progress(int fd, yvex_error *err);
 int openai_http_peer_wait(int fd, unsigned int milliseconds, int *closed,
                           yvex_error *err);
 int openai_json_admit(const openai_http_request *http, openai_endpoint endpoint,

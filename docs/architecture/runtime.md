@@ -280,6 +280,20 @@ but ready sequences cannot dynamically join or leave physical decode batches.
 `continuous_batching_ready` therefore remains false. Multiple workers or a
 multi-row kernel do not promote that claim.
 
+Transport connection capacity is also independent of execution width. The
+OpenAI adapter has a bounded connection population separate from engine workers;
+it does not serialize health/discovery behind a long model request. A session's
+real prefill and committed decode observations travel on the same typed local
+control-event channel for native and provider consumers. The adapter's bounded
+read timeout measures inactivity, not the duration of an advancing computation.
+Streaming projects these observations as SSE comments; buffered requests retain
+one final result. No adapter heartbeat claims execution progress, and external
+client deadlines remain external. Cancellation still routes to the exact
+session/engine generation through the ordinary host lifecycle.
+The telemetry owner seals the direct observation before bounded history
+retention. Coalescing or replacing a retained event with a drop notice cannot
+erase or relabel the execution fact delivered to the waiting request.
+
 ## Resources and residency
 
 The engine's resource summary distinguishes:

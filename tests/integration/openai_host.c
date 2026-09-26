@@ -565,6 +565,57 @@ static int send_native_cancellation(int fd,
     return yvex_server_protocol_send(fd, &message, err);
 }
 
+/* Real protocol progress, with no output, spans several adapter idle budgets.
+ * Service discovery/control connections during each bounded simulated step. */
+static int send_slow_progress(int fd, const yvex_client_request *request,
+                              yvex_error *err)
+{
+    server_telemetry *telemetry = NULL;
+    const struct timespec step = {0, 100000000L};
+    /* Two retained slots force overflow while the direct progress stream advances. */
+    int rc = yvex_server_telemetry_open(&telemetry, 2u, err);
+    for (unsigned int index = 0; rc == YVEX_OK && index < 15u; ++index) {
+        yvex_client_message message;
+        struct pollfd listener = {.fd = listener_fd, .events = POLLIN};
+        message_base(&message, YVEX_CLIENT_MESSAGE_EVENT, request);
+        message.stream_channel = YVEX_CLIENT_STREAM_CONTROL_EVENT;
+        rc = yvex_server_telemetry_emit_provider(
+            telemetry, NULL,
+            request_contains(request->provider_request, "SLOW_DECODE")
+                ? YVEX_SERVER_EVENT_GENERATION_PROGRESS
+                : YVEX_SERVER_EVENT_PREFILL_PROGRESS,
+            YVEX_SERVER_SEVERITY_INFO, request->session_name,
+            "fixture-request", "fixture-turn", "progress", index + 1u, 15u,
+            0u, 0.1 * (double)(index + 1u), 10.0, NULL,
+            request->provider_request, NULL, &message.event, err);
+        if (request_contains(request->provider_request, "FOREIGN_PROGRESS"))
+            message.request_number++;
+        if (rc == YVEX_OK) rc = yvex_server_protocol_send(fd, &message, err);
+        if (rc != YVEX_OK) break;
+        if (request_contains(request->provider_request, "SLOW_PREFILL_DISCONNECT")) {
+            rc = send_native_cancellation(fd, request, err);
+            break;
+        }
+        if (request_contains(request->provider_request, "FOREIGN_PROGRESS")) break;
+        if (request_contains(request->provider_request, "STALLED_PROGRESS")) {
+            const struct timespec stalled = {0, 700000000L};
+            (void)nanosleep(&stalled, NULL);
+            break;
+        }
+        (void)nanosleep(&step, NULL);
+        if (poll(&listener, 1u, 0) > 0 && (listener.revents & POLLIN)) {
+            int control = accept(listener_fd, NULL, NULL);
+            if (control < 0) rc = YVEX_ERR_IO;
+            else {
+                rc = serve_connection(control, err);
+                close(control);
+            }
+        }
+    }
+    yvex_server_telemetry_close(&telemetry);
+    return rc;
+}
+
 static int send_generation(int fd, const yvex_client_request *request,
                            yvex_error *err)
 {
@@ -595,6 +646,15 @@ static int send_generation(int fd, const yvex_client_request *request,
     }
     message_base(&message, YVEX_CLIENT_MESSAGE_TURN_STARTED, request);
     rc = yvex_server_protocol_send(fd, &message, err);
+    if (rc == YVEX_OK && (request_contains(provider, "SLOW_PREFILL") ||
+                          request_contains(provider, "SLOW_DECODE") ||
+                          request_contains(provider, "STALLED_PROGRESS") ||
+                          request_contains(provider, "FOREIGN_PROGRESS"))) {
+        rc = send_slow_progress(fd, request, err);
+        if (rc != YVEX_OK || request_contains(provider, "SLOW_PREFILL_DISCONNECT") ||
+            request_contains(provider, "STALLED_PROGRESS") ||
+            request_contains(provider, "FOREIGN_PROGRESS")) return rc;
+    }
     if (rc == YVEX_OK && !provider) {
         size_t progress_events = native_prompt_contains(request, "WAIT_PREFILL_CANCEL")
                                      ? 2u : 4u;

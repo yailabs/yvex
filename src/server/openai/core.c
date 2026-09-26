@@ -778,6 +778,12 @@ static int generation_execute(openai_gateway *gateway,
     while (rc == YVEX_OK && !result->complete) {
         rc = yvex_client_receive(client, &message, err);
         if (rc != YVEX_OK) break;
+        if (message.request_number != request.request_number) {
+            rc = YVEX_ERR_STATE;
+            yvex_error_set(err, rc, "server.openai.generation",
+                           "runtime reply belongs to another request");
+            break;
+        }
         if (message.status != YVEX_OK || message.kind == YVEX_CLIENT_MESSAGE_ERROR) {
             result->failure_class = message.failure_class;
             yvex_error_set(err, (yvex_status)(message.status ? message.status
@@ -805,6 +811,11 @@ static int generation_execute(openai_gateway *gateway,
                                                json, count, err);
                 free(json);
             }
+        } else if (message.kind == YVEX_CLIENT_MESSAGE_EVENT) {
+            /* The native frame timeout bounds silence, not total execution time.
+             * Progress comes from the executing session, never an adapter timer. */
+            if (sink->stream && sink->headers_sent)
+                rc = openai_http_sse_progress(sink->fd, err);
         } else if (message.kind == YVEX_CLIENT_MESSAGE_FRAGMENT ||
                    message.kind == YVEX_CLIENT_MESSAGE_TURN_COMPLETE) {
             rc = generation_message(sink, id, engine->alias, created, &message,
@@ -1379,12 +1390,10 @@ static int connection_start(server_openai_listener *listener, int fd, unsigned s
                        "bounded connection ownership is required");
         return YVEX_ERR_INVALID_ARG;
     }
-    while (listener->active_connections >= listener->maximum_connections &&
-           !atomic_load_explicit(&listener->stop, memory_order_acquire))
-        (void)pthread_cond_wait(&listener->connection_idle,
-                                &listener->connection_mutex);
     if (atomic_load_explicit(&listener->stop, memory_order_acquire))
         rc = YVEX_ERR_CANCELLED;
+    else if (listener->active_connections >= listener->maximum_connections)
+        rc = YVEX_ERR_BOUNDS;
     else if (listener->connection_sequence == ULLONG_MAX)
         rc = YVEX_ERR_BOUNDS;
     else {
@@ -1418,7 +1427,9 @@ static int connection_start(server_openai_listener *listener, int fd, unsigned s
             err, (yvex_status)rc, "server.openai.connection",
             rc == YVEX_ERR_CANCELLED
                 ? "OpenAI listener stopped before connection admission"
-                : "OpenAI connection worker could not start");
+                : (rc == YVEX_ERR_BOUNDS
+                       ? "OpenAI transport connection capacity exhausted"
+                       : "OpenAI connection worker could not start"));
         return rc;
     }
     yvex_error_clear(err);
@@ -1438,8 +1449,8 @@ static void connections_finish(server_openai_listener *listener)
 /*
  * Serve one already-reserved loopback listener until its server owner requests stop.
  *
- * Prepared listener ownership. Accepted connections execute concurrently only up to the runtime's
- * admitted session width; each still reaches the canonical server scheduler over local protocol.
+ * Bounded transport workers remain independent of model execution width. Saturation refuses
+ * promptly; admitted computation still reaches the canonical engine scheduler over local protocol.
  */
 static void *listener_main(void *opaque)
 {

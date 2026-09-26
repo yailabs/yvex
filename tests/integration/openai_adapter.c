@@ -75,7 +75,7 @@ int main(int argc, char **argv)
     options.yvex_socket = socket_path;
     options.port = 8001u;
     options.timeout_ms = 600000u;
-    options.maximum_connections = 8ull;
+    options.maximum_connections = SERVER_OPENAI_CONNECTION_CAPACITY;
     for (index = 1; index < argc; ++index) {
         if (strcmp(argv[index], "--help") == 0) {
             usage(stdout);

@@ -147,6 +147,8 @@ typedef struct {
     unsigned short port;
     unsigned long long timeout_ms, maximum_connections;
 } server_openai_options;
+/* Transport admission is independent of engine execution width. */
+#define SERVER_OPENAI_CONNECTION_CAPACITY 32ull
 
 typedef struct {
     unsigned short port;

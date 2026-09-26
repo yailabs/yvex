@@ -268,6 +268,13 @@ int openai_http_sse_done(int fd, yvex_error *err)
     return write_all(fd, "data: [DONE]\n\n", 14u, err);
 }
 
+/* A comment observes real execution progress without inventing an output delta. */
+int openai_http_sse_progress(int fd, yvex_error *err)
+{
+    static const char comment[] = ": yvex execution progress\n\n";
+    return write_all(fd, comment, sizeof(comment) - 1u, err);
+}
+
 int openai_http_peer_wait(int fd, unsigned int milliseconds, int *closed,
                           yvex_error *err)
 {

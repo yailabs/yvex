@@ -16,7 +16,7 @@ Status: living public project control
 | Executable foundation | DeepSeek source-to-hosted text and speculation; exact Qwen3.8-27B BF16 target-only CUDA tokenizer/forward/full-logits plus common hybrid-prefix and finite-candidate readout execution; bounded MiniMax composite media; exact Mamba2 pure-SSM CPU artifact execution plus zero-generation finite-candidate readout; exact Laya typed-decisions F16 source and physical binding through a bounded CPU non-autoregressive finite-decision engine and empty persistent host. Evidence depths differ. |
 | Variable text context | `model load` and `engine load` accept a positive `--ctx` for a new text-engine generation through current local protocol v24 and the common capacity/backend admission path. An isolated admitted Mamba CPU engine opened with 32,768 tokens against a 4,096-token registry default; this does not establish DeepSeek 32k resource fit or resize an already-loaded generation. |
 | Remote management bootstrap | A separate bounded v1 SSH forced-command identity/enrollment/status slice is implemented for any YVEX machine with the required OpenSSH/Ed25519 deployment. Exon → Spark is a disposable two-client fixture, not a persistent endpoint or production remote-governance claim. Mutating operations and a durable operation journal remain open. |
-| External execution characterization | Capacity-compatible 12,055-token Golden still fails prefill: 11,694 tokens in 613.70 s, zero generated, then producer HTTP 504. Retained as a measured limitation, not a refoundation .1 closure gate; no downstream-safe claim. |
+| External execution characterization | Capacity-compatible long inputs exposed provider progress suppressed on the local transport and HTTP ingress tied to inference-worker width. The common serving correction forwards actual prefill/committed-decode progress and separates bounded transport admission; it does not accelerate prefill or extend a consumer's total deadline. Earlier 12,055-token Golden and 17,316-token YAI request 504s remain failed live evidence; complete long-context response remains unqualified. |
 | v0.1 target | DeepSeek text on admitted GB10; no physical variant is yet release-qualified. |
 | Behavior evaluation | BLOCKED / not ready. |
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
@@ -1944,6 +1944,22 @@ decision. This is neither the maturity matrix nor the release scope.
 | 31 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
 
 Active Next: SPECTRUM.FLAN.T5.ENCODER.DECODER.0
+
+Serving correction: provider turns now forward the executing session's actual
+prefill and committed-decode progress through existing local-protocol events.
+The OpenAI frame timeout remains bounded inactivity, while HTTP connections
+are admitted independently of inference workers and refuse saturation promptly.
+This closes a model-independent transport defect exposed by YAI's large context;
+it does not change A03 selection or promote long-context performance/release.
+The bounded qualification distinguishes advancing computation from stalled and
+foreign-request replies, checks discovery during computation, disconnect
+cancellation, telemetry-ring overflow and real tiny-model provider execution.
+Direct progress remains available even when bounded event history coalesces.
+YAI semantic Recall stays
+consumer-owned; its buffered total deadline, stateless Chat prefix replay and
+actual long-prompt execution latency remain distinct integration/performance
+pressures. No new Recall store, semantic truncation, prefix cache, public schema
+or model-family execution path is introduced.
 
 Separate completed slice: `MANAGEMENT.REMOTE.IDENTITY.ENROLLMENT.0` (X / Q)
 implements a public v1 restricted-SSH device/peer identity, local explicit

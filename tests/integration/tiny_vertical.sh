@@ -197,8 +197,9 @@ for row in profiles + profile_model["profiles"]:
     assert row["capabilities"]["maximum_input_parts"] == 32
 PY
 
+http_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" serve \
-    --workers 2 --openai off --logs human \
+    --workers 2 --openai-port "$http_port" --logs human \
     >"$root/server.out" 2>"$root/server.err" &
 server_pid=$!
 
@@ -222,8 +223,54 @@ grep -F '"model_open_count":0' "$root/status.json" >/dev/null
 grep -F 'YVEX HOST · verified inference runtime' "$root/server.out" >/dev/null
 grep -F 'host ready · Ctrl-C to stop' "$root/server.out" >/dev/null
 
+# HTTP admission cannot inherit the two inference workers: two incomplete
+# HTTP clients must leave host discovery reachable, even with zero engines.
+python3 - "$http_port" <<'PY'
+import http.client, socket, sys, time
+port = int(sys.argv[1])
+held = [socket.create_connection(('127.0.0.1', port), timeout=2) for _ in range(2)]
+try:
+    for client in held:
+        client.sendall(b'GET /health HTTP/1.1\r\n')
+    time.sleep(0.05)
+    client = http.client.HTTPConnection('127.0.0.1', port, timeout=2)
+    client.request('GET', '/health')
+    response = client.getresponse()
+    assert response.status == 200, response.status
+    response.read(); client.close()
+finally:
+    for client in held:
+        client.close()
+print('HTTP transport width is independent of inference workers')
+PY
+
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" model load tiny-executable \
     --json >"$root/load.first"
+# Exercise the real session producer, tokenizer and compiled CPU decoder.
+python3 - "$http_port" <<'PY'
+import http.client, json, sys
+client = http.client.HTTPConnection('127.0.0.1', int(sys.argv[1]), timeout=10)
+client.request('GET', '/v1/models')
+response = client.getresponse()
+assert response.status == 200
+model, = json.loads(response.read())['data']
+client.request('POST', '/v1/chat/completions', json.dumps({
+    'model': model['id'], 'messages': [{'role': 'user', 'content': 'a'}],
+    'max_tokens': 3, 'stream': True, 'temperature': 0,
+}), {'Content-Type': 'application/json'})
+response = client.getresponse()
+body = response.read()
+assert response.status == 200, (response.status, body)
+assert b': yvex execution progress\n\n' in body, body
+assert b'data: [DONE]' in body, body
+chunks = [json.loads(line[6:]) for line in body.splitlines()
+          if line.startswith(b'data: {')]
+text = ''.join(c['choices'][0].get('delta', {}).get('content', '')
+               for c in chunks if c.get('choices'))
+assert text == 'okokok', (text, body)
+client.close()
+print('Real provider turn: prefill progress transported; exact output=okokok')
+PY
 if HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" model load tiny-executable \
     --json >"$root/load.repeat" 2>"$root/load.repeat.err"; then
     echo 'repeated load unexpectedly created residency' >&2

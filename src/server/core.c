@@ -280,7 +280,7 @@ int yvex_server_create(yvex_server **out, const yvex_server_options *options,
             .yvex_socket = server->socket_path,
             .port = admitted->openai_port,
             .timeout_ms = admitted->openai_timeout_ms,
-            .maximum_connections = admitted->worker_count
+            .maximum_connections = SERVER_OPENAI_CONNECTION_CAPACITY
         };
         rc = yvex_server_openai_prepare(&server->openai, &openai,
                                         server->telemetry, err);

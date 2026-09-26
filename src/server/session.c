@@ -50,6 +50,20 @@ typedef struct {
 } turn_sink;
 #define TURN_PROGRESS_INTERVAL_NS 1000000000ull
 #define TURN_PROGRESS_TOKEN_INTERVAL 64ull
+/* Publish the same execution fact to native and provider consumers. */
+static int turn_event_send(turn_sink *sink, const yvex_server_event *event,
+                            yvex_error *err)
+{
+    yvex_client_message message = {0};
+    message.schema_version = YVEX_LOCAL_PROTOCOL_VERSION;
+    message.kind = YVEX_CLIENT_MESSAGE_EVENT;
+    message.status = YVEX_OK;
+    message.request_number = sink->request->request_number;
+    message.stream_channel = YVEX_CLIENT_STREAM_CONTROL_EVENT;
+    message.event = *event;
+    return sink->emit(sink->emit_context, &message, err);
+}
+
 static int provider_text_stream_direct(const yvex_provider_request *request)
 {
     return request && request->response_format == YVEX_PROVIDER_RESPONSE_TEXT &&
@@ -165,9 +179,11 @@ static int turn_decode_progress(
 {
     yvex_execution_measurement measurement;
     yvex_runtime_speculation_progress speculation;
+    yvex_server_event event;
     const yvex_runtime_speculation_progress *speculation_fact;
     unsigned long long since_time, since_tokens;
     double seconds;
+    int rc;
     if (!token->model_committed) return YVEX_OK;
     sink->committed_tokens++;
     turn_decode_timestamp_record(sink, now);
@@ -183,7 +199,7 @@ static int turn_decode_progress(
         &measurement);
     speculation_fact = turn_speculation_summary(sink, &speculation);
     sink->last_progress_ns = now;
-    return yvex_server_telemetry_emit_provider(
+    rc = yvex_server_telemetry_emit_provider(
         sink->registry->telemetry, &sink->registry->event_scope,
         YVEX_SERVER_EVENT_GENERATION_PROGRESS,
         YVEX_SERVER_SEVERITY_INFO, sink->session->name,
@@ -192,8 +208,9 @@ static int turn_decode_progress(
         sink->committed_tokens, token->position_after,
         sink->reasoning_tokens, seconds,
         seconds > 0.0 ? (double)sink->committed_tokens / seconds : 0.0,
-        speculation_fact, sink->request->provider_request, &measurement, NULL,
+        speculation_fact, sink->request->provider_request, &measurement, &event,
         err);
+    return rc == YVEX_OK ? turn_event_send(sink, &event, err) : rc;
 }
 
 static void turn_envelope_project(
@@ -717,7 +734,6 @@ static int turn_progress(void *opaque,
                          unsigned long long value_b, yvex_error *err)
 {
     turn_sink *sink = opaque;
-    yvex_client_message message;
     yvex_server_event event;
     yvex_execution_measurement measurement;
     yvex_server_event_kind event_kind;
@@ -756,15 +772,7 @@ static int turn_progress(void *opaque,
             sink->request_id, sink->turn_id, phase, value_a, value_b, 0u,
             elapsed, elapsed > 0.0 ? (double)value_a / elapsed : 0.0,
             NULL, sink->request->provider_request, &measurement, &event, err);
-        if (rc != YVEX_OK || sink->request->provider_request) return rc;
-        memset(&message, 0, sizeof(message));
-        message.schema_version = YVEX_LOCAL_PROTOCOL_VERSION;
-        message.kind = YVEX_CLIENT_MESSAGE_EVENT;
-        message.status = YVEX_OK;
-        message.request_number = sink->request->request_number;
-        message.stream_channel = YVEX_CLIENT_STREAM_CONTROL_EVENT;
-        message.event = event;
-        return sink->emit(sink->emit_context, &message, err);
+        return rc == YVEX_OK ? turn_event_send(sink, &event, err) : rc;
     }
 }
 
