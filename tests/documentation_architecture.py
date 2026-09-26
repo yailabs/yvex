@@ -193,7 +193,7 @@ def validate_roadmap(text: str, *, check_counts: bool = True) -> dict:
                 require(row[4].split(" / ")[0] in {"PLANNED", "PARTIAL", "BLOCKED", "COMPLETE", "DONE", "DEFERRED"},
                         "invalid spectrum evidence state")
                 spectrum.append(row[0])
-    require(spectrum == [f"A{i:02}" for i in range(1, 12)], "spectrum must preserve ordered A01-A11")
+    require(spectrum == [f"A{i:02}" for i in range(1, 13)], "spectrum must preserve ordered A01-A12")
 
     sequence = table_rows(sections["Current Execution Sequence"])[1:]
     require(bool(sequence), "empty execution sequence")
@@ -251,8 +251,8 @@ def check_roadmap() -> None:
                                    if line.startswith("| 2 | `"))
         def with_dependency(line: str, dependency: str) -> str:
             return text.replace(line, line.rsplit("|", 2)[0] + f"| `{dependency}` |", 1)
-        a10 = next(line for line in text.splitlines() if line.startswith("| A10 |"))
         a11 = next(line for line in text.splitlines() if line.startswith("| A11 |"))
+        a12 = next(line for line in text.splitlines() if line.startswith("| A12 |"))
         mutations = {
             "duplicate section": text + "\n## System Maturity\n",
             "missing section": text.replace("## Strategic Programs", "## Programs", 1),
@@ -267,10 +267,10 @@ def check_roadmap() -> None:
                 r"(\| 1 \| `[^`]+` \| )[^|]+", r"\1ACTIVE ", first_sequence), 1)
                 if "| ACTIVE |" not in first_sequence else text.replace("| ACTIVE |", "| COMPLETE |", 1),
             "private classifications": text + "\n| H01 | private |\n",
-            "missing A11": text.replace(a11 + "\n", "", 1),
-            "duplicate A11": text.replace(a11, a11 + "\n" + a11, 1),
-            "reordered spectrum": text.replace(a10 + "\n" + a11, a11 + "\n" + a10, 1),
-            "unadopted spectrum extent": text.replace(a11, a11 + "\n" + a11.replace("| A11 |", "| A12 |", 1), 1),
+            "missing A12": text.replace(a12 + "\n", "", 1),
+            "duplicate A12": text.replace(a12, a12 + "\n" + a12, 1),
+            "reordered spectrum": text.replace(a11 + "\n" + a12, a12 + "\n" + a11, 1),
+            "unadopted spectrum extent": text.replace(a12, a12 + "\n" + a12.replace("| A12 |", "| A13 |", 1), 1),
             "spectrum elsewhere": text + "\n| A01 | elsewhere |\n",
             "missing program": text.replace("| F | Scale-out", "| Z | Scale-out", 1),
             "missing N program": text.replace(program_n + "\n", "", 1),
