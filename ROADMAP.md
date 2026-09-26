@@ -7,12 +7,12 @@ Status: living public project control
 | Axis | Current truth |
 | --- | --- |
 | Project target | Native, harness-independent model compilation and execution substrate. |
-| Active engineering boundary | `PROJECT_CONTROL.POST.FINITE.DECISION.PRODUCER.RECONCILIATION.0` — assess the bounded consumer-safe producer and select one next falsification pressure without silently implementing it. |
+| Active engineering boundary | `SPECTRUM.FLAN.T5.ENCODER.DECODER.0` — test retained encoder state and decoder cross-attention through the common compiler, engine and session substrate; no implementation has begun. |
 | Latest generic architecture boundary | `MAINTENANCE.ARCHITECTURE.REFOUNDATION.1` COMPLETE and independently qualified at its claimed scope: current admitted Qwen, DeepSeek/DSpark and MiniMax computation is compiler-owned; runtime consumes authenticated program/schedule truth. The `.0` producer-owned device-result lifetime remains preserved. |
-| Architecture Spectrum | A01 PARTIAL / exact artifact-executable; A02–A11 PLANNED. No next vertical is active. |
+| Architecture Spectrum | A01 PARTIAL / exact artifact-executable; A02–A11 PLANNED. A03 / FLAN-T5 is selected as the next pressure, not acquired or promoted. |
 | Adopted state architecture target | N.B1 — Slow-Update Dual-Stream is the official primary research target: primary R plus persistent Experiential Computational State E; unfinished deliberation L remains distinct. YAI owns semantic authority; YVEX owns computational realization. Program N and B1 post-training remain OPEN/unscheduled, not implemented. |
 | Adopted decision architecture target | YAI owns the semantic Decision Plane; YVEX owns computational Decision Readout and the future broader Decision Core. Internal schema v1 is qualified on exact Mamba2 CPU recurrent and Qwen CUDA hybrid state; scores acquire no semantic authority or canonical admission. |
-| Most important structural gap | Two materially distinct state classes share one readout, capacity policy, execution-profile policy and committed-source-state owner. Exact DeepSeek CPU/CUDA decoded-forensic execution now agrees at the bounded two-token full-evidence scope; production Q8 activation is a different numerical class, not a CPU-parity claim. Intermittent non-finite CUDA execution has not recurred in the bounded live controls, but long-horizon reliability, independent upstream whole-model conformance and production performance remain unearned. Observed branch-allocation maxima are not device/process peak measurements. |
+| Most important structural gap | No admitted model yet composes a retained bidirectional encoder result with a separate causal decoder through source-defined cross-attention and ordinary engine/session lifecycle. Existing Laya finite-decision, MiniMax component and DeepSeek decoder execution each prove narrower, different contracts. DeepSeek long-horizon reliability, independent upstream whole-model conformance and production performance remain separate unearned evidence. |
 | Executable foundation | DeepSeek source-to-hosted text and speculation; exact Qwen3.8-27B BF16 target-only CUDA tokenizer/forward/full-logits plus common hybrid-prefix and finite-candidate readout execution; bounded MiniMax composite media; exact Mamba2 pure-SSM CPU artifact execution plus zero-generation finite-candidate readout; exact Laya typed-decisions F16 source and physical binding through a bounded CPU non-autoregressive finite-decision engine and empty persistent host. Evidence depths differ. |
 | Variable text context | `model load` and `engine load` accept a positive `--ctx` for a new text-engine generation through current local protocol v24 and the common capacity/backend admission path. An isolated admitted Mamba CPU engine opened with 32,768 tokens against a 4,096-token registry default; this does not establish DeepSeek 32k resource fit or resize an already-loaded generation. |
 | Remote management bootstrap | A separate bounded v1 SSH forced-command identity/enrollment/status slice is implemented for any YVEX machine with the required OpenSSH/Ed25519 deployment. Exon → Spark is a disposable two-client fixture, not a persistent endpoint or production remote-governance claim. Mutating operations and a durable operation journal remain open. |
@@ -22,7 +22,7 @@ Status: living public project control
 | Full-model benchmark | NOT MEASURED at release scope; repeated bounded characterization is not that benchmark. |
 | Release qualification | BLOCKED. |
 | Current branch | `models2`; branch epochs coordinate integration, not model ownership. |
-| Next decision point | Reconcile the qualified one-checkpoint CPU producer against remaining consumer-safety limits, then choose one next architectural pressure. Architecture Spectrum A02–A11 is eligible by falsification value, not numeric order; CUDA speed, broader checkpoint/head breadth, calibration, YAI authority, Program N, A11 execution and GB10 remain separately unselected. |
+| Next decision point | Qualify or falsify A03's retained encoder-result and decoder cross-attention lifecycle on one exact FLAN-T5 reference through ordinary YVEX ownership. The bounded finite-decision producer is consumer-safe at its qualified local CPU scope; CUDA speed, model/head breadth, calibration, YAI authority, Program N, A11 execution and GB10 remain separate pressures. |
 
 <!-- maturity-counts:start -->
 <!-- Generated from System Maturity by tests/documentation_architecture.py. -->
@@ -1713,6 +1713,28 @@ administration. A10 is still-image pressure, distinct from MiniMax synchronized
 media; TEXT → IMAGE or TEXT + IMAGE → IMAGE would be executable I/O truth,
 not a YAI cognitive capability.
 
+Post-producer reconciliation selects A03 / FLAN-T5 as the next falsifier, while
+its Spectrum evidence state remains PLANNED. Laya qualifies bounded
+bidirectional finite-decision computation, but no admitted model retains an
+encoder result for a distinct causal decoder to cross-attend across decoder
+steps. MiniMax component preparation and DeepSeek target/draft state are not
+that contract. A03 isolates this compiler → engine → session boundary before
+Whisper adds audio input or A11 adds phase-asymmetric residency and shared
+cross-layer sparse state. The exact FLAN-T5 checkpoint and revision must be
+selected through immutable source archaeology in the implementation wave;
+project-control selection acquires or executes nothing.
+
+The other pressures remain real but less isolating now: A02 follows admitted
+non-KV recurrent/SSM state; A05 and A06 test combinations of state and sparse
+work already qualified separately on Qwen and DeepSeek; A07 follows admitted
+sliding-attention execution. A08 still needs retrieval output semantics after
+Laya's bounded encoder foothold. A04 tests diffusion text generation and A10
+tests still-image generation beyond MiniMax's bounded latent lifecycle, but
+neither first resolves retained encoder→decoder ownership. A09 compounds that missing
+boundary with speech input; A11 compounds it with conditional parameter memory,
+cross-layer state sharing and phase-aware residency. None is promoted by this
+comparison.
+
 ### Architectural breadth strategy
 
 Once expressible by common model language, typed state, component graphs and
@@ -1883,13 +1905,14 @@ decision. This is neither the maturity matrix nor the release scope.
 | 23 | `SYSTEM.MODEL.LAYA.0` | COMPLETE | R / C / P / O / S / Q | Native finite-decision model computation advances to PARTIAL at one exact CPU/token-domain scope; no Decision Readout, Score, Classify or calibration promotion | Immutable Laya typed-decisions revision `1a793eb568e6718f15941d08f85432581df534e3` and 842,609,220-byte F16/206-tensor source execute through a compiler-owned bidirectional physical SSA program and authenticated binding. One 29-token, three-candidate `choice` request matches independent upstream marker logits within predeclared `1e-4` absolute tolerance; an empty persistent host loads the same typed engine, executes without generation, unloads/reloads and refuses stale generations. CPU residency/latency are characterized; CUDA, text construction, action-head, calibration, YAI and low-latency usefulness remain unqualified. | `PROJECT_CONTROL.POST.RUNTIME.EXECUTION.CONSOLIDATION.0` |
 | 24 | `PROJECT_CONTROL.POST.SYSTEM.MODEL.LAYA.RECONCILIATION.0` | COMPLETE | R / C / O / Q | Project-control selection only; no maturity promotion or implementation | The exact native CPU/token-domain computation is sound at its bounded scope, but the caller must still construct Laya tokenizer/template/marker facts and the local C host producer cannot be called across a process boundary. Both are necessary parts of one consumer-safe typed producer. Selected that narrow input-plus-host seam; CUDA/latency, multilingual/head breadth, calibration, remote/YAI integration and Spectrum remain unscheduled by this decision. | `SYSTEM.MODEL.LAYA.0` |
 | 25 | `FINITE.DECISION.PRODUCER.0` | COMPLETE | R / C / O / S / X / Q | Consumer-safe local finite-decision producer at one exact model/input scope; maturity remains PARTIAL | A separate UID-authenticated local process uses protocol v24 and a typed bounded question/context plus opaque candidate frontier, never token IDs, template, type ID or marker positions. The common host retains its one finite engine and generation lifecycle; the source-owned exact tokenizer/input policy builds the admitted `choice` input and seals its identity. Independent upstream construction matches all 29 control tokens and marker positions `[10,14,18]`; raw scores differ by at most `3.934e-6` under declared `1e-4`. Empty/oversized/duplicate/overlength/stale frontiers refuse before numerical publication; disconnect and reload preserve host/engine ownership. Raw logits and finite-population relative distribution remain uncalibrated. No CUDA speed, YAI ABI, semantic authority or general checkpoint breadth follows. | `PROJECT_CONTROL.POST.SYSTEM.MODEL.LAYA.RECONCILIATION.0` |
-| 26 | `PROJECT_CONTROL.POST.FINITE.DECISION.PRODUCER.RECONCILIATION.0` | ACTIVE | R / C / O / Q | Project-control assessment only; no maturity or capability promotion | Determine whether the bounded finite-decision producer now suffices at its qualified scope and choose one next material falsification pressure, with Architecture Spectrum A02–A11 eligible. Do not assume another Laya-specific wave, CUDA optimization or YAI integration. | `FINITE.DECISION.PRODUCER.0` |
-| 27 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
-| 28 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
-| 29 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
-| 30 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
+| 26 | `PROJECT_CONTROL.POST.FINITE.DECISION.PRODUCER.RECONCILIATION.0` | COMPLETE | R / C / O / Q | Project-control selection only; no maturity or capability promotion | The local finite-decision producer is consumer-safe at one exact CPU/checkpoint/input scope. A02–A11 were compared against the live substrate; A03 isolates the still-absent retained encoder-result and decoder cross-attention contract with less compounded modality, memory and resource pressure than A09/A11. No Laya extension, model acquisition or Spectrum execution occurred. | `FINITE.DECISION.PRODUCER.0` |
+| 27 | `SPECTRUM.FLAN.T5.ENCODER.DECODER.0` | ACTIVE | R / C / P / S / O / Q | A03 executable evidence only if qualified; no preauthorized System Maturity, release or other Spectrum promotion | Select one immutable FLAN-T5 checkpoint after source archaeology. Through ordinary source → compiler programs → physical artifact/binding → one engine/session, execute a bounded bidirectional encoder whose exact retained result feeds a distinct causal decoder via source-defined cross-attention, then produce complete logits and bounded text output. Qualify independent upstream numerical agreement at encoder/cross-attention/output boundaries; exact retained-state identity, reuse, isolation, stale/refusal, cancellation/rollback, cleanup and resource evidence. Keep family meaning in source/compiler owners, not a T5 runtime. No Whisper/audio, A11/CED/Engram, YAI, Program N, Laya acceleration, general encoder-decoder breadth, behavior or release claim follows. | `PROJECT_CONTROL.POST.FINITE.DECISION.PRODUCER.RECONCILIATION.0` |
+| 28 | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | PARTIAL | Q / S / R | Warm execution performance | Measured bottleneck-driven improvement without numerical/lifecycle regression. | Explicit resumption and controlled workload |
+| 29 | `V010.EVAL.DEEPSEEK.0` | BLOCKED | Q | Model behavior evidence | Repeatable quality, tokenizer, long-context and refusal evaluation. | `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` |
+| 30 | `V010.BENCH.DEEPSEEK.0` | NOT MEASURED | Q | Full-model performance | Identity-bound latency, throughput, memory and reliability evidence. | `V010.EVAL.DEEPSEEK.0` |
+| 31 | `V010.RELEASE.0` | BLOCKED | Q | Release | All version-specific gates close together. | Benchmark and remaining release obligations |
 
-Active Next: PROJECT_CONTROL.POST.FINITE.DECISION.PRODUCER.RECONCILIATION.0
+Active Next: SPECTRUM.FLAN.T5.ENCODER.DECODER.0
 
 Separate completed slice: `MANAGEMENT.REMOTE.IDENTITY.ENROLLMENT.0` (X / Q)
 implements a public v1 restricted-SSH device/peer identity, local explicit
@@ -2196,10 +2219,10 @@ scores match the bounded control; direct token-domain execution remains intact.
 This is a computational producer, not YAI integration or public remote
 management. General decision-model breadth, CUDA execution, calibration and
 useful low-latency residency remain unearned; observed CPU forwards around
-35–53 s are characterization, not a System-1 latency claim. The sole ACTIVE
-project-control reconciliation now decides whether the next falsification
-pressure should return to Architecture Spectrum rather than automatically
-opening another Laya-specific wave.
+35–53 s are characterization, not a System-1 latency claim. Post-producer
+reconciliation judged this bounded local producer consumer-safe and returned
+the sole ACTIVE pressure to A03 / FLAN-T5. Further Laya work requires its own
+independent justification, not an automatic continuation.
 
 Decision / option readout stays PARTIAL; general Score, Prompt
 logprobs, Classify, Rerank and Reward are not promoted. I07 remains unselected.
@@ -2326,7 +2349,7 @@ to implement every OPEN row.
 
 | Horizon | Engineering objective | Programs | Exit condition |
 | --- | --- | --- | --- |
-| Now | Reconcile the qualified one-checkpoint local finite-decision producer and select one next material pressure | R / C / O / Q | One project-control decision tests whether remaining input/model breadth or Architecture Spectrum A02–A11 offers the strongest next falsification; no new implementation starts by implication. |
+| Now | Test retained encoder-result and cross-attending decoder execution with one exact FLAN-T5 reference | R / C / P / S / O / Q | A03's ordinary source-to-engine path either qualifies an independent bounded encoder→decoder numerical/lifecycle result or identifies the exact generic owner that prevents it; selection alone is not evidence. |
 | Near | Broaden model language and physical representation foundations | C / P | Common architectures compile through shared semantics and reproducible recipes. |
 | Near | Prepare persistent-state language and realization/lifecycle boundaries | C / S / N | Future state-capable models need not create another runtime; semantic authority remains external. |
 | Near | Mature single-node sequence runtime | S / G | Typed paging, inflight scheduling, chunked prefill and reusable prefixes qualified. |
@@ -2394,7 +2417,8 @@ platform qualification. [MLC quick start][mlc]
 | `SYSTEM.MODEL.LAYA.0`, COMPLETE | R / C / P / O / S / Q | One exact native CPU/token-domain finite-decision engine and typed local C producer match independent upstream raw candidate logits | Distinct non-autoregressive model/output class; no Axx, Decision Readout or calibration promotion | Local protocol v23 adds engine-kind lifecycle truth; no release gate change |
 | `PROJECT_CONTROL.POST.SYSTEM.MODEL.LAYA.RECONCILIATION.0`, COMPLETE | R / C / O / Q | Selected one native input-plus-local-host producer seam from the two concrete consumer-safety gaps; no implementation or maturity promotion | Spectrum remains eligible after that seam, not automatically scheduled now | No release gate change |
 | `FINITE.DECISION.PRODUCER.0`, COMPLETE | R / C / O / S / X / Q | Exact admitted tokenizer/input policy and separate-process local typed scoring on the resident host, without caller Laya mechanics | One computational producer at the selected scope; no Axx, YAI, calibration or useful-latency promotion | Local protocol v24 adds bounded finite-decision scoring; no release gate change |
-| `PROJECT_CONTROL.POST.FINITE.DECISION.PRODUCER.RECONCILIATION.0`, ACTIVE | R / C / O / Q | Reconcile the bounded producer and select one next architectural falsification pressure | No implementation or maturity promotion by selection | No release gate change |
+| `PROJECT_CONTROL.POST.FINITE.DECISION.PRODUCER.RECONCILIATION.0`, COMPLETE | R / C / O / Q | Bounded producer suffices locally at its exact scope; A03 selected for the missing retained encoder→decoder state/result contract | No implementation or maturity promotion by selection | No release gate change |
+| `SPECTRUM.FLAN.T5.ENCODER.DECODER.0`, ACTIVE | R / C / P / S / O / Q | One exact FLAN-T5 source, admitted encoder and decoder programs, retained cross-attention input and bounded independent numerical/lifecycle evidence | A03 remains PLANNED until execution qualifies it; no other Axx, generic maturity or release promotion is assumed | No release gate change |
 | Future cognitive-state realization qualification, unscheduled | N / C / S / Q | Ingress, model-specific State Read/Update and useful-state evidence | Real model/reference required; no new Axx scheduled | Not a v0.1 gate |
 | Explicit DeepSeek optimization resumption | Q / S / R | Baseline, resource/structural performance evidence | Existing DeepSeek control, not a new Axx | Predecessor of evaluation |
 | Model-language breadth after A01 | C / O / D / M | Components, heads, tokenizer and modality semantics | A02–A11 selected by pressure | General substrate, not automatically v0.1 |
