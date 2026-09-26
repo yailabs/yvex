@@ -27,6 +27,12 @@ RECORDS = {
     "yvex_finite_decision_result": (
         "include/yvex/finite_decision.h", "YVEX_FINITE_DECISION_SCHEMA_V1", 1, 5496,
         "17b124c43a24109ca39294fef859fd95c3a70bc3bf778f09a2e26e6ef9ce9aac"),
+    "yvex_finite_producer_request": (
+        "include/yvex/finite_decision_producer.h", "YVEX_FINITE_PRODUCER_SCHEMA_V1", 1, 2968,
+        "d53dc10d8ed4f5acce32e6a61c9b911bd30a98736dc2da625068a1471a8bf322"),
+    "yvex_finite_producer_result": (
+        "include/yvex/finite_decision_producer.h", "YVEX_FINITE_PRODUCER_SCHEMA_V1", 1, 1848,
+        "bf73f148f7fa52291eeee5e6c8daf91b55cb7a452289179b0c3fdf8c7beb8cea"),
     "yvex_content_part": (
         "include/yvex/content.h", "YVEX_CONTENT_PART_SCHEMA_V1", 1, 1312,
         "fa96b37a668d01ad150ff54287e53d0f750e0eaede5710e08e5cfc84db7837c8"),
@@ -106,10 +112,10 @@ RECORDS = {
         "include/yvex/server.h", "YVEX_CLIENT_MEDIA_CONDITION_SCHEMA_V1", 1, 524,
         "15b251a93051e0f0cf0c70e1a14c2cdcb019b54d7e27851b6c36b02bcac9802b"),
     "yvex_client_request": (
-        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 23, 2120,
+        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 24, 2120,
         "ec8504a565fad81fb7297bcf2fc3dbaa3f4065c8480c0a5d49fddc3264722d28"),
     "yvex_client_message": (
-        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 23, 11344,
+        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 24, 11344,
         "89817068a9a56a76a5a55c2fbe22497200a34ddf8873f8a91da2a66ac9f4404e"),
     "yvex_tokenizer_plan_summary": (
         "include/yvex/tokenizer.h", "YVEX_TOKENIZER_PLAN_SCHEMA_CURRENT", 5, 872,
@@ -177,6 +183,7 @@ def compiler_source() -> str:
         "#include <yvex/content.h>",
         "#include <yvex/execution.h>",
         "#include <yvex/finite_decision.h>",
+        "#include <yvex/finite_decision_producer.h>",
         "#include <yvex/provider.h>",
         "#include <yvex/quant.h>",
         "#include <yvex/registry.h>",
@@ -223,7 +230,7 @@ def compiler_source() -> str:
         '"prompt conversation value changed");',
         'ABI_ASSERT(YVEX_TOKENIZER_PROMPT_VERBATIM == 2, '
         '"prompt verbatim value changed");',
-        'ABI_ASSERT(YVEX_LOCAL_PROTOCOL_VERSION == 23u, "local protocol identity changed");',
+        'ABI_ASSERT(YVEX_LOCAL_PROTOCOL_VERSION == 24u, "local protocol identity changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_NONE == 0, "engine-kind none value changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_TEXT == 1, "engine-kind text value changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_MEDIA == 2, "engine-kind media value changed");',

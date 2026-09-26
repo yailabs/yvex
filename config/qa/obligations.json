@@ -9,7 +9,13 @@
   "change_classes": [
     {
       "id": "finite-decision-model",
-      "patterns": ["src/model/families/laya.c", "include/yvex/internal/families/laya_source.h",
+      "patterns": ["src/model/families/laya.c", "src/tokenizer/families/laya_input.c",
+                   "src/tokenizer/finite_input.c", "include/yvex/internal/finite_input.h",
+                   "include/yvex/internal/families/laya_input.h",
+                   "include/yvex/finite_decision_producer.h",
+                   "src/server/finite_client.c", "src/server/finite_wire.c",
+                   "include/yvex/internal/finite_producer_wire.h",
+                   "include/yvex/internal/families/laya_source.h",
                    "src/graph/families/laya.c", "include/yvex/internal/families/laya.h",
                    "src/artifact/tensor_source.c", "include/yvex/internal/tensor_source.h",
                    "src/graph/tensor_binding.c", "include/yvex/internal/tensor_binding.h",

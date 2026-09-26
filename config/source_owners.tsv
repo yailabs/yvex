@@ -5,6 +5,7 @@ include/yvex/backend.h	abi	abi.backend	generic	public	public-abi	repository	inte
 include/yvex/catalog.h	abi	abi.catalog	generic	public	public-abi	repository	interface	none
 include/yvex/core.h	abi	abi.core	generic	public	public-abi	repository	interface	none
 include/yvex/finite_decision.h	abi	abi.finite_decision	generic	public	public-abi	runtime,server,applications	interface	none
+include/yvex/finite_decision_producer.h	abi	abi.finite_decision_producer	generic	public	public-abi	server,applications	interface	none
 include/yvex/server_finite_decision.h	abi	abi.server_finite_decision	generic	public	public-abi	server,applications	interface	none
 include/yvex/content.h	abi	abi.content	generic	public	public-abi	provider,server,applications	interface	none
 include/yvex/execution.h	abi	abi.execution	generic	public	public-abi	runtime,server,cli,tests	interface	none
@@ -17,6 +18,9 @@ include/yvex/internal/tensor_parameters.h	runtime	runtime.tensor_parameters	gene
 include/yvex/internal/tensor_binding.h	graph	graph.tensor_binding	generic	private	internal-abi	runtime,tests	interface	none
 include/yvex/internal/tensor_engine.h	runtime	runtime.tensor_engine	generic	private	internal-abi	server,tests	interface	none
 include/yvex/internal/finite_decision.h	runtime	runtime.finite_decision	generic	private	internal-abi	server,tests	interface	none
+include/yvex/internal/finite_input.h	tokenizer	tokenizer.finite_input	generic	private	internal-abi	tokenizer,server	interface	none
+include/yvex/internal/finite_producer_wire.h	server	server.finite_wire	generic	private	internal-abi	server,tests	interface	none
+include/yvex/internal/families/laya_input.h	tokenizer	tokenizer.laya_input	family	private	internal-abi	tokenizer,server	interface	none
 include/yvex/internal/artifact_lowering.h	gguf	gguf.artifact_lowering	generic	private	internal-abi	model.family,model.target,graph.family,quant	interface	none
 include/yvex/internal/conversation.h	model	model.conversation_protocol	generic	private	internal-abi	model.family,tokenizer,server	interface	none
 include/yvex/internal/candidate.h	graph	graph.candidate	generic	private	internal-abi	graph,runtime,tests	interface	none
@@ -312,6 +316,8 @@ include/yvex/internal/families/mamba2.h	model	model.families.mamba2	family	priva
 include/yvex/internal/families/laya.h	graph.family	graph.family.laya	family	private	family-interface	graph,runtime,tests	interface	none
 include/yvex/internal/families/laya_source.h	model	model.families.laya	family	private	family-interface	model,graph,tests	interface	none
 src/model/families/laya.c	model.family	model.family.laya	family	private	reusable-algorithm	model,graph,tests	implementation	none
+src/tokenizer/families/laya_input.c	tokenizer	tokenizer.laya_input	family	private	reusable-algorithm	tokenizer,server,tests	implementation	none
+src/tokenizer/finite_input.c	tokenizer	tokenizer.finite_input	generic	private	resource-lifecycle	server,tests	implementation	none
 src/runtime/descriptor.c	runtime	runtime.descriptor	generic	private	resource-lifecycle	artifact,graph,runtime	implementation	none
 src/runtime/evidence.c	runtime	runtime.evidence	generic	private	reusable-algorithm	runtime,cli,tests	implementation	none
 src/runtime/transaction.c	runtime	runtime.execution_transaction	generic	private	resource-lifecycle	runtime,graph,tests	implementation	none
@@ -407,6 +413,8 @@ src/server/openai/render.c	server.openai	server.openai.render	generic	private	re
 src/server/openai/state.c	server.openai	server.openai.state	generic	private	resource-lifecycle	server.openai.lifecycle	implementation	none
 src/server/private.h	server	server.shared	generic	private	private-interface	server.core,server.protocol,server.local_transport,server.session,server.session_lifecycle,server.request_queue,server.media,server.telemetry,server.openai.lifecycle	interface	none
 src/server/protocol.c	server	server.protocol	generic	private	public-protocol	client,daemon	implementation	none
+src/server/finite_client.c	server	server.finite_client	generic	public	protocol-client	applications,tests	implementation	none
+src/server/finite_wire.c	server	server.finite_wire	generic	private	file-serialization	server,tests	implementation	none
 src/server/protocol_execution.c	server	server.protocol.execution_truth	generic	private	public-protocol	server.protocol,client,daemon	implementation	none
 src/server/protocol_validate.c	server	server.protocol_validation	generic	private	public-protocol	server.protocol	implementation	none
 src/server/request_queue.c	server	server.request_queue	generic	private	resource-lifecycle	server.core,server.session	implementation	none
@@ -437,6 +445,7 @@ src/tokenizer/core.c	tokenizer	tokenizer.core	generic	private	resource-lifecycle
 src/tokenizer/compilation.c	tokenizer	tokenizer.family_policy	generic	private	file-serialization	compilation,runtime,tokenizer	implementation	none
 src/tokenizer/decode.c	tokenizer	tokenizer.decode	generic	private	resource-lifecycle	runtime,generation	implementation	none
 src/tokenizer/execution.c	tokenizer	tokenizer.execution	generic	private	reusable-algorithm	runtime,cli,generation	implementation	none
+src/tokenizer/hf_json.c	tokenizer	tokenizer.hf_json	generic	private	reusable-algorithm	runtime,tokenizer.family	implementation	none
 src/tokenizer/normalization.c	tokenizer	tokenizer.normalization	generic	private	reusable-algorithm	tokenizer.execution	implementation	none
 src/tokenizer/prompt.c	tokenizer	tokenizer.prompt	generic	private	reusable-algorithm	runtime,server,generation	implementation	none
 src/tokenizer/provider.c	tokenizer	tokenizer.provider	generic	private	reusable-algorithm	server,generation,provider	implementation	none

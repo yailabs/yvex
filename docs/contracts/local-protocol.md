@@ -1,8 +1,8 @@
-# Local Protocol v23
+# Local Protocol v24
 
 Status: normative private protocol contract
 
-Schema/version: `YVEX_LOCAL_PROTOCOL_VERSION = 23`.
+Schema/version: `YVEX_LOCAL_PROTOCOL_VERSION = 24`.
 
 Authority: `include/yvex/server.h` and `src/server/protocol.c`. This document
 explains the wire and lifecycle contract; code remains authoritative for exact
@@ -17,18 +17,18 @@ Unix-domain socket and is not a public network API.
 
 ## Framing and negotiation
 
-Every connection negotiates version 23 and exchanges bounded typed frames.
+Every connection negotiates version 24 and exchanges bounded typed frames.
 Lengths, enums, strings, arrays, message/tool fields, and correlations are
 validated before dispatch. Oversized, truncated, duplicate, unknown, or
 malformed fields refuse without entering the server scheduler.
 
-Every earlier version, including v22, is refused explicitly. There is no private
+Every earlier version, including v23, is refused explicitly. There is no private
 pre-v0.1 compatibility decoder. Unknown operations and response kinds fail
 closed.
 
 ## Operations
 
-Protocol v23 carries host status/stop, engine load/list/unload, demand-active
+Protocol v24 carries host status/stop, engine load/list/unload, demand-active
 model lease acquire/release, model and memory
 facts for each engine generation, text, media or finite-decision engine kind, target-only or
 speculative text execution strategy,
@@ -36,9 +36,18 @@ session lifecycle, bounded copy-on-write session fork, ordered typed-content
 generation turns and
 cancellation, speculative lifecycle events, event subscriptions, and composed
 console status. Offline compile, artifact, inspect, execute, profile, and system
-operations do not cross this protocol. Finite-decision scoring uses a separate
-typed local C producer, not a generation turn or OpenAI-compatible route;
-the protocol carries its engine lifecycle and summary but not candidate scores.
+operations do not cross this protocol. `FINITE_DECISION` carries a bounded
+schema-v1 semantic-neutral question, context, opaque candidate IDs/text and
+exact alias/generation through its own binary request field, never a text prompt
+or generation turn. The host constructs the admitted model input and returns
+typed raw model logits, an explicitly uncalibrated relative distribution,
+exact identities and resource facts. The UID-owned local socket is not the
+OpenAI-compatible route or a public remote management protocol.
+
+The bounded producer payload and result use a dedicated versioned codec. A
+foreign generation, malformed/oversized frontier, unknown input policy or
+disconnected client refuses before result publication. A client may close its
+connection without cancelling another engine generation or host transport.
 
 Every engine-scoped request names a model alias and, after resolution, the exact
 process-local engine generation. Alias equality never permits a stale session or
@@ -236,7 +245,7 @@ accepted prefix, confidence facts, separate draft/verification/commit timing,
 effective committed rate, and policy identity. Exact seconds are never
 reconstructed from rounded rates.
 
-Protocol v23 retains measurement schema v1. Each record identifies
+Protocol v24 retains measurement schema v1. Each record identifies
 its phase scope, host/device clock, top-level/nested/enclosing/overlapping
 composition, work unit, and availability. A cumulative rate uses the complete
 declared work/duration denominator; rolling decode uses its own recent work and
@@ -313,7 +322,7 @@ summed into a synthetic total.
 
 ## Non-claims
 
-Protocol v23 is not a public remote API, authentication protocol, TLS transport,
+Protocol v24 is not a public remote API, authentication protocol, TLS transport,
 stable cross-version SDK promise, distributed serving protocol, or model
 quality contract. Versioned checkpoints preserve the admitted model and
 semantic-session state across restart; the in-memory fork does not create a

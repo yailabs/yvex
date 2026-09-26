@@ -7,6 +7,7 @@
 #define _GNU_SOURCE
 #include "src/server/private.h"
 #include <yvex/server_finite_decision.h>
+#include <yvex/internal/finite_producer_wire.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -457,6 +458,47 @@ static int protocol_error(int fd, const yvex_client_request *request,
     }
     yvex_core_text_copy(message.reason, sizeof(message.reason),
                         reason ? reason : "request failed");
+    return yvex_server_protocol_send(fd, &message, err);
+}
+
+typedef struct { const yvex_server *server; int fd; } finite_client_cancel;
+
+static int finite_client_cancelled(void *opaque)
+{
+    const finite_client_cancel *scope = opaque;
+    unsigned char byte;
+    ssize_t observed;
+    if (atomic_load_explicit(&scope->server->stopping, memory_order_acquire)) return 1;
+    observed = recv(scope->fd, &byte, 1u, MSG_PEEK | MSG_DONTWAIT);
+    return observed == 0 || (observed < 0 && errno != EAGAIN &&
+        errno != EWOULDBLOCK && errno != EINTR);
+}
+
+static int finite_producer_send(yvex_server *server, int fd,
+    const yvex_client_request *request, yvex_error *err)
+{
+    yvex_finite_producer_request producer = {0};
+    yvex_finite_producer_result result = {0};
+    yvex_client_message message = {0};
+    size_t bytes = 0u;
+    int rc = yvex_finite_producer_request_decode(request->prompt,
+        (size_t)request->prompt_bytes, &producer, err);
+    if (rc == YVEX_OK && (strcmp(producer.model_alias, request->model_alias) ||
+        producer.expected_generation != request->engine_generation))
+        rc = server_refuse(err, YVEX_ERR_FORMAT, "finite producer route differs from payload");
+    if (rc != YVEX_OK) return rc;
+    finite_client_cancel cancel = {.server = server, .fd = fd};
+    rc = yvex_server_engine_manager_finite_produce(server->engines, &producer,
+        &result, finite_client_cancelled, &cancel, err);
+    if (rc != YVEX_OK) return rc;
+    message.schema_version = YVEX_LOCAL_PROTOCOL_VERSION;
+    message.kind = YVEX_CLIENT_MESSAGE_FINITE_DECISION;
+    message.status = YVEX_OK;
+    message.request_number = request->request_number;
+    rc = yvex_finite_producer_result_encode(&result, message.bytes,
+        sizeof(message.bytes), &bytes, err);
+    if (rc != YVEX_OK) return rc;
+    message.byte_count = bytes;
     return yvex_server_protocol_send(fd, &message, err);
 }
 
@@ -1053,6 +1095,8 @@ static void *client_main(void *opaque)
             rc = engine_list_send(server, fd, &request, &err);
         } else if (request.operation == YVEX_CLIENT_OP_EXECUTION_PREFLIGHT) {
             rc = preflight_send(server, fd, &request, &err);
+        } else if (request.operation == YVEX_CLIENT_OP_FINITE_DECISION) {
+            rc = finite_producer_send(server, fd, &request, &err);
         } else if (request.operation == YVEX_CLIENT_OP_ENGINE_LOAD) {
             rc = engine_load_control(server, fd, &request, &err);
         } else if (request.operation == YVEX_CLIENT_OP_ENGINE_UNLOAD) {

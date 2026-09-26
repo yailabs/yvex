@@ -211,6 +211,14 @@ int yvex_server_protocol_request_fields_valid(
     const yvex_client_request *request)
 {
     return request &&
+           (request->operation != YVEX_CLIENT_OP_FINITE_DECISION ||
+            (request->model_alias[0] && request->engine_generation &&
+             request->prompt && request->prompt_bytes && request->prompt_bytes <= 4096u &&
+             !request->session_name[0] && !request->provider_request &&
+             !request->content_part_count && !request->maximum_new_tokens &&
+             !request->stochastic && !request->seed_present && !request->seed &&
+             !request->event_after_sequence && !request->trace_content &&
+             request->trace_level == YVEX_SERVER_TRACE_SUMMARY)) &&
            (request->operation == YVEX_CLIENT_OP_ENGINE_LOAD ||
             !request->load_context_capacity) &&
            (request->operation != YVEX_CLIENT_OP_EXECUTION_PREFLIGHT ||
@@ -238,7 +246,9 @@ int yvex_server_protocol_message_valid(const yvex_client_message *message)
     ((int)(value) >= (int)(first) && (value) <= (last))
 #define BOOL_VALID(value) ((value) == 0 || (value) == 1)
     return ENUM_VALID(message->kind, YVEX_CLIENT_MESSAGE_ACK,
-                      YVEX_CLIENT_MESSAGE_PREFLIGHT) &&
+                      YVEX_CLIENT_MESSAGE_FINITE_DECISION) &&
+           (message->kind != YVEX_CLIENT_MESSAGE_FINITE_DECISION ||
+            (message->status == YVEX_OK && message->byte_count > 0u)) &&
            (message->kind == YVEX_CLIENT_MESSAGE_PREFLIGHT
                 ? (message->status == YVEX_OK &&
                    yvex_server_preflight_valid(&message->preflight) &&

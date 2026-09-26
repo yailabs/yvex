@@ -24,7 +24,7 @@ External consumers may include the convenience umbrella:
 ```
 
 Production YVEX code includes the exact domain header it consumes. The umbrella
-contains these fifteen installed domain headers:
+contains these installed domain headers:
 
 | Header | Stable domain |
 | --- | --- |
@@ -44,12 +44,23 @@ contains these fifteen installed domain headers:
 | `<yvex/registry.h>` | local model registry and typed reference resolution |
 | `<yvex/server.h>` | local protocol, runtime host, sessions, telemetry and thin client lifecycle |
 | `<yvex/finite_decision.h>` | bounded token-domain finite-decision engine and uncalibrated typed computational result |
+| `<yvex/finite_decision_producer.h>` | bounded semantic-neutral question/frontier request and identity-bound local-process result; model input construction stays inside YVEX |
 | `<yvex/server_finite_decision.h>` | typed local C execution against an exact resident finite-decision engine generation |
 
 Headers below `include/yvex/internal/` are non-installed cross-subsystem ABI.
 They are available to repository production owners and focused tests only;
 `<yvex/api.h>` never includes them. No source-local header is part of either
 surface.
+
+The finite-decision producer request is a local, versioned computational
+contract: exact model alias and generation, bounded question/context text, and
+an ordered finite population of opaque candidate IDs with text representations.
+The caller supplies no token IDs, model type IDs, templates or marker positions.
+The admitted input policy constructs those facts behind the host boundary.
+The result names raw model logits, a relative distribution over precisely that
+population (not calibrated confidence), source/model/binding/tokenizer/program,
+input-policy and execution identities, plus zero-generation/resource evidence.
+The existing direct `<yvex/finite_decision.h>` token-domain API is unchanged.
 
 The common-runtime cutover intentionally retired the former installed
 `runtime.h`, `generation.h`, and `metrics.h` diagnostic contracts. Those
@@ -261,7 +272,7 @@ engine kind from text execution strategy while retaining alias, package,
 backend, capacity, memory, and generation facts. Engine schema v1 is refused
 before the added fields are read.
 The source-authored conversation boundary admits provider request/wire schema
-v4, tokenizer plan v5, tokenizer provider result v2, and local protocol v23.
+v4, tokenizer plan v5, tokenizer provider result v2, and local protocol v24.
 Runtime event schema v6, generation plan schema v7, and generation result
 schema v5 are current. Generation plan ABI v5 added the workload-profile identity
 required to bind phase evidence to the compiled workload. Generation result
@@ -665,7 +676,7 @@ reasoning, at most one assistant tool call, and its original field semantics.
 Clone and wire-decode publish only a complete owned request graph. The provider
 owner neither parses HTTP nor renders model-family prompt syntax.
 
-`<yvex/server.h>` protocol v23 carries the sealed provider request through the
+`<yvex/server.h>` protocol v24 carries the sealed provider request through the
 private Unix socket. Provider output messages distinguish assistant text,
 explicit reasoning, function calls, usage, terminal completion, and failure.
 Typed events bind the provider adapter, provider-request identity, and external

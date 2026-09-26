@@ -209,7 +209,7 @@ verification, compilation, artifact admission or model support.
 
 ## Protocol planes
 
-Native commands and chat use private local protocol v23 over a UID-owned Unix
+Native commands and chat use private local protocol v24 over a UID-owned Unix
 socket. That protocol carries YVEX engine generations, sessions, KV identity,
 lifecycle, ordered typed content/provenance, model leases and directional
 capabilities, typed progress, cancellation, resource facts, and telemetry.

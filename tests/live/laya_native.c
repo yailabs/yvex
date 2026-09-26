@@ -4,14 +4,130 @@
 #include <yvex/internal/families/laya_source.h>
 #include <yvex/internal/tensor_binding.h>
 #include <yvex/internal/tensor_source.h>
+#include <yvex/internal/finite_input.h>
 #include <yvex/finite_decision.h>
+#include <yvex/finite_decision_producer.h>
 #include <yvex/server_finite_decision.h>
+#include <yvex/internal/finite_producer_wire.h>
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <spawn.h>
+#include <sys/wait.h>
+#include <time.h>
+
+extern char **environ;
+
+#define LAYA_EXPECTED_SOURCE "4fa56de72383a9d3efa9cfa78955733c81b9fc8067a587ca4beb82c78107a24e"
+#define LAYA_EXPECTED_BINDING "5d1d4598c32c8317efbacfa3097cc4e630485cb9722e1f25e3fc3fe802fa1c41"
+#define LAYA_EXPECTED_TOKENIZER "6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30"
+#define LAYA_EXPECTED_PROGRAM "cc2bbc47dbe9e053299e948a8bb4a5b4b234f6c37a3f2ad08a118dfe190625b1"
+
+static void producer_fixture(yvex_finite_producer_request *producer,
+    unsigned long long generation)
+{
+    memset(producer, 0, sizeof(*producer));
+    producer->schema_version = YVEX_FINITE_PRODUCER_SCHEMA_V1;
+    producer->expected_generation = generation;
+    producer->candidate_count = 3u;
+    strcpy(producer->model_alias, "laya-typed");
+    strcpy(producer->question, "Select the best option.");
+    strcpy(producer->context, "A short state.");
+    strcpy(producer->candidates[0].id, "continue");
+    strcpy(producer->candidates[0].text, "continue");
+    strcpy(producer->candidates[1].id, "stop");
+    strcpy(producer->candidates[1].text, "stop");
+    strcpy(producer->candidates[2].id, "escalate");
+    strcpy(producer->candidates[2].text, "escalate");
+}
+
+static void *host_serve(void *opaque)
+{
+    yvex_error err = {0};
+    return (void *)(intptr_t)yvex_server_serve(opaque, &err);
+}
+
+static int client_process(const char *program, const char *mode,
+    const char *socket_path, unsigned long long generation)
+{
+    char number[32];
+    pid_t child;
+    int status;
+    snprintf(number, sizeof(number), "%llu", generation);
+    char *const args[] = {(char *)program, (char *)mode, (char *)socket_path, number, NULL};
+    if (posix_spawn(&child, program, NULL, NULL, args, environ) != 0 ||
+        waitpid(child, &status, 0) != child)
+        return 0;
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+static int client_mode(const char *mode, const char *socket_path, unsigned long long generation)
+{
+    yvex_finite_producer_request request;
+    yvex_finite_producer_result result = {0};
+    yvex_error err = {0};
+    producer_fixture(&request, generation);
+    if (!strcmp(mode, "--client-invalid"))
+        strcpy(request.candidates[1].id, request.candidates[0].id);
+    if (!strcmp(mode, "--client-overlong")) {
+        memset(request.question, 'x', sizeof(request.question) - 1u);
+        request.question[sizeof(request.question) - 1u] = 0;
+    }
+    if (!strcmp(mode, "--client-disconnect")) {
+        unsigned char payload[4096];
+        size_t payload_bytes = 0u;
+        yvex_client *client = NULL;
+        if (yvex_finite_producer_request_encode(&request, payload,
+                sizeof(payload), &payload_bytes, &err) != YVEX_OK ||
+            yvex_client_connect(&client, socket_path, &err) != YVEX_OK) return 1;
+        yvex_client_request outbound = {.schema_version = YVEX_LOCAL_PROTOCOL_VERSION,
+            .operation = YVEX_CLIENT_OP_FINITE_DECISION, .request_number = 5u,
+            .engine_generation = generation, .prompt = payload, .prompt_bytes = payload_bytes};
+        strcpy(outbound.model_alias, request.model_alias);
+        int sent = yvex_client_send(client, &outbound, &err) == YVEX_OK;
+        if (sent) { struct timespec pause = {.tv_nsec = 200000000L}; nanosleep(&pause, NULL); }
+        yvex_client_close(&client);
+        return sent ? 0 : 1;
+    }
+    int rc = yvex_finite_producer_execute_local(socket_path, &request, &result, &err);
+    if (!strcmp(mode, "--client-stale"))
+        return rc == YVEX_ERR_STATE && !result.schema_version ? 0 : 1;
+    if (!strcmp(mode, "--client-invalid"))
+        return rc == YVEX_ERR_FORMAT && !result.schema_version ? 0 : 1;
+    if (!strcmp(mode, "--client-overlong"))
+        return rc == YVEX_ERR_BOUNDS && !result.schema_version ? 0 : 1;
+    const double expected[] = {0.752040267, 0.347543657, -0.223986357};
+    if (rc != YVEX_OK || result.candidate_count != 3u || result.token_count != 29u ||
+        result.engine_generation != generation || result.sampling_invocation_count ||
+        result.generated_token_count || result.resident_backbone_count != 1u ||
+        result.calibrated || result.score_kind != YVEX_FINITE_PRODUCER_SCORE_MODEL_LOGIT ||
+        strcmp(result.source_identity, LAYA_EXPECTED_SOURCE) ||
+        strcmp(result.binding_identity, LAYA_EXPECTED_BINDING) ||
+        strcmp(result.tokenizer_identity, LAYA_EXPECTED_TOKENIZER) ||
+        strcmp(result.physical_program_identity, LAYA_EXPECTED_PROGRAM) ||
+        !yvex_sha256_hex_valid(result.input_policy_identity)) {
+        fprintf(stderr, "producer client: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        return 1;
+    }
+    double max_abs = 0.0;
+    for (size_t i = 0u; i < 3u; ++i) {
+        double delta = fabs(result.candidates[i].raw_score - expected[i]);
+        if (delta > 1e-4 || strcmp(result.candidates[i].id, request.candidates[i].id)) return 1;
+        if (delta > max_abs) max_abs = delta;
+    }
+    printf("producer_process=separate generation=%llu input_tokens=%llu raw=%.9g,%.9g,%.9g "
+        "upstream_max_abs=%.9g tolerance=0.0001 sampling=%llu generated=%llu backbones=%llu\n",
+        result.engine_generation, result.token_count, result.candidates[0].raw_score,
+        result.candidates[1].raw_score, result.candidates[2].raw_score,
+        max_abs, result.sampling_invocation_count, result.generated_token_count,
+        result.resident_backbone_count);
+    return 0;
+}
 
 static const unsigned int tokens[] = {
     50281u, 22122u, 1953u, 27u, 16551u, 253u, 1682u, 4500u, 15u,
@@ -31,7 +147,7 @@ static int cancel_after_entry(void *context)
     return *polls > 1u;
 }
 
-static int diagnostic(const char *checkpoint_directory)
+static int diagnostic(const char *checkpoint_directory, const char *program)
 {
     yvex_error err = {0};
     yvex_laya_typed_source_summary admitted = {0};
@@ -39,7 +155,10 @@ static int diagnostic(const char *checkpoint_directory)
     yvex_tensor_binding *package = NULL;
     yvex_laya_program *compiled = NULL;
     yvex_finite_decision_engine *engine = NULL;
+    yvex_finite_input *input_policy = NULL;
     yvex_server *server = NULL;
+    pthread_t serving;
+    int serving_started = 0;
     char temporary[] = "/tmp/yvex-laya-binding-XXXXXX";
     char binding_path[256] = {0};
     char socket_path[256] = {0};
@@ -88,6 +207,33 @@ static int diagnostic(const char *checkpoint_directory)
     printf("binding=%s program=%s\n", published.identity, published.physical_program_identity);
     yvex_tensor_binding_close(&package);
     yvex_tensor_source_close(&source);
+    yvex_finite_input_admission input_engine = {
+        .input_format = published.input_format, .marker_token_id = published.marker_token_id,
+        .token_domain_size = published.token_domain_size,
+        .type_domain_size = published.type_domain_size};
+    memcpy(input_engine.tokenizer_identity, published.tokenizer_identity,
+        sizeof(input_engine.tokenizer_identity));
+    memcpy(input_engine.binding_identity, published.identity,
+        sizeof(input_engine.binding_identity));
+    memcpy(input_engine.source_identity, published.source_identity,
+        sizeof(input_engine.source_identity));
+    yvex_finite_input_admission foreign_source = input_engine;
+    memset(foreign_source.source_identity, '0', 64u);
+    foreign_source.source_identity[64] = 0;
+    if (yvex_finite_input_open(&input_policy, admitted.weight_path, &foreign_source, &err) !=
+        YVEX_ERR_UNSUPPORTED || input_policy) goto done;
+    yvex_finite_producer_request producer;
+    producer_fixture(&producer, 17u);
+    yvex_finite_input_compiled prepared = {0};
+    if (yvex_finite_input_open(&input_policy, admitted.weight_path, &input_engine, &err) != YVEX_OK ||
+        yvex_finite_input_build(input_policy, &producer, &prepared, &err) != YVEX_OK ||
+        prepared.token_count != count || memcmp(prepared.tokens, tokens, sizeof(tokens)) ||
+        prepared.candidates[0].marker_position != 10u ||
+        prepared.candidates[1].marker_position != 14u ||
+        prepared.candidates[2].marker_position != 18u) goto done;
+    printf("producer_input_tokens=%llu upstream_input_equal=1 marker_positions=10,14,18\n",
+        prepared.token_count);
+    yvex_finite_input_close(&input_policy);
     const yvex_finite_decision_engine_options options = {.schema_version = YVEX_FINITE_DECISION_SCHEMA_V1,
         .source_path = admitted.weight_path, .binding_path = binding_path,
         .backend = YVEX_BACKEND_KIND_CPU,
@@ -225,6 +371,22 @@ static int diagnostic(const char *checkpoint_directory)
         loaded.state != YVEX_SERVER_ENGINE_LOADED ||
         loaded.engine_kind != YVEX_SERVER_ENGINE_FINITE_DECISION ||
         !loaded.execution_ready) goto done;
+    if (pthread_create(&serving, NULL, host_serve, server) != 0) goto done;
+    serving_started = 1;
+    if (!client_process(program, "--client", socket_path, loaded.generation) ||
+        !client_process(program, "--client-invalid", socket_path, loaded.generation) ||
+        !client_process(program, "--client-overlong", socket_path, loaded.generation) ||
+        !client_process(program, "--client-disconnect", socket_path, loaded.generation)) goto done;
+    for (unsigned int attempt = 0u; attempt < 100u; ++attempt) {
+        yvex_server_engine_summary observed[1] = {{0}};
+        unsigned long long snapshot_count = 0u;
+        if (yvex_server_engine_snapshot(server, observed, 1u, &snapshot_count, &err) != YVEX_OK ||
+            snapshot_count != 1u) goto done;
+        if (!observed[0].active_work) break;
+        struct timespec pause = {.tv_nsec = 100000000L};
+        nanosleep(&pause, NULL);
+        if (attempt == 99u) goto done;
+    }
     decision.candidates = candidates;
     decision.expected_generation = loaded.generation;
     memset(&result, 0, sizeof(result));
@@ -233,6 +395,7 @@ static int diagnostic(const char *checkpoint_directory)
         fabs(result.candidates[0].raw_logit - (double)expected[0]) > tolerance ||
         result.sampling_invocation_count || result.generated_token_count ||
         result.resident_backbone_count != 1u) goto done;
+    printf("producer_refusals=duplicate,overlength,stale disconnect_followup_forward=pass\n");
     struct rusage usage = {0};
     if (getrusage(RUSAGE_SELF, &usage) != 0) goto done;
     printf("host_forward_elapsed_ns=%llu observed_process_peak_rss_bytes=%llu\n",
@@ -247,6 +410,7 @@ static int diagnostic(const char *checkpoint_directory)
     if (yvex_server_engine_load(server, &resident, &replacement, &err) != YVEX_OK ||
         replacement.generation <= loaded.generation ||
         replacement.engine_kind != YVEX_SERVER_ENGINE_FINITE_DECISION) goto done;
+    if (!client_process(program, "--client-stale", socket_path, loaded.generation)) goto done;
     if (yvex_server_finite_decision_execute(server, resident.alias, &decision,
             &result, &err) == YVEX_OK || result.schema_version) goto done;
     yvex_error_clear(&err);
@@ -256,8 +420,15 @@ static int diagnostic(const char *checkpoint_directory)
         "host_unloaded=1 stale_refusal=1\n", loaded.generation, replacement.generation);
     if (yvex_server_stop(server, &err) != YVEX_OK ||
         yvex_server_finish(server, &err) != YVEX_OK) goto done;
+    if (serving_started) { pthread_join(serving, NULL); serving_started = 0; }
     rc = 0;
 done:
+    if (serving_started) {
+        yvex_error stop_error = {0};
+        (void)yvex_server_stop(server, &stop_error);
+        pthread_join(serving, NULL);
+    }
+    yvex_finite_input_close(&input_policy);
     if (rc) fprintf(stderr, "laya native: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
     if (engine) (void)yvex_finite_decision_engine_close(&engine, &err);
     yvex_server_close(&server);
@@ -273,6 +444,8 @@ done:
 
 int main(int argc, char **argv)
 {
+    if (argc == 4 && !strncmp(argv[1], "--client", 8u))
+        return client_mode(argv[1], argv[2], strtoull(argv[3], NULL, 10));
     if (argc != 2) { fprintf(stderr, "usage: laya_native CHECKPOINT_DIRECTORY\n"); return 2; }
-    return diagnostic(argv[1]);
+    return diagnostic(argv[1], argv[0]);
 }

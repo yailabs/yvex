@@ -125,6 +125,10 @@ struct yvex_gguf;
 int yvex_tokenizer_from_compiled_gguf(
     yvex_tokenizer **out, const struct yvex_gguf *gguf,
     const yvex_tokenizer_family_policy *policy, yvex_error *err);
+/* Standalone immutable HF ByteLevel BPE source, admitted by exact JSON digest. */
+int yvex_tokenizer_from_hf_json(yvex_tokenizer **out, const char *json,
+    size_t json_bytes, const char *expected_identity,
+    unsigned long long expected_vocabulary, yvex_error *err);
 const yvex_conversation_protocol *yvex_tokenizer_conversation_protocol_get(
     const yvex_tokenizer *tokenizer);
 

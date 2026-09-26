@@ -9,6 +9,7 @@
 #include <yvex/core.h>
 #include <yvex/content.h>
 #include <yvex/execution.h>
+#include <yvex/finite_decision_producer.h>
 #include <yvex/gguf.h>
 #include <yvex/graph.h>
 #include <yvex/materialization.h>

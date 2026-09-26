@@ -198,7 +198,7 @@ static uint32_t byte_codepoint(unsigned int byte)
     return 256u + extra;
 }
 
-static int byte_tokens_build(yvex_tokenizer *tokenizer, yvex_error *err)
+static int byte_tokens_build(yvex_tokenizer *tokenizer, int allow_missing, yvex_error *err)
 {
     unsigned int byte;
     for (byte = 0u; byte < 256u; ++byte) {
@@ -216,6 +216,8 @@ static int byte_tokens_build(yvex_tokenizer *tokenizer, yvex_error *err)
             count = utf8_put(byte_codepoint(byte), encoded);
         }
         if (!vocab_lookup(tokenizer, unit, count, &tokenizer->byte_token_ids[byte])) {
+            tokenizer->byte_token_ids[byte] = UINT_MAX;
+            if (allow_missing) continue;
             yvex_error_setf(err, YVEX_ERR_FORMAT, "tokenizer.plan.bytelevel",
                             "%s byte unit %u is absent from vocabulary",
                             tokenizer->compiled_policy.model_policy ==
@@ -234,7 +236,7 @@ static int byte_tokens_build(yvex_tokenizer *tokenizer, yvex_error *err)
  *
  * Model lifetime.
  */
-static int vocabulary_build(yvex_tokenizer *tokenizer, yvex_error *err)
+static int vocabulary_build(yvex_tokenizer *tokenizer, int allow_missing_bytes, yvex_error *err)
 {
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
@@ -270,7 +272,7 @@ static int vocabulary_build(yvex_tokenizer *tokenizer, yvex_error *err)
     if (!yvex_sha256_final(&hash, digest))
         return YVEX_ERR_STATE;
     yvex_sha256_hex(digest, tokenizer->plan.vocabulary_identity);
-    return byte_tokens_build(tokenizer, err);
+    return byte_tokens_build(tokenizer, allow_missing_bytes, err);
 }
 
 static int merge_insert(yvex_tokenizer *tokenizer, unsigned int left, unsigned int right,
@@ -750,7 +752,7 @@ int yvex_tokenizer_execution_seal(yvex_tokenizer *tokenizer, const yvex_gguf *gg
     tokenizer->plan.add_bos_token = policy->add_bos_token;
     tokenizer->plan.add_eos_token = policy->add_eos_token;
     tokenizer->plan.byte_fallback = policy->byte_fallback;
-    rc = vocabulary_build(tokenizer, err);
+    rc = vocabulary_build(tokenizer, 0, err);
     if (rc == YVEX_OK)
         rc = merges_build(tokenizer, gguf, err);
     if (rc == YVEX_OK)
@@ -845,6 +847,62 @@ int yvex_tokenizer_execution_seal(yvex_tokenizer *tokenizer, const yvex_gguf *gg
  *
  * Model lifetime.
  */
+int yvex_tokenizer_execution_seal_hf_json(yvex_tokenizer *tokenizer,
+                                          const char *json, size_t json_bytes,
+                                          yvex_error *err)
+{
+    const char *merges = yvex_json_probe_field_value(json, "merges");
+    yvex_json cursor;
+    yvex_json_iter rows;
+    yvex_json_item item;
+    unsigned long long rank = 0u, capacity = 1u;
+    int rc;
+    if (!tokenizer || !json || !json_bytes || !merges ||
+        tokenizer->compiled_policy.model_policy != YVEX_TOKENIZER_MODEL_BPE_BYTELEVEL) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "tokenizer.hf-json", "admitted ByteLevel BPE source required");
+        return YVEX_ERR_FORMAT;
+    }
+    rc = vocabulary_build(tokenizer, 1, err);
+    if (rc != YVEX_OK) return rc;
+    while (capacity < 131072u) capacity *= 2u;
+    tokenizer->merge_index = calloc((size_t)capacity, sizeof(*tokenizer->merge_index));
+    if (!tokenizer->merge_index) return YVEX_ERR_NOMEM;
+    tokenizer->merge_index_capacity = capacity;
+    yvex_json_init(&cursor, merges, strlen(merges));
+    if (!yvex_json_iter_begin(&cursor, &rows, YVEX_JSON_COLLECTION_ARRAY)) return YVEX_ERR_FORMAT;
+    while ((item = yvex_json_array_value(&rows)) == YVEX_JSON_ITEM_READY) {
+        yvex_json_iter pair;
+        char left[2048], right[2048], joined[4097];
+        unsigned int l, r, merged;
+        int n;
+        if (rank >= 65536u || !yvex_json_iter_begin(&cursor, &pair, YVEX_JSON_COLLECTION_ARRAY) ||
+            yvex_json_array_value(&pair) != YVEX_JSON_ITEM_READY ||
+            !yvex_json_string(&cursor, left, sizeof(left)) ||
+            yvex_json_array_value(&pair) != YVEX_JSON_ITEM_READY ||
+            !yvex_json_string(&cursor, right, sizeof(right)) ||
+            yvex_json_array_value(&pair) != YVEX_JSON_ITEM_END)
+            return YVEX_ERR_FORMAT;
+        n = snprintf(joined, sizeof(joined), "%s %s", left, right);
+        if (n <= 0 || n >= (int)sizeof(joined) ||
+            merge_parse(tokenizer, joined, (unsigned long long)n, &l, &r, &merged, err) != YVEX_OK ||
+            !merge_insert(tokenizer, l, r, merged, (unsigned int)rank))
+            return YVEX_ERR_FORMAT;
+        rank++;
+    }
+    if (item != YVEX_JSON_ITEM_END || !rank) return YVEX_ERR_FORMAT;
+    tokenizer->plan.merge_count = rank;
+    rc = added_tokens_build(tokenizer, err);
+    if (rc != YVEX_OK) return rc;
+    tokenizer->plan.sealed = 1;
+    tokenizer->plan.owned_bytes = tokenizer->vocab_index_capacity * sizeof(*tokenizer->vocab_index) +
+        tokenizer->merge_index_capacity * sizeof(*tokenizer->merge_index) +
+        tokenizer->added_token_count * sizeof(*tokenizer->added_token_ids);
+    if (!plan_identity_build(tokenizer)) return YVEX_ERR_STATE;
+    tokenizer->support = YVEX_TOKENIZER_SUPPORT_ARTIFACT_BPE;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 void yvex_tokenizer_execution_release(yvex_tokenizer *tokenizer)
 {
     if (!tokenizer)
@@ -1135,8 +1193,16 @@ static int bpe_piece(const yvex_tokenizer *tokenizer, const unsigned char *bytes
             }
         }
     } else {
-        for (index = 0u; index < count; ++index)
-            symbols[symbol_count++] = tokenizer->byte_token_ids[bytes[index]];
+        for (index = 0u; index < count; ++index) {
+            unsigned int token = tokenizer->byte_token_ids[bytes[index]];
+            if (token == UINT_MAX) {
+                free(symbols);
+                yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "tokenizer.encode.bpe",
+                               "source vocabulary cannot encode this byte");
+                return YVEX_ERR_UNSUPPORTED;
+            }
+            symbols[symbol_count++] = token;
+        }
     }
     while (symbol_count > 1u) {
         const tokenizer_merge_slot *best = NULL;
@@ -1336,7 +1402,8 @@ int yvex_tokenizer_encode(const yvex_tokenizer *tokenizer,
         yvex_error_set(err, YVEX_ERR_FORMAT, "tokenizer.encode.utf8", "input is not canonical UTF-8");
         return YVEX_ERR_FORMAT;
     }
-    if (strcmp(tokenizer->compiled_policy.tokenizer_pre, "qwen2") == 0) {
+    if (strcmp(tokenizer->compiled_policy.tokenizer_pre, "qwen2") == 0 ||
+        strcmp(tokenizer->compiled_policy.tokenizer_pre, "bytelevel-nfc") == 0) {
         rc = yvex_tokenizer_nfc_normalize(bytes, byte_count, &normalized_owner,
                                           &normalized_count, err);
         normalized_bytes = normalized_owner;

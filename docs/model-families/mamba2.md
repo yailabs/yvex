@@ -139,7 +139,7 @@ BLOCKED or NOT RUN, never inferred from component or internal determinism.
 A01 therefore remains PARTIAL even though its exact artifact/model execution
 qualification is complete.
 
-Public ABI 0.1.0, current local protocol 23, OpenAI profile
+Public ABI 0.1.0, current local protocol 24, OpenAI profile
 `yvex.openai.compat.v3`, model-plan v8, PEIR v5 and Semantic Model IR v2 are
 unchanged. Runtime binding advances internally to v17 because an authenticated
 absence of attention is a different semantic contract from the v16 layout;

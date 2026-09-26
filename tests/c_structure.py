@@ -945,7 +945,7 @@ class Audit:
                 family = Path(path).stem
                 if path.endswith((".c", ".cu")):
                     if not re.match(
-                        r"^src/(model|graph|backend/cuda)/families/[^/]+\.(c|cu)$", path
+                        r"^src/(model|graph|tokenizer|backend/cuda)/families/[^/]+\.(c|cu)$", path
                     ):
                         errors.append(f"invalid family source path: {path}")
                     if re.search(

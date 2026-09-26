@@ -110,6 +110,7 @@ directories, and current family completeness differs.
 | Remote provider discovery and remote representation records | `src/accounts/`, `src/model/remote.c`, `include/yvex/catalog.h` |
 | Local acquired-source and admitted-package catalogs | `src/model/catalog.c`, `src/model/artifacts/`, `include/yvex/catalog.h` |
 | Family source facts, coverage and logical lowering | `src/model/families/` |
+| Authenticated finite-frontier text/token construction | `src/tokenizer/finite_input.c` and source-owned recipes under `src/tokenizer/families/` |
 | Artifact-neutral parameter transformation, transform binding and representation policy | `src/model/compilation/`, model compilation owners |
 | GGUF container, qtypes, writer, layout | `src/gguf/` |
 | Artifact snapshot, integrity, admission, bounded ranges, and package mapping/materialization session | `src/artifact/`, `include/yvex/internal/artifact.h` |

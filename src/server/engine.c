@@ -11,6 +11,7 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/engine_scheduler.h>
 #include <yvex/internal/finite_decision.h>
+#include <yvex/internal/finite_input.h>
 #include <yvex/internal/tokenizer.h>
 
 #define ENGINE_INTERACTIVE_PREFILL_CHUNK 64u
@@ -27,6 +28,8 @@ typedef struct {
     char target_id[128];
     yvex_model_engine *model;
     yvex_finite_decision_engine *finite_decision;
+    yvex_finite_input *finite_input;
+    char finite_tokenizer_identity[YVEX_SHA256_HEX_CAP];
     atomic_int finite_cancel_requested;
     server_request_queue *request_queue;
     server_session_registry *sessions;
@@ -599,7 +602,26 @@ static int finite_decision_engine_open(server_engine_manager *manager,
     yvex_tensor_engine_summary model = {0};
     if (rc == YVEX_OK)
         rc = yvex_finite_decision_engine_summary_copy(engine->finite_decision, &model, err);
+    if (rc == YVEX_OK) {
+        yvex_finite_input_admission admission = {.input_format = model.input_format,
+            .marker_token_id = model.marker_token_id,
+            .token_domain_size = model.token_domain_size,
+            .type_domain_size = model.type_domain_size};
+        yvex_core_text_copy(admission.binding_identity, sizeof(admission.binding_identity),
+            model.binding_identity);
+        yvex_core_text_copy(admission.source_identity, sizeof(admission.source_identity),
+            model.source_identity);
+        yvex_core_text_copy(admission.tokenizer_identity, sizeof(admission.tokenizer_identity),
+            model.tokenizer_identity);
+        rc = yvex_finite_input_open(&engine->finite_input, engine->artifact_path, &admission, err);
+        if (rc == YVEX_ERR_UNSUPPORTED) {
+            yvex_error_clear(err);
+            rc = YVEX_OK; /* Direct token-domain execution remains independently admitted. */
+        }
+    }
     if (rc != YVEX_OK) return rc;
+    yvex_core_text_copy(engine->finite_tokenizer_identity,
+        sizeof(engine->finite_tokenizer_identity), model.tokenizer_identity);
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     yvex_sha256_init(&hash);
@@ -902,6 +924,95 @@ int yvex_server_engine_manager_finite_decision_execute(server_engine_manager *ma
     return rc;
 }
 
+int yvex_server_engine_manager_finite_produce(server_engine_manager *manager,
+    const yvex_finite_producer_request *request, yvex_finite_producer_result *result,
+    int (*caller_cancel)(void *), void *caller_context, yvex_error *err)
+{
+    if (result) memset(result, 0, sizeof(*result));
+    if (!manager || !request || !result || !alias_valid(request->model_alias) ||
+        !request->expected_generation || pthread_mutex_lock(&manager->mutex) != 0)
+        return engine_refuse(err, YVEX_ERR_INVALID_ARG, "bounded finite producer request required");
+    server_engine *engine = !manager->closing ? engine_find(manager, request->model_alias) : NULL;
+    if (!engine || engine->state != YVEX_SERVER_ENGINE_LOADED || !engine->finite_decision ||
+        engine->generation != request->expected_generation) {
+        pthread_mutex_unlock(&manager->mutex);
+        return engine_refuse(err, YVEX_ERR_STATE, "stale or unavailable finite-decision engine");
+    }
+    if (!engine->finite_input) {
+        pthread_mutex_unlock(&manager->mutex);
+        return engine_refuse(err, YVEX_ERR_UNSUPPORTED, "no admitted text-frontier input policy");
+    }
+    engine->active_work++;
+    engine->model_lease_count++;
+    pthread_mutex_unlock(&manager->mutex);
+
+    yvex_finite_input_compiled compiled = {0};
+    yvex_finite_decision_result scored = {0};
+    finite_cancel_scope scope = {.engine = engine,
+        .caller_cancel = caller_cancel, .caller_context = caller_context};
+    int rc = yvex_finite_input_build(engine->finite_input, request, &compiled, err);
+    if (rc == YVEX_OK) {
+        yvex_finite_decision_request exact = {.schema_version = YVEX_FINITE_DECISION_SCHEMA_V1,
+            .expected_generation = request->expected_generation,
+            .expected_binding_identity = engine->summary.runtime_binding_identity,
+            .expected_tokenizer_identity = engine->finite_tokenizer_identity,
+            .token_ids = compiled.tokens, .token_count = compiled.token_count,
+            .input_type_id = compiled.input_type_id,
+            .candidates = compiled.candidates, .candidate_count = request->candidate_count,
+            .cancel_requested = finite_cancel_requested, .cancel_context = &scope};
+        rc = yvex_finite_decision_execute(engine->finite_decision, &exact, &scored, err);
+    }
+    if (rc == YVEX_OK) {
+        result->schema_version = YVEX_FINITE_PRODUCER_SCHEMA_V1;
+        result->score_kind = YVEX_FINITE_PRODUCER_SCORE_MODEL_LOGIT;
+        result->engine_generation = scored.engine_generation;
+        result->token_count = scored.token_count;
+        result->candidate_count = scored.candidate_count;
+        result->model_forward_count = scored.model_forward_count;
+        result->sampling_invocation_count = scored.sampling_invocation_count;
+        result->generated_token_count = scored.generated_token_count;
+        result->resident_backbone_count = scored.resident_backbone_count;
+        result->elapsed_nanoseconds = scored.elapsed_nanoseconds;
+        result->source_mapped_bytes = scored.source_mapped_bytes;
+        result->parameter_execution_bytes = scored.parameter_execution_bytes;
+        result->workspace_host_bytes = scored.workspace_host_bytes;
+        result->workspace_device_bytes = scored.workspace_device_bytes;
+#define COPY_ID(field) memcpy(result->field, scored.field, sizeof(result->field))
+        COPY_ID(source_identity); COPY_ID(logical_model_identity);
+        COPY_ID(binding_identity); COPY_ID(tokenizer_identity);
+        COPY_ID(physical_program_identity); COPY_ID(input_identity);
+        COPY_ID(candidate_population_identity); COPY_ID(result_identity);
+#undef COPY_ID
+        yvex_core_text_copy(result->input_policy_identity,
+            sizeof(result->input_policy_identity), yvex_finite_input_identity(engine->finite_input));
+        yvex_sha256 hash;
+        unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+        yvex_sha256_init(&hash);
+        if (!yvex_sha256_update_text(&hash, "yvex.finite-producer-result.v1") ||
+            !yvex_sha256_update_text(&hash, scored.result_identity) ||
+            !yvex_sha256_update_text(&hash, result->input_policy_identity) ||
+            !yvex_sha256_final(&hash, digest))
+            rc = engine_refuse(err, YVEX_ERR_STATE, "finite producer result identity failed");
+        else yvex_sha256_hex(digest, result->result_identity);
+        result->calibrated = scored.calibrated;
+        for (unsigned long long i = 0u; i < scored.candidate_count; ++i) {
+            yvex_core_text_copy(result->candidates[i].id, sizeof(result->candidates[i].id),
+                scored.candidates[i].candidate_id);
+            result->candidates[i].raw_score = scored.candidates[i].raw_logit;
+            result->candidates[i].relative_candidate_probability =
+                scored.candidates[i].relative_candidate_probability;
+        }
+    }
+    pthread_mutex_lock(&manager->mutex);
+    engine->active_work--;
+    engine->model_lease_count--;
+    summary_base(engine);
+    pthread_cond_broadcast(&manager->condition);
+    pthread_mutex_unlock(&manager->mutex);
+    if (rc != YVEX_OK) memset(result, 0, sizeof(*result));
+    return rc;
+}
+
 static int engine_close(server_engine_manager *manager, server_engine *engine,
                         yvex_error *err)
 {
@@ -922,6 +1033,7 @@ static int engine_close(server_engine_manager *manager, server_engine *engine,
         }
     }
     yvex_server_media_registry_close(&engine->media);
+    yvex_finite_input_close(&engine->finite_input);
     if (engine->finite_decision) {
         cleanup_rc = yvex_finite_decision_engine_close(&engine->finite_decision, &cleanup);
         if (cleanup_rc != YVEX_OK && rc == YVEX_OK) {

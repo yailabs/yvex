@@ -230,14 +230,14 @@ while test "$attempt" -lt 100; do
 done
 test "$ready" -eq 1 || fail 'persistent host did not become ready'
 contains "$OUT_DIR/host.out" 'YVEX HOST · verified inference runtime'
-contains "$OUT_DIR/host.out" 'protocol 23'
+contains "$OUT_DIR/host.out" 'protocol 24'
 contains "$OUT_DIR/host.out" '0/2 engines · 2 workers'
 contains "$OUT_DIR/host.out" 'events lifecycle · progress · resources'
 contains "$OUT_DIR/host.out" 'host ready · Ctrl-C to stop'
 not_contains "$OUT_DIR/host.out" '█'
 not_contains "$OUT_DIR/host.out" '▀'
 contains "$OUT_DIR/status.json" '"schema":"yvex.host.status.v1"'
-contains "$OUT_DIR/status.json" '"protocol":23'
+contains "$OUT_DIR/status.json" '"protocol":24'
 contains "$OUT_DIR/status.json" '"status":2'
 contains "$OUT_DIR/status.json" '"host_ready":true'
 contains "$OUT_DIR/status.json" '"engine_count":0'
@@ -373,7 +373,7 @@ server_pid=
 contains "$OUT_DIR/server-terminal.typescript" 'YVEX 0.1.0 · HOST'
 contains "$OUT_DIR/server-terminal.typescript" '▀▀█▄ █ ▄█▀▀'
 contains "$OUT_DIR/server-terminal.typescript" 'HOST     0/2 engines · 2 workers'
-contains "$OUT_DIR/server-terminal.typescript" 'PROTOCOL 23'
+contains "$OUT_DIR/server-terminal.typescript" 'PROTOCOL 24'
 contains "$OUT_DIR/server-terminal.typescript" 'NATIVE'
 not_contains "$OUT_DIR/server-terminal.typescript" 'LOAD   deepseek4-v4-flash-dspark · g1'
 contains "$OUT_DIR/server-terminal.typescript" 'FAIL'
@@ -465,7 +465,7 @@ for width, colored in [(40, False), (60, False), (76, False), (80, False),
                         for c in line)
             assert cells < width, (width, cells, line)
         for fact in ('YVEX 0.1.0 · HOST', 'verified inference runtime',
-                     'HOST     0/2 engines · 2 workers', 'PROTOCOL 23',
+                     'HOST     0/2 engines · 2 workers', 'PROTOCOL 24',
                      'OPENAI   disabled', 'lifecycle', 'progress', 'resources'):
             assert fact in banner, (width, fact)
         native = next(line.split('NATIVE   ', 1)[1] for line in lines if 'NATIVE   ' in line)

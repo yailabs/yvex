@@ -71,6 +71,9 @@ int yvex_tokenizer_nfc_normalize(const unsigned char *input, unsigned long long 
 int yvex_tokenizer_execution_seal(yvex_tokenizer *tokenizer, const yvex_gguf *gguf,
                                   const yvex_tokenizer_family_policy *policy,
                                   yvex_error *err);
+int yvex_tokenizer_execution_seal_hf_json(yvex_tokenizer *tokenizer,
+                                          const char *json, size_t json_bytes,
+                                          yvex_error *err);
 int yvex_tokenizer_prompt_render_v2(
     yvex_rendered_prompt *out, const yvex_tokenizer *tokenizer,
     const yvex_prompt_message *messages, unsigned long long message_count,

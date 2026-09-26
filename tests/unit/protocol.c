@@ -14,6 +14,7 @@
 
 #include <yvex/server.h>
 #include <yvex/internal/generation.h>
+#include <yvex/internal/finite_producer_wire.h>
 #include "src/server/private.h"
 
 #include "tests/test.h"
@@ -914,7 +915,7 @@ typedef struct {
 static void *stale_peer_main(void *opaque)
 {
     static const unsigned char response[12] = {
-        'Y', 'V', 'X', 'P', 0u, 22u, 0u, 2u, 0u, 0u, 0u, 0u};
+        'Y', 'V', 'X', 'P', 0u, 23u, 0u, 2u, 0u, 0u, 0u, 0u};
     stale_peer *peer = opaque;
     unsigned char header[12], discard[4096];
     unsigned int length;
@@ -963,8 +964,8 @@ static int test_stale_frame_refusal(void)
                      "stale peer thread");
     rc = yvex_client_connect(&client, path, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT && client == NULL &&
-                         strstr(yvex_error_message(&err), "version 23") != NULL,
-                     "immediately prior v22 frame explicitly refuses");
+                         strstr(yvex_error_message(&err), "version 24") != NULL,
+                     "immediately prior v23 frame explicitly refuses");
     YVEX_TEST_ASSERT(pthread_join(thread, NULL) == 0, "stale peer join");
     (void)close(peer.listener);
     (void)unlink(path);
@@ -1362,8 +1363,102 @@ static int test_execution_preflight_contract(void)
     return 0;
 }
 
+static int test_finite_producer_wire(void)
+{
+    yvex_error err = {0};
+    yvex_finite_producer_request request = {.schema_version = YVEX_FINITE_PRODUCER_SCHEMA_V1,
+        .expected_generation = 9u, .candidate_count = 2u};
+    yvex_finite_producer_request decoded = {0};
+    unsigned char payload[4096], frame[8192], *owned = NULL;
+    yvex_content_part *content = NULL;
+    yvex_provider_request *provider = NULL;
+    size_t bytes = 0u;
+    unsigned long long frame_bytes = 0u;
+    strcpy(request.model_alias, "decision-only");
+    strcpy(request.question, "Select an option.");
+    strcpy(request.context, "Current context.");
+    strcpy(request.candidates[0].id, "first");
+    strcpy(request.candidates[0].text, "continue");
+    strcpy(request.candidates[1].id, "second");
+    strcpy(request.candidates[1].text, "stop");
+    YVEX_TEST_ASSERT(yvex_finite_producer_request_encode(&request, payload,
+        sizeof(payload), &bytes, &err) == YVEX_OK && bytes > 0u,
+        "bounded producer payload encodes");
+    YVEX_TEST_ASSERT(yvex_finite_producer_request_decode(payload, bytes,
+        &decoded, &err) == YVEX_OK && decoded.expected_generation == 9u &&
+        !strcmp(decoded.candidates[1].text, "stop"), "typed producer payload roundtrip");
+    YVEX_TEST_ASSERT(yvex_finite_producer_request_decode(payload, bytes - 1u,
+        &decoded, &err) == YVEX_ERR_FORMAT, "truncated producer payload refuses");
+    request.candidate_count = 0u;
+    YVEX_TEST_ASSERT(yvex_finite_producer_request_encode(&request, payload,
+        sizeof(payload), &bytes, &err) == YVEX_ERR_INVALID_ARG,
+        "empty finite frontier refuses before execution");
+    request.candidate_count = YVEX_FINITE_PRODUCER_MAX_CANDIDATES + 1u;
+    YVEX_TEST_ASSERT(yvex_finite_producer_request_encode(&request, payload,
+        sizeof(payload), &bytes, &err) == YVEX_ERR_INVALID_ARG,
+        "oversized finite frontier refuses before execution");
+    request.candidate_count = 2u;
+    YVEX_TEST_ASSERT(yvex_finite_producer_request_encode(&request, payload,
+        sizeof(payload), &bytes, &err) == YVEX_OK,
+        "restored bounded producer payload encodes");
+    yvex_client_request carrier = {.schema_version = YVEX_LOCAL_PROTOCOL_VERSION,
+        .operation = YVEX_CLIENT_OP_FINITE_DECISION, .engine_generation = 9u,
+        .prompt = payload, .prompt_bytes = bytes};
+    strcpy(carrier.model_alias, "decision-only");
+    YVEX_TEST_ASSERT(yvex_protocol_request_encode(&carrier, frame,
+        sizeof(frame), &frame_bytes, &err) == YVEX_OK,
+        "producer uses existing local request frame");
+    yvex_client_request carried = {0};
+    YVEX_TEST_ASSERT(yvex_protocol_request_decode(frame, frame_bytes,
+        &carried, &owned, &content, &provider, &err) == YVEX_OK &&
+        carried.operation == YVEX_CLIENT_OP_FINITE_DECISION &&
+        carried.engine_generation == 9u && carried.prompt_bytes == bytes,
+        "producer route and payload cross local frame");
+    free(owned);
+    carried.prompt = NULL;
+    carrier.engine_generation = 0u;
+    YVEX_TEST_ASSERT(yvex_protocol_request_encode(&carrier, frame,
+        sizeof(frame), &frame_bytes, &err) == YVEX_ERR_INVALID_ARG,
+        "producer without exact generation refuses");
+    yvex_finite_producer_result result = {.schema_version = YVEX_FINITE_PRODUCER_SCHEMA_V1,
+        .score_kind = YVEX_FINITE_PRODUCER_SCORE_MODEL_LOGIT,
+        .engine_generation = 9u, .token_count = 17u, .candidate_count = 2u,
+        .model_forward_count = 1u, .resident_backbone_count = 1u};
+    char *ids[] = {result.source_identity, result.logical_model_identity,
+        result.binding_identity, result.tokenizer_identity,
+        result.physical_program_identity, result.input_policy_identity, result.input_identity,
+        result.candidate_population_identity, result.result_identity};
+    for (size_t i = 0u; i < sizeof(ids) / sizeof(ids[0]); ++i)
+        memset(ids[i], 'a', 64u);
+    strcpy(result.candidates[0].id, "first");
+    strcpy(result.candidates[1].id, "second");
+    result.candidates[0].raw_score = 0.5;
+    result.candidates[1].raw_score = -0.5;
+    result.candidates[0].relative_candidate_probability = 0.7;
+    result.candidates[1].relative_candidate_probability = 0.3;
+    YVEX_TEST_ASSERT(yvex_finite_producer_result_encode(&result, payload,
+        sizeof(payload), &bytes, &err) == YVEX_OK,
+        "typed uncalibrated result encodes");
+    yvex_finite_producer_result observed = {0};
+    YVEX_TEST_ASSERT(yvex_finite_producer_result_decode(payload, bytes,
+        &observed, &err) == YVEX_OK && observed.candidate_count == 2u &&
+        observed.candidates[0].raw_score == 0.5 && !observed.calibrated,
+        "typed result roundtrip preserves scores and nonclaim");
+    result.calibrated = 1;
+    YVEX_TEST_ASSERT(yvex_finite_producer_result_encode(&result, payload,
+        sizeof(payload), &bytes, &err) == YVEX_ERR_INVALID_ARG,
+        "uncalibrated producer cannot publish calibration claim");
+    result.calibrated = 0;
+    result.candidates[0].raw_score = NAN;
+    YVEX_TEST_ASSERT(yvex_finite_producer_result_encode(&result, payload,
+        sizeof(payload), &bytes, &err) == YVEX_ERR_FORMAT,
+        "non-finite model score cannot cross local transport");
+    return 0;
+}
+
 int yvex_test_protocol(void)
 {
+    if (test_finite_producer_wire() != 0) return 1;
     if (test_execution_preflight_contract() != 0) return 1;
     if (test_request_roundtrip() != 0) return 1;
     if (test_load_context_roundtrip() != 0) return 1;
