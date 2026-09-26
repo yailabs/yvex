@@ -1,8 +1,8 @@
-# Local Protocol v22
+# Local Protocol v23
 
 Status: normative private protocol contract
 
-Schema/version: `YVEX_LOCAL_PROTOCOL_VERSION = 22`.
+Schema/version: `YVEX_LOCAL_PROTOCOL_VERSION = 23`.
 
 Authority: `include/yvex/server.h` and `src/server/protocol.c`. This document
 explains the wire and lifecycle contract; code remains authoritative for exact
@@ -17,26 +17,28 @@ Unix-domain socket and is not a public network API.
 
 ## Framing and negotiation
 
-Every connection negotiates version 22 and exchanges bounded typed frames.
+Every connection negotiates version 23 and exchanges bounded typed frames.
 Lengths, enums, strings, arrays, message/tool fields, and correlations are
 validated before dispatch. Oversized, truncated, duplicate, unknown, or
 malformed fields refuse without entering the server scheduler.
 
-Every earlier version, including v21, is refused explicitly. There is no private
+Every earlier version, including v22, is refused explicitly. There is no private
 pre-v0.1 compatibility decoder. Unknown operations and response kinds fail
 closed.
 
 ## Operations
 
-Protocol v22 carries host status/stop, engine load/list/unload, demand-active
+Protocol v23 carries host status/stop, engine load/list/unload, demand-active
 model lease acquire/release, model and memory
-facts for each engine generation, text or media engine kind, target-only or
+facts for each engine generation, text, media or finite-decision engine kind, target-only or
 speculative text execution strategy,
 session lifecycle, bounded copy-on-write session fork, ordered typed-content
 generation turns and
 cancellation, speculative lifecycle events, event subscriptions, and composed
 console status. Offline compile, artifact, inspect, execute, profile, and system
-operations do not cross this protocol.
+operations do not cross this protocol. Finite-decision scoring uses a separate
+typed local C producer, not a generation turn or OpenAI-compatible route;
+the protocol carries its engine lifecycle and summary but not candidate scores.
 
 Every engine-scoped request names a model alias and, after resolution, the exact
 process-local engine generation. Alias equality never permits a stale session or
@@ -163,7 +165,7 @@ request fail before scheduler admission. Conditions are request-owned and do
 not alter engine identity or persist in a later turn.
 
 The admitted tokenizer contract classifies source-authored explicit reasoning
-separately from final text. Protocol v22 permits an omitted policy to remain
+separately from final text. Protocol v23 permits an omitted policy to remain
 `source-default` until the exact loaded model resolves it; concrete `disabled`,
 `low`, `enabled`, and `maximum` choices remain request facts. Provider request
 v4 independently carries source-default/drop/preserve reasoning-history policy.
@@ -234,7 +236,7 @@ accepted prefix, confidence facts, separate draft/verification/commit timing,
 effective committed rate, and policy identity. Exact seconds are never
 reconstructed from rounded rates.
 
-Protocol v22 retains measurement schema v1. Each record identifies
+Protocol v23 retains measurement schema v1. Each record identifies
 its phase scope, host/device clock, top-level/nested/enclosing/overlapping
 composition, work unit, and availability. A cumulative rate uses the complete
 declared work/duration denominator; rolling decode uses its own recent work and
@@ -311,7 +313,7 @@ summed into a synthetic total.
 
 ## Non-claims
 
-Protocol v22 is not a public remote API, authentication protocol, TLS transport,
+Protocol v23 is not a public remote API, authentication protocol, TLS transport,
 stable cross-version SDK promise, distributed serving protocol, or model
 quality contract. Versioned checkpoints preserve the admitted model and
 semantic-session state across restart; the in-memory fork does not create a

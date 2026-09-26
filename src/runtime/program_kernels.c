@@ -331,6 +331,11 @@ static int kernel_f32_bind(yvex_program_kernels *c, const yvex_program_physical_
             yvex_program_physical_attribute(s, "weight_offset")->value.real, err);
         return rc == YVEX_OK ? kernel_small_prepare(c, s->operands[2], 0.0, err) : rc;
     }
+    if (!strcmp(s->implementation, "layer_norm_unbiased.f32.v1")) {
+        if (!c->ops || !c->ops->centered_norm_unbiased_f32) goto unavailable;
+        return kernel_small_prepare(c, s->operands[1],
+            yvex_program_physical_attribute(s, "weight_offset")->value.real, err);
+    }
     if (!strcmp(s->implementation, "rotary_half.f32.v1")) {
         if (!c->ops || !c->ops->rotary_half_f32) goto unavailable;
         return YVEX_OK;
@@ -357,6 +362,22 @@ static int kernel_f32_bind(yvex_program_kernels *c, const yvex_program_physical_
     if (!strcmp(s->implementation, "split_interleaved_three.f32.v1") ||
         !strcmp(s->implementation, "split_interleaved_three.bf16.v1")) {
         if (!c->ops || !c->ops->split_interleaved_three) goto unavailable;
+        return YVEX_OK;
+    }
+    if (!strcmp(s->implementation, "split_three.f32.v1")) {
+        if (!c->ops || !c->ops->split_three) goto unavailable;
+        return YVEX_OK;
+    }
+    if (!strcmp(s->implementation, "split_two.f32.v1")) {
+        if (!c->ops || !c->ops->split_two_f32) goto unavailable;
+        return YVEX_OK;
+    }
+    if (!strcmp(s->implementation, "multiply.f32.v1")) {
+        if (!c->ops || !c->ops->multiply_f32) goto unavailable;
+        return YVEX_OK;
+    }
+    if (!strcmp(s->implementation, "gelu.erf.f32.v1")) {
+        if (!c->ops || !c->ops->gelu) goto unavailable;
         return YVEX_OK;
     }
     if (!strcmp(s->implementation, "swiglu_split.f32.v1")) {
@@ -1269,6 +1290,18 @@ static int kernel_f32_execute(yvex_program_kernels *c, const yvex_program_device
         return c->ops->split_interleaved_three(c->backend, input, output, &r->values[s->results[1]],
             &r->values[s->results[2]], r->rows, width / head, head, facts, err);
     }
+    if (!strcmp(s->implementation, "split_three.f32.v1"))
+        return c->ops->split_three(c->backend, input, output, &r->values[s->results[1]],
+            &r->values[s->results[2]], r->rows, width, facts, err);
+    if (!strcmp(s->implementation, "split_two.f32.v1"))
+        return c->ops->split_two_f32(c->backend, input, output, &r->values[s->results[1]],
+            r->rows, width, facts, err);
+    if (!strcmp(s->implementation, "multiply.f32.v1"))
+        return c->ops->multiply_f32(c->backend, input, &r->values[s->operands[1]],
+            output, output->bytes / sizeof(float), facts, err);
+    if (!strcmp(s->implementation, "gelu.erf.f32.v1"))
+        return c->ops->gelu(c->backend, input, output, output->bytes / sizeof(float),
+            0, 0, facts, err);
     if (!strcmp(s->implementation, "swiglu_split.f32.v1"))
         return c->ops->swiglu_split_f32(c->backend, input, output, r->rows, width,
             (int)yvex_program_physical_attribute(s, "gate_first")->value.integer, facts, err);
@@ -1291,6 +1324,9 @@ static int kernel_f32_execute(yvex_program_kernels *c, const yvex_program_device
     }
     if (!strcmp(s->implementation, "layer_norm.f32.v1"))
         return c->ops->normalization_f32(c->backend, input, c->small[s->operands[1]], c->small[s->operands[2]],
+            output, r->rows, width, yvex_program_physical_attribute(s, "epsilon")->value.real, facts, err);
+    if (!strcmp(s->implementation, "layer_norm_unbiased.f32.v1"))
+        return c->ops->centered_norm_unbiased_f32(c->backend, input, c->small[s->operands[1]],
             output, r->rows, width, yvex_program_physical_attribute(s, "epsilon")->value.real, facts, err);
     if (!strcmp(s->implementation, "rms_norm.f32.v1") || !strcmp(s->implementation, "rms_normalize.f32.v1")) {
         int unit = !strcmp(s->implementation, "rms_normalize.f32.v1");

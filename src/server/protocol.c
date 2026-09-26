@@ -1504,7 +1504,7 @@ static int message_base_field(yvex_client_message *candidate, unsigned int tag,
     case TAG_KV_USED_BYTES: valid = BASE_U64(candidate->kv_used_bytes); break;
     case TAG_MESSAGE_ENGINE_KIND:
         valid = reader_u64(bytes, count, &value) &&
-                value <= YVEX_SERVER_ENGINE_MEDIA;
+                value <= YVEX_SERVER_ENGINE_FINITE_DECISION;
         if (valid)
             candidate->engine_kind = (yvex_server_engine_kind)value;
         break;
@@ -1791,7 +1791,7 @@ static int message_engine_field(yvex_client_message *candidate,
         break;
     case TAG_ENGINE_KIND:
         valid = reader_u64(bytes, count, &value) &&
-                value <= YVEX_SERVER_ENGINE_MEDIA;
+                value <= YVEX_SERVER_ENGINE_FINITE_DECISION;
         if (valid)
             engine->engine_kind = (yvex_server_engine_kind)value;
         break;
@@ -1907,7 +1907,7 @@ static int message_event_field(yvex_client_message *candidate,
         break;
     case TAG_EVENT_ENGINE_KIND:
         valid = reader_u64(bytes, count, &value) &&
-                value <= YVEX_SERVER_ENGINE_MEDIA;
+                value <= YVEX_SERVER_ENGINE_FINITE_DECISION;
         if (valid)
             candidate->event.engine_kind = (yvex_server_engine_kind)value;
         break;

@@ -2,6 +2,7 @@
 #include "src/server/private.h"
 
 #include <assert.h>
+#include <stdatomic.h>
 #include <limits.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -9,6 +10,7 @@
 
 #include <yvex/internal/core.h>
 #include <yvex/internal/engine_scheduler.h>
+#include <yvex/internal/finite_decision.h>
 #include <yvex/internal/tokenizer.h>
 
 #define ENGINE_INTERACTIVE_PREFILL_CHUNK 64u
@@ -24,6 +26,8 @@ typedef struct {
     char runtime_binding_path[YVEX_PATH_CAP];
     char target_id[128];
     yvex_model_engine *model;
+    yvex_finite_decision_engine *finite_decision;
+    atomic_int finite_cancel_requested;
     server_request_queue *request_queue;
     server_session_registry *sessions;
     server_media_registry *media;
@@ -66,6 +70,8 @@ struct server_engine_manager {
     int mutex_ready, condition_ready, closing;
 };
 
+static server_engine *engine_find(server_engine_manager *manager, const char *alias);
+
 static int engine_refuse(yvex_error *err, yvex_status status,
                          const char *reason)
 {
@@ -96,7 +102,9 @@ static void engine_capability_default(
     yvex_model_capability_profile profile =
         kind == YVEX_SERVER_ENGINE_TEXT
             ? YVEX_MODEL_CAPABILITY_PROFILE_TEXT_GENERATION
-            : YVEX_MODEL_CAPABILITY_PROFILE_CONDITIONED_AUDIOVISUAL_GENERATION;
+            : kind == YVEX_SERVER_ENGINE_MEDIA
+                ? YVEX_MODEL_CAPABILITY_PROFILE_CONDITIONED_AUDIOVISUAL_GENERATION
+                : YVEX_MODEL_CAPABILITY_PROFILE_FINITE_DECISION;
     (void)yvex_model_capability_profile_describe(profile, capability, NULL);
 }
 
@@ -239,7 +247,7 @@ static int options_admit(server_engine *engine,
         (options->backend != YVEX_BACKEND_KIND_CPU &&
          options->backend != YVEX_BACKEND_KIND_CUDA) ||
         options->engine_kind == YVEX_SERVER_ENGINE_NONE ||
-        options->engine_kind > YVEX_SERVER_ENGINE_MEDIA ||
+        options->engine_kind > YVEX_SERVER_ENGINE_FINITE_DECISION ||
         options->execution_strategy > YVEX_SERVER_EXECUTION_SPECULATIVE ||
         options->trace_level > YVEX_SERVER_TRACE_FULL ||
         !options->maximum_output_bytes || !options->maximum_sessions ||
@@ -252,7 +260,12 @@ static int options_admit(server_engine *engine,
                   !options->context_capacity || !options->maximum_new_tokens || media ||
                   options->execution_strategy ==
                       YVEX_SERVER_EXECUTION_NOT_APPLICABLE)) ||
-        (!text && (!media || options->artifact_path ||
+        (options->engine_kind == YVEX_SERVER_ENGINE_FINITE_DECISION &&
+         (!options->artifact_path || !options->runtime_binding_path ||
+          !options->context_capacity || options->maximum_new_tokens || media ||
+          options->prefill_chunk_tokens ||
+          options->execution_strategy != YVEX_SERVER_EXECUTION_NOT_APPLICABLE)) ||
+        (options->engine_kind == YVEX_SERVER_ENGINE_MEDIA && (!media || options->artifact_path ||
                    options->runtime_binding_path || options->context_capacity ||
                    options->prefill_chunk_tokens || options->maximum_new_tokens ||
                    options->execution_strategy !=
@@ -570,6 +583,50 @@ static int media_engine_open(server_engine_manager *manager,
     return YVEX_OK;
 }
 
+static int finite_decision_engine_open(server_engine_manager *manager,
+    server_engine *engine, yvex_error *err)
+{
+    yvex_finite_decision_engine_options options = {
+        .schema_version = YVEX_FINITE_DECISION_SCHEMA_V1,
+        .source_path = engine->artifact_path,
+        .binding_path = engine->runtime_binding_path,
+        .backend = engine->options.backend,
+        .generation = engine->generation,
+        .maximum_tokens = engine->options.context_capacity,
+        .maximum_host_bytes = engine->options.maximum_host_bytes,
+        .maximum_device_bytes = engine->options.maximum_device_bytes};
+    int rc = yvex_finite_decision_engine_open(&engine->finite_decision, &options, err);
+    yvex_tensor_engine_summary model = {0};
+    if (rc == YVEX_OK)
+        rc = yvex_finite_decision_engine_summary_copy(engine->finite_decision, &model, err);
+    if (rc != YVEX_OK) return rc;
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    yvex_sha256_init(&hash);
+    if (!yvex_sha256_update_text(&hash, "yvex.server.finite-decision-specialization.v1") ||
+        !yvex_sha256_update_text(&hash, model.binding_identity) ||
+        !yvex_sha256_update_u64(&hash, model.backend) ||
+        !yvex_sha256_update_u64(&hash, model.maximum_rows) ||
+        !yvex_sha256_update_u64(&hash, model.generation) ||
+        !yvex_sha256_final(&hash, digest))
+        return engine_refuse(err, YVEX_ERR_STATE, "finite-decision specialization identity failed");
+    engine->artifact_bytes = model.source_mapped_bytes;
+    engine->mapped_package_bytes = model.source_mapped_bytes;
+    engine->model_component_count = 1u;
+    engine->model_residency.placement = YVEX_RUNTIME_WEIGHT_PLACEMENT_ARTIFACT_MAPPED;
+    engine->summary.context_capacity = model.maximum_rows;
+    yvex_core_text_copy(engine->summary.runtime_model_identity,
+        sizeof(engine->summary.runtime_model_identity), model.logical_model_identity);
+    yvex_core_text_copy(engine->summary.runtime_binding_identity,
+        sizeof(engine->summary.runtime_binding_identity), model.binding_identity);
+    yvex_core_text_copy(engine->summary.artifact_identity,
+        sizeof(engine->summary.artifact_identity), model.source_identity);
+    yvex_sha256_hex(digest, engine->summary.specialization_identity);
+    yvex_server_telemetry_model_opened(manager->telemetry, model.source_mapped_bytes, 0u, 0u, 0u);
+    engine->telemetry_opened = 1;
+    return YVEX_OK;
+}
+
 static int optional_summary_identity_valid(const char *identity)
 {
     return identity && memchr(identity, '\0', YVEX_SHA256_HEX_CAP) &&
@@ -582,11 +639,11 @@ int yvex_server_engine_summary_valid(const yvex_server_engine_summary *engine)
         engine->state > YVEX_SERVER_ENGINE_FAILED ||
         engine->backend > YVEX_BACKEND_KIND_CUDA ||
         engine->engine_kind == YVEX_SERVER_ENGINE_NONE ||
-        engine->engine_kind > YVEX_SERVER_ENGINE_MEDIA ||
+        engine->engine_kind > YVEX_SERVER_ENGINE_FINITE_DECISION ||
         engine->execution_strategy > YVEX_SERVER_EXECUTION_SPECULATIVE ||
         (engine->engine_kind == YVEX_SERVER_ENGINE_TEXT &&
          engine->execution_strategy == YVEX_SERVER_EXECUTION_NOT_APPLICABLE) ||
-        (engine->engine_kind == YVEX_SERVER_ENGINE_MEDIA &&
+        (engine->engine_kind != YVEX_SERVER_ENGINE_TEXT &&
          engine->execution_strategy != YVEX_SERVER_EXECUTION_NOT_APPLICABLE) ||
         !memchr(engine->alias, '\0', sizeof(engine->alias)) ||
         !memchr(engine->target_id, '\0', sizeof(engine->target_id)) ||
@@ -681,7 +738,7 @@ static int summary_resources(server_engine *engine, yvex_error *err)
     yvex_execution_resource_summary session = {0};
     server_media_summary media = {0};
     yvex_execution_resource_summary *resources = &engine->summary.resources;
-    int owns_resources = engine->model || engine->sessions || engine->media;
+    int owns_resources = engine->model || engine->sessions || engine->media || engine->finite_decision;
     memset(resources, 0, sizeof(*resources));
     resources->schema_version = YVEX_EXECUTION_RESOURCE_SCHEMA_V1;
     engine->summary.mapped_package_bytes =
@@ -703,6 +760,14 @@ static int summary_resources(server_engine *engine, yvex_error *err)
     resources->model_prepared_bytes = engine->prepared_bytes;
     resources->model_device_addressable_bytes =
         engine->model_residency.cuda_addressable_bytes;
+    if (engine->finite_decision) {
+        yvex_tensor_engine_summary finite = {0};
+        if (yvex_finite_decision_engine_summary_copy(engine->finite_decision, &finite, err) != YVEX_OK)
+            return yvex_error_code(err);
+        resources->available |= YVEX_EXECUTION_RESOURCE_WORKSPACE_AVAILABLE;
+        resources->workspace_current_bytes = finite.workspace_host_bytes;
+        resources->workspace_peak_bytes = finite.workspace_host_bytes;
+    }
     resources->logical_upload_bytes = engine->model_residency.cuda_upload_bytes;
     if (engine->media) {
         resources->placement = YVEX_EXECUTION_PLACEMENT_COMPOSITE;
@@ -784,10 +849,57 @@ static int summary_resources(server_engine *engine, yvex_error *err)
 
 static void engine_cancel(server_engine *engine)
 {
+    if (engine->finite_decision)
+        atomic_store_explicit(&engine->finite_cancel_requested, 1, memory_order_release);
     if (engine->media)
         yvex_server_media_registry_cancel_all(engine->media);
     else if (engine->sessions)
         yvex_server_sessions_cancel_all(engine->sessions);
+}
+
+typedef struct {
+    server_engine *engine;
+    int (*caller_cancel)(void *);
+    void *caller_context;
+} finite_cancel_scope;
+
+static int finite_cancel_requested(void *context)
+{
+    const finite_cancel_scope *scope = context;
+    return atomic_load_explicit(&scope->engine->finite_cancel_requested, memory_order_acquire) ||
+        (scope->caller_cancel && scope->caller_cancel(scope->caller_context));
+}
+
+int yvex_server_engine_manager_finite_decision_execute(server_engine_manager *manager,
+    const char *alias, const yvex_finite_decision_request *request,
+    yvex_finite_decision_result *result, yvex_error *err)
+{
+    if (result) memset(result, 0, sizeof(*result));
+    if (!manager || !alias_valid(alias) || !request || !result ||
+        pthread_mutex_lock(&manager->mutex) != 0)
+        return engine_refuse(err, YVEX_ERR_INVALID_ARG, "finite-decision host request required");
+    server_engine *engine = !manager->closing ? engine_find(manager, alias) : NULL;
+    if (!engine || engine->state != YVEX_SERVER_ENGINE_LOADED || !engine->finite_decision ||
+        engine->generation != request->expected_generation) {
+        pthread_mutex_unlock(&manager->mutex);
+        return engine_refuse(err, YVEX_ERR_STATE, "exact loaded finite-decision generation required");
+    }
+    engine->active_work++;
+    engine->model_lease_count++;
+    finite_cancel_scope scope = {.engine = engine,
+        .caller_cancel = request->cancel_requested, .caller_context = request->cancel_context};
+    yvex_finite_decision_request submitted = *request;
+    submitted.cancel_requested = finite_cancel_requested;
+    submitted.cancel_context = &scope;
+    pthread_mutex_unlock(&manager->mutex);
+    int rc = yvex_finite_decision_execute(engine->finite_decision, &submitted, result, err);
+    pthread_mutex_lock(&manager->mutex);
+    engine->active_work--;
+    engine->model_lease_count--;
+    summary_base(engine);
+    pthread_cond_broadcast(&manager->condition);
+    pthread_mutex_unlock(&manager->mutex);
+    return rc;
 }
 
 static int engine_close(server_engine_manager *manager, server_engine *engine,
@@ -810,7 +922,14 @@ static int engine_close(server_engine_manager *manager, server_engine *engine,
         }
     }
     yvex_server_media_registry_close(&engine->media);
-    if (!engine->sessions && !engine->media)
+    if (engine->finite_decision) {
+        cleanup_rc = yvex_finite_decision_engine_close(&engine->finite_decision, &cleanup);
+        if (cleanup_rc != YVEX_OK && rc == YVEX_OK) {
+            rc = cleanup_rc;
+            primary = cleanup;
+        }
+    }
+    if (!engine->sessions && !engine->media && !engine->finite_decision)
         engine->summary.session_count = 0ull;
     yvex_model_engine_close(&engine->model);
     yvex_server_request_queue_close(&engine->request_queue);
@@ -955,11 +1074,14 @@ int yvex_server_engine_manager_load(
                            YVEX_SERVER_EVENT_ENGINE_LOAD_REQUESTED,
                            YVEX_SERVER_SEVERITY_INFO, candidate.state);
     candidate.active_work = 0ull;
-    rc = engine_request_queue_open(manager, &candidate, err);
+    rc = candidate.options.engine_kind == YVEX_SERVER_ENGINE_FINITE_DECISION ?
+        YVEX_OK : engine_request_queue_open(manager, &candidate, err);
     if (rc == YVEX_OK)
         rc = candidate.options.engine_kind == YVEX_SERVER_ENGINE_MEDIA
                  ? media_engine_open(manager, &candidate, media, err)
-                 : text_engine_open(manager, &candidate, err);
+                 : candidate.options.engine_kind == YVEX_SERVER_ENGINE_FINITE_DECISION
+                     ? finite_decision_engine_open(manager, &candidate, err)
+                     : text_engine_open(manager, &candidate, err);
     if (rc == YVEX_OK)
         rc = summary_resources(&candidate, err);
     if (rc != YVEX_OK) {
@@ -1009,12 +1131,14 @@ int yvex_server_engine_manager_acquire(
         engine = engine_find(manager, alias);
     else
         for (index = 0ull; index < manager->capacity; ++index)
-            if (manager->engines[index].state == YVEX_SERVER_ENGINE_LOADED) {
+            if (manager->engines[index].state == YVEX_SERVER_ENGINE_LOADED &&
+                !manager->engines[index].finite_decision) {
                 engine = &manager->engines[index];
                 loaded++;
             }
     if ((!alias || !alias[0]) && loaded != 1ull) engine = NULL;
     if (!engine || engine->state != YVEX_SERVER_ENGINE_LOADED ||
+        engine->finite_decision ||
         (generation && generation != engine->generation)) {
         (void)pthread_mutex_unlock(&manager->mutex);
         return engine_refuse(err, YVEX_ERR_STATE,
@@ -1269,7 +1393,8 @@ int yvex_server_engine_lease_execute(
     void *emit_context, yvex_error *err)
 {
     server_engine *engine = lease ? lease->engine : NULL;
-    if (!engine || engine->generation != lease->generation)
+    if (!engine || engine->generation != lease->generation ||
+        (!engine->media && !engine->sessions))
         return engine_refuse(err, YVEX_ERR_STATE,
                              "live engine lease is required");
     return engine->media
@@ -1293,7 +1418,8 @@ int yvex_server_engine_lease_preflight(
     yvex_tokenizer_encode_result encoded = {0};
     char identity[YVEX_SHA256_HEX_CAP];
     int rc;
-    if (!output || !request || !engine || engine->generation != lease->generation)
+    if (!output || !request || !engine || engine->generation != lease->generation ||
+        !engine->model)
         return engine_refuse(err, YVEX_ERR_STATE, "live exact engine lease is required");
     memset(output, 0, sizeof(*output));
     if (engine->media || !request->provider_request)
@@ -1328,7 +1454,8 @@ int yvex_server_engine_lease_cancel(server_engine_lease *lease,
                                     const char *session, yvex_error *err)
 {
     server_engine *engine = lease ? lease->engine : NULL;
-    if (!engine || engine->generation != lease->generation)
+    if (!engine || engine->generation != lease->generation ||
+        (!engine->media && !engine->sessions))
         return engine_refuse(err, YVEX_ERR_STATE,
                              "live engine lease is required");
     return engine->media
@@ -1342,7 +1469,8 @@ int yvex_server_engine_lease_console_status(
     yvex_error *err)
 {
     server_engine *engine = lease ? lease->engine : NULL;
-    if (!engine || engine->generation != lease->generation)
+    if (!engine || engine->generation != lease->generation ||
+        (!engine->media && !engine->sessions))
         return engine_refuse(err, YVEX_ERR_STATE,
                              "live engine lease is required");
     return engine->media

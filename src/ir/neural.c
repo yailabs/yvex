@@ -245,6 +245,20 @@ static int neural_split_three(const yvex_ir_module *m, yvex_ir_id id, yvex_error
     return YVEX_OK;
 }
 
+static int neural_split_two(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
+{
+    const yvex_ir_operation *op = &m->operations[id];
+    const yvex_ir_type *x = neural_input(m, op, 0u), *y = neural_output(m, op, 0u);
+    if (!neural_float_tensor(x) || !neural_float_tensor(y) || x->scalar != y->scalar ||
+        x->rank != 2u || y->rank != 2u || !yvex_ir_extent_equal(x->shape[0], y->shape[0]) ||
+        x->shape[1].symbol != YVEX_IR_NONE || y->shape[1].symbol != YVEX_IR_NONE ||
+        x->shape[1].extent % 2u || x->shape[1].extent / 2u != y->shape[1].extent ||
+        !yvex_ir_type_equal(y, neural_output(m, op, 1u)))
+        return yvex_ir_refuse(err, YVEX_ERR_FORMAT,
+            "split-two requires equal contiguous channel partitions per row");
+    return YVEX_OK;
+}
+
 static int neural_channel_bias(const yvex_ir_module *m, yvex_ir_id id, yvex_error *err)
 {
     const yvex_ir_operation *op = &m->operations[id];
@@ -918,6 +932,7 @@ const yvex_ir_dialect *yvex_ir_neural_dialect(void)
         /* Bias is added to the accumulated projection before result rounding. */
         {"nn.linear_bias", 1u, 3u, 3u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_linear_bias},
         {"tensor.split_three", 1u, 1u, 1u, 3u, 3u, 0u, 0u, NULL, 0u, 0, neural_split_three},
+        {"tensor.split_two", 1u, 1u, 1u, 2u, 2u, 0u, 0u, NULL, 0u, 0, neural_split_two},
         {"tensor.grid_bilinear", 1u, 1u, 1u, 1u, 1u, 0u, 0u, grid, 4u, 0, neural_grid},
         {"tensor.grid_rotary", 1u, 0u, 0u, 2u, 2u, 0u, 0u, grid_rotary, 4u, 0, neural_grid},
         {"nn.embedding", 1u, 2u, 2u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_embedding},
@@ -931,6 +946,7 @@ const yvex_ir_dialect *yvex_ir_neural_dialect(void)
         {"tensor.rotary_tables", 1u, 3u, 3u, 2u, 2u, 0u, 0u, tables, 3u, 0, neural_rotary_tables},
         {"tensor.masked_rows", 1u, 3u, 3u, 1u, 1u, 0u, 0u, masked, 1u, 0, neural_masked_rows},
         {"nn.layer_norm", 1u, 3u, 3u, 1u, 1u, 0u, 0u, norm, 2u, 0, neural_norm},
+        {"nn.layer_norm_unbiased", 1u, 2u, 2u, 1u, 1u, 0u, 0u, norm, 2u, 0, neural_norm},
         {"mhc.head_norm", 1u, 5u, 5u, 2u, 2u, 0u, 0u, mhc, 2u, 0, neural_mhc_head},
         {"mhc.residual_pre", 1u, 4u, 4u, 3u, 3u, 0u, 0u, mhc_pre, 4u, 0, neural_mhc_pre},
         {"tensor.stream_mean", 1u, 1u, 1u, 1u, 1u, 0u, 0u, NULL, 0u, 0, neural_stream_mean},

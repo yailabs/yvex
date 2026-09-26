@@ -1,4 +1,4 @@
-/* Encode and validate the fixed execution-truth subrecords carried by protocol v22. */
+/* Encode and validate the fixed execution-truth subrecords carried by protocol v23. */
 #include "src/server/private.h"
 
 #include <math.h>

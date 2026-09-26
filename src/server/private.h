@@ -16,6 +16,7 @@
 #include <yvex/internal/runtime_prefix.h>
 #include <yvex/internal/runtime_state_store.h>
 #include <yvex/server.h>
+#include <yvex/finite_decision.h>
 
 typedef struct server_telemetry server_telemetry;
 typedef struct server_session_registry server_session_registry;
@@ -432,6 +433,9 @@ int yvex_server_engine_manager_load(
 int yvex_server_engine_manager_unload(
     server_engine_manager *, const char *, unsigned long long,
     yvex_server_engine_summary *, yvex_error *);
+int yvex_server_engine_manager_finite_decision_execute(
+    server_engine_manager *, const char *, const yvex_finite_decision_request *,
+    yvex_finite_decision_result *, yvex_error *);
 int yvex_server_engine_manager_snapshot(
     server_engine_manager *, yvex_server_engine_summary *, unsigned long long,
     unsigned long long *, yvex_error *);

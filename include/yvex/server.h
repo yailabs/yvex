@@ -10,7 +10,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define YVEX_LOCAL_PROTOCOL_VERSION 22u
+#define YVEX_LOCAL_PROTOCOL_VERSION 23u
 #define YVEX_CLIENT_MEDIA_CONDITION_SCHEMA_V1 1u
 #define YVEX_CLIENT_MEDIA_CONDITION_CAP 2u
 #define YVEX_CLIENT_MEDIA_RESULT_SCHEMA_V1 1u
@@ -84,7 +84,8 @@ typedef enum {
 typedef enum {
     YVEX_SERVER_ENGINE_NONE = 0,
     YVEX_SERVER_ENGINE_TEXT,
-    YVEX_SERVER_ENGINE_MEDIA
+    YVEX_SERVER_ENGINE_MEDIA,
+    YVEX_SERVER_ENGINE_FINITE_DECISION
 } yvex_server_engine_kind;
 typedef enum {
     YVEX_SERVER_EXECUTION_NOT_APPLICABLE = 0,
@@ -362,7 +363,6 @@ typedef enum {
     YVEX_CLIENT_STREAM_CONTROL_EVENT,
     YVEX_CLIENT_STREAM_ERROR
 } yvex_client_stream_channel;
-/* A terminal failure snapshot separates committed state from failure/reset facts. */
 typedef struct {
     unsigned int schema_version;
     int available, committed_progress, reset_required;

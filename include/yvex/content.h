@@ -60,7 +60,8 @@ typedef struct {
 
 typedef enum {
     YVEX_MODEL_CAPABILITY_PROFILE_TEXT_GENERATION = 0,
-    YVEX_MODEL_CAPABILITY_PROFILE_CONDITIONED_AUDIOVISUAL_GENERATION
+    YVEX_MODEL_CAPABILITY_PROFILE_CONDITIONED_AUDIOVISUAL_GENERATION,
+    YVEX_MODEL_CAPABILITY_PROFILE_FINITE_DECISION
 } yvex_model_capability_profile;
 
 int yvex_content_part_seal(yvex_content_part *part, yvex_error *err);

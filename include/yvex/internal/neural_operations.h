@@ -258,10 +258,19 @@ struct yvex_backend_transformer_operations {
     int (*layer_norm_f32)(yvex_backend *, const yvex_device_tensor *, const yvex_device_tensor *,
         const yvex_device_tensor *, yvex_device_tensor *, unsigned long long, unsigned long long,
         float, yvex_backend_operation_facts *, yvex_error *);
+    int (*centered_norm_unbiased_f32)(yvex_backend *, const yvex_device_tensor *,
+        const yvex_device_tensor *, yvex_device_tensor *, unsigned long long,
+        unsigned long long, double, yvex_backend_operation_facts *, yvex_error *);
     int (*gelu)(yvex_backend *, const yvex_device_tensor *, yvex_device_tensor *,
         unsigned long long, int, int, yvex_backend_operation_facts *, yvex_error *);
     int (*split_three)(yvex_backend *, const yvex_device_tensor *, yvex_device_tensor *,
         yvex_device_tensor *, yvex_device_tensor *, unsigned long long, unsigned long long,
+        yvex_backend_operation_facts *, yvex_error *);
+    int (*split_two_f32)(yvex_backend *, const yvex_device_tensor *, yvex_device_tensor *,
+        yvex_device_tensor *, unsigned long long, unsigned long long,
+        yvex_backend_operation_facts *, yvex_error *);
+    int (*multiply_f32)(yvex_backend *, const yvex_device_tensor *,
+        const yvex_device_tensor *, yvex_device_tensor *, unsigned long long,
         yvex_backend_operation_facts *, yvex_error *);
     /* Packed group normalization preserves the vector-four reduction and
      * BF16 publication contract selected by physical lowering. */

@@ -6,6 +6,7 @@
  */
 #define _GNU_SOURCE
 #include "src/server/private.h"
+#include <yvex/server_finite_decision.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -550,15 +551,27 @@ int yvex_server_engine_load(
     if (!server || !options || !summary || !server->engines ||
         server->summary.status != YVEX_SERVER_STATUS_READY)
         return server_refuse(err, YVEX_ERR_STATE,
-                             "ready host and text-engine options are required");
+                             "ready host and engine options are required");
     if (options->schema_version != YVEX_SERVER_ENGINE_SCHEMA_CURRENT)
         return server_refuse(err, YVEX_ERR_UNSUPPORTED,
                              "server engine options schema is unsupported");
-    if (options->engine_kind != YVEX_SERVER_ENGINE_TEXT)
+    if (options->engine_kind != YVEX_SERVER_ENGINE_TEXT &&
+        options->engine_kind != YVEX_SERVER_ENGINE_FINITE_DECISION)
         return server_refuse(err, YVEX_ERR_INVALID_ARG,
                              "media engine requires its composite profile");
     return yvex_server_engine_manager_load(
         server->engines, options, NULL, summary, err);
+}
+
+int yvex_server_finite_decision_execute(yvex_server *server, const char *alias,
+    const yvex_finite_decision_request *request,
+    yvex_finite_decision_result *result, yvex_error *err)
+{
+    if (!server || !server->engines ||
+        server->summary.status != YVEX_SERVER_STATUS_READY)
+        return server_refuse(err, YVEX_ERR_STATE, "ready host required for finite decision");
+    return yvex_server_engine_manager_finite_decision_execute(server->engines,
+        alias, request, result, err);
 }
 
 int yvex_server_media_engine_load(

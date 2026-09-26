@@ -291,12 +291,12 @@ int yvex_server_telemetry_emit_provider(
          !yvex_server_execution_measurement_valid(measurement)) ||
         (scope &&
          (scope->engine_kind == YVEX_SERVER_ENGINE_NONE ||
-          scope->engine_kind > YVEX_SERVER_ENGINE_MEDIA ||
+          scope->engine_kind > YVEX_SERVER_ENGINE_FINITE_DECISION ||
           scope->execution_strategy > YVEX_SERVER_EXECUTION_SPECULATIVE ||
           (scope->engine_kind == YVEX_SERVER_ENGINE_TEXT &&
            scope->execution_strategy ==
                YVEX_SERVER_EXECUTION_NOT_APPLICABLE) ||
-          (scope->engine_kind == YVEX_SERVER_ENGINE_MEDIA &&
+          (scope->engine_kind != YVEX_SERVER_ENGINE_TEXT &&
            scope->execution_strategy !=
                YVEX_SERVER_EXECUTION_NOT_APPLICABLE) ||
           (scope->runtime_model_identity[0] &&
@@ -785,7 +785,7 @@ int yvex_server_event_validate(const yvex_server_event *event, yvex_error *err)
         (!event->provider_adapter[0] &&
          (event->provider_request_identity[0] ||
           event->external_correlation_id[0])) ||
-        event->engine_kind > YVEX_SERVER_ENGINE_MEDIA ||
+        event->engine_kind > YVEX_SERVER_ENGINE_FINITE_DECISION ||
         event->execution_strategy > YVEX_SERVER_EXECUTION_SPECULATIVE ||
         (event->engine_kind == YVEX_SERVER_ENGINE_TEXT &&
          event->execution_strategy ==

@@ -26,7 +26,7 @@ to current information owners; it does not duplicate their status.
 | Command grammar and generated projections | [Commands](architecture/commands.md) |
 | External terminal-editor ownership and pin | [REPLAI decision](decisions/0007-external-terminal-editor.md) |
 | Family integration and accepted boundaries | [Integration](model-families/integration.md) |
-| Family-specific facts and evidence barriers | [DeepSeek](model-families/deepseek-v4-flash.md), [MiniMax](model-families/minimax-h3.md), [Mamba2](model-families/mamba2.md) |
+| Family-specific facts and evidence barriers | [DeepSeek](model-families/deepseek-v4-flash.md), [MiniMax](model-families/minimax-h3.md), [Mamba2](model-families/mamba2.md), [Laya](model-families/laya.md) |
 | Managed model storage and location | [Model storage](contracts/model-storage.md) |
 | Artifact admission and lifecycle | [Artifact contract](contracts/artifacts.md) |
 | Runtime behavior and failure semantics | [Runtime contract](contracts/runtime.md) |

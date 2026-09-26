@@ -2,6 +2,7 @@
  * Exercises backend layer opens the CPU reference backend and supports tensor allocation, memory
  * stats, read/write, copy, sync, and memory-limit errors.
  */
+#include <math.h>
 #include <string.h>
 
 #include <yvex/api.h>
@@ -227,11 +228,69 @@ static int test_attention_workspace(void)
     return 0;
 }
 
+static int test_dense_encoder_primitives(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *t[8] = {0};
+    yvex_backend_tensor_desc desc;
+    yvex_backend_operation_facts facts;
+    yvex_error err;
+    const float source[6] = {-2.0f, 1.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+    const float factors[2] = {2.0f, -3.0f};
+    float observed[6];
+    YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK,
+        "dense encoder reference backend opens");
+    const yvex_backend_transformer_operations *ops = yvex_backend_transformer_operations_get(backend);
+    YVEX_TEST_ASSERT(ops && ops->split_three && ops->split_two_f32 &&
+        ops->multiply_f32 && ops->gelu, "all F32 encoder primitives are advertised");
+    for (unsigned int i = 0u; i < 8u; ++i) {
+        make_desc(&desc, "encoder-fixture", 1u, i ? 2u : 6u);
+        YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, t + i, &err) == YVEX_OK,
+            "bounded encoder tensor allocation");
+    }
+    YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, t[0], source, sizeof(source), &err) == YVEX_OK &&
+        yvex_backend_tensor_write(backend, t[4], factors, sizeof(factors), &err) == YVEX_OK,
+        "exact F32 source and factors are initialized");
+    YVEX_TEST_ASSERT(ops->split_three(backend, t[0], t[1], t[2], t[3], 1u, 2u,
+        &facts, &err) == YVEX_OK &&
+        yvex_backend_tensor_read(backend, t[2], observed, 2u * sizeof(float), &err) == YVEX_OK &&
+        observed[0] == 3.0f && observed[1] == 4.0f,
+        "three contiguous channel partitions follow an independent fixture");
+    YVEX_TEST_ASSERT(ops->multiply_f32(backend, t[1], t[4], t[5], 2u, &facts, &err) == YVEX_OK &&
+        yvex_backend_tensor_read(backend, t[5], observed, 2u * sizeof(float), &err) == YVEX_OK &&
+        observed[0] == -4.0f && observed[1] == -3.0f,
+        "F32 gate multiplication is elementwise");
+    YVEX_TEST_ASSERT(ops->centered_norm_unbiased_f32(backend, t[1], t[4], t[7],
+        1u, 2u, 1e-5, &facts, &err) == YVEX_OK &&
+        yvex_backend_tensor_read(backend, t[7], observed, 2u * sizeof(float), &err) == YVEX_OK &&
+        fabsf(observed[0] - (-3.0f / sqrtf(2.25f + 1e-5f))) < 1e-6f &&
+        fabsf(observed[1] - (-4.5f / sqrtf(2.25f + 1e-5f))) < 1e-6f,
+        "bias-free centered LayerNorm does not silently become RMS normalization");
+    YVEX_TEST_ASSERT(ops->gelu(backend, t[5], t[6], 2u, 0, 0, &facts, &err) == YVEX_OK &&
+        yvex_backend_tensor_read(backend, t[6], observed, 2u * sizeof(float), &err) == YVEX_OK &&
+        fabsf(observed[0] - (-4.0f * 0.5f * (1.0f + erff(-4.0f / sqrtf(2.0f))))) < 1e-7f &&
+        fabsf(observed[1] - (-3.0f * 0.5f * (1.0f + erff(-3.0f / sqrtf(2.0f))))) < 1e-7f,
+        "exact-erf GELU follows independent scalar formula");
+    YVEX_TEST_ASSERT(ops->split_two_f32(backend, t[0], t[1], t[2], 1u, 3u,
+        &facts, &err) != YVEX_OK,
+        "mis-sized split outputs fail before publication");
+    YVEX_TEST_ASSERT(ops->multiply_f32(backend, t[1], t[4], t[1], 2u,
+        &facts, &err) != YVEX_OK,
+        "aliased result cannot overwrite an input");
+    for (unsigned int i = 0u; i < 8u; ++i)
+        YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, t + i, &err) == YVEX_OK,
+            "encoder tensor cleanup");
+    YVEX_TEST_ASSERT(yvex_backend_close_checked(&backend, &err) == YVEX_OK,
+        "encoder backend cleanup");
+    return 0;
+}
+
 int yvex_test_backend_cpu(void)
 {
     if (test_open_and_unsupported() != 0) return 1;
     if (test_tensor_memory_and_copy() != 0) return 1;
     if (test_memory_limit_and_invalid_args() != 0) return 1;
     if (test_attention_workspace() != 0) return 1;
+    if (test_dense_encoder_primitives() != 0) return 1;
     return 0;
 }

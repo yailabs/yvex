@@ -225,7 +225,8 @@ static const char *execution_strategy_name(
 static const char *engine_execution_name(
     yvex_server_engine_kind kind, yvex_server_execution_strategy strategy)
 {
-    return kind == YVEX_SERVER_ENGINE_MEDIA ? "media"
+    return kind == YVEX_SERVER_ENGINE_FINITE_DECISION ? "finite-decision"
+           : kind == YVEX_SERVER_ENGINE_MEDIA ? "media"
                                              : execution_strategy_name(strategy);
 }
 static int runtime_summary_fetch(yvex_server_summary *summary, yvex_error *err)

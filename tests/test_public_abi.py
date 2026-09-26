@@ -18,6 +18,15 @@ ROOT = Path(__file__).resolve().parents[1]
 # schema decision. Updating an entry is therefore a reviewable ABI migration,
 # not a mechanical consequence of editing an installed header.
 RECORDS = {
+    "yvex_finite_decision_engine_options": (
+        "include/yvex/finite_decision.h", "YVEX_FINITE_DECISION_SCHEMA_V1", 1, 64,
+        "418182f8ad309073e3b9d0789650adf641cf7c40049719bf3daad5ebf9098d4d"),
+    "yvex_finite_decision_request": (
+        "include/yvex/finite_decision.h", "YVEX_FINITE_DECISION_SCHEMA_V1", 1, 88,
+        "37c0b54a8adac25d51e51efbfbeaddf4e4012f2c237a65abc51cbe63f360f03b"),
+    "yvex_finite_decision_result": (
+        "include/yvex/finite_decision.h", "YVEX_FINITE_DECISION_SCHEMA_V1", 1, 5496,
+        "17b124c43a24109ca39294fef859fd95c3a70bc3bf778f09a2e26e6ef9ce9aac"),
     "yvex_content_part": (
         "include/yvex/content.h", "YVEX_CONTENT_PART_SCHEMA_V1", 1, 1312,
         "fa96b37a668d01ad150ff54287e53d0f750e0eaede5710e08e5cfc84db7837c8"),
@@ -97,10 +106,10 @@ RECORDS = {
         "include/yvex/server.h", "YVEX_CLIENT_MEDIA_CONDITION_SCHEMA_V1", 1, 524,
         "15b251a93051e0f0cf0c70e1a14c2cdcb019b54d7e27851b6c36b02bcac9802b"),
     "yvex_client_request": (
-        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 22, 2120,
+        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 23, 2120,
         "ec8504a565fad81fb7297bcf2fc3dbaa3f4065c8480c0a5d49fddc3264722d28"),
     "yvex_client_message": (
-        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 22, 11344,
+        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 23, 11344,
         "89817068a9a56a76a5a55c2fbe22497200a34ddf8873f8a91da2a66ac9f4404e"),
     "yvex_tokenizer_plan_summary": (
         "include/yvex/tokenizer.h", "YVEX_TOKENIZER_PLAN_SCHEMA_CURRENT", 5, 872,
@@ -167,10 +176,12 @@ def compiler_source() -> str:
         "#include <yvex/catalog.h>",
         "#include <yvex/content.h>",
         "#include <yvex/execution.h>",
+        "#include <yvex/finite_decision.h>",
         "#include <yvex/provider.h>",
         "#include <yvex/quant.h>",
         "#include <yvex/registry.h>",
         "#include <yvex/server.h>",
+        "#include <yvex/server_finite_decision.h>",
         "#include <yvex/tokenizer.h>",
         "#if defined(__cplusplus)",
         "#define ABI_ASSERT(condition, message) static_assert(condition, message)",
@@ -212,7 +223,7 @@ def compiler_source() -> str:
         '"prompt conversation value changed");',
         'ABI_ASSERT(YVEX_TOKENIZER_PROMPT_VERBATIM == 2, '
         '"prompt verbatim value changed");',
-        'ABI_ASSERT(YVEX_LOCAL_PROTOCOL_VERSION == 22u, "local protocol identity changed");',
+        'ABI_ASSERT(YVEX_LOCAL_PROTOCOL_VERSION == 23u, "local protocol identity changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_NONE == 0, "engine-kind none value changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_TEXT == 1, "engine-kind text value changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_MEDIA == 2, "engine-kind media value changed");',

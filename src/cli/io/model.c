@@ -97,7 +97,10 @@ static const char *model_engine_state(yvex_server_engine_state state)
 
 static const char *model_engine_kind_name(yvex_server_engine_kind kind)
 {
-    return kind == YVEX_SERVER_ENGINE_MEDIA ? "media" : "text";
+    if (kind == YVEX_SERVER_ENGINE_TEXT) return "text";
+    if (kind == YVEX_SERVER_ENGINE_MEDIA) return "media";
+    if (kind == YVEX_SERVER_ENGINE_FINITE_DECISION) return "finite-decision";
+    return "none";
 }
 
 static void model_selection_from_engine(

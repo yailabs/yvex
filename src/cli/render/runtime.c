@@ -84,6 +84,7 @@ static const char *engine_kind_name(yvex_server_engine_kind kind)
 {
     if (kind == YVEX_SERVER_ENGINE_TEXT) return "text";
     if (kind == YVEX_SERVER_ENGINE_MEDIA) return "media";
+    if (kind == YVEX_SERVER_ENGINE_FINITE_DECISION) return "finite-decision";
     return "none";
 }
 

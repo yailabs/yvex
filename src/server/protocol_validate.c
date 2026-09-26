@@ -267,7 +267,7 @@ int yvex_server_protocol_message_valid(const yvex_client_message *message)
             (message->stream_channel == YVEX_CLIENT_STREAM_ERROR &&
              message->provider_output_kind == YVEX_PROVIDER_OUTPUT_ERROR)) &&
            ENUM_VALID(message->engine_kind, YVEX_SERVER_ENGINE_NONE,
-                      YVEX_SERVER_ENGINE_MEDIA) &&
+                      YVEX_SERVER_ENGINE_FINITE_DECISION) &&
            ENUM_VALID(message->execution_strategy,
                       YVEX_SERVER_EXECUTION_NOT_APPLICABLE,
                       YVEX_SERVER_EXECUTION_SPECULATIVE) &&

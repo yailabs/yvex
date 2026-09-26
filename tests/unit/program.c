@@ -17,6 +17,8 @@
 #include <yvex/internal/compilation.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/dense_program.h>
+#include <yvex/internal/families/laya.h>
+#include <yvex/internal/tensor_binding.h>
 #include <yvex/internal/execution.h>
 #include <yvex/internal/program.h>
 #include <yvex/internal/program_kernels.h>
@@ -26,6 +28,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 static const char program_source[] =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -78,6 +82,91 @@ static int program_dense_projection(void)
                 "dense population/head/rotary/storage/numerical source negatives refuse before lowering");
         }
     }
+    return 0;
+}
+
+static int program_laya_bidirectional_recipe(void)
+{
+    yvex_laya_program_recipe recipe = {.source_identity = program_source,
+        .maximum_tokens = 4u, .layer_count = 1u, .vocabulary_size = 16u,
+        .hidden_width = 8u, .attention_heads = 2u, .intermediate_width = 12u,
+        .head_layer_count = 1u, .epsilon = 1e-5};
+    yvex_laya_program *first = NULL, *repeat = NULL;
+    yvex_error err = {0};
+    int rc = yvex_laya_program_compile(&first, &recipe, &err);
+    if (rc != YVEX_OK) fprintf(stderr, "Laya recipe: %s: %s\n",
+        yvex_error_where(&err), yvex_error_message(&err));
+    YVEX_TEST_ASSERT(rc == YVEX_OK && yvex_laya_program_parameter_count(first) == 27u,
+        "source-owned encoder and typed head compile without a generation plan");
+    const yvex_program_physical_summary *summary =
+        yvex_program_physical_summary_get(yvex_laya_program_physical(first));
+    size_t attention = 0u, centered = 0u, causal = 0u;
+    for (size_t i = 0u; i < summary->step_count; ++i) {
+        const yvex_program_physical_step *step =
+            yvex_program_physical_step_at(yvex_laya_program_physical(first), i);
+        attention += !strcmp(step->implementation, "attention.full.f32.v1");
+        centered += !strcmp(step->implementation, "layer_norm_unbiased.f32.v1");
+        if (!strcmp(step->implementation, "attention.full.f32.v1"))
+            causal += yvex_program_physical_attribute(step, "causal")->value.integer != 0u;
+    }
+    YVEX_TEST_ASSERT(summary->input_count == 6u && summary->result_count == 1u &&
+        summary->maximum_rows == 4u && attention == 2u && centered == 3u && !causal,
+        "encoder and head use two full noncausal attentions and centered bias-free norms");
+    char name[256];
+    YVEX_TEST_ASSERT(yvex_laya_program_parameter_name(first, 0u, name, &err) == YVEX_OK &&
+        !strcmp(name, "encoder.embeddings.tok_embeddings.weight") &&
+        yvex_laya_program_parameter_name(first, 27u, name, &err) != YVEX_OK,
+        "compiled source parameter namespace is exact and bounded");
+    YVEX_TEST_ASSERT(yvex_laya_program_compile(&repeat, &recipe, &err) == YVEX_OK &&
+        !strcmp(summary->identity,
+            yvex_program_physical_summary_get(yvex_laya_program_physical(repeat))->identity),
+        "non-generative source recipe recompiles to the same physical identity");
+    char root[] = "/tmp/yvex-tensor-binding-unit-XXXXXX";
+    char path[256];
+    YVEX_TEST_ASSERT(mkdtemp(root) != NULL &&
+        snprintf(path, sizeof(path), "%s/model.binding", root) > 0,
+        "bounded tensor binding publication directory");
+    yvex_tensor_binding_build_request binding = {
+        .schema_version = YVEX_TENSOR_BINDING_SCHEMA_V1,
+        .source_identity = program_source, .tokenizer_identity = program_other,
+        .logical_model_identity = program_source,
+        .source_bytes = 1024u, .source_tensor_count = 27u,
+        .input_format = YVEX_TENSOR_INPUT_TOKEN_TYPE_DUAL_ROPE_V1,
+        .rotary_width = 4u, .primary_theta = 160000u, .secondary_theta = 10000u,
+        .token_domain_size = 16u, .type_domain_size = 3u, .marker_token_id = 4u,
+        .program = yvex_laya_program_physical(first),
+        .parameter_count = yvex_laya_program_parameter_count(first),
+        .parameter_name = yvex_laya_program_parameter_name, .parameter_context = first};
+    yvex_tensor_binding_summary published = {0};
+    yvex_tensor_binding *reopened = NULL;
+    YVEX_TEST_ASSERT(yvex_tensor_binding_publish(path, &binding, &published, &err) == YVEX_OK &&
+        yvex_tensor_binding_open(&reopened, path, &err) == YVEX_OK &&
+        !strcmp(published.identity, yvex_tensor_binding_summary_get(reopened)->identity) &&
+        !strcmp(summary->identity,
+            yvex_tensor_binding_summary_get(reopened)->physical_program_identity),
+        "compiled physical program and parameter directory reopen under one sealed binding");
+    yvex_tensor_binding_close(&reopened);
+    YVEX_TEST_ASSERT(yvex_tensor_binding_publish(path, &binding, &published, &err) != YVEX_OK,
+        "immutable binding publication refuses overwrite");
+    int fd = open(path, O_WRONLY);
+    unsigned char altered = 0u;
+    YVEX_TEST_ASSERT(fd >= 0 && pwrite(fd, &altered, 1u, 8) == 1 && close(fd) == 0 &&
+        yvex_tensor_binding_open(&reopened, path, &err) == YVEX_ERR_FORMAT && !reopened,
+        "corrupted binding bytes refuse before program or parameter publication");
+    YVEX_TEST_ASSERT(unlink(path) == 0 && rmdir(root) == 0,
+        "binding test publication cleans exact temporary path");
+    yvex_laya_program_close(&repeat);
+    yvex_laya_program_close(&first);
+    recipe.maximum_tokens = 64u;
+    recipe.layer_count = 28u;
+    recipe.head_layer_count = 2u;
+    YVEX_TEST_ASSERT(yvex_laya_program_compile(&first, &recipe, &err) == YVEX_OK &&
+        yvex_laya_program_parameter_count(first) == 201u,
+        "full 28-layer source and two-layer decision head retain 201 exact used parameter roles");
+    yvex_laya_program_close(&first);
+    recipe.maximum_tokens = 129u;
+    YVEX_TEST_ASSERT(yvex_laya_program_compile(&first, &recipe, &err) == YVEX_ERR_FORMAT && !first,
+        "unqualified sliding-window population refuses rather than silently becoming full attention");
     return 0;
 }
 
@@ -374,6 +463,136 @@ static int program_device_fixture(yvex_program_physical **out, unsigned int vari
     yvex_program_execution_close(&execution);
     yvex_ir_module_close(&m);
     return rc;
+}
+
+static int program_test_f32_encoder_lowering(void)
+{
+    yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+    yvex_ir_module *module = NULL;
+    yvex_program_execution *execution = NULL;
+    yvex_program_physical *physical = NULL, *reopened = NULL;
+    yvex_core_bytes wire = {.maximum = 65536u};
+    yvex_ir_type input = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 2u,
+        .shape = {{YVEX_IR_NONE, 1u}, {YVEX_IR_NONE, 6u}}};
+    yvex_ir_type half = input;
+    yvex_ir_id input_type, half_type, function, block, op, values[2], result;
+    yvex_error err = {0};
+    half.shape[1].extent = 3u;
+    int rc = yvex_ir_module_open(&module, "encoder_f32", program_source, dialects, 2u, &err);
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(module, &input, &input_type, &err);
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(module, &half, &half_type, &err);
+    if (rc == YVEX_OK) rc = yvex_ir_function_add(module, "forward", &input_type, 1u,
+        &half_type, 1u, 0u, &function, &err);
+    if (rc == YVEX_OK) {
+        block = yvex_ir_function_at(module, function)->body;
+        yvex_ir_id source = yvex_ir_block_at(module, block)->arguments[0];
+        yvex_ir_id result_types[] = {half_type, half_type};
+        yvex_ir_operation_request request = {.operation = "tensor.split_two", .operands = &source,
+            .operand_count = 1u, .result_types = result_types, .result_count = 2u};
+        rc = yvex_ir_operation_add(module, block, &request, &op, &err);
+        if (rc == YVEX_OK) {
+            values[0] = yvex_ir_operation_at(module, op)->results[0];
+            values[1] = yvex_ir_operation_at(module, op)->results[1];
+            request = (yvex_ir_operation_request){.operation = "tensor.multiply", .operands = values,
+                .operand_count = 2u, .result_types = &half_type, .result_count = 1u};
+            rc = yvex_ir_operation_add(module, block, &request, &op, &err);
+        }
+        if (rc == YVEX_OK) {
+            source = yvex_ir_operation_at(module, op)->results[0];
+            request = (yvex_ir_operation_request){.operation = "nn.gelu", .operands = &source,
+                .operand_count = 1u, .result_types = &half_type, .result_count = 1u};
+            rc = yvex_ir_operation_add(module, block, &request, &op, &err);
+        }
+        if (rc == YVEX_OK) {
+            result = yvex_ir_operation_at(module, op)->results[0];
+            request = (yvex_ir_operation_request){.operation = "core.return", .operands = &result,
+                .operand_count = 1u};
+            rc = yvex_ir_operation_add(module, block, &request, &op, &err);
+        }
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_seal(module, &err);
+    if (rc == YVEX_OK) rc = yvex_program_execution_compile(&execution, module, &err);
+    if (rc == YVEX_OK) rc = yvex_program_physical_compile(&physical, execution,
+        "forward", NULL, 0u, program_source, &err);
+    if (rc != YVEX_OK) fprintf(stderr, "F32 encoder lowering: %s: %s\n",
+        yvex_error_where(&err), yvex_error_message(&err));
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "F32 encoder operations lower through generic program owner");
+    const yvex_program_physical_summary *summary = yvex_program_physical_summary_get(physical);
+    YVEX_TEST_ASSERT(summary && summary->step_count == 3u &&
+        !strcmp(yvex_program_physical_step_at(physical, 0u)->implementation, "split_two.f32.v1") &&
+        !strcmp(yvex_program_physical_step_at(physical, 1u)->implementation, "multiply.f32.v1") &&
+        !strcmp(yvex_program_physical_step_at(physical, 2u)->implementation, "gelu.erf.f32.v1") &&
+        yvex_program_physical_encode(physical, &wire, &err) == YVEX_OK &&
+        yvex_program_physical_decode(&reopened, wire.data, wire.count, &err) == YVEX_OK &&
+        !strcmp(summary->identity, yvex_program_physical_summary_get(reopened)->identity),
+        "F32 split, multiply and GELU retain one deterministic physical identity");
+    free(wire.data);
+    yvex_program_physical_close(&reopened);
+    yvex_program_physical_close(&physical);
+    yvex_program_execution_close(&execution);
+    yvex_ir_module_close(&module);
+    return 0;
+}
+
+static int program_test_unbiased_layer_norm_lowering(void)
+{
+    yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_neural_dialect()};
+    yvex_ir_module *module = NULL;
+    yvex_program_execution *execution = NULL;
+    yvex_program_physical *physical = NULL;
+    yvex_ir_type input = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 2u,
+        .shape = {{YVEX_IR_NONE, 1u}, {YVEX_IR_NONE, 2u}}};
+    yvex_ir_type weight = {.kind = YVEX_IR_TENSOR, .scalar = YVEX_IR_F32, .rank = 1u,
+        .shape = {{YVEX_IR_NONE, 2u}}};
+    yvex_ir_id input_type, weight_type, function, block, op, gamma = YVEX_IR_NONE, result;
+    yvex_error err = {0};
+    int rc = yvex_ir_module_open(&module, "unbiased_norm", program_source, dialects, 2u, &err);
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(module, &input, &input_type, &err);
+    if (rc == YVEX_OK) rc = yvex_ir_type_intern(module, &weight, &weight_type, &err);
+    if (rc == YVEX_OK) rc = yvex_ir_function_add(module, "forward", &input_type, 1u,
+        &input_type, 1u, 0u, &function, &err);
+    if (rc == YVEX_OK) {
+        block = yvex_ir_function_at(module, function)->body;
+        yvex_ir_attribute attrs[] = {{.name = "source", .kind = YVEX_IR_ATTR_TEXT},
+            {.name = "parameter", .kind = YVEX_IR_ATTR_SYMBOL}};
+        yvex_core_text_copy(attrs[0].value.text, sizeof(attrs[0].value.text), program_source);
+        yvex_core_text_copy(attrs[1].value.text, sizeof(attrs[1].value.text), "gamma");
+        yvex_ir_operation_request request = {.operation = "core.parameter", .result_types = &weight_type,
+            .result_count = 1u, .attributes = attrs, .attribute_count = 2u};
+        rc = yvex_ir_operation_add(module, block, &request, &op, &err);
+        if (rc == YVEX_OK) gamma = yvex_ir_operation_at(module, op)->results[0];
+        if (rc == YVEX_OK) {
+            yvex_ir_id args[] = {yvex_ir_block_at(module, block)->arguments[0], gamma};
+            yvex_ir_attribute norm[] = {{.name = "epsilon", .kind = YVEX_IR_ATTR_F64,
+                .value.real = 1e-5}, {.name = "weight_offset", .kind = YVEX_IR_ATTR_F64}};
+            request = (yvex_ir_operation_request){.operation = "nn.layer_norm_unbiased",
+                .operands = args, .operand_count = 2u, .result_types = &input_type, .result_count = 1u,
+                .attributes = norm, .attribute_count = 2u};
+            rc = yvex_ir_operation_add(module, block, &request, &op, &err);
+        }
+        if (rc == YVEX_OK) {
+            result = yvex_ir_operation_at(module, op)->results[0];
+            request = (yvex_ir_operation_request){.operation = "core.return", .operands = &result,
+                .operand_count = 1u};
+            rc = yvex_ir_operation_add(module, block, &request, &op, &err);
+        }
+    }
+    if (rc == YVEX_OK) rc = yvex_ir_seal(module, &err);
+    if (rc == YVEX_OK) rc = yvex_program_execution_compile(&execution, module, &err);
+    yvex_program_parameter_binding binding = {.semantic_value = gamma, .tensor_id = 0u,
+        .qtype = YVEX_GGUF_QTYPE_F32};
+    if (rc == YVEX_OK) rc = yvex_program_physical_compile(&physical, execution,
+        "forward", &binding, 1u, program_source, &err);
+    if (rc != YVEX_OK) fprintf(stderr, "unbiased norm lowering: %s: %s\n",
+        yvex_error_where(&err), yvex_error_message(&err));
+    YVEX_TEST_ASSERT(rc == YVEX_OK &&
+        !strcmp(yvex_program_physical_step_at(physical, 1u)->implementation,
+            "layer_norm_unbiased.f32.v1"),
+        "bias-free centered LayerNorm is a distinct physical operation from RMSNorm");
+    yvex_program_physical_close(&physical);
+    yvex_program_execution_close(&execution);
+    yvex_ir_module_close(&module);
+    return 0;
 }
 
 static int program_test_value_layout(void)
@@ -801,6 +1020,8 @@ int yvex_test_program(void)
     if (test_shared_expert(YVEX_BACKEND_KIND_CPU)) return 1;
     if (test_shared_target(YVEX_BACKEND_KIND_CPU)) return 1;
     if (program_test_value_layout()) return 1;
+    if (program_test_f32_encoder_lowering()) return 1;
+    if (program_test_unbiased_layer_norm_lowering()) return 1;
     if (test_spatial_programs(YVEX_BACKEND_KIND_CPU)) return 1;
     if (program_target_state_cleanup()) return 1;
     if (test_conditioning_program(YVEX_BACKEND_KIND_CPU)) return 1;
@@ -809,6 +1030,7 @@ int yvex_test_program(void)
     if (program_parameter_views()) return 1;
     if (test_dense_program(YVEX_BACKEND_KIND_CPU)) return 1;
     if (program_dense_projection() != 0) return 1;
+    if (program_laya_bidirectional_recipe() != 0) return 1;
     if (test_program_populations(YVEX_BACKEND_KIND_CPU, 0)) return 1;
     if (test_program_index_values(YVEX_BACKEND_KIND_CPU)) return 1;
     if (program_text_compile() != 0) return 1;

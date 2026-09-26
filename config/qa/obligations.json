@@ -8,6 +8,22 @@
   },
   "change_classes": [
     {
+      "id": "finite-decision-model",
+      "patterns": ["src/model/families/laya.c", "include/yvex/internal/families/laya_source.h",
+                   "src/graph/families/laya.c", "include/yvex/internal/families/laya.h",
+                   "src/artifact/tensor_source.c", "include/yvex/internal/tensor_source.h",
+                   "src/graph/tensor_binding.c", "include/yvex/internal/tensor_binding.h",
+                   "src/runtime/tensor_engine.c", "include/yvex/internal/tensor_engine.h",
+                   "src/runtime/tensor_parameters.c", "include/yvex/internal/tensor_parameters.h",
+                   "src/runtime/finite_decision.c", "include/yvex/finite_decision.h",
+                   "include/yvex/internal/finite_decision.h", "include/yvex/server_finite_decision.h",
+                   "tests/live/laya_native.c", "tests/reference/laya_typed_decision.py"],
+      "lanes": ["fast", "structural", "numeric", "runtime", "sanitizer", "live"],
+      "tests": ["unit.program", "unit.backend_cpu", "unit.server", "unit.protocol",
+                "live.laya.native-diagnostic", "integration.tiny-vertical"],
+      "reason": "first exact non-autoregressive source, compiled binding, native CPU execution, typed result and empty-host lifecycle require upstream arithmetic and generic regressions"
+    },
+    {
       "id": "keyframe-program-consumer",
       "patterns": ["src/graph/families/minimax_h3.c", "src/backend/cuda/families/minimax_h3.c",
                    "tests/live/minimax_h3_video.c", "tests/unit/minimax_h3.c"],

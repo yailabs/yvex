@@ -357,9 +357,9 @@ static int cpu_linear_bias_f32(yvex_backend *backend, const unsigned char *encod
     return cpu_neural_publish(&output, 1u, err);
 }
 
-static int cpu_normalization_f32(yvex_backend *backend, const yvex_device_tensor *input,
+static int cpu_normalization_mode_f32(yvex_backend *backend, const yvex_device_tensor *input,
     const yvex_device_tensor *weight, const yvex_device_tensor *bias, yvex_device_tensor *output,
-    unsigned long long rows, unsigned long long width, double epsilon,
+    unsigned long long rows, unsigned long long width, double epsilon, int centered,
     yvex_backend_operation_facts *facts, yvex_error *err)
 {
     unsigned long long sizes[3];
@@ -376,7 +376,7 @@ static int cpu_normalization_f32(yvex_backend *backend, const yvex_device_tensor
     float *y = (float *)output->data;
     for (unsigned long long row = 0u; row < rows; ++row) {
         double mean = 0.0, variance = 0.0;
-        if (bias) {
+        if (centered) {
             for (unsigned long long k = 0u; k < width; ++k) mean += x[row * width + k];
             mean /= (double)width;
         }
@@ -393,6 +393,24 @@ static int cpu_normalization_f32(yvex_backend *backend, const yvex_device_tensor
     }
     facts->active_weight_bytes = weight->bytes + (bias ? bias->bytes : 0u);
     return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_normalization_f32(yvex_backend *backend, const yvex_device_tensor *input,
+    const yvex_device_tensor *weight, const yvex_device_tensor *bias, yvex_device_tensor *output,
+    unsigned long long rows, unsigned long long width, double epsilon,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    return cpu_normalization_mode_f32(backend, input, weight, bias, output,
+        rows, width, epsilon, !!bias, facts, err);
+}
+
+static int cpu_centered_norm_unbiased_f32(yvex_backend *backend,
+    const yvex_device_tensor *input, const yvex_device_tensor *weight,
+    yvex_device_tensor *output, unsigned long long rows, unsigned long long width,
+    double epsilon, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    return cpu_normalization_mode_f32(backend, input, weight, NULL, output,
+        rows, width, epsilon, 1, facts, err);
 }
 
 static int cpu_weighted_rms_bf16(yvex_backend *backend, const yvex_device_tensor *input,
@@ -441,6 +459,81 @@ static int cpu_split_interleaved_three(yvex_backend *backend, const yvex_device_
             ((float *)outputs[part]->data)[i] =
                 ((const float *)input->data)[i / head * head * 3u + part * head + i % head];
     return cpu_neural_publish(outputs, 3u, err);
+}
+
+static int cpu_split_two_f32(yvex_backend *backend, const yvex_device_tensor *input,
+    yvex_device_tensor *first, yvex_device_tensor *second,
+    unsigned long long rows, unsigned long long width,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long size, full, sizes[2];
+    yvex_device_tensor *outputs[] = {first, second};
+    if (!rows || !width || !yvex_core_u64_mul(rows, width, &size) ||
+        !yvex_core_u64_mul(size, 2u, &full)) return cpu_neural_bounds(err);
+    sizes[0] = sizes[1] = size;
+    int rc = cpu_neural_admit(backend, &input, &full, 1u, outputs, sizes, 2u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    for (unsigned long long row = 0u; row < rows; ++row) {
+        const float *source = (const float *)input->data + row * width * 2u;
+        memcpy((float *)first->data + row * width, source, (size_t)width * sizeof(float));
+        memcpy((float *)second->data + row * width, source + width, (size_t)width * sizeof(float));
+    }
+    return cpu_neural_publish(outputs, 2u, err);
+}
+
+static int cpu_split_three_f32(yvex_backend *backend, const yvex_device_tensor *input,
+    yvex_device_tensor *first, yvex_device_tensor *second, yvex_device_tensor *third,
+    unsigned long long rows, unsigned long long width,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long size, full, sizes[3];
+    yvex_device_tensor *outputs[] = {first, second, third};
+    if (!rows || !width || !yvex_core_u64_mul(rows, width, &size) ||
+        !yvex_core_u64_mul(size, 3u, &full)) return cpu_neural_bounds(err);
+    sizes[0] = sizes[1] = sizes[2] = size;
+    int rc = cpu_neural_admit(backend, &input, &full, 1u, outputs, sizes, 3u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    for (unsigned long long row = 0u; row < rows; ++row) {
+        const float *source = (const float *)input->data + row * width * 3u;
+        for (unsigned long long part = 0u; part < 3u; ++part)
+            memcpy((float *)outputs[part]->data + row * width, source + part * width,
+                (size_t)width * sizeof(float));
+    }
+    return cpu_neural_publish(outputs, 3u, err);
+}
+
+static int cpu_multiply_f32(yvex_backend *backend, const yvex_device_tensor *left,
+    const yvex_device_tensor *right, yvex_device_tensor *output,
+    unsigned long long count, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_device_tensor *inputs[] = {left, right};
+    if (!count) return cpu_neural_bounds(err);
+    unsigned long long sizes[] = {count, count};
+    int rc = cpu_neural_admit(backend, inputs, sizes, 2u, &output, &count, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    for (unsigned long long i = 0u; i < count; ++i)
+        ((float *)output->data)[i] = ((const float *)left->data)[i] *
+                                     ((const float *)right->data)[i];
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_gelu_f32(yvex_backend *backend, const yvex_device_tensor *input,
+    yvex_device_tensor *output, unsigned long long count, int tanh_approximation,
+    int bf16_output, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    if (!count || (tanh_approximation != 0 && tanh_approximation != 1) ||
+        (bf16_output != 0 && bf16_output != 1)) return cpu_neural_bounds(err);
+    int rc = cpu_neural_admit(backend, &input, &count, 1u, &output, &count, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    for (unsigned long long i = 0u; i < count; ++i) {
+        float x = ((const float *)input->data)[i];
+        float value = tanh_approximation
+            ? 0.5f * x * (1.0f + tanhf(0.7978845608028654f * (x + 0.044715f * x * x * x)))
+            : 0.5f * x * (1.0f + erff(x * 0.7071067811865475f));
+        ((float *)output->data)[i] = bf16_output
+            ? yvex_quant_bf16_decode(yvex_quant_bf16_encode(value)) : value;
+    }
+    return cpu_neural_publish(&output, 1u, err);
 }
 
 static int cpu_swiglu_split_f32(yvex_backend *backend, const yvex_device_tensor *input,
@@ -792,9 +885,13 @@ static const yvex_backend_transformer_operations *cpu_transformer_operations(con
         .feature_mean = cpu_stream_mean, .final = cpu_mhc_head, .residual_post = cpu_residual_post,
         .residual_pre = cpu_residual_pre,
         .linear_bias_f32 = cpu_linear_bias_f32, .normalization_f32 = cpu_normalization_f32,
+        .centered_norm_unbiased_f32 = cpu_centered_norm_unbiased_f32,
         .weighted_rms_bf16 = cpu_weighted_rms_bf16,
         .sinusoidal_embedding = cpu_sinusoidal_embedding,
         .scaled_residual_f32 = cpu_scaled_residual_f32, .split_interleaved_three = cpu_split_interleaved_three,
+        .split_three = cpu_split_three_f32, .split_two_f32 = cpu_split_two_f32,
+        .multiply_f32 = cpu_multiply_f32,
+        .gelu = cpu_gelu_f32,
         .swiglu_split_f32 = cpu_swiglu_split_f32, .rotary_half_f32 = cpu_rotary_half_f32,
         .attention_workspace_required = cpu_attention_workspace, .attention_execute = cpu_full_attention};
     (void)backend;

@@ -43,6 +43,8 @@ contains these fifteen installed domain headers:
 | `<yvex/tokenizer.h>` | tokenizer views, tokenization and prompt rendering |
 | `<yvex/registry.h>` | local model registry and typed reference resolution |
 | `<yvex/server.h>` | local protocol, runtime host, sessions, telemetry and thin client lifecycle |
+| `<yvex/finite_decision.h>` | bounded token-domain finite-decision engine and uncalibrated typed computational result |
+| `<yvex/server_finite_decision.h>` | typed local C execution against an exact resident finite-decision engine generation |
 
 Headers below `include/yvex/internal/` are non-installed cross-subsystem ABI.
 They are available to repository production owners and focused tests only;
@@ -259,7 +261,7 @@ engine kind from text execution strategy while retaining alias, package,
 backend, capacity, memory, and generation facts. Engine schema v1 is refused
 before the added fields are read.
 The source-authored conversation boundary admits provider request/wire schema
-v4, tokenizer plan v5, tokenizer provider result v2, and local protocol v22.
+v4, tokenizer plan v5, tokenizer provider result v2, and local protocol v23.
 Runtime event schema v6, generation plan schema v7, and generation result
 schema v5 are current. Generation plan ABI v5 added the workload-profile identity
 required to bind phase evidence to the compiled workload. Generation result
@@ -663,7 +665,7 @@ reasoning, at most one assistant tool call, and its original field semantics.
 Clone and wire-decode publish only a complete owned request graph. The provider
 owner neither parses HTTP nor renders model-family prompt syntax.
 
-`<yvex/server.h>` protocol v22 carries the sealed provider request through the
+`<yvex/server.h>` protocol v23 carries the sealed provider request through the
 private Unix socket. Provider output messages distinguish assistant text,
 explicit reasoning, function calls, usage, terminal completion, and failure.
 Typed events bind the provider adapter, provider-request identity, and external

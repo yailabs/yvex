@@ -430,7 +430,8 @@ int yvex_model_capability_profile_describe(
     if (!capability ||
         (profile != YVEX_MODEL_CAPABILITY_PROFILE_TEXT_GENERATION &&
          profile !=
-             YVEX_MODEL_CAPABILITY_PROFILE_CONDITIONED_AUDIOVISUAL_GENERATION))
+             YVEX_MODEL_CAPABILITY_PROFILE_CONDITIONED_AUDIOVISUAL_GENERATION &&
+         profile != YVEX_MODEL_CAPABILITY_PROFILE_FINITE_DECISION))
         return content_refuse(err, YVEX_ERR_INVALID_ARG,
                               "known capability profile and output are required");
     memset(capability, 0, sizeof(*capability));
@@ -444,12 +445,17 @@ int yvex_model_capability_profile_describe(
             YVEX_MODEL_CAPABILITY_STATEFUL_SESSION |
             YVEX_MODEL_CAPABILITY_STREAMING_OUTPUT;
         capability->maximum_input_parts = YVEX_CONTENT_MAX_PARTS;
-    } else {
+    } else if (profile == YVEX_MODEL_CAPABILITY_PROFILE_CONDITIONED_AUDIOVISUAL_GENERATION) {
         capability->input_kinds = YVEX_CONTENT_KIND_MASK(YVEX_CONTENT_TEXT) |
                                   YVEX_CONTENT_KIND_MASK(YVEX_CONTENT_IMAGE);
         capability->output_kinds = YVEX_CONTENT_KIND_MASK(YVEX_CONTENT_VIDEO) |
                                    YVEX_CONTENT_KIND_MASK(YVEX_CONTENT_AUDIO);
         capability->maximum_input_parts = 3u;
+    } else {
+        capability->input_kinds = YVEX_CONTENT_KIND_MASK(YVEX_CONTENT_TENSOR);
+        capability->output_kinds = YVEX_CONTENT_KIND_MASK(YVEX_CONTENT_TENSOR);
+        capability->execution_properties = YVEX_MODEL_CAPABILITY_ORDERED_INPUT_PARTS;
+        capability->maximum_input_parts = YVEX_CONTENT_MAX_PARTS;
     }
     yvex_error_clear(err);
     return YVEX_OK;

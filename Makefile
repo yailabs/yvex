@@ -353,6 +353,7 @@ MATERIALIZE_LIVE_OBJ := $(OBJ_DIR)/tests/live/materialize_deepseek.o
 MINIMAX_AUDIO_LIVE_OBJ := $(OBJ_DIR)/tests/live/minimax_h3_audio.o
 MINIMAX_VIDEO_LIVE_OBJ := $(OBJ_DIR)/tests/live/minimax_h3_video.o
 PROGRAM_FORWARD_LIVE_OBJ := $(OBJ_DIR)/tests/live/program_forward.o
+LAYA_NATIVE_LIVE_OBJ := $(OBJ_DIR)/tests/live/laya_native.o
 MINIMAX_TEXT_LIVE_OBJ := $(OBJ_DIR)/tests/live/minimax_h3_text.o
 MINIMAX_TRANSFORMER_LIVE_OBJ := $(OBJ_DIR)/tests/live/minimax_h3_transformer.o
 ATTENTION_LIVE_OBJ := $(OBJ_DIR)/tests/live/attention_deepseek.o
@@ -1814,6 +1815,15 @@ $(MINIMAX_AUDIO_LIVE_RUNNER): $(MINIMAX_AUDIO_LIVE_OBJ) $(LIBYVEX)
 $(TEST_DIR)/program_forward: $(PROGRAM_FORWARD_LIVE_OBJ) $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(PROGRAM_FORWARD_LIVE_OBJ) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+$(TEST_DIR)/laya_native: $(LAYA_NATIVE_LIVE_OBJ) $(OPENAI_ADAPTER_OBJS) $(LIBYVEX)
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(LAYA_NATIVE_LIVE_OBJ) $(OPENAI_ADAPTER_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+.PHONY: test-laya-native-live
+test-laya-native-live: $(TEST_DIR)/laya_native
+	@test -n "$(LAYA_TYPED_SOURCE)" || { echo "LAYA_TYPED_SOURCE is required" >&2; exit 2; }
+	$(TEST_DIR)/laya_native "$(LAYA_TYPED_SOURCE)"
 
 .PHONY: test-program-forward-live
 test-program-forward-live: $(TEST_DIR)/program_forward

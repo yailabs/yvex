@@ -914,7 +914,7 @@ typedef struct {
 static void *stale_peer_main(void *opaque)
 {
     static const unsigned char response[12] = {
-        'Y', 'V', 'X', 'P', 0u, 21u, 0u, 2u, 0u, 0u, 0u, 0u};
+        'Y', 'V', 'X', 'P', 0u, 22u, 0u, 2u, 0u, 0u, 0u, 0u};
     stale_peer *peer = opaque;
     unsigned char header[12], discard[4096];
     unsigned int length;
@@ -963,8 +963,8 @@ static int test_stale_frame_refusal(void)
                      "stale peer thread");
     rc = yvex_client_connect(&client, path, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT && client == NULL &&
-                         strstr(yvex_error_message(&err), "version 22") != NULL,
-                     "immediately prior v21 frame explicitly refuses");
+                         strstr(yvex_error_message(&err), "version 23") != NULL,
+                     "immediately prior v22 frame explicitly refuses");
     YVEX_TEST_ASSERT(pthread_join(thread, NULL) == 0, "stale peer join");
     (void)close(peer.listener);
     (void)unlink(path);
