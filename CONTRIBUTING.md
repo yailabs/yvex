@@ -29,6 +29,12 @@ a branch merely to give an agent a separate identity.
 
 ## Before opening work
 
+Contributions to first-party YVEX remain under the repository's MIT posture.
+Contributors retain their copyright; no corporate assignment, CLA or DCO is
+created by this policy. Identify third-party material and preserve its notices;
+do not submit material you lack authority to contribute under compatible terms.
+See [NOTICE](NOTICE.md#first-party-ownership-and-brand) for pre-incorporation ownership.
+
 Search issues and the roadmap boundary. Describe one concrete problem, its
 current evidence and consumer, the desired after-state, refusal behavior,
 and relevant non-goals. Include a reproducible failure when possible.

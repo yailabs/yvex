@@ -1,8 +1,28 @@
 # Notices and attribution
 
-YVEX is a YAI Labs project. Original YVEX code and documentation are licensed
+YVEX is an independently MIT-licensed project in the YAI technology base.
+Original YVEX code and documentation are licensed
 under the [MIT license](LICENSE). Distributions retain both `LICENSE` and
 `NOTICE.md`; the product package places them in `share/yvex/`.
+
+## First-party ownership and brand
+
+Copyright (c) 2026 Francesco Maiomascio for first-party material authored and
+owned by him. Repository history records his authorship; it is not evidence
+of a corporate assignment or of ownership of third-party material. Any other
+contributors retain their applicable rights and notices.
+
+YAI is the intended company and flagship product name. The legal entity has
+not yet been incorporated and is not the present IP owner. No assignment,
+trademark registration or patent ownership is asserted here. A later transfer
+requires an actual agreement with the relevant rights holders before updating
+ownership notices. YAI's proprietary/source-available terms do not apply to
+YVEX or REPLAI, which remain MIT.
+
+The obsolete name "YAI Labs" is not a current company or first-party rights
+holder. Existing `yailabs` repository/model namespaces, `yai-labs.com` domain
+references and immutable historical release labels remain technical or
+historical identifiers, not claims that such a company owns this software.
 
 ## Model assets and external dependencies
 
@@ -17,9 +37,18 @@ YVEX merely because it links to or invokes them. A distributor that bundles
 those components must retain their applicable notices and terms.
 
 The chat editor statically links [REPLAI](https://github.com/mothx9/replai),
-MIT, Copyright (c) 2026 YAI Labs. Its exact revision is in `config/replai.json`;
+MIT, at revision `6230713c3c80140e609f836918811835bd847da4` as pinned in
+`config/replai.json`. That immutable revision's license says
+"Copyright (c) 2026 YAI Labs"; this is a retained historical upstream notice,
+not a current ownership claim. Current REPLAI first-party attribution is to
+Francesco Maiomascio. Do not replace the license shipped with the pinned source
+by implication or silently move the dependency revision;
 the product package includes `share/licenses/replai/LICENSE` and the native
 build receipt. REPLAI and its Rust dependencies retain their upstream licenses.
+The REPLAI license alone is not a complete notice bundle for a statically linked
+binary: distributors must also carry the notices required by the exact linked
+Rust dependencies. The current build receipt/pin is provenance, not a complete
+third-party compliance certification.
 
 ## Unicode data
 

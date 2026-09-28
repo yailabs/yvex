@@ -91,7 +91,7 @@ named family can be prepared on every machine.
 
 ## Download tested model artifacts
 
-The first YaiLabs releases are available on Hugging Face:
+Published representations are available under the existing `yailabs` Hugging Face namespace:
 
 | Release | Available representations |
 | --- | --- |
@@ -104,7 +104,7 @@ checksums, immutable upstream revision, build lineage, license and bounded
 validation evidence. This qualification does not imply universal hardware
 compatibility or a model-quality benchmark.
 
-See the [model lifecycle guide](docs/model-lifecycle.md#published-yailabs-representations)
+See the [model lifecycle guide](docs/model-lifecycle.md#published-representations)
 for pinned download commands, manual-file adoption and local storage behavior.
 Choose one DeepSeek representation; pulling it does not require the other file
 or the upstream Safetensors.

@@ -28,7 +28,7 @@ REMOTE --pull--> LOCAL SOURCE --prepare--> READY --load--> LOADED
 ```
 
 This diagram describes operations, not one combined status enum. Origin,
-availability, preparation, and residency are independent. A YaiLabs-derived
+availability, preparation, and residency are independent. A published derived
 GGUF can be available both locally and remotely, ready for execution, and
 currently unloaded. A source directory can exist locally without an executable
 binding. `pull` never means remote execution, and `load` never downloads weights.
@@ -68,10 +68,15 @@ retained. Explicitly specifying a moving reference requests its resolution.
 When several revisions or representations match, choose the exact revision and
 `--variant` rather than relying on a guess.
 
-## Published YaiLabs representations
+<a id="published-yailabs-representations"></a>
 
-These repositories contain YaiLabs transformations of upstream models, not
-upstream models trained by YaiLabs. Their model cards own license, derivation,
+## Published representations
+
+These repositories in the existing `yailabs` namespace contain transformed
+representations of upstream models, not models trained by YAI. The namespace
+and retained compatibility anchor are technical identifiers, not a corporate
+ownership claim; see [NOTICE](../NOTICE.md#first-party-ownership-and-brand).
+Their model cards own license, derivation,
 qualification, and capability limitations.
 
 | Repository | Immutable release revision | Selection |
@@ -167,7 +172,7 @@ immutable upstream source
 
 Safetensors can be source weights or directly executable weights for a backend
 that admits them. They are not permanent companion files required beside every
-GGUF. A consumer of the published YaiLabs GGUF normally needs that GGUF and its
+GGUF. A consumer of a published GGUF normally needs that GGUF and its
 admitted runtime configuration, not the complete upstream Safetensors snapshot.
 Source preparation is needed when producing a different representation, not
 merely because the source exists upstream.
