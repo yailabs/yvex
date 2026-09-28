@@ -1,0 +1,64 @@
+{
+  "schema": "yvex.evaluation.observation.v1",
+  "id": "qwen-readout-state",
+  "title": "Qwen bounded readout allocations",
+  "kind": "characterization",
+  "context": {
+    "source_commit": null,
+    "source_tree": null,
+    "source_stability": "unknown",
+    "date": null,
+    "run_id": null,
+    "model": "Qwen3.8-27B text BF16",
+    "model_revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "artifact_identity": "1fce07008eaa78e04eedd1a031144f48eb6af617f2b5c508811ba91dca7e00f1",
+    "binding_identity": "164b88fbb116c2ef1daad6f4bb840f7b655d4c0dce8bae7b3c2e85bf81701126",
+    "representation": "BF16",
+    "backend": "cuda",
+    "device": null,
+    "runtime_configuration": {},
+    "workload": "prefix [1]; candidates [3], [4], [3,4], alias [3]",
+    "warm_state": "unknown",
+    "concurrency": 1,
+    "sequence_lengths": {},
+    "memory": {},
+    "limitations": [
+      "Bounded allocation observations, not continuous process/device peaks.",
+      "Categories have different ownership; the chart does not assert an additive total.",
+      "Execution commit, date and exact device were not retained in the source paragraph."
+    ],
+    "recorded_from": "https://github.com/yailabs/yvex/blob/b5f632ef8d452f61bbbc8f91f9459a2fd26b7c83/ROADMAP.md#current-execution-sequence"
+  },
+  "measurements": [
+    {
+      "id": "shared",
+      "label": "Shared prefix",
+      "metric": "allocation",
+      "unit": "bytes",
+      "value": 314114048,
+      "samples": 1,
+      "statistic": "observed",
+      "scope": "immutable shared prefix"
+    },
+    {
+      "id": "branch",
+      "label": "Branch maximum",
+      "metric": "allocation",
+      "unit": "bytes",
+      "value": 314967616,
+      "samples": 1,
+      "statistic": "observed",
+      "scope": "observed at attach/committed-token boundaries"
+    },
+    {
+      "id": "workspace",
+      "label": "Workspace",
+      "metric": "allocation",
+      "unit": "bytes",
+      "value": 201326592,
+      "samples": 1,
+      "statistic": "observed",
+      "scope": "session workspace"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 334" role="img" aria-labelledby="title desc">
+<title id="title">Mamba CPU readout durations</title>
+<desc id="desc">characterization; Historical characterization, not a benchmark or performance advantage.. Values are printed beside each bar.</desc>
+<rect width="1000" height="334" rx="12" fill="#faf8ff"/>
+<g font-family="Arial, sans-serif" fill="#231735">
+<text x="30" y="38" font-size="23" font-weight="700">Mamba CPU readout durations</text>
+<text x="30" y="67" font-size="16">CHARACTERIZATION · s · not an automatic capability promotion</text>
+<text x="30" y="129" font-size="18">Prefix</text>
+<rect x="330" y="110" width="78.756" height="27" rx="4" fill="#7541ba"/>
+<text x="428.756" y="129" font-size="17">27.763</text>
+<text x="30" y="187" font-size="18">Candidates</text>
+<rect x="330" y="168" width="391.244" height="27" rx="4" fill="#7541ba"/>
+<text x="741.244" y="187" font-size="17">137.92</text>
+<text x="30" y="245" font-size="18">Total</text>
+<rect x="330" y="226" width="470.000" height="27" rx="4" fill="#7541ba"/>
+<text x="820.000" y="245" font-size="17">165.683</text>
+</g></svg>

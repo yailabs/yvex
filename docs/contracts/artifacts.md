@@ -1,6 +1,18 @@
+<!-- docs:metadata
+title: Artifact and Admission Contract
+id: yvex.contracts.artifacts
+document: reference
+status: current
+owner: interfaces
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # Artifact and Admission Contract
 
-Status: normative implemented contract
+**Exact producer/consumer requirements at this boundary.**
+
+[Up](README.md)
 
 Authority: artifact terminology, complete-artifact admission, repository
 payload policy, and the boundary between artifact, materialization, runtime,

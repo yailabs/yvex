@@ -1,7 +1,20 @@
+<!-- docs:metadata
+title: 0004 — Target-verified speculative generation
+id: yvex.decisions.0004-target-verified-speculation
+document: reference
+status: current
+owner: yvex
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # 0004 — Target-verified speculative generation
 
+**Structural selection and its conceptual lineage.**
+
+[Up](README.md)
+
 Date: 2026-08-02
-Status: accepted
 
 Protocol versions below record the original decision, not today's wire
 contract; see the [current protocol](../contracts/local-protocol.md).

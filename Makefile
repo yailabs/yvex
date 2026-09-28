@@ -38,6 +38,9 @@
 
 .DEFAULT_GOAL := all
 
+DOCS_PYTHON ?= $(if $(wildcard build/docs-venv/bin/python),build/docs-venv/bin/python,python3)
+export DOCS_PYTHON
+
 .PHONY: all info lib client package print-build-identity generate-source-manifest \
 	check-source-manifest generate-operator-registry \
 	generate-qa-registry check-qa-registry qa qa-fast qa-structural qa-cuda qa-ci qa-doctor \
@@ -1602,7 +1605,27 @@ test-docs-surface: $(YVEX_BIN) tests/test_docs_surface.sh
 	sh tests/test_docs_surface.sh
 
 test-documentation-architecture: tests/documentation_architecture.py
-	python3 tests/documentation_architecture.py
+	$(DOCS_PYTHON) tests/documentation_architecture.py
+	$(DOCS_PYTHON) tests/test_docs_publication.py
+
+.PHONY: docs-setup docs-check docs-diagrams docs-benchmarks docs-site docs-pdf
+docs-setup:
+	python3 -m venv build/docs-venv
+	build/docs-venv/bin/python -m pip install -r tools/docs/requirements.txt
+
+docs-check: test-documentation-architecture test-project-control
+
+docs-diagrams:
+	python3 tools/render_diagrams.py
+
+docs-benchmarks:
+	$(DOCS_PYTHON) tools/docs/benchmarks.py
+
+docs-site:
+	$(DOCS_PYTHON) tools/docs/site.py
+
+docs-pdf:
+	$(DOCS_PYTHON) tools/docs/site.py --pdf $(if $(DOCS_BROWSER),--browser '$(DOCS_BROWSER)')
 
 test-surface: tests/test_surface.sh
 	sh tests/test_surface.sh

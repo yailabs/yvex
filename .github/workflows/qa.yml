@@ -37,6 +37,8 @@ jobs:
           node-version: 22
       - name: Diagnose QA environment
         run: python3 tools/qa.py doctor
+      - name: Prepare the documentation publication toolchain
+        run: make docs-setup
       - name: Run canonical hosted lane
         run: python3 tools/qa.py run ci
       - name: Check real chat memory ownership

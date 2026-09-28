@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render the bounded, fixed-layout documentation figures using only stdlib.
 
-JSON owns content and coordinates; this file owns the shared SVG grammar. No
+JSON owns the typed graph and print coordinates; this file owns Mermaid and SVG projections. No
 layout engine, font download, timestamp, random ID, script, or external asset
 enters a render. This is a documentation projection, not an architecture DB.
 """
@@ -13,11 +13,13 @@ import hashlib
 import html
 import json
 import math
+import os
+import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DIRECTORY = ROOT / "docs/diagrams"
+DIRECTORY = ROOT / "docs/assets/diagrams"
 KINDS = {"external": "X", "interface": "I", "semantic": "S", "runtime": "R",
          "mutable": "M", "physical": "P", "evidence": "E"}
 EDGES = {"flow": ("", "solid", "data / result"),
@@ -26,14 +28,18 @@ EDGES = {"flow": ("", "solid", "data / result"),
          "bind": ("9 4 2 4", "none", "identity binding"),
          "lifecycle": ("", "open", "lifecycle / gate")}
 STYLE = """
-text{fill:#161616}
+text{fill:#261b38}
 .title{font-size:26px;font-weight:700}.panel-title{font-size:19px;font-weight:700}
 .node-title{font-size:20px;font-weight:700}.body{font-size:18px}
 .note,.legend{font-size:16px}.code{font-size:16px}
 .tag{font-size:15px;font-weight:700;text-anchor:middle}
 .label{font-size:16px}
-.panel{fill:#f7f7f7;stroke:#a3a3a3;stroke-width:1}
-.node{fill:#fff;stroke:#525252;stroke-width:1.5}
+.panel{fill:#f7f3fc;stroke:#c6b6db;stroke-width:1}
+.node{fill:#fff;stroke:#665275;stroke-width:1.5}
+.semantic{fill:#efe5fc;stroke:#7541ba}.physical{fill:#f4effb;stroke:#8054b2}
+.runtime{fill:#eeeafb;stroke:#6a4ca3}.mutable{fill:#fff3db;stroke:#8e6920}
+.interface{fill:#edf3fb;stroke:#456789}.external{fill:#f2f2f4;stroke:#707078}
+.evidence{fill:#eaf5ef;stroke:#3d7255}
 .external{stroke-dasharray:6 4}.runtime{stroke-width:2.5}.mutable{stroke-width:2}
 .edge{fill:none;stroke:#292929;stroke-width:1.7;stroke-linejoin:round}
 """.strip()
@@ -100,7 +106,9 @@ def validate(data):
             require(not (x < a+c and a < x+w and y < b+d and b < y+h),
                     f"overlapping nodes: {node['id']}, {other['id']}")
     for edge in data["edges"]:
-        fields(edge, ("kind", "points"))
+        fields(edge, ("kind", "points", "source", "target"))
+        endpoints = ids | {f'panel-{i}' for i in range(len(data['panels']))}
+        require(edge['source'] in endpoints and edge['target'] in endpoints, 'unknown semantic edge endpoint')
         require(edge["kind"] in EDGES and len(edge["points"]) >= 2, "invalid edge")
         for point in edge["points"]:
             coordinate(point, 2)
@@ -189,6 +197,81 @@ def check_output(path, expected):
     require(path.is_file() and path.read_text(encoding="utf-8") == expected,
             f"stale diagram: {path.name}; run python3 tools/render_diagrams.py")
 
+def mermaid(data):
+    """Project the same typed graph into GitHub-native Mermaid, without coordinates."""
+    validate(data)
+    def identity(value):return 'n_'+value.replace('-', '_')
+    def label(value):return value.replace('&','&amp;').replace('"','&quot;').replace('<','&lt;').replace('>','&gt;')
+    panels=data['panels'];parents={};members={i:[] for i in range(len(panels))}
+    def contains(outer,inner):
+        a,b,w,h=outer;x,y,v,z=inner
+        return a<=x and b<=y and x+v<=a+w and y+z<=b+h and outer!=inner
+    def parent(box):
+        candidates=[i for i,p in enumerate(panels) if contains(p['box'],box)]
+        return min(candidates,key=lambda i:panels[i]['box'][2]*panels[i]['box'][3]) if candidates else None
+    for i,p in enumerate(panels):parents[i]=parent(p['box'])
+    loose=[]
+    for n in data['nodes']:
+        owner=parent(n['box'])
+        (members[owner] if owner is not None else loose).append(n)
+    out=['flowchart TB']
+    def node(n):
+        # Mermaid is the orientation view; exact annotations remain in the
+        # companion static figure and explanatory owner, from this same model.
+        body='<br/>'.join(label(t) for t in [n['kind'].upper(),n['title'],*n['lines'][:1]])
+        return f'  {identity(n["id"])}["{body}"]:::{n["kind"]}'
+    def panel(i):
+        out.append(f'  subgraph {identity("panel-"+str(i))}["{label(panels[i]["title"])}"]')
+        out.append('    direction TB')
+        out.extend(node(n) for n in members[i])
+        for j in range(len(panels)):
+            if parents[j]==i:panel(j)
+        for j,b in enumerate(data.get('bands',[])):
+            if parent(b['box'])==i:out.append(f'  band_{j}["{label(b["text"])}"]:::runtime')
+        # Invisible constraints express reading order, never a system edge.
+        local=[n['id'] for n in members[i]]
+        if len(local)>1 and not any(e['source'] in local and e['target'] in local for e in data['edges']):
+            out.append('  '+' ~~~ '.join(identity(n) for n in local))
+        bands=[f'band_{j}' for j,b in enumerate(data.get('bands',[])) if parent(b['box'])==i]
+        if len(bands)>1:out.append('  '+' ~~~ '.join(bands))
+        out.append('  end')
+    out.extend(node(n) for n in loose)
+    for i in range(len(panels)):
+        if parents[i] is None:panel(i)
+    styles={'flow':'-->', 'control':'-. request .->', 'observe':'-. observation .->',
+            'bind':'---|identity|', 'lifecycle':'-->|gate|'}
+    for e in data['edges']:
+        out.append(f'  {identity(e["source"])} {styles[e["kind"]]} {identity(e["target"])}')
+    roots=[identity('panel-'+str(i)) for i in range(len(panels)) if parents[i] is None]
+    if len(roots)>1:out.append('  '+' ~~~ '.join(roots))
+    palette={'semantic':('#efe5fc','#7541ba'),'physical':('#f4effb','#8054b2'),
+      'runtime':('#eeeafb','#6a4ca3'),'mutable':('#fff3db','#8e6920'),
+      'interface':('#edf3fb','#456789'),'external':('#f2f2f4','#707078'),'evidence':('#eaf5ef','#3d7255')}
+    for kind,(fill,stroke) in palette.items():
+        out.append(f'  classDef {kind} fill:{fill},stroke:{stroke},color:#261b38')
+    for i in range(len(panels)):
+        out.append(f'  style {identity("panel-"+str(i))} fill:#faf8fe,stroke:#b8a5d0,color:#261b38')
+    return '\n'.join(out)+'\n'
+
+def diagram_block(name, data, consumer):
+    relative=os.path.relpath(DIRECTORY/(name+'.svg'),consumer.parent)
+    source=os.path.relpath(DIRECTORY/(name+'.json'),consumer.parent)
+    return (f'<!-- docs:diagram {name} -->\n```mermaid\n%% yvex-figure: {name}\n'+mermaid(data)+
+      f'```\n\n[Static figure]({relative}) · [Editable source]({source})\n<!-- /docs:diagram -->')
+
+def synchronize_markdown(sources, check):
+    models={p.stem:json.loads(p.read_text()) for p in sources}
+    pattern=re.compile(r'<!-- docs:diagram ([a-z_]+) -->.*?<!-- /docs:diagram -->',re.S)
+    consumers=[ROOT/'README.md',*(ROOT/'docs').rglob('*.md')]
+    for path in consumers:
+        text=path.read_text()
+        def replacement(match):
+            require(match[1] in models,'unknown Mermaid source: '+match[1])
+            return diagram_block(match[1],models[match[1]],path)
+        expected=pattern.sub(replacement,text)
+        if check:require(text==expected,'stale Mermaid projection: '+str(path.relative_to(ROOT)))
+        elif text!=expected:path.write_text(expected)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -197,7 +280,6 @@ def main():
     try:
         sources = sorted(DIRECTORY.glob("*.json"))
         require(sources, "no figure sources")
-        require(not list(DIRECTORY.glob("*.mmd")), "retired Mermaid authoring remains")
         require({p.stem for p in DIRECTORY.glob("*.svg")} <= {p.stem for p in sources}, "orphan SVG")
         for source in sources:
             output = source.with_suffix(".svg")
@@ -206,6 +288,7 @@ def main():
                 check_output(output, svg)
             else:
                 output.write_text(svg, encoding="utf-8")
+        synchronize_markdown(sources,args.check)
         print(f'documentation figures: {len(sources)} synchronized ({"check" if args.check else "render"})')
     except (ValueError, KeyError, TypeError, OSError) as exc:
         parser.exit(1, f"documentation figures: {exc}\n")

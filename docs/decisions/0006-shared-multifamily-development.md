@@ -1,7 +1,20 @@
+<!-- docs:metadata
+title: 0006 — Shared multi-family development
+id: yvex.decisions.0006-shared-multifamily-development
+document: reference
+status: current
+owner: yvex
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # 0006 — Shared multi-family development
 
+**Structural selection and its conceptual lineage.**
+
+[Up](README.md)
+
 Date: 2026-08-24
-Status: accepted
 
 ## Context
 

@@ -1,4 +1,18 @@
+<!-- docs:metadata
+title: Remote management bootstrap v1
+id: yvex.contracts.remote-management
+document: reference
+status: current
+owner: interfaces
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # Remote management bootstrap v1
+
+**Exact producer/consumer requirements at this boundary.**
+
+[Up](README.md)
 
 This contract is independent of model family, accelerator, hostname and Case.
 It applies to a YVEX machine with an OpenSSH server and an Ed25519 host key;
@@ -181,4 +195,4 @@ operations or infer that an arbitrary machine is remote-ready. Production
 qualification still requires a supervised persistent listener, effective
 security-configuration audit, real YAI enrollment, operation journal and
 mutating lifecycle conformance. The broad remote transport, authentication and
-release rows in `ROADMAP.md` are not promoted by the isolated fixture.
+release gates in the version-specific release record are not promoted by the isolated fixture.

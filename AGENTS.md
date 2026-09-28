@@ -1,12 +1,45 @@
-# YVEX agent rules
+<!-- docs:metadata
+title: YVEX Agent Protocol
+id: yvex.agents
+document: guide
+status: current
+owner: docs
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
+# YVEX Agent Protocol
+
+**Task-based delivery with source, lifetime and evidence discipline.**
 
 YVEX is a native C/CUDA compiler and runtime for identity-bound verified
-open-weight inference. Code and tests own capability; documentation describes
-implemented truth. [ROADMAP.md](ROADMAP.md) is the sole live macro
-project-control authority. Consult the [engineering method](docs/development/agentic-engineering.md)
-when framing or closing a substantial delivery, and the [documentation map](docs/README.md)
-for task-relevant architecture and contracts; neither is a mandatory pre-read
-for a small local change.
+open-weight inference. Code/tests own capability; documentation describes it.
+Use [Documentation](docs/README.md) for contextual routes, not universal preload.
+
+## Start from a Task
+
+For substantial work, select an already authorized Task or temporary Task Pack
+from [TASKS](docs/project-control/TASKS.md). A newly authorized independent
+outcome is recorded there before implementation. Do not select unrelated work.
+Resolve outcome, affected plane, invariants, ABI, family, backend/hardware lane,
+current [Status](docs/project-control/STATUS.md), required evidence and docs impact.
+Small local fixes do not require reading every control or product document.
+
+## Context routing
+
+| Change | Minimum owner route, plus affected implementation/tests |
+| --- | --- |
+| Source / family | [Source](docs/architecture/source-provenance.md), [family integration](docs/model-families/integration.md), exact family record |
+| Compiler / representation | [Compiler](docs/architecture/compiler-ir.md), [representation](docs/architecture/representation-artifacts.md), affected contract |
+| Artifact / deployment | [Admission](docs/architecture/artifacts-admission.md), [deployment](docs/architecture/deployment-specialization.md) |
+| Runtime / state / scheduling | [Runtime](docs/architecture/runtime-lifecycle.md), affected [plane](docs/architecture/README.md) and runtime contract |
+| Backend / performance | [Backend](docs/architecture/backend-execution.md), [benchmark methodology](docs/evaluation/benchmarks/methodology.md) |
+| Public integration | [Interfaces](docs/architecture/interfaces-protocols.md), exact [contract](docs/contracts/README.md) |
+| Research / promotion | Relevant [research owner](docs/research/README.md), Status and independent evidence |
+
+Read [Invariants](docs/architecture/INVARIANTS.md) when changing an ownership or
+execution boundary. Read [ROADMAP](ROADMAP.md) only for long-horizon planning.
+ADRs own structural selections; Memory is derived context.
 
 ## Shared development
 
@@ -35,7 +68,7 @@ authority. Add a file only for a real ABI, lifecycle, reusable algorithm,
 backend/platform or generated boundary, family recipe, or entrypoint; otherwise
 extend its owner or keep a helper static. Paths form namespaces: lowercase
 snake_case, no repeated tokens or `yvex_` source prefixes, root C/private
-headers, or flattened object identities. See [source ownership](docs/development/source-ownership.md)
+headers, or flattened object identities. See [source ownership](docs/guides/source-ownership.md)
 for the change procedure.
 
 Installed public headers live in `include/yvex/*.h`, cross-subsystem internal
@@ -108,7 +141,7 @@ stability; separate measured from derived facts. Judge performance candidates
 by throughput, latency, memory, preparation cost
 and numerical effect together.
 
-Use [QA ownership](docs/development/qa.md) and its registered change mapping
+Use [QA ownership](docs/evaluation/qa.md) and its registered change mapping
 to choose proportional tests. Safe local tests may be run, repaired and rerun
 without another approval; expensive live/model work is not required for docs
 or cosmetic changes. Evidence from a moving source snapshot is invalid.
@@ -132,3 +165,24 @@ failure caused by the change calls for
 repair and revalidation; stop only for a genuine external blocker or a decision
 outside the authorized boundary. Do not promote the next roadmap boundary
 merely because this one is complete.
+
+## Documentation and Task closure
+
+Update executable architecture in the same Task as its change. Route public
+ABI/protocol changes to Contracts, family support to the family record and
+Status, observations to Evaluation, selected delivery to Tasks, structural
+choices to an ADR, and release changes to the release record. Rebuild generated
+benchmark/publication views from their sources. Update Memory only for durable
+re-entry traps; Roadmap only when a macro horizon changes.
+
+Closure explicitly reports: code; architecture; Task/Status impact; structural
+decisions; earned evidence; evaluation/benchmark observations; changed canonical
+docs; cross-repository effects. “Documentation impact: none” requires a concrete
+reason. COMPLETE means the actual exit is earned; unresolved architecture or
+missing mandatory evidence remains PARTIAL/BLOCKED delivery, never stale docs
+silently deferred. Task rows themselves use only the four controlled states.
+
+For the full method see [task delivery](docs/guides/agentic-engineering.md).
+Stop for incompatible foreign work, unresolved ownership/authority, unpublished
+external contracts or evidence required for a claim that cannot be obtained.
+Resolve routine implementation and editorial choices without repeated approval.

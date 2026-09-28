@@ -1,6 +1,18 @@
+<!-- docs:metadata
+title: DeepSeek V4 Flash / DSpark Technical Record
+id: yvex.model-families.deepseek-v4-flash
+document: reference
+status: mixed
+owner: model
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # DeepSeek V4 Flash / DSpark Technical Record
 
-Status: current family and target record
+**Exact family semantics, admitted execution and remaining evidence limits.**
+
+[Up](README.md)
 
 This record owns current DeepSeek V4 Flash family facts and the exact DSpark
 target admitted by YVEX. It does not own macro gate state, operator procedure,
@@ -198,4 +210,4 @@ This record does not claim:
 - speculative support for another family;
 - release qualification.
 
-Current gate state is owned only by [`ROADMAP.md`](../../ROADMAP.md).
+Current gate state is owned only by [Status](../project-control/STATUS.md).

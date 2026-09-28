@@ -1,11 +1,24 @@
+<!-- docs:metadata
+title: 0005 — Identity-bound execution substrate
+id: yvex.decisions.0005-execution-substrate
+document: reference
+status: current
+owner: yvex
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # 0005 — Identity-bound execution substrate
 
+**Structural selection and its conceptual lineage.**
+
+[Up](README.md)
+
 Date: 2026-08-03
-Status: accepted
 
 The version numbers and migration context below belong to this decision's
 original checkpoint. Current package storage versus deployment-specialization
-ownership is specified by [compilation](../architecture/compilation.md#runtime-binding);
+ownership is specified by [compilation](../architecture/deployment-specialization.md#runtime-binding);
 the [local protocol](../contracts/local-protocol.md) owns current wire semantics.
 
 ## Context

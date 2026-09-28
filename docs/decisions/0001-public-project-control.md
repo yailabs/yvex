@@ -1,7 +1,20 @@
+<!-- docs:metadata
+title: 0001 — Public project control
+id: yvex.decisions.0001-public-project-control
+document: reference
+status: current
+owner: yvex
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # 0001 — Public project control
 
+**Structural selection and its conceptual lineage.**
+
+[Up](README.md)
+
 Date: 2026-07-30
-Status: accepted
 
 ## Context
 

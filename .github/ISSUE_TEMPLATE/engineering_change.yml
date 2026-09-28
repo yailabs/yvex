@@ -4,7 +4,7 @@ title: "change: "
 body:
   - type: markdown
     attributes:
-      value: Frame the work as outcome, authority, freedom, invariants, then completion. Link current evidence; leave implementation choices open unless a real boundary constrains them. ROADMAP.md alone owns active project state.
+      value: Frame the work as outcome, authority, freedom, invariants, then completion. Link current evidence; leave implementation choices open unless a real boundary constrains them. Canonical Tasks own selected delivery; Status owns current evidence-backed capability. Link the affected Task and documentation owners.
   - type: textarea
     id: outcome
     attributes:

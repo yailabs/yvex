@@ -46,8 +46,8 @@ that revision. [ROADMAP.md](ROADMAP.md) owns release qualification state.
 
 The implemented transport and lifecycle contracts are in
 [local protocol](docs/contracts/local-protocol.md),
-[OpenAI compatibility](docs/openai-compatibility.md), and the
-[operator runbook](docs/operator-runbook.md).
+[OpenAI compatibility](docs/contracts/openai-compatibility.md), and the
+[operator runbook](docs/guides/operator-runbook.md).
 
 ## Development and disclosure hygiene
 

@@ -23,7 +23,7 @@ keep credentials, model payloads, and private data out of the diff and report.
 
 State any capability, compatibility, or readiness change and the remaining
 non-claims. For milestone work, include the progression decision, downstream
-safety, and any `ROADMAP.md` or decision-record update. Mark these inapplicable
+safety, and Task/Status/architecture/evaluation updates, any structural ADR, and a Roadmap change only for a changed long horizon. Mark these inapplicable
 when the delivery does not change a milestone.
 
 ## Review checklist

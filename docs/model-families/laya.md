@@ -1,4 +1,18 @@
+<!-- docs:metadata
+title: 'Laya typed-decisions: first finite-decision model pressure'
+id: yvex.model-families.laya
+document: reference
+status: mixed
+owner: model
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # Laya typed-decisions: first finite-decision model pressure
+
+**Exact family semantics, admitted execution and remaining evidence limits.**
+
+[Up](README.md)
 
 `SYSTEM.MODEL.LAYA.0` uses the immutable
 [`convaiinnovations/laya-typed-decisions`](https://huggingface.co/convaiinnovations/laya-typed-decisions)

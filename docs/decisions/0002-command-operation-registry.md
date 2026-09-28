@@ -1,7 +1,20 @@
+<!-- docs:metadata
+title: 0002 — Canonical command and operation registry
+id: yvex.decisions.0002-command-operation-registry
+document: reference
+status: current
+owner: yvex
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # 0002 — Canonical command and operation registry
 
+**Structural selection and its conceptual lineage.**
+
+[Up](README.md)
+
 Date: 2026-07-31
-Status: accepted
 
 ## Context
 

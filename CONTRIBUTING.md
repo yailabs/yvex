@@ -1,7 +1,8 @@
 # Contributing to YVEX
 
-[AGENTS](AGENTS.md) owns repository rules. Consult [ROADMAP](ROADMAP.md) for
-current macro state and the [engineering method](docs/development/agentic-engineering.md)
+[AGENTS](AGENTS.md) owns repository rules. Start substantial delivery from
+[Tasks](docs/project-control/TASKS.md), inspect [Status](docs/project-control/STATUS.md),
+and use the [engineering method](docs/guides/agentic-engineering.md)
 when framing or reviewing a substantial delivery; task-relevant technical
 owners are linked from the [documentation map](docs/README.md).
 
@@ -10,7 +11,7 @@ through [SECURITY](SECURITY.md), not a public issue or pull request.
 
 ## Set up a development checkout
 
-Use the [build instructions](README.md#1-build), then inspect the prerequisites
+Use the [build instructions](docs/guides/build.md), then inspect the prerequisites
 for the relevant test lane:
 
 ```sh
@@ -35,7 +36,7 @@ created by this policy. Identify third-party material and preserve its notices;
 do not submit material you lack authority to contribute under compatible terms.
 See [NOTICE](NOTICE.md#first-party-ownership-and-brand) for pre-incorporation ownership.
 
-Search issues and the roadmap boundary. Describe one concrete problem, its
+Search issues and the selected Task. Describe one concrete problem, its
 current evidence and consumer, the desired after-state, refusal behavior,
 and relevant non-goals. Include a reproducible failure when possible.
 
@@ -55,16 +56,18 @@ Unless the delivery explicitly owns documentation or policy:
 1. reconcile the checkout and inspect current owners;
 2. implement at the correct ownership boundary;
 3. qualify positive and adversarial behavior;
-4. update affected contracts and project state only to the evidence obtained.
+4. reconcile the owning architecture/contracts, Task exits, Status and evidence in the same delivery.
+
+Read [ROADMAP](ROADMAP.md) only when the work changes a long-horizon direction.
 
 For new production membership, use the
-[source-ownership workflow](docs/development/source-ownership.md). For command
+[source-ownership workflow](docs/guides/source-ownership.md). For command
 changes, update the canonical operation registry described by
-[command architecture](docs/architecture/commands.md), not generated help
+[command architecture](docs/reference/commands.md), not generated help
 or independent flag tables.
 
 Documentation changes must identify where each retained fact belongs.
-The [documentation lifecycle](docs/development/agentic-engineering.md#documentation-lifecycle)
+The [documentation lifecycle](docs/guides/agentic-engineering.md#documentation-lifecycle)
 covers admission, compression, historical records, and changelog scope.
 
 ## Tests
@@ -78,7 +81,7 @@ python3 tools/qa.py run --changed BASE
 git diff --check
 ```
 
-[QA](docs/development/qa.md) owns lane selection, prerequisites, locks,
+[QA](docs/evaluation/qa.md) owns lane selection, prerequisites, locks,
 evidence output, and invalidation. A missing mandatory lane is blocked or
 skipped, never passed. Documentation and cosmetic work do not need expensive
 model execution. Runtime changes require their mapped lifecycle, numerical,
@@ -109,7 +112,7 @@ The pull request should state:
 Review the actual implementation and refusal paths, not only the author's
 summary. Independent repository verification and the distinction between
 published facts and local runtime evidence are explained in the
-[engineering method](docs/development/agentic-engineering.md#verify-the-delivery).
+[engineering method](docs/guides/agentic-engineering.md#verify-the-delivery).
 
 Follow [AGENTS closure rules](AGENTS.md#evidence-and-completion) for source
 stability and downstream safety. License and attribution obligations remain

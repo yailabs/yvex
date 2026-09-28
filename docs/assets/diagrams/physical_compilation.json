@@ -1,0 +1,590 @@
+{
+  "schema": 1,
+  "number": 2,
+  "title": "Coordinated compilation lanes and runtime join",
+  "description": "Verified source enters family interpretation, which projects distinct computation and parameter-package compilation lanes. Symbolic execution joins exact Transformation IR lineage and authenticated PEIR package terminals before physical program construction, compiled model planning and runtime binding. Deployment specialization then combines immutable binding truth with a real backend, device and resource policy.",
+  "size": [
+    1200,
+    1200
+  ],
+  "owner": "docs/architecture/compiler-ir.md",
+  "authority": [
+    "include/yvex/internal/compiler.h",
+    "include/yvex/internal/ir.h",
+    "include/yvex/internal/program.h",
+    "include/yvex/internal/program_physical.h",
+    "include/yvex/internal/execution.h",
+    "src/graph/program.c",
+    "src/graph/execution.c",
+    "src/runtime/binding.c",
+    "docs/contracts/artifacts.md"
+  ],
+  "panels": [
+    {
+      "box": [
+        24,
+        82,
+        1152,
+        150
+      ],
+      "title": "a  Verified source and family interpretation"
+    },
+    {
+      "box": [
+        24,
+        252,
+        1152,
+        400
+      ],
+      "title": "b  Coordinated compilation — computation and parameter/package lanes"
+    },
+    {
+      "box": [
+        24,
+        682,
+        1152,
+        210
+      ],
+      "title": "c  Identity-preserving join and immutable binding"
+    },
+    {
+      "box": [
+        24,
+        922,
+        1152,
+        155
+      ],
+      "title": "d  Deployment and executable resources"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "source",
+      "box": [
+        40,
+        122,
+        300,
+        100
+      ],
+      "kind": "external",
+      "title": "Verified source",
+      "lines": [
+        "inventory · ranges · trust",
+        "configuration + tokenizer"
+      ]
+    },
+    {
+      "id": "family",
+      "box": [
+        450,
+        122,
+        300,
+        100
+      ],
+      "kind": "semantic",
+      "title": "Family interpretation",
+      "lines": [
+        "irreducible source semantics",
+        "roles · topology · numerics"
+      ]
+    },
+    {
+      "id": "semantic",
+      "box": [
+        840,
+        122,
+        320,
+        100
+      ],
+      "kind": "semantic",
+      "title": "Semantic Model IR",
+      "lines": [
+        "sealed model aggregate",
+        "may retain native program"
+      ]
+    },
+    {
+      "id": "typed",
+      "box": [
+        200,
+        300,
+        320,
+        120
+      ],
+      "kind": "semantic",
+      "title": "Native typed program",
+      "lines": [
+        "functions · values · state",
+        "operations · effects",
+        "no payload or backend"
+      ]
+    },
+    {
+      "id": "execution",
+      "box": [
+        680,
+        300,
+        320,
+        120
+      ],
+      "kind": "semantic",
+      "title": "Program Execution IR",
+      "lines": [
+        "entry slots · dependencies",
+        "effect order · last use",
+        "parameters stay symbolic"
+      ]
+    },
+    {
+      "id": "transform",
+      "box": [
+        40,
+        500,
+        250,
+        120
+      ],
+      "kind": "semantic",
+      "title": "Transformation IR",
+      "lines": [
+        "source → terminal",
+        "typed derivation recipe",
+        "payload-free planning"
+      ]
+    },
+    {
+      "id": "transform_binding",
+      "box": [
+        320,
+        500,
+        250,
+        120
+      ],
+      "kind": "semantic",
+      "title": "Transform binding",
+      "lines": [
+        "verified ranges + IDs",
+        "artifact lowering map",
+        "payload separate"
+      ]
+    },
+    {
+      "id": "variant",
+      "box": [
+        600,
+        500,
+        250,
+        120
+      ],
+      "kind": "physical",
+      "title": "Variant / artifact",
+      "lines": [
+        "qtype · rows · layout",
+        "writer + admission",
+        "variant identity"
+      ]
+    },
+    {
+      "id": "peir",
+      "box": [
+        880,
+        500,
+        280,
+        120
+      ],
+      "kind": "physical",
+      "title": "PEIR package truth",
+      "lines": [
+        "authenticated terminals",
+        "encoded ranges · sharing",
+        "no live deployment facts"
+      ]
+    },
+    {
+      "id": "join",
+      "box": [
+        40,
+        730,
+        250,
+        120
+      ],
+      "kind": "semantic",
+      "title": "Parameter join",
+      "lines": [
+        "symbol ↔ lineage",
+        "exact PEIR terminal",
+        "distinct joined identity"
+      ]
+    },
+    {
+      "id": "physical_program",
+      "box": [
+        320,
+        730,
+        250,
+        120
+      ],
+      "kind": "physical",
+      "title": "Physical program",
+      "lines": [
+        "admitted impls",
+        "physical contracts",
+        "computational work"
+      ]
+    },
+    {
+      "id": "compiled",
+      "box": [
+        600,
+        730,
+        250,
+        120
+      ],
+      "kind": "semantic",
+      "title": "Compiled plan",
+      "lines": [
+        "programs + schedule",
+        "derived impl plans",
+        "execution identity"
+      ]
+    },
+    {
+      "id": "binding",
+      "box": [
+        880,
+        730,
+        280,
+        120
+      ],
+      "kind": "interface",
+      "title": "Runtime binding",
+      "lines": [
+        "authenticated truth",
+        "package + program IDs",
+        "no machine or residency"
+      ]
+    },
+    {
+      "id": "deployment",
+      "box": [
+        170,
+        970,
+        360,
+        100
+      ],
+      "kind": "runtime",
+      "title": "Deployment specialization",
+      "lines": [
+        "real backend · device · resources",
+        "admitted implementation envelope"
+      ]
+    },
+    {
+      "id": "engine",
+      "box": [
+        670,
+        970,
+        360,
+        100
+      ],
+      "kind": "runtime",
+      "title": "Engine generation",
+      "lines": [
+        "executable resource ownership",
+        "sessions · state · scheduling"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "kind": "flow",
+      "points": [
+        [
+          340,
+          172
+        ],
+        [
+          450,
+          172
+        ]
+      ],
+      "source": "source",
+      "target": "family"
+    },
+    {
+      "kind": "flow",
+      "points": [
+        [
+          750,
+          172
+        ],
+        [
+          840,
+          172
+        ]
+      ],
+      "source": "family",
+      "target": "semantic"
+    },
+    {
+      "kind": "flow",
+      "points": [
+        [
+          1000,
+          222
+        ],
+        [
+          1000,
+          290
+        ],
+        [
+          360,
+          290
+        ],
+        [
+          360,
+          300
+        ]
+      ],
+      "source": "semantic",
+      "target": "typed"
+    },
+    {
+      "kind": "flow",
+      "points": [
+        [
+          520,
+          360
+        ],
+        [
+          680,
+          360
+        ]
+      ],
+      "source": "typed",
+      "target": "execution"
+    },
+    {
+      "kind": "flow",
+      "points": [
+        [
+          600,
+          222
+        ],
+        [
+          1100,
+          222
+        ],
+        [
+          1100,
+          486
+        ],
+        [
+          165,
+          486
+        ],
+        [
+          165,
+          500
+        ]
+      ],
+      "source": "family",
+      "target": "transform"
+    },
+    {
+      "kind": "flow",
+      "points": [
+        [
+          290,
+          560
+        ],
+        [
+          320,
+          560
+        ]
+      ],
+      "source": "transform",
+      "target": "transform_binding"
+    },
+    {
+      "kind": "flow",
+      "points": [
+        [
+          570,
+          560
+        ],
+        [
+          600,
+          560
+        ]
+      ],
+      "source": "transform_binding",
+      "target": "variant"
+    },
+    {
+      "kind": "flow",
+      "points": [
+        [
+          850,
+          560
+        ],
+        [
+          880,
+          560
+        ]
+      ],
+      "source": "variant",
+      "target": "peir"
+    },
+    {
+      "kind": "bind",
+      "points": [
+        [
+          840,
+          420
+        ],
+        [
+          1170,
+          420
+        ],
+        [
+          1170,
+          700
+        ],
+        [
+          165,
+          700
+        ],
+        [
+          165,
+          730
+        ]
+      ],
+      "source": "execution",
+      "target": "join"
+    },
+    {
+      "kind": "bind",
+      "points": [
+        [
+          1020,
+          620
+        ],
+        [
+          1020,
+          680
+        ],
+        [
+          165,
+          680
+        ],
+        [
+          165,
+          730
+        ]
+      ],
+      "source": "peir",
+      "target": "join"
+    },
+    {
+      "kind": "flow",
+      "points": [
+        [
+          290,
+          790
+        ],
+        [
+          320,
+          790
+        ]
+      ],
+      "source": "join",
+      "target": "physical_program"
+    },
+    {
+      "kind": "flow",
+      "points": [
+        [
+          570,
+          790
+        ],
+        [
+          600,
+          790
+        ]
+      ],
+      "source": "physical_program",
+      "target": "compiled"
+    },
+    {
+      "kind": "flow",
+      "points": [
+        [
+          850,
+          790
+        ],
+        [
+          880,
+          790
+        ]
+      ],
+      "source": "compiled",
+      "target": "binding"
+    },
+    {
+      "kind": "lifecycle",
+      "points": [
+        [
+          1020,
+          850
+        ],
+        [
+          1020,
+          910
+        ],
+        [
+          350,
+          910
+        ],
+        [
+          350,
+          970
+        ]
+      ],
+      "source": "binding",
+      "target": "deployment"
+    },
+    {
+      "kind": "flow",
+      "points": [
+        [
+          530,
+          1020
+        ],
+        [
+          670,
+          1020
+        ]
+      ],
+      "source": "deployment",
+      "target": "engine"
+    }
+  ],
+  "labels": [
+    {
+      "at": [
+        40,
+        324
+      ],
+      "text": "COMPUTATION",
+      "style": "note"
+    },
+    {
+      "at": [
+        40,
+        486
+      ],
+      "text": "PARAMETER / PACKAGE",
+      "style": "note"
+    }
+  ]
+}

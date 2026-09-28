@@ -1,10 +1,22 @@
+<!-- docs:metadata
+title: Model-Family Integration Contract
+id: yvex.model-families.integration
+document: reference
+status: mixed
+owner: model
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # Model-Family Integration Contract
 
-Status: normative family-integration architecture
+**Exact family semantics, admitted execution and remaining evidence limits.**
+
+[Up](README.md)
 
 This document owns the common contract by which a model family enters YVEX.
-Family-specific facts live in separate records. Current release scope and gate
-state remain in [`ROADMAP.md`](../../ROADMAP.md).
+Family-specific facts live in separate records. Current capability and qualification
+state remain in [Status](../project-control/STATUS.md).
 
 ## Family and target
 
@@ -24,17 +36,54 @@ and media publication have different terminal semantics.
 
 ## Promotion path
 
-![Family interpretation seals roles, topology, state and numerical meaning into admitted records consumed by common execution owners; Mamba2 now reaches exact CPU artifact execution while hosted conversation and whole-model conformance remain open.](../diagrams/family_boundary.svg)
+<!-- docs:diagram family_boundary -->
+```mermaid
+%% yvex-figure: family_boundary
+flowchart TB
+  n_sealed["SEMANTIC<br/>Sealed plan boundary<br/>common compiler validates"]:::semantic
+  subgraph n_panel_0["a  Family-specific meaning"]
+    direction TB
+  n_family["SEMANTIC<br/>Interpret and lower<br/>source / config / tokenizer"]:::semantic
+  end
+  subgraph n_panel_1["b  Common execution owners"]
+    direction TB
+  n_generic["RUNTIME<br/>Reuse mechanisms<br/>artifact / materialization"]:::runtime
+  end
+  subgraph n_panel_2["c  Existing architectural pressure — examples, not a support matrix"]
+    direction TB
+  n_deepseek["SEMANTIC<br/>DeepSeek<br/>sparse expert work"]:::semantic
+  n_qwen["SEMANTIC<br/>Qwen hybrid<br/>attention + recurrence"]:::semantic
+  n_minimax["SEMANTIC<br/>MiniMax composite<br/>multiple components"]:::semantic
+  n_mamba["EVIDENCE<br/>Mamba2: PARTIAL<br/>token / norm authority"]:::evidence
+  n_deepseek ~~~ n_qwen ~~~ n_minimax ~~~ n_mamba
+  end
+  n_family --> n_sealed
+  n_sealed --> n_generic
+  n_panel_0 ~~~ n_panel_1 ~~~ n_panel_2
+  classDef semantic fill:#efe5fc,stroke:#7541ba,color:#261b38
+  classDef physical fill:#f4effb,stroke:#8054b2,color:#261b38
+  classDef runtime fill:#eeeafb,stroke:#6a4ca3,color:#261b38
+  classDef mutable fill:#fff3db,stroke:#8e6920,color:#261b38
+  classDef interface fill:#edf3fb,stroke:#456789,color:#261b38
+  classDef external fill:#f2f2f4,stroke:#707078,color:#261b38
+  classDef evidence fill:#eaf5ef,stroke:#3d7255,color:#261b38
+  style n_panel_0 fill:#faf8fe,stroke:#b8a5d0,color:#261b38
+  style n_panel_1 fill:#faf8fe,stroke:#b8a5d0,color:#261b38
+  style n_panel_2 fill:#faf8fe,stroke:#b8a5d0,color:#261b38
+```
+
+[Static figure](../assets/diagrams/family_boundary.svg) · [Editable source](../assets/diagrams/family_boundary.json)
+<!-- /docs:diagram -->
 
 *Figure 4 — Family integration boundary. Families supply irreducible semantics;
 common owners validate, seal and execute admitted plans without another family
 runtime. The lower panel identifies existing architectural pressure, not equal
 support: Mamba2 has exact artifact-backed pure-SSM CPU execution but no hosted
 conversation or independent whole-model oracle, and MiniMax retains its
-full-scale numerical/quality gap.* [Editable source](../diagrams/family_boundary.json).
+full-scale numerical/quality gap.* [Editable source](../assets/diagrams/family_boundary.json).
 
-The [compilation figure](../architecture/compilation.md#pipeline) owns the
-source-to-engine sequence; the [evidence ladder](../development/agentic-engineering.md#classify-evidence)
+The [compilation figure](../architecture/compiler-ir.md#pipeline) owns the
+source-to-engine sequence; the [evidence ladder](../guides/agentic-engineering.md#classify-evidence)
 separates terminal execution from evaluation, benchmark and release.
 
 No stage inherits a later claim from a name, report, fixture, external engine,
@@ -266,32 +315,11 @@ same hosted path exposed to the operator.
 | Family/target | Accepted boundary | Evidence limit |
 | --- | --- | --- |
 | [DeepSeek-V4-Flash-DSpark](deepseek-v4-flash.md) | Source-to-hosted text; target-verified speculation | No release quality/performance promotion |
-| Qwen3.8-27B | Exact published BF16 text specialization, current binding v17, target-only CUDA hybrid recurrent/full-attention forward, complete logits and common prefix capture/attach | No Decision Readout breadth, vision, upstream whole-model conformance, behavior, benchmark or release claim |
+| [Qwen3.8-27B text](qwen3.8-text.md) | Exact BF16 CUDA hybrid execution, common prefix and bounded finite-candidate readout | No universal family, vision, upstream whole-model, behavior, benchmark or release claim |
 | [MiniMax-H3 FL2VA](minimax-h3.md) | Four component artifacts, composite iterative execution, synchronized-media publication | Bounded component conformance is not full-scale numerical/behavioral correctness |
 | [Mamba2](mamba2.md) | Exact acquired source, deterministic artifact/binding, 64-layer pure-SSM CPU execution, finite LM-head output and common transactional state | Partial; independent all-layer/whole-model oracle and hosted conversation remain unavailable |
+| [Laya](laya.md) | Exact CPU finite model and local text-frontier producer | No calibration, CUDA or general head/checkpoint breadth |
 | Gemma | Source/header and candidate-role observations | Not an executable family |
-
-Qwen's current text target is `Qwen/Qwen3.8-27B`, revision
-`1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`, interpreted by the
-[`qwen3_5` model owner](../../src/model/families/qwen3_5.c) and
-[graph recipe](../../src/graph/families/qwen3_5.c). The 64 text layers compose
-48 recurrent sequence mixers and 16 full-attention layers. Text roles consume
-851 of 1,199 source tensors; 333 vision and 15 MTP tensors do not enter the
-admitted text artifact. Source presence does not publish input capability.
-[Adapter tests](../../tests/unit/qwen_adapter.c) and
-[architecture tests](../../tests/unit/qwen3_5_architecture.c) guard that boundary.
-
-The unchanged 53,815,809,152-byte BF16 GGUF artifact
-`1fce07008eaa78e04eedd1a031144f48eb6af617f2b5c508811ba91dca7e00f1`
-is associated with immutable published release
-`yailabs/Qwen3.8-27B-Text-GGUF@066eb288bffd5a07c0d5ca584114a1f3fcfd13a8`
-and a fresh authenticated binding v17. Ordinary target-only CUDA execution
-consumes the 1,732-step compiler-owned forward and two-step output programs,
-produces 248,320 finite logits, and captures/attaches common prefix schema v2
-with all 16 attention and 48 recurrent layers represented. Malformed retained
-v16 canonical records remain refused. This qualifies the ordinary Qwen
-execution prerequisite only: no Qwen Decision Readout ran, and no upstream
-whole-model conformance claim follows.
 
 These are current evidence summaries, not a universal family compatibility
 matrix. Runtime capability comes from the exact admitted specialization.

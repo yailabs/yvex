@@ -1,7 +1,7 @@
 # Getting help with YVEX
 
 Start with the [quick start](README.md#quick-start) and
-[operator runbook](docs/operator-runbook.md). The
+[operator runbook](docs/guides/operator-runbook.md). The
 [documentation map](docs/README.md) links the current contracts, supported
 model boundaries, and development guides. [ROADMAP.md](ROADMAP.md) records
 release status and open qualification gates.

@@ -1,37 +1,27 @@
-# Architecture Decision Records
+<!-- docs:metadata
+title: Architecture Decisions
+id: yvex.decisions
+document: reference
+status: current
+owner: yvex
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
 
-Decision records preserve durable choices that affect YVEX architecture,
-ownership, public ABI, protocols, executable topology, release doctrine, or
-project-control doctrine.
+# Architecture Decisions
 
-They explain why a choice was made. They do not become implementation,
-capability, milestone, or release authority. Current macro state remains in
-[`ROADMAP.md`](../../ROADMAP.md); current technical truth remains in code and
-its owning contracts.
+**Durable structural selections and explicit supersession.**
 
-## Format
+[Documentation](../README.md)
 
-Use a numbered Markdown file with:
+Numbered ADRs retain context, decision, consequences and alternatives. Adoption states are proposed, accepted and superseded; Git retains chronology. [0008](0008-task-based-documentation.md) supersedes [0001](0001-public-project-control.md) for current project-control doctrine. Do not reverse an accepted conclusion in place.
 
-- title;
-- date and status;
-- context;
-- decision;
-- consequences;
-- alternatives considered; and
-- supersession link when applicable.
+## Owners and reading paths
 
-Accepted statuses are `proposed`, `accepted`, and `superseded`. Do not edit an
-accepted decision to reverse its conclusion; add a successor and mark the old
-record superseded.
-
-## Index
-
-| Record | Status | Decision |
-| --- | --- | --- |
-| [0001](0001-public-project-control.md) | accepted | Separate compact live project control from historical ledger evidence and issue/PR delivery workflow. |
-| [0002](0002-command-operation-registry.md) | accepted | Generate immutable command descriptors from one strict, versioned operation registry while preserving typed execution lanes. |
-| [0004](0004-target-verified-speculation.md) | accepted | Keep target and DSpark drafting in one runtime model and publish only an atomically committed target-verified prefix. |
-| [0005](0005-execution-substrate.md) | accepted | Separate execution identity from evidence depth, promote verified candidate state without replay, and admit CUDA work through typed profiles and shapes. |
-| [0006](0006-shared-multifamily-development.md) | accepted | Admit shared multi-family branches and worktrees while preserving semantic ownership, source-stable evidence, and stable main integration. |
-| [0007](0007-external-terminal-editor.md) | accepted | Consume a pinned REPLAI C ABI statically; preserve product command, generation and session ownership. |
+- [0001 — Public project control](0001-public-project-control.md)
+- [0002 — Canonical command and operation registry](0002-command-operation-registry.md)
+- [0004 — Target-verified speculative generation](0004-target-verified-speculation.md)
+- [0005 — Identity-bound execution substrate](0005-execution-substrate.md)
+- [0006 — Shared multi-family development](0006-shared-multifamily-development.md)
+- [0007 — External terminal editor ownership](0007-external-terminal-editor.md)
+- [0008 — Task-based documentation architecture](0008-task-based-documentation.md)

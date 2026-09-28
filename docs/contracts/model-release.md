@@ -1,4 +1,18 @@
+<!-- docs:metadata
+title: Model release evidence
+id: yvex.contracts.model-release
+document: reference
+status: current
+owner: interfaces
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # Model release evidence
+
+**Exact producer/consumer requirements at this boundary.**
+
+[Up](README.md)
 
 Release qualification projects the existing model library, source identities and
 artifact records. It does not create another catalog or change runtime admission.

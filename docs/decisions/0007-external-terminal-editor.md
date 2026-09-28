@@ -1,7 +1,20 @@
+<!-- docs:metadata
+title: 0007 — External terminal editor ownership
+id: yvex.decisions.0007-external-terminal-editor
+document: reference
+status: current
+owner: yvex
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # 0007 — External terminal editor ownership
 
+**Structural selection and its conceptual lineage.**
+
+[Up](README.md)
+
 Date: 2026-09-05
-Status: accepted
 
 ## Context
 

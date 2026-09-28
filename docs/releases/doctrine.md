@@ -1,9 +1,21 @@
+<!-- docs:metadata
+title: Release Doctrine
+id: yvex.releases.doctrine
+document: evaluation
+status: current
+owner: evaluation
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # Release Doctrine
 
-Status: normative release contract
+**Versioned scope and evidence gates; no implicit capability promotion.**
+
+[Up](README.md)
 
 This document owns the stable meaning and closure rules of YVEX release gates.
-[`ROADMAP.md`](../../ROADMAP.md) owns current gate state, dependency order, and
+[Status](../project-control/STATUS.md) owns current gate state, dependency order, and
 release target. Version-specific facts live in their release record.
 
 Documentation records implementation truth. It cannot create capability.

@@ -17,12 +17,12 @@ reject_text() {
 }
 
 # Inventory, links, protocol identity, assets and retired paths have one owner.
-python3 tests/documentation_architecture.py
+"${DOCS_PYTHON:-python3}" tests/documentation_architecture.py
 require_text README.md '## Why YVEX'
 require_text README.md '## Quick start'
 require_text README.md '## Product boundary'
 require_text README.md '## Documentation'
-require_text README.md '## Current limits'
+require_text README.md '## Evidence and current limits'
 require_text README.md './yvex model list'
 require_text README.md './yvex serve'
 require_text README.md './yvex model load'
@@ -35,18 +35,18 @@ reject_text README.md 'export YVEX_MODEL_ARTIFACT'
 readme_lines=$(wc -l < README.md | tr -d ' ')
 test "$readme_lines" -le 500 || fail "README exceeds bounded public entry surface: $readme_lines"
 
-require_text docs/architecture/system.md '# Implemented YVEX System'
-require_text docs/architecture/compilation.md '## Runtime binding'
-require_text docs/architecture/runtime.md '## Sessions and transactional state'
-require_text docs/architecture/commands.md 'yvex.operator.registry.v1'
+require_text docs/architecture/README.md '# YVEX System Architecture'
+require_text docs/architecture/deployment-specialization.md '## Runtime binding'
+require_text docs/architecture/computational-state.md '## Sessions and transactional state'
+require_text docs/reference/commands.md 'yvex.operator.registry.v1'
 require_text docs/model-families/integration.md '# Model-Family Integration Contract'
 require_text docs/contracts/artifacts.md '# Artifact and Admission Contract'
 require_text docs/contracts/runtime.md 'A client connection is not a session.'
 require_text docs/contracts/runtime.md 'no explicit exact request silently changes'
 require_text docs/contracts/events-telemetry.md 'No consumer scrapes another renderer'
 require_text docs/contracts/c-api.md '## Compiled Operator Registry Boundary'
-require_text docs/openai-compatibility.md 'YVEX never executes application tools.'
-require_text docs/operator-runbook.md '## First verified startup'
+require_text docs/contracts/openai-compatibility.md 'YVEX never executes application tools.'
+require_text docs/guides/operator-runbook.md '## First verified startup'
 test ! -e ./yvexd || fail 'retired hidden server executable remains'
 if test -x ./yvex; then
   help=$(./yvex)

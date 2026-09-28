@@ -1,6 +1,18 @@
+<!-- docs:metadata
+title: Events and Telemetry Contract
+id: yvex.contracts.events-telemetry
+document: reference
+status: current
+owner: interfaces
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # Events and Telemetry Contract
 
-Status: normative implemented contract
+**Exact producer/consumer requirements at this boundary.**
+
+[Up](README.md)
 
 Authority: server/runtime typed event owners and telemetry fan-out. Renderers
 project these facts but do not own event meaning.

@@ -1,0 +1,64 @@
+{
+  "schema": "yvex.evaluation.observation.v1",
+  "id": "mamba-readout-characterization",
+  "title": "Mamba CPU readout durations",
+  "kind": "characterization",
+  "context": {
+    "source_commit": null,
+    "source_tree": null,
+    "source_stability": "unknown",
+    "date": null,
+    "run_id": null,
+    "model": "Mamba-Codestral-7B-v0.1",
+    "model_revision": null,
+    "artifact_identity": null,
+    "binding_identity": null,
+    "representation": null,
+    "backend": "cpu",
+    "device": null,
+    "runtime_configuration": {},
+    "workload": "prefix [1]; candidates [3], [4], [3,4], alias [3]",
+    "warm_state": "unknown",
+    "concurrency": 1,
+    "sequence_lengths": {},
+    "memory": {},
+    "limitations": [
+      "Historical characterization, not a benchmark or performance advantage.",
+      "Execution commit, date, exact device and warm/cold classification were not retained.",
+      "One bounded observation; phase and total durations must not be summed."
+    ],
+    "recorded_from": "https://github.com/yailabs/yvex/blob/b5f632ef8d452f61bbbc8f91f9459a2fd26b7c83/ROADMAP.md#current-execution-sequence"
+  },
+  "measurements": [
+    {
+      "id": "prefix",
+      "label": "Prefix",
+      "metric": "duration",
+      "unit": "s",
+      "value": 27.763,
+      "samples": 1,
+      "statistic": "observed",
+      "scope": "one prefix forward"
+    },
+    {
+      "id": "candidates",
+      "label": "Candidates",
+      "metric": "duration",
+      "unit": "s",
+      "value": 137.92,
+      "samples": 1,
+      "statistic": "observed",
+      "scope": "five teacher-forced candidate steps"
+    },
+    {
+      "id": "total",
+      "label": "Total",
+      "metric": "duration",
+      "unit": "s",
+      "value": 165.683,
+      "samples": 1,
+      "statistic": "observed",
+      "scope": "complete bounded readout; includes prior phases"
+    }
+  ]
+}

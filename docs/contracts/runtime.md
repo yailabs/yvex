@@ -1,6 +1,18 @@
+<!-- docs:metadata
+title: Hosted Runtime Contract
+id: yvex.contracts.runtime
+document: reference
+status: current
+owner: interfaces
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # Hosted Runtime Contract
 
-Status: normative implemented contract
+**Exact producer/consumer requirements at this boundary.**
+
+[Up](README.md)
 
 Authority: host/engine lifecycle, execution sessions, scheduling, transactional
 publication, resource admission, failure, and cleanup. C interfaces are

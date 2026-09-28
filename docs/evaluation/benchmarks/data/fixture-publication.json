@@ -1,0 +1,52 @@
+{
+  "schema": "yvex.evaluation.observation.v1",
+  "id": "fixture-publication",
+  "title": "Synthetic publication fixture",
+  "kind": "fixture",
+  "context": {
+    "source_commit": null,
+    "source_tree": null,
+    "source_stability": "fixture",
+    "date": null,
+    "run_id": null,
+    "model": "fixture model",
+    "model_revision": null,
+    "artifact_identity": null,
+    "binding_identity": null,
+    "representation": null,
+    "backend": "fixture",
+    "device": null,
+    "runtime_configuration": {},
+    "workload": "synthetic",
+    "warm_state": "fixture",
+    "concurrency": 1,
+    "sequence_lengths": {},
+    "memory": {},
+    "limitations": [
+      "Synthetic data validates publication only; it demonstrates no YVEX performance."
+    ],
+    "recorded_from": "Synthetic fixture owned by this observation; no runtime measurement."
+  },
+  "measurements": [
+    {
+      "id": "a",
+      "label": "Fixture A",
+      "metric": "duration",
+      "unit": "ms",
+      "value": 12.0,
+      "samples": 1,
+      "statistic": "observed",
+      "scope": "synthetic configuration"
+    },
+    {
+      "id": "b",
+      "label": "Fixture B",
+      "metric": "duration",
+      "unit": "ms",
+      "value": 18.0,
+      "samples": 1,
+      "statistic": "observed",
+      "scope": "synthetic configuration"
+    }
+  ]
+}

@@ -1,6 +1,18 @@
+<!-- docs:metadata
+title: Local Protocol v24
+id: yvex.contracts.local-protocol
+document: reference
+status: current
+owner: interfaces
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # Local Protocol v24
 
-Status: normative private protocol contract
+**Exact producer/consumer requirements at this boundary.**
+
+[Up](README.md)
 
 Schema/version: `YVEX_LOCAL_PROTOCOL_VERSION = 24`.
 
@@ -81,7 +93,7 @@ identity, tokenizer identity, input count, separate input/output violations
 and remaining sequence/output budget. Wire verification rejects inconsistent
 counts, geometry, identities and versions. The result is not a resource
 reservation; dispatch retains ordinary admission. See the
-[public projection](../openai-compatibility.md#execution-capacity-and-preflight).
+[public projection](openai-compatibility.md#execution-capacity-and-preflight).
 
 A native generation turn may carry one ordered collection of at most 32 typed
 parts. Each part identifies its schema, kind (`text`, `image`, `audio`, `video`,

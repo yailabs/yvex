@@ -1,6 +1,19 @@
+<!-- docs:metadata
+title: MiniMax-H3 FL2VA Family Record
+id: yvex.model-families.minimax-h3
+document: reference
+status: mixed
+owner: model
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # MiniMax-H3 FL2VA Family Record
 
-Status: admitted composite execution with bounded numerical conformance;
+**Exact family semantics, admitted execution and remaining evidence limits.**
+
+[Up](README.md)
+
 full-scale numerical/behavioral qualification remains open.
 
 This record owns current family-specific source, topology, physical policy,
@@ -193,7 +206,7 @@ or failure publishes no terminal file. GStreamer supplies an independent
 container/decode check.
 
 Operator commands, preview selection, attachments, and output paths belong to
-the [media procedure](../operator-runbook.md#direct-minimax-h3-media-host).
+the [media procedure](../guides/multimodal.md#direct-minimax-h3-media-host).
 The family does not own another host, session manager, event plane, or CLI.
 
 ## Numerical and lifecycle evidence

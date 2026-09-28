@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "YVEX evaluation observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "title",
+    "kind",
+    "context",
+    "measurements"
+  ],
+  "properties": {
+    "schema": {
+      "const": "yvex.evaluation.observation.v1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": [
+        "benchmark",
+        "characterization",
+        "numerical",
+        "fixture"
+      ]
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "source_commit",
+        "source_tree",
+        "source_stability",
+        "date",
+        "run_id",
+        "model",
+        "model_revision",
+        "artifact_identity",
+        "binding_identity",
+        "representation",
+        "backend",
+        "device",
+        "runtime_configuration",
+        "workload",
+        "warm_state",
+        "concurrency",
+        "sequence_lengths",
+        "memory",
+        "limitations",
+        "recorded_from"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source_commit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "source_tree": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "source_stability": {
+          "enum": [
+            "frozen",
+            "unknown",
+            "fixture"
+          ]
+        },
+        "date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "format": "date"
+        },
+        "run_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "model_revision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "artifact_identity": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "binding_identity": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "representation": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "backend": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "device": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "runtime_configuration": {
+          "type": "object"
+        },
+        "workload": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "warm_state": {
+          "enum": [
+            "cold",
+            "warm",
+            "mixed",
+            "unknown",
+            "fixture"
+          ]
+        },
+        "concurrency": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "sequence_lengths": {
+          "type": "object"
+        },
+        "memory": {
+          "type": "object"
+        },
+        "limitations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "recorded_from": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "measurements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "metric",
+          "unit",
+          "value",
+          "samples",
+          "statistic",
+          "scope"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "metric": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "statistic": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scope": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": "number",
+            "minimum": 0
+          },
+          "samples": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          }
+        }
+      }
+    }
+  }
+}

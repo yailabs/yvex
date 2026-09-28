@@ -1,6 +1,19 @@
+<!-- docs:metadata
+title: Mamba2 pure-SSM compiler boundary
+id: yvex.model-families.mamba2
+document: reference
+status: mixed
+owner: model
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # Mamba2 pure-SSM compiler boundary
 
-Status: PARTIAL / exact artifact-executable. Source authority, deterministic
+**Exact family semantics, admitted execution and remaining evidence limits.**
+
+[Up](README.md)
+
 artifact and binding admission, the common CPU compiler/runtime path and exact
 all-layer/output/session execution are qualified. Independent all-layer or
 whole-model numerical conformance and hosted text generation are not claimed.

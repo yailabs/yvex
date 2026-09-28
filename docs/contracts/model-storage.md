@@ -1,4 +1,18 @@
+<!-- docs:metadata
+title: Model storage contract
+id: yvex.contracts.model-storage
+document: reference
+status: current
+owner: interfaces
+audience: [engineer, agent, evaluator]
+publication: {html: true, pdf: true, index: true}
+-->
+
 # Model storage contract
+
+**Exact producer/consumer requirements at this boundary.**
+
+[Up](README.md)
 
 The source catalog owns provider origin and acquisition facts. The artifact
 registry owns representations and optional deployment profiles. The model
@@ -6,13 +20,52 @@ library joins those facts into logical models; filesystem proximity never
 establishes lineage. These owners remain authoritative for remote-only records,
 managed local material and explicit external references.
 
-![Durable source and artifact retention, logical working-set membership, READY deployments, loaded engines and active work occupy separate authority domains.](../diagrams/storage_residency.svg)
+<!-- docs:diagram storage_residency -->
+```mermaid
+%% yvex-figure: storage_residency
+flowchart TB
+  subgraph n_panel_0["a  Durable source and representation facts"]
+    direction TB
+  n_remote["EXTERNAL<br/>Remote record<br/>provider + revision"]:::external
+  n_source["SEMANTIC<br/>Retained source<br/>immutable bytes"]:::semantic
+  n_artifact["SEMANTIC<br/>Representation / artifact<br/>source-derived bytes + authenticated derivation"]:::semantic
+  n_library["INTERFACE<br/>Logical model library<br/>joins source, artifact and deployment facts"]:::interface
+  end
+  subgraph n_panel_1["b  Deployment and live runtime facts"]
+    direction TB
+  n_ready["SEMANTIC<br/>READY deployment<br/>artifact + binding + current compatibility"]:::semantic
+  n_engine["RUNTIME<br/>Loaded engine generation<br/>mappings / prepared resources / backend placement"]:::runtime
+  n_work["MUTABLE<br/>Active execution work<br/>explicit request on an admitted generation"]:::mutable
+  end
+  subgraph n_panel_2["c  Orthogonal location classes — not promotion stages"]
+    direction TB
+  end
+  n_remote -. request .-> n_source
+  n_source --> n_artifact
+  n_artifact -->|gate| n_ready
+  n_ready -. request .-> n_engine
+  n_engine -. request .-> n_work
+  n_panel_0 ~~~ n_panel_1 ~~~ n_panel_2
+  classDef semantic fill:#efe5fc,stroke:#7541ba,color:#261b38
+  classDef physical fill:#f4effb,stroke:#8054b2,color:#261b38
+  classDef runtime fill:#eeeafb,stroke:#6a4ca3,color:#261b38
+  classDef mutable fill:#fff3db,stroke:#8e6920,color:#261b38
+  classDef interface fill:#edf3fb,stroke:#456789,color:#261b38
+  classDef external fill:#f2f2f4,stroke:#707078,color:#261b38
+  classDef evidence fill:#eaf5ef,stroke:#3d7255,color:#261b38
+  style n_panel_0 fill:#faf8fe,stroke:#b8a5d0,color:#261b38
+  style n_panel_1 fill:#faf8fe,stroke:#b8a5d0,color:#261b38
+  style n_panel_2 fill:#faf8fe,stroke:#b8a5d0,color:#261b38
+```
+
+[Static figure](../assets/diagrams/storage_residency.svg) · [Editable source](../assets/diagrams/storage_residency.json)
+<!-- /docs:diagram -->
 
 *Figure 6 — Storage versus runtime truth. Working-set membership is orthogonal
 to retention and residency; explicit requests cross the boundaries. Cache is
 not provenance, a file is not a deployment, and device-addressability does not
 prove physical UMA page residency. No automatic eviction policy is implied.*
-[Editable source](../diagrams/storage_residency.json).
+[Editable source](../assets/diagrams/storage_residency.json).
 
 ## What users choose and YVEX manages
 
@@ -184,7 +237,7 @@ records the external path while leaving the bytes there. Directories use the
 same operation. `inbox/` is optional: placing a file there does not trigger a
 watcher, import, preparation or automatic catalog admission. Invoke `model pull`
 on that path explicitly. Complete commands belong to the
-[operator runbook](../operator-runbook.md#discover-acquire-and-prepare-a-model).
+[operator runbook](../guides/source-preparation.md#discover-acquire-and-prepare-a-model).
 
 ## Location, working set and runtime state
 
@@ -234,7 +287,7 @@ readiness.
 
 ## Idempotency and removal
 
-The [model lifecycle guide](../model-lifecycle.md) owns user commands and provider
+The [model lifecycle guide](../guides/model-lifecycle.md) owns user commands and provider
 interoperability examples. These are the implementation invariants:
 
 - Ordinary exact pull hits use catalog identity plus a verification receipt bound

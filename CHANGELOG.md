@@ -45,7 +45,7 @@ belongs to [ROADMAP](ROADMAP.md).
   linear REPL and `host logs` is the shared operational event stream.
 - Source-authored reasoning/final/tool channels, exact prompt policy, and
   committed-only output. The bounded loopback
-  [OpenAI compatibility profile](docs/openai-compatibility.md) supports its
+  [OpenAI compatibility profile](docs/contracts/openai-compatibility.md) supports its
   declared Chat Completions and Responses subset; YVEX never executes tools.
 
 ### Execution and measurement
