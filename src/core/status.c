@@ -369,7 +369,13 @@ int yvex_status_is_error(yvex_status status)
 
 const char *yvex_version_string(void)
 {
-    return "0.1.0";
+#define VERSION_TEXT_INNER(value) #value
+#define VERSION_TEXT(value) VERSION_TEXT_INNER(value)
+    return VERSION_TEXT(YVEX_VERSION_MAJOR) "."
+           VERSION_TEXT(YVEX_VERSION_MINOR) "."
+           VERSION_TEXT(YVEX_VERSION_PATCH);
+#undef VERSION_TEXT
+#undef VERSION_TEXT_INNER
 }
 
 int yvex_version_major(void)

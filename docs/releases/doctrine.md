@@ -22,6 +22,15 @@ Documentation records implementation truth. It cannot create capability.
 
 ## Release identity
 
+YVEX uses independent Semantic Versioning, MAJOR.MINOR.PATCH. The canonical
+product version is `YVEX_VERSION_MAJOR/MINOR/PATCH` in `include/yvex/core.h`;
+the runtime string and numeric API are derived projections, checked by
+`unit.version`. Its current 0.1.0 is independent of YAI Core, Studio, SDK and
+REPLAI versions. Before 1.0, breaking product contracts require a minor increment;
+patch releases preserve the declared contract. Protocol, ABI and persisted schema
+versions remain separate identities. Future qualified release tags use
+`vMAJOR.MINOR.PATCH`; metadata changes alone never earn a release or tag.
+
 A release binds a declared source snapshot, model target, logical model,
 physical variant, artifact, runtime binding, backend profile, operator path,
 evaluation suite, benchmark workload, package, and source commit. Changing one

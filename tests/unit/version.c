@@ -2,12 +2,16 @@
 #include <yvex/core.h>
 
 #include "tests/test.h"
+#include <stdio.h>
 
 int yvex_test_version(void)
 {
-    YVEX_TEST_ASSERT_STREQ(yvex_version_string(), "0.1.0", "version string");
-    YVEX_TEST_ASSERT(yvex_version_major() == 0, "version major");
-    YVEX_TEST_ASSERT(yvex_version_minor() == 1, "version minor");
-    YVEX_TEST_ASSERT(yvex_version_patch() == 0, "version patch");
+    char expected[64];
+    (void)snprintf(expected, sizeof(expected), "%d.%d.%d",
+                   YVEX_VERSION_MAJOR, YVEX_VERSION_MINOR, YVEX_VERSION_PATCH);
+    YVEX_TEST_ASSERT_STREQ(yvex_version_string(), expected, "canonical version projection");
+    YVEX_TEST_ASSERT(yvex_version_major() == YVEX_VERSION_MAJOR, "version major");
+    YVEX_TEST_ASSERT(yvex_version_minor() == YVEX_VERSION_MINOR, "version minor");
+    YVEX_TEST_ASSERT(yvex_version_patch() == YVEX_VERSION_PATCH, "version patch");
     return 0;
 }
