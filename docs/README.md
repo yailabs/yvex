@@ -96,3 +96,7 @@ Concepts use sans-serif text; exact identifiers can use monospace. SVGs contain
 accessible titles/descriptions and no external resources or embedded HTML.
 Use these same vectors for GitHub and print; temporary PNG/PDF previews are not
 canonical assets. Review fonts, routes and scale after every material edit.
+
+## Selected documentation migration
+
+[Coverage and frozen basis](evaluation/documentation-migration.md).

@@ -1,0 +1,4075 @@
+{
+  "schema": "yvex.documentation-migration.v1",
+  "source_commit": "b5f632ef8d452f61bbbc8f91f9459a2fd26b7c83",
+  "reference_protocol_commit": "702375e569d1befb74bcf9bc9acbf73b9b117589",
+  "entries": [
+    {
+      "source": "AGENTS.md",
+      "section": "Shared development",
+      "line": 11,
+      "sha256": "5eec37cd5806b1736104d8c884a2170cf58ba2fe2d60816da791357292f8f75c",
+      "classification": "KEEP",
+      "destination": "AGENTS.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "AGENTS.md",
+      "section": "Source and execution ownership",
+      "line": 30,
+      "sha256": "071f10d0e3f144d61adc530a34df5b42c5b58e5cd0e7cedd660a1ffc20d3c28a",
+      "classification": "KEEP",
+      "destination": "AGENTS.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "AGENTS.md",
+      "section": "Public and product contracts",
+      "line": 83,
+      "sha256": "a22958fbaf457918013368f74edb0d178587c07ee7ed8d721c568d4b13e2f66b",
+      "classification": "KEEP",
+      "destination": "AGENTS.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "AGENTS.md",
+      "section": "Evidence and completion",
+      "line": 98,
+      "sha256": "5e81473ac32093ad8128cd7bb888ae08d01cbbbaf65e54d77dbbaeb687f084fc",
+      "classification": "KEEP",
+      "destination": "AGENTS.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "Why YVEX",
+      "line": 52,
+      "sha256": "6e0f8a972326d5352654cd79dc51f11ecfab848d52011c355f1883b33a5ca520",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "Available execution",
+      "line": 79,
+      "sha256": "8b4e1c8b81752f13875447fe6fe99796869b9e83b01ddac2cccbd36bc34079c6",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "Download tested model artifacts",
+      "line": 92,
+      "sha256": "3d0ddea75d73887a3908296611fba4163f9319696e1fe8c645ae42ef03a59844",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "Quick start",
+      "line": 112,
+      "sha256": "0f7c51a7630b9c37fdd6a3154b99e4faaf8fc2772cfd3b7e53115f02906babdf",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "1. Build",
+      "line": 114,
+      "sha256": "f1213c12cdd16cafea8bbbbaf0602a06a8d8f956ecadcf8dee670e59d590dc95",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "2. Acquire and prepare",
+      "line": 136,
+      "sha256": "dc0ec0ff170cd0a85854c4388ab192fdec4ca37ed16745924e903e73e8a169a5",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "3. Serve and chat",
+      "line": 156,
+      "sha256": "d4ceccc2e67018011c266d18f8ffc09004ede0c9b7a0d93fe41bb23663679538",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "4. Inspect the running system",
+      "line": 187,
+      "sha256": "6b34635dbb403707de08c9f87abeffa2e2deafb5bcf90b628e3df4a0c3c7940e",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "Architecture and lifetimes",
+      "line": 209,
+      "sha256": "a2c8fecdd0944c9b77489bc72e0d284b61b31fd2cb43ad4789371494960db90c",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "Multiple models and typed turns",
+      "line": 245,
+      "sha256": "9fa0bcdd115f28b4f0674e35696cdef7c7df0613618722c46036ea210516b134",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "Reading execution and memory truth",
+      "line": 274,
+      "sha256": "c5f047193d674dc857bc7cfb244ce043058a23cf8f1d9719add48a9931699703",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "Product boundary",
+      "line": 299,
+      "sha256": "da467115fb5eeefc389df80273610383948487582a00fd5474740033f4f5b2ca",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "Development and validation",
+      "line": 318,
+      "sha256": "a460a038ec49404b05df975db46050f03bce62926967192a2fc6db5fc303e4ea",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "Current limits",
+      "line": 341,
+      "sha256": "4652075f43f7eefc848a78cbc139245464b0240fd33fbc468a9041bdfae4ffcb",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "README.md",
+      "section": "Documentation",
+      "line": 356,
+      "sha256": "2c416b25c83a867008f9df704d3b972f518bdec39e45a526b1730cb85371a44f",
+      "classification": "KEEP",
+      "destination": "README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "At a Glance / Current Snapshot",
+      "line": 5,
+      "sha256": "08e990013cc510f74468e61dfbeec65941b219f203df2edcb39066f97d87a6a2",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "System Maturity",
+      "line": 54,
+      "sha256": "44ee8d61729a871e85a16729766d6a884f91065307e94e99bc2b9d8269cd96d5",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Model language, compiler and physical representation",
+      "line": 62,
+      "sha256": "b1f7997b60f1520c4a6c953baae275a02e3dad6f824c1e1b02cc555719f832fc",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Semantic Model IR target language",
+      "line": 84,
+      "sha256": "96307b7fd9c2a911034f48521946f8dbe0dc536cc690015da8522ade87f5b81e",
+      "classification": "RESEARCH",
+      "destination": "docs/research/compiler-language.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Physical Model Compiler",
+      "line": 128,
+      "sha256": "e5c1b5c792a4bae5583b7b17f3c0af9af6a878add372f44badd5b1ebbc8f9e66",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Runtime, state and scheduling",
+      "line": 230,
+      "sha256": "b397cc8942e460a1796cc33f57820e81562dd83e9a5ef6260a09d14f337eea04",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Paged typed sequence state target",
+      "line": 256,
+      "sha256": "6162280f545b66ba2e33f6550ccb6240db677079fd562d155e14e12727427205",
+      "classification": "RESEARCH",
+      "destination": "docs/research/runtime-horizons.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Conditional sparse parameter memory",
+      "line": 271,
+      "sha256": "d3e03495137d3d71d71c73a3f587805d314df7fce5923843752ff01e610a07ff",
+      "classification": "RESEARCH",
+      "destination": "docs/research/sparse-parameter-memory.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Phase liveness and quantized runtime state",
+      "line": 351,
+      "sha256": "c7946a5e956e24e68ad297cd9678959247fb0925cfd1aee0ff09a858b2aa05e3",
+      "classification": "RESEARCH",
+      "destination": "docs/research/sparse-parameter-memory.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Native Cognitive State",
+      "line": 392,
+      "sha256": "558578d2aaf0f9dd1ffea705701464cdd73aff49069b00c065750673858391f6",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Semantic authority and computational realization",
+      "line": 424,
+      "sha256": "9f992b9cb2a334d0147a9115190280568f90b25962c56374cea80d13603fbf80",
+      "classification": "RESEARCH",
+      "destination": "docs/research/native-computational-state.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "E, L and three continuity classes",
+      "line": 498,
+      "sha256": "93a24ed910f222fe4f51f2c441a202366b3b1d6e798f70ef300d0d534d082909",
+      "classification": "RESEARCH",
+      "destination": "docs/research/native-computational-state.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Lower, Reconcile and model State Update",
+      "line": 533,
+      "sha256": "3b47b5100c398b587786efc5d7ac3879ba794ed978693a2587984fc5d9974046",
+      "classification": "RESEARCH",
+      "destination": "docs/research/native-computational-state.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "N.B1 Slow-Update Dual-Stream",
+      "line": 548,
+      "sha256": "8cb86e2f9aa4fcd8255614d29976fa308935a632e10375d7305a3dea6925a367",
+      "classification": "RESEARCH",
+      "destination": "docs/research/dual-stream-model.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "B1-v0 reference StateProfile and structural budget",
+      "line": 579,
+      "sha256": "bc245d1c91f9d8826509a86bce14dcd881a3bd051f42548adffb918d0e933fc0",
+      "classification": "RESEARCH",
+      "destination": "docs/research/dual-stream-model.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Reference State Read and neutral-path surgery",
+      "line": 635,
+      "sha256": "18ec4aac0a28c6a6d5d92583e3e38f5be60eccf284cf4d5cac686fbca2fabd6a",
+      "classification": "RESEARCH",
+      "destination": "docs/research/dual-stream-model.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Reference Slow State Update and execution clock",
+      "line": 660,
+      "sha256": "74b17eaa5321ab1ef795474c8766c0d844f231316a44eff4a5c82841fce5525c",
+      "classification": "RESEARCH",
+      "destination": "docs/research/dual-stream-model.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "E generations, derived materializations and physical lifetime",
+      "line": 702,
+      "sha256": "b38be4ff3c7294af43535a30aed2876bc0c551c8eba79dfb0201327e2f8a1cf5",
+      "classification": "RESEARCH",
+      "destination": "docs/research/state-realization.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Realization space and persistent-KV controls",
+      "line": 741,
+      "sha256": "feaa8018db08aa39275e134870a902c08efe9bd51ba195f4520bd117fcb3a528",
+      "classification": "RESEARCH",
+      "destination": "docs/research/state-realization.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Compiler, execution DAG and admitted backend target",
+      "line": 771,
+      "sha256": "5cafecdba94a53099435a90f68fed1d7e5fe40cd8a2719862fd155f3d8906b29",
+      "classification": "RESEARCH",
+      "destination": "docs/research/state-realization.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Generic provider and program ownership",
+      "line": 830,
+      "sha256": "02083fee5a44a7668ee1de22999408cc385b8e5ee621fdb1f9395cf2acbb6e20",
+      "classification": "RESEARCH",
+      "destination": "docs/research/native-computational-state.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Generation control",
+      "line": 861,
+      "sha256": "73e4921a7db7d0d8aa1482530d14caae847a2429c57a074505e66d4de6f979fe",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Speculation breadth",
+      "line": 882,
+      "sha256": "5fcc746758d257d711fbb5625bc43befe4502f05c1fe71ffcf5903fa37b6e2c8",
+      "classification": "RESEARCH",
+      "destination": "docs/research/runtime-horizons.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Dynamic composition and adapters",
+      "line": 893,
+      "sha256": "7d6bca524a1c51f220552256da339a8c2336bab08bb013a7ef04574d59ab1fde",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Qwen B1 model adaptation and post-training target",
+      "line": 920,
+      "sha256": "0474e98f1d8f180b9772a7962f0a891813dc712262f35614a389efbf4db3e672",
+      "classification": "RESEARCH",
+      "destination": "docs/research/model-adaptation.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Mandatory model controls and adaptation ladder",
+      "line": 947,
+      "sha256": "b3c2a81fa8969b286126f1dc5652d745be5de6114e0655a79af4bd80d887fc17",
+      "classification": "RESEARCH",
+      "destination": "docs/research/model-adaptation.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Provenance and inference composition pipeline",
+      "line": 990,
+      "sha256": "aac26261cab505790ba6b938571d961064a2d51df7d83e3b8b817e60bfb2c825",
+      "classification": "RESEARCH",
+      "destination": "docs/research/model-adaptation.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Cross-execution episodes and objective families",
+      "line": 1024,
+      "sha256": "777509fd97449b78553790dc3fea77f7b0f4cc713468a696e297e685f07f43df",
+      "classification": "RESEARCH",
+      "destination": "docs/research/model-adaptation.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Output runners",
+      "line": 1053,
+      "sha256": "4736c3cf00d06e091a0138fdf364769c080f6216bb18281b9cd1be6343f00631",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Decision Readout / Decision Core target",
+      "line": 1071,
+      "sha256": "191a42911126f1fcd2e49fbedc66d797ad565e287a38e0b347945add30a00e9c",
+      "classification": "RESEARCH",
+      "destination": "docs/research/output-runners.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Multimodal execution",
+      "line": 1170,
+      "sha256": "1b0b05506b3675b48d481e731c1d5b9ce76e6bf7e3e942241965dc6fe364abcb",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Tokenizer and conversation",
+      "line": 1193,
+      "sha256": "dbe83bf000a829be516ee3d68bf1caa394128a5020923c0b4e37e223b8462a0a",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Interfaces and portability",
+      "line": 1214,
+      "sha256": "2f249e256c4f250690b344303806f164b507b459b021bfa8ef496d42aa7c1882",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Qualification",
+      "line": 1239,
+      "sha256": "199e6403dcc2b3ec8f4ead9453d103df871a91c79d05582b02b787e15176047b",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "B1 qualification controls",
+      "line": 1279,
+      "sha256": "ea7baaa4c605ecb2e62a4cdffe58b83b53418a92736b45231fef0946b3d19e89",
+      "classification": "RESEARCH",
+      "destination": "docs/research/model-adaptation.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Scale-out",
+      "line": 1305,
+      "sha256": "b0b10fe2a7110d313de5079150164746f0d640e020323d0288b74e0ea379ace3",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Strategic Programs",
+      "line": 1321,
+      "sha256": "26bff977cc88baa3cc7babcf3bb83d794da96cce86c5ee5dec3708aa7a8c4c1a",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "R — Architecture Integrity & Refoundation",
+      "line": 1342,
+      "sha256": "e7fdc429b0b836e94e9bbadcd23419ee1d87efdd83ea67d89d867c146777449d",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Program purpose/exits remain horizons; stale current-pressure chronology yields to current Status, family records and retained observations."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "C — Model Language & Compiler",
+      "line": 1382,
+      "sha256": "094931640c7ba27ceda9b311eeeaf1b8ac87f467ccdffc917972542b1e7123da",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Program purpose/exits remain horizons; stale current-pressure chronology yields to current Status, family records and retained observations."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "P — Physical Model Compiler",
+      "line": 1415,
+      "sha256": "ce5548f40c500380d490fab6048bc64cacd95116a67c3323f281551ae57e357a",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Program purpose/exits remain horizons; stale current-pressure chronology yields to current Status, family records and retained observations."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "S — Sequence Runtime",
+      "line": 1440,
+      "sha256": "5810fcd2621a650e95ab9b43e2610480466d3c7009a0a7834ceb61121b1c51c9",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Program purpose/exits remain horizons; stale current-pressure chronology yields to current Status, family records and retained observations."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "N — Native Cognitive State",
+      "line": 1478,
+      "sha256": "79a6a459c4dc6e3914f25605f0c82bd34d139f9028abad8f372140a984bb839a",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Program purpose/exits remain horizons; stale current-pressure chronology yields to current Status, family records and retained observations."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "G — Generation Control",
+      "line": 1509,
+      "sha256": "9a059fa9bb2c0472a9a4b99e9f80af5d4eaaa71c2b90a1180d873fe1465f8328",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Program purpose/exits remain horizons; stale current-pressure chronology yields to current Status, family records and retained observations."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "D — Dynamic Composition",
+      "line": 1525,
+      "sha256": "59afb4248dc053b3287996edca605ce5a7c2a91671aac10ffcd10fc329ee521b",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Program purpose/exits remain horizons; stale current-pressure chronology yields to current Status, family records and retained observations."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "O — Output Runners",
+      "line": 1539,
+      "sha256": "2081ede313234bdbd3ebdc0f560f52bafe34fad44e7bcada0ab88b8935a101d2",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Program purpose/exits remain horizons; stale current-pressure chronology yields to current Status, family records and retained observations."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "M — Multimodal Execution",
+      "line": 1583,
+      "sha256": "1ec6f52d861774697953406a3b8221025efb06b21d328d20ecf2b711a20c6b22",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Program purpose/exits remain horizons; stale current-pressure chronology yields to current Status, family records and retained observations."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "X — External Interfaces",
+      "line": 1597,
+      "sha256": "ffeb64a8ca7456b8faf6143b74b8a0df57bff9d4ed6babe74deeae6cd004f554",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Program purpose/exits remain horizons; stale current-pressure chronology yields to current Status, family records and retained observations."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Q — Qualification",
+      "line": 1615,
+      "sha256": "36b913a23c1676f1854e97bd34bffd3dbd91a35c8ee590c6944fc06e2bbdd9eb",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Program purpose/exits remain horizons; stale current-pressure chronology yields to current Status, family records and retained observations."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Architecture Spectrum",
+      "line": 1673,
+      "sha256": "696dfd7b175a02b0d6bd24e143deb87790907a4788c94d8ef8e9badeb2a943ab",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/STATUS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Architectural breadth strategy",
+      "line": 1742,
+      "sha256": "7716ca8b32da20563b477ae4ace213f23bb794182a563365fd23cda7d5e0e93d",
+      "classification": "RESEARCH",
+      "destination": "docs/research/architecture-spectrum.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "A11 DeepSeek V4.1 Flash target pressure",
+      "line": 1763,
+      "sha256": "7c58510dbb58813ac0a78cd80c47041f66afd60badf222cac789a32147ce3d82",
+      "classification": "RESEARCH",
+      "destination": "docs/research/architecture-spectrum.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Bounded GB10 text target and evidence ladder",
+      "line": 1825,
+      "sha256": "7f0db0dc2bb866e53f2c3247804c8a0d8a245533933a2613207f5c02b7618b04",
+      "classification": "RESEARCH",
+      "destination": "docs/research/architecture-spectrum.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "External feasibility evidence",
+      "line": 1861,
+      "sha256": "2c374b3a85ea6db43dda1052d25068159fa5e6d9111f71eb3aeda60e39f2f0d0",
+      "classification": "RESEARCH",
+      "destination": "docs/research/architecture-spectrum.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "A12 Native finite-decision model pressure",
+      "line": 1879,
+      "sha256": "74ce8b22e8b678b0eaa2aa21318a01b4085b39717009a485224638d213327988",
+      "classification": "RESEARCH",
+      "destination": "docs/research/architecture-spectrum.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Current Execution Sequence",
+      "line": 1906,
+      "sha256": "fd8445e5cfafc06e5126189a10f29dd6dfb083b22c82442667cb959aa2e5669b",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/TASKS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "General Substrate Progression",
+      "line": 2393,
+      "sha256": "fa8476aac4a6a5bff58ef78c85ae9b0d710e659f935b456bf515fd404fd5ff5d",
+      "classification": "REWRITE",
+      "destination": "ROADMAP.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Mature-runtime comparison surface",
+      "line": 2413,
+      "sha256": "0f5d760feeb796c1bb318f78c045894fa44233b12b4cc2498911d8f8b6b5f0e4",
+      "classification": "RESEARCH",
+      "destination": "docs/research/runtime-horizons.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Cross-axis traceability",
+      "line": 2440,
+      "sha256": "08c38001893275d5abd39ec2e0b173febefc7454bd2a9e26570b4121039b5411",
+      "classification": "REWRITE",
+      "destination": "docs/project-control/TASKS.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "v0.1 Release Path",
+      "line": 2477,
+      "sha256": "1b0a80f675672bb14e46955e854ac70e6ea4e5b35cb0d5907b5ca1c7e5364cc3",
+      "classification": "REWRITE",
+      "destination": "docs/releases/v0.1.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Explicit Nonclaims and Deferred Scope",
+      "line": 2506,
+      "sha256": "b740a835a13ba1ef1fccafdc6c6a46180954ef931e9e32510a995a3fcb267381",
+      "classification": "REWRITE",
+      "destination": "docs/reference/DOCUMENTATION-PROTOCOL.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Progression and Promotion Discipline",
+      "line": 2597,
+      "sha256": "e81247254ad0393d92f491e4a1fc8344babaad32729838781cfb23ca4ddbaa70",
+      "classification": "REWRITE",
+      "destination": "docs/reference/DOCUMENTATION-PROTOCOL.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "ROADMAP.md",
+      "section": "Living-update rules",
+      "line": 2639,
+      "sha256": "dbd518adda0541b6dbe6d6b47ea72017a309e307959aab440b9b5a7ad59b69f4",
+      "classification": "REWRITE",
+      "destination": "docs/reference/DOCUMENTATION-PROTOCOL.md",
+      "reason": "Preserve exact capability states; relocate current truth, selected delivery, evidence and target doctrine to their own owners."
+    },
+    {
+      "source": "docs/README.md",
+      "section": "Entry and project method",
+      "line": 6,
+      "sha256": "42bfd497390727e41211f2c2ab04db1eaf17a19deb5d39695b805f9dfcbc37b4",
+      "classification": "KEEP",
+      "destination": "docs/README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/README.md",
+      "section": "Architecture and contracts",
+      "line": 18,
+      "sha256": "56c2366dc644ce82dc8c671360921469b00ce43c72338363b036a3325fb6482f",
+      "classification": "KEEP",
+      "destination": "docs/README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/README.md",
+      "section": "Operation, development, and release",
+      "line": 41,
+      "sha256": "194665cfb03951075f2fea2615ad0cf514bce146f475ca4ba49425df9c751e71",
+      "classification": "KEEP",
+      "destination": "docs/README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/README.md",
+      "section": "Canonical technical figures",
+      "line": 60,
+      "sha256": "134653d7d5d68a1267aef96c16fdef4964e7b956ca7b9a1dcbfc9ca618738d00",
+      "classification": "KEEP",
+      "destination": "docs/README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "1. Purpose",
+      "line": 33,
+      "sha256": "2abe21235fb991c104835eff2676628b39d50ee6485b2185b3c355bb4a06aacb",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "2. Research Workflow",
+      "line": 87,
+      "sha256": "39c017d41db1e0a4fac8c03ee11f32cb365fc58653f7a53015be50026df8088e",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "3. Frozen Implementation Baseline",
+      "line": 140,
+      "sha256": "a7eeb8ccc593009731f4efb656da5b357b4f2db1f93d6f1192b2378ae35b5f52",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "4. Research Ledger State",
+      "line": 191,
+      "sha256": "07c60109a9fa407b394c2fba209c1ef6332ea49e09746c23b59c2b116e1ab014",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "5. Repository Safety Contract",
+      "line": 213,
+      "sha256": "827618aaffab9b16140e7d1b494128a2d5f4e8ae73b3530c5b86424daccd22bb",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "5.1 Read authority",
+      "line": 217,
+      "sha256": "180625d091470bc7248070f927b0f93a0ecb85a794bf35d579d9346dfd8a0c05",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "5.2 Write authority",
+      "line": 240,
+      "sha256": "e2e5ea48ebfab90728be6dd78e1a722f563530ee762898fe63093eafd53b6503",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "5.3 Canonical surfaces are read-only",
+      "line": 269,
+      "sha256": "14d0381803a1a004a493a11117433a6592ae5c65a297c8f69909861d6c7411f7",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "6. Observe, Do Not Repair",
+      "line": 301,
+      "sha256": "1cefd4403e2ac3c6477560731411524a5e39eea87771f5f2826a071c4f7bb5fd",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "7. No Build or Execution During Archaeology",
+      "line": 351,
+      "sha256": "9fa86e9cd9fdbc9eab79f870333d3fbca1140a31bc70a4ab272f2b0341e39cae",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "8. Git Safety Contract",
+      "line": 390,
+      "sha256": "e607c3fa017b1573ed5246c1331437a63314894d95be1dacdf95e4516a54a71b",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "8.1 Existing unrelated changes",
+      "line": 411,
+      "sha256": "5f68d68744692df0156017b86d4d11403ce80c7adaaf014967d8b409c427c82f",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "8.2 Remote divergence",
+      "line": 428,
+      "sha256": "b2890e20133b977f66d2a4681ffcc46d58716455ed8e10a2e8d8f48e6c282e0d",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "8.3 Forbidden Git operations",
+      "line": 449,
+      "sha256": "a555b042490a339bee3ab4a3a33807098b2eedd5772041047a81fd7d04043c8e",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "9. Documentation Discipline",
+      "line": 474,
+      "sha256": "b83a4dbd8d5f9a7a0df9dda2178c5f5f6e46291ae64ba464f4b70707af905dd9",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "9.1 Language",
+      "line": 478,
+      "sha256": "2dfdc20d13953b2409cc36aad294e03a0761ccdd1e85ddfc13ca7e8c5498770d",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "9.2 Style",
+      "line": 495,
+      "sha256": "94eceeba7cd3ffdfb797ad7271e7f6ef46400d2e2f9522c838b967b5ca5441f3",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "9.3 Existing concepts have priority",
+      "line": 520,
+      "sha256": "66a6b26da39579397bd5a518f23a38225e96b1fcee7065b6ca3b8d1bdc5ae388",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "10. Required Non-Equivalences",
+      "line": 529,
+      "sha256": "5787fe66c8c8f498ce653c65c337615b314968a7e539d5c5af5b3a7039a33b4e",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "11. Epistemic Classes",
+      "line": 573,
+      "sha256": "f519d2b38165e8b7b311c382396c2969d91bcb1753d1d28c5a7a7579e9767034",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "11.1 CANONICAL CONTEXT",
+      "line": 588,
+      "sha256": "2da1fa949399fbba5f98f3f34f35945d6703a5f523235fd699c078533741f8d9",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "11.2 REPOSITORY FACT",
+      "line": 595,
+      "sha256": "49fba149932f4a62e717464bf0cf925d3562861e4c384bc88e1d04f324da60de",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "11.3 INFERENCE",
+      "line": 613,
+      "sha256": "43819edfb1ef0da1119843139d7c3a9a338dd5377b04e0831eb771c40dc01c35",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "11.4 PROPOSAL",
+      "line": 619,
+      "sha256": "3afb041a318b4320182df6f7853d3c8c0f4d120cdcc67a96e7c1f36a343fbd1a",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "11.5 OPEN QUESTION",
+      "line": 626,
+      "sha256": "6f46b284ae33d3aba3be0dc15444e8be1e79b00cecb0103bf8a5cb0ac3b465c4",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "11.6 ACCEPTED WORKING DECISION",
+      "line": 632,
+      "sha256": "e66e7133ed62e653450c31f7d17498cb5ae1aa964873716d41ded47db3b46b51",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "11.7 CONTRADICTION",
+      "line": 641,
+      "sha256": "670bdb3b6774e5c1982ae45fec3ebb46c994c684e8d488b94603a4e929da99ed",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "11.8 STALE OBSERVATION",
+      "line": 648,
+      "sha256": "374cf4b3bf4d0f622b2060452af8aa61669639547966b241760682ba7f2fd006",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "12. Entry Identity and Provenance",
+      "line": 657,
+      "sha256": "7fd3ebb3f29b1aa6c459d49b15b0bd711327104d0002bff25fb10df476a7b7bd",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "12.1 Standard repository fact",
+      "line": 678,
+      "sha256": "176ac7707d0bed090e4532842e5ab0421714dbfd51944e0e77933a8eec727c8d",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "12.2 Durable research address",
+      "line": 711,
+      "sha256": "e48a50bbdd91e4824a31a5cb849f59182fefbe4158750a263b0dd672d3e09e2d",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "12.3 Multi-source claims",
+      "line": 729,
+      "sha256": "dfa272150a8ba7943ea02edcf9b6a61ff8c4dad2493ca29350bda957dd81e32f",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "13. Canonical Authority Map",
+      "line": 738,
+      "sha256": "0806ed57f8436d58de64e0c34b5f0e8a7377dbdb94df4af4f9d8b0e65335be66",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "14. Mandatory Repository Reading Map",
+      "line": 762,
+      "sha256": "5b3bbd491fc2314c656780037478cd40fe89cf19cdf0a6fb06d1d58ab807c9d4",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "15. Implementation Areas to Trace",
+      "line": 805,
+      "sha256": "2188c5e35e06154a52f7ff163f1f55962a879f7d173e29f95db4d29a1dad0f00",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "16. Tests as Evidence",
+      "line": 877,
+      "sha256": "f7631c36a51e6e1ce259892361c0093d43ac7ca994d776be93b1f1102b8dca57",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "17. Seeded Architectural Story",
+      "line": 911,
+      "sha256": "e509a1bb9bc43104bd864e1a98e9ab79f46880d2c24ee8314b73a14dcc2f8d67",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "18. Seeded Subsystem Authority Map",
+      "line": 1001,
+      "sha256": "6d46bec0c0b0987fe0dacfb58ee41d1190f10a3eeae267d5090718bf7a7ef22d",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "19. Identity and Lifetime Ledger",
+      "line": 1029,
+      "sha256": "8d80ce0619cda0a6c2b86fe9a3b67966b79af9d295d29968b96adbe359b16334",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "20. Refoundation .1",
+      "line": 1078,
+      "sha256": "3817a404d4a44f9d3bc92365fbbd5006d2af90b21fb4dff7d8f254bfffdd7a2c",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "20.1 Consumer cutover matrix",
+      "line": 1111,
+      "sha256": "f92e4573e36de4dbe96c536ff7430373fd7322ce73e4faca7b6a40953966d5b3",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "21. Program P: Physical Model Compiler",
+      "line": 1143,
+      "sha256": "7b6de9a176d4ad72cc2f230b3c2462eaf914be303fcc7caac4012b599bfe4779",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "21.1 Existing substrate to map",
+      "line": 1205,
+      "sha256": "a67756e6398a84616e03c840959e4c4c513ee26d3b8664a412529bc129279465",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "21.2 Strategic gap to map",
+      "line": 1230,
+      "sha256": "9ff0d3512ef0512f8b328e42d96ef43451d60924f429ce441fe05bfc10457ca3",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "22. Physical Recipe Research",
+      "line": 1252,
+      "sha256": "07c5c6bce40417bcaf4997002cc774fd14cbd331ef3f1efaef52c3d46877bff6",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "23. Hardware and Resource Baseline",
+      "line": 1311,
+      "sha256": "9cfe134ff89944df4647bc16b0c907d724b1cdd3b455c4e0b9379407f0cc75ee",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "24. Hardware Research Vocabulary",
+      "line": 1359,
+      "sha256": "32d35fd0bd0edc30d2a3734b67fd64b433ba2c53fa33445d7065776af789b569",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "25. Future Hardware Pressure",
+      "line": 1381,
+      "sha256": "375b686a98823fdf3dedf1d7c72f09b9af10b3115134aabf3f0cb21a3cb94fc2",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "26. Storage, Materialization, Residency, and Resources",
+      "line": 1426,
+      "sha256": "7841faef713c30e67893d9f18793bad5c7d395b41eb00bc271bcd52d1ab170b4",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "27. Model Catalog and Library",
+      "line": 1480,
+      "sha256": "45387ed13e3dea9b20418fd91869ddbeec47b9fb8cd7eb76677f724e17b8e6bf",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "28. Model Lifecycle",
+      "line": 1519,
+      "sha256": "d1ccfd4bc2edd23bd7f656f98141ef79d7380c897046eb68a7b8b9e85352c3d3",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "29. Representation Recommendation Gap",
+      "line": 1574,
+      "sha256": "1eb0760ca634160ac8940b7ed5995705234d29d651484c35cf08c6d2727413e6",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "30. CLI, API, and Product Projection",
+      "line": 1619,
+      "sha256": "c317e7bd6fe00009525aed1b9dd6fb138d7ceba3fb9992e5a9b06a9953fbb9b8",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "31. Family Boundary",
+      "line": 1688,
+      "sha256": "0f522fcf8336cd3b9ba87a0bf8573fc377a8fd313132b23441935067a7a1657b",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "32. Current Family Evidence",
+      "line": 1721,
+      "sha256": "9cfde5a121fbc1e1034b4eaa56f404e769946175b0e96decc0808f92c9110172",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "33. Architecture Spectrum",
+      "line": 1755,
+      "sha256": "de2a05b97ccdc3f6e83a3f658f7b9e648366ce964d4141f8eb5e995a080c4eed",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "34. Telemetry, Measurement, and Evidence",
+      "line": 1793,
+      "sha256": "0535b20940c760d264beb41c74d2c169624edd449d2f7cba87133aa12d01ea24",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "35. Evidence Ladder",
+      "line": 1829,
+      "sha256": "83b7a0fbd6cad0ee78eded93473a2eb2fc5f979c6a3b095e10acb4119207331a",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "36. Contradiction Register",
+      "line": 1867,
+      "sha256": "02d88b4d64920ff69976452c146e837636a1c97d58c8c61041e1ea8450d51b97",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "37. Open Question Register",
+      "line": 1896,
+      "sha256": "dab3b9e9ed7723f6b7cb7187626a418d61be1dbcd0f0fba403a596fe4f5deb53",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "38. Accepted Working Decisions",
+      "line": 1908,
+      "sha256": "95d6a6e3bb2802a2aca7c9a12591f2ca74bc222ed53cc2bdfbbd1d3cbe3cd98e",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "39. Proposal Admission Rule",
+      "line": 1942,
+      "sha256": "6e1045972bd1da6c2954ad4e8f0044805eb7e65bc8c8b2609c6696ae841ad3ad",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "40. Initial Reconciliation Targets",
+      "line": 2010,
+      "sha256": "94dd0c3538b692a64769252c88ce8e0b11bf6601684318d76931dbedd13c04bb",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "40.1 PEIR versus deployment specialization",
+      "line": 2014,
+      "sha256": "2a25240c8aec76ff6e439d9c8cbd9e59e896f0a3142fd2588a39bd1853c8592e",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "40.2 Hardware profile versus topology",
+      "line": 2033,
+      "sha256": "a860489ff29fee5938e4657991f73b73c18c283256f167cf592020e90d9bd5ea",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "40.3 Model Library versus recommendation",
+      "line": 2045,
+      "sha256": "5f437c2941198ef173e8dc59f8c9c7fe54f0ad66d3125ee0055449f428a832d9",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "40.4 Resource catalog versus selective residency",
+      "line": 2059,
+      "sha256": "60a8a667999a2454fe1adc4303ea4b6fc5100eba5be7c10d0236737a9e66add8",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "40.5 Refoundation .1 cutover",
+      "line": 2066,
+      "sha256": "d1025a77626de7572157357f53c52e9fb3e258ff8727d8a3572b9c901a4b0754",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "40.6 Program P substrate",
+      "line": 2071,
+      "sha256": "5ad53115b6351515b207f5c6c7164524f3ac1ec4e684102a559087dfa83ad589",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "41. Research Workstreams",
+      "line": 2078,
+      "sha256": "b0b0b47fad653b5d6876f0f9935f087e5cc9e0b580bdbd9b4da779ceba565d46",
+      "classification": "RESEARCH",
+      "destination": "docs/research/physical-model-compiler.md",
+      "reason": "Rescue recipe, hardware vocabulary, recommendation and resource questions as questions; reconcile current owners."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "A. Repository archaeology",
+      "line": 2082,
+      "sha256": "8e9041bc5fbd619f46d28ff79abc46c57ab7d9f30d5bec2cef2bdfd1bd4f5464",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "B. Refoundation .1",
+      "line": 2090,
+      "sha256": "90773ad49f88dc431697dc697bdfaee528c8afa29351e658b5b88d462076d1aa",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "C. Program P",
+      "line": 2098,
+      "sha256": "adac9387eaa4304759dfdf73e7c2a8ba5d79508cb5112dabe4c8fc0c66d8c3cf",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "D. Hardware and resources",
+      "line": 2108,
+      "sha256": "00813954c6f0ecd2656920925874dc7bb54091359e3ede7bd52ec9f04136b81e",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "E. Model Library",
+      "line": 2123,
+      "sha256": "61994093efdf2959e75ecfb0d9a195afc23f83bead2edc619d54c5480830fe71",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "F. Family and spectrum",
+      "line": 2133,
+      "sha256": "b98414482df28fb1330f0f810075ac6475a016680e6a27f8d277dfd162e61434",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "G. Product projection",
+      "line": 2143,
+      "sha256": "4e1e80a5705e3624072a9e2b5e633f16a8f54c26498df60fcd509c980f77ba2a",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "42. DeepSeek Research Pass Format",
+      "line": 2159,
+      "sha256": "ccd0318a5cb9d968d9c2a5e3dcc98f4ff4eea5f369c49507ff8cece5430184f5",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "Research Pass YYYY-MM-DD / NNN",
+      "line": 2164,
+      "sha256": "f46c14056417bb2d6b7552d3d9bcdc0d222416adac091e432cf4bfb30f55748a",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "43. Session Chronicle",
+      "line": 2222,
+      "sha256": "42f538cb533145cf78fe178a26c6dd16db6b8486240ca44b238734f7bb481dca",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "Session Chronicle YYYY-MM-DD / NNN",
+      "line": 2227,
+      "sha256": "9b5fa520b6d76f54e0c4a01beb3604964b627082e23ef2dcae8c8b0ca08494c1",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "44. TEMP Commit Safety Gate",
+      "line": 2287,
+      "sha256": "aaee08c3231efabbff602d61a40b35222d5a1d1ec17a64f6b4c41c109ae286a7",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "Repository state",
+      "line": 2291,
+      "sha256": "d1ba451de0aaafc4c2ac1b4af2f026060274f68dac9198de93fc35a95f55bc6d",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "Mutation boundary",
+      "line": 2302,
+      "sha256": "7f751795a20febfedb6696eb101fe418df2bd0440f88c63ec2a869e594a9c305",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "Research discipline",
+      "line": 2317,
+      "sha256": "4262fee325ea532782e3423708f61e8e568e3351c80f8595a0343185e7e45c8c",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "Diff",
+      "line": 2331,
+      "sha256": "2c88e029dcafe0e03c2fa6454e837a100b3c73dc3f356c183ca04a093957a677",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "45. Commit and Push Rule",
+      "line": 2365,
+      "sha256": "f825ee66732f6239805b87467516f8781b40ce158d7566d4ff9cb6562e87f34f",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "46. Codex Reconciliation Queue",
+      "line": 2404,
+      "sha256": "aaa7ff5ca4cadca17d832fc1861edff27d8e1e3ab113038d777d3e6241775f49",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "47. Initial Bootstrap Research Objectives",
+      "line": 2435,
+      "sha256": "2a0e10ea2edeb6561d6c49b5aff6a8ebabd057287402c7178ca7d127b598692d",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "48. DeepSeek Evaluation Criteria",
+      "line": 2466,
+      "sha256": "22ec4f062e544aa3bd0f3c9efa817e7b805e0ae91870ce784b3d47376ea674f4",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/TEMP.md",
+      "section": "49. Bootstrap Completion Boundary",
+      "line": 2498,
+      "sha256": "9a6983ced4de6a08bd31bc721e6de70b217529ca23a2d6d32a28b52535ffffbe",
+      "classification": "HISTORICAL",
+      "destination": null,
+      "reason": "Frozen bootstrap workflow, empty register/template or superseded/redundant observation. Complete source retained in Git; current boundaries live in architecture/contracts."
+    },
+    {
+      "source": "docs/architecture/commands.md",
+      "section": "Domain objects",
+      "line": 10,
+      "sha256": "24360bf15f6ade7bdbe9e020b98d73f543e9341aa21698ac76a5eaea68c72ba8",
+      "classification": "MOVE",
+      "destination": "docs/reference/commands.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/commands.md",
+      "section": "Product grammar and plumbing",
+      "line": 28,
+      "sha256": "85b0268550584f626e1fa19dc3ac86343aa6fa7c0df594c75f7f389c9fa36e2d",
+      "classification": "MOVE",
+      "destination": "docs/reference/commands.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/commands.md",
+      "section": "Process roles",
+      "line": 84,
+      "sha256": "4e770989dc0e942d293ef22bd93ed1aa22469178ae31dca51352ede2cd2c38bf",
+      "classification": "MOVE",
+      "destination": "docs/reference/commands.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/commands.md",
+      "section": "Foreground host",
+      "line": 86,
+      "sha256": "44eed8dfbcfd1fc2749fba7c7f730a5cde570cea657e7cad96d0c5f3dd5ee7fa",
+      "classification": "MOVE",
+      "destination": "docs/reference/commands.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/commands.md",
+      "section": "Native chat client",
+      "line": 100,
+      "sha256": "1afd1efaa4b67c1ad1a28f2149e70c9c43074dd48ebdb963e63ad6acde28d324",
+      "classification": "MOVE",
+      "destination": "docs/reference/commands.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/commands.md",
+      "section": "Hosted model use and exact administration",
+      "line": 133,
+      "sha256": "d0f5c46dcdaf03e22721dfa40a6403d456648259d1d8b491f5f1c950d63b284d",
+      "classification": "MOVE",
+      "destination": "docs/reference/commands.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/commands.md",
+      "section": "Offline work",
+      "line": 164,
+      "sha256": "c96a093ee54a8f584527d16e8e6592477d6c5973ee20f53a6d04b19f24aae448",
+      "classification": "MOVE",
+      "destination": "docs/reference/commands.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/commands.md",
+      "section": "Protocol planes",
+      "line": 210,
+      "sha256": "65781454863702f09173139155bba5914c980b55c6ec0583d1334f958f3f8399",
+      "classification": "MOVE",
+      "destination": "docs/reference/commands.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/commands.md",
+      "section": "Canonical operation authority",
+      "line": 221,
+      "sha256": "9b239eba7030f8403727247b4597b79c1e4ba691233df15e770d810ee3de6e94",
+      "classification": "MOVE",
+      "destination": "docs/reference/commands.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/commands.md",
+      "section": "Output and errors",
+      "line": 241,
+      "sha256": "249f9a40f3c269a82ac60ee82043d36ddd8912e2dbef1d04015998450dab1b41",
+      "classification": "MOVE",
+      "destination": "docs/reference/commands.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/commands.md",
+      "section": "Non-claims",
+      "line": 254,
+      "sha256": "2a4de186102b6ea27441e517491c53241959b8e33c2408ed2cce5217e351e937",
+      "classification": "MOVE",
+      "destination": "docs/reference/commands.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Pipeline",
+      "line": 9,
+      "sha256": "e639639ad1a2bc9aa321089828c4b03632d4fea5fe64e85183ce134d42253df8",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/compiler-ir.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Source intake and trust",
+      "line": 21,
+      "sha256": "ba6677f3606021be1c94f23cf7f44adbaf2fab0ee33be20cf7c788203f3d749b",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/source-provenance.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Logical projection and transformation",
+      "line": 40,
+      "sha256": "cb5a3d8121d2e665b38802620a6eedfc7eee99044d631598db6c45babdd0da07",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/compiler-ir.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Physical policy",
+      "line": 104,
+      "sha256": "1da7d174eaa19e43c809015a9496682e443b68d79d04189d42a04c64b632cb26",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/representation-artifacts.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Artifact emission and admission",
+      "line": 138,
+      "sha256": "f9cd84baca9cfaeffb11d570b8f1a6022aabb59a439b0ce4b79a377a07a7ca9b",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/artifacts-admission.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Runtime binding",
+      "line": 162,
+      "sha256": "36e27084a49f5ced34c515b9169adb372c85b3374354f0d241a1abd673be2e35",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/deployment-specialization.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Executable composition oracle",
+      "line": 219,
+      "sha256": "0f5cd6ee0de8eb1ddf83783ca2c645fdd7f662570b0cf93a903533796026c017",
+      "classification": "SPLIT",
+      "destination": "docs/evaluation/compiler-evidence.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Current family lowering",
+      "line": 237,
+      "sha256": "82e98ec839b347dd3ab08b8c306701699da353bf65dafc6ffedfc9778f48e259",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/model-semantics.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Typed computational programs",
+      "line": 251,
+      "sha256": "6c937bd59dee1a5925044801d560cd22be60134b9d966a679eeddeea5eef5351",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/compiler-ir.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Current consumer cutover",
+      "line": 266,
+      "sha256": "22931a7c03b9e9716f0c89f42a7577925d749145a43522536c819d497f3b68fd",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/compiler-ir.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Cutover acceptance boundary",
+      "line": 284,
+      "sha256": "75be4d598fef9e7ff1eec8007b75fd51f7f29c8000178437881f564a235a8674",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/compiler-ir.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Representation and ownership",
+      "line": 355,
+      "sha256": "3fd5c8b28233584cd4ef2f1cf8a30fc05c2905a19baecfa9d02faf06be035a82",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/computational-programs.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Operations, regions and effects",
+      "line": 410,
+      "sha256": "0cee9bb58882eeeaef8694ac1a05e5f4730cba3602e5d760afaf3a6a7ba0e75f",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/computational-programs.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Passes, identity and refusal",
+      "line": 454,
+      "sha256": "77348a7130f9fd70278e82da2d0288a29560f29d4dda8059ee7fa0f359e4e392",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/computational-programs.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Spatial and dense component programs",
+      "line": 564,
+      "sha256": "07dec497ac05b1e670c44d59c013b36b8685e07cce6086018a6deb647f181f34",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/component-programs.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Joint preparation and executable composition",
+      "line": 646,
+      "sha256": "ca0905b2a20ade780828dbae707c02232abbe143f9dfaab113aa56c667bd62a5",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/component-programs.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Physical tensor execution and schema import",
+      "line": 703,
+      "sha256": "fedfc55810c19b24df9da3ca43ddb22d947f4f5b47c50025613163b86d6f08ca",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/component-programs.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Compiled text components",
+      "line": 807,
+      "sha256": "655a4a644590247ebd98a38431d43e92defeee51364ea6d4da4bcc691870e96b",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/component-programs.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Computed index values",
+      "line": 849,
+      "sha256": "56dc9740968b71c270106b371409dfcdb3b48f2d4b3ea1d839e161426c302875",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/index-programs.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/compilation.md",
+      "section": "Repository boundary",
+      "line": 1044,
+      "sha256": "49294ed1b4e4202f4c6bd89dc86bfc1fad3764126b7c0f920bad4944b15ad456",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/compiler-ir.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/runtime.md",
+      "section": "Authority map",
+      "line": 11,
+      "sha256": "b33a5cd522018966de17830a071c8488fd50a3866792770914ed01f2dd272803",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/runtime-lifecycle.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/runtime.md",
+      "section": "Persistent host and engine lifecycle",
+      "line": 27,
+      "sha256": "d098b0d8f56549e45fc283c20b20932b0bc740405d1803a35c1cfc3cccd2622f",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/runtime-lifecycle.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/runtime.md",
+      "section": "Model engine",
+      "line": 75,
+      "sha256": "243baf3f29b0923f7e1752cfdbbdf2d697b30e638e3afe1a8b3ce63a847f2fc6",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/runtime-lifecycle.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/runtime.md",
+      "section": "Sessions and transactional state",
+      "line": 160,
+      "sha256": "3f5c976bda4b8c96102b5a0e71de34bb656793e3095291e3959150db53708b2a",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/computational-state.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/runtime.md",
+      "section": "Generation vocabulary",
+      "line": 207,
+      "sha256": "09c54b221354e2e61a3ed81edb676626f22cabfba903c686e5884b85a3501c4f",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/generation-decode.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/runtime.md",
+      "section": "Scheduling and executable work",
+      "line": 250,
+      "sha256": "ec4a538629eaff7c409cf0df274c913bbee9be6a5336a84143044c4719340f68",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/scheduling-resources.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/runtime.md",
+      "section": "Resources and residency",
+      "line": 297,
+      "sha256": "936a4c102685b76775c61f186c5bc7ff3d517ee28b869e712f5ca647db97995a",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/scheduling-resources.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/runtime.md",
+      "section": "Measurement plane",
+      "line": 318,
+      "sha256": "59c8e183c86589272bb21b47434fdaf426f1b60af8f0b11a6c3188de02e90a00",
+      "classification": "SPLIT",
+      "destination": "docs/evaluation/measurement.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/runtime.md",
+      "section": "Backend boundary",
+      "line": 358,
+      "sha256": "c38162ba737b1deec245877a7a93fa7c955fd637f255e9168d7c31bc21d953d7",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/backend-execution.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/runtime.md",
+      "section": "Failure and recovery",
+      "line": 387,
+      "sha256": "53f26cae1e647505557a3824719391fa85c0018447ce3769bcb203ab2f2a05f1",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/runtime-lifecycle.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/runtime.md",
+      "section": "Evidence plane",
+      "line": 403,
+      "sha256": "670128432c2cacb88976f3a5bbfd8543c993cd9cb7b5aa5cf802c4b7783250eb",
+      "classification": "SPLIT",
+      "destination": "docs/evaluation/measurement.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/runtime.md",
+      "section": "Current limits",
+      "line": 417,
+      "sha256": "c04a9ee004418f15e8775d7bf45e007488d161cb4195fc38d8ae6a31483bba4b",
+      "classification": "SPLIT",
+      "destination": "docs/architecture/runtime-lifecycle.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/architecture/system.md",
+      "section": "System boundary",
+      "line": 9,
+      "sha256": "5fb4a2485f28a1807dd70de58141106c851d9a6103a4b2a74f3da517efaef622",
+      "classification": "REWRITE",
+      "destination": "docs/architecture/README.md",
+      "reason": "Whole-system landing and plane dossiers absorb source, lifetime, client and authority views."
+    },
+    {
+      "source": "docs/architecture/system.md",
+      "section": "Product processes",
+      "line": 29,
+      "sha256": "621b06eca16bf3c66017e3ff349343909a199c2e6cadad036e4139d258455cb3",
+      "classification": "REWRITE",
+      "destination": "docs/architecture/README.md",
+      "reason": "Whole-system landing and plane dossiers absorb source, lifetime, client and authority views."
+    },
+    {
+      "source": "docs/architecture/system.md",
+      "section": "Subsystem direction",
+      "line": 62,
+      "sha256": "2d6635fd9c0cb6ce8f5dc952b35c1a708ea008d941981ee1155ad8d89a98bc9d",
+      "classification": "REWRITE",
+      "destination": "docs/architecture/README.md",
+      "reason": "Whole-system landing and plane dossiers absorb source, lifetime, client and authority views."
+    },
+    {
+      "source": "docs/architecture/system.md",
+      "section": "Authority boundaries",
+      "line": 105,
+      "sha256": "5413aa12da1dd136e58e17b8cdad00e8670a49d01422ab86a96872745bdf1276",
+      "classification": "REWRITE",
+      "destination": "docs/architecture/README.md",
+      "reason": "Whole-system landing and plane dossiers absorb source, lifetime, client and authority views."
+    },
+    {
+      "source": "docs/architecture/system.md",
+      "section": "Application surfaces",
+      "line": 139,
+      "sha256": "a7201014d31f098b9ef6e290f469771c0bc276cfe2ab990f672aa97fe858cd7d",
+      "classification": "REWRITE",
+      "destination": "docs/architecture/README.md",
+      "reason": "Whole-system landing and plane dossiers absorb source, lifetime, client and authority views."
+    },
+    {
+      "source": "docs/architecture/system.md",
+      "section": "Interactive terminal path",
+      "line": 154,
+      "sha256": "1c7cdd4ac4164226d8a070dc3da1f3ce842bfcdead36f3eb115798c05f5074d4",
+      "classification": "REWRITE",
+      "destination": "docs/architecture/README.md",
+      "reason": "Whole-system landing and plane dossiers absorb source, lifetime, client and authority views."
+    },
+    {
+      "source": "docs/architecture/system.md",
+      "section": "Current implementation scope",
+      "line": 195,
+      "sha256": "56ee017827afb478b933ac37ead70a57ecb3f4894712c29cf802dc99a6104051",
+      "classification": "REWRITE",
+      "destination": "docs/architecture/README.md",
+      "reason": "Whole-system landing and plane dossiers absorb source, lifetime, client and authority views."
+    },
+    {
+      "source": "docs/contracts/artifacts.md",
+      "section": "Terminology",
+      "line": 14,
+      "sha256": "4b135ee91fd21edf453f98266071bccce58152abbc0ddfb18da5041f6e584291",
+      "classification": "KEEP",
+      "destination": "docs/contracts/artifacts.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/artifacts.md",
+      "section": "Source Payload Handoff",
+      "line": 59,
+      "sha256": "90f8b1b4aa007ebb1250d62948de4906e827a6f2a90b567bc54e6df1bae30125",
+      "classification": "KEEP",
+      "destination": "docs/contracts/artifacts.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/artifacts.md",
+      "section": "Native Structural Reader",
+      "line": 87,
+      "sha256": "01e1a821af5c5f37fd50c618028ab4fee91a0f663d5ebc3c34d8433f926a3975",
+      "classification": "KEEP",
+      "destination": "docs/contracts/artifacts.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/artifacts.md",
+      "section": "Admission Contract",
+      "line": 110,
+      "sha256": "51f4af5596eb1001d26bcf484652dde7c486808cb48667c2329cdc5cdd95c734",
+      "classification": "KEEP",
+      "destination": "docs/contracts/artifacts.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/artifacts.md",
+      "section": "Verified Reopen",
+      "line": 138,
+      "sha256": "12baa320a76b962039798d99081cf13678076293b91894f957f4cf60bdbd3fbe",
+      "classification": "KEEP",
+      "destination": "docs/contracts/artifacts.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/artifacts.md",
+      "section": "Existing Proof Files",
+      "line": 155,
+      "sha256": "601731092b887bf4603ad9016a1bba48b22e5f73df7d1bb5bdb09e434eaa2512",
+      "classification": "KEEP",
+      "destination": "docs/contracts/artifacts.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/artifacts.md",
+      "section": "Repository Guardrail",
+      "line": 166,
+      "sha256": "88b2f48fadaf212c7d8f37fa1b2fb1434bb7f1a6eb2760c80986cb0d7ee8d70d",
+      "classification": "KEEP",
+      "destination": "docs/contracts/artifacts.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/artifacts.md",
+      "section": "Non-Claims",
+      "line": 180,
+      "sha256": "3fe9b811dd20e9c5bd80502fd9442eb159f1beff90a535b0ba7542bb56eb147a",
+      "classification": "KEEP",
+      "destination": "docs/contracts/artifacts.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Header Tiers",
+      "line": 18,
+      "sha256": "c60dbaa14d790da2330f92fa807c170c54e76c56d21f83adb9af4cc6d14afbfa",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/c-api.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Installed ABI Versioning",
+      "line": 79,
+      "sha256": "62153dfb29a081938cb57cfade78108e271a50f971692a9c368851ef596a4d9b",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/c-api.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Status, Failure, And Publication",
+      "line": 113,
+      "sha256": "2077cb120d02cf0e49c5ba18759e8e1456c659eb2bbea8c3332b4918a723e408",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/c-api.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Artifact And GGUF Ownership",
+      "line": 129,
+      "sha256": "af52c004641bf67c41bdcc604cfcf95a6c757ba8d0fafaccdf81b1ca94bac26a",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/c-api.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Model Registry And Startup Profiles",
+      "line": 152,
+      "sha256": "22ac183cfd64da46cb8df10a1f58107d68ea01c3ada660b136005adc78d29e6a",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/c-api.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Model, Materialization, And Backend",
+      "line": 202,
+      "sha256": "dc6eeae56fe8f78824d906fab27591afdb65909a2e4647d93f2a43a2b447b0cd",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/c-api.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Common Internal Runtime",
+      "line": 241,
+      "sha256": "1b3838f5c164be3e0de6d4177698bcb86ee2e736c653cdd5f1df8d8221e7160c",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/runtime-abi.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Internal Activation-Prefill Boundary",
+      "line": 379,
+      "sha256": "b110744fd94928616611fcddb428dc50f745507da5c4297e16dddd3e7df71324",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/numerical-abi.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Internal MoE Execution Boundary",
+      "line": 419,
+      "sha256": "c559749cfea18a90659abdd2cbb69e58ea877706d491bb3ec7e9dd3b84a327bd",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/numerical-abi.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Internal Transformer Execution Boundary",
+      "line": 459,
+      "sha256": "7e3eee32c47667ccd68fc6a5a99be6f9fbe1e93fc06e6ffd632dc5b0a6379d2b",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/numerical-abi.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Internal Repeated Decode Boundary",
+      "line": 484,
+      "sha256": "a67e16a533e77f8e5f6fcf63770b7cb88659537064d3a15bb5b4903f652e58a3",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/numerical-abi.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Internal Vocabulary-Logits Boundary",
+      "line": 506,
+      "sha256": "95bf832f5e7ce1ca55fdff1e8b90aca9fc57f460cd98035b283e9ead4b924709",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/numerical-abi.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Internal Real-Logits Sampling Boundary",
+      "line": 545,
+      "sha256": "1b9aa1575ecc57aecea48f3818089abb4386e93c4d12e97f8ee66728751955b1",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/numerical-abi.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Internal DeepSeek Attention Operator Boundary",
+      "line": 572,
+      "sha256": "98ed9e560d6d95a8633a9cbc8f2db290b340b10998a162692488efe5bb9249fd",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/numerical-abi.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Artifact-Bound Tokenizer Runtime",
+      "line": 618,
+      "sha256": "872ef60ff94bf08697703b9df6f7f7568a918082e035a24a5e312009302b061d",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/c-api.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Compiled Operator Registry Boundary",
+      "line": 631,
+      "sha256": "c88d3be20d978747355fa11c8f22395f79cd230c620117bcbf89834d50c532aa",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/c-api.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Execution Truth ABI",
+      "line": 646,
+      "sha256": "c44419db34fba806f139efe671152e8543a8d9afa038227eae66186a2b6520e1",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/c-api.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Application Provider And Local Protocol v22",
+      "line": 664,
+      "sha256": "3fa29717b89af106bc63d9ec3805bbfbe9240b8204f67abf42146f2c8ac5bdd9",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/c-api.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Physical Execution And Candidate-State ABI",
+      "line": 769,
+      "sha256": "f05a70af4951a733e3a03827978210570a83ad8f86cd1badd1a81a1d79f5359d",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/runtime-abi.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Internal Generation And Hosted Turn Boundary",
+      "line": 799,
+      "sha256": "bddbb9ee4b096d5ba5d486e787fc87e817bd39879d3745fc9b0246f29203b98b",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/runtime-abi.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Runtime Binding And Operator Actions",
+      "line": 834,
+      "sha256": "2b273cf2869aa01394b1cafda4417e1d339f1475783cfa5cfaf40273f8c2ec82",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/runtime-abi.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Qualification, Benchmark, And Chart Contract",
+      "line": 885,
+      "sha256": "b34ebe43ccb39aedaf8c4e4b6d6cbb8f5d010fd6984723dd1f7e1951b7dd9af5",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/benchmark-publication.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Capability And Claim Boundary",
+      "line": 932,
+      "sha256": "beca7a82d9963abbc51afcc5b92ffd45835f63cf5f5d6bb527d46f15fa01f58e",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/c-api.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/c-api.md",
+      "section": "Extension Rules",
+      "line": 948,
+      "sha256": "57540febf3d0be470e8cda2ab3acb20eb7baabb17ca9d12cb0da9d5338c36ffa",
+      "classification": "SPLIT",
+      "destination": "docs/contracts/c-api.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/events-telemetry.md",
+      "section": "Producer and consumers",
+      "line": 8,
+      "sha256": "9cffd13a22e95c6d5c30efa2865841461a0372bca0a2549e1e5258b59b034904",
+      "classification": "KEEP",
+      "destination": "docs/contracts/events-telemetry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/events-telemetry.md",
+      "section": "Event identity",
+      "line": 23,
+      "sha256": "f7c94ed6712a966c19c3dd3eaa0fbbde2482b4d600051d7394ae19fd6ee148ee",
+      "classification": "KEEP",
+      "destination": "docs/contracts/events-telemetry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/events-telemetry.md",
+      "section": "Lifecycle coverage",
+      "line": 37,
+      "sha256": "147342b9d180b6c2b695daad0b753ed28f6c14357b3506fced5fc958c3e0e3bf",
+      "classification": "KEEP",
+      "destination": "docs/contracts/events-telemetry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/events-telemetry.md",
+      "section": "Fan-out and overflow",
+      "line": 55,
+      "sha256": "92a6c997f665f045689e8bfd2d2639f016fa95bedd7cde8c3a52e49ff6018056",
+      "classification": "KEEP",
+      "destination": "docs/contracts/events-telemetry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/events-telemetry.md",
+      "section": "Projections",
+      "line": 73,
+      "sha256": "5cd7c6ef564027f62685283d40e53b5b5f317337e41132aad3d11caae54c9647",
+      "classification": "KEEP",
+      "destination": "docs/contracts/events-telemetry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/events-telemetry.md",
+      "section": "External HTTP access",
+      "line": 156,
+      "sha256": "8ee48bb34215e45fd5c7af97bdb96339a603a112e84803d5ada537055d92be87",
+      "classification": "KEEP",
+      "destination": "docs/contracts/events-telemetry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/events-telemetry.md",
+      "section": "Privacy and content",
+      "line": 183,
+      "sha256": "cb27be96a24705027565f760454240436fb73ed00e42476c9441d756f8d98183",
+      "classification": "KEEP",
+      "destination": "docs/contracts/events-telemetry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/events-telemetry.md",
+      "section": "Timing and counters",
+      "line": 190,
+      "sha256": "1ac6187093d9d5b71170c594deed243aadf5f2c47f9989f400115ade23b59969",
+      "classification": "KEEP",
+      "destination": "docs/contracts/events-telemetry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/events-telemetry.md",
+      "section": "Observability cost",
+      "line": 214,
+      "sha256": "53aa5e23cd4abcf815e9f5f85cc96f83d5b5e9cce9c4c148db01d50e22005aee",
+      "classification": "KEEP",
+      "destination": "docs/contracts/events-telemetry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/events-telemetry.md",
+      "section": "Side effects and failure",
+      "line": 229,
+      "sha256": "b45f6e0c876e4671e5723d992d8f7a7f35e958d3e49b58d8324a93e232b3ce5b",
+      "classification": "KEEP",
+      "destination": "docs/contracts/events-telemetry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/events-telemetry.md",
+      "section": "Compatibility and non-claims",
+      "line": 236,
+      "sha256": "66e2bc78066beafe360548a59fa10929cc3d31f6bd3e9615f092aacb467b84df",
+      "classification": "KEEP",
+      "destination": "docs/contracts/events-telemetry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Producer and consumer",
+      "line": 11,
+      "sha256": "43b7cf33606916544ee499efbd85f90ddc1c7c6eaa2b9ac20859feadec7ce53a",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Framing and negotiation",
+      "line": 18,
+      "sha256": "af8466d563804d080b12c43e0fc9596ad70226d5af736baef7b2abb43b3523fc",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Operations",
+      "line": 29,
+      "sha256": "196b8aee13d0fc7470f6bf50816b4c1a8d84ced4112e33bfb86ce36d563b2189",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Ordered content and provenance",
+      "line": 72,
+      "sha256": "7fd81f693e66d2dd636d490ff593982c2ab1871948e46cc70e95565e6ddc075f",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Request lifecycle",
+      "line": 107,
+      "sha256": "86b0a19b5b107ca4e66700ae814faeaca92c609dead88e5ba36e6b13e3f00c04",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Streaming",
+      "line": 121,
+      "sha256": "54b2d36a4c067b8de4da2cc1ec3af58cc2feb73ab4596bd5e2e8e4f946aaa7a2",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Status and console facts",
+      "line": 193,
+      "sha256": "26359100b8f316537f95e40e123b4b400fef7c0ec05ec8c11f0d0eef2afc70f5",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Turn result",
+      "line": 229,
+      "sha256": "3f2f25defcc729cf002a5979b7f9eb6aad7891eae5a606037bab333bdf82cf7e",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Side effects",
+      "line": 269,
+      "sha256": "1ea34ff67edc0e175636f7ed6d7b648ca88f291c3371e97b9cc8fbb198acdfd4",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Failure and cleanup",
+      "line": 289,
+      "sha256": "0c9305d01729297ad8bd037edd41df7df3157014da8afe2b81f103ed0ce6c578",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Compatibility policy",
+      "line": 304,
+      "sha256": "d9c9fdeceec1a4e11dfa61701f519098b89735bd39d6d6b66f19817bdf08cc45",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Resource truth",
+      "line": 311,
+      "sha256": "a2bcb761b69dd6c652fb23f5a59c29588c37b2c8237535bbfd903db7123c7c48",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/local-protocol.md",
+      "section": "Non-claims",
+      "line": 323,
+      "sha256": "3bb09f9fd0df607f96673d26d15c6a414f53b94b1f1d43a428e31eb61fd02e39",
+      "classification": "KEEP",
+      "destination": "docs/contracts/local-protocol.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/model-release.md",
+      "section": "Document",
+      "line": 1,
+      "sha256": "a49dda44d2c715c8b94d737f2868747c2c4daf7c4eabed9ed24a8c7f71f32c61",
+      "classification": "KEEP",
+      "destination": "docs/contracts/model-release.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/model-storage.md",
+      "section": "What users choose and YVEX manages",
+      "line": 17,
+      "sha256": "426ff598522a35091a5cbe281023579bac28fcfe30ed01ab6ec789f1f9c52f3e",
+      "classification": "KEEP",
+      "destination": "docs/contracts/model-storage.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/model-storage.md",
+      "section": "Path ownership",
+      "line": 47,
+      "sha256": "7d05baa8c2a42eabd1394b5fc1d7c4a6defc810abc294e27d70fdd71dc79c0b1",
+      "classification": "KEEP",
+      "destination": "docs/contracts/model-storage.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/model-storage.md",
+      "section": "Supervised acquisition operations",
+      "line": 91,
+      "sha256": "041a5045c0342d06e129252117f3277491f9881f3d28df150056bde2e82be29c",
+      "classification": "KEEP",
+      "destination": "docs/contracts/model-storage.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/model-storage.md",
+      "section": "Importing material obtained elsewhere",
+      "line": 167,
+      "sha256": "b3c34bc8897c168b91e01c5a3892ab7080280ae3708f3022345b1d4971fb0593",
+      "classification": "KEEP",
+      "destination": "docs/contracts/model-storage.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/model-storage.md",
+      "section": "Location, working set and runtime state",
+      "line": 189,
+      "sha256": "72cb58a5ba446402ac51cc941f01b0aca7d92209e7d13dacc88792c9d00bfabf",
+      "classification": "KEEP",
+      "destination": "docs/contracts/model-storage.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/model-storage.md",
+      "section": "Idempotency and removal",
+      "line": 235,
+      "sha256": "81d03e212621753edba7e749a639749a6ee158243300f36c9033267d6a64b3ad",
+      "classification": "KEEP",
+      "destination": "docs/contracts/model-storage.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/remote-management.md",
+      "section": "Transport and trust",
+      "line": 9,
+      "sha256": "7119ddad01eb78b829545b7f242f7c0cb9a024a858b1da2eb602a2469b4bffb1",
+      "classification": "KEEP",
+      "destination": "docs/contracts/remote-management.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/remote-management.md",
+      "section": "Local enrollment and revocation",
+      "line": 49,
+      "sha256": "e5e30d2fab05d6e99cfa3dc730c393eee5f627fe7087ad05939b0782d00b60ed",
+      "classification": "KEEP",
+      "destination": "docs/contracts/remote-management.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/remote-management.md",
+      "section": "Wire contract",
+      "line": 118,
+      "sha256": "f4456423e3cc7229ec40f9d4eaa3eda7f2db4d5da770ffbc8fdc755989f8b43b",
+      "classification": "KEEP",
+      "destination": "docs/contracts/remote-management.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/remote-management.md",
+      "section": "Conformance and handoff",
+      "line": 164,
+      "sha256": "6fb7ada47de772ef0986f05c2b60d1ab066b53182f313d3a01863b85110cac4d",
+      "classification": "KEEP",
+      "destination": "docs/contracts/remote-management.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Parties and scope",
+      "line": 9,
+      "sha256": "1318f228bfb652aae7d3d761825ecab36d4c6faf4e1f0c5566b598ea7f17add2",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Host lifecycle",
+      "line": 21,
+      "sha256": "6c5e0981c64bfbe8cacccf069497b4c7d1dbdb2d3a75d51c18ccc3cbef3c2477",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Engine lifecycle",
+      "line": 46,
+      "sha256": "7fd0de6be7a369c54708947aec33b042a11bbb997d2faef3d79ab689bf43cf3e",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Package and specialization",
+      "line": 85,
+      "sha256": "e9b6b7de5e30e7ff2ceeb5115036f4e7daebb82022ffbf83a4ab3b001c91f459",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Resource admission and accounting",
+      "line": 113,
+      "sha256": "a12e949f9a65c9a62dc6cc7397f782cf30834e67e4d53a8ccbdff2ae6bc856c4",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Session lifecycle and routing",
+      "line": 167,
+      "sha256": "80a1652448d65578bc10da395e4a492f4a0b7fb957cd464c150aebd01882a1f8",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Prompt, execution, and publication",
+      "line": 191,
+      "sha256": "22eafb0765051387962a26d47c9e277f4da49b711ad2aefdaaf1936920b57470",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Transactional sequence state",
+      "line": 216,
+      "sha256": "7fbce782de4307a07cc90e59e11fea8b0876705318558e2e217d7f578705c19b",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Finite-candidate decision readout",
+      "line": 266,
+      "sha256": "549b1e216c0c063106a642923351d3dff76aeadda206c461938508ff574cfb78",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Scheduling and executable batches",
+      "line": 312,
+      "sha256": "731388989ea91ee40901fb00b0eca9771dd06ba9ba1068c873e72b02a82e9609",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Execution accounting",
+      "line": 338,
+      "sha256": "130c02d5ec8be96055016b5015ff8f6bf6db06e2d6c140cb56adcc333106313d",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Cancellation and draining",
+      "line": 354,
+      "sha256": "5c80738c4d24991c79c1697ae5a3292cab8da461f9bf71689b76b9a4264f473a",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Failure and recovery",
+      "line": 385,
+      "sha256": "9a632939871324ca18c8e7e09c91d01ed876320da78b58aa9e7671950956bacd",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Resource truth",
+      "line": 400,
+      "sha256": "d9d25a7275e240b75aa6684de8fdd58fbc1a82e9563c19427545aaa52c537169",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Evidence",
+      "line": 415,
+      "sha256": "8f9c630ef3dadce909b87d3e20a348950cef05874647a5b0cc79cfa0ba79618e",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Inputs, outputs, and side effects",
+      "line": 426,
+      "sha256": "7e8056dc39fea5b8593f439ac735b5e15b3e6195176cecf20e6187687f5e06be",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/contracts/runtime.md",
+      "section": "Compatibility and non-claims",
+      "line": 442,
+      "sha256": "16c5b574589a58b89d4191ac830ada04cbeb389fd261b29f093fb86bfc5b5b83",
+      "classification": "KEEP",
+      "destination": "docs/contracts/runtime.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0001-public-project-control.md",
+      "section": "Context",
+      "line": 6,
+      "sha256": "759c44277af5d9ed5acce6294f5f186e217e61d6059d23ec6c0c1420246aacf5",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0001-public-project-control.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0001-public-project-control.md",
+      "section": "Decision",
+      "line": 18,
+      "sha256": "c2dfbb05711658c0b6ae0a5f3b71067cc12f68481044cae8f3893dc59ecfdf14",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0001-public-project-control.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0001-public-project-control.md",
+      "section": "Consequences",
+      "line": 40,
+      "sha256": "0909da4f05447596617413185789ad3015cede3606e0b762fd59a940dfb4ed52",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0001-public-project-control.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0001-public-project-control.md",
+      "section": "Alternatives considered",
+      "line": 50,
+      "sha256": "4710a4be214cbd1216d5d6e8e18d98af0e89f8861a43aeeb8940b8fbdf66d9de",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0001-public-project-control.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0002-command-operation-registry.md",
+      "section": "Context",
+      "line": 6,
+      "sha256": "5c8a5483590f32ca34a35d584721e4afd612e20ac6a5fc0922c94790c3d03a05",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0002-command-operation-registry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0002-command-operation-registry.md",
+      "section": "Decision",
+      "line": 21,
+      "sha256": "f8eb5159e532265ecaccf11eecd5579e896974c9da4a31c7b76126942d295c20",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0002-command-operation-registry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0002-command-operation-registry.md",
+      "section": "Consequences",
+      "line": 65,
+      "sha256": "36c59dd6e3fb8ce7e784598f36712f60a13262ef8db03abef06340ca6b0f6c02",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0002-command-operation-registry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0002-command-operation-registry.md",
+      "section": "Alternatives considered",
+      "line": 79,
+      "sha256": "589c82f5a43caafe00f8316e3903dd0d97bc8d92d4c6c7ac19bad4895aa75d6c",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0002-command-operation-registry.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0004-target-verified-speculation.md",
+      "section": "Context",
+      "line": 10,
+      "sha256": "9e2ef16b5a20e7df62eaccd25b5bc54209cdeba1086313ae7649841c108f0159",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0004-target-verified-speculation.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0004-target-verified-speculation.md",
+      "section": "Decision",
+      "line": 25,
+      "sha256": "4ff28c5309847861070ea236be5f8ddb9898f216db0139281f47b27a059beea8",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0004-target-verified-speculation.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0004-target-verified-speculation.md",
+      "section": "Consequences",
+      "line": 67,
+      "sha256": "def177642e1d51e3102ea903bcd9952d3fccaffe98a55a4eb8d202f08b95654a",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0004-target-verified-speculation.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0004-target-verified-speculation.md",
+      "section": "Alternatives considered",
+      "line": 80,
+      "sha256": "5040eb0502528e8eafe7f38796ca4c288a8696b4155e0db68367fac1b1a6d610",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0004-target-verified-speculation.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0005-execution-substrate.md",
+      "section": "Context",
+      "line": 11,
+      "sha256": "6ff2436a907c2a01b1568de010a03b4f15aa541c18f12231230798cee6717a5c",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0005-execution-substrate.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0005-execution-substrate.md",
+      "section": "Decision",
+      "line": 25,
+      "sha256": "46d8033f8eaf83cefd512e79aa8b86c485fd1c220558272cea6b2725f6f72c56",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0005-execution-substrate.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0005-execution-substrate.md",
+      "section": "Consequences",
+      "line": 87,
+      "sha256": "ac1c67e93a7de1982fa89f6e5923e5a89d1d15f119e84f084565d2cc3b69b222",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0005-execution-substrate.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0005-execution-substrate.md",
+      "section": "Alternatives considered",
+      "line": 104,
+      "sha256": "5447c4df796ad2b7a0a1c3761862ee5b3a10b8998b61fdb2050d1955bf2cbf28",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0005-execution-substrate.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0006-shared-multifamily-development.md",
+      "section": "Context",
+      "line": 6,
+      "sha256": "6a02f03b5ca0e34c251a3f284caf504c7b9742ff039760bea6948a48298321a0",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0006-shared-multifamily-development.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0006-shared-multifamily-development.md",
+      "section": "Decision",
+      "line": 20,
+      "sha256": "06c8486445d382084e4a7778f214422bad62e4500e12428b0d70d85d2840ec0e",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0006-shared-multifamily-development.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0006-shared-multifamily-development.md",
+      "section": "Consequences",
+      "line": 48,
+      "sha256": "a1ee26bee51bfd93c89045c7ab1fef132938097b33573de021b29fcd83dc1d44",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0006-shared-multifamily-development.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0006-shared-multifamily-development.md",
+      "section": "Alternatives considered",
+      "line": 65,
+      "sha256": "be3d82ec9cdfcb33fdf43a737be1045273e7cefa9d5984becf03e7f5f1b8d00f",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0006-shared-multifamily-development.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0007-external-terminal-editor.md",
+      "section": "Context",
+      "line": 6,
+      "sha256": "a48f0ad04932bace9353efa17bce545b93d333b4c7d0bfa810248958f2ffedc8",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0007-external-terminal-editor.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0007-external-terminal-editor.md",
+      "section": "Decision",
+      "line": 14,
+      "sha256": "ce45e1092c9f80fb178fbc3895fae6fdda647afb447b077e2f906ba0b1d6e2b1",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0007-external-terminal-editor.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0007-external-terminal-editor.md",
+      "section": "Consequences and evidence",
+      "line": 66,
+      "sha256": "fb502da94d80e928d532383bca81a3a868501c46ffdf3ea98fa91bcb25a17aa1",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0007-external-terminal-editor.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/0007-external-terminal-editor.md",
+      "section": "Alternatives considered",
+      "line": 89,
+      "sha256": "fefd91774e2c8643783b94a18a459670354308361b3a4180d4ebab2f649fd954",
+      "classification": "KEEP",
+      "destination": "docs/decisions/0007-external-terminal-editor.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/README.md",
+      "section": "Format",
+      "line": 12,
+      "sha256": "6ae8e22b37877da3c2d34f1e83815d4b2a1967634838af3a5638117544daee99",
+      "classification": "KEEP",
+      "destination": "docs/decisions/README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/decisions/README.md",
+      "section": "Index",
+      "line": 28,
+      "sha256": "369309768d9713a9911dcd2e651d30f8175c9d785b14442544edd2c76445e7d2",
+      "classification": "KEEP",
+      "destination": "docs/decisions/README.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/agentic-engineering.md",
+      "section": "Authorities",
+      "line": 7,
+      "sha256": "002e3bdc7ce9ef5644f8a85472101e609eb81d928ee490c6b6ce370c1210a099",
+      "classification": "MOVE",
+      "destination": "docs/guides/agentic-engineering.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/agentic-engineering.md",
+      "section": "Frame the outcome",
+      "line": 21,
+      "sha256": "06380d45ed2705ac2ef884537e4249054117b5b2fdd556ad9f2c54549bd809ae",
+      "classification": "MOVE",
+      "destination": "docs/guides/agentic-engineering.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/agentic-engineering.md",
+      "section": "Investigate and implement",
+      "line": 41,
+      "sha256": "e2a39a8b2f0b00e79957be28717f3aaabf946f00bb46baeb99a1161288852bb2",
+      "classification": "MOVE",
+      "destination": "docs/guides/agentic-engineering.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/agentic-engineering.md",
+      "section": "Classify evidence",
+      "line": 55,
+      "sha256": "f7a6b1ef1f186e5fb249d4a177319d3b5a40aba923c8ee84591189fe76139694",
+      "classification": "MOVE",
+      "destination": "docs/guides/agentic-engineering.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/agentic-engineering.md",
+      "section": "Verify the delivery",
+      "line": 69,
+      "sha256": "34fdf491ae5c43b3e73557b1e1f913b683f25cae8402dcf389758e616ef79ad0",
+      "classification": "MOVE",
+      "destination": "docs/guides/agentic-engineering.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/agentic-engineering.md",
+      "section": "Decide progression",
+      "line": 83,
+      "sha256": "41cb3fac186fcfaa4fbae5e5507b36d51fbbb41af9c0982f3e981c264ba3d416",
+      "classification": "MOVE",
+      "destination": "docs/guides/agentic-engineering.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/agentic-engineering.md",
+      "section": "Documentation lifecycle",
+      "line": 97,
+      "sha256": "20f9bdf85c472aa8b535edbe8edd3f3265b82d804e7417275be9ae64737b1d78",
+      "classification": "MOVE",
+      "destination": "docs/guides/agentic-engineering.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/gb10-targets.md",
+      "section": "Hardware envelope",
+      "line": 12,
+      "sha256": "99c1b683f061533c79ce2ed86e67a211b129e3868047d7f24a5ebde66e6f2467",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/benchmarks/gb10-targets.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/gb10-targets.md",
+      "section": "Target dimensions",
+      "line": 23,
+      "sha256": "9f3000c290fedaa01d67553b0629bbbe9e3b2688671b11d523c61d2726c19f41",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/benchmarks/gb10-targets.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/gb10-targets.md",
+      "section": "Required measurement key",
+      "line": 70,
+      "sha256": "109add6a65a8faae409664631a9a080b8b34b740d900d2cc6bb4a3ac6f6559d9",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/benchmarks/gb10-targets.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/gb10-targets.md",
+      "section": "Retained empirical barrier",
+      "line": 89,
+      "sha256": "d5d0ab2ecd6547345954b31946edb42739b10ce96d7d2e043c7c8969dff22a32",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/benchmarks/gb10-targets.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/qa.md",
+      "section": "Authorities",
+      "line": 10,
+      "sha256": "e41fe1557b194a47f6f93fb6ca50d57cff09fa56ef95a3dbf17ba986f4a463d2",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/qa.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/qa.md",
+      "section": "Evidence taxonomy",
+      "line": 31,
+      "sha256": "0c44257f5a1d7be4fffb28fe5901731b01401bdea6a2b3d69b35fdbc68504470",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/qa.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/qa.md",
+      "section": "Lanes",
+      "line": 54,
+      "sha256": "cdb23e243223ac90c207703866e1c08e38d0d486f58e20c0f6f06380fdc9c670",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/qa.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/qa.md",
+      "section": "Result states",
+      "line": 66,
+      "sha256": "1206a76cd92177dcffb3cda342701feea76d0749b96c7c2c99f0fcf8ece13c99",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/qa.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/qa.md",
+      "section": "Normal workflow",
+      "line": 80,
+      "sha256": "e447c1243f5017b54d5908951230cbe1ddf9dbe0d7348c0a78145a0a361bd86f",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/qa.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/qa.md",
+      "section": "Registry additions",
+      "line": 108,
+      "sha256": "bd16b8da9997d8735168ca9faf39d68ed6b0599f94a42bc7ad47734d0da9501c",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/qa.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/qa.md",
+      "section": "Fixtures and numerical authority",
+      "line": 125,
+      "sha256": "9e430086c521f8413724bcf179181ece11e7da2042feff93f3cec2487c2d4a3d",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/qa.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/qa.md",
+      "section": "Resources and cleanup",
+      "line": 138,
+      "sha256": "68deb9c09384f7c841b2989b7bf0aedf071de98cd6a2032b97d8db81955e26e8",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/qa.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/qa.md",
+      "section": "Performance evidence",
+      "line": 158,
+      "sha256": "d94346060e5b72178cc62a657ba355288aae8b8f9d7558952fd5a11879c867db",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/qa.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/qa.md",
+      "section": "Structured reports",
+      "line": 168,
+      "sha256": "c0ba0e4f23d2fee5a1cdcb9c702a7d1395258ca5f731b9a878e6e0f3be89eba2",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/qa.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/qa.md",
+      "section": "CI, sanitizers, static analysis, coverage, and property seams",
+      "line": 184,
+      "sha256": "bd3c8c13f37d79f87d628854b8a6dabaa8ccc37a1783278aaee7c9b62da62bd6",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/qa.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/qa.md",
+      "section": "Branch-neutral vertical qualification",
+      "line": 197,
+      "sha256": "1c3a04bf443beff5a9d5ca7402ede430961574a40addc89d57008be75ddca112",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/qa.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/reference-baseline.md",
+      "section": "Ownership rules",
+      "line": 20,
+      "sha256": "e1f4b087d6efeca93f22313c501cd2c55904ce097f68f58d90c1f5cc0ba30341",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/reference-baseline.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/reference-baseline.md",
+      "section": "Reference-to-owner map",
+      "line": 33,
+      "sha256": "1866ca2ef3016d2f308c17ee210dbf2be3c17304aa22b3a3a995062e4ce316e0",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/reference-baseline.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/reference-baseline.md",
+      "section": "Validation boundary",
+      "line": 54,
+      "sha256": "7fe8144a37789cb44f56079f0eb056418c7e09a5bd25c085c88c2e3b59a2c27a",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/reference-baseline.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/reference-baseline.md",
+      "section": "Pinned DeepSeek-V4 architecture baseline",
+      "line": 56,
+      "sha256": "c5bb09ba7137aac62979847f2b2d991ed7b3a6073bd971b2de46719a324bca81",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/reference-baseline.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/reference-baseline.md",
+      "section": "Pinned GGUF qtype storage baseline",
+      "line": 100,
+      "sha256": "97bdd418f5daf70689c9f9f0819ed0b1190c4abbdf3bc5be21c4abd8eefa7e66",
+      "classification": "MOVE",
+      "destination": "docs/evaluation/reference-baseline.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/source-ownership.md",
+      "section": "Membership authority",
+      "line": 8,
+      "sha256": "9f7c8e3a171baea56d9110d9822687983271686872d2334045f7b2d2d0a647ea",
+      "classification": "MOVE",
+      "destination": "docs/guides/source-ownership.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/source-ownership.md",
+      "section": "Changing an owner",
+      "line": 33,
+      "sha256": "180bdcf1877393fc9eed5cbd6717dbaff5fd45985cbc7ac26b7bf9b56e645b26",
+      "classification": "MOVE",
+      "destination": "docs/guides/source-ownership.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/source-ownership.md",
+      "section": "Navigating the implementation",
+      "line": 55,
+      "sha256": "5c48692cecedea89c26ed9b08de7dba7cb69d4398c566baf2edb8f03f0284174",
+      "classification": "MOVE",
+      "destination": "docs/guides/source-ownership.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/development/source-ownership.md",
+      "section": "Format boundaries",
+      "line": 74,
+      "sha256": "a02f4a81ff70ef09142d67745f14c27addef8c0bc69b3a4e7d4eb7c6efd00362",
+      "classification": "MOVE",
+      "destination": "docs/guides/source-ownership.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/deepseek-v4-flash.md",
+      "section": "Identity and source",
+      "line": 9,
+      "sha256": "a41fdb42c0e64640d0f51435f7541d2b06fd4fdae809dc4e42d4e4d13abf66c9",
+      "classification": "KEEP",
+      "destination": "docs/model-families/deepseek-v4-flash.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/deepseek-v4-flash.md",
+      "section": "Target architecture",
+      "line": 39,
+      "sha256": "88bcd621e1b0a5539fa7a76798383b2eacd42e195b85f8cb4cbf24602bc05d2b",
+      "classification": "KEEP",
+      "destination": "docs/model-families/deepseek-v4-flash.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/deepseek-v4-flash.md",
+      "section": "DSpark architecture",
+      "line": 59,
+      "sha256": "bf984227ed5e704c7ce105ec2a1ca6d328f5aeb43d591fcfc521fdeb10709507",
+      "classification": "KEEP",
+      "destination": "docs/model-families/deepseek-v4-flash.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/deepseek-v4-flash.md",
+      "section": "Tokenizer and output",
+      "line": 79,
+      "sha256": "06a41fb774082a5a6e5af0151a3831b6a85849507bdfd01c2e045c365af255f5",
+      "classification": "KEEP",
+      "destination": "docs/model-families/deepseek-v4-flash.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/deepseek-v4-flash.md",
+      "section": "Coverage, transformation, and artifact",
+      "line": 118,
+      "sha256": "38ec50f3341ddab5fcaaa49c681b9f2f0054b7b777878b1d6f9412763978ba44",
+      "classification": "KEEP",
+      "destination": "docs/model-families/deepseek-v4-flash.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/deepseek-v4-flash.md",
+      "section": "Hosted execution",
+      "line": 145,
+      "sha256": "1db6e4f5eb1f9cf376c4bd82890a7473fa5cb018a07dc499694b5a2b474d368b",
+      "classification": "KEEP",
+      "destination": "docs/model-families/deepseek-v4-flash.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/deepseek-v4-flash.md",
+      "section": "Current capability",
+      "line": 174,
+      "sha256": "aca8f4aa0f65fbea5f80956a2afc0e8b808ca2f8f1e0deed61e7d8f47b46c763",
+      "classification": "KEEP",
+      "destination": "docs/model-families/deepseek-v4-flash.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/deepseek-v4-flash.md",
+      "section": "Explicit non-claims",
+      "line": 185,
+      "sha256": "891be3a24f45d6a54000b0984fdabfe337afb9e84b71f387fc582073ee920ca9",
+      "classification": "KEEP",
+      "destination": "docs/model-families/deepseek-v4-flash.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Family and target",
+      "line": 9,
+      "sha256": "086c1b237bec4e4169bf663e838be7073f00037f34e9067869d34cae8c226336",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Promotion path",
+      "line": 25,
+      "sha256": "455eb440316816161718aa22d007a494007d723d17d5067f7a61bc73bac92ae5",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Architecture signature",
+      "line": 43,
+      "sha256": "855bef97cf6cd58f7a2be93eeeb12412fbc8572a18b6f764f62252364fa33efd",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Source inventory and canonical roles",
+      "line": 66,
+      "sha256": "a19f2ebfc284938d0674523c8996ba61f7958fe971f8d207752935d50ed685f0",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Family adapter",
+      "line": 89,
+      "sha256": "c0d53856bb115c114ccfd1fac09bf48c84b933df2cb389061f5536dbeca24ae4",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Artifact prerequisites",
+      "line": 139,
+      "sha256": "31248d0af7ca76b85eac3f13609219198ae5ca75fd29ea52f1914df7ad2b30f7",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Runtime prerequisites",
+      "line": 151,
+      "sha256": "561c8029cb39b59afa74b4c4d963c72ad5c3fdb3ad97ad4727a025f520b2b67d",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Backend prerequisites",
+      "line": 195,
+      "sha256": "15dc19c4821099e50a4aeebd7f91d4f0bf87ff4d9e61d10208f94eadfd561761",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Dense and sparse composition",
+      "line": 206,
+      "sha256": "b99bc6d01b63fcdc0375ace24ab9156bf2b106d1b8d4507be13e0b1d72c8b52b",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Persistent-state contract",
+      "line": 217,
+      "sha256": "3f578d83f6e22411392f43527ef6e6c618a08afb40548a675cd55da5c8cdee6d",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Evidence stages",
+      "line": 230,
+      "sha256": "073662a55b44888c34c1151036df3a8cc17d2aa1c3c5ba688be1e4aedd7e85a4",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Failure classification",
+      "line": 254,
+      "sha256": "858d96066ffeb9f1abeeef7521cb65a553133c75e303a6085fe49f878eae9f8d",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/integration.md",
+      "section": "Current family boundaries",
+      "line": 264,
+      "sha256": "a644320125607658b2e6b5343024fecb6a2b592b029b7286cd246af17f7554de",
+      "classification": "KEEP",
+      "destination": "docs/model-families/integration.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/laya.md",
+      "section": "Document",
+      "line": 1,
+      "sha256": "0ac3b6eb9b552063a7e275eddbb5338cacfe867981d6e1dcf42992f7f56278fe",
+      "classification": "KEEP",
+      "destination": "docs/model-families/laya.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/mamba2.md",
+      "section": "Source-owned execution policy",
+      "line": 30,
+      "sha256": "bfe8d54e124bb7205a86095934b051d5e3e17f2dea243f76c570f8172f284f88",
+      "classification": "KEEP",
+      "destination": "docs/model-families/mamba2.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/mamba2.md",
+      "section": "Compiler and runtime ownership",
+      "line": 59,
+      "sha256": "a28e69ba9bb0ae9f0b5b1ea752afb9bfe3a73c0ddb31bfe5316f484d522bc981",
+      "classification": "KEEP",
+      "destination": "docs/model-families/mamba2.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/mamba2.md",
+      "section": "Numerical and lifecycle evidence",
+      "line": 88,
+      "sha256": "1c0e7880ac9c18964e1736aec29e67400cdf98cbca035bd9da235fee83cacbe3",
+      "classification": "KEEP",
+      "destination": "docs/model-families/mamba2.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/mamba2.md",
+      "section": "Remaining evidence boundary",
+      "line": 120,
+      "sha256": "04c4e28719e5bd297822e3e7e13250f3bca3dae9c2e6edd28c4a0c31acd4d409",
+      "classification": "KEEP",
+      "destination": "docs/model-families/mamba2.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Target and source identity",
+      "line": 17,
+      "sha256": "5e72c3cdffdc632a2dfabc09f187564c29de5492662270faad85366ba5ccf3ee",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "License observations",
+      "line": 49,
+      "sha256": "c04f0db5f035460fa65d8c103dc3b8a5e8372d69f81ed7512f01fd114fd365d6",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Components and artifacts",
+      "line": 64,
+      "sha256": "6c2f16a6241c6efa28fbfb3d2d69735b5730432397fae48e9b092500013672ec",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Architecture and conditioning",
+      "line": 92,
+      "sha256": "76d566bb02193277b23a3b0e648b86b55e24df6ad05dce7ff0681e4d2660c243",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Text and vision",
+      "line": 100,
+      "sha256": "2158fda64f9cd12df0a99fdb929dc783396ea21b5eb9decf8025c87c33b970ab",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Keyframe state",
+      "line": 121,
+      "sha256": "ea492a55f5214a3249d0036733270fa062ae227e1a7d51f72c9d8dae468a1c61",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Joint trajectory",
+      "line": 128,
+      "sha256": "b993b8e400099b2db746cab97c6a37be5757460d2d882ab120f508bc77c57084",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Physical and output policy",
+      "line": 152,
+      "sha256": "ccaa92173a7209eb1bc909ca47561525954e8c729a66850887a24e0e60750097",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Visual and audio decoding",
+      "line": 173,
+      "sha256": "a0580985eeab32ac699dd881e6cc3be555e6f4e7a802ff516c3289bccf1f8466",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Publication",
+      "line": 187,
+      "sha256": "6e33096387936f356a0e2f43b6556039650877433fa0a7f27646abb4df1b034f",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Numerical and lifecycle evidence",
+      "line": 199,
+      "sha256": "0b6b11c68bba528f573bcd969083ce1e2b11a94603afd1e135c54124647ed6c8",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Full-scale negative boundary",
+      "line": 235,
+      "sha256": "ec25ea55c6c5d4b30133914140fe423eb888859967850c60cbdcd16c1126e09b",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Rejected physical representation",
+      "line": 256,
+      "sha256": "711a5076232f4d50b71858417c1cc7fa0e7621f47d04ad8fb25b559862830ccb",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-families/minimax-h3.md",
+      "section": "Explicit non-claims",
+      "line": 264,
+      "sha256": "91026d5fa27dd873729e18fedb9d8d9e17d582a1585c587683289e8c0e74281b",
+      "classification": "KEEP",
+      "destination": "docs/model-families/minimax-h3.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-lifecycle.md",
+      "section": "The operations",
+      "line": 8,
+      "sha256": "510a01cb55e60f2ce01069ba70256625b3b37faa10e8534ffa7fa406d98805fe",
+      "classification": "MOVE",
+      "destination": "docs/guides/model-lifecycle.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-lifecycle.md",
+      "section": "Hugging Face and authentication",
+      "line": 36,
+      "sha256": "218c8e30483b9fb3b4178adba578482624bf7f649a3cf9fb1dcb5cedf962877f",
+      "classification": "MOVE",
+      "destination": "docs/guides/model-lifecycle.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-lifecycle.md",
+      "section": "Published representations",
+      "line": 73,
+      "sha256": "32d29e3b15b6fb39abdc6442ce3f363063450046110fbfaa32d10ff8d9e2129e",
+      "classification": "MOVE",
+      "destination": "docs/guides/model-lifecycle.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-lifecycle.md",
+      "section": "Files obtained outside YVEX",
+      "line": 105,
+      "sha256": "1182f11091375aafb134ff89595534828135d91f8f6c671bfe7657ffea6cb4b8",
+      "classification": "MOVE",
+      "destination": "docs/guides/model-lifecycle.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-lifecycle.md",
+      "section": "Safetensors and preparation",
+      "line": 158,
+      "sha256": "7024f8c8fea175bbbbb00cf2f1108f8488716af69768aae0d9a9f9d856c1b687",
+      "classification": "MOVE",
+      "destination": "docs/guides/model-lifecycle.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-lifecycle.md",
+      "section": "Runtime and local removal",
+      "line": 205,
+      "sha256": "37929dca258eea24c8e0eebae5e9c5f05e6c33e581fa1ba4bab8958ad0cd26f7",
+      "classification": "MOVE",
+      "destination": "docs/guides/model-lifecycle.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/model-lifecycle.md",
+      "section": "Repeated commands, interruptions, and disk cost",
+      "line": 295,
+      "sha256": "551b06314e4e0e3b9e93eae22b12a76b213affa86cea9a3b83a8f273822cb97c",
+      "classification": "MOVE",
+      "destination": "docs/guides/model-lifecycle.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/openai-compatibility.md",
+      "section": "Process and trust boundary",
+      "line": 23,
+      "sha256": "28f7effb7c63d2df7491777022ab7a2c1aa71c90efd38edfe274f2921ce4e909",
+      "classification": "MOVE",
+      "destination": "docs/contracts/openai-compatibility.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/openai-compatibility.md",
+      "section": "Endpoint matrix",
+      "line": 99,
+      "sha256": "89cdef722bac96afecc982c98d8206264863c30d192f43eb042deedd2b7b9c9c",
+      "classification": "MOVE",
+      "destination": "docs/contracts/openai-compatibility.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/openai-compatibility.md",
+      "section": "Execution capacity and preflight",
+      "line": 113,
+      "sha256": "a2b3fd750281ecaab367d3f145c23336ce5bfd833c4edc1c1ce54b800a57da53",
+      "classification": "MOVE",
+      "destination": "docs/contracts/openai-compatibility.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/openai-compatibility.md",
+      "section": "Chat Completions request profile",
+      "line": 176,
+      "sha256": "34bc0cab153361767efa0f00d1150f173bf75ad02c7fea6a66b9fbb31cf0f9c1",
+      "classification": "MOVE",
+      "destination": "docs/contracts/openai-compatibility.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/openai-compatibility.md",
+      "section": "Responses request profile",
+      "line": 215,
+      "sha256": "c273385ccf1499acbd2d26a21bce0b601fff3e8c9ec61b8269c2c9241522f8e6",
+      "classification": "MOVE",
+      "destination": "docs/contracts/openai-compatibility.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/openai-compatibility.md",
+      "section": "Function tools",
+      "line": 267,
+      "sha256": "23e4893874b742cd74a2940794086a59e155662ae8002d734e6c4ea24c7b19d0",
+      "classification": "MOVE",
+      "destination": "docs/contracts/openai-compatibility.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/openai-compatibility.md",
+      "section": "Structured output and stop strings",
+      "line": 287,
+      "sha256": "cfaaeb2b034574e133f69e59785032ceed5671b72afd648090d716c5a2ee29a0",
+      "classification": "MOVE",
+      "destination": "docs/contracts/openai-compatibility.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/openai-compatibility.md",
+      "section": "Usage and finish mapping",
+      "line": 299,
+      "sha256": "84aa0d523a7b15a50c471ea2c9025766356a56f4aa0037a2e9a5457505e05388",
+      "classification": "MOVE",
+      "destination": "docs/contracts/openai-compatibility.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/openai-compatibility.md",
+      "section": "HTTP and error contract",
+      "line": 319,
+      "sha256": "ed29202178ef3e0fd5b8368720a4e34bd9b0e5075c2f7307c758851f9150794c",
+      "classification": "MOVE",
+      "destination": "docs/contracts/openai-compatibility.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/openai-compatibility.md",
+      "section": "Verified clients and non-claims",
+      "line": 343,
+      "sha256": "c5186f9744005fc50911b25fb0fe636ea46778af9acdcaa824e9b5b7b22c2760",
+      "classification": "MOVE",
+      "destination": "docs/contracts/openai-compatibility.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Prerequisites",
+      "line": 18,
+      "sha256": "79ab534bc7b0a7d22f16a7526f544082a045a1ea770e4190466205ee9c4ec88a",
+      "classification": "SPLIT",
+      "destination": "docs/guides/build.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Discover, acquire, and prepare a model",
+      "line": 71,
+      "sha256": "f027feea77476b0dc1f549187e69f2be9fb379a830822171c099f740b1746923",
+      "classification": "SPLIT",
+      "destination": "docs/guides/source-preparation.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Verifying source payloads for compilation",
+      "line": 209,
+      "sha256": "0dfe003b7d75024da1c492190560574c23e1b94aa8f1e42e5bb4c6147a6338d8",
+      "classification": "SPLIT",
+      "destination": "docs/guides/source-preparation.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Probing a physical-variant candidate",
+      "line": 235,
+      "sha256": "635e9ea2caae2ed35829809f44be976a030cec1e1dd5615cf3e4599d797db0ff",
+      "classification": "SPLIT",
+      "destination": "docs/guides/source-preparation.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "First verified startup",
+      "line": 259,
+      "sha256": "3e5874c6ca63450b0a4510dc90bd0b1bbc8ab4140b3ed2a76ee408826e5bf61e",
+      "classification": "SPLIT",
+      "destination": "docs/guides/operator-runbook.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "What “load the model” means",
+      "line": 318,
+      "sha256": "aff8947bb8e0266a1e2678b15d37657df9d66d918ca1be0548d937ede2a31d86",
+      "classification": "SPLIT",
+      "destination": "docs/guides/operator-runbook.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Direct MiniMax-H3 media host",
+      "line": 346,
+      "sha256": "3d16bfd04fd2ffaad30e0a1bf2ba52338bd18f923b70c733c9c2794714fd89a9",
+      "classification": "SPLIT",
+      "destination": "docs/guides/multimodal.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Foreground host and client terminal",
+      "line": 436,
+      "sha256": "1bab421d2ef37b4905c283cb29322f7fdb7d025a955cc4f4a8f56941c743c203",
+      "classification": "SPLIT",
+      "destination": "docs/guides/operator-runbook.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Interactive console",
+      "line": 448,
+      "sha256": "a394a3af0f6ae229a8192660b11b0b5dd8e199943c35b156f2654c6de5d1161d",
+      "classification": "SPLIT",
+      "destination": "docs/guides/interactive-client.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Interactive and programmatic requests",
+      "line": 530,
+      "sha256": "e209e50e7f4e7cb7bffa65bfdcb91cc4e82c5a555627caaa84c1e36b134a0f9b",
+      "classification": "SPLIT",
+      "destination": "docs/guides/interactive-client.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "OpenAI-compatible application provider",
+      "line": 558,
+      "sha256": "b5b2598dd185c2ce6f3b70cf7d8c472c8880f5670dbac67c0aa0f93509c3edb4",
+      "classification": "SPLIT",
+      "destination": "docs/guides/operator-runbook.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Session lifecycle",
+      "line": 583,
+      "sha256": "7e9ab187a7ed1bb061fcbda790b6f2a73ecde835b0b68e191c44150c8cefec3e",
+      "classification": "SPLIT",
+      "destination": "docs/guides/operator-runbook.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Status, metrics, and logs",
+      "line": 615,
+      "sha256": "bd1904264b3a2dea4abe0db8352773eae74103df2a56d8b4eae6f77949435293",
+      "classification": "SPLIT",
+      "destination": "docs/guides/operator-runbook.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Graceful shutdown",
+      "line": 684,
+      "sha256": "65a645aef4208e7ff5fea79e2181be4b7f094fa0a36b4f7a5ce00d78a384bc59",
+      "classification": "SPLIT",
+      "destination": "docs/guides/operator-runbook.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Registering an existing model",
+      "line": 706,
+      "sha256": "806c80622afbb05e8eb19dfb226b86ac9f3627e8a21019bbbbaad39d16d62423",
+      "classification": "SPLIT",
+      "destination": "docs/guides/source-preparation.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Local paths",
+      "line": 758,
+      "sha256": "08682a245e703f641043f51854495594417da1e99a0008f3321ef13b4124dad2",
+      "classification": "SPLIT",
+      "destination": "docs/guides/recovery.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/operator-runbook.md",
+      "section": "Recovery",
+      "line": 774,
+      "sha256": "102f70eeb9de6ed7710acc6d5f9100655cc2de392ac08fd46c28a680c136f122",
+      "classification": "SPLIT",
+      "destination": "docs/guides/recovery.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/releases/doctrine.md",
+      "section": "Release identity",
+      "line": 11,
+      "sha256": "d40fe98c692e9447417787140c1c15dce4d4ae87e286d324b5b217e036175eb9",
+      "classification": "KEEP",
+      "destination": "docs/releases/doctrine.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/releases/doctrine.md",
+      "section": "Gate meanings",
+      "line": 18,
+      "sha256": "78cbb3296d57f8b12544cefef30dd92f0e9ae8b0e8df6137b0f96bc2e8175c69",
+      "classification": "KEEP",
+      "destination": "docs/releases/doctrine.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/releases/doctrine.md",
+      "section": "Closure rules",
+      "line": 35,
+      "sha256": "7a4af9a183110152e7b249a16058e4855befb0b7b728dcf7070e9272dbf1cd1d",
+      "classification": "KEEP",
+      "destination": "docs/releases/doctrine.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/releases/doctrine.md",
+      "section": "Failure and security",
+      "line": 49,
+      "sha256": "27b284f48cfaee77aa0e98a4c8c261fd081a972ccd55c55310f6cdaa6b10895c",
+      "classification": "KEEP",
+      "destination": "docs/releases/doctrine.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/releases/doctrine.md",
+      "section": "Evidence and publication",
+      "line": 57,
+      "sha256": "be385b352405f94ee279526ddd9cff3c08de7317980820b9766e42d3b4d03773",
+      "classification": "KEEP",
+      "destination": "docs/releases/doctrine.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/releases/doctrine.md",
+      "section": "Change control",
+      "line": 65,
+      "sha256": "f3689e78866dc8382aabb0005a856317f346c24a233151ddcab9df4956dfa3f1",
+      "classification": "KEEP",
+      "destination": "docs/releases/doctrine.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/releases/v0.1.md",
+      "section": "Target",
+      "line": 9,
+      "sha256": "9cbdb60636708ec93155b389d70c6015578e8c3d437c0a81be76d932e1bdfd5e",
+      "classification": "KEEP",
+      "destination": "docs/releases/v0.1.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/releases/v0.1.md",
+      "section": "Required generation path",
+      "line": 28,
+      "sha256": "7cbfe6ab14d165699256300db555c1eb835772deda0dce40baf8636c71c2d6a2",
+      "classification": "KEEP",
+      "destination": "docs/releases/v0.1.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/releases/v0.1.md",
+      "section": "Required closure",
+      "line": 53,
+      "sha256": "1b6196f5279c89bafac0339bad6e4240f7a3ef2d1eb7201e2a902313d0cc941c",
+      "classification": "KEEP",
+      "destination": "docs/releases/v0.1.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    },
+    {
+      "source": "docs/releases/v0.1.md",
+      "section": "Explicit non-claims",
+      "line": 68,
+      "sha256": "62ac035886bb52fd5cb1c8a476cfae4f2e99d6103402eb9cbe4b04fee106d6b7",
+      "classification": "KEEP",
+      "destination": "docs/releases/v0.1.md",
+      "reason": "Current technical meaning retained; links and presentation reconciled."
+    }
+  ]
+}
