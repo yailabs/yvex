@@ -118,3 +118,30 @@ disposable review directories, rather than acquiring documentation authority.
 Final run identities and exact result counts are reported in the milestone
 closure. No model benchmark, GPU numerical campaign, upstream model evaluation
 or release qualification is claimed by these documentation checks.
+
+## Qualified snapshot and results
+
+The main migration is commit `266006d86288a7ab795aa719bc978169f90ea8cc`.
+The complete structural rerun recorded source stability `valid=true` at that
+HEAD with preserved concurrent work identified by delta
+`cd92a60e10b45225d74c5cf50a625b34a3a8581b07e675cb2a32c8d3b25293cd`.
+Its QA run identity is
+`4954cff3f68127e26542fcb234db2bfc1d1437dae3937411bb1762786f48aac7`:
+**17 PASS, 0 FAIL, 0 SKIP, 0 BLOCKED, 0 ERROR**. The preceding attempt was
+invalidated by concurrent source changes and is not closure evidence.
+
+Publication qualification: **16 regression tests**, **101 canonical owners**,
+**13 planes**, **149 unchanged capability names/states**, **34 selected Tasks**,
+**7 diagram sources**, **3 observation projections**, **312 browser configurations
+without detected page overflow/missing figures/metadata residue**, and
+**14 successful native GitHub Mermaid views**. Chromium produced a 326-page
+PDF through both browser automation and the CLI used by the publication target;
+extracted content agrees after whitespace normalization. Diagram, navigation,
+Task and benchmark pages were sampled visually; this is not a line-by-line
+proof of every printed page.
+
+The final lookup-reference repair and this qualification record are validated
+by `make docs-check` and publication generation after the full structural run.
+No production source, ABI, runtime benchmark producer or model behavior was
+changed by the documentation commits. Concurrent README presentation and
+version/release edits remain their owners' work, outside these commits.
