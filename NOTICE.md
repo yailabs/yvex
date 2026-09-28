@@ -50,6 +50,14 @@ binary: distributors must also carry the notices required by the exact linked
 Rust dependencies. The current build receipt/pin is provenance, not a complete
 third-party compliance certification.
 
+`make package` now labels that staged software candidate `UNQUALIFIED` for
+distribution. The [artifact-bound legal gate](docs/releases/distribution-legal.md)
+requires original recipient notices and corresponding source where applicable;
+`make qualify-distribution DISTRIBUTION_PACKAGE=...` refuses unresolved policy
+or missing/stale material. The product profile remains blocked until the exact
+compiled contribution closure is retained. This is not a claim of completed
+repository distribution readiness.
+
 ## Unicode data
 
 The classification tables in `src/tokenizer/unicode.c` and normalization

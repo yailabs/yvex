@@ -8,6 +8,13 @@
   },
   "change_classes": [
     {
+      "id": "distribution-legal",
+      "patterns": ["tools/distribution_legal.py", "tools/distribution_policy.json", "tests/test_distribution_legal.py"],
+      "lanes": ["structural"],
+      "tests": ["structural.distribution-legal", "property.qa-registry"],
+      "reason": "exact package, notice, corresponding source and first-party licensing drift must fail closed without runtime changes"
+    },
+    {
       "id": "finite-decision-model",
       "patterns": ["src/model/families/laya.c", "src/tokenizer/families/laya_input.c",
                    "src/tokenizer/finite_input.c", "include/yvex/internal/finite_input.h",

@@ -1,0 +1,16 @@
+{
+  "schema": "distribution.policy.v1",
+  "product": "yvex",
+  "first_party_license": "LICENSE",
+  "first_party_terms": "MIT",
+  "profiles": {
+    "product": {
+      "build_inputs": ["Makefile", "config/package_manifest.tsv", "config/replai.json", "tools/prepare_replai.py", "LICENSE", "NOTICE.md"],
+      "cargo_manifests": [],
+      "unresolved": [
+        "The pinned REPLAI build receipt lacks its complete compiled dependency/toolchain legal closure.",
+        "The exact package's native and compiler-generated inputs need artifact-bound membership and redistribution classification."
+      ]
+    }
+  }
+}

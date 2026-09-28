@@ -504,7 +504,19 @@ package: client config/package_manifest.tsv LICENSE NOTICE.md
 		'$(YVEX_PROTOCOL_VERSION)' "$$registry_identity" 'cpu+cuda-dynamic'; \
 	  printf 'yvex_sha256\t%s\nlibyvex_sha256\t%s\n' \
 		"$$client_sha" "$$library_sha"; \
+	  printf 'distribution_legal_status\tUNQUALIFIED\n'; \
 	} > "$$package_dir/share/yvex/build.tsv"
+
+# `package` is a software candidate, not permission to distribute it.
+# Recipient material is assembled by tools/distribution_legal.py bundle;
+# qualification verifies the exact resulting package and first-party authority.
+.PHONY: qualify-distribution test-distribution-legal
+qualify-distribution:
+	@test -n "$(DISTRIBUTION_PACKAGE)" || { echo 'DISTRIBUTION_PACKAGE is required' >&2; exit 1; }
+	python3 tools/distribution_legal.py verify '$(DISTRIBUTION_PACKAGE)' --first-party-license LICENSE --first-party-terms MIT --policy tools/distribution_policy.json
+
+test-distribution-legal:
+	python3 -B tests/test_distribution_legal.py
 
 cuda-info: $(YVEX_BIN)
 	@echo "nvcc: $$(command -v $(NVCC) >/dev/null 2>&1 && command -v $(NVCC) || echo unavailable)"
