@@ -29,6 +29,18 @@ class PublicationTests(unittest.TestCase):
         self.assertIn('<h1',html);self.assertIn('<table>',html)
         self.assertNotIn('publication:',html)
 
+    def test_centered_readme_brand_is_root_only(self):
+        text=(ROOT/'README.md').read_text()
+        meta,body=metadata.parse(text,branded_root=True)
+        self.assertEqual(meta['id'],'yvex')
+        self.assertTrue(body.startswith('<p align="center">\n  <picture>'))
+        self.assertIn('<p align="center">',site.render(body))
+        self.assertEqual(body.count('https://img.shields.io/'),5)
+        with self.assertRaisesRegex(ValueError,'visible Markdown title'):
+            metadata.parse(text)
+        with self.assertRaisesRegex(ValueError,'visible Markdown title'):
+            metadata.parse(text.replace('alt="YVEX"','alt="Other"',1),branded_root=True)
+
     def test_visible_yaml_refuses(self):
         visible=self.text.replace('<!-- docs:metadata','---',1).replace('-->','---',1)
         with self.assertRaisesRegex(ValueError,'visible YAML'):metadata.parse(visible)
@@ -117,7 +129,7 @@ class PublicationTests(unittest.TestCase):
         for doc in metadata.registry().values():
             with self.subTest(path=str(doc['path'])):
                 rendered=site.render(doc['body'])
-                if doc['path']==ROOT/'README.md' and doc['body'].startswith('<picture>'):
+                if doc['path']==ROOT/'README.md' and not doc['body'].startswith('# '):
                     self.assertIn('alt="YVEX"',rendered)
                 else:self.assertIn('<h1',rendered)
                 self.assertNotIn('<!-- docs:metadata',rendered)

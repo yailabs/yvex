@@ -75,7 +75,8 @@ def parse(text, *, allow_visible=False, branded_root=False):
     elif 'source' in meta:
         raise ValueError('source is reserved for generated projection provenance')
     body = text[match.end():].lstrip('\n')
-    branded = branded_root and meta['id']=='yvex' and body.startswith('<picture>') and 'alt="YVEX"' in body.split('</picture>',1)[0]
+    brand_body = body.removeprefix('<p align="center">').lstrip()
+    branded = branded_root and meta['id']=='yvex' and brand_body.startswith('<picture>') and 'alt="YVEX"' in brand_body.split('</picture>',1)[0]
     require(branded or body.startswith('# '+meta['title']+'\n'), 'visible Markdown title must match metadata')
     require(not re.search(r'<(?:header|script)\b|\bstyle=["\']',body,re.I), 'canonical Markdown contains page styling/script')
     return meta, body

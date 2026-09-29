@@ -8,15 +8,20 @@ audience: [engineer, agent, evaluator]
 publication: {html: true, pdf: true, index: true}
 -->
 
-# YVEX
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/yvex-readme-stacked-dark.png">
+    <img src="docs/assets/brand/yvex-readme-stacked-light.png" alt="YVEX" width="280">
+  </picture>
+</p>
 
-**From model source to verified execution.**
-
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/yvex-readme-stacked-dark.png">
-  <img src="docs/assets/brand/yvex-readme-stacked-light.png" alt="YVEX" width="220">
-</picture>
+<p align="center">
+  <a href="#quick-start"><img src="https://img.shields.io/badge/language-C11-8D5CF5?style=flat&amp;labelColor=30363d" alt="Language: C11"></a>
+  <a href="docs/architecture/backend-execution.md"><img src="https://img.shields.io/badge/backends-CPU_%2F_CUDA-8D5CF5?style=flat&amp;labelColor=30363d" alt="Backends: CPU / CUDA"></a>
+  <a href="docs/project-control/STATUS.md"><img src="https://img.shields.io/badge/status-in%20development-8D5CF5?style=flat&amp;labelColor=30363d" alt="Status: in development"></a>
+  <a href="https://github.com/yailabs/yvex/actions/workflows/qa.yml?query=branch%3Amodels2"><img src="https://img.shields.io/github/actions/workflow/status/yailabs/yvex/qa.yml?branch=models2&amp;label=QA%20%28models2%29&amp;style=flat&amp;labelColor=30363d" alt="QA status on models2"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8D5CF5?style=flat&amp;labelColor=30363d" alt="License: MIT"></a>
+</p>
 
 A native C/CUDA model compiler and stateful execution runtime. YVEX prepares
 authenticated open-weight sources, compiles their meaning into admitted work,
