@@ -50,6 +50,7 @@ This correction does not qualify long-request latency or complete YAI workloads.
 <!-- docs:diagram interactive_boundary -->
 ```mermaid
 %% yvex-figure: interactive_boundary
+%%{init: {"themeVariables": {"background": "transparent"}}}%%
 flowchart TB
   n_terminal["EXTERNAL<br/>Terminal / user<br/>input and displayed results"]:::external
   subgraph n_panel_0["a  REPLAI inside chat"]

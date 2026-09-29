@@ -24,6 +24,7 @@ boundaries without becoming an execution owner.
 <!-- docs:diagram system_overview -->
 ```mermaid
 %% yvex-figure: system_overview
+%%{init: {"themeVariables": {"background": "transparent"}}}%%
 flowchart TB
   n_providers["EXTERNAL<br/>Provider sources<br/>weights · config · tokenizer"]:::external
   n_applications["EXTERNAL<br/>SDKs / applications<br/>local compatibility clients"]:::external
@@ -87,6 +88,7 @@ computation; a transport adapter does not confer additional model capability.
 <!-- docs:diagram physical_compilation -->
 ```mermaid
 %% yvex-figure: physical_compilation
+%%{init: {"themeVariables": {"background": "transparent"}}}%%
 flowchart TB
   subgraph n_panel_0["a  Verified source and family interpretation"]
     direction TB

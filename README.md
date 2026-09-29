@@ -43,6 +43,7 @@ YVEX treats support as a lifecycle with explicit identities, owners and evidence
 <!-- docs:diagram physical_compilation -->
 ```mermaid
 %% yvex-figure: physical_compilation
+%%{init: {"themeVariables": {"background": "transparent"}}}%%
 flowchart TB
   subgraph n_panel_0["a  Verified source and family interpretation"]
     direction TB

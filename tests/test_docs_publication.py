@@ -141,6 +141,9 @@ class PublicationTests(unittest.TestCase):
         path=ROOT/'docs/assets/diagrams/physical_compilation.json'
         data=json.loads(path.read_text());block=diagrams.diagram_block(path.stem,data,ROOT/'README.md')
         self.assertIn('```mermaid',block)
+        self.assertIn('"background": "transparent"',block)
+        svg=diagrams.render(data)
+        self.assertNotIn(f'<rect width="{data["size"][0]}" height="{data["size"][1]}" fill="#fff"/>',svg)
         self.assertIn('n_execution ---|identity| n_join',block)
         self.assertIn('n_peir ---|identity| n_join',block)
         self.assertIn('physical_compilation.svg',site.render(block))

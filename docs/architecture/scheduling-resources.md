@@ -36,6 +36,7 @@ device-addressable storage does not prove the physical GPU working set.
 <!-- docs:diagram storage_residency -->
 ```mermaid
 %% yvex-figure: storage_residency
+%%{init: {"themeVariables": {"background": "transparent"}}}%%
 flowchart TB
   subgraph n_panel_0["a  Durable source and representation facts"]
     direction TB

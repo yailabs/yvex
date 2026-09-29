@@ -23,6 +23,7 @@ managed local material and explicit external references.
 <!-- docs:diagram storage_residency -->
 ```mermaid
 %% yvex-figure: storage_residency
+%%{init: {"themeVariables": {"background": "transparent"}}}%%
 flowchart TB
   subgraph n_panel_0["a  Durable source and representation facts"]
     direction TB

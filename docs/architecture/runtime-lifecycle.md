@@ -23,6 +23,7 @@ connection is not a session, and a disconnected client does not own the host.
 <!-- docs:diagram runtime_lifetimes -->
 ```mermaid
 %% yvex-figure: runtime_lifetimes
+%%{init: {"themeVariables": {"background": "transparent"}}}%%
 flowchart TB
   subgraph n_panel_0["a  Persistent host — listeners, engine manager and routing"]
     direction TB

@@ -42,6 +42,7 @@ text{fill:#261b38}
 .evidence{fill:#eaf5ef;stroke:#3d7255}
 .external{stroke-dasharray:6 4}.runtime{stroke-width:2.5}.mutable{stroke-width:2}
 .edge{fill:none;stroke:#292929;stroke-width:1.7;stroke-linejoin:round}
+@media(prefers-color-scheme:dark){.title,.legend{fill:#e9e2f4}}
 """.strip()
 
 
@@ -154,7 +155,6 @@ def render(data):
            '<defs><style>' + STYLE + '</style>',
            '<marker id="solid" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0L8 4L0 8Z" fill="#292929"/></marker>',
            '<marker id="open" markerWidth="9" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1L8 5L1 9" fill="none" stroke="#292929" stroke-width="1.5"/></marker></defs>',
-           f'<rect width="{width}" height="{height}" fill="#fff"/>',
            text(32, 41, f'{data["number"]:02d}  {data["title"]}', "title"),
            f'<path d="M32 57H{width-32}" stroke="#161616" stroke-width="2"/>']
     for panel in data["panels"]:
@@ -214,7 +214,7 @@ def mermaid(data):
     for n in data['nodes']:
         owner=parent(n['box'])
         (members[owner] if owner is not None else loose).append(n)
-    out=['flowchart TB']
+    out=['%%{init: {"themeVariables": {"background": "transparent"}}}%%', 'flowchart TB']
     def node(n):
         # Mermaid is the orientation view; exact annotations remain in the
         # companion static figure and explanatory owner, from this same model.

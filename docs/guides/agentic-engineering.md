@@ -73,6 +73,7 @@ as observations of the admitted deployment, not configured capacity.
 <!-- docs:diagram evidence_promotion -->
 ```mermaid
 %% yvex-figure: evidence_promotion
+%%{init: {"themeVariables": {"background": "transparent"}}}%%
 flowchart TB
   subgraph n_panel_0["a  Increasing claim strength — not a build schedule"]
     direction TB

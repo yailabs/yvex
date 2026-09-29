@@ -39,6 +39,7 @@ and media publication have different terminal semantics.
 <!-- docs:diagram family_boundary -->
 ```mermaid
 %% yvex-figure: family_boundary
+%%{init: {"themeVariables": {"background": "transparent"}}}%%
 flowchart TB
   n_sealed["SEMANTIC<br/>Sealed plan boundary<br/>common compiler validates"]:::semantic
   subgraph n_panel_0["a  Family-specific meaning"]
