@@ -34,7 +34,7 @@ text{fill:#261b38}
 .note,.legend{font-size:16px}.code{font-size:16px}
 .tag{font-size:15px;font-weight:700;text-anchor:middle}
 .label{font-size:16px}
-.panel{fill:#f7f3fc;stroke:#c6b6db;stroke-width:1}
+.panel{fill:none;stroke:#c6b6db;stroke-width:1}
 .node{fill:#fff;stroke:#665275;stroke-width:1.5}
 .semantic{fill:#efe5fc;stroke:#7541ba}.physical{fill:#f4effb;stroke:#8054b2}
 .runtime{fill:#eeeafb;stroke:#6a4ca3}.mutable{fill:#fff3db;stroke:#8e6920}
@@ -42,7 +42,7 @@ text{fill:#261b38}
 .evidence{fill:#eaf5ef;stroke:#3d7255}
 .external{stroke-dasharray:6 4}.runtime{stroke-width:2.5}.mutable{stroke-width:2}
 .edge{fill:none;stroke:#292929;stroke-width:1.7;stroke-linejoin:round}
-@media(prefers-color-scheme:dark){.title,.legend{fill:#e9e2f4}}
+@media(prefers-color-scheme:dark){.title,.legend,.panel-title{fill:#e9e2f4}.edge{stroke:#b9b0c5}#solid path{fill:#b9b0c5}#open path{stroke:#b9b0c5}}
 """.strip()
 
 
@@ -250,7 +250,7 @@ def mermaid(data):
     for kind,(fill,stroke) in palette.items():
         out.append(f'  classDef {kind} fill:{fill},stroke:{stroke},color:#261b38')
     for i in range(len(panels)):
-        out.append(f'  style {identity("panel-"+str(i))} fill:#faf8fe,stroke:#b8a5d0,color:#261b38')
+        out.append(f'  style {identity("panel-"+str(i))} fill:transparent,stroke:#b8a5d0')
     return '\n'.join(out)+'\n'
 
 def diagram_block(name, data, consumer):

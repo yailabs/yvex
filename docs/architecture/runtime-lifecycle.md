@@ -67,10 +67,10 @@ flowchart TB
   classDef interface fill:#edf3fb,stroke:#456789,color:#261b38
   classDef external fill:#f2f2f4,stroke:#707078,color:#261b38
   classDef evidence fill:#eaf5ef,stroke:#3d7255,color:#261b38
-  style n_panel_0 fill:#faf8fe,stroke:#b8a5d0,color:#261b38
-  style n_panel_1 fill:#faf8fe,stroke:#b8a5d0,color:#261b38
-  style n_panel_2 fill:#faf8fe,stroke:#b8a5d0,color:#261b38
-  style n_panel_3 fill:#faf8fe,stroke:#b8a5d0,color:#261b38
+  style n_panel_0 fill:transparent,stroke:#b8a5d0
+  style n_panel_1 fill:transparent,stroke:#b8a5d0
+  style n_panel_2 fill:transparent,stroke:#b8a5d0
+  style n_panel_3 fill:transparent,stroke:#b8a5d0
 ```
 
 [Static figure](../assets/diagrams/runtime_lifetimes.svg) · [Editable source](../assets/diagrams/runtime_lifetimes.json)
