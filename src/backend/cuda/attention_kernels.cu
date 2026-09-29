@@ -5,6 +5,7 @@
  * independently admitted parallel reduction used by production execution.
  */
 #include "src/backend/cuda/kernel_primitives.h"
+#include "src/backend/cuda/dot_recovery.h"
 
 typedef struct {
     const float *local;
@@ -19,9 +20,8 @@ typedef struct {
     int candidate_block_visible;
 } attention_reduce_rows;
 
-/* The rolling-state contract already defines two equally shaped projections of
- * one activation.  A warp retains the activation load across both independent
- * accumulators while preserving each projection's original dot-product order. */
+/* One launch projects the same activation twice. Both projections retain the
+ * ordinary decoded-input source-order F64 dot and F32 publication. */
 extern "C" __global__ void yvex_attention_bf16_pair(
     const unsigned char *first, unsigned long long first_row_bytes,
     const unsigned char *second, unsigned long long second_row_bytes,
@@ -42,39 +42,9 @@ extern "C" __global__ void yvex_attention_bf16_pair(
     if (*status || row_index >= row_count) return;
     first += row_index * first_row_bytes;
     second += row_index * second_row_bytes;
-    for (unsigned long long i = lane; i < row_width; i += 32ull) {
-        float value = input[i];
-        float first_weight = bf16_bits_to_float(qtype_load_u16(first + i * 2ull));
-        float second_weight = bf16_bits_to_float(qtype_load_u16(second + i * 2ull));
-        /* Nonfinite operands propagate to a terminal sum and are refused
-         * below. Keep finite validation outside the ordered FMA loop. */
-        first_sum = fmaf(first_weight, value, first_sum);
-        second_sum = fmaf(second_weight, value, second_sum);
-    }
-    for (unsigned int offset = 16u; offset; offset >>= 1u) {
-        first_sum += __shfl_down_sync(0xffffffffu, first_sum, offset);
-        second_sum += __shfl_down_sync(0xffffffffu, second_sum, offset);
-    }
     if (!lane) {
-        /* Finite terms may overflow a lane's F32 partial sum before later
-         * terms cancel. Recover exceptional rows from decoded operands, but
-         * never turn an invalid input into an admitted finite result. */
-        if (!isfinite(first_sum) || !isfinite(second_sum)) {
-            double first_recovered = 0.0, second_recovered = 0.0;
-            for (unsigned long long i = 0ull; i < row_width; ++i) {
-                float value = input[i];
-                float first_weight = bf16_bits_to_float(qtype_load_u16(first + i * 2ull));
-                float second_weight = bf16_bits_to_float(qtype_load_u16(second + i * 2ull));
-                if (!isfinite(value) || !isfinite(first_weight) || !isfinite(second_weight)) {
-                    atomicCAS(status, 0, 1);
-                    return;
-                }
-                first_recovered += (double)first_weight * (double)value;
-                second_recovered += (double)second_weight * (double)value;
-            }
-            first_sum = (float)first_recovered;
-            second_sum = (float)second_recovered;
-        }
+        first_sum = qtype_dot_recover_f64(first, input, row_width, YVEX_GGUF_QTYPE_BF16);
+        second_sum = qtype_dot_recover_f64(second, input, row_width, YVEX_GGUF_QTYPE_BF16);
         if (!isfinite(first_sum) || !isfinite(second_sum)) atomicCAS(status, 0, 1);
         else {
             first_out[row_index] = first_sum;

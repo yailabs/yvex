@@ -724,10 +724,10 @@ extern "C" __global__ void yvex_qtype_grouped_rows(
     row = group * group_rows + local_row;
     row_data = encoded + row * row_bytes;
     input = vector + input_row * input_stride + group * row_width;
-    sum = qtype_warp_dot(row_data, input, row_width, qtype, status);
     if (lane) return;
-    if (!isfinite(sum) && *status == 0)
-        sum = qtype_dot_recover_f64(row_data, input, row_width, qtype);
+    /* Grouping changes launch topology only. The ordinary decoded-input
+     * projection uses source-order F64 accumulation, including finite rows. */
+    sum = qtype_dot_recover_f64(row_data, input, row_width, qtype);
     if (!isfinite(sum)) atomicCAS(status, 0, 1);
     else out[input_row * output_stride + row] =
         output_bf16 ? float_to_bf16_rne(sum) : sum;

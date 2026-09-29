@@ -55,6 +55,12 @@ CPU and CUDA evidence applies to the named admitted class. GB10 controls do not
 qualify another GPU, operating system or numerical representation. Fixture
 execution is labeled separately from real model observations.
 
+The [dated CUDA producer repair](../evaluation/retained-observations.md#deepseek-cuda-producer-reconciliation-2026-09-29)
+qualifies the mixed DSpark artifact's bounded synthetic request and decoded-dot
+component contracts. The full mapped gate remains BLOCKED on a distinct legacy
+bootstrap artifact. This is not long-request, upstream whole-model or release
+promotion, and the historical deleted-executable failure has no proved cause.
+
 ## Capability vocabulary
 
 ESTABLISHED means the bounded claim carries its required evidence. PARTIAL means

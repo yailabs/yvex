@@ -10,14 +10,186 @@ publication: {html: true, pdf: true, index: true}
 
 # Retained Execution Observations
 
-**Preserved measurements and their limits, not a new qualification run.**
+**Identity-bound execution observations and their limits.**
 
 [Up](README.md)
 
-These observations were retained at the pre-migration source
+The undated observations below were retained at the pre-migration source
 [`b5f632ef`](https://github.com/yailabs/yvex/tree/b5f632ef8d452f61bbbc8f91f9459a2fd26b7c83).
 They are not rerun by documentation validation. Scope and missing provenance
 remain visible; [Status](../project-control/STATUS.md) alone owns current maturity.
+
+## DeepSeek CUDA producer reconciliation (2026-09-29)
+
+`RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` distinguishes a historical service
+failure from two reproducible decoded-projection numerical-class defects.
+This is bounded producer/component evidence, not whole-model upstream
+conformance, long-request qualification or a completed Studio/Case chain.
+
+### Source, executable and admitted model
+
+The clean DGX checkout started on historical `models2` at
+`5edb91df87246c3f59262d77182d2276466d88f5` (tree
+`df8000eaab3eaf318233bd7c63ad3c011807a828`). Fetch established no unique local
+commits; the canonical worktree switched to `main` and fast-forwarded to
+`1073450a7f4f167e2718b3f8cba72e7492368f20` (tree
+`899aa0a8e227c4b561ac2de98cd32cba6c293cc3`). No foreign work was discarded.
+
+The former service used a deleted executable with SHA-256
+`f54647ca1b1f1e4ed95165bb497a6c6c8a95f45c17c8241d55b165e8361e4d27`,
+different from the then-on-disk `87652d89988e372e9a265bcb7ecaf8937dc2ca3bcd311273d7e07bb22bf50c97`.
+It was stopped through the supported host lifecycle only after authoritative
+work, session, client, model-lease and queue counts were zero. That deleted
+executable was not retained; its original numerical cause remains unproved.
+Layer 30/status 1 identifies an observation site, not an originating kernel or
+a CUDA driver error.
+
+A fresh SM121 build **before either kernel repair** had executable SHA-256
+`525c0e3aad446a76d530f34ca3b26b7d1fceecaae7f90dbd77114759949ece36`,
+build identity `76edf1771c3af0a9c0a5a9571cc25835095c5079427e6d72806007dd0a773d17`
+and source delta `1e654643d229d6688310d06c998df45e9da0c92a240cf524ac7e95055b5be34e`
+over that main tree (Task documentation only). The loaded `/proc/PID/exe`
+digest equalled the built executable. Both the small control and the original
+synthetic provider request already completed on this baseline. Consequently,
+the kernel changes below are **not** a demonstrated explanation of the former
+HTTP 503. No source-level repair of that historical failure is claimed.
+
+The post-repair measured executable was
+`47f47df0ed5c2383fba466c855f74fc27407be095bbdf4a87617fa23de8281ab`,
+with build identity `8eac22cf9215010c8fe968475ea45564a63ebf1e529d3fb9b38416e6da9e118c`
+and source delta `ac93db10a9e402ee7053968a07e18b8d8a17b45916c8745daea0c4a50eefe4c6`.
+The loaded executable matched again. Kernel source identities are
+`dd9dbec009d5cbb8896146816ba41b7958598fc2bcade59d520f9a917f839a46`
+for paired attention and
+`d9f10c30ac7a25b35dbeb257e66809d9462bac70e1a860f3a13c15224a904745`
+for grouped rows; the corresponding native CUBIN identities are
+`d4db307a195a7b4590af23eb148905c460533da83b9cd8c79e62fd9a438e1f40`
+and `ee2627420752184dafde1a0a12152b0ba8fa8a0404cd1c99effcd625736cc7f7`.
+
+All HTTP observations use the exact admitted model
+`deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda`,
+engine generation 1, speculative execution and context capacity 32,768:
+
+| Identity | Exact value |
+| --- | --- |
+| Artifact | `b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f` |
+| Runtime binding | `8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e` |
+| Runtime model | `cf8ebc69dae8e38f96a47418e8efcebdc47bc4ed05bac76d6974ccc1379e0e7e` |
+| Specialization | `7604985ea75253a9338877e3867d2f18daac3be036ffa66babe84aca8ae2554e` |
+| Device | NVIDIA GB10, `GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc`, driver `580.159.03`, SM121 |
+
+### Demonstrated component defects and repair
+
+The existing `cuda.quant_qtype` control first failed its grouped-row bitwise
+comparison and, after that repair, its paired-BF16 comparison. Ordinary
+decoded-input projection uses source-order F64 accumulation followed by F32
+publication. Grouped and paired kernels instead used parallel F32 sums and
+recovered only exceptional non-finite sums. Finite rows therefore differed:
+recovering overflow did not preserve the ordinary numerical class.
+
+Both generic CUDA kernels now use the existing `qtype_dot_recover_f64()` owner
+for every decoded row. The paired kernel's duplicate exceptional-dot loop was
+removed. Q8 activation reduction, quantization, expert routing/populations,
+SwiGLU, transaction semantics and final F32/BF16 publication are unchanged.
+There is no family/layer/prompt branch, disabled validation or CPU fallback.
+
+| Control / authority | Expected | Observed | Tolerance / result | Exact claim |
+| --- | --- | --- | --- | --- |
+| Grouped rows; ordinary projection plus independent CPU decode/scalar F64 dot | Equal grouped/ordinary values; agreement with decoded oracle | 8 groups × 5 inputs, 640 values, zero bit mismatches | Exact internal comparison; oracle `1e-5 * (1 + abs(reference))`; PASS | Grouping preserves the decoded numerical class |
+| Paired BF16; ordinary BF16 projection | Both outputs bit-identical | Existing paired projection assertions pass | Zero bit differences; PASS | Pairing changes launch topology, not dot semantics |
+| `cuda.dot_finiteness`; independent decoded F64 arithmetic | Finite cancellation survives; NaN/Inf operands refuse before nonlinear clamp | All 80 admitted cases pass; canaries preserved | Registered arithmetic bounds, exact zero overflow cancellation; PASS | Invalid operands are not converted into admitted finite output |
+| `cuda.moe_rows`; CPU decoded weights and scalar F64 dot | Encoded IQ2/Q2 specialized/fallback rows preserve their oracle | Registered normal, overflow, tail and refusal controls pass | Registered per-case bounds; PASS | Expert-row computation and finite validation remain intact |
+| Added grouped NaN input | Nonzero device status | Refused, followed by normal work cleanup | Exact status predicate; PASS | Grouped finite validation remains fail-closed |
+
+These are component oracles and internal numerical-class comparisons, not
+independent upstream whole-model evidence.
+
+### Real producer and lifecycle controls
+
+The discriminating synthetic request contains exactly two messages:
+system `Synthetic YAI provider contract probe. No Case data.` and user
+`Return exactly YAI_OK.` The original request has only `model`, `stream:false`
+and `messages`; its canonical compact-body SHA-256 is
+`933a8e8d95d8947609c30878d49ceb289b1e4683d4ecb2128ed675cd37b4453f`.
+The bounded repeated control additionally sets `max_tokens:4`, `temperature:0`
+and the exact `yvex_engine_generation` (body SHA-256
+`9b78489bc63d49a79f5f012b3dd80180ad7ac5d5533de48e2947e5795c88bb08`).
+No operator Case content is used.
+
+| Control / authority | Expected | Post-repair observation | Result / claim |
+| --- | --- | --- | --- |
+| Small `Reply OK.` producer control | Finite completed response, ≤4 output tokens | HTTP 200; 7 input / 4 output; 17.285 s | PASS; prior small scope preserved |
+| Repeated discriminating producer control | Same completed result and usage | Three HTTP 200 responses, `YAI_OK`, 22 input / 3 output; 30.398, 31.098, 31.156 s | PASS; bounded deterministic repeated execution |
+| Original synthetic text shape | Completed response, no numerical error | HTTP 200, `YAI_OK`, 22 input / 3 output; 39.401 s | PASS; original synthetic class currently completes |
+| Synthetic JSON request | Completed parseable object | HTTP 200; 47 input / 8 output; 68.922 s | PASS; bounded JSON producer completion, not semantic quality |
+| Stale engine generation | No completion published | HTTP 409 `incompatible_state` | PASS; exact generation refusal |
+| Output limit 32,769 | No completion published | HTTP 413 `output_token_capacity_exceeded` | PASS; capacity refusal, not a claim of zero internal admission work |
+| Disconnect during admitted streamed work | Cancellation and retirement | Cancellation counter +1; active work/requests, sessions, clients, leases and queue return to zero; session physical bytes zero | PASS; cleanup observed through typed host/engine/resource owners |
+| Independent request after cancellation | Engine remains usable | HTTP 200, `YAI_OK`; 30.934 s | PASS; bounded recovery |
+
+Idle unload also retires mapped artifact bytes and balances model opens/closes
+before supported host stop/reload. Public output success alone is not a
+numerical oracle: these complete-model controls compose the admitted kernels
+and retained fail-closed checks, not an exhaustive intermediate tensor trace.
+
+### Qualification and fixture ownership
+
+The first source-stable mapped run selected 128 tests and returned 126 PASS,
+1 FAIL, 1 BLOCKED, 0 SKIP and 0 ERROR. Its receipt is
+`64ee4a3bb65b92e66a2c9e1de63a9e49304bc695be32ac776252dee68365d97f`.
+The FAIL was `live.deepseek.generation`: its two-session fixture synchronized
+request starts before preparation, which did not establish simultaneous ready
+operations. It observed no width-two physical population, not invalid model
+numerics. Production scheduler deadlines and assertions were not changed.
+
+The fixture now coordinates prefill readiness and bounded turn quanta through
+the existing generation-turn/progress APIs. It still requires two actual
+session sources, width-two prefill/decode rendezvous, multi-source physical
+batches/worklists and exact serial token, text, state and RNG agreement.
+Three isolated repeated controls passed before adoption. A peer-failure
+control also aborts after committed prefill: cancellation is observed through
+advance, mandatory finish and context/session close retire the turn, and zero
+generated tokens are published. A 60-second fixture barrier guard is not a
+model latency contract.
+
+| Qualification / authority | Expected | Observed | Result / exact claim |
+| --- | --- | --- | --- |
+| Registered complete `live.deepseek.generation` | CPU control; CUDA target-only and DSpark; repeated seeded output; existing lifecycle, acceptance and CLI assertions | PASS, receipt `869c0f11ad0c5e3559c75f3c7ffe0fdc9fec5d8d17343fad701ac764cbce4309`; source stable | Internal composition/lifecycle regression qualified, not upstream conformance |
+| Real two-session fixture | Exact serial semantics and width-two ready populations | Greedy tokens `[223,19,16]`; four width-two rendezvous; 172 multi-source batches, 169 multi-source worklists in the registered replay | PASS; real populations, no timing-based guarantee for arbitrary requests |
+| Final fixture with peer failure | Active turn retires; no sampled/committed output token; subsequent controls execute | `peer_failure_cleanup=pass`, same serial tokens/state; two-source batching assertions intact | PASS; fixture failure cannot strand an active generation turn |
+| Registered `cuda.quant_qtype` | Grouped and paired exact comparisons plus decoded scalar bounds and refusal | PASS, source-stable receipt `ee09575a6b07612f4e4f8d1d12bcf2b82fc157eb224424911409b7d712e1ec31` | Decoded projection regression qualified independently of the missing legacy aggregate |
+| `sanitizer.runtime` and `sanitizer.quant` | ASan/LSan/UBSan host paths refuse faults and retire ownership | Both PASS in the mapped receipt | Host sanitizer scope, not CUDA memory instrumentation |
+| CUDA Compute Sanitizer memcheck | No invalid memory access in finite-dot/expert-row controls | Exit zero, `ERROR SUMMARY: 0 errors` | PASS; bounded device memory scope |
+| Registered runtime characterization | Three admitted attention execution modes, repeated output/replay and exact provenance | PASS in the mapped receipt; no speedup claim | Current-build characterization, not full-model benchmark or optimization promotion |
+| Legacy `cuda.native` aggregate | Exact bootstrap-Q2 artifact available | Missing `DEEPSEEK_ATTENTION_ARTIFACT`; fixture requires 108,285,860,832 bytes, not the current 95,050,210,272-byte mixed artifact | BLOCKED; no substitute or aggregate PASS |
+
+The resolved latest outcomes across the mapped receipt, repaired generation
+replay and explicit qtype control are 128 PASS / 1 BLOCKED / 0 remaining FAIL,
+SKIP or ERROR (129 distinct test identities), **not one green aggregate run**.
+Final fixture/document checks are retained separately. Unchanged numerical
+owners retain the exact kernel source/CUBIN identities above; fixture and
+documentation edits do not manufacture fresh model or sanitizer evidence.
+The Task remains BLOCKED until its mandatory legacy aggregate can run; no
+full-gate downstream-safe claim is made.
+
+These timings are characterization only. Restoring the declared decoded dot
+class is slower on this workload than the first canonical pre-repair service
+(three synthetic controls at 9.458–9.728 s). No performance improvement, SLA,
+calibration, arbitrary-prompt correctness or 17,316-token Case qualification is
+claimed. Public/persisted schemas and protocol v24 are unchanged; A03 remains
+READY and no optimization Task is selected.
+
+Raw build, component and HTTP records, measured executable and kernel payloads
+are retained outside Git under the operator evidence directory
+`yvex-cuda-moe-20260929.L2WMTQ`. The legacy `cuda.native` aggregate requires the
+distinct 108,285,860,832-byte bootstrap-Q2 artifact; the current mixed artifact
+is not a substitute. Missing legacy evidence must remain BLOCKED.
+
+**Product handoff:** the exact model at the existing YVEX inference endpoint is
+safe to requalify with this synthetic workload through the supported YAI
+provider chain. This Task neither retries nor mutates the indeterminate Tech
+Infra Case. Studio → SDK → governed YAI → producer → canonical result still
+requires its own integration evidence.
 
 ## Provider progress
 

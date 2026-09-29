@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define LIVE_GENERATION_MAX_TOKENS 16ull
 #define LIVE_GENERATION_TEXT_BYTES 1024ull
@@ -62,8 +63,8 @@ typedef struct {
 typedef struct {
     pthread_mutex_t mutex;
     pthread_cond_t condition;
-    unsigned int participants, ready;
-    int released, aborted;
+    unsigned int participants, ready, cycle;
+    int aborted, abort_after_prefill;
 } live_start_gate;
 
 typedef struct {
@@ -129,24 +130,37 @@ static int live_trace_policy_read(void)
 
 static int live_start_gate_wait(live_start_gate *gate, yvex_error *err)
 {
-    int aborted;
+    struct timespec deadline = {0};
+    unsigned int cycle;
+    int aborted, status = 0;
     if (!gate || pthread_mutex_lock(&gate->mutex) != 0) {
         yvex_error_set(err, YVEX_ERR_STATE, "generation_live.scheduler",
-                       "scheduled generation start gate is unavailable");
+                       "scheduled generation ready-work gate is unavailable");
         return YVEX_ERR_STATE;
     }
-    gate->ready++;
-    if (gate->ready == gate->participants) {
-        gate->released = 1;
+    if (clock_gettime(CLOCK_REALTIME, &deadline) != 0) {
+        gate->aborted = 1;
         (void)pthread_cond_broadcast(&gate->condition);
     }
-    while (!gate->released && !gate->aborted)
-        (void)pthread_cond_wait(&gate->condition, &gate->mutex);
+    deadline.tv_sec += 60;
+    cycle = gate->cycle;
+    gate->ready++;
+    if (gate->ready == gate->participants) {
+        gate->ready = 0u;
+        gate->cycle++;
+        (void)pthread_cond_broadcast(&gate->condition);
+    }
+    while (cycle == gate->cycle && !gate->aborted && status == 0)
+        status = pthread_cond_timedwait(&gate->condition, &gate->mutex, &deadline);
+    if (status != 0) {
+        gate->aborted = 1;
+        (void)pthread_cond_broadcast(&gate->condition);
+    }
     aborted = gate->aborted;
     (void)pthread_mutex_unlock(&gate->mutex);
     if (aborted) {
         yvex_error_set(err, YVEX_ERR_STATE, "generation_live.scheduler",
-                       "one scheduled peer failed before execution admission");
+                       "one scheduled peer failed or timed out at a ready-work boundary");
         return YVEX_ERR_STATE;
     }
     yvex_error_clear(err);
@@ -161,19 +175,94 @@ static void live_start_gate_abort(live_start_gate *gate)
     (void)pthread_mutex_unlock(&gate->mutex);
 }
 
+static int live_scheduled_cancel(void *opaque)
+{
+    live_start_gate *gate = opaque;
+    int aborted;
+    if (pthread_mutex_lock(&gate->mutex) != 0) return 1;
+    aborted = gate->aborted;
+    (void)pthread_mutex_unlock(&gate->mutex);
+    return aborted;
+}
+
+static int live_scheduled_progress(
+    void *opaque, yvex_runtime_generation_progress_kind kind,
+    unsigned long long completed, unsigned long long total, yvex_error *err)
+{
+    (void)completed;
+    (void)total;
+    if (kind == YVEX_GENERATION_PROGRESS_PREFILL_COMPLETED &&
+        ((live_start_gate *)opaque)->abort_after_prefill) {
+        live_start_gate_abort(opaque);
+        return YVEX_OK;
+    }
+    if (kind == YVEX_GENERATION_PROGRESS_PREFILL_STARTED ||
+        kind == YVEX_GENERATION_PROGRESS_PREFILL_COMPLETED)
+        return live_start_gate_wait(opaque, err);
+    return YVEX_OK;
+}
+
 static int live_generation_turn_run(
     yvex_runtime_generation_context *context,
     const yvex_runtime_generation_turn_request *turn,
     yvex_runtime_generation_token_result *tokens, unsigned long long token_capacity,
     unsigned char *text, unsigned long long text_capacity,
-    yvex_runtime_generation_result *result, yvex_error *err)
+    yvex_runtime_generation_result *result, live_start_gate *gate, yvex_error *err)
 {
+    yvex_error cleanup;
     int active = 0, complete = 0, rc = yvex_runtime_generation_turn_begin(
         context, turn, tokens, token_capacity, text, text_capacity, result, err);
     active = rc == YVEX_OK;
-    while (rc == YVEX_OK && !complete)
-        rc = yvex_runtime_generation_turn_advance(context, 1ull, &complete, err);
-    if (active) rc = yvex_runtime_generation_turn_finish(context, err);
+    while (rc == YVEX_OK && !complete) {
+        if (gate) rc = live_start_gate_wait(gate, err);
+        if (rc == YVEX_OK)
+            rc = yvex_runtime_generation_turn_advance(context, 1ull, &complete, err);
+        if (rc == YVEX_OK && gate) rc = live_start_gate_wait(gate, err);
+    }
+    if (rc != YVEX_OK && gate) {
+        live_start_gate_abort(gate);
+        /* A fixture peer failure outside advance still owns an active turn.
+         * Observe cancellation through advance before mandatory finish. */
+        if (active && !complete)
+            (void)yvex_runtime_generation_turn_advance(context, 1ull, &complete, &cleanup);
+    }
+    if (active) {
+        int finish_rc = yvex_runtime_generation_turn_finish(context, &cleanup);
+        if (rc == YVEX_OK && finish_rc != YVEX_OK) {
+            rc = finish_rc;
+            *err = cleanup;
+        }
+    }
+    return rc;
+}
+
+/* The scheduler batches ready operations, not merely simultaneous requests.
+ * Coordinate two real fixture sessions after preparation and at each bounded
+ * quantum; do not change production coalescing deadlines or result assertions. */
+static int live_scheduled_execute(
+    yvex_runtime_generation_context *context,
+    const yvex_runtime_generation_request *request,
+    unsigned long long context_capacity, unsigned long long maximum_tokens,
+    live_start_gate *gate, live_generation *out, yvex_error *err)
+{
+    unsigned int *prompt_tokens = calloc((size_t)context_capacity, sizeof(*prompt_tokens));
+    yvex_runtime_generation_turn_request turn = {
+        .schema_version = YVEX_RUNTIME_GENERATION_TURN_SCHEMA_V1,
+        .prompt = request, .maximum_new_tokens = maximum_tokens,
+        .prompt_token_ids = prompt_tokens, .prompt_token_capacity = context_capacity,
+        .evidence = &out->evidence, .progress_sink = live_scheduled_progress,
+        .progress_context = gate};
+    int rc;
+    if (!prompt_tokens) {
+        live_start_gate_abort(gate);
+        yvex_error_set(err, YVEX_ERR_NOMEM, "generation_live.scheduler",
+                       "scheduled prompt allocation failed");
+        return YVEX_ERR_NOMEM;
+    }
+    rc = live_generation_turn_run(context, &turn,
+        out->tokens, LIVE_GENERATION_MAX_TOKENS, out->text, sizeof(out->text),
+        &out->result, gate, err);
+    free(prompt_tokens);
     return rc;
 }
 
@@ -427,6 +516,10 @@ static int live_production_request(
     options.sampling_policy = policy;
     options.concurrent_sequences = concurrent_sequences;
     options.compatible_operation_batching = concurrent_sequences > 1ull;
+    if (start_gate) {
+        options.cancel_requested = live_scheduled_cancel;
+        options.cancel_context = start_gate;
+    }
     rc = yvex_runtime_session_open(&session, model, &session_options,
                                    &failure, err);
     if (rc == YVEX_OK)
@@ -434,11 +527,12 @@ static int live_production_request(
             &context, model, session, &options, err);
     if (rc == YVEX_OK)
         out->plan = *yvex_runtime_generation_plan_summary_get(context);
-    if (rc == YVEX_OK && start_gate)
-        rc = live_start_gate_wait(start_gate, err);
-    else if (rc != YVEX_OK && start_gate)
+    if (rc != YVEX_OK && start_gate)
         live_start_gate_abort(start_gate);
-    if (rc == YVEX_OK)
+    if (rc == YVEX_OK && start_gate)
+        rc = live_scheduled_execute(context, request, context_capacity,
+            maximum_tokens, start_gate, out, err);
+    else if (rc == YVEX_OK)
         rc = yvex_runtime_generation_execute(
             context, request, out->tokens, LIVE_GENERATION_MAX_TOKENS,
             out->text, sizeof(out->text), &out->result, &out->evidence, err);
@@ -519,10 +613,10 @@ static int live_production_request(
     }
     yvex_error_clear(&cleanup);
     close_rc = yvex_runtime_generation_context_close(&context, &cleanup);
-    if (rc == YVEX_OK && close_rc != YVEX_OK) { rc = close_rc; *err = cleanup; }
+    if (close_rc != YVEX_OK) { rc = close_rc; *err = cleanup; }
     yvex_error_clear(&cleanup);
     close_rc = yvex_runtime_session_close(&session, &cleanup);
-    if (rc == YVEX_OK && close_rc != YVEX_OK) { rc = close_rc; *err = cleanup; }
+    if (close_rc != YVEX_OK) { rc = close_rc; *err = cleanup; }
     return rc;
 }
 
@@ -996,7 +1090,7 @@ static int live_dspark_cancellation_proof(
     if (rc == YVEX_OK) {
         execute_rc = live_generation_turn_run(
             context, &turn, tokens, LIVE_GENERATION_MAX_TOKENS,
-            text, sizeof(text), &result, err);
+            text, sizeof(text), &result, NULL, err);
         primary = *err;
         rc = execute_rc == YVEX_ERR_CANCELLED ? YVEX_OK : YVEX_ERR_FORMAT;
     }
@@ -1061,7 +1155,7 @@ static int live_dspark_cancellation_proof(
     if (rc == YVEX_OK)
         rc = live_generation_turn_run(
             context, &turn, tokens, LIVE_GENERATION_MAX_TOKENS,
-            text, sizeof(text), &result, err);
+            text, sizeof(text), &result, NULL, err);
     if (rc == YVEX_OK)
         rc = yvex_runtime_generation_result_validate(
             &plan, tokens, LIVE_GENERATION_MAX_TOKENS, text, sizeof(text),
@@ -1658,6 +1752,27 @@ static int live_compatible_operation_batching_proof(
                 out->operation_mismatches);
         }
     }
+    if (rc == YVEX_OK) {
+        int refused_rc;
+        gate.participants = 1u;
+        gate.ready = gate.cycle = 0u;
+        gate.abort_after_prefill = 1;
+        refused_rc = live_production_request(
+            model, YVEX_BACKEND_KIND_CUDA, YVEX_GENERATION_MODE_TARGET_ONLY,
+            policy, &(yvex_runtime_generation_request){
+                .schema_version = YVEX_RUNTIME_GENERATION_SCHEMA_V3,
+                .kind = YVEX_GENERATION_INPUT_TEXT,
+                .text = (const unsigned char *)"Hi", .text_bytes = 2ull,
+                .encode_options = {.maximum_tokens = 16ull}},
+            64ull, maximum_tokens, 2ull, &gate, &results[0], err);
+        if (refused_rc != YVEX_ERR_STATE || !results[0].result.cancelled ||
+            results[0].result.completed || results[0].result.sampled_token_count ||
+            results[0].result.model_committed_token_count) {
+            rc = YVEX_ERR_STATE;
+            yvex_error_set(err, rc, "generation_live.scheduler",
+                           "scheduled peer failure did not retire its active turn");
+        }
+    }
     (void)pthread_cond_destroy(&gate.condition);
     (void)pthread_mutex_destroy(&gate.mutex);
     if (rc == YVEX_OK) yvex_error_clear(err);
@@ -2175,11 +2290,13 @@ int main(int argc, char **argv)
                    YVEX_EXECUTION_BATCH_COMPILED_COMPATIBLE]);
         printf(
             "generation_scheduler compatible_operation_batching=%s "
+            "peer_failure_cleanup=%s "
             "admitted_width=%llu "
             "rendezvous=%llu multi_source_rendezvous=%llu max_rendezvous_width=%llu "
             "physical_batches=%llu multi_source_batches=%llu "
             "max_multi_source_width=%llu max_source_count=%llu "
             "multi_source_worklists=%llu\n",
+            compatible.enabled ? "pass" : "not-run",
             compatible.enabled ? "pass" : "not-run",
             compatible.admitted_maximum_width,
             compatible.rendezvous_steps,

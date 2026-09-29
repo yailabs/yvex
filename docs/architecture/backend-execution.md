@@ -54,6 +54,12 @@ physical computational or package plan from dimensions. An explicit CUDA
 request refuses when no admitted implementation exists. `auto` may retry only
 an already-admitted numerically equivalent strategy.
 
+Decoded-input grouped and paired projections retain the ordinary projection's
+source-order F64 accumulation and final F32/BF16 publication. Grouping changes launch
+topology, not the numerical class; a finite F32 warp reduction is not an
+equivalent substitute. Q8 activation keeps its separately admitted reduction.
+Non-finite results still refuse through the device-status completion owner.
+
 Exact MiniMax output-linear requirements remain source/package numerical facts.
 Runtime component specialization resolves them to exact generic linear
 execution records; generic CUDA consumes those records without MiniMax switches

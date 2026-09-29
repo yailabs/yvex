@@ -1505,6 +1505,18 @@ static int quant_cuda_grouped_attention_rows(yvex_backend *backend)
                      expected[input_row * ROWS + row]) <=
                     1e-5 * (1.0 + fabs((double)expected[input_row * ROWS + row])),
                 "grouped attention rows match the independent exact reference");
+    printf("grouped decoded rows: groups=%u inputs=%u values=%u bit_mismatches=0 "
+           "CPU_tolerance=1e-5*(1+abs(reference))\n", GROUPS, INPUT_ROWS, INPUT_ROWS * ROWS);
+    vectors[0] = NAN;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, input, vectors, sizeof(vectors), &err) == YVEX_OK &&
+        operations->matvec_grouped(&work, &weight, yvex_cuda_tensor_ptr(resident),
+            GROUPS, GROUP_ROWS, INPUT_ROWS, yvex_cuda_tensor_ptr(input), GROUPS * WIDTH,
+            yvex_cuda_tensor_ptr(output), ROWS, 0, yvex_cuda_tensor_ptr(status),
+            "cuda.test.grouped-attention-invalid", &attention_failure, &err) == YVEX_OK &&
+        yvex_cuda_launch_synchronize(backend, YVEX_BACKEND_VARIANT_ATTENTION_ENCODED,
+            &device_wide, "cuda.test.grouped-attention-invalid", &err) == YVEX_OK &&
+        yvex_backend_tensor_read(backend, status, &status_value, sizeof(status_value), &err) == YVEX_OK &&
+        status_value != 0, "grouped decoded rows refuse a nonfinite input");
     YVEX_TEST_ASSERT(yvex_cuda_work_cleanup(&work, &err) == YVEX_OK &&
                          yvex_backend_resident_detach(backend, &err) == YVEX_OK &&
                          yvex_backend_tensor_release(backend, &status, &err) == YVEX_OK &&

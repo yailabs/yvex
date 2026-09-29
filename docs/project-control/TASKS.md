@@ -19,6 +19,15 @@ Current phase: **documentation qualified; selected A03 execution is READY**.
 The next selected implementation boundary remains **A03 encoder-decoder**;
 it is READY, with no implementation started by this documentation Task.
 
+The independently authorized YVEX repair
+`RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` has a qualified bounded producer and
+component repair, but its full mandatory QA gate is BLOCKED by the unavailable
+legacy bootstrap-Q2 attention artifact. The historical deleted-binary failure
+does not reproduce on the identified canonical build; its cause is not inferred.
+[Dated evidence](../evaluation/retained-observations.md#deepseek-cuda-producer-reconciliation-2026-09-29)
+separates that observation from the demonstrated decoded-projection defects,
+numerical repair, refusal and cleanup. A03 remains READY.
+
 An independently authorized cross-repository Task Pack,
 `PLATFORM.SDK.PARITY.REFOUNDATION.0`, is in progress for public client/parity
 integration. Its first YVEX slice projects the exact remote-management v1
@@ -29,10 +38,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 34 | 29 | 0 | 1 | 4 |
+| 35 | 29 | 0 | 1 | 5 |
 <!-- task-counts:end -->
 
-**29/34 selected Tasks complete.** This denominator includes the significant
+**29/35 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence and two independent completed interface Tasks. It is
 not YVEX product completion. Research candidates are not selected Tasks.
 
@@ -145,6 +154,7 @@ already completed correction at `6ae29730`; it does not invent a historical ID.
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
 | `PROJECT.DOCS.YVEX.REFOUNDATION.2` | Qualify the YVEX documentation architecture | Closed | ✅ COMPLETE | [Qualification](../evaluation/documentation-migration.md): coverage, Markdown/Mermaid, HTML/PDF, benchmarks and mapped QA |
+| `RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` | Restore bounded DeepSeek CUDA/MoE numerical correctness | P1 | ⛔ BLOCKED | Bounded producer/component repair qualified; mandatory `cuda.native` needs the distinct unavailable bootstrap-Q2 artifact; [evidence](../evaluation/retained-observations.md#deepseek-cuda-producer-reconciliation-2026-09-29) |
 | `SPECTRUM.FLAN.T5.ENCODER.DECODER.0` | A03 exact encoder-decoder execution | Next selected | ⬜ READY | Immutable target, retained encoder state, cross-attention, independent numerics and lifecycle evidence |
 
 The old ROADMAP called A03 ACTIVE to identify the selected next boundary. READY
