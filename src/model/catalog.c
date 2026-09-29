@@ -5,6 +5,7 @@
  * separate so list projections cannot silently promote one lifecycle stage into another.
  */
 
+#define _XOPEN_SOURCE 700
 #define _POSIX_C_SOURCE 200809L
 
 #include <yvex/catalog.h>

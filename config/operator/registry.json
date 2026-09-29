@@ -115,6 +115,10 @@
       "session.state.save",
       "session.show"
     ],
+    "remote_management_operations": [
+      "device.describe",
+      "host.status"
+    ],
     "renderers": [
       "completion",
       "discovery",

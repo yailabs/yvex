@@ -30,6 +30,16 @@ have different trust and compatibility boundaries.
 | Application provider | [OpenAI adapter](../contracts/openai-compatibility.md) | Bounded compatibility, not universal API parity |
 | Remote operator | [Remote management](../contracts/remote-management.md) | Read-only enrolled identity/status bootstrap |
 
+The public platform SDK in
+[`yailabs/yai-sdk`](https://github.com/yailabs/yai-sdk) now has a separate
+`yvex-sdk` Rust client domain for those two remote-management reads. The SDK
+does not own source/model/runtime truth. YVEX's canonical operator registry
+exports the exact read-only remote operation set, and producer-vs-client parity
+is checked without exposing the private local Unix wire. YAI may consume
+producer facts through its bounded provider adapter; Studio may inspect
+YVEX-owned operator facts directly. Case-affecting actions still cross YAI
+admission. There is no remote model/lifecycle mutation contract in this slice.
+
 ## YAI boundary
 
 YAI owns Case meaning, memory, workflow, authority and effects. YVEX owns source,

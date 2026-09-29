@@ -72,6 +72,7 @@ CATALOG_KEYS = {
     "completion_providers",
     "default_providers",
     "protocol_operations",
+    "remote_management_operations",
     "renderers",
     "validators",
 }
@@ -412,6 +413,16 @@ def validate_registry(registry: dict[str, Any]) -> list[dict[str, Any]]:
     validators = catalog(registry, "validators")
     renderers = catalog(registry, "renderers")
     protocols = catalog(registry, "protocol_operations")
+    remote_management_operations = catalog(registry, "remote_management_operations")
+    if not all(IDENTIFIER.fullmatch(operation) for operation in remote_management_operations):
+        fail("catalogs.remote_management_operations", "contains an invalid operation ID")
+    management_source = pathlib.Path(__file__).resolve().parents[1] / "src/cli/io/management.c"
+    implemented_management_operations = set(re.findall(
+        r'!strcmp\(request->operation, "([a-z][a-z0-9.]*)"\)',
+        management_source.read_text(encoding="utf-8"),
+    ))
+    if remote_management_operations != implemented_management_operations:
+        fail("catalogs.remote_management_operations", "remote management operation mismatch with producer")
     defaults = catalog(registry, "default_providers")
     completion_providers = catalog(registry, "completion_providers")
     source = registry.get("operations")

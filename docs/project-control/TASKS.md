@@ -19,6 +19,13 @@ Current phase: **documentation qualified; selected A03 execution is READY**.
 The next selected implementation boundary remains **A03 encoder-decoder**;
 it is READY, with no implementation started by this documentation Task.
 
+An independently authorized cross-repository Task Pack,
+`PLATFORM.SDK.PARITY.REFOUNDATION.0`, is in progress for public client/parity
+integration. Its first YVEX slice projects the exact remote-management v1
+operation set from the existing registry, qualifies the SDK consumer against
+the real isolated SSH fixture, and converges published development onto
+`main`. It does not make remote mutations, model generation or A03 complete.
+
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |

@@ -19,7 +19,7 @@ publication: {html: true, pdf: true, index: true}
   <a href="#quick-start"><img src="https://img.shields.io/badge/language-C11-8D5CF5?style=flat&amp;labelColor=30363d" alt="Language: C11"></a>
   <a href="docs/architecture/backend-execution.md"><img src="https://img.shields.io/badge/backends-CPU_%2F_CUDA-8D5CF5?style=flat&amp;labelColor=30363d" alt="Backends: CPU / CUDA"></a>
   <a href="docs/project-control/STATUS.md"><img src="https://img.shields.io/badge/status-in%20development-8D5CF5?style=flat&amp;labelColor=30363d" alt="Status: in development"></a>
-  <a href="https://github.com/yailabs/yvex/actions/workflows/qa.yml?query=branch%3Amodels2"><img src="https://img.shields.io/github/actions/workflow/status/yailabs/yvex/qa.yml?branch=models2&amp;label=QA%20%28models2%29&amp;style=flat&amp;labelColor=30363d" alt="QA status on models2"></a>
+  <a href="https://github.com/yailabs/yvex/actions/workflows/qa.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/yailabs/yvex/qa.yml?branch=main&amp;label=QA%20%28main%29&amp;style=flat&amp;labelColor=30363d" alt="QA status on main"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8D5CF5?style=flat&amp;labelColor=30363d" alt="License: MIT"></a>
 </p>
 

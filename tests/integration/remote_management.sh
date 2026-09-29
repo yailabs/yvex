@@ -104,6 +104,18 @@ second=$(ssh_request "$fixture_dir/peer-b")
 [[ $first == *'"status":"ok"'* && $first == *"$device"* &&
    $first == *"$peer_a"* ]]
 [[ $second == *'"status":"ok"'* && $second == *"$peer_b"* ]]
+if [[ -n ${YVEX_SDK_MANAGEMENT_EXAMPLE:-} ]]; then
+    sdk_device=$("$YVEX_SDK_MANAGEMENT_EXAMPLE" "$fixture_dir/known_hosts" \
+        "$fixture_dir/peer-a" 127.0.0.1 "$port" "$(id -un)" \
+        "$device" "$peer_a" device.describe)
+    [[ $sdk_device == *"$device"* && $sdk_device == *"$peer_a"* ]]
+    if "$YVEX_SDK_MANAGEMENT_EXAMPLE" "$fixture_dir/known_hosts" \
+        "$fixture_dir/peer-a" 127.0.0.1 "$port" "$(id -un)" \
+        "$peer_b" "$peer_a" device.describe >/dev/null 2>&1; then
+        echo 'SDK accepted a wrong expected device identity' >&2
+        exit 1
+    fi
+fi
 [[ $(ssh_request "$fixture_dir/peer-a") == "$first" ]]
 if "$repo_dir/yvex" management enroll "$fixture_dir/unknown.pub" \
     "$fixture_dir/authorized_keys" "$fixture_dir/host.pub" \
@@ -134,6 +146,12 @@ request='{"schema":"yvex.management.request.v1","request_id":"111111111111111111
 request='{"schema":"yvex.management.request.v1","request_id":"2222222222222222222222222222222222222222222222222222222222222222","operation":"host.status"}'
 stopped=$(ssh_request "$fixture_dir/peer-a")
 [[ $stopped == *'"host_state":"stopped"'* ]]
+if [[ -n ${YVEX_SDK_MANAGEMENT_EXAMPLE:-} ]]; then
+    sdk_stopped=$("$YVEX_SDK_MANAGEMENT_EXAMPLE" "$fixture_dir/known_hosts" \
+        "$fixture_dir/peer-a" 127.0.0.1 "$port" "$(id -un)" \
+        "$device" "$peer_a" host.status)
+    [[ $sdk_stopped == *'"state":"stopped"'* ]]
+fi
 ssh -M -N -f -S "$fixture_dir/control" -T -F /dev/null \
     -o BatchMode=yes -o IdentitiesOnly=yes \
     -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$fixture_dir/known_hosts" \
@@ -148,6 +166,13 @@ done
 running=$(ssh_request "$fixture_dir/peer-a")
 [[ $running == *'"host_state":"running"'* &&
    $running == *'"engine_count":0'* ]]
+if [[ -n ${YVEX_SDK_MANAGEMENT_EXAMPLE:-} ]]; then
+    sdk_running=$("$YVEX_SDK_MANAGEMENT_EXAMPLE" "$fixture_dir/known_hosts" \
+        "$fixture_dir/peer-a" 127.0.0.1 "$port" "$(id -un)" \
+        "$device" "$peer_a" host.status)
+    [[ $sdk_running == *'"state":"running"'* &&
+       $sdk_running == *'"engine_count":0'* ]]
+fi
 kill -INT "$host_pid"
 wait "$host_pid"
 host_pid=
@@ -200,6 +225,13 @@ printf '[127.0.0.1]:%s %s\n' "$port" "$(<"$fixture_dir/unknown.pub")" \
     >"$fixture_dir/known_hosts"
 if ssh_request "$fixture_dir/peer-b" >/dev/null 2>&1; then
     echo 'changed host identity unexpectedly accepted' >&2
+    exit 1
+fi
+if [[ -n ${YVEX_SDK_MANAGEMENT_EXAMPLE:-} ]] &&
+   "$YVEX_SDK_MANAGEMENT_EXAMPLE" "$fixture_dir/known_hosts" \
+       "$fixture_dir/peer-b" 127.0.0.1 "$port" "$(id -un)" \
+       "$device" "$peer_b" host.status >/dev/null 2>&1; then
+    echo 'SDK accepted a changed SSH host key' >&2
     exit 1
 fi
 printf 'PASS remote_management address=%s:%s device=%s clients=2 host=stopped\n' \

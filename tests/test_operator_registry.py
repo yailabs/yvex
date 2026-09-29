@@ -435,6 +435,11 @@ def test_completion() -> None:
 
 def main() -> int:
     registry = read_registry()
+    mutation_failure(
+        registry,
+        lambda candidate: candidate["catalogs"]["remote_management_operations"].append("model.load"),
+        "remote management operation mismatch with producer",
+    )
     test_generation(registry)
     test_refusals(registry)
     test_product_surface(registry)
