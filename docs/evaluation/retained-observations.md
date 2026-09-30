@@ -41,6 +41,18 @@ or SKIP, with `source_stability.valid=true`. Subsequent closure edits affect
 only documentation/project control and receive separate documentation validation.
 Raw receipts and PTY captures remain outside tracked payloads.
 
+The first hosted CI run at `356d924c` reports 116 PASS and two FAIL. The
+documentation surface checker still called the old root executable instead of
+`YVEX_BIN` and required flat advanced-help lines; that local pass did not qualify
+the new help projection. The repaired checker consumes the selected binary and
+joins parent/leaf syntax, with negative command/argument identity controls.
+The source-acquisition failure had no assertion context. Independently holding
+the legitimate provider-partial-before-metadata stage reproduces its existing
+`completed_files == 4` assertion failure. Qualification now waits for one exact
+snapshot containing both facts and deliberately exercises that early stage;
+it neither changes progress semantics nor relaxes the expected values. This
+demonstrated test race is not retroactively asserted as the unlogged CI cause.
+
 REPLAI started at `5c8594923f8153de347ad6f8a96d0db8382080ee`.
 Independent producer qualification used
 `19845f5ae24fc0b9589a2621d03a8d1ba1ad47c2`, tree

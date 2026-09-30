@@ -26,7 +26,10 @@ if not field:
             if heading:
                 parent = heading[1]
             elif parent and re.match(r"^    [a-z]", line):
-                if parent + ' ' + line.strip().split()[0] == wanted:
+                combined = parent + ' ' + line.strip()
+                if combined.startswith(wanted) and (
+                    len(combined) == len(wanted) or combined[len(wanted)].isspace()
+                ):
                     raise SystemExit(0)
     for index, line in enumerate(lines):
         match = re.fullmatch(r"[ \t]*[A-Za-z_][A-Za-z0-9_. -]*?(?:[ \t]*:[ \t]*|[ \t]{2,})(.*)", line)
