@@ -29,27 +29,25 @@ extern "C" __global__ void yvex_attention_bf16_pair(
     const float *input, float *first_out, float *second_out, int *status)
 {
     unsigned int lane = threadIdx.x & 31u;
-    unsigned int warp = threadIdx.x >> 5u;
-    unsigned long long row_index = (unsigned long long)blockIdx.x * 8ull + warp;
+    unsigned long long row_index =
+        (unsigned long long)blockIdx.x * blockDim.x + threadIdx.x;
     float first_sum = 0.0f, second_sum = 0.0f;
     if (!status) return;
     if (!first || !second || !first_row_bytes || !second_row_bytes ||
         !row_width || !row_count || !input || !first_out || !second_out ||
-        blockDim.x != 256u) {
+        blockDim.x == 0u) {
         if (!lane) atomicCAS(status, 0, 2);
         return;
     }
     if (*status || row_index >= row_count) return;
     first += row_index * first_row_bytes;
     second += row_index * second_row_bytes;
-    if (!lane) {
-        first_sum = qtype_dot_recover_f64(first, input, row_width, YVEX_GGUF_QTYPE_BF16);
-        second_sum = qtype_dot_recover_f64(second, input, row_width, YVEX_GGUF_QTYPE_BF16);
-        if (!isfinite(first_sum) || !isfinite(second_sum)) atomicCAS(status, 0, 1);
-        else {
-            first_out[row_index] = first_sum;
-            second_out[row_index] = second_sum;
-        }
+    first_sum = qtype_dot_recover_f64(first, input, row_width, YVEX_GGUF_QTYPE_BF16);
+    second_sum = qtype_dot_recover_f64(second, input, row_width, YVEX_GGUF_QTYPE_BF16);
+    if (!isfinite(first_sum) || !isfinite(second_sum)) atomicCAS(status, 0, 1);
+    else {
+        first_out[row_index] = first_sum;
+        second_out[row_index] = second_sum;
     }
 }
 

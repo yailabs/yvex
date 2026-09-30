@@ -60,6 +60,17 @@ topology, not the numerical class; a finite F32 warp reduction is not an
 equivalent substitute. Q8 activation keeps its separately admitted reduction.
 Non-finite results still refuse through the device-status completion owner.
 
+Independent ordered decoded dots occupy independent CUDA threads rather than
+warps whose other lanes immediately return. Generic launch geometry maps each
+row/input pair once, bounds the task product and covers partial tiles; grouped
+projections preserve group and input strides. Paired BF16 projections likewise
+assign both dots for one row to one thread. Each dot still uses the canonical
+source-order F64 helper and the same publication cast. The separately admitted
+Q8 reduction and narrow block-owned F32 class are unchanged. This changes neither
+buffers nor runtime state, synchronization, routing populations or numerical
+validation. [Bounded GB10 observations](../evaluation/retained-observations.md#deepseek-gb10-optimization-2026-09-30)
+qualify the complete-request benefit, separately from component timings.
+
 Exact MiniMax output-linear requirements remain source/package numerical facts.
 Runtime component specialization resolves them to exact generic linear
 execution records; generic CUDA consumes those records without MiniMax switches

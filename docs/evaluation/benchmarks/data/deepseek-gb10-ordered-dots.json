@@ -1,0 +1,207 @@
+{
+  "schema": "yvex.evaluation.observation.v1",
+  "id": "deepseek-gb10-ordered-dots",
+  "title": "DeepSeek GB10 ordered-dot optimization",
+  "kind": "characterization",
+  "context": {
+    "source_commit": "a73c887e104d5427ecaf3e03104b365af8dc11fb",
+    "source_tree": "b3e121b3614223f2759d16c904ac1acd8b4a5a13",
+    "source_stability": "frozen",
+    "date": "2026-09-29",
+    "run_id": "yvex-gb10-opt-20260929.IU93gg",
+    "model": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
+    "model_revision": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "artifact_identity": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "binding_identity": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1",
+    "backend": "CUDA SM121",
+    "device": "NVIDIA GB10, GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc, 580.159.03",
+    "runtime_configuration": {
+      "context_capacity": 32768,
+      "prefill_chunk_tokens": 64,
+      "strategy": "speculative DSpark",
+      "engine_generation": 1,
+      "workers": 1,
+      "physical_sequence_width": 1,
+      "temperature": 0,
+      "max_tokens": 4,
+      "prefix_reuse": false,
+      "profiler_collecting_during_samples": false,
+      "source_variants": {
+        "baseline": {
+          "source": {
+            "delta": "c448359289b7076ffcdd2b886a1afe25b9a2f20ddcc5ad566d6d5c2cc5bc0fdd",
+            "executable": "0dfc3a256100d2b66ac48ee98b1045512017026c4c0aaa94b13214b96369a82d",
+            "head": "a73c887e104d5427ecaf3e03104b365af8dc11fb",
+            "tree": "b3e121b3614223f2759d16c904ac1acd8b4a5a13"
+          },
+          "compiled_source_provenance": {
+            "commit": "a73c887e104d5427ecaf3e03104b365af8dc11fb",
+            "tree": "b3e121b3614223f2759d16c904ac1acd8b4a5a13",
+            "state": "clean",
+            "delta": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "build_identity": "9d7a43bc7b783833ae12a0d7672ffb86866a32b094a3e5241a47509d21bb913c",
+          "raw_evidence_sha256": "d6fb0eb7410358b9ce83ba2597213ef6514bc53b8ac5134ff37d6d696e84d409",
+          "samples": [
+            {
+              "http_s": 30.724882501061074,
+              "prefill_s": 22.1816542,
+              "ttft_turn_s": 27.7490162,
+              "decode_including_first_s": 5.567792799999999,
+              "peak_process_rss_bytes": 100538970112
+            },
+            {
+              "http_s": 30.655731988954358,
+              "prefill_s": 22.1888359,
+              "ttft_turn_s": 27.7494649,
+              "decode_including_first_s": 5.561126299999998,
+              "peak_process_rss_bytes": 100557361152
+            },
+            {
+              "http_s": 30.77760680799838,
+              "prefill_s": 22.1889779,
+              "ttft_turn_s": 27.7505986,
+              "decode_including_first_s": 5.5622452,
+              "peak_process_rss_bytes": 100571156480
+            }
+          ]
+        },
+        "candidate": {
+          "source": {
+            "delta": "c092b6a5c97b12b7027cb13dedd502ba69d25eb7269796d449b37f568cd6a66f",
+            "executable": "91215e612e4bd753683e84277b77c6cbcf3d26b35e3f5e11be9a313052f388c2",
+            "head": "a73c887e104d5427ecaf3e03104b365af8dc11fb",
+            "tree": "b3e121b3614223f2759d16c904ac1acd8b4a5a13"
+          },
+          "compiled_source_provenance": {
+            "commit": "a73c887e104d5427ecaf3e03104b365af8dc11fb",
+            "tree": "b3e121b3614223f2759d16c904ac1acd8b4a5a13",
+            "state": "dirty",
+            "delta": "c092b6a5c97b12b7027cb13dedd502ba69d25eb7269796d449b37f568cd6a66f"
+          },
+          "build_identity": "2d1732de0a798e91e8b95f7fa689ff037803f67ac6d0914742d2a09b986f22f6",
+          "raw_evidence_sha256": "0de7e300ecac0e9a78756ca2c7dbd6867676171199bf0bd1d97e4771305d1fee",
+          "samples": [
+            {
+              "http_s": 8.050025193020701,
+              "prefill_s": 4.19133819,
+              "ttft_turn_s": 5.04579398,
+              "decode_including_first_s": 0.8548958600000001,
+              "peak_process_rss_bytes": 100540637184
+            },
+            {
+              "http_s": 8.370607270975597,
+              "prefill_s": 4.19775735,
+              "ttft_turn_s": 5.04885156,
+              "decode_including_first_s": 0.8516154299999998,
+              "peak_process_rss_bytes": 100558675968
+            },
+            {
+              "http_s": 8.54981656500604,
+              "prefill_s": 4.20953001,
+              "ttft_turn_s": 5.06589465,
+              "decode_including_first_s": 0.8569786200000005,
+              "peak_process_rss_bytes": 100571152384
+            }
+          ]
+        }
+      },
+      "candidate_cubins": {
+        "kernels": "d524462115903c9752fb0bbbc2900290bb75fc6168bc48ddd099442f59fdc607",
+        "attention_kernels": "bd773a682763f4fe1c171a71780ce2d4724c9d12141fc30e65d49d7da7984271"
+      },
+      "request_sha256": "332d93a1d8f9578b2183553b0f1664e23f5adf7f6ba28ddd4799358a85c79b5f",
+      "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+      "runtime_model_identity": "cf8ebc69dae8e38f96a47418e8efcebdc47bc4ed05bac76d6974ccc1379e0e7e",
+      "specialization_identity": "7604985ea75253a9338877e3867d2f18daac3be036ffa66babe84aca8ae2554e"
+    },
+    "workload": "Synthetic system: Synthetic YAI provider contract probe. No Case data.; user: Return exactly YAI_OK. Exact compact bodies and telemetry retained outside Git.",
+    "warm_state": "warm",
+    "concurrency": 1,
+    "sequence_lengths": {
+      "input": 22,
+      "committed_output": 3
+    },
+    "memory": {
+      "model_mapped_bytes": 95050210272,
+      "idle_session_physical_bytes": 0,
+      "physical_residency_known": false,
+      "new_backend_buffer_allocations": 0,
+      "turn_peak_workspace_bytes": null
+    },
+    "limitations": [
+      "Three equivalent warm fresh-session observations per variant, not a release benchmark or SLA.",
+      "Each measured worktree fingerprint is frozen. The baseline executable was built from clean a73c887e; its measured worktree differs only by Task resumption documentation. The candidate executable binds the measured eight-path dirty delta, including the generic CUDA repair.",
+      "The six scopes overlap and must not be summed. First-token clock starts at the turn, whereas HTTP includes request admission and retirement.",
+      "Nsight graph-node diagnostic primers are excluded from these measurements; profiling was not collecting during the samples.",
+      "No 17K/32K input qualification, arbitrary model-quality claim or cross-product Case qualification.",
+      "The separately retained 32-output-token control characterizes five speculative cycles, not asymptotic sustained decode.",
+      "No physical GPU residency or turn-peak workspace measurement is inferred from mapped bytes, process RSS or idle zero state.",
+      "The mandatory legacy bootstrap-Q2 cuda.native aggregate remains BLOCKED; bounded component/live evidence is not a green aggregate."
+    ],
+    "recorded_from": "[Retained observation](../../retained-observations.md#deepseek-gb10-optimization-2026-09-30)"
+  },
+  "measurements": [
+    {
+      "id": "baseline-prefill_s",
+      "label": "Baseline Prefill",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 22.18648933333333,
+      "samples": 3,
+      "statistic": "arithmetic mean",
+      "scope": "prefill complete; preparation remains included; 22 input / 3 output"
+    },
+    {
+      "id": "baseline-ttft_turn_s",
+      "label": "Baseline First token",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 27.749693233333332,
+      "samples": 3,
+      "statistic": "arithmetic mean",
+      "scope": "from generation turn start, not HTTP ingress; 22 input / 3 output"
+    },
+    {
+      "id": "baseline-http_s",
+      "label": "Baseline HTTP request",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 30.71940709933794,
+      "samples": 3,
+      "statistic": "arithmetic mean",
+      "scope": "complete nonstreaming HTTP exchange; 22 input / 3 output"
+    },
+    {
+      "id": "candidate-prefill_s",
+      "label": "Candidate Prefill",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 4.19954185,
+      "samples": 3,
+      "statistic": "arithmetic mean",
+      "scope": "prefill complete; preparation remains included; 22 input / 3 output"
+    },
+    {
+      "id": "candidate-ttft_turn_s",
+      "label": "Candidate First token",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 5.053513396666666,
+      "samples": 3,
+      "statistic": "arithmetic mean",
+      "scope": "from generation turn start, not HTTP ingress; 22 input / 3 output"
+    },
+    {
+      "id": "candidate-http_s",
+      "label": "Candidate HTTP request",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 8.323483009667447,
+      "samples": 3,
+      "statistic": "arithmetic mean",
+      "scope": "complete nonstreaming HTTP exchange; 22 input / 3 output"
+    }
+  ]
+}

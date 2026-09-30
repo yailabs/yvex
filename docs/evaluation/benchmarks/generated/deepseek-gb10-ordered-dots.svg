@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 508" role="img" aria-labelledby="title desc">
+<title id="title">DeepSeek GB10 ordered-dot optimization</title>
+<desc id="desc">characterization; Three equivalent warm fresh-session observations per variant, not a release benchmark or SLA.. Values are printed beside each bar.</desc>
+<rect width="1000" height="508" rx="12" fill="#faf8ff"/>
+<g font-family="Arial, sans-serif" fill="#231735">
+<text x="30" y="38" font-size="23" font-weight="700">DeepSeek GB10 ordered-dot optimization</text>
+<text x="30" y="67" font-size="16">CHARACTERIZATION · s · not an automatic capability promotion</text>
+<text x="30" y="129" font-size="18">Baseline Prefill</text>
+<rect x="330" y="110" width="339.448" height="27" rx="4" fill="#7541ba"/>
+<text x="689.448" y="129" font-size="17">22.1865</text>
+<text x="30" y="187" font-size="18">Baseline First token</text>
+<rect x="330" y="168" width="424.564" height="27" rx="4" fill="#7541ba"/>
+<text x="774.564" y="187" font-size="17">27.7497</text>
+<text x="30" y="245" font-size="18">Baseline HTTP request</text>
+<rect x="330" y="226" width="470.000" height="27" rx="4" fill="#7541ba"/>
+<text x="820.000" y="245" font-size="17">30.7194</text>
+<text x="30" y="303" font-size="18">Candidate Prefill</text>
+<rect x="330" y="284" width="64.252" height="27" rx="4" fill="#7541ba"/>
+<text x="414.252" y="303" font-size="17">4.19954</text>
+<text x="30" y="361" font-size="18">Candidate First token</text>
+<rect x="330" y="342" width="77.318" height="27" rx="4" fill="#7541ba"/>
+<text x="427.318" y="361" font-size="17">5.05351</text>
+<text x="30" y="419" font-size="18">Candidate HTTP request</text>
+<rect x="330" y="400" width="127.347" height="27" rx="4" fill="#7541ba"/>
+<text x="477.347" y="419" font-size="17">8.32348</text>
+</g></svg>

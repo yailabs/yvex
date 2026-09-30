@@ -887,7 +887,7 @@ int yvex_cuda_transformer_linear_release(
 int yvex_cuda_qtype_matvec_geometry(
     unsigned long long rows, unsigned long long row_width,
     unsigned long long input_rows, unsigned int qtype,
-    int block_row_eligible, unsigned int *grid, unsigned int *block,
+    int block_row_eligible, int decoded_input, unsigned int *grid, unsigned int *block,
     int *block_row)
 {
     unsigned long long blocks, groups, tiles;
@@ -901,6 +901,17 @@ int yvex_cuda_qtype_matvec_geometry(
         *grid = (unsigned int)(rows * input_rows);
         *block = CUDA_QTYPE_MATVEC_BLOCK;
         *block_row = 1;
+        return 1;
+    }
+    /* Independent ordered dots occupy threads, not otherwise idle warps.
+     * Keep the narrow block-owned class above and Q8 reduction below intact. */
+    if (decoded_input) {
+        if (!yvex_core_u64_mul(rows, input_rows, &blocks) ||
+            blocks > ULLONG_MAX - 31ull) return 0;
+        blocks = (blocks + 31ull) / 32ull;
+        if (!blocks || blocks > UINT_MAX) return 0;
+        *grid = (unsigned int)blocks;
+        *block = 32u;
         return 1;
     }
     if (input_rows <= 8ull) {
@@ -1511,7 +1522,7 @@ static int cuda_encoded_matvec(
         (additive && !yvex_core_u64_add(activation_bytes, output_bytes,
                                         &activation_bytes)) ||
         !yvex_cuda_qtype_matvec_geometry(
-            row_count, row_width, input_rows, qtype, !split_input,
+            row_count, row_width, input_rows, qtype, !split_input, !q8_path && !split_input,
             &matvec_grid, &matvec_block, &block_row) ||
         row_count > ULLONG_MAX / row_bytes || row_count * row_bytes != encoded_bytes ||
         !backend_tensor_owner_is(backend, input) || !input->is_written ||

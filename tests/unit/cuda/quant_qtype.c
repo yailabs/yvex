@@ -1314,7 +1314,7 @@ static int quant_cuda_bf16_projection_pair(yvex_backend *backend)
                           &row_width, &rows, &input_ptr, &first_out_ptr,
                           &second_out_ptr, &status_ptr};
         rc = operations->launch(&work, work.state->attention_bf16_pair_function,
-                                grid, 256u, 0u, params, "cuda.test.bf16-pair",
+                                grid, 8u, 0u, params, "cuda.test.bf16-pair",
                                 &failure, &err);
     }
     if (rc == YVEX_OK)
@@ -1351,7 +1351,7 @@ static int quant_cuda_bf16_projection_pair(yvex_backend *backend)
 
 static int quant_cuda_grouped_attention_rows(yvex_backend *backend)
 {
-    enum { GROUPS = 8, GROUP_ROWS = 16, INPUT_ROWS = 5, ROWS = 128, WIDTH = 256 };
+    enum { GROUPS = 8, GROUP_ROWS = 17, INPUT_ROWS = 9, ROWS = 136, WIDTH = 256 };
     const yvex_cuda_attention_operations *operations =
         yvex_cuda_attention_operations_get();
     yvex_backend_attention_weight weight = {0};
@@ -1458,7 +1458,7 @@ static int quant_cuda_grouped_attention_rows(yvex_backend *backend)
                 backend, output, actual, sizeof(actual), &err) == YVEX_OK,
         "grouped attention rows complete without a device-wide barrier");
     rc = yvex_cuda_qtype_matvec_geometry(
-             GROUP_ROWS, WIDTH, INPUT_ROWS, YVEX_GGUF_QTYPE_MXFP4, 1,
+             GROUP_ROWS, WIDTH, INPUT_ROWS, YVEX_GGUF_QTYPE_MXFP4, 1, 1,
              &matvec_grid, &matvec_block, &block_row) && !block_row
              ? YVEX_OK
              : YVEX_ERR_BOUNDS;
@@ -1640,7 +1640,7 @@ static int quant_cuda_mxfp4_q8_shared_rows(yvex_backend *backend, unsigned int i
         "production attention selects two-launch exact MXFP4 shared-row execution");
     YVEX_TEST_ASSERT(
         yvex_cuda_qtype_matvec_geometry(
-            ROWS, WIDTH, input_count, YVEX_GGUF_QTYPE_MXFP4, 1,
+            ROWS, WIDTH, input_count, YVEX_GGUF_QTYPE_MXFP4, 1, 0,
             &grid, &block, &block_row) && !block_row,
         "ordinary MXFP4 geometry remains available as the numerical oracle");
     {
@@ -3601,22 +3601,31 @@ int yvex_cuda_test_quant_qtype(void)
                      "CUDA qtype parity backend opens");
     YVEX_TEST_ASSERT(
         yvex_cuda_qtype_matvec_geometry(
-            24ull, 16384ull, 3ull, YVEX_GGUF_QTYPE_F32, 1,
+            24ull, 16384ull, 3ull, YVEX_GGUF_QTYPE_F32, 1, 1,
             &matvec_grid, &matvec_block, &block_row) &&
             matvec_grid == 72u && matvec_block == 256u && block_row,
         "wide narrow F32 projection assigns one reduction block per row and input");
     YVEX_TEST_ASSERT(
         yvex_cuda_qtype_matvec_geometry(
-            24ull, 16384ull, 3ull, YVEX_GGUF_QTYPE_F32, 0,
+            24ull, 16384ull, 3ull, YVEX_GGUF_QTYPE_F32, 0, 0,
             &matvec_grid, &matvec_block, &block_row) &&
             matvec_grid == 12u && matvec_block == 192u && !block_row,
         "reference geometry retains canonical warp-owned rows");
     YVEX_TEST_ASSERT(
         yvex_cuda_qtype_matvec_geometry(
-            4096ull, 8192ull, 1ull, YVEX_GGUF_QTYPE_Q8_0, 1,
+            4096ull, 8192ull, 1ull, YVEX_GGUF_QTYPE_Q8_0, 1, 0,
             &matvec_grid, &matvec_block, &block_row) &&
             matvec_grid == 512u && matvec_block == 256u && !block_row,
         "encoded Q8 projection cannot enter the F32 reduction class");
+    YVEX_TEST_ASSERT(
+        yvex_cuda_qtype_matvec_geometry(
+            257ull, 256ull, 9ull, YVEX_GGUF_QTYPE_BF16, 1, 1,
+            &matvec_grid, &matvec_block, &block_row) &&
+            matvec_grid == 73u && matvec_block == 32u && !block_row &&
+        !yvex_cuda_qtype_matvec_geometry(
+            ULLONG_MAX, 256ull, 9ull, YVEX_GGUF_QTYPE_BF16, 1, 1,
+            &matvec_grid, &matvec_block, &block_row),
+        "decoded row/input tiling covers partial warps and refuses task overflow");
     YVEX_TEST_ASSERT(
         yvex_cuda_qtype_tensorcore_geometry(
             2048ull, 60ull, &matvec_grid, &matvec_block) &&

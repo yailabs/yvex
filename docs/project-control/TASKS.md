@@ -28,6 +28,16 @@ does not reproduce on the identified canonical build; its cause is not inferred.
 separates that observation from the demonstrated decoded-projection defects,
 numerical repair, refusal and cleanup. A03 remains READY.
 
+`V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` was explicitly resumed and its bounded
+implementation/measurement exit is earned: generic ordered-dot thread ownership
+reduces the repeated 22-input/3-output control from 30.72 to 8.32 seconds HTTP
+and 22.19 to 4.20 seconds prefill, preserving numerical and lifecycle controls.
+The Task remains BLOCKED only on the mandatory legacy bootstrap-Q2 aggregate,
+not on a reproduced failure of the current mixed producer. No further
+optimization is selected; [dated evidence](../evaluation/retained-observations.md#deepseek-gb10-optimization-2026-09-30)
+retains exact provenance, qualification and limits. No YAI Case retry,
+cross-repository change or A03 execution occurred.
+
 An independently authorized cross-repository Task Pack,
 `PLATFORM.SDK.PARITY.REFOUNDATION.0`, is in progress for public client/parity
 integration. Its first YVEX slice projects the exact remote-management v1
@@ -186,13 +196,14 @@ artifact, implementation and oracle. No adjacent spectrum or Program N work is s
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | Resume bounded optimization | Await selection | ⛔ BLOCKED | Explicit resumption + controlled baseline; existing implementation remains PARTIAL |
+| `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | Bounded warm DeepSeek GB10 latency optimization | P1 | ⛔ BLOCKED | Bounded material gain and numerical/lifecycle exit qualified; full mandatory gate awaits distinct bootstrap-Q2 artifact; no additional optimization selected; [evidence](../evaluation/retained-observations.md#deepseek-gb10-optimization-2026-09-30) |
 | `V010.EVAL.DEEPSEEK.0` | Independent behavior evaluation | Release | ⛔ BLOCKED | Optimization boundary and repeatable evaluation basis |
 | `V010.BENCH.DEEPSEEK.0` | Full-model benchmark | Release | ⛔ BLOCKED | Behavior gate and exact comparable runs; NOT MEASURED |
 | `V010.RELEASE.0` | Qualify v0.1 | Release | ⛔ BLOCKED | Benchmark and every version-specific release gate |
 
 BLOCKED denotes an unmet delivery prerequisite; it does not change capability
-states. Partial optimization is not resumed automatically.
+states. Optimization is resumed only by the explicit authorization recorded above;
+behavior, full-model benchmark and release gates remain separate.
 
 ## Retained exit contracts
 

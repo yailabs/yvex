@@ -298,7 +298,7 @@ static int attention_matvec(yvex_cuda_work *work,
         rows > weight->row_count - start_row ||
         !yvex_cuda_qtype_matvec_geometry(
             rows, weight ? weight->row_width : 0ull, input_rows,
-            weight ? weight->qtype : 0u, 1, &matvec_grid, &matvec_block,
+            weight ? weight->qtype : 0u, 1, !q8_path, &matvec_grid, &matvec_block,
             &block_row))
         return attention_fail(
             failure, YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT, stage,
@@ -407,7 +407,7 @@ static int attention_matvec_grouped(
         rows != weight->row_count || input_stride < input_width ||
         output_stride < rows ||
         !yvex_cuda_qtype_matvec_geometry(group_rows, weight->row_width, input_rows,
-                                         weight->qtype, 1, &grid, &block, &block_row))
+                                         weight->qtype, 1, 1, &grid, &block, &block_row))
         return attention_fail(
             failure, YVEX_BACKEND_ATTENTION_FAILURE_INVALID_ARGUMENT, stage,
             weight ? weight->row_count : 0ull, rows, err, YVEX_ERR_BOUNDS,

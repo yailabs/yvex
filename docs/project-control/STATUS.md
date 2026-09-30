@@ -61,6 +61,12 @@ component contracts. The full mapped gate remains BLOCKED on a distinct legacy
 bootstrap artifact. This is not long-request, upstream whole-model or release
 promotion, and the historical deleted-executable failure has no proved cause.
 
+The [bounded GB10 optimization](../evaluation/retained-observations.md#deepseek-gb10-optimization-2026-09-30)
+preserves that numerical class and reduces the equivalent warm 22-input/3-output
+control's mean prefill by 81.1% and complete HTTP latency by 72.9% (three samples
+per implementation). This does not establish long-context performance, sustained
+decode, a release benchmark or the complete YAI product chain.
+
 ## Capability vocabulary
 
 ESTABLISHED means the bounded claim carries its required evidence. PARTIAL means
@@ -476,7 +482,7 @@ meaning, generation cancellation and semantic rendering.
 | Evidence lineage | 🟢 ESTABLISHED | Identity-bound reports distinguish implementation, numerical, runtime and release evidence. | Preserve lineage and reject stale/missing evidence. | Q | [Evidence contract][events]; [engineering method][method] |
 | Measurement plane | 🟢 ESTABLISHED | Typed durations, rates and resource facts observe real execution. | Preserve measured/derived/unknown distinctions for new runners. | Q | [Measurement contract][events] |
 | Independent whole-model conformance | 🟡 PARTIAL | Component references and hosted execution do not establish every full numerical path. | Independent exact-source tokenizer-to-output references at claimed scale. | Q / C | [Reference authority][reference]; [family evidence][families] |
-| Current full-model performance baseline | 🟡 PARTIAL | Reassessment retained repeated fixed-workload DeepSeek control; not a release-wide or automatically current-tree benchmark. | Replay exact identities on the selected clean execution tree with dispersion/resources. | Q | [GB10 control authority][gb10] |
+| Current full-model performance baseline | 🟡 PARTIAL | Source-stable warm DeepSeek GB10 control: 5.28× prefill and 3.69× complete HTTP improvement at 22 input / 3 output, three samples per implementation; bounded 32-output-token characterization. | Broader independently qualified workloads, sustained decode, context bands and release-wide dispersion/resources. | Q | [Bounded optimization](../evaluation/retained-observations.md#deepseek-gb10-optimization-2026-09-30); [GB10 control authority][gb10] |
 | Long-context benchmark | 🔴 OPEN | Capacity and target budgets do not establish context-band results. | Reproducible long-context latency, memory, correctness and reliability. | Q / S | [GB10 targets][gb10] |
 | Concurrency/batching benchmark | 🔴 OPEN | Multi-session/row tests do not establish serving throughput at scale. | Real physical concurrency, fairness and resource measurements. | Q / S | [Runtime][runtime]; [GB10 targets][gb10] |
 | Behavior evaluation | 🔴 OPEN | Full-model quality/tokenizer/refusal/long-context gate remains open. | Declared corpus/scorer and repeatable hosted-path evaluation. | Q | [Release doctrine][doctrine] |

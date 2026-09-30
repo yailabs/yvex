@@ -559,6 +559,12 @@ extern "C" __global__ void yvex_qtype_matvec(
             task >= row_count * input_rows) return;
         row = task / input_rows;
         input_row = task % input_rows;
+    } else if (forensic_numeric || !q8_input) {
+        unsigned long long task =
+            (unsigned long long)blockIdx.x * blockDim.x + threadIdx.x;
+        if (row_count > ~0ull / input_rows || task >= row_count * input_rows) return;
+        row = task / input_rows;
+        input_row = task % input_rows;
     } else if (!qtype_matvec_pair(row_count, input_rows, &row, &input_row))
         return;
     row_data = encoded + (start_row + row) * row_bytes;
@@ -569,7 +575,7 @@ extern "C" __global__ void yvex_qtype_matvec(
     /* This decoded-input row path follows source-order F64 accumulation.
        Q8 activation retains its separately admitted quantized reduction. */
     if (forensic_numeric || !q8_input) {
-        if ((block_row ? threadIdx.x : lane) != 0u) return;
+        if (block_row && threadIdx.x != 0u) return;
         sum = qtype_dot_recover_f64(
             row_data, (const float *)input, row_width, qtype);
     } else if (block_row) {
@@ -678,9 +684,9 @@ extern "C" __global__ void yvex_mxfp4_q8_rows(
         output_bf16 ? float_to_bf16_rne(sum) : sum;
 }
 
-/* One grid covers the group-major matrix while token-major activations remain
- * distinct. The row dot and token tiling are deliberately identical to
- * yvex_qtype_matvec; grouping changes launch topology, not numerical policy. */
+/* One grid covers independent ordered dots over the group-major matrix and
+ * token-major activations. Every thread owns one result, not a warp whose
+ * other lanes return; grouping changes launch topology, not numerical policy. */
 extern "C" __global__ void yvex_qtype_grouped_rows(
     const unsigned char *encoded,
     unsigned long long row_bytes,
@@ -698,7 +704,7 @@ extern "C" __global__ void yvex_qtype_grouped_rows(
     int *status)
 {
     unsigned int lane = threadIdx.x & 31u;
-    unsigned int warps = blockDim.x >> 5u;
+    unsigned int threads = blockDim.x;
     unsigned long long group, input_row, local_block, local_row, row;
     const unsigned char *row_data;
     const float *input;
@@ -706,10 +712,9 @@ extern "C" __global__ void yvex_qtype_grouped_rows(
 
     if (!status || *status != 0) return;
     if (!encoded || !vector || !out || !row_bytes || !row_width ||
-        !group_count || !group_rows || !blocks_per_group || !input_rows || !warps ||
-        (blockDim.x & 31u) != 0u ||
+        !group_count || !group_rows || !blocks_per_group || !input_rows || !threads ||
         group_count > ~0ull / group_rows ||
-        group_count > ~0ull / row_width ||
+        group_count > ~0ull / row_width || group_rows > ~0ull / input_rows ||
         input_stride < group_count * row_width ||
         output_stride < group_count * group_rows) {
         if (!lane) atomicCAS(status, 0, 2);
@@ -718,13 +723,13 @@ extern "C" __global__ void yvex_qtype_grouped_rows(
     group = (unsigned long long)blockIdx.x / blocks_per_group;
     local_block = (unsigned long long)blockIdx.x % blocks_per_group;
     if (group >= group_count) return;
-    if (!qtype_matvec_pair_index(
-            local_block, group_rows, input_rows, &local_row, &input_row))
-        return;
+    unsigned long long task = local_block * threads + threadIdx.x;
+    if (task >= group_rows * input_rows) return;
+    local_row = task / input_rows;
+    input_row = task % input_rows;
     row = group * group_rows + local_row;
     row_data = encoded + row * row_bytes;
     input = vector + input_row * input_stride + group * row_width;
-    if (lane) return;
     /* Grouping changes launch topology only. The ordinary decoded-input
      * projection uses source-order F64 accumulation, including finite rows. */
     sum = qtype_dot_recover_f64(row_data, input, row_width, qtype);

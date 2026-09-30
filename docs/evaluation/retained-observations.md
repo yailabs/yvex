@@ -191,6 +191,173 @@ provider chain. This Task neither retries nor mutates the indeterminate Tech
 Infra Case. Studio → SDK → governed YAI → producer → canonical result still
 requires its own integration evidence.
 
+## DeepSeek GB10 optimization (2026-09-30)
+
+`V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` resumes the existing performance
+Task and earns one bounded material improvement, without changing the admitted
+model, ordered decoded-projection numerical class or lifecycle. No YAI Case
+request was retried and no cross-repository implementation changed.
+
+### Frozen baseline and candidate
+
+The canonical clean starting source is `a73c887e104d5427ecaf3e03104b365af8dc11fb`,
+tree `b3e121b3614223f2759d16c904ac1acd8b4a5a13`. The baseline executable is
+`0dfc3a256100d2b66ac48ee98b1045512017026c4c0aaa94b13214b96369a82d`,
+build identity `9d7a43bc7b783833ae12a0d7672ffb86866a32b094a3e5241a47509d21bb913c`.
+Its compiled source is clean; the measured worktree contains only Task
+resumption documentation (delta
+`c448359289b7076ffcdd2b886a1afe25b9a2f20ddcc5ad566d6d5c2cc5bc0fdd`).
+
+The candidate executable is
+`91215e612e4bd753683e84277b77c6cbcf3d26b35e3f5e11be9a313052f388c2`,
+build identity `2d1732de0a798e91e8b95f7fa689ff037803f67ac6d0914742d2a09b986f22f6`.
+Compiled and measured source both bind frozen delta
+`c092b6a5c97b12b7027cb13dedd502ba69d25eb7269796d449b37f568cd6a66f`
+over that base. The changed CUBIN identities are
+`d524462115903c9752fb0bbbc2900290bb75fc6168bc48ddd099442f59fdc607`
+(`kernels`) and
+`bd773a682763f4fe1c171a71780ce2d4724c9d12141fc30e65d49d7da7984271`
+(`attention_kernels`). Both loaded service executables were verified against
+their built digest. Source/executable stability assertions pass independently
+for baseline and candidate.
+
+The exact admitted model, artifact, binding, runtime model, specialization and
+GB10/driver identities are unchanged from the preceding reconciliation table.
+Context is 32,768, prefill chunk 64, speculative DSpark, one worker and physical
+sequence width one. Weights are warm; each request gets a fresh independent
+session without prefix reuse. An isolated loopback listener on port 18081
+excludes unrelated operator traffic. Earlier contested/incomplete records are
+not comparison samples. Profiling primers are also excluded; Nsight collection
+is off during the complete-request measurements.
+
+The [structured observation](benchmarks/data/deepseek-gb10-ordered-dots.json)
+owns raw sample values, executable/worktree/compiled-source distinctions,
+request and output identities. Its [generated projection](benchmarks/generated/deepseek-gb10-ordered-dots.md)
+is characterization, not a release benchmark.
+
+### Dominant cost and equivalent implementation
+
+A complete Nsight graph-node trace of the diagnostic control attributes 63.6%
+of measured kernel time to grouped decoded projection, 16.0% to paired BF16
+projection and 17.8% to ordinary decoded projection. The earlier graph-only
+trace omitted graph-node detail and is not used as a complete kernel profile.
+The ordered F64 repair assigned one independent result to a warp while its
+other lanes returned. The backend now packs independent results into threads,
+retaining the same ordered F64 helper, operands and final publication casts.
+This is generic CUDA launch geometry, not a family, layer or workload branch.
+Q8 reduction, Tensor Core classes and the narrow block-owned F32 class remain
+unchanged. No new buffer, cache, preparation or transfer path is introduced.
+
+| Profiled kernel scope | Same launch count | Baseline → candidate kernel seconds | Exact claim |
+| --- | ---: | ---: | --- |
+| Grouped decoded rows | 233 | 17.232809 → 0.544834 | Independent-result packing removes idle-lane execution |
+| Paired BF16 rows | 1,550 | 4.341830 → 1.332993 | Same two ordered dots, denser row ownership |
+| Ordinary decoded rows | 2,138 | 4.816032 → 1.803008 | Same row/input results, denser thread ownership |
+| MoE up / down | 218 / 218 | 0.217980 / 0.119812 → 0.218412 / 0.120785 | Unchanged expert kernels are not the optimization claim |
+
+These are separate profiled primers, not unprofiled wall-time samples. Nested
+host spans overlap and must not be summed. All six comparison workloads retain
+the same output/usage, speculative proposed/accepted/discarded/verified counts,
+target rows, component/output-head and synchronization populations.
+
+### Equivalent complete requests and resources
+
+The discriminating control uses the two synthetic messages above with exact
+generation 1, `max_tokens:4`, `temperature:0`, `stream:false`. Its compact-body
+SHA-256 is `332d93a1d8f9578b2183553b0f1664e23f5adf7f6ba28ddd4799358a85c79b5f`.
+Every sample returns HTTP 200, `YAI_OK`, 22 input and three committed output
+tokens. The output bound and workload were not reduced.
+
+| Metric / oracle | Baseline mean; sample range | Candidate mean; sample range | Expected / observed / claim |
+| --- | --- | --- | --- |
+| Existing prefill-completed telemetry | 22.186489 s; 22.181654–22.188978 | 4.199542 s; 4.191338–4.209530 | Equivalent token work; 5.28×, 81.1% less wall time; PASS |
+| First-token telemetry, clock from turn start | 27.749693 s; 27.749016–27.750599 | 5.053513 s; 5.045794–5.065895 | Same first committed result; 5.49×, 81.8% reduction; PASS |
+| External complete HTTP exchange | 30.719407 s; 30.655732–30.777607 | 8.323483 s; 8.050025–8.549817 | Same completed body/usage; 3.69×, 72.9% reduction; PASS |
+
+There are three samples per implementation. HTTP sample standard deviation is
+0.061122 s before and 0.253206 s after; the gain is far outside this variability.
+These overlapping metrics are not additive. Preparation remains included in
+its original scope; first-token telemetry is not HTTP-ingress TTFT.
+
+Single bounded scaling controls preserve their exact bodies/results: 7 input /
+4 output takes 17.516645 → 6.778754 s HTTP (7.589747 → 1.884176 s prefill);
+45 input / 3 output takes 53.785992 → 12.546556 s HTTP (44.975987 → 8.162392 s
+prefill). The old prefill cost is token-dependent, not just fixed admission.
+This is not a long-context scaling law.
+
+A 20-input/32-output control completes five speculative cycles and five target
+verifications with equal output and populations: HTTP 78.270961 → 17.139047 s;
+prefill 20.369170 → 4.003273 s; first token 30.462452 → 5.742320 s. The bounded
+decode rate **including the first token** is 0.584075 → 3.312073 committed
+tokens/s. Three output tokens in one cycle do not establish sustained decode;
+nor does this one 32-output-token sample establish an asymptotic rate.
+
+Mapped model bytes remain 95,050,210,272. The repeated controls' process-RSS
+high-water samples remain approximately 100.54–100.57 GB, with less than 2 MB
+paired difference. This is not physical GPU residency. Idle current session
+physical state, workspace and transient bytes return to zero. Turn-peak
+workspace is not retained; idle zero is not a peak-memory measurement. No new
+backend allocation appears in the repair, and no cost is moved into a new cache
+or model-preparation stage.
+
+### Numerical, lifecycle and mapped evidence
+
+| Lane / authority | Expected | Observed / tolerance | Result / supported claim |
+| --- | --- | --- | --- |
+| `cuda.quant_qtype`; CPU canonical codec/scalar F64 and ordinary CUDA projection | Grouped values match both references; paired BF16 matches ordinary exactly | 8 × 17 × 9 = 1,224 grouped results, zero bit differences; scalar bound `1e-5 * (1 + abs(reference))`; paired exact comparison passes | PASS; partial tiles and more than eight input rows preserve ordered dots |
+| `cuda.dot_finiteness`; decoded arithmetic and canaries | Overflow cancellation finite; NaN/Inf and prior status refuse | All 80 cases pass, exact zero cancellation and canaries preserved | PASS; finite validation not disabled |
+| `live.deepseek.generation`; admitted target/DSpark and serial replay | Output/state/RNG and real two-session population/lifecycle controls preserve semantics | Greedy `[223,19,16]`; four width-two rendezvous, 175 multi-source batches and 172 worklists; peer-failure cleanup, mutation/capacity, seeded replay and DSpark cancellation/acceptance pass | PASS; internal model composition/lifecycle, not upstream conformance |
+| `live.deepseek.logits`; scalar head reference per backend | Full-vocabulary projection and stale-publication refusal | 387,840 values per lane, CPU-reference/CUDA-reference max_abs=0; 2,068,480 reused projection values max_abs=0; stale rows 3/3 refused without RNG mutation | PASS; head/reuse contract, not whole-model CPU/CUDA equivalence (their hidden-state paths differ) |
+| `performance.runtime`; runtime benchmark schema v5 | Eager/piecewise/full evidence and replay validate | Three modes and six charts validate | PASS; registered characterization/publication, not release benchmark |
+| HTTP lifecycle; typed host/engine/resource owners | No result on stale/capacity refusal; cancellation retires owned work; replacement rejects old generation | 409/413, cancellation counter +1, all work/request/session/client/lease/queue counts zero, physical session bytes zero; recovery HTTP 200; reload generation 1→2, old generation 409 and new generation HTTP 200 | PASS; failure/retirement and subsequent independent work remain usable |
+| `sanitizer.runtime`, `sanitizer.quant` | Host ownership and bounds remain valid | Both ASan/LSan/UBSan lanes pass | PASS; host sanitizer scope |
+| Compute Sanitizer memcheck; bounded registered finite/expert controls and existing grouped/paired fixtures | Normal exit and no invalid device accesses | Both bounded runs exit zero with `ERROR SUMMARY: 0 errors`; affected fixture reuses the registered test helpers | PASS; bounded device memory scope |
+| Legacy `cuda.native` | Distinct exact bootstrap-Q2 fixture available | Only `DEEPSEEK_ATTENTION_ARTIFACT` remains unavailable | BLOCKED; current mixed artifact is not substituted |
+
+The full optional qtype Compute Sanitizer diagnostic exits 11 after its eight
+qtype rows, including when no kernel instrumentation matches. Its cause is not
+localized; a printed zero memory-error count without normal application exit
+is **not PASS**. Normal registered qtype execution and the bounded affected
+grouped/paired and finite/expert memchecks above pass. No tool-bug explanation
+or broad device-sanitizer success is inferred.
+
+The source-stable mapped receipt
+`aebc312804e00d41b9cb006a3b0daad59d3ccfcca5105d3d5d43a7e85581d370`
+has 125 PASS / 4 BLOCKED / 0 FAIL / 0 SKIP / 0 ERROR. Three missing-environment
+lanes were re-run with exact current assets: generation
+`28e7ed767b0828026a098af16076c18e2aaabd1f2a3b8da8710ea7069a621f33`,
+logits `dd7bd7bea6401b9f6da749e80229ef205462e8c5ca9e4a275df6effadacfcbcb`
+and runtime characterization
+`ee015ff071574a781215a896a7d0b52c27fe4356a4da81ae76cedb7633ebafc7`
+all PASS. The configured legacy receipt
+`7c7a664f938cbb526e7469827c40c58cac5fc222af18084f771af0172cd848a7`
+remains BLOCKED. Resolved latest registered outcomes are **128 PASS / 1 BLOCKED**
+across 129 identities, not one green aggregate. Final documentation checks are
+separate from the frozen numerical source/CUBIN evidence. The bounded
+implementation/measurement exit is earned; the Task's full mandatory gate is
+still BLOCKED and cannot support a full-gate downstream-safe claim.
+
+Raw source/build, node-profile, HTTP, lifecycle, sanitizer and QA records remain
+outside Git in `yvex-gb10-opt-20260929.IU93gg`; retained baseline/candidate HTTP
+SHA-256 values are respectively
+`d6fb0eb7410358b9ce83ba2597213ef6514bc53b8ac5134ff37d6d696e84d409` and
+`0de7e300ecac0e9a78756ca2c7dbd6867676171199bf0bd1d97e4771305d1fee`.
+
+### Exit and product handoff
+
+One coherent material gain is retained; no further performance work is selected.
+Remaining profiled GPU pressure is ordinary decoded projection (41.3%) and
+paired BF16 (30.5%). Roughly three seconds of HTTP exchange outside the turn
+remain unlocalized. Asymptotic sustained decode, 17K/32K input, model-quality,
+SLA and release performance remain NOT MEASURED/unqualified. A03 stays READY.
+Public/persisted schemas and local protocol v24 are unchanged; no new structural
+owner or ADR is required for equivalent backend launch geometry.
+
+The exact 32,768-context producer and bounded synthetic request are suitable for
+a new independently governed YAI integration qualification. This evidence does
+not qualify Studio → SDK → Case → YVEX → canonical result, mutate operator
+Cases, or resolve an indeterminate prior delivery.
+
 ## Provider progress
 
 The transport correction at `6ae29730` qualified actual progress forwarding,

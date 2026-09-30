@@ -1255,7 +1255,7 @@ static int attn_rolling_execute(attn_run *run, unsigned int kind) {
             &run->job->weights[base].row_width, &rows,
             &run->core_input, &device->kv, &device->score, &run->device_status};
         rc = run->ops->launch(&run->resources, run->state->attention_bf16_pair_function,
-                              grid, 256u, 0u, params, stage, run->failure, run->err);
+                              grid, 8u, 0u, params, stage, run->failure, run->err);
     } else {
         rc = run->ops->matvec(&run->resources, &run->job->weights[base], run->weight[base],
             0ull, rolling->state_width, 1ull, run->core_input, device->kv, 0,
