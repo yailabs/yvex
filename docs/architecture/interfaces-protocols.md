@@ -63,15 +63,15 @@ This correction does not qualify long-request latency or complete YAI workloads.
 %%{init: {"themeVariables": {"background": "transparent"}}}%%
 flowchart TB
   n_terminal["EXTERNAL<br/>Terminal / user<br/>input and displayed results"]:::external
-  subgraph n_panel_0["a  REPLAI inside chat"]
+  subgraph n_panel_0["a  REPLAI terminal substrate"]
     direction TB
-  n_editor["EXTERNAL<br/>REPLAI · C ABI 1<br/>editing / cursor / paste"]:::external
+  n_editor["EXTERNAL<br/>REPLAI · ABI 1 / P1<br/>editing / paste / history"]:::external
   end
   subgraph n_panel_1["b  Client"]
     direction TB
   n_client["INTERFACE<br/>YVEX client adapter<br/>grammar / history admission"]:::interface
   n_protocol["INTERFACE<br/>Typed local protocol<br/>bounded UDS requests"]:::interface
-  n_render["INTERFACE<br/>YVEX rendering<br/>semantic result formatting"]:::interface
+  n_render["INTERFACE<br/>YVEX display intent<br/>typed facts / channels"]:::interface
   end
   subgraph n_panel_2["c  Persistent yvex serve"]
     direction TB
@@ -86,7 +86,8 @@ flowchart TB
   n_runtime --> n_events
   n_events --> n_render
   n_client --> n_render
-  n_render --> n_terminal
+  n_render --> n_editor
+  n_editor --> n_terminal
   n_panel_0 ~~~ n_panel_1 ~~~ n_panel_2
   classDef semantic fill:#efe5fc,stroke:#7541ba,color:#261b38
   classDef physical fill:#f4effb,stroke:#8054b2,color:#261b38
@@ -112,8 +113,11 @@ The figure shows the continuing path, not a concurrent editor during generation.
 
 [ADR 0007](../decisions/0007-external-terminal-editor.md) owns the editor split
 and [`config/replai.json`](../../config/replai.json) owns its exact pin. YVEX
-retains prompt values, history admission, slash-completion decisions, reconnect,
-attachments and semantic rendering. Ctrl-C while editing is a generic REPLAI
+retains prompt facts, history admission, candidate meaning, reconnect,
+attachments, exact channel interpretation and presentation intent. REPLAI owns
+cell geometry, responsive documents, semantic styles, menus and quiet feedback
+through separately queried presentation extension 1, without an editor lifetime
+for ordinary commands. JSON remains a sibling serializer of typed facts. Ctrl-C while editing is a generic REPLAI
 event; during generation it enters YVEX cancellation and quiet-output handling.
 EOF, exit and transport failure follow their distinct close/recovery paths.
 Historical `repl_` helper names do not establish another editor.
@@ -121,14 +125,18 @@ Historical `repl_` helper names do not establish another editor.
 The private `src/cli/io/terminal/` contract exposes terminal observation,
 opaque output/capture scopes and interrupt counts, not descriptors, signals or
 console layouts. The current POSIX implementation adapts the editor entrypoint,
-captures interrupts, and joins its watch before application context expires.
+captures interrupts and driven resize wakes, and joins its watch before
+application context expires. Borrowed input FDs and decoder deadlines come from
+REPLAI; neither is a product semantic type.
 The client callback decides which generation to cancel; terminal capture never
 owns engine/session meaning. Output-state admission and restoration failures
 stop chat instead of continuing with uncertain terminal state.
 
 This is an interface portability boundary, not cross-platform qualification.
 Linux PTY tests exercise the implementation and the pinned REPLAI ABI, which
-now has Linux/macOS POSIX qualification. YVEX itself remains Linux-qualified;
+has retained base Linux/macOS POSIX qualification. The new optional extension
+has independently retained native Linux qualification; base evidence is not
+automatically promoted into extension/platform evidence. YVEX itself remains Linux-qualified;
 a macOS or Windows port must qualify its
 platform adapter, editor dependency and local transport; neither a POSIX signal
 nor a Windows console event is a generic request type.

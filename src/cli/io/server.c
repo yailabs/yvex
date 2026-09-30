@@ -10,6 +10,7 @@
 
 #include "src/cli/private.h"
 #include "src/cli/io/private.h"
+#include <yvex/internal/cli_presentation.h>
 #include "src/cli/io/terminal/private.h"
 
 #include <errno.h>
@@ -517,171 +518,27 @@ static int server_remote_summary(
     return rc;
 }
 
-static unsigned int startup_terminal_columns(void)
+static void startup_announce(const yvex_server_options *options, int human_terminal)
 {
-    unsigned int width = yvex_cli_terminal_width(stdout);
-    unsigned long long configured;
-
-    if (width) return width;
-    if (parse_u64(getenv("COLUMNS"), &configured) && configured <= UINT_MAX)
-        return (unsigned int)configured;
-    return 80u;
-}
-
-static void startup_tail_fit(char *output, size_t capacity, const char *text,
-                             size_t maximum)
-{
-    size_t length, retained;
-    const char *tail;
-
-    if (!output || !capacity) return;
-    text = text ? text : "unavailable";
-    length = strlen(text);
-    if (maximum >= capacity) maximum = capacity - 1u;
-    if (length <= maximum) {
-        (void)snprintf(output, capacity, "%s", text);
-        return;
-    }
-    if (maximum <= 3u) {
-        (void)snprintf(output, capacity, "%.*s", (int)maximum, "...");
-        return;
-    }
-    retained = maximum - 3u;
-    tail = text + length - retained;
-    /* A conservative byte budget fits display cells without splitting UTF-8. */
-    while (((unsigned char)*tail & 0xc0u) == 0x80u) tail++;
-    (void)snprintf(output, capacity, "...%s", tail);
-}
-
-static size_t startup_text_columns(const char *text)
-{
-    const unsigned char *byte = (const unsigned char *)(text ? text : "");
-    size_t columns = 0u;
-
-    for (; *byte; ++byte)
-        if ((*byte & 0xc0u) != 0x80u) columns++;
-    return columns;
-}
-
-static const char *startup_logo_line(size_t index)
-{
-    /* One compact, open-wing reduction of the canonical YVEX mark. */
-    static const char *const logo[] = {
-        " ▄          │          ▄",
-        "  ▀█▄▄    ╲ │ ╱    ▄▄█▀",
-        "    ▀▀█▄▄  ╲│╱  ▄▄█▀▀",
-        "       ▀▀█▄ █ ▄█▀▀",
-        "       ▄█▀  █  ▀█▄",
-        "     ▄▀    ╱│╲    ▀▄",
-        "            │",
-        "            ╵",
-    };
-
-    return index < sizeof(logo) / sizeof(logo[0]) ? logo[index] : "";
-}
-
-static void startup_panel_row(const yvex_cli_terminal_style *style,
-                               const char *art, const char *label,
-                               const char *value, const char *tone)
-{
-    size_t width;
-
-    fputs("  ", stdout);
-    if (art) {
-        printf("%s%s%s", style->strong, art, style->reset);
-        width = startup_text_columns(art);
-        while (width++ < 24u) fputc(' ', stdout);
-        fputs("   ", stdout);
-    }
-    if (label && label[0])
-        printf("%s%-8s%s ", style->dim, label, style->reset);
-    if (value && value[0])
-        printf("%s%s%s", tone ? tone : "", value, style->reset);
-    fputc('\n', stdout);
-}
-
-static void startup_announce_terminal(const yvex_server_options *options,
-                                      const char *endpoint,
-                                      const yvex_cli_terminal_style *style,
-                                      unsigned int columns)
-{
-    char capacity[96], protocol[32], title[96];
-    char local[YVEX_SERVER_SOCKET_PATH_CAP], openai[64];
-    const char *labels[] = {NULL, NULL, NULL, "HOST", "PROTOCOL", "NATIVE", "OPENAI", "EVENTS"};
-    const char *values[8], *tones[8];
-    int side_by_side = columns >= 76u;
-    size_t index, prefix = side_by_side ? 38u : 11u;
-    size_t endpoint_width = columns > prefix + 1u ? columns - prefix - 1u : 1u;
-
-    (void)snprintf(title, sizeof(title), "YVEX %s · HOST", yvex_version_string());
-    (void)snprintf(capacity, sizeof(capacity), "0/%llu engines · %llu worker%s",
-                   options->maximum_engines, options->worker_count,
-                   options->worker_count == 1ull ? "" : "s");
-    (void)snprintf(protocol, sizeof(protocol), "%u", YVEX_LOCAL_PROTOCOL_VERSION);
-    startup_tail_fit(local, sizeof(local), endpoint, endpoint_width);
-    if (options->openai_enabled)
-        (void)snprintf(openai, sizeof(openai), "127.0.0.1:%u · loopback", options->openai_port);
-    else
-        (void)snprintf(openai, sizeof(openai), "disabled");
-
-    values[0] = title;
-    values[1] = "verified inference runtime";
-    values[2] = "";
-    values[3] = capacity;
-    values[4] = protocol;
-    values[5] = local;
-    values[6] = openai;
-    values[7] = columns >= 44u ? "lifecycle · progress · resources"
-                               : "lifecycle progress resources";
-    for (index = 0u; index < 8u; ++index) tones[index] = style->strong;
-    tones[0] = style->accent;
-    tones[1] = style->dim;
-    if (!options->openai_enabled) tones[6] = style->dim;
-
-    fputc('\n', stdout);
-    for (index = 0u; index < 8u; ++index)
-        startup_panel_row(style, side_by_side ? startup_logo_line(index) : NULL,
-                           labels[index], values[index], tones[index]);
-    fputc('\n', stdout);
-}
-
-static void startup_announce_compact(const yvex_server_options *options,
-                                     const char *endpoint, int human_terminal,
-                                     const yvex_cli_terminal_style *style)
-{
-    printf("%sYVEX HOST%s · verified inference runtime\n"
-           "%sYVEX %s · protocol %u%s\n",
-           style->strong, style->reset, style->dim, yvex_version_string(),
-           YVEX_LOCAL_PROTOCOL_VERSION, style->reset);
-    printf("  0/%llu engines · %llu worker%s\n", options->maximum_engines,
-           options->worker_count, options->worker_count == 1ull ? "" : "s");
-    printf("  native %s", endpoint ? endpoint : "unavailable");
-    if (options->openai_enabled)
-        printf(" · OpenAI 127.0.0.1:%u",
-               (unsigned int)options->openai_port);
-    else
-        printf(" · OpenAI disabled");
-    printf("\n  events lifecycle · progress · resources");
-    if (!human_terminal) printf(" · Ctrl-C to stop");
-    putchar('\n');
-}
-
-static void startup_announce(const yvex_server_options *options,
-                             int human_terminal)
-{
-    char socket_path[YVEX_SERVER_SOCKET_PATH_CAP];
-    yvex_cli_terminal_style style;
-    unsigned int columns;
+    char socket_path[YVEX_SERVER_SOCKET_PATH_CAP], title[96], capacity[96], protocol[32], openai[64];
     yvex_error err;
     const char *endpoint = options->socket_path;
-    if (!endpoint && yvex_server_socket_path(socket_path, &err) == YVEX_OK)
-        endpoint = socket_path;
-    yvex_cli_terminal_style_get(stdout, &style);
-    columns = startup_terminal_columns();
-    if (human_terminal)
-        startup_announce_terminal(options, endpoint, &style, columns);
-    else
-        startup_announce_compact(options, endpoint, human_terminal, &style);
+    (void)human_terminal;
+    if (!endpoint && yvex_server_socket_path(socket_path, &err) == YVEX_OK) endpoint = socket_path;
+    snprintf(title, sizeof(title), "YVEX %s · HOST", yvex_version_string());
+    snprintf(capacity, sizeof(capacity), "0/%llu engines · %llu workers", options->maximum_engines,
+             options->worker_count);
+    snprintf(protocol, sizeof(protocol), "%u", YVEX_LOCAL_PROTOCOL_VERSION);
+    if (options->openai_enabled) snprintf(openai, sizeof(openai), "127.0.0.1:%u · loopback", options->openai_port);
+    else snprintf(openai, sizeof(openai), "disabled");
+    const yvex_cli_present_field fields[] = {
+        {"host", capacity, YVEX_CLI_TEXT_NORMAL},
+        {"protocol", protocol, YVEX_CLI_TEXT_DIM},
+        {"native", endpoint ? endpoint : "unavailable", YVEX_CLI_TEXT_NORMAL},
+        {"OpenAI", openai, YVEX_CLI_TEXT_NORMAL},
+        {"events", "lifecycle · progress · resources", YVEX_CLI_TEXT_DIM}};
+    (void)yvex_cli_present_text(stdout, "verified inference runtime", YVEX_CLI_TEXT_DIM, 0u);
+    (void)yvex_cli_present_record(stdout, title, fields, 5u);
     (void)fflush(stdout);
 }
 

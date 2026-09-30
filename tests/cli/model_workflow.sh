@@ -47,18 +47,18 @@ grep -F -- '--wide' "$ROOT/help-list.out" >/dev/null
 grep -F -- '--provider local|hf|huggingface' "$ROOT/help-search.out" >/dev/null
 grep -F -- '--page N' "$ROOT/help-search.out" >/dev/null
 grep -F -- 'range 1..20' "$ROOT/help-search.out" >/dev/null
-grep -F -- '--all' "$ROOT/help-search.out" | grep -F -- \
-    'conflicts --page, --limit' >/dev/null
+grep -F -- '--all' "$ROOT/help-search.out" >/dev/null
+grep -F -- 'conflicts --page|--limit' "$ROOT/help-search.out" >/dev/null
 grep -F -- '--format safetensors|gguf' "$ROOT/help-pull.out" >/dev/null
 grep -F -- '--models-root PATH' "$ROOT/help-pull.out" >/dev/null
-grep -F -- '--include TEXT' "$ROOT/help-pull.out" | grep -F -- \
-    'repeatable' >/dev/null
-grep -F -- '--quant NAME' "$ROOT/help-pull.out" | grep -F -- \
-    'requires --prepare' >/dev/null
-grep -F -- '--reference' "$ROOT/help-pull.out" | grep -F -- \
-    'conflicts --managed, --resume' >/dev/null
-grep -F -- '--verbose' "$ROOT/help-pull.out" | grep -F -- \
-    'conflicts --json' >/dev/null
+grep -F -- '--include TEXT' "$ROOT/help-pull.out" >/dev/null
+grep -F -- 'repeatable' "$ROOT/help-pull.out" >/dev/null
+grep -F -- '--quant NAME' "$ROOT/help-pull.out" >/dev/null
+grep -F -- 'requires --prepare' "$ROOT/help-pull.out" >/dev/null
+grep -F -- '--reference' "$ROOT/help-pull.out" >/dev/null
+grep -F -- 'conflicts --managed|--resume' "$ROOT/help-pull.out" >/dev/null
+grep -F -- '--verbose' "$ROOT/help-pull.out" >/dev/null
+grep -F -- 'conflicts --json' "$ROOT/help-pull.out" >/dev/null
 
 expect_rc()
 {
@@ -73,7 +73,7 @@ expect_rc()
 
 contains()
 {
-    grep -F -- "$2" "$1" >/dev/null
+    python3 tests/support/human_field.py "$1" "$2"
 }
 
 # Registry metadata drives both discovery and early validation.  These
@@ -191,16 +191,16 @@ PY
 
 COLUMNS=240 NO_COLOR=1 "$YVEX_BIN" model list --wide \
     --models-root "$MODELS_ROOT" --registry "$REGISTRY" >"$ROOT/models-wide.out"
-contains "$ROOT/models-wide.out" 'MODEL'
-contains "$ROOT/models-wide.out" 'FAMILY'
-contains "$ROOT/models-wide.out" 'ORIGIN'
-contains "$ROOT/models-wide.out" 'FORMAT'
-contains "$ROOT/models-wide.out" 'QUANT/PRECISION'
-contains "$ROOT/models-wide.out" 'SIZE'
-contains "$ROOT/models-wide.out" 'STATE'
-contains "$ROOT/models-wide.out" 'EXEC'
-contains "$ROOT/models-wide.out" 'VARIANTS'
-contains "$ROOT/models-wide.out" 'LOCATION'
+contains "$ROOT/models-wide.out" 'tiny-external'
+contains "$ROOT/models-wide.out" 'family'
+contains "$ROOT/models-wide.out" 'origin'
+contains "$ROOT/models-wide.out" 'format'
+contains "$ROOT/models-wide.out" 'precision'
+contains "$ROOT/models-wide.out" 'size'
+contains "$ROOT/models-wide.out" 'state'
+contains "$ROOT/models-wide.out" 'execution'
+contains "$ROOT/models-wide.out" 'representations'
+contains "$ROOT/models-wide.out" 'location'
 contains "$ROOT/models-wide.out" 'tiny-external'
 contains "$ROOT/models-wide.out" 'EXTERNAL'
 contains "$ROOT/models-wide.out" 'tiny-managed'
@@ -210,11 +210,15 @@ contains "$ROOT/models-wide.out" "$ROOT/input/tiny-external.gguf"
 
 COLUMNS=70 NO_COLOR=1 "$YVEX_BIN" model list --all \
     --models-root "$MODELS_ROOT" --registry "$REGISTRY" >"$ROOT/models-all-narrow.out"
-contains "$ROOT/models-all-narrow.out" "$ROOT/input/tiny-external.gguf"
+python3 - "$ROOT/models-all-narrow.out" "$ROOT/input/tiny-external.gguf" <<'PY'
+import pathlib, sys
+# Responsive wrapping preserves the entire exact path, not an ellipsis.
+assert sys.argv[2] in ''.join(pathlib.Path(sys.argv[1]).read_text().split())
+PY
 
 COLUMNS=70 NO_COLOR=1 "$YVEX_BIN" model list \
     --models-root "$MODELS_ROOT" --registry "$REGISTRY" >"$ROOT/models-narrow.out"
-contains "$ROOT/models-narrow.out" '2 representations'
+contains "$ROOT/models-narrow.out" 'representations  2'
 
 # Styling is a TTY-only projection, and NO_COLOR removes every escape byte
 # without changing the model facts being rendered.
@@ -226,7 +230,62 @@ NO_COLOR=1 COLUMNS=180 TERM=xterm-256color \
     script -q -e -c "$pty_command" "$ROOT/models-no-color.typescript" </dev/null >/dev/null
 ! LC_ALL=C grep "$(printf '\033')" "$ROOT/models-no-color.typescript" >/dev/null
 
-"$YVEX_BIN" model show tiny-managed --models-root "$MODELS_ROOT" \
+# Actual terminal geometry and styling use the same semantic content. Capture
+# these owned synthetic catalogs, never an operator model registry or Case.
+python3 - "$YVEX_BIN" "$MODELS_ROOT" "$REGISTRY" "$ROOT" <<'PY'
+import fcntl, os, pathlib, pty, re, select, struct, subprocess, sys, termios
+binary, models, registry, root = sys.argv[1:]
+binary = str(pathlib.Path(binary).resolve())
+commands = {
+    'root': ['help'], 'advanced': ['help', '--advanced'],
+    'list': ['model', 'list', '--models-root', models, '--registry', registry],
+    'detail': ['model', 'show', 'tiny-managed', '--models-root', models, '--registry', registry],
+    'error': ['modle', 'list'],
+}
+destination = pathlib.Path(os.environ.get('YVEX_PRESENTATION_CAPTURE_DIR', root))
+assert destination.is_absolute() and destination.is_dir()
+ansi = re.compile(rb'\x1b\[[0-9;]*m')
+for columns in (40, 80, 180):
+    for name, arguments in commands.items():
+        semantic = []
+        for styled in (False, True):
+            master, slave = pty.openpty()
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 30, columns, 0, 0))
+            env = dict(os.environ, TERM='xterm-256color')
+            env.pop('COLUMNS', None)
+            env.pop('NO_COLOR', None)
+            if not styled: env['NO_COLOR'] = '1'
+            child = subprocess.Popen([binary, *arguments], stdout=slave, stderr=slave,
+                                     stdin=subprocess.DEVNULL, env=env)
+            os.close(slave)
+            data = bytearray()
+            while True:
+                if not select.select([master], [], [], 10)[0]:
+                    raise AssertionError('terminal render stalled')
+                try: part = os.read(master, 65536)
+                except OSError: break
+                if not part: break
+                data.extend(part)
+            os.close(master)
+            assert child.wait() == (2 if name == 'error' else 0)
+            text = ansi.sub(b'', data).decode().replace('\r\n', '\n')
+            assert '\x1b' not in text, 'unexpected terminal control in one-shot output'
+            assert all(len(line) <= columns for line in text.splitlines()), (name, columns, text)
+            assert not any(symbol in text for symbol in ('┌', '│', '└', '…'))
+            semantic.append(text)
+            (destination / f'{name}-{columns}-{"styled" if styled else "plain"}.txt').write_bytes(data)
+        assert semantic[0] == semantic[1], (name, columns)
+        if name == 'list':
+            assert 'tiny-managed' in semantic[0] and 'tiny-external' in semantic[0]
+            assert re.search(r'^\s*state\s+VERIFIED$', semantic[0], re.M)
+        if name == 'detail':
+            assert 'payload-verified' in semantic[0] and 'not launchable' in semantic[0]
+        if name == 'error':
+            assert 'unchanged' in semantic[0] and 'model list' in semantic[0]
+print('CLI PTY: 40/80/180 columns, styled/plain exact facts, no clipping or boxes')
+PY
+
+COLUMNS=240 "$YVEX_BIN" model show tiny-managed --models-root "$MODELS_ROOT" \
     --registry "$REGISTRY" >"$ROOT/model-show.out"
 for section in MODEL 'ORIGIN / SOURCE' REPRESENTATIONS RUNTIME; do
     contains "$ROOT/model-show.out" "$section"
@@ -234,12 +293,19 @@ done
 contains "$ROOT/model-show.out" "$managed_location"
 contains "$ROOT/model-show.out" 'payload-verified'
 contains "$ROOT/model-show.out" 'not launchable'
-test "$(grep -c ' · managed · ' "$ROOT/model-show.out")" -eq 2
+test "$(grep -c 'storage.*managed' "$ROOT/model-show.out")" -eq 2
 
 "$YVEX_BIN" model list --all --models-root "$MODELS_ROOT" \
     --registry "$REGISTRY" >"$ROOT/local-models-all.out"
-test "$(grep -c '^tiny-managed' "$ROOT/local-models-all.out")" -eq 1
-test "$(grep -c 'source.*gguf' "$ROOT/local-models-all.out")" -ge 2
+python3 - "$ROOT/local-models-all.out" <<'PY'
+from pathlib import Path
+import re, sys
+text = Path(sys.argv[1]).read_text()
+assert len(re.findall(r'^\s*MODEL\s+tiny-managed$', text, re.M)) == 1
+records = text.split('\n\n')
+assert sum(bool(re.search(r'^\s*ROLE\s+source$', item, re.M) and
+                re.search(r'^\s*FORMAT\s+gguf$', item, re.M)) for item in records) >= 2
+PY
 
 "$YVEX_BIN" model search tiny --provider local --models-root "$MODELS_ROOT" \
     >"$ROOT/search-local.out"
@@ -284,8 +350,8 @@ PY
 YVEX_FAKE_HF_DISCOVERY_MODE=tiny \
     "$YVEX_BIN" model show hf://community/unknown-model \
     --models-root "$MODELS_ROOT" >"$ROOT/remote-show.out"
-contains "$ROOT/remote-show.out" 'repository  community/unknown-model'
-contains "$ROOT/remote-show.out" 'family      unknown'
+contains "$ROOT/remote-show.out" 'community/unknown-model'
+contains "$ROOT/remote-show.out" 'family: unknown'
 contains "$ROOT/remote-show.out" 'REPRESENTATIONS'
 contains "$ROOT/remote-show.out" 'use --json for exact paths'
 ! grep -F -- 'use --audit' "$ROOT/remote-show.out" >/dev/null
@@ -534,13 +600,20 @@ assert matches[0]["representation_count"] == 2
 PY
 "$YVEX_BIN" model list --all --models-root "$MODELS_ROOT" --registry "$REGISTRY" \
     >"$ROOT/models-all.out"
-test "$(grep -c '^workflow-demo' "$ROOT/models-all.out")" -eq 1
-test "$(grep -Ec 'alternate.*gguf' "$ROOT/models-all.out")" -eq 2
-test "$(grep -Ec 'BLOCKED +not current' "$ROOT/models-all.out")" -eq 2
+test "$(grep -c 'MODEL.*workflow-demo' "$ROOT/models-all.out")" -eq 1
+python3 - "$ROOT/models-all.out" <<'PY'
+from pathlib import Path
+import re, sys
+records = Path(sys.argv[1]).read_text().split('\n\n')
+def field(item, label, value):
+    return bool(re.search(r'^\s*' + label + r'\s+' + re.escape(value) + '$', item, re.M))
+assert sum(field(item, 'ROLE', 'alternate') and field(item, 'FORMAT', 'gguf') for item in records) == 2
+assert sum(field(item, 'STATE', 'BLOCKED') and field(item, 'EXEC', 'not current') for item in records) == 2
+PY
 "$YVEX_BIN" model show workflow-demo --models-root "$MODELS_ROOT" \
     --registry "$REGISTRY" >"$ROOT/workflow-show.out"
-contains "$ROOT/workflow-show.out" 'State           BLOCKED'
-contains "$ROOT/workflow-show.out" 'Execution       not current'
+contains "$ROOT/workflow-show.out" 'State: BLOCKED'
+contains "$ROOT/workflow-show.out" 'Execution: not current'
 contains "$ROOT/workflow-show.out" 'FP16'
 contains "$ROOT/workflow-show.out" 'FP32'
 contains "$ROOT/workflow-show.out" 'not launchable; run `yvex model prepare MODEL`'

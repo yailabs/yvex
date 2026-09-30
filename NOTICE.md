@@ -36,15 +36,14 @@ for integration tests retain their own licenses. They are not licensed by
 YVEX merely because it links to or invokes them. A distributor that bundles
 those components must retain their applicable notices and terms.
 
-The chat editor statically links [REPLAI](https://github.com/mothx9/replai),
-MIT, at revision `6230713c3c80140e609f836918811835bd847da4` as pinned in
-`config/replai.json`. That immutable revision's license says
-"Copyright (c) 2026 YAI Labs"; this is a retained historical upstream notice,
-not a current ownership claim. Current REPLAI first-party attribution is to
-Francesco Maiomascio. Do not replace the license shipped with the pinned source
-by implication or silently move the dependency revision;
-the product package includes `share/licenses/replai/LICENSE` and the native
-build receipt. REPLAI and its Rust dependencies retain their upstream licenses.
+The terminal product statically links [REPLAI](https://github.com/mothx9/replai),
+MIT, at revision `93d62f6d34cfb933a1f59407ade027152e1ef2ba` as pinned in
+`config/replai.json`. This qualified revision attributes its first-party copyright
+to Francesco Maiomascio. The original upstream license and the native build
+receipt are staged under `share/licenses/replai/LICENSE` and the private prefix.
+REPLAI and its Rust dependencies retain their respective upstream licenses.
+Historical notices remain in their immutable historical artifacts; this repin
+does not retrospectively change those artifacts or assign anyone's rights.
 The REPLAI license alone is not a complete notice bundle for a statically linked
 binary: distributors must also carry the notices required by the exact linked
 Rust dependencies. The current build receipt/pin is provenance, not a complete

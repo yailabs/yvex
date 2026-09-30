@@ -15,7 +15,7 @@ fail() {
 contains() {
     file=$1
     text=$2
-    grep -F "$text" "$file" >/dev/null || fail "$file missing: $text"
+    python3 tests/support/human_field.py "$file" "$text" || fail "$file missing: $text"
 }
 
 contains_any_code() {

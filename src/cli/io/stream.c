@@ -8,13 +8,12 @@
 #include "src/cli/io/private.h"
 #include "src/cli/io/terminal/private.h"
 
+#include <yvex/internal/cli_presentation.h>
 #include <ctype.h>
 #include <limits.h>
-#include <locale.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <wchar.h>
 
 #define STREAM_PREFERRED_PROSE_WIDTH 96u
 #define STREAM_INLINE_STRONG 1u
@@ -85,6 +84,7 @@ static int stream_newline(yvex_cli_stream_renderer *renderer)
         fputc('\n', renderer->output) == EOF)
         return 0;
     renderer->column = 0u;
+    renderer->geometry_count = 0u;
     renderer->wrote_bytes = renderer->last_newline = 1;
     return 1;
 }
@@ -122,6 +122,7 @@ static int stream_escape_byte(yvex_cli_stream_renderer *renderer,
         !stream_output(renderer, (const unsigned char *)escaped, 4u, style))
         return 0;
     renderer->column += 4u;
+    renderer->geometry_count = 0u;
     return 1;
 }
 
@@ -147,37 +148,28 @@ static int stream_utf8_valid(const unsigned char *bytes, size_t available,
     return 1;
 }
 
-/* Width is display cells, not UTF-8 bytes or Unicode scalar count. The public
- * rendering calls scope wcwidth to a thread-local UTF-8 locale. */
-static unsigned int stream_unit_columns(const unsigned char *bytes, size_t count)
+/* The terminal producer owns Unicode cell policy. Transport framing/escaping
+ * remain host concerns; this adapter never substitutes a locale/wcwidth policy. */
+static int stream_unit_columns(yvex_cli_stream_renderer *renderer,
+                                         const unsigned char *bytes, size_t count)
 {
-    unsigned int extent = stream_utf8_extent(bytes[0]), index;
-    uint32_t scalar;
-    int width;
+    unsigned int extent = stream_utf8_extent(bytes[0]);
+    size_t before, after;
     if (bytes[0] < 0x20u || bytes[0] == 0x7fu) return 4u;
     if (bytes[0] < 0x80u) return 1u;
     if (!stream_utf8_valid(bytes, count, extent)) return 1u;
-    scalar = bytes[0] & ((1u << (7u - extent)) - 1u);
-    for (index = 1u; index < extent; ++index)
-        scalar = (scalar << 6u) | (bytes[index] & 0x3fu);
-    width = wcwidth((wchar_t)scalar);
-    return width < 0 ? 1u : (unsigned int)width;
+    if (renderer->geometry_count > sizeof(renderer->geometry) - extent)
+        return INT_MIN; /* Refuse over-bound Unicode context, never change cell policy. */
+    before = yvex_cli_present_cells((const char *)renderer->geometry, renderer->geometry_count);
+    memcpy(renderer->geometry + renderer->geometry_count, bytes, extent);
+    after = yvex_cli_present_cells((const char *)renderer->geometry, renderer->geometry_count + extent);
+    return (int)after - (int)before;
 }
 
 static unsigned int stream_prefix_columns(const char *text)
 {
-    const unsigned char *bytes = (const unsigned char *)text;
-    size_t count = strlen(text), index = 0u;
-    unsigned int width = 0u;
-    while (index < count) {
-        unsigned int extent = stream_utf8_extent(bytes[index]);
-        width += stream_unit_columns(bytes + index, count - index);
-        index += extent && stream_utf8_valid(bytes + index, count - index, extent)
-                     ? extent : 1u;
-    }
-    return width;
+    return (unsigned int)yvex_cli_present_cells(text, strlen(text));
 }
-
 static int stream_markup_may_open(const yvex_cli_stream_renderer *renderer,
                                   const unsigned char *bytes, size_t count,
                                   size_t marker_width)
@@ -224,6 +216,7 @@ static int stream_text_unit(yvex_cli_stream_renderer *renderer,
                             yvex_cli_stream_style style, size_t *consumed)
 {
     unsigned int extent;
+    int columns;
     static const unsigned char replacement[] = {0xefu, 0xbfu, 0xbdu};
     *consumed = 1u;
     if (bytes[0] < 0x20u || bytes[0] == 0x7fu) {
@@ -237,6 +230,8 @@ static int stream_text_unit(yvex_cli_stream_renderer *renderer,
     if (bytes[0] < 0x80u) {
         if (!stream_output(renderer, bytes, 1u, style)) return 0;
         renderer->column++;
+        renderer->geometry[0] = bytes[0];
+        renderer->geometry_count = 1u;
         return 1;
     }
     extent = stream_utf8_extent(bytes[0]);
@@ -246,8 +241,11 @@ static int stream_text_unit(yvex_cli_stream_renderer *renderer,
         renderer->column++;
         return 1;
     }
+    columns = stream_unit_columns(renderer, bytes, available);
+    if (columns == INT_MIN || (columns < 0 && renderer->column < (unsigned int)-columns)) return 0;
     if (!stream_output(renderer, bytes, extent, style)) return 0;
-    renderer->column += stream_unit_columns(bytes, available);
+    renderer->column = (unsigned int)((int)renderer->column + columns);
+    renderer->geometry_count += extent;
     *consumed = extent;
     return 1;
 }
@@ -300,15 +298,17 @@ static int stream_inline(yvex_cli_stream_renderer *renderer,
         }
         /* Commit text progressively at cell boundaries. Looking ahead to a word
          * inside only the current transport fragment makes layout chunk-dependent. */
-        if (renderer->column + (renderer->pending_space ? 1u : 0u) +
-                stream_unit_columns(bytes + index, count - index) >
-                    renderer->prose_width && renderer->column > indent) {
+        int columns = stream_unit_columns(renderer, bytes + index, count - index);
+        if (columns == INT_MIN) return 0;
+        if ((int)renderer->column + (renderer->pending_space ? 1 : 0) + columns >
+                    (int)renderer->prose_width && renderer->column > indent) {
             if (!stream_continuation(renderer, indent)) return 0;
             renderer->pending_space = 0;
         }
         if (renderer->pending_space) {
             if (!stream_ascii(renderer, " ", style)) return 0;
             renderer->column++;
+            renderer->geometry_count = 0u;
             renderer->pending_space = 0;
         }
         if (!stream_text_unit(renderer, bytes + index, count - index,
@@ -650,43 +650,16 @@ static int stream_finish(yvex_cli_stream_renderer *renderer,
     return ok && !ferror(renderer->output) ? YVEX_OK : YVEX_ERR_IO;
 }
 
-/* No process-wide setlocale: application locale and other threads are untouched.
- * Linux provides C.UTF-8 independently of the caller's LANG/LC_ALL settings. */
-static int stream_render_call(yvex_cli_stream_renderer *renderer,
-                              yvex_client_stream_channel channel,
-                              const unsigned char *bytes, unsigned long long count,
-                              int finish, int separate_terminal_status)
-{
-    locale_t utf8, prior;
-    int rc;
-    if (!renderer || !renderer->enhanced)
-        return finish ? stream_finish(renderer, separate_terminal_status)
-                      : stream_write(renderer, channel, bytes, count);
-    utf8 = newlocale(LC_CTYPE_MASK, "C.UTF-8", (locale_t)0);
-    if (!utf8) return YVEX_ERR_IO;
-    prior = uselocale(utf8);
-    if (!prior) {
-        freelocale(utf8);
-        return YVEX_ERR_IO;
-    }
-    rc = finish ? stream_finish(renderer, separate_terminal_status)
-                : stream_write(renderer, channel, bytes, count);
-    (void)uselocale(prior);
-    freelocale(utf8);
-    return rc;
-}
-
 int yvex_cli_stream_renderer_write(yvex_cli_stream_renderer *renderer,
                                    yvex_client_stream_channel channel,
                                    const unsigned char *bytes,
                                    unsigned long long count)
 {
-    return stream_render_call(renderer, channel, bytes, count, 0, 0);
+    return stream_write(renderer, channel, bytes, count);
 }
 
 int yvex_cli_stream_renderer_finish(yvex_cli_stream_renderer *renderer,
                                     int separate_terminal_status)
 {
-    return stream_render_call(renderer, YVEX_CLIENT_STREAM_FINAL_TEXT, NULL, 0u,
-                              1, separate_terminal_status);
+    return stream_finish(renderer, separate_terminal_status);
 }

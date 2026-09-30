@@ -15,9 +15,10 @@ publication: {html: true, pdf: true, index: true}
 [Up](README.md)
 
 Selected program: **YVEX shared compiler/runtime delivery**.
-Current phase: **documentation qualified; selected A03 execution is READY**.
+Current phase: **interface refoundation COMPLETE; selected A03 execution is READY**.
 The next selected implementation boundary remains **A03 encoder-decoder**;
-it is READY, with no implementation started by this documentation Task.
+it is READY, with no implementation started by this independently authorized
+interface Task Pack.
 
 The independently authorized YVEX repair
 `RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` has a qualified bounded producer and
@@ -68,11 +69,12 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 36 | 29 | 0 | 1 | 6 |
+| 37 | 30 | 0 | 1 | 6 |
 <!-- task-counts:end -->
 
-**29/36 selected Tasks complete.** This denominator includes the significant
-retained delivery sequence and two independent completed interface Tasks. It is
+**30/37 selected Tasks complete.** This denominator includes the significant
+retained delivery sequence, two independent completed interface Tasks and the
+completed CLI/chat Task Pack. It is
 not YVEX product completion. Research candidates are not selected Tasks.
 
 ## Delivery progression
@@ -184,6 +186,7 @@ already completed correction at `6ae29730`; it does not invent a historical ID.
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
 | `PROJECT.DOCS.YVEX.REFOUNDATION.2` | Qualify the YVEX documentation architecture | Closed | ✅ COMPLETE | [Qualification](../evaluation/documentation-migration.md): coverage, Markdown/Mermaid, HTML/PDF, benchmarks and mapped QA |
+| `INTERFACES.CLI.REPLAI.PRODUCT.SURFACE.REFOUNDATION.0` | Coherent CLI/chat over a qualified generic REPLAI C presentation boundary | Closed | ✅ COMPLETE | Independently qualified ABI 1 / P1 producer, immutable repin, registry/CLI/chat composition, source-stable mapped QA and real CPU/PTY evidence; [earned exit](../evaluation/retained-observations.md#native-interface-composition-2026-09-30) |
 | `V010.RUNTIME.DEEPSEEK.GB10.INFERENCE.PIPELINE.1` | Reduce dominant warm GB10 inference-pipeline latency | P1 | ⛔ BLOCKED | Bounded performance, Makefile and official encoding-vector evidence earned; mandatory QA retains external gaps and unchanged baseline numerical failures; [evidence](../evaluation/retained-observations.md#deepseek-gb10-inference-pipeline-2026-09-30); no follow-up selected |
 | `RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` | Restore bounded DeepSeek CUDA/MoE numerical correctness | P1 | ⛔ BLOCKED | Bounded producer/component repair qualified; mandatory `cuda.native` needs the distinct unavailable bootstrap-Q2 artifact; [evidence](../evaluation/retained-observations.md#deepseek-cuda-producer-reconciliation-2026-09-29) |
 | `SPECTRUM.FLAN.T5.ENCODER.DECODER.0` | A03 exact encoder-decoder execution | Next selected | ⬜ READY | Immutable target, retained encoder state, cross-attention, independent numerics and lifecycle evidence |
@@ -191,6 +194,34 @@ already completed correction at `6ae29730`; it does not invent a historical ID.
 The old ROADMAP called A03 ACTIVE to identify the selected next boundary. READY
 now distinguishes selection from execution. Its scope and selection survive;
 this milestone does not acquire a model or start implementation.
+
+### Completed interface Task Pack
+
+`INTERFACES.CLI.REPLAI.PRODUCT.SURFACE.REFOUNDATION.0` was independently
+authorized across YVEX and `mothx9/replai`. YVEX owns command grammar, typed
+facts and presentation intent; REPLAI owns generic geometry, presentation and
+interaction. YAI, SDK and Studio are outside this delivery. The live production
+host is not a fixture. A03 remains READY and DeepSeek optimization is stopped.
+
+The completed implementation gates are:
+
+1. Define and implement bounded REPLAI presentation/interaction extensions,
+   retaining ABI 1 records and behavior.
+2. Independently qualify and publish the producer before consumption.
+3. Repin the exact revision/tree/archive and extension identity.
+4. Converge human CLI/chat, registry metadata and surface dispositions without
+   changing domain semantics, existing JSON or private-wire meaning.
+5. Qualify representative widths/modes, stale/malformed/refusal and terminal
+   cleanup, reconcile architecture/contracts/evidence, then publish YVEX.
+
+The whole composition is qualified, not only one renderer or dependency update.
+[Dated evidence](../evaluation/retained-observations.md#native-interface-composition-2026-09-30)
+binds the exact producer, frozen runtime source, 121 mapped passes, independent
+producer gates, real CPU decoder, terminal restoration and machine-output controls.
+Closing evidence/project-control edits are documentation-only and separately
+validated. Remote mutation, Laya lifecycle convergence, new model classes and
+release/distribution readiness remain excluded. No successor implementation
+starts automatically; A03 remains READY.
 
 ### Completed documentation Task Pack
 

@@ -67,7 +67,7 @@ qa-ci:
 qa-doctor:
 	python3 tools/qa.py doctor
 test-operator-registry: check-operator-registry client
-	python3 tests/test_operator_registry.py
+	YVEX_BIN='$(YVEX_BIN)' BUILD_DIR='$(BUILD_DIR)' python3 tests/test_operator_registry.py
 cuda-info: $(YVEX_BIN)
 	@echo "nvcc: $$(command -v $(NVCC) >/dev/null 2>&1 && command -v $(NVCC) || echo unavailable)"
 	@echo "CUDA_HOME: $(CUDA_HOME)"
@@ -168,7 +168,7 @@ test-openai-live: client
 		sh tests/live/openai.sh
 
 test-cli: client $(CLI_TEST) $(CLIENT_CUTOVER_TEST)
-	YVEX_BIN='$(YVEX_BIN)' sh $(CLI_TEST)
+	YVEX_BIN='$(YVEX_BIN)' BUILD_DIR='$(BUILD_DIR)' REPLAI_PREFIX='$(REPLAI_PREFIX)' sh $(CLI_TEST)
 	YVEX_BIN='$(YVEX_BIN)' YVEX_CLIENT_LANE_OBJ='$(CLIENT_LANE_OBJ)' \
 		sh $(CLIENT_CUTOVER_TEST)
 

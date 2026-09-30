@@ -19,6 +19,89 @@ The undated observations below were retained at the pre-migration source
 They are not rerun by documentation validation. Scope and missing provenance
 remain visible; [Status](../project-control/STATUS.md) alone owns current maturity.
 
+## Native interface composition (2026-09-30)
+
+`INTERFACES.CLI.REPLAI.PRODUCT.SURFACE.REFOUNDATION.0` qualifies a shared human
+presentation/interaction producer without changing model execution or the private
+wire. [ADR 0007](../decisions/0007-external-terminal-editor.md) owns the split;
+the [command reference](../reference/commands.md) owns registry/product grammar.
+YVEX owns typed facts, exact channels and admission. REPLAI owns cell geometry,
+semantic documents/styles, menu mechanics and terminal/output restoration.
+
+### Immutable authority
+
+YVEX started at `5d84349f8774a4273ee5f4ac4ce3a05ce99c64e1`, tree
+`26925f595b733d7a07939a926f97721de1757e4c`. Its final implementation receipt is
+`0ae97043e36f6dc633e7820c4cedf12003108486ccab3fcb9667612d74d0cb55`, source delta
+`35029aa1f7237f39ba0d59eb692323f813abb45ad39e6b3af29743f50762043b`, build identity
+`a200518beff13d090824573f6e36eb8fef81ecc8509430a349e0a026cbdc3d09`, executable
+`bc31b78a640943c524fc606d2040ffd861c0ca98da6a3ed148db7cc8780f6ff2`.
+The mapped run froze that source throughout: 121 PASS, zero FAIL, ERROR, BLOCKED
+or SKIP, with `source_stability.valid=true`. Subsequent closure edits affect
+only documentation/project control and receive separate documentation validation.
+Raw receipts and PTY captures remain outside tracked payloads.
+
+REPLAI started at `5c8594923f8153de347ad6f8a96d0db8382080ee`.
+Independent producer qualification used
+`19845f5ae24fc0b9589a2621d03a8d1ba1ad47c2`, tree
+`1e012f04a871bf65c9f05bfb16659419d000eac6`, Rust source subtree
+`7b62ec3136df94a9f906307d2e1e9276ca19530a`.
+The subsequent published pin
+`93d62f6d34cfb933a1f59407ade027152e1ef2ba`, tree
+`02e946c6ac5b3baf746cff9eade7f10ba7ed5669`, has identical implementation, ABI,
+header and Cargo inputs. Its archive SHA-256 is
+`a3095b82e53f55067105820f66ffe3fe003d274eec69e91b44186692712c9ee1`.
+Base C ABI 1 is unchanged; presentation extension 1 is queried separately.
+The consumer downloads and verifies this immutable producer, not a sibling tree.
+
+### Composition and controls
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| REPLAI producer | Independent clean checkout; native qualification and packaging drivers | Rust, C/C++, static/shared and moved-prefix consumers; PTY/misuse/memory controls | Preserve ABI 1; bounded P1; restoration and refusal | 22 qualification gates and 27 software packaging phases pass; pinned-revision CI passes | Exact layouts, bytes, termios and zero memory-checker errors | PASS | Independent Linux producer, not customer distribution readiness |
+| Registry/CLI | Canonical registry and generated projections | 175 operation dispositions; positional/flag enums/cardinality; compatibility aliases; version JSON | Parser/help/discovery/completion agree; malformed requests refuse before dispatch | Mapped acceptance and negative controls pass; all 49 former opaque argument packs gain exact static grammar | Exact metadata and typed exit/schema identities | PASS | Command grammar, not runtime support inferred from a name |
+| Human terminal | Actual old/new executable captures and read-only resident facts | 60 before/after CLI captures; 30 live host reads; 40/80/180 columns, styled/plain | Sparse records/groups; no dropped facts, boxes or plain ANSI | Model cards, grouped advanced help, responsive engine/host records and errors inspected | Cell-bounded lines and unchanged terminal attributes | PASS | Human layout at these widths/modes |
+| Chat PTY | Production client against isolated protocol fixtures | Startup/help, slash/context menus, stale tickets, Unicode/paste/history, progress, exact channels, disconnect/cancel/resize | Preserve input/channel meaning; clear transient feedback; restore prompt/terminal | Mapped PTY suite and repeated-turn controls pass | Exact protocol bytes; balanced paste; termios before equals after; 5 TTY descriptors across scopes | PASS | Interactive composition and cleanup, not model behavior |
+| Real CPU vertical | Compiled bounded decoder and normal resident host | Input `a`, two turns through chat, reset, checkpoint/fork and stale/cancel/refusal controls | `okokok`, committed position 5, next prompt and independent subsequent work | Exact response/state and lifecycle controls pass | Exact fixture result; no upstream-model equivalence claimed | PASS | Actual generation through the normal host, not a mocked completion |
+| Host memory safety | ASan/LSan, UBSan and unsuppressed Valgrind | Changed CLI/host composition; four real chat processes and 20 repeated edit/generation turns | No invalid access/leak/undefined behavior; failure cleanup | Both mapped sanitizer lanes pass; all four checked chat processes exit with 0 errors and 0 bytes in use | Zero errors/leaks; no new suppression | PASS | Software memory/lifecycle safety at exercised scope |
+| Machine/API | Existing serializers and protocol/API acceptance | JSON acquisition success/dry-run/failure; host/session/engine/OpenAI/remote fixtures | ANSI-free structured output; existing schemas and routing retained | Mapped integration lanes pass; acquisition stdout is one typed result, not parsed supervisor logs | Exact JSON/schema/status controls; local protocol remains v24 | PASS | Machine separation and preserved existing API meaning |
+| Documentation | Native metadata/link/project-control and publication checks | 103 owners, architecture diagram, contracts, reference and ADR | Coherent owners/links/counts; common Markdown → HTML/PDF | Structural gates, HTML and browser-backed PDF generation pass | No runtime maturity inferred from publication | PASS | Documentation/publication integrity |
+
+The real CPU package is artifact
+`a946a8447534b15556e9b6d38c57cfee2bb3f5f05ffa5932ac9c672b7641341d`, binding
+`5911a93e48dbe4b993b13fae4b3e2773f688db02ec125de92227f145f41c9884`, context 8.
+No model weights or operator payloads become repository fixtures.
+
+Thirty-two installed static/shared producer PTY cycles observe explicit resize
+advance at 0.002–0.003 ms and Esc visual dismissal/advance plus drain at
+0.012–0.139 ms. These are local call observations, not end-to-end event-delivery
+SLAs. The original 250 ms fragmented-sequence deadline remains intact; visual
+dismissal no longer waits for it. YVEX uses producer readiness/deadline facts
+and a resize wake rather than the former 100 ms editor poll cadence.
+
+### Nonclaims and live-service boundary
+
+Wrapping is Unicode/grapheme-cell based, not language-aware word wrapping or a
+universal terminal-emulator guarantee. Extension qualification is native Linux;
+retained base macOS evidence does not qualify the new extension there. Plain
+and styled output carry the same facts; no alternate screen, opaque background,
+caller ANSI injection, domain meaning in REPLAI or fallback editor is introduced.
+
+The existing production host was only inspected. PID 3951411 retained loaded
+and on-disk executable digest
+`2999dc940a7cdfd9cfb214c47b29af20bc2813425e0357327ab2b8a7340db4e7`;
+its attached user session was not changed. The candidate is built under
+`build/interface-refoundation/`, not installed over that live executable.
+This does not requalify DeepSeek numerics/performance or the YAI product chain.
+The separate legacy `cuda.native` artifact blocker and broader retained
+numerical failures are not erased by the interface selection's 121 passes.
+
+YAI, Studio and SDK are untouched. API-only finite-decision discovery does not
+implement Laya lifecycle convergence. Remote management remains read-only v1;
+A03 remains READY. Static-link notices and receipts retain MIT attribution, but
+exact recipient legal/package closure remains UNQUALIFIED and fail-closed.
+No release, customer distribution or unrelated capability promotion is earned.
+
 ## DeepSeek GB10 inference pipeline (2026-09-30)
 
 `V010.RUNTIME.DEEPSEEK.GB10.INFERENCE.PIPELINE.1` preserves the preceding

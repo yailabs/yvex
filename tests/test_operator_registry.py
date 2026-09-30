@@ -4,19 +4,23 @@
 from __future__ import annotations
 
 import copy
+import os
 import hashlib
 import json
 import pathlib
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "config/operator/registry.json"
 GENERATOR = ROOT / "tools/generate_operator_registry.py"
-GENERATED = ROOT / "build/generated/operator"
+BUILD = ROOT / os.environ.get("BUILD_DIR", "build")
+BINARY = pathlib.Path(os.environ.get("YVEX_BIN", str(ROOT / "yvex"))).resolve()
+GENERATED = BUILD / "generated/operator"
 FORBIDDEN_TOP_LEVEL = {
     "dev",
     "eval",
@@ -125,7 +129,7 @@ def test_generation(registry: dict[str, object]) -> None:
     ):
         require(forbidden not in generated_source,
                 f"generated descriptors contain behavior: {forbidden}")
-    generated_object = ROOT / "build/obj/generated/operator/registry.o"
+    generated_object = BUILD / "obj/generated/operator/registry.o"
     require(generated_object.is_file(), "compiled registry descriptor object is missing")
     undefined = subprocess.run(
         ["nm", "-u", str(generated_object)],
@@ -140,6 +144,10 @@ def test_generation(registry: dict[str, object]) -> None:
 
 
 def test_refusals(registry: dict[str, object]) -> None:
+    for key in ("help_group", "slash_group", "summary"):
+        mutation_failure(registry,
+            lambda row, key=key: operation(row, "host.status").update({key: "bad\x1b[31m"}),
+            "terminal control characters")
     mutation_failure(registry, lambda row: row.update(schema_version=2), "registry.schema")
     mutation_failure(registry, lambda row: row.update(unexpected=True), "unknown field 'unexpected'")
     mutation_failure(
@@ -260,8 +268,8 @@ def test_refusals(registry: dict[str, object]) -> None:
     )
 
     def unknown_flag_set_field(row: dict[str, object]) -> None:
-        target = next(value for value in row["flag_sets"].values() if isinstance(value, dict))
-        target["surprise"] = []
+        target = next(value for value in row["flag_sets"].values() if isinstance(value, list))
+        target[0]["surprise"] = []
 
     mutation_failure(registry, unknown_flag_set_field, "unknown field 'surprise'")
 
@@ -313,7 +321,7 @@ def test_product_surface(registry: dict[str, object]) -> None:
 
 def test_compiled_discovery(registry: dict[str, object]) -> None:
     result = subprocess.run(
-        [str(ROOT / "yvex"), "help", "--json"],
+        [str(BINARY), "help", "--json"],
         cwd=ROOT,
         text=True,
         capture_output=True,
@@ -361,6 +369,11 @@ def test_compiled_discovery(registry: dict[str, object]) -> None:
                 f"discovery aliases: {actual['operation_id']}")
         require(actual["summary"] == source["summary"],
                 f"discovery summary: {actual['operation_id']}")
+        require(actual["help_group"] == source["help_group"], "help grouping drift")
+        require(actual["slash_group"] == source.get("slash_group", "Other"), "slash grouping drift")
+        for actual_flag, source_flag in zip(actual["flags"], source["expanded_flags"]):
+            require(actual_flag["description"] == source_flag.get("description", "none"),
+                    "flag description drift")
         require(actual["input_schema"] == source["input_schema"] and
                 actual["result_schema"] == source["result_schema"],
                 f"discovery schemas: {actual['operation_id']}")
@@ -368,6 +381,15 @@ def test_compiled_discovery(registry: dict[str, object]) -> None:
                 f"discovery side effects: {actual['operation_id']}")
         require(len(actual["arguments"]) == len(source.get("arguments", [])),
                 f"discovery argument coverage: {actual['operation_id']}")
+        for actual_arg, source_arg in zip(actual["arguments"], source.get("arguments", [])):
+            for field in ("name", "multiplicity", "required", "validator",
+                          "completion_provider"):
+                require(actual_arg[field] == source_arg[field],
+                        f"discovery argument {field} drift: {actual['operation_id']}")
+            require(actual_arg["enum_values"] == source_arg.get("enum_values", []),
+                    f"discovery argument enum drift: {actual['operation_id']}")
+            require(actual_arg["type"] == source_arg["value_type"],
+                    f"discovery argument type drift: {actual['operation_id']}")
         slash_arguments = source.get("slash_arguments", source.get("arguments", []))
         require(len(actual["slash_arguments"]) == len(slash_arguments),
                 f"discovery slash argument coverage: {actual['operation_id']}")
@@ -397,7 +419,7 @@ def test_compiled_discovery(registry: dict[str, object]) -> None:
 def test_completion() -> None:
     outputs: dict[str, str] = {}
     for shell in ("bash", "zsh", "fish"):
-        command = [str(ROOT / "yvex"), "help", "completion", shell]
+        command = [str(BINARY), "help", "completion", shell]
         first = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
         second = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
         require(first.returncode == 0, first.stderr)
@@ -423,6 +445,18 @@ def test_completion() -> None:
         bash.write_text(outputs["bash"], encoding="utf-8")
         require(subprocess.run(["bash", "-n", str(bash)], check=False).returncode == 0,
                 "invalid bash completion")
+        result = subprocess.run(["bash", "-c",
+            'source "$1"; COMP_WORDS=(yvex profile create --backend c); COMP_CWORD=4; '
+            '_yvex_complete; printf "%s\\n" "${COMPREPLY[@]}"', "bash", str(bash)],
+            text=True, capture_output=True)
+        require(result.returncode == 0 and set(result.stdout.split()) == {"cpu", "cuda"},
+                f"enum completion drift: {result}")
+        result = subprocess.run(["bash", "-c",
+            'source "$1"; COMP_WORDS=(yvex compile quant convert p); COMP_CWORD=4; '
+            '_yvex_complete; printf "%s\\n" "${COMPREPLY[@]}"', "bash", str(bash)],
+            text=True, capture_output=True)
+        require(result.returncode == 0 and set(result.stdout.split()) == {"plan"},
+                f"positional enum completion drift: {result}")
         for shell in ("zsh", "fish"):
             executable = shutil.which(shell)
             if not executable:
@@ -434,6 +468,15 @@ def test_completion() -> None:
 
 
 def main() -> int:
+    with tempfile.TemporaryDirectory(prefix="yvex-human-oracle-") as temporary:
+        fixture = pathlib.Path(temporary) / "fields.txt"
+        fixture.write_text("  identity  abcdef\n            012345\n  state     BLOCKED\n")
+        matcher = [sys.executable, "tests/support/human_field.py", str(fixture)]
+        for value, expected in (("identity: abcdef012345", 0), ("state: BLOCKED", 0),
+                                ("identity: abcdef012344", 1), ("state: READY", 1),
+                                ("State: BLOCKED", 1)):
+            require(subprocess.run([*matcher, value]).returncode == expected,
+                    "human test oracle changed facts while recovering layout")
     registry = read_registry()
     mutation_failure(
         registry,
@@ -445,6 +488,57 @@ def main() -> int:
     test_product_surface(registry)
     test_compiled_discovery(registry)
     test_completion()
+    advanced = subprocess.run([str(BINARY), "help", "--advanced"],
+        env=dict(os.environ, COLUMNS="4096", NO_COLOR="1"), text=True, capture_output=True)
+    require(advanced.returncode == 0, advanced.stderr)
+    paths, parent = set(), None
+    for line in advanced.stdout.split("ADVANCED AND ENGINEERING", 1)[1].splitlines():
+        heading = re.fullmatch(r"  (yvex(?: .*)?)", line)
+        if heading:
+            parent = heading[1]
+        elif parent and re.match(r"^    [a-z]", line):
+            paths.add(parent + " " + line.strip().split()[0])
+    expected = {"yvex " + " ".join(row["command_path"]) for row in normalized_operations(registry)
+                if row["CLI_projection"] and row["visibility"] in ("product-advanced", "engineering")}
+    require(paths == expected, f"grouped advanced help omitted/added grammar: {paths ^ expected}")
+    require("[arguments ...]" not in advanced.stdout,
+            "advanced help still hides known static positional grammar")
+    for action in ("status", "stop", "resume", "cleanup"):
+        canonical = subprocess.run([str(BINARY), "source", action, "--help"],
+            text=True, capture_output=True)
+        compatible = subprocess.run([str(BINARY), "source", "acquire", action, "--help"],
+            text=True, capture_output=True)
+        require(canonical.returncode == compatible.returncode == 0 and
+                canonical.stdout == compatible.stdout and
+                f"source acquire {action}" in compatible.stdout,
+                f"acquisition compatibility path escaped registry: {action}")
+    for command, label in ((["compile"], "target"),
+                           (["inspect", "tokenizer", "encode"], "path"),
+                           (["management", "enroll"], "peer_public_key")):
+        leaf = subprocess.run([str(BINARY), *command, "--help"],
+            env=dict(os.environ, COLUMNS="4096", NO_COLOR="1"), text=True, capture_output=True)
+        require(leaf.returncode == 0 and "ARGUMENTS" in leaf.stdout and label in leaf.stdout,
+                f"leaf help hides positional grammar: {command}: {leaf.stdout}")
+    for command in (["compile"], ["artifact", "list", "unexpected"],
+                    ["source", "acquire", "one", "two"],
+                    ["inspect", "backend", "not-a-backend"],
+                    ["compile", "quant", "convert", "not-an-action"],
+                    ["management", "enroll", "missing"]):
+        refused = subprocess.run([str(BINARY), *command], text=True, capture_output=True)
+        require(refused.returncode == 2, f"malformed static grammar dispatched: {command}")
+    version = subprocess.run([str(BINARY), "version", "--json"], text=True, capture_output=True)
+    require(version.returncode == 0 and "\x1b" not in version.stdout, version.stderr)
+    identity = json.loads(version.stdout)
+    require(identity["schema"] == "yvex.version.v1" and identity["version"] == "0.1.0",
+            "version JSON is not the product version projection")
+    require(identity["registry_identity"] == (GENERATED / "registry.sha256").read_text().strip(),
+            "version/discovery registry drift")
+    require(subprocess.run([str(BINARY), "version", "--unqualified"], capture_output=True).returncode == 2,
+            "version accepted an unknown option")
+    for op in ("http.chat.preflight", "finite.decision.producer"):
+        require(operation(registry, op)["visibility"] == "API-only", "API operation acquired a CLI")
+    require(operation(registry, "system.cuda.bandwidth")["command_path"] == ["inspect", "cuda", "bandwidth"],
+            "bandwidth diagnostic has no canonical identity")
     print("operator registry: schema/generation/refusal/product/discovery checks passed")
     return 0
 

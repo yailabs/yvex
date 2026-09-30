@@ -29,7 +29,7 @@ fail() {
 contains() {
     file=$1
     text=$2
-    grep -F "$text" "$file" >/dev/null || fail "$file missing: $text"
+    python3 tests/support/human_field.py "$file" "$text" || fail "$file missing: $text"
 }
 
 not_contains() {
@@ -322,7 +322,7 @@ append_matrix_row bad-magic materialize-gate "status: materialize-gate-fail" pre
   --alias "$ALIAS" \
   --support-level selected-tensor-materialized \
   --registry "$REG" >"$OUT_DIR/models-add.out" 2>"$OUT_DIR/models-add.err"
-GOOD_SHA=$(awk '/^registered_sha256: / { print $2 }' "$OUT_DIR/models-add.out")
+GOOD_SHA=$(awk '$1 == "registered_sha256" || $1 == "registered_sha256:" { print $2 }' "$OUT_DIR/models-add.out")
 test -n "$GOOD_SHA" || fail "missing registered sha"
 
 run_expect_pass identity-pass models-verify "status: models-identity-pass" identity false false not-needed \

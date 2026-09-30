@@ -44,7 +44,7 @@ yvex
 yvex help [COMMAND...]
 yvex help --advanced
 yvex help --json
-yvex version
+yvex version [--json]
 
 yvex serve
 yvex chat [--model MODEL]
@@ -119,8 +119,9 @@ starts no host, and loads no engine. A missing host produces the explicit
 The linear editor is the externally linked REPLAI ABI 1 implementation. It owns
 grapheme editing, history navigation, paste, resize/redraw and exact terminal
 restoration. YVEX supplies prompt values, history admission, registry completion
-and interrupt meaning. During generation the editor is closed; YVEX owns output
-and protocol cancellation. See [the dependency decision](../decisions/0007-external-terminal-editor.md)
+and interrupt meaning. During generation the editor is closed; YVEX owns stream
+meaning and protocol cancellation while REPLAI owns quiet feedback and terminal
+restoration. See [the dependency decision](../decisions/0007-external-terminal-editor.md)
 for the exact pin, build requirements and lifecycle evidence. Registry-derived
 slash operations remain limited to conversation and session use:
 
@@ -171,7 +172,7 @@ these clients opens a package directly.
 catalog used by `engine list`: backend, execution mode, active/idle state,
 attached sessions/clients, model leases, directional capabilities, and H12
 resource/placement facts. Its JSON schema is `yvex.model.active.v1`; consumers
-never parse the human table.
+never parse the human presentation.
 
 ### Offline work
 
@@ -241,7 +242,9 @@ semantic validation, and typed result authority; the registry does not create
 support by naming an operation.
 
 Default help projects only the product map. `help --advanced` exposes admitted
-advanced and engineering leaves. `help --json` is a stable structured
+advanced and engineering leaves grouped by registry-authored domain and parent
+command, with concise child verbs instead of repeated full command paths.
+`help --json` is a stable structured
 projection with exact operation and command identities. Human and machine
 renderers consume the same typed result and machine output contains no ANSI.
 Registry-generated shell completion applies the same projection at an empty
@@ -268,3 +271,49 @@ authority or administrative REPL exists.
 This local product architecture does not establish public HTTP serving,
 authentication, TLS, remote security, full OpenAI compatibility, distributed
 serving, model quality, benchmark authority, or release qualification.
+
+## Human presentation and machine inventory
+
+The common human grammar is identity → aligned responsive fields → blockers and
+secondary facts. Normal model lists emphasize state, execution, format, size and
+available representations. `show`, audit and JSON retain deep lineage. `--wide`
+explicitly adds useful metadata; terminal width does not silently opt into it.
+Engine entries retain their detailed facts in responsive records. Session fleets
+and benchmark comparisons use lightweight tables, with structural record fallback
+at narrow widths. Important fields are not elided.
+Color supplements content; NO_COLOR, dumb terminals and redirected output retain
+the same facts. Human layout is not a stable machine schema.
+
+Static positional cardinality/types/actions and flag descriptions, types, enum
+values, conflicts, requirements and repeatability are registry-owned and shared
+by parsing, leaf help, discovery and shell completion. Compound action-dependent
+requirements remain in the domain parser; an action listed by grammar is not a
+capability claim. Leaf help exposes argument requirements and admitted enum
+spellings rather than an opaque `[arguments ...]` pack. Domain admission stays
+outside that registry. `--json` selects
+the command's existing structured contract; `--output` exists only where a real
+normal/table/audit choice is supported. `--audit` and `--wide` retain their command
+meaning, not an invented universal envelope.
+
+Acquisition lifecycle paths are canonically `source status|stop|resume|cleanup`.
+The existing nested `source acquire status|stop|resume|cleanup` spellings remain
+registry-authored compatibility aliases, not parser-only subcommands.
+
+`source acquire --json` emits one terminal `yvex.model.pull.v1` result on stdout;
+provider output and progress remain on stderr. The detached supervisor publishes
+a bounded structured result before its terminal operation state. An attaching
+client consumes that result, never reconstructing it from provider/human logs.
+An unavailable terminal result fails closed, and starting a replacement supervisor
+retires the previous result rather than reusing stale publication.
+
+`version --json` emits `yvex.version.v1`: product version, observed private local
+protocol version, registry identity, build commit/tree/state and build identity.
+It is a build-fact projection, not a public remote compatibility negotiation.
+`inspect cuda bandwidth` is the engineering diagnostic `system.cuda.bandwidth`;
+it measures bounded allocation/transfers and does not mutate resident engines.
+
+Discovery includes API-only dispositions for HTTP health/catalog/chat preflight,
+the finite-decision producer, and the existing read-only remote management facts.
+This inventory neither creates CLI paths nor promotes runtime maturity. Finite
+decisions are not chat. Remote mutation remains deferred. QA and programmatic
+one-shot generation remain deliberately absent from ordinary product commands.

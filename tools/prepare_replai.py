@@ -36,6 +36,8 @@ def prepare(prefix, source_override):
             source_override = source_override.resolve()
             if command(['git', 'rev-parse', 'HEAD'], cwd=source_override) != pin['revision']:
                 raise RuntimeError('REPLAI_SOURCE must be at the exact pinned revision')
+            if command(['git', 'rev-parse', 'HEAD^{tree}'], cwd=source_override) != pin['tree']:
+                raise RuntimeError('REPLAI_SOURCE tree identity mismatch')
             if command(['git', 'status', '--porcelain'], cwd=source_override):
                 raise RuntimeError('REPLAI_SOURCE must be clean')
         receipt = prefix / 'replai-build.json'
@@ -82,6 +84,8 @@ def prepare(prefix, source_override):
             header = (staged / 'include/replai.h').read_text()
             if f'#define REPLAI_C_ABI_VERSION {pin["abi"]}\n' not in header:
                 raise RuntimeError('REPLAI header ABI mismatch')
+            if f'#define REPLAI_PRESENTATION_VERSION {pin["presentation_extension"]}\n' not in header:
+                raise RuntimeError('REPLAI presentation extension mismatch')
             record = {'pin': pin, 'rustc': command(['rustc', '--version']), 'rustflags': env.get('RUSTFLAGS', ''),
                       'sha256': {name: digest(staged / name) for name in FILES}}
             (staged / 'replai-build.json').write_text(json.dumps(record, indent=2) + '\n')

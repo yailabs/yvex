@@ -34,7 +34,7 @@ run_code() {
 contains() {
     file=$1
     value=$2
-    grep -F -- "$value" "$file" >/dev/null || fail "$file missing: $value"
+    python3 tests/support/human_field.py "$file" "$value" || fail "$file missing: $value"
 }
 
 omits() {
@@ -46,7 +46,7 @@ omits() {
 }
 
 run_ok no_args "$YVEX_BIN"
-contains "$OUT_DIR/no_args.out" "YVEX inference runtime"
+contains "$OUT_DIR/no_args.out" "YVEX native model execution"
 contains "$OUT_DIR/no_args.out" "RUNTIME"
 contains "$OUT_DIR/no_args.out" "serve"
 contains "$OUT_DIR/no_args.out" "chat"
@@ -58,18 +58,14 @@ contains "$OUT_DIR/chat_non_tty.err" "chat requires a terminal"
 contains "$OUT_DIR/chat_non_tty.err" "configured provider API"
 
 run_ok help "$YVEX_BIN" --help
-contains "$OUT_DIR/help.out" "YVEX inference runtime"
+contains "$OUT_DIR/help.out" "YVEX native model execution"
 contains "$OUT_DIR/help.out" "USE"
 contains "$OUT_DIR/help.out" "RUNTIME"
 contains "$OUT_DIR/help.out" "TOOLS"
 contains "$OUT_DIR/help.out" "META"
 contains "$OUT_DIR/help.out" "model search -> model pull -> model prepare -> serve -> model load -> chat"
-contains "$OUT_DIR/help.out" "yvex model pull SOURCE"
-contains "$OUT_DIR/help.out" "yvex model prepare MODEL"
-contains "$OUT_DIR/help.out" "yvex model load [MODEL]"
-contains "$OUT_DIR/help.out" "yvex model push MODEL DESTINATION"
-contains "$OUT_DIR/help.out" "yvex host logs"
-contains "$OUT_DIR/help.out" "yvex host memory"
+contains "$OUT_DIR/help.out" 'Use `yvex help model`'
+contains "$OUT_DIR/help.out" "yvex host status / memory / logs"
 omits "$OUT_DIR/help.out" "yvex run"
 omits "$OUT_DIR/help.out" "yvex server"
 
@@ -81,9 +77,9 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 run_ok help_graph "$YVEX_BIN" help bench attention --advanced
 contains "$OUT_DIR/help_graph.out" "yvex bench attention execute"
 run_ok help_input "$YVEX_BIN" inspect input --help
-contains "$OUT_DIR/help_input.out" "operation: input.prepare"
+contains "$OUT_DIR/help_input.out" "input.prepare"
 run_ok help_paths "$YVEX_BIN" inspect paths --help
-contains "$OUT_DIR/help_paths.out" "operation: system.paths"
+contains "$OUT_DIR/help_paths.out" "system.paths"
 
 run_ok inspect "$YVEX_BIN" artifact show "$FIXTURE"
 contains "$OUT_DIR/inspect.out" "format: gguf"

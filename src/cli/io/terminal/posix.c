@@ -19,10 +19,11 @@
 
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2, "interrupt capture requires lock-free unsigned atomics");
 
-struct yvex_cli_output_scope { struct termios saved; };
+struct yvex_cli_output_scope { replai_handle *handle; };
 struct yvex_cli_interrupt {
-    struct sigaction previous;
+    struct sigaction previous, previous_resize;
     int wake[2], watching;
+    unsigned int resize_seen;
     pthread_t worker;
     atomic_int stopping;
     int (*handle)(void *context);
@@ -34,6 +35,7 @@ struct yvex_cli_interrupt {
  * worker joins and the prior handler is restored. */
 static pthread_mutex_t capture_mutex = PTHREAD_MUTEX_INITIALIZER;
 static atomic_uint captured;
+static atomic_uint resized;
 static volatile sig_atomic_t wake_descriptor = -1;
 static int capture_owned;
 
@@ -65,19 +67,18 @@ int yvex_cli_terminal_editor_open(struct replai_handle *editor)
 int yvex_cli_output_scope_open(yvex_cli_output_scope **out, yvex_error *err)
 {
     yvex_cli_output_scope *scope;
-    struct termios quiet;
+    replai_status status;
+    replai_config config = {.struct_size = sizeof(config),
+        .abi_version = REPLAI_C_ABI_VERSION, .max_input_bytes = 1u};
     if (!out) return terminal_refuse(err, YVEX_ERR_INVALID_ARG, "output scope is required");
     *out = NULL;
-    if (!yvex_cli_terminal_interactive(stdin)) return YVEX_OK;
+    if (!yvex_cli_terminal_interactive(stdin) || !yvex_cli_terminal_interactive(stdout)) return YVEX_OK;
     scope = calloc(1u, sizeof(*scope));
     if (!scope) return terminal_refuse(err, YVEX_ERR_NOMEM, "output scope allocation failed");
-    if (tcgetattr(STDIN_FILENO, &scope->saved) != 0) {
-        free(scope);
-        return terminal_refuse(err, YVEX_ERR_IO, "terminal state capture failed");
-    }
-    quiet = scope->saved;
-    quiet.c_lflag &= (tcflag_t)~(ECHO | ECHONL);
-    if (tcsetattr(STDIN_FILENO, TCSANOW, &quiet) != 0) {
+    status = replai_create(&config, &scope->handle);
+    if (status == REPLAI_OK) status = replai_output_open(scope->handle, STDIN_FILENO, STDOUT_FILENO);
+    if (status != REPLAI_OK) {
+        if (scope->handle) (void)replai_destroy(&scope->handle);
         free(scope);
         return terminal_refuse(err, YVEX_ERR_IO, "quiet output admission failed");
     }
@@ -85,18 +86,29 @@ int yvex_cli_output_scope_open(yvex_cli_output_scope **out, yvex_error *err)
     return YVEX_OK;
 }
 
+int yvex_cli_output_scope_feedback(yvex_cli_output_scope *scope, const char *text)
+{
+    replai_span span = {.struct_size = sizeof(span),
+        .extension_version = REPLAI_PRESENTATION_VERSION, .text = (const uint8_t *)text,
+        .text_bytes = text ? strlen(text) : 0u, .role = REPLAI_ROLE_DIM};
+    replai_text value = {.struct_size = sizeof(value),
+        .extension_version = REPLAI_PRESENTATION_VERSION, .spans = &span, .span_count = 1u};
+    if (!scope) return YVEX_OK;
+    return replai_output_feedback(scope->handle, &value) == REPLAI_OK ? YVEX_OK : YVEX_ERR_IO;
+}
+
 int yvex_cli_output_scope_close(yvex_cli_output_scope **owned, yvex_error *err)
 {
     yvex_cli_output_scope *scope;
-    int flushed, restored;
+    replai_status restored, retired;
     if (!owned || !*owned) return YVEX_OK;
     scope = *owned;
     /* Product does not admit a draft while a request owns output. */
-    flushed = tcflush(STDIN_FILENO, TCIFLUSH);
-    restored = tcsetattr(STDIN_FILENO, TCSANOW, &scope->saved);
+    restored = replai_output_close(scope->handle, 1u);
+    retired = replai_destroy(&scope->handle);
     free(scope);
     *owned = NULL;
-    return flushed == 0 && restored == 0 ? YVEX_OK
+    return restored == REPLAI_OK && retired == REPLAI_OK ? YVEX_OK
         : terminal_refuse(err, YVEX_ERR_IO, "terminal output restoration failed");
 }
 
@@ -118,8 +130,8 @@ static void wake_send(int descriptor)
 static void interrupt_handler(int number)
 {
     int saved_errno = errno;
-    (void)number;
-    interrupt_record();
+    if (number == SIGWINCH) atomic_fetch_add_explicit(&resized, 1u, memory_order_relaxed);
+    else interrupt_record();
     if (wake_descriptor >= 0) wake_send(wake_descriptor);
     errno = saved_errno;
 }
@@ -168,12 +180,60 @@ int yvex_cli_interrupt_open(yvex_cli_interrupt **out, yvex_error *err)
         free(scope);
         rc = terminal_refuse(err, YVEX_ERR_IO, "interrupt handler admission failed");
     } else {
+        if (sigaction(SIGWINCH, &action, &scope->previous_resize) != 0) {
+            (void)sigaction(SIGINT, &scope->previous, NULL);
+            wake_descriptor = -1;
+            (void)close(scope->wake[0]); (void)close(scope->wake[1]); free(scope);
+            (void)pthread_mutex_unlock(&capture_mutex);
+            return terminal_refuse(err, YVEX_ERR_IO, "resize handler admission failed");
+        }
+        scope->resize_seen = atomic_load_explicit(&resized, memory_order_relaxed);
         atomic_init(&scope->stopping, 0);
         capture_owned = 1;
         *out = scope;
     }
     (void)pthread_mutex_unlock(&capture_mutex);
     return rc;
+}
+
+int yvex_cli_terminal_editor_advance(struct replai_handle *editor,
+    yvex_cli_interrupt *interrupts, unsigned int observed_interrupts,
+    struct replai_event *event)
+{
+    replai_interest interest = {.struct_size = sizeof(interest),
+        .extension_version = REPLAI_PRESENTATION_VERSION};
+    struct pollfd descriptors[2];
+    unsigned int resize;
+    int ready;
+    replai_status status = replai_wait_interest(editor, &interest);
+    if (status != REPLAI_OK) return status;
+    if (yvex_cli_interrupt_count(interrupts) != observed_interrupts)
+        return replai_interrupt(editor, event);
+    resize = atomic_load_explicit(&resized, memory_order_relaxed);
+    if (resize != interrupts->resize_seen) {
+        interrupts->resize_seen = resize;
+        return replai_advance(editor, REPLAI_WAKE_RESIZE, 0u, event);
+    }
+    if (interest.kind == REPLAI_WAIT_READY)
+        return replai_advance(editor, REPLAI_WAKE_INPUT, 0u, event);
+    descriptors[0] = (struct pollfd){.fd = interest.input_fd, .events = POLLIN};
+    descriptors[1] = (struct pollfd){.fd = interrupts->wake[0], .events = POLLIN};
+    ready = poll(descriptors, 2u, interest.timeout_ms);
+    if (ready < 0) return errno == EINTR ? REPLAI_OK : REPLAI_IO;
+    if (!ready) return replai_advance(editor, REPLAI_WAKE_DEADLINE, interest.deadline_ticket, event);
+    if (descriptors[1].revents) {
+        unsigned char bytes[64];
+        while (read(interrupts->wake[0], bytes, sizeof(bytes)) > 0) {}
+        if (yvex_cli_interrupt_count(interrupts) != observed_interrupts)
+            return replai_interrupt(editor, event);
+        resize = atomic_load_explicit(&resized, memory_order_relaxed);
+        if (resize != interrupts->resize_seen) {
+            interrupts->resize_seen = resize;
+            return replai_advance(editor, REPLAI_WAKE_RESIZE, 0u, event);
+        }
+    }
+    if (descriptors[0].revents) return replai_advance(editor, REPLAI_WAKE_INPUT, 0u, event);
+    return REPLAI_OK;
 }
 
 unsigned int yvex_cli_interrupt_count(const yvex_cli_interrupt *scope)
@@ -243,6 +303,8 @@ int yvex_cli_interrupt_close(yvex_cli_interrupt **owned, yvex_error *err)
     (void)yvex_cli_interrupt_unwatch(scope);
     if (sigaction(SIGINT, &scope->previous, NULL) != 0)
         return terminal_refuse(err, YVEX_ERR_IO, "interrupt handler restoration failed");
+    if (sigaction(SIGWINCH, &scope->previous_resize, NULL) != 0)
+        return terminal_refuse(err, YVEX_ERR_IO, "resize handler restoration failed");
     wake_descriptor = -1;
     (void)close(scope->wake[0]);
     (void)close(scope->wake[1]);

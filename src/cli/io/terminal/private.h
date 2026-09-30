@@ -7,6 +7,7 @@
 #include <yvex/core.h>
 
 struct replai_handle;
+struct replai_event;
 typedef struct yvex_cli_interrupt yvex_cli_interrupt;
 typedef struct yvex_cli_output_scope yvex_cli_output_scope;
 
@@ -15,7 +16,11 @@ int yvex_cli_terminal_interactive(FILE *stream);
 unsigned int yvex_cli_terminal_width(FILE *stream);
 /* Adapts the pinned editor's platform entrypoint; returns its status code. */
 int yvex_cli_terminal_editor_open(struct replai_handle *editor);
+int yvex_cli_terminal_editor_advance(struct replai_handle *editor,
+    yvex_cli_interrupt *interrupts, unsigned int observed_interrupts,
+    struct replai_event *event);
 int yvex_cli_output_scope_open(yvex_cli_output_scope **out, yvex_error *err);
+int yvex_cli_output_scope_feedback(yvex_cli_output_scope *scope, const char *text);
 int yvex_cli_output_scope_close(yvex_cli_output_scope **scope, yvex_error *err);
 
 /* One process-local capture scope; nested capture refuses. Editing and work

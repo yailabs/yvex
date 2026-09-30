@@ -48,10 +48,10 @@ grep 'dtype=F32' "$OUT_DIR/tensors.out" >/dev/null || fail "missing tensor dtype
 
 "$YVEX_BIN" artifact materialize --model "$OUT" --backend cpu > "$OUT_DIR/materialize-cpu.out" 2> "$OUT_DIR/materialize-cpu.err" || fail "cpu materialize failed"
 grep 'materialization status: materialized' "$OUT_DIR/materialize-cpu.out" >/dev/null || fail "missing materialized status"
-grep 'tensors_materialized: 1' "$OUT_DIR/materialize-cpu.out" >/dev/null || fail "missing materialized tensor count"
-grep 'bytes_materialized: 128' "$OUT_DIR/materialize-cpu.out" >/dev/null || fail "missing materialized bytes"
-grep 'execution_ready: false' "$OUT_DIR/materialize-cpu.out" >/dev/null || fail "missing execution false"
-grep 'status: weights-materialized' "$OUT_DIR/materialize-cpu.out" >/dev/null || fail "missing weights status"
+python3 tests/support/human_field.py "$OUT_DIR/materialize-cpu.out" 'tensors_materialized: 1' || fail "missing materialized tensor count"
+python3 tests/support/human_field.py "$OUT_DIR/materialize-cpu.out" 'bytes_materialized: 128' || fail "missing materialized bytes"
+python3 tests/support/human_field.py "$OUT_DIR/materialize-cpu.out" 'execution_ready: false' || fail "missing execution false"
+python3 tests/support/human_field.py "$OUT_DIR/materialize-cpu.out" 'status: weights-materialized' || fail "missing weights status"
 
 "$YVEX_BIN" compile artifact emit --help > "$OUT_DIR/help.out" 2> "$OUT_DIR/help.err" || fail "help failed"
 grep 'usage: yvex compile artifact emit' "$OUT_DIR/help.out" >/dev/null || fail "missing help usage"

@@ -261,6 +261,8 @@ int model_download_finish(const yvex_cli_models_download_options *options,
 
 /* Detached acquisition client/supervisor projection. Source owns durable truth. */
 int model_acquisition_worker_active(void);
+int model_acquisition_result_path(const yvex_model_download_report *report,
+                                   char path[YVEX_PATH_CAP]);
 int model_acquisition_operation_matches_report(
     const yvex_source_acquisition_operation *operation,
     const yvex_model_download_report *report, const char *selection_identity);

@@ -147,8 +147,9 @@ def audit(binary):
     dependency_rejections(root, pin)
     symbols = subprocess.check_output(['nm', str(binary)], text=True)
     imports = subprocess.check_output(['nm', '-u', os.environ['YVEX_CLIENT_LANE_OBJ']], text=True)
-    for symbol in ['replai_abi_version', 'replai_create', 'replai_poll',
-                   'replai_complete', 'replai_external_output', 'replai_history_add',
+    for symbol in ['replai_abi_version', 'replai_create', 'replai_prompt_composed',
+                   'replai_completion_snapshot', 'replai_completions_present',
+                   'replai_external_output', 'replai_history_add',
                    'replai_interrupt', 'replai_destroy']:
         assert any(line.split()[-1] == symbol for line in symbols.splitlines())
         assert any(line.split()[-1] == symbol for line in imports.splitlines())
@@ -188,6 +189,7 @@ def reply_format(binary, output, memcheck):
                 assert '**' not in text, text
                 assert '你指的是C.I.A.A.吗？' in text, text
                 assert 'Spacing: alpha bold words omega.' in text, text
+                assert '👩‍💻' in text and '👍🏽' in text and '🇮🇹' in text, text
                 assert '  • CIA' in text, text
                 assert any(line.startswith('    ') for line in text.splitlines()), text
                 assert '\n\n\n' not in text, text
@@ -205,11 +207,26 @@ def reply_format(binary, output, memcheck):
 
 def run(binary, host_log, output, memcheck):
     reply_format(binary, output, memcheck)
+    for columns, plain in ((40, True), (80, False), (180, True)):
+        c = Chat(binary, f'replai-help-{columns}', output, plain=plain,
+                 memcheck=memcheck, columns=columns)
+        try:
+            start = c.send(b'/help\r'); c.wait(b'Keyboard', start); c.wait(ENABLE, start); c.quiet()
+            raw = bytes(c.data[start:])
+            for group in (b'Observation', b'Reasoning', b'Content', b'Sessions', b'Lifecycle'):
+                assert group in raw, (columns, group, raw)
+            for operation in (b'/status', b'/think', b'/attach', b'/use', b'/cancel', b'/quit'):
+                assert operation in raw, (columns, operation)
+            start = c.send(b'hello\r'); c.wait(b'hello from yvex', start); c.wait(ENABLE, start)
+            c.finish()
+        finally: c.dispose()
     for name, plain, dumb in [('styled', False, False), ('plain', True, False), ('dumb', False, True)]:
         c = Chat(binary, 'replai-' + name, output, plain=plain, dumb=dumb, memcheck=memcheck)
         try:
-            prompt = b'\r\x1b[2K' + (LABEL + b'> ' if plain or dumb else b'\x1b[38;5;81m' + LABEL + b'>\x1b[0m ')
-            assert ENABLE + prompt in c.data
+            import re
+            plain_prompt = re.sub(rb'\x1b\[[0-9;]*m', b'', bytes(c.data))
+            assert LABEL + ' › '.encode() in plain_prompt
+            assert b'/attachments-clear' not in c.data  # catalog is demand-driven
             if plain or dumb:
                 import re
                 assert not re.search(rb'\x1b\[[0-9;]*m', c.data)
@@ -225,11 +242,29 @@ def run(binary, host_log, output, memcheck):
         assert b'... ' in c.data
         start = c.send(b'/sta\t')
         c.wait(b'/status', start)
+        c.send(b'\r')  # menu acceptance is not submission
         start = c.send(b'\r'); c.wait(ENABLE, start)
         c.quiet()
         assert b'context' in c.data[start:] and b'hello from yvex' not in c.data[start:]
+        # Ambiguous candidates are visible, Esc dismisses without submitting.
+        start = c.send(b'/s\t'); c.wait(b'/sessions', start)
+        c.send(b'\x1b'); c.quiet(); c.quiet()  # retain the semantic ESC ambiguity deadline
+        c.send(b'\x7f\x7f')  # discard the two draft characters, not a product operation
+        asset = output / 'completion-local.txt'
+        asset.write_text('local qualification fixture')
+        path_command = '/attach ' + str(output / 'completion-lo')
+        start = c.send(path_command + '\t')
+        c.wait(b'completion-local.txt', start)
+        c.send(b'\r')  # accept the path, do not admit an attachment yet
+        c.quiet()
+        assert b'attached\r\n' not in c.data[start:]
+        c.send(b'\x7f' * len(('/attach ' + str(asset)).encode()))
+        start = c.send(b'/use replai-\t'); c.wait(b'resident session', start)
+        c.send(b'\r\r'); c.wait(ENABLE, start); c.quiet()
         start = c.send('wide 界🌍'.encode()); c.wait('界🌍'.encode(), start)
         fcntl.ioctl(c.slave, termios.TIOCSWINSZ, struct.pack('HHHH', 20, 32, 0, 0))
+        import signal
+        os.kill(c.process.pid, signal.SIGWINCH)
         c.quiet()
         c.send(b'\x0c'); c.wait(b'\x1b[2J\x1b[H', start)
         c.submit(b'\x1b[D!', 'wide 界!🌍'.encode(), host_log)
@@ -240,14 +275,14 @@ def run(binary, host_log, output, memcheck):
         assert host_log.read_text().count('generation.cancel replai-edit') == cancel_before
         # While generation owns output, only the caller's three TTY FDs remain.
         start = c.send(b'WAIT_PREFILL_CANCEL\r')
-        c.wait(b'processing 4 input tokens', start)
-        assert c.tty_fds() == 3
+        c.wait('prefill · 0/4 tokens'.encode(), start)
+        assert c.tty_fds() == 5  # quiet-output producer owns two terminal duplicates
         flags = termios.tcgetattr(c.slave)[3]
         assert flags & termios.ICANON and flags & termios.ISIG and not flags & termios.ECHO
         c.send(b'\x03'); c.wait(b'cancelled', start); c.wait(ENABLE, start); c.quiet()
         assert 'generation.cancel replai-edit' in host_log.read_text()
         assert c.tty_fds() == 5
-        print('generation transition: tty_fds 5->3->5; ICANON/ISIG restored; Ctrl-C routed to cancellation', flush=True)
+        print('generation transition: editor/quiet scopes each own 2 duplicates; ICANON/ISIG restored; Ctrl-C routed to cancellation', flush=True)
         for index in range(20):
             text = f'repeat-{index}'.encode()
             c.submit(text, text, host_log)

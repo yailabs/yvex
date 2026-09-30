@@ -345,7 +345,7 @@
     },
     {
       "id": "cli",
-      "patterns": ["src/cli/**", "config/operator/registry.json", "tools/generate_operator_registry.py"],
+      "patterns": ["src/cli/**", "include/yvex/internal/cli_presentation.h", "config/operator/registry.json", "tools/generate_operator_registry.py"],
       "lanes": ["fast", "structural", "runtime"],
       "tests": ["integration.cli", "structural.operator-registry"],
       "reason": "operator grammar changes require generated-authority and executable CLI acceptance"

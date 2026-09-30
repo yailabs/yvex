@@ -2,7 +2,7 @@
   "schema": 1,
   "number": 5,
   "title": "Interactive editing is not runtime ownership",
-  "description": "REPLAI is a pinned, statically linked editor inside yvex chat. It returns submitted UTF-8 and generic input events, restores terminal state before dispatch, and owns no product request semantics. YVEX owns history admission, command completion decisions, attachments, generation-bound requests, cancellation and result rendering. No editable prompt coexists with generation.",
+  "description": "Pinned REPLAI ABI 1 plus presentation extension 1 owns generic editing, documents, geometry, completion menus and quiet-output restoration. YVEX owns domain facts, history/candidate meaning, exact typed requests/channels and cancellation. No editable prompt coexists with generation.",
   "size": [
     1200,
     1060
@@ -25,7 +25,7 @@
         358,
         280
       ],
-      "title": "a  REPLAI inside chat"
+      "title": "a  REPLAI terminal substrate"
     },
     {
       "box": [
@@ -71,12 +71,12 @@
         194
       ],
       "kind": "external",
-      "title": "REPLAI · C ABI 1",
+      "title": "REPLAI · ABI 1 / P1",
       "lines": [
-        "editing / cursor / paste",
-        "history navigation mechanics",
-        "resize / redraw / restoration",
-        "pinned library inside chat",
+        "editing / paste / history",
+        "documents / geometry / styles",
+        "menus / driven wakeups",
+        "quiet output / restoration",
         "no command or model policy"
       ]
     },
@@ -153,10 +153,10 @@
         130
       ],
       "kind": "interface",
-      "title": "YVEX rendering",
+      "title": "YVEX display intent",
       "lines": [
-        "semantic result formatting",
-        "reasoning / final / status",
+        "typed facts / channels",
+        "framing / safe literals",
         "canonical bytes unchanged"
       ]
     }
@@ -319,10 +319,37 @@
         ],
         [
           193,
-          250
+          370
+        ],
+        [
+          410,
+          370
+        ],
+        [
+          410,
+          310
+        ],
+        [
+          422,
+          310
         ]
       ],
       "source": "render",
+      "target": "editor"
+    },
+    {
+      "kind": "flow",
+      "points": [
+        [
+          422,
+          220
+        ],
+        [
+          338,
+          220
+        ]
+      ],
+      "source": "editor",
       "target": "terminal"
     }
   ],
@@ -360,7 +387,7 @@
         48,
         891
       ],
-      "text": "Client owns cancellation; a platform adapter captures interrupts and restores output state.",
+      "text": "YVEX owns cancellation and presentation intent; REPLAI owns generic terminal mechanics.",
       "style": "note"
     }
   ]

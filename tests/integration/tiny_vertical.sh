@@ -81,14 +81,47 @@ assert inspected["requested_revision"] == sys.argv[4]
 assert inspected["resolved_revision"] == sys.argv[4]
 assert inspected["representations"][0]["format"] == "gguf"
 PY
+YVEX_HF_CLI="$fake_hf" "$YVEX_BIN" source acquire --repo "$provider_repo" \
+    --family tiny-fixture --name tiny-executable-source --revision "$provider_revision" \
+    --include model-Q4_K_M.gguf --models-root "$models" --auth never \
+    --dry-run --no-native-inventory --json >"$root/provider.plan.json" 2>"$root/provider.plan.err"
+python3 - "$root/provider.plan.json" <<'PY'
+import json, pathlib, sys
+text = pathlib.Path(sys.argv[1]).read_text()
+assert "\x1b" not in text
+assert json.loads(text)["status"] == "model-download-dry-run"
+PY
+if YVEX_HF_CLI="$fake_hf" YVEX_FAKE_HF_FAIL=1 "$YVEX_BIN" source acquire \
+    --repo "$provider_repo" --family tiny-fixture --name tiny-executable-source \
+    --revision "$provider_revision" --include model-Q4_K_M.gguf \
+    --models-root "$root/failed-models" --auth never --no-native-inventory --json \
+    >"$root/provider.failed.json" 2>"$root/provider.failed.err"; then
+    printf 'failed provider unexpectedly succeeded\n' >&2
+    exit 1
+fi
+python3 - "$root/provider.failed.json" <<'PY'
+import json, pathlib, sys
+text = pathlib.Path(sys.argv[1]).read_text()
+assert "\x1b" not in text
+result = json.loads(text)
+assert result["schema"] == "yvex.model.pull.v1"
+assert result["status"] == "model-download-fail"
+assert result["reason"]
+PY
 YVEX_HF_CLI="$fake_hf" YVEX_FAKE_HF_DOWNLOAD_SOURCE="$first/tiny.gguf" \
     "$YVEX_BIN" source acquire --repo "$provider_repo" --family tiny-fixture \
     --name tiny-executable-source --revision "$provider_revision" \
     --include model-Q4_K_M.gguf --models-root "$models" --auth never \
-    --no-native-inventory --audit >"$root/provider.acquire.out"
-grep -F 'status: model-download-pass' "$root/provider.acquire.out" >/dev/null
-grep -F "revision: $provider_revision" "$root/provider.acquire.out" >/dev/null
-acquired_root=$(sed -n 's/^source: //p' "$root/provider.acquire.out")
+    --no-native-inventory --json >"$root/provider.acquire.out"
+acquired_root=$(python3 - "$root/provider.acquire.out" "$provider_revision" <<'PY'
+import json, pathlib, sys
+result = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert result["schema"] == "yvex.model.pull.v1"
+assert result["status"] == "model-download-pass"
+assert result["revision"] == sys.argv[2]
+print(result["location"])
+PY
+)
 test -n "$acquired_root"
 acquired="$acquired_root/model-Q4_K_M.gguf"
 cmp "$first/tiny.gguf" "$acquired"
@@ -220,7 +253,8 @@ grep -F '"host_ready":true' "$root/status.json" >/dev/null
 grep -F '"loaded_engine_count":0' "$root/status.json" >/dev/null
 grep -F '"workers":2' "$root/status.json" >/dev/null
 grep -F '"model_open_count":0' "$root/status.json" >/dev/null
-grep -F 'YVEX HOST · verified inference runtime' "$root/server.out" >/dev/null
+grep -Fx 'verified inference runtime' "$root/server.out" >/dev/null
+grep -E '^YVEX [0-9]+\.[0-9]+\.[0-9]+ · HOST$' "$root/server.out" >/dev/null
 grep -F 'host ready · Ctrl-C to stop' "$root/server.out" >/dev/null
 
 # HTTP admission cannot inherit the two inference workers: two incomplete
@@ -451,7 +485,7 @@ assert shown["schema"] == "yvex.session.v1"
 assert shown["session"]["name"] == "persisted"
 assert shown["session"]["position"] > 0
 PY
-HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show persisted \
+HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show persisted --json \
     >"$root/prefix.source.before"
 if HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session fork \
     persisted fork-too-small 1 >"$root/prefix.small.out" \
@@ -461,28 +495,33 @@ if HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session fork \
 fi
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session fork \
     persisted forked 1048576 >"$root/prefix.fork.out"
-grep -E '^forked[[:space:]]+(ready|detached)[[:space:]]+position=[1-9][0-9]* turns=[1-9][0-9]*$' \
-    "$root/prefix.fork.out" >/dev/null
-HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show forked \
+grep -Fx 'forked' "$root/prefix.fork.out" >/dev/null
+grep -E '^[[:space:]]+state[[:space:]]+(ready|detached)$' "$root/prefix.fork.out" >/dev/null
+grep -E '^[[:space:]]+position[[:space:]]+[1-9][0-9]*$' "$root/prefix.fork.out" >/dev/null
+grep -E '^[[:space:]]+turns[[:space:]]+[1-9][0-9]*$' "$root/prefix.fork.out" >/dev/null
+HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show forked --json \
     >"$root/prefix.child.before"
-source_position=$(sed -n 's/^.*position=\([0-9][0-9]*\).*$/\1/p' \
-    "$root/prefix.source.before")
-child_position=$(sed -n 's/^.*position=\([0-9][0-9]*\).*$/\1/p' \
-    "$root/prefix.child.before")
+session_fact()
+{
+    python3 - "$1" "$2" <<'PY'
+import json, pathlib, sys
+print(json.loads(pathlib.Path(sys.argv[1]).read_text())["session"][sys.argv[2]])
+PY
+}
+source_position=$(session_fact "$root/prefix.source.before" position)
+child_position=$(session_fact "$root/prefix.child.before" position)
 test -n "$source_position" && test "$source_position" = "$child_position"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$NATIVE_TURN" --session forked a \
     --reasoning none --strategy greedy --max-new-tokens 1 \
     >"$root/run.forked.out" 2>"$root/run.forked.err"
 grep -Fx 'ok' "$root/run.forked.out" >/dev/null
 grep -E '[1-9][0-9]* reused' "$root/run.forked.err" >/dev/null
-HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show persisted \
+HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show persisted --json \
     >"$root/prefix.source.after"
-HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show forked \
+HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show forked --json \
     >"$root/prefix.child.after"
-test "$source_position" = "$(sed -n 's/^.*position=\([0-9][0-9]*\).*$/\1/p' \
-    "$root/prefix.source.after")"
-test "$(sed -n 's/^.*position=\([0-9][0-9]*\).*$/\1/p' \
-    "$root/prefix.child.after")" -gt "$child_position"
+test "$source_position" = "$(session_fact "$root/prefix.source.after" position)"
+test "$(session_fact "$root/prefix.child.after" position)" -gt "$child_position"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session new reasoning-limit \
     >"$root/session.reasoning.new"
 if HOME="$home" XDG_RUNTIME_DIR="$runtime" "$NATIVE_TURN" \
@@ -501,7 +540,7 @@ HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session state save \
 test -s "$state_path"
 grep -E '^state checkpoint saved position=[1-9][0-9]* bytes=[1-9][0-9]* digest=[0-9a-f]{64}$' \
     "$root/state.save" >/dev/null
-HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show persisted \
+HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show persisted --json \
     >"$root/session.before"
 
 if HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" model unload tiny-executable \
@@ -579,12 +618,10 @@ grep -E '^state checkpoint restored position=[1-9][0-9]* bytes=[1-9][0-9]* diges
     "$root/state.restore" >/dev/null
 test "$(sed -n 's/^.* digest=//p' "$root/state.save")" = \
     "$(sed -n 's/^.* digest=//p' "$root/state.restore")"
-HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show persisted \
+HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show persisted --json \
     >"$root/session.after"
-test "$(sed -n 's/^.*position=\([0-9][0-9]*\) turns=\([0-9][0-9]*\).*$/\1:\2/p' \
-        "$root/session.before")" = \
-    "$(sed -n 's/^.*position=\([0-9][0-9]*\) turns=\([0-9][0-9]*\).*$/\1:\2/p' \
-        "$root/session.after")"
+test "$(session_fact "$root/session.before" position)" = "$(session_fact "$root/session.after" position)"
+test "$(session_fact "$root/session.before" turns)" = "$(session_fact "$root/session.after" turns)"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$NATIVE_TURN" --session persisted a \
     --reasoning none --strategy greedy --max-new-tokens 1 \
     >"$root/run.after-restore.out" 2>"$root/run.after-restore.err"
@@ -671,13 +708,11 @@ HOME="$home" XDG_RUNTIME_DIR="$runtime" "$NATIVE_TURN" \
     --strategy greedy --max-new-tokens 1 a \
     >"$root/run.shared.second.out" 2>"$root/run.shared.second.err"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show shared \
-    --model "$second_profile" >"$root/session.shared.second.after"
+    --model "$second_profile" --json >"$root/session.shared.second.after"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show \
-    --model "$profile" shared >"$root/session.shared.first.after"
-test "$(sed -n 's/^.*position=\([0-9][0-9]*\).*$/\1/p' \
-        "$root/session.shared.second.after")" -gt 0
-test "$(sed -n 's/^.*position=\([0-9][0-9]*\).*$/\1/p' \
-        "$root/session.shared.first.after")" -eq 0
+    --model "$profile" --json shared >"$root/session.shared.first.after"
+test "$(session_fact "$root/session.shared.second.after" position)" -gt 0
+test "$(session_fact "$root/session.shared.first.after" position)" -eq 0
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$NATIVE_TURN" \
     --model "$second_profile" --reasoning none --strategy greedy \
     --max-new-tokens 1 a >"$root/run.second.out" 2>"$root/run.second.err"

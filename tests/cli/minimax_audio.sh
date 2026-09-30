@@ -25,7 +25,7 @@ run_code() {
 }
 
 contains() {
-    grep -F -- "$2" "$1" >/dev/null || fail "$1 missing: $2"
+    python3 tests/support/human_field.py "$1" "$2" || fail "$1 missing: $2"
 }
 
 run_code help 0 "$YVEX_BIN" bench component audio-vae --help
@@ -45,7 +45,7 @@ contains "$OUT_DIR/wrong_target.err" \
 run_code wrong_backend 2 "$YVEX_BIN" bench component audio-vae \
     --target minimax-h3-fl2va --artifact /tmp/missing.gguf --backend vulkan \
     --input-file /tmp/missing.f32 --latent-steps 1 --out "$OUT_DIR/wrong-backend.f32"
-contains "$OUT_DIR/wrong_backend.err" "unknown backend kind: vulkan"
+contains "$OUT_DIR/wrong_backend.err" "invalid value for --backend: vulkan"
 
 run_code cuda_backend 5 "$YVEX_BIN" bench component audio-vae \
     --target minimax-h3-fl2va --artifact /tmp/missing.gguf --backend cuda \

@@ -13,6 +13,7 @@
 #include <yvex/core.h>
 #include <yvex/gguf.h>
 #include <yvex/internal/cli_table.h>
+#include <yvex/internal/cli_presentation.h>
 #include <yvex/model.h>
 #include <yvex/registry.h>
 #include <yvex/server.h>
@@ -122,33 +123,6 @@ typedef struct {
     size_t offset;
     const char *fallback;
 } yvex_cli_field_spec;
-typedef struct {
-    const char *reset;
-    const char *strong;
-    const char *accent;
-    const char *dim;
-    const char *success;
-    const char *warning;
-    const char *error;
-} yvex_cli_terminal_style;
-typedef enum {
-    YVEX_CLI_STREAM_STYLE_NORMAL = 0,
-    YVEX_CLI_STREAM_STYLE_DIM,
-    YVEX_CLI_STREAM_STYLE_ACCENT,
-    YVEX_CLI_STREAM_STYLE_STRONG
-} yvex_cli_stream_style;
-#define YVEX_CLI_STREAM_LINE_CAP 16384u
-typedef struct {
-    FILE *output;
-    yvex_cli_terminal_style style;
-    yvex_client_stream_channel channel;
-    yvex_cli_stream_style active_style, line_style;
-    unsigned char line[YVEX_CLI_STREAM_LINE_CAP], inline_previous;
-    size_t line_count;
-    unsigned int column, prose_width, line_indent, inline_flags;
-    int enhanced, in_fence, pending_cr, channel_announced, line_started;
-    int wrote_bytes, last_newline, pending_space;
-} yvex_cli_stream_renderer;
 typedef struct {
     yvex_cli_terminal_style style;
     char session_id[YVEX_SERVER_ID_CAP];
