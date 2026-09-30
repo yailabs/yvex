@@ -7,6 +7,7 @@
 #include <yvex/internal/runtime.h>
 
 #include <stdio.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -17,6 +18,88 @@ typedef struct {
     unsigned long long token_count;
     const char *name;
 } live_vector;
+
+/* Project authenticated upstream JSON messages through the public typed ABI.
+ * argv is test transport only; the reference runner owns the original vectors. */
+static int official_prompt_render(const yvex_tokenizer *tokenizer,
+                                  int argc, char **argv, yvex_error *err)
+{
+    yvex_prompt_message messages[32] = {0};
+    yvex_prompt_options options = {.add_bos = 1, .drop_thinking = 1,
+        .mode = YVEX_PROMPT_MODE_THINKING, .reasoning_policy = YVEX_REASONING_ENABLED};
+    yvex_rendered_prompt rendered = {0};
+    unsigned long long count = 0ull;
+    int index, rc, start = 5;
+    if (argc < 6) return YVEX_ERR_BOUNDS;
+    if (strcmp(argv[4], "thinking") && strcmp(argv[4], "chat")) return YVEX_ERR_UNSUPPORTED;
+    options.mode = !strcmp(argv[4], "thinking")
+        ? YVEX_PROMPT_MODE_THINKING : YVEX_PROMPT_MODE_CHAT;
+    options.reasoning_policy = options.mode == YVEX_PROMPT_MODE_THINKING
+        ? YVEX_REASONING_ENABLED : YVEX_REASONING_DISABLED;
+    options.add_generation_prompt = 1;
+    if ((argc - start) % 3 || argc <= start || argc > start + 96) return YVEX_ERR_BOUNDS;
+    for (index = start; index < argc; index += 3) {
+        yvex_prompt_message *message = &messages[count++];
+        message->schema_version = YVEX_PROMPT_MESSAGE_SCHEMA_V1;
+        if (!strcmp(argv[index], "system")) message->role = YVEX_PROMPT_ROLE_SYSTEM;
+        else if (!strcmp(argv[index], "user")) message->role = YVEX_PROMPT_ROLE_USER;
+        else if (!strcmp(argv[index], "assistant")) message->role = YVEX_PROMPT_ROLE_ASSISTANT;
+        else if (!strcmp(argv[index], "tool")) message->role = YVEX_PROMPT_ROLE_TOOL;
+        else return YVEX_ERR_UNSUPPORTED;
+        message->content = argv[index + 1];
+        message->content_len = strlen(message->content);
+        message->reasoning_content = argv[index + 2];
+        message->reasoning_content_len = strlen(message->reasoning_content);
+    }
+    rc = yvex_prompt_render(&rendered, tokenizer, messages, count, &options, err);
+    if (rc == YVEX_OK && fwrite(rendered.text, 1u, (size_t)rendered.len, stdout) != rendered.len)
+        rc = YVEX_ERR_IO;
+    yvex_rendered_prompt_free(&rendered);
+    return rc;
+}
+
+static int reference_encode(const yvex_tokenizer *tokenizer, const char *text,
+                            yvex_error *err)
+{
+    yvex_tokenizer_encode_options options = {0, 0, 1, 65536u};
+    yvex_tokenizer_encode_result result = {0};
+    unsigned long long index;
+    int rc = yvex_tokenizer_encode(tokenizer, (const unsigned char *)text,
+                                   strlen(text), &options, &result, err);
+    for (index = 0; rc == YVEX_OK && index < result.tokens.len; ++index)
+        if (printf("%u%c", result.tokens.ids[index],
+                   index + 1 == result.tokens.len ? '\n' : ' ') < 0) rc = YVEX_ERR_IO;
+    yvex_tokenizer_encode_result_clear(&result);
+    return rc;
+}
+
+static int reference_decode(const yvex_tokenizer *tokenizer, const char *text,
+                            yvex_error *err)
+{
+    yvex_tokenizer_decode_options options = {0};
+    yvex_tokenizer_decode_result result = {0};
+    unsigned int *ids = calloc(strlen(text) + 1u, sizeof(*ids));
+    unsigned long long count = 0;
+    const char *cursor = text;
+    int rc = YVEX_OK;
+    if (!ids) return YVEX_ERR_NOMEM;
+    while (*cursor && rc == YVEX_OK) {
+        char *end;
+        unsigned long value = strtoul(cursor, &end, 10);
+        if (end == cursor || value > UINT_MAX || (*end && *end != ',')) rc = YVEX_ERR_FORMAT;
+        else {
+            ids[count++] = (unsigned int)value;
+            cursor = *end ? end + 1 : end;
+        }
+    }
+    if (rc == YVEX_OK)
+        rc = yvex_tokenizer_decode(tokenizer, ids, count, &options, &result, err);
+    if (rc == YVEX_OK && fwrite(result.bytes, 1u, (size_t)result.byte_count, stdout)
+                             != result.byte_count) rc = YVEX_ERR_IO;
+    yvex_tokenizer_decode_result_clear(&result);
+    free(ids);
+    return rc;
+}
 
 static int expect_encode(const yvex_tokenizer *tokenizer, const live_vector *vector,
                          yvex_error *err)
@@ -127,7 +210,8 @@ static int prompt_proof(const yvex_tokenizer *tokenizer, yvex_error *err)
         {.schema_version = YVEX_PROMPT_MESSAGE_SCHEMA_V1,
          .role = YVEX_PROMPT_ROLE_USER, .content = "next", .content_len = 4u}
     };
-    yvex_prompt_options options = {1, 0, 1, 1, YVEX_PROMPT_MODE_CHAT};
+    yvex_prompt_options options = {1, 0, 1, 1, YVEX_PROMPT_MODE_CHAT,
+                                  YVEX_REASONING_DISABLED};
     yvex_tokenizer_encode_options encode = {0, 0, 1, 128u};
     yvex_rendered_prompt rendered = {0};
     yvex_tokenizer_encode_result tokens = {0};
@@ -202,7 +286,9 @@ int main(int argc, char **argv)
     yvex_error err;
     unsigned int sampled[3];
     int rc;
-    if (argc != 4 || !sampled_ids_parse(argv[3], sampled)) {
+    int official = argc > 3 && (!strcmp(argv[3], "--reference-render") || !strcmp(argv[3], "--reference-encode") ||
+        !strcmp(argv[3], "--reference-decode"));
+    if (!official && (argc != 4 || !sampled_ids_parse(argv[3], sampled))) {
         fprintf(stderr, "usage: %s ARTIFACT RUNTIME_BINDING ID,ID,ID\n", argv[0]);
         return 2;
     }
@@ -236,6 +322,21 @@ int main(int argc, char **argv)
         !plan->eos_present || plan->eos_token_id != 1u ||
         !plan->pad_present || plan->pad_token_id != 1u || plan->unk_present))
         rc = YVEX_ERR_FORMAT;
+    if (official) {
+        if (rc == YVEX_OK) {
+            if (!strcmp(argv[3], "--reference-encode"))
+                rc = argc == 5 ? reference_encode(context.tokenizer, argv[4], &err) : YVEX_ERR_BOUNDS;
+            else if (!strcmp(argv[3], "--reference-decode"))
+                rc = argc == 5 ? reference_decode(context.tokenizer, argv[4], &err) : YVEX_ERR_BOUNDS;
+            else rc = official_prompt_render(context.tokenizer, argc, argv, &err);
+        }
+        if (rc != YVEX_OK)
+            fprintf(stderr, "official_prompt status=%d where=%s reason=%s\n", rc,
+                    yvex_error_where(&err), yvex_error_message(&err));
+        yvex_runtime_binding_close(binding);
+        yvex_model_context_close(&context);
+        return rc == YVEX_OK ? 0 : 1;
+    }
     if (rc == YVEX_OK) rc = vector_proof(context.tokenizer, &err);
     if (rc == YVEX_OK) rc = admission_refusal_proof(context.tokenizer, &err);
     if (rc == YVEX_OK) rc = prompt_proof(context.tokenizer, &err);

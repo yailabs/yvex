@@ -22,6 +22,7 @@ Start with [Methodology](methodology.md). Existing runtime benchmark v5 remains 
 - [Benchmark Methodology](methodology.md)
 ## Observation projections
 
+- [DeepSeek GB10 inference-pipeline characterization](generated/deepseek-gb10-inference-pipeline.md)
 - [DeepSeek GB10 ordered-dot characterization](generated/deepseek-gb10-ordered-dots.md)
 - [fixture-publication](generated/fixture-publication.md)
 - [mamba-readout-characterization](generated/mamba-readout-characterization.md)

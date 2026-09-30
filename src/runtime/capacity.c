@@ -179,6 +179,7 @@ unsigned long long yvex_runtime_private_system_reserve(
 
 
 typedef struct {
+    yvex_model_engine *model;
     const yvex_model_engine_view *model_view;
     yvex_runtime_capacity_options options;
     yvex_runtime_capacity result;
@@ -780,7 +781,7 @@ static int capacity_physical_row_capacity(
     unsigned long long *capacity, yvex_error *err)
 {
     const yvex_speculation_family_policy *speculation = NULL;
-    unsigned long long draft_width = 0ull;
+    unsigned long long draft_width = 0ull, admitted_width = 0ull;
     if (capacity) *capacity = 0ull;
     if (!context || !capacity || !context->options.prefill_chunk_tokens ||
         !context->model_view || !context->model_view->compiled_binding ||
@@ -790,6 +791,15 @@ static int capacity_physical_row_capacity(
             err, YVEX_ERR_STATE,
             "compiled physical row geometry is unavailable");
     *capacity = context->options.prefill_chunk_tokens;
+    /* Logical prompt chunks do not widen the sealed routed-row population.
+     * Match generation_prefill before sizing per-row activation/staging arenas. */
+    /* Before specialization exists, pre-residency admission retains the
+     * conservative configured width. A live engine supplies the sealed bound. */
+    if (context->model && yvex_model_engine_scheduler_maximum_width_copy(
+            context->model, &admitted_width, err) != YVEX_OK)
+        return yvex_error_code(err);
+    if (admitted_width > 1ull && *capacity > admitted_width)
+        *capacity = admitted_width;
     if (context->options.mode == YVEX_EXECUTION_GENERATION_SPECULATIVE) {
         if (!speculation ||
             !yvex_core_u64_add(speculation->block_size, 2ull, &draft_width))
@@ -1087,7 +1097,7 @@ static int capacity_build_for(
             context, backend, *workspace_capacity, physical_rows,
             &attention_workspace, err) != YVEX_OK ||
         capacity_moe_workspace(
-            context, backend, context->options.prefill_chunk_tokens,
+            context, backend, physical_rows,
             draft_rows, &moe_workspace, err) != YVEX_OK)
         return yvex_error_code(err);
     if (attention_workspace > workspace) workspace = attention_workspace;
@@ -1177,6 +1187,7 @@ int yvex_runtime_capacity_derive(
     if (!residency.encoded_bytes)
         return capacity_context_refuse(err, YVEX_ERR_STATE,
             "model residency placement facts are unavailable");
+    context.model = model;
     capacity_options_copy(&context, options);
     model_bytes = residency.cuda_addressable_bytes
                       ? residency.cuda_addressable_bytes

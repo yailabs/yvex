@@ -375,8 +375,6 @@ int yvex_runtime_speculation_context_open(yvex_runtime_speculation_context **out
     context->target_sampling = target_sampling;
     context->sampling_policy = *sampling_policy;
     context->options = *options;
-    context->prefill_rows = options->prefill_chunk_tokens > YVEX_SPECULATION_MAX_BLOCK + 2ull
-                                ? options->prefill_chunk_tokens : YVEX_SPECULATION_MAX_BLOCK + 2ull;
     target_plan = yvex_transformer_plan_summary_get(yvex_runtime_transformer_context_plan(target_transformer));
     draft_plan = yvex_transformer_plan_summary_get(
         context->model_view ? yvex_compiled_model_plan_transformer(
@@ -408,6 +406,8 @@ int yvex_runtime_speculation_context_open(yvex_runtime_speculation_context **out
         (void)yvex_runtime_speculation_context_close(&context, NULL);
         return rc;
     }
+    context->prefill_rows = options->prefill_chunk_tokens > context->policy.block_size + 2ull
+        ? options->prefill_chunk_tokens : context->policy.block_size + 2ull;
     context->vocabulary_size = target_plan->vocabulary_size;
     context->hidden_width = target_plan->hidden_width;
     context->device_draft_selection = options->backend == YVEX_BACKEND_KIND_CUDA &&

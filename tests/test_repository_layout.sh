@@ -3,6 +3,8 @@ set -eu
 
 cd "$(dirname "$0")/.."
 
+make_inputs=$(make --no-print-directory -s print-build-inputs)
+
 fail() {
     printf 'repository-layout: %s\n' "$1" >&2
     exit 1
@@ -15,7 +17,7 @@ make_cleanup=$(awk '
     /^\t/ && /rm[[:space:]]+([^[:space:]]+[[:space:]]+)*(--recursive|-[^[:space:]]*[rR][^[:space:]]*)/ && target !~ /^clean[[:space:]]*:/ {
         print FNR ":" target ":" $0
     }
-' Makefile)
+' $make_inputs)
 if [ -n "$make_cleanup" ]; then
     printf '%s\n' "$make_cleanup" >&2
     fail "recursive cleanup outside the canonical clean target"
@@ -23,7 +25,7 @@ fi
 if make -s BUILD_DIR=/ clean >/dev/null 2>&1; then
     fail "clean target accepts the filesystem root"
 fi
-rg -q 'if test "\$\$build_dir" = build; then' Makefile ||
+rg -q 'if test "\$\$build_dir" = build; then' $make_inputs ||
     fail "external BUILD_DIR cleanup may remove repository-root executables"
 clean_probe=$(mktemp -d /tmp/yvex-clean-guard.XXXXXX)
 clean_external=$(mktemp -d /tmp/clean-guard-external.XXXXXX)
@@ -44,26 +46,26 @@ fi
 # Commit-bound benchmark provenance is generated as an explicit object
 # dependency. A process-wide CPPFLAGS define would leave incremental builds
 # carrying the previous HEAD after a commit.
-if rg -n 'CPPFLAGS.*YVEX_BUILD_COMMIT' Makefile; then
+if rg -n 'CPPFLAGS.*YVEX_BUILD_COMMIT' $make_inputs; then
     fail "build commit provenance is an untracked process-wide compiler define"
 fi
-rg -q '^BUILD_COMMIT_HEADER[[:space:]]*:=' Makefile ||
+rg -q '^BUILD_COMMIT_HEADER[[:space:]]*:=' $make_inputs ||
     fail "build commit provenance header is missing"
-rg -q '^YVEX_BUILD_SOURCE_STATE[[:space:]]+[?]=' Makefile ||
+rg -q '^YVEX_BUILD_SOURCE_STATE[[:space:]]+[?]=' $make_inputs ||
     fail "build source-state provenance is missing"
-rg -q '^YVEX_BUILD_SOURCE_DELTA_IDENTITY[[:space:]]+[?]=' Makefile ||
+rg -q '^YVEX_BUILD_SOURCE_DELTA_IDENTITY[[:space:]]+[?]=' $make_inputs ||
     fail "exact dirty source-delta provenance is missing"
-rg -q '^YVEX_BUILD_SOURCE_TREE[[:space:]]+[?]=' Makefile ||
+rg -q '^YVEX_BUILD_SOURCE_TREE[[:space:]]+[?]=' $make_inputs ||
     fail "exact source-tree provenance is missing"
-rg -q '^YVEX_BUILD_IDENTITY[[:space:]]+[?]=' Makefile ||
+rg -q '^YVEX_BUILD_IDENTITY[[:space:]]+[?]=' $make_inputs ||
     fail "compiler/link/CUDA build provenance is missing"
-rg -q '^YVEX_BUILD_SOURCE_ROOT[[:space:]]+[?]=' Makefile ||
+rg -q '^YVEX_BUILD_SOURCE_ROOT[[:space:]]+[?]=' $make_inputs ||
     fail "external benchmark path boundary lacks a generated source root"
-rg -q '^\$\(OBJ_DIR\)/src/cli/commands/graph\.o: \$\(BUILD_COMMIT_HEADER\)' Makefile ||
+rg -q '^\$\(OBJ_DIR\)/src/cli/commands/graph\.o: \$\(BUILD_COMMIT_HEADER\)' $make_inputs ||
     fail "operator object does not depend on build commit provenance"
-rg -q '^\$\(OBJ_DIR\)/src/runtime/benchmark\.o: \$\(BUILD_COMMIT_HEADER\)' Makefile ||
+rg -q '^\$\(OBJ_DIR\)/src/runtime/benchmark\.o: \$\(BUILD_COMMIT_HEADER\)' $make_inputs ||
     fail "runtime benchmark object does not depend on build commit provenance"
-rg -q '^\$\(BUILD_COMMIT_HEADER\): FORCE' Makefile ||
+rg -q '^\$\(BUILD_COMMIT_HEADER\): FORCE' $make_inputs ||
     fail "build commit provenance does not revalidate on incremental builds"
 for field in YVEX_BUILD_SOURCE_STATE YVEX_BUILD_SOURCE_DELTA_IDENTITY \
              YVEX_BUILD_IDENTITY; do
@@ -81,13 +83,13 @@ fi
 # Production membership is handwritten once in the ownership manifest. Make
 # consumes only the deterministic projection, so a new file cannot bypass
 # ownership admission through a wildcard or a second source list.
-rg -q '^SOURCE_OWNER_MANIFEST := config/source_owners.tsv$' Makefile ||
+rg -q '^SOURCE_OWNER_MANIFEST := config/source_owners.tsv$' $make_inputs ||
     fail "canonical production source manifest is not configured"
-rg -q '^SOURCE_MANIFEST_GENERATOR := tools/generate_source_manifest.py$' Makefile ||
+rg -q '^SOURCE_MANIFEST_GENERATOR := tools/generate_source_manifest.py$' $make_inputs ||
     fail "source build projection has no canonical generator"
-rg -q '^include \$\(SOURCE_MANIFEST_MK\)$' Makefile ||
+rg -q '^include \$\(SOURCE_MANIFEST_MK\)$' $make_inputs ||
     fail "Make does not consume the generated source projection"
-if rg -n '\$\(wildcard[[:space:]]+(src|include)/|^[A-Z0-9_]+[[:space:]]*[:?+]?=[[:space:]]*(src|include)/.*[.](c|cu|h)\b' Makefile; then
+if rg -n '\$\(wildcard[[:space:]]+(src|include)/|^[A-Z0-9_]+[[:space:]]*[:?+]?=[[:space:]]*(src|include)/.*[.](c|cu|h)\b' $make_inputs; then
     fail "Makefile repeats or wildcard-admits production membership"
 fi
 make -s check-source-manifest >/dev/null ||
@@ -101,7 +103,7 @@ for target in '$(CUDA_PTX_INC)' '$(CUDA_CUBIN_INC)'; do
         index($0, target ":") == 1 { active = 1 }
         active && /^[^[:space:]#][^=]*:/ && index($0, target ":") != 1 { exit }
         active { print }
-    ' Makefile)
+    ' $make_inputs)
     printf '%s\n' "$recipe" | grep -F 'tmp="$@.tmp.$$$$"' >/dev/null ||
         fail "$target generation lacks a process-unique staging path"
     printf '%s\n' "$recipe" | grep -F 'mv "$$tmp" "$@"' >/dev/null ||
@@ -112,7 +114,7 @@ for obsolete_target in cli server test-client test-cli-cutover \
                        test-openai-agent test-runtime-benchmark-chart \
                        test-runtime-sessions test-runtime-turns \
                        test-runtime-telemetry; do
-    if rg -q "^${obsolete_target}:" Makefile; then
+    if rg -q "^${obsolete_target}:" $make_inputs; then
         fail "historical Make target returned: ${obsolete_target}"
     fi
 done
@@ -177,3 +179,4 @@ test "$build_identity" = "$runtime_noise_identity" ||
     fail "irrelevant runtime environment noise changes build identity"
 
 python3 tests/c_structure.py check layout
+python3 -B tests/test_build.py

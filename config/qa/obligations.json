@@ -8,6 +8,13 @@
   },
   "change_classes": [
     {
+      "id": "deepseek-official-encoding",
+      "patterns": ["tests/reference/tokenizer.py", "tests/live/tokenizer_deepseek.c", "tests/vectors/manifest.json"],
+      "lanes": ["fast", "structural"],
+      "tests": ["reference.deepseek.official-encoding"],
+      "reason": "exact upstream cases must remain authenticated and independently compared at the native tokenizer/input boundary, not promoted to full-model logits evidence"
+    },
+    {
       "id": "distribution-legal",
       "patterns": ["tools/distribution_legal.py", "tools/distribution_policy.json", "tests/test_distribution_legal.py"],
       "lanes": ["structural"],
@@ -286,14 +293,14 @@
                    "include/yvex/internal/neural_operations.h", "tools/generate_cuda_exports.py",
                    "tests/test_cuda_exports.py"],
       "lanes": ["fast", "structural", "numeric", "cuda", "sanitizer"],
-      "tests": ["cuda.native", "live.deepseek.generation", "live.deepseek.logits"],
+      "tests": ["cuda.native", "cuda.quant_qtype", "live.deepseek.generation", "live.deepseek.logits"],
       "reason": "CUDA backend changes require native parity, faults, cleanup, and production reachability"
     },
     {
       "id": "cuda-kernel",
       "patterns": ["src/backend/cuda/*.cu", "src/backend/cuda/families/*.cu"],
       "lanes": ["structural", "numeric", "cuda", "sanitizer", "perf"],
-      "tests": ["cuda.native", "live.deepseek.generation"],
+      "tests": ["cuda.native", "cuda.quant_qtype", "live.deepseek.generation"],
       "reason": "kernel changes require native numeric oracle, repeat, cleanup, live reachability, and comparable performance evidence"
     },
     {
@@ -401,7 +408,7 @@
     },
     {
       "id": "build-topology",
-      "patterns": ["Makefile", "tools/generate_source_manifest.py", "config/c_policy.json", "tools/prepare_replai.py", "config/replai.json"],
+      "patterns": ["Makefile", "config/make/*.mk", "tools/generate_source_manifest.py", "config/c_policy.json", "tools/prepare_replai.py", "config/replai.json"],
       "lanes": ["fast", "structural", "ci"],
       "tests": ["integration.tiny-vertical"],
       "reason": "build topology requires generated dependency parity and repeated compositional builds"

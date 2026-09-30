@@ -1211,7 +1211,7 @@ static int quant_cuda_compiled_dense_plan(yvex_backend *backend)
 
 static int quant_cuda_bf16_projection_pair(yvex_backend *backend)
 {
-    enum { ROWS = 9, WIDTH = 64, ROW_BYTES = WIDTH * 2 };
+    enum { ROWS = 9, WIDTH = 4096, ROW_BYTES = WIDTH * 2 };
     const yvex_cuda_attention_operations *operations =
         yvex_cuda_attention_operations_get();
     yvex_backend_attention_failure failure = {0};
@@ -1334,6 +1334,19 @@ static int quant_cuda_bf16_projection_pair(yvex_backend *backend)
         yvex_backend_tensor_read(backend, second_out, actual, sizeof(actual), &err) == YVEX_OK &&
             memcmp(actual, second_expected, sizeof(actual)) == 0,
         "second paired projection is bit-identical to ordinary BF16 matvec");
+    for (row = 0u; row < ROWS; ++row) {
+        float scalar_first = 0.0f, scalar_second = 0.0f;
+        yvex_quant_failure scalar_failure = {0};
+        YVEX_TEST_ASSERT(yvex_quant_cpu_dot(
+            YVEX_GGUF_QTYPE_BF16, first_encoded + row * ROW_BYTES,
+            ROW_BYTES, vector, WIDTH, &scalar_first, &scalar_failure, &err) == YVEX_OK &&
+            yvex_quant_cpu_dot(YVEX_GGUF_QTYPE_BF16,
+            second_encoded + row * ROW_BYTES, ROW_BYTES, vector, WIDTH,
+            &scalar_second, &scalar_failure, &err) == YVEX_OK &&
+            scalar_first == first_expected[row] &&
+            scalar_second == second_expected[row],
+            "4096-column paired projections match the independent host F64 dot exactly");
+    }
     YVEX_TEST_ASSERT(
         yvex_cuda_work_cleanup(&ordinary, &err) == YVEX_OK &&
             yvex_cuda_work_cleanup(&work, &err) == YVEX_OK &&

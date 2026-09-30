@@ -71,6 +71,15 @@ buffers nor runtime state, synchronization, routing populations or numerical
 validation. [Bounded GB10 observations](../evaluation/retained-observations.md#deepseek-gb10-optimization-2026-09-30)
 qualify the complete-request benefit, separately from component timings.
 
+Storage-invariant dispatch for ordered decoded dots is resolved once per row;
+the selected storage realization still decodes and accumulates each column in
+source order. Paired BF16 dots share one input-column traversal with two
+independent F64 accumulators, retaining each dot's order and publication cast.
+Neither change introduces a parallel sum, alternative precision or routing
+policy. [Pipeline characterization](../evaluation/retained-observations.md#deepseek-gb10-inference-pipeline-2026-09-30)
+separates these kernel gains from canonical arena sizing and complete-request
+preparation/teardown cost.
+
 Exact MiniMax output-linear requirements remain source/package numerical facts.
 Runtime component specialization resolves them to exact generic linear
 execution records; generic CUDA consumes those records without MiniMax switches

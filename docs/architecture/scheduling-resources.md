@@ -127,6 +127,17 @@ erase or relabel the execution fact delivered to the waiting request.
 
 ## Resources and residency
 
+The common runtime capacity derivation owns physical workspace rows as well as
+admission bytes. With a live engine it bounds configured prefill chunks by the
+engine's admitted scheduler width, then includes the exact source-authored
+speculative staging requirement and compatible-sequence width. Transformer,
+decoder, MoE and draft arenas consume that same derived physical-row fact; they
+do not allocate the logical configured chunk or global maximum proposal bound
+independently. Logical context and configured prefill remain unchanged. Before
+engine specialization exists, memory preflight remains conservative: it cannot
+infer a wider or narrower executable population. This is arena sizing, not
+broader prefill or continuous batching admission.
+
 The engine's resource summary distinguishes:
 
 - immutable mapped package bytes;

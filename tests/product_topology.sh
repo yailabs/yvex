@@ -4,6 +4,7 @@ set -eu
 
 YVEX_BIN=${YVEX_BIN:-./yvex}
 BUILD_DIR=${BUILD_DIR:-build}
+make_inputs=$(make --no-print-directory -s print-build-inputs)
 
 test -x "$YVEX_BIN"
 test ! -e ./yvexd
@@ -21,6 +22,6 @@ test "$(nm "$YVEX_BIN" | awk '$NF == "main" { count++ } END { print count + 0 }'
 test "$(rg -l '(^|[[:space:]])int[[:space:]]+main[[:space:]]*\(' src/cli src/server \
     | LC_ALL=C sort | tr '\n' ' ')" = 'src/cli/main.c '
 test "$(nm "$YVEX_BIN" | awk '$NF == "yvex_cli_server_dispatch" { count++ } END { print count + 0 }')" = 1
-! rg -n '^gateway:|^dev-tools:|^package-dev:|YVEX_OPENAI_BIN|YVEX_DEV_BIN' Makefile \
+! rg -n '^gateway:|^dev-tools:|^package-dev:|YVEX_OPENAI_BIN|YVEX_DEV_BIN' $make_inputs \
     >/dev/null
 printf 'test: product_topology single yvex command/server binary\n'

@@ -1123,7 +1123,10 @@ class Audit:
 
     def make_layout_violations(self) -> list[str]:
         errors: list[str] = []
-        makefile = (ROOT / "Makefile").read_text()
+        makefile = "\n".join(
+            (ROOT / name).read_text()
+            for name in self.make_variable("YVEX_AUTHORED_MAKEFILES")
+        )
         style_path = ROOT / ".clang-format"
         if not style_path.is_file():
             errors.append("canonical .clang-format is missing")
@@ -1136,7 +1139,7 @@ class Audit:
                     ".clang-format ColumnLimit is not canonical: "
                     f"{column.group(1) if column else 'missing'} != {expected_column}"
                 )
-        roots = re.search(r"^CPPFLAGS \?= (.*)$", makefile, re.MULTILINE)
+        roots = re.search(r"^override CPPFLAGS \+= (.*-Iinclude.*)$", makefile, re.MULTILINE)
         observed = [token[2:] for token in roots.group(1).split() if token.startswith("-I")] if roots else []
         expected = self.policy["include_policy"]["make_include_roots"]
         if observed != expected:

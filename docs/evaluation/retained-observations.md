@@ -19,6 +19,213 @@ The undated observations below were retained at the pre-migration source
 They are not rerun by documentation validation. Scope and missing provenance
 remain visible; [Status](../project-control/STATUS.md) alone owns current maturity.
 
+## DeepSeek GB10 inference pipeline (2026-09-30)
+
+`V010.RUNTIME.DEEPSEEK.GB10.INFERENCE.PIPELINE.1` preserves the preceding
+ordered-dot launch-geometry gain. Its fresh profile identifies three further
+generic costs: arenas sized by logical prefill rather than executable rows,
+duplicated paired-input traversal, and storage dispatch inside ordered dots.
+The [structured observation](benchmarks/data/deepseek-gb10-inference-pipeline.json)
+retains exact variant/executable identities, samples, request/output hashes,
+strategy comparison and instrumented cycle economics; its
+[generated view](benchmarks/generated/deepseek-gb10-inference-pipeline.md) is a
+projection, not another measurement owner.
+
+### Authority and comparable controls
+
+The later user-authorized official-vector import is a separate input/reference
+claim inside this delivery: the pinned DSpark snapshot contains four official
+encoding/parsing input/gold cases. Twelve file hashes (including tokenizer and
+upstream license) are retained in the test-vector manifest. The unmodified
+upstream test passes four cases; native BPE encode/decode passes all four gold
+strings, and one supported request prefix is independently byte-exact. Thirteen
+text and three simple prompt comparisons also pass. The native proof uses the
+authenticated runtime-binding tokenizer, not the unbound legacy CLI inspector.
+Complete native transcript projection and official full-model logits remain
+NOT QUALIFIED/NOT RUN. Upstream payloads and MIT notices remain external; the
+repository imports identities and a reproducible test adapter, not model data.
+The final registered receipt is `5af92326…` (61.082 seconds); injected missing
+and corrupt backing both refuse before upstream or native execution.
+
+Baseline source is `115884e6970676df66c587ad359563bf047773a2`, tree
+`6f8787db8551eabb79358b3c015c9673a4538bdd`, executable
+`00064493ee9c3c19bf9f1545a43a2cf64815512501d825bb59ddcf085ea2868e`.
+The isolated changes culminate in measured executable
+`77f0828892b5b752f5c3ab1ef92bdf2946b14dff8fa8f7e0b7bf3b4008498d32`,
+tracked source delta `79894e2b945f47f4eaa6202efa07d6ae8b07a05de21efce22bdbc25f776158cb`.
+The subsequent reviewed-build confirmation is
+`ffda5718a7af89c9e16062ed7a8e29d6ed0c95939d57c6d76ed1a884cafba2bd`,
+complete compiled delta `fffaf0177855f1ced7025e16d33e47e8f4551c693e390f12fbb7d86b33a817b4`,
+build identity `6235d951d43080317774b809782a5dc8c9de5733096ce7e510381d95e2ee88f8`.
+Each run freezes source; the reviewed live `/proc/PID/exe` equals its built
+executable. Raw receipts remain outside Git under
+`/home/dgmothx/lab/models/evidence/yvex-gb10-pipeline-20260930.z5UwYo`.
+
+All controls use the same admitted mixed DeepSeek/DSpark artifact, binding,
+runtime model, specialization, GB10 UUID and driver listed in the producer
+reconciliation below. Context is 32,768, configured prefill 64, one worker,
+temperature zero, fresh zero-prefix ephemeral sessions and warm mapped weights.
+No operator Case content or retry is used. Samples have no collecting profiler.
+The fresh baseline has one sample per suite member; candidate/strategy controls
+have three. The preceding clean baseline separately retains three stable A
+samples (about 8.1 seconds HTTP). These are bounded observations, not an SLA.
+
+| Fixed control | Rendered input / committed output | Baseline HTTP s (n=1) | Optimized HTTP mean s (n=3) | Optimized range s |
+| --- | --- | ---: | ---: | --- |
+| A, exact `YAI_OK`, non-thinking | 22 / 3 | 8.131 | 5.377 | 5.326–5.449 |
+| B, bounded integer continuation | 20 / 32 | 16.501 | 12.212 | 12.132–12.264 |
+| C, source-authored high reasoning | 17 / 41 | 21.245 | 16.078 | 16.014–16.117 |
+| D, source-authored maximum reasoning | 96 / 58 | 39.922 | 31.662 | 31.636–31.693 |
+| E, modest larger prefill | 100 / 3 | 21.517 | 16.430 | 16.393–16.456 |
+
+The reviewed build independently confirms A at 5.247 seconds HTTP mean
+(5.193–5.336), 3.456 seconds prefill and 4.179 seconds turn-relative first token,
+three samples. This confirms preservation through the Makefile review; it does
+not establish an additional optimization beyond ordinary sample variation.
+
+### Dominant owners and changes
+
+Nsight Systems graph-node traces are diagnostic runs, separate from wall-time
+comparisons. The baseline's one `cuMemHostAlloc` and one `cuMemFreeHost` cost
+1.988 and 0.931 seconds; after canonical arena sizing they cost about 0.549 and
+0.270 seconds. These lifetimes explain substantial time outside the generation
+turn, rather than tokenizer or transport latency. The same capacity owner now
+derives physical rows from admitted scheduler width and exact source proposal
+staging. The current target uses six rows; DSpark requires seven. Transformer,
+decoder, MoE and draft consume this one fact instead of independently allocating
+64 configured rows/global maximum draft rows. Pre-engine admission stays
+conservative. Logical context/chunk, routing and real executed populations are
+unchanged; no arena cache, pool or borrowed-lifetime shortcut is introduced.
+
+Capacity alone changes A HTTP to 6.181 seconds, with prefill unchanged near
+4.14 seconds. Paired BF16 traversal sharing changes it to 5.843; hoisting
+storage-invariant ordered-dot dispatch changes it to 5.377. The paired kernel
+profile falls from 1.324 to 1.047 seconds; ordinary qtype matvec falls from
+1.798 to 1.267 seconds. The final profile is still dominated by ordered decoded
+projection: matvec 35.6%, paired 29.4%, grouped rows 15.6% of recorded GPU kernel
+time. Device/host synchronize API durations include waits for this same GPU
+work and must not be added to it. The A trace has 13,905 direct launches,
+454 graph launches, 362 graph instantiations, 5,207 context synchronizations
+and 2,467 stream synchronizations. Direct launch API time is about 20 ms:
+launch count alone does not establish the dominant cost.
+
+Each paired dot retains an independent source-order F64 accumulator and original
+F32/BF16 cast. Storage dispatch selects an equivalent typed decode loop once per
+row; other representations retain the previous generic path. Precision,
+experts, routing, attention/mHC, validation and target verification do not change.
+A packed narrow-F32 thread trial passed its component control but did not
+materially improve complete requests (A 5.415 seconds, E 16.285); it was reverted.
+
+### First token, decode, reasoning and speculation
+
+One reviewed A SSE sample resolves host-observed phases from request receipt:
+session created 0.030 s; turn/prefill started 0.660 s; prefill completed 4.113 s;
+first committed token 4.796 s; session closed 5.203 s; complete HTTP 5.204 s.
+Turn-relative first token is 4.136 s, not HTTP-visible TTFT. Mean external first
+fragment across the three samples is 4.796 s, versus baseline 7.072 s.
+This separates preparation, actual prefill, first decode and teardown without
+moving excluded work out of the complete-request metric.
+
+Bounded B post-first publication is 4.862 committed tokens/s across 31 tokens,
+versus baseline 3.977. This is bounded decode characterization, not sustained
+serving throughput. High and maximum first reasoning fragments change from
+7.229/20.598 to 4.888/15.953 seconds; prefill changes from 3.257/16.465 to
+2.787/13.852 seconds. Authored maximum rendering really produces 96 input tokens;
+it is not the same rendered geometry as high. No effort, source instruction,
+reasoning token, stop or channel classification is removed.
+
+Both modes naturally reach `</think>` and final `4`. DSpark can publish the
+terminator and first final token in the same verified cycle: observed final
+fragment gaps are microseconds, not proof of an isolated zero-cost transition.
+Target-only gaps are about 0.777/0.780 seconds. A separate high-mode F control
+(three samples, 20 input / 62 output) naturally emits reasoning followed by
+`2 plus 2 equals 4.`, completing in 21.853 seconds. This establishes a real
+multi-token final continuation, not a forced terminator or general transition SLA.
+
+The explicitly selected target-only engine uses the same executable, artifact,
+binding and context, after sequential unload/load; no hidden strategy policy
+is added. Three-sample HTTP means for target-only versus DSpark are A SSE
+5.712/5.278, B 16.717/12.212, high 19.795/16.078, maximum 37.378/31.662 seconds.
+Target-only publishes the first fragment earlier (A 4.506 versus 4.862 seconds),
+while DSpark finishes these controls sooner. Thus complete-turn benefit does
+not imply improved first-token latency for every strategy.
+
+Full-trace diagnostics record B five cycles, 25 proposed / 20 accepted / 5
+rejected; high nine cycles, 45 / 24 / 21; maximum twelve cycles, 60 / 35 / 25.
+Mean accepted prefixes are 4.0, 2.67 and 2.92 (maximum five). Draft/verification/
+commit timings are retained separately; commit includes target correction work,
+and full tracing perturbs timings. They are not substituted for ordinary samples.
+
+### Qualification, resource truth and next limit
+
+Paired projections are compared bit-exactly with ordinary CUDA and independent
+host decoded scalar F64 dots at width 4,096, including row tails. Existing
+non-finite/overflow and quantized class controls remain required. Reviewed live
+controls return HTTP 200 with identical bounded output; stale generation returns
+409, oversized output 413, disconnect cancels, and independent/replacement work
+succeeds. Every checked idle state has zero active work, sessions, leases and
+physical session state. The final mapped QA ledger separately classifies absent
+mandatory external assets; no missing gate becomes PASS.
+
+The source-stable mapped campaign `981a55af…` ran 161 required assertions:
+134 PASS, 8 FAIL, 19 BLOCKED, zero SKIP/ERROR. Three structural failures shared
+one stale scanner of the former monolithic Makefile; the repaired structural
+lane `19ccccf0…` passes all 17 assertions. The strengthened ordered-dot device
+oracle passes (`5cb277b4…`), and registered official input vectors pass
+(`5af92326…`). The later fast/structural receipts `455c24ec…`/`6078fd23…`
+separately pass 97/17 assertions. These are source-bound receipts, not one
+summed gate.
+The old client fixture also lacked the immutable artifact hash and assumed an
+explicit device copy, obsolete UI text and telemetry v3; it now checks typed
+mapped/addressable ownership, current terminal behavior and telemetry v6.
+Its repaired live receipt `99d7251e…` passes in 122.864 seconds, preserving two
+KV-reusing turns, exact checkpoint/restore/reset, native PTY completion,
+reasoning/final separation, cancellation/recovery and supported host shutdown.
+The optimized paired/grouped projection device memcheck reports zero errors;
+this bounded control is not the separate full-qtype diagnostic.
+
+Four numerical failures are independently reproduced in a disposable archive
+of unchanged `115884e…`: DeepSeek decode, prefill and production transformer,
+plus Qwen Decision Readout's independent-score assertion. Baseline and candidate
+prefill output/state digests are identical to each other; baseline and candidate
+transformer layer/logit diagnostics are identical (first mismatch layer 6,
+hidden max absolute error 1.09375, argmax 339/295, probability TV 0.362520746).
+These assertions remain FAIL, not reclassified as external missing assets or
+fixed by this performance work. The independently admitted forensic CPU/CUDA
+control still agrees through all 43 layers and logits exactly: max absolute
+error/RMSE/TV zero, argmax 339/339, common hidden digest
+`f00d7529f7efaf4f1e92ff1455e868be92514654c4632f6afab287431af43467`.
+It does not qualify CPU equivalence for the distinct production Q8 class.
+Full mapped-gate closure therefore remains unearned, separately from the
+bounded performance, component and producer/lifecycle result. Unconfigured
+source/emission or benchmark lanes are NOT RUN; only genuinely unavailable
+identities such as legacy bootstrap-Q2 are external asset blockers.
+
+The mapped 95,050,210,272-byte model remains borrowed/device-addressable.
+Physical residency is unknown, and RSS is not additional independent model
+storage. Typed target active workspace is 3,421,365,264 bytes; after request
+retirement typed current workspace/session state is zero. No retained scratch
+or preparation cost is hidden elsewhere. Nsight Compute counters were refused
+with `ERR_NVGPUCTRPERM`: achieved occupancy/utilization and a hardware floor are
+NOT QUALIFIED; no driver configuration was changed to manufacture evidence.
+
+The concrete next physical constraint is not a configured chunk setting.
+Specialization derives its maximum row-width mask from the compiled model's
+verification width; this DSpark source supplies block five plus one, and
+routed admission additionally bounds the generic width mask. The observed
+22/100-token prompts therefore use four/seventeen physical prefill groups,
+not one 64-row matrix. Wider phase-specific prefill requires compiler and
+specialization admission independent of verification geometry. Conventional
+parallel reductions/Tensor Core substitution would also need their own admitted
+numerical class rather than silently replacing ordered F64. Neither distinct
+boundary is implemented or selected here. The remaining ordered projection
+cost is measured; inability to improve it locally is not a hardware-limit proof.
+
+The unavailable legacy bootstrap-Q2 attention artifact still blocks its exact
+`cuda.native` aggregate. No 17K/32K performance, sustained reasoning, release,
+upstream whole-model conformance or Studio/Case-chain claim is promoted. A03
+remains READY and unstarted; YAI, SDK and Studio are untouched.
+
 ## DeepSeek CUDA producer reconciliation (2026-09-29)
 
 `RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` distinguishes a historical service

@@ -11,11 +11,11 @@ BINDING=${YVEX_RUNTIME_BINDING:?YVEX_RUNTIME_BINDING is required}
 
 test -f "$ARTIFACT"
 test -f "$BINDING"
+artifact_sha256=${YVEX_MODEL_SHA256:-$(sha256sum "$ARTIFACT" | awk '{print $1}')}
 root=$(mktemp -d "${TMPDIR:-/tmp}/yvex-client-live.XXXXXX")
 runtime="$root/runtime"
 home="$root/home"
 profile=deepseek4-v4-flash-dspark-runtime-iq2xxs
-repl_prompt="$profile> "
 mkdir -m 700 "$runtime" "$home"
 mkdir -p "$home/.local/share/yvex"
 cat >"$home/.local/share/yvex/models.local.json" <<EOF
@@ -24,6 +24,7 @@ cat >"$home/.local/share/yvex/models.local.json" <<EOF
   "models": [{
     "alias": "$profile",
     "path": "$ARTIFACT",
+    "sha256": "$artifact_sha256",
     "runtime_binding": "$BINDING",
     "runtime_target": "deepseek4-v4-flash-dspark",
     "runtime_backend": "cuda",
@@ -74,6 +75,7 @@ cleanup()
     return "$status"
 }
 trap cleanup EXIT HUP INT TERM
+trap 'exit 141' PIPE
 
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" serve \
     --logs json --trace-level tokens --openai off \
@@ -139,42 +141,62 @@ grep -F 'detached' "$root/detached" >/dev/null
 XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session attach main >/dev/null
 XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" host status --json >"$root/status.after.json"
 grep -F '"model_open_count":1' "$root/status.after.json" >/dev/null
-grep -E '"resident_device_bytes":[1-9][0-9]*' "$root/status.after.json" >/dev/null
+python3 - "$root/status.after.json" <<'PY'
+import json, sys
+status = json.load(open(sys.argv[1]))
+resources = status["resources"]
+assert resources["model_device_addressable_bytes"] > 0
+assert resources["model_device_addressable_bytes"] == resources["model_mapped_bytes"]
+assert resources["unified_memory"] and not resources["physical_residency_known"]
+assert status["resident_device_bytes"] == 0  # borrowed mapping, not a second allocation
+assert status["active_requests"] == 0 and status["queue_depth"] == 0
+PY
 grep -E '"output_head_upload_count":[01](,|})' "$root/status.after.json" >/dev/null
+XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session detach main >/dev/null
 
 mkfifo "$root/repl.input"
-NO_COLOR=1 XDG_RUNTIME_DIR="$runtime" script -q -f -e \
-    -c "$YVEX_BIN chat --session repl-live --max-new-tokens 1" \
+NO_COLOR=1 TERM=xterm-256color XDG_RUNTIME_DIR="$runtime" script -q -f -e \
+    -c "stty rows 24 cols 100; exec $YVEX_BIN chat --session repl-live --max-new-tokens 1" \
     "$root/repl.typescript" <"$root/repl.input" >/dev/null &
 repl_pid=$!
 exec 3>"$root/repl.input"
 attempt=0
 while test "$attempt" -lt 100; do
-    test -f "$root/repl.typescript" && grep -F "$repl_prompt" "$root/repl.typescript" >/dev/null && break
+    test -f "$root/repl.typescript" && grep -F 'commands' "$root/repl.typescript" >/dev/null && break
     attempt=$((attempt + 1))
     sleep 0.1
 done
 test "$attempt" -lt 100
-printf 'Hi\n' >&3
+printf 'Hi\r' >&3
 attempt=0
 while test "$attempt" -lt 900; do
-    prompts=$(grep -o "$repl_prompt" "$root/repl.typescript" 2>/dev/null | wc -l)
-    test "$prompts" -ge 2 && break
+    XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" host status --json >"$root/repl.status.json"
+    if python3 - "$root/repl.status.json" <<'PY'
+import json, sys
+status = json.load(open(sys.argv[1]))
+sys.exit(0 if status["completed_requests"] >= 3 and status["active_requests"] == 0 else 1)
+PY
+    then break; fi
     kill -0 "$repl_pid" 2>/dev/null || break
     attempt=$((attempt + 1))
     sleep 0.1
 done
 test "$attempt" -lt 900
-printf '\004' >&3
+printf '/quit\r' >&3
 exec 3>&-
 wait "$repl_pid"
 repl_pid=
 grep -F '● ready' "$root/repl.typescript" >/dev/null
 grep -F 'attached to resident runtime' "$root/repl.typescript" >/dev/null
 grep -F 'session repl-live' "$root/repl.typescript" >/dev/null
-grep -F 'generation' "$root/repl.typescript" >/dev/null
-grep -F '1 tokens' "$root/repl.typescript" >/dev/null
-grep -F 'prefill' "$root/repl.typescript" >/dev/null
+XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" engine list --json >"$root/repl.engines.json"
+python3 - "$root/repl.engines.json" <<'PY'
+import json, sys
+engines = json.load(open(sys.argv[1]))["engines"]
+assert len(engines) == 1 and engines[0]["generation"] == 1
+assert engines[0]["active_work"] == 0 and engines[0]["attached_clients"] == 0
+PY
+grep -F 'processing' "$root/repl.typescript" >/dev/null
 ! grep -F 'assistant>' "$root/repl.typescript" >/dev/null
 ! grep -F 'you>' "$root/repl.typescript" >/dev/null
 XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show repl-live >"$root/repl.session"
@@ -253,10 +275,10 @@ grep -F '"kind":"runtime.ready"' "$root/raw.jsonl" >/dev/null
 grep -F '"kind":"runtime.shutdown.complete"' "$root/raw.jsonl" |
     grep -F '"a":1,"b":1' >/dev/null
 grep -E 'REQUEST[[:space:]]+main/' "$root/engine.log" >/dev/null
-grep -E 'COMPLETE[[:space:]]+[1-9][0-9]* token' "$root/engine.log" >/dev/null
+grep -E 'DONE[[:space:]]+main/.*generated=[1-9][0-9]*' "$root/engine.log" >/dev/null
 grep -F '"kind":"request.started"' "$root/trace.log" >/dev/null
 grep -F '"kind":"generation.completed"' "$root/trace.log" >/dev/null
-grep -F '"schema":3' "$root/trace.log" >/dev/null
+grep -F '"schema":6' "$root/trace.log" >/dev/null
 ! grep -E '(^|[[:space:]])[ab]=' "$root/engine.log" >/dev/null
 ! grep -E '(^|[[:space:]])[ab]=' "$root/trace.log" >/dev/null
 grep -F '"kind":"generation.cancelled"' "$root/raw.jsonl" |

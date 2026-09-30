@@ -3,6 +3,8 @@ set -eu
 
 cd "$(dirname "$0")/.."
 
+make_inputs=$(make --no-print-directory -s print-build-inputs)
+
 if rg -n '#include[[:space:]]+"src/graph/private\.h"' src/cli; then
     echo "architecture: CLI depends on graph-private ABI" >&2
     exit 1
@@ -903,9 +905,9 @@ if [ -n "$runtime_planning_symbols" ]; then
     printf '%s\n' "$runtime_planning_symbols" >&2
     fail "runtime objects link source/compiler planning symbols"
 fi
-rg -n '^test-runtime-attention-live:' Makefile >/dev/null ||
+rg -n '^test-runtime-attention-live:' $make_inputs >/dev/null ||
     fail "runtime attention session/oracle evidence has no canonical target"
-rg -nF 'YVEX_ATTENTION_RUNTIME_BINDING="$$binding" $(ATTENTION_LIVE_RUNNER)' Makefile >/dev/null ||
+rg -nF 'YVEX_ATTENTION_RUNTIME_BINDING="$$binding" $(ATTENTION_LIVE_RUNNER)' $make_inputs >/dev/null ||
     fail "runtime attention evidence may silently omit its immutable binding"
 
 # CUDA production accepts only the generated kernels.cu bundle. A local PTX

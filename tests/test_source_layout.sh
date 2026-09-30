@@ -3,8 +3,10 @@ set -eu
 
 cd "$(dirname "$0")/.."
 
+make_inputs=$(make --no-print-directory -s print-build-inputs)
+
 grep -nF 'test-layout: $(LIBYVEX) $(YVEX_BIN) $(TEST_REFERENCE_OBJS) tests/test_source_layout.sh' \
-  Makefile >/dev/null || {
+  $make_inputs >/dev/null || {
   echo "source layout: test-layout lacks required production dependencies" >&2
   exit 1
 }
@@ -80,8 +82,8 @@ if grep -RInE '#include[[:space:]]+["<].*tests/' src include; then
   exit 1
 fi
 
-grep -nF '$(OBJ_DIR)/%.o: %.c' Makefile >/dev/null
-grep -nF '@mkdir -p $(@D)' Makefile >/dev/null
+grep -nF '$(OBJ_DIR)/%.o: %.c' $make_inputs >/dev/null
+grep -nF '@mkdir -p $(@D)' $make_inputs >/dev/null
 
 # Every independently focused runtime owner must remain inside the aggregate
 # used by both sanitizer builds. Derive the set so a later owner cannot add a
@@ -90,7 +92,7 @@ runtime_aggregate=$(awk '
   /^test-runtime: \$\(TEST_RUNNER\)$/ { body = 1; next }
   body && /^[^[:space:]#][^=]*:/ { exit }
   body { print }
-' Makefile)
+' $make_inputs)
 focused_runtime_filters=$(awk '
   /^test-runtime-[[:alnum:]_-]+: \$\(TEST_RUNNER\)$/ { focused = 1; next }
   focused && /^\tYVEX_TEST_FILTER=(runtime_[[:alnum:]_-]+|unit[.]runtime_binding) \$\(TEST_RUNNER\)$/ {
@@ -102,7 +104,7 @@ focused_runtime_filters=$(awk '
     next
   }
   focused { focused = 0 }
-' Makefile | sort -u)
+' $make_inputs | sort -u)
 for filter in $focused_runtime_filters; do
   printf '%s\n' "$runtime_aggregate" |
     grep -F "YVEX_TEST_FILTER=$filter \$(TEST_RUNNER)" >/dev/null || {
@@ -117,12 +119,12 @@ for filter in provider openai; do
       exit 1
     }
 done
-grep -A16 '^test-runtime-asan:' Makefile |
+grep -A16 '^test-runtime-asan:' $make_inputs |
   grep -F 'test-runtime client test-openai' >/dev/null || {
     echo "source layout: ASan omits the in-process OpenAI adapter" >&2
     exit 1
   }
-grep -A16 '^test-runtime-ubsan:' Makefile |
+grep -A16 '^test-runtime-ubsan:' $make_inputs |
   grep -F 'test-runtime client test-openai' >/dev/null || {
     echo "source layout: UBSan omits the in-process OpenAI adapter" >&2
     exit 1

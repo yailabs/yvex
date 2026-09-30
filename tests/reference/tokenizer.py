@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Independent DeepSeek tokenizer/prompt oracle; production never imports this module."""
 import importlib.util
-import ast
+import hashlib
+import json
 import pathlib
-import re
 import subprocess
 import sys
 
@@ -11,36 +11,76 @@ import tokenizers
 from tokenizers import Tokenizer
 
 
-def ids_from_cli(yvex, artifact, text):
-    result = subprocess.run(
-        [yvex, "tokenize", artifact, "--text", text],
-        check=True, capture_output=True, text=True,
-    )
-    match = re.search(r"^ids:(.*)$", result.stdout, re.MULTILINE)
-    if not match:
-        raise AssertionError("YVEX token IDs absent")
-    return [int(value) for value in match.group(1).split()]
+def native_request(native, artifact, binding, operation, *arguments):
+    return subprocess.check_output(
+        [str(native), str(artifact), str(binding), operation, *arguments], text=True)
 
 
-def text_from_cli(yvex, artifact, token_ids):
-    result = subprocess.run(
-        [yvex, "detokenize", artifact, "--ids", ",".join(map(str, token_ids))],
+def ids_from_native(native, artifact, binding, text):
+    return [int(value) for value in
+            native_request(native, artifact, binding, "--reference-encode", text).split()]
+
+
+def text_from_native(native, artifact, binding, token_ids):
+    return native_request(native, artifact, binding, "--reference-decode",
+                          ",".join(map(str, token_ids)))
+
+
+def prompt_from_native(native, artifact, binding, mode, messages):
+    arguments = [mode]
+    for message in messages:
+        arguments.extend([message["role"], message["content"],
+                          message.get("reasoning_content", "")])
+    return native_request(native, artifact, binding, "--reference-render", *arguments)
+
+
+def official_vectors(source, artifact, oracle, native, binding):
+    manifest = json.loads((pathlib.Path(__file__).parents[1] / "vectors/manifest.json").read_text())
+    authority = manifest["deepseek_official_encoding"]
+    for name, expected in authority["files"].items():
+        if hashlib.sha256((source / name).read_bytes()).hexdigest() != expected:
+            raise AssertionError(f"official vector identity mismatch: {name}")
+    # Run the immutable upstream tests without modifying/vendoring their source.
+    upstream = subprocess.run(
+        [sys.executable, "-B", "test_encoding_dsv4.py"], cwd=source / "encoding",
         check=True, capture_output=True, text=True,
     )
-    match = re.search(r'^text: (".*")$', result.stdout, re.MULTILINE)
-    if not match:
-        raise AssertionError("YVEX decoded text absent")
-    escaped = ast.literal_eval(match.group(1))
-    return escaped.encode("latin-1").decode("utf-8")
+    if upstream.stdout.count("[PASS]") != 4:
+        raise AssertionError("official upstream case count changed")
+    for case in range(1, 5):
+        gold = (source / f"encoding/tests/test_output_{case}.txt").read_text()
+        expected = oracle.encode(gold, add_special_tokens=False).ids
+        if ids_from_native(native, artifact, binding, gold) != expected:
+            raise AssertionError(f"official case {case}: native BPE differs")
+        if text_from_native(native, artifact, binding, expected) != gold:
+            raise AssertionError(f"official case {case}: native decode differs")
+    # The serving contract is a request ending in user/tool, not a completed
+    # transcript ending in assistant. Derive the exact request prefix of case 2
+    # and compare it with upstream construction, without calling it full-vector
+    # transcript equivalence. The full four gold strings above qualify BPE only.
+    messages = json.loads((source / "encoding/tests/test_input_2.json").read_text())
+    spec = importlib.util.spec_from_file_location("official_encoding", source / "encoding/encoding_dsv4.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    request = messages[:-1]
+    rendered = prompt_from_native(native, artifact, binding, "thinking", request)
+    expected = module.encode_messages(request, "thinking")
+    if rendered != expected:
+        raise AssertionError("official case 2 request prefix: typed native prompt bytes differ")
+    print(f"official_source={authority['repository']} revision={authority['revision']} "
+          "upstream_encoding_cases=4 native_bpe_cases=4 native_request_prefix_cases=1 "
+          "full_native_transcript_projection=not-qualified "
+          "native_tool_developer_reminder_projection=not-qualified full_model_logits=not-run")
 
 
 def main():
-    if len(sys.argv) != 4:
-        raise SystemExit(f"usage: {sys.argv[0]} SOURCE_DIR YVEX ARTIFACT")
-    source, yvex, artifact = map(pathlib.Path, sys.argv[1:])
+    if len(sys.argv) != 5:
+        raise SystemExit(f"usage: {sys.argv[0]} SOURCE_DIR ARTIFACT NATIVE_TOKENIZER BINDING")
+    source, artifact, native, binding = [pathlib.Path(arg).resolve() for arg in sys.argv[1:]]
     if tokenizers.__version__ != "0.20.3":
         raise AssertionError(f"unexpected tokenizers version {tokenizers.__version__}")
     oracle = Tokenizer.from_file(str(source / "tokenizer.json"))
+    official_vectors(source, artifact, oracle, native, binding)
     corpus = [
         "", "hello world", "  repeated   spaces\nnext\tline", "café e\u0301",
         "😀🧠", "你好世界", "こんにちは世界", "Привет мир", "مرحبا بالعالم",
@@ -49,11 +89,11 @@ def main():
     ]
     for text in corpus:
         expected = oracle.encode(text, add_special_tokens=False).ids
-        actual = ids_from_cli(str(yvex), str(artifact), text)
+        actual = ids_from_native(native, artifact, binding, text)
         if actual != expected:
             raise AssertionError((text, expected, actual))
         if expected:
-            decoded = text_from_cli(str(yvex), str(artifact), expected)
+            decoded = text_from_native(native, artifact, binding, expected)
             expected_decoded = oracle.decode(expected, skip_special_tokens=False)
             if decoded != expected_decoded:
                 raise AssertionError((expected, expected_decoded, decoded))
@@ -68,12 +108,7 @@ def main():
         {"role": "user", "content": "next"},
     ]
     expected_prompt = module.encode_messages(messages, "chat")
-    result = subprocess.run(
-        [str(yvex), "prompt", str(artifact), "--system", "policy", "--user", "hi",
-         "--assistant", "ok", "--user", "next", "--tokens"],
-        check=True, capture_output=True, text=True,
-    )
-    rendered = result.stdout.split("rendered:\n", 1)[1].split("\ntokens:", 1)[0]
+    rendered = prompt_from_native(native, artifact, binding, "chat", messages)
     if rendered != expected_prompt:
         raise AssertionError((expected_prompt, rendered))
     tool_messages = [
@@ -84,21 +119,13 @@ def main():
         {"role": "tool", "content": "two"},
     ]
     expected_tool_prompt = module.encode_messages(tool_messages, "chat")
-    result = subprocess.run(
-        [str(yvex), "prompt", str(artifact), "--system", "policy", "--user", "call",
-         "--assistant", "working", "--tool", "one", "--tool", "two", "--tokens"],
-        check=True, capture_output=True, text=True,
-    )
-    rendered = result.stdout.split("rendered:\n", 1)[1].split("\ntokens:", 1)[0]
+    rendered = prompt_from_native(native, artifact, binding, "chat", tool_messages)
     if rendered != expected_tool_prompt:
         raise AssertionError((expected_tool_prompt, rendered))
     expected_thinking = module.encode_messages(
         [{"role": "user", "content": "reason"}], "thinking")
-    result = subprocess.run(
-        [str(yvex), "prompt", str(artifact), "--user", "reason", "--thinking"],
-        check=True, capture_output=True, text=True,
-    )
-    rendered = result.stdout.split("rendered:\n", 1)[1].split("\nprompt_identity:", 1)[0]
+    rendered = prompt_from_native(native, artifact, binding, "thinking",
+                                  [{"role": "user", "content": "reason"}])
     if rendered != expected_thinking:
         raise AssertionError((expected_thinking, rendered))
     print("tokenizer_reference=tokenizers-0.20.3 cases=13 prompt_cases=3 "

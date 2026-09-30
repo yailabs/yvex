@@ -33,10 +33,30 @@ implementation/measurement exit is earned: generic ordered-dot thread ownership
 reduces the repeated 22-input/3-output control from 30.72 to 8.32 seconds HTTP
 and 22.19 to 4.20 seconds prefill, preserving numerical and lifecycle controls.
 The Task remains BLOCKED only on the mandatory legacy bootstrap-Q2 aggregate,
-not on a reproduced failure of the current mixed producer. No further
-optimization is selected; [dated evidence](../evaluation/retained-observations.md#deepseek-gb10-optimization-2026-09-30)
+not on a reproduced failure of the current mixed producer. [Dated evidence](../evaluation/retained-observations.md#deepseek-gb10-optimization-2026-09-30)
 retains exact provenance, qualification and limits. No YAI Case retry,
 cross-repository change or A03 execution occurred.
+
+`V010.RUNTIME.DEEPSEEK.GB10.INFERENCE.PIPELINE.1` has a bounded measured
+implementation exit: canonical physical-row arenas remove large per-request
+preparation/teardown, and generic paired traversal/ordered-dot dispatch remove
+repeated work without changing the numerical class. Fixed none/high/maximum,
+bounded decode and 100-token prefill controls improve complete HTTP latency;
+explicit target/DSpark controls preserve the first-token/complete-turn tradeoff.
+[Dated evidence](../evaluation/retained-observations.md#deepseek-gb10-inference-pipeline-2026-09-30)
+retains source-stable samples, numerical/lifecycle controls and the concrete next
+compiled phase-width constraint, not a hardware-floor claim. The independently
+requested Makefile review separates build/QA/docs/distribution owners and
+qualifies incremental dependencies, flag invalidation and manifest-derived
+DESTDIR installation; it does not confer release/legal readiness. Full mandatory
+QA is not green: exact external assets, including the legacy bootstrap-Q2
+aggregate, remain absent; four broader numerical assertions also fail on the
+unchanged baseline (production DeepSeek CPU/CUDA and Qwen readout). The forensic
+CPU/CUDA control remains exact, not a replacement for those failing assertions.
+The requested official-vector addition authenticates upstream encoding/parsing
+and native BPE/request-prefix evidence, not unavailable official full-model
+logits. No additional optimization, YAI/SDK/Studio edit, Case
+retry or A03 execution is selected.
 
 An independently authorized cross-repository Task Pack,
 `PLATFORM.SDK.PARITY.REFOUNDATION.0`, is in progress for public client/parity
@@ -48,10 +68,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 35 | 29 | 0 | 1 | 5 |
+| 36 | 29 | 0 | 1 | 6 |
 <!-- task-counts:end -->
 
-**29/35 selected Tasks complete.** This denominator includes the significant
+**29/36 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence and two independent completed interface Tasks. It is
 not YVEX product completion. Research candidates are not selected Tasks.
 
@@ -164,6 +184,7 @@ already completed correction at `6ae29730`; it does not invent a historical ID.
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
 | `PROJECT.DOCS.YVEX.REFOUNDATION.2` | Qualify the YVEX documentation architecture | Closed | ✅ COMPLETE | [Qualification](../evaluation/documentation-migration.md): coverage, Markdown/Mermaid, HTML/PDF, benchmarks and mapped QA |
+| `V010.RUNTIME.DEEPSEEK.GB10.INFERENCE.PIPELINE.1` | Reduce dominant warm GB10 inference-pipeline latency | P1 | ⛔ BLOCKED | Bounded performance, Makefile and official encoding-vector evidence earned; mandatory QA retains external gaps and unchanged baseline numerical failures; [evidence](../evaluation/retained-observations.md#deepseek-gb10-inference-pipeline-2026-09-30); no follow-up selected |
 | `RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` | Restore bounded DeepSeek CUDA/MoE numerical correctness | P1 | ⛔ BLOCKED | Bounded producer/component repair qualified; mandatory `cuda.native` needs the distinct unavailable bootstrap-Q2 artifact; [evidence](../evaluation/retained-observations.md#deepseek-cuda-producer-reconciliation-2026-09-29) |
 | `SPECTRUM.FLAN.T5.ENCODER.DECODER.0` | A03 exact encoder-decoder execution | Next selected | ⬜ READY | Immutable target, retained encoder state, cross-attention, independent numerics and lifecycle evidence |
 

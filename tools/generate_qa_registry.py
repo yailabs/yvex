@@ -342,7 +342,7 @@ def validate_make_target_inventory(registry: dict[str, Any], tests: list[dict[st
 
     make_targets: set[str] = set()
     pattern = re.compile(r"^((?:test|check|smoke)(?:-[a-z0-9][a-z0-9_-]*)?):", re.MULTILINE)
-    make_targets.update(pattern.findall((root / "Makefile").read_text(encoding="utf-8")))
+    make_targets.update(pattern.findall(authored_make_text(root)))
     implicit = {target for item in tests for target in item["legacy_targets"]}
     missing = make_targets - implicit - targets
     # Registry legacy targets are materialized through the generated generic
@@ -352,6 +352,22 @@ def validate_make_target_inventory(registry: dict[str, Any], tests: list[dict[st
         fail("make_target_inventory",
              f"parity failed missing={sorted(missing)} stale={sorted(stale)}")
     return sorted(entries, key=lambda item: item["target"])
+
+
+def authored_make_text(root: Path) -> str:
+    """Read literal authored includes without bootstrapping generated Make state."""
+    visited: set[str] = set()
+
+    def read(name: str) -> str:
+        if name in visited:
+            fail("Makefile", f"duplicate or cyclic authored include: {name}")
+        visited.add(name)
+        path = root / name
+        body = path.read_text(encoding="utf-8")
+        includes = re.findall(r"^include (config/make/[a-z_]+[.]mk)$", body, re.MULTILINE)
+        return body + "\n" + "\n".join(read(child) for child in includes)
+
+    return read("Makefile")
 
 
 def c_string(value: str) -> str:

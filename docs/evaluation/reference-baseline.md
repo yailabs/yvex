@@ -63,6 +63,19 @@ claims.
 | DeepSeek DSpark [encoding contract](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-DSpark/blob/62af8fffb2f7030cac4de2f0169f5b8d1101b646/encoding/README.md) and [`encoding_dsv4.py`](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-DSpark/blob/62af8fffb2f7030cac4de2f0169f5b8d1101b646/encoding/encoding_dsv4.py) at the admitted source revision | Chat versus thinking prompt transitions, explicit reasoning delimiters, prior-turn reasoning retention and maximum-effort prefix | `src/tokenizer/`, `src/server/`, `src/cli/io/` | `V010.PRODUCT.ARCHITECTURE.REFOUNDATION.0` | Hidden chain of thought, prose inference, terminal-only policy, public provider reasoning schema, or reasoning support for another target |
 | NVIDIA [DGX Spark hardware specification](https://docs.nvidia.com/dgx/dgx-spark/hardware.html) | GB10 compute, memory, bandwidth, CPU, copy-engine and platform envelope | compiled hardware profile and [GB10 measurement contract](benchmarks/gb10-targets.md) | `V010.PRODUCT.ARCHITECTURE.REFOUNDATION.0`, `V010.RUNTIME.DEEPSEEK.GB10.OPTIMIZATION.0` | Achieved YVEX throughput, effective model bandwidth, kernel support, precision admission, competitive performance, or release benchmark |
 
+## Official DeepSeek input vectors
+
+The admitted DSpark revision's `encoding/test_encoding_dsv4.py` and four
+`encoding/tests/test_input_*.json` / `test_output_*.txt` pairs are now runnable
+through `make test-deepseek-official-vectors`. The test-vector manifest pins
+each source/license/tokenizer file; the native adapter uses the compiled binding
+and the independent `tokenizers==0.20.3` oracle. Upstream parsing/encoding,
+native BPE for complete gold strings, and native construction of a supported
+request prefix are three distinct claims. Full native transcript construction
+(tool/developer/reminder cases included) and full-model numerical conformance
+are not implied. See the [family qualification boundary](../model-families/deepseek-v4-flash.md)
+and [dated observations](retained-observations.md#deepseek-gb10-inference-pipeline-2026-09-30).
+
 ## Validation boundary
 
 ### Pinned DeepSeek-V4 architecture baseline

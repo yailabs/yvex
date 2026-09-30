@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 740" role="img" aria-labelledby="title desc">
+<title id="title">DeepSeek GB10 inference-pipeline characterization</title>
+<desc id="desc">characterization; Bounded warm characterization, not release performance, an SLA, whole-model upstream conformance or product-chain qualification.. Values are printed beside each bar.</desc>
+<rect width="1000" height="740" rx="12" fill="#faf8ff"/>
+<g font-family="Arial, sans-serif" fill="#231735">
+<text x="30" y="38" font-size="23" font-weight="700">DeepSeek GB10 inference-pipeline characterization</text>
+<text x="30" y="67" font-size="16">CHARACTERIZATION · s · not an automatic capability promotion</text>
+<text x="30" y="129" font-size="18">A baseline</text>
+<rect x="330" y="110" width="95.723" height="27" rx="4" fill="#7541ba"/>
+<text x="445.723" y="129" font-size="17">8.13071</text>
+<text x="30" y="187" font-size="18">A optimized</text>
+<rect x="330" y="168" width="63.300" height="27" rx="4" fill="#7541ba"/>
+<text x="413.300" y="187" font-size="17">5.3767</text>
+<text x="30" y="245" font-size="18">B baseline</text>
+<rect x="330" y="226" width="194.269" height="27" rx="4" fill="#7541ba"/>
+<text x="544.269" y="245" font-size="17">16.5012</text>
+<text x="30" y="303" font-size="18">B optimized</text>
+<rect x="330" y="284" width="143.774" height="27" rx="4" fill="#7541ba"/>
+<text x="493.774" y="303" font-size="17">12.2122</text>
+<text x="30" y="361" font-size="18">C baseline</text>
+<rect x="330" y="342" width="250.121" height="27" rx="4" fill="#7541ba"/>
+<text x="600.121" y="361" font-size="17">21.2453</text>
+<text x="30" y="419" font-size="18">C optimized</text>
+<rect x="330" y="400" width="189.284" height="27" rx="4" fill="#7541ba"/>
+<text x="539.284" y="419" font-size="17">16.0778</text>
+<text x="30" y="477" font-size="18">D baseline</text>
+<rect x="330" y="458" width="470.000" height="27" rx="4" fill="#7541ba"/>
+<text x="820.000" y="477" font-size="17">39.9218</text>
+<text x="30" y="535" font-size="18">D optimized</text>
+<rect x="330" y="516" width="372.758" height="27" rx="4" fill="#7541ba"/>
+<text x="722.758" y="535" font-size="17">31.6621</text>
+<text x="30" y="593" font-size="18">E baseline</text>
+<rect x="330" y="574" width="253.321" height="27" rx="4" fill="#7541ba"/>
+<text x="603.321" y="593" font-size="17">21.5171</text>
+<text x="30" y="651" font-size="18">E optimized</text>
+<rect x="330" y="632" width="193.433" height="27" rx="4" fill="#7541ba"/>
+<text x="543.433" y="651" font-size="17">16.4302</text>
+</g></svg>

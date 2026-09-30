@@ -140,7 +140,7 @@ def check_cuda_native_assets(tests: list[dict]) -> None:
 def main() -> int:
     source = ROOT / "config/qa/registry.json"
     registry, tests = generate_qa_registry.load_and_validate(ROOT, source)
-    runtime_body = (ROOT / "Makefile").read_text().split("\ntest-runtime:", 1)[1].split("\n\n", 1)[0]
+    runtime_body = generate_qa_registry.authored_make_text(ROOT).split("\ntest-runtime:", 1)[1].split("\n\n", 1)[0]
     runtime_filters = set()
     for line in runtime_body.splitlines():
         if line.strip().startswith("YVEX_TEST_FILTER="):

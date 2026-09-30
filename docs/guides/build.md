@@ -14,6 +14,49 @@ publication: {html: true, pdf: true, index: true}
 
 [Up](README.md)
 
+## Developer and packager entry points
+
+GNU Make 4.3 or newer, a C11 compiler, Python 3 and the pinned REPLAI build
+toolchain are required. CUDA is optional at build time; an explicitly requested
+CUDA execution still refuses without an admitted kernel bundle. Start with
+`make help`, then `make -j4` (library plus the single `yvex` executable).
+`make check` and registered `make qa-*` lanes are software qualification, not
+release or model-quality claims. [QA](../evaluation/qa.md) owns lane selection.
+
+The root Makefile is the entry point. `config/make/config.mk` owns toolchain
+configuration; `rules.mk` owns source-relative compilation, generated inputs and
+linking; `qa.mk` supplies existing qualification adapters; `docs.mk` owns
+publication targets; `distribution.mk` owns software staging and legal gates.
+Source and test membership still come only from their existing manifests and
+registries. `make print-build-inputs` exposes the parsed authored Make inputs.
+
+`CC`, `AR`, `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, `LDLIBS`, `NVCC`, `NVCCFLAGS`,
+`BUILD_DIR` and `YVEX_CUDA_ARCH` are explicit overrides. Packager `CPPFLAGS`
+augment mandatory project includes/feature definitions. Material compiler and
+link flags invalidate their consumers; C and CUDA transitive header dependencies
+are generated, including PTX and native CUBIN. Concurrent image/archive publication
+uses complete staged files. Use an independent build directory for separate
+toolchain variants; this is not an out-of-source configure interface.
+
+For an executable **software candidate**, including its current manifest and
+license receipts:
+
+```sh
+make package
+make install DESTDIR=/absolute/staging/root prefix=/usr
+```
+
+GNU `exec_prefix`, `bindir`, `datarootdir`, `datadir`, `INSTALL_PROGRAM` and
+`INSTALL_DATA` overrides are supported. Installation derives file membership
+from `config/package_manifest.tsv`; it does not install model payloads or invent
+a separately qualified SDK package. It preserves the `UNQUALIFIED` legal marker.
+Neither `package` nor `install` grants release/distribution readiness:
+`qualify-distribution DISTRIBUTION_PACKAGE=/absolute/legal-bundle` remains the
+fail-closed gate for an exact recipient package. Unknown dependency/legal closure
+remains blocked. `clean` removes only its validated build tree and, for the
+default tree, `./yvex`; it neither follows symlink ancestors nor deletes arbitrary
+root objects or historical executables.
+
 ## Prerequisites
 
 Builds provide one executable product. `yvex serve` owns the private Unix

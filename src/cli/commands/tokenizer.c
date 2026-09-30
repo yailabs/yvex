@@ -346,7 +346,7 @@ static int command_prompt(int arg_count, char **args)
     yvex_model_context ctx;
     yvex_prompt_message messages[16];
     unsigned long long message_count = 0;
-    yvex_prompt_options options;
+    yvex_prompt_options options = {0};
     yvex_rendered_prompt rendered;
     yvex_tokenizer_encode_result encoded;
     yvex_error err;

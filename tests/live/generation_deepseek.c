@@ -15,6 +15,7 @@
 #include <yvex/internal/logits.h>
 #include <yvex/internal/moe.h>
 #include <yvex/internal/runtime.h>
+#include <yvex/internal/runtime_capacity.h>
 #include <yvex/internal/sampling.h>
 #include <yvex/internal/transformer.h>
 #include <yvex/registry.h>
@@ -2005,6 +2006,55 @@ static int live_qualification_publish(
     return rc;
 }
 
+/* Logical chunks and sealed physical populations must not create independent
+ * arena geometries. Both target and speculative consumers use capacity truth. */
+static int live_physical_capacity_proof(yvex_model_engine *model,
+    yvex_backend_kind backend, yvex_error *err)
+{
+    yvex_runtime_execution_session *session = NULL;
+    yvex_runtime_session_open_request open = {.backend = backend};
+    yvex_model_engine_failure failure = {0};
+    yvex_runtime_capacity capacity = {0};
+    yvex_graph_attention_capacity_plan *attention = NULL;
+    yvex_runtime_capacity_options options = {
+        .backend = backend, .context_capacity = 64ull,
+        .prefill_chunk_tokens = 64ull, .concurrent_sequences = 1ull,
+        .workload_kind = YVEX_EXECUTION_WORKLOAD_INTERACTIVE_LATENCY,
+        .evidence_profile = YVEX_EXECUTION_EVIDENCE_PRODUCTION,
+        .sampling_requirement = YVEX_EXECUTION_SAMPLING_GREEDY};
+    const yvex_model_engine_view *view = yvex_model_engine_view_get(model);
+    const yvex_speculation_family_policy *policy = NULL;
+    unsigned long long width = 0ull, expected = 0ull;
+    int rc = yvex_model_engine_scheduler_maximum_width_copy(model, &width, err);
+    if (rc == YVEX_OK && (!view || !yvex_runtime_binding_policies(
+            view->compiled_binding, NULL, NULL, &policy) || !policy))
+        rc = YVEX_ERR_STATE;
+    if (rc == YVEX_OK)
+        rc = yvex_runtime_session_open(&session, model, &open, &failure, err);
+    for (unsigned int mode = 0u; rc == YVEX_OK && mode < 2u; ++mode) {
+        options.mode = mode ? YVEX_EXECUTION_GENERATION_SPECULATIVE
+                            : YVEX_EXECUTION_GENERATION_TARGET_ONLY;
+        expected = width > 1ull && width < 64ull ? width : 64ull;
+        if (mode && policy->block_size + 2ull > expected)
+            expected = policy->block_size + 2ull;
+        rc = yvex_runtime_capacity_derive(model, session, &options,
+                                         &capacity, &attention, err);
+        if (rc == YVEX_OK && (capacity.physical_rows != expected ||
+            capacity.workload_profile.prefill_chunk_tokens != 64ull)) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, "generation_live.capacity",
+                "physical arena width or logical chunk identity diverged");
+            rc = YVEX_ERR_FORMAT;
+        }
+        if (rc == YVEX_OK)
+            fprintf(stderr, "physical capacity: strategy=%s logical=64 admitted=%llu arena=%llu\n",
+                mode ? "speculative" : "target-only", width, capacity.physical_rows);
+        yvex_graph_attention_capacity_plan_close(&attention);
+    }
+    if (rc == YVEX_OK) rc = yvex_runtime_session_close(&session, err);
+    else (void)yvex_runtime_session_close(&session, NULL);
+    return rc;
+}
+
 int main(int argc, char **argv)
 {
     yvex_model_engine_open_request request = {0};
@@ -2068,6 +2118,8 @@ int main(int argc, char **argv)
     if (yvex_paths_default(&paths, &path_error) == YVEX_OK)
         request.artifact_reopen_cache_root = paths.cache_dir;
     rc = yvex_model_engine_open(&model, &request, &failure, &err);
+    if (rc == YVEX_OK) { step = "physical-capacity";
+        rc = live_physical_capacity_proof(model, backend, &err); }
     if (rc == YVEX_OK) { step = "production"; rc = live_production(
         model, backend, mode, policy, maximum_tokens, &production, &err); }
     if (rc == YVEX_OK && mode == YVEX_GENERATION_MODE_TARGET_ONLY) {

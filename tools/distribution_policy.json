@@ -5,7 +5,7 @@
   "first_party_terms": "MIT",
   "profiles": {
     "product": {
-      "build_inputs": ["Makefile", "config/package_manifest.tsv", "config/replai.json", "tools/prepare_replai.py", "LICENSE", "NOTICE.md"],
+      "build_inputs": ["Makefile", "config/make/config.mk", "config/make/rules.mk", "config/make/qa.mk", "config/make/docs.mk", "config/make/distribution.mk", "config/package_manifest.tsv", "config/replai.json", "tools/prepare_replai.py", "LICENSE", "NOTICE.md"],
       "cargo_manifests": [],
       "unresolved": [
         "The pinned REPLAI build receipt lacks its complete compiled dependency/toolchain legal closure.",

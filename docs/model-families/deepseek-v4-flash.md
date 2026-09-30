@@ -127,6 +127,21 @@ reasoning from assistant turns before the latest user turn is omitted. A
 tool-enabled prompt disables that drop so reasoning, calls and ordered tool
 results retain the continuity required by the official format.
 
+The independent `reference.deepseek.official-encoding` gate authenticates the
+four upstream encoding/parsing cases and gold strings at the exact DSpark
+revision above, using [`tests/vectors/manifest.json`](../../tests/vectors/manifest.json).
+It executes the unmodified upstream test, compares native artifact-bound BPE
+encoding/decoding for all four strings against `tokenizers==0.20.3`, and compares
+the supported request prefix of case 2 against the upstream encoder. Thirteen
+additional text controls and three simple prompt controls remain separate.
+This is not native projection of every tool/developer/reminder transcript and
+is not an official full-model logits oracle. Source code, gold files, tokenizer
+data and their upstream MIT license stay in the immutable external source
+snapshot; absent or changed backing fails the gate rather than downloading an
+unpinned substitute. Run `make test-deepseek-official-vectors` with
+`DEEPSEEK_SOURCE`, `DEEPSEEK_SELECTED_ARTIFACT`, `YVEX_RUNTIME_BINDING` and the
+pinned test-only `YVEX_TOKENIZER_REFERENCE_PYTHON`. No GPU or generation runs.
+
 ## Coverage, transformation, and artifact
 
 Exact source coverage reconciles 72,317 source tensors, 3,130 more than the

@@ -384,13 +384,7 @@ static int generation_execution_owners_open(
     if (rc != YVEX_OK) return rc;
     context->scheduler_acquired = 1;
 
-    workspace_token_capacity = options->prefill_chunk_tokens;
-    if (options->mode == YVEX_GENERATION_MODE_SPECULATIVE &&
-        workspace_token_capacity < YVEX_SPECULATION_MAX_BLOCK + 2ull)
-        workspace_token_capacity = YVEX_SPECULATION_MAX_BLOCK + 2ull;
-    if (options->compatible_operation_batching &&
-        workspace_token_capacity < options->concurrent_sequences)
-        workspace_token_capacity = options->concurrent_sequences;
+    workspace_token_capacity = context->capacity.physical_rows;
     transformer.maximum_host_bytes = options->maximum_host_bytes;
     transformer.maximum_device_bytes = options->maximum_device_bytes;
     transformer.context_capacity = options->context_capacity;
@@ -478,7 +472,7 @@ static int generation_execution_owners_open(
         return rc;
     speculation.backend = options->backend;
     speculation.context_capacity = options->context_capacity;
-    speculation.prefill_chunk_tokens = options->prefill_chunk_tokens;
+    speculation.prefill_chunk_tokens = workspace_token_capacity;
     speculation.maximum_host_bytes = options->maximum_host_bytes;
     speculation.maximum_device_bytes = options->maximum_device_bytes;
     speculation.engine_scheduling = options->compatible_operation_batching;

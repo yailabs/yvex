@@ -31,7 +31,8 @@ extern "C" __global__ void yvex_attention_bf16_pair(
     unsigned int lane = threadIdx.x & 31u;
     unsigned long long row_index =
         (unsigned long long)blockIdx.x * blockDim.x + threadIdx.x;
-    float first_sum = 0.0f, second_sum = 0.0f;
+    double first_dot = 0.0, second_dot = 0.0;
+    float first_sum, second_sum;
     if (!status) return;
     if (!first || !second || !first_row_bytes || !second_row_bytes ||
         !row_width || !row_count || !input || !first_out || !second_out ||
@@ -42,8 +43,15 @@ extern "C" __global__ void yvex_attention_bf16_pair(
     if (*status || row_index >= row_count) return;
     first += row_index * first_row_bytes;
     second += row_index * second_row_bytes;
-    first_sum = qtype_dot_recover_f64(first, input, row_width, YVEX_GGUF_QTYPE_BF16);
-    second_sum = qtype_dot_recover_f64(second, input, row_width, YVEX_GGUF_QTYPE_BF16);
+    /* Independent accumulators share the activation read and expose instruction
+     * parallelism, without reassociating either source-ordered F64 dot. */
+    for (unsigned long long column = 0ull; column < row_width; ++column) {
+        double activation = (double)input[column];
+        first_dot += (double)qtype_value(first, column, YVEX_GGUF_QTYPE_BF16) * activation;
+        second_dot += (double)qtype_value(second, column, YVEX_GGUF_QTYPE_BF16) * activation;
+    }
+    first_sum = (float)first_dot;
+    second_sum = (float)second_dot;
     if (!isfinite(first_sum) || !isfinite(second_sum)) atomicCAS(status, 0, 1);
     else {
         first_out[row_index] = first_sum;
