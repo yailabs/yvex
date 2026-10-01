@@ -108,8 +108,17 @@ to replace caller-injected capacity facts. Other cases, including
 Scheduler observation waits sleep for 1 ms with a bounded retry budget and retain
 their exact assertions. Production memory and scheduling policy are unchanged.
 
-Both actual-memory and declared-capacity local reruns pass the affected binding,
-generation and real tiny CPU/terminal vertical. Hosted results belong to their
+The second hosted native run passed 12/13 cases and exposed one remaining
+fixture lifetime error: `tiny_compile` cleared its caller's envelope after a
+startup-capacity refusal. It now copies and restores all three caller capacity
+variables around its explicit startup and process-limit injections; no production
+capacity owner changes. The failed hosted snapshot remains diagnostic evidence.
+
+The clean local Mac run on `53ef5d38` again passed all 13 native cases with
+actual memory and valid source stability (run
+`e3c066cd6e5eb47e28141a9248e56b97c607d182d5e633dc67ef47635991742d`).
+Actual-memory and declared-capacity reruns also pass the repaired tiny compiler
+and its real CPU/terminal vertical. Hosted results belong to their
 exact workflow source snapshot. A hosted pass with this declared envelope
 qualifies native fixture execution and lifecycle; it does not qualify the
 runner's actual memory admission or promise a usable 8B/14B model.
@@ -138,7 +147,12 @@ During Linux confirmation, Exon's `/` filesystem reported zero user-available
 space (100% usage), while `/tmp` is a separate tmpfs with 13 GiB available.
 Build fixtures using the host's default `/home/mothx/.cache/tmp` failed with
 ENOSPC. Repeating them under `/tmp` passes. This is an observed host storage
-problem for the next Exon work session; no unrelated files were deleted.
+failure; no unrelated files were deleted.
+At the subsequent read-only refresh on 2026-10-01, `/` had 49 GiB available
+(95% usage); the earlier ENOSPC observation is historical, not a current blocker.
+YAI `81f8372` and SDK `e0e2323` were locally committed but not yet on their
+published main refs; Studio `7074c31` had 106 local changed paths. Those owners
+remain separate from this YVEX branch and are not consumer-chain qualification.
 
 ## Mechanism authority
 
