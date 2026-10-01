@@ -417,8 +417,7 @@ assert {"model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors", 
 PY
 test ! -d "$MODELS_ROOT/hf/minimax/alternative-model"
 for population in incomplete-shards duplicate-shards; do
-    YVEX_FAKE_HF_DISCOVERY_MODE="$population" \
-        expect_rc 4 "$YVEX_BIN" model pull hf://community/alternative-model \
+    expect_rc 4 env YVEX_FAKE_HF_DISCOVERY_MODE="$population" "$YVEX_BIN" model pull hf://community/alternative-model \
         --format safetensors --dry-run --models-root "$MODELS_ROOT" \
         >"$ROOT/$population.out" 2>"$ROOT/$population.err"
     contains "$ROOT/$population.err" 'provider'
