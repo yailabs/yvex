@@ -37,7 +37,7 @@ grep '"schema": "yvex.source_manifest.v1"' "$MANIFEST" >/dev/null || fail "missi
 grep '"repo": "test-org/test-model"' "$MANIFEST" >/dev/null || fail "missing repo"
 grep '"status": "in-progress"' "$MANIFEST" >/dev/null || fail "missing status"
 grep 'model-00001.safetensors' "$MANIFEST" >/dev/null || fail "missing safetensors file"
-grep 'status: source-manifest-written' "$OUT_DIR/create.out" >/dev/null || fail "missing CLI status"
+python3 tests/support/human_field.py "$OUT_DIR/create.out" 'status: source-manifest-written' >/dev/null || fail "missing CLI status"
 
 "$YVEX_BIN" help source verify > "$OUT_DIR/verify-help.out"
 grep 'source verify' "$OUT_DIR/verify-help.out" >/dev/null || fail "payload verification help is unreachable"
@@ -73,22 +73,22 @@ test ! -e "$OUT_DIR/unchecked-complete.json" || fail "complete refusal wrote a m
 
 "$YVEX_BIN" compile source manifest report --family deepseek --release v0.1.0 \
   --models-root "$OUT_DIR/models" > "$OUT_DIR/deepseek.out"
-grep 'target: deepseek4-v4-flash-dspark' "$OUT_DIR/deepseek.out" >/dev/null || fail "missing canonical DeepSeek target"
-grep 'status: exact-source-blocked' "$OUT_DIR/deepseek.out" >/dev/null || fail "missing blocked source status"
-grep 'top_blocker: missing-source-path' "$OUT_DIR/deepseek.out" >/dev/null || fail "missing source refusal"
-grep 'next: V010.REBASE.DEEPSEEK.DSPARK.0' "$OUT_DIR/deepseek.out" >/dev/null || fail "wrong blocked handoff"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek.out" 'target: deepseek4-v4-flash-dspark' >/dev/null || fail "missing canonical DeepSeek target"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek.out" 'status: exact-source-blocked' >/dev/null || fail "missing blocked source status"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek.out" 'top_blocker: missing-source-path' >/dev/null || fail "missing source refusal"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek.out" 'next: V010.REBASE.DEEPSEEK.DSPARK.0' >/dev/null || fail "wrong blocked handoff"
 
 "$YVEX_BIN" compile source manifest report --family deepseek --release v0.1.0 \
   --models-root "$OUT_DIR/models" --output table > "$OUT_DIR/deepseek-table.out"
 grep 'deepseek4-v4-flash-dspark' "$OUT_DIR/deepseek-table.out" >/dev/null || fail "table lost canonical target"
 grep 'blocked' "$OUT_DIR/deepseek-table.out" >/dev/null || fail "table lost verification state"
-grep 'top_blocker: missing-source-path' "$OUT_DIR/deepseek-table.out" >/dev/null || fail "table lost typed refusal"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-table.out" 'top_blocker: missing-source-path' >/dev/null || fail "table lost typed refusal"
 
 "$YVEX_BIN" compile source manifest report --family deepseek --release v0.1.0 \
   --models-root "$OUT_DIR/models" --audit > "$OUT_DIR/deepseek-audit.out"
-grep 'canonical_repository: deepseek-ai/DeepSeek-V4-Flash-DSpark' "$OUT_DIR/deepseek-audit.out" >/dev/null || fail "audit lost repository identity"
-grep 'source_verification_status: blocked' "$OUT_DIR/deepseek-audit.out" >/dev/null || fail "audit lost verification state"
-grep 'blocker_0: missing-source-path' "$OUT_DIR/deepseek-audit.out" >/dev/null || fail "audit lost typed refusal"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-audit.out" 'canonical_repository: deepseek-ai/DeepSeek-V4-Flash-DSpark' >/dev/null || fail "audit lost repository identity"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-audit.out" 'source_verification_status: blocked' >/dev/null || fail "audit lost verification state"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-audit.out" 'blocker_0: missing-source-path' >/dev/null || fail "audit lost typed refusal"
 
 "$YVEX_BIN" compile source manifest report --family deepseek --release v0.1.0 \
   --models-root "$OUT_DIR/models" --output json > "$OUT_DIR/deepseek.json"
@@ -262,30 +262,30 @@ PY
 
 "$YVEX_BIN" compile source manifest report --family deepseek --release v0.1.0 \
   --models-root "$VERIFIED_MODELS" > "$OUT_DIR/deepseek-fixture.out"
-grep 'status: exact-source-blocked' "$OUT_DIR/deepseek-fixture.out" >/dev/null || fail "non-upstream index fixture was promoted"
-grep 'inventory: upstream-index' "$OUT_DIR/deepseek-fixture.out" >/dev/null || fail "normal output lost inventory authority"
-grep 'top_blocker: upstream-index-identity-mismatch' "$OUT_DIR/deepseek-fixture.out" >/dev/null || fail "normal output lost upstream identity refusal"
-grep 'next: V010.REBASE.DEEPSEEK.DSPARK.0' "$OUT_DIR/deepseek-fixture.out" >/dev/null || fail "blocked fixture handoff is wrong"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture.out" 'status: exact-source-blocked' >/dev/null || fail "non-upstream index fixture was promoted"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture.out" 'inventory: upstream-index' >/dev/null || fail "normal output lost inventory authority"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture.out" 'top_blocker: upstream-index-identity-mismatch' >/dev/null || fail "normal output lost upstream identity refusal"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture.out" 'next: V010.REBASE.DEEPSEEK.DSPARK.0' >/dev/null || fail "blocked fixture handoff is wrong"
 
 "$YVEX_BIN" compile source manifest report --family deepseek --release v0.1.0 \
   --models-root "$VERIFIED_MODELS" --output table > "$OUT_DIR/deepseek-fixture-table.out"
 grep 'upstream-index' "$OUT_DIR/deepseek-fixture-table.out" >/dev/null || fail "table output lost inventory authority"
-grep 'top_blocker: upstream-index-identity-mismatch' "$OUT_DIR/deepseek-fixture-table.out" >/dev/null || fail "table output lost upstream identity refusal"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-table.out" 'top_blocker: upstream-index-identity-mismatch' >/dev/null || fail "table output lost upstream identity refusal"
 
 "$YVEX_BIN" compile source manifest report --family deepseek --release v0.1.0 \
   --models-root "$VERIFIED_MODELS" --audit > "$OUT_DIR/deepseek-fixture-audit.out"
-grep 'source_verification_status: blocked' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output promoted the fixture"
-grep 'inventory_authority: upstream-index' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output lost inventory authority"
-grep 'upstream_index_identity_verified: false' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output lost upstream identity status"
-grep 'header_scan_count: 1' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output lost canonical header scan"
-grep 'inference_config_valid: true' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output lost DSpark inference admission"
-grep 'config_dspark_block_size: 5' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output lost DSpark block size"
-grep 'config_dspark_noise_token_id: 128799' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output lost DSpark noise token"
-grep 'config_dspark_target_layer_ids: \[40,41,42\]' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output lost DSpark target feature layers"
-grep 'config_dspark_markov_rank: 256' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output lost DSpark Markov rank"
-grep 'inference_dspark_layer_count: 3' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output lost DSpark inference layer count"
-grep 'release_qtype: unselected' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "source verification selected a qtype"
-grep 'generation: unsupported-full-model' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "source verification promoted generation"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-audit.out" 'source_verification_status: blocked' >/dev/null || fail "audit output promoted the fixture"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-audit.out" 'inventory_authority: upstream-index' >/dev/null || fail "audit output lost inventory authority"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-audit.out" 'upstream_index_identity_verified: false' || fail "audit output lost upstream identity status"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-audit.out" 'header_scan_count: 1' >/dev/null || fail "audit output lost canonical header scan"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-audit.out" 'inference_config_valid: true' >/dev/null || fail "audit output lost DSpark inference admission"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-audit.out" 'config_dspark_block_size: 5' >/dev/null || fail "audit output lost DSpark block size"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-audit.out" 'config_dspark_noise_token_id: 128799' >/dev/null || fail "audit output lost DSpark noise token"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-audit.out" 'config_dspark_target_layer_ids: [40,41,42]' || fail "audit output lost DSpark target feature layers"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-audit.out" 'config_dspark_markov_rank: 256' >/dev/null || fail "audit output lost DSpark Markov rank"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-audit.out" 'inference_dspark_layer_count: 3' >/dev/null || fail "audit output lost DSpark inference layer count"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-audit.out" 'release_qtype: unselected' >/dev/null || fail "source verification selected a qtype"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-fixture-audit.out" 'generation: unsupported-full-model' >/dev/null || fail "source verification promoted generation"
 
 "$YVEX_BIN" compile source manifest report --family deepseek --release v0.1.0 \
   --models-root "$VERIFIED_MODELS" --output json > "$OUT_DIR/deepseek-fixture.json"

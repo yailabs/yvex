@@ -113,12 +113,15 @@ OPERATION_KEYS = {
     "slash_aliases",
     "slash_projection",
     "summary",
+    "help_group",
+    "slash_group",
     "superseded_by",
     "test_owner",
     "validator_ids",
     "visibility",
 }
 FLAG_KEYS = {
+    "description",
     "aliases",
     "config",
     "conflicts",
@@ -184,6 +187,8 @@ def load_registry(path: pathlib.Path) -> dict[str, Any]:
 def text(value: Any, where: str, *, allow_empty: bool = False) -> str:
     if not isinstance(value, str) or (not allow_empty and not value):
         fail(where, "must be a non-empty string")
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        fail(where, "must not contain terminal control characters")
     return value
 
 
@@ -273,6 +278,7 @@ def validate_flag(flag: Any, where: str, defaults: set[str], validators: set[str
         fail(f"{where}.enum_values", "enum flag requires admitted values")
     return {
         "name": name,
+        "description": text(flag.get("description", "none"), f"{where}.description"),
         "aliases": aliases,
         "value_type": value_type,
         "takes_value": takes_value,
@@ -606,6 +612,8 @@ def validate_registry(registry: dict[str, Any]) -> list[dict[str, Any]]:
             fail(f"{where}.superseded_by", "current operation cannot name a successor")
         operations.append({
             **operation,
+            "help_group": text(operation.get("help_group", "Other"), f"{where}.help_group"),
+            "slash_group": text(operation.get("slash_group", "Other"), f"{where}.slash_group"),
             "operation_id": operation_id,
             "command_path": command_path,
             "aliases": normalized_aliases,
@@ -733,6 +741,7 @@ def render_header(registry: dict[str, Any]) -> str:
         "    const char *default_provider, *range, *enum_values;",
         "    const char *conflicts, *dependencies, *environment, *config;",
         "    const char *protocol_field, *output_interaction, *deprecation, *validator;",
+        "    const char *description;",
         "    int takes_value, required;",
         "} yvex_operator_flag_descriptor;",
         "typedef struct {",
@@ -745,6 +754,7 @@ def render_header(registry: dict[str, Any]) -> str:
         "    const char *operation_id, *command_path, *aliases, *deprecation_state;",
         "    const char *superseded_by;",
         "    const char *summary, *input_schema, *result_schema, *side_effects;",
+        "    const char *help_group, *slash_group;",
         "    const char *protocol_operation, *adapter_id, *renderer_id;",
         "    const char *slash_projection, *slash_aliases, *completion_provider;",
         "    const char *test_owner, *documentation_owner, *default_providers, *validator_ids;",
@@ -843,7 +853,7 @@ def render_source(registry: dict[str, Any], operations: list[dict[str, Any]], id
                     c_string(joined(flag["dependencies"])), c_string(flag["environment"]),
                     c_string(flag["config"]), c_string(flag["protocol_field"]),
                     c_string(flag["output_interaction"]), c_string(flag["deprecation"]),
-                    c_string(flag["validator"]), "1" if flag["takes_value"] else "0",
+                    c_string(flag["validator"]), c_string(flag["description"]), "1" if flag["takes_value"] else "0",
                     "1" if flag["required"] else "0",
                 ]) + "},")
             lines.append("};")
@@ -879,6 +889,7 @@ def render_source(registry: dict[str, Any], operations: list[dict[str, Any]], id
             f"        {c_string(joined(operation['superseded_by']))},",
             f"        {c_string(operation['summary'])}, {c_string(operation['input_schema'])},",
             f"        {c_string(operation['result_schema'])}, {c_string(operation['side_effects'])},",
+            f"        {c_string(operation['help_group'])}, {c_string(operation['slash_group'])},",
             f"        {c_string(operation['protocol_operation'])}, {c_string(operation['adapter_id'])},",
             f"        {c_string(operation['renderer_id'])}, {c_string(operation['slash_projection'])},",
             f"        {c_string(slash_alias_text)},",

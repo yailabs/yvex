@@ -33,7 +33,7 @@ static void wait_attempts(int wanted)
 
 int main(void)
 {
-    struct sigaction action = {0}, previous, restored;
+    struct sigaction action = {0}, previous, previous_resize, restored;
     yvex_cli_interrupt *scope = NULL, *other = NULL;
     yvex_cli_output_scope *output = NULL;
     yvex_error err;
@@ -48,11 +48,13 @@ int main(void)
     action.sa_handler = prior_handler;
     (void)sigemptyset(&action.sa_mask);
     assert(sigaction(SIGINT, &action, &previous) == 0);
+    assert(sigaction(SIGWINCH, &action, &previous_resize) == 0);
     for (cycle = 0u; cycle < 32u; ++cycle) {
         int finished;
         assert(yvex_cli_interrupt_open(&scope, &err) == YVEX_OK && scope);
         assert(yvex_cli_interrupt_open(&other, &err) == YVEX_ERR_STATE && !other);
         assert(!yvex_cli_interrupt_count(scope));
+        assert(raise(SIGWINCH) == 0 && !yvex_cli_interrupt_count(scope));
         atomic_store(&attempts, 0);
         assert(yvex_cli_interrupt_watch(scope, handle_interrupt, &attempts, &err) == YVEX_OK);
         assert(yvex_cli_interrupt_watch(scope, handle_interrupt, &attempts, &err) == YVEX_ERR_STATE);
@@ -74,9 +76,11 @@ int main(void)
         assert(yvex_cli_interrupt_close(&scope, &err) == YVEX_OK && !scope);
         assert(yvex_cli_interrupt_close(&scope, &err) == YVEX_OK);
         assert(sigaction(SIGINT, NULL, &restored) == 0 && restored.sa_handler == prior_handler);
+        assert(sigaction(SIGWINCH, NULL, &restored) == 0 && restored.sa_handler == prior_handler);
     }
     assert(raise(SIGINT) == 0 && prior_interrupts == 1);
     assert(sigaction(SIGINT, &previous, NULL) == 0);
+    assert(sigaction(SIGWINCH, &previous_resize, NULL) == 0);
     assert(fclose(file) == 0);
     puts("terminal scope: 32 capture/watch/retry/close cycles, prior handler restored, no request semantics");
     return 0;

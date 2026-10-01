@@ -8,6 +8,7 @@
 #include <build_commit.h>
 #include "src/cli/io/private.h"
 #include "src/cli/io/terminal/private.h"
+#include <yvex/internal/cli_presentation.h>
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
@@ -81,6 +82,14 @@ static completion_candidates completion_collect(size_t prefix_count,
         const yvex_operator_descriptor *descriptor =
             &yvex_operator_descriptors[descriptor_index];
         size_t index;
+        if (completion_visible(descriptor) &&
+            prefix_count == descriptor->command_word_count + 1u &&
+            completion_prefix_matches(descriptor, descriptor->command_word_count, prefix)) {
+            for (index = 0u; index < descriptor->flag_count; ++index)
+                if (!strcmp(descriptor->flags[index].name, prefix[prefix_count - 1u]))
+                    completion_add_metadata(&candidates, descriptor->flags[index].enum_values);
+            continue;
+        }
         if (!completion_visible(descriptor) ||
             (!prefix_count && descriptor->visibility !=
                                   YVEX_OPERATOR_VISIBILITY_PRODUCT_DEFAULT) ||
@@ -141,6 +150,17 @@ static void completion_emit_cases(FILE *output, const char *shell)
             if (!seen)
                 completion_emit_case(output, shell, prefix_count,
                                      descriptor->command_words);
+        }
+        if (descriptor->command_word_count < 63u) {
+            size_t flag;
+            const char *words[64];
+            for (prefix_count = 0u; prefix_count < descriptor->command_word_count; ++prefix_count)
+                words[prefix_count] = descriptor->command_words[prefix_count];
+            for (flag = 0u; flag < descriptor->flag_count; ++flag) {
+                if (!strcmp(descriptor->flags[flag].enum_values, "none")) continue;
+                words[prefix_count] = descriptor->flags[flag].name;
+                completion_emit_case(output, shell, prefix_count + 1u, words);
+            }
         }
     }
 }
@@ -251,41 +271,45 @@ void yvex_cli_terminal_style_get(FILE *fp, yvex_cli_terminal_style *style)
     if (!yvex_cli_terminal_interactive(stream) || getenv("NO_COLOR") ||
         (terminal && !strcmp(terminal, "dumb")))
         return;
-    style->reset = "\033[0m";
-    style->strong = "\033[1;38;5;250m";
-    style->accent = "\033[38;5;81m";
-    style->dim = "\033[38;5;245m";
-    style->success = "\033[38;5;114m";
-    style->warning = "\033[38;5;179m";
-    style->error = "\033[38;5;203m";
+    style->reset = yvex_cli_present_style(YVEX_CLI_TEXT_NORMAL);
+    style->strong = yvex_cli_present_style(YVEX_CLI_TEXT_STRONG);
+    style->accent = yvex_cli_present_style(YVEX_CLI_TEXT_ACCENT);
+    style->dim = yvex_cli_present_style(YVEX_CLI_TEXT_DIM);
+    style->success = yvex_cli_present_style(YVEX_CLI_TEXT_SUCCESS);
+    style->warning = yvex_cli_present_style(YVEX_CLI_TEXT_WARNING);
+    style->error = yvex_cli_present_style(YVEX_CLI_TEXT_ERROR);
 }
 
 
 
 void yvex_cli_out_repl_catalog(void)
 {
-    yvex_cli_terminal_style style;
-    size_t index, pass;
-    yvex_cli_terminal_style_get(stdout, &style);
-    printf("%scommands%s", style.strong, style.reset);
-    for (pass = 0u; pass < 3u; ++pass) {
-        for (index = 0u; index < yvex_operator_descriptor_count; ++index) {
-            const yvex_operator_descriptor *descriptor = &yvex_operator_descriptors[index];
-            int priority = descriptor->runtime_adapter == YVEX_OPERATOR_RUNTIME_HELP ? 0
-                         : descriptor->repl_adapter == YVEX_OPERATOR_REPL_QUIT ? 2 : 1;
-            if (!strcmp(descriptor->slash_projection, "none") || priority != (int)pass) continue;
-            printf("\n  %s%-12s%s %s%s%s", style.accent,
-                   descriptor->slash_projection, style.reset, style.dim,
-                   descriptor->summary, style.reset);
+    size_t index, prior;
+    for (index = 0u; index < yvex_operator_descriptor_count; ++index) {
+        const yvex_operator_descriptor *row = &yvex_operator_descriptors[index];
+        yvex_cli_present_field fields[64];
+        size_t next, count = 0u;
+        if (!strcmp(row->slash_projection, "none")) continue;
+        for (prior = 0u; prior < index; ++prior)
+            if (strcmp(yvex_operator_descriptors[prior].slash_projection, "none") &&
+                !strcmp(yvex_operator_descriptors[prior].slash_group, row->slash_group)) break;
+        if (prior != index) continue;
+        for (next = index; next < yvex_operator_descriptor_count && count < 64u; ++next) {
+            const yvex_operator_descriptor *candidate = &yvex_operator_descriptors[next];
+            if (strcmp(candidate->slash_projection, "none") &&
+                !strcmp(candidate->slash_group, row->slash_group))
+                fields[count++] = (yvex_cli_present_field){candidate->slash_projection,
+                    candidate->summary, YVEX_CLI_TEXT_NORMAL};
         }
+        (void)yvex_cli_present_record(stdout, row->slash_group, fields, count);
     }
-    printf("\n\n  %s%-12s%s %scancel an active turn or clear input; press again to exit%s",
-           style.warning, "Ctrl-C", style.reset, style.dim, style.reset);
-    printf("\n  %s%-12s%s %sexit on empty input; otherwise delete at cursor%s", style.accent,
-           "Ctrl-D", style.reset, style.dim, style.reset);
-    printf("\n  %s%-12s%s %sclear and redraw input%s", style.accent, "Ctrl-L",
-           style.reset, style.dim, style.reset);
-    puts("\n");
+    {
+        const yvex_cli_present_field keys[] = {
+            {"Ctrl-C", "Cancel work or clear input; repeat to leave", YVEX_CLI_TEXT_NORMAL},
+            {"Ctrl-D", "Leave on empty input; otherwise delete", YVEX_CLI_TEXT_NORMAL},
+            {"Tab", "Open candidates; Enter selects, then submits", YVEX_CLI_TEXT_NORMAL}};
+        (void)yvex_cli_present_record(stdout, "Keyboard", keys, 3u);
+    }
 }
 void yvex_cli_out_line(FILE *fp, const char *text)
 {
@@ -306,82 +330,58 @@ void yvex_cli_out_lines(FILE *fp,
 }
 void yvex_cli_out_kv_str(FILE *fp, const char *key, const char *value)
 {
-    (void)yvex_cli_out_writef(fp, "%s: %s\n", key ? key : "", value ? value : "");
+    const yvex_cli_present_field field = {key, value, YVEX_CLI_TEXT_NORMAL};
+    (void)yvex_cli_present_fields(fp, &field, 1u, 2u);
 }
 void yvex_cli_out_kv_bool(FILE *fp, const char *key, int value)
 {
     yvex_cli_out_kv_str(fp, key, value ? "true" : "false");
 }
-int yvex_cli_out_fields(FILE *fp,
-                        const void *object,
-                        const yvex_cli_field_spec *fields,
-                        size_t field_count)
+int yvex_cli_out_fields(FILE *fp, const void *object,
+                        const yvex_cli_field_spec *fields, size_t field_count)
 {
     const unsigned char *base = object;
+    yvex_cli_present_field *intent;
+    char (*numbers)[128];
     size_t i;
-    if (!object || (!fields && field_count != 0u)) {
-        return -1;
-    }
-    for (i = 0; i < field_count; ++i) {
+    int rc = -1;
+    if (!object || (!fields && field_count) || field_count > 4096u) return -1;
+    intent = calloc(field_count ? field_count : 1u, sizeof(*intent));
+    numbers = calloc(field_count ? field_count : 1u, sizeof(*numbers));
+    if (!intent || !numbers) goto done;
+    for (i = 0u; i < field_count; ++i) {
         const yvex_cli_field_spec *field = &fields[i];
         const void *value = base + field->offset;
-        const char *text;
-        int rc;
+        const char *text = numbers[i];
         switch (field->kind) {
-        case YVEX_CLI_FIELD_TEXT:
-            text = *(const char *const *)value;
-            rc = yvex_cli_out_writef(fp, "%s: %s\n", field->key,
-                                     text && text[0]
-                                         ? text
-                                         : (field->fallback ? field->fallback : "unknown"));
-            break;
-        case YVEX_CLI_FIELD_TEXT_ARRAY:
-            text = value;
-            rc = yvex_cli_out_writef(fp, "%s: %s\n", field->key,
-                                     text[0]
-                                         ? text
-                                         : (field->fallback ? field->fallback : "unknown"));
-            break;
-        case YVEX_CLI_FIELD_U64:
-            rc = yvex_cli_out_writef(fp, "%s: %llu\n", field->key,
-                                     *(const unsigned long long *)value);
-            break;
-        case YVEX_CLI_FIELD_U32:
-            rc = yvex_cli_out_writef(fp, "%s: %u\n", field->key,
-                                     *(const unsigned int *)value);
-            break;
-        case YVEX_CLI_FIELD_I32:
-            rc = yvex_cli_out_writef(fp, "%s: %d\n", field->key, *(const int *)value);
-            break;
-        case YVEX_CLI_FIELD_BOOL:
-            rc = yvex_cli_out_writef(fp, "%s: %s\n", field->key,
-                                     *(const int *)value ? "true" : "false");
-            break;
-        case YVEX_CLI_FIELD_DOUBLE:
-            rc = yvex_cli_out_writef(fp, "%s: %.17g\n", field->key,
-                                     *(const double *)value);
-            break;
-        case YVEX_CLI_FIELD_FLOAT9:
-            rc = yvex_cli_out_writef(fp, "%s: %.9g\n", field->key,
-                                     *(const double *)value);
-            break;
-        case YVEX_CLI_FIELD_HEX64:
-            rc = yvex_cli_out_writef(fp, "%s: %016llx\n", field->key,
-                                     *(const unsigned long long *)value);
-            break;
-        default:
-            return -1;
+        case YVEX_CLI_FIELD_TEXT: text = *(const char *const *)value; break;
+        case YVEX_CLI_FIELD_TEXT_ARRAY: text = value; break;
+        case YVEX_CLI_FIELD_U64: snprintf(numbers[i], 128u, "%llu", *(const unsigned long long *)value); break;
+        case YVEX_CLI_FIELD_U32: snprintf(numbers[i], 128u, "%u", *(const unsigned int *)value); break;
+        case YVEX_CLI_FIELD_I32: snprintf(numbers[i], 128u, "%d", *(const int *)value); break;
+        case YVEX_CLI_FIELD_BOOL: text = *(const int *)value ? "true" : "false"; break;
+        case YVEX_CLI_FIELD_DOUBLE: snprintf(numbers[i], 128u, "%.17g", *(const double *)value); break;
+        case YVEX_CLI_FIELD_FLOAT9: snprintf(numbers[i], 128u, "%.9g", *(const double *)value); break;
+        case YVEX_CLI_FIELD_HEX64: snprintf(numbers[i], 128u, "%016llx", *(const unsigned long long *)value); break;
+        default: goto done;
         }
-        if (rc < 0) {
-            return -1;
-        }
+        intent[i] = (yvex_cli_present_field){field->key,
+            text && text[0] ? text : field->fallback ? field->fallback : "unknown", YVEX_CLI_TEXT_NORMAL};
     }
-    return 0;
+    rc = yvex_cli_present_fields(fp, intent, field_count, 2u) == YVEX_OK ? 0 : -1;
+done:
+    free(numbers); free(intent);
+    return rc;
 }
 int print_yvex_error(const yvex_error *err, int exit_code)
 {
-    yvex_cli_out_writef(stderr, "yvex: %s: %s\n", yvex_error_where(err),
-                        yvex_error_message(err));
+    char code[32];
+    yvex_cli_present_field facts[3];
+    snprintf(code, sizeof(code), "%d", (int)yvex_error_code(err));
+    facts[0] = (yvex_cli_present_field){"owner", yvex_error_where(err), YVEX_CLI_TEXT_DIM};
+    facts[1] = (yvex_cli_present_field){"reason", yvex_error_message(err), YVEX_CLI_TEXT_ERROR};
+    facts[2] = (yvex_cli_present_field){"status", code, YVEX_CLI_TEXT_DIM};
+    (void)yvex_cli_present_record(stderr, "YVEX refusal", facts, 3u);
     return exit_code;
 }
 int exit_for_status(int status)
@@ -650,20 +650,21 @@ static void render_leaf_usage(FILE *output,
                               const yvex_operator_descriptor *descriptor)
 {
     size_t index;
-    fputs("usage: yvex", output);
-    if (descriptor->command_path[0])
-        fprintf(output, " %s", descriptor->command_path);
+    char syntax[1024];
+    size_t used = (size_t)snprintf(syntax, sizeof(syntax), "usage: yvex%s%s",
+        descriptor->command_path[0] ? " " : "", descriptor->command_path);
     for (index = 0u; index < descriptor->argument_count; ++index) {
         const yvex_operator_argument_descriptor *argument = &descriptor->arguments[index];
-        if (!strcmp(argument->multiplicity, "many"))
-            fprintf(output, " [%s ...]", argument->name);
-        else if (argument->required)
-            fprintf(output, " %s", argument->name);
-        else
-            fprintf(output, " [%s]", argument->name);
+        int many = !strcmp(argument->multiplicity, "many");
+        int written = snprintf(syntax + used, sizeof(syntax) - used, " %s%s%s%s",
+            !argument->required || many ? "[" : "", argument->name,
+            many ? " ..." : "", !argument->required || many ? "]" : "");
+        if (written < 0 || (size_t)written >= sizeof(syntax) - used) return;
+        used += (size_t)written;
     }
-    if (descriptor->flag_count) fputs(" [options]", output);
-    fputc('\n', output);
+    if (descriptor->flag_count && used + sizeof(" [options]") <= sizeof(syntax))
+        memcpy(syntax + used, " [options]", sizeof(" [options]"));
+    (void)yvex_cli_present_text(output, syntax, YVEX_CLI_TEXT_NORMAL, 0u);
 }
 static const char *flag_value_name(const yvex_operator_flag_descriptor *flag)
 {
@@ -675,74 +676,120 @@ static const char *flag_value_name(const yvex_operator_flag_descriptor *flag)
     if (!strcmp(flag->value_type, "text")) return "TEXT";
     return "VALUE";
 }
-static void render_metadata_text(const char *value)
-{
-    for (; *value; ++value)
-        if (*value == '|') fputs(", ", stdout); else fputc(*value, stdout);
-}
 static void render_leaf_help(const yvex_operator_descriptor *descriptor)
 {
     size_t index;
+    yvex_cli_present_field identity[] = {
+        {"operation", descriptor->operation_id, YVEX_CLI_TEXT_DIM},
+        {"plane", plane_name(descriptor->plane), YVEX_CLI_TEXT_DIM},
+        {"visibility", visibility_name(descriptor->visibility), YVEX_CLI_TEXT_DIM},
+        {"lane", lane_name(descriptor->lane), YVEX_CLI_TEXT_DIM}};
     render_leaf_usage(stdout, descriptor);
-    printf("\n%s\n\noperation: %s\nplane: %s\nvisibility: %s\nlane: %s\n",
-           descriptor->summary, descriptor->operation_id, plane_name(descriptor->plane),
-           visibility_name(descriptor->visibility), lane_name(descriptor->lane));
-    if (descriptor->flag_count) {
-        puts("\noptions:");
-        for (index = 0u; index < descriptor->flag_count; ++index) {
-            const yvex_operator_flag_descriptor *flag = &descriptor->flags[index];
-            char syntax[384];
-            const char *separator = "";
-            snprintf(syntax, sizeof(syntax), "%s%s%s", flag->name,
-                     flag->takes_value ? " " : "",
-                     flag->takes_value ? flag_value_name(flag) : "");
-            printf("  %-42s", syntax);
-            if (!strcmp(flag->multiplicity, "repeatable")) {
-                fputs("repeatable", stdout); separator = "; ";
-            }
-            if (strcmp(flag->range, "delegated")) {
-                printf("%srange %s", separator, flag->range); separator = "; ";
-            }
-            if (strcmp(flag->dependencies, "none")) {
-                printf("%srequires ", separator); render_metadata_text(flag->dependencies);
-                separator = "; ";
-            }
-            if (strcmp(flag->conflicts, "none")) {
-                printf("%sconflicts ", separator); render_metadata_text(flag->conflicts);
-                separator = "; ";
-            }
-            if (strcmp(flag->aliases, "none")) {
-                printf("%salias ", separator); render_metadata_text(flag->aliases);
-            }
-            fputc('\n', stdout);
-        }
+    putchar('\n');
+    (void)yvex_cli_present_record(stdout, descriptor->summary, identity, 4u);
+    if (strcmp(descriptor->aliases, "none")) {
+        const yvex_cli_present_field aliases = {
+            "compatibility paths", descriptor->aliases, YVEX_CLI_TEXT_DIM};
+        (void)yvex_cli_present_fields(stdout, &aliases, 1u, 2u);
+        putchar('\n');
     }
-}
-
-static void render_command_index_line(const yvex_operator_descriptor *descriptor)
-{
-    size_t index, width = strlen(descriptor->command_path);
-    fputs("  yvex", stdout);
-    if (descriptor->command_path[0])
-        printf(" %s", descriptor->command_path);
+    if (descriptor->argument_count) puts("ARGUMENTS");
     for (index = 0u; index < descriptor->argument_count; ++index) {
         const yvex_operator_argument_descriptor *argument = &descriptor->arguments[index];
-        if (!strcmp(argument->multiplicity, "many")) {
-            printf(" [%s ...]", argument->name);
-            width += strlen(argument->name) + 7u;
-        } else if (argument->required) {
-            printf(" %s", argument->name);
-            width += strlen(argument->name) + 1u;
-        } else {
-            printf(" [%s]", argument->name);
-            width += strlen(argument->name) + 3u;
-        }
+        char details[1024];
+        yvex_cli_present_field field;
+        (void)snprintf(details, sizeof(details), "%s; %s%s%s%s%s",
+            argument->required ? "required" : "optional",
+            !strcmp(argument->multiplicity, "many") ? "multiple " : "",
+            argument->value_type,
+            strcmp(argument->enum_values, "none") ? "; values " : "",
+            strcmp(argument->enum_values, "none") ? argument->enum_values : "",
+            strcmp(argument->range, "delegated") ? "; constrained" : "");
+        field = (yvex_cli_present_field){argument->name, details, YVEX_CLI_TEXT_NORMAL};
+        (void)yvex_cli_present_fields(stdout, &field, 1u, 2u);
     }
-    if (width < 42u) printf("%*s", (int)(42u - width), "");
-    else fputc(' ', stdout);
-    printf(" %s%s\n", descriptor->summary,
-           descriptor->visibility == YVEX_OPERATOR_VISIBILITY_ENGINEERING
-               ? " [engineering]" : "");
+    if (descriptor->flag_count) puts("OPTIONS");
+    for (index = 0u; index < descriptor->flag_count; ++index) {
+        const yvex_operator_flag_descriptor *flag = &descriptor->flags[index];
+        char syntax[384], constraints[768];
+        yvex_cli_present_field field;
+        snprintf(syntax, sizeof(syntax), "%s%s%s", flag->name,
+            flag->takes_value ? " " : "", flag->takes_value ? flag_value_name(flag) : "");
+        field = (yvex_cli_present_field){syntax, flag->description, YVEX_CLI_TEXT_NORMAL};
+        (void)yvex_cli_present_fields(stdout, &field, 1u, 2u);
+        snprintf(constraints, sizeof(constraints), "%s%s%s%s%s%s%s%s%s%s%s",
+            !strcmp(flag->multiplicity, "repeatable") ? "repeatable; " : "",
+            strcmp(flag->range, "delegated") ? "range " : "",
+            strcmp(flag->range, "delegated") ? flag->range : "",
+            strcmp(flag->dependencies, "none") ? " requires " : "",
+            strcmp(flag->dependencies, "none") ? flag->dependencies : "",
+            strcmp(flag->conflicts, "none") ? " conflicts " : "",
+            strcmp(flag->conflicts, "none") ? flag->conflicts : "",
+            strcmp(flag->aliases, "none") ? " compatibility alias " : "",
+            strcmp(flag->aliases, "none") ? flag->aliases : "",
+            flag->required ? " required" : "", "");
+        if (constraints[0]) (void)yvex_cli_present_text(stdout, constraints, YVEX_CLI_TEXT_DIM, 4u);
+    }
+}
+static void render_command_index_line(const yvex_operator_descriptor *descriptor,
+                                      int leaf_only, unsigned int indent)
+{
+    char syntax[512];
+    yvex_cli_present_field field;
+    size_t index, used = (size_t)snprintf(syntax, sizeof(syntax), "%s%s",
+        leaf_only ? "" : "yvex ", leaf_only
+            ? descriptor->command_words[descriptor->command_word_count - 1u] : descriptor->command_path);
+    for (index = 0u; index < descriptor->argument_count && used < sizeof(syntax); ++index) {
+        const yvex_operator_argument_descriptor *arg = &descriptor->arguments[index];
+        int many = !strcmp(arg->multiplicity, "many");
+        int written = snprintf(syntax + used, sizeof(syntax) - used, " %s%s%s%s",
+            arg->required ? "" : "[", arg->name, many ? " ..." : "", arg->required ? "" : "]");
+        if (written < 0 || (size_t)written >= sizeof(syntax) - used) return;
+        used += (size_t)written;
+    }
+    field = (yvex_cli_present_field){syntax, descriptor->summary, YVEX_CLI_TEXT_NORMAL};
+    (void)yvex_cli_present_fields(stdout, &field, 1u, indent);
+}
+
+static int advanced_group_member(const yvex_operator_descriptor *row, const char *group)
+{
+    return row->cli_projection && row->command_word_count &&
+        (row->visibility == YVEX_OPERATOR_VISIBILITY_PRODUCT_ADVANCED ||
+         row->visibility == YVEX_OPERATOR_VISIBILITY_ENGINEERING) && !strcmp(row->help_group, group);
+}
+
+static size_t command_parent_size(const yvex_operator_descriptor *row)
+{
+    const char *space = strrchr(row->command_path, ' ');
+    return space ? (size_t)(space - row->command_path) : 0u;
+}
+
+static void render_advanced_group(const char *group)
+{
+    size_t index;
+    for (index = 0u; index < yvex_operator_descriptor_count; ++index) {
+        const yvex_operator_descriptor *row = &yvex_operator_descriptors[index];
+        size_t prior, next, parent_size;
+        char parent[512];
+        if (!advanced_group_member(row, group)) continue;
+        parent_size = command_parent_size(row);
+        for (prior = 0u; prior < index; ++prior) {
+            const yvex_operator_descriptor *p = &yvex_operator_descriptors[prior];
+            if (advanced_group_member(p, group) && command_parent_size(p) == parent_size &&
+                !strncmp(p->command_path, row->command_path, parent_size)) break;
+        }
+        if (prior != index) continue;
+        (void)snprintf(parent, sizeof(parent), "yvex%s%.*s", parent_size ? " " : "",
+                       (int)parent_size, row->command_path);
+        (void)yvex_cli_present_text(stdout, parent, YVEX_CLI_TEXT_STRONG, 2u);
+        for (next = index; next < yvex_operator_descriptor_count; ++next) {
+            const yvex_operator_descriptor *p = &yvex_operator_descriptors[next];
+            if (advanced_group_member(p, group) && command_parent_size(p) == parent_size &&
+                !strncmp(p->command_path, row->command_path, parent_size))
+                render_command_index_line(p, 1, 4u);
+        }
+        putchar('\n');
+    }
 }
 void yvex_client_render_usage_error(const yvex_operator_descriptor *operation)
 {
@@ -803,6 +850,8 @@ static void render_discovery_operation(size_t operation_index,
     fputc(',', stdout); JSON_FIELD("plane", plane_name(descriptor->plane));
     fputc(',', stdout); JSON_FIELD("lane", lane_name(descriptor->lane));
     fputc(',', stdout); JSON_FIELD("summary", descriptor->summary);
+    fputc(',', stdout); JSON_FIELD("help_group", descriptor->help_group);
+    fputc(',', stdout); JSON_FIELD("slash_group", descriptor->slash_group);
     fputs(",\"arguments\":", stdout);
     render_discovery_arguments(descriptor->arguments, descriptor->argument_count);
     fputs(",\"slash_arguments\":", stdout);
@@ -815,6 +864,7 @@ static void render_discovery_operation(size_t operation_index,
         fputc('{', stdout); JSON_FIELD("name", flag->name);
         fputs(",\"aliases\":", stdout); discovery_json_list(stdout, flag->aliases, '|');
         fputc(',', stdout); JSON_FIELD("type", flag->value_type);
+        fputc(',', stdout); JSON_FIELD("description", flag->description);
         printf(",\"takes_value\":%s,", flag->takes_value ? "true" : "false");
         printf("\"required\":%s,", flag->required ? "true" : "false");
         JSON_FIELD("multiplicity", flag->multiplicity);
@@ -936,41 +986,36 @@ static void render_root_map(void)
 {
     static const char *const labels[] = {"USE", "RUNTIME", "TOOLS", "META"};
     size_t group, index;
-    puts("YVEX inference runtime");
+    (void)yvex_cli_present_text(stdout, "YVEX native model execution", YVEX_CLI_TEXT_STRONG, 0u);
     for (group = 0u; group < sizeof(labels) / sizeof(labels[0]); ++group) {
-        printf("\n%s\n", labels[group]);
-        for (index = 0u; index < yvex_operator_descriptor_count; ++index) {
+        yvex_cli_present_field fields[16];
+        size_t count = 0u;
+        for (index = 0u; index < yvex_operator_descriptor_count && count < 16u; ++index) {
             const yvex_operator_descriptor *row = &yvex_operator_descriptors[index];
-            if (root_first_visible(index) &&
-                root_group(row->command_words[0]) == (int)group)
-                printf("  %-10s %s\n", row->command_words[0],
-                       root_summary(row->command_words[0]));
+            if (root_first_visible(index) && root_group(row->command_words[0]) == (int)group)
+                fields[count++] = (yvex_cli_present_field){row->command_words[0],
+                    root_summary(row->command_words[0]), YVEX_CLI_TEXT_NORMAL};
         }
+        (void)yvex_cli_present_record(stdout, labels[group], fields, count);
     }
-    puts("\nUse `yvex help COMMAND` for details.");
-}
-
-static void render_default_namespace(const char *root, const char *title)
-{
-    size_t index;
-    printf("\n%s\n", title);
-    for (index = 0u; index < yvex_operator_descriptor_count; ++index) {
-        const yvex_operator_descriptor *descriptor =
-            &yvex_operator_descriptors[index];
-        if (descriptor->cli_projection && descriptor->command_word_count > 1u &&
-            descriptor->visibility == YVEX_OPERATOR_VISIBILITY_PRODUCT_DEFAULT &&
-            !strcmp(descriptor->command_words[0], root))
-            render_command_index_line(descriptor);
-    }
+    (void)yvex_cli_present_text(stdout, "Use `yvex help COMMAND` for details.", YVEX_CLI_TEXT_DIM, 0u);
 }
 
 static void render_product_grammar(void)
 {
-    puts("\nLIFECYCLE\n"
-         "  model search -> model pull -> model prepare -> serve -> model load -> chat\n"
-         "  model push distributes; model unload changes runtime residency.");
-    render_default_namespace("model", "MODEL COMMANDS");
-    render_default_namespace("host", "HOST CONTROL");
+    (void)yvex_cli_present_text(stdout, "LIFECYCLE", YVEX_CLI_TEXT_STRONG, 0u);
+    (void)yvex_cli_present_text(stdout,
+        "model search -> model pull -> model prepare -> serve -> model load -> chat",
+        YVEX_CLI_TEXT_NORMAL, 2u);
+    (void)yvex_cli_present_text(stdout, "model push distributes; model unload changes runtime residency.",
+        YVEX_CLI_TEXT_DIM, 2u);
+    puts("");
+    (void)yvex_cli_present_text(stdout, "READ", YVEX_CLI_TEXT_STRONG, 0u);
+    (void)yvex_cli_present_text(stdout, "yvex model list / show / active\nyvex host status / memory / logs",
+        YVEX_CLI_TEXT_NORMAL, 2u);
+    puts("");
+    (void)yvex_cli_present_text(stdout,
+        "Use `yvex help model` or `yvex help host` to explore their operations.", YVEX_CLI_TEXT_DIM, 0u);
 }
 
 int yvex_client_render_help_path(size_t path_count, const char *const *path,
@@ -993,10 +1038,25 @@ int yvex_client_render_help_path(size_t path_count, const char *const *path,
                 if (descriptor->cli_projection &&
                     (descriptor->visibility == YVEX_OPERATOR_VISIBILITY_PRODUCT_ADVANCED ||
                      descriptor->visibility == YVEX_OPERATOR_VISIBILITY_ENGINEERING))
-                    render_command_index_line(descriptor);
+                    {
+                    size_t prior;
+                    for (prior = 0u; prior < index; ++prior) {
+                        const yvex_operator_descriptor *p = &yvex_operator_descriptors[prior];
+                        if (p->cli_projection &&
+                            (p->visibility == YVEX_OPERATOR_VISIBILITY_PRODUCT_ADVANCED ||
+                             p->visibility == YVEX_OPERATOR_VISIBILITY_ENGINEERING) &&
+                            !strcmp(p->help_group, descriptor->help_group)) break;
+                    }
+                    if (prior == index) {
+                        (void)yvex_cli_present_text(stdout, descriptor->help_group, YVEX_CLI_TEXT_STRONG, 0u);
+                        render_advanced_group(descriptor->help_group);
+                        putchar('\n');
+                    }
+                }
             }
         } else {
-            puts("Use `yvex help --advanced` for advanced and engineering commands.");
+            (void)yvex_cli_present_text(stdout,
+                "Use `yvex help --advanced` for advanced and engineering commands.", YVEX_CLI_TEXT_DIM, 0u);
         }
         return 0;
     }
@@ -1028,7 +1088,7 @@ int yvex_client_render_help_path(size_t path_count, const char *const *path,
                                     descriptor->visibility == YVEX_OPERATOR_VISIBILITY_ENGINEERING));
         if (descriptor != exact && descriptor->cli_projection && visible &&
             descriptor_has_prefix(descriptor, path_count, path))
-            render_command_index_line(descriptor);
+            render_command_index_line(descriptor, 0, 2u);
     }
     if (!advanced) puts("\nUse `yvex help --advanced` for advanced and engineering commands.");
     return 0;

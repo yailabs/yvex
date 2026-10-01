@@ -25,7 +25,7 @@ run_code() {
 }
 
 contains() {
-    grep -F -- "$2" "$1" >/dev/null || fail "$1 missing: $2"
+    python3 tests/support/human_field.py "$1" "$2" || fail "$1 missing: $2"
 }
 
 run_code help 0 "$YVEX_BIN" bench component video-vae --help
@@ -57,7 +57,7 @@ run_code wrong_backend 2 "$YVEX_BIN" bench component video-vae \
     --target minimax-h3-fl2va --artifact /tmp/missing.gguf --backend metal \
     --input-file /tmp/missing.f32 --latent-frames 1 --latent-height 1 --latent-width 1 \
     --out "$OUT_DIR/wrong-backend.f32"
-contains "$OUT_DIR/wrong_backend.err" "unknown backend kind: metal"
+contains "$OUT_DIR/wrong_backend.err" "invalid value for --backend: metal"
 
 run_code cuda_backend 5 "$YVEX_BIN" bench component video-vae \
     --target minimax-h3-fl2va --artifact /tmp/missing.gguf --backend cuda \

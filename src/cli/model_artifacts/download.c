@@ -41,10 +41,12 @@ static void model_download_restore_provider_signal_handlers(
     const struct sigaction *old_int,
     const struct sigaction *old_term);
 static void model_download_print_start_progress(
+    FILE *output,
     const yvex_model_download_report *report,
     yvex_model_download_progress_mode effective_mode,
     int dry_run);
 static void model_download_print_tick_progress(
+    FILE *output,
     const char *source_dir,
     time_t started_at,
     yvex_model_download_report *report,
@@ -598,6 +600,7 @@ typedef struct {
     unsigned long long tick_seconds;
     const char *local_source_dir;
     yvex_model_download_report *report;
+    FILE *progress_output;
     yvex_error *err;
 } provider_stream_state;
 
@@ -698,7 +701,7 @@ static void provider_stream_drain(provider_stream_state *state,
         int stream_kind = which[i];
         int read_fd = stream_kind == 1 ? state->stdout_pipe[0] : state->stderr_pipe[0];
         int log_fd = stream_kind == 1 ? state->stdout_log_fd : state->stderr_log_fd;
-        int mirror_fd = stream_kind == 1 ? STDOUT_FILENO : STDERR_FILENO;
+        int mirror_fd = stream_kind == 1 ? fileno(state->progress_output) : STDERR_FILENO;
         int *open = stream_kind == 1 ? &state->stdout_open : &state->stderr_open;
         int *streamed = stream_kind == 1 ? &state->report->stdout_streamed
                                          : &state->report->stderr_streamed;
@@ -715,7 +718,7 @@ static void provider_stream_drain(provider_stream_state *state,
             if (state->mirror_provider) {
                 model_download_mirror_provider_bytes(mirror_fd, buf, (size_t)got,
                                                      state->normalize_cr);
-                fflush(stream_kind == 1 ? stdout : stderr);
+                fflush(stream_kind == 1 ? state->progress_output : stderr);
             }
         } else if (got == 0 ||
                    (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) {
@@ -775,7 +778,8 @@ static int provider_stream_iteration(provider_stream_state *state)
         !state->child_exited) {
         model_acquisition_provider_observe(state->report);
         if (state->effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_OFF)
-            model_download_print_tick_progress(state->local_source_dir, state->started_at,
+            model_download_print_tick_progress(state->progress_output,
+                                               state->local_source_dir, state->started_at,
                                                state->report, state->effective_mode);
         state->next_tick = now + (time_t)state->tick_seconds;
     }
@@ -831,6 +835,7 @@ static int provider_process_run_streaming(const char *const *args,
     state.tick_seconds = tick_seconds;
     state.local_source_dir = local_source_dir;
     state.report = report;
+    state.progress_output = options && options->output_mode == YVEX_MODELS_OUTPUT_JSON ? stderr : stdout;
     state.err = err;
 
     if (!args || !args[0] || !stdout_log_path || !stderr_log_path || !report) {
@@ -1013,7 +1018,8 @@ int model_download_run_hf(const yvex_cli_models_download_options *options,
     args[n] = NULL;
 
     effective_mode = model_download_effective_progress_mode(options->progress_mode);
-    model_download_print_start_progress(report, effective_mode, options->dry_run);
+    model_download_print_start_progress(options->output_mode == YVEX_MODELS_OUTPUT_JSON ? stderr : stdout,
+                                        report, effective_mode, options->dry_run);
     return provider_process_run_streaming(
         args, token_value,
         options->dry_run ? "/dev/null" : report->stdout_log_path,
@@ -1245,6 +1251,7 @@ static const char *const download_status_lines[] = {
     "status: model-download-status"};
 
 static void model_download_print_start_progress(
+    FILE *output,
     const yvex_model_download_report *report,
     yvex_model_download_progress_mode effective_mode,
     int dry_run)
@@ -1252,15 +1259,15 @@ static void model_download_print_start_progress(
     if (!report || effective_mode == YVEX_MODEL_DOWNLOAD_PROGRESS_OFF) {
         return;
     }
-    yvex_cli_out_writef(stdout, "model-download: %s target=%s\n",
+    yvex_cli_out_writef(output, "model-download: %s target=%s\n",
                         dry_run ? "plan" : "start", report->target_id);
-    yvex_cli_out_writef(stdout, "provider: %s\n", report->provider);
-    yvex_cli_out_writef(stdout, "repo: %s\n", report->repo_id);
-    yvex_cli_out_writef(stdout, "source: %s\n", report->local_source_dir);
-    yvex_cli_out_writef(stdout, "stage: account-provider %s\n", report->stage_account_provider);
-    yvex_cli_out_writef(stdout, "stage: download %s\n",
+    yvex_cli_out_writef(output, "provider: %s\n", report->provider);
+    yvex_cli_out_writef(output, "repo: %s\n", report->repo_id);
+    yvex_cli_out_writef(output, "source: %s\n", report->local_source_dir);
+    yvex_cli_out_writef(output, "stage: account-provider %s\n", report->stage_account_provider);
+    yvex_cli_out_writef(output, "stage: download %s\n",
                         dry_run ? "planned (dry-run)" : "running");
-    fflush(stdout);
+    fflush(output);
 }
 
 void model_download_format_bytes(char *out,
@@ -1357,7 +1364,7 @@ static int model_download_tick_scan_sync(yvex_model_download_report *report,
     return changed;
 }
 
-static void model_download_print_tick_progress(const char *source_dir,
+static void model_download_print_tick_progress(FILE *output, const char *source_dir,
                                                time_t started_at,
                                                yvex_model_download_report *report,
                                                yvex_model_download_progress_mode effective_mode)
@@ -1402,7 +1409,7 @@ static void model_download_print_tick_progress(const char *source_dir,
     model_download_format_bytes(largest_text, sizeof(largest_text), scan.largest_file_bytes);
     model_download_short_file_name(largest_name, sizeof(largest_name),
                                    scan.largest_file_name[0] ? scan.largest_file_name : "none");
-    yvex_cli_out_writef(stdout,
+    yvex_cli_out_writef(output,
         "tick: elapsed=%s files=%llu partial=%llu safetensors=%llu gguf=%llu bytes=%s delta=%s%s largest=%s (%s)\n",
            elapsed_text,
            scan.file_count,
@@ -1414,7 +1421,7 @@ static void model_download_print_tick_progress(const char *source_dir,
            delta_text,
            largest_name,
            largest_text);
-    fflush(stdout);
+    fflush(output);
     report->tick_last_elapsed_seconds = elapsed;
     (void)model_download_tick_scan_sync(report, &scan, 1);
     report->tick_count++;

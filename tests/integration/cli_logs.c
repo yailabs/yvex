@@ -1,5 +1,6 @@
 /* Standalone CLI integration fixture: exercise the real renderer without a model. */
 #include "src/cli/io/private.h"
+#include "src/cli/render/private.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,11 +9,65 @@
 static char output[16384];
 static int failures;
 
+static void test_presentation(void)
+{
+    FILE *file = tmpfile();
+    const yvex_cli_present_field bad = {"refused", "\033[31munsafe", YVEX_CLI_TEXT_ERROR};
+    if (!file) exit(2);
+    if (yvex_cli_present_fields(file, &bad, 1u, 2u) != YVEX_ERR_INVALID_ARG || ftell(file) != 0)
+        failures++;
+    if (yvex_cli_present_fields(file, NULL, 1u, 2u) != YVEX_ERR_INVALID_ARG ||
+        yvex_cli_present_fields(file, &bad, 4097u, 2u) != YVEX_ERR_INVALID_ARG)
+        failures++;
+    if (yvex_cli_present_cells("👩‍💻", strlen("👩‍💻")) != 2u ||
+        yvex_cli_present_cells("é界", strlen("é界")) != 3u)
+        failures++;
+    fclose(file);
+}
+
 static void expect(int condition, const char *reason)
 {
     if (condition) return;
     fprintf(stderr, "log renderer: %s\n%s\n", reason, output);
     failures++;
+}
+
+static void test_engine_geometry(void)
+{
+    yvex_server_engine_summary engine = {0};
+    yvex_server_engine_summary before;
+    FILE *file = tmpfile();
+    size_t size;
+    char *line, *next;
+    if (!file) exit(2);
+    strcpy(engine.alias, "qualified-long-engine-alias-with-independent-finite-decision-semantics");
+    engine.engine_kind = YVEX_SERVER_ENGINE_FINITE_DECISION;
+    engine.generation = 19u;
+    engine.state = YVEX_SERVER_ENGINE_LOADED;
+    engine.backend = YVEX_BACKEND_KIND_CPU;
+    engine.capacity.session_capacity = 8u;
+    before = engine;
+    if (setenv("COLUMNS", "40", 1) != 0) exit(2);
+    yvex_cli_engine_render(file, NULL, 0);
+    expect(ftell(file) == 0, "null engine emits nothing");
+    yvex_cli_engine_render(file, &engine, 0);
+    rewind(file);
+    size = fread(output, 1u, sizeof(output) - 1u, file);
+    output[size] = '\0';
+    expect(feof(file), "engine record fits bounded capture");
+    expect(!memcmp(&engine, &before, sizeof(engine)), "presentation does not mutate engine facts");
+    expect(strstr(output, "finite-decision") && strstr(output, "not measured") &&
+           strstr(output, "not reported") && strstr(output, "19"),
+           "engine kind, generation and unavailable resource facts survive narrow layout");
+    line = output;
+    while ((next = strchr(line, '\n')) != NULL) {
+        *next = '\0';
+        expect(yvex_cli_present_cells(line, strlen(line)) <= 40u,
+               "every long-engine record line fits the terminal");
+        line = next + 1;
+    }
+    fclose(file);
+    if (unsetenv("COLUMNS") != 0) exit(2);
 }
 
 static int capture(yvex_cli_watch_renderer *renderer, yvex_server_event *event,
@@ -366,11 +421,13 @@ int main(void)
     yvex_cli_watch_renderer renderer;
     yvex_server_event event = decode_event();
     test_decode();
+    test_presentation();
     test_lifecycle();
     test_progress_rates();
     test_http_access();
     test_prefill_cadence();
     test_resources();
+    test_engine_geometry();
     if (failures) return 1;
     yvex_cli_watch_renderer_open(&renderer, 0);
     yvex_cli_watch_renderer_event(&renderer, &event, NULL);

@@ -15,7 +15,7 @@ fail() {
 }
 
 contains() {
-    grep -F -- "$2" "$1" >/dev/null || fail "$1 missing: $2"
+    python3 tests/support/human_field.py "$1" "$2" || fail "$1 missing: $2"
 }
 
 "$YVEX_BIN" inspect tokenizer "$ARTIFACT" >"$OUT_DIR/inspect.out"

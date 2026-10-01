@@ -17,7 +17,7 @@ fail() {
 contains() {
     file=$1
     value=$2
-    grep -F -- "$value" "$file" >/dev/null || fail "$file missing: $value"
+    python3 tests/support/human_field.py "$file" "$value" || fail "$file missing: $value"
 }
 
 "$YVEX_BIN" inspect model full report --help >"$ROOT/help.out" 2>"$ROOT/help.err"

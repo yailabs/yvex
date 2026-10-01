@@ -276,6 +276,10 @@ if [ "${YVEX_FAKE_HF_PARTIAL_OBJECT:-0}" = 1 ]; then
   partial_path=$local_dir/.cache/huggingface/download/model.incomplete
   mkdir -p "$(dirname "$partial_path")"
   printf 'provider-owned partial object\n' > "$partial_path"
+  # Expose the legitimate partial-before-metadata stage deterministically.
+  if [ "${YVEX_FAKE_HF_PARTIAL_SETUP_DELAY:-0}" != 0 ]; then
+    sleep "$YVEX_FAKE_HF_PARTIAL_SETUP_DELAY"
+  fi
 fi
 
 provider_event() {

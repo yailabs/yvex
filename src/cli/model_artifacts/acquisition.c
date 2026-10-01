@@ -34,6 +34,15 @@ int model_acquisition_worker_active(void)
     return worker && !strcmp(worker, "1");
 }
 
+int model_acquisition_result_path(const yvex_model_download_report *report,
+                                   char path[YVEX_PATH_CAP])
+{
+    int bytes;
+    if (!report || !path || !report->supervisor_log_path[0]) return YVEX_ERR_INVALID_ARG;
+    bytes = snprintf(path, YVEX_PATH_CAP, "%s.result.json", report->supervisor_log_path);
+    return bytes >= 0 && (size_t)bytes < YVEX_PATH_CAP ? YVEX_OK : YVEX_ERR_INPUT_CAPACITY;
+}
+
 int model_acquisition_operation_matches_report(
     const yvex_source_acquisition_operation *operation,
     const yvex_model_download_report *report, const char *selection_identity)
@@ -401,6 +410,7 @@ int model_acquisition_supervisor_start(
     yvex_source_acquisition_create_options create;
     unsigned long long generation = 1ull;
     pid_t supervisor = -1;
+    char result_path[YVEX_PATH_CAP];
     int rc;
     if (access(report->operation_path, F_OK) == 0) {
         rc = yvex_source_acquisition_operation_read(report->operation_path,
@@ -451,6 +461,13 @@ int model_acquisition_supervisor_start(
     if (rc == YVEX_OK)
         rc = yvex_source_acquisition_operation_publish(report->operation_path,
                                                         &operation, err);
+    if (rc == YVEX_OK) {
+        rc = model_acquisition_result_path(report, result_path);
+        if (rc == YVEX_OK && unlink(result_path) != 0 && errno != ENOENT) rc = YVEX_ERR_IO;
+        if (rc != YVEX_OK)
+            yvex_error_set(err, rc, "source.acquisition.result",
+                           "previous machine result cannot be retired");
+    }
     if (rc == YVEX_OK)
         rc = acquisition_exec_supervisor(arg_count, args, report,
                                          operation.operation_id, &supervisor, err);
@@ -675,47 +692,48 @@ static int acquisition_attach_render(
     const yvex_cli_models_download_options *options,
     const yvex_source_acquisition_operation *operation, int live)
 {
+    FILE *output = options->output_mode == YVEX_MODELS_OUTPUT_JSON ? stderr : stdout;
     if (options->progress_mode == YVEX_MODEL_DOWNLOAD_PROGRESS_OFF) return 0;
     if (live) {
-        unsigned int width = yvex_cli_terminal_width(stdout);
-        yvex_cli_out_writef(stdout, "\r\033[2K%s · %s",
+        unsigned int width = yvex_cli_terminal_width(output);
+        yvex_cli_out_writef(output, "\r\033[2K%s · %s",
                             yvex_source_acquisition_lifecycle_name(operation->lifecycle),
                             yvex_source_acquisition_health_name(operation->health));
         if (width == 0u || width >= 60u) {
             if (operation->progress.completed_files.known)
-                yvex_cli_out_writef(stdout, " · files %llu",
+                yvex_cli_out_writef(output, " · files %llu",
                                     operation->progress.completed_files.value);
-            else yvex_cli_out_fputs(" · files unknown", stdout);
+            else yvex_cli_out_fputs(" · files unknown", output);
         }
         if (width == 0u || width >= 92u) {
             if (operation->progress.committed_bytes.known)
-                yvex_cli_out_writef(stdout, " · committed %llu",
+                yvex_cli_out_writef(output, " · committed %llu",
                                     operation->progress.committed_bytes.value);
-            else yvex_cli_out_fputs(" · committed unknown", stdout);
+            else yvex_cli_out_fputs(" · committed unknown", output);
         }
-        fflush(stdout);
+        fflush(output);
     } else {
-        yvex_cli_out_writef(stdout, "acquisition: state=%s health=%s",
+        yvex_cli_out_writef(output, "acquisition: state=%s health=%s",
             yvex_source_acquisition_lifecycle_name(operation->lifecycle),
             yvex_source_acquisition_health_name(operation->health));
         if (operation->progress.completed_files.known)
-            yvex_cli_out_writef(stdout, " files=%llu",
+            yvex_cli_out_writef(output, " files=%llu",
                                 operation->progress.completed_files.value);
-        else yvex_cli_out_fputs(" files=unknown", stdout);
+        else yvex_cli_out_fputs(" files=unknown", output);
         if (operation->progress.committed_bytes.known)
-            yvex_cli_out_writef(stdout, " committed=%llu",
+            yvex_cli_out_writef(output, " committed=%llu",
                                 operation->progress.committed_bytes.value);
-        else yvex_cli_out_fputs(" committed=unknown", stdout);
+        else yvex_cli_out_fputs(" committed=unknown", output);
         if (operation->progress.provider_activity_current_bytes_per_second.known)
-            yvex_cli_out_writef(stdout, " provider_write_activity=%lluB/s\n",
+            yvex_cli_out_writef(output, " provider_write_activity=%lluB/s\n",
                 operation->progress.provider_activity_current_bytes_per_second.value);
-        else yvex_cli_out_fputs(" provider_write_activity=unknown\n", stdout);
-        fflush(stdout);
+        else yvex_cli_out_fputs(" provider_write_activity=unknown\n", output);
+        fflush(output);
     }
     return 0;
 }
 
-static int acquisition_attach_audit(const char *path, yvex_error *err)
+static int acquisition_attach_audit(const char *path, FILE *output, yvex_error *err)
 {
     unsigned char buffer[8192];
     FILE *stream;
@@ -728,14 +746,16 @@ static int acquisition_attach_audit(const char *path, yvex_error *err)
         return YVEX_ERR_IO;
     }
     while ((count = fread(buffer, 1u, sizeof(buffer), stream)) > 0u) {
-        if (fwrite(buffer, 1u, count, stdout) != count) {
+        if (fwrite(buffer, 1u, count, output) != count) {
             fclose(stream);
             yvex_error_set(err, YVEX_ERR_IO, "source.acquisition.audit",
                            "cannot project the supervisor audit record");
             return YVEX_ERR_IO;
         }
     }
-    if (ferror(stream) || fclose(stream) != 0) {
+    int failed = ferror(stream);
+    if (fclose(stream) != 0) failed = 1;
+    if (failed) {
         yvex_error_set(err, YVEX_ERR_IO, "source.acquisition.audit",
                        "cannot read the supervisor audit record");
         return YVEX_ERR_IO;
@@ -748,7 +768,8 @@ int model_acquisition_attach(
     const yvex_model_download_report *report, yvex_error *err)
 {
     yvex_source_acquisition_operation operation, previous;
-    int first = 1, live = options->progress_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_OFF &&
+    int first = 1, machine = options->output_mode == YVEX_MODELS_OUTPUT_JSON;
+    int live = !machine && options->progress_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_OFF &&
         isatty(STDOUT_FILENO) && !getenv("NO_COLOR");
     memset(&previous, 0, sizeof(previous));
     for (;;) {
@@ -768,10 +789,21 @@ int model_acquisition_attach(
         (void)poll(NULL, 0, 250);
     }
     if (live) yvex_cli_out_fputs("\n", stdout);
-    if ((options->output_mode == YVEX_MODELS_OUTPUT_AUDIT ||
-         options->output_mode == YVEX_MODELS_OUTPUT_JSON) &&
-        acquisition_attach_audit(report->supervisor_log_path, err) != YVEX_OK)
+    if ((options->output_mode == YVEX_MODELS_OUTPUT_AUDIT || machine) &&
+        acquisition_attach_audit(report->supervisor_log_path, machine ? stderr : stdout, err) != YVEX_OK)
         return yvex_error_code(err);
+    if (machine) {
+        char result_path[YVEX_PATH_CAP];
+        struct stat info;
+        if (model_acquisition_result_path(report, result_path) != YVEX_OK ||
+            stat(result_path, &info) != 0 || !S_ISREG(info.st_mode) ||
+            info.st_size <= 0 || info.st_size > 65536) {
+            yvex_error_set(err, YVEX_ERR_IO, "source.acquisition.result",
+                           "bounded machine result is unavailable");
+            return YVEX_ERR_IO;
+        }
+        if (acquisition_attach_audit(result_path, stdout, err) != YVEX_OK) return yvex_error_code(err);
+    }
     if (operation.lifecycle == YVEX_SOURCE_ACQUISITION_COMPLETE) return YVEX_OK;
     yvex_error_setf(err, YVEX_ERR_STATE, "source.acquisition.attach",
                     "acquisition ended in %s: %s",

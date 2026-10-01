@@ -147,9 +147,14 @@ static int removed_path_refusal(int argc, char **argv)
     for (index = 0u; index < yvex_operator_removed_path_count; ++index) {
         if (!removed_path_matches(yvex_operator_removed_paths[index].path, argc, argv))
             continue;
-        yvex_cli_out_writef(stderr, "yvex: removed command: %s\nhint: %s\n",
-                            yvex_operator_removed_paths[index].path,
-                            yvex_operator_removed_paths[index].hint);
+        char reason[512];
+        (void)snprintf(reason, sizeof(reason), "removed command: %s",
+                       yvex_operator_removed_paths[index].path);
+        const yvex_cli_present_field fields[] = {
+            {"reason", reason, YVEX_CLI_TEXT_ERROR},
+            {"state", "unchanged; command was not dispatched", YVEX_CLI_TEXT_DIM},
+            {"hint", yvex_operator_removed_paths[index].hint, YVEX_CLI_TEXT_NORMAL}};
+        (void)yvex_cli_present_record(stderr, "YVEX command refused", fields, 3u);
         return 1;
     }
     return 0;
@@ -260,11 +265,15 @@ int main(int argc, char **argv)
             return yvex_client_render_help_path((size_t)argc - 2u,
                                                 (const char *const *)&argv[1], 0, 0);
         nearest = nearest_command(argc, argv, input);
-        yvex_cli_out_writef(stderr, "yvex: unknown command: %s\n", argc > 1 ? input : "");
-        if (nearest)
-            yvex_cli_out_writef(stderr, "hint: did you mean `yvex %s`?\n", nearest);
-        else
-            yvex_cli_out_writef(stderr, "hint: use `yvex help`\n");
+        char reason[512], hint[512];
+        (void)snprintf(reason, sizeof(reason), "unknown command: %s", argc > 1 ? input : "");
+        if (nearest) (void)snprintf(hint, sizeof(hint), "did you mean `yvex %s`?", nearest);
+        else (void)snprintf(hint, sizeof(hint), "use `yvex help`");
+        const yvex_cli_present_field fields[] = {
+            {"reason", reason, YVEX_CLI_TEXT_ERROR},
+            {"state", "unchanged; command was not dispatched", YVEX_CLI_TEXT_DIM},
+            {"hint", hint, YVEX_CLI_TEXT_NORMAL}};
+        (void)yvex_cli_present_record(stderr, "YVEX command refused", fields, 3u);
         return 2;
     }
     status = yvex_cli_operator_argv_parse(operation, argc, argv, consumed,

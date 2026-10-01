@@ -161,7 +161,9 @@ artifact is still not a supported artifact.
 ## Model Registry And Startup Profiles
 
 `<yvex/registry.h>` owns the local model catalog and typed reference
-resolution. Registry schema `yvex.models.local.v7` preserves artifact entries and optional
+resolution. The v8 projection also retains current working-set facts; reading
+legacy v7 remains an explicit compatibility path, not the current write schema.
+Registry schema `yvex.models.local.v8` preserves artifact entries and optional
 typed startup profiles. Its `working_set` array records canonical logical-model
 identities independently of local payload residency. Artifact-only entries do
 not create a startup profile merely by naming a runtime target. Every profile records engine kind independently from

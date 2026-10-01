@@ -5,6 +5,7 @@
 #include "src/cli/model_artifacts/private.h"
 #include "src/cli/render/private.h"
 
+#include <yvex/internal/cli_presentation.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -215,35 +216,27 @@ static int remote_catalog_render_table(FILE *fp, const yvex_remote_catalog *cata
         unsigned int index;
         remote_local_project(&local, model, local_catalog);
         remote_parameter_text(parameters, sizeof(parameters), model);
-        yvex_cli_out_writef(fp, "MODEL\n  repository  %s\n  provider    %s\n", model->repository,
-                            model->provider);
-        yvex_cli_out_writef(fp, "  kind        %s%s\n  family      %s\n  parameters  %s\n",
-                            yvex_remote_model_kind_name(model->kind),
-                            model->kind_provisional ? " (provisional)" : "",
-                            model->family[0] ? model->family : "unknown", parameters);
-        yvex_cli_out_writef(fp, "  access      %s\n\nREVISION\n  requested   %s\n  resolved    %s\n",
-                            model->gated_known ? (model->gated ? "gated" : "public") : "unknown",
-                            model->revision_reference[0] ? model->revision_reference : "default",
-                            model->resolved_revision[0] ? model->resolved_revision : "unavailable");
-        yvex_cli_out_writef(fp, "\nLOCAL LIFECYCLE\n  source      %s\n  package     %s\n  engine      %s\n\n",
-                            local.source ? "acquired"
-                                         : (local.source_revision[0]
-                                                       ? "available at another revision"
-                                                       : "no"),
-                            local.package ? "available"
-                                          : (local.package_revision[0]
-                                                        ? "available at another revision"
-                                                        : "no"),
-                            "not-observed");
-        if (local.source_revision[0] || local.package_revision[0])
-            yvex_cli_out_writef(fp, "  local revision  %s\n\n",
-                                local.package_revision[0]
-                                    ? local.package_revision
-                                    : local.source_revision);
-        yvex_cli_out_fputs("REPRESENTATIONS\n", fp);
-        yvex_cli_out_writef(fp, "%-23s %-13s %-18s %10s %6s %-9s %s\n",
-                            "REPRESENTATION", "FORMAT", "PRECISION/QTYPE", "SIZE", "FILES",
-                            "LOCAL", "YVEX COMPATIBILITY");
+        const yvex_cli_present_field fields[] = {
+            {"provider", model->provider, YVEX_CLI_TEXT_NORMAL},
+            {"kind", yvex_remote_model_kind_name(model->kind), YVEX_CLI_TEXT_NORMAL},
+            {"kind evidence", model->kind_provisional ? "provisional" : model->kind_evidence, YVEX_CLI_TEXT_DIM},
+            {"family", model->family[0] ? model->family : "unknown", YVEX_CLI_TEXT_NORMAL},
+            {"parameters", parameters, YVEX_CLI_TEXT_NORMAL},
+            {"access", model->gated_known ? (model->gated ? "gated" : "public") : "unknown", YVEX_CLI_TEXT_NORMAL},
+            {"requested revision", model->revision_reference[0] ? model->revision_reference : "default",
+             YVEX_CLI_TEXT_DIM},
+            {"resolved revision", model->resolved_revision[0] ? model->resolved_revision : "unavailable",
+             YVEX_CLI_TEXT_DIM},
+            {"source", local.source ? "acquired" : "not acquired at this revision", YVEX_CLI_TEXT_NORMAL},
+            {"package", local.package ? "available" : "not available at this revision", YVEX_CLI_TEXT_NORMAL},
+            {"engine", "not-observed", YVEX_CLI_TEXT_DIM},
+            {"local revision", local.package_revision[0] ? local.package_revision : local.source_revision,
+             YVEX_CLI_TEXT_DIM},
+            {"YVEX", remote_product_status(model), YVEX_CLI_TEXT_NORMAL},
+            {"support reason", model->support_reason, YVEX_CLI_TEXT_WARNING}};
+        int rc = yvex_cli_present_record(fp, model->repository, fields, sizeof(fields)/sizeof(fields[0]));
+        if (rc != YVEX_OK) return rc;
+        (void)yvex_cli_present_text(fp, "REPRESENTATIONS", YVEX_CLI_TEXT_STRONG, 0u);
         for (index = 0u; index < model->representation_count; ++index) {
             const yvex_model_representation *representation =
                 yvex_remote_catalog_representation_at(catalog, 0u, index);
@@ -259,17 +252,19 @@ static int remote_catalog_render_table(FILE *fp, const yvex_remote_catalog *cata
                      strcmp(representation->precision_evidence, "filename-hint") == 0
                          ? " (filename)"
                          : (representation->provisional ? " ?" : ""));
-            yvex_cli_out_writef(fp, "%-23.23s %-13.13s %-18.18s %10.10s %6llu %-9s %s\n",
-                                representation->identity, representation->format,
-                                precision,
-                                size, representation->file_count,
-                                remote_representation_local(&local, representation)
-                                    ? "yes" : "no",
-                                representation->compatibility);
+            char files[32];
+            snprintf(files, sizeof(files), "%llu", representation->file_count);
+            const yvex_cli_present_field facts[] = {
+                {"format", representation->format, YVEX_CLI_TEXT_NORMAL},
+                {"precision", precision, YVEX_CLI_TEXT_NORMAL},
+                {"size", size, YVEX_CLI_TEXT_NORMAL},
+                {"files", files, YVEX_CLI_TEXT_NORMAL},
+                {"local", remote_representation_local(&local, representation) ? "yes" : "no", YVEX_CLI_TEXT_NORMAL},
+                {"compatibility", representation->compatibility, YVEX_CLI_TEXT_DIM}};
+            rc = yvex_cli_present_record(fp, representation->identity, facts, 6u);
+            if (rc != YVEX_OK) return rc;
         }
-        yvex_cli_out_writef(fp, "\nYVEX  %s\n", remote_product_status(model));
-        yvex_cli_out_writef(fp, "provider_files: %u (use --json for exact paths)\n",
-                            model->available_file_count);
+        yvex_cli_out_writef(fp, "provider_files: %u (use --json for exact paths)\n", model->available_file_count);
         return ferror(fp) ? YVEX_ERR_IO : YVEX_OK;
     }
     {
@@ -626,11 +621,15 @@ static void local_table_row(FILE *fp,
         model_download_format_bytes(size, sizeof(size), size_bytes);
     else
         snprintf(size, sizeof(size), "unknown");
-    yvex_cli_out_writef(fp,
-                        "%-40.40s %-12.12s %-8.8s %-16.16s %-18.18s %-18.18s "
-                        "%10.10s %-12.12s %s%s%s\n",
-                        name, family, kind, representation, state, verification, size,
-                        engine, backend, blocker[0] ? " · " : "", blocker);
+    {
+        yvex_cli_present_field facts[] = {
+            {"state", state, YVEX_CLI_TEXT_NORMAL}, {"kind", kind, YVEX_CLI_TEXT_NORMAL},
+            {"engine", engine, YVEX_CLI_TEXT_NORMAL}, {"backend", backend, YVEX_CLI_TEXT_NORMAL},
+            {"representation", representation, YVEX_CLI_TEXT_NORMAL}, {"size", size, YVEX_CLI_TEXT_NORMAL},
+            {"family", family, YVEX_CLI_TEXT_DIM}, {"verification", verification, YVEX_CLI_TEXT_DIM},
+            {"blocker", blocker[0] ? blocker : "none", blocker[0] ? YVEX_CLI_TEXT_WARNING : YVEX_CLI_TEXT_DIM}};
+        (void)yvex_cli_present_record(fp, name, facts, 9u);
+    }
 }
 
 int yvex_local_catalog_render(FILE *fp,
@@ -692,10 +691,7 @@ int yvex_local_catalog_render(FILE *fp,
         return ferror(fp) ? YVEX_ERR_IO : YVEX_OK;
     }
     yvex_cli_out_writef(fp, "LOCAL MODELS  count=%llu\n\n", local_projection_count(catalog));
-    yvex_cli_out_writef(fp,
-                        "%-40s %-12s %-8s %-16s %-18s %-18s %10s %-12s %s\n",
-                        "MODEL", "FAMILY", "KIND", "REPRESENTATION", "PACKAGE STATE",
-                        "VERIFICATION", "SIZE", "ENGINE", "BACKEND / BLOCKER");
+
     for (source_index = 0u;
          source_index < yvex_local_catalog_source_count(catalog);
          ++source_index) {

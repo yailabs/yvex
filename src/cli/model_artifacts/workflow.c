@@ -1,6 +1,7 @@
 /* Derive the human model workflow from exact source, artifact, profile, and model facts. */
 #define _POSIX_C_SOURCE 200809L
 #include "src/cli/model_artifacts/private.h"
+#include <yvex/internal/cli_presentation.h>
 
 #include <sys/stat.h>
 #include <limits.h>
@@ -493,36 +494,6 @@ static void product_cell(product_table_row *row, unsigned int column,
     row->cells[column].tone = tone;
 }
 
-static void product_default_row(product_table_row *row,
-                                const product_model_fact *fact, int wide)
-{
-    memset(row, 0, sizeof(*row));
-    product_cell(row, 0u, fact->selector, YVEX_CLI_TABLE_ACCENT);
-    if (wide) {
-        product_cell(row, 1u, fact->model->family, YVEX_CLI_TABLE_PLAIN);
-        product_cell(row, 2u, fact->origin, YVEX_CLI_TABLE_PLAIN);
-        product_cell(row, 3u, fact->format, YVEX_CLI_TABLE_PLAIN);
-        product_cell(row, 4u, fact->precision, YVEX_CLI_TABLE_PLAIN);
-        product_cell(row, 5u, fact->size, YVEX_CLI_TABLE_PLAIN);
-        product_cell(row, 6u, fact->state, product_state_tone(fact->state));
-        product_cell(row, 7u, fact->execution, YVEX_CLI_TABLE_PLAIN);
-        product_cell(row, 8u, fact->variants, YVEX_CLI_TABLE_PLAIN);
-        product_cell(row, 9u, fact->location, YVEX_CLI_TABLE_DIM);
-    } else {
-        product_cell(row, 1u, fact->state, product_state_tone(fact->state));
-        product_cell(row, 2u, fact->format, YVEX_CLI_TABLE_PLAIN);
-        product_cell(row, 3u, fact->size, YVEX_CLI_TABLE_PLAIN);
-        product_cell(row, 4u, fact->execution, YVEX_CLI_TABLE_PLAIN);
-        snprintf(row->secondary, sizeof(row->secondary),
-                 "family %s · origin %s · %s representation%s",
-                 fact->model->family, fact->origin,
-                 fact->variants, !strcmp(fact->variants, "1") ? "" : "s");
-        row->row.secondary = row->secondary;
-        row->row.secondary_tone = YVEX_CLI_TABLE_DIM;
-    }
-    row->row.cells = row->cells;
-}
-
 static int product_text_contains(const char *text, const char *query)
 {
     size_t extent;
@@ -552,64 +523,44 @@ static int product_table_default(const yvex_model_library *library, int force_wi
                                  const char *query, unsigned long long offset,
                                  unsigned long long limit)
 {
-    static const yvex_cli_table_column wide_columns[] = {
-        {"MODEL", 12u, 28u, YVEX_CLI_TABLE_LEFT, 0},
-        {"FAMILY", 8u, 15u, YVEX_CLI_TABLE_LEFT, 0},
-        {"ORIGIN", 8u, 14u, YVEX_CLI_TABLE_LEFT, 0},
-        {"FORMAT", 6u, 12u, YVEX_CLI_TABLE_LEFT, 0},
-        {"QUANT/PRECISION", 10u, 28u, YVEX_CLI_TABLE_LEFT, 0},
-        {"SIZE", 8u, 12u, YVEX_CLI_TABLE_RIGHT, 0},
-        {"STATE", 7u, 10u, YVEX_CLI_TABLE_LEFT, 0},
-        {"EXEC", 6u, 14u, YVEX_CLI_TABLE_LEFT, 0},
-        {"VARIANTS", 8u, 8u, YVEX_CLI_TABLE_RIGHT, 0},
-        {"LOCATION", 18u, 0u, YVEX_CLI_TABLE_LEFT, 1}
-    };
-    static const yvex_cli_table_column narrow_columns[] = {
-        {"MODEL", 12u, 28u, YVEX_CLI_TABLE_LEFT, 0},
-        {"STATE", 7u, 11u, YVEX_CLI_TABLE_LEFT, 0},
-        {"FORMAT", 6u, 12u, YVEX_CLI_TABLE_LEFT, 0},
-        {"SIZE", 8u, 12u, YVEX_CLI_TABLE_RIGHT, 0},
-        {"EXECUTION", 8u, 16u, YVEX_CLI_TABLE_LEFT, 0}
-    };
-    product_table_row *storage;
-    yvex_cli_table_row *rows;
-    unsigned long long index, matched = 0u, count = 0u, cursor = 0u;
-    int wide = force_wide || yvex_cli_terminal_columns(stdout) >= 160u;
-    int rc;
+    unsigned long long index, matched = 0u, count = 0u;
     for (index = 0u; index < yvex_model_library_count(library); ++index) {
-        if (!product_query_match(yvex_model_library_at(library, index), query))
-            continue;
-        if (matched++ < offset) continue;
-        if (count == limit) break;
-        count++;
-    }
-    storage = calloc((size_t)(count ? count : 1u), sizeof(*storage));
-    rows = calloc((size_t)(count ? count : 1u), sizeof(*rows));
-    if (!storage || !rows) {
-        free(storage); free(rows);
-        yvex_cli_out_fputs("yvex: model catalog table allocation failed\n", stderr);
-        return 1;
-    }
-    matched = 0u;
-    for (index = 0u; index < yvex_model_library_count(library) && cursor < count;
-         ++index) {
         product_model_fact fact;
-        if (!product_query_match(yvex_model_library_at(library, index), query))
-            continue;
+        yvex_cli_present_field fields[10];
+        size_t n = 0u;
+        if (!product_query_match(yvex_model_library_at(library, index), query)) continue;
         if (matched++ < offset) continue;
+        if (count++ == limit) break;
         product_fact_build(&fact, library, index, NULL, NULL, runtime);
-        product_default_row(&storage[cursor], &fact, wide);
-        rows[cursor] = storage[cursor].row;
-        cursor++;
+        fields[n++] = (yvex_cli_present_field){"state", fact.state,
+            (yvex_cli_text_role)(product_state_tone(fact.state) == YVEX_CLI_TABLE_SUCCESS
+                ? YVEX_CLI_TEXT_SUCCESS : product_state_tone(fact.state) == YVEX_CLI_TABLE_WARNING
+                ? YVEX_CLI_TEXT_WARNING : YVEX_CLI_TEXT_NORMAL)};
+        fields[n++] = (yvex_cli_present_field){"execution", fact.execution, YVEX_CLI_TEXT_NORMAL};
+        fields[n++] = (yvex_cli_present_field){"format", fact.format, YVEX_CLI_TEXT_NORMAL};
+        fields[n++] = (yvex_cli_present_field){"size", fact.size, YVEX_CLI_TEXT_NORMAL};
+        fields[n++] = (yvex_cli_present_field){"family", fact.model->family, YVEX_CLI_TEXT_DIM};
+        fields[n++] = (yvex_cli_present_field){"representations", fact.variants, YVEX_CLI_TEXT_DIM};
+        if (force_wide) {
+            fields[n++] = (yvex_cli_present_field){"origin", fact.origin, YVEX_CLI_TEXT_DIM};
+            fields[n++] = (yvex_cli_present_field){"precision", fact.precision, YVEX_CLI_TEXT_DIM};
+            fields[n++] = (yvex_cli_present_field){"location", fact.location, YVEX_CLI_TEXT_DIM};
+        }
+        if (yvex_cli_present_record(stdout, fact.selector, fields, n) != YVEX_OK) return 1;
+        if (!strcmp(fact.state, "BLOCKED")) {
+            unsigned long long profile_index;
+            for (profile_index = 0u;
+                 profile_index < yvex_model_library_profile_count(library, index); ++profile_index) {
+                const yvex_model_runtime_profile_fact *profile =
+                    yvex_model_library_profile_at(library, index, profile_index);
+                const yvex_cli_present_field blockers[] = {
+                    {"profile", profile->alias, YVEX_CLI_TEXT_DIM},
+                    {"blocker", profile->blocker, YVEX_CLI_TEXT_WARNING}};
+                if (yvex_cli_present_fields(stdout, blockers, 2u, 4u) != YVEX_OK) return 1;
+            }
+        }
     }
-    rc = force_wide
-             ? yvex_cli_table_render_width(stdout, wide_columns, 10u, rows,
-                                           (size_t)count, 1000u)
-             : yvex_cli_table_render(stdout,
-                                     wide ? wide_columns : narrow_columns,
-                                     wide ? 10u : 5u, rows, (size_t)count);
-    free(rows); free(storage);
-    return rc == YVEX_OK ? 0 : 1;
+    return 0;
 }
 
 static int product_table_all(const yvex_model_library *library,
@@ -967,10 +918,6 @@ int yvex_cli_model_find(const yvex_model_library *library, const char *selector,
 
 static void show_key_table(const product_model_fact *fact)
 {
-    static const yvex_cli_table_column columns[] = {
-        {"", 10u, 22u, YVEX_CLI_TABLE_LEFT, 0},
-        {"", 20u, 100u, YVEX_CLI_TABLE_LEFT, 1}
-    };
     const char *lineage =
         fact->model->identity_kind == YVEX_MODEL_IDENTITY_PROVIDER_REPOSITORY_REVISION
             ? "provider source; no authenticated target lineage"
@@ -982,103 +929,57 @@ static void show_key_table(const product_model_fact *fact)
     const char *values[] = {fact->selector, fact->model->identity,
                             fact->model->family, fact->state, fact->execution,
                             lineage, "not recorded"};
-    yvex_cli_table_cell cells[7][2];
-    yvex_cli_table_row rows[7];
+    yvex_cli_present_field fields[7];
     size_t index;
-    for (index = 0u; index < 7u; ++index) {
-        cells[index][0] = (yvex_cli_table_cell){keys[index], YVEX_CLI_TABLE_DIM};
-        cells[index][1] = (yvex_cli_table_cell){values[index],
-            index == 0u ? YVEX_CLI_TABLE_ACCENT
-            : index == 3u ? product_state_tone(fact->state) : YVEX_CLI_TABLE_PLAIN};
-        rows[index] = (yvex_cli_table_row){cells[index], NULL,
-                                           YVEX_CLI_TABLE_DIM};
-    }
-    (void)yvex_cli_table_render(stdout, columns, 2u, rows, 7u);
+    for (index = 0u; index < 7u; ++index)
+        fields[index] = (yvex_cli_present_field){keys[index], values[index],
+            index == 0u ? YVEX_CLI_TEXT_ACCENT : YVEX_CLI_TEXT_NORMAL};
+    (void)yvex_cli_present_fields(stdout, fields, 7u, 2u);
 }
 
 static void show_sources(const yvex_model_library *library, unsigned long long model_index)
 {
-    static const yvex_cli_table_column columns[] = {
-        {"SOURCE", 14u, 30u, YVEX_CLI_TABLE_LEFT, 1},
-        {"FORMAT", 6u, 14u, YVEX_CLI_TABLE_LEFT, 0},
-        {"PRECISION", 8u, 20u, YVEX_CLI_TABLE_LEFT, 0},
-        {"SIZE", 8u, 12u, YVEX_CLI_TABLE_RIGHT, 0},
-        {"VERIFY", 10u, 22u, YVEX_CLI_TABLE_LEFT, 0}
-    };
-    const yvex_model_library_entry *model =
-        yvex_model_library_at(library, model_index);
+    const yvex_model_library_entry *model = yvex_model_library_at(library, model_index);
     unsigned long long index, count = yvex_model_library_source_count(library, model_index);
-    product_table_row *storage = calloc((size_t)(count ? count : 1u), sizeof(*storage));
-    yvex_cli_table_row *rows = calloc((size_t)(count ? count : 1u), sizeof(*rows));
-    if (!storage || !rows) { free(storage); free(rows); return; }
     for (index = 0u; index < count; ++index) {
         const yvex_local_source_record *source =
             yvex_model_library_source_at(library, model_index, index);
         char size[32], location[YVEX_PATH_CAP], precision[YVEX_REMOTE_PRECISION_CAP];
         product_size(size, source->size_bytes, source->size_known);
         product_source_location(location, source);
-        product_cell(&storage[index], 0u, source->repository,
-                     YVEX_CLI_TABLE_ACCENT);
-        product_cell(&storage[index], 1u,
-                     source->format[0] ? source->format
-                                       : source->representation,
-                     YVEX_CLI_TABLE_PLAIN);
         yvex_cli_precision_format(precision, sizeof(precision), source->precision);
-        product_cell(&storage[index], 2u, precision, YVEX_CLI_TABLE_PLAIN);
-        product_cell(&storage[index], 3u, size, YVEX_CLI_TABLE_PLAIN);
-        product_cell(&storage[index], 4u, source->verification_state,
-                     strstr(source->verification_state, "verified")
-                         ? YVEX_CLI_TABLE_SUCCESS : YVEX_CLI_TABLE_WARNING);
-        storage[index].row.cells = storage[index].cells;
-        snprintf(storage[index].secondary, sizeof(storage[index].secondary),
-                 "%s · revision %s · %s · %s", product_origin(source, model),
-                 source->revision, source->storage_kind, location);
-        storage[index].row.secondary = storage[index].secondary;
-        storage[index].row.secondary_tone = YVEX_CLI_TABLE_DIM;
-        rows[index] = storage[index].row;
+        const yvex_cli_present_field fields[] = {
+            {"format", source->format[0] ? source->format : source->representation, YVEX_CLI_TEXT_NORMAL},
+            {"precision", precision, YVEX_CLI_TEXT_NORMAL},
+            {"size", size, YVEX_CLI_TEXT_NORMAL},
+            {"verification", source->verification_state, YVEX_CLI_TEXT_NORMAL},
+            {"origin", product_origin(source, model), YVEX_CLI_TEXT_DIM},
+            {"revision", source->revision, YVEX_CLI_TEXT_DIM},
+            {"storage", source->storage_kind, YVEX_CLI_TEXT_NORMAL},
+            {"location", location, YVEX_CLI_TEXT_DIM}};
+        if (yvex_cli_present_record(stdout, source->repository, fields, 8u) != YVEX_OK) return;
     }
-    if (count) {
-        (void)yvex_cli_table_render(stdout, columns, 5u, rows, (size_t)count);
-    }
-    else yvex_cli_out_fputs("  no proven source lineage\n", stdout);
-    free(rows); free(storage);
+    if (!count) (void)yvex_cli_present_text(stdout, "no proven source lineage", YVEX_CLI_TEXT_DIM, 2u);
 }
 
 static void show_artifacts(const yvex_model_library *library, unsigned long long model_index)
 {
-    static const yvex_cli_table_column columns[] = {
-        {"FORMAT", 8u, 14u, YVEX_CLI_TABLE_LEFT, 0},
-        {"QUANT/PRECISION", 12u, 30u, YVEX_CLI_TABLE_LEFT, 0},
-        {"SIZE", 8u, 12u, YVEX_CLI_TABLE_RIGHT, 0},
-        {"ARTIFACT", 12u, 24u, YVEX_CLI_TABLE_LEFT, 1}
-    };
     unsigned long long index, count = yvex_model_library_artifact_count(library, model_index);
-    product_table_row *storage = calloc((size_t)(count ? count : 1u), sizeof(*storage));
-    yvex_cli_table_row *rows = calloc((size_t)(count ? count : 1u), sizeof(*rows));
-    if (!storage || !rows) { free(storage); free(rows); return; }
     for (index = 0u; index < count; ++index) {
         const yvex_model_artifact_fact *artifact =
             yvex_model_library_artifact_at(library, model_index, index);
         char size[32], precision[YVEX_REMOTE_PRECISION_CAP];
         product_size(size, artifact->file_size, 1);
         yvex_cli_precision_format(precision, sizeof(precision),
-                                  artifact->physical_variant[0]
-                                      ? artifact->physical_variant
-                                      : artifact->artifact_class);
-        product_cell(&storage[index], 0u, artifact->format, YVEX_CLI_TABLE_PLAIN);
-        product_cell(&storage[index], 1u, precision, YVEX_CLI_TABLE_PLAIN);
-        product_cell(&storage[index], 2u, size, YVEX_CLI_TABLE_PLAIN);
-        product_cell(&storage[index], 3u, artifact->identity, YVEX_CLI_TABLE_DIM);
-        storage[index].row.cells = storage[index].cells;
-        snprintf(storage[index].secondary, sizeof(storage[index].secondary),
-                 "location %s", artifact->path);
-        storage[index].row.secondary = storage[index].secondary;
-        storage[index].row.secondary_tone = YVEX_CLI_TABLE_DIM;
-        rows[index] = storage[index].row;
+            artifact->physical_variant[0] ? artifact->physical_variant : artifact->artifact_class);
+        const yvex_cli_present_field fields[] = {
+            {"format", artifact->format, YVEX_CLI_TEXT_NORMAL},
+            {"precision", precision, YVEX_CLI_TEXT_NORMAL},
+            {"size", size, YVEX_CLI_TEXT_NORMAL},
+            {"location", artifact->path, YVEX_CLI_TEXT_DIM}};
+        if (yvex_cli_present_record(stdout, artifact->identity, fields, 4u) != YVEX_OK) return;
     }
-    if (count) (void)yvex_cli_table_render(stdout, columns, 4u, rows, (size_t)count);
-    else yvex_cli_out_fputs("  no prepared representation\n", stdout);
-    free(rows); free(storage);
+    if (!count) (void)yvex_cli_present_text(stdout, "no prepared representation", YVEX_CLI_TEXT_DIM, 2u);
 }
 
 static void show_components(const yvex_model_runtime_profile_fact *profile)
@@ -1187,7 +1088,8 @@ static void show_runtime(const yvex_model_library *library,
     if (count) {
         (void)yvex_cli_table_render(stdout, columns, 6u, rows, (size_t)count);
     }
-    else yvex_cli_out_fputs("  not launchable; run `yvex model prepare MODEL`\n", stdout);
+    else (void)yvex_cli_present_text(stdout, "not launchable; run `yvex model prepare MODEL`",
+                                     YVEX_CLI_TEXT_DIM, 2u);
     free(rows); free(storage);
 }
 

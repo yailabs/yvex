@@ -28,12 +28,12 @@ cleanup()
 trap cleanup EXIT HUP INT TERM
 
 "$YVEX_BIN" help >"$root/help"
-grep -F 'YVEX inference runtime' "$root/help" >/dev/null
+grep -F 'YVEX native model execution' "$root/help" >/dev/null
 for expected in \
     'USE' 'RUNTIME' 'TOOLS' 'META' \
     'chat' 'serve' 'host' 'model' 'inspect' 'help' 'version' \
-    'MODEL COMMANDS' 'HOST CONTROL' 'yvex model pull SOURCE' \
-    'yvex model load [MODEL]' 'yvex host logs' 'yvex host memory'
+    'LIFECYCLE' 'READ' 'model search -> model pull -> model prepare' \
+    'serve -> model load -> chat' 'yvex host status / memory / logs'
 do
     grep -F "$expected" "$root/help" >/dev/null
 done
@@ -52,11 +52,11 @@ for expected in \
     'yvex bench attention execute' \
     'yvex bench attention profile'
 do
-    grep -F "$expected" "$root/advanced" >/dev/null
+    python3 tests/support/human_field.py "$root/advanced" "$expected"
 done
 
 "$YVEX_BIN" help host logs >"$root/leaf-help"
-grep -F 'operation: host.logs' "$root/leaf-help" >/dev/null
+python3 tests/support/human_field.py "$root/leaf-help" 'operation: host.logs'
 "$YVEX_BIN" help --json >"$root/discovery.json"
 python3 - "$root/discovery.json" <<'PY'
 import json, pathlib, sys
@@ -160,7 +160,7 @@ for command in run server evidence execute graph quant system tensor tokenizer; 
     set -e
     test "$status" -eq 2
     grep -F "removed command: $command" "$root/err" >/dev/null
-    grep -F 'hint:' "$root/err" >/dev/null
+    python3 tests/support/human_field.py "$root/err" 'hint:'
 done
 for arguments in 'runtime input' 'runtime context' 'runtime start' \
     'runtime status' 'runtime model' 'runtime memory' 'runtime watch' \
@@ -202,7 +202,7 @@ printf 'hello\n' | "$YVEX_BIN" >"$root/out" 2>"$root/err"
 status=$?
 set -e
 test "$status" -eq 0
-grep -F 'YVEX inference runtime' "$root/out" >/dev/null
+grep -F 'YVEX native model execution' "$root/out" >/dev/null
 set +e
 printf 'hello\n' | "$YVEX_BIN" chat >"$root/out" 2>"$root/err"
 status=$?
@@ -227,7 +227,7 @@ done
 
 # One registry-driven parser owns help bypass, types, ranges, duplicates, and relations.
 "$YVEX_BIN" serve -h >"$root/out" 2>"$root/err"
-grep -F 'operation: host.serve' "$root/out" >/dev/null
+python3 tests/support/human_field.py "$root/out" 'operation: host.serve'
 for arguments in \
     'serve --workers' \
     'serve --workers 0' \

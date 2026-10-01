@@ -39,7 +39,7 @@ fail() {
 }
 
 contains() {
-    grep -F -- "$2" "$1" >/dev/null || fail "$1 missing: $2"
+    python3 tests/support/human_field.py "$1" "$2" || fail "$1 missing: $2"
 }
 
 expect_status() {
@@ -336,7 +336,7 @@ contains "$OUT_DIR/capability-backend.err" "requires --backend cpu|cuda"
 expect_status 2 "$YVEX_BIN" inspect attention plan \
     --target deepseek4-v4-flash-dspark --backend metal --output json \
     >"$OUT_DIR/plan-backend.out" 2>"$OUT_DIR/plan-backend.err"
-contains "$OUT_DIR/plan-backend.err" "unknown backend kind: metal"
+contains "$OUT_DIR/plan-backend.err" "invalid value for --backend: metal"
 
 expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --phase generation \

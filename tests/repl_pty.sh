@@ -35,6 +35,10 @@ printf '{"schema":"yvex.models.local.v6","models":[]}\n' >"$registry"
 cleanup()
 {
     status=$?
+    if test "$status" -eq 0 && test -n "${YVEX_PRESENTATION_CAPTURE_DIR:-}"; then
+        test -d "$YVEX_PRESENTATION_CAPTURE_DIR"
+        cp "$root"/*.typescript "$YVEX_PRESENTATION_CAPTURE_DIR/"
+    fi
     if test "$status" -ne 0; then
         for transcript in "$root"/*.typescript; do
             test -f "$transcript" && tail -c 12000 "$transcript" >&2 || true
@@ -169,7 +173,7 @@ start_console()
         <"$fifo" >"$root/$name.stdout" 2>"$root/$name.stderr" &
     console_job=$!
     exec 3>"$fifo"
-    wait_for "$transcript" 'deepseek4-v4-flash-dspark>'
+    wait_for "$transcript" '›'
     attempt=0
     while test "$attempt" -lt "$YVEX_TEST_PTY_WAIT_ATTEMPTS"; do
         client_pid=$(find_console_client || true)
@@ -215,7 +219,7 @@ set -e
 test "$chat_status" -eq 2
 test "$bare_status" -eq 0
 grep -F 'chat requires a terminal' "$root/non-tty.err" >/dev/null
-grep -F 'YVEX inference runtime' "$root/bare.out" >/dev/null
+grep -F 'YVEX native model execution' "$root/bare.out" >/dev/null
 ! grep "$(printf '\033')" "$root/non-tty.out" "$root/non-tty.err" \
     "$root/bare.out" "$root/bare.err" >/dev/null
 
@@ -251,7 +255,10 @@ printf 'RIFF\004\000\000\000WAVE' >"$audio"
 
 # Explicit chat preserves scrollback, streams output, and restores bracketed paste mode.
 start_console explicit 24 100 'chat --session linear' nocolor
-wait_for "$root/explicit.typescript" 'commands'
+wait_for "$root/explicit.typescript" 'Use /help'
+! grep -F '/attachments-clear' "$root/explicit.typescript" >/dev/null
+printf '/help\r' >&3
+wait_for "$root/explicit.typescript" 'Keyboard'
 wait_for "$root/explicit.typescript" '/help'
 wait_for "$root/explicit.typescript" '/status'
 wait_for "$root/explicit.typescript" '/context'
@@ -263,11 +270,12 @@ wait_for "$root/explicit.typescript" '/use'
 wait_for "$root/explicit.typescript" '/reset'
 wait_for "$root/explicit.typescript" '/quit'
 printf '/attach %s\r' "$image" >&3
-wait_for "$root/explicit.typescript" 'attached · image'
+wait_for "$root/explicit.typescript" 'attached'
+wait_for "$root/explicit.typescript" 'image'
 printf '/attach %s\r' "$audio" >&3
-wait_for "$root/explicit.typescript" 'next turn 2/31'
+wait_for "$root/explicit.typescript" '2/31'
 printf '/attachments\r' >&3
-wait_for "$root/explicit.typescript" 'attachments · 2 staged for next turn'
+wait_for "$root/explicit.typescript" 'staged for next turn'
 printf 'hello\r' >&3
 wait_for "$root/explicit.typescript" 'hello from yvex'
 printf '/attachments\r' >&3
@@ -334,7 +342,7 @@ assert_linear_terminal "$root/rendering.typescript"
 # neither echoed into model output nor carried into the following prompt.
 start_console async 24 100 'chat --session async' nocolor
 printf 'WAIT_ASYNC_KEYS\r' >&3
-wait_for "$root/async.typescript" 'processing 4 input tokens · 4/4'
+wait_for "$root/async.typescript" 'prefill ·'
 cycle=0
 while test "$cycle" -lt 3; do
     printf '\033[A\033[B\033[C\033[D\033[H\033[F\033[3~async-keys-🌍\177\014' >&3
@@ -355,7 +363,7 @@ assert_linear_terminal "$root/async.typescript"
 
 # Exercise completion, UTF-8 editing, paste, history, and resize in the one public REPL.
 start_console bare 32 150 'chat' color
-printf '/sta\t\r' >&3
+printf '/sta\t\r\r' >&3
 wait_for "$root/bare.typescript" '/status'
 wait_count "$root/bare.typescript" "$(printf '\033[?2004h')" 2
 printf '\033[200~hello\nworld 🌍\033[201~\r' >&3
@@ -393,7 +401,7 @@ assert_linear_terminal "$root/reconnect.typescript"
 # Active generation Ctrl-C crosses the canonical cancellation operation.
 start_console cancel 24 100 'chat --session cancel' nocolor
 printf 'WAIT_PREFILL_CANCEL\r' >&3
-wait_for "$root/cancel.typescript" 'processing 4 input tokens · 0/4'
+wait_for "$root/cancel.typescript" 'prefill · 0/4'
 kill -INT "$client_pid"
 wait_for "$root/host.err" 'generation.cancel cancel'
 wait_for "$root/cancel.typescript" 'cancelled'

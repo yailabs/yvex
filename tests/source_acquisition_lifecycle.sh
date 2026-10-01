@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Darwin system aliases are not application-controlled cleanup roots.
 if test "$(uname -s)" = Darwin; then export TMPDIR=/private/tmp; fi
+trap 'failure_status=$?; printf "source lifecycle: assertion failed at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2; exit "$failure_status"' ERR
 
 . tests/support/cleanup.sh
 
@@ -67,6 +68,25 @@ wait_nonzero_field() {
   done
   printf 'timed out waiting for nonzero %s under %s (last=%s)\n' \
     "$field" "$root" "${value:-missing}" >&2
+  return 1
+}
+
+wait_partial_snapshot() {
+  local root=$1 attempt snapshot
+  for attempt in $(seq 1 120); do
+    snapshot=$(status_json "$root" 2>/dev/null || true)
+    if printf '%s' "$snapshot" | python3 -c '
+import json,sys
+value=json.load(sys.stdin)
+sys.exit(not (value["provider_partial_objects"] == 1 and value["completed_files"] == 4))
+' 2>/dev/null; then
+      printf '%s' "$snapshot"
+      return 0
+    fi
+    sleep 0.1
+  done
+  printf 'timed out waiting for partial + metadata snapshot under %s (last=%s)\n' \
+    "$root" "${snapshot:-missing}" >&2
   return 1
 }
 
@@ -168,11 +188,14 @@ wait "$START_PID"
 # Provider-internal partial objects and cache activity remain separate from committed
 # selected files and selected-domain in-flight bytes.  Default cache roots are YVEX-owned.
 PARTIAL="$ROOT/models-partial"
-start_fake "$PARTIAL" 1 4 5 env YVEX_FAKE_HF_PARTIAL_OBJECT=1 \
+start_fake "$PARTIAL" 2 4 5 env YVEX_FAKE_HF_PARTIAL_OBJECT=1 \
+  YVEX_FAKE_HF_PARTIAL_SETUP_DELAY=2 \
   YVEX_FAKE_HF_EXPECT_CACHE_ROOT="$PARTIAL" HF_XET_HIGH_PERFORMANCE=1 \
   YVEX_FAKE_HF_EXPECT_HIGH_PERFORMANCE=1
-wait_field "$PARTIAL" provider_partial_objects 1
-partial=$(status_json "$PARTIAL")
+# A provider partial can precede metadata. Admit one snapshot containing both
+# facts, not two observations accidentally relying on machine scheduling speed.
+partial=$(wait_partial_snapshot "$PARTIAL")
+test "$(printf '%s' "$partial" | json_field provider_partial_objects)" = 1
 test "$(printf '%s' "$partial" | json_field completed_files)" = 4
 test "$(printf '%s' "$partial" | json_field incomplete_files)" = None
 test "$(printf '%s' "$partial" | json_field inflight_selected_bytes)" = None

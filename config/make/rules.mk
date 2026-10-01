@@ -2,8 +2,10 @@
 replai-dependency:
 	python3 tools/prepare_replai.py --prefix '$(REPLAI_PREFIX)' $(if $(REPLAI_SOURCE),--source '$(REPLAI_SOURCE)')
 $(REPLAI_HEADER) $(REPLAI_ARCHIVE): | replai-dependency
-$(CLIENT_LANE_OBJ) $(CLIENT_TERMINAL_OBJ): override CPPFLAGS += -I$(REPLAI_PREFIX)/include
-$(CLIENT_LANE_OBJ) $(CLIENT_TERMINAL_OBJ): $(REPLAI_HEADER)
+REPLAI_CONSUMER_OBJS := $(CLIENT_LANE_OBJ) $(CLIENT_TERMINAL_OBJ) \
+    $(addprefix $(OBJ_DIR)/src/cli/io/,presentation.o table.o)
+$(REPLAI_CONSUMER_OBJS): override CPPFLAGS += -I$(REPLAI_PREFIX)/include
+$(REPLAI_CONSUMER_OBJS): $(REPLAI_HEADER)
 generate-source-manifest: $(SOURCE_MANIFEST_MK) $(SOURCE_FAMILY_HEADER)
 check-source-manifest: $(SOURCE_MANIFEST_MK) $(SOURCE_FAMILY_HEADER)
 	python3 $(SOURCE_MANIFEST_GENERATOR) --manifest $(SOURCE_OWNER_MANIFEST) \

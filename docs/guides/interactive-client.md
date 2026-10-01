@@ -22,7 +22,7 @@ numbers or a screenshot are not admission evidence. `/help` gives the current
 registry-authored command catalog.
 
 The [external REPLAI editor](../decisions/0007-external-terminal-editor.md) owns
-input editing, history navigation, paste framing, and redraw. YVEX owns
+input editing, history navigation, paste framing, redraw, semantic layout and completion menus. YVEX owns
 commands, attachment conversion, session/engine binding, and typed generation
 output and cancellation. The editor closes before generation starts; retained
 presentation helpers are not a second native editor.
@@ -34,13 +34,13 @@ output distinguishes explicit reasoning from final text; final text has no extra
 section label. The terminal renderer supports bounded headings, lists, emphasis,
 inline/fenced code and quotes. Prose wraps progressively at display-cell boundaries,
 to at most 96 cells or the narrower terminal measure, independently of wire fragment
-boundaries. CJK, combining marks and single-codepoint emoji use Linux UTF-8 cell
-widths; complex emoji sequences remain terminal-dependent. Inline styling and
-normalized prose spacing do not change canonical response bytes. During a turn, the
-console updates one server-authored prefill line in place. The terminal result
-then reports prefill, generation, TTFT, speculation, initial/final context,
-adaptive or explicit output envelope, truthful stop reason, and session in a
-compact summary. Candidate token text is never displayed.
+boundaries. Cell measurement comes from the pinned REPLAI Unicode policy, shared with
+records, tables and prompts. Progressive complex-grapheme wrapping remains
+terminal-dependent; this is not a universal terminal-emulator guarantee. Inline styling and
+normalized prose spacing do not change canonical response bytes. During a turn, REPLAI replaces one bounded server-authored progress field and
+clears it before model output or an outcome. Repaints do not leave redundant 100%
+rows. Interactive text retains the answer, not a metrics dump; typed protocol
+measurements remain available. Candidate token text is never displayed.
 
 On a TTY, cyan marks the prompt and active work, green marks readiness and
 completion, orange marks cancellation or warning, red marks refusal, and dim
@@ -50,7 +50,8 @@ that variable is already exported in the shell, unset it to see the semantic
 colors.
 
 Slash commands are discovered from the canonical registry and their complete
-current catalog is visible at startup. `/help` adds one-line descriptions;
+catalog is available on demand, not dumped at startup. `/help` groups concise
+descriptions by intent;
 `/status`, `/runtime`, `/model`, `/memory`, and `/context` inspect state;
 `/session`, `/sessions`, `/new`, `/use`, `/detach`, `/reset`, and `/close`
 manage the session; `/attach PATH` stages one local media object for the next
@@ -59,7 +60,10 @@ turn, `/attachments` lists the bounded ordered stage, and
 turn; after accepted submission the stage clears while the exact session stays
 attached. `/cancel` cancels active generation; and `/quit` exits locally.
 `/exit` is a registry-owned alias for `/quit`; bare `exit` remains
-ordinary model input. Tab completes an unambiguous slash command. Commands for an unsupported
+ordinary model input. Tab opens matching slash candidates with labels and annotations. Enter accepts
+the menu selection; a second Enter submits. `/use` and `/session` complete resident
+names for the bound generation. `/attach` offers bounded local path candidates,
+not content admission. Esc dismisses the menu without changing the draft. Commands for an unsupported
 explicit reasoning channel refuse rather than simulate support. The current
 DSpark profile admits `/think`, `/think-max`, and `/nothink`; a family with an
 authenticated low-effort policy additionally admits `/think-low`. They select the
@@ -81,7 +85,7 @@ while keeping the process-resident model open.
 Left/Right, Home/End, Delete and Backspace edit the current UTF-8 line without
 submitting it; Up/Down navigate local history. If the server connection closes,
 an active progress row is terminated cleanly and the prompt changes to
-`yvex [disconnected]>`. Local help and exit remain available. The next remote
+`MODEL [disconnected] › `. Local help and exit remain available. The next remote
 operation attempts one foreground reconnect; when that fails, the unsent line
 is preserved for another attempt rather than discarded.
 

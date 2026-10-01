@@ -159,16 +159,11 @@ static void model_runtime_human(const char *operation,
                                 const yvex_cli_model_profile_selection *model,
                                 const yvex_server_engine_summary *engine)
 {
-    static const yvex_cli_table_column columns[] = {
-        {"", 10u, 18u, YVEX_CLI_TABLE_LEFT, 0},
-        {"", 16u, 90u, YVEX_CLI_TABLE_LEFT, 1}
-    };
     const char *keys[] = {"Model", "Format", "Quant / precision", "Variant",
                           "Backend", "Generation", "State"};
     const char *values[7];
     char generation[32];
-    yvex_cli_table_cell cells[7][2];
-    yvex_cli_table_row rows[7];
+    yvex_cli_present_field fields[7];
     size_t index;
     snprintf(generation, sizeof(generation), "%llu", engine->generation);
     values[0] = model->model_selector;
@@ -179,14 +174,10 @@ static void model_runtime_human(const char *operation,
     values[5] = generation;
     values[6] = model_engine_state(engine->state);
     yvex_cli_out_writef(stdout, "MODEL %s\n\n", operation);
-    for (index = 0u; index < 7u; ++index) {
-        cells[index][0] = (yvex_cli_table_cell){keys[index], YVEX_CLI_TABLE_DIM};
-        cells[index][1] = (yvex_cli_table_cell){values[index],
-            index == 6u && engine->state == YVEX_SERVER_ENGINE_LOADED
-                ? YVEX_CLI_TABLE_SUCCESS : YVEX_CLI_TABLE_PLAIN};
-        rows[index] = (yvex_cli_table_row){cells[index], NULL, YVEX_CLI_TABLE_PLAIN};
-    }
-    (void)yvex_cli_table_render(stdout, columns, 2u, rows, 7u);
+    for (index = 0u; index < 7u; ++index)
+        fields[index] = (yvex_cli_present_field){keys[index], values[index],
+            index == 0u ? YVEX_CLI_TEXT_ACCENT : YVEX_CLI_TEXT_NORMAL};
+    (void)yvex_cli_present_fields(stdout, fields, 7u, 2u);
 }
 
 static int engine_catalog_fetch(yvex_server_engine_summary *engines,

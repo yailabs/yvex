@@ -96,6 +96,8 @@ include/yvex/internal/source_catalog.h	source	source.catalog	generic	private	int
 include/yvex/internal/source_distribution.h	source	source.distribution	generic	private	internal-abi	source,model.catalog,cli	interface	none
 include/yvex/internal/source_payload.h	source	source.payload	generic	private	internal-abi	model,compilation,cli	interface	none
 include/yvex/internal/cli_table.h	cli.io	cli.io.table	generic	private	internal-abi	cli.render,cli.model_artifacts,client	interface	none
+include/yvex/internal/cli_presentation.h	cli.io	cli.io.presentation	generic	private	internal-abi	cli.render,cli.io	interface	none
+src/cli/io/presentation.c	cli.io	cli.io.presentation	generic	private	reusable-algorithm	cli.render,cli.io	implementation	none
 include/yvex/materialization.h	abi	abi.materialization	generic	public	public-abi	repository	interface	none
 include/yvex/model.h	abi	abi.model	generic	public	public-abi	repository	interface	none
 include/yvex/provider.h	abi	abi.provider	generic	public	public-abi	repository	interface	none

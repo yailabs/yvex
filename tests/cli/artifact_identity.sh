@@ -21,7 +21,7 @@ fail() {
 contains() {
     file=$1
     text=$2
-    grep -F "$text" "$file" >/dev/null || fail "$file missing: $text"
+    python3 tests/support/human_field.py "$file" "$text" || fail "$file missing: $text"
 }
 
 not_contains() {
@@ -62,7 +62,7 @@ contains "$OUT_DIR/add.out" "registered_selected_embedding_ready: true"
 contains "$OUT_DIR/add.out" "identity_status: recorded"
 contains "$OUT_DIR/add.out" "status: models-added"
 
-GOOD_SHA=$(awk '/^registered_sha256: / { print $2 }' "$OUT_DIR/add.out")
+GOOD_SHA=$(awk '$1 == "registered_sha256" || $1 == "registered_sha256:" { print $2 }' "$OUT_DIR/add.out")
 test -n "$GOOD_SHA" || fail "missing registered sha"
 
 "$YVEX_BIN" profile verify "$ALIAS" --registry "$REG" --audit \

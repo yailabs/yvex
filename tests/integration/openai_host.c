@@ -399,6 +399,7 @@ static int send_native_format(int fd, const yvex_client_request *request,
         "进行秘密行动等。还有更多内容需要解释，不能把文字和格式拆散。\n"
         "Spacing:    alpha   **bold words**   omega.\r\n"
         "Unicode: 界🌍é 界🌍é 界🌍é 界🌍é 界🌍é 界🌍é 界🌍é 界🌍é\n"
+        "Joined: 👩‍💻 👍🏽 🇮🇹 é\n"
         "FORMAT END\n";
     size_t offset = 0u, step = bytewise ? 1u : sizeof(text) - 1u;
     int rc = YVEX_OK;
@@ -907,6 +908,12 @@ static int serve_connection(int fd, yvex_error *err)
         if (request.operation == YVEX_CLIENT_OP_GENERATION_CANCEL) {
             fprintf(stderr, "generation.cancel %s\n", request.session_name);
             fflush(stderr);
+        }
+        if (request.operation == YVEX_CLIENT_OP_SESSION_LIST) {
+            message_base(&message, YVEX_CLIENT_MESSAGE_SESSION, &request);
+            strcpy(message.session_name, "replai-edit");
+            rc = yvex_server_protocol_send(fd, &message, err);
+            if (rc != YVEX_OK) goto done;
         }
         message_base(&message,
                      request.operation == YVEX_CLIENT_OP_SESSION_LIST

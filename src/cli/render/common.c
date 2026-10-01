@@ -1292,30 +1292,30 @@ static void model_download_print_audit(const yvex_cli_models_download_options *o
         yvex_cli_out_writef(stdout, "reason: %s\n", report->error);
 }
 
-static void model_download_print_json(const yvex_model_download_report *report)
+static void model_download_print_json(FILE *fp, const yvex_model_download_report *report)
 {
-    yvex_cli_out_fputs("{\"schema\":\"yvex.model.pull.v1\",\"status\":", stdout);
-    yvex_cli_out_json_string(stdout, report->status);
-    yvex_cli_out_fputs(",\"model\":", stdout);
-    yvex_cli_out_json_string(stdout, report->target_id);
-    yvex_cli_out_fputs(",\"family\":", stdout);
-    yvex_cli_out_json_string(stdout, report->family);
-    yvex_cli_out_fputs(",\"provider\":", stdout);
-    yvex_cli_out_json_string(stdout, report->provider);
-    yvex_cli_out_fputs(",\"repository\":", stdout);
-    yvex_cli_out_json_string(stdout, report->repo_id);
-    yvex_cli_out_fputs(",\"revision\":", stdout);
-    yvex_cli_out_json_string(stdout, report->revision);
-    yvex_cli_out_fputs(",\"location\":", stdout);
-    yvex_cli_out_json_string(stdout, report->local_source_dir);
-    yvex_cli_out_fputs(",\"format\":", stdout);
-    yvex_cli_out_json_string(stdout, report->representation_format);
-    yvex_cli_out_fputs(",\"precision\":", stdout);
-    yvex_cli_out_json_string(stdout, report->representation_precision);
-    yvex_cli_out_fputs(",\"local_content_digest\":", stdout);
-    yvex_cli_out_json_string(stdout, report->source_payload_digest);
+    yvex_cli_out_fputs("{\"schema\":\"yvex.model.pull.v1\",\"status\":", fp);
+    yvex_cli_out_json_string(fp, report->status);
+    yvex_cli_out_fputs(",\"model\":", fp);
+    yvex_cli_out_json_string(fp, report->target_id);
+    yvex_cli_out_fputs(",\"family\":", fp);
+    yvex_cli_out_json_string(fp, report->family);
+    yvex_cli_out_fputs(",\"provider\":", fp);
+    yvex_cli_out_json_string(fp, report->provider);
+    yvex_cli_out_fputs(",\"repository\":", fp);
+    yvex_cli_out_json_string(fp, report->repo_id);
+    yvex_cli_out_fputs(",\"revision\":", fp);
+    yvex_cli_out_json_string(fp, report->revision);
+    yvex_cli_out_fputs(",\"location\":", fp);
+    yvex_cli_out_json_string(fp, report->local_source_dir);
+    yvex_cli_out_fputs(",\"format\":", fp);
+    yvex_cli_out_json_string(fp, report->representation_format);
+    yvex_cli_out_fputs(",\"precision\":", fp);
+    yvex_cli_out_json_string(fp, report->representation_precision);
+    yvex_cli_out_fputs(",\"local_content_digest\":", fp);
+    yvex_cli_out_json_string(fp, report->source_payload_digest);
     yvex_cli_out_writef(
-        stdout,
+        fp,
         ",\"files\":%llu,\"partial_files\":%llu,"
         "\"safetensors_files\":%llu,\"gguf_files\":%llu,\"bytes\":%llu,"
         "\"upstream_identity_verified\":%s,\"payload_hash_verified\":%s,"
@@ -1326,11 +1326,11 @@ static void model_download_print_json(const yvex_model_download_report *report)
         report->upstream_identity_verified ? "true" : "false",
         report->payload_hash_verified ? "true" : "false",
         report->interrupted ? "true" : "false");
-    yvex_cli_out_json_string(stdout, report->download_report_path);
-    yvex_cli_out_fputs(",\"reason\":", stdout);
-    yvex_cli_out_json_string(stdout, report->error[0] ? report->error
+    yvex_cli_out_json_string(fp, report->download_report_path);
+    yvex_cli_out_fputs(",\"reason\":", fp);
+    yvex_cli_out_json_string(fp, report->error[0] ? report->error
                                                        : report->top_blocker);
-    yvex_cli_out_fputs("}\n", stdout);
+    yvex_cli_out_fputs("}\n", fp);
 }
 
 static void model_download_print(const yvex_cli_models_download_options *options,
@@ -1340,7 +1340,7 @@ static void model_download_print(const yvex_cli_models_download_options *options
     } else if (options && options->output_mode == YVEX_MODELS_OUTPUT_TABLE) {
         model_download_print_table(report);
     } else if (options && options->output_mode == YVEX_MODELS_OUTPUT_JSON) {
-        model_download_print_json(report);
+        model_download_print_json(stdout, report);
     } else {
         model_download_print_normal(options, report);
     }
@@ -1348,6 +1348,18 @@ static void model_download_print(const yvex_cli_models_download_options *options
 
 int model_download_finish(const yvex_cli_models_download_options *options,
                           yvex_model_download_report *report) {
+    if (model_acquisition_worker_active()) {
+        char path[YVEX_PATH_CAP];
+        FILE *result;
+        int failed;
+        if (model_acquisition_result_path(report, path) != YVEX_OK) return 1;
+        result = fopen(path, "wb");
+        if (!result) return 1;
+        model_download_print_json(result, report);
+        failed = ferror(result);
+        if (fclose(result) != 0) failed = 1;
+        if (failed) { (void)unlink(path); return 1; }
+    }
     model_download_print(options, report);
     if (strcmp(report->status, "model-download-pass") == 0 ||
         strcmp(report->status, "model-download-resume-pass") == 0 ||

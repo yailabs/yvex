@@ -28,7 +28,10 @@ presentation grammar. Keeping two live editors would leave ownership ambiguous.
 
 `src/cli/io/client.c` consumes REPLAI C ABI 1 through its installed header. The
 exact revision, Git tree and downloaded archive checksum are owned by
-`config/replai.json`: active revision `6230713c3c80140e609f836918811835bd847da4`.
+`config/replai.json`: active revision `93d62f6d34cfb933a1f59407ade027152e1ef2ba`.
+Base C ABI 1 remains unchanged; the separately queried presentation extension 1
+adds bounded semantic documents, composed prompts, candidate sets, driven events
+and an exclusive quiet-output scope. It exports no Rust layouts or YVEX meaning.
 The original cutover qualified `df5538c718b8d068432032e7fb116fb8bfab158e`;
 that historical identity remains unchanged in its evidence.
 No floating branch, vendored header, committed native artifact or runtime
@@ -54,42 +57,46 @@ modified and Cargo output remains external. Incompatible source revisions,
 header ABI, receipts, missing artifacts or changed artifact bytes fail the
 build. Changing the pin requires a fresh prefix and consumer requalification.
 
-The adapter owns one opaque handle per chat lifetime. Each input opens the
-terminal with a literal host label/state suffix, polls events, and closes before
-product dispatch. Submission copies exact UTF-8 into a C-owned command buffer.
-YVEX admits nonempty non-command history and suppresses consecutive duplicates;
-REPLAI owns navigation and returning to the original draft/cursor. The YVEX
-operation registry selects a unique slash replacement; the library validates and
-applies it. Ambiguous/missing completions preserve the draft.
+The adapter owns one opaque handle per chat lifetime. Each input opens with a
+semantic composed host label/state prompt and closes before product dispatch.
+Submission copies exact UTF-8 into a C-owned command buffer. YVEX admits history,
+supplies registry-authored candidates and bounded context from resident session
+names or attachment paths. REPLAI owns menus, label/annotation layout, navigation
+and insertion. Enter accepts a selected candidate without submitting the line.
+Snapshot tickets refuse stale draft results; completion never admits an attachment.
 
-Keyboard interrupts while editing return generic events; YVEX clears the draft
-and applies its repeated-interrupt exit policy. Host-delivered SIGINT is observed
-by a minimal YVEX handler and delivered to the library from ordinary control
-flow. Resize installs no YVEX SIGWINCH handler; REPLAI polls dimensions. EOF and
-input failure are distinct. Ctrl-D deletes at the cursor on nonempty input and
-exits on empty input, retaining the qualified editor correction.
+The POSIX host waits on REPLAI's borrowed input FD, its own wake pipe and the
+producer's next decoder deadline. SIGWINCH only wakes that ordinary control flow;
+SIGINT enters the existing counted cancellation policy. Both prior handlers are
+restored before the scope closes. REPLAI owns no signal handler or host thread.
+Visual Esc dismissal is immediate while the original fragmented-sequence deadline
+remains intact. No timeout was shortened to mask a decoder ambiguity.
 
-Generation starts only after the input interaction has restored captured termios
-and released duplicated descriptors. The existing YVEX generation signal thread,
-protocol cancellation request, quiet-output termios scope and queued-key discard
-policy remain product-owned. No prompt is concurrently editable during generation.
-Reconnect, attachments, command grammar, engine/session binding, reasoning and
-product output retain their existing owners.
+Generation starts after editor restoration. REPLAI's separately admitted output
+scope owns temporary echo suppression, replaceable progress and captured-terminal
+restoration. YVEX owns cancellation, queued-input discard, exact channels,
+transactions, session generation and reconnect. There is no concurrent editable
+prompt during generation, alternate screen or terminal background painting.
+
+Ordinary CLI renderers construct semantic records or comparative tables, using the
+same pure REPLAI document renderer without an editor lifetime. JSON serialization
+remains separate. Palette and Unicode cell measurement have one producer owner;
+YVEX retains bounded stream framing, trusted structural projection and control-byte
+escaping. Complex progressive grapheme wrapping is not a universal terminal claim.
 
 ## Consequences and evidence
 
 The old live `repl_read_line`, byte insertion/deletion, escape reader, scalar
-column count, redraw and history-navigation implementation is removed. Product
-formatting, palette use outside editing, generation terminal suppression and
-semantic helpers with historical `repl_` names remain for the later removal audit;
-they are not an alternate input loop.
+column count, redraw and history-navigation implementation is removed. Manual table padding/elision, scalar/wcwidth cell measurement, the duplicate
+palette and generation termios implementation are also removed. Domain formatting
+and semantic helpers with historical `repl_` names are not a second editor.
 
 `tests/repl_pty.sh` retains its existing attachments, streaming, cancellation,
 reconnect and linear-surface coverage. Its production-process extension observes
 exact protocol input after Unicode/grapheme edits, history return, multiline CRLF
 paste and slash completion. It checks prompt bytes, color-disable rules, resize,
 Ctrl-L, editing interrupts and exact captured termios. TTY descriptors are 5
-while editing, 3 during generation, and 5 after reopening; repeated turns retain
+while editing, 5 in the separately admitted quiet-output scope, and 5 after reopening; repeated turns retain
 the same count. Optional `YVEX_REPL_MEMCHECK=valgrind make test-repl` runs the real
 chat process under a memory checker and fails on invalid accesses/definite leaks.
 
@@ -104,4 +111,5 @@ performance result. No weights are downloaded for terminal qualification.
 Runtime shared linkage was unnecessary for the current executable package.
 Vendoring, copying the binding, a local editor fallback and a toy acceptance
 consumer would not prove external ownership. Extending REPLAI with product
-semantics was rejected; ABI 1 expresses this cutover without a library change.
+semantics was rejected; base ABI 1 remains compatible. The 2026-09-30 implementation adds an independently
+qualified optional extension rather than reinterpreting that ABI.

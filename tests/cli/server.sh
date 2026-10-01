@@ -40,15 +40,19 @@ chmod 0700 "$SOCKET_ROOT"
 
 # Link the actual renderer; section GC excludes unrelated porcelain consumers.
 ${CC:-cc} -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -I. -Iinclude \
-    -Ibuild/generated -I"${REPLAI_PREFIX:-build/external/replai}/include" \
+    -I"${BUILD_DIR:-build}/generated" -I"${REPLAI_PREFIX:-build/external/replai}/include" \
     -ffunction-sections -fdata-sections \
-    tests/integration/cli_logs.c src/cli/io/events.c src/cli/io/out.c \
-    src/cli/io/terminal/posix.c src/core/status.c \
+    tests/integration/cli_logs.c src/cli/render/runtime.c src/cli/io/events.c src/cli/io/out.c \
+    src/cli/io/presentation.c src/cli/io/table.c src/cli/io/terminal/posix.c src/core/status.c \
+    "${REPLAI_PREFIX:-build/external/replai}/lib/libreplai_c.a" \
+    $(PKG_CONFIG_PATH="${REPLAI_PREFIX:-build/external/replai}/lib/pkgconfig" pkg-config --libs --static replai) \
     -pthread -Wl,--gc-sections -o "$OUT_DIR/log-renderer"
 NO_COLOR=1 "$OUT_DIR/log-renderer" >"$OUT_DIR/log-renderer.out"
 ${CC:-cc} -std=c11 -Wall -Wextra -Werror -I. -Iinclude \
     -I"${REPLAI_PREFIX:-build/external/replai}/include" -ffunction-sections -fdata-sections \
     tests/integration/terminal_scope.c src/cli/io/terminal/posix.c src/core/status.c \
+    "${REPLAI_PREFIX:-build/external/replai}/lib/libreplai_c.a" \
+    $(PKG_CONFIG_PATH="${REPLAI_PREFIX:-build/external/replai}/lib/pkgconfig" pkg-config --libs --static replai) \
     -pthread -Wl,--gc-sections -o "$OUT_DIR/terminal-scope"
 "$OUT_DIR/terminal-scope"
 env -u NO_COLOR TERM=xterm script -q -e -c "$OUT_DIR/log-renderer" \
@@ -69,7 +73,7 @@ fail()
 
 contains()
 {
-    grep -F -- "$2" "$1" >/dev/null || fail "$1 missing: $2"
+    python3 tests/support/human_field.py "$1" "$2" || fail "$1 missing: $2"
 }
 
 not_contains()
@@ -229,10 +233,10 @@ while test "$attempt" -lt 100; do
     sleep 0.02
 done
 test "$ready" -eq 1 || fail 'persistent host did not become ready'
-contains "$OUT_DIR/host.out" 'YVEX HOST · verified inference runtime'
-contains "$OUT_DIR/host.out" 'protocol 24'
+contains "$OUT_DIR/host.out" 'verified inference runtime'
+contains "$OUT_DIR/host.out" 'protocol: 24'
 contains "$OUT_DIR/host.out" '0/2 engines · 2 workers'
-contains "$OUT_DIR/host.out" 'events lifecycle · progress · resources'
+contains "$OUT_DIR/host.out" 'events: lifecycle · progress · resources'
 contains "$OUT_DIR/host.out" 'host ready · Ctrl-C to stop'
 not_contains "$OUT_DIR/host.out" '█'
 not_contains "$OUT_DIR/host.out" '▀'
@@ -371,15 +375,15 @@ run_client host stop >/dev/null
 wait "$server_pid"
 server_pid=
 contains "$OUT_DIR/server-terminal.typescript" 'YVEX 0.1.0 · HOST'
-contains "$OUT_DIR/server-terminal.typescript" '▀▀█▄ █ ▄█▀▀'
-contains "$OUT_DIR/server-terminal.typescript" 'HOST     0/2 engines · 2 workers'
-contains "$OUT_DIR/server-terminal.typescript" 'PROTOCOL 24'
-contains "$OUT_DIR/server-terminal.typescript" 'NATIVE'
+contains "$OUT_DIR/server-terminal.typescript" 'YVEX 0.1.0 · HOST'
+contains "$OUT_DIR/server-terminal.typescript" 'host: 0/2 engines · 2 workers'
+contains "$OUT_DIR/server-terminal.typescript" 'protocol: 24'
+contains "$OUT_DIR/server-terminal.typescript" 'native'
 not_contains "$OUT_DIR/server-terminal.typescript" 'LOAD   deepseek4-v4-flash-dspark · g1'
 contains "$OUT_DIR/server-terminal.typescript" 'FAIL'
 contains "$OUT_DIR/server-terminal.typescript" 'deepseek4-v4-flash-dspark-'
 contains "$OUT_DIR/server-terminal.typescript" ' generation=0 backend=CPU'
-contains "$OUT_DIR/server-terminal.typescript" 'EVENTS   lifecycle · progress · resources'
+contains "$OUT_DIR/server-terminal.typescript" 'events: lifecycle · progress · resources'
 contains "$OUT_DIR/server-terminal.typescript" 'host ready · Ctrl-C to stop'
 not_contains "$OUT_DIR/server-terminal.typescript" 'CONTROL'
 not_contains "$OUT_DIR/server-terminal.typescript" 'OPERATE'
@@ -389,7 +393,7 @@ not_contains "$OUT_DIR/server-terminal.typescript" 'yvex[host] >'
 not_contains "$OUT_DIR/server-terminal.typescript" 'yvex[multi-engine] >'
 test ! -e "$SOCKET_PATH"
 
-# Ordinary 80-column terminals keep the same compact mark beside the facts.
+# Ordinary 80-column terminals keep the same complete semantic records.
 HOME="$HOME_ROOT" XDG_RUNTIME_DIR="$SOCKET_ROOT" NO_COLOR=1 TERM=xterm-256color \
     script -q -f -e -c \
         "stty cols 80 rows 30; $YVEX_BIN serve --openai off" \
@@ -411,9 +415,8 @@ test "$ready" -eq 1 || fail 'compact terminal host did not become ready'
 run_client host stop >/dev/null
 wait "$server_pid"
 server_pid=
-contains "$OUT_DIR/server-compact.typescript" '▀▀█▄ █ ▄█▀▀'
 contains "$OUT_DIR/server-compact.typescript" 'YVEX 0.1.0 · HOST'
-contains "$OUT_DIR/server-compact.typescript" 'OPENAI   disabled'
+contains "$OUT_DIR/server-compact.typescript" 'OpenAI: disabled'
 not_contains "$OUT_DIR/server-compact.typescript" 'Interactive host console'
 test ! -e "$SOCKET_PATH"
 
@@ -458,29 +461,19 @@ for width, colored in [(40, False), (60, False), (76, False), (80, False),
         text = ansi.sub('', raw).replace('\r\n', '\n')
         banner = text.split('host ready', 1)[0]
         lines = [line for line in banner.splitlines() if line.strip()]
-        assert len(lines) == (8 if width >= 76 else 7), lines
+        assert 7 <= len(lines) <= 18, lines
         for line in lines:
             cells = sum(0 if unicodedata.combining(c) else
                         2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1
                         for c in line)
-            assert cells < width, (width, cells, line)
+            assert cells <= width, (width, cells, line)
         for fact in ('YVEX 0.1.0 · HOST', 'verified inference runtime',
-                     'HOST     0/2 engines · 2 workers', 'PROTOCOL 24',
-                     'OPENAI   disabled', 'lifecycle', 'progress', 'resources'):
-            assert fact in banner, (width, fact)
-        native = next(line.split('NATIVE   ', 1)[1] for line in lines if 'NATIVE   ' in line)
+                     'host 0/2 engines · 2 workers', 'protocol 24',
+                     'OpenAI disabled', 'lifecycle', 'progress', 'resources'):
+            assert re.sub(r'\s+', '', fact) in re.sub(r'\s+', '', banner), (width, fact, banner)
         expected = str(runtime / 'yvex/yvexd.sock')
-        if native.startswith('...'):
-            assert expected.endswith(native[3:]), (native, expected)
-        else:
-            assert native == expected
-        if width >= 76:
-            assert lines[0].index('YVEX') == 29
-            for label in ('HOST', 'PROTOCOL', 'NATIVE', 'OPENAI', 'EVENTS'):
-                line = next(line for line in lines if f'{label:<8} ' in line)
-                assert line.index(label) == 29, (label, line)
-        else:
-            assert '█' not in banner
+        assert expected in re.sub(r'\s+', '', banner), (expected, banner)
+        assert '...' not in banner and '█' not in banner
         if not colored:
             captures[width] = banner
         else:
