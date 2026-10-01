@@ -69,13 +69,27 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 37 | 30 | 0 | 1 | 6 |
+| 38 | 31 | 0 | 1 | 6 |
 <!-- task-counts:end -->
 
-**30/37 selected Tasks complete.** This denominator includes the significant
+**31/38 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
-completed CLI/REPLAI refoundation. It is not YVEX product completion. Research
+completed CLI/REPLAI refoundation and native macOS qualification. It is not
+YVEX product completion. Research
 candidates are not selected Tasks.
+
+## Independently selected macOS qualification
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `PLATFORM.MACOS.NATIVE.0` | Native macOS build, authenticated local host and CPU lifecycle | P1 | ✅ COMPLETE | Native CPU, authenticated host, acquisition/state and real CLI/PTY qualified on Mac and Linux; 13 PASS per host plus ownership/build/documentation contracts; [evidence](../evaluation/macos-native.md). Metal, full-model conversation and YAI/Studio/SDK composition retain independent gates. |
+
+The operator selected this Task on 2026-09-30. Implementation is isolated on
+`feature/macos-native`. Published Spark CLI/REPLAI refoundation at `6c522959`
+is integrated; unpublished work and Exon primary checkouts remain untouched.
+Source ownership and existing protocol meanings remain authoritative.
+`progression_decision=proceed`, `downstream_safe=true` for bounded native CPU,
+host and terminal execution only; no next platform/model wave is selected.
 
 ## Delivery progression
 

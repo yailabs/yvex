@@ -5,6 +5,7 @@
  * External activation files become bounded typed views, never model or tokenizer authority.
  */
 #define _GNU_SOURCE
+#include <yvex/internal/platform.h>
 #include <yvex/internal/moe.h>
 
 #include <yvex/internal/runtime.h>
@@ -221,7 +222,7 @@ static int input_serialize(const yvex_moe_input_summary *summary,
                            const float *activations, const unsigned int *token_ids,
                            unsigned char **out, size_t *out_bytes, yvex_error *err)
 {
-    unsigned long long records_bytes, activation_offset, token_offset, total, index;
+    unsigned long long records_bytes, activation_offset, token_offset, total = 0ull, index;
     unsigned char *bytes, *cursor;
     if (out) *out = NULL;
     if (out_bytes) *out_bytes = 0u;
@@ -290,7 +291,7 @@ static int input_parse(yvex_moe_input *input, yvex_error *err)
 {
     yvex_moe_input_summary *summary = &input->summary;
     const unsigned char *bytes = input->mapping, *cursor;
-    unsigned long long records_bytes, activation_offset, token_offset, total, index;
+    unsigned long long records_bytes, activation_offset, token_offset, total = 0ull, index;
     if (!bytes || input->mapping_bytes < MOE_INPUT_HEADER_BYTES ||
         memcmp(bytes, moe_input_magic, sizeof(moe_input_magic)) != 0)
         return input_refuse(err, YVEX_ERR_FORMAT, "MoE input magic or header is invalid");
@@ -366,10 +367,10 @@ static int input_snapshot_valid(const yvex_moe_input *input)
            (fstat(input->fd, &current) == 0 && current.st_dev == input->snapshot.st_dev &&
             current.st_ino == input->snapshot.st_ino && current.st_mode == input->snapshot.st_mode &&
             current.st_size == input->snapshot.st_size &&
-            current.st_mtim.tv_sec == input->snapshot.st_mtim.tv_sec &&
-            current.st_mtim.tv_nsec == input->snapshot.st_mtim.tv_nsec &&
-            current.st_ctim.tv_sec == input->snapshot.st_ctim.tv_sec &&
-            current.st_ctim.tv_nsec == input->snapshot.st_ctim.tv_nsec);
+            yvex_platform_stat_mtime(&current).tv_sec == yvex_platform_stat_mtime(&input->snapshot).tv_sec &&
+            yvex_platform_stat_mtime(&current).tv_nsec == yvex_platform_stat_mtime(&input->snapshot).tv_nsec &&
+            yvex_platform_stat_ctime(&current).tv_sec == yvex_platform_stat_ctime(&input->snapshot).tv_sec &&
+            yvex_platform_stat_ctime(&current).tv_nsec == yvex_platform_stat_ctime(&input->snapshot).tv_nsec);
 }
 
 int yvex_moe_input_open_file(yvex_moe_input **out, const char *path,

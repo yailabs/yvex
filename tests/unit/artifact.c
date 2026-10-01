@@ -616,7 +616,12 @@ int yvex_test_artifact(void)
         YVEX_TEST_ASSERT(memcmp(magic, "GGUF", sizeof(magic)) == 0, "positioned bytes");
     }
     rc = yvex_artifact_cache_release(artifact, 0ull, yvex_artifact_size(artifact), &err);
+#ifdef __APPLE__
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED,
+                     "Darwin refuses unsupported range cache eviction explicitly");
+#else
     YVEX_TEST_ASSERT(rc == YVEX_OK, "verified artifact cache range released");
+#endif
     rc = yvex_artifact_cache_release(artifact, yvex_artifact_size(artifact), 1ull, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS, "out-of-range cache release refused");
     yvex_artifact_close(artifact);

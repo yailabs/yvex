@@ -1,4 +1,5 @@
 /* Deployment capacity reflects current host and cgroup pressure, never package identity. */
+#include <yvex/internal/platform.h>
 #include "src/runtime/private.h"
 
 #include <errno.h>
@@ -117,7 +118,13 @@ static int runtime_system_memory(unsigned long long *total,
         if (fclose(meminfo) != 0) return 0;
     }
     if (!system_total || !system_available) {
-#if defined(_SC_PHYS_PAGES) && defined(_SC_AVPHYS_PAGES)
+#if defined(__APPLE__)
+        unsigned long long native_total, native_available;
+        (void)total_pages; (void)available_pages; (void)page_bytes;
+        if (!yvex_platform_system_memory(&native_total, &native_available)) return 0;
+        if (!system_total) system_total = native_total;
+        if (!system_available) system_available = native_available;
+#elif defined(_SC_PHYS_PAGES) && defined(_SC_AVPHYS_PAGES)
         total_pages = sysconf(_SC_PHYS_PAGES);
         available_pages = sysconf(_SC_AVPHYS_PAGES);
         page_bytes = sysconf(_SC_PAGESIZE);

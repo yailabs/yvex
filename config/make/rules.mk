@@ -39,10 +39,10 @@ check-operator-registry: generate-operator-registry
 	python3 $(OPERATOR_REGISTRY_GENERATOR) --registry $(OPERATOR_REGISTRY_SOURCE) --output "$$first"; \
 	python3 $(OPERATOR_REGISTRY_GENERATOR) --registry $(OPERATOR_REGISTRY_SOURCE) --output "$$second"; \
 	diff -ru "$$first" "$$second" >/dev/null
-$(LIBYVEX): $(CORE_OBJS)
+$(LIBYVEX): $(CORE_OBJS) $(if $(filter Darwin,$(YVEX_HOST_OS)),tools/archive_darwin.py)
 	@mkdir -p $(@D)
 	@set -eu; tmp="$@.tmp.$$$$"; trap 'rm -f "$$tmp"' EXIT HUP INT TERM; \
-		$(AR) rcsP "$$tmp" $^; mv "$$tmp" "$@"; trap - EXIT HUP INT TERM
+		$(YVEX_ARCHIVER) "$$tmp" $(CORE_OBJS); mv "$$tmp" "$@"; trap - EXIT HUP INT TERM
 
 # Linker changes must invalidate products even when no C source changed.
 $(YVEX_BIN) $(TEST_RUNNER) $(QUANT_TEST_RUNNER) $(ARTIFACT_TEST_RUNNER) \
@@ -355,18 +355,19 @@ $(CUDA_TEST_RUNNER): $(CUDA_TEST_MAIN_OBJ) $(CUDA_TEST_UNIT_OBJS) $(LIBYVEX) tes
 clean:
 	@set -eu; \
 	build_dir='$(BUILD_DIR)'; \
+	temporary_dir=$${TMPDIR:-/tmp}; temporary_dir=$${temporary_dir%/}; \
 	case "/$$build_dir/" in */../*|*/./*) \
 		printf 'clean: refusing non-canonical BUILD_DIR: %s\n' "$$build_dir" >&2; exit 1;; esac; \
 	case "$$build_dir" in *//*) \
 		printf 'clean: refusing repeated path separators: %s\n' "$$build_dir" >&2; exit 1;; esac; \
 	case "$$build_dir" in \
-		build|build/*|/tmp/yvex-*/build|/tmp/yvex.*/build) ;; \
+		build|build/*|/tmp/yvex-*/build|/tmp/yvex.*/build|"$$temporary_dir"/yvex-*/build|"$$temporary_dir"/yvex.*/build) ;; \
 		*) printf 'clean: refusing unowned BUILD_DIR: %s\n' "$$build_dir" >&2; exit 1 ;; \
 	esac; \
 	if [ -L "$$build_dir" ]; then \
 		printf 'clean: refusing symlink BUILD_DIR: %s\n' "$$build_dir" >&2; exit 1; \
 	fi; \
-	if test "$$(realpath -m "$$build_dir")" != "$$(realpath -ms "$$build_dir")"; then \
+	if ! python3 tools/check_build_path.py "$$build_dir"; then \
 		printf 'clean: refusing symlink ancestor: %s\n' "$$build_dir" >&2; exit 1; \
 	fi; \
 	if [ -d "$$build_dir" ]; then \

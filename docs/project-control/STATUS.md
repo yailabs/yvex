@@ -17,7 +17,7 @@ publication: {html: true, pdf: true, index: true}
 <!-- maturity-counts:start -->
 | Established | Partial | Open | Later | Total |
 | ---: | ---: | ---: | ---: | ---: |
-| 32 | 44 | 59 | 14 | 149 |
+| 33 | 44 | 58 | 14 | 149 |
 <!-- maturity-counts:end -->
 
 ## Product, engineering and qualification
@@ -445,7 +445,7 @@ tokenizer kind is explicitly weaker than executing its processor.
 | Generic external harness consumption | 🟡 PARTIAL | Typed facts serve current native and compatibility consumers. | Independently qualify additional real consumers without frontend leakage. | X | [C API][c-api]; [runtime contract][runtime-contract] |
 | SDK-ready client boundary | 🟡 PARTIAL | Consumable C interfaces exist; broad SDK/platform lifecycle evidence is incomplete. | Supported packaging, error/cancel semantics and consumer tests. | X | [C API][c-api] |
 | Linux terminal execution | 🟢 ESTABLISHED | Private POSIX adapter and REPLAI have real PTY/lifetime evidence. | Preserve submission, interrupt, restoration and cleanup. | X | [Editor ADR][editor]; [terminal tests][terminal-tests] |
-| macOS terminal execution | 🔴 OPEN | Portable/POSIX structure is not executed macOS qualification. | Real platform build and interaction/lifecycle qualification. | X | [Platform boundary][system]; [editor ADR][editor] |
+| macOS terminal execution | 🟢 ESTABLISHED | macOS arm64 native build, real REPLAI PTY edit/paste/completion/cancel, restored terminal and bounded CPU host lifecycle; 13 selected native tests pass on Mac and Linux. | Preserve the earned native boundary; Metal, full conversation models and YAI/Studio/SDK composition retain independent gates. | X | [Native qualification](../evaluation/macos-native.md); [platform boundary][system]; [editor ADR][editor] |
 | Windows Console/ConPTY execution | 🔴 OPEN | No qualified Windows product terminal backend. | Platform mechanics beneath the same semantic contract, independently tested. | X | [Platform boundary][system] |
 | Remote production transport | 🔴 OPEN | A restricted SSH identity/status bootstrap has bounded two-machine fixture evidence, but no supervised production management endpoint or mutating operation contract. Local/loopback inference is not remote serving. | Persistent secure deployment, governed lifecycle operations and reliability evidence. | X | [Remote management bootstrap][remote-management]; [Compatibility scope][openai] |
 | Authentication | 🔴 OPEN | Bootstrap v1 authenticates pinned SSH host and enrolled Ed25519 client keys at its narrow scope; broad product remote request authorization remains unqualified. | Persistent listener security audit, authorization for governed operations and key-rotation/revocation evidence. | X | [Remote management bootstrap][remote-management] |
@@ -455,8 +455,9 @@ tokenizer kind is explicitly weaker than executing its processor.
 Portable architecture means product semantics → generic interaction contract →
 platform adapter. Linux/POSIX and macOS may implement mechanics with TTY/PTY,
 termios and signals; Windows may use Console/ConPTY and console-control events.
-These are **platform mechanisms**, not generic semantic types. Only Linux is
-execution-qualified. Editing remains REPLAI-owned; YVEX owns submission
+These are **platform mechanisms**, not generic semantic types. Linux and
+macOS arm64 carry bounded native terminal/CPU fixture qualification; this does
+not qualify every model or another accelerator. Editing remains REPLAI-owned; YVEX owns submission
 meaning, generation cancellation and semantic rendering.
 
 

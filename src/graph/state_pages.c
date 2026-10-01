@@ -9,6 +9,7 @@
  * therefore refuses growth before state mutation rather than relying on an eventual OOM fault.
  */
 #include "src/graph/private.h"
+#include <yvex/internal/platform.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -20,20 +21,6 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
-
-#ifndef MFD_CLOEXEC
-#define MFD_CLOEXEC 0x0001u
-#endif
-#ifndef MFD_ALLOW_SEALING
-#define MFD_ALLOW_SEALING 0x0002u
-#endif
-#ifndef F_ADD_SEALS
-#define F_ADD_SEALS 1033
-#define F_SEAL_SEAL 0x0001
-#define F_SEAL_SHRINK 0x0002
-#define F_SEAL_GROW 0x0004
-#define F_SEAL_WRITE 0x0008
-#endif
 
 struct yvex_graph_state_page_pool {
     pthread_mutex_t mutex;
@@ -478,6 +465,7 @@ static int pages_shared_open(const yvex_graph_state_page_store *store,
     state_shared_backing *backing = NULL;
     unsigned long long page;
     int fd = -1;
+    yvex_platform_backing native = {-1, -1};
     if (out) *out = NULL;
     if (!store || !out || !store->address || !store->mapped_bytes)
         return pages_reject(err, YVEX_ERR_INVALID_ARG,
@@ -519,8 +507,9 @@ static int pages_shared_open(const yvex_graph_state_page_store *store,
                            store->system_page_bytes,
                            &backing->resident_bytes))
         goto overflow;
-    fd = memfd_create("yvex-state-prefix", MFD_CLOEXEC | MFD_ALLOW_SEALING);
-    if (fd < 0 || ftruncate(fd, (off_t)backing->mapped_bytes) != 0)
+    if (yvex_platform_backing_open(&native) != 0) goto io;
+    fd = native.write_fd;
+    if (ftruncate(fd, (off_t)backing->mapped_bytes) != 0)
         goto io;
     for (page = 0ull; page < backing->system_page_count; ++page) {
         const unsigned char *bytes;
@@ -531,12 +520,10 @@ static int pages_shared_open(const yvex_graph_state_page_store *store,
                                 (off_t)(page * store->system_page_bytes)))
             goto io;
     }
-    backing->fd = fd;
+    if (!pages_shared_identity(backing, store)) goto io;
+    backing->fd = yvex_platform_backing_finish(&native);
+    if (backing->fd < 0) goto io;
     fd = -1;
-    if (!pages_shared_identity(backing, store) ||
-        fcntl(backing->fd, F_ADD_SEALS,
-              F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE | F_SEAL_SEAL) != 0)
-        goto io;
     atomic_init(&backing->references, 1ull);
     *out = backing;
     yvex_error_clear(err);
@@ -553,7 +540,7 @@ io:
     pages_reject(err, YVEX_ERR_IO,
                  "immutable state prefix backing creation failed");
 failed:
-    if (fd >= 0) (void)close(fd);
+    yvex_platform_backing_close(&native);
     if (backing) {
         if (backing->fd >= 0) (void)close(backing->fd);
         free(backing->committed);
@@ -612,9 +599,8 @@ static int pages_store_install_shared(yvex_graph_state_page_store *store,
                      "state prefix release accounting overflowed");
         goto failed;
     }
-    if (mremap(mapping, (size_t)store->mapped_bytes,
-               (size_t)store->mapped_bytes,
-               MREMAP_MAYMOVE | MREMAP_FIXED, store->address) == MAP_FAILED) {
+    if (yvex_platform_mapping_replace(mapping, store->address,
+                                      (size_t)store->mapped_bytes) != 0) {
         (void)pthread_mutex_unlock(&store->pool->mutex);
         pages_reject(err, YVEX_ERR_NOMEM,
                      "state prefix mapping replacement failed");
@@ -798,9 +784,8 @@ static int pages_store_replace_anonymous(yvex_graph_state_page_store *store,
 #endif
     mapping = mmap(NULL, (size_t)store->mapped_bytes, protection, flags, -1, 0);
     if (mapping == MAP_FAILED ||
-        mremap(mapping, (size_t)store->mapped_bytes,
-               (size_t)store->mapped_bytes,
-               MREMAP_MAYMOVE | MREMAP_FIXED, store->address) == MAP_FAILED) {
+        yvex_platform_mapping_replace(mapping, store->address,
+                                      (size_t)store->mapped_bytes) != 0) {
         if (mapping != MAP_FAILED)
             (void)munmap(mapping, (size_t)store->mapped_bytes);
         return pages_reject(err, YVEX_ERR_NOMEM,

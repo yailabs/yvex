@@ -4,6 +4,7 @@
  * Documents own their strings; data views retain one stable regular-file mapping. Calibration
  * evidence informs numeric policy but never selects artifact qtypes.
  */
+#include <yvex/internal/platform.h>
 #include <fcntl.h>
 #include <math.h>
 #include <stddef.h>
@@ -342,10 +343,10 @@ int yvex_imatrix_data_validate(const yvex_imatrix_data *data, yvex_error *err) {
     if (lstat(data->path, &current) != 0 || !S_ISREG(current.st_mode) ||
         current.st_dev != data->snapshot.st_dev || current.st_ino != data->snapshot.st_ino ||
         current.st_size != data->snapshot.st_size ||
-        current.st_mtim.tv_sec != data->snapshot.st_mtim.tv_sec ||
-        current.st_mtim.tv_nsec != data->snapshot.st_mtim.tv_nsec ||
-        current.st_ctim.tv_sec != data->snapshot.st_ctim.tv_sec ||
-        current.st_ctim.tv_nsec != data->snapshot.st_ctim.tv_nsec) {
+        yvex_platform_stat_mtime(&current).tv_sec != yvex_platform_stat_mtime(&data->snapshot).tv_sec ||
+        yvex_platform_stat_mtime(&current).tv_nsec != yvex_platform_stat_mtime(&data->snapshot).tv_nsec ||
+        yvex_platform_stat_ctime(&current).tv_sec != yvex_platform_stat_ctime(&data->snapshot).tv_sec ||
+        yvex_platform_stat_ctime(&current).tv_nsec != yvex_platform_stat_ctime(&data->snapshot).tv_nsec) {
         yvex_error_set(err, YVEX_ERR_IO, "imatrix.data", "imatrix snapshot drifted after admission");
         return YVEX_ERR_IO;
     }

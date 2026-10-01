@@ -6,6 +6,7 @@
  */
 
 #define _GNU_SOURCE
+#include <yvex/internal/platform.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -40,10 +41,10 @@ static void snapshot_from_stat(const struct stat *st, yvex_artifact_snapshot *ou
     out->device = (unsigned long long)st->st_dev;
     out->inode = (unsigned long long)st->st_ino;
     out->size = (unsigned long long)st->st_size;
-    out->mtime_seconds = (long long)st->st_mtim.tv_sec;
-    out->mtime_nanoseconds = (long long)st->st_mtim.tv_nsec;
-    out->ctime_seconds = (long long)st->st_ctim.tv_sec;
-    out->ctime_nanoseconds = (long long)st->st_ctim.tv_nsec;
+    out->mtime_seconds = (long long)yvex_platform_stat_mtime(st).tv_sec;
+    out->mtime_nanoseconds = (long long)yvex_platform_stat_mtime(st).tv_nsec;
+    out->ctime_seconds = (long long)yvex_platform_stat_ctime(st).tv_sec;
+    out->ctime_nanoseconds = (long long)yvex_platform_stat_ctime(st).tv_nsec;
 }
 
 static int artifact_path_open(const char *path) {
@@ -54,6 +55,8 @@ static int artifact_path_open(const char *path) {
     how.flags = O_RDONLY | O_CLOEXEC;
     how.resolve = RESOLVE_NO_SYMLINKS | RESOLVE_NO_MAGICLINKS;
     return (int)syscall(SYS_openat2, AT_FDCWD, path, &how, sizeof(how));
+#elif defined(__APPLE__)
+    return yvex_core_file_open_readonly(path);
 #else
     (void)path;
     errno = ENOTSUP;
@@ -240,8 +243,12 @@ int yvex_artifact_cache_release(const yvex_artifact *artifact,
                        "cache-release range exceeds the artifact or platform offset contract");
         return YVEX_ERR_BOUNDS;
     }
-    advice_rc = posix_fadvise(artifact->fd, (off_t)offset, (off_t)byte_count,
-                              POSIX_FADV_DONTNEED);
+    advice_rc = yvex_platform_file_cache_release(artifact->fd, (off_t)offset, (off_t)byte_count);
+    if (advice_rc == ENOTSUP) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "artifact.cache-release",
+                       "range cache-release advice is unavailable on this platform");
+        return YVEX_ERR_UNSUPPORTED;
+    }
     if (advice_rc != 0) {
         yvex_error_setf(err, YVEX_ERR_IO, "artifact.cache-release",
                         "kernel cache release failed: %s", strerror(advice_rc));

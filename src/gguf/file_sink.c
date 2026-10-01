@@ -6,6 +6,7 @@
  * completeness.
  */
 #define _GNU_SOURCE
+#include <yvex/internal/platform.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -144,36 +145,36 @@ static int file_stat_core_matches(const yvex_gguf_file_sink_summary *summary,
 
 static void file_stat_capture_validated(yvex_gguf_file_sink_summary *summary,
                                         const struct stat *file_stat) {
-    summary->validated_mtime_seconds = (long long)file_stat->st_mtim.tv_sec;
-    summary->validated_mtime_nanoseconds = (long long)file_stat->st_mtim.tv_nsec;
-    summary->validated_ctime_seconds = (long long)file_stat->st_ctim.tv_sec;
-    summary->validated_ctime_nanoseconds = (long long)file_stat->st_ctim.tv_nsec;
+    summary->validated_mtime_seconds = (long long)yvex_platform_stat_mtime(file_stat).tv_sec;
+    summary->validated_mtime_nanoseconds = (long long)yvex_platform_stat_mtime(file_stat).tv_nsec;
+    summary->validated_ctime_seconds = (long long)yvex_platform_stat_ctime(file_stat).tv_sec;
+    summary->validated_ctime_nanoseconds = (long long)yvex_platform_stat_ctime(file_stat).tv_nsec;
 }
 
 static int file_stat_validated_matches(const yvex_gguf_file_sink_summary *summary,
                                        const struct stat *file_stat) {
     return file_stat_core_matches(summary, file_stat) &&
-           (long long)file_stat->st_mtim.tv_sec == summary->validated_mtime_seconds &&
-           (long long)file_stat->st_mtim.tv_nsec == summary->validated_mtime_nanoseconds &&
-           (long long)file_stat->st_ctim.tv_sec == summary->validated_ctime_seconds &&
-           (long long)file_stat->st_ctim.tv_nsec == summary->validated_ctime_nanoseconds;
+           (long long)yvex_platform_stat_mtime(file_stat).tv_sec == summary->validated_mtime_seconds &&
+           (long long)yvex_platform_stat_mtime(file_stat).tv_nsec == summary->validated_mtime_nanoseconds &&
+           (long long)yvex_platform_stat_ctime(file_stat).tv_sec == summary->validated_ctime_seconds &&
+           (long long)yvex_platform_stat_ctime(file_stat).tv_nsec == summary->validated_ctime_nanoseconds;
 }
 
 static void file_stat_capture_published(yvex_gguf_file_sink_summary *summary,
                                         const struct stat *file_stat) {
-    summary->published_mtime_seconds = (long long)file_stat->st_mtim.tv_sec;
-    summary->published_mtime_nanoseconds = (long long)file_stat->st_mtim.tv_nsec;
-    summary->published_ctime_seconds = (long long)file_stat->st_ctim.tv_sec;
-    summary->published_ctime_nanoseconds = (long long)file_stat->st_ctim.tv_nsec;
+    summary->published_mtime_seconds = (long long)yvex_platform_stat_mtime(file_stat).tv_sec;
+    summary->published_mtime_nanoseconds = (long long)yvex_platform_stat_mtime(file_stat).tv_nsec;
+    summary->published_ctime_seconds = (long long)yvex_platform_stat_ctime(file_stat).tv_sec;
+    summary->published_ctime_nanoseconds = (long long)yvex_platform_stat_ctime(file_stat).tv_nsec;
 }
 
 static int file_stat_published_matches(const yvex_gguf_file_sink_summary *summary,
                                        const struct stat *file_stat) {
     return file_stat_core_matches(summary, file_stat) &&
-           (long long)file_stat->st_mtim.tv_sec == summary->published_mtime_seconds &&
-           (long long)file_stat->st_mtim.tv_nsec == summary->published_mtime_nanoseconds &&
-           (long long)file_stat->st_ctim.tv_sec == summary->published_ctime_seconds &&
-           (long long)file_stat->st_ctim.tv_nsec == summary->published_ctime_nanoseconds;
+           (long long)yvex_platform_stat_mtime(file_stat).tv_sec == summary->published_mtime_seconds &&
+           (long long)yvex_platform_stat_mtime(file_stat).tv_nsec == summary->published_mtime_nanoseconds &&
+           (long long)yvex_platform_stat_ctime(file_stat).tv_sec == summary->published_ctime_seconds &&
+           (long long)yvex_platform_stat_ctime(file_stat).tv_nsec == summary->published_ctime_nanoseconds;
 }
 
 static char *file_string_copy(const char *text) {
@@ -299,7 +300,7 @@ static int file_directory_open(const char *path) {
     if (errno != ENOSYS && errno != EINVAL)
         return -1;
 #endif
-    return open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    return yvex_core_directory_open(path);
 }
 
 static int file_pwrite_exact(yvex_gguf_file_sink *sink, const unsigned char *bytes,
@@ -637,7 +638,7 @@ static int file_sink_prepare_temporary(yvex_gguf_file_sink **sink_address,
     }
     fallocate_status = sink->options.inject_preallocate_failure
                            ? ENOSPC
-                           : posix_fallocate(sink->file_fd, 0, (off_t)writer->final_file_bytes);
+                           : yvex_platform_file_preallocate(sink->file_fd, (off_t)writer->final_file_bytes);
     if (fallocate_status != 0) {
         yvex_gguf_file_sink_release(sink_address);
         return file_sink_fail(failure, YVEX_GGUF_FILE_PREALLOCATE, fallocate_status, ULLONG_MAX,

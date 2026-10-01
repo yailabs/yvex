@@ -2,6 +2,7 @@
  * A runtime model owns authenticated artifacts, immutable plans, weights, and reusable resources;
  * sessions own mutable state. It publishes only after full admission and cleans up in reverse.
  */
+#include <yvex/internal/platform.h>
 #include "src/runtime/private.h"
 #include <yvex/internal/backend.h>
 #include <yvex/internal/core.h>
@@ -991,7 +992,8 @@ int yvex_model_engine_open(yvex_model_engine **out, const yvex_model_engine_open
         request, YVEX_RUNTIME_LIFECYCLE_MATERIALIZATION_OPEN, 0ull, 1ull, err);
     yvex_materialization_options_default(&materialization_options);
     materialization_options.require_complete_admission = 1;
-    materialization_options.release_artifact_cache_after_read = 1;
+    materialization_options.release_artifact_cache_after_read =
+        yvex_platform_cache_release_available();
     if (rc == YVEX_OK)
         rc = yvex_runtime_binding_import_materialization(
             model->binding, model->artifact, &materialization_options,

@@ -23,6 +23,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifdef __APPLE__
+#include <libproc.h>
+#include <sys/sysctl.h>
+#endif
+
 static const char *const literal_pair_0[] = { "deleted: 0",
     "status: model-download-cleanup-blocked"};
 
@@ -127,6 +132,51 @@ static int model_download_read_active_process(const char *active_path, pid_t *pi
 static void model_download_find_provider_processes(
     const char *local_source_dir, yvex_model_download_process_match *match)
 {
+#ifdef __APPLE__
+    pid_t *pids;
+    int capacity, count, index;
+    if (!match) return;
+    memset(match, 0, sizeof(*match));
+    match->first_pid = match->first_pgid = -1;
+    if (!local_source_dir || !local_source_dir[0]) return;
+    capacity = proc_listallpids(NULL, 0);
+    if (capacity <= 0 || capacity > 1000000) return;
+    capacity += 64;
+    pids = calloc((size_t)capacity, sizeof(*pids));
+    if (!pids) return;
+    count = proc_listallpids(pids, capacity * (int)sizeof(*pids));
+    if (count > capacity) count = capacity;
+    for (index = 0; index < count; ++index) {
+        int mib[3] = {CTL_KERN, KERN_PROCARGS2, pids[index]}, argc, argument;
+        char raw[8192], command[8192];
+        size_t bytes = sizeof(raw), cursor = sizeof(argc), used = 0u;
+        if (pids[index] <= 0 || sysctl(mib, 3, raw, &bytes, NULL, 0) != 0 ||
+            bytes < sizeof(argc)) continue;
+        memcpy(&argc, raw, sizeof(argc));
+        if (argc <= 0 || argc > 4096) continue;
+        while (cursor < bytes && raw[cursor]) ++cursor; /* executable path */
+        while (cursor < bytes && !raw[cursor]) ++cursor;
+        for (argument = 0; argument < argc && cursor < bytes; ++argument) {
+            while (cursor < bytes && raw[cursor] && used + 1u < sizeof(command))
+                command[used++] = raw[cursor++];
+            if (cursor >= bytes || raw[cursor]) break;
+            ++cursor;
+            if (used + 1u < sizeof(command)) command[used++] = ' ';
+        }
+        command[used] = '\0';
+        if (argument != argc || !strstr(command, local_source_dir) ||
+            (!strstr(command, "hf") && !strstr(command, "huggingface") &&
+             !strstr(command, "gh") && !strstr(command, "fake-hf") &&
+             !strstr(command, "fake-gh"))) continue;
+        match->count++;
+        if (match->first_pid <= 0) {
+            pid_t group = getpgid(pids[index]);
+            match->first_pid = pids[index];
+            match->first_pgid = group > 0 ? group : pids[index];
+        }
+    }
+    free(pids);
+#else
     DIR *proc;
     struct dirent *ent;
 
@@ -176,6 +226,7 @@ static void model_download_find_provider_processes(
         }
     }
     closedir(proc);
+#endif
 }
 
 static int model_download_resolve_for_control(int arg_count, char **args, int start_index,

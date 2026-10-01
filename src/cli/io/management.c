@@ -1,5 +1,6 @@
 /* Restricted SSH forced-command projection for device management v1. */
 #define _POSIX_C_SOURCE 200809L
+#include <yvex/internal/platform.h>
 #include "src/cli/io/private.h"
 #include <yvex/internal/core.h>
 #include <ctype.h>
@@ -417,8 +418,7 @@ static int management_trust_change(int argc, char **argv, int enroll)
             !management_safe_command_path(argv[4]) ||
             !management_safe_command_path(path))
             return management_local_refuse("peer_or_host_identity_mismatch");
-        executable_length = readlink("/proc/self/exe", executable,
-                                     sizeof(executable) - 1u);
+        executable_length = yvex_platform_executable(executable, sizeof(executable));
         if (executable_length <= 0 || executable_length >= (ssize_t)sizeof(executable))
             return management_local_refuse("executable_identity_unavailable");
         executable[executable_length] = '\0';

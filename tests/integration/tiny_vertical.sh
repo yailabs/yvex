@@ -8,6 +8,19 @@ TINY_GENERATOR=${TINY_GENERATOR:-tests/integration/tiny_model.py}
 NATIVE_TURN=${NATIVE_TURN:-build/tests/native_turn}
 . tests/support/cleanup.sh
 
+if test "${YVEX_TEST_FIXTURE_CAPACITY:-0}" = 1; then
+    if test -n "${YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES+x}${YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES+x}${YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES+x}"; then
+        printf '%s\n' 'tiny fixture: declared capacity cannot replace caller-injected capacity facts' >&2
+        exit 1
+    fi
+    export YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES=137438953472
+    export YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES=137438953472
+    printf '%s\n' 'tiny fixture: declared 128 GiB admission capacity; not host memory evidence' >&2
+fi
+
+if test "$(uname -s)" = Darwin; then
+    export TMPDIR=/private/tmp
+fi
 root=$(mktemp -d "${TMPDIR:-/tmp}/yvex-tiny-vertical.XXXXXX")
 runtime="$root/runtime"
 home="$root/home"
@@ -816,16 +829,15 @@ HOME="$home" XDG_RUNTIME_DIR="$runtime" "$NATIVE_TURN" \
     --max-new-tokens 1 a >"$root/turn.shutdown.out" 2>"$root/turn.shutdown.err"
 grep -Fx 'ok' "$root/turn.shutdown.out" >/dev/null
 python3 - "$server_pid" <<'PY'
-import os, pathlib, signal, sys, time
+import os, signal, subprocess, sys, time
 pid = int(sys.argv[1])
 started = time.monotonic()
 os.kill(pid, signal.SIGINT)
 while time.monotonic() - started < 10:
-    try:
-        state = pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
-    except FileNotFoundError:
-        break
-    if state == "Z":
+    status = subprocess.run(["ps", "-p", str(pid), "-o", "stat="],
+                            capture_output=True, text=True)
+    state = status.stdout.strip()
+    if not state or state.startswith("Z"):
         break
     time.sleep(.02)
 else:

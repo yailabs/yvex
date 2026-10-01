@@ -1,6 +1,7 @@
 /* Own durable supervised source-acquisition identity, state, and reconciliation. */
 #define _POSIX_C_SOURCE 200809L
 
+#include <yvex/internal/platform.h>
 #include <yvex/internal/source_acquisition.h>
 
 #include <yvex/internal/core.h>
@@ -156,58 +157,12 @@ int yvex_source_acquisition_operation_create(
 
 static int acquisition_boot_id(char out[YVEX_SOURCE_ACQUISITION_BOOT_ID_CAP])
 {
-    FILE *stream = fopen("/proc/sys/kernel/random/boot_id", "rb");
-    size_t length;
-    if (!stream) return 0;
-    if (!fgets(out, YVEX_SOURCE_ACQUISITION_BOOT_ID_CAP, stream)) {
-        fclose(stream);
-        return 0;
-    }
-    fclose(stream);
-    length = strlen(out);
-    while (length && (out[length - 1u] == '\n' || out[length - 1u] == '\r'))
-        out[--length] = '\0';
-    return length > 0u;
+    return yvex_platform_boot_id(out, YVEX_SOURCE_ACQUISITION_BOOT_ID_CAP);
 }
 
 static int acquisition_start_ticks(pid_t pid, unsigned long long *out)
 {
-    char path[64], buffer[4096], *cursor, *end;
-    FILE *stream;
-    unsigned int field = 3u;
-    if (pid <= 0 || !out) return 0;
-    if (snprintf(path, sizeof(path), "/proc/%lld/stat", (long long)pid) >=
-        (int)sizeof(path)) return 0;
-    stream = fopen(path, "rb");
-    if (!stream) return 0;
-    if (!fgets(buffer, sizeof(buffer), stream)) {
-        fclose(stream);
-        return 0;
-    }
-    fclose(stream);
-    cursor = strrchr(buffer, ')');
-    if (!cursor || cursor[1] != ' ') return 0;
-    cursor += 2;
-    while (field <= 22u) {
-        while (*cursor == ' ') cursor++;
-        if (!*cursor) return 0;
-        end = cursor;
-        while (*end && *end != ' ') end++;
-        if (field == 22u) {
-            char saved = *end;
-            unsigned long long value;
-            *end = '\0';
-            errno = 0;
-            value = strtoull(cursor, NULL, 10);
-            *end = saved;
-            if (errno) return 0;
-            *out = value;
-            return 1;
-        }
-        cursor = end;
-        field++;
-    }
-    return 0;
+    return yvex_platform_process_start(pid, out);
 }
 
 int yvex_source_acquisition_process_capture(

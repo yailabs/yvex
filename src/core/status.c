@@ -203,7 +203,13 @@ int yvex_core_u64_mul(unsigned long long left,
 unsigned long long yvex_core_monotonic_ns(void)
 {
     struct timespec value;
+#ifdef __APPLE__
+    /* Darwin's ordinary monotonic clock is microsecond-quantized; measured
+     * empty profile scopes still need the native high-resolution timebase. */
+    return clock_gettime(CLOCK_MONOTONIC_RAW, &value) == 0
+#else
     return clock_gettime(CLOCK_MONOTONIC, &value) == 0
+#endif
                ? (unsigned long long)value.tv_sec * 1000000000ull +
                      (unsigned long long)value.tv_nsec
                : 0ull;

@@ -3,6 +3,7 @@
  * state is independently compared across chunk and decode transactions. Focused internal-ABI
  * coverage; no fixture enters production objects.
  */
+#include <unistd.h>
 #include "tests/test.h"
 
 #include <limits.h>
@@ -2126,7 +2127,7 @@ static void state_page_capacity_open(yvex_execution_capacity_plan *capacity)
     memset(capacity, 0, sizeof(*capacity));
     capacity->schema_version = YVEX_EXECUTION_CAPACITY_PLAN_SCHEMA_V1;
     capacity->per_session_maximum = 524288ull;
-    capacity->state_pool_bytes = 64ull * 1024ull;
+    capacity->state_pool_bytes = 16ull * (unsigned long long)sysconf(_SC_PAGESIZE);
     capacity->state_class_count = 6ull;
     (void)snprintf(capacity->model_execution_identity, YVEX_SHA256_HEX_CAP,
                    "%064x", 0x101u);

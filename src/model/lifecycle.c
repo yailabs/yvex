@@ -1,5 +1,6 @@
 /* Own catalog-authorized local eviction; remote and logical records outlive local bytes. */
 #define _GNU_SOURCE
+#include <yvex/internal/platform.h>
 #include <yvex/internal/model_lifecycle.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/source_distribution.h>
@@ -345,10 +346,10 @@ static int snapshot_matches_stat(const yvex_artifact_snapshot *snapshot, const s
     return S_ISREG(status->st_mode) && snapshot->device == (unsigned long long)status->st_dev &&
            snapshot->inode == (unsigned long long)status->st_ino &&
            snapshot->size == (unsigned long long)status->st_size &&
-           snapshot->mtime_seconds == status->st_mtim.tv_sec &&
-           snapshot->mtime_nanoseconds == status->st_mtim.tv_nsec &&
-           snapshot->ctime_seconds == status->st_ctim.tv_sec &&
-           snapshot->ctime_nanoseconds == status->st_ctim.tv_nsec;
+           snapshot->mtime_seconds == yvex_platform_stat_mtime(status).tv_sec &&
+           snapshot->mtime_nanoseconds == yvex_platform_stat_mtime(status).tv_nsec &&
+           snapshot->ctime_seconds == yvex_platform_stat_ctime(status).tv_sec &&
+           snapshot->ctime_nanoseconds == yvex_platform_stat_ctime(status).tv_nsec;
 }
 
 static int evict_verified(const char *path, const yvex_artifact_snapshot *snapshot,
@@ -369,7 +370,7 @@ static int evict_verified(const char *path, const yvex_artifact_snapshot *snapsh
 #ifdef __linux__
     directory = (int)syscall(SYS_openat2, AT_FDCWD, parent, &how, sizeof(how));
 #else
-    return lifecycle_refuse(err, YVEX_ERR_UNSUPPORTED, "safe local eviction requires openat2");
+    directory = yvex_core_directory_open(parent);
 #endif
     if (directory < 0 || (fd = openat(directory, leaf, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)) < 0) {
         rc = lifecycle_refuse(err, YVEX_ERR_IO, "cannot open canonical eviction target");
@@ -497,8 +498,7 @@ static int materialize_commit(yvex_model_remote_selection *selected, const char 
         rc = lifecycle_refuse(err, YVEX_ERR_FORMAT, "download SHA-256 differs from qualified remote artifact");
     if (rc == YVEX_OK) rc = yvex_artifact_snapshot_validate(artifact, &verified, err);
     if (rc == YVEX_OK) rc = yvex_core_mkdir_parent(selected->artifact.path, "model.materialize", err);
-    if (rc == YVEX_OK && syscall(SYS_renameat2, AT_FDCWD, temporary, AT_FDCWD,
-                                 selected->artifact.path, 1u) != 0)
+    if (rc == YVEX_OK && yvex_platform_rename_noreplace(temporary, selected->artifact.path) != 0)
         rc = lifecycle_refuse(err, YVEX_ERR_IO, "cannot atomically commit acquired artifact without replacement");
     yvex_artifact_close(artifact);
     artifact = NULL;

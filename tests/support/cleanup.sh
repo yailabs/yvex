@@ -1,5 +1,23 @@
 #!/bin/sh
 
+# Canonicalize only Darwin's root-owned OS aliases before a test creates its
+# resources. Application symlinks still reach the refusal checks below.
+if test "$(uname -s)" = Darwin; then
+    TMPDIR=${TMPDIR:-/tmp}
+    TMPDIR=${TMPDIR%/}
+    case "$TMPDIR" in
+        /var/*)
+            if test "$(readlink /var)" = private/var &&
+                test "$(/usr/bin/stat -f %u /var)" = 0; then TMPDIR=/private$TMPDIR; fi
+            ;;
+        /tmp|/tmp/*)
+            if test "$(readlink /tmp)" = private/tmp &&
+                test "$(/usr/bin/stat -f %u /tmp)" = 0; then TMPDIR=/private$TMPDIR; fi
+            ;;
+    esac
+    export TMPDIR
+fi
+
 # Reports whether any component already present in an absolute path is a
 # symlink. Missing suffixes are safe to inspect because cleanup never creates
 # them while validating ownership.
@@ -59,6 +77,14 @@ yvex_test_cleanup_validate() {
     case "$_yvex_path" in
         /*) _yvex_absolute=$_yvex_path ;;
         *) _yvex_absolute=$_yvex_repo_root/$_yvex_path ;;
+    esac
+    # A checkout may itself be inside an owned-looking temporary directory.
+    # Its root and ancestors are never disposable test resources.
+    case "$_yvex_repo_root/" in
+        "$_yvex_absolute/"*)
+            printf 'test cleanup: repository ancestor refused: %s\n' "$_yvex_path" >&2
+            return 1
+            ;;
     esac
 
     _yvex_tmp_root=${TMPDIR:-/tmp}

@@ -712,6 +712,25 @@ static int tiny_common_capacity(yvex_model_engine *model,
     return YVEX_OK;
 }
 
+static const char *const tiny_capacity_variables[] = {
+    "YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES",
+    "YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES",
+    "YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES",
+};
+
+static int tiny_capacity_restore(char *const saved[3])
+{
+    size_t index;
+    int ok = 1;
+
+    for (index = 0u; index < 3u; ++index) {
+        int rc = saved[index] ? setenv(tiny_capacity_variables[index], saved[index], 1) :
+                               unsetenv(tiny_capacity_variables[index]);
+        if (rc != 0) ok = 0;
+    }
+    return ok;
+}
+
 static int tiny_generation_capacity_refusal(
     const char *artifact_path, const char *binding_path, yvex_error *err)
 {
@@ -752,9 +771,22 @@ static int tiny_generation_capacity_refusal(
     tiny_capacity_progress progress = {0};
     yvex_error cleanup;
     char available_text[32];
+    char *saved[3] = {NULL, NULL, NULL};
+    size_t index;
     unsigned long long transient, baseline;
     int injected_system = 0, injected_process = 0;
-    int rc = yvex_runtime_binding_open(
+    int rc;
+
+    for (index = 0u; index < 3u; ++index) {
+        const char *value = getenv(tiny_capacity_variables[index]);
+        if (value && !(saved[index] = strdup(value))) {
+            while (index) free(saved[--index]);
+            yvex_error_set(err, YVEX_ERR_IO, "tiny.capacity",
+                           "saving caller memory capacity failed");
+            return YVEX_ERR_IO;
+        }
+    }
+    rc = yvex_runtime_binding_open(
         &binding, binding_path, &binding_summary, &admission,
         &binding_failure, err);
     if (rc == YVEX_OK &&
@@ -777,8 +809,11 @@ static int tiny_generation_capacity_refusal(
     model_request.progress_context = &progress;
     if (rc == YVEX_OK)
         rc = yvex_model_engine_open(&model, &model_request, &failure, err);
-    (void)unsetenv("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES");
-    (void)unsetenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES");
+    if (!tiny_capacity_restore(saved)) {
+        rc = YVEX_ERR_IO;
+        yvex_error_set(err, rc, "tiny.capacity",
+                       "restoring caller memory capacity failed");
+    }
     if (rc == YVEX_ERR_BOUNDS && !model &&
         failure.code == YVEX_MODEL_ENGINE_FAILURE_ALLOCATION &&
         strcmp(failure.field, "startup-execution-capacity") == 0 &&
@@ -829,10 +864,12 @@ static int tiny_generation_capacity_refusal(
                            "generation ignored live process memory capacity");
         }
     }
-    if (injected_system)
-        (void)unsetenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES");
-    if (injected_process)
-        (void)unsetenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES");
+    if (!tiny_capacity_restore(saved) && rc == YVEX_OK) {
+        rc = YVEX_ERR_IO;
+        yvex_error_set(err, rc, "tiny.capacity",
+                       "restoring caller memory capacity failed");
+    }
+    for (index = 0u; index < 3u; ++index) free(saved[index]);
     if (generation)
         (void)yvex_runtime_generation_context_close(&generation, &cleanup);
     if (session)

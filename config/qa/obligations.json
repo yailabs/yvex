@@ -8,6 +8,16 @@
   },
   "change_classes": [
     {
+      "id": "native-platform",
+      "patterns": ["src/core/platform.c", "include/yvex/internal/platform.h", "src/core/fs.c",
+                   "src/graph/state_pages.c", "src/runtime/capacity.c", "src/server/core.c",
+                   "tools/archive_darwin.py", "tools/check_build_path.py", "tests/unit/platform.c"],
+      "lanes": ["native", "structural"],
+      "tests": ["unit.platform", "unit.runtime_state", "unit.server",
+                "integration.source-acquisition", "integration.repl", "integration.tiny-vertical"],
+      "reason": "native mechanisms must preserve admission, state COW, host ownership, lifecycle and terminal restoration on Linux and Darwin"
+    },
+    {
       "id": "deepseek-official-encoding",
       "patterns": ["tests/reference/tokenizer.py", "tests/live/tokenizer_deepseek.c", "tests/vectors/manifest.json"],
       "lanes": ["fast", "structural"],

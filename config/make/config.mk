@@ -22,7 +22,12 @@ YVEX_PROTOCOL_VERSION := $(shell sed -n \
 	's/^#define YVEX_LOCAL_PROTOCOL_VERSION \([0-9][0-9]*\)u$$/\1/p' \
 	include/yvex/server.h)
 
+YVEX_HOST_OS := $(shell uname -s)
+YVEX_ARCHIVER := $(if $(filter Darwin,$(YVEX_HOST_OS)),python3 tools/archive_darwin.py --ar '$(AR)',$(AR) rcsP)
 CPPFLAGS ?=
+ifeq ($(YVEX_HOST_OS),Darwin)
+override CPPFLAGS += -D_DARWIN_C_SOURCE
+endif
 override CPPFLAGS += -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L -Iinclude -I.
 YVEX_BUILD_COMMIT ?= $(shell git rev-parse --verify HEAD 2>/dev/null || printf unknown)
 YVEX_BUILD_SOURCE_TREE ?= $(shell git rev-parse --verify 'HEAD^{tree}' 2>/dev/null || printf unknown)
@@ -31,7 +36,7 @@ YVEX_BUILD_SOURCE_DELTA_IDENTITY ?= $(shell { \
 	git ls-files --others --exclude-standard 2>/dev/null | LC_ALL=C sort | \
 		grep -v '__pycache__/' | grep -v '[.]pyc$$' | \
 		while IFS= read -r path; do \
-			printf 'untracked\t%s\t' "$$path"; stat -c 'mode=%a' "$$path"; \
+			printf 'untracked\t%s\t' "$$path"; $(if $(filter Darwin,$(YVEX_HOST_OS)),/usr/bin/stat -f 'mode=%Lp',stat -c 'mode=%a') "$$path"; \
 			sha256sum "$$path"; \
 			done; \
 	} | sha256sum | cut -d' ' -f1)

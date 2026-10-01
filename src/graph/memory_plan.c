@@ -700,7 +700,7 @@ static int attention_cuda_load_weight(yvex_materialization_session *session,
     yvex_backend_attention_weight *weight;
     unsigned long long blocks;
     unsigned long long row_bytes;
-    unsigned long long expected;
+    unsigned long long expected = 0ull;
     const unsigned char *resident = NULL;
     yvex_materialization_failure materialization_failure;
     int rc;

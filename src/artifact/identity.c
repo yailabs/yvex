@@ -4,6 +4,7 @@
  * The identity binds every byte and exact length; partial reads never publish. Physical identity
  * does not prove semantic completeness or support.
  */
+#include <yvex/internal/platform.h>
 #include <ctype.h>
 #include <dlfcn.h>
 #include <limits.h>
@@ -475,7 +476,9 @@ int yvex_artifact_identity_read_open_progress(
         rc = YVEX_ERR_BOUNDS;
         goto failure;
     }
-    rc = yvex_artifact_cache_release(artifact, 0ull, size, err);
+    /* Cache advice is an optimization; SHA-256 and snapshot validation own trust. */
+    rc = yvex_platform_cache_release_available()
+             ? yvex_artifact_cache_release(artifact, 0ull, size, err) : YVEX_OK;
     if (rc != YVEX_OK)
         goto failure;
     artifact_hash_provider_close(&provider);

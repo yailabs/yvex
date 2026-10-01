@@ -5,6 +5,7 @@
  * emitted artifact tensors.
  */
 #define _GNU_SOURCE
+#include <yvex/internal/platform.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/source_payload.h>
 
@@ -17,10 +18,10 @@
 static int payload_stream_identity_matches(const yvex_source_payload_file_identity *identity,
                                            const struct stat *status) {
     return identity->device == status->st_dev && identity->inode == status->st_ino &&
-           identity->size == status->st_size && identity->mtime.tv_sec == status->st_mtim.tv_sec &&
-           identity->mtime.tv_nsec == status->st_mtim.tv_nsec &&
-           identity->ctime.tv_sec == status->st_ctim.tv_sec &&
-           identity->ctime.tv_nsec == status->st_ctim.tv_nsec;
+           identity->size == status->st_size && identity->mtime.tv_sec == yvex_platform_stat_mtime(status).tv_sec &&
+           identity->mtime.tv_nsec == yvex_platform_stat_mtime(status).tv_nsec &&
+           identity->ctime.tv_sec == yvex_platform_stat_ctime(status).tv_sec &&
+           identity->ctime.tv_nsec == yvex_platform_stat_ctime(status).tv_nsec;
 }
 
 static int payload_sink_valid(const yvex_source_payload_sink *sink) {
@@ -721,10 +722,9 @@ int yvex_source_payload_probe(yvex_source_payload_session *session,
             rc = yvex_source_payload_handle_acquire(session, range->shard_index, &fd, failure, err);
             if (rc != YVEX_OK)
                 return rc;
-            if (posix_fadvise(fd,
+            if (yvex_platform_file_cache_release(fd,
                               (off_t)range->absolute_begin,
-                              (off_t)range->byte_length,
-                              POSIX_FADV_DONTNEED) != 0)
+                              (off_t)range->byte_length) != 0)
                 out->page_cache_advice_accepted = 0;
             yvex_source_payload_handle_release(session, range->shard_index);
         }

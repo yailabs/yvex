@@ -244,7 +244,7 @@ def check_control():
       (maturity,status.replace('| Established |','| Stale |'),'stale capability counts'),
       (maturity,status.replace('| A12 |','| A13 |'),'lost spectrum identity'),
       (tasks,task.replace(row,row+'\n'+row),'duplicate Task'),
-      (tasks,task.replace(row,row.replace('✅ COMPLETE','🟢 ESTABLISHED')),'capability used as Task state'),
+      (tasks,task.replace(row,row.replace(row.split('|')[4].strip(),'🟢 ESTABLISHED')),'capability used as Task state'),
       (tasks,task.replace('| Total selected |','| Stale |'),'stale Task counts')]
     for fn,bad,name in bad_cases:
         try:fn(bad)

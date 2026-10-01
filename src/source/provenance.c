@@ -5,6 +5,7 @@
  * full shard payload trust.
  */
 #define _XOPEN_SOURCE 700
+#include <yvex/internal/platform.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <ctype.h>
@@ -1520,10 +1521,10 @@ static int source_acquisition_hash_file(
     }
     if (count < 0 || fstat(fd, &after) != 0 || before.st_dev != after.st_dev ||
         before.st_ino != after.st_ino || before.st_size != after.st_size ||
-        before.st_mtim.tv_sec != after.st_mtim.tv_sec ||
-        before.st_mtim.tv_nsec != after.st_mtim.tv_nsec ||
-        before.st_ctim.tv_sec != after.st_ctim.tv_sec ||
-        before.st_ctim.tv_nsec != after.st_ctim.tv_nsec ||
+        yvex_platform_stat_mtime(&before).tv_sec != yvex_platform_stat_mtime(&after).tv_sec ||
+        yvex_platform_stat_mtime(&before).tv_nsec != yvex_platform_stat_mtime(&after).tv_nsec ||
+        yvex_platform_stat_ctime(&before).tv_sec != yvex_platform_stat_ctime(&after).tv_sec ||
+        yvex_platform_stat_ctime(&before).tv_nsec != yvex_platform_stat_ctime(&after).tv_nsec ||
         total != file->expected_size ||
         !yvex_sha256_final(&hash, digest)) {
         close(fd);
@@ -1531,10 +1532,10 @@ static int source_acquisition_hash_file(
     }
     file->verified_device = (unsigned long long)after.st_dev;
     file->verified_inode = (unsigned long long)after.st_ino;
-    file->verified_mtime_seconds = (long long)after.st_mtim.tv_sec;
-    file->verified_mtime_nanoseconds = after.st_mtim.tv_nsec;
-    file->verified_ctime_seconds = (long long)after.st_ctim.tv_sec;
-    file->verified_ctime_nanoseconds = after.st_ctim.tv_nsec;
+    file->verified_mtime_seconds = (long long)yvex_platform_stat_mtime(&after).tv_sec;
+    file->verified_mtime_nanoseconds = yvex_platform_stat_mtime(&after).tv_nsec;
+    file->verified_ctime_seconds = (long long)yvex_platform_stat_ctime(&after).tv_sec;
+    file->verified_ctime_nanoseconds = yvex_platform_stat_ctime(&after).tv_nsec;
     file->local_identity_verified = 1;
     close(fd);
     yvex_sha256_hex(digest, digest_hex);
@@ -1878,10 +1879,10 @@ int yvex_source_acquisition_metadata_read(
         before.st_size < 0 || (unsigned long long)before.st_size != file->actual_size ||
         (unsigned long long)before.st_dev != file->verified_device ||
         (unsigned long long)before.st_ino != file->verified_inode ||
-        (long long)before.st_mtim.tv_sec != file->verified_mtime_seconds ||
-        before.st_mtim.tv_nsec != file->verified_mtime_nanoseconds ||
-        (long long)before.st_ctim.tv_sec != file->verified_ctime_seconds ||
-        before.st_ctim.tv_nsec != file->verified_ctime_nanoseconds) {
+        (long long)yvex_platform_stat_mtime(&before).tv_sec != file->verified_mtime_seconds ||
+        yvex_platform_stat_mtime(&before).tv_nsec != file->verified_mtime_nanoseconds ||
+        (long long)yvex_platform_stat_ctime(&before).tv_sec != file->verified_ctime_seconds ||
+        yvex_platform_stat_ctime(&before).tv_nsec != file->verified_ctime_nanoseconds) {
         if (fd >= 0) close(fd);
         return provenance_refuse(err, YVEX_ERR_FORMAT,
                                  "source_acquisition_metadata_read",
@@ -1903,10 +1904,10 @@ int yvex_source_acquisition_metadata_read(
     }
     if (fstat(fd, &after) != 0 || before.st_dev != after.st_dev ||
         before.st_ino != after.st_ino || before.st_size != after.st_size ||
-        before.st_mtim.tv_sec != after.st_mtim.tv_sec ||
-        before.st_mtim.tv_nsec != after.st_mtim.tv_nsec ||
-        before.st_ctim.tv_sec != after.st_ctim.tv_sec ||
-        before.st_ctim.tv_nsec != after.st_ctim.tv_nsec)
+        yvex_platform_stat_mtime(&before).tv_sec != yvex_platform_stat_mtime(&after).tv_sec ||
+        yvex_platform_stat_mtime(&before).tv_nsec != yvex_platform_stat_mtime(&after).tv_nsec ||
+        yvex_platform_stat_ctime(&before).tv_sec != yvex_platform_stat_ctime(&after).tv_sec ||
+        yvex_platform_stat_ctime(&before).tv_nsec != yvex_platform_stat_ctime(&after).tv_nsec)
         goto failure;
     close(fd);
     fd = -1;

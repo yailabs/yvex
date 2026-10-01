@@ -4,6 +4,7 @@
  * materializes them.
  */
 #define _POSIX_C_SOURCE 200809L
+#include <yvex/internal/platform.h>
 #include <yvex/internal/artifact.h>
 #include <yvex/internal/compiler.h>
 #include <yvex/internal/compiler_source.h>
@@ -437,10 +438,10 @@ static int artifact_official_check(
         stat(path, &after) != 0 ||
         before.st_dev != after.st_dev || before.st_ino != after.st_ino ||
         before.st_size != after.st_size ||
-        before.st_mtim.tv_sec != after.st_mtim.tv_sec ||
-        before.st_mtim.tv_nsec != after.st_mtim.tv_nsec ||
-        before.st_ctim.tv_sec != after.st_ctim.tv_sec ||
-        before.st_ctim.tv_nsec != after.st_ctim.tv_nsec)
+        yvex_platform_stat_mtime(&before).tv_sec != yvex_platform_stat_mtime(&after).tv_sec ||
+        yvex_platform_stat_mtime(&before).tv_nsec != yvex_platform_stat_mtime(&after).tv_nsec ||
+        yvex_platform_stat_ctime(&before).tv_sec != yvex_platform_stat_ctime(&after).tv_sec ||
+        yvex_platform_stat_ctime(&before).tv_nsec != yvex_platform_stat_ctime(&after).tv_nsec)
         return 0;
     (void)snprintf(out->revision, sizeof(out->revision), "%s",
                    YVEX_GGUF_OFFICIAL_READER_REVISION);
@@ -449,10 +450,10 @@ static int artifact_official_check(
     out->file_bytes = plan->final_file_bytes;
     out->file_device = (unsigned long long)after.st_dev;
     out->file_inode = (unsigned long long)after.st_ino;
-    out->file_mtime_seconds = (long long)after.st_mtim.tv_sec;
-    out->file_mtime_nanoseconds = (long long)after.st_mtim.tv_nsec;
-    out->file_ctime_seconds = (long long)after.st_ctim.tv_sec;
-    out->file_ctime_nanoseconds = (long long)after.st_ctim.tv_nsec;
+    out->file_mtime_seconds = (long long)yvex_platform_stat_mtime(&after).tv_sec;
+    out->file_mtime_nanoseconds = (long long)yvex_platform_stat_mtime(&after).tv_nsec;
+    out->file_ctime_seconds = (long long)yvex_platform_stat_ctime(&after).tv_sec;
+    out->file_ctime_nanoseconds = (long long)yvex_platform_stat_ctime(&after).tv_nsec;
     out->accepted = 1;
     return 1;
 }

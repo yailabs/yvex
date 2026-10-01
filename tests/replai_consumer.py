@@ -12,6 +12,8 @@ import subprocess
 import termios
 import time
 import tempfile
+import sys
+import platform
 
 ENABLE = b'\x1b[?2004h'
 DISABLE = b'\x1b[?2004l'
@@ -32,6 +34,12 @@ class Chat:
         env = os.environ.copy()
         env.pop('NO_COLOR', None)
         env['TERM'] = 'dumb' if dumb else 'xterm-256color'
+        self.termios_receipt = output / (name + '.termios.json')
+        if sys.platform == 'darwin':
+            probe = Path(env['YVEX_TEST_TERMIOS_PROBE'])
+            assert probe.is_file(), 'Darwin terminal observation probe is required'
+            env['DYLD_INSERT_LIBRARIES'] = str(probe)
+            env['YVEX_TEST_TERMIOS_RECEIPT'] = str(self.termios_receipt)
         if plain: env['NO_COLOR'] = ''
         command = [str(binary), 'chat', '--session', name]
         if model: command += ['--model', model, '--max-new-tokens', '3']
@@ -73,6 +81,10 @@ class Chat:
 
     def tty_fds(self):
         target = os.ttyname(self.slave)
+        if sys.platform == 'darwin':
+            descriptors = subprocess.check_output(
+                ['lsof', '-a', '-p', str(self.process.pid), '-Ffn'], text=True)
+            return sum(line == 'n' + target for line in descriptors.splitlines())
         count = 0
         for descriptor in Path(f'/proc/{self.process.pid}/fd').iterdir():
             try: count += os.readlink(descriptor) == target
@@ -95,7 +107,12 @@ class Chat:
         while self.process.poll() is None and time.monotonic() < deadline: self.pump()
         assert self.process.wait(timeout=1) == 0
         self.quiet()
-        assert termios.tcgetattr(self.slave) == self.before, 'captured termios not restored'
+        if sys.platform == 'darwin':
+            expected = [*self.before[:6],
+                        [v if isinstance(v, int) else v[0] for v in self.before[6]]]
+            assert json.loads(self.termios_receipt.read_text()) == expected, 'captured termios not restored'
+        else:
+            assert termios.tcgetattr(self.slave) == self.before, 'captured termios not restored'
         assert self.data.count(ENABLE) == self.data.count(DISABLE)
         for forbidden in [b'\x1b[?1049h', b'\x1b[48;', b'\x1b[40m']:
             assert forbidden not in self.data
@@ -130,7 +147,9 @@ def dependency_rejections(root, pin):
         receipt = prefix / 'replai-build.json'
         receipt.write_text(json.dumps({'pin': dict(pin, abi=999)}))
         rejected('incompatible REPLAI prefix')
-        receipt.write_text(json.dumps({'pin': pin, 'sha256': {'include/replai.h': '0' * 64}}))
+        receipt.write_text(json.dumps({'pin': pin,
+            'target': {'system': platform.system(), 'machine': platform.machine()},
+            'sha256': {'include/replai.h': '0' * 64}}))
         rejected('No such file')
         (prefix / 'include').mkdir()
         (prefix / 'include/replai.h').write_text('incompatible header')
@@ -147,6 +166,9 @@ def audit(binary):
     dependency_rejections(root, pin)
     symbols = subprocess.check_output(['nm', str(binary)], text=True)
     imports = subprocess.check_output(['nm', '-u', os.environ['YVEX_CLIENT_LANE_OBJ']], text=True)
+    if sys.platform == 'darwin':
+        symbols = symbols.replace(' _', ' ').replace('\n_', '\n').lstrip('_')
+        imports = imports.replace(' _', ' ').replace('\n_', '\n').lstrip('_')
     for symbol in ['replai_abi_version', 'replai_create', 'replai_prompt_composed',
                    'replai_completion_snapshot', 'replai_completions_present',
                    'replai_external_output', 'replai_history_add',
@@ -159,7 +181,8 @@ def audit(binary):
     for symbol in ['replai_open', 'sigaction', 'sigwait', 'pthread_sigmask',
                    'tcgetattr', 'tcsetattr', 'tcflush', 'ioctl', 'isatty', 'fileno']:
         assert not any(line.split()[-1] == symbol for line in imports.splitlines()), symbol
-    loader = subprocess.check_output(['ldd', str(binary)], text=True)
+    loader = subprocess.check_output(
+        ['otool', '-L', str(binary)] if sys.platform == 'darwin' else ['ldd', str(binary)], text=True)
     assert 'libreplai' not in loader
     source = (root / 'src/cli/io/client.c').read_text()
     for retired in ['repl_read_line(', 'repl_redraw(', 'repl_insert_byte(',
@@ -254,8 +277,10 @@ def run(binary, host_log, output, memcheck):
         asset.write_text('local qualification fixture')
         path_command = '/attach ' + str(output / 'completion-lo')
         start = c.send(path_command + '\t')
-        c.wait(b'completion-local.txt', start)
+        # A long path label may be ellipsized; accepting must retain the full value.
+        c.wait(b'path; attachment admission still required', start)
         c.send(b'\r')  # accept the path, do not admit an attachment yet
+        c.wait(b'completion-local.txt', start)
         c.quiet()
         assert b'attached\r\n' not in c.data[start:]
         c.send(b'\x7f' * len(('/attach ' + str(asset)).encode()))

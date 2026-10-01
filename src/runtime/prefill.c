@@ -5,6 +5,7 @@
  * the common runtime model/session and graph executor without reconstructing compiler truth.
  */
 #define _GNU_SOURCE
+#include <yvex/internal/platform.h>
 #include <yvex/internal/runtime_prefill.h>
 #include <yvex/internal/core.h>
 
@@ -400,7 +401,7 @@ static int activation_parse_mapping(
 {
     const unsigned char *bytes = input->mapping;
     yvex_runtime_activation_input_summary *summary = &input->summary;
-    unsigned long long records_bytes, payload_offset, total, index;
+    unsigned long long records_bytes, payload_offset, total = 0ull, index;
     const unsigned char *cursor;
     if (input->mapping_bytes < ACTIVATION_HEADER_BYTES ||
         memcmp(bytes, activation_magic, sizeof(activation_magic)) != 0)
@@ -664,10 +665,10 @@ int yvex_runtime_activation_input_validate(
         current.st_dev != input->snapshot.st_dev ||
         current.st_ino != input->snapshot.st_ino ||
         current.st_size != input->snapshot.st_size ||
-        current.st_mtim.tv_sec != input->snapshot.st_mtim.tv_sec ||
-        current.st_mtim.tv_nsec != input->snapshot.st_mtim.tv_nsec ||
-        current.st_ctim.tv_sec != input->snapshot.st_ctim.tv_sec ||
-        current.st_ctim.tv_nsec != input->snapshot.st_ctim.tv_nsec)
+        yvex_platform_stat_mtime(&current).tv_sec != yvex_platform_stat_mtime(&input->snapshot).tv_sec ||
+        yvex_platform_stat_mtime(&current).tv_nsec != yvex_platform_stat_mtime(&input->snapshot).tv_nsec ||
+        yvex_platform_stat_ctime(&current).tv_sec != yvex_platform_stat_ctime(&input->snapshot).tv_sec ||
+        yvex_platform_stat_ctime(&current).tv_nsec != yvex_platform_stat_ctime(&input->snapshot).tv_nsec)
         return activation_refuse(
             err, YVEX_ERR_STATE,
             "activation tensor file drifted after admission");

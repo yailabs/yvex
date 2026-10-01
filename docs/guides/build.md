@@ -57,6 +57,44 @@ remains blocked. `clean` removes only its validated build tree and, for the
 default tree, `./yvex`; it neither follows symlink ancestors nor deletes arbitrary
 root objects or historical executables.
 
+## macOS native CPU build
+
+The native Darwin path supports the same single executable and local protocol.
+Install the Xcode Command Line Tools and modern GNU Make; Apple's bundled Make
+3.81 cannot parse the build. The qualified toolchain uses Rust 1.98.1 for the
+pinned REPLAI producer and Python 3.14 for QA:
+
+```sh
+brew install make pkg-config ripgrep coreutils python@3.14
+rustup toolchain install 1.98.1
+export PATH="$(brew --prefix make)/libexec/gnubin:$(brew --prefix coreutils)/libexec/gnubin:$(brew --prefix python@3.14)/libexec/bin:$PATH"
+export RUSTUP_TOOLCHAIN=1.98.1
+make -j4
+python3 tools/qa.py run native
+```
+
+Use a separate REPLAI staging prefix for each host/architecture; its receipt
+binds the staged native library to that target. Older receipts without a target
+are refused: retain the old prefix and select an empty one, for example
+`make REPLAI_PREFIX=build/external/replai-native`. This also applies when
+updating an existing Linux checkout. Darwin archives preserve
+source-relative object identities using BSD member names and the native symbol
+indexer. No external REPLAI pin or public wire layout changes are required.
+
+[Native qualification and remaining limits](../evaluation/macos-native.md)
+cover CPU fixtures, Unix peers, immutable state and real terminal lifecycle.
+Metal, an 8B/14B conversation model and the complete YAI/Studio/SDK product chain
+retain separate execution gates. An explicit artifact cache-eviction request
+returns unsupported on Darwin; optional cache release is omitted without
+weakening byte authentication.
+
+The `native` lane uses actual host memory by default and retains the runtime's
+minimum system reserve. The hosted macOS job explicitly sets
+`YVEX_TEST_FIXTURE_CAPACITY=1` for two tiny model-admission fixtures; their
+declared envelope is reported in the test logs. That CI mode qualifies fixture
+execution, not available host capacity. Keep it unset for local model-admission
+qualification; the evaluation report records the distinction.
+
 ## Prerequisites
 
 Builds provide one executable product. `yvex serve` owns the private Unix

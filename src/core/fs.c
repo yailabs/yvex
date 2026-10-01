@@ -9,6 +9,7 @@
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
+#include <yvex/internal/platform.h>
 #include <yvex/core.h>
 #include <yvex/internal/core.h>
 
@@ -374,6 +375,25 @@ static int core_file_parent_open(const char *path, int *directory_fd,
         return core_file_fail(result, YVEX_CORE_FILE_STAGE_ARGUMENT, EINVAL, 1ull, 0ull,
                               YVEX_ERR_INVALID_ARG, "file path is empty or exceeds capacity", err);
     yvex_core_text_copy(copy, sizeof(copy), path);
+#ifdef __APPLE__
+    /* Darwin's root-owned /tmp and /var aliases are OS paths. All subsequent
+     * components still pass the descriptor-relative O_NOFOLLOW walk below. */
+    if (!strncmp(path, "/tmp/", 5u) || !strncmp(path, "/var/", 5u)) {
+        char alias[5], target[32];
+        struct stat status;
+        ssize_t length;
+        memcpy(alias, path, 4u);
+        alias[4] = '\0';
+        length = readlink(alias, target, sizeof(target) - 1u);
+        if (length < 0 || lstat(alias, &status) != 0 || status.st_uid != 0 ||
+            !S_ISLNK(status.st_mode)) goto unsafe;
+        target[length] = '\0';
+        if (strcmp(target, !strcmp(alias, "/tmp") ? "private/tmp" : "private/var"))
+            goto unsafe;
+        if (snprintf(copy, sizeof(copy), "/private%s", path) >= (int)sizeof(copy))
+            goto unsafe;
+    }
+#endif
     slash = strrchr(copy, '/');
     if (!slash) {
         if (snprintf(name, CORE_FILE_NAME_CAP, "%s", copy) >= (int)CORE_FILE_NAME_CAP)
@@ -394,7 +414,8 @@ static int core_file_parent_open(const char *path, int *directory_fd,
         int child;
         next = strchr(cursor, '/');
         if (next) *next = '\0';
-        if (!cursor[0] || !strcmp(cursor, ".") || !strcmp(cursor, "..")) goto unsafe;
+        if (!cursor[0]) { cursor = next ? next + 1 : NULL; continue; }
+        if (!strcmp(cursor, ".") || !strcmp(cursor, "..")) goto unsafe;
         child = openat(fd, cursor, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
         if (child < 0) goto unsafe;
         (void)close(fd);
@@ -409,6 +430,32 @@ unsafe:
     if (fd >= 0) (void)close(fd);
     return core_file_fail(result, YVEX_CORE_FILE_STAGE_PATH, errno, 1ull, 0ull,
                           YVEX_ERR_IO, "file path or parent directory is unsafe", err);
+}
+
+int yvex_core_file_open_readonly(const char *path)
+{
+    char name[CORE_FILE_NAME_CAP];
+    yvex_core_file_result result;
+    yvex_error err;
+    int parent = -1, fd, saved;
+    if (core_file_parent_open(path, &parent, name, &result, &err) != YVEX_OK) return -1;
+    fd = openat(parent, name, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    saved = errno;
+    (void)close(parent);
+    errno = saved;
+    return fd;
+}
+
+int yvex_core_directory_open(const char *path)
+{
+    char child[YVEX_PATH_CAP], name[CORE_FILE_NAME_CAP];
+    yvex_core_file_result result;
+    yvex_error err;
+    int fd = -1;
+    if (!path || !path[0] || snprintf(child, sizeof(child), "%s/.yvex-parent", path) >=
+        (int)sizeof(child)) { errno = EINVAL; return -1; }
+    if (core_file_parent_open(child, &fd, name, &result, &err) != YVEX_OK) return -1;
+    return fd;
 }
 
 static int core_file_write_exact(int fd, const void *source, size_t count)
@@ -467,10 +514,10 @@ int yvex_core_file_read_descriptor_snapshot(
                             YVEX_ERR_IO, "descriptor snapshot read was incomplete", err);
     else if (fstat(descriptor, &after) != 0 || before.st_dev != after.st_dev ||
              before.st_ino != after.st_ino || before.st_size != after.st_size ||
-             before.st_mtim.tv_sec != after.st_mtim.tv_sec ||
-             before.st_mtim.tv_nsec != after.st_mtim.tv_nsec ||
-             before.st_ctim.tv_sec != after.st_ctim.tv_sec ||
-             before.st_ctim.tv_nsec != after.st_ctim.tv_nsec)
+             yvex_platform_stat_mtime(&before).tv_sec != yvex_platform_stat_mtime(&after).tv_sec ||
+             yvex_platform_stat_mtime(&before).tv_nsec != yvex_platform_stat_mtime(&after).tv_nsec ||
+             yvex_platform_stat_ctime(&before).tv_sec != yvex_platform_stat_ctime(&after).tv_sec ||
+             yvex_platform_stat_ctime(&before).tv_nsec != yvex_platform_stat_ctime(&after).tv_nsec)
         rc = core_file_fail(result, YVEX_CORE_FILE_STAGE_DRIFT, errno, expected_count,
                             after.st_size > 0 ? (unsigned long long)after.st_size : 0ull,
                             YVEX_ERR_IO, "descriptor snapshot drifted during read", err);

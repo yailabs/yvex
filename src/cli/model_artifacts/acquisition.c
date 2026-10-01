@@ -1,6 +1,7 @@
 /* Project the Source-owned acquisition operation into detached CLI supervision. */
 #define _POSIX_C_SOURCE 200809L
 
+#include <yvex/internal/platform.h>
 #include "src/cli/model_artifacts/private.h"
 #include "src/cli/io/terminal/private.h"
 
@@ -85,23 +86,7 @@ static int acquisition_operation_store(const yvex_model_download_report *report,
 
 static int acquisition_process_io(pid_t pid, unsigned long long *write_bytes)
 {
-    char path[64], key[64];
-    unsigned long long value;
-    FILE *stream;
-    if (pid <= 0 || !write_bytes ||
-        snprintf(path, sizeof(path), "/proc/%lld/io", (long long)pid) >=
-            (int)sizeof(path)) return 0;
-    stream = fopen(path, "rb");
-    if (!stream) return 0;
-    while (fscanf(stream, "%63s %llu", key, &value) == 2) {
-        if (!strcmp(key, "write_bytes:")) {
-            fclose(stream);
-            *write_bytes = value;
-            return 1;
-        }
-    }
-    fclose(stream);
-    return 0;
+    return yvex_platform_process_write_bytes(pid, write_bytes);
 }
 
 static void acquisition_provider_event_observe(
@@ -389,7 +374,11 @@ static int acquisition_exec_supervisor(int arg_count, char **args,
         if (setenv(ACQUISITION_WORKER_ENV, "1", 1) != 0 ||
             setenv(ACQUISITION_PATH_ENV, report->operation_path, 1) != 0 ||
             setenv(ACQUISITION_ID_ENV, operation_id, 1) != 0) _exit(126);
-        execv("/proc/self/exe", exec_args);
+        {
+            char executable[YVEX_PATH_CAP];
+            if (yvex_platform_executable(executable, sizeof(executable)) <= 0) _exit(126);
+            execv(executable, exec_args);
+        }
         _exit(127);
     }
     close(descriptors[1]);

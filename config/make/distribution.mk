@@ -6,7 +6,7 @@ package: client config/package_manifest.tsv LICENSE NOTICE.md
 		echo 'package: BUILD_DIR may not contain dot components' >&2; exit 1;; esac; \
 	case '$(BUILD_DIR)' in ''|/|.) \
 		echo 'package: refusing broad BUILD_DIR' >&2; exit 1;; esac; \
-	if test "$$(realpath -m "$$package_root")" != "$$(realpath -ms "$$package_root")"; then \
+	if ! python3 tools/check_build_path.py "$$package_root"; then \
 		echo 'package: refusing symlink ancestor' >&2; exit 1; fi; \
 	if test -L "$$package_root"; then echo 'package root may not be a symlink' >&2; exit 1; fi; \
 	if test -d "$$package_root"; then find "$$package_root" -depth -mindepth 1 -delete; fi; \

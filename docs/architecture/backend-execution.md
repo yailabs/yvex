@@ -21,6 +21,37 @@ numerical classes. The compiler supplies the legal program. Runtime owns
 session/transaction lifetime. Backend owns device allocation, submission,
 synchronization and equivalent launch details.
 
+## Native platform mechanisms
+
+CPU execution is independent of Linux process and filesystem APIs. The
+cross-subsystem internal `core.platform` owner supplies native stat timestamps,
+preallocation, exclusive rename, Unix peer credentials, process identity,
+executable discovery, process I/O and memory observations. Admission, reserve
+policy, compiler semantics and state accounting remain with their consumers.
+Darwin uses libproc/sysctl and Mach; Linux retains procfs, cgroup admission,
+sealed memfd and mremap.
+
+Darwin prefix capture fills a private temporary file, opens a matching read-only
+descriptor, unlinks it, and closes the writer before publication. It offers
+process-owned immutable backing rather than Linux kernel seals. Prefix attach
+uses fixed Mach VM remap after validating aligned, non-overlapping extents;
+sparse protections and session COW ownership remain authoritative. Replacement
+failure preserves the owned target. Core path traversal permits only the
+root-owned Darwin `/tmp` and `/var` system aliases, then refuses application
+symlinks and dot components.
+
+The local listener is nonblocking and polled at bounded intervals so shutdown
+is observed without depending on cross-thread `close()` waking `accept()`.
+Accepted streams return to blocking protocol I/O. CLI `serve` owns blocked
+SIGINT/SIGTERM dispositions even when launched from a shell background job;
+the library does not change process signal policy.
+
+[Native evidence](../evaluation/macos-native.md) qualifies bounded CPU and
+terminal execution. No Metal backend is implemented or implied by Darwin
+platform support. Explicit cache eviction has no equivalent qualified native
+mechanism and refuses; native memory availability is a conservative advisory
+estimate, with the existing reserve and capacity admission still applied.
+
 ## Execution path
 
 Authenticated program + real batch/worklist → admitted implementation → device

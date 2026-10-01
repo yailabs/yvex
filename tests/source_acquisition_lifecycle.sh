@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Darwin system aliases are not application-controlled cleanup roots.
+if test "$(uname -s)" = Darwin; then export TMPDIR=/private/tmp; fi
 trap 'failure_status=$?; printf "source lifecycle: assertion failed at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2; exit "$failure_status"' ERR
 
 . tests/support/cleanup.sh
 
 YVEX_BIN=${YVEX_BIN:-"$PWD/yvex"}
 FAKE_HF="$PWD/tests/fixtures/bin/fake-hf"
-ROOT=$(mktemp -d /tmp/yvex-source-lifecycle-XXXXXX)
+ROOT=$(mktemp -d "${TMPDIR:-/tmp}/yvex-source-lifecycle-XXXXXX")
 CLIENT_PIDS=()
+
+record_terminal() {
+  if test "$(uname -s)" = Darwin; then
+    python3 tests/support/record_terminal.py "$1" "$2"
+  else
+    script -q -e -c "$2" "$1"
+  fi
+}
+
 
 cleanup() {
   local root pid
@@ -109,8 +120,7 @@ test -f "$NORMAL/evidence/build/gemma/gemma-4-12b-it.source-manifest.json"
 # same operation facts but selects append-only plain output even on a PTY.
 PTY_ROOT="$ROOT/models-pty"
 pty_command="stty cols 40; env YVEX_CONFIG_DIR=$ROOT/config YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=0 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI=$FAKE_HF $YVEX_BIN source acquire gemma-4-12b-it --models-root $PTY_ROOT --auth required --progress live --tick-seconds 1 --stall-seconds 5"
-env -u NO_COLOR TERM=xterm-256color script -q -e -c "$pty_command" \
-  "$ROOT/pty.typescript" </dev/null >/dev/null
+(unset NO_COLOR; export TERM=xterm-256color; record_terminal "$ROOT/pty.typescript" "$pty_command") </dev/null >/dev/null
 LC_ALL=C grep -q $'\033\[2K' "$ROOT/pty.typescript"
 if grep -q 'files' "$ROOT/pty.typescript"; then
   printf 'narrow PTY projection exceeded its reduced fact surface\n' >&2
@@ -119,8 +129,7 @@ fi
 
 PLAIN_PTY_ROOT="$ROOT/models-plain-pty"
 plain_pty_command="env YVEX_CONFIG_DIR=$ROOT/config YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=0 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI=$FAKE_HF $YVEX_BIN source acquire gemma-4-12b-it --models-root $PLAIN_PTY_ROOT --auth required --progress live --tick-seconds 1 --stall-seconds 5"
-NO_COLOR=1 TERM=xterm-256color script -q -e -c "$plain_pty_command" \
-  "$ROOT/plain-pty.typescript" </dev/null >/dev/null
+NO_COLOR=1 TERM=xterm-256color record_terminal "$ROOT/plain-pty.typescript" "$plain_pty_command" </dev/null >/dev/null
 if LC_ALL=C grep -q $'\033' "$ROOT/plain-pty.typescript"; then
   printf 'NO_COLOR PTY projection contains terminal escapes\n' >&2
   exit 1

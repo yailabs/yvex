@@ -5,6 +5,7 @@
  * server event fan-out and process metrics accumulator.
  */
 #define _POSIX_C_SOURCE 200809L
+#include <yvex/internal/platform.h>
 #include "src/server/private.h"
 #include <limits.h>
 #include <math.h>
@@ -562,9 +563,6 @@ int yvex_server_telemetry_metrics_copy(server_telemetry *telemetry,
                                   yvex_server_metrics *metrics,
                                   yvex_error *err)
 {
-    struct rusage usage;
-    FILE *status;
-    unsigned long long pages = 0u, resident_pages = 0u;
     unsigned long long now;
     if (!telemetry || !metrics || pthread_mutex_lock(&telemetry->mutex) != 0) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "server.telemetry.metrics",
@@ -578,23 +576,8 @@ int yvex_server_telemetry_metrics_copy(server_telemetry *telemetry,
                              ? now - ((unsigned long long)telemetry->started.tv_sec * 1000000000ull +
                                       (unsigned long long)telemetry->started.tv_nsec)
                              : 0u;
-    status = fopen("/proc/self/statm", "r");
-    if (status) {
-        if (fscanf(status, "%llu %llu", &pages, &resident_pages) == 2) {
-            long page_size = sysconf(_SC_PAGESIZE);
-            if (page_size > 0 &&
-                resident_pages <= ULLONG_MAX / (unsigned long long)page_size)
-                metrics->current_rss_bytes =
-                    resident_pages * (unsigned long long)page_size;
-        }
-        (void)fclose(status);
-    }
-    if (getrusage(RUSAGE_SELF, &usage) == 0 && usage.ru_maxrss > 0 &&
-        (unsigned long long)usage.ru_maxrss <= ULLONG_MAX / 1024u)
-        metrics->peak_rss_bytes =
-            (unsigned long long)usage.ru_maxrss * 1024u;
-    if (metrics->peak_rss_bytes < metrics->current_rss_bytes)
-        metrics->peak_rss_bytes = metrics->current_rss_bytes;
+    (void)yvex_platform_process_memory(&metrics->current_rss_bytes,
+                                        &metrics->peak_rss_bytes);
     metrics->resources.schema_version = YVEX_EXECUTION_RESOURCE_SCHEMA_V1;
     metrics->resources.available |= YVEX_EXECUTION_RESOURCE_PROCESS_AVAILABLE;
     metrics->resources.process_rss_current_bytes = metrics->current_rss_bytes;
