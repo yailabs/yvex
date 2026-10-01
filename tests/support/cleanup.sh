@@ -78,6 +78,14 @@ yvex_test_cleanup_validate() {
         /*) _yvex_absolute=$_yvex_path ;;
         *) _yvex_absolute=$_yvex_repo_root/$_yvex_path ;;
     esac
+    # A checkout may itself be inside an owned-looking temporary directory.
+    # Its root and ancestors are never disposable test resources.
+    case "$_yvex_repo_root/" in
+        "$_yvex_absolute/"*)
+            printf 'test cleanup: repository ancestor refused: %s\n' "$_yvex_path" >&2
+            return 1
+            ;;
+    esac
 
     _yvex_tmp_root=${TMPDIR:-/tmp}
     case "$_yvex_tmp_root" in

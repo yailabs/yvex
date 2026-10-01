@@ -53,19 +53,30 @@ build identity; generated fixtures and raw logs remain outside Git.
 
 ## Evidence
 
-Source-stable native and Linux confirmation is required for Task closure.
+Source-stable native and Linux confirmation passed on 2026-10-01: 13 PASS,
+zero FAIL/SKIP/BLOCKED/ERROR on each host. Qualified code commit
+`6f20258e348a826cbc872b21aea227da1e5ebb8f` has source tree
+`27ed1ee4f62e610b1cc9d93eeb063aa7120df9ee`; the isolated Linux checkout has
+the identical tree. Mac run identity is
+`d82edfbbb74c4d4ae37b72ae5ab227f4f21fcba0cf0a5ce7eae2736e27779c6d`;
+Linux run identity is `01cc6d932a798c0fb18f8257c4ea59090ab771dd54f66cc647467ef42a9182fd`.
+Mac build identity is `8c89b02957147c6acb3d63549451b1a42a25c40a79d1bcd84ac3e10f556a8fa5`;
+Linux is `b71ac4cc4c5419df4ce71f8bf94dcbfc33a3cc026e51418d2e652ecc29208ce1`.
+A subsequent test-cleanup guard also refuses the checkout root when the checkout
+itself lives beneath a temporary `yvex-*` directory. Its Linux and Mac
+architecture/build contracts pass; it changes no production runtime code.
 Runs performed while the source delta changed are diagnostics only, even when
 all individual tests pass.
 
 | Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `unit.platform`, filesystem and artifact | Native OS APIs, bytes and descriptor access | Temporary files, socket pair, sparse VM mappings | Exclusive publication, immutable descriptor, preserved failed replacement and COW | Native mechanisms exercised | Exact bytes, permissions and page protections | Pending final receipt | Darwin platform mechanisms, not model quality |
-| Runtime binding/state/sequence tests | Authenticated bindings and independent sessions | Bounded generated state | Attach/reset/checkpoint, isolation and transactional rollback | CPU lifecycle exercised | Exact identities/state | Pending final receipt | Native state lifetime |
-| Source acquisition lifecycle | Real detached supervisor, bounded fake provider | Completion, disconnect, stall, crash, stop/resume | Owner identity and cleanup survive client loss | All lifecycle cases exercised | Exact typed states and generation counts | Pending final receipt | Native supervision; no remote provider throughput claim |
-| Real REPL PTY | Real terminal, typed fake host and descriptor observations | Unicode edit, paste, cancellation, repeated submissions | Restored termios, balanced paste and bounded descriptor lifetime | Full terminal interaction exercised | Saved terminal flags equal; TTY fd counts bounded | Pending final receipt | Native terminal lifecycle |
-| Tiny production vertical | Real compiler, authenticated artifact/binding, CPU backend and typed transport | Generated deterministic model, input `a`, context 8 | Provider progress, decoded output, next prompt and complete shutdown | `okokok`, session position 5, next prompt; SIGINT under one second | Exact output and identity; shutdown deadline 10 s | Pending final receipt | Actual bounded CPU execution and host/CLI composition |
-| Structure/build/registry | Manifest, compiler, native symbols and real Make rules | Current source and disposable build/package fixtures | Same owner/ABI policy and failed-publication preservation | Contracts exercised | Exact membership and foreign-file survival; CUDA compiler case may SKIP | Pending final receipt | Build and source integrity |
-| Linux `native` regression | Existing Linux mechanisms and same assertions | Isolated x86_64 checkout | All selected CPU/terminal/host cases pass | Confirmation in progress | No unsupported case hidden as PASS | Pending final receipt | Retained Linux behavior |
+| `unit.platform`, filesystem and artifact | Native OS APIs, bytes and descriptor access | Temporary files, socket pair, sparse VM mappings | Exclusive publication, immutable descriptor, preserved failed replacement and COW | Native mechanisms exercised | Exact bytes, permissions and page protections | PASS | Darwin platform mechanisms, not model quality |
+| Runtime binding/state/sequence tests | Authenticated bindings and independent sessions | Bounded generated state | Attach/reset/checkpoint, isolation and transactional rollback | CPU lifecycle exercised | Exact identities/state | PASS | Native state lifetime |
+| Source acquisition lifecycle | Real detached supervisor, bounded fake provider | Completion, disconnect, stall, crash, stop/resume | Owner identity and cleanup survive client loss | All lifecycle cases exercised | Exact typed states and generation counts | PASS | Native supervision; no remote provider throughput claim |
+| Real REPL PTY | Real terminal, typed fake host and descriptor observations | Unicode edit, paste, cancellation, repeated submissions | Restored termios, balanced paste and bounded descriptor lifetime | Full terminal interaction exercised | Saved terminal flags equal; TTY fd counts bounded | PASS | Native terminal lifecycle |
+| Tiny production vertical | Real compiler, authenticated artifact/binding, CPU backend and typed transport | Generated deterministic model, input `a`, context 8 | Provider progress, decoded output, next prompt and complete shutdown | `okokok`, session position 5, next prompt; SIGINT 0.748 s | Exact output and identity; shutdown deadline 10 s | PASS | Actual bounded CPU execution and host/CLI composition |
+| Structure/build/registry | Manifest, compiler, native symbols and real Make rules | Current source and disposable build/package fixtures | Same owner/ABI policy and failed-publication preservation | Contracts exercised | Exact membership and foreign-file survival; CUDA compiler case may SKIP | PASS | Build and source integrity |
+| Linux `native` regression | Existing Linux mechanisms and same assertions | Isolated x86_64 checkout | All selected CPU/terminal/host cases pass | 13/13 selected tests pass on the identical source tree | No unsupported case hidden as PASS | PASS | Retained Linux behavior |
 
 The fixture artifact SHA-256 is
 `a946a8447534b15556e9b6d38c57cfee2bb3f5f05ffa5932ac9c672b7641341d` and its
@@ -86,6 +97,20 @@ whole-model behavior oracle.
 | Hosted macOS CI | A pinned-action macOS job runs native and build contracts. Its first hosted execution is separate from this local arm64 evidence. |
 | Wider platforms and release | Other macOS versions/architectures, GPU/full-model performance, Windows and distribution/legal qualification remain independent. Existing nonliteral-format Clang warnings are not removed by this portability Task. |
 
+## Build and host observations
+
+Source ownership, natural structure, architecture, registry, repository/build
+contracts and canonical documentation validation pass on the local Mac. The
+Linux ownership/layout/natural/architecture/registry/build contracts pass with
+`TMPDIR=/tmp`; each host's seven-case build suite has six PASS and one explicit
+SKIP for its absent CUDA compiler. CUDA is not a native CPU gate.
+
+During Linux confirmation, Exon's `/` filesystem reported zero user-available
+space (100% usage), while `/tmp` is a separate tmpfs with 13 GiB available.
+Build fixtures using the host's default `/home/mothx/.cache/tmp` failed with
+ENOSPC. Repeating them under `/tmp` passes. This is an observed host storage
+problem for the next Exon work session; no unrelated files were deleted.
+
 ## Mechanism authority
 
 Apple's [fcntl documentation](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fcntl.2.html)
@@ -103,5 +128,10 @@ and [Status](../project-control/STATUS.md#interfaces-and-portability).
 No cross-repository source contract changes. The dependency update belongs to
 the separately published CLI refoundation, whose native consumers were requalified.
 
-`progression_decision=complete_evidence`, `downstream_safe=false` until the final
-source-stable Mac and Linux confirmation is retained.
+No new ADR or Roadmap horizon is selected: native mechanisms implement the
+existing platform boundary. Code, architecture, Task/Status and evaluation
+owners close together; the macOS CI job retains its separate first hosted gate.
+
+`progression_decision=proceed`, `downstream_safe=true` for the qualified native
+CPU fixtures, host and terminal boundary. Metal, small-model conversation,
+YAI/SDK/Studio composition and release remain independently unqualified.
