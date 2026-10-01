@@ -224,10 +224,10 @@ contains "$ROOT/models-narrow.out" 'representations  2'
 # without changing the model facts being rendered.
 pty_command="$YVEX_BIN model list --wide --models-root $MODELS_ROOT --registry $REGISTRY"
 env -u NO_COLOR COLUMNS=180 TERM=xterm-256color \
-    script -q -e -c "$pty_command" "$ROOT/models-color.typescript" </dev/null >/dev/null
+    sh tests/support/record_terminal.sh -q -e -c "$pty_command" "$ROOT/models-color.typescript" </dev/null >/dev/null
 LC_ALL=C grep "$(printf '\033')" "$ROOT/models-color.typescript" >/dev/null
 NO_COLOR=1 COLUMNS=180 TERM=xterm-256color \
-    script -q -e -c "$pty_command" "$ROOT/models-no-color.typescript" </dev/null >/dev/null
+    sh tests/support/record_terminal.sh -q -e -c "$pty_command" "$ROOT/models-no-color.typescript" </dev/null >/dev/null
 ! LC_ALL=C grep "$(printf '\033')" "$ROOT/models-no-color.typescript" >/dev/null
 
 # Actual terminal geometry and styling use the same semantic content. Capture
@@ -379,8 +379,7 @@ PY
 
 # Standalone and numbered payloads are separate choices. Selection excludes the
 # unselected payload even when include globs are broad; malformed populations fail.
-YVEX_FAKE_HF_DISCOVERY_MODE=alternative-safetensors \
-    expect_rc 2 "$YVEX_BIN" model pull hf://community/alternative-model \
+expect_rc 2 env YVEX_FAKE_HF_DISCOVERY_MODE=alternative-safetensors "$YVEX_BIN" model pull hf://community/alternative-model \
     --format safetensors --dry-run --models-root "$MODELS_ROOT" \
     >"$ROOT/alternative-ambiguous.out" 2>"$ROOT/alternative-ambiguous.err"
 contains "$ROOT/alternative-ambiguous.err" 'multiple representations are available'
@@ -643,7 +642,7 @@ expect_rc 1 "$YVEX_BIN" model load workflow-demo \
     >"$ROOT/load-profile-alias.out" 2>"$ROOT/load-profile-alias.err"
 contains "$ROOT/load-profile-alias.err" 'model is not launchable: workflow-demo'
 set +e
-printf '1\nq\n' | NO_COLOR=1 TERM=xterm-256color script -q -e -c \
+printf '1\nq\n' | NO_COLOR=1 TERM=xterm-256color sh tests/support/record_terminal.sh -q -e -c \
     "$YVEX_BIN model load" \
     "$ROOT/load-variant-selector.typescript" >/dev/null 2>&1
 selector_status=$?

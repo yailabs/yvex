@@ -17,7 +17,8 @@ def record(transcript, command):
         stderr=slave, start_new_session=True,
         preexec_fn=lambda: fcntl.ioctl(0, termios.TIOCSCTTY, 0))
     os.close(slave)
-    input_open = True
+    # Output-only renderer fixtures do not own an input stream or an EOF key.
+    input_open = os.environ.get('YVEX_TEST_PTY_INPUT') != 'none'
     try:
         with transcript.open('wb', buffering=0) as output:
             while True:

@@ -525,12 +525,10 @@ python3 tests/support/human_field.py "$ROOT/inspect-gguf.out" 'kind: conversion'
 grep 'Q4_K_M (filename)' "$ROOT/inspect-gguf.out"
 grep 'acquire-and-inspect-required' "$ROOT/inspect-gguf.out"
 
-YVEX_FAKE_HF_DISCOVERY_MODE=model-not-found YVEX_HF_CLI="$FAKE_HF" \
-  expect_rc 1 "$YVEX_BIN" source inspect missing/model \
+expect_rc 1 env YVEX_FAKE_HF_DISCOVERY_MODE=model-not-found YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source inspect missing/model \
   > "$ROOT/inspect-model-missing.out" 2> "$ROOT/inspect-model-missing.err"
 grep 'remote model was not found' "$ROOT/inspect-model-missing.err"
-YVEX_FAKE_HF_DISCOVERY_MODE=revision-not-found YVEX_HF_CLI="$FAKE_HF" \
-  expect_rc 1 "$YVEX_BIN" source inspect MiniMaxAI/MiniMax-H3 --revision DOES_NOT_EXIST \
+expect_rc 1 env YVEX_FAKE_HF_DISCOVERY_MODE=revision-not-found YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source inspect MiniMaxAI/MiniMax-H3 --revision DOES_NOT_EXIST \
   > "$ROOT/inspect-revision-missing.out" 2> "$ROOT/inspect-revision-missing.err"
 grep 'remote revision or reference was not found' "$ROOT/inspect-revision-missing.err"
 
@@ -540,8 +538,8 @@ expect_rc 2 "$YVEX_BIN" model search MiniMax --interactive \
     > "$ROOT/search-interactive.out" 2> "$ROOT/search-interactive.err"
 python3 tests/support/human_field.py "$ROOT/search-interactive.err" 'model search: unknown flag: --interactive'
 
-YVEX_FAKE_HF_RESOLVED_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
-  YVEX_HF_CLI="$FAKE_HF" expect_rc 1 "$YVEX_BIN" source inspect MiniMaxAI/MiniMax-H3 \
+expect_rc 1 env YVEX_FAKE_HF_RESOLVED_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source inspect MiniMaxAI/MiniMax-H3 \
   --revision b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08 \
   > "$ROOT/inspect-revision-mismatch.out" 2> "$ROOT/inspect-revision-mismatch.err"
 grep 'provider resolved revision does not match the requested identity' \
@@ -554,8 +552,7 @@ YVEX_FAKE_HF_RESOLVED_SHA=62af8fffb2f7030cac4de2f0169f5b8d1101b646 \
 python3 tests/support/human_field.py "$ROOT/inspect-deepseek.out" 'family: deepseek'
 python3 tests/support/human_field.py "$ROOT/inspect-deepseek.out" 'support_stage: package-preparation'
 
-YVEX_FAKE_HF_DISCOVERY_MODE=unsafe-file YVEX_HF_CLI="$FAKE_HF" \
-  expect_rc 4 "$YVEX_BIN" source inspect MiniMaxAI/MiniMax-H3 \
+expect_rc 4 env YVEX_FAKE_HF_DISCOVERY_MODE=unsafe-file YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source inspect MiniMaxAI/MiniMax-H3 \
   > "$ROOT/inspect-unsafe-file.out" 2> "$ROOT/inspect-unsafe-file.err"
 grep 'provider file listing is malformed or oversized' "$ROOT/inspect-unsafe-file.err"
 
@@ -563,18 +560,15 @@ YVEX_FAKE_HF_DISCOVERY_MODE=empty YVEX_HF_CLI="$FAKE_HF" \
   "$YVEX_BIN" model search none > "$ROOT/search-empty.out"
 grep '^REMOTE MODELS · "none"' "$ROOT/search-empty.out"
 
-YVEX_FAKE_HF_DISCOVERY_MODE=malformed YVEX_HF_CLI="$FAKE_HF" \
-  expect_rc 4 "$YVEX_BIN" model search malformed > "$ROOT/search-malformed.out" \
+expect_rc 4 env YVEX_FAKE_HF_DISCOVERY_MODE=malformed YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" model search malformed > "$ROOT/search-malformed.out" \
   2> "$ROOT/search-malformed.err"
 grep 'provider search did not return a JSON array' "$ROOT/search-malformed.err"
 
-YVEX_FAKE_HF_DISCOVERY_AUTH=1 YVEX_HF_CLI="$FAKE_HF" \
-  expect_rc 1 "$YVEX_BIN" model search private > "$ROOT/search-auth.out" \
+expect_rc 1 env YVEX_FAKE_HF_DISCOVERY_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" model search private > "$ROOT/search-auth.out" \
   2> "$ROOT/search-auth.err"
 grep 'authentication is required' "$ROOT/search-auth.err"
 
-YVEX_FAKE_HF_FAIL=1 YVEX_HF_CLI="$FAKE_HF" \
-  expect_rc 1 "$YVEX_BIN" model search failed > "$ROOT/search-fail.out" \
+expect_rc 1 env YVEX_FAKE_HF_FAIL=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" model search failed > "$ROOT/search-fail.out" \
   2> "$ROOT/search-fail.err"
 grep 'provider operation failed' "$ROOT/search-fail.err"
 

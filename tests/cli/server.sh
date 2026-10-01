@@ -38,24 +38,31 @@ SOCKET_ROOT=$(realpath "$SOCKET_ROOT")
 SOCKET_PATH=$SOCKET_ROOT/yvex/yvexd.sock
 chmod 0700 "$SOCKET_ROOT"
 
+scope_cppflags=-D_POSIX_C_SOURCE=200809L
+scope_gc=-Wl,--gc-sections
+if test "$(uname -s)" = Darwin; then
+    scope_cppflags="$scope_cppflags -D_DARWIN_C_SOURCE"
+    scope_gc=-Wl,-dead_strip
+fi
+
 # Link the actual renderer; section GC excludes unrelated porcelain consumers.
-${CC:-cc} -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -I. -Iinclude \
+${CC:-cc} -std=c11 -Wall -Wextra -Werror $scope_cppflags -I. -Iinclude \
     -I"${BUILD_DIR:-build}/generated" -I"${REPLAI_PREFIX:-build/external/replai}/include" \
     -ffunction-sections -fdata-sections \
     tests/integration/cli_logs.c src/cli/render/runtime.c src/cli/io/events.c src/cli/io/out.c \
     src/cli/io/presentation.c src/cli/io/table.c src/cli/io/terminal/posix.c src/core/status.c \
     "${REPLAI_PREFIX:-build/external/replai}/lib/libreplai_c.a" \
     $(PKG_CONFIG_PATH="${REPLAI_PREFIX:-build/external/replai}/lib/pkgconfig" pkg-config --libs --static replai) \
-    -pthread -Wl,--gc-sections -o "$OUT_DIR/log-renderer"
+    -pthread "$scope_gc" -Wl,-rpath,"${REPLAI_PREFIX:-build/external/replai}/lib" -o "$OUT_DIR/log-renderer"
 NO_COLOR=1 "$OUT_DIR/log-renderer" >"$OUT_DIR/log-renderer.out"
-${CC:-cc} -std=c11 -Wall -Wextra -Werror -I. -Iinclude \
+${CC:-cc} -std=c11 -Wall -Wextra -Werror $scope_cppflags -I. -Iinclude \
     -I"${REPLAI_PREFIX:-build/external/replai}/include" -ffunction-sections -fdata-sections \
     tests/integration/terminal_scope.c src/cli/io/terminal/posix.c src/core/status.c \
     "${REPLAI_PREFIX:-build/external/replai}/lib/libreplai_c.a" \
     $(PKG_CONFIG_PATH="${REPLAI_PREFIX:-build/external/replai}/lib/pkgconfig" pkg-config --libs --static replai) \
-    -pthread -Wl,--gc-sections -o "$OUT_DIR/terminal-scope"
+    -pthread "$scope_gc" -Wl,-rpath,"${REPLAI_PREFIX:-build/external/replai}/lib" -o "$OUT_DIR/terminal-scope"
 "$OUT_DIR/terminal-scope"
-env -u NO_COLOR TERM=xterm script -q -e -c "$OUT_DIR/log-renderer" \
+env -u NO_COLOR YVEX_TEST_PTY_INPUT=none TERM=xterm sh tests/support/record_terminal.sh -q -e -c "$OUT_DIR/log-renderer" \
     "$OUT_DIR/log-renderer.tty" >"$OUT_DIR/log-renderer.color"
 python3 - "$OUT_DIR/log-renderer.out" "$OUT_DIR/log-renderer.color" <<'PY'
 import pathlib, re, sys
@@ -159,7 +166,7 @@ set +e
 run_client engine load >"$OUT_DIR/load-nontty.out" 2>"$OUT_DIR/load-nontty.err"
 load_nontty_status=$?
 HOME="$HOME_ROOT" XDG_RUNTIME_DIR="$SOCKET_ROOT" NO_COLOR=1 \
-    TERM=xterm-256color script -q -e -c "$YVEX_BIN engine load" \
+    TERM=xterm-256color sh tests/support/record_terminal.sh -q -e -c "$YVEX_BIN engine load" \
     "$OUT_DIR/engine-load.typescript" </dev/null >"$OUT_DIR/engine-load.out" \
     2>"$OUT_DIR/engine-load.err"
 engine_load_tty_status=$?
@@ -167,7 +174,7 @@ run_client model load >"$OUT_DIR/model-load-nontty.out" \
     2>"$OUT_DIR/model-load-nontty.err"
 model_load_nontty_status=$?
 printf '1\n1\n' | HOME="$HOME_ROOT" XDG_RUNTIME_DIR="$SOCKET_ROOT" NO_COLOR=1 \
-    TERM=xterm-256color script -q -e -c "$YVEX_BIN model load" \
+    TERM=xterm-256color sh tests/support/record_terminal.sh -q -e -c "$YVEX_BIN model load" \
     "$OUT_DIR/load-selector.typescript" >"$OUT_DIR/load-selector.out" \
     2>"$OUT_DIR/load-selector.err"
 load_selector_status=$?
@@ -295,7 +302,7 @@ contains "$OUT_DIR/unload.err" 'requested engine is not loaded'
 # not compete for listeners or open a second stdin-driven command surface.
 set +e
 HOME="$HOME_ROOT" XDG_RUNTIME_DIR="$SOCKET_ROOT" NO_COLOR=1 TERM=xterm-256color \
-    script -q -e -c \
+    sh tests/support/record_terminal.sh -q -e -c \
         "stty cols 132 rows 44; $YVEX_BIN serve" \
         "$OUT_DIR/attached.typescript" </dev/null \
         >"$OUT_DIR/attached.out" 2>"$OUT_DIR/attached.err"
@@ -347,7 +354,7 @@ test ! -e "$SOCKET_PATH"
 # A foreground TTY owns only server logs.  Lifecycle control remains the same
 # deterministic command plane from another terminal.
 HOME="$HOME_ROOT" XDG_RUNTIME_DIR="$SOCKET_ROOT" NO_COLOR=1 TERM=xterm-256color \
-    script -q -f -e -c \
+    sh tests/support/record_terminal.sh -q -f -e -c \
         "stty cols 132 rows 44; $YVEX_BIN serve --openai off --workers 2 --max-engines 2" \
         "$OUT_DIR/server-terminal.typescript" </dev/null \
         >"$OUT_DIR/server-terminal.out" 2>"$OUT_DIR/server-terminal.err" &
@@ -395,7 +402,7 @@ test ! -e "$SOCKET_PATH"
 
 # Ordinary 80-column terminals keep the same complete semantic records.
 HOME="$HOME_ROOT" XDG_RUNTIME_DIR="$SOCKET_ROOT" NO_COLOR=1 TERM=xterm-256color \
-    script -q -f -e -c \
+    sh tests/support/record_terminal.sh -q -f -e -c \
         "stty cols 80 rows 30; $YVEX_BIN serve --openai off" \
         "$OUT_DIR/server-compact.typescript" </dev/null \
         >"$OUT_DIR/server-compact.out" 2>"$OUT_DIR/server-compact.err" &

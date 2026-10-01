@@ -65,7 +65,7 @@ contains "$OUT_DIR/first.out" "audio_samples_trimmed: 5"
 contains "$OUT_DIR/first.out" "file_bytes: 16524"
 contains "$OUT_DIR/first.out" "duration: 3/24 seconds"
 contains "$OUT_DIR/first.out" "end_user_path_available: false"
-[ "$(stat -c %s "$OUT_DIR/first.avi")" -eq 16524 ] || fail "AVI extent differs"
+[ "$(wc -c < "$OUT_DIR/first.avi")" -eq 16524 ] || fail "AVI extent differs"
 [ "$(dd if="$OUT_DIR/first.avi" bs=1 count=4 2>/dev/null)" = RIFF ] ||
     fail "AVI RIFF signature missing"
 cmp "$OUT_DIR/first.avi" "$OUT_DIR/second.avi" || fail "repeat AVI differs"
