@@ -69,10 +69,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 39 | 32 | 0 | 1 | 6 |
+| 40 | 32 | 1 | 1 | 6 |
 <!-- task-counts:end -->
 
-**32/39 selected Tasks complete.** This denominator includes the significant
+**32/40 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -109,6 +109,21 @@ and existing Mac managed-directory publication remain separate canonical
 boundaries; no workaround or model promotion was introduced.
 `progression_decision=proceed`, `downstream_safe=true` only for this primitive
 backend foundation and retained native CPU behavior. No next milestone is selected.
+
+## Independently selected macOS small-model execution
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `MACOS.SMALLMODEL.CLI.0` | Acquire real small-model tensors, compile, load and capture native generation on the Mac; publish the resulting qualified representation on Hugging Face | P1 | 🔵 IN PROGRESS | Exact immutable upstream source, full integrity, native compilation/admission, real output and truthful CPU/Metal scope; existing source, family, runtime and release contracts remain authoritative. A refusal is evidence of a blocker, not a generated answer or publication qualification. |
+
+The operator independently selected this outcome on 2026-10-01 after Metal
+foundation closure. Begin with the existing source-qualified
+`mistralai/Mamba-Codestral-7B-v0.1` target and its pinned revision, using the
+existing CPU deployment and normal CLI lifecycle. The separate Metal foundation
+does not confer model admission. Preserve main and concurrent primary work;
+do not invent a chat template, numerical relaxation or Metal-only runtime.
+Hugging Face publication is authorized for the resulting representation, once
+its exact license, lineage, runtime scope and remote integrity are established.
 
 ## Delivery progression
 
