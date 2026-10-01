@@ -230,6 +230,24 @@ only after complete discharge and retains it when cleanup must be retried;
 `yvex_backend_close` remains the best-effort compatibility projection for
 callers without a failure channel.
 
+Native Apple Silicon Metal is admitted through this same factory and exact
+variant query. It exposes storage operations and F32 embedding only; admitting
+that backend does not admit a runtime model. Its shared physical RAM has distinct
+host and GPU addresses. A native tensor retains its buffer owner; this foundation
+refuses borrowed physical subviews. Completion precedes initialized-output
+publication, and a failed command retains a cleanup-only owner. Checked close
+requires releasing all live tensors before its retry can discharge ownership.
+
+`<yvex/internal/backend_resource.h>` is a repository-internal observation ABI,
+not a new installed public layout. Schema v1 pairs copied byte facts with a
+known mask: an unset bit means unavailable or unmeasured, not measured zero.
+Addressable/mapped extents and requested allocated/temporary payload are distinct
+from physical residency, actual working set, device API allocation and the
+recommended working set. API/storage copy counters are distinct from unmeasured
+bus transfers. CPU/CUDA providers not qualified for this record return unsupported
+with a cleared output. Installed public backend records and wire versions are
+unchanged.
+
 The concrete backend object and dispatch table are source-local backend ABI.
 Graph and runtime owners hold an opaque `yvex_backend` and use typed operations
 for allocation, transfer, capability queries, residency mappings and workspace

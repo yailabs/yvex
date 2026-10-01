@@ -46,7 +46,7 @@ $(LIBYVEX): $(CORE_OBJS) $(if $(filter Darwin,$(YVEX_HOST_OS)),tools/archive_dar
 
 # Linker changes must invalidate products even when no C source changed.
 $(YVEX_BIN) $(TEST_RUNNER) $(QUANT_TEST_RUNNER) $(ARTIFACT_TEST_RUNNER) \
-	$(CUDA_TEST_RUNNER) $(patsubst $(OBJ_DIR)/tests/live/%.o,$(TEST_DIR)/%,\
+	$(CUDA_TEST_RUNNER) $(METAL_TEST_RUNNER) $(patsubst $(OBJ_DIR)/tests/live/%.o,$(TEST_DIR)/%,\
 		$(filter $(OBJ_DIR)/tests/live/%.o,$(RUNNER_OBJS))) \
 	$(OPENAI_FAKE_HOST) $(OPENAI_ADAPTER_HOST) $(TINY_VERTICAL_COMPILER) \
 	$(NATIVE_TURN_TEST): $(LINK_BUILD_CONFIG)
@@ -54,6 +54,12 @@ $(YVEX_BIN) $(TEST_RUNNER) $(QUANT_TEST_RUNNER) $(ARTIFACT_TEST_RUNNER) \
 $(OBJ_DIR)/%.o: %.c $(C_BUILD_CONFIG)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
+
+ifeq ($(YVEX_NATIVE_METAL),yes)
+$(OBJ_DIR)/%.o: %.m $(C_BUILD_CONFIG)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(METAL_CFLAGS) $(DEPFLAGS) -c $< -o $@
+endif
 
 $(SOURCE_MANIFEST_MK) $(SOURCE_FAMILY_HEADER) &: \
 		$(SOURCE_OWNER_MANIFEST) $(SOURCE_MANIFEST_GENERATOR) config/qa/registry.json
@@ -90,7 +96,8 @@ $(C_BUILD_CONFIG): FORCE
 	@mkdir -p $(@D)
 	@set -eu; tmp="$@.tmp.$$$$"; trap 'rm -f "$$tmp"' EXIT HUP INT TERM; \
 	printf '%s\n' 'cc=$(CC)' 'cc-version=$(shell $(CC) --version 2>/dev/null | head -1)' \
-		'cppflags=$(YVEX_BUILD_CPPFLAGS)' 'cflags=$(YVEX_BUILD_CFLAGS)' >"$$tmp"; \
+		'cppflags=$(YVEX_BUILD_CPPFLAGS)' 'cflags=$(YVEX_BUILD_CFLAGS)' \
+		'metal-cflags=$(METAL_CFLAGS)' 'native-metal=$(YVEX_NATIVE_METAL)' >"$$tmp"; \
 	if test -r "$@" && cmp -s "$$tmp" "$@"; then rm -f "$$tmp"; \
 	else mv "$$tmp" "$@"; fi; trap - EXIT HUP INT TERM
 
@@ -379,3 +386,8 @@ clean:
 	if test "$$build_dir" = build; then \
 		rm -f -- ./yvex; \
 	fi
+
+$(METAL_TEST_MAIN_OBJ): $(QA_REGISTRY_HEADER) $(QA_REGISTRY_DIR)/metal_registry.inc tests/support/runner.h
+$(METAL_TEST_RUNNER): $(METAL_TEST_MAIN_OBJ) $(METAL_TEST_UNIT_OBJ) $(LIBYVEX) tests/test.h
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(METAL_TEST_MAIN_OBJ) $(METAL_TEST_UNIT_OBJ) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@

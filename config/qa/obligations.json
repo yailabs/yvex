@@ -7,6 +7,7 @@
     "reason": "unknown ownership expands to conservative CPU composition evidence"
   },
   "change_classes": [
+    {"id":"metal-foundation","patterns":["src/backend/metal.c","src/backend/metal/*","include/yvex/internal/backend_resource.h","tests/unit/backend_metal.c"],"lanes":["metal","native","structural"],"tests":["metal.foundation","metal.failure","unit.backend_metal_refusal","unit.backend_cpu","unit.backend_ops"],"reason":"native shared-buffer execution must earn GPU, bit-exact semantic, fail-closed cleanup and CPU/platform evidence separately"},
     {
       "id": "native-platform",
       "patterns": ["src/core/platform.c", "include/yvex/internal/platform.h", "src/core/fs.c",

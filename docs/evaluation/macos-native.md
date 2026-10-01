@@ -127,7 +127,7 @@ runner's actual memory admission or promise a usable 8B/14B model.
 
 | Boundary | Current problem / required evidence |
 | --- | --- |
-| Metal | No implemented Metal execution backend. Native Darwin support does not add GPU kernels, allocator/submission or independently admitted numerical classes. |
+| Metal | No Metal execution was earned by this native CPU Task. The separate [Metal foundation](macos-metal.md) owns device, storage and primitive evidence; model numerical classes still require independent qualification. |
 | Useful small conversation model | No 8B/14B Mac conversation model is qualified. The existing 7B Mamba-Codestral CPU family lacks hosted conversation support; a standard small GGUF cannot bypass family admission/template contracts. Select an exact supported checkpoint and earn its separate execution/conversation gates. |
 | YAI, SDKs and Studio | This Task qualifies YVEX only. The complete Mac product chain remains untested against the unpublished Exon/Spark waves. Align after those authoritative pushes, then test consumer startup and real turns. |
 | Darwin explicit cache eviction | Returns unsupported. F_NOCACHE changes future caching and is not proof of eviction or a cold-load benchmark. |

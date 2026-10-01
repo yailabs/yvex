@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import platform
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -71,6 +73,30 @@ class BuildContract(unittest.TestCase):
         self.assertIn(" -ptx ", self.make(target))
         self.assertIn(" -ptx ", self.make("NVCCFLAGS=-O0", target))
         self.assertIn(str(header), Path(target + ".d").read_text())
+
+    @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64",
+                         "native Metal Objective-C build requires macOS arm64")
+    def test_metal_objective_c_flags_and_dependencies(self):
+        header = self.root / "value.h"
+        header.write_text("#define FIXTURE_VALUE 7\n")
+        source = self.root / "native.m"
+        source.write_text('#import <Foundation/Foundation.h>\n#include "value.h"\n'
+                          'int probe(void);\nint probe(void) { return FIXTURE_VALUE + (int)[@"a" length]; }\n')
+        self.inputs = [f"METAL_SRCS={source}"]
+        target = str(self.build / "obj") + "/" + str(source.with_suffix(".o"))
+        self.assertIn("-fobjc-arc", self.make("METAL_CFLAGS=-O0", target))
+        self.assertNotIn(" -c ", self.make("METAL_CFLAGS=-O0", target))
+        header.write_text("#define FIXTURE_VALUE 8\n")
+        self.assertIn(" -c ", self.make("METAL_CFLAGS=-O0", target))
+        self.assertIn(" -c ", self.make("METAL_CFLAGS=-O1", target))
+        self.assertIn(str(header), Path(target).with_suffix(".d").read_text())
+
+    def test_linux_rules_have_no_metal_toolchain(self):
+        output = self.make("YVEX_HOST_OS=Linux", "YVEX_HOST_ARCH=aarch64",
+                           "NVCC=yvex-no-nvcc", "-n", "lib")
+        self.assertNotIn("src/backend/metal/native.o", output)
+        self.assertNotIn("src/backend/metal/native.m", output)
+        self.assertNotIn("-framework", output)
 
     def test_install_manifest_and_destdir(self):
         paths = [line.split("\t")[0] for line in

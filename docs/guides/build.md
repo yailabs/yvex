@@ -31,7 +31,7 @@ Source and test membership still come only from their existing manifests and
 registries. `make print-build-inputs` exposes the parsed authored Make inputs.
 
 `CC`, `AR`, `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, `LDLIBS`, `NVCC`, `NVCCFLAGS`,
-`BUILD_DIR` and `YVEX_CUDA_ARCH` are explicit overrides. Packager `CPPFLAGS`
+`METAL_CFLAGS`, `BUILD_DIR` and `YVEX_CUDA_ARCH` are explicit overrides. Packager `CPPFLAGS`
 augment mandatory project includes/feature definitions. Material compiler and
 link flags invalidate their consumers; C and CUDA transitive header dependencies
 are generated, including PTX and native CUBIN. Concurrent image/archive publication
@@ -94,6 +94,32 @@ minimum system reserve. The hosted macOS job explicitly sets
 declared envelope is reported in the test logs. That CI mode qualifies fixture
 execution, not available host capacity. Keep it unset for local model-admission
 qualification; the evaluation report records the distinction.
+
+## Apple Silicon Metal foundation
+
+On native macOS arm64 the same build compiles the manifest-owned Objective-C
+backend with required ARC and links the system Foundation/Metal frameworks.
+Command Line Tools provide the native compiler and SDK; pipeline admission uses
+the system Metal runtime compiler, without the Xcode `metal` CLI or CUDA tools.
+Linux/CUDA builds do not compile the Objective-C implementation or link Apple
+frameworks. Non-native exact Metal requests return unsupported.
+
+After the native build above:
+
+```sh
+./yvex inspect backend metal
+python3 tools/qa.py run metal
+python3 tools/qa.py run native
+```
+
+`metal` is a mandatory real-device lane with two independent foundation/failure
+tests and an exclusive device resource. Darwin arm64 is a prerequisite, not GPU
+proof: the test must admit the device and compiled pipeline and execute real
+commands. Missing native hardware is BLOCKED; an eligible host whose device or
+pipeline cannot open fails the test. Keep diagnostic Metal fault hooks unset
+for real execution evidence. The [qualification](../evaluation/macos-metal.md)
+records exact source and target facts. No model-load or generation path is
+promoted; F32 embedding and common storage are the earned boundary.
 
 ## Prerequisites
 

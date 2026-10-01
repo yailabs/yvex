@@ -14,6 +14,25 @@ publication: {html: true, pdf: true, index: true}
 
 [Up](README.md)
 
+## Embedding row selection
+
+The existing F32 embedding primitive reads a table described as
+`[hidden_size, vocabulary_size]`, with contiguous vocabulary rows of
+`hidden_size` F32 values, and writes `[token_count, hidden_size]` in token order.
+Each token ID must be in the table vocabulary. The primitive selects source
+representations without arithmetic, conversion, reduction or finite-value
+reclassification; its numerical criterion is exact F32 bit equality, including
+signed zero, subnormal and exceptional payloads. Repeated IDs repeat identical
+rows. This is narrower than model-input admission, which may require finite
+payloads under its own contract.
+
+The Metal foundation realizes that existing operation with integer payload
+loads/stores. Qualification compares original host bytes through independent
+row addressing, separately from the existing CPU backend operation. It does
+not infer equivalence for operations requiring ordered F64 accumulation or
+other numerical classes. F16 conversion, matmul, normalization, attention and
+quantized variants remain explicitly unsupported by this Metal realization.
+
 ## Internal Activation-Prefill Boundary
 
 `include/yvex/internal/runtime_prefill.h` owns the non-installed production

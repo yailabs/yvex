@@ -2,6 +2,7 @@
 #ifndef INCLUDE_YVEX_INTERNAL_BACKEND_H_INCLUDED
 #define INCLUDE_YVEX_INTERNAL_BACKEND_H_INCLUDED
 #include <yvex/backend.h>
+#include <yvex/internal/backend_resource.h>
 #include <yvex/core.h>
 #include <yvex/internal/core.h>
 #include <yvex/model.h>
@@ -384,6 +385,8 @@ int yvex_backend_validate_mlp(const yvex_backend *backend,
                               unsigned long long *gate_offset, unsigned long long *up_offset,
                               unsigned long long *down_offset, const char *where, yvex_error *err);
 int yvex_backend_open_cuda_impl(yvex_backend **out, const char *device,
+                               unsigned long long memory_limit_bytes, yvex_error *err);
+int yvex_backend_open_metal_impl(yvex_backend **out, const char *device,
                                 unsigned long long memory_limit_bytes, yvex_error *err);
 /* CUDA launch-graph lifecycle shared by runtime execution sessions. */
 #define YVEX_BACKEND_CUDA_GRAPH_SCHEMA 1u
@@ -535,6 +538,7 @@ typedef struct {
     char device_name[128], reason[256], kernel_bundle_architecture[16];
     char kernel_bundle_identity[YVEX_SHA256_HEX_BYTES];
     yvex_backend_memory_stats memory;
+    yvex_backend_resource_facts resources;
     int capabilities[YVEX_BACKEND_CAP_OP_ATTENTION + 1];
     yvex_backend_capability_result variants[YVEX_BACKEND_VARIANT_COUNT];
     unsigned int variant_count, context_available;

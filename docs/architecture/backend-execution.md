@@ -16,8 +16,8 @@ related: [yvex.architecture.deployment-specialization, yvex.architecture.generat
 
 [Up](README.md)
 
-CPU and CUDA implement admitted operations, physical representations and
-numerical classes. The compiler supplies the legal program. Runtime owns
+CPU and CUDA implement admitted model operations, physical representations and
+numerical classes. Metal implements the bounded foundation below. The compiler supplies the legal program. Runtime owns
 session/transaction lifetime. Backend owns device allocation, submission,
 synchronization and equivalent launch details.
 
@@ -47,10 +47,65 @@ SIGINT/SIGTERM dispositions even when launched from a shell background job;
 the library does not change process signal policy.
 
 [Native evidence](../evaluation/macos-native.md) qualifies bounded CPU and
-terminal execution. No Metal backend is implemented or implied by Darwin
-platform support. Explicit cache eviction has no equivalent qualified native
+terminal execution. Metal has its own independent backend qualification;
+Darwin platform support alone does not grant GPU execution. Explicit cache eviction has no equivalent qualified native
 mechanism and refuses; native memory availability is a conservative advisory
 estimate, with the existing reserve and capacity admission still applied.
+
+## Apple Silicon Metal foundation
+
+The common backend factory admits `metal` on native Darwin arm64. Admission
+requires an enumerated unified-memory device, command queue and compiled F32
+embedding compute pipeline before publishing READY. Invalid device selectors,
+missing resources and builds without that native implementation refuse the
+exact request. The ordinary `yvex inspect backend metal` consumes the same
+typed report and exact operation-variant capability authority as other backends.
+This adds no Metal-only runtime, CLI, deployment or model lifecycle.
+
+`backend.metal.execution` owns ARC-managed device, queue, pipeline and shared
+MTLBuffer lifetimes. Each tensor owns one native buffer record; borrowed
+physical subviews refuse rather than pretending that their offsets are bound.
+Synchronous embedding and blit operations wait for checked command completion
+before publishing initialized output or releasing temporary IDs. A command,
+encoder or completion failure marks the backend FAILED; only cleanup remains
+legal. Checked close retains the owner while tensors remain, allowing release
+and a final close retry. Allocation or declared-capacity refusal does not poison
+an otherwise healthy backend.
+
+Shared storage uses one physical system-memory domain. CPU `contents` and the
+GPU address are distinct observations; shared RAM does not imply identical
+virtual addresses. Host API reads/writes copy bytes to/from that shared buffer;
+embedding binds those same table/output buffers without another host/device
+allocation or transfer. IDs use a bounded temporary shared buffer and two
+64-bit dispatch constants use `setBytes`. Device copy/zero use Metal blits.
+Copy counters describe those API/storage operations, not measured memory-bus
+traffic. There is no no-copy external host wrapping in this foundation.
+
+The internal schema-v1 resource record separates logical addressable/mapped
+buffer extents, requested owned payload allocation, temporary ID storage, the
+device's recommended working set, max buffer length and API current allocation.
+The requested-payload byte limit includes tensor and ID buffers; it does not
+bound driver queue/pipeline or inline-command overhead. Physical residency and
+actual working set remain unmeasured through explicit absent known bits. Legacy
+dedicated/free GPU-memory and CUDA capability fields remain unavailable, not a
+measured zero or a promise that all system RAM is usable.
+
+The first operation is existing F32 embedding row selection: integer loads and
+stores preserve source F32 representations exactly. Every other numerical
+variant, including F16 embedding, matmul, normalization, attention and quantized
+operations, refuses. The [numerical contract](../contracts/numerical-abi.md#embedding-row-selection)
+and [Metal evidence](../evaluation/macos-metal.md) bound the claim.
+
+The generic kind parser now consumes the existing four-kind vocabulary instead
+of a CPU/CUDA subset. Resource observations and variant reports extend common
+backend-owned seams; no backend internals leak into runtime. Model admission
+remains bounded to CPU/CUDA. `runtime.capacity` validates only those kinds and
+uses CUDA-specific placement/capacity facts; `runtime.core` model admission and
+specialization release/counting also assume two backends. Before a Metal model
+wave, those canonical owners must select capability and physical memory-domain
+semantics and generalize specialization lifetime. Adding another kind conditional
+would not resolve that structural boundary. It does not block this primitive
+backend foundation, which does not construct an engine or claim model support.
 
 ## Execution path
 

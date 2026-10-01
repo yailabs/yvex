@@ -157,7 +157,7 @@ def main() -> int:
             raise AssertionError(f"{identifier} lost its executable CUDA resource contract")
     build_consumers = [
         item for item in tests
-        if item["runner"]["kind"] in {"c-unit", "c-cuda"} or
+        if item["runner"]["kind"] in {"c-unit", "c-cuda", "c-metal"} or
         (item["runner"]["kind"] == "command" and item["runner"]["argv"][0] == "make")
     ]
     if any("build-tree" not in item["resources"] for item in build_consumers):

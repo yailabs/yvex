@@ -191,7 +191,8 @@ def tool_path(name: str) -> str | None:
 
 
 def hardware_facts() -> dict[str, Any]:
-    facts: dict[str, Any] = {"cuda_present": Path("/dev/nvidiactl").exists(), "sm121_present": False}
+    facts: dict[str, Any] = {"cuda_present": Path("/dev/nvidiactl").exists(), "sm121_present": False,
+                             "metal_target": sys.platform == "darwin" and os.uname().machine == "arm64"}
     if shutil.which("nvidia-smi"):
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=name,compute_cap", "--format=csv,noheader"],
@@ -240,6 +241,8 @@ def requirement_failure(item: dict[str, Any], facts: dict[str, Any]) -> str | No
     if missing_tools:
         return f"missing tools: {', '.join(missing_tools)}"
     hardware = requirement["hardware"]
+    if hardware == "metal" and not facts["hardware"]["metal_target"]:
+        return "native macOS arm64 Metal target unavailable"
     if hardware == "cuda" and not facts["hardware"]["cuda_present"]:
         return "CUDA device unavailable"
     if hardware == "sm121" and not facts["hardware"]["sm121_present"]:
@@ -365,6 +368,10 @@ def command_for(item: dict[str, Any]) -> tuple[list[str], dict[str, str]]:
             environment["YVEX_TEST_DISABLE_WORKSPACE_LOCK"] = "1"
         environment["YVEX_TEST_FILTER"] = item["id"]
         return [str(ROOT / "build/tests/test")], environment
+    if runner["kind"] == "c-metal":
+        return [str(ROOT / "build/tests/test_metal")], {
+            **environment, "YVEX_METAL_TEST_FILTER": item["id"],
+        }
     if runner["kind"] == "c-cuda":
         return [str(ROOT / "build/tests/test_cuda")], {
             **environment,
@@ -380,6 +387,8 @@ def build_for(item: dict[str, Any], log) -> tuple[bool, str]:
         targets = list(item["build_targets"])
         if kind == "c-unit":
             targets.append("build/tests/test")
+        elif kind == "c-metal":
+            targets.append("build/tests/test_metal")
         elif kind == "c-cuda":
             targets.append("cuda")
         if not targets:

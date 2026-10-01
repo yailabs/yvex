@@ -23,6 +23,11 @@ YVEX_PROTOCOL_VERSION := $(shell sed -n \
 	include/yvex/server.h)
 
 YVEX_HOST_OS := $(shell uname -s)
+YVEX_HOST_ARCH := $(shell uname -m)
+# Native Objective-C Metal sources are never passed to Linux/CUDA toolchains.
+YVEX_NATIVE_METAL := $(if $(filter Darwin-arm64,$(YVEX_HOST_OS)-$(YVEX_HOST_ARCH)),yes,no)
+METAL_CFLAGS ?=
+override METAL_CFLAGS += -fobjc-arc
 YVEX_ARCHIVER := $(if $(filter Darwin,$(YVEX_HOST_OS)),python3 tools/archive_darwin.py --ar '$(AR)',$(AR) rcsP)
 CPPFLAGS ?=
 ifeq ($(YVEX_HOST_OS),Darwin)
@@ -55,6 +60,7 @@ YVEX_BUILD_IDENTITY ?= $(shell printf '%s\n' \
 	'linker-version=$(shell $(CC) -Wl,--version 2>/dev/null | head -1)' \
 	'nvcc=$(NVCC)' 'nvcc-version=$(shell $(NVCC) --version 2>/dev/null | tail -1)' \
 	'nvccflags=$(YVEX_BUILD_NVCCFLAGS)' 'cuda-ldflags=$(YVEX_BUILD_CUDA_LDFLAGS)' \
+	'metal-cflags=$(METAL_CFLAGS)' 'native-metal=$(YVEX_NATIVE_METAL)' \
 	'cuda-arch-request=$(YVEX_CUDA_ARCH)' 'cuda-arch=$(CUDA_EFFECTIVE_ARCH)' | \
 	sha256sum | cut -d' ' -f1)
 YVEX_BUILD_SOURCE_ROOT ?= $(shell pwd -P)
@@ -64,6 +70,9 @@ CFLAGS ?= -O3 -std=c11 -Wall -Wextra -pedantic -Wstrict-prototypes \
 DEPFLAGS ?= -MMD -MP
 LDFLAGS ?=
 LDLIBS ?= -ldl -pthread -lm -lz
+ifeq ($(YVEX_NATIVE_METAL),yes)
+override LDLIBS += -framework Foundation -framework Metal
+endif
 TEST_CPPFLAGS := $(CPPFLAGS)
 
 BUILD_DIR ?= build
@@ -85,6 +94,7 @@ QA_REGISTRY_MK := $(QA_REGISTRY_DIR)/registry.mk
 QA_REGISTRY_HEADER := $(QA_REGISTRY_DIR)/test_declarations.h
 QA_REGISTRY_PROJECTIONS := $(QA_REGISTRY_HEADER) \
 	$(QA_REGISTRY_DIR)/unit_registry.inc $(QA_REGISTRY_DIR)/cuda_registry.inc \
+	$(QA_REGISTRY_DIR)/metal_registry.inc \
 	$(QA_REGISTRY_DIR)/quant_registry.inc $(QA_REGISTRY_DIR)/artifact_registry.inc \
 	$(QA_REGISTRY_DIR)/inventory.tsv $(QA_REGISTRY_DIR)/make_targets.tsv \
 	$(QA_REGISTRY_DIR)/registry.sha256
@@ -193,6 +203,9 @@ CUDA_CUBIN_INC := $(OBJ_DIR)/generated/cuda_kernels_cubin.inc
 CORE_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 CUDA_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CUDA_SRCS))
 CORE_OBJS += $(CUDA_OBJS)
+ifeq ($(YVEX_NATIVE_METAL),yes)
+CORE_OBJS += $(patsubst %.m,$(OBJ_DIR)/%.o,$(METAL_SRCS))
+endif
 
 ifeq ($(NVCC_AVAILABLE),yes)
 override CPPFLAGS += -DYVEX_HAVE_CUDA_KERNEL_PTX=1
@@ -255,6 +268,9 @@ TINY_VERTICAL_COMPILER := $(TEST_DIR)/tiny_compile
 NATIVE_TURN_TEST := $(TEST_DIR)/native_turn
 OFFICIAL_GGUF_CHECKER := $(TEST_DIR)/ggml_gguf_check
 CUDA_TEST_RUNNER := $(TEST_DIR)/test_cuda
+METAL_TEST_RUNNER := $(TEST_DIR)/test_metal
+METAL_TEST_MAIN_OBJ := $(OBJ_DIR)/tests/metal_runner.o
+METAL_TEST_UNIT_OBJ := $(OBJ_DIR)/tests/unit/backend_metal.o
 
 TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(TEST_UNIT_SRCS))
 TEST_REFERENCE_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(TEST_REFERENCE_SRCS))
@@ -295,7 +311,7 @@ TINY_VERTICAL_COMPILER_OBJ := $(OBJ_DIR)/tests/integration/tiny_compile.o
 NATIVE_TURN_TEST_OBJ := $(OBJ_DIR)/tests/integration/native_turn.o
 
 RUNNER_OBJS := $(TEST_MAIN_OBJ) $(QUANT_TEST_RUNNER_OBJ) \
-	$(ARTIFACT_TEST_RUNNER_OBJ) $(CUDA_TEST_MAIN_OBJ) \
+	$(ARTIFACT_TEST_RUNNER_OBJ) $(CUDA_TEST_MAIN_OBJ) $(METAL_TEST_MAIN_OBJ) \
 	$(SOURCE_PAYLOAD_LIVE_OBJ) $(QUANT_LIVE_OBJ) $(ARTIFACT_LIVE_OBJ) \
 	$(MATERIALIZE_LIVE_OBJ) $(MINIMAX_AUDIO_LIVE_OBJ) $(MINIMAX_VIDEO_LIVE_OBJ) \
 	$(MINIMAX_TEXT_LIVE_OBJ) $(MINIMAX_TRANSFORMER_LIVE_OBJ) $(PROGRAM_FORWARD_LIVE_OBJ) \

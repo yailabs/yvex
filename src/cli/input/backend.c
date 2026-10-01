@@ -30,16 +30,10 @@ int yvex_backend_args_parse(int argc, char **argv,
     }
     if (argc != 3) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "backend",
-                       "backend requires cpu or cuda");
+                       "backend requires a registered backend kind");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (strcmp(argv[2], "cpu") == 0) {
-        out->request.backend_kind = YVEX_BACKEND_KIND_CPU;
-    } else if (strcmp(argv[2], "cuda") == 0) {
-        out->request.backend_kind = YVEX_BACKEND_KIND_CUDA;
-    } else {
-        yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "backend",
-                        "unknown backend kind: %s", argv[2]);
+    if (yvex_backend_kind_parse(argv[2], &out->request.backend_kind, err) != YVEX_OK) {
         return YVEX_ERR_INVALID_ARG;
     }
     yvex_error_clear(err);

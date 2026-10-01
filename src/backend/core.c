@@ -195,15 +195,17 @@ int yvex_backend_kind_parse(const char *name,
                        "output backend kind is required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (!name || strcmp(name, "cpu") == 0) {
+    if (!name) {
         *out = YVEX_BACKEND_KIND_CPU;
         yvex_error_clear(err);
         return YVEX_OK;
     }
-    if (strcmp(name, "cuda") == 0) {
-        *out = YVEX_BACKEND_KIND_CUDA;
-        yvex_error_clear(err);
-        return YVEX_OK;
+    for (size_t index = 0; index < sizeof(backend_kind_names) / sizeof(backend_kind_names[0]); index++) {
+        if (strcmp(name, backend_kind_names[index]) == 0) {
+            *out = (yvex_backend_kind)index;
+            yvex_error_clear(err);
+            return YVEX_OK;
+        }
     }
     yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "backend_kind",
                     "unknown backend kind: %s", name);
@@ -270,6 +272,10 @@ int yvex_backend_open(yvex_backend **out,
     if (kind == YVEX_BACKEND_KIND_CUDA) {
         return yvex_backend_open_cuda_impl(out, options ? options->device : NULL,
                                            memory_limit_bytes, err);
+    }
+    if (kind == YVEX_BACKEND_KIND_METAL) {
+        return yvex_backend_open_metal_impl(out, options ? options->device : NULL,
+                                            memory_limit_bytes, err);
     }
     yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_open",
                     "backend %s is not implemented",
@@ -472,6 +478,26 @@ int yvex_backend_get_device_info(const yvex_backend *backend,
         return YVEX_ERR_UNSUPPORTED;
     }
     return backend->vtable->device_info(backend, out, err);
+}
+
+int yvex_backend_get_resource_facts(const yvex_backend *backend,
+                                   yvex_backend_resource_facts *out, yvex_error *err)
+{
+    int rc;
+    if (out) memset(out, 0, sizeof(*out));
+    if (!backend || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "backend.resources",
+                       "backend and facts output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = backend_dispatch_admit(backend, "backend.resources", err);
+    if (rc != YVEX_OK) return rc;
+    if (!backend->vtable || !backend->vtable->resource_facts) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "backend.resources",
+                       "backend has no qualified resource observation provider");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    return backend->vtable->resource_facts(backend, out, err);
 }
 
 int yvex_backend_bandwidth_probe(yvex_backend *backend,
@@ -1867,11 +1893,18 @@ int yvex_backend_report_build(const yvex_backend_report_request *request,
              report->device_info.name ? report->device_info.name : "");
     report->device_info.name = report->device_name;
 
+    rc = yvex_backend_get_resource_facts(backend, &report->resources, err);
+    if (rc != YVEX_OK && rc != YVEX_ERR_UNSUPPORTED) {
+        yvex_backend_close(backend);
+        return rc;
+    }
+    yvex_error_clear(err);
+
     for (i = 0; i <= (unsigned int)YVEX_BACKEND_CAP_OP_ATTENTION; ++i) {
         report->capabilities[i] =
             yvex_backend_supports(backend, (yvex_backend_capability)i);
     }
-    if (request->backend_kind == YVEX_BACKEND_KIND_CUDA) {
+    {
         report->variant_count = (unsigned int)YVEX_BACKEND_VARIANT_COUNT;
         for (i = 0; i < report->variant_count; ++i) {
             rc = yvex_backend_query_capability(
@@ -1882,6 +1915,8 @@ int yvex_backend_report_build(const yvex_backend_report_request *request,
                 return rc;
             }
         }
+    }
+    if (request->backend_kind == YVEX_BACKEND_KIND_CUDA) {
         backend_report_set_cuda_admission(
             report, &report->variants[YVEX_BACKEND_VARIANT_EMBED_F32_TO_F32]);
         rc = yvex_backend_cuda_attention_graph_summary_get(backend, &cuda, err);
@@ -1904,7 +1939,5 @@ int yvex_backend_report_build(const yvex_backend_report_request *request,
             }
         }
     }
-    yvex_backend_close(backend);
-    yvex_error_clear(err);
-    return YVEX_OK;
+    return yvex_backend_close_checked(&backend, err);
 }

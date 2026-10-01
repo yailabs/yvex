@@ -456,3 +456,6 @@ src/tokenizer/token_input.c	tokenizer	tokenizer.token_input	generic	private	tran
 src/tokenizer/unicode.c	tokenizer	tokenizer.unicode	generic	private	reusable-algorithm	tokenizer.execution,tokenizer.decode	implementation	none
 include/yvex/internal/platform.h	core	core.platform	generic	private	platform-interface	repository	interface	none
 src/core/platform.c	core	core.platform	generic	private	platform-interface	repository	implementation	none
+include/yvex/internal/backend_resource.h	backend	backend.core	generic	private	internal-abi	backend,runtime,tests	interface	none
+src/backend/metal.c	backend	backend.metal.admission	backend	private	platform-interface	backend	implementation	none
+src/backend/metal/native.m	backend	backend.metal.execution	backend	private	platform-interface	backend	implementation	none

@@ -2,8 +2,8 @@
   "schema_version": 1,
   "production_roots": ["src", "include"],
   "owned_roots": ["src", "include", "tests", "tools", "scripts", "schema", "config"],
-  "production_suffixes": [".c", ".h", ".cu"],
-  "owned_suffixes": [".c", ".h", ".cu", ".sh", ".py", ".json", ".def", ".tsv"],
+  "production_suffixes": [".c", ".h", ".cu", ".m"],
+  "owned_suffixes": [".c", ".h", ".cu", ".m", ".sh", ".py", ".json", ".def", ".tsv"],
   "header_tiers": {
     "public_root": "include/yvex",
     "internal_root": "include/yvex/internal",
@@ -56,7 +56,7 @@
   },
   "commentary": {
     "roots": ["src", "include/yvex", "tests", "tools"],
-    "suffixes": [".c", ".cu", ".h", ".py", ".sh"],
+    "suffixes": [".c", ".cu", ".m", ".h", ".py", ".sh"],
     "build_files": ["Makefile"],
     "excluded_prefixes": ["build/"],
     "generated_prefixes": ["build/generated/"],
@@ -113,7 +113,7 @@
   "archive": {
     "path": "build/lib/libyvex.a",
     "member_prefix": "build/obj/",
-    "source_variables": ["CORE_SRCS", "YVEX_SRCS", "DAEMON_SRCS", "OPENAI_ADAPTER_SRCS", "CUDA_SRCS", "CUDA_CU_SRCS"],
+    "source_variables": ["CORE_SRCS", "YVEX_SRCS", "DAEMON_SRCS", "OPENAI_ADAPTER_SRCS", "CUDA_SRCS", "CUDA_CU_SRCS", "METAL_SRCS"],
     "object_variable": "CORE_OBJS"
   },
   "analysis": {

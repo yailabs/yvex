@@ -69,10 +69,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 38 | 31 | 0 | 1 | 6 |
+| 39 | 31 | 1 | 1 | 6 |
 <!-- task-counts:end -->
 
-**31/38 selected Tasks complete.** This denominator includes the significant
+**31/39 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -84,12 +84,24 @@ candidates are not selected Tasks.
 | --- | --- | --- | --- | --- |
 | `PLATFORM.MACOS.NATIVE.0` | Native macOS build, authenticated local host and CPU lifecycle | P1 | ✅ COMPLETE | Native CPU, authenticated host, acquisition/state and real CLI/PTY qualified on Mac and Linux; 13 PASS per host plus ownership/build/documentation contracts; [evidence](../evaluation/macos-native.md). Metal, full-model conversation and YAI/Studio/SDK composition retain independent gates. |
 
-The operator selected this Task on 2026-09-30. Implementation is isolated on
-`feature/macos-native`. Published Spark CLI/REPLAI refoundation at `6c522959`
+The operator selected this Task on 2026-09-30. Implementation used
+`feature/macos-native` and is integrated in `main` by `67a7905`. Published Spark CLI/REPLAI refoundation at `6c522959`
 is integrated; unpublished work and Exon primary checkouts remain untouched.
 Source ownership and existing protocol meanings remain authoritative.
 `progression_decision=proceed`, `downstream_safe=true` for bounded native CPU,
 host and terminal execution only; no next platform/model wave is selected.
+
+## Independently selected Metal foundation
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `METAL.BACKEND.FOUNDATION.0` | Real Apple Silicon Metal execution through the common backend lifecycle | P1 | 🔵 IN PROGRESS | Discover/admit the device, own shared-memory resources, execute an existing operation on GPU against an independent CPU oracle, qualify refusal/cleanup and native CPU/platform separation. No model, attention, projection or performance promotion. |
+
+The operator selected this Task on 2026-10-01 for `feature/macos-metal`,
+starting at `67a7905ea9deb98b0704629a1f979634e19007fb`, clean and aligned
+with published `main`. Native macOS qualification is integrated in `main`;
+primary Linux/CUDA and other repository work remain separately owned.
+Completion requires implementation and reproducible target evidence.
 
 ## Delivery progression
 

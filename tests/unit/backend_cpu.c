@@ -63,7 +63,7 @@ static int test_open_and_unsupported(void)
     yvex_backend_close(backend);
 
     memset(&options, 0, sizeof(options));
-    options.kind = YVEX_BACKEND_KIND_METAL;
+    options.kind = YVEX_BACKEND_KIND_ROCM;
     rc = yvex_backend_open(&backend, &options, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED && backend == NULL,
                      "unimplemented backend refuses without probing hardware");

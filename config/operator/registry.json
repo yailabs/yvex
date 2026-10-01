@@ -6969,7 +6969,9 @@
           "completion_provider": "enum",
           "enum_values": [
             "cpu",
-            "cuda"
+            "cuda",
+            "metal",
+            "rocm"
           ],
           "multiplicity": "one",
           "name": "backend",

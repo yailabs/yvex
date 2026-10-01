@@ -470,7 +470,7 @@ class Audit:
         )
         self.units = {relative(path): parse_unit(path) for path in self.files}
         self.translation_units = {
-            name: unit for name, unit in self.units.items() if unit.path.suffix in {".c", ".cu"}
+            name: unit for name, unit in self.units.items() if unit.path.suffix in {".c", ".cu", ".m"}
         }
         self.headers = {
             name: unit for name, unit in self.units.items() if unit.path.suffix == ".h"
@@ -478,7 +478,7 @@ class Audit:
         self.test_translation_units = {
             relative(path): parse_unit(path)
             for path in sorted((ROOT / "tests").rglob("*"))
-            if path.is_file() and path.suffix in {".c", ".cu"}
+            if path.is_file() and path.suffix in {".c", ".cu", ".m"}
         }
         self.manifest_rows, self.manifest_errors = self.load_manifest()
         self.manifest = {row[0]: row for row in self.manifest_rows}
@@ -591,7 +591,7 @@ class Audit:
         """Yield C, Python, shell, and Make comments without scanning literals as prose."""
         for path in self.commentary_paths():
             name = relative(path)
-            if path.suffix in {".c", ".cu", ".h"}:
+            if path.suffix in {".c", ".cu", ".m", ".h"}:
                 for comment in parse_unit(path).comments:
                     yield name, comment.start_line, self.normalize_comment(comment.text)
                 continue
@@ -632,7 +632,7 @@ class Audit:
                 if len(original.expandtabs(8)) > hard_width:
                     long_lines += 1
             functions.extend((name, function) for function in unit.functions)
-            if unit.path.suffix in {".c", ".cu"}:
+            if unit.path.suffix in {".c", ".cu", ".m"}:
                 for function in unit.functions:
                     body = unit.comment_stripped[function.body_start : function.end]
                     for line in body.splitlines():
@@ -839,6 +839,11 @@ class Audit:
             owner = " ".join(fields[:-2])
             if symbol.startswith(namespace):
                 definitions[symbol].append(owner)
+            elif re.fullmatch(r"OBJC_(?:CLASS|METACLASS|IVAR)_\$_" + re.escape(namespace) +
+                              r"[a-z0-9_]+(?:\.[a-z0-9_]+)?", symbol):
+                # Objective-C emits runtime metadata around the governed class namespace.
+                # These records are not installed C entrypoints or callable backend ABI.
+                continue
             elif not symbol.startswith(("_", ".")):
                 foreign.append(symbol)
         return dict(definitions), sorted(set(foreign))
@@ -1528,7 +1533,7 @@ class Audit:
             if not root.exists():
                 continue
             for path in root.rglob("*"):
-                if path.is_file() and path.suffix in {".c", ".h", ".cu"}:
+                if path.is_file() and path.suffix in {".c", ".h", ".cu", ".m"}:
                     if expression.search(path.read_text(errors="ignore")):
                         errors.append(f"unsupported capability promoted: {relative(path)}")
         return errors

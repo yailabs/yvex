@@ -13,6 +13,14 @@ static const char *yes_no(int value)
     return value ? "yes" : "no";
 }
 
+static void render_resource_value(FILE *fp, const char *name,
+                                  const yvex_backend_resource_facts *facts,
+                                  yvex_backend_resource_fact bit, unsigned long long value)
+{
+    if (facts->known & bit) yvex_cli_out_writef(fp, "%s: %llu\n", name, value);
+    else yvex_cli_out_writef(fp, "%s: unmeasured\n", name);
+}
+
 static void render_cuda_admission(FILE *fp, const yvex_backend_report *report)
 {
     yvex_cli_out_writef(fp, "context_available: %s\n",
@@ -61,6 +69,11 @@ static int render_capabilities(FILE *fp, const yvex_backend_report *report)
     }
     yvex_cli_out_writef(fp, "status: %s\n",
                         yvex_backend_status_name(report->backend_status));
+    if (report->has_device_info) {
+        yvex_cli_out_writef(fp, "device_index: %d\nname: %s\nunified_addressing: %s\n",
+                            report->device_info.device_index, report->device_info.name,
+                            yes_no(report->device_info.unified_addressing));
+    }
     if (report->backend_kind == YVEX_BACKEND_KIND_CUDA &&
         report->has_device_info) {
         yvex_cli_out_writef(fp, "device: %d\nname: %s\ncompute_capability: %d.%d\n",
@@ -88,8 +101,28 @@ static int render_capabilities(FILE *fp, const yvex_backend_report *report)
     }
     if (report->backend_kind == YVEX_BACKEND_KIND_CUDA) {
         render_cuda_admission(fp, report);
-        render_variants(fp, report);
     }
+    if (report->resources.schema) {
+        const yvex_backend_resource_facts *facts = &report->resources;
+        yvex_cli_out_writef(fp, "resources_schema: %u\nshared_system_memory: %s\n",
+                            facts->schema, yes_no(facts->shared_system_memory));
+        yvex_cli_out_writef(fp, "resource_known_mask: %u\n", facts->known);
+        render_resource_value(fp, "addressable_bytes", facts, YVEX_BACKEND_RESOURCE_ADDRESSABLE,
+                              facts->addressable_bytes);
+        render_resource_value(fp, "mapped_bytes", facts, YVEX_BACKEND_RESOURCE_MAPPED, facts->mapped_bytes);
+        render_resource_value(fp, "device_allocated_bytes", facts, YVEX_BACKEND_RESOURCE_DEVICE_ALLOCATED,
+                              facts->device_allocated_bytes);
+        render_resource_value(fp, "recommended_working_set_bytes", facts,
+                              YVEX_BACKEND_RESOURCE_RECOMMENDED_WORKING_SET, facts->recommended_working_set_bytes);
+        render_resource_value(fp, "max_buffer_bytes", facts, YVEX_BACKEND_RESOURCE_MAX_BUFFER,
+                              facts->max_buffer_bytes);
+        render_resource_value(fp, "temporary_bytes", facts, YVEX_BACKEND_RESOURCE_TEMPORARY,
+                              facts->temporary_bytes);
+        render_resource_value(fp, "resident_bytes", facts, YVEX_BACKEND_RESOURCE_RESIDENT, facts->resident_bytes);
+        render_resource_value(fp, "working_set_bytes", facts, YVEX_BACKEND_RESOURCE_WORKING_SET,
+                              facts->working_set_bytes);
+    }
+    render_variants(fp, report);
     yvex_cli_out_writef(fp, "status: backend-capabilities\n");
     return YVEX_OK;
 }
@@ -161,7 +194,7 @@ int yvex_backend_render(FILE *fp, const yvex_backend_report *report)
 int yvex_backend_render_help(FILE *fp)
 {
     yvex_cli_out_writef(
-        fp, "usage: yvex inspect backend cpu|cuda\n\n"
+        fp, "usage: yvex inspect backend cpu|cuda|metal|rocm\n\n"
             "Reports context, bundle, and exact primitive capabilities.\n");
     return YVEX_OK;
 }

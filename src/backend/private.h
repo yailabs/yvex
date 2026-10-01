@@ -6,6 +6,7 @@
 #include <stdatomic.h>
 
 #include <yvex/internal/backend.h>
+#include <yvex/internal/backend_resource.h>
 
 struct yvex_backend_moe_operations;
 struct yvex_backend_sampling_operations;
@@ -16,6 +17,7 @@ typedef struct yvex_backend_vtable {
     int (*close)(yvex_backend *, yvex_error *);
     int (*memory_stats)(const yvex_backend *, yvex_backend_memory_stats *, yvex_error *);
     int (*device_info)(const yvex_backend *, yvex_backend_device_info *, yvex_error *);
+    int (*resource_facts)(const yvex_backend *, yvex_backend_resource_facts *, yvex_error *);
     int (*bandwidth_probe)(yvex_backend *, yvex_backend_bandwidth_evidence *, yvex_error *);
     int (*tensor_alloc)(yvex_backend *, const yvex_backend_tensor_desc *,
                         yvex_device_tensor **, yvex_error *);

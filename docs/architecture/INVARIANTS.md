@@ -27,7 +27,7 @@ contracts specify exact interfaces; evidence determines which claims are earned.
 | Families own irreducible semantics | No family-local generic loader, scheduler or state manager | [Integration](../model-families/integration.md) |
 | Transactions publish all participants or abort | Candidate state cannot leak into committed continuation | [State](computational-state.md) |
 | Stale identities refuse | Reused storage cannot validate an expired borrowed result | [Runtime contract](../contracts/runtime.md) |
-| Explicit CUDA never silently becomes CPU | Exact requests cannot degrade to a different computation | [Backend](backend-execution.md) |
+| Explicit backend requests never silently change backend | Exact requests, including CUDA and Metal, refuse missing admitted semantics | [Backend](backend-execution.md) |
 | Fallback stays inside admitted equivalence | Integrity or missing mandatory semantics cannot be “recovered” by approximation | [Deployment](deployment-specialization.md) |
 | Real populations determine work | Duplicated activations cannot manufacture semantic batch width | [Scheduler](scheduling-resources.md) |
 | Evidence observes, never controls execution | Trace depth cannot change numerical behavior | [Measurement](../evaluation/measurement.md) |

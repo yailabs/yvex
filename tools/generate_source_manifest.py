@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 
-PRODUCTION_SUFFIXES = {".c", ".cu", ".h"}
+PRODUCTION_SUFFIXES = {".c", ".cu", ".m", ".h"}
 MANIFEST_FIELDS = 9
 
 
@@ -83,6 +83,7 @@ def classify_production(rows: list[list[str]]) -> dict[str, list[str]]:
         "OPENAI_ADAPTER_SRCS": [],
         "CUDA_SRCS": [],
         "CUDA_CU_SRCS": [],
+        "METAL_SRCS": [],
         "CLI_COMMAND_SRCS": [],
         "CLI_INPUT_SRCS": [],
         "CLI_MODEL_ARTIFACT_SRCS": [],
@@ -110,6 +111,8 @@ def classify_production(rows: list[list[str]]) -> dict[str, list[str]]:
                 classes["CLI_IO_SRCS"].append(path)
         elif path.startswith("src/server/openai/"):
             classes["OPENAI_ADAPTER_SRCS"].append(path)
+        elif path.startswith("src/backend/metal/") and suffix == ".m":
+            classes["METAL_SRCS"].append(path)
         elif path.startswith("src/backend/cuda/") and suffix == ".cu":
             classes["CUDA_CU_SRCS"].append(path)
         elif path.startswith("src/backend/cuda/"):
@@ -123,6 +126,7 @@ def classify_production(rows: list[list[str]]) -> dict[str, list[str]]:
         + classes["OPENAI_ADAPTER_SRCS"]
         + classes["CUDA_SRCS"]
         + classes["CUDA_CU_SRCS"]
+        + classes["METAL_SRCS"]
     )
     if sorted(product) != classes["OWNED_PRODUCTION_SRCS"] or len(product) != len(set(product)):
         fail("production classification is incomplete or overlapping")
