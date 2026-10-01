@@ -5,6 +5,7 @@
  * performs no numeric transformation.
  */
 #define _GNU_SOURCE
+#include <yvex/internal/platform.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -250,17 +251,17 @@ static void payload_identity_from_stat(yvex_source_payload_file_identity *out,
     out->device = status->st_dev;
     out->inode = status->st_ino;
     out->size = status->st_size;
-    out->mtime = status->st_mtim;
-    out->ctime = status->st_ctim;
+    out->mtime = yvex_platform_stat_mtime(status);
+    out->ctime = yvex_platform_stat_ctime(status);
 }
 
 static int payload_identity_equal(const yvex_source_payload_file_identity *left,
                                   const struct stat *right) {
     return left->device == right->st_dev && left->inode == right->st_ino &&
-           left->size == right->st_size && left->mtime.tv_sec == right->st_mtim.tv_sec &&
-           left->mtime.tv_nsec == right->st_mtim.tv_nsec &&
-           left->ctime.tv_sec == right->st_ctim.tv_sec &&
-           left->ctime.tv_nsec == right->st_ctim.tv_nsec;
+           left->size == right->st_size && left->mtime.tv_sec == yvex_platform_stat_mtime(right).tv_sec &&
+           left->mtime.tv_nsec == yvex_platform_stat_mtime(right).tv_nsec &&
+           left->ctime.tv_sec == yvex_platform_stat_ctime(right).tv_sec &&
+           left->ctime.tv_nsec == yvex_platform_stat_ctime(right).tv_nsec;
 }
 
 typedef struct {

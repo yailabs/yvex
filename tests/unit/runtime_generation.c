@@ -575,6 +575,7 @@ static int generation_test_runnable_capacity(void)
     pthread_t thread;
     yvex_error err;
     unsigned long long attempt;
+    const struct timespec retry = {0, 1000000L};
     YVEX_TEST_ASSERT(
         pthread_mutex_init(&model.lifecycle_mutex, NULL) == 0 &&
             pthread_mutex_init(&gate.mutex, NULL) == 0 &&
@@ -600,15 +601,16 @@ static int generation_test_runnable_capacity(void)
     YVEX_TEST_ASSERT(
         pthread_create(&thread, NULL, generation_progress_run, &job) == 0,
         "independent work should wait for one-wide physical execution");
-    for (attempt = 0ull; attempt < 100000ull; ++attempt) {
+    for (attempt = 0ull; attempt < 2000ull; ++attempt) {
         YVEX_TEST_ASSERT(
             yvex_model_engine_scheduler_summary_copy(
                 &model, &summary, &err) == YVEX_OK,
             "runnable scheduler pressure should remain inspectable");
         if (summary.ready_sequence_work == 1ull) break;
+        (void)nanosleep(&retry, NULL);
     }
     YVEX_TEST_ASSERT(
-        attempt < 100000ull && summary.sequence_capacity == 1ull &&
+        attempt < 2000ull && summary.sequence_capacity == 1ull &&
             summary.runnable_capacity == 2ull &&
             summary.cooperative_width == 1ull &&
             summary.maximum_active_sequences == 1ull,
@@ -1018,15 +1020,21 @@ static int generation_test_evidence_sidecar_validation(void)
     yvex_runtime_generation_evidence evidence = {0}, mutated;
     yvex_error err;
     evidence.schema_version = YVEX_RUNTIME_GENERATION_EVIDENCE_SCHEMA_V1;
-    YVEX_TEST_ASSERT(
-        yvex_runtime_profile_begin(
-            &evidence.profile, YVEX_RUNTIME_PROFILE_SUMMARY,
-            YVEX_RUNTIME_PROFILE_GENERATION, YVEX_BACKEND_KIND_CPU,
-            profile_id_a, profile_id_b, profile_id_c, profile_id_d,
-            profile_id_e, profile_id_f, &err) == YVEX_OK &&
-            yvex_runtime_profile_finish(&evidence.profile, &err) == YVEX_OK &&
-            yvex_runtime_generation_evidence_validate(
-                &plan, &evidence, &err) == YVEX_OK,
+    int rc = yvex_runtime_profile_begin(
+        &evidence.profile, YVEX_RUNTIME_PROFILE_SUMMARY,
+        YVEX_RUNTIME_PROFILE_GENERATION, YVEX_BACKEND_KIND_CPU,
+        profile_id_a, profile_id_b, profile_id_c, profile_id_d,
+        profile_id_e, profile_id_f, &err);
+    if (rc == YVEX_OK) {
+        const struct timespec interval = {0, 1000000L};
+        /* This fixture requires measured work, not two readings in one clock tick. */
+        (void)nanosleep(&interval, NULL);
+    }
+    if (rc == YVEX_OK) rc = yvex_runtime_profile_finish(&evidence.profile, &err);
+    if (rc == YVEX_OK) rc = yvex_runtime_generation_evidence_validate(&plan, &evidence, &err);
+    if (rc != YVEX_OK)
+        fprintf(stderr, "generation evidence sidecar: %s\n", yvex_error_message(&err));
+    YVEX_TEST_ASSERT(rc == YVEX_OK,
         "generation evidence validates independently from semantic output");
     mutated = evidence;
     mutated.profile.counters[YVEX_RUNTIME_PROFILE_KERNEL_LAUNCHES]++;

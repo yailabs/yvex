@@ -326,9 +326,17 @@ test-protocol: $(TEST_RUNNER)
 test-runtime-host: $(TEST_RUNNER)
 	YVEX_TEST_FILTER=server $(TEST_RUNNER)
 
-test-tiny-vertical: client $(TINY_VERTICAL_COMPILER) $(NATIVE_TURN_TEST) \
+ifeq ($(YVEX_HOST_OS),Darwin)
+TERMIOS_PROBE := $(TEST_DIR)/termios_probe.dylib
+$(TERMIOS_PROBE): tests/integration/termios_probe.c
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -dynamiclib $< -o $@
+endif
+
+test-tiny-vertical: client $(TINY_VERTICAL_COMPILER) $(NATIVE_TURN_TEST) $(TERMIOS_PROBE) \
 	$(TINY_VERTICAL_TEST)
-	YVEX_BIN='$(YVEX_BIN)' TINY_COMPILER='$(TINY_VERTICAL_COMPILER)' \
+	YVEX_TEST_TERMIOS_PROBE='$(abspath $(TERMIOS_PROBE))' \
+		YVEX_BIN='$(YVEX_BIN)' TINY_COMPILER='$(TINY_VERTICAL_COMPILER)' \
 		NATIVE_TURN='$(NATIVE_TURN_TEST)' \
 		TINY_GENERATOR='tests/integration/tiny_model.py' sh $(TINY_VERTICAL_TEST)
 
@@ -336,8 +344,9 @@ test-runtime-streaming: $(TEST_RUNNER)
 	YVEX_TEST_FILTER=protocol $(TEST_RUNNER)
 	YVEX_TEST_FILTER=runtime_generation $(TEST_RUNNER)
 
-test-repl: client $(OPENAI_FAKE_HOST) $(REPL_PTY_TEST)
-	YVEX_BIN='$(YVEX_BIN)' YVEX_TEST_HOST='$(OPENAI_FAKE_HOST)' \
+test-repl: client $(OPENAI_FAKE_HOST) $(REPL_PTY_TEST) $(TERMIOS_PROBE)
+	YVEX_TEST_TERMIOS_PROBE='$(abspath $(TERMIOS_PROBE))' \
+		YVEX_BIN='$(YVEX_BIN)' YVEX_TEST_HOST='$(OPENAI_FAKE_HOST)' \
 		YVEX_CLIENT_LANE_OBJ='$(CLIENT_LANE_OBJ)' REPLAI_PREFIX='$(REPLAI_PREFIX)' \
 		sh $(REPL_PTY_TEST)
 

@@ -9,6 +9,7 @@
  */
 #define _POSIX_C_SOURCE 200809L
 
+#include <yvex/internal/platform.h>
 #include "src/runtime/private.h"
 
 #include <errno.h>
@@ -134,51 +135,26 @@ static int state_file_parent_open(const char *path, int *directory_fd,
                                   char name[STATE_FILE_NAME_CAP],
                                   yvex_error *err)
 {
-    char copy[YVEX_PATH_CAP];
-    char *slash, *cursor, *next;
-    int fd = -1;
-    if (!path || !path[0] || strnlen(path, sizeof(copy)) >= sizeof(copy))
+    char parent[YVEX_PATH_CAP], *slash;
+    int fd;
+    if (!path || !path[0] || strnlen(path, sizeof(parent)) >= sizeof(parent))
         return state_store_fail(YVEX_ERR_INVALID_ARG,
                                 "state checkpoint path is invalid", err);
-    yvex_core_text_copy(copy, sizeof(copy), path);
-    slash = strrchr(copy, '/');
-    if (!slash) {
-        if (snprintf(name, STATE_FILE_NAME_CAP, "%s", copy) >=
-            (int)STATE_FILE_NAME_CAP)
-            goto unsafe;
-        cursor = NULL;
-        fd = open(".", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-    } else {
-        if (!slash[1] ||
-            snprintf(name, STATE_FILE_NAME_CAP, "%s", slash + 1) >=
-                (int)STATE_FILE_NAME_CAP)
-            goto unsafe;
-        *slash = '\0';
-        fd = open(path[0] == '/' ? "/" : ".",
-                  O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-        cursor = slash == copy ? NULL : copy + (path[0] == '/');
-    }
-    if (!strcmp(name, ".") || !strcmp(name, "..") || !name[0]) goto unsafe;
-    while (fd >= 0 && cursor && *cursor) {
-        int child;
-        next = strchr(cursor, '/');
-        if (next) *next = '\0';
-        if (!cursor[0] || !strcmp(cursor, ".") || !strcmp(cursor, ".."))
-            goto unsafe;
-        child = openat(fd, cursor,
-                       O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-        if (child < 0) goto unsafe;
-        (void)close(fd);
-        fd = child;
-        cursor = next ? next + 1 : NULL;
-    }
-    if (fd < 0) goto unsafe;
+    yvex_core_text_copy(parent, sizeof(parent), path);
+    slash = strrchr(parent, '/');
+    if (snprintf(name, STATE_FILE_NAME_CAP, "%s", slash ? slash + 1 : parent) >=
+        (int)STATE_FILE_NAME_CAP || !name[0] || !strcmp(name, ".") || !strcmp(name, ".."))
+        return state_store_fail(YVEX_ERR_IO, "state checkpoint path is unsafe", err);
+    if (slash) {
+        if (slash == parent) slash[1] = '\0';
+        else *slash = '\0';
+    } else snprintf(parent, sizeof(parent), ".");
+    /* Relative current-directory spelling is retained without admitting dot traversal. */
+    fd = !strcmp(parent, ".") ? open(".", O_RDONLY | O_DIRECTORY | O_CLOEXEC) :
+                               yvex_core_directory_open(parent);
+    if (fd < 0) return state_store_fail(YVEX_ERR_IO, "state checkpoint path is unsafe", err);
     *directory_fd = fd;
     return YVEX_OK;
-unsafe:
-    if (fd >= 0) (void)close(fd);
-    return state_store_fail(YVEX_ERR_IO,
-                            "state checkpoint path is unsafe", err);
 }
 
 static int state_file_write_exact(int fd, const void *data, size_t count)
@@ -946,10 +922,10 @@ static int state_file_map(const char *path, unsigned long long maximum_bytes,
     }
     if (fstat(fd, &after) != 0 || before.st_dev != after.st_dev ||
         before.st_ino != after.st_ino || before.st_size != after.st_size ||
-        before.st_mtim.tv_sec != after.st_mtim.tv_sec ||
-        before.st_mtim.tv_nsec != after.st_mtim.tv_nsec ||
-        before.st_ctim.tv_sec != after.st_ctim.tv_sec ||
-        before.st_ctim.tv_nsec != after.st_ctim.tv_nsec) {
+        yvex_platform_stat_mtime(&before).tv_sec != yvex_platform_stat_mtime(&after).tv_sec ||
+        yvex_platform_stat_mtime(&before).tv_nsec != yvex_platform_stat_mtime(&after).tv_nsec ||
+        yvex_platform_stat_ctime(&before).tv_sec != yvex_platform_stat_ctime(&after).tv_sec ||
+        yvex_platform_stat_ctime(&before).tv_nsec != yvex_platform_stat_ctime(&after).tv_nsec) {
         rc = state_store_fail(YVEX_ERR_IO,
                               "state checkpoint drifted while mapping", err);
         goto done;

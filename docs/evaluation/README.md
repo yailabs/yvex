@@ -24,6 +24,7 @@ Software correctness, independent numerical conformance, artifact integrity, run
 - [Quality Assurance Architecture](qa.md)
 - [External Reference-Engineering Baseline](reference-baseline.md)
 - [Retained Execution Observations](retained-observations.md)
+- [Native macOS Qualification](macos-native.md)
 <!-- docs:diagram evidence_promotion -->
 ```mermaid
 %% yvex-figure: evidence_promotion

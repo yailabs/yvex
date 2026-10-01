@@ -729,7 +729,21 @@ int yvex_cli_server_dispatch(int argc, char **argv, size_t consumed)
     (void)sigemptyset(&signals);
     (void)sigaddset(&signals, SIGINT);
     (void)sigaddset(&signals, SIGTERM);
-    (void)pthread_sigmask(SIG_BLOCK, &signals, NULL);
+    {
+        struct sigaction action;
+        memset(&action, 0, sizeof(action));
+        action.sa_handler = SIG_DFL;
+        (void)sigemptyset(&action.sa_mask);
+        /* Background shells can pass SIG_IGN through exec. Darwin sigwait does
+         * not consume such signals: the host owns their blocked disposition. */
+        if (pthread_sigmask(SIG_BLOCK, &signals, NULL) != 0 ||
+            sigaction(SIGINT, &action, NULL) != 0 ||
+            sigaction(SIGTERM, &action, NULL) != 0) {
+            (void)pthread_mutex_destroy(&loader.registry_mutex);
+            fprintf(stderr, "yvex serve: signal coordinator admission failed\n");
+            return 1;
+        }
+    }
     yvex_error_clear(&err);
     rc = yvex_server_create(&server, &loader.host, &err);
     if (rc == YVEX_OK) rc = yvex_server_start(server, &err);

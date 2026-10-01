@@ -13,6 +13,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  macos-native:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install native build tools
+        run: |
+          brew install make pkg-config ripgrep coreutils
+          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: 1.98.1
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: 0.11.28
+          enable-cache: false
+      - name: Install QA Python
+        run: |
+          uv python install 3.14 --default
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Qualify native CPU and terminal lifecycle
+        run: python3 tools/qa.py run native
+      - name: Check ownership and build contracts
+        run: >-
+          make check-qa-registry test-source-ownership test-layout
+          test-code-natural test-architecture-boundaries test-repository-layout
+      - name: Upload native evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: yvex-macos-native-evidence
+          path: |
+            build/qa/evidence/
+            build/qa/runs/*/logs/
+          if-no-files-found: warn
+          retention-days: 14
   hermetic:
     runs-on: ubuntu-24.04
     timeout-minutes: 45

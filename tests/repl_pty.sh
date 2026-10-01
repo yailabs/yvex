@@ -16,6 +16,9 @@ case "$YVEX_TEST_HOST" in
     *) YVEX_TEST_HOST="$(pwd -P)/${YVEX_TEST_HOST#./}" ;;
 esac
 
+if test "$(uname -s)" = Darwin; then
+    export TMPDIR=/private/tmp
+fi
 root=$(mktemp -d "${TMPDIR:-/tmp}/yvex-repl-pty.XXXXXX")
 runtime="$root/runtime"
 config="$root/config"
@@ -25,6 +28,7 @@ socket="$runtime/yvex/yvexd.sock"
 host_pid=
 console_job=
 client_pid=
+color_env='env NO_COLOR=1'
 mkdir -m 700 "$runtime" "$runtime/yvex" "$config" "$models"
 printf '{"schema":"yvex.models.local.v6","models":[]}\n' >"$registry"
 
@@ -44,7 +48,11 @@ cleanup()
         kill "$host_pid" 2>/dev/null || true
         wait "$host_pid" 2>/dev/null || true
     fi
-    yvex_test_cleanup "$root"
+    if test "$status" -eq 0; then
+        yvex_test_cleanup "$root"
+    else
+        printf 'repl PTY output: %s\n' "$root" >&2
+    fi
     return "$status"
 }
 trap cleanup EXIT HUP INT TERM
@@ -111,13 +119,31 @@ stop_host()
 find_console_client()
 {
     for candidate in $(pgrep -x yvex 2>/dev/null || true); do
-        if tr '\000' '\n' <"/proc/$candidate/environ" 2>/dev/null |
-            grep -Fqx "XDG_RUNTIME_DIR=$runtime"; then
+        if test "$(uname -s)" = Darwin; then
+            if ps eww -p "$candidate" -o command= |
+                tr ' ' '\n' | grep -Fqx "XDG_RUNTIME_DIR=$runtime"; then
+                printf '%s\n' "$candidate"
+                return 0
+            fi
+        elif tr '\000' '\n' <"/proc/$candidate/environ" 2>/dev/null |
+             grep -Fqx "XDG_RUNTIME_DIR=$runtime"; then
             printf '%s\n' "$candidate"
             return 0
         fi
     done
     return 1
+}
+
+# Preserve flush and child-exit semantics with each platform's native script syntax.
+record_terminal()
+{
+    transcript=$1
+    command=$2
+    if test "$(uname -s)" = Darwin; then
+        $color_env python3 tests/support/record_terminal.py "$transcript" "$command"
+    else
+        $color_env script -q -f -e -c "$command" "$transcript"
+    fi
 }
 
 start_console()
@@ -135,12 +161,12 @@ start_console()
     else
         color_env='env NO_COLOR=1'
     fi
-    $color_env TERM=xterm-256color XDG_RUNTIME_DIR="$runtime" \
+    TERM=xterm-256color XDG_RUNTIME_DIR="$runtime" \
         YVEX_MODELS_REGISTRY="$registry" YVEX_MODELS_ROOT="$models" \
         YVEX_CONFIG_DIR="$config" XDG_CONFIG_HOME="$config" \
-        script -q -f -e \
-        -c "cd $root; stty rows $rows cols $columns; exec $YVEX_BIN $command" \
-        "$transcript" <"$fifo" >"$root/$name.stdout" 2>"$root/$name.stderr" &
+        record_terminal "$transcript" \
+        "cd $root; stty rows $rows cols $columns; exec $YVEX_BIN $command" \
+        <"$fifo" >"$root/$name.stdout" 2>"$root/$name.stderr" &
     console_job=$!
     exec 3>"$fifo"
     wait_for "$transcript" 'deepseek4-v4-flash-dspark>'
@@ -196,7 +222,7 @@ grep -F 'YVEX inference runtime' "$root/bare.out" >/dev/null
 # An interactive chat with no host fails as a client and gives the host-start action.
 set +e
 XDG_RUNTIME_DIR="$runtime" NO_COLOR=1 TERM=xterm-256color \
-    script -q -e -c "$YVEX_BIN chat" "$root/no-host.typescript" </dev/null \
+    record_terminal "$root/no-host.typescript" "$YVEX_BIN chat" </dev/null \
     >"$root/no-host.stdout" 2>"$root/no-host.stderr"
 no_host_status=$?
 set -e

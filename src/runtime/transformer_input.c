@@ -4,6 +4,7 @@
  * Payload is canonical little-endian U32 and every file is regular, non-symlink, bounded, and
  * exact. Numeric model input only; token IDs do not establish tokenizer support.
  */
+#include <yvex/internal/platform.h>
 #include <yvex/internal/transformer.h>
 
 #include <errno.h>
@@ -355,10 +356,10 @@ int yvex_transformer_input_validate(const yvex_transformer_input *input,
         (input->fd < 0 || fstat(input->fd, &current) != 0 ||
          current.st_dev != input->snapshot.st_dev || current.st_ino != input->snapshot.st_ino ||
          current.st_size != input->snapshot.st_size ||
-         current.st_mtim.tv_sec != input->snapshot.st_mtim.tv_sec ||
-         current.st_mtim.tv_nsec != input->snapshot.st_mtim.tv_nsec ||
-         current.st_ctim.tv_sec != input->snapshot.st_ctim.tv_sec ||
-         current.st_ctim.tv_nsec != input->snapshot.st_ctim.tv_nsec))
+         yvex_platform_stat_mtime(&current).tv_sec != yvex_platform_stat_mtime(&input->snapshot).tv_sec ||
+         yvex_platform_stat_mtime(&current).tv_nsec != yvex_platform_stat_mtime(&input->snapshot).tv_nsec ||
+         yvex_platform_stat_ctime(&current).tv_sec != yvex_platform_stat_ctime(&input->snapshot).tv_sec ||
+         yvex_platform_stat_ctime(&current).tv_nsec != yvex_platform_stat_ctime(&input->snapshot).tv_nsec))
         return transformer_input_refuse(err, YVEX_ERR_STATE,
                                         "transformer token input file drifted after admission");
     yvex_error_clear(err);

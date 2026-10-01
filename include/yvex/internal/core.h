@@ -16,6 +16,10 @@
 extern "C" {
 #endif
 
+/* Descriptor-relative path opens reject symlinks in every application component. */
+int yvex_core_file_open_readonly(const char *path);
+int yvex_core_directory_open(const char *path);
+
 /* Bounded JSON parsing. */
 #define YVEX_JSON_KEY_CAP 1024u
 typedef struct {

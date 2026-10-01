@@ -5,11 +5,13 @@
  * sessions; queued work holds a generation lease through completion.
  */
 #define _GNU_SOURCE
+#include <yvex/internal/platform.h>
 #include "src/server/private.h"
 #include <yvex/server_finite_decision.h>
 #include <yvex/internal/finite_producer_wire.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
@@ -97,20 +99,10 @@ yvex_client_failure_class yvex_server_failure_class_from_status(int status)
 
 static int peer_validate(int fd, yvex_error *err)
 {
-#ifdef SO_PEERCRED
-    struct ucred credentials;
-    socklen_t count = sizeof(credentials);
-    memset(&credentials, 0, sizeof(credentials));
-    if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &credentials, &count) != 0 ||
-        count != sizeof(credentials) || credentials.uid != geteuid())
+    if (!yvex_platform_peer_owned(fd))
         return server_refuse(err, YVEX_ERR_STATE,
                              "local client UID does not own the runtime");
     return YVEX_OK;
-#else
-    (void)fd;
-    return server_refuse(err, YVEX_ERR_UNSUPPORTED,
-                         "local peer credential validation is unavailable");
-#endif
 }
 
 static unsigned long long server_monotonic_ns(void)
@@ -414,6 +406,7 @@ static int listener_open(yvex_server *server, yvex_error *err)
     memcpy(address.sun_path, pending, strlen(pending) + 1u);
     if (bind(fd, (struct sockaddr *)&address, sizeof(address)) != 0 ||
         chmod(pending, 0600) != 0 || listen(fd, 32) != 0 ||
+        fcntl(fd, F_SETFL, O_NONBLOCK) != 0 ||
         rename(pending, server->socket_path) != 0) {
         (void)close(fd);
         (void)unlink(pending);
@@ -664,8 +657,9 @@ int yvex_server_engine_snapshot(
 int yvex_server_start(yvex_server *server, yvex_error *err)
 {
     int rc;
-    if (!server || !server->state_mutex_ready ||
-        (rc = socket_directory_prepare(server->socket_path, err)) != YVEX_OK ||
+    if (!server || !server->state_mutex_ready)
+        return server_refuse(err, YVEX_ERR_INVALID_ARG, "configured host is required");
+    if ((rc = socket_directory_prepare(server->socket_path, err)) != YVEX_OK ||
         pthread_mutex_lock(&server->state_mutex) != 0)
         return rc != YVEX_OK ? rc : server_refuse(
             err, YVEX_ERR_INVALID_ARG, "configured host is required");
@@ -1286,14 +1280,35 @@ int yvex_server_serve(yvex_server *server, yvex_error *err)
         if (rc != YVEX_OK) return rc;
     }
     while (!atomic_load_explicit(&server->stopping, memory_order_acquire)) {
-        int fd = accept(server->listen_fd, NULL, NULL);
+        struct pollfd ready = {server->listen_fd, POLLIN, 0};
+        int fd, flags, polled = poll(&ready, 1u, 100);
+        if (polled < 0 && errno == EINTR) continue;
+        if (atomic_load_explicit(&server->stopping, memory_order_acquire)) break;
+        if (!polled) continue;
+        if (polled < 0 || !(ready.revents & POLLIN)) {
+            rc = server_refuse(err, YVEX_ERR_IO, "local listener readiness failed");
+            break;
+        }
+        fd = accept(server->listen_fd, NULL, NULL);
         if (fd < 0) {
-            if (errno == EINTR) continue;
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
             if (atomic_load_explicit(&server->stopping, memory_order_acquire) ||
                 errno == EBADF || errno == EINVAL)
                 break;
             rc = server_refuse(err, YVEX_ERR_IO,
                                "local listener accept failed");
+            break;
+        }
+        if (atomic_load_explicit(&server->stopping, memory_order_acquire)) {
+            (void)close(fd);
+            break;
+        }
+        /* Darwin inherits the listener's nonblocking flag. Protocol clients
+         * retain their existing blocking-stream contract on both platforms. */
+        flags = fcntl(fd, F_GETFL);
+        if (flags < 0 || fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) != 0) {
+            (void)close(fd);
+            rc = server_refuse(err, YVEX_ERR_IO, "local client stream configuration failed");
             break;
         }
         if (peer_validate(fd, err) != YVEX_OK) {
@@ -1343,8 +1358,6 @@ int yvex_server_stop(yvex_server *server, yvex_error *err)
         0.0, 0.0, err);
     if (server->listen_fd >= 0) {
         (void)shutdown(server->listen_fd, SHUT_RDWR);
-        (void)close(server->listen_fd);
-        server->listen_fd = -1;
     }
     yvex_server_engine_manager_cancel_all(server->engines);
     if (rc != YVEX_OK) {
@@ -1538,6 +1551,11 @@ void yvex_server_close(yvex_server **server)
     if (!server || !*server) return;
     owner = *server;
     (void)yvex_server_finish(owner, &err);
+    /* The accept owner has observed stopping before its descriptor is retired. */
+    if (owner->listen_fd >= 0) {
+        (void)close(owner->listen_fd);
+        owner->listen_fd = -1;
+    }
     if (owner->clients_mutex_ready &&
         pthread_mutex_lock(&owner->clients_mutex) == 0) {
         for (index = 0u; index < owner->client_capacity; ++index)

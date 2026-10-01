@@ -803,7 +803,8 @@ class Audit:
         result = subprocess.run(
             ["ar", "t", str(archive)], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
-        members = result.stdout.splitlines() if result.returncode == 0 else []
+        members = [name for name in result.stdout.splitlines()
+                   if name not in {"__.SYMDEF", "__.SYMDEF SORTED", "__.SYMDEF_64", "__.SYMDEF_64 SORTED"}] if result.returncode == 0 else []
         return {
             "present": True,
             "readable": result.returncode == 0,
@@ -820,7 +821,7 @@ class Audit:
         if not archive.is_file():
             return {}, []
         result = subprocess.run(
-            ["nm", "-A", "-g", "--defined-only", str(archive)],
+            ["nm", "-A", "-g", "-U" if sys.platform == "darwin" else "--defined-only", str(archive)],
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -833,6 +834,8 @@ class Audit:
             if len(fields) < 3 or not re.fullmatch(r"[A-ZTRDB]", fields[-2]):
                 continue
             symbol = fields[-1]
+            if sys.platform == "darwin" and symbol.startswith("_"):
+                symbol = symbol[1:]
             owner = " ".join(fields[:-2])
             if symbol.startswith(namespace):
                 definitions[symbol].append(owner)
@@ -854,7 +857,8 @@ class Audit:
         consumers: dict[str, set[str]] = defaultdict(set)
         namespace = self.policy["symbols"]["namespace"]
         for line in result.stdout.splitlines():
-            match = re.match(r"^(.*?):\s+U\s+(\S+)$", line)
+            match = re.match(r"^(.*?):\s+_(yvex_\S+)$" if sys.platform == "darwin"
+                             else r"^(.*?):\s+U\s+(\S+)$", line)
             if not match:
                 continue
             owner, symbol = match.groups()
@@ -1193,6 +1197,8 @@ class Audit:
             "-fsyntax-only",
             "-",
         ]
+        if sys.platform == "darwin":
+            common_flags.append("-D_DARWIN_C_SOURCE")
         for name in sorted(self.headers):
             tier = self.header_tier(name)
             include = name.removeprefix("include/")
@@ -1234,7 +1240,8 @@ class Audit:
         )
         if result.returncode:
             return [f"archive cannot be listed: {result.stderr.strip()}"]
-        members = result.stdout.splitlines()
+        members = [name for name in result.stdout.splitlines()
+                   if name not in {"__.SYMDEF", "__.SYMDEF SORTED", "__.SYMDEF_64", "__.SYMDEF_64 SORTED"}]
         duplicates = sorted(name for name, count in Counter(members).items() if count > 1)
         if duplicates:
             errors.append(f"duplicate archive member identities: {duplicates}")

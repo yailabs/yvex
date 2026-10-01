@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 import shutil
+import platform
+import sys
 import subprocess
 import tarfile
 import tempfile
@@ -14,7 +16,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = ROOT / 'config/replai.json'
-FILES = ('include/replai.h', 'lib/libreplai_c.a', 'lib/libreplai_c.so',
+FILES = ('include/replai.h', 'lib/libreplai_c.a', ('lib/libreplai_c.dylib' if sys.platform == 'darwin' else 'lib/libreplai_c.so'),
          'lib/pkgconfig/replai.pc', 'share/licenses/replai/LICENSE')
 
 
@@ -29,6 +31,7 @@ def command(argv, **kwargs):
 
 def prepare(prefix, source_override):
     pin = json.loads(PIN.read_text())
+    target = {'system': platform.system(), 'machine': platform.machine()}
     prefix.parent.mkdir(parents=True, exist_ok=True)
     with (prefix.parent / (prefix.name + '.lock')).open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -41,7 +44,7 @@ def prepare(prefix, source_override):
         receipt = prefix / 'replai-build.json'
         if receipt.exists():
             record = json.loads(receipt.read_text())
-            if record['pin'] != pin:
+            if record['pin'] != pin or record.get('target') != target:
                 raise RuntimeError('incompatible REPLAI prefix; choose an empty REPLAI_PREFIX')
             for name in FILES:
                 if digest(prefix / name) != record['sha256'][name]:
@@ -82,7 +85,7 @@ def prepare(prefix, source_override):
             header = (staged / 'include/replai.h').read_text()
             if f'#define REPLAI_C_ABI_VERSION {pin["abi"]}\n' not in header:
                 raise RuntimeError('REPLAI header ABI mismatch')
-            record = {'pin': pin, 'rustc': command(['rustc', '--version']), 'rustflags': env.get('RUSTFLAGS', ''),
+            record = {'pin': pin, 'target': target, 'rustc': command(['rustc', '--version']), 'rustflags': env.get('RUSTFLAGS', ''),
                       'sha256': {name: digest(staged / name) for name in FILES}}
             (staged / 'replai-build.json').write_text(json.dumps(record, indent=2) + '\n')
             # Copy into a sibling first so a failed producer never publishes a partial prefix.

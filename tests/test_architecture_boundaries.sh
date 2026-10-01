@@ -1108,7 +1108,9 @@ if nm -u "$client_lane" | rg \
 fi
 product=${YVEX_BIN:-./yvex}
 [ -x "$product" ] || fail "role product is missing: $product"
-main_count=$(nm "$product" | awk '$NF == "main" { count++ } END { print count + 0 }')
+main_symbol=main
+if test "$(uname -s)" = Darwin; then main_symbol=_main; fi
+main_count=$(nm "$product" | awk -v entry="$main_symbol" '$NF == entry { count++ } END { print count + 0 }')
 [ "$main_count" -eq 1 ] || fail "role product does not own exactly one main: $product"
 nm "$product" | rg 'yvex_cli_server_dispatch' >/dev/null ||
     fail "yvex does not contain its foreground server entrypoint"
@@ -1124,15 +1126,15 @@ reference_objects=${YVEX_REFERENCE_OBJS:-build/obj/tests/reference/deepseek_atte
 for object in $reference_objects; do
     [ -f "$object" ] || fail "attention oracle object is missing: $object"
     unexpected=$(
-        nm -u "$object" | awk '{ print $NF }' |
+        nm -u "$object" | awk -v host="$(uname -s)" '{ symbol=$NF; if (host == "Darwin") sub(/^_/, "", symbol); print symbol }' |
         while IFS= read -r symbol; do
             case "$symbol" in
-                yvex_core_allocate|\
+                (yvex_core_allocate|\
                 yvex_error_clear|\
                 yvex_materialization_session_read|yvex_model_register_deepseek_v4|\
                 yvex_runtime_descriptor_find_role|yvex_sha256_*)
                     ;;
-                yvex_*)
+                (yvex_*)
                     printf '%s\n' "$symbol"
                     ;;
             esac

@@ -1,6 +1,7 @@
 /* Own deterministic locator parsing and local source distribution mechanics. */
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
+#include <yvex/internal/platform.h>
 #include <yvex/internal/source_distribution.h>
 
 #include <yvex/internal/core.h>
@@ -736,8 +737,8 @@ verify:
         before.st_dev != after.st_dev || before.st_ino != after.st_ino ||
         before.st_size != after.st_size || before.st_mtime != after.st_mtime ||
         before.st_ctime != after.st_ctime ||
-        before.st_mtim.tv_nsec != after.st_mtim.tv_nsec ||
-        before.st_ctim.tv_nsec != after.st_ctim.tv_nsec)
+        yvex_platform_stat_mtime(&before).tv_nsec != yvex_platform_stat_mtime(&after).tv_nsec ||
+        yvex_platform_stat_ctime(&before).tv_nsec != yvex_platform_stat_ctime(&after).tv_nsec)
         rc = distribution_refuse(err, YVEX_ERR_IO, "source.distribution.copy",
                                  "source changed or destination sync failed during copy");
 done:
@@ -1385,9 +1386,7 @@ static int source_directory_open(const char *path)
     how.resolve = RESOLVE_NO_SYMLINKS | RESOLVE_NO_MAGICLINKS;
     return (int)syscall(SYS_openat2, AT_FDCWD, path, &how, sizeof(how));
 #else
-    (void)path;
-    errno = ENOTSUP;
-    return -1;
+    return yvex_core_directory_open(path);
 #endif
 }
 

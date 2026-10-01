@@ -68,12 +68,22 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 36 | 29 | 0 | 1 | 6 |
+| 37 | 29 | 1 | 1 | 6 |
 <!-- task-counts:end -->
 
-**29/36 selected Tasks complete.** This denominator includes the significant
+**29/37 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence and two independent completed interface Tasks. It is
 not YVEX product completion. Research candidates are not selected Tasks.
+
+## Independently selected macOS qualification
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `PLATFORM.MACOS.NATIVE.0` | Native macOS build, authenticated local host and CPU lifecycle | P1 | 🔵 IN PROGRESS | Darwin filesystem, process identity, peer credentials and memory mechanisms; real CLI/PTY and bounded CPU execution; Linux regression evidence. Metal and full-model qualification retain independent gates. |
+
+The operator selected this Task on 2026-09-30. Implementation is isolated on
+`feature/macos-native`, preserving the unpublished Spark CLI/REPLAI refoundation.
+Source ownership and existing protocol meanings remain authoritative.
 
 ## Delivery progression
 

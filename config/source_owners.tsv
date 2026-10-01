@@ -452,3 +452,5 @@ src/tokenizer/provider.c	tokenizer	tokenizer.provider	generic	private	reusable-a
 src/tokenizer/private.h	tokenizer	tokenizer.shared	generic	private	source-local-interface	tokenizer.core,tokenizer.execution,tokenizer.decode,tokenizer.provider	interface	none
 src/tokenizer/token_input.c	tokenizer	tokenizer.token_input	generic	private	transactional-execution	runtime,cli,generation	implementation	none
 src/tokenizer/unicode.c	tokenizer	tokenizer.unicode	generic	private	reusable-algorithm	tokenizer.execution,tokenizer.decode	implementation	none
+include/yvex/internal/platform.h	core	core.platform	generic	private	platform-interface	repository	interface	none
+src/core/platform.c	core	core.platform	generic	private	platform-interface	repository	implementation	none

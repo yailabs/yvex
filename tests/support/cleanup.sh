@@ -1,5 +1,23 @@
 #!/bin/sh
 
+# Canonicalize only Darwin's root-owned OS aliases before a test creates its
+# resources. Application symlinks still reach the refusal checks below.
+if test "$(uname -s)" = Darwin; then
+    TMPDIR=${TMPDIR:-/tmp}
+    TMPDIR=${TMPDIR%/}
+    case "$TMPDIR" in
+        /var/*)
+            if test "$(readlink /var)" = private/var &&
+                test "$(stat -f %u /var)" = 0; then TMPDIR=/private$TMPDIR; fi
+            ;;
+        /tmp|/tmp/*)
+            if test "$(readlink /tmp)" = private/tmp &&
+                test "$(stat -f %u /tmp)" = 0; then TMPDIR=/private$TMPDIR; fi
+            ;;
+    esac
+    export TMPDIR
+fi
+
 # Reports whether any component already present in an absolute path is a
 # symlink. Missing suffixes are safe to inspect because cleanup never creates
 # them while validating ownership.
