@@ -277,8 +277,10 @@ def run(binary, host_log, output, memcheck):
         asset.write_text('local qualification fixture')
         path_command = '/attach ' + str(output / 'completion-lo')
         start = c.send(path_command + '\t')
-        c.wait(b'completion-local.txt', start)
+        # A long path label may be ellipsized; accepting must retain the full value.
+        c.wait(b'path; attachment admission still required', start)
         c.send(b'\r')  # accept the path, do not admit an attachment yet
+        c.wait(b'completion-local.txt', start)
         c.quiet()
         assert b'attached\r\n' not in c.data[start:]
         c.send(b'\x7f' * len(('/attach ' + str(asset)).encode()))

@@ -16,10 +16,12 @@ publication: {html: true, pdf: true, index: true}
 
 `PLATFORM.MACOS.NATIVE.0` was selected independently on 2026-09-30 and
 implemented on `feature/macos-native` from published main
-`5d84349f8774a4273ee5f4ac4ce3a05ce99c64e1`. The native changes preserve the
-published REPLAI pin, protocol v24 and installed public layouts. Unpublished
-Spark CLI/REPLAI refoundation and the Exon YAI/Studio sessions retain their own
-worktrees and authority. Linux qualification runs in a disposable Exon checkout,
+`5d84349f8774a4273ee5f4ac4ce3a05ce99c64e1`. The native changes preserve
+protocol v24 and installed public layouts. Published CLI/REPLAI refoundation
+was integrated from main `6c5229594d523a7976ea82319c225ae20e514c73`, including its
+authenticated REPLAI producer `93d62f6d34cfb933a1f59407ade027152e1ef2ba`.
+The native Task does not repin that dependency. Exon YAI/Studio and Spark
+sessions retain their own worktrees and authority. Linux qualification runs in a disposable Exon checkout,
 without replacing the primary YVEX source or daemon.
 
 The local qualification host is macOS 26.6.2 arm64, Apple Clang 21, 24 GiB RAM,
@@ -98,7 +100,8 @@ preservation rather than substituting documentation for execution evidence.
 Architecture changes are documented in [backend/platform execution](../architecture/backend-execution.md#native-platform-mechanisms).
 Task and maturity closure stay in [Tasks](../project-control/TASKS.md#independently-selected-macos-qualification)
 and [Status](../project-control/STATUS.md#interfaces-and-portability).
-No cross-repository source contract or upstream REPLAI pin changes.
+No cross-repository source contract changes. The dependency update belongs to
+the separately published CLI refoundation, whose native consumers were requalified.
 
 `progression_decision=complete_evidence`, `downstream_safe=false` until the final
 source-stable Mac and Linux confirmation is retained.

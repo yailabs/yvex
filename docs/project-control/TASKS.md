@@ -84,7 +84,8 @@ candidates are not selected Tasks.
 | `PLATFORM.MACOS.NATIVE.0` | Native macOS build, authenticated local host and CPU lifecycle | P1 | 🔵 IN PROGRESS | Darwin filesystem, process identity, peer credentials and memory mechanisms; real CLI/PTY and bounded CPU execution; Linux regression evidence. Metal and full-model qualification retain independent gates. |
 
 The operator selected this Task on 2026-09-30. Implementation is isolated on
-`feature/macos-native`, preserving the unpublished Spark CLI/REPLAI refoundation.
+`feature/macos-native`. Published Spark CLI/REPLAI refoundation at `6c522959`
+is integrated; unpublished work and Exon primary checkouts remain untouched.
 Source ownership and existing protocol meanings remain authoritative.
 
 ## Delivery progression
