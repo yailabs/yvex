@@ -333,7 +333,11 @@ static int metal_tensor_copy(yvex_backend *backend, yvex_device_tensor *dst,
 {
     int rc = yvex_backend_tensor_copy_validate(backend, dst, src, "backend.metal.copy", err);
     if (rc != YVEX_OK) return rc;
-    if (dst == src) { yvex_error_clear(err); return YVEX_OK; }
+    if (dst == src) {
+        rc = metal_owned_storage(backend, dst, err);
+        if (rc == YVEX_OK) yvex_error_clear(err);
+        return rc;
+    }
     return metal_blit(backend, dst, src, err);
 }
 

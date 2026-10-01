@@ -90,6 +90,8 @@ static int metal_embedding_case(yvex_backend *metal, yvex_backend *cpu,
                          yvex_backend_tensor_read(metal, &view, actual, sizeof(float), &err) == YVEX_ERR_UNSUPPORTED,
                      "unqualified borrowed physical views refuse without reading the wrong buffer offset");
     yvex_device_tensor *borrowed = &view;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_copy(metal, borrowed, borrowed, &err) == YVEX_ERR_UNSUPPORTED,
+                     "self-copy cannot admit an unqualified borrowed physical view");
     YVEX_TEST_ASSERT(yvex_backend_tensor_release(metal, &borrowed, &err) == YVEX_ERR_UNSUPPORTED &&
                          borrowed == &view, "borrowed view release preserves the owning buffer and stack view");
     YVEX_TEST_ASSERT(yvex_backend_op_embed(metal, mt, ids, tokens, mo, &err) == YVEX_OK &&
