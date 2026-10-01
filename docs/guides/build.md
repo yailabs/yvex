@@ -74,7 +74,10 @@ python3 tools/qa.py run native
 ```
 
 Use a separate REPLAI staging prefix for each host/architecture; its receipt
-binds the staged native library to that target. Darwin archives preserve
+binds the staged native library to that target. Older receipts without a target
+are refused: retain the old prefix and select an empty one, for example
+`make REPLAI_PREFIX=build/external/replai-native`. This also applies when
+updating an existing Linux checkout. Darwin archives preserve
 source-relative object identities using BSD member names and the native symbol
 indexer. No external REPLAI pin or public wire layout changes are required.
 

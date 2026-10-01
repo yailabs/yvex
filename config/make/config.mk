@@ -36,7 +36,7 @@ YVEX_BUILD_SOURCE_DELTA_IDENTITY ?= $(shell { \
 	git ls-files --others --exclude-standard 2>/dev/null | LC_ALL=C sort | \
 		grep -v '__pycache__/' | grep -v '[.]pyc$$' | \
 		while IFS= read -r path; do \
-			printf 'untracked\t%s\t' "$$path"; $(if $(filter Darwin,$(YVEX_HOST_OS)),stat -f 'mode=%Lp',stat -c 'mode=%a') "$$path"; \
+			printf 'untracked\t%s\t' "$$path"; $(if $(filter Darwin,$(YVEX_HOST_OS)),/usr/bin/stat -f 'mode=%Lp',stat -c 'mode=%a') "$$path"; \
 			sha256sum "$$path"; \
 			done; \
 	} | sha256sum | cut -d' ' -f1)

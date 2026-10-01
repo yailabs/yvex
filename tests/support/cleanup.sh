@@ -8,11 +8,11 @@ if test "$(uname -s)" = Darwin; then
     case "$TMPDIR" in
         /var/*)
             if test "$(readlink /var)" = private/var &&
-                test "$(stat -f %u /var)" = 0; then TMPDIR=/private$TMPDIR; fi
+                test "$(/usr/bin/stat -f %u /var)" = 0; then TMPDIR=/private$TMPDIR; fi
             ;;
         /tmp|/tmp/*)
             if test "$(readlink /tmp)" = private/tmp &&
-                test "$(stat -f %u /tmp)" = 0; then TMPDIR=/private$TMPDIR; fi
+                test "$(/usr/bin/stat -f %u /tmp)" = 0; then TMPDIR=/private$TMPDIR; fi
             ;;
     esac
     export TMPDIR
