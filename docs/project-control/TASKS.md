@@ -69,7 +69,7 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 40 | 32 | 1 | 1 | 6 |
+| 40 | 32 | 0 | 1 | 7 |
 <!-- task-counts:end -->
 
 **32/40 selected Tasks complete.** This denominator includes the significant
@@ -114,7 +114,7 @@ backend foundation and retained native CPU behavior. No next milestone is select
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `MACOS.SMALLMODEL.CLI.0` | Acquire real small-model tensors, compile, load and capture native generation on the Mac; publish the resulting qualified representation on Hugging Face | P1 | 🔵 IN PROGRESS | Exact immutable upstream source, full integrity, native compilation/admission, real output and truthful CPU/Metal scope; existing source, family, runtime and release contracts remain authoritative. A refusal is evidence of a blocker, not a generated answer or publication qualification. |
+| `MACOS.SMALLMODEL.CLI.0` | Acquire real small-model tensors, compile, load and capture native generation on the Mac; publish the resulting qualified representation on Hugging Face | P1 | ⛔ BLOCKED | Real Mamba 7B and Qwen 0.8B weights acquired; Mamba GGUF/binding and full integrity pass. Mac model load/raw generation refuse required memory; small Qwen has no admitted compiler binding and tied-output support. Zero generated text; publication validation blocked. [Exact evidence and owner boundaries](../evaluation/macos-small-model.md). |
 
 The operator independently selected this outcome on 2026-10-01 after Metal
 foundation closure. Begin with the existing source-qualified
@@ -124,6 +124,12 @@ does not confer model admission. Preserve main and concurrent primary work;
 do not invent a chat template, numerical relaxation or Metal-only runtime.
 Hugging Face publication is authorized for the resulting representation, once
 its exact license, lineage, runtime scope and remote integrity are established.
+The attempted native binary reports clean selection commit `9ab4be5a`; no
+production policy or architecture workaround was introduced. The requested
+load/generation/publication outcome remains blocked, while downloaded tensors
+and the compiled Mamba artifact are retained. `progression_decision=blocked_external`,
+`downstream_safe=false` for that requested outcome; earlier foundation closure
+is unchanged.
 
 ## Delivery progression
 

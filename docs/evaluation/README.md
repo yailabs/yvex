@@ -26,6 +26,7 @@ Software correctness, independent numerical conformance, artifact integrity, run
 - [Retained Execution Observations](retained-observations.md)
 - [Native macOS Qualification](macos-native.md)
 - [Apple Silicon Metal Foundation](macos-metal.md)
+- [macOS Real Small-Model Execution Attempt](macos-small-model.md)
 <!-- docs:diagram evidence_promotion -->
 ```mermaid
 %% yvex-figure: evidence_promotion

@@ -60,3 +60,8 @@ Only the exact admitted text representation is covered. Vision/MTP tensors in
 upstream source do not confer input/output capability. Broader models, public
 readout APIs, calibrated results, behavior evaluation and release qualification
 remain separate obligations.
+
+The [Mac small-model attempt](../evaluation/macos-small-model.md) acquires real
+`Qwen/Qwen3.5-0.8B` tensors but preparation refuses the missing exact compiler
+binding. Its tied embedding/output semantics are outside this admitted 27B
+record; the family name does not grant small-checkpoint support.
