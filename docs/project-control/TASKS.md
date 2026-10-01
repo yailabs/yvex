@@ -69,10 +69,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 39 | 31 | 1 | 1 | 6 |
+| 39 | 32 | 0 | 1 | 6 |
 <!-- task-counts:end -->
 
-**31/39 selected Tasks complete.** This denominator includes the significant
+**32/39 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -95,13 +95,20 @@ host and terminal execution only; no next platform/model wave is selected.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `METAL.BACKEND.FOUNDATION.0` | Real Apple Silicon Metal execution through the common backend lifecycle | P1 | 🔵 IN PROGRESS | Discover/admit the device, own shared-memory resources, execute an existing operation on GPU against an independent CPU oracle, qualify refusal/cleanup and native CPU/platform separation. No model, attention, projection or performance promotion. |
+| `METAL.BACKEND.FOUNDATION.0` | Real Apple Silicon Metal execution through the common backend lifecycle | P1 | ✅ COMPLETE | Real M5 Pro device/pipeline admission, shared-buffer lifetime, exact F32 embedding, refusal/cleanup and resource observations qualified; Metal 2 PASS, native 14 PASS on Mac/Linux, Linux CI 120 PASS. Model, attention, projection and performance remain unqualified; [evidence](../evaluation/macos-metal.md). |
 
 The operator selected this Task on 2026-10-01 for `feature/macos-metal`,
 starting at `67a7905ea9deb98b0704629a1f979634e19007fb`, clean and aligned
 with published `main`. Native macOS qualification is integrated in `main`;
 primary Linux/CUDA and other repository work remain separately owned.
-Completion requires implementation and reproducible target evidence.
+Qualified implementation ends at `428e8e8e9548566d06e785acbc4b03b92f22852c`;
+source-stable evidence and precise earlier/common-code receipts are recorded in
+the evaluation owner. Generic kind parsing/resource observation was repaired
+inside backend ownership. CPU/CUDA-only runtime capacity/model-specialization
+and existing Mac managed-directory publication remain separate canonical
+boundaries; no workaround or model promotion was introduced.
+`progression_decision=proceed`, `downstream_safe=true` only for this primitive
+backend foundation and retained native CPU behavior. No next milestone is selected.
 
 ## Delivery progression
 
