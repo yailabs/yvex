@@ -15,13 +15,14 @@ test ! -e "$BUILD_DIR/package/product/bin/yvex-openai"
 test ! -e "$BUILD_DIR/package/developer"
 cmp LICENSE "$BUILD_DIR/package/product/share/yvex/LICENSE"
 cmp NOTICE.md "$BUILD_DIR/package/product/share/yvex/NOTICE.md"
-test "$(find "$BUILD_DIR/package/product/bin" -maxdepth 1 -type f -perm /111 \
-    -printf '%f\n' | LC_ALL=C sort | tr '\n' ' ')" = 'yvex '
+test "$(find "$BUILD_DIR/package/product/bin" -type f \
+    \( -perm -100 -o -perm -010 -o -perm -001 \) -exec basename {} \; \
+    | LC_ALL=C sort | tr '\n' ' ')" = 'yvex '
 
-test "$(nm "$YVEX_BIN" | awk '$NF == "main" { count++ } END { print count + 0 }')" = 1
+test "$(nm "$YVEX_BIN" | awk '$NF == "main" || $NF == "_main" { count++ } END { print count + 0 }')" = 1
 test "$(rg -l '(^|[[:space:]])int[[:space:]]+main[[:space:]]*\(' src/cli src/server \
     | LC_ALL=C sort | tr '\n' ' ')" = 'src/cli/main.c '
-test "$(nm "$YVEX_BIN" | awk '$NF == "yvex_cli_server_dispatch" { count++ } END { print count + 0 }')" = 1
+test "$(nm "$YVEX_BIN" | awk '$NF == "yvex_cli_server_dispatch" || $NF == "_yvex_cli_server_dispatch" { count++ } END { print count + 0 }')" = 1
 ! rg -n '^gateway:|^dev-tools:|^package-dev:|YVEX_OPENAI_BIN|YVEX_DEV_BIN' $make_inputs \
     >/dev/null
 printf 'test: product_topology single yvex command/server binary\n'

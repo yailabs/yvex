@@ -285,7 +285,8 @@ def test_authorized_acquisition(temporary: pathlib.Path) -> None:
 
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="yvex-minimax-intake-") as directory:
-        temporary = pathlib.Path(directory)
+        # Darwin's default temporary root crosses a system alias; fixtures use its real path.
+        temporary = pathlib.Path(directory).resolve()
         test_valid_and_deterministic(temporary)
         cases = {
             "duplicate": "duplicate tensor name",
