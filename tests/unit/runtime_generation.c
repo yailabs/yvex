@@ -196,6 +196,7 @@ static int generation_test_bounded_batch_coalescing(void)
     pthread_t thread;
     yvex_error err;
     unsigned long long attempt;
+    const struct timespec retry = {0, 1000000L};
     memset(&gate, 0, sizeof(gate));
     memset(&job, 0, sizeof(job));
     gate.released = 1;
@@ -220,12 +221,13 @@ static int generation_test_bounded_batch_coalescing(void)
         yvex_execution_compatibility_key_validate(&job.ticket.key, &err) == YVEX_OK &&
             pthread_create(&thread, NULL, generation_scheduler_submit, &job) == 0,
         "one producer should submit into the bounded rendezvous");
-    for (attempt = 0ull; attempt < 100000ull; ++attempt) {
+    for (attempt = 0ull; attempt < 2000ull; ++attempt) {
         YVEX_TEST_ASSERT(
             yvex_runtime_private_engine_scheduler_snapshot(scheduler, &summary, &err) ==
                 YVEX_OK,
             "bounded coalescing state should remain inspectable");
         if (summary.coalescing_waits) break;
+        (void)nanosleep(&retry, NULL);
     }
     (void)pthread_join(thread, NULL);
     YVEX_TEST_ASSERT(
@@ -260,6 +262,7 @@ static int generation_test_incompatible_arrival_releases_impossible_wait(void)
     pthread_t threads[2];
     yvex_error err;
     unsigned long long attempt;
+    const struct timespec retry = {0, 1000000L};
     memset(&gate, 0, sizeof(gate));
     memset(jobs, 0, sizeof(jobs));
     gate.released = 1;
@@ -285,12 +288,13 @@ static int generation_test_incompatible_arrival_releases_impossible_wait(void)
             pthread_create(&threads[0], NULL, generation_scheduler_submit,
                            &jobs[0]) == 0,
         "declared width-four ticket should enter coalescing");
-    for (attempt = 0ull; attempt < 100000ull; ++attempt) {
+    for (attempt = 0ull; attempt < 2000ull; ++attempt) {
         YVEX_TEST_ASSERT(
             yvex_runtime_private_engine_scheduler_snapshot(scheduler, &summary, &err) ==
                 YVEX_OK,
             "coalescing wait should remain observable");
         if (summary.coalescing_waits) break;
+        (void)nanosleep(&retry, NULL);
     }
     YVEX_TEST_ASSERT(summary.coalescing_waits == 1ull,
                      "declared width-four ticket should wait for peers");
@@ -704,6 +708,7 @@ static int cooperative_execution_case(
     pthread_t threads[2];
     yvex_error err;
     unsigned long long attempt;
+    const struct timespec retry = {0, 1000000L};
     YVEX_TEST_ASSERT(
         pthread_mutex_init(&gate.mutex, NULL) == 0 &&
             pthread_cond_init(&gate.condition, NULL) == 0 &&
@@ -724,12 +729,13 @@ static int cooperative_execution_case(
     YVEX_TEST_ASSERT(
         pthread_create(&threads[1], NULL, cooperative_execution_run, &jobs[1]) == 0,
         "second cooperative request should become runnable");
-    for (attempt = 0ull; attempt < 100000ull; ++attempt) {
+    for (attempt = 0ull; attempt < 2000ull; ++attempt) {
         YVEX_TEST_ASSERT(
             yvex_runtime_execution_coordinator_summary_copy(
                 scheduler, summary, &err) == YVEX_OK,
             "cooperative ready queue should remain inspectable");
         if (summary->ready_sequence_work == 1ull) break;
+        (void)nanosleep(&retry, NULL);
     }
     YVEX_TEST_ASSERT(summary->ready_sequence_work == 1ull,
                      "second request should wait behind one active quantum");
@@ -868,6 +874,7 @@ static int generation_test_cooperative_drain(void)
     pthread_t worker, closer;
     yvex_error err;
     unsigned long long attempt;
+    const struct timespec retry = {0, 1000000L};
     YVEX_TEST_ASSERT(
         yvex_runtime_execution_coordinator_open(
             &scheduler, 2ull, 1ull, &err) == YVEX_OK &&
@@ -885,10 +892,12 @@ static int generation_test_cooperative_drain(void)
     YVEX_TEST_ASSERT(
         pthread_create(&closer, NULL, cooperative_close_run, &close) == 0,
         "scheduler drain should start concurrently with active work");
-    for (attempt = 0ull; attempt < 100000ull; ++attempt)
+    for (attempt = 0ull; attempt < 2000ull; ++attempt) {
         if (yvex_runtime_execution_yield_requested(&work.lease)) break;
+        (void)nanosleep(&retry, NULL);
+    }
     YVEX_TEST_ASSERT(
-        attempt < 100000ull,
+        attempt < 2000ull,
         "a draining scheduler should request the next admitted safe point");
     (void)pthread_mutex_lock(&work.mutex);
     work.proceed = 1;

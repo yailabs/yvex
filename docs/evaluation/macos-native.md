@@ -49,6 +49,7 @@ build identity; generated fixtures and raw logs remain outside Git.
 | BSD script rejects FIFO input; Mach-O symbols carry a leading underscore | A real PTY recorder preserves child status, and symbol audits normalize the native ABI before applying the same ownership rules. |
 | Darwin revokes a session leader's PTY after exit | A test-only destructor records the real terminal flags before revocation, without changing them. Restoration remains a required assertion. |
 | Scheduler observation spins may finish before the new thread runs | Use a bounded sleeping observation interval; require the same runnable/physical-width assertions. |
+| Hosted runner memory cannot preserve the existing minimum reserve for tiny model admission | An explicit test-only capacity mode supplies a declared envelope inside the binding and tiny-vertical fixtures. Default local runs retain actual host admission; native platform memory observations and resource refusal assertions remain independent. Production reserve policy is unchanged. |
 | Clang identifies potentially uninitialized refusal-path values | Initialize checked arithmetic inputs and refuse an invalid server owner before reading a return code. |
 
 ## Evidence
@@ -85,6 +86,34 @@ This model deliberately has a deterministic small output. It exercises the
 real compiler/runtime path; it is neither an 8B/14B checkpoint nor an upstream
 whole-model behavior oracle.
 
+### Hosted CI capacity boundary
+
+The first [hosted run](https://github.com/yailabs/yvex/actions/runs/36847530428)
+completed the Linux hermetic lane with 119 PASS and valid source stability;
+its subsequent real-chat Valgrind step also passed. On macOS 15.7.9 arm64,
+Apple Clang 17, native results were 10 PASS and 3 FAIL: tiny-vertical and
+runtime-binding could not preserve the product's existing 8 GiB minimum
+system reserve from available host memory; runtime-generation exhausted a
+busy observation loop before its drain thread ran. That failed run is diagnostic
+evidence, not qualification.
+
+The macOS workflow now opts into `YVEX_TEST_FIXTURE_CAPACITY=1`. Only
+`unit.runtime_binding` and `integration.tiny-vertical` install a declared
+128 GiB total/available admission envelope through the existing test hooks,
+inside their own test processes. The binding owner clears the envelope after
+its case and restores it only after its explicit low-capacity, proportional
+reserve, process-limit and just-in-time refusal assertions. The fixtures refuse
+to replace caller-injected capacity facts. Other cases, including
+`unit.platform`, still observe the actual native kernel and memory mechanisms.
+Scheduler observation waits sleep for 1 ms with a bounded retry budget and retain
+their exact assertions. Production memory and scheduling policy are unchanged.
+
+Both actual-memory and declared-capacity local reruns pass the affected binding,
+generation and real tiny CPU/terminal vertical. Hosted results belong to their
+exact workflow source snapshot. A hosted pass with this declared envelope
+qualifies native fixture execution and lifecycle; it does not qualify the
+runner's actual memory admission or promise a usable 8B/14B model.
+
 ## Remaining problems and next boundaries
 
 | Boundary | Current problem / required evidence |
@@ -94,7 +123,7 @@ whole-model behavior oracle.
 | YAI, SDKs and Studio | This Task qualifies YVEX only. The complete Mac product chain remains untested against the unpublished Exon/Spark waves. Align after those authoritative pushes, then test consumer startup and real turns. |
 | Darwin explicit cache eviction | Returns unsupported. F_NOCACHE changes future caching and is not proof of eviction or a cold-load benchmark. |
 | Memory capacity | Kernel free/reclaimable percentage is rounded down; fallback free/inactive pages is conservative. Existing reserve admission still applies. This is not a promise that all reported pages are immediately unused. |
-| Hosted macOS CI | A pinned-action macOS job runs native and build contracts. Its first hosted execution is separate from this local arm64 evidence. |
+| Hosted macOS CI | A pinned-action macOS job runs native and build contracts. Its two model-admission fixtures use an explicit declared capacity envelope. Hosted fixture evidence is separate from the actual-memory local arm64 qualification and does not establish runner memory admission. |
 | Wider platforms and release | Other macOS versions/architectures, GPU/full-model performance, Windows and distribution/legal qualification remain independent. Existing nonliteral-format Clang warnings are not removed by this portability Task. |
 
 ## Build and host observations
@@ -130,7 +159,7 @@ the separately published CLI refoundation, whose native consumers were requalifi
 
 No new ADR or Roadmap horizon is selected: native mechanisms implement the
 existing platform boundary. Code, architecture, Task/Status and evaluation
-owners close together; the macOS CI job retains its separate first hosted gate.
+owners close together; hosted fixture capacity remains a separate evidence boundary.
 
 `progression_decision=proceed`, `downstream_safe=true` for the qualified native
 CPU fixtures, host and terminal boundary. Metal, small-model conversation,

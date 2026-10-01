@@ -2480,6 +2480,22 @@ static int test_artifact_copy_portability(
     return 0;
 }
 
+static int runtime_fixture_capacity(void)
+{
+    const char *enabled = getenv("YVEX_TEST_FIXTURE_CAPACITY");
+
+    if (!enabled || strcmp(enabled, "1") != 0) return 1;
+    if (getenv("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES") ||
+        getenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES") ||
+        getenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES")) return 1;
+    if (setenv("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES", "137438953472", 1) != 0 ||
+        setenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES", "137438953472", 1) != 0)
+        return 0;
+    fprintf(stderr, "binding fixture: declared 128 GiB admission capacity; "
+                    "not host memory evidence\n");
+    return 1;
+}
+
 static int runtime_model_open_fixture(const binding_fixture *fixture,
                                       const yvex_runtime_binding_prepare_result *prepared,
                                       yvex_model_engine **model,
@@ -2712,6 +2728,8 @@ static int test_runtime_model_progress(
             progress.events[YVEX_RUNTIME_LIFECYCLE_ARTIFACT_HASH] > 1ull &&
             progress.events[YVEX_RUNTIME_LIFECYCLE_RESIDENCY] == 0ull,
         "model open rechecks live capacity after hashing and before residency mutation");
+    YVEX_TEST_ASSERT(runtime_fixture_capacity(),
+                     "restore optional fixture capacity after explicit refusal tests");
     memset(&progress, 0, sizeof(progress));
     progress.cancel_hash = 1;
     YVEX_TEST_ASSERT(setenv("YVEX_TEST_RUNTIME_MODEL_CLEANUP_FAILURE", "1", 1) == 0,
@@ -5353,10 +5371,21 @@ static int runtime_binding_suite(int cuda_only)
     char artifact_path[YVEX_PATH_CAP];
     yvex_error err;
     int rc = 1;
+    const char *capacity_flag = getenv("YVEX_TEST_FIXTURE_CAPACITY");
+    int declared_capacity = !cuda_only && capacity_flag &&
+                            strcmp(capacity_flag, "1") == 0;
 
     memset(&prepared, 0, sizeof(prepared));
     yvex_error_clear(&err);
     if (!cuda_only) {
+        YVEX_TEST_ASSERT(
+            !declared_capacity ||
+                (!getenv("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES") &&
+                 !getenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES") &&
+                 !getenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES")),
+            "declared fixture capacity must not replace caller-injected capacity facts");
+        YVEX_TEST_ASSERT(runtime_fixture_capacity(),
+                         "install optional declared capacity for CPU admission fixtures");
         YVEX_TEST_ASSERT(
             yvex_materialization_project_artifact_lowering(NULL, &projection, &err) ==
                     YVEX_ERR_INVALID_ARG &&
@@ -5413,6 +5442,10 @@ static int runtime_binding_suite(int cuda_only)
     rc = 0;
 
 done:
+    if (declared_capacity) {
+        (void)unsetenv("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES");
+        (void)unsetenv("YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES");
+    }
     yvex_runtime_binding_close(binding);
     fixture_close(&fixture);
     if (prepared.path[0]) (void)unlink(prepared.path);

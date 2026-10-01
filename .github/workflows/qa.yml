@@ -37,6 +37,10 @@ jobs:
           uv python install 3.14 --default
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Qualify native CPU and terminal lifecycle
+        env:
+          # Admission fixtures use declared capacity on the hosted runner;
+          # unit.platform still observes actual native memory independently.
+          YVEX_TEST_FIXTURE_CAPACITY: '1'
         run: python3 tools/qa.py run native
       - name: Check ownership and build contracts
         run: >-

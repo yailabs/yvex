@@ -8,6 +8,16 @@ TINY_GENERATOR=${TINY_GENERATOR:-tests/integration/tiny_model.py}
 NATIVE_TURN=${NATIVE_TURN:-build/tests/native_turn}
 . tests/support/cleanup.sh
 
+if test "${YVEX_TEST_FIXTURE_CAPACITY:-0}" = 1; then
+    if test -n "${YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES+x}${YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES+x}${YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES+x}"; then
+        printf '%s\n' 'tiny fixture: declared capacity cannot replace caller-injected capacity facts' >&2
+        exit 1
+    fi
+    export YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES=137438953472
+    export YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES=137438953472
+    printf '%s\n' 'tiny fixture: declared 128 GiB admission capacity; not host memory evidence' >&2
+fi
+
 if test "$(uname -s)" = Darwin; then
     export TMPDIR=/private/tmp
 fi
