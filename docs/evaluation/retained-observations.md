@@ -37,8 +37,9 @@ YVEX started at `5d84349f8774a4273ee5f4ac4ce3a05ce99c64e1`, tree
 `a200518beff13d090824573f6e36eb8fef81ecc8509430a349e0a026cbdc3d09`, executable
 `bc31b78a640943c524fc606d2040ffd861c0ca98da6a3ed148db7cc8780f6ff2`.
 The mapped run froze that source throughout: 121 PASS, zero FAIL, ERROR, BLOCKED
-or SKIP, with `source_stability.valid=true`. Subsequent closure edits affect
-only documentation/project control and receive separate documentation validation.
+or SKIP, with `source_stability.valid=true`. Published test-oracle corrections
+below do not change those production inputs. Final closure edits affect only
+documentation/project control and receive separate documentation validation.
 Raw receipts and PTY captures remain outside tracked payloads.
 
 The first hosted CI run at `356d924c` reports 116 PASS and two FAIL. The
@@ -52,6 +53,20 @@ the legitimate provider-partial-before-metadata stage reproduces its existing
 snapshot containing both facts and deliberately exercises that early stage;
 it neither changes progress semantics nor relaxes the expected values. This
 demonstrated test race is not retroactively asserted as the unlogged CI cause.
+
+The repaired published source
+`e5c0e550879c990100587d1bd6f5d989cb39530e`, tree
+`03252c399f6f897bfeb256b62067a899ac8819ee`, passes the independent
+[hosted qualification](https://github.com/yailabs/yvex/actions/runs/36792686079):
+118 PASS, zero FAIL/SKIP/BLOCKED/ERROR, receipt
+`fbde941b75000ba6efec1880bee61f9cf04c99ef28bd1b2fc3d4978932bd2c51`.
+All ten separately checked chat processes report zero Valgrind errors,
+zero bytes/blocks in use at exit and no suppression. Clean local confirmation
+also passes the selected-binary documentation surface and source-acquisition
+lanes; the latter deliberately observes the early partial stage before its
+completed metadata. This closes the interface publication gate, not the separate
+model/release gates. Subsequent documentation-only closeout retains identical
+production, test, registry and build inputs.
 
 REPLAI started at `5c8594923f8153de347ad6f8a96d0db8382080ee`.
 Independent producer qualification used
