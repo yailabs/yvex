@@ -272,7 +272,7 @@ fi
 if rg -n 'yvex_graph_component_variant_find[[:space:]]*\(' src/graph/families; then
     fail "a family projection owns the common component catalog lookup"
 fi
-rg -n 'YVEX_GRAPH_FAMILY_DESCRIPTORS' src/graph/catalog.c >/dev/null ||
+rg -n 'YVEX_GRAPH_FAMILY_CATALOGS' src/graph/catalog.c >/dev/null ||
     fail "graph catalog no longer consumes generated family descriptor membership"
 if rg -n '(execution_providers|component_providers|quant_preset_providers|source_providers)' \
     src/graph/catalog.c; then

@@ -395,8 +395,7 @@ static const yvex_family_source_adapter *laya_unadmitted_source(void)
     return NULL;
 }
 
-extern const yvex_family_descriptor yvex_graph_family_descriptor_laya;
-const yvex_family_descriptor yvex_graph_family_descriptor_laya = {
+static const yvex_family_descriptor yvex_graph_family_descriptor_laya = {
     .schema_version = YVEX_FAMILY_DESCRIPTOR_SCHEMA_V1,
     .target_id = "laya-typed-decisions",
     .family = "laya",
@@ -404,3 +403,12 @@ const yvex_family_descriptor yvex_graph_family_descriptor_laya = {
     .tokenizer_pre = "default",
     .source = laya_unadmitted_source,
 };
+
+static const yvex_family_descriptor *const laya_registered_targets[] = {
+    &yvex_graph_family_descriptor_laya};
+
+const yvex_family_target_catalog yvex_graph_family_catalog_laya = {
+    .schema_version = YVEX_FAMILY_TARGET_CATALOG_SCHEMA_V1,
+    .family = "laya",
+    .targets = laya_registered_targets,
+    .target_count = sizeof(laya_registered_targets) / sizeof(laya_registered_targets[0])};

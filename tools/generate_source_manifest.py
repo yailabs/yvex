@@ -208,16 +208,16 @@ def render_family_header(rows: list[list[str]]) -> str:
         "#ifndef YVEX_GENERATED_SOURCE_FAMILIES_H_INCLUDED",
         "#define YVEX_GENERATED_SOURCE_FAMILIES_H_INCLUDED",
         "",
-        f"#define YVEX_GRAPH_FAMILY_DESCRIPTOR_COUNT {len(names)}u",
+        f"#define YVEX_GRAPH_FAMILY_CATALOG_COUNT {len(names)}u",
     ]
     if names:
-        lines.append("#define YVEX_GRAPH_FAMILY_DESCRIPTORS(X) \\")
+        lines.append("#define YVEX_GRAPH_FAMILY_CATALOGS(X) \\")
         lines.extend(
             f"    X({name}){' \\' if index + 1 < len(names) else ''}"
             for index, name in enumerate(names)
         )
     else:
-        lines.append("#define YVEX_GRAPH_FAMILY_DESCRIPTORS(X)")
+        lines.append("#define YVEX_GRAPH_FAMILY_CATALOGS(X)")
     lines.extend(["", "#endif", ""])
     return "\n".join(lines)
 

@@ -886,11 +886,11 @@ class Audit:
             if self.header_tier(name) in {"internal", "source"}
             for symbol in declarations(unit) | data_declarations(unit)
         }
-        return declared | self.family_descriptor_entrypoints()
+        return declared | self.family_catalog_entrypoints()
 
-    def family_descriptor_entrypoints(self) -> set[str]:
+    def family_catalog_entrypoints(self) -> set[str]:
         return {
-            f"yvex_graph_family_descriptor_{Path(row[0]).stem}"
+            f"yvex_graph_family_catalog_{Path(row[0]).stem}"
             for row in self.manifest_rows
             if row[0].startswith("src/graph/families/") and row[0].endswith(".c")
             and row[2] == "graph.family." + Path(row[0]).stem
@@ -1328,7 +1328,7 @@ class Audit:
         )
         allowed_family_symbols = (
             set(self.policy["symbols"]["family_entrypoints"])
-            | self.family_descriptor_entrypoints()
+            | self.family_catalog_entrypoints()
         )
         for name, unit in self.headers.items():
             row = self.manifest.get(name)
@@ -1410,7 +1410,7 @@ class Audit:
         required_entrypoints = (
             self.policy["symbols"]["family_entrypoints"]
             + self.policy["symbols"]["required_internal_entrypoints"]
-            + sorted(self.family_descriptor_entrypoints())
+            + sorted(self.family_catalog_entrypoints())
         )
         for entrypoint in required_entrypoints:
             if len(definitions.get(entrypoint, [])) != 1:

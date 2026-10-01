@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-extern const yvex_family_descriptor yvex_graph_family_descriptor_minimax_h3;
+static const yvex_family_descriptor yvex_graph_family_descriptor_minimax_h3;
 #define VIDEO_COMPONENT_IDENTITY "c45d914061f4a8d71e84d70cf79f286793919bdc040f48e94b4ec83c2ee8a0e7"
 #define VIDEO_TRANSFORM_IDENTITY "438aee784ab722b7c7cb5de1a934fa9ab3067282f30311ee2d595ad128f2d4f8"
 #define VIDEO_PROFILE_IDENTITY "2a4211fda0e32dc53e4734a57e4ddc4cd408483b2980eb1439770dabb9bea575"
@@ -1966,8 +1966,17 @@ static const yvex_family_source_adapter *minimax_source_adapter(void)
         .tokenizer_policy = minimax_tokenizer_policy, .compile = minimax_source_compile};
     return &adapter;
 }
-const yvex_family_descriptor yvex_graph_family_descriptor_minimax_h3 = {
+static const yvex_family_descriptor yvex_graph_family_descriptor_minimax_h3 = {
     .schema_version = YVEX_FAMILY_DESCRIPTOR_SCHEMA_V1, .target_id = YVEX_MINIMAX_H3_TARGET_ID,
     .family = "minimax-h3", .tokenizer_architecture = "minimax-h3",
     .tokenizer_pre = "qwen2",
     .component = minimax_component_adapter, .source = minimax_source_adapter};
+
+static const yvex_family_descriptor *const minimax_h3_registered_targets[] = {
+    &yvex_graph_family_descriptor_minimax_h3};
+
+const yvex_family_target_catalog yvex_graph_family_catalog_minimax_h3 = {
+    .schema_version = YVEX_FAMILY_TARGET_CATALOG_SCHEMA_V1,
+    .family = "minimax-h3",
+    .targets = minimax_h3_registered_targets,
+    .target_count = sizeof(minimax_h3_registered_targets) / sizeof(minimax_h3_registered_targets[0])};

@@ -44,6 +44,53 @@ typedef struct yvex_family_descriptor {
     yvex_family_source_provider source;
 } yvex_family_descriptor;
 
+/* One family owner may register several exact targets without duplicating its
+ * implementation or making a checkpoint another family. */
+#define YVEX_FAMILY_TARGET_CATALOG_SCHEMA_V1 1u
+typedef struct {
+    unsigned int schema_version;
+    const char *family;
+    const yvex_family_descriptor *const *targets;
+    unsigned long long target_count;
+} yvex_family_target_catalog;
+
+static inline unsigned long long yvex_family_target_catalog_count_registered(
+    const yvex_family_target_catalog *const *catalogs, unsigned long long count)
+{
+    unsigned long long index, targets = 0ull;
+    if (!catalogs) return 0ull;
+    for (index = 0ull; index < count; ++index) {
+        const yvex_family_target_catalog *catalog = catalogs[index];
+        if (!catalog || catalog->schema_version != YVEX_FAMILY_TARGET_CATALOG_SCHEMA_V1 ||
+            !catalog->family || !catalog->family[0] || !catalog->targets ||
+            !catalog->target_count || catalog->target_count > 64ull ||
+            targets > ~0ull - catalog->target_count)
+            return 0ull;
+        targets += catalog->target_count;
+    }
+    return targets;
+}
+
+static inline const yvex_family_descriptor *yvex_family_target_catalog_at_registered(
+    const yvex_family_target_catalog *const *catalogs, unsigned long long count,
+    unsigned long long ordinal)
+{
+    unsigned long long index;
+    if (ordinal >= yvex_family_target_catalog_count_registered(catalogs, count))
+        return NULL;
+    for (index = 0ull; index < count; ++index) {
+        const yvex_family_target_catalog *catalog = catalogs[index];
+        if (ordinal < catalog->target_count) {
+            const yvex_family_descriptor *target = catalog->targets[ordinal];
+            return target && target->schema_version == YVEX_FAMILY_DESCRIPTOR_SCHEMA_V1 &&
+                target->family && !strcmp(target->family, catalog->family)
+                ? target : NULL;
+        }
+        ordinal -= catalog->target_count;
+    }
+    return NULL;
+}
+
 static inline const yvex_family_descriptor *yvex_family_descriptor_find_registered(
     const yvex_family_descriptor *const *descriptors,
     unsigned long long count, const char *target_id)

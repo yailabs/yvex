@@ -19,7 +19,7 @@
 
 #define TEST_DSML "\xef\xbd\x9c" "DSML" "\xef\xbd\x9c"
 
-extern const yvex_family_descriptor yvex_graph_family_descriptor_minimax_h3;
+extern const yvex_family_target_catalog yvex_graph_family_catalog_minimax_h3;
 
 typedef struct {
     pthread_mutex_t mutex;
@@ -222,7 +222,7 @@ static int test_compiled_family_policy(void)
 {
     const yvex_family_compiler_adapter *compiler = yvex_compiler_family_deepseek_v4();
     const yvex_family_descriptor *minimax_descriptor =
-        &yvex_graph_family_descriptor_minimax_h3;
+        yvex_graph_family_catalog_minimax_h3.targets[0];
     const yvex_family_source_adapter *minimax =
         minimax_descriptor && minimax_descriptor->source
             ? minimax_descriptor->source() : NULL;

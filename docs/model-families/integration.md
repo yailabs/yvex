@@ -29,6 +29,13 @@ repository or local source, revision, configuration, tokenizer, parameter
 class, license posture, and intended artifact class. Backend or machine names
 do not belong in target identity.
 
+The source-ownership manifest registers one target-catalog provider per family
+owner. That immutable provider can enumerate several exact target descriptors;
+each retains its own source, compiler, deployment and capability identity.
+Enumeration refuses stale catalogs, foreign-family entries and out-of-bounds
+ordinals; target lookup refuses duplicate identities. Adding a checkpoint does
+not require another family implementation or a central family-name switch.
+
 Family classification is not family support. A target becomes executable only
 after exact roles are admitted in an artifact, materialized, lowered, executed,
 and consumed by its admitted typed product path. Text generation, embeddings,

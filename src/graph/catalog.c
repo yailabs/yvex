@@ -17,20 +17,26 @@
 
 typedef int (*tokenizer_policy_provider)(yvex_tokenizer_family_policy *, yvex_error *);
 
-#define DECLARE_FAMILY_DESCRIPTOR(name) \
-    extern const yvex_family_descriptor yvex_graph_family_descriptor_##name;
-YVEX_GRAPH_FAMILY_DESCRIPTORS(DECLARE_FAMILY_DESCRIPTOR)
-#undef DECLARE_FAMILY_DESCRIPTOR
+#define DECLARE_FAMILY_CATALOG(name) \
+    extern const yvex_family_target_catalog yvex_graph_family_catalog_##name;
+YVEX_GRAPH_FAMILY_CATALOGS(DECLARE_FAMILY_CATALOG)
+#undef DECLARE_FAMILY_CATALOG
 
-static const yvex_family_descriptor *const family_descriptors[] = {
-#define FAMILY_DESCRIPTOR(name) &yvex_graph_family_descriptor_##name,
-    YVEX_GRAPH_FAMILY_DESCRIPTORS(FAMILY_DESCRIPTOR)
-#undef FAMILY_DESCRIPTOR
+static const yvex_family_target_catalog *const family_catalogs[] = {
+#define FAMILY_CATALOG(name) &yvex_graph_family_catalog_##name,
+    YVEX_GRAPH_FAMILY_CATALOGS(FAMILY_CATALOG)
+#undef FAMILY_CATALOG
 };
 
-_Static_assert(sizeof(family_descriptors) / sizeof(family_descriptors[0]) ==
-                   YVEX_GRAPH_FAMILY_DESCRIPTOR_COUNT,
-               "generated graph family descriptor count is inconsistent");
+_Static_assert(sizeof(family_catalogs) / sizeof(family_catalogs[0]) ==
+                   YVEX_GRAPH_FAMILY_CATALOG_COUNT,
+               "generated graph family catalog count is inconsistent");
+
+static unsigned long long family_descriptor_count(void)
+{
+    return yvex_family_target_catalog_count_registered(
+        family_catalogs, sizeof(family_catalogs) / sizeof(family_catalogs[0]));
+}
 
 static const yvex_family_descriptor *family_descriptor_at(size_t index)
 {
@@ -39,8 +45,8 @@ static const yvex_family_descriptor *family_descriptor_at(size_t index)
     const yvex_component_variant_adapter *component;
     const yvex_family_source_adapter *source;
 
-    if (index >= sizeof(family_descriptors) / sizeof(family_descriptors[0])) return NULL;
-    descriptor = family_descriptors[index];
+    descriptor = yvex_family_target_catalog_at_registered(
+        family_catalogs, sizeof(family_catalogs) / sizeof(family_catalogs[0]), index);
     if (!descriptor || descriptor->schema_version != YVEX_FAMILY_DESCRIPTOR_SCHEMA_V1 ||
         !descriptor->target_id || !descriptor->target_id[0] ||
         !descriptor->family || !descriptor->family[0] ||
@@ -88,13 +94,16 @@ static const yvex_family_descriptor *family_descriptor_at(size_t index)
 
 static const yvex_family_descriptor *family_descriptor_find_target(const char *target_id)
 {
-    const yvex_family_descriptor *descriptors[YVEX_GRAPH_FAMILY_DESCRIPTOR_COUNT];
-    size_t index;
-
-    for (index = 0u; index < YVEX_GRAPH_FAMILY_DESCRIPTOR_COUNT; ++index)
-        descriptors[index] = family_descriptor_at(index);
-    return yvex_family_descriptor_find_registered(
-        descriptors, YVEX_GRAPH_FAMILY_DESCRIPTOR_COUNT, target_id);
+    const yvex_family_descriptor *selected = NULL;
+    unsigned long long index;
+    if (!target_id || !target_id[0]) return NULL;
+    for (index = 0ull; index < family_descriptor_count(); ++index) {
+        const yvex_family_descriptor *candidate = family_descriptor_at(index);
+        if (!candidate || strcmp(candidate->target_id, target_id)) continue;
+        if (selected) return NULL;
+        selected = candidate;
+    }
+    return selected;
 }
 
 static int architecture_matches(
@@ -120,8 +129,7 @@ static int catalog_tokenizer_policy(
                        "artifact architecture has no compiled tokenizer policy");
         return YVEX_ERR_UNSUPPORTED;
     }
-    for (index = 0u; index < sizeof(family_descriptors) /
-                                      sizeof(family_descriptors[0]); ++index) {
+    for (index = 0u; index < family_descriptor_count(); ++index) {
         const yvex_family_descriptor *descriptor = family_descriptor_at(index);
         const yvex_graph_execution_binding *binding =
             descriptor && descriptor->execution ? descriptor->execution() : NULL;
@@ -255,8 +263,7 @@ unsigned long long yvex_quant_policy_preset_count(void)
     unsigned long long count = 0u;
     size_t index;
 
-    for (index = 0u; index < sizeof(family_descriptors) /
-                                   sizeof(family_descriptors[0]); ++index) {
+    for (index = 0u; index < family_descriptor_count(); ++index) {
         const yvex_quant_preset_catalog *catalog = quant_preset_catalog_at(index);
 
         if (catalog) count += catalog->count();
@@ -268,8 +275,7 @@ const char *yvex_quant_policy_preset_name(unsigned long long ordinal)
 {
     size_t index;
 
-    for (index = 0u; index < sizeof(family_descriptors) /
-                                   sizeof(family_descriptors[0]); ++index) {
+    for (index = 0u; index < family_descriptor_count(); ++index) {
         const yvex_quant_preset_catalog *catalog = quant_preset_catalog_at(index);
         unsigned long long count = catalog ? catalog->count() : 0u;
 
@@ -291,8 +297,7 @@ int yvex_quant_policy_preset_open(
                        "out and preset name are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    for (provider = 0u; provider < sizeof(family_descriptors) /
-                                         sizeof(family_descriptors[0]); ++provider) {
+    for (provider = 0u; provider < family_descriptor_count(); ++provider) {
         const yvex_quant_preset_catalog *catalog = quant_preset_catalog_at(provider);
         unsigned long long preset;
 
@@ -327,7 +332,7 @@ const yvex_graph_execution_binding *yvex_graph_execution_find(
         descriptor = family_descriptor_find_target(target_id);
         return descriptor && descriptor->execution ? descriptor->execution() : NULL;
     }
-    for (index = 0u; index < sizeof(family_descriptors) / sizeof(family_descriptors[0]); ++index) {
+    for (index = 0u; index < family_descriptor_count(); ++index) {
         const yvex_family_descriptor *candidate = family_descriptor_at(index);
         const yvex_graph_execution_binding *binding =
             candidate && candidate->execution ? candidate->execution() : NULL;
@@ -356,7 +361,7 @@ const yvex_component_variant_adapter *yvex_graph_component_variant_find_family(
     size_t index;
 
     if (!family) return NULL;
-    for (index = 0u; index < sizeof(family_descriptors) / sizeof(family_descriptors[0]); ++index) {
+    for (index = 0u; index < family_descriptor_count(); ++index) {
         const yvex_family_descriptor *descriptor = family_descriptor_at(index);
         const yvex_component_variant_adapter *adapter =
             descriptor && descriptor->component ? descriptor->component() : NULL;

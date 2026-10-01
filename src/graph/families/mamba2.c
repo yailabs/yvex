@@ -791,9 +791,18 @@ static const yvex_graph_execution_binding *mamba_execution_binding(void)
     return &execution;
 }
 
-const yvex_family_descriptor yvex_graph_family_descriptor_mamba2 = {
+static const yvex_family_descriptor yvex_graph_family_descriptor_mamba2 = {
     .schema_version = YVEX_FAMILY_DESCRIPTOR_SCHEMA_V1,
     .target_id = YVEX_MAMBA2_TARGET, .family = "mamba2",
     .tokenizer_architecture = "mamba2", .tokenizer_pre = "sentencepiece",
     .execution = mamba_execution_binding,
     .quant_presets = mamba_quant_presets};
+
+static const yvex_family_descriptor *const mamba2_registered_targets[] = {
+    &yvex_graph_family_descriptor_mamba2};
+
+const yvex_family_target_catalog yvex_graph_family_catalog_mamba2 = {
+    .schema_version = YVEX_FAMILY_TARGET_CATALOG_SCHEMA_V1,
+    .family = "mamba2",
+    .targets = mamba2_registered_targets,
+    .target_count = sizeof(mamba2_registered_targets) / sizeof(mamba2_registered_targets[0])};

@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-extern const yvex_family_descriptor yvex_graph_family_descriptor_deepseek_v4;
+static const yvex_family_descriptor yvex_graph_family_descriptor_deepseek_v4;
 
 static int graph_recipe_project(const yvex_deepseek_v4_layer_spec *layer,
                                 unsigned long long ordinal, yvex_tensor_scope scope,
@@ -1606,7 +1606,7 @@ static const yvex_quant_preset_catalog *deepseek_quant_presets(void)
     return &catalog;
 }
 
-const yvex_family_descriptor yvex_graph_family_descriptor_deepseek_v4 = {
+static const yvex_family_descriptor yvex_graph_family_descriptor_deepseek_v4 = {
     .schema_version = YVEX_FAMILY_DESCRIPTOR_SCHEMA_V1,
     .target_id = "deepseek4-v4-flash-dspark", .family = "deepseek-v4",
     .tokenizer_architecture = "deepseek-v3", .tokenizer_pre = "deepseek-v3",
@@ -1894,3 +1894,12 @@ const yvex_model_family_lowering_api *yvex_model_deepseek_lowering_api(void)
 
     return &api;
 }
+
+static const yvex_family_descriptor *const deepseek_v4_registered_targets[] = {
+    &yvex_graph_family_descriptor_deepseek_v4};
+
+const yvex_family_target_catalog yvex_graph_family_catalog_deepseek_v4 = {
+    .schema_version = YVEX_FAMILY_TARGET_CATALOG_SCHEMA_V1,
+    .family = "deepseek-v4",
+    .targets = deepseek_v4_registered_targets,
+    .target_count = sizeof(deepseek_v4_registered_targets) / sizeof(deepseek_v4_registered_targets[0])};

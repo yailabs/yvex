@@ -1080,7 +1080,7 @@ static int qwen_tokenizer_policy(yvex_tokenizer_family_policy *out,
                YVEX_TOKENIZER_PROMPT_CONVERSATION, err) == YVEX_OK;
 }
 
-const yvex_family_descriptor yvex_graph_family_descriptor_qwen3_5 = {
+static const yvex_family_descriptor yvex_graph_family_descriptor_qwen3_5 = {
     .schema_version = YVEX_FAMILY_DESCRIPTOR_SCHEMA_V1,
     .target_id = YVEX_QWEN3_8_27B_TARGET_ID,
     .family = YVEX_QWEN3_5_FAMILY_KEY,
@@ -1088,3 +1088,12 @@ const yvex_family_descriptor yvex_graph_family_descriptor_qwen3_5 = {
     .tokenizer_pre = "qwen2",
     .execution = qwen_execution_binding,
     .quant_presets = qwen_quant_presets};
+
+static const yvex_family_descriptor *const qwen3_5_registered_targets[] = {
+    &yvex_graph_family_descriptor_qwen3_5};
+
+const yvex_family_target_catalog yvex_graph_family_catalog_qwen3_5 = {
+    .schema_version = YVEX_FAMILY_TARGET_CATALOG_SCHEMA_V1,
+    .family = YVEX_QWEN3_5_FAMILY_KEY,
+    .targets = qwen3_5_registered_targets,
+    .target_count = sizeof(qwen3_5_registered_targets) / sizeof(qwen3_5_registered_targets[0])};

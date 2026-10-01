@@ -208,6 +208,26 @@ static int test_family_descriptor_registration(void)
         yvex_family_descriptor_find_registered(duplicate, 2ull,
                                                "synthetic-family-test") == NULL,
         "family descriptor discovery rejects ambiguous registration");
+    yvex_family_descriptor sibling = descriptor;
+    sibling.target_id = "synthetic-small-target";
+    const yvex_family_descriptor *targets[] = {&descriptor, &sibling};
+    yvex_family_target_catalog catalog = {
+        .schema_version = YVEX_FAMILY_TARGET_CATALOG_SCHEMA_V1,
+        .family = "synthetic", .targets = targets, .target_count = 2ull};
+    const yvex_family_target_catalog *catalogs[] = {&catalog};
+    YVEX_TEST_ASSERT(yvex_family_target_catalog_count_registered(catalogs, 1ull) == 2ull &&
+        yvex_family_target_catalog_at_registered(catalogs, 1ull, 0ull) == &descriptor &&
+        yvex_family_target_catalog_at_registered(catalogs, 1ull, 1ull) == &sibling,
+        "one family registers both exact targets without another source owner");
+    YVEX_TEST_ASSERT(yvex_family_target_catalog_at_registered(catalogs, 1ull, 2ull) == NULL,
+        "target catalog refuses an out-of-bounds target ordinal");
+    sibling.family = "foreign";
+    YVEX_TEST_ASSERT(yvex_family_target_catalog_at_registered(catalogs, 1ull, 1ull) == NULL,
+        "target catalog refuses a checkpoint from a different semantic family");
+    catalog.schema_version = 0u;
+    YVEX_TEST_ASSERT(!yvex_family_target_catalog_count_registered(catalogs, 1ull) &&
+        !yvex_family_target_catalog_at_registered(catalogs, 1ull, 0ull),
+        "target catalog refuses a stale registration schema before enumeration");
     return 0;
 }
 
