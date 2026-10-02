@@ -69,10 +69,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 40 | 32 | 0 | 1 | 7 |
+| 40 | 33 | 0 | 1 | 6 |
 <!-- task-counts:end -->
 
-**32/40 selected Tasks complete.** This denominator includes the significant
+**33/40 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -114,7 +114,7 @@ backend foundation and retained native CPU behavior. No next milestone is select
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `MACOS.SMALLMODEL.CLI.0` | Acquire real small-model tensors, compile, load and capture native generation on the Mac; publish the resulting qualified representation on Hugging Face | P1 | ⛔ BLOCKED | Exact Qwen 0.8B mixed-precision/tied text artifact qualifies native CPU load/generation against two independent eight-token continuations; Mac/Linux CI 120 and native 14 each PASS, Metal 2 PASS at clean `17e5e0a1`. Offline release is READY_TO_PUBLISH; actual HF repository creation returns 403 because the existing Exon token is read-only. Update credential write capability before completing upload and exact public verification. [Evidence and exact blocker](../evaluation/macos-small-model.md). |
+| `MACOS.SMALLMODEL.CLI.0` | Acquire real small-model tensors, compile, load and capture native generation on the Mac; publish the resulting qualified representation on Hugging Face | P1 | ✅ COMPLETE | Exact Qwen 0.8B mixed-precision/tied text artifact qualifies CPU load/generation against two independent eight-token continuations; Mac/Linux CI 120 and native 14 each PASS, Metal 2 PASS at clean `17e5e0a1`. Mac OAuth publication is anonymously verified at HF `7eab0fd7`; canonical catalog and release record bind the exact public bytes without changing artifact identity. [Evidence and scope](../evaluation/macos-small-model.md). |
 
 The operator independently selected this outcome on 2026-10-01 after Metal
 foundation closure. Begin with the existing source-qualified
@@ -142,11 +142,13 @@ and exact release evidence remain the exit; publication authorization persists.
 
 The resumed implementation ends at clean `17e5e0a1` with byte-identical replay,
 exact mixed source types, two independent CPU continuation matches and qualified
-normal engine load/unload/stop. The remaining Task blocker is solely the
-read-only HF credential: actual creation returns 403 and no repository exists.
-The prepared release remains READY_TO_PUBLISH offline. `progression_decision=blocked_external`,
-`downstream_safe=false` for publication; existing CPU and Metal primitive claims
-remain qualified at their stated bounds. No next Metal/model milestone is selected.
+normal engine load/unload/stop. The initial read-only Exon credential refuses
+creation with 403. The operator's subsequent Mac OAuth login closes publication:
+public HF commit `7eab0fd727ccd5148f127466934790f344d44d38`, exact remote digest,
+rendered card/license and canonical catalog location are independently verified.
+The exact release is PUBLISHED without changing artifact-set identity.
+`progression_decision=proceed`, `downstream_safe=true` only for these CPU/artifact
+and retained Metal primitive bounds. No next Metal/model milestone is selected.
 
 ## Delivery progression
 

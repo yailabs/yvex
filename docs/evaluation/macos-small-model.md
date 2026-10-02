@@ -10,7 +10,7 @@ publication: {html: true, pdf: true, index: true}
 
 # macOS Small-Model CPU Qualification
 
-**Exact Qwen CPU generation qualified; Hugging Face upload blocked by credential scope.**
+**Exact Qwen CPU generation qualified and source-faithful text artifact publicly verified.**
 
 [Up](README.md)
 
@@ -22,7 +22,8 @@ family-owned exact-target catalogs are introduced at `cc7a9c79`. The qualified
 implementation is `17e5e0a14fdb934cdb19a4cc720fd798d13f5283`, tree
 `bfa57cf065c44c82ac78f9ff3743d57eadc89935`. All final execution and QA below
 use that clean, unchanged source. It is published on the same pressure branch;
-this report's later closure commit changes only documentation. Published main
+this report's later closure commits change only documentation. Publication retry
+starts at clean `59e52268b53bb6bc11df2b58bccf814b439c84bf`. Published main
 remains `67a7905ea9deb98b0704629a1f979634e19007fb`. SDK/Studio/YAI and primary
 Exon checkouts/services are outside this work.
 
@@ -100,7 +101,7 @@ execution is an oracle; native generation uses YVEX throughout.
 | Linux CPU separation | Same common source in disposable Exon checkout; CUDA disabled | Clean exact implementation | No Apple tooling; retained CPU behavior | CI 120 PASS; native 14 PASS | Zero FAIL/SKIP/BLOCKED/ERROR | PASS | Linux CPU regression/platform separation |
 | Metal regression | Independent host bit oracle and existing failure owner | Existing shared-buffer F32 embedding/fault fixtures | Retain bounded GPU foundation | Metal 2 PASS | Zero bit mismatches; checked refusal/cleanup | PASS | Metal primitive foundation only |
 | Release projection | Canonical v4 catalog, full integrity, reviewed exact assessment | This artifact, upstream Apache-2.0 license, lineage and runtime evidence | Offline eligible release | `release-ready-final.json` is `READY_TO_PUBLISH` | Exact-subject checksummed evidence | PASS | Publication eligibility, not upload |
-| Hugging Face upload | Actual authenticated Hub API | Prepared five-file package and proposed `yailabs` repository | Create/write exact distribution | `create_repo` returns HTTP 403; read-only token cannot create repository | No repository, upload, remote commit or public-render evidence | BLOCKED | Credential scope prevents publication |
+| Hugging Face publication | Native Hub API, anonymous public inspection and canonical registry/release projection | Qualified five-file package, exact remote commit and public card | Public exact distribution without changing artifact identity | Mac OAuth upload succeeds; anonymous API and full small-file reads verify public visibility, card rendering and metadata; GGUF LFS digest/size agree | Exact SHA-256/size, Git identities for metadata and unchanged artifact-set identity | PASS | Exact public artifact and canonical location |
 
 Final immutable run identities at `17e5e0a1`:
 
@@ -160,23 +161,46 @@ license/manifest and `publication-attempt-final.json`. A SHA-256 metadata index
 binds retained records. Independent reference records remain under
 `evidence/qwen-small-oracle`. Weights, runtime dumps and registries stay out of Git.
 
-The only exact blocker for this selected Task's remaining exit is Hugging Face
-credential write capability. Existing Exon authentication is account
-`francescomaiomascio`, with `yailabs` admin membership but access-token role
-`read`. The actual create attempt returns 403; read-only existence inspection
-confirms no repository was created. The prepared card passes official metadata
-validation; public rendering and remote bytes cannot be verified before upload.
-No `PUBLISHED` receipt or canonical remote location is fabricated. Update the
-existing HF login on Exon to a credential allowed to create/write `yailabs`
-repositories; publication authorization already exists and no token must be
-copied to the Mac or conversation.
+### Verified Hugging Face publication
+
+The initial Exon create attempt returned 403 because its existing token was
+read-only; `publication-attempt-final.json` retains that historical failure.
+The operator then logged in directly on the Mac. The existing local OAuth
+credential created and uploaded the repository without transferring credentials
+between machines. The distribution is now public:
+
+[Qwen3.5-0.8B Text GGUF](https://huggingface.co/yailabs/Qwen3.5-0.8B-Text-GGUF/tree/7eab0fd727ccd5148f127466934790f344d44d38),
+immutable commit `7eab0fd727ccd5148f127466934790f344d44d38`.
+
+The full GGUF's authoritative remote LFS SHA-256/size match the exact qualified
+local file. This does not claim a second full remote-payload download. Anonymous
+full reads independently verify README, LICENSE, manifest and tensor manifest
+against local SHA-256 and the provider's Git blob identities. The public model
+page returns 200, contains the rendered card heading and explicit CPU/Metal
+scope, and official card metadata validation passes. The complete file set
+includes the five intended files plus provider `.gitattributes`.
+
+Publication is added through the installed common registry API, preserving
+both existing artifact entries and all earlier registry facts. Fresh catalog v4
+joins the exact published location to the same logical/artifact identity.
+The canonical release projection returns `PUBLISHED`, retaining artifact-set
+identity `sha256:93ba00bd319ef61cf9fc549c06ea3b685e5d203095f1a139fcffe13b08c97f71`.
+Public manifest SHA-256 is
+`455816818b0348e019b19ee78d43bd78222941db2667a496da08fe30ef262590`.
+
+Raw upload observations, anonymous HTTP/card evidence, full publication receipt,
+before/after registry snapshots, fresh catalog and `release-published-final.json`
+are retained with the earlier qualification evidence. Public distribution of
+this exact artifact is distinct from YVEX product or general release readiness.
+No credential-scope blocker remains for this publication.
 
 ### Earned boundary and remaining work
 
-The selected Task remains BLOCKED solely on publication. Native small-model
+The selected Task is COMPLETE at this exact scope: native small-model
 acquisition, compilation, explicit CPU execution, two bounded independent
-continuations and CLI engine lifecycle are qualified. The earlier Mamba memory
-refusal remains historical evidence, not a blocker for this small artifact.
+continuations, CLI engine lifecycle and verified public artifact distribution.
+The earlier Mamba memory refusal remains historical evidence, not a blocker for
+this small artifact.
 Primary Exon work and main remain unchanged; the published temporary branch is
 reviewable, and no heavy model was run on Exon. No new macro ADR or architecture
 is selected. Documentation routes the result through Task, Status, family and
@@ -188,9 +212,9 @@ lifetime, remain required before a Metal engine can execute this model. There
 is no full-model Metal, chat, vision/MTP, low-precision, performance, general
 model or YAI/Studio composition claim here.
 
-`progression_decision=blocked_external`, `downstream_safe=false` for publication;
-the exact CPU and Metal primitive qualifications above remain safe within their
-stated bounds. Nothing selects or closes the next Metal milestone.
+`progression_decision=proceed`, `downstream_safe=true` only for the exact CPU
+artifact, bounded native generation, verified publication and retained Metal
+primitive foundation. Nothing selects or closes the next Metal milestone.
 
 ## Historical first attempt — 2026-10-01
 

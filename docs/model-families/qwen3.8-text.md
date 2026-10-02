@@ -76,8 +76,10 @@ policy uses model EOS 248044; tokenizer conversation EOS 248046 remains a
 separate source fact. Only verbatim raw completion is selected; no conversation
 template, vision or MTP capability is admitted by this integration. The
 [Mac evidence](../evaluation/macos-small-model.md) records actual preparation,
-CPU generation, independent reference comparison and remaining release gates.
+CPU generation, independent reference comparison and exact public distribution.
 Clean `17e5e0a1` qualifies two exact eight-token CPU continuations and normal
 host load/unload/stop; full-model Metal and conversation remain unsupported.
-The exact artifact passes offline release gates; publication is blocked only
-by the existing read-only Hugging Face credential.
+The exact artifact is publicly distributed at verified HF commit
+`7eab0fd727ccd5148f127466934790f344d44d38`; the canonical catalog binds the
+same file identity to its PUBLISHED location. Distribution is not a general
+Metal-model or product-release promotion.
