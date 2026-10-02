@@ -8,6 +8,7 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/deployment.h>
 #include <yvex/internal/tokenizer.h>
+#include <yvex/internal/source_catalog.h>
 #include <yvex/gguf.h>
 #include <yvex/quant.h>
 #include <source/families.h>
@@ -120,6 +121,9 @@ static int catalog_tokenizer_policy(
     const char *architecture = NULL;
     unsigned long long count = 0ull;
     tokenizer_policy_provider selected = NULL;
+    char target[96] = {0}, repository[192] = {0}, revision[64] = {0};
+    const char *text;
+    unsigned long long length;
     size_t index;
 
     if (!policy || !gguf ||
@@ -128,6 +132,27 @@ static int catalog_tokenizer_policy(
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "family.tokenizer-catalog",
                        "artifact architecture has no compiled tokenizer policy");
         return YVEX_ERR_UNSUPPORTED;
+    }
+    value = yvex_gguf_metadata_find(gguf, "yvex.logical.target");
+    if (value) {
+        if (yvex_gguf_value_as_string(value, &text, &length) != YVEX_OK ||
+            !length || length >= sizeof(target)) goto ambiguous;
+        memcpy(target, text, (size_t)length);
+    } else {
+        value = yvex_gguf_metadata_find(gguf, "general.source.repository");
+        if (value) {
+            if (yvex_gguf_value_as_string(value, &text, &length) != YVEX_OK ||
+                !length || length >= sizeof(repository)) goto ambiguous;
+            memcpy(repository, text, (size_t)length);
+            value = yvex_gguf_metadata_find(gguf, "general.source.revision");
+            if (yvex_gguf_value_as_string(value, &text, &length) != YVEX_OK ||
+                !length || length >= sizeof(revision)) goto ambiguous;
+            memcpy(revision, text, (size_t)length);
+            const yvex_source_target_identity *identity = yvex_source_target_identity_find_repository(repository);
+            if (identity && !strcmp(identity->upstream_revision, revision))
+                yvex_core_text_copy(target, sizeof(target), identity->target_id);
+            else goto ambiguous;
+        }
     }
     for (index = 0u; index < family_descriptor_count(); ++index) {
         const yvex_family_descriptor *descriptor = family_descriptor_at(index);
@@ -139,7 +164,8 @@ static int catalog_tokenizer_policy(
         const yvex_family_source_adapter *adapter =
             descriptor && descriptor->source ? descriptor->source() : NULL;
 
-        if (!descriptor || !descriptor->tokenizer_architecture ||
+        if (!descriptor || (target[0] && strcmp(target, descriptor->target_id)) ||
+            !descriptor->tokenizer_architecture ||
             !architecture_matches(descriptor->tokenizer_architecture, architecture, count))
             continue;
         if (compiler && compiler->tokenizer_policy && pipeline &&
@@ -326,6 +352,7 @@ const yvex_graph_execution_binding *yvex_graph_execution_find(
     const char *target_id)
 {
     const yvex_family_descriptor *descriptor;
+    const yvex_graph_execution_binding *selected = NULL;
     size_t index;
 
     if (target_id) {
@@ -339,10 +366,12 @@ const yvex_graph_execution_binding *yvex_graph_execution_find(
 
         if (!binding || binding->schema_version != YVEX_GRAPH_EXECUTION_BINDING_SCHEMA_V1)
             continue;
-        if (adapter_id == binding->adapter_id && adapter_version == binding->adapter_version)
-            return binding;
+        if (adapter_id == binding->adapter_id && adapter_version == binding->adapter_version) {
+            if (selected) return NULL;
+            selected = binding;
+        }
     }
-    return NULL;
+    return selected;
 }
 
 const yvex_component_variant_adapter *yvex_graph_component_variant_find(

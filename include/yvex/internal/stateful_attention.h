@@ -54,6 +54,12 @@ int yvex_runtime_stateful_attention_execute(
     yvex_runtime_stateful_attention_result *, yvex_attention_failure *,
     yvex_error *);
 
+/* Includes execution scratch and any temporary history realization. Logical
+ * state remains provider-owned; this is not a second persistent K/V bank. */
+int yvex_runtime_stateful_attention_workspace_required(
+    yvex_backend *, const yvex_transformer_attention_requirement *,
+    unsigned long long *, yvex_error *);
+
 #ifdef __cplusplus
 }
 #endif

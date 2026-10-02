@@ -905,6 +905,48 @@ static int source_verify_acquisition(void)
     return 0;
 }
 
+static int source_verify_alternate_shard_stem(void)
+{
+    const char *root = "build/tests/source-verify-alternate-stem";
+    const char *names[] = {"model.safetensors-00001-of-00001.safetensors",
+                          "model.safetensors-00000-of-00001.safetensors"};
+    char old[512], next[512], index[512], metadata[768], json[1024];
+    yvex_source_verification result;
+    yvex_error err;
+    YVEX_TEST_ASSERT(system("rm -rf build/tests/source-verify-alternate-stem") == 0 &&
+        source_verify_make_valid(root), "isolated indexed-shard grammar fixture");
+    snprintf(old, sizeof(old), "%s/model-00001-of-00001.safetensors", root);
+    snprintf(index, sizeof(index), "%s/model.safetensors.index.json", root);
+    for (unsigned int variant = 0u; variant < 2u; ++variant) {
+        snprintf(next, sizeof(next), "%s/%s", root, names[variant]);
+        snprintf(json, sizeof(json), "{\"metadata\":{\"total_size\":11},\"weight_map\":{"
+            "\"model.embed_tokens.weight\":\"%s\",\"model.scale\":\"%s\",\"model.values\":\"%s\"}}",
+            names[variant], names[variant], names[variant]);
+        YVEX_TEST_ASSERT(rename(old, next) == 0 && source_verify_write_text(index, json) &&
+            source_verify_write_metadata(root, names[variant]) &&
+            source_verify_write_metadata(root, "model.safetensors.index.json"),
+            "index and exact shard metadata bind the same renamed payload");
+        snprintf(metadata, sizeof(metadata), "%s/.cache/huggingface/download/%s.metadata", root, names[variant]);
+        snprintf(json, sizeof(json), "%s\n%s\n0\n", source_verify_revision,
+            "7c3a10eeb47de03729b98276827c00e954457cbb8c664ff265c7350a3ffbd14f");
+        YVEX_TEST_ASSERT(source_verify_write_text(metadata, json), "actual fixture LFS payload identity");
+        YVEX_TEST_ASSERT(source_verify_write_manifest(root, "huggingface",
+            yvex_source_release_identity()->upstream_repo_id, "in-progress", source_verify_revision),
+            "reacquired fixture requires exact manifest promotion");
+        int rc = source_verify_run_mode(root, 1, &result, &err);
+        if (!variant && (rc != YVEX_OK || !result.verified)) {
+            fprintf(stderr, "alternate shard: rc=%d error=%s\n", rc, yvex_error_message(&err));
+            for (unsigned int i = 0u; i < result.blocker_count; ++i)
+                fprintf(stderr, "alternate shard blocker: %s\n", result.blockers[i]);
+        }
+        YVEX_TEST_ASSERT(variant ? rc != YVEX_OK || !result.verified
+                                : rc == YVEX_OK && result.verified,
+            "official safetensors shard stem verifies; zero shard ordinal fails closed");
+        snprintf(old, sizeof(old), "%s", next);
+    }
+    return 0;
+}
+
 int yvex_test_source_verify(void)
 {
     const char *root = "build/tests/source-verify";
@@ -915,6 +957,8 @@ int yvex_test_source_verify(void)
     unsigned long long total;
     char path[512];
     int rc;
+
+    if (source_verify_alternate_shard_stem() != 0) return 1;
 
     if (source_verify_json_iteration() != 0)
         return 1;

@@ -72,6 +72,22 @@ general shape-expression solver or qualified dynamic-shape runtime.
 
 ## Operations, regions and effects
 
+Operation definitions are selected by qualified name **and semantic version**.
+An omitted construction version selects v1 for compatibility, never the latest
+definition. Wire import requires the exact nonzero version; passes preserve it.
+Distinct versions may coexist, while duplicate name/version pairs refuse.
+`sequence.gated_delta` v1 retains BF16 parameter operands. V2 retains BF16
+convolution/time-bias operands and F32 decay-log/normalization operands, with
+F32 recurrent/convolution state in both versions. Physical
+`gated_delta.mixed.f32state.v2` joins exactly those parameter classes; neither
+lowering nor execution changes an F32 source vector to BF16.
+
+Output-head plan v3 (schema 5) permits a tied `TOKEN_EMBEDDING` parameter with
+`separate_output_head=0`. V1/v2 retain their separate `OUTPUT_HEAD` contract.
+The compiled output program must reference the same exact physical tensor as
+the forward embedding operation; equal dimensions are insufficient. Residency
+owns that parameter once. The normal output/logits lifecycle remains common.
+
 Static dialect tables bind a qualified operation name and semantic version to
 arity, attribute schema, effects, region count and a typed verifier. An imported
 program cannot redefine an operation or supply code pointers. Unknown operations,

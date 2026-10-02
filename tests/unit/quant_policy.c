@@ -175,6 +175,7 @@ static int test_policy_v2_and_presets(void)
         "5942d4c1bc6ae5d140c72387ff93da14e5ed9a77a6ded3f41ac3f7e9596a0f24",
         "5f457af00c3c47af62f4ee6ddcdcd15292d569857c6515612c79f6847b75dd5c",
         "d3e8c279e1f5256b61e039e0cb0d462551d0790b73c9bead86789a4d6ec99338",
+        "12080587185f1286503749fe157e05599aa8ea8d438e1608d76dcfe1092b283d",
     };
     const char *path = "build/tests/quant-policy/v2.json";
     const char *roundtrip = "build/tests/quant-policy/v2-roundtrip.json";

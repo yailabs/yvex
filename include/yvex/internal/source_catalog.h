@@ -111,6 +111,11 @@ typedef struct {
 #define YVEX_SOURCE_QWEN3_8_27B_CONFIG_ARCHITECTURE \
     "Qwen3_5ForConditionalGeneration"
 
+#define YVEX_SOURCE_QWEN3_5_08B_TARGET_ID "qwen3.5-0.8b"
+#define YVEX_SOURCE_QWEN3_5_08B_REPOSITORY "Qwen/Qwen3.5-0.8B"
+#define YVEX_SOURCE_QWEN3_5_08B_REVISION \
+    "2fc06364715b967f1860aea9cf38778875588b17"
+
 const yvex_source_target_identity *yvex_source_release_identity(void);
 const yvex_source_target_identity *yvex_source_target_identity_find(
     const char *target_id);

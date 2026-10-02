@@ -25,13 +25,15 @@ typedef struct {
 
 static const yvex_quant_artifact_lowering_rule *quant_artifact_rule_find(
     const yvex_quant_artifact_lowering_policy *policy,
-    yvex_artifact_lowering_transform transform)
+    yvex_artifact_lowering_transform transform, yvex_native_dtype dtype)
 {
     unsigned long long index;
 
     if (!policy || !policy->rules) return NULL;
     for (index = 0u; index < policy->rule_count; ++index)
-        if (policy->rules[index].transform == transform) return &policy->rules[index];
+        if (policy->rules[index].transform == transform &&
+            (!policy->rules[index].source_dtype || policy->rules[index].source_dtype == dtype))
+            return &policy->rules[index];
     return NULL;
 }
 
@@ -55,8 +57,11 @@ static int quant_artifact_lowering_tensor(
     const quant_artifact_lowering_context *context = opaque;
     const yvex_artifact_lowering_descriptor *row = context
         ? yvex_artifact_lowering_operations.descriptor_at(context->map, ordinal) : NULL;
+    const yvex_artifact_lowering_contribution *source = row && row->contribution_count == 1ull
+        ? yvex_artifact_lowering_operations.contribution_at(context->map, row->contribution_offset) : NULL;
     const yvex_quant_artifact_lowering_rule *rule = row
-        ? quant_artifact_rule_find(context->policy, row->transform) : NULL;
+        ? quant_artifact_rule_find(context->policy, row->transform,
+                                  source ? source->source_dtype : YVEX_NATIVE_DTYPE_UNKNOWN) : NULL;
 
     if (!row || !rule || !out || row->logical_rank > YVEX_GGUF_QTYPE_MAX_DIMS)
         return 0;
@@ -113,11 +118,15 @@ static int quant_artifact_lowering_api(
         const yvex_quant_artifact_lowering_rule *rule = &policy->rules[index];
 
         if (rule->operation >= YVEX_TRANSFORM_OP_COUNT ||
+            (rule->source_dtype && (rule->transform != YVEX_ARTIFACT_LOWERING_TRANSFORM_DIRECT ||
+              (rule->source_dtype != YVEX_NATIVE_DTYPE_BF16 && rule->source_dtype != YVEX_NATIVE_DTYPE_F32))) ||
             !yvex_quant_numeric_capability_at(rule->source_faithful_qtype) ||
             !yvex_quant_numeric_capability_at(rule->release_qtype))
             return 0;
         for (other = index + 1u; other < policy->rule_count; ++other)
-            if (rule->transform == policy->rules[other].transform) return 0;
+            if (rule->transform == policy->rules[other].transform &&
+                (!rule->source_dtype || !policy->rules[other].source_dtype ||
+                 rule->source_dtype == policy->rules[other].source_dtype)) return 0;
     }
     *context = (quant_artifact_lowering_context){map, policy};
     *api = (yvex_quant_lowering_api){

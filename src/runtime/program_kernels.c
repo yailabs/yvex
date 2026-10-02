@@ -550,7 +550,8 @@ static int kernel_instructions_bind(yvex_program_kernels *c, yvex_error *err)
         } else if (!strcmp(s->implementation, "rms_norm.bf16.v1")) {
             const yvex_ir_attribute *offset = yvex_program_physical_attribute(s, "weight_offset");
             rc = kernel_small_prepare(c, s->operands[1], offset ? offset->value.real : 0.0, err);
-        } else if (!strcmp(s->implementation, "gated_delta.bf16.f32state.v1")) {
+        } else if (!strcmp(s->implementation, "gated_delta.bf16.f32state.v1") ||
+                   !strcmp(s->implementation, "gated_delta.mixed.f32state.v2")) {
             for (j = 4u; rc == YVEX_OK && j < 8u; ++j) rc = kernel_small_prepare(c, s->operands[j], 0.0, err);
         } else if (!strcmp(s->implementation, "gated_causal.bf16.v1")) {
             rc = kernel_small_prepare(c, s->operands[3], 1.0, err);

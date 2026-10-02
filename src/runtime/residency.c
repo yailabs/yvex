@@ -6,6 +6,54 @@
  */
 #include "src/runtime/private.h"
 
+/* One authenticated output parameter may serve both embedding and readout.
+ * Sharing is a sealed program relation, never inferred from equal geometry. */
+int yvex_runtime_compiled_output_tensor(const yvex_model_engine_view *view,
+    unsigned long long *tensor_id, yvex_error *err)
+{
+    const yvex_program_physical *output = view && view->compiled_plan
+        ? yvex_compiled_model_plan_output(view->compiled_plan) : NULL;
+    const yvex_program_physical *forward = view && view->compiled_plan
+        ? yvex_compiled_model_plan_forward(view->compiled_plan) : NULL;
+    const yvex_program_physical_summary *s = yvex_program_physical_summary_get(output);
+    const yvex_program_physical_summary *f = yvex_program_physical_summary_get(forward);
+    const yvex_program_physical_value *weight = yvex_program_physical_value_at(output, 1u);
+    const yvex_logits_family_policy *policy = view && view->compiled_binding
+        ? &view->compiled_binding->logits_policy : NULL;
+    const yvex_materialized_tensor_binding *binding = weight && view
+        ? yvex_materialization_session_tensor_at(view->materialization, weight->tensor_id) : NULL;
+    size_t embeddings = 0u;
+    if (tensor_id) *tensor_id = ULLONG_MAX;
+    if (!tensor_id || !s || !weight || !weight->parameter || !binding || !policy ||
+        policy->schema_version != YVEX_RUNTIME_LOGITS_SCHEMA_V1 ||
+        !((policy->separate_output_head == 1 && policy->tied_output_head == 0) ||
+          (policy->separate_output_head == 0 && policy->tied_output_head == 1)) || policy->output_head_bias ||
+        s->input_count != 1u || s->value_count != 3u || s->step_count != 2u ||
+        s->result_count != 1u || binding->scope != YVEX_TENSOR_SCOPE_GLOBAL ||
+        binding->role != (policy->tied_output_head ? YVEX_TENSOR_ROLE_TOKEN_EMBEDDING : YVEX_TENSOR_ROLE_OUTPUT_HEAD))
+        goto invalid;
+    if (policy->tied_output_head) {
+        if (!f) goto invalid;
+        for (size_t i = 0u; i < f->step_count; ++i) {
+            const yvex_program_physical_step *step = yvex_program_physical_step_at(forward, i);
+            if (strcmp(step->implementation, "embedding.bf16.v1") &&
+                strcmp(step->implementation, "embedding.encoded.f32.v1")) continue;
+            const yvex_program_physical_value *embedding = yvex_program_physical_value_at(forward, step->operands[1]);
+            if (!embedding || !embedding->parameter || embedding->tensor_id != weight->tensor_id ||
+                embedding->qtype != weight->qtype) goto invalid;
+            embeddings++;
+        }
+        if (embeddings != 1u) goto invalid;
+    }
+    *tensor_id = weight->tensor_id;
+    return YVEX_OK;
+invalid:
+    yvex_error_set(err, YVEX_ERR_FORMAT, "runtime.output-parameter",
+        "compiled output parameter contradicts the authenticated sharing policy");
+    return YVEX_ERR_FORMAT;
+}
+
+
 #include <limits.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -332,7 +380,7 @@ static int residency_records_prepare(
     yvex_runtime_residency *residency, const yvex_runtime_descriptor *descriptor,
     const yvex_runtime_descriptor_summary *descriptor_summary,
     const yvex_attention_plan *plan, const yvex_attention_summary *attention,
-    int output_head_required,
+    int output_head_required, unsigned long long output_tensor_id,
     yvex_runtime_residency_failure *failure, yvex_error *err)
 {
     unsigned long long core_qtypes[YVEX_RUNTIME_DESCRIPTOR_QTYPE_CAP] = {0};
@@ -356,7 +404,8 @@ static int residency_records_prepare(
         else if (attention_class == YVEX_ATTENTION_BINDING_ENVELOPE)
             binding_class = RESIDENCY_BINDING_ENVELOPE;
         else if (output_head_required && binding &&
-                 binding->role == YVEX_TENSOR_ROLE_OUTPUT_HEAD &&
+                 (output_tensor_id != ULLONG_MAX ? binding->tensor_id == output_tensor_id
+                                               : binding->role == YVEX_TENSOR_ROLE_OUTPUT_HEAD) &&
                  binding->scope == YVEX_TENSOR_SCOPE_GLOBAL)
             binding_class = RESIDENCY_BINDING_OUTPUT_HEAD;
         else
@@ -376,7 +425,8 @@ static int residency_records_prepare(
             attention_class == YVEX_ATTENTION_BINDING_CORE ||
             attention_class == YVEX_ATTENTION_BINDING_ENVELOPE ||
             (output_head_required && binding &&
-             binding->role == YVEX_TENSOR_ROLE_OUTPUT_HEAD &&
+             (output_tensor_id != ULLONG_MAX ? binding->tensor_id == output_tensor_id
+                                           : binding->role == YVEX_TENSOR_ROLE_OUTPUT_HEAD) &&
              binding->scope == YVEX_TENSOR_SCOPE_GLOBAL);
         if (!accelerator_binding)
             rc = residency_add_record(residency, binding, RESIDENCY_BINDING_MODEL,
@@ -933,6 +983,7 @@ int yvex_runtime_residency_prepare(yvex_runtime_residency **out, yvex_model_engi
         view && view->compiled_plan
             ? yvex_compiled_model_plan_output(view->compiled_plan) : NULL;
     yvex_program_token_interface program_interface = {0};
+    unsigned long long output_tensor_id = ULLONG_MAX;
     const char *execution_identity = NULL;
     yvex_materialization_session *materialization = view ? view->materialization : NULL;
     yvex_runtime_residency *residency = NULL;
@@ -972,6 +1023,8 @@ int yvex_runtime_residency_prepare(yvex_runtime_residency **out, yvex_model_engi
             program_interface.attention_operations,
             "attention-free residency requires an authenticated attention-free physical program",
             YVEX_ERR_FORMAT, err);
+    if (output_program && yvex_runtime_compiled_output_tensor(view, &output_tensor_id, err) != YVEX_OK)
+        return yvex_error_code(err);
     residency = (yvex_runtime_residency *)calloc(1u, sizeof(*residency));
     if (!residency)
         return residency_reject(failure, YVEX_RUNTIME_RESIDENCY_FAILURE_ALLOCATION,
@@ -1000,7 +1053,7 @@ int yvex_runtime_residency_prepare(yvex_runtime_residency **out, yvex_model_engi
     rc = residency_records_prepare(
         residency, descriptor, descriptor_summary, plan, attention,
         output_program != NULL ||
-            model_summary.capabilities.output_head_binding_ready,
+            model_summary.capabilities.output_head_binding_ready, output_tensor_id,
         failure, err);
     if (rc == YVEX_OK)
         rc = residency_layout_plan(residency, view->physical_execution, failure, err);
@@ -1030,7 +1083,8 @@ int yvex_runtime_residency_prepare(yvex_runtime_residency **out, yvex_model_engi
         rc = residency_identity_build(
             residency, &model_summary, execution_identity, err);
     if (rc == YVEX_OK) residency->summary.generation = 1ull;
-    if (rc == YVEX_OK && (model->opening_backend || residency->execution.backend))
+    if (rc == YVEX_OK && (yvex_backend_kind_of(model->opening_backend) == YVEX_BACKEND_KIND_CUDA ||
+                         residency->execution.backend))
         rc = residency_claim_cuda(residency, &model->opening_backend, err);
     if (rc == YVEX_OK) {
         provider.context = residency;

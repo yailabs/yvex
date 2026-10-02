@@ -44,6 +44,17 @@ It cannot pretend the committed prefix never happened.
 
 ## Sessions and transactional state
 
+Direct causal attention consumes the same transactional logical K/V provider on
+CPU and CUDA. CUDA appends to its admitted candidate device bank. Explicit CPU
+execution assembles a temporary backend-owned F32 prefix from the provider's
+uncompressed contiguous history plus the current projections, executes the
+existing exact attention operation, releases the temporary, and stages one host
+delta. It creates no second persistent state bank. Capacity includes the
+temporary prefix and backend score scratch; execution reports those temporary
+extents separately from logical state and zero discrete GPU transfer bytes.
+Malformed history, unsupported backends, cancellation and cleanup failures do
+not publish a completed result. The enclosing common transaction owns abort.
+
 Execution capacity is runner-independent. `src/runtime/capacity.c` consumes
 compiler-owned state geometry, residency and live backend facts; generation and
 Decision Readout only supply bounded workload requirements. Ordinary hybrid

@@ -81,6 +81,26 @@ static const yvex_source_target_identity source_target_identities[] = {
         .config_validation = YVEX_SOURCE_CONFIG_VALIDATION_FAMILY_SEMANTIC,
         .required_sidecars = YVEX_SOURCE_SIDECARS_TEXT,
     },
+    {
+        .target_id = YVEX_SOURCE_QWEN3_5_08B_TARGET_ID,
+        .family_key = "qwen",
+        .family_display = "Qwen3.5",
+        .model_name = "Qwen3.5-0.8B",
+        .upstream_repo_id = YVEX_SOURCE_QWEN3_5_08B_REPOSITORY,
+        .source_dir_leaf = YVEX_SOURCE_QWEN3_5_08B_TARGET_ID,
+        .upstream_revision = YVEX_SOURCE_QWEN3_5_08B_REVISION,
+        .upstream_index_path = "model.safetensors.index.json",
+        .upstream_index_oid = "f691cefdb79d73270895ebd6d9594ddcecfc1838",
+        .upstream_index_size = 50900ull,
+        .upstream_inventory_authority = "upstream-index",
+        .config_model_type = "qwen3_5",
+        .config_architecture = "Qwen3_5ForConditionalGeneration",
+        .config_validation = YVEX_SOURCE_CONFIG_VALIDATION_FAMILY_SEMANTIC,
+        /* This exact source has no generation_config.json. Generation and
+         * conversation interpretation remain family-owned, not fabricated files. */
+        .required_sidecars = YVEX_SOURCE_SIDECAR_CONFIG |
+            YVEX_SOURCE_SIDECAR_TOKENIZER | YVEX_SOURCE_SIDECAR_TOKENIZER_CONFIG,
+    },
 };
 
 const yvex_source_logical_model *yvex_source_logical_model_for_registry(

@@ -123,7 +123,8 @@ static int output_head_producer_valid(
         return yvex_sha256_hex_valid(summary->transformer_plan_identity) &&
                !summary->decoder_plan_identity[0];
     if (summary->producer_kind == YVEX_EXECUTION_PLAN_DECODER)
-        return summary->schema_version == YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V2 &&
+        return (summary->schema_version == YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V2 ||
+                summary->schema_version == YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V3) &&
                !summary->transformer_plan_identity[0] &&
                yvex_sha256_hex_valid(summary->decoder_plan_identity);
     return 0;
@@ -134,14 +135,17 @@ static int output_head_facts_valid(
 {
     return summary &&
            (summary->schema_version == YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V1 ||
-            summary->schema_version == YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V2) &&
+            summary->schema_version == YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V2 ||
+            summary->schema_version == YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V3) &&
            summary->family_adapter_id && summary->family_adapter_version &&
-           summary->role == YVEX_TENSOR_ROLE_OUTPUT_HEAD &&
+           ((summary->separate_output_head == 1 && summary->role == YVEX_TENSOR_ROLE_OUTPUT_HEAD) ||
+            (summary->schema_version == YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V3 &&
+             summary->separate_output_head == 0 && summary->role == YVEX_TENSOR_ROLE_TOKEN_EMBEDDING)) &&
            summary->row_width && summary->row_count && summary->row_bytes &&
            summary->encoded_bytes &&
            summary->row_count == summary->vocabulary_size &&
            summary->row_width == summary->hidden_width &&
-           summary->separate_output_head && !summary->output_head_bias &&
+           !summary->output_head_bias &&
            yvex_sha256_hex_valid(summary->artifact_identity) &&
            yvex_sha256_hex_valid(summary->materialization_identity) &&
            yvex_sha256_hex_valid(summary->logical_model_identity) &&
@@ -263,14 +267,22 @@ static int output_head_build(
         (producer_kind != YVEX_EXECUTION_PLAN_TRANSFORMER &&
          producer_kind != YVEX_EXECUTION_PLAN_DECODER) ||
         policy->schema_version != YVEX_RUNTIME_LOGITS_SCHEMA_V1 ||
-        !policy->separate_output_head || policy->tied_output_head ||
+        (policy->separate_output_head != 0 && policy->separate_output_head != 1) ||
+        (policy->tied_output_head != 0 && policy->tied_output_head != 1) ||
+        policy->separate_output_head == policy->tied_output_head ||
         policy->output_head_bias)
         return output_head_refuse(
             err, YVEX_ERR_FORMAT,
             "family output-head policy or producer is unavailable");
+    if (policy->tied_output_head) {
+        row = embedding;
+        binding = row ? yvex_materialization_session_tensor_at(materialization, row->tensor_id) : NULL;
+        geometry = binding ? yvex_gguf_qtype_geometry_find(binding->qtype) : NULL;
+        numeric = binding ? yvex_quant_numeric_capability_at(binding->qtype) : NULL;
+    }
     if (!row || !binding || !embedding ||
-        binding->tensor_id == embedding->tensor_id ||
-        binding->role != YVEX_TENSOR_ROLE_OUTPUT_HEAD ||
+        ((binding->tensor_id == embedding->tensor_id) != policy->tied_output_head) ||
+        binding->role != (policy->tied_output_head ? YVEX_TENSOR_ROLE_TOKEN_EMBEDDING : YVEX_TENSOR_ROLE_OUTPUT_HEAD) ||
         binding->row_width != hidden_width ||
         binding->row_count != vocabulary_size ||
         !geometry || !geometry->block_size || !geometry->bytes_per_block ||
@@ -279,14 +291,14 @@ static int output_head_build(
         !numeric->reference_decoder_available)
         return output_head_refuse(
             err, YVEX_ERR_FORMAT,
-            "exact separate output-head binding or qtype compute is unavailable");
+            "exact output parameter binding or qtype compute is unavailable");
     blocks = binding->row_width / geometry->block_size;
     if (!yvex_core_u64_mul(blocks, geometry->bytes_per_block, &row_bytes) ||
         !yvex_core_u64_mul(row_bytes, binding->row_count, &encoded_bytes) ||
         encoded_bytes != binding->encoded_bytes)
         return output_head_refuse(err, YVEX_ERR_FORMAT,
                                   "output-head encoded geometry is inconsistent");
-    out->schema_version = YVEX_OUTPUT_HEAD_PLAN_SCHEMA_CURRENT;
+    out->schema_version = policy->tied_output_head ? YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V3 : YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V2;
     out->producer_kind = producer_kind;
     out->family_adapter_id = family_adapter_id;
     out->family_adapter_version = family_adapter_version;

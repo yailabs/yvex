@@ -66,6 +66,7 @@ typedef struct {
     double rms_norm_epsilon, attention_dropout;
     int attention_output_gate, attention_bias, use_cache;
     int tied_embeddings, mtp_dedicated_embeddings, recurrent_state_f32;
+    int recurrent_parameters_f32;
     int mrope_interleaved;
 } yvex_qwen3_5_text_architecture;
 

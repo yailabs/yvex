@@ -839,9 +839,9 @@ static int runtime_model_startup_preflight(
         request, model->binding, &model->admission, failure_spec,
         required_bytes, available_bytes);
     if (rc != YVEX_OK) return rc;
-    if (request->residency_backend == YVEX_BACKEND_KIND_CUDA) {
+    {
         yvex_backend_options options = {
-            .kind = YVEX_BACKEND_KIND_CUDA,
+            .kind = request->residency_backend,
             .memory_limit_bytes = request->maximum_device_bytes,
         };
         rc = yvex_backend_open(&model->opening_backend, &options, err);

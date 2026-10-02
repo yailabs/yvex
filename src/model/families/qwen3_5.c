@@ -165,7 +165,7 @@ static int qwen_parse_rope(yvex_json *json,
         seen |= bit;
     }
     return item == YVEX_JSON_ITEM_END && !iter.trailing_separator &&
-           seen == ROPE_REQUIRED;
+           (seen | (text->recurrent_parameters_f32 ? ROPE_PARTIAL : 0u)) == ROPE_REQUIRED;
 }
 
 static int qwen_field_apply(yvex_json *json, const qwen_field *field,
@@ -280,12 +280,21 @@ static int qwen_parse_text_config(yvex_json *json,
                                   yvex_qwen3_5_text_architecture *text)
 {
     qwen_parse_state state = {0};
+    unsigned long long required = QWEN_TEXT_REQUIRED;
 
     state.text = text;
+    /* The exact 0.8B revision omits these upstream defaults. They are model
+     * semantics, not synthetic source sidecars or defaults for other targets. */
+    if (text->recurrent_parameters_f32) {
+        text->bos_token_id = ULLONG_MAX;
+        text->partial_rotary_factor = text->rope_partial_rotary_factor = 0.25;
+        yvex_core_text_copy(text->output_gate_type, sizeof(text->output_gate_type), "swish");
+        required &= ~((1ull << 3) | (1ull << 25) | (1ull << 26) | (1ull << 27));
+    }
     return qwen_object_parse(
         json, qwen_text_fields,
         sizeof(qwen_text_fields) / sizeof(qwen_text_fields[0]),
-        QWEN_TEXT_REQUIRED, text, &state);
+        required, text, &state);
 }
 
 #define QWEN_VISION_FIELD(bit, name, kind, member) \
@@ -416,7 +425,9 @@ static int qwen_parse_config(const char *data, size_t length,
     }
     architecture->source_multimodal = !language_only;
     return item == YVEX_JSON_ITEM_END && !iter.trailing_separator &&
-           yvex_json_complete(&json) && seen == OUTER_REQUIRED && !tied;
+           yvex_json_complete(&json) &&
+           (seen | (architecture->text.recurrent_parameters_f32 ? OUTER_LANGUAGE_ONLY : 0u)) == OUTER_REQUIRED &&
+           tied == architecture->text.tied_embeddings;
 }
 
 static int qwen_parse_stop_tokens(yvex_json *json,
@@ -522,7 +533,7 @@ static int qwen_validate(yvex_qwen3_5_architecture *architecture,
         strcmp(text->hidden_activation, "silu") != 0 ||
         strcmp(text->output_gate_type, "swish") != 0 ||
         text->attention_bias || text->attention_dropout != 0.0 ||
-        !text->attention_output_gate || !text->use_cache || text->tied_embeddings ||
+        !text->attention_output_gate || !text->use_cache ||
         text->mtp_dedicated_embeddings || text->partial_rotary_factor <= 0.0 ||
         text->partial_rotary_factor != text->rope_partial_rotary_factor ||
         rotary == 0ull || section_sum * 2ull != rotary ||
@@ -542,7 +553,8 @@ static int qwen_validate(yvex_qwen3_5_architecture *architecture,
         if (architecture->generation.stop_token_ids[layer] == text->eos_token_id)
             eos_present = 1;
     if (architecture->generation.bos_token_id != text->bos_token_id ||
-        architecture->generation.pad_token_id != text->eos_token_id || !eos_present ||
+        (architecture->generation.pad_token_id != text->eos_token_id &&
+         !(text->recurrent_parameters_f32 && architecture->generation.pad_token_id == ULLONG_MAX)) || !eos_present ||
         architecture->generation.temperature <= 0.0 ||
         architecture->generation.top_p <= 0.0 ||
         architecture->generation.top_p > 1.0)
@@ -614,13 +626,15 @@ static yvex_qwen3_5_tensor_role qwen_suffix_role(
     return YVEX_QWEN3_5_ROLE_UNKNOWN;
 }
 
-static int qwen_bf16_shape(const yvex_native_weight_info *tensor,
-                           unsigned int rank, const unsigned long long *dims)
+static int qwen_tensor_shape(const yvex_native_weight_info *tensor,
+                           unsigned int rank, const unsigned long long *dims,
+                           yvex_native_dtype dtype)
 {
     unsigned long long elements = 1ull;
     unsigned int index;
 
-    if (!tensor || tensor->dtype != YVEX_NATIVE_DTYPE_BF16 ||
+    unsigned long long bytes = dtype == YVEX_NATIVE_DTYPE_F32 ? 4ull : 2ull;
+    if (!tensor || tensor->dtype != dtype ||
         tensor->rank != rank || !rank)
         return 0;
     for (index = 0u; index < rank; ++index) {
@@ -629,7 +643,7 @@ static int qwen_bf16_shape(const yvex_native_weight_info *tensor,
             return 0;
         elements *= dims[index];
     }
-    return elements <= ULLONG_MAX / 2ull && tensor->data_bytes == elements * 2ull;
+    return elements <= ULLONG_MAX / bytes && tensor->data_bytes == elements * bytes;
 }
 
 static int qwen_text_tensor_shape(
@@ -686,7 +700,10 @@ static int qwen_text_tensor_shape(
     default:
         return 0;
     }
-    return qwen_bf16_shape(tensor, rank, dims);
+    return qwen_tensor_shape(tensor, rank, dims,
+        text->recurrent_parameters_f32 &&
+        (role == YVEX_QWEN3_5_ROLE_DELTA_DECAY_LOG || role == YVEX_QWEN3_5_ROLE_DELTA_OUTPUT_NORM)
+            ? YVEX_NATIVE_DTYPE_F32 : YVEX_NATIVE_DTYPE_BF16);
 }
 
 static int qwen_deferred_tensor_valid(const yvex_native_weight_info *tensor)
@@ -775,7 +792,7 @@ static int qwen_tensor_classify(
         role = YVEX_QWEN3_5_ROLE_TOKEN_EMBEDDING;
     else if (strcmp(tensor->name, "model.language_model.norm.weight") == 0)
         role = YVEX_QWEN3_5_ROLE_OUTPUT_NORM;
-    else if (strcmp(tensor->name, "lm_head.weight") == 0)
+    else if (strcmp(tensor->name, "lm_head.weight") == 0 && !architecture->text.tied_embeddings)
         role = YVEX_QWEN3_5_ROLE_OUTPUT_HEAD;
     else if (qwen_indexed_name(tensor->name, "model.language_model.layers.",
                                &layer, &suffix) && layer < architecture->text.layer_count) {
@@ -830,8 +847,9 @@ static unsigned long long qwen_expected_role_count(
     switch (role) {
     case YVEX_QWEN3_5_ROLE_TOKEN_EMBEDDING:
     case YVEX_QWEN3_5_ROLE_OUTPUT_NORM:
-    case YVEX_QWEN3_5_ROLE_OUTPUT_HEAD:
         return 1ull;
+    case YVEX_QWEN3_5_ROLE_OUTPUT_HEAD:
+        return architecture->text.tied_embeddings ? 0ull : 1ull;
     case YVEX_QWEN3_5_ROLE_INPUT_NORM:
     case YVEX_QWEN3_5_ROLE_FFN_GATE:
     case YVEX_QWEN3_5_ROLE_FFN_UP:
@@ -953,7 +971,7 @@ static int qwen_tensor_rows_audit(
             return qwen_refuse(failure, YVEX_QWEN3_5_FAILURE_TENSOR_INVENTORY,
                                "role-population", "tensor role population is incomplete or duplicated",
                                YVEX_ERR_FORMAT, err);
-    expected_text = 3ull + architecture->text.layer_count * 5ull +
+    expected_text = (architecture->text.tied_embeddings ? 2ull : 3ull) + architecture->text.layer_count * 5ull +
                     architecture->text.full_attention_layers * 6ull +
                     architecture->text.linear_attention_layers * 9ull;
     expected_vision = architecture->vision.depth * 12ull + 9ull;
@@ -1087,6 +1105,10 @@ static int qwen_identity(yvex_qwen3_5_architecture *architecture)
         return 0;
     for (index = 0ull; index < generation->stop_token_count; ++index)
         if (!yvex_sha256_update_u64(&hash, generation->stop_token_ids[index])) return 0;
+    if ((text->tied_embeddings || text->recurrent_parameters_f32) &&
+        (!yvex_sha256_update_text(&hash, "yvex.qwen3_5.parameter-classes.v2") ||
+         !yvex_sha256_update_u64(&hash, text->tied_embeddings) ||
+         !yvex_sha256_update_u64(&hash, text->recurrent_parameters_f32))) return 0;
     if (!yvex_sha256_final(&hash, digest)) return 0;
     yvex_sha256_hex(digest, architecture->architecture_identity);
     return 1;
@@ -1101,6 +1123,8 @@ static int qwen_model_open(yvex_qwen3_5_model **out,
     char *config = NULL, *generation = NULL;
     size_t config_length = 0u, generation_length = 0u;
     int rc = YVEX_OK;
+    const yvex_source_target_identity *identity;
+    int small;
 
     if (out) *out = NULL;
     if (failure) memset(failure, 0, sizeof(*failure));
@@ -1112,17 +1136,16 @@ static int qwen_model_open(yvex_qwen3_5_model **out,
         return qwen_refuse(failure, YVEX_QWEN3_5_FAILURE_SOURCE_NOT_VERIFIED,
                            "verification", "exact source verification is required",
                            YVEX_ERR_STATE, err);
-    if (strcmp(verification->repository_id,
-               YVEX_SOURCE_QWEN3_8_27B_REPOSITORY) != 0 ||
-        strcmp(verification->revision,
-               YVEX_SOURCE_QWEN3_8_27B_REVISION) != 0 ||
-        strcmp(verification->model_type,
-               YVEX_SOURCE_QWEN3_8_27B_CONFIG_TYPE) != 0 ||
-        strcmp(verification->architecture,
-               YVEX_SOURCE_QWEN3_8_27B_CONFIG_ARCHITECTURE) != 0)
+    identity = yvex_source_target_identity_find_repository(verification->repository_id);
+    if (!identity || (strcmp(identity->target_id, YVEX_QWEN3_8_27B_TARGET_ID) &&
+                      strcmp(identity->target_id, YVEX_SOURCE_QWEN3_5_08B_TARGET_ID)) ||
+        strcmp(verification->revision, identity->upstream_revision) ||
+        strcmp(verification->model_type, identity->config_model_type) ||
+        strcmp(verification->architecture, identity->config_architecture))
         return qwen_refuse(failure, YVEX_QWEN3_5_FAILURE_SOURCE_IDENTITY,
-                           "source", "source identity is not the pinned Qwen3.8-27B release",
+                           "source", "source identity is not an exact registered Qwen release",
                            YVEX_ERR_FORMAT, err);
+    small = !strcmp(identity->target_id, YVEX_SOURCE_QWEN3_5_08B_TARGET_ID);
     if (!yvex_source_path_join(config_path, sizeof(config_path),
                                verification->resolved_source_path, "config.json") ||
         !yvex_source_path_join(generation_path, sizeof(generation_path),
@@ -1133,9 +1156,9 @@ static int qwen_model_open(yvex_qwen3_5_model **out,
                            YVEX_ERR_BOUNDS, err);
     config = yvex_read_bounded_file(config_path, QWEN_CONFIG_CAP,
                                     &config_length, err);
-    generation = yvex_read_bounded_file(generation_path, QWEN_CONFIG_CAP,
-                                        &generation_length, err);
-    if (!config || !generation) {
+    if (!small) generation = yvex_read_bounded_file(generation_path, QWEN_CONFIG_CAP,
+                                                   &generation_length, err);
+    if (!config || (!small && !generation)) {
         rc = qwen_refuse(failure, YVEX_QWEN3_5_FAILURE_MISSING_CONFIG,
                          !config ? "config.json" : "generation_config.json",
                          "pinned source configuration is unavailable",
@@ -1153,21 +1176,30 @@ static int qwen_model_open(yvex_qwen3_5_model **out,
     }
     yvex_core_text_copy(model->architecture.product_id,
                         sizeof(model->architecture.product_id),
-                        YVEX_QWEN3_8_27B_TARGET_ID);
+                        identity->target_id);
     yvex_core_text_copy(model->architecture.semantic_family,
                         sizeof(model->architecture.semantic_family),
                         YVEX_QWEN3_5_FAMILY_KEY);
     yvex_core_text_copy(model->architecture.source_revision,
                         sizeof(model->architecture.source_revision),
                         verification->revision);
-    if (!qwen_parse_config(config, config_length, &model->architecture)) {
+    model->architecture.text.recurrent_parameters_f32 = small;
+    if (!qwen_parse_config(config, config_length, &model->architecture) ||
+        model->architecture.text.tied_embeddings != small) {
         rc = qwen_refuse(failure, YVEX_QWEN3_5_FAILURE_MALFORMED_CONFIG,
                          "config.json", "Qwen source configuration is malformed or incomplete",
                          YVEX_ERR_FORMAT, err);
         goto cleanup;
     }
-    if (!qwen_parse_generation(generation, generation_length,
-                               &model->architecture.generation)) {
+    /* No generation_config.json exists at the pinned small revision. Use
+     * an explicit YVEX greedy policy plus the actual model EOS. Absent
+     * BOS/pad remain absent; tokenizer conversation EOS is a separate fact. */
+    if (small) model->architecture.generation = (yvex_qwen3_5_generation_policy){
+        .bos_token_id = ULLONG_MAX, .pad_token_id = ULLONG_MAX,
+        .stop_token_ids = {model->architecture.text.eos_token_id}, .stop_token_count = 1ull,
+        .temperature = 1.0, .top_p = 1.0, .top_k = 50ull};
+    if (!small && !qwen_parse_generation(generation, generation_length,
+                                         &model->architecture.generation)) {
         rc = qwen_refuse(failure, YVEX_QWEN3_5_FAILURE_GENERATION_POLICY,
                          "generation_config.json", "Qwen generation policy is malformed or incomplete",
                          YVEX_ERR_FORMAT, err);
@@ -1334,7 +1366,9 @@ static yvex_ir_id qwen_program_emit(qwen_program_builder *b, const char *name,
     const yvex_ir_attribute *attributes, size_t count)
 {
     yvex_ir_id id = YVEX_IR_NONE;
-    yvex_ir_operation_request request = {.operation = name, .operands = operands, .operand_count = inputs,
+    yvex_ir_operation_request request = {.operation = name,
+        .version = b->text->recurrent_parameters_f32 && !strcmp(name, "sequence.gated_delta") ? 2u : 1u,
+        .operands = operands, .operand_count = inputs,
         .result_types = types, .result_count = outputs, .attributes = attributes, .attribute_count = count};
     if (b->rc == YVEX_OK) b->rc = yvex_ir_operation_add(b->module, b->block, &request, &id, b->error);
     return id;
@@ -1351,7 +1385,10 @@ static yvex_ir_id qwen_program_parameter(qwen_program_builder *b, const char *su
 {
     yvex_ir_attribute attrs[] = {
         {.name = "parameter", .kind = YVEX_IR_ATTR_SYMBOL}, {.name = "source", .kind = YVEX_IR_ATTR_TEXT}};
-    yvex_ir_id type = qwen_program_type(b, YVEX_IR_TENSOR, YVEX_IR_BF16, shape, rank, NULL, 0);
+    yvex_ir_scalar scalar = b->text->recurrent_parameters_f32 &&
+        (!strcmp(suffix, "linear_attn.A_log") || !strcmp(suffix, "linear_attn.norm.weight"))
+            ? YVEX_IR_F32 : YVEX_IR_BF16;
+    yvex_ir_id type = qwen_program_type(b, YVEX_IR_TENSOR, scalar, shape, rank, NULL, 0);
     int count = snprintf(attrs[0].value.text, sizeof(attrs[0].value.text), "%s%s", b->prefix, suffix);
     if (count < 0 || (size_t)count >= sizeof(attrs[0].value.text)) {
         b->rc = YVEX_ERR_BOUNDS;
@@ -1596,7 +1633,9 @@ static int qwen_program_functions(qwen_program_builder *b, yvex_ir_id tokens)
     if (b->rc != YVEX_OK) return b->rc;
     b->block = yvex_ir_function_at(b->module, function)->body;
     input = yvex_ir_block_at(b->module, b->block)->arguments[0];
-    results[0] = qwen_program_linear(b, input, "lm_head.weight", t->hidden_size, t->vocabulary_size, YVEX_IR_F32);
+    results[0] = qwen_program_linear(b, input, t->tied_embeddings
+        ? "model.language_model.embed_tokens.weight" : "lm_head.weight",
+        t->hidden_size, t->vocabulary_size, YVEX_IR_F32);
     (void)qwen_program_emit(b, "core.return", results, 1u, NULL, 0u, NULL, 0u);
     return b->rc;
 }

@@ -109,6 +109,17 @@ stage.*
 
 ## Logical projection and transformation
 
+Each family publishes a bounded catalog of exact targets. Generated membership
+enumerates family-owned catalogs; consumers flatten their target records rather
+than assuming one target per family. Adapter identity alone refuses ambiguous
+resolution. Exact target identity, or an exact embedded source repository and
+revision, disambiguates tokenizer ownership. No target is inferred from shape.
+
+Source-class lowering rules may select a verified source dtype. An unspecified
+dtype preserves the existing wildcard behavior; overlapping rules refuse. The
+small Qwen source-faithful recipe keeps its BF16 matrices and F32 recurrent
+vectors as distinct direct transformations, without converting source precision.
+
 Family owners interpret exact source facts into model topology and canonical
 roles. The transformation plan then binds every terminal output tensor to its
 ordered source contributions and typed operations. Plan construction is

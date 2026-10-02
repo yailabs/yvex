@@ -20,7 +20,8 @@ extern "C" {
 #define YVEX_RUNTIME_LOGITS_SCHEMA_V1 YVEX_RUNTIME_LOGITS_SCHEMA_V3
 #define YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V1 YVEX_RUNTIME_LOGITS_SCHEMA_V3
 #define YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V2 4u
-#define YVEX_OUTPUT_HEAD_PLAN_SCHEMA_CURRENT YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V2
+#define YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V3 5u
+#define YVEX_OUTPUT_HEAD_PLAN_SCHEMA_CURRENT YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V3
 
 typedef struct yvex_logits_family_policy {
     unsigned int schema_version;
@@ -42,6 +43,8 @@ typedef struct yvex_runtime_logits_plan_summary {
     unsigned long long encoded_bytes, vocabulary_size, hidden_width;
     yvex_tensor_role role;
     unsigned int qtype;
+    /* V3 permits TOKEN_EMBEDDING with separate_output_head=0. V1/V2 require
+     * a separate OUTPUT_HEAD. The existing role/flag fields seal ownership. */
     int separate_output_head, output_head_bias;
     char artifact_identity[YVEX_SHA256_HEX_BYTES];
     char materialization_identity[YVEX_SHA256_HEX_BYTES];

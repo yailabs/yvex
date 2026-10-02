@@ -149,8 +149,9 @@ static int sequence_delta_verify(const yvex_ir_module *m, yvex_ir_id id, yvex_er
     if (!sequence_static(sequence_operand(m, op, 4u), YVEX_IR_TENSOR, YVEX_IR_BF16,
                           weight, 3u, NULL)) goto invalid;
     for (index = 5u; index < 8u; ++index) {
+        yvex_ir_scalar scalar = op->definition->version == 2u && index != 6u ? YVEX_IR_F32 : YVEX_IR_BF16;
         weight[0] = index == 7u ? vd : vh;
-        if (!sequence_static(sequence_operand(m, op, index), YVEX_IR_TENSOR, YVEX_IR_BF16,
+        if (!sequence_static(sequence_operand(m, op, index), YVEX_IR_TENSOR, scalar,
                               weight, 1u, NULL)) goto invalid;
     }
     convolution[0] = combined;
@@ -228,6 +229,10 @@ const yvex_ir_dialect *yvex_ir_sequence_dialect(void)
          YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE,
          ssd, sizeof(ssd) / sizeof(ssd[0]), 0, sequence_ssd_verify},
         {"sequence.gated_delta", 1u, 10u, 10u, 3u, 3u, 0u, YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE,
+         delta, sizeof(delta) / sizeof(delta[0]), 0, sequence_delta_verify},
+        /* Same recurrence and publication, distinct exact parameter classes:
+         * convolution/time-bias BF16, decay-log/output-norm F32. */
+        {"sequence.gated_delta", 2u, 10u, 10u, 3u, 3u, 0u, YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE,
          delta, sizeof(delta) / sizeof(delta[0]), 0, sequence_delta_verify},
         {"attention.gated_causal", 1u, 7u, 7u, 2u, 2u, 0u, YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE,
          attention, sizeof(attention) / sizeof(attention[0]), 0, sequence_attention_verify}};

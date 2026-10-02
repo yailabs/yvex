@@ -61,7 +61,19 @@ upstream source do not confer input/output capability. Broader models, public
 readout APIs, calibrated results, behavior evaluation and release qualification
 remain separate obligations.
 
-The [Mac small-model attempt](../evaluation/macos-small-model.md) acquires real
-`Qwen/Qwen3.5-0.8B` tensors but preparation refuses the missing exact compiler
-binding. Its tied embedding/output semantics are outside this admitted 27B
-record; the family name does not grant small-checkpoint support.
+## Exact small text checkpoint
+
+The family catalog separately names `Qwen/Qwen3.5-0.8B` at
+`2fc06364715b967f1860aea9cf38778875588b17`; it does not inherit the 27B artifact
+identity. Its 24 text layers contain 18 recurrent and six full-attention layers.
+The source has 488 tensors: 320 text, 153 deferred vision and 15 deferred MTP.
+The text artifact retains 284 BF16 tensors and 36 F32 recurrent vectors; tied
+embedding/output uses one physical parameter. The source-faithful preset is
+`qwen3.5-0.8b-source-faithful`.
+
+The small source has no generation configuration file. Its explicit YVEX greedy
+policy uses model EOS 248044; tokenizer conversation EOS 248046 remains a
+separate source fact. Only verbatim raw completion is selected; no conversation
+template, vision or MTP capability is admitted by this integration. The
+[Mac evidence](../evaluation/macos-small-model.md) records actual preparation,
+CPU generation, independent reference comparison and remaining release gates.

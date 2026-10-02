@@ -140,6 +140,7 @@ typedef struct {
     size_t operand_count, result_count;
     const yvex_ir_attribute *attributes;
     size_t attribute_count;
+    uint32_t version; /* Zero selects the retained v1 contract; never latest. */
 } yvex_ir_operation_request;
 
 /* Construction owns copies of all request data. Mutation is refused after seal.

@@ -165,8 +165,10 @@ int yvex_program_sequence_open(yvex_program_sequence **out, const yvex_program_p
     rc = c->attention ? YVEX_OK : sequence_refuse(err, YVEX_ERR_NOMEM, "state operation directory allocation failed");
     for (size_t i = 0u; rc == YVEX_OK && i < s->step_count; ++i) {
         const char *implementation = yvex_program_physical_step_at(program, i)->implementation;
-        if (!strcmp(implementation, "gated_delta.bf16.f32state.v1") &&
-            (!c->ops || !c->ops->bf16_round || !c->ops->gated_delta_execute || !session->sequence_state))
+        if ((!strcmp(implementation, "gated_delta.bf16.f32state.v1") ||
+             !strcmp(implementation, "gated_delta.mixed.f32state.v2")) &&
+            (!c->ops || !c->ops->bf16_round || !session->sequence_state ||
+             (yvex_backend_kind_of(session->backend) != YVEX_BACKEND_KIND_CPU && !c->ops->gated_delta_execute)))
             rc = sequence_refuse(err, YVEX_ERR_UNSUPPORTED, "compiled recurrence requires an admitted state backend");
         if (!strcmp(implementation, "selective_ssd.cpu.f32state.v1") &&
             (yvex_backend_kind_of(session->backend) != YVEX_BACKEND_KIND_CPU || !session->sequence_state))
@@ -298,9 +300,69 @@ static int sequence_attention(yvex_program_sequence *c, const yvex_program_devic
     return rc;
 }
 
+/* The explicitly selected CPU realization consumes the common host state
+ * transaction and existing portable recurrence authority. CUDA never enters it. */
+static int sequence_delta_cpu(yvex_program_sequence *c, const yvex_program_device_invocation *r,
+    const yvex_program_sequence_request *options, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_program_physical_step *s = r->step;
+    const yvex_gated_delta_plan *plan = yvex_program_physical_delta_at(c->program, r->step_index);
+    yvex_ir_id root = yvex_program_physical_value_at(c->program, s->operands[8])->state_root;
+    yvex_ir_id recurrent = yvex_program_physical_value_at(c->program, s->operands[9])->state_root;
+    yvex_gated_delta_cpu_request request = {.token_count = r->rows,
+        .cancel_requested = options->cancel_requested, .cancel_context = options->cancel_context};
+    yvex_gated_delta_cpu_result result = {0};
+    yvex_device_tensor *output = &r->values[s->results[0]];
+    const yvex_device_tensor *inputs[8];
+    if (!plan || r->arguments[root].state_handle != root || r->arguments[recurrent].state_handle != recurrent)
+        return sequence_refuse(err, YVEX_ERR_FORMAT, "CPU recurrence requires exact state handles");
+    for (size_t i = 0u; i < 8u; ++i) {
+        inputs[i] = i < 4u ? &r->values[s->operands[i]] : yvex_program_kernels_small_weight(c->kernels, s->operands[i]);
+        if (!inputs[i] || !yvex_backend_tensor_owned_by(c->session->backend, inputs[i]) ||
+            !inputs[i]->is_written || inputs[i]->dtype != YVEX_DTYPE_F32 || !inputs[i]->data)
+            return sequence_refuse(err, YVEX_ERR_FORMAT, "CPU recurrence requires prepared exact F32 storage");
+    }
+    int rc = yvex_sequence_state_layer(c->session->sequence_state, root, &request.state, &request.next_state, err);
+    request.projected_qkv = (const float *)(const void *)inputs[0]->data;
+    request.projected_qkv_capacity = inputs[0]->bytes / sizeof(float);
+    request.projected_output_gate = (const float *)(const void *)inputs[1]->data;
+    request.projected_output_gate_capacity = inputs[1]->bytes / sizeof(float);
+    request.projected_beta = (const float *)(const void *)inputs[2]->data;
+    request.projected_beta_capacity = inputs[2]->bytes / sizeof(float);
+    request.projected_decay = (const float *)(const void *)inputs[3]->data;
+    request.projected_decay_capacity = inputs[3]->bytes / sizeof(float);
+    request.convolution_weight = (const float *)(const void *)inputs[4]->data;
+    request.convolution_weight_capacity = inputs[4]->bytes / sizeof(float);
+    request.decay_log = (const float *)(const void *)inputs[5]->data;
+    request.decay_log_capacity = inputs[5]->bytes / sizeof(float);
+    request.time_bias = (const float *)(const void *)inputs[6]->data;
+    request.time_bias_capacity = inputs[6]->bytes / sizeof(float);
+    request.normalization_weight = (const float *)(const void *)inputs[7]->data;
+    request.normalization_weight_capacity = inputs[7]->bytes / sizeof(float);
+    request.output = (float *)(void *)output->data;
+    request.output_capacity = output->bytes / sizeof(float);
+    output->is_written = 0;
+    if (rc == YVEX_OK) rc = yvex_gated_delta_execute_cpu(plan, &request, &result, err);
+    if (rc == YVEX_OK) {
+        output->is_written = 1;
+        rc = sequence_round(c, output, facts, err);
+    }
+    if (rc == YVEX_OK) rc = yvex_sequence_state_stage(c->session->sequence_state, root, err);
+    output->is_written = rc == YVEX_OK;
+    if (rc == YVEX_OK) {
+        facts->state_bytes = plan->convolution_state_bytes + plan->recurrent_state_bytes;
+        facts->temporary_bytes = (plan->qkv_width + 2u * plan->requirement.key_head_dimension +
+            3u * plan->requirement.value_head_dimension) * sizeof(float);
+        facts->compulsory_memory_facts_available = 1;
+    }
+    return rc;
+}
+
 static int sequence_delta(yvex_program_sequence *c, const yvex_program_device_invocation *r,
     const yvex_program_sequence_request *options, yvex_backend_operation_facts *facts, yvex_error *err)
 {
+    if (yvex_backend_kind_of(c->session->backend) == YVEX_BACKEND_KIND_CPU)
+        return sequence_delta_cpu(c, r, options, facts, err);
     const yvex_program_physical_step *s = r->step;
     const yvex_gated_delta_plan *plan = yvex_program_physical_delta_at(c->program, r->step_index);
     yvex_ir_id root = yvex_program_physical_value_at(c->program, s->operands[8])->state_root;
@@ -395,7 +457,8 @@ int yvex_program_sequence_invoke(yvex_program_sequence *c, const yvex_program_de
         !r->rows || r->rows > c->capacity ||
         r->step != yvex_program_physical_step_at(c->program, r->step_index) || !r->step)
         return sequence_refuse(err, YVEX_ERR_INVALID_ARG, "state operation requires its bound physical invocation");
-    if (!strcmp(r->step->implementation, "gated_delta.bf16.f32state.v1"))
+    if (!strcmp(r->step->implementation, "gated_delta.bf16.f32state.v1") ||
+        !strcmp(r->step->implementation, "gated_delta.mixed.f32state.v2"))
         return sequence_delta(c, r, options, facts, err);
     if (!strcmp(r->step->implementation, "selective_ssd.cpu.f32state.v1"))
         return sequence_ssd(c, r, options, facts, err);

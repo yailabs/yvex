@@ -767,21 +767,12 @@ static int publish_temporary(const char *temporary, const char *destination,
                                    errno == EEXIST ? "destination already exists"
                                                     : "cannot publish copied file");
     }
-#ifdef __linux__
-    if (syscall(SYS_renameat2, AT_FDCWD, temporary, AT_FDCWD, destination,
-                1u /* RENAME_NOREPLACE */) == 0)
+    if (yvex_platform_rename_noreplace(temporary, destination) == 0)
         return YVEX_OK;
     return distribution_refuse(err, errno == EEXIST ? YVEX_ERR_STATE : YVEX_ERR_IO,
                                "source.distribution.copy",
                                errno == EEXIST ? "destination already exists"
                                                 : "cannot publish copied directory");
-#else
-    (void)temporary;
-    (void)destination;
-    return distribution_refuse(err, YVEX_ERR_UNSUPPORTED,
-                               "source.distribution.copy",
-                               "atomic no-replace directory publication is unavailable");
-#endif
 }
 
 static int copy_representation(const yvex_source_representation_fact *source,

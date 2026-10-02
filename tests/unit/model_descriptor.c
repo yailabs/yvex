@@ -971,7 +971,7 @@ static int test_output_program_import(const yvex_runtime_logits_plan_summary *he
     yvex_physical_execution_summary summary = {.schema_version = YVEX_PHYSICAL_EXECUTION_SCHEMA_V5,
         .decision_count = 1u};
     yvex_physical_execution_decision weight = {.schema_version = YVEX_PHYSICAL_EXECUTION_SCHEMA_V5,
-        .terminal_tensor_id = head->output_head_tensor_id, .role = YVEX_TENSOR_ROLE_OUTPUT_HEAD,
+        .terminal_tensor_id = head->output_head_tensor_id, .role = head->role,
         .scope = YVEX_TENSOR_SCOPE_GLOBAL, .layer_index = YVEX_TRANSFORM_IR_NO_ID,
         .predictor_index = YVEX_TRANSFORM_IR_NO_ID, .canonical_qtype = head->qtype,
         .canonical_row_width = head->row_width, .canonical_row_count = head->row_count,
@@ -1056,6 +1056,20 @@ static int test_decoder_output_head_identity(void)
             !summary.transformer_plan_identity[0],
         "decoder output head seals exact non-Transformer producer lineage");
     YVEX_TEST_ASSERT(test_output_program_import(&summary) == 0, "decoder output normalizes into physical SSA");
+    mutated = summary;
+    mutated.role = YVEX_TENSOR_ROLE_TOKEN_EMBEDDING;
+    mutated.separate_output_head = 0;
+    YVEX_TEST_ASSERT(yvex_output_head_plan_seal(&mutated, &err) == YVEX_OK &&
+        yvex_output_head_plan_validate(&mutated, &err) == YVEX_OK &&
+        test_output_program_import(&mutated) == 0,
+        "V3 seals one tied embedding parameter as the exact output owner");
+    mutated.schema_version = YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V2;
+    YVEX_TEST_ASSERT(yvex_output_head_plan_seal(&mutated, &err) == YVEX_ERR_FORMAT,
+        "V2 refuses the newly versioned tied parameter contract");
+    mutated.schema_version = YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V3;
+    mutated.separate_output_head = 1;
+    YVEX_TEST_ASSERT(yvex_output_head_plan_seal(&mutated, &err) == YVEX_ERR_FORMAT,
+        "output ownership refuses a separate policy with an embedding role");
     mutated = summary;
     model_test_identity(mutated.transformer_plan_identity, '7');
     YVEX_TEST_ASSERT(

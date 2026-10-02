@@ -589,7 +589,7 @@ static int mamba_runtime_unqualified(
 
 static const yvex_quant_artifact_lowering_rule mamba_quant_lowering_rules[] = {
     {YVEX_ARTIFACT_LOWERING_TRANSFORM_DIRECT, YVEX_TRANSFORM_OP_IDENTITY,
-     YVEX_GGUF_QTYPE_BF16, YVEX_GGUF_QTYPE_BF16, 0}};
+     YVEX_GGUF_QTYPE_BF16, YVEX_GGUF_QTYPE_BF16, 0, YVEX_NATIVE_DTYPE_UNKNOWN}};
 
 static const yvex_quant_artifact_lowering_policy mamba_quant_lowering_policy = {
     MAMBA_SOURCE_FAITHFUL_PRESET, MAMBA_SOURCE_FAITHFUL_PRESET,

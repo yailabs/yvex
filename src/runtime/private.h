@@ -60,6 +60,10 @@ struct yvex_runtime_binding {
     yvex_compiled_model_plan *plan;
 };
 
+/* Resolve one authenticated output parameter, including explicit tied sharing. */
+int yvex_runtime_compiled_output_tensor(const yvex_model_engine_view *,
+    unsigned long long *, yvex_error *);
+
 /* Exact legacy wire records exist only to authenticate and narrow accepted v14 bindings. */
 typedef struct {
     unsigned int schema_version;

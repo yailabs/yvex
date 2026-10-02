@@ -9,6 +9,7 @@
 #include <yvex/qtype.h>
 
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -117,10 +118,12 @@ static void qwen_test_verification(yvex_source_verification *verification,
                         "Qwen3_5ForConditionalGeneration");
 }
 
-static int qwen_test_physical(const yvex_program_execution *execution)
+static int qwen_test_physical(const yvex_program_execution *execution,
+    const yvex_qwen3_5_text_architecture *text)
 {
     const yvex_ir_module *m = yvex_program_execution_module(execution);
     yvex_program_parameter_binding bindings[851];
+    const char *names[851];
     yvex_program_physical *physical = NULL, *decoded = NULL, *rejected = NULL, *output = NULL;
     const yvex_program_physical_summary *s;
     yvex_core_bytes bytes = {.maximum = 4u * 1024u * 1024u};
@@ -132,7 +135,12 @@ static int qwen_test_physical(const yvex_program_execution *execution)
         const yvex_ir_operation *op = yvex_ir_operation_at(m, (yvex_ir_id)i);
         if (strcmp(op->definition->name, "core.parameter")) continue;
         YVEX_TEST_ASSERT(count < 851u, "bounded fixture parameter inventory");
-        bindings[count] = (yvex_program_parameter_binding){op->results[0], count, YVEX_GGUF_QTYPE_BF16};
+        const yvex_ir_type *type = yvex_ir_type_at(m, yvex_ir_value_at(m, op->results[0])->type);
+        names[count] = yvex_ir_attribute_get(m, (yvex_ir_id)i, "parameter")->value.text;
+        bindings[count] = (yvex_program_parameter_binding){op->results[0], count,
+            type->scalar == YVEX_IR_F32 ? YVEX_GGUF_QTYPE_F32 : YVEX_GGUF_QTYPE_BF16};
+        for (size_t j = 0u; j < count; ++j)
+            if (!strcmp(names[j], names[count])) bindings[count].tensor_id = bindings[j].tensor_id;
         count++;
     }
     rc = yvex_program_physical_compile(&physical, execution, "forward", bindings, count,
@@ -142,7 +150,8 @@ static int qwen_test_physical(const yvex_program_execution *execution)
     s = yvex_program_physical_summary_get(physical);
     for (i = 0u; i < s->step_count; ++i) {
         const yvex_program_physical_step *step = yvex_program_physical_step_at(physical, i);
-        delta += !strcmp(step->implementation, "gated_delta.bf16.f32state.v1");
+        delta += !strcmp(step->implementation, text->recurrent_parameters_f32
+            ? "gated_delta.mixed.f32state.v2" : "gated_delta.bf16.f32state.v1");
         attention += !strcmp(step->implementation, "gated_causal.bf16.v1");
     }
     for (i = 0u; i < s->result_count; ++i) {
@@ -153,8 +162,10 @@ static int qwen_test_physical(const yvex_program_execution *execution)
                          "state successor preserves its explicit input lifetime");
         states++;
     }
-    YVEX_TEST_ASSERT(delta == 48u && attention == 16u && states == 112u &&
-        s->input_count == 114u && s->result_count == 113u && s->storage_count < 64u,
+    size_t expected_states = 2u * text->linear_attention_layers + text->full_attention_layers;
+    YVEX_TEST_ASSERT(delta == text->linear_attention_layers && attention == text->full_attention_layers &&
+        states == expected_states && s->input_count == 2u + expected_states &&
+        s->result_count == 1u + expected_states && s->storage_count < 64u,
         "physical dataflow preserves hybrid state and compiles bounded reusable activation storage");
     YVEX_TEST_ASSERT(yvex_program_physical_compile(&output, execution, "output", bindings, count,
         yvex_ir_identity(m), &err) == YVEX_OK, "native output entry lowers without a legacy output-head importer");
@@ -170,6 +181,16 @@ static int qwen_test_physical(const yvex_program_execution *execution)
             "forward/output share one compiler lineage and preserve distinct logical result precision");
         printf("Qwen output: input=BF16 result=F32 values=%zu steps=%zu; shared forward semantic/execution identity\n",
             head->value_count, head->step_count);
+        if (text->tied_embeddings) {
+            size_t shared = 0u;
+            const yvex_program_physical_value *head_weight = yvex_program_physical_value_at(output, 1u);
+            for (size_t j = 0u; j < s->step_count; ++j) {
+                const yvex_program_physical_step *step = yvex_program_physical_step_at(physical, j);
+                if (strcmp(step->implementation, "embedding.bf16.v1")) continue;
+                shared += yvex_program_physical_value_at(physical, step->operands[1])->tensor_id == head_weight->tensor_id;
+            }
+            YVEX_TEST_ASSERT(shared == 1u, "tied output and embedding bind one actual physical parameter");
+        }
     }
     YVEX_TEST_ASSERT(yvex_program_physical_encode(physical, &bytes, &err) == YVEX_OK &&
         yvex_program_physical_decode(&decoded, bytes.data, bytes.count, &err) == YVEX_OK &&
@@ -194,6 +215,9 @@ static int qwen_test_physical(const yvex_program_execution *execution)
 
 static int qwen_test_program(const yvex_qwen3_5_architecture *architecture)
 {
+    const yvex_qwen3_5_text_architecture *t = &architecture->text;
+    size_t state_count = 2u * t->linear_attention_layers + t->full_attention_layers;
+    size_t forward_parameters = 2u + 5u * t->layer_count + 6u * t->full_attention_layers + 9u * t->linear_attention_layers;
     static const char source[] = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     yvex_ir_module *program = NULL, *repeat = NULL, *imported = NULL;
     yvex_program_execution *lowered = NULL;
@@ -211,7 +235,7 @@ static int qwen_test_program(const yvex_qwen3_5_architecture *architecture)
                      yvex_ir_function_find(program, "forward", &function), "typed forward/output programs");
     forward = yvex_ir_function_at(program, function);
     body = yvex_ir_block_at(program, forward->body);
-    YVEX_TEST_ASSERT(body->argument_count == 114u && forward->result_count == 113u,
+    YVEX_TEST_ASSERT(body->argument_count == 2u + state_count && forward->result_count == 1u + state_count,
                      "tokens + position + 48 convolution/48 recurrent/16 KV states; distinct output versions");
     for (id = body->first_operation; id != YVEX_IR_NONE; id = yvex_ir_operation_at(program, id)->next) {
         const yvex_ir_operation *op = yvex_ir_operation_at(program, id);
@@ -222,7 +246,8 @@ static int qwen_test_program(const yvex_qwen3_5_architecture *architecture)
         ffn += !strcmp(op->definition->name, "nn.silu_product");
         parameters += !strcmp(op->definition->name, "core.parameter");
     }
-    YVEX_TEST_ASSERT(delta == 48u && attention == 16u && norms == 129u && ffn == 64u && parameters == 850u,
+    YVEX_TEST_ASSERT(delta == t->linear_attention_layers && attention == t->full_attention_layers &&
+        norms == 2u * t->layer_count + 1u && ffn == t->layer_count && parameters == forward_parameters,
                      "source projection preserves real hybrid operations and every forward parameter");
     parameters = 0u;
     for (id = 0u; id < yvex_ir_operation_count(program); ++id) {
@@ -237,9 +262,9 @@ static int qwen_test_program(const yvex_qwen3_5_architecture *architecture)
         type = yvex_ir_type_at(program, yvex_ir_value_at(program, op->results[0])->type);
         parameter = yvex_ir_attribute_get(program, id, "parameter");
         tensor.name = parameter->value.text;
-        tensor.dtype = YVEX_NATIVE_DTYPE_BF16;
+        tensor.dtype = type->scalar == YVEX_IR_F32 ? YVEX_NATIVE_DTYPE_F32 : YVEX_NATIVE_DTYPE_BF16;
         tensor.rank = type->rank;
-        tensor.data_bytes = 2u;
+        tensor.data_bytes = type->scalar == YVEX_IR_F32 ? 4u : 2u;
         for (dimension = 0u; dimension < type->rank; ++dimension) {
             tensor.dims[dimension] = type->shape[dimension].extent;
             YVEX_TEST_ASSERT(yvex_core_u64_mul(tensor.data_bytes, tensor.dims[dimension], &tensor.data_bytes),
@@ -251,7 +276,8 @@ static int qwen_test_program(const yvex_qwen3_5_architecture *architecture)
                          "each program parameter agrees with the independent source tensor-role classifier");
         parameters++;
     }
-    YVEX_TEST_ASSERT(parameters == 851u, "all forward and output parameters have source-admitted geometry");
+    YVEX_TEST_ASSERT(parameters == forward_parameters + 1u,
+        "every forward/output reference has admitted source geometry; tied references share a tensor");
     YVEX_TEST_ASSERT(yvex_qwen3_5_program_build(&repeat, architecture, source, &error) == YVEX_OK &&
                      !strcmp(yvex_ir_identity(program), yvex_ir_identity(repeat)), "repeatable source projection");
     rc = yvex_ir_encode(program, &bytes, &error);
@@ -265,8 +291,8 @@ static int qwen_test_program(const yvex_qwen3_5_architecture *architecture)
     {
         const yvex_program_entry *entry = yvex_program_execution_entry_at(lowered, 1u);
         size_t step, dependency;
-        YVEX_TEST_ASSERT(entry && !strcmp(entry->symbol, "forward") && entry->input_count == 114u &&
-            entry->result_count == 113u, "execution form preserves all 112 typed state inputs and successors");
+        YVEX_TEST_ASSERT(entry && !strcmp(entry->symbol, "forward") && entry->input_count == 2u + state_count &&
+            entry->result_count == 1u + state_count, "execution form preserves every typed state input and successor");
         for (step = 0u; step < entry->step_count; ++step)
             for (dependency = 0u; dependency < entry->steps[step].dependency_count; ++dependency)
                 YVEX_TEST_ASSERT(entry->steps[step].dependencies[dependency] < step,
@@ -275,7 +301,7 @@ static int qwen_test_program(const yvex_qwen3_5_architecture *architecture)
                entry->step_count, entry->value_count);
     }
     printf("Qwen program: forward inputs=114 results=113; delta=48 attention=16 RMSNorm=129 FFN=64 parameters=851\n");
-    YVEX_TEST_ASSERT(qwen_test_physical(lowered) == 0, "whole-program physical lowering");
+    YVEX_TEST_ASSERT(qwen_test_physical(lowered, t) == 0, "whole-program physical lowering");
     free(bytes.data);
     yvex_program_execution_close(&lowered);
     yvex_ir_module_close(&imported);
@@ -333,6 +359,62 @@ static int qwen_test_lowering(const yvex_graph_execution_binding *execution,
                          "attention population, position semantics and rounding contract preserved");
     printf("Qwen lowering: 64/64 execution records and 16/16 attention records match source geometry/numerical class\n");
     yvex_semantic_model_ir_close(&semantic);
+    return 0;
+}
+
+/* Metadata fixture from the exact 0.8B source; no weight bytes or fixture runtime. */
+static int qwen_test_small(void)
+{
+    const char *root = "build/tests/qwen3_5_small";
+    const yvex_qwen3_5_api *api = yvex_model_register_qwen3_5();
+    yvex_qwen3_5_model *model = NULL;
+    yvex_qwen3_5_failure failure = {0};
+    yvex_source_verification verification;
+    yvex_error err = {0};
+    YVEX_TEST_ASSERT(qwen_test_dir(root), "small metadata workspace");
+    FILE *fp = fopen("build/tests/qwen3_5_small/config.json", "wb");
+    YVEX_TEST_ASSERT(fp && fputs(
+        "{\"architectures\":[\"Qwen3_5ForConditionalGeneration\"],\"image_token_id\":248056,\"mo"
+        "del_type\":\"qwen3_5\",\"text_config\":{\"attention_bias\":false,\"attention_dropout\":0."
+        "0,\"attn_output_gate\":true,\"dtype\":\"bfloat16\",\"eos_token_id\":248044,\"full_attenti"
+        "on_interval\":4,\"head_dim\":256,\"hidden_act\":\"silu\",\"hidden_size\":1024,\"initialize"
+        "r_range\":0.02,\"intermediate_size\":3584,\"layer_types\":[\"linear_attention\",\"linear"
+        "_attention\",\"linear_attention\",\"full_attention\",\"linear_attention\",\"linear_atten"
+        "tion\",\"linear_attention\",\"full_attention\",\"linear_attention\",\"linear_attention\","
+        "\"linear_attention\",\"full_attention\",\"linear_attention\",\"linear_attention\",\"linea"
+        "r_attention\",\"full_attention\",\"linear_attention\",\"linear_attention\",\"linear_atte"
+        "ntion\",\"full_attention\",\"linear_attention\",\"linear_attention\",\"linear_attention\""
+        ",\"full_attention\"],\"linear_conv_kernel_dim\":4,\"linear_key_head_dim\":128,\"linear_"
+        "num_key_heads\":16,\"linear_num_value_heads\":16,\"linear_value_head_dim\":128,\"max_p"
+        "osition_embeddings\":262144,\"mlp_only_layers\":[],\"model_type\":\"qwen3_5_text\",\"mtp"
+        "_num_hidden_layers\":1,\"mtp_use_dedicated_embeddings\":false,\"num_attention_heads\""
+        ":8,\"num_hidden_layers\":24,\"num_key_value_heads\":2,\"rms_norm_eps\":1e-06,\"tie_word"
+        "_embeddings\":true,\"use_cache\":true,\"vocab_size\":248320,\"mamba_ssm_dtype\":\"float3"
+        "2\",\"rope_parameters\":{\"mrope_interleaved\":true,\"mrope_section\":[11,11,10],\"rope_"
+        "type\":\"default\",\"rope_theta\":10000000,\"partial_rotary_factor\":0.25}},\"tie_word_e"
+        "mbeddings\":true,\"transformers_version\":\"4.57.0.dev0\",\"video_token_id\":248057,\"vi"
+        "sion_config\":{\"deepstack_visual_indexes\":[],\"depth\":12,\"hidden_act\":\"gelu_pytorc"
+        "h_tanh\",\"hidden_size\":768,\"in_channels\":3,\"initializer_range\":0.02,\"intermediate"
+        "_size\":3072,\"model_type\":\"qwen3_5\",\"num_heads\":12,\"num_position_embeddings\":2304"
+        ",\"out_hidden_size\":1024,\"patch_size\":16,\"spatial_merge_size\":2,\"temporal_patch_s"
+        "ize\":2},\"vision_end_token_id\":248054,\"vision_start_token_id\":248053}", fp) >= 0 && fclose(fp) == 0, "exact small config metadata");
+    qwen_test_verification(&verification, root);
+    yvex_core_text_copy(verification.repository_id, sizeof(verification.repository_id), "Qwen/Qwen3.5-0.8B");
+    yvex_core_text_copy(verification.revision, sizeof(verification.revision), "2fc06364715b967f1860aea9cf38778875588b17");
+    int rc = api->open(&model, &verification, &failure, &err);
+    if (rc != YVEX_OK) fprintf(stderr, "Small Qwen config: %s (%s)\n", yvex_error_message(&err), failure.field);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "actual omitted fields and absent generation sidecar remain admissible");
+    const yvex_qwen3_5_architecture *a = api->architecture(model);
+    YVEX_TEST_ASSERT(a && !strcmp(a->product_id, "qwen3.5-0.8b") && a->text.tied_embeddings &&
+        a->text.recurrent_parameters_f32 && a->text.hidden_size == 1024u && a->text.layer_count == 24u &&
+        a->text.bos_token_id == ULLONG_MAX && a->generation.pad_token_id == ULLONG_MAX &&
+        a->generation.stop_token_count == 1u && a->generation.stop_token_ids[0] == 248044u,
+        "source classes, tied readout and genuinely absent BOS/pad are preserved");
+    YVEX_TEST_ASSERT(qwen_test_program(a) == 0, "small complete program and exact parameter sharing");
+    api->close(&model);
+    verification.revision[0] = '0';
+    YVEX_TEST_ASSERT(api->open(&model, &verification, &failure, &err) != YVEX_OK && !model,
+        "foreign small source revision fails closed");
     return 0;
 }
 
@@ -436,5 +518,6 @@ int yvex_test_qwen3_5_architecture(void)
         api->open(&model, &verification, &failure, &err) != YVEX_OK &&
             failure.code == YVEX_QWEN3_5_FAILURE_SOURCE_IDENTITY,
         "mutable or foreign source identity cannot construct Qwen semantics");
+    YVEX_TEST_ASSERT(qwen_test_small() == 0, "pinned small checkpoint specialization");
     return 0;
 }

@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 #define QWEN_TEXT_TENSORS 851ull
@@ -25,9 +26,20 @@
 #define QWEN_EXTENSION_NAMES 432ull
 #define QWEN_MAPPING_IDENTITY 9266396127046126464ull
 #define QWEN_SOURCE_FAITHFUL_PRESET "qwen3.8-source-faithful"
+#define QWEN_SMALL_PRESET "qwen3.5-0.8b-source-faithful"
+/* Source-verified exact lowering and transformation products. */
+#define QWEN_SMALL_MAPPING_IDENTITY 7974369785627479995ull
+#define QWEN_SMALL_TRANSFORM_IDENTITY "9314ebdcbf77aab139d342c67b9da1c9c1612ff50151ac4358924b491bc59d17"
 
 static int qwen_tokenizer_policy(yvex_tokenizer_family_policy *out,
                                  yvex_error *err);
+static int qwen_small_tokenizer_policy(yvex_tokenizer_family_policy *, yvex_error *);
+
+static unsigned long long qwen_text_count(const yvex_qwen3_5_text_architecture *t)
+{
+    return (t->tied_embeddings ? 2ull : 3ull) + 5ull * t->layer_count +
+           6ull * t->full_attention_layers + 9ull * t->linear_attention_layers;
+}
 
 static int qwen_role_project(yvex_qwen3_5_tensor_role source,
                              yvex_tensor_role *role,
@@ -108,7 +120,8 @@ static int qwen_transform_add(yvex_transform_recipe_sink *sink,
     yvex_tensor_collection collection;
     unsigned int dimension;
 
-    if (!tensor || !binding || tensor->dtype != YVEX_NATIVE_DTYPE_BF16 ||
+    if (!tensor || !binding ||
+        (tensor->dtype != YVEX_NATIVE_DTYPE_BF16 && tensor->dtype != YVEX_NATIVE_DTYPE_F32) ||
         tensor->rank == 0u || tensor->rank > YVEX_TRANSFORM_IR_MAX_RANK ||
         !qwen_role_project(binding->role, &role, &collection)) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "qwen3_5.transform",
@@ -165,7 +178,7 @@ static int qwen_transform_project(void *context,
             rc = qwen_transform_add(
                 sink, tensor, &binding, ordinal++, failure, err);
     }
-    if (rc == YVEX_OK && ordinal != QWEN_TEXT_TENSORS) {
+    if (rc == YVEX_OK && ordinal != qwen_text_count(&projection->architecture->text)) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "qwen3_5.transform",
                        "text specialization tensor population changed after audit");
         rc = YVEX_ERR_FORMAT;
@@ -193,7 +206,7 @@ static int qwen_transform_build(yvex_transform_ir **out,
         yvex_source_tensor_snapshot_facts_get(snapshot, &facts, err) != YVEX_OK ||
         facts.identity != verification->source_snapshot_identity ||
         inventory->class_counts[YVEX_QWEN3_5_TENSOR_TEXT_EXECUTION_REQUIRED] !=
-            QWEN_TEXT_TENSORS) {
+            qwen_text_count(&architecture->text)) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "qwen3_5.transform",
                        "verified pinned source and complete tensor accounting are required");
         return YVEX_ERR_FORMAT;
@@ -206,8 +219,8 @@ static int qwen_transform_build(yvex_transform_ir **out,
     header.architecture_identity = architecture->architecture_identity;
     header.role_map_identity = inventory->role_map_identity;
     header.source_population_count = facts.tensor_count;
-    header.expected_source_count = QWEN_TEXT_TENSORS;
-    header.expected_terminal_count = QWEN_TEXT_TENSORS;
+    header.expected_source_count = qwen_text_count(&architecture->text);
+    header.expected_terminal_count = header.expected_source_count;
     header.header_scan_count = facts.header_scan_count;
     yvex_transform_budget_default(&options.budget);
     options.source_snapshot = snapshot;
@@ -242,16 +255,23 @@ static int qwen_lowering_build(yvex_artifact_lowering_map **out,
                                yvex_artifact_lowering_failure *failure,
                                yvex_error *err)
 {
-    yvex_artifact_lowering_metadata metadata[18];
+    yvex_artifact_lowering_metadata metadata[19];
     yvex_artifact_lowering_policy policy = {0};
     unsigned long long count = 0ull;
+    const yvex_source_target_identity *identity = yvex_source_target_identity_find(architecture->product_id);
+    const yvex_qwen3_5_text_architecture *t = &architecture->text;
+    char name[96];
+    if (!identity || snprintf(name, sizeof(name), "%s Text", identity->model_name) >= (int)sizeof(name))
+        return YVEX_ERR_FORMAT;
 
     qwen_metadata_string(&metadata[count++], "general.architecture", "qwen3_5");
-    qwen_metadata_string(&metadata[count++], "general.name", "Qwen3.8-27B Text");
+    qwen_metadata_string(&metadata[count++], "general.name", name);
     qwen_metadata_string(&metadata[count++], "general.source.repository",
-                         YVEX_SOURCE_QWEN3_8_27B_REPOSITORY);
+                         identity->upstream_repo_id);
     qwen_metadata_string(&metadata[count++], "general.source.revision",
-                         YVEX_SOURCE_QWEN3_8_27B_REVISION);
+                         identity->upstream_revision);
+    if (t->tied_embeddings)
+        qwen_metadata_string(&metadata[count++], "yvex.logical.target", identity->target_id);
     qwen_metadata_string(&metadata[count++], "yvex.source.capability", "multimodal");
     qwen_metadata_string(&metadata[count++], "yvex.specialization", "text");
     qwen_metadata_string(&metadata[count++], "yvex.vision.execution", "deferred");
@@ -277,16 +297,15 @@ static int qwen_lowering_build(yvex_artifact_lowering_map **out,
     qwen_metadata_u64(&metadata[count++], "qwen3_5.linear_attention.conv_kernel",
                       architecture->text.linear_convolution_kernel);
     policy.schema_version = YVEX_ARTIFACT_LOWERING_POLICY_SCHEMA_V1;
-    policy.source_contribution_count = QWEN_TEXT_TENSORS;
-    policy.descriptor_count = QWEN_TEXT_TENSORS;
-    policy.trunk_descriptor_count = QWEN_TEXT_TENSORS;
-    policy.pinned_standard_count = QWEN_PINNED_NAMES;
-    policy.extension_count = QWEN_EXTENSION_NAMES;
-    policy.trunk_collection_counts[YVEX_TENSOR_COLLECTION_GLOBAL] = 2ull;
-    policy.trunk_collection_counts[YVEX_TENSOR_COLLECTION_ATTENTION] = 96ull;
-    policy.trunk_collection_counts[YVEX_TENSOR_COLLECTION_NORM] = 129ull;
-    policy.trunk_collection_counts[YVEX_TENSOR_COLLECTION_SEQUENCE_MIXER] = 432ull;
-    policy.trunk_collection_counts[YVEX_TENSOR_COLLECTION_DENSE_FFN] = 192ull;
+    policy.source_contribution_count = qwen_text_count(t);
+    policy.descriptor_count = policy.trunk_descriptor_count = policy.source_contribution_count;
+    policy.pinned_standard_count = (t->tied_embeddings ? 2ull : 3ull) + t->layer_count * 2ull;
+    policy.extension_count = t->linear_attention_layers * 9ull;
+    policy.trunk_collection_counts[YVEX_TENSOR_COLLECTION_GLOBAL] = t->tied_embeddings ? 1ull : 2ull;
+    policy.trunk_collection_counts[YVEX_TENSOR_COLLECTION_ATTENTION] = t->full_attention_layers * 6ull;
+    policy.trunk_collection_counts[YVEX_TENSOR_COLLECTION_NORM] = t->layer_count * 2ull + 1ull;
+    policy.trunk_collection_counts[YVEX_TENSOR_COLLECTION_SEQUENCE_MIXER] = t->linear_attention_layers * 9ull;
+    policy.trunk_collection_counts[YVEX_TENSOR_COLLECTION_DENSE_FFN] = t->layer_count * 3ull;
     policy.metadata = metadata;
     policy.metadata_count = count;
     return yvex_artifact_lowering_operations.build(
@@ -348,6 +367,20 @@ static const yvex_compilation_source_projection qwen_source_projection = {
         YVEX_COMPILATION_SOURCE_REQUIRE_NORM |
         YVEX_COMPILATION_SOURCE_REQUIRE_OUTPUT_HEAD,
     .source_identity = qwen_source_identity,
+    .lower = qwen_source_lower,
+    .lowering = &yvex_artifact_lowering_operations};
+
+static const void *qwen_small_source_identity(void)
+{
+    return yvex_source_target_identity_find(YVEX_SOURCE_QWEN3_5_08B_TARGET_ID);
+}
+
+static const yvex_compilation_source_projection qwen_small_source_projection = {
+    .schema_version = YVEX_COMPILATION_SOURCE_PROJECTION_SCHEMA_V1,
+    .expected_mapping_identity = QWEN_SMALL_MAPPING_IDENTITY,
+    .required_contribution_mask = YVEX_COMPILATION_SOURCE_REQUIRE_DIRECT |
+        YVEX_COMPILATION_SOURCE_REQUIRE_GLOBAL | YVEX_COMPILATION_SOURCE_REQUIRE_NORM,
+    .source_identity = qwen_small_source_identity,
     .lower = qwen_source_lower,
     .lowering = &yvex_artifact_lowering_operations};
 
@@ -657,7 +690,7 @@ static int qwen_semantic_model_build(yvex_semantic_model_ir **out,
         request.schema_version = YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2;
         request.family_adapter_id = YVEX_QWEN3_5_ADAPTER_ID;
         request.family_adapter_version = YVEX_QWEN3_5_ADAPTER_VERSION;
-        request.target_id = YVEX_QWEN3_8_27B_TARGET_ID;
+        request.target_id = architecture->product_id;
         request.source_model_identity = verification->manifest_payload_identity;
         request.logical_model_identity = architecture->architecture_identity;
         request.semantic_payload_identity = execution.identity;
@@ -679,9 +712,10 @@ static int qwen_semantic_model_build(yvex_semantic_model_ir **out,
     return rc;
 }
 
-static int qwen_compilation_source_open(
+static int qwen_compilation_source_open_projected(
     yvex_family_compilation_source *out,
-    const yvex_compilation_runtime_binding_request *request, yvex_error *err)
+    const yvex_compilation_runtime_binding_request *request,
+    const yvex_compilation_source_projection *projection, yvex_error *err)
 {
     yvex_compilation_source_options options = {0};
     yvex_compilation_source_failure failure = {0};
@@ -713,7 +747,7 @@ static int qwen_compilation_source_open(
     options.chunk_bytes = options.budget.chunk_bytes;
     options.page_bytes = options.budget.page_bytes;
     rc = yvex_compilation_source_operations.open(
-        &source, &options, &qwen_source_projection, &failure, err);
+        &source, &options, projection, &failure, err);
     if (rc != YVEX_OK) {
         yvex_compilation_source_operations.close(source);
         return rc;
@@ -737,6 +771,18 @@ static int qwen_compilation_source_open(
         return YVEX_ERR_STATE;
     }
     return YVEX_OK;
+}
+
+static int qwen_compilation_source_open(yvex_family_compilation_source *out,
+    const yvex_compilation_runtime_binding_request *request, yvex_error *err)
+{
+    return qwen_compilation_source_open_projected(out, request, &qwen_source_projection, err);
+}
+
+static int qwen_small_compilation_source_open(yvex_family_compilation_source *out,
+    const yvex_compilation_runtime_binding_request *request, yvex_error *err)
+{
+    return qwen_compilation_source_open_projected(out, request, &qwen_small_source_projection, err);
 }
 
 static void qwen_compilation_source_close(void *owner)
@@ -816,6 +862,47 @@ static int qwen_speculation_policy(
         return 0;
     memset(out, 0, sizeof(*out));
     return 1;
+}
+
+static int qwen_small_logits_policy(yvex_logits_family_policy *out)
+{
+    if (!out) return 0;
+    *out = (yvex_logits_family_policy){.schema_version = YVEX_RUNTIME_LOGITS_SCHEMA_V1,
+                                     .tied_output_head = 1};
+    return 1;
+}
+
+static int qwen_small_artifact_admit(const yvex_artifact *artifact,
+    yvex_complete_artifact_admission *out, yvex_artifact_admission_failure *failure, yvex_error *err)
+{
+    static const yvex_complete_artifact_admission catalog = {
+        .artifact_class = YVEX_ARTIFACT_CLASS_COMPLETE_YVEX,
+        .metadata_count = 45ull, .tensor_count = 320ull,
+        .payload_bytes = 1504791232ull, .file_bytes = 1528566432ull,
+        .source_snapshot_identity = 0x38fa2136288d1564ull,
+        .mapping_identity = QWEN_SMALL_MAPPING_IDENTITY,
+        .payload_identity =
+            "fe569d1eef5367a22685c8d730c35364ace77fea5cd981dfcda7f8e8cf6acdd2",
+        .transform_identity = QWEN_SMALL_TRANSFORM_IDENTITY,
+        .profile_identity =
+            "ba86df2b7b2d716095da083b3f43da734f9c6c21290b32f679da50eb46c3c990",
+        .profile_name = QWEN_SMALL_PRESET,
+        .quant_execution_identity =
+            "10c69672d2405da43a3eba0dcab7f7faf0e523fe5ed144fdfdeb2c60e7ecc369",
+        .payload_plan_identity =
+            "f3a286c2a3e169e4f79d85dfd1183a09adc02bf4049e8e8ff481d196ad8de410",
+        .payload_byte_identity =
+            "09c387948661ca50ffa0c2cbfb7e4d02b35126493a84c8adac53b3bac81edf60",
+        .writer_plan_identity =
+            "c20f9a0cedc8e6d1c6e80822a00cd90589159d0ebf2d992487d14f72901b093d",
+        .artifact_identity =
+            "0c5776eb6b1f2abb3a35f2324aabc4d8b7693856650b799e88161f7167feded6",
+        .official_reader_revision = YVEX_GGUF_OFFICIAL_READER_REVISION,
+        .tokenizer_complete = 1, .native_reader_accepted = 1,
+        .official_reader_accepted = 1, .payload_integrity_accepted = 1,
+        .materialization_input_ready = 1};
+    yvex_artifact_catalog_contract contract = {.catalog = &catalog};
+    return yvex_artifact_admit_catalog(artifact, NULL, NULL, &contract, out, failure, err);
 }
 
 static int qwen_artifact_admit(
@@ -920,12 +1007,38 @@ static int qwen_runtime_descriptor(
 static const yvex_quant_artifact_lowering_rule qwen_quant_lowering_rules[] = {
     {YVEX_ARTIFACT_LOWERING_TRANSFORM_DIRECT,
      YVEX_TRANSFORM_OP_IDENTITY,
-     YVEX_GGUF_QTYPE_BF16, YVEX_GGUF_QTYPE_BF16, 0}};
+     YVEX_GGUF_QTYPE_BF16, YVEX_GGUF_QTYPE_BF16, 0, YVEX_NATIVE_DTYPE_UNKNOWN}};
 
 static const yvex_quant_artifact_lowering_policy qwen_quant_lowering_policy = {
     QWEN_SOURCE_FAITHFUL_PRESET, QWEN_SOURCE_FAITHFUL_PRESET,
     qwen_quant_lowering_rules,
     sizeof(qwen_quant_lowering_rules) / sizeof(qwen_quant_lowering_rules[0])};
+
+static const yvex_quant_artifact_lowering_rule qwen_small_quant_rules[] = {
+    {YVEX_ARTIFACT_LOWERING_TRANSFORM_DIRECT, YVEX_TRANSFORM_OP_IDENTITY,
+     YVEX_GGUF_QTYPE_BF16, YVEX_GGUF_QTYPE_BF16, 0, YVEX_NATIVE_DTYPE_BF16},
+    {YVEX_ARTIFACT_LOWERING_TRANSFORM_DIRECT, YVEX_TRANSFORM_OP_IDENTITY,
+     YVEX_GGUF_QTYPE_F32, YVEX_GGUF_QTYPE_F32, 0, YVEX_NATIVE_DTYPE_F32}};
+static const yvex_quant_artifact_lowering_policy qwen_small_quant_lowering = {
+    QWEN_SMALL_PRESET, QWEN_SMALL_PRESET, qwen_small_quant_rules,
+    sizeof(qwen_small_quant_rules) / sizeof(qwen_small_quant_rules[0])};
+
+static int qwen_small_quant_default(yvex_quant_plan **out, const yvex_transform_ir *transform,
+    const yvex_transform_binding *binding, const void *lowering, yvex_error *err)
+{
+    yvex_quant_failure failure = {0};
+    return yvex_quant_plan_build_artifact_lowering_profile(out, transform, binding, lowering,
+        &qwen_small_quant_lowering, YVEX_QUANT_PROFILE_SOURCE_FAITHFUL, NULL, &failure, err);
+}
+
+static int qwen_small_quant_policy(yvex_quant_plan **out, const yvex_transform_ir *transform,
+    const yvex_transform_binding *binding, const void *lowering, const yvex_quant_policy *policy,
+    const char *imatrix_identity, yvex_error *err)
+{
+    yvex_quant_failure failure = {0};
+    return yvex_quant_plan_build_artifact_lowering_policy(out, transform, binding, lowering,
+        &qwen_small_quant_lowering, policy, imatrix_identity, NULL, &failure, err);
+}
 
 static int qwen_quant_default(
     yvex_quant_plan **out, const yvex_transform_ir *transform,
@@ -987,7 +1100,7 @@ static int qwen_preset_open(
     yvex_quant_policy_rule rule;
     yvex_quant_policy_definition definition;
 
-    if (!out || !name || strcmp(name, QWEN_SOURCE_FAITHFUL_PRESET) != 0) {
+    if (!out || !name || (strcmp(name, QWEN_SOURCE_FAITHFUL_PRESET) && strcmp(name, QWEN_SMALL_PRESET))) {
         if (out) *out = NULL;
         yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "quant_policy_preset",
                         "unknown Qwen quantization preset: %s",
@@ -995,8 +1108,9 @@ static int qwen_preset_open(
         return YVEX_ERR_UNSUPPORTED;
     }
     qwen_preset_rule(&rule);
+    if (!strcmp(name, QWEN_SMALL_PRESET)) rule.label = "preserve pinned Qwen BF16/F32 source representation";
     definition = (yvex_quant_policy_definition){
-        QWEN_SOURCE_FAITHFUL_PRESET, YVEX_QWEN3_8_27B_TARGET_ID,
+        name, !strcmp(name, QWEN_SMALL_PRESET) ? YVEX_SOURCE_QWEN3_5_08B_TARGET_ID : YVEX_QWEN3_8_27B_TARGET_ID,
         "built-in-preset", &rule, 1ull};
     return yvex_quant_policy_create_definition(out, &definition, err);
 }
@@ -1008,6 +1122,19 @@ static const yvex_quant_preset_catalog *qwen_quant_presets(void)
         YVEX_QWEN3_8_27B_TARGET_ID,
         qwen_preset_count, qwen_preset_name, qwen_preset_open};
 
+    return &catalog;
+}
+
+static const char *qwen_small_preset_name(unsigned long long index)
+{
+    return index == 0ull ? QWEN_SMALL_PRESET : NULL;
+}
+
+static const yvex_quant_preset_catalog *qwen_small_quant_presets(void)
+{
+    static const yvex_quant_preset_catalog catalog = {
+        YVEX_QUANT_PRESET_CATALOG_SCHEMA_V1, YVEX_SOURCE_QWEN3_5_08B_TARGET_ID,
+        qwen_preset_count, qwen_small_preset_name, qwen_preset_open};
     return &catalog;
 }
 
@@ -1089,8 +1216,65 @@ static const yvex_family_descriptor yvex_graph_family_descriptor_qwen3_5 = {
     .execution = qwen_execution_binding,
     .quant_presets = qwen_quant_presets};
 
+static int qwen_small_tokenizer_policy(yvex_tokenizer_family_policy *out, yvex_error *err)
+{
+    /* This milestone admits raw completion only. Conversation rendering is
+     * refused until this checkpoint's distinct template is qualified. */
+    static const yvex_tokenizer_direct_policy policy = {
+        .family_adapter_id = YVEX_QWEN3_5_ADAPTER_ID, .family_adapter_version = YVEX_QWEN3_5_ADAPTER_VERSION,
+        .tokenizer_kind = YVEX_TOKENIZER_KIND_GGML_GPT2, .model_policy = YVEX_TOKENIZER_MODEL_BPE_BYTELEVEL,
+        .prompt_policy = YVEX_TOKENIZER_PROMPT_VERBATIM,
+        .vocabulary_size = 248070ull, .base_vocabulary_size = 248044ull, .merge_count = 247587ull,
+        .added_token_count = 26ull, .special_token_count = 14ull,
+        .eos_token_id = 248046u, .pad_token_id = 248044u, .eos_present = 1, .pad_present = 1,
+        .architecture = YVEX_QWEN3_5_FAMILY_KEY, .tokenizer_model = "gpt2", .tokenizer_pre = "qwen2",
+        .tokenizer_json_identity = "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+        .tokenizer_config_identity = "49e2b6e395f959f077f1e992b338919c0d4a9732fc6e613995e06557f843500c",
+        .prompt_name = "verbatim-qwen3.5-0.8b-v1"};
+    return yvex_tokenizer_family_policy_compile_direct(out, &policy, err) == YVEX_OK;
+}
+
+static const yvex_family_binding_pipeline qwen_small_binding_pipeline = {
+    .schema_version = YVEX_FAMILY_BINDING_PIPELINE_SCHEMA_V1,
+    .source_open = qwen_small_compilation_source_open, .source_close = qwen_compilation_source_close,
+    .artifact_admit = qwen_small_artifact_admit, .semantic_model_build = qwen_semantic_model_build,
+    .runtime_descriptor_build = qwen_runtime_descriptor,
+    .quant_plan_default = qwen_small_quant_default, .quant_plan_policy = qwen_small_quant_policy,
+    .tokenizer_architecture = YVEX_QWEN3_5_FAMILY_KEY, .tokenizer_model = "gpt2", .tokenizer_pre = "qwen2"};
+static const yvex_family_compiler_adapter qwen_small_compiler = {
+    .schema_version = YVEX_FAMILY_COMPILER_SCHEMA_V2,
+    .adapter_id = YVEX_QWEN3_5_ADAPTER_ID, .adapter_version = YVEX_QWEN3_5_ADAPTER_VERSION,
+    .target_id = YVEX_SOURCE_QWEN3_5_08B_TARGET_ID, .family = YVEX_QWEN3_5_FAMILY_KEY,
+    .logical_transform_identity = QWEN_SMALL_TRANSFORM_IDENTITY,
+    .graph = qwen_graph_compile, .operator_graph_build = yvex_operator_graph_ir_build_decoder,
+    .execution_capabilities = qwen_execution_capabilities, .transformer_policy = qwen_transformer_policy,
+    .logits_policy = qwen_small_logits_policy, .speculation_policy = qwen_speculation_policy,
+    .tokenizer_policy = qwen_small_tokenizer_policy, .physical_variant = yvex_graph_physical_variant_api_get,
+    .binding_pipeline = &qwen_small_binding_pipeline, .binding_compile = yvex_family_binding_compile};
+static const yvex_model_deployment_defaults qwen_small_deployment = {
+    .schema_version = YVEX_MODEL_DEPLOYMENT_DEFAULTS_SCHEMA_CURRENT,
+    .logical_family = YVEX_QWEN3_5_FAMILY_KEY, .logical_model = YVEX_SOURCE_QWEN3_5_08B_TARGET_ID,
+    .quant_preset = QWEN_SMALL_PRESET, .backend = "cpu", .engine_kind = "text", .execution_strategy = "target-only"};
+static const yvex_graph_execution_binding *qwen_small_execution_binding(void)
+{
+    static const yvex_graph_execution_binding execution = {
+        .schema_version = YVEX_GRAPH_EXECUTION_BINDING_SCHEMA_V1,
+        .adapter_id = YVEX_QWEN3_5_ADAPTER_ID, .adapter_version = YVEX_QWEN3_5_ADAPTER_VERSION,
+        .target_id = YVEX_SOURCE_QWEN3_5_08B_TARGET_ID, .family_name = YVEX_QWEN3_5_FAMILY_KEY,
+        .logical_transform_identity = QWEN_SMALL_TRANSFORM_IDENTITY, .operator_family_key = "qwen",
+        .operator_artifact_filename = "qwen3.5-0.8b-source-faithful.gguf",
+        .source_manifest_filename = "qwen3.5-0.8b.source-manifest.json",
+        .deployment_defaults = &qwen_small_deployment, .compiler = &qwen_small_compiler,
+        .api = &yvex_attention_execution_api};
+    return &execution;
+}
+static const yvex_family_descriptor qwen_small_descriptor = {
+    .schema_version = YVEX_FAMILY_DESCRIPTOR_SCHEMA_V1, .target_id = YVEX_SOURCE_QWEN3_5_08B_TARGET_ID,
+    .family = YVEX_QWEN3_5_FAMILY_KEY, .tokenizer_architecture = YVEX_QWEN3_5_FAMILY_KEY,
+    .tokenizer_pre = "qwen2", .execution = qwen_small_execution_binding, .quant_presets = qwen_small_quant_presets};
+
 static const yvex_family_descriptor *const qwen3_5_registered_targets[] = {
-    &yvex_graph_family_descriptor_qwen3_5};
+    &yvex_graph_family_descriptor_qwen3_5, &qwen_small_descriptor};
 
 const yvex_family_target_catalog yvex_graph_family_catalog_qwen3_5 = {
     .schema_version = YVEX_FAMILY_TARGET_CATALOG_SCHEMA_V1,

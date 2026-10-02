@@ -177,6 +177,10 @@ static int logits_program_plan_project(
                : NULL;
     yvex_runtime_logits_plan_summary *plan = &context->plan.summary;
     unsigned long long blocks, row_bytes;
+    unsigned long long output_tensor_id;
+
+    if (yvex_runtime_compiled_output_tensor(context->model_view, &output_tensor_id, err) != YVEX_OK)
+        return yvex_error_code(err);
 
     if (!forward_summary || !output_summary || !binding_summary || !input ||
         !weight || !result || !linear || strcmp(output_summary->entry, "output") ||
@@ -197,7 +201,7 @@ static int logits_program_plan_project(
         strcmp(output_summary->execution_identity,
                forward_summary->execution_identity) ||
         !binding || binding->tensor_id != weight->tensor_id ||
-        binding->role != YVEX_TENSOR_ROLE_OUTPUT_HEAD ||
+        binding->tensor_id != output_tensor_id ||
         binding->scope != YVEX_TENSOR_SCOPE_GLOBAL ||
         binding->row_width != producer_hidden_width ||
         binding->row_count != producer_vocabulary_size ||
@@ -212,7 +216,8 @@ static int logits_program_plan_project(
             "compiled output program contradicts its authenticated binding");
 
     memset(plan, 0, sizeof(*plan));
-    plan->schema_version = YVEX_OUTPUT_HEAD_PLAN_SCHEMA_CURRENT;
+    plan->schema_version = context->model_view->compiled_binding->logits_policy.tied_output_head
+        ? YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V3 : YVEX_OUTPUT_HEAD_PLAN_SCHEMA_V2;
     plan->producer_kind = YVEX_EXECUTION_PLAN_DECODER;
     plan->family_adapter_id = binding_summary->family_adapter_id;
     plan->family_adapter_version = binding_summary->family_adapter_version;
@@ -225,7 +230,7 @@ static int logits_program_plan_project(
     plan->hidden_width = producer_hidden_width;
     plan->role = binding->role;
     plan->qtype = binding->qtype;
-    plan->separate_output_head = 1;
+    plan->separate_output_head = context->model_view->compiled_binding->logits_policy.separate_output_head;
     yvex_runtime_identity_copy(plan->artifact_identity,
                                binding_summary->artifact_identity);
     yvex_runtime_identity_copy(plan->materialization_identity,

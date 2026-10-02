@@ -11,6 +11,7 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/deployment.h>
 #include <yvex/internal/moe.h>
+#include <yvex/internal/stateful_attention.h>
 
 static int runtime_capacity_value(const char *text, unsigned long long *value)
 {
@@ -942,8 +943,8 @@ static int capacity_decoder_attention_workspace(
             .numeric_contract = YVEX_TRANSFORMER_ATTENTION_NUMERIC_EXACT_F32,
             .deterministic = 1};
         unsigned long long bytes;
-        int rc = operations->attention_workspace_required(
-            &requirement, &bytes, err);
+        int rc = yvex_runtime_stateful_attention_workspace_required(
+            backend, &requirement, &bytes, err);
         if (rc != YVEX_OK) return rc;
         if (bytes > *workspace) *workspace = bytes;
     }

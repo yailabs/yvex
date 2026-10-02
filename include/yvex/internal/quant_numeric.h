@@ -363,6 +363,7 @@ typedef struct {
     yvex_transform_operation_kind operation;
     unsigned int source_faithful_qtype, release_qtype;
     int profile_qtype_required;
+    yvex_native_dtype source_dtype; /* UNKNOWN matches any source dtype. */
 } yvex_quant_artifact_lowering_rule;
 typedef struct {
     const char *source_profile_name, *release_profile_name;

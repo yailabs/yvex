@@ -16,6 +16,7 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/runtime.h>
 #include <yvex/internal/runtime_operator.h>
+#include <yvex/internal/stateful_attention.h>
 
 #include "src/graph/private.h"
 #include "src/runtime/private.h"
@@ -2870,11 +2871,124 @@ static int test_session_committed_state_identity(
     return 0;
 }
 
+static int state_cancel_after_begin(void *context)
+{
+    int *checks = context;
+    return ++*checks >= 2;
+}
+
+static int test_cpu_stateful_attention(void)
+{
+    state_plan_fixture fixture;
+    test_state provider = {0};
+    yvex_runtime_state_residency *residency = NULL;
+    yvex_graph_attention_capacity_plan *capacity = NULL;
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *tensors[4] = {0};
+    yvex_attention_failure failure;
+    yvex_backend_memory_stats memory;
+    yvex_error err;
+    float host[8], actual[4], zeros[4] = {0};
+    unsigned long long positions[1], workspace;
+    int cancelled = 0;
+    state_plan_open(&fixture);
+    fixture.plan.layer_count = fixture.plan.summary.layer_count = 1u;
+    fixture.plan.summary.csa_layer_count = fixture.plan.summary.hca_layer_count = 0u;
+    fixture.layers[0].query_lora_rank = 0u;
+    fixture.layers[0].sliding_window = 8u;
+    yvex_graph_attention_capacity_request capacity_request = {
+        .scope = YVEX_ATTENTION_PROBE_SCOPE_FULL, .token_count = 4u, .execution_count = 1u};
+    YVEX_TEST_ASSERT(state_open(&provider, &fixture.plan, ULLONG_MAX, &failure, &err) == YVEX_OK &&
+        yvex_graph_attention_capacity_plan_build(&capacity, &fixture.plan, &capacity_request, &err) == YVEX_OK,
+        "one direct-K/V CPU state plan and provider open");
+    const yvex_graph_attention_capacity_layer *layer = yvex_graph_attention_capacity_plan_layer(capacity, 0u);
+    YVEX_TEST_ASSERT(layer && provider.prepare(provider.context, 0u, &layer->recipe, NULL,
+        &failure, &err) == YVEX_OK && yvex_backend_open_cpu(&backend, &err) == YVEX_OK &&
+        yvex_runtime_state_residency_prepare(&residency, backend, capacity, &provider,
+            0u, ULLONG_MAX, 0u, ULLONG_MAX, &err) == YVEX_OK, "common CPU residency borrows logical state");
+    for (unsigned int i = 0u; i < 4u; ++i) {
+        yvex_backend_tensor_desc desc = {.name = "stateful-cpu-fixture", .dtype = YVEX_DTYPE_F32,
+            .rank = 1u, .dims = {i == 1u || i == 2u ? 2u : 4u},
+            .bytes = (i == 1u || i == 2u ? 2u : 4u) * sizeof(float)};
+        YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, tensors + i, &err) == YVEX_OK &&
+            yvex_backend_tensor_write(backend, tensors[i], zeros, desc.bytes, &err) == YVEX_OK,
+            "bounded CPU projection storage");
+    }
+    yvex_runtime_stateful_attention_request request = {.backend = backend, .state = &provider,
+        .residency = residency, .layer = fixture.layers, .layer_ordinal = 0u,
+        .attention_plan_identity = fixture.plan.summary.attention_plan_identity,
+        .input_identity = fixture.plan.summary.attention_plan_identity, .token_count = 1u,
+        .query = tensors[0], .key = tensors[1], .value = tensors[2], .output = tensors[3],
+        .host_workspace = host, .host_workspace_values = 8u,
+        .host_positions = positions, .host_position_capacity = 1u,
+        .cancellation = {.requested = state_cancel_requested, .context = &cancelled}};
+    yvex_transformer_attention_requirement requirement = {.query_tokens = 1u, .key_value_tokens = 4u,
+        .query_start = 3u, .query_heads = 2u, .key_value_heads = 1u, .head_dimension = 2u,
+        .query_dtype = YVEX_DTYPE_F32, .key_dtype = YVEX_DTYPE_F32,
+        .value_dtype = YVEX_DTYPE_F32, .output_dtype = YVEX_DTYPE_F32,
+        .layout = YVEX_TRANSFORMER_ATTENTION_LAYOUT_TOKEN_HEAD_DIM,
+        .mask = YVEX_TRANSFORMER_ATTENTION_MASK_CAUSAL,
+        .numeric_contract = YVEX_TRANSFORMER_ATTENTION_NUMERIC_EXACT_F32, .deterministic = 1};
+    YVEX_TEST_ASSERT(yvex_runtime_stateful_attention_workspace_required(backend, &requirement,
+        &workspace, &err) == YVEX_OK && workspace == 80u,
+        "capacity includes 64 prefix bytes and 16 score bytes, not another state bank");
+    for (unsigned int token = 0u; token < 2u; ++token) {
+        yvex_runtime_stateful_attention_result result;
+        float values[] = {2.0f + 4.0f * token, 4.0f + 4.0f * token};
+        request.token_position = token;
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, tensors[2], values, sizeof(values), &err) == YVEX_OK &&
+            yvex_runtime_stateful_attention_execute(&request, &result, &failure, &err) == YVEX_OK &&
+            result.completed && !result.h2d_bytes && !result.d2h_bytes && !result.d2d_bytes &&
+            result.attention.temporary_bytes == (token + 1u) * 20u &&
+            yvex_backend_tensor_read(backend, tensors[3], actual, sizeof(actual), &err) == YVEX_OK,
+            "CPU exact attention stages its host delta and releases temporary prefix storage");
+        for (unsigned int lane = 0u; lane < 4u; ++lane)
+            YVEX_TEST_ASSERT(actual[lane] == (lane % 2u ? 4.0f : 2.0f) + token * 2.0f,
+                "independent causal uniform-attention oracle exact across two commits");
+        YVEX_TEST_ASSERT(yvex_runtime_state_residency_prepare_commit(residency, &err) == YVEX_OK &&
+            provider.prepare_commit(provider.context, &failure, &err) == YVEX_OK, "state owners prepare atomic commit");
+        yvex_runtime_state_residency_publish_commit(residency);
+        provider.publish_commit(provider.context);
+    }
+    yvex_runtime_stateful_attention_result result;
+    float committed[8];
+    const yvex_attention_history_view *view = state_view(&provider, 0u, YVEX_ATTENTION_STATE_VIEW_COMMITTED);
+    YVEX_TEST_ASSERT(view && view->token_count == 2u && view->local_kv_stride == 4u,
+        "committed prefix has two exact K/V rows");
+    memcpy(committed, view->local_kv, sizeof(committed));
+    request.token_position = 2u;
+    int cancel_checks = 0;
+    request.cancellation = (yvex_attention_cancellation){
+        .requested = state_cancel_after_begin, .context = &cancel_checks};
+    YVEX_TEST_ASSERT(yvex_runtime_stateful_attention_execute(&request, &result, &failure, &err) == YVEX_ERR_CANCELLED &&
+        !result.completed, "cancellation publishes no stateful result");
+    yvex_runtime_state_residency_abort(residency);
+    YVEX_TEST_ASSERT(provider.abort(provider.context, &failure, &err) == YVEX_OK,
+        "cancelled provider transaction aborts");
+    view = state_view(&provider, 0u, YVEX_ATTENTION_STATE_VIEW_COMMITTED);
+    YVEX_TEST_ASSERT(view && view->token_count == 2u &&
+        !memcmp(committed, view->local_kv, sizeof(committed)),
+        "abort preserves every byte of the committed K/V prefix");
+    YVEX_TEST_ASSERT(yvex_runtime_state_residency_reset(residency, &err) == YVEX_OK &&
+        provider.reset(provider.context, &failure, &err) == YVEX_OK &&
+        state_view(&provider, 0u, YVEX_ATTENTION_STATE_VIEW_COMMITTED)->token_count == 0u,
+        "reset clears CPU continuity through common owners");
+    YVEX_TEST_ASSERT(yvex_runtime_state_residency_close(&residency, &err) == YVEX_OK && state_close(&provider),
+        "CPU state owners close");
+    yvex_graph_attention_capacity_plan_close(&capacity);
+    for (unsigned int i = 0u; i < 4u; ++i)
+        YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, tensors + i, &err) == YVEX_OK, "projection cleanup");
+    YVEX_TEST_ASSERT(yvex_backend_get_memory_stats(backend, &memory, &err) == YVEX_OK && !memory.allocated_bytes &&
+        yvex_backend_close_checked(&backend, &err) == YVEX_OK, "temporary CPU attention allocations fully released");
+    return 0;
+}
+
 int yvex_test_runtime_state(void)
 {
     state_plan_fixture fixture;
 
     state_plan_open(&fixture);
+    if (test_cpu_stateful_attention() != 0) return 1;
     if (test_state_recipe_identity(&fixture) != 0) return 1;
     if (test_activation_state_identity_rows() != 0) return 1;
     if (test_direct_kv_state_width(&fixture) != 0) return 1;

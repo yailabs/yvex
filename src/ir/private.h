@@ -33,6 +33,6 @@ int yvex_ir_refuse(yvex_error *, yvex_status, const char *);
 int yvex_ir_name_valid(const char *, int qualified);
 int yvex_ir_type_valid(const yvex_ir_module *, const yvex_ir_type *);
 const yvex_ir_operation_definition *yvex_ir_definition_find(
-    const yvex_ir_module *, const char *);
+    const yvex_ir_module *, const char *, uint32_t);
 
 #endif

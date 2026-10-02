@@ -8,6 +8,7 @@
 #include <yvex/api.h>
 #include <yvex/internal/backend.h>
 #include <yvex/internal/neural_operations.h>
+#include <yvex/internal/gguf.h>
 
 #include "tests/test.h"
 
@@ -50,7 +51,8 @@ static int test_open_and_unsupported(void)
     YVEX_TEST_ASSERT(neural && neural->final && neural->feature_mean && neural->residual_post && !neural->initial &&
                          neural->attention_execute && neural->normalization_f32 && neural->linear_bias_f32 &&
                          !neural->gated_delta_execute &&
-                         !neural->linear_compile,
+                         neural->linear_compile && neural->linear_execute &&
+                         neural->linear_summary && neural->linear_release,
                      "CPU advertises admitted neural primitives without claiming unrelated operations");
     YVEX_TEST_ASSERT(yvex_backend_bandwidth_probe(backend, &bandwidth, &err) ==
                          YVEX_ERR_UNSUPPORTED && !bandwidth.schema_version,
@@ -285,6 +287,112 @@ static int test_dense_encoder_primitives(void)
     return 0;
 }
 
+static int test_bf16_linear_executable(void)
+{
+    yvex_backend *backend = NULL, *foreign = NULL;
+    yvex_device_tensor *input = NULL, *output = NULL;
+    yvex_transformer_linear_executable *executable = NULL;
+    yvex_transformer_linear_executable_summary summary;
+    yvex_backend_tensor_desc desc;
+    yvex_backend_operation_facts facts;
+    yvex_backend_memory_stats memory;
+    yvex_error err;
+    /* Little-endian BF16 [1,2;-3,0.5]. Expected products are independent
+     * integer/half arithmetic, with exactly representable F32/BF16 results. */
+    const unsigned char encoded[] = {0x80,0x3f, 0x00,0x40, 0x40,0xc0, 0x00,0x3f};
+    const float values[] = {2,4,8,-2}, expected[] = {10,-4,4,-25};
+    float actual[4];
+    yvex_component_encoded_weight weight = {.encoded = encoded, .encoded_bytes = sizeof(encoded),
+        .row_count = 2u, .row_width = 2u, .row_bytes = 4u, .qtype = YVEX_GGUF_QTYPE_BF16};
+    yvex_transformer_linear_requirement requirement = {
+        .operation = YVEX_TRANSFORMER_LINEAR_OPERATION_PROJECTION,
+        .publication_contract = YVEX_TRANSFORMER_LINEAR_NUMERIC_BF16_F32_ACCUMULATION,
+        .source_dtype = YVEX_DTYPE_BF16, .input_dtype = YVEX_DTYPE_F32,
+        .accumulation_dtype = YVEX_DTYPE_F32, .output_dtype = YVEX_DTYPE_F32,
+        .publication_dtype = YVEX_DTYPE_F32, .input_width = 2u, .output_width = 2u};
+    yvex_transformer_linear_compile_request compile = {.semantic_domain = "test.bounded.linear",
+        .requirement = &requirement, .input_rows = 2u};
+    YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK &&
+        yvex_backend_open_cpu(&foreign, &err) == YVEX_OK, "independent CPU owners open");
+    const yvex_backend_transformer_operations *ops = yvex_backend_transformer_operations_get(backend);
+    make_desc(&desc, "linear-input", 2u, 2u);
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &input, &err) == YVEX_OK &&
+        yvex_backend_tensor_alloc(backend, &desc, &output, &err) == YVEX_OK &&
+        yvex_backend_tensor_write(backend, input, values, sizeof(values), &err) == YVEX_OK,
+        "linear execution owns bounded initialized tensors");
+    for (unsigned int publication = 0u; publication < 2u; ++publication) {
+        requirement.publication_dtype = publication ? YVEX_DTYPE_BF16 : YVEX_DTYPE_F32;
+        YVEX_TEST_ASSERT(ops->linear_compile(backend, &compile, &executable, &summary, &err) == YVEX_OK &&
+            summary.exact && !summary.accelerated_matrix && !summary.workspace_bytes &&
+            !summary.prepared_weight_bytes && summary.plan_host_bytes && !summary.use_count,
+            "CPU linear owns a descriptor and borrows weights without acceleration claims");
+        yvex_transformer_linear_execution_request request = {
+            .executable = executable, .weight = &weight, .input = input, .output = output};
+        YVEX_TEST_ASSERT(ops->linear_execute(backend, &request, &facts, &err) == YVEX_OK &&
+            yvex_backend_tensor_read(backend, output, actual, sizeof(actual), &err) == YVEX_OK &&
+            !memcmp(actual, expected, sizeof(expected)) && !facts.kernel_launches &&
+            facts.active_weight_bytes == sizeof(encoded), "analytic matrix products match exactly");
+        YVEX_TEST_ASSERT(ops->linear_execute(foreign, &request, &facts, &err) != YVEX_OK &&
+            !memcmp(output->data, expected, sizeof(expected)), "foreign executable ownership refuses");
+        weight.encoded_bytes--;
+        YVEX_TEST_ASSERT(ops->linear_execute(backend, &request, &facts, &err) != YVEX_OK &&
+            !memcmp(output->data, expected, sizeof(expected)), "truncated weights refuse before publication");
+        weight.encoded_bytes++;
+        request.output = input;
+        YVEX_TEST_ASSERT(ops->linear_execute(backend, &request, &facts, &err) != YVEX_OK &&
+            !memcmp(input->data, values, sizeof(values)), "aliased linear publication refuses");
+        YVEX_TEST_ASSERT(ops->linear_summary(executable, &summary, &err) == YVEX_OK &&
+            summary.use_count == 1u, "refused invocations do not increment completed use count");
+        YVEX_TEST_ASSERT(ops->linear_release(foreign, &executable, &err) != YVEX_OK && executable &&
+            ops->linear_release(backend, &executable, &err) == YVEX_OK && !executable,
+            "foreign release retains owner and correct release discharges it");
+    }
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &input, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &output, &err) == YVEX_OK, "matrix fixture releases before precision probes");
+    make_desc(&desc, "precision-input", 1u, 3u);
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &input, &err) == YVEX_OK, "precision input");
+    make_desc(&desc, "precision-output", 1u, 1u);
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &desc, &output, &err) == YVEX_OK, "precision output");
+    const unsigned char ones[] = {0x80,0x3f, 0x80,0x3f, 0x80,0x3f};
+    weight = (yvex_component_encoded_weight){.encoded = ones, .encoded_bytes = sizeof(ones),
+        .row_count = 1u, .row_width = 3u, .row_bytes = sizeof(ones), .qtype = YVEX_GGUF_QTYPE_BF16};
+    requirement.input_width = 3u; requirement.output_width = 1u; compile.input_rows = 1u;
+    for (unsigned int probe = 0u; probe < 3u; ++probe) {
+        float precise[] = {probe ? 1.00390625f : 16777216.0f, probe ? 0.0f : 1.0f,
+                           probe ? 0.0f : -16777216.0f};
+        float expected_scalar = probe == 0u ? 0.0f : probe == 1u ? 1.0f : 1.00390625f;
+        requirement.publication_dtype = probe == 1u ? YVEX_DTYPE_BF16 : YVEX_DTYPE_F32;
+        yvex_transformer_linear_execution_request request = {.weight = &weight, .input = input, .output = output};
+        YVEX_TEST_ASSERT(ops->linear_compile(backend, &compile, &executable, &summary, &err) == YVEX_OK &&
+            yvex_backend_tensor_write(backend, input, precise, sizeof(precise), &err) == YVEX_OK, "precision probe admits");
+        request.executable = executable;
+        YVEX_TEST_ASSERT(ops->linear_execute(backend, &request, &facts, &err) == YVEX_OK &&
+            yvex_backend_tensor_read(backend, output, actual, sizeof(float), &err) == YVEX_OK &&
+            actual[0] == expected_scalar, "ordered F32 cancellation and BF16 tie-to-even are independently distinguished");
+        precise[0] = NAN;
+        YVEX_TEST_ASSERT(yvex_backend_tensor_write(backend, input, precise, sizeof(precise), &err) == YVEX_OK &&
+            ops->linear_execute(backend, &request, &facts, &err) != YVEX_OK && !output->is_written,
+            "non-finite linear result remains unpublished");
+        YVEX_TEST_ASSERT(ops->linear_release(backend, &executable, &err) == YVEX_OK, "precision executable cleanup");
+    }
+    requirement.accumulation_dtype = YVEX_DTYPE_BF16;
+    YVEX_TEST_ASSERT(ops->linear_compile(backend, &compile, &executable, &summary, &err) != YVEX_OK &&
+        !executable && !summary.schema_version, "unsupported precision publishes no executable");
+    YVEX_TEST_ASSERT(yvex_backend_tensor_release(backend, &input, &err) == YVEX_OK &&
+        yvex_backend_tensor_release(backend, &output, &err) == YVEX_OK &&
+        yvex_backend_get_memory_stats(backend, &memory, &err) == YVEX_OK && !memory.allocated_bytes &&
+        yvex_backend_close_checked(&backend, &err) == YVEX_OK &&
+        yvex_backend_close_checked(&foreign, &err) == YVEX_OK, "linear resource owners release completely");
+    requirement.accumulation_dtype = YVEX_DTYPE_F32;
+    YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK &&
+        ops->linear_compile(backend, &compile, &executable, &summary, &err) == YVEX_OK &&
+        yvex_backend_close_checked(&backend, &err) == YVEX_ERR_STATE && backend && executable &&
+        ops->linear_release(backend, &executable, &err) == YVEX_OK &&
+        yvex_backend_close_checked(&backend, &err) == YVEX_OK && !backend,
+        "checked close retains a cleanup-only CPU owner until its executable is released");
+    return 0;
+}
+
 int yvex_test_backend_cpu(void)
 {
     if (test_open_and_unsupported() != 0) return 1;
@@ -292,5 +400,6 @@ int yvex_test_backend_cpu(void)
     if (test_memory_limit_and_invalid_args() != 0) return 1;
     if (test_attention_workspace() != 0) return 1;
     if (test_dense_encoder_primitives() != 0) return 1;
+    if (test_bf16_linear_executable() != 0) return 1;
     return 0;
 }

@@ -55,7 +55,7 @@ static void *ir_copy(const void *source, size_t count, size_t item)
 }
 
 const yvex_ir_operation_definition *yvex_ir_definition_find(
-    const yvex_ir_module *module, const char *name)
+    const yvex_ir_module *module, const char *name, uint32_t version)
 {
     size_t dialect, operation;
     if (!module || !yvex_ir_name_valid(name, 1)) return NULL;
@@ -63,7 +63,8 @@ const yvex_ir_operation_definition *yvex_ir_definition_find(
         for (operation = 0u; operation < module->dialects[dialect].count; ++operation) {
             const yvex_ir_operation_definition *definition =
                 &module->dialects[dialect].operations[operation];
-            if (strcmp(definition->name, name) == 0) return definition;
+            if (strcmp(definition->name, name) == 0 && definition->version == (version ? version : 1u))
+                return definition;
         }
     return NULL;
 }
@@ -77,7 +78,7 @@ static int ir_builtin_definition_valid(const yvex_ir_operation_definition *op)
     for (dialect = 0u; dialect < sizeof(builtins) / sizeof(builtins[0]); ++dialect)
         for (index = 0u; index < builtins[dialect]->count; ++index) {
             const yvex_ir_operation_definition *canonical = &builtins[dialect]->operations[index];
-            if (!strcmp(op->name, canonical->name)) return op == canonical;
+            if (!strcmp(op->name, canonical->name) && op->version == canonical->version) return op == canonical;
             const char *dot = strchr(canonical->name, '.');
             if (dot && !strncmp(op->name, canonical->name, (size_t)(dot - canonical->name) + 1u))
                 reserved_namespace = 1;
@@ -116,7 +117,8 @@ static int ir_dialects_valid(const yvex_ir_dialect *dialects, size_t count)
             }
             for (k = 0u; k <= i; ++k)
                 for (l = 0u; l < (k == i ? j : dialects[k].count); ++l)
-                    if (strcmp(op->name, dialects[k].operations[l].name) == 0) return 0;
+                    if (strcmp(op->name, dialects[k].operations[l].name) == 0 &&
+                        op->version == dialects[k].operations[l].version) return 0;
         }
     }
     return 1;
@@ -419,7 +421,7 @@ int yvex_ir_operation_add(yvex_ir_module *module, yvex_ir_id block,
     size_t index, bytes;
     if (out) *out = YVEX_IR_NONE;
     if (!module || module->sealed || !out || !request || block >= module->block_count ||
-        !(op.definition = yvex_ir_definition_find(module, request->operation)) ||
+        !(op.definition = yvex_ir_definition_find(module, request->operation, request->version)) ||
         request->operand_count < op.definition->minimum_operands ||
         request->operand_count > op.definition->maximum_operands ||
         request->result_count < op.definition->minimum_results ||

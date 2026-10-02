@@ -110,6 +110,7 @@ static const physical_rule physical_rules[] = {
     {"sequence.selective_ssd", "selective_ssd.cpu.f32state.v1",
      YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x7eu},
     {"sequence.gated_delta", "gated_delta.bf16.f32state.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0xf0u},
+    {"sequence.gated_delta", "gated_delta.mixed.f32state.v2", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0xf0u},
     {"attention.gated_causal", "gated_causal.bf16.v1", YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE, 0x18u}};
 
 static int physical_refuse(yvex_error *err, yvex_status status, const char *reason)
@@ -187,7 +188,8 @@ int yvex_program_physical_token_interface(const yvex_program_physical *p,
     }
     for (i = 0u; i < p->summary.step_count; ++i) {
         const yvex_program_physical_step *s = &p->steps[i];
-        view.recurrent_operations += !strcmp(s->implementation, "gated_delta.bf16.f32state.v1");
+        view.recurrent_operations += !strcmp(s->implementation, "gated_delta.bf16.f32state.v1") ||
+                                     !strcmp(s->implementation, "gated_delta.mixed.f32state.v2");
         view.recurrent_operations += !strcmp(s->implementation, "selective_ssd.cpu.f32state.v1");
         view.attention_operations += !strcmp(s->implementation, "gated_causal.bf16.v1");
         if (!strcmp(s->implementation, "embedding.bf16.v1") ||
@@ -226,6 +228,8 @@ static const physical_rule *physical_rule_select(const yvex_program_physical *p,
     const yvex_ir_operation *op, const yvex_ir_id *results, size_t result_count)
 {
     const char *semantic = op->definition->name;
+    if (!strcmp(semantic, "sequence.gated_delta") && op->definition->version == 2u)
+        return physical_rule_find("gated_delta.mixed.f32state.v2", 1);
     if (!strcmp(semantic, "nn.linear"))
         for (unsigned int i = 0u; i < op->attribute_count; ++i)
             if (!strcmp(op->attributes[i].name, "reduction") &&
@@ -267,6 +271,15 @@ static int physical_numeric_verify(const yvex_program_physical *p,
             return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
                 "operand storage class requires another physical implementation");
     if (!strcmp(s->implementation, "parameter.encoded.v1")) return YVEX_OK;
+    if (!strcmp(s->implementation, "gated_delta.mixed.f32state.v2")) {
+        for (i = 4u; i < 8u; ++i) {
+            unsigned int expected = i == 5u || i == 7u ? YVEX_GGUF_QTYPE_F32 : YVEX_GGUF_QTYPE_BF16;
+            if (p->values[s->operands[i]].qtype != expected)
+                return physical_refuse(err, YVEX_ERR_UNSUPPORTED,
+                    "mixed gated-delta requires exact BF16/F32 parameter storage");
+        }
+        return YVEX_OK; /* The versioned semantic verifier checks every result/state/type. */
+    }
     if (!strcmp(s->implementation, "selective_ssd.cpu.f32state.v1")) {
         for (i = 1u; i < 7u; ++i) {
             unsigned int qtype = p->values[s->operands[i]].qtype;
@@ -515,7 +528,8 @@ static int physical_state_lower(yvex_program_physical *p, yvex_error *err)
             p->sequence_count++;
             continue;
         }
-        if (strcmp(s->implementation, "gated_delta.bf16.f32state.v1")) continue;
+        if (strcmp(s->implementation, "gated_delta.bf16.f32state.v1") &&
+            strcmp(s->implementation, "gated_delta.mixed.f32state.v2")) continue;
         r.query_heads = r.key_heads = yvex_program_physical_attribute(s, "key_heads")->value.integer;
         r.value_heads = yvex_program_physical_attribute(s, "value_heads")->value.integer;
         r.key_head_dimension = yvex_program_physical_attribute(s, "key_dimension")->value.integer;
@@ -672,7 +686,8 @@ static int physical_steps_lower(yvex_program_physical *p, const yvex_ir_module *
             source->results, source->result_count) : NULL;
         yvex_program_physical_step *step = &p->steps[i];
         int parameter = rule && !strcmp(rule->semantic, "core.parameter");
-        if (!rule || op->definition->version != 1u ||
+        if (!rule || (op->definition->version != 1u &&
+            !(op->definition->version == 2u && !strcmp(rule->implementation, "gated_delta.mixed.f32state.v2"))) ||
             source->operand_count > YVEX_PROGRAM_OPERAND_CAP || source->result_count > YVEX_PROGRAM_RESULT_CAP ||
             (!parameter && op->attribute_count > YVEX_PROGRAM_ATTRIBUTE_CAP) ||
             yvex_ir_operation_effects(m, source->semantic_operation) != rule->effects)
@@ -789,6 +804,7 @@ static int physical_verify(yvex_program_physical *p, yvex_error *err)
             rc = physical_refuse(err, YVEX_ERR_FORMAT, "physical operation/effects are not admitted");
         if (rc != YVEX_OK) break;
         r.operation = rule->semantic;
+        r.version = !strcmp(rule->implementation, "gated_delta.mixed.f32state.v2") ? 2u : 1u;
         for (j = 0u; rc == YVEX_OK && j < step->operand_count; ++j) {
             if (step->operands[j] >= defined)
                 rc = physical_refuse(err, YVEX_ERR_FORMAT, "physical operand has no preceding definition");

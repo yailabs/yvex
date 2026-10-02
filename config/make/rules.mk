@@ -348,12 +348,13 @@ $(OFFICIAL_GGUF_CHECKER): tests/external/ggml_gguf_check.cpp
 	cmake -S "$(PINNED_GGML_ROOT)" -B "$(PINNED_GGML_BUILD)" \
 		-DGGML_BUILD_TESTS=OFF -DGGML_BUILD_EXAMPLES=OFF \
 		-DGGML_BUILD_TOOLS=OFF -DGGML_BUILD_SERVER=OFF \
-		-DGGML_CUDA=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
+		-DGGML_CUDA=OFF -DGGML_METAL=OFF -DGGML_OPENMP=OFF \
+		-DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
 	cmake --build "$(PINNED_GGML_BUILD)" -j4
 	c++ -std=c++17 -Wall -Wextra -pedantic \
 		-I"$(PINNED_GGML_ROOT)/include" $< \
 		"$(PINNED_GGML_BUILD)/src/libggml-base.a" \
-		-fopenmp -ldl -pthread -lm -o $@
+		$(if $(filter Darwin,$(YVEX_HOST_OS)),,-ldl) -pthread -lm -o $@
 
 $(CUDA_TEST_RUNNER): $(CUDA_TEST_MAIN_OBJ) $(CUDA_TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)

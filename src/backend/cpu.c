@@ -17,6 +17,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct {
+    unsigned long long linear_executables;
+} cpu_context;
+
 static int cpu_tensor_alloc(yvex_backend *, const yvex_backend_tensor_desc *,
                                  yvex_device_tensor **, yvex_error *);
 static int cpu_tensor_free(yvex_backend *, yvex_device_tensor *, yvex_error *);
@@ -874,10 +878,186 @@ static int cpu_gated_residual_bf16(yvex_backend *backend, const yvex_device_tens
         rows, width, table_rows, parameters, gate, 0u, facts, err);
 }
 
+/* A CPU executable owns only a checked descriptor. It borrows exact encoded
+ * weights for each invocation and accumulates BF16 products in F32. */
+struct yvex_transformer_linear_executable {
+    yvex_backend *owner;
+    yvex_transformer_linear_requirement requirement;
+    yvex_transformer_linear_executable_summary summary;
+};
+
+static int cpu_linear_compile(yvex_backend *backend,
+    const yvex_transformer_linear_compile_request *r,
+    yvex_transformer_linear_executable **out,
+    yvex_transformer_linear_executable_summary *summary, yvex_error *err)
+{
+    yvex_sha256 hash;
+    unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
+    unsigned long long input_values, output_values;
+    cpu_context *context = backend ? backend->impl : NULL;
+    if (out) *out = NULL;
+    if (summary) memset(summary, 0, sizeof(*summary));
+    if (!out || !summary || !context || yvex_backend_kind_of(backend) != YVEX_BACKEND_KIND_CPU ||
+        yvex_backend_status_of(backend) != YVEX_BACKEND_STATUS_READY || context->linear_executables == ULLONG_MAX ||
+        !r || !r->semantic_domain || !r->semantic_domain[0] || !r->input_rows ||
+        yvex_transformer_linear_requirement_validate(r->requirement, err) != YVEX_OK ||
+        r->requirement->publication_contract != YVEX_TRANSFORMER_LINEAR_NUMERIC_BF16_F32_ACCUMULATION ||
+        !yvex_core_u64_mul(r->input_rows, r->requirement->input_width, &input_values) ||
+        !yvex_core_u64_mul(r->input_rows, r->requirement->output_width, &output_values) ||
+        input_values > SIZE_MAX / sizeof(float) || output_values > SIZE_MAX / sizeof(float))
+        return cpu_neural_bounds(err);
+    yvex_transformer_linear_executable *p = calloc(1u, sizeof(*p));
+    if (!p) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "cpu.linear", "linear descriptor allocation failed");
+        return YVEX_ERR_NOMEM;
+    }
+    p->owner = backend; p->requirement = *r->requirement;
+    p->summary = (yvex_transformer_linear_executable_summary){
+        .schema_version = YVEX_TRANSFORMER_LINEAR_EXECUTABLE_SCHEMA_V1,
+        .input_rows = r->input_rows, .plan_host_bytes = sizeof(*p), .exact = 1};
+    yvex_sha256_init(&hash);
+    unsigned long long fields[] = {r->input_rows, p->requirement.operation,
+        p->requirement.publication_contract, p->requirement.source_dtype,
+        p->requirement.input_dtype, p->requirement.accumulation_dtype,
+        p->requirement.output_dtype, p->requirement.publication_dtype,
+        p->requirement.input_width, p->requirement.output_width, (unsigned int)p->requirement.bias};
+    int valid = yvex_sha256_update_text(&hash, "yvex.cpu.linear.bf16.f32acc.v1") &&
+        yvex_sha256_update_text(&hash, r->semantic_domain);
+    for (size_t i = 0u; valid && i < sizeof(fields) / sizeof(fields[0]); ++i)
+        valid = yvex_sha256_update_u64(&hash, fields[i]);
+    if (!valid || !yvex_sha256_final(&hash, digest)) { free(p); return cpu_neural_bounds(err); }
+    yvex_sha256_hex(digest, p->summary.identity);
+    context->linear_executables++;
+    *summary = p->summary; *out = p;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+static int cpu_linear_execute(yvex_backend *backend,
+    const yvex_transformer_linear_execution_request *r,
+    yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_transformer_linear_executable *p = r ? r->executable : NULL;
+    const yvex_component_encoded_weight *w = r ? r->weight : NULL;
+    unsigned long long row_bytes, bytes, sizes[2];
+    if (!p || p->owner != backend || yvex_backend_status_of(backend) != YVEX_BACKEND_STATUS_READY ||
+        !w || !w->encoded || w->qtype != YVEX_GGUF_QTYPE_BF16 ||
+        w->row_width != p->requirement.input_width || w->row_count != p->requirement.output_width ||
+        !yvex_core_u64_mul(w->row_width, 2u, &row_bytes) || w->row_bytes != row_bytes ||
+        !yvex_core_u64_mul(row_bytes, w->row_count, &bytes) || bytes != w->encoded_bytes || bytes > SIZE_MAX ||
+        !yvex_core_u64_mul(p->summary.input_rows, w->row_width, sizes) ||
+        !yvex_core_u64_mul(p->summary.input_rows, w->row_count, sizes + 1u))
+        return cpu_neural_bounds(err);
+    int rc = cpu_neural_admit(backend, &r->input, sizes, 1u, &r->output, sizes + 1u, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    const float *x = (const float *)r->input->data;
+    float *y = (float *)r->output->data;
+    for (unsigned long long row = 0u; row < p->summary.input_rows; ++row)
+        for (unsigned long long column = 0u; column < w->row_count; ++column) {
+            const unsigned char *encoded = w->encoded + column * row_bytes;
+            float sum = 0.0f;
+            for (unsigned long long lane = 0u; lane < w->row_width; ++lane) {
+                unsigned short bits = (unsigned short)encoded[2u * lane] |
+                    (unsigned short)((unsigned short)encoded[2u * lane + 1u] << 8u);
+                sum += yvex_quant_bf16_decode(bits) * x[row * w->row_width + lane];
+            }
+            y[row * w->row_count + column] = p->requirement.publication_dtype == YVEX_DTYPE_BF16
+                ? yvex_quant_bf16_decode(yvex_quant_bf16_encode(sum)) : sum;
+        }
+    rc = cpu_neural_publish(&r->output, 1u, err);
+    if (rc == YVEX_OK) {
+        r->executable->summary.use_count++;
+        facts->active_weight_bytes = bytes;
+    }
+    return rc;
+}
+
+static int cpu_linear_summary(const yvex_transformer_linear_executable *p,
+    yvex_transformer_linear_executable_summary *out, yvex_error *err)
+{
+    if (!p || !out) return cpu_neural_bounds(err);
+    *out = p->summary; yvex_error_clear(err); return YVEX_OK;
+}
+
+static int cpu_linear_release(yvex_backend *backend, yvex_transformer_linear_executable **owner, yvex_error *err)
+{
+    if (!owner || (*owner && (*owner)->owner != backend)) return cpu_neural_bounds(err);
+    if (*owner) {
+        cpu_context *context = backend->impl;
+        if (!context || !context->linear_executables) return cpu_neural_bounds(err);
+        context->linear_executables--;
+    }
+    free(*owner); *owner = NULL; yvex_error_clear(err); return YVEX_OK;
+}
+
+static int cpu_split_interleaved_two(yvex_backend *backend, const yvex_device_tensor *input,
+    yvex_device_tensor *first, yvex_device_tensor *second, unsigned long long rows,
+    unsigned long long heads, unsigned long long width, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    unsigned long long pairs, size, full, sizes[2];
+    yvex_device_tensor *outputs[] = {first, second};
+    if (!rows || !heads || !width || !yvex_core_u64_mul(rows, heads, &pairs) ||
+        !yvex_core_u64_mul(pairs, width, &size) || !yvex_core_u64_mul(size, 2u, &full))
+        return cpu_neural_bounds(err);
+    sizes[0] = sizes[1] = size;
+    int rc = cpu_neural_admit(backend, &input, &full, 1u, outputs, sizes, 2u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    for (unsigned long long pair = 0u; pair < pairs; ++pair) {
+        const float *source = (const float *)input->data + pair * width * 2u;
+        memcpy((float *)first->data + pair * width, source, (size_t)width * sizeof(float));
+        memcpy((float *)second->data + pair * width, source + width, (size_t)width * sizeof(float));
+    }
+    return cpu_neural_publish(outputs, 2u, err);
+}
+
+static int cpu_bf16_binary(yvex_backend *backend, const yvex_device_tensor *left,
+    const yvex_device_tensor *right, yvex_device_tensor *output, unsigned long long count,
+    unsigned int operation, yvex_backend_operation_facts *facts, yvex_error *err)
+{
+    const yvex_device_tensor *inputs[] = {left, right};
+    unsigned long long sizes[] = {count, count};
+    int rc = cpu_neural_admit(backend, inputs, sizes, 2u, &output, &count, 1u, facts, err);
+    if (rc != YVEX_OK) return rc;
+    for (unsigned long long i = 0u; i < count; ++i) {
+        float a = ((const float *)left->data)[i], b = ((const float *)right->data)[i], y;
+        if (operation == 0u) y = a + b;
+        else if (operation == 1u) y = yvex_quant_bf16_decode(yvex_quant_bf16_encode(a / (1.0f + expf(-a)))) * b;
+        else y = a / (1.0f + expf(-b));
+        ((float *)output->data)[i] = yvex_quant_bf16_decode(yvex_quant_bf16_encode(y));
+    }
+    return cpu_neural_publish(&output, 1u, err);
+}
+
+static int cpu_add_bf16(yvex_backend *b, const yvex_device_tensor *a, const yvex_device_tensor *r,
+    yvex_device_tensor *o, unsigned long long rows, unsigned long long width,
+    yvex_backend_operation_facts *f, yvex_error *e)
+{
+    unsigned long long count;
+    if (!rows || !width || !yvex_core_u64_mul(rows, width, &count)) return cpu_neural_bounds(e);
+    return cpu_bf16_binary(b, a, r, o, count, 0u, f, e);
+}
+
+static int cpu_silu_product(yvex_backend *b, const yvex_device_tensor *a, const yvex_device_tensor *r,
+    yvex_device_tensor *o, unsigned long long count, yvex_backend_operation_facts *f, yvex_error *e)
+{
+    return cpu_bf16_binary(b, a, r, o, count, 1u, f, e);
+}
+
+static int cpu_sigmoid_product(yvex_backend *b, const yvex_device_tensor *a, const yvex_device_tensor *r,
+    yvex_device_tensor *o, unsigned long long count, yvex_backend_operation_facts *f, yvex_error *e)
+{
+    return cpu_bf16_binary(b, a, r, o, count, 2u, f, e);
+}
+
 static const yvex_backend_transformer_operations *cpu_transformer_operations(const yvex_backend *backend)
 {
     static const yvex_backend_transformer_operations operations = {
         .bf16_round = cpu_bf16_round, .silu = cpu_silu,
+        .linear_compile = cpu_linear_compile, .linear_execute = cpu_linear_execute,
+        .linear_summary = cpu_linear_summary, .linear_release = cpu_linear_release,
+        .split_interleaved_two_f32 = cpu_split_interleaved_two,
+        .add_bf16 = cpu_add_bf16, .silu_product_bf16 = cpu_silu_product,
+        .sigmoid_product_bf16 = cpu_sigmoid_product,
         .modulate_bf16 = cpu_modulate_bf16, .gated_residual_bf16 = cpu_gated_residual_bf16,
         .combine_f32 = cpu_combine_f32, .clamp_f32 = cpu_clamp_f32,
         .clamped_swiglu_bf16 = cpu_clamped_swiglu_bf16,
@@ -898,7 +1078,21 @@ static const yvex_backend_transformer_operations *cpu_transformer_operations(con
     return &operations;
 }
 
+static int cpu_close(yvex_backend *backend, yvex_error *err)
+{
+    const cpu_context *context = backend->impl;
+    if (backend->stats.allocation_count || (context && context->linear_executables)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "cpu.close", "CPU tensors or linear executables remain owned");
+        return YVEX_ERR_STATE;
+    }
+    free(backend->impl);
+    backend->impl = NULL;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 static const yvex_backend_vtable cpu_vtable = {
+    .close = cpu_close,
     .memory_stats = cpu_memory_stats,
     .device_info = cpu_device_info,
     .tensor_alloc = cpu_tensor_alloc,
@@ -932,6 +1126,12 @@ int yvex_backend_open_cpu(yvex_backend **out, yvex_error *err)
     if (!backend) {
         yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_backend_open_cpu",
                        "failed to allocate CPU backend");
+        return YVEX_ERR_NOMEM;
+    }
+    backend->impl = calloc(1u, sizeof(cpu_context));
+    if (!backend->impl) {
+        free(backend);
+        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_backend_open_cpu", "CPU context allocation failed");
         return YVEX_ERR_NOMEM;
     }
     backend->kind = YVEX_BACKEND_KIND_CPU;

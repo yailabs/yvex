@@ -1,4 +1,4 @@
-/* Append direct K/V projections once, execute H28, and stage the matching logical delta. */
+/* Execute exact causal attention and stage one provider-owned logical K/V delta. */
 #include <yvex/internal/stateful_attention.h>
 
 #include <stdint.h>
@@ -21,6 +21,35 @@ typedef struct {
     unsigned long long position_bytes, staged_bytes;
     unsigned long long history_tokens, history_view_bytes;
 } stateful_geometry;
+
+int yvex_runtime_stateful_attention_workspace_required(
+    yvex_backend *backend, const yvex_transformer_attention_requirement *requirement,
+    unsigned long long *bytes, yvex_error *err)
+{
+    const yvex_backend_transformer_operations *operations =
+        yvex_backend_transformer_operations_get(backend);
+    unsigned long long scratch = 0ull, history = 0ull;
+    int rc;
+    if (bytes) *bytes = 0ull;
+    if (!bytes || !operations || !operations->attention_workspace_required)
+        return stateful_refuse(err, YVEX_ERR_UNSUPPORTED,
+                               "stateful exact-attention workspace capability is unavailable");
+    rc = operations->attention_workspace_required(requirement, &scratch, err);
+    if (rc != YVEX_OK) return rc;
+    if (yvex_backend_kind_of(backend) == YVEX_BACKEND_KIND_CPU &&
+        (!yvex_core_u64_mul(requirement->key_value_tokens, requirement->key_value_heads, &history) ||
+         !yvex_core_u64_mul(history, requirement->head_dimension, &history) ||
+         !yvex_core_u64_mul(history, 2ull * sizeof(float), &history)))
+        return stateful_refuse(err, YVEX_ERR_BOUNDS,
+                               "temporary stateful attention history extent overflowed");
+    if (!yvex_core_u64_add(scratch, history, bytes) || *bytes > SIZE_MAX) {
+        *bytes = 0ull;
+        return stateful_refuse(err, YVEX_ERR_BOUNDS,
+                               "stateful exact-attention workspace extent overflowed");
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
 
 static int stateful_tensor_view(const yvex_device_tensor *source,
                                 unsigned long long offset,
@@ -76,10 +105,11 @@ static int stateful_geometry_build(
         return stateful_refuse(
             err, YVEX_ERR_INVALID_ARG,
             "stateful attention requires one layer and bounded projection storage");
-    if (yvex_backend_kind_of(request->backend) != YVEX_BACKEND_KIND_CUDA)
+    if (yvex_backend_kind_of(request->backend) != YVEX_BACKEND_KIND_CUDA &&
+        yvex_backend_kind_of(request->backend) != YVEX_BACKEND_KIND_CPU)
         return stateful_refuse(
             err, YVEX_ERR_UNSUPPORTED,
-            "stateful attention currently requires the CUDA backend");
+            "selected backend has no admitted stateful exact-attention realization");
     if (!yvex_sha256_hex_valid(request->attention_plan_identity) ||
         !yvex_sha256_hex_valid(request->input_identity))
         return stateful_refuse(
@@ -270,6 +300,59 @@ static int stateful_host_delta(
     return YVEX_OK;
 }
 
+static int stateful_cpu_history(
+    const yvex_runtime_stateful_attention_request *request,
+    const yvex_attention_history_view *candidate, const stateful_geometry *geometry,
+    const float *raw_kv, yvex_device_tensor **owned,
+    yvex_runtime_state_history_device_view *history, yvex_error *err)
+{
+    yvex_backend_tensor_desc descriptor = {.name = "stateful-attention-prefix",
+        .dtype = YVEX_DTYPE_F32, .rank = 2u,
+        .dims = {geometry->history_tokens, geometry->state_width}};
+    unsigned long long row_bytes, source_values;
+    int rc;
+    if (!candidate || candidate->token_count != request->token_position ||
+        candidate->local_tail_count != request->token_position ||
+        candidate->compressed_entry_count || candidate->indexer_entry_count ||
+        (candidate->local_tail_count &&
+         (!candidate->local_kv || !candidate->local_positions ||
+          candidate->local_kv_stride < geometry->state_width)) ||
+        !yvex_core_u64_mul(candidate->local_tail_count, candidate->local_kv_stride, &source_values) ||
+        source_values > SIZE_MAX / sizeof(float) ||
+        !yvex_core_u64_mul(geometry->state_width, sizeof(float), &row_bytes) ||
+        !yvex_core_u64_mul(geometry->history_tokens, row_bytes, &descriptor.bytes) ||
+        descriptor.bytes > SIZE_MAX)
+        return stateful_refuse(err, YVEX_ERR_STATE,
+                               "CPU attention requires the exact provider-owned uncompressed prefix");
+    rc = yvex_backend_tensor_alloc(request->backend, &descriptor, owned, err);
+    for (unsigned long long token = 0ull; rc == YVEX_OK && token < geometry->history_tokens; ++token) {
+        yvex_device_tensor row;
+        const float *source;
+        if (request->cancellation.requested &&
+            request->cancellation.requested(request->cancellation.context))
+            return stateful_refuse(err, YVEX_ERR_CANCELLED,
+                                   "CPU stateful attention cancelled before publication");
+        if (token < candidate->local_tail_count) {
+            if (candidate->local_positions[token] != token)
+                return stateful_refuse(err, YVEX_ERR_STATE,
+                                       "CPU attention prefix positions are not contiguous");
+            source = candidate->local_kv + token * candidate->local_kv_stride;
+        } else source = raw_kv + (token - candidate->local_tail_count) * geometry->state_width;
+        if (!stateful_tensor_view(*owned, token * row_bytes, row_bytes, &row))
+            return stateful_refuse(err, YVEX_ERR_BOUNDS,
+                                   "CPU attention prefix exceeded temporary storage");
+        rc = yvex_backend_tensor_write(request->backend, &row, source, row_bytes, err);
+    }
+    if (rc == YVEX_OK) {
+        (*owned)->is_written = 1;
+        history->values = **owned;
+        history->value_width = geometry->state_width;
+        history->visible_tokens = request->token_position;
+        history->admitted_tokens = geometry->history_tokens;
+    }
+    return rc;
+}
+
 int yvex_runtime_stateful_attention_execute(
     const yvex_runtime_stateful_attention_request *request,
     yvex_runtime_stateful_attention_result *result,
@@ -277,13 +360,14 @@ int yvex_runtime_stateful_attention_execute(
 {
     const yvex_backend_transformer_operations *operations;
     const yvex_attention_history_view *candidate = NULL;
-    yvex_runtime_state_history_device_view history;
+    yvex_runtime_state_history_device_view history = {0};
     yvex_transformer_attention_request attention = {0};
     yvex_attention_publication publication = {0};
     yvex_device_tensor key_history, value_history;
+    yvex_device_tensor *owned_history = NULL;
     stateful_geometry geometry;
     float *raw_kv = NULL;
-    int rc;
+    int rc, cpu;
 
     if (result) memset(result, 0, sizeof(*result));
     if (failure) memset(failure, 0, sizeof(*failure));
@@ -291,6 +375,7 @@ int yvex_runtime_stateful_attention_execute(
         err, YVEX_ERR_INVALID_ARG, "stateful attention result storage is required");
     rc = stateful_geometry_build(request, &geometry, err);
     if (rc != YVEX_OK) return rc;
+    cpu = yvex_backend_kind_of(request->backend) == YVEX_BACKEND_KIND_CPU;
     operations = yvex_backend_transformer_operations_get(request->backend);
     if (!operations || !operations->attention_execute)
         return stateful_refuse(
@@ -305,11 +390,11 @@ int yvex_runtime_stateful_attention_execute(
         rc = yvex_runtime_state_residency_transition(
             request->residency, request->state, NULL, request->layer_ordinal,
             request->token_count, YVEX_RUNTIME_STATE_BEGIN, err);
-    if (rc == YVEX_OK)
+    if (rc == YVEX_OK && !cpu)
         rc = yvex_runtime_state_residency_candidate_history(
             request->residency, request->layer_ordinal,
             YVEX_ATTENTION_STATE_BINDING_LOCAL_HISTORY, &history, err);
-    if (rc == YVEX_OK &&
+    if (rc == YVEX_OK && !cpu &&
         (!candidate || candidate->token_count != request->token_position ||
          candidate->local_tail_count != request->token_position ||
          history.value_width != geometry.state_width ||
@@ -318,10 +403,13 @@ int yvex_runtime_stateful_attention_execute(
         rc = stateful_refuse(
             err, YVEX_ERR_STATE,
             "transactional K/V history does not match the requested position");
-    if (rc == YVEX_OK)
+    if (rc == YVEX_OK && !cpu)
         rc = stateful_copy_projection(request, &history, &geometry, err);
     if (rc == YVEX_OK)
         rc = stateful_host_delta(request, &geometry, &raw_kv, err);
+    if (rc == YVEX_OK && cpu)
+        rc = stateful_cpu_history(request, candidate, &geometry, raw_kv,
+                                  &owned_history, &history, err);
     if (rc == YVEX_OK) {
         if (!stateful_tensor_view(
                 &history.values, 0ull, geometry.history_view_bytes,
@@ -357,20 +445,31 @@ int yvex_runtime_stateful_attention_execute(
         rc = operations->attention_execute(
             request->backend, &attention, &result->attention, err);
     }
+    if (owned_history) {
+        yvex_error cleanup;
+        unsigned long long bytes = owned_history->bytes;
+        int cleanup_rc = yvex_backend_tensor_release(request->backend, &owned_history, &cleanup);
+        if (cleanup_rc != YVEX_OK) { if (err) *err = cleanup; rc = cleanup_rc; }
+        else if (rc == YVEX_OK &&
+                 !yvex_core_u64_add(result->attention.temporary_bytes, bytes,
+                                    &result->attention.temporary_bytes))
+            rc = stateful_refuse(err, YVEX_ERR_BOUNDS,
+                                 "CPU stateful attention workspace accounting overflowed");
+    }
     if (rc == YVEX_OK && !stateful_identity(request, result->execution_identity))
         rc = stateful_refuse(
             err, YVEX_ERR_STATE,
             "stateful exact-attention identity derivation failed");
     if (rc == YVEX_OK) {
         publication.complete = 1;
-        publication.device_state_staged = 1;
+        publication.device_state_staged = !cpu;
         publication.layer_index = request->layer->layer_index;
         publication.attention_class = request->layer->attention_class;
         publication.token_position = request->token_position;
         publication.token_count = request->token_count;
         publication.kv_width = geometry.state_width;
         publication.raw_kv = raw_kv;
-        publication.device_state_staged_bytes = geometry.staged_bytes;
+        publication.device_state_staged_bytes = cpu ? 0ull : geometry.staged_bytes;
         yvex_runtime_identity_copy(
             publication.execution_identity, result->execution_identity);
         rc = request->state->stage(
@@ -389,10 +488,10 @@ int yvex_runtime_stateful_attention_execute(
     result->token_position = request->token_position;
     result->token_count = request->token_count;
     result->history_tokens = geometry.history_tokens;
-    result->state_staged_bytes = publication.device_state_staged_bytes;
-    result->h2d_bytes = geometry.position_bytes;
-    result->d2h_bytes = geometry.projection_bytes * 2ull;
-    result->d2d_bytes = geometry.projection_bytes * 2ull;
+    result->state_staged_bytes = geometry.staged_bytes;
+    result->h2d_bytes = cpu ? 0ull : geometry.position_bytes;
+    result->d2h_bytes = cpu ? 0ull : geometry.projection_bytes * 2ull;
+    result->d2d_bytes = cpu ? 0ull : geometry.projection_bytes * 2ull;
     yvex_error_clear(err);
     return YVEX_OK;
 }

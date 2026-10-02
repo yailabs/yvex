@@ -54,7 +54,7 @@ static int ir_rewrite_block(ir_rewrite *r, yvex_ir_id source, yvex_ir_id target,
         const yvex_ir_operation *op = &r->input->operations[id];
         yvex_ir_attribute attributes[256];
         yvex_ir_id *operands = NULL, *types = NULL, created;
-        yvex_ir_operation_request request = {.operation = op->definition->name,
+        yvex_ir_operation_request request = {.operation = op->definition->name, .version = op->definition->version,
             .operand_count = op->operand_count, .result_count = op->result_count,
             .attributes = attributes, .attribute_count = op->attribute_count};
         int rc;

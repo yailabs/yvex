@@ -114,7 +114,8 @@ static int decoder_physical_invoke(void *opaque, const yvex_program_device_invoc
 {
     yvex_runtime_decoder_execution_context *c = opaque;
     const char *name = r->step->implementation;
-    int delta = !strcmp(name, "gated_delta.bf16.f32state.v1");
+    int delta = !strcmp(name, "gated_delta.bf16.f32state.v1") ||
+                !strcmp(name, "gated_delta.mixed.f32state.v2");
     int ssd = !strcmp(name, "selective_ssd.cpu.f32state.v1");
     int attention = !strcmp(name, "gated_causal.bf16.v1");
     unsigned long long started = yvex_core_monotonic_ns();
@@ -178,6 +179,7 @@ static int decoder_physical_open(yvex_runtime_decoder_execution_context *c, yvex
         {"add.bf16.v1", decoder_physical_invoke},
         {"add.f32.v1", decoder_physical_invoke},
         {"gated_delta.bf16.f32state.v1", decoder_physical_invoke},
+        {"gated_delta.mixed.f32state.v2", decoder_physical_invoke},
         {"selective_ssd.cpu.f32state.v1", decoder_physical_invoke},
         {"gated_causal.bf16.v1", decoder_physical_invoke}};
     const yvex_program_physical_summary *s = yvex_program_physical_summary_get(c->physical);

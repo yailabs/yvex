@@ -747,20 +747,23 @@ source_shard_name_parse(const char *name, unsigned int *index_out, unsigned int 
     unsigned int index = 0u;
     unsigned int total = 0u;
     size_t i;
+    const char *digits;
 
-    if (!name || strlen(name) != strlen("model-00000-of-00000.safetensors") ||
-        strncmp(name, "model-", 6u) != 0 || strncmp(name + 11u, "-of-", 4u) != 0 ||
-        strcmp(name + 20u, ".safetensors") != 0)
-        return 0;
-    for (i = 6u; i < 11u; ++i) {
-        if (!isdigit((unsigned char)name[i]))
+    if (!name) return 0;
+    if (!strncmp(name, "model-", 6u)) digits = name + 6u;
+    else if (!strncmp(name, "model.safetensors-", 18u)) digits = name + 18u;
+    else return 0;
+    if (strlen(digits) != strlen("00000-of-00000.safetensors") ||
+        strncmp(digits + 5u, "-of-", 4u) || strcmp(digits + 14u, ".safetensors")) return 0;
+    for (i = 0u; i < 5u; ++i) {
+        if (!isdigit((unsigned char)digits[i]))
             return 0;
-        index = index * 10u + (unsigned int)(name[i] - '0');
+        index = index * 10u + (unsigned int)(digits[i] - '0');
     }
-    for (i = 15u; i < 20u; ++i) {
-        if (!isdigit((unsigned char)name[i]))
+    for (i = 9u; i < 14u; ++i) {
+        if (!isdigit((unsigned char)digits[i]))
             return 0;
-        total = total * 10u + (unsigned int)(name[i] - '0');
+        total = total * 10u + (unsigned int)(digits[i] - '0');
     }
     if (index == 0u || total == 0u || index > total)
         return 0;

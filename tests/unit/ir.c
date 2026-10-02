@@ -503,9 +503,10 @@ static int ir_retained_program(void)
 
 static int ir_sequence_constraints(void)
 {
-    unsigned int family, scenario;
-    for (family = 0u; family < 2u; ++family) {
-        for (scenario = 0u; scenario < 8u; ++scenario) {
+    unsigned int contract, scenario;
+    for (contract = 0u; contract < 3u; ++contract) {
+        unsigned int family = contract == 1u, mixed = contract == 2u;
+        for (scenario = 0u; scenario < (mixed ? 11u : 8u); ++scenario) {
             yvex_ir_dialect dialects[] = {*yvex_ir_core_dialect(), *yvex_ir_sequence_dialect()};
             yvex_ir_module *module = NULL;
             yvex_ir_type types[10] = {0}, output;
@@ -537,6 +538,7 @@ static int ir_sequence_constraints(void)
             uint32_t state_index = family ? 6u : 8u, index, axis;
             uint32_t effects = YVEX_IR_READ_STATE | YVEX_IR_WRITE_STATE;
             yvex_ir_operation_request request = {.operation = family ? "attention.gated_causal" : "sequence.gated_delta",
+                .version = mixed ? 2u : 1u,
                 .operand_count = input_count, .result_count = result_count,
                 .result_types = outputs, .attributes = family ? attention : delta, .attribute_count = family ? 7u : 8u};
             yvex_error error;
@@ -554,6 +556,7 @@ static int ir_sequence_constraints(void)
                 types[5].scalar = YVEX_IR_INDEX;
                 snprintf(types[6].domain, sizeof(types[6].domain), "attention.causal_kv");
             } else {
+                if (mixed) types[5].scalar = types[7].scalar = YVEX_IR_F32;
                 snprintf(types[8].domain, sizeof(types[8].domain), "convolution.causal");
                 snprintf(types[9].domain, sizeof(types[9].domain), "recurrent.gated_delta");
             }
@@ -571,6 +574,9 @@ static int ir_sequence_constraints(void)
             }
             if (scenario == 5u) effects = YVEX_IR_READ_STATE;
             if (scenario == 6u) types[0].shape[1].extent++;
+            if (scenario == 8u) types[5].scalar = YVEX_IR_BF16;
+            if (scenario == 9u) types[7].scalar = YVEX_IR_BF16;
+            if (scenario == 10u) types[6].scalar = YVEX_IR_F32;
             YVEX_TEST_ASSERT(yvex_ir_module_open(&module, "sequence_contract", ir_source,
                                                  dialects, 2u, &error) == YVEX_OK, "sequence module");
             for (index = 0u; index < input_count; ++index)
@@ -596,10 +602,25 @@ static int ir_sequence_constraints(void)
             rc = yvex_ir_seal(module, &error);
             YVEX_TEST_ASSERT(scenario == 0u ? rc == YVEX_OK : rc != YVEX_OK,
                              "accept valid state transition; reject geometry, scalar, attributes, effects and stale state");
+            if (mixed && !scenario) {
+                yvex_core_bytes wire = {.maximum = 65536u};
+                yvex_ir_module *decoded = NULL, *rewritten = NULL;
+                yvex_ir_pass passes[] = {*yvex_ir_canonical_pass(), *yvex_ir_dead_code_pass()};
+                YVEX_TEST_ASSERT(yvex_ir_encode(module, &wire, &error) == YVEX_OK &&
+                    yvex_ir_decode(&decoded, wire.data, wire.count, dialects, 2u, &error) == YVEX_OK &&
+                    !strcmp(yvex_ir_identity(module), yvex_ir_identity(decoded)),
+                    "wire import preserves exact operation v2 instead of reinterpreting v1");
+                YVEX_TEST_ASSERT(yvex_ir_pass_pipeline(decoded, passes, 2u, &rewritten, NULL, &error) == YVEX_OK &&
+                    yvex_ir_operation_at(rewritten, 0u)->definition->version == 2u,
+                    "compiler passes preserve the numerical contract version");
+                yvex_ir_module_close(&rewritten);
+                yvex_ir_module_close(&decoded);
+                free(wire.data);
+            }
             yvex_ir_module_close(&module);
         }
     }
-    printf("IR sequence contracts: valid=2; rejected geometry/type/attribute/effect/stale-state cases=14\n");
+    printf("IR sequence contracts: valid=3; rejected geometry/type/precision/attribute/effect/stale-state cases=24\n");
     return 0;
 }
 

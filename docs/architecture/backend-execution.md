@@ -109,6 +109,21 @@ backend foundation, which does not construct an engine or claim model support.
 
 ## Execution path
 
+The CPU operation table realizes the common BF16-weight linear contract with
+source-order F32 accumulation and the declared F32 or BF16/RNE publication.
+Its executable owns a checked descriptor and borrows exact encoded weights per
+invocation; it reports no accelerated matrix execution. Interleaved query/gate
+splitting, BF16 residual addition and rounded SiLU/sigmoid products use the same
+typed operation requests as CUDA. Unsupported classes and foreign owners refuse.
+Checked CPU close retains a cleanup-only owner while tensors or linear
+executables remain; correct releases and a final close discharge it. Descriptor
+bytes are reported as plan host storage, not prepared weights or GPU residency.
+
+Explicit CPU gated-delta execution consumes the existing host sequence-state
+provider and common F32 recurrence authority. It stages through the same session
+transaction and rounds only the declared BF16 output. It is not a fallback from
+a requested GPU backend and does not grant those operations to Metal.
+
 Authenticated program + real batch/worklist → admitted implementation → device
 buffers and kernels → checked synchronization → staged result → runtime commit.
 

@@ -189,7 +189,7 @@ static int ir_operation_read(ir_reader *r, yvex_ir_id block, unsigned int depth,
     const yvex_ir_operation_definition *definition;
     int ok = 0;
     if (!ir_get_text(r, name, sizeof(name)) || !ir_get_count(r, &version, UINT32_MAX) ||
-        !(definition = yvex_ir_definition_find(r->module, name)) || definition->version != version ||
+        !version || !(definition = yvex_ir_definition_find(r->module, name, version)) ||
         !ir_get_count(r, &input_count, definition->maximum_operands) ||
         !ir_get_count(r, &result_count, definition->maximum_results) ||
         !ir_get_count(r, &attribute_count, (uint32_t)definition->attribute_count) ||
@@ -204,7 +204,7 @@ static int ir_operation_read(ir_reader *r, yvex_ir_id block, unsigned int depth,
             !ir_get_count(r, &types[index], (uint32_t)r->module->type_count)) goto done;
     for (index = 0u; index < attribute_count; ++index)
         if (!ir_attribute_read(r, &attributes[index])) goto done;
-    request = (yvex_ir_operation_request){.operation = name, .operands = inputs,
+    request = (yvex_ir_operation_request){.operation = name, .version = version, .operands = inputs,
         .operand_count = input_count, .result_types = types, .result_count = result_count,
         .attributes = attributes, .attribute_count = attribute_count};
     if (yvex_ir_operation_add(r->module, block, &request, &created, err) != YVEX_OK) goto done;
