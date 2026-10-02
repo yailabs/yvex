@@ -142,6 +142,12 @@ block raw backend admission, tensor lifetime or the representative primitive.
 No architecture blocker prevents this bounded foundation once its final gates
 are earned. Existing Clang warnings remain unrelated baseline observations.
 
+The later independently selected [small-model CPU Task](macos-small-model.md)
+repairs managed source publication and CPU preflight at `17e5e0a1`, retaining
+this foundation with a fresh two-case Metal PASS. Those canonical CPU/source
+changes do not close Metal model capacity or specialization lifetime; the
+historical defects above describe their exact foundation source snapshot.
+
 ## Reproduce and authority
 
 Use the [native build and Metal lane](../guides/build.md#apple-silicon-metal-foundation).

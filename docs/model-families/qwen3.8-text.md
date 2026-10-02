@@ -77,3 +77,7 @@ separate source fact. Only verbatim raw completion is selected; no conversation
 template, vision or MTP capability is admitted by this integration. The
 [Mac evidence](../evaluation/macos-small-model.md) records actual preparation,
 CPU generation, independent reference comparison and remaining release gates.
+Clean `17e5e0a1` qualifies two exact eight-token CPU continuations and normal
+host load/unload/stop; full-model Metal and conversation remain unsupported.
+The exact artifact passes offline release gates; publication is blocked only
+by the existing read-only Hugging Face credential.
