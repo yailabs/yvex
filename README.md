@@ -16,16 +16,18 @@ publication: {html: true, pdf: true, index: true}
 </p>
 
 <p align="center">
-  <a href="#quick-start"><img src="https://img.shields.io/badge/language-C11-8D5CF5?style=flat&amp;labelColor=30363d" alt="Language: C11"></a>
-  <a href="docs/architecture/backend-execution.md"><img src="https://img.shields.io/badge/backends-CPU_%2F_CUDA-8D5CF5?style=flat&amp;labelColor=30363d" alt="Backends: CPU / CUDA"></a>
+  <a href="#quick-start"><img src="https://img.shields.io/badge/languages-C11_%2F_Rust-8D5CF5?style=flat&amp;labelColor=30363d" alt="Languages: C11 / Rust"></a>
+  <a href="#platforms-and-backends"><img src="https://img.shields.io/badge/backends-CPU_%2F_CUDA_%2F_Metal%20%28early%29-8D5CF5?style=flat&amp;labelColor=30363d" alt="Backends: CPU / CUDA / Metal (early)"></a>
   <a href="docs/project-control/STATUS.md"><img src="https://img.shields.io/badge/status-in%20development-8D5CF5?style=flat&amp;labelColor=30363d" alt="Status: in development"></a>
   <a href="https://github.com/yailabs/yvex/actions/workflows/qa.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/yailabs/yvex/qa.yml?branch=main&amp;label=QA%20%28main%29&amp;style=flat&amp;labelColor=30363d" alt="QA status on main"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8D5CF5?style=flat&amp;labelColor=30363d" alt="License: MIT"></a>
 </p>
 
-A native C/CUDA model compiler and stateful execution runtime. YVEX prepares
-authenticated open-weight sources, compiles their meaning into admitted work,
-and runs isolated sessions through a persistent local host.
+A native model compiler and stateful execution runtime with a Rust operator
+shell. YVEX prepares authenticated open-weight sources, compiles their meaning
+into admitted work, and runs isolated sessions through a persistent local host.
+The C computational core has CPU and CUDA execution and an early Apple Silicon
+Metal backend, with qualification recorded separately for each path.
 
 ## Why YVEX
 
@@ -106,8 +108,25 @@ flowchart TB
 
 The compiler interprets family semantics and seals both computation and exact
 parameter lineage. Deployment admits the implementation. An engine generation
-owns executable resources; each session owns mutable state. CUDA executes the
-admitted program below that boundary.
+owns executable resources; each session owns mutable state. Backends execute
+only the operations and numerical classes admitted for that exact path.
+
+## Platforms and backends
+
+Linux and macOS share one compiler/runtime and one `yvex` product. Metal is now
+integrated in `main`; Apple GPU execution is at the foundation stage.
+
+| Platform / backend | Current evidence | Boundary still open |
+| --- | --- | --- |
+| Linux / CPU and NVIDIA CUDA | Native host/CLI and exact admitted model paths, including bounded GB10 execution | Support remains specific to model, artifact, numerical class and device |
+| macOS arm64 / CPU | Native Rust CLI/host, terminal lifecycle and exact Qwen 0.8B CPU generation | General conversation, checkpoint coverage and performance |
+| Apple Silicon / Metal — early | Tested M5 Pro device/pipeline admission, owned shared buffers, copy/zero and exact F32 embedding row selection | Full-model admission, projection/attention/quantized kernels and performance |
+
+[Backend architecture](docs/architecture/backend-execution.md#apple-silicon-metal-foundation)
+owns the mechanism; [integrated qualification](docs/evaluation/macos-main-integration.md)
+owns the evidence. A Metal device or primitive being available does not yet
+make `model load --backend metal` an admitted model path. The Mac Qwen result
+below uses CPU execution.
 
 ## Available execution
 
@@ -115,6 +134,7 @@ admitted program below that boundary.
 | --- | --- | --- |
 | [DeepSeek V4 Flash / DSpark](docs/model-families/deepseek-v4-flash.md) | Admitted text and target-verified speculative generation | No release behavior/performance claim |
 | [Qwen3.8-27B text](docs/model-families/qwen3.8-text.md) | BF16 hybrid text CUDA execution and bounded readout | Not all upstream modalities or checkpoints |
+| [Qwen3.5-0.8B text](docs/model-families/qwen3.8-text.md#exact-small-text-checkpoint) | Exact mixed BF16/F32 artifact; Mac CPU generation with two bounded upstream continuation matches | No conversation, full-model Metal or general quality/performance claim |
 | [MiniMax-H3 FL2VA](docs/model-families/minimax-h3.md) | Bounded component/composite media execution | Full-scale numerics and useful output remain unqualified |
 | [Mamba-Codestral](docs/model-families/mamba2.md) | Exact 64-layer CPU artifact execution | Hosted conversation, CUDA SSM and whole-model oracle remain open |
 | [Laya typed decisions](docs/model-families/laya.md) | Exact CPU finite model and bounded local text producer | No calibration, general head breadth or CUDA claim |
@@ -131,6 +151,9 @@ computational state. Clients use qualified [integration contracts](docs/contract
 Future native cognitive-state interoperation remains research.
 
 ## Quick start
+
+Prepare the [native toolchain](docs/guides/build.md), including modern GNU Make
+on macOS, then build from the repository root:
 
 ```sh
 make info

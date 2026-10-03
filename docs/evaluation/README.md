@@ -24,10 +24,24 @@ Software correctness, independent numerical conformance, artifact integrity, run
 - [Quality Assurance Architecture](qa.md)
 - [External Reference-Engineering Baseline](reference-baseline.md)
 - [Retained Execution Observations](retained-observations.md)
-- [Native macOS Qualification](macos-native.md)
-- [Apple Silicon Metal Foundation](macos-metal.md)
-- [macOS Small-Model CPU Qualification](macos-small-model.md)
-- [macOS Metal and Rust Shell Main Integration](macos-main-integration.md)
+
+## macOS and Apple Silicon evidence
+
+Start with the [main integration record](macos-main-integration.md) for the
+combined Rust shell, native CPU and early Metal state now in main. Its component
+records retain the original source identities and distinct claims:
+
+| Question | Evidence owner | Scope |
+| --- | --- | --- |
+| Does the native product work on macOS? | [Native qualification](macos-native.md) | Platform, CPU/host and terminal lifecycle |
+| What executes on the Apple GPU? | [Metal foundation](macos-metal.md) | Device/pipeline, shared buffers, F32 embedding and refusal/cleanup |
+| Has a real model generated on the Mac? | [Small-model CPU qualification](macos-small-model.md) | Exact Qwen 0.8B artifact, two bounded upstream continuation matches and publication |
+
+The CPU model result does not qualify Metal inference. Full-model Metal,
+performance and release evidence remain separate gates.
+
+## Evidence promotion
+
 <!-- docs:diagram evidence_promotion -->
 ```mermaid
 %% yvex-figure: evidence_promotion

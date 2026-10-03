@@ -12,8 +12,11 @@ publication: {html: true, pdf: true, index: true}
 
 **Task-based delivery with source, lifetime and evidence discipline.**
 
-YVEX is a native C/CUDA compiler and runtime for identity-bound verified
-open-weight inference. Code/tests own capability; documentation describes it.
+YVEX is a native compiler/runtime with a Rust product shell, a C computational
+core, and CPU, CUDA and early Metal backends for identity-bound verified
+open-weight inference. Backend presence does not establish model admission;
+use exact [platform/backend evidence](docs/architecture/backend-execution.md).
+Code/tests own capability; documentation describes it.
 Use [Documentation](docs/README.md) for contextual routes, not universal preload.
 
 ## Start from a Task
@@ -101,7 +104,7 @@ operations and numerical obligations—not generic session or protocol policy.
 
 Upstream declares legal work, numerical class and real populations; deployment
 selects an admitted class; backends own buffers, submission, synchronization,
-launch geometry and device profiling. CUDA details stay below that boundary.
+launch geometry and device profiling. Device-specific details stay below that boundary.
 Optional acceleration may fall back only to a known-correct admitted path;
 integrity failures, missing mandatory semantics and unsupported exact requests
 fail closed.
@@ -128,11 +131,13 @@ semantics, not an implementation. CLI consumes typed APIs: input adapters
 parse, renderers format, and only CLI I/O/server entrypoints write operator
 output. UIs do not parse human output or invent telemetry.
 
-The product shell is Rust under `src/cli/rust/`; C/CUDA computational owners do
+The product shell is Rust under `src/cli/rust/`; native computational owners do
 not depend on it. The `ffi` module alone crosses native ownership. Cargo derives
 bindings from actual C headers and embeds the generated operator registry;
 neither hand-authored ABI layouts nor a legacy C dispatcher is an alternative.
 `make lib` remains independent of Cargo; `make client` builds the Rust product.
+The Metal implementation stays under backend ownership; Darwin portability,
+Metal primitive qualification and full-model GPU execution are separate claims.
 
 ## Evidence and completion
 

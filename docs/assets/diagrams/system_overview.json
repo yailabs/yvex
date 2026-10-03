@@ -2,7 +2,7 @@
   "schema": 1,
   "number": 1,
   "title": "System context and execution ownership",
-  "description": "Provider sources feed the offline acquisition and compiler owners. CLI and loopback HTTP consumers address one persistent host with generation-bound engines and independent sessions. Admitted graph operations reach CPU or CUDA; typed events observe execution without owning it.",
+  "description": "Provider sources feed the offline acquisition and compiler owners. The Rust CLI and loopback HTTP consumers address one persistent host with generation-bound engines and independent sessions. Model execution is admitted on CPU or CUDA. The integrated early Metal backend owns shared storage and F32 embedding primitives; model admission remains open. Typed events observe execution without owning it.",
   "size": [
     1200,
     1000
@@ -13,7 +13,9 @@
     "src/cli/rust/client.rs",
     "docs/contracts/local-protocol.md",
     "docs/architecture/compiler-ir.md",
-    "docs/architecture/runtime-lifecycle.md"
+    "docs/architecture/runtime-lifecycle.md",
+    "docs/architecture/backend-execution.md",
+    "src/backend/metal/native.m"
   ],
   "panels": [
     {
@@ -253,9 +255,9 @@
         72
       ],
       "kind": "physical",
-      "title": "CPU / CUDA backends",
+      "title": "CPU / CUDA / Metal (early)",
       "lines": [
-        "buffers · admitted kernels · submission · synchronization"
+        "CPU/CUDA model work · Metal: storage + F32 embedding only"
       ]
     }
   ],

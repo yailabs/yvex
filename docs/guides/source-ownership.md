@@ -52,7 +52,9 @@ not comments, strings or a handwritten symbol exemption. A missing/stale index
 fails the architecture gate and is rebuilt through `make rust-ffi-index`.
 The generator rejects any return of C product-shell membership under `src/cli`.
 Cargo owns Rust compilation; Make assembles the sole executable from that shell
-and the independently buildable C/CUDA library.
+and the independently buildable native computational library. Objective-C
+Metal implementation files remain manifest-owned backend code, selected only
+for their admitted native platform by Make.
 
 ## Changing an owner
 

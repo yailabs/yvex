@@ -17,9 +17,13 @@ related: [yvex.architecture.deployment-specialization, yvex.architecture.generat
 [Up](README.md)
 
 CPU and CUDA implement admitted model operations, physical representations and
-numerical classes. Metal implements the bounded foundation below. The compiler supplies the legal program. Runtime owns
-session/transaction lifetime. Backend owns device allocation, submission,
-synchronization and equivalent launch details.
+numerical classes. Metal is integrated in main as an early Apple Silicon backend
+with the qualified device, shared-storage and F32-embedding foundation below.
+The compiler supplies the legal program. Runtime owns session/transaction
+lifetime. Backend owns device allocation, submission, synchronization and
+equivalent launch details. [Combined-source qualification](../evaluation/macos-main-integration.md)
+binds the integrated Rust shell, native CPU paths and Metal primitive evidence;
+full-model Metal admission remains open.
 
 ## Native platform mechanisms
 

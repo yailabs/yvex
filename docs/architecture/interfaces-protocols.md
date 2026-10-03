@@ -24,7 +24,11 @@ The canonical product shell is Rust; [ADR 0009](../decisions/0009-rust-product-s
 owns that split. Generated registry metadata drives parsing/help/discovery and
 completion. Private compiler-derived FFI adapts C-owned typed operations;
 runtime clients consume the existing C transport, never a second wire parser.
-C/CUDA remains the independently buildable computational library.
+The native computational library remains independently buildable: C owns the
+common core, CUDA and Metal retain their backend implementations. The same
+Rust shell projects their typed availability and refusals on Linux and macOS;
+the [Metal foundation](backend-execution.md#apple-silicon-metal-foundation)
+does not grant model admission or new public management operations.
 
 ## Integration map
 

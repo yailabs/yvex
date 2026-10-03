@@ -34,6 +34,7 @@ different operations. A host may remain healthy with no loaded engines.
 | Artifact/deployment/lifetime identity stays distinct | [Architecture invariants](../architecture/INVARIANTS.md) |
 | Sessions isolate mutable state and publish atomically | [Runtime contract](../contracts/runtime.md) |
 | Clients consume typed behavior and errors | [Interfaces](../architecture/interfaces-protocols.md) |
+| Platform portability, backend operations and model admission are qualified separately | [Backend and device execution](../architecture/backend-execution.md) |
 | Support and performance claims carry appropriate evidence | [Evaluation](../evaluation/README.md) |
 
 ## Product surfaces
@@ -46,6 +47,13 @@ identity/status management is a separate qualified bootstrap boundary.
 Models share compilation/runtime machinery where their semantics permit it.
 Each family retains exact source, role, state and numerical obligations. Product
 interaction does not imply that every format, checkpoint, modality or backend is supported.
+
+Linux and macOS share that product boundary. The Rust shell and native CPU
+paths run on both; NVIDIA CUDA and the early Apple Silicon Metal backend have
+their own operation/numerical evidence. Current Mac model generation is CPU
+qualified, while Metal remains at the device/storage/primitive foundation.
+[Status](../project-control/STATUS.md#model-family-and-hardware-scope) owns the
+exact supported model and hardware scope.
 
 ## Success and current limits
 

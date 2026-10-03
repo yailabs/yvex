@@ -19,6 +19,13 @@ Its compiler seals meaning and physical work; its runtime owns engine/session
 lifetimes; its backends execute admitted operations. Evidence observes these
 boundaries without becoming an execution owner.
 
+The single Rust product shell calls the native computational library through
+typed FFI. CPU and CUDA realize admitted model execution; Metal is integrated
+in main as an early Apple Silicon backend for owned shared storage and exact
+F32 embedding row selection. Native Mac CPU model evidence and Metal primitive
+evidence have separate admission gates. The [backend plane](backend-execution.md)
+owns their mechanisms and current model-runtime limits.
+
 ## System context
 
 <!-- docs:diagram system_overview -->
@@ -47,7 +54,7 @@ flowchart TB
   end
   subgraph n_panel_2["c  Backend"]
     direction TB
-  n_backend["PHYSICAL<br/>CPU / CUDA backends<br/>buffers · admitted kernels · submission · synchronization"]:::physical
+  n_backend["PHYSICAL<br/>CPU / CUDA / Metal (early)<br/>CPU/CUDA model work · Metal: storage + F32 embedding only"]:::physical
   end
   n_providers --> n_source
   n_source --> n_compiler
@@ -207,9 +214,13 @@ the [runtime contract](../contracts/runtime.md).
 ## Execution and generation view
 
 The scheduler chooses ready progress. An execution batch records actual selected
-rows; an expert worklist groups their routed populations. CUDA owns buffers,
-submission, synchronization and equivalent launch geometry below admitted
-execution. It does not infer topology from a family name or tensor dimensions.
+rows; an expert worklist groups their routed populations. Each backend owns
+buffers, submission, synchronization and equivalent launch geometry for its
+admitted operations. It does not infer topology from a family name or tensor
+dimensions. Current model-runtime admission remains CPU/CUDA; the Metal
+foundation exercises the common backend boundary without constructing a model
+engine. Its numerical and resource frontier is explicit in the
+[Metal foundation](backend-execution.md#apple-silicon-metal-foundation).
 
 Ordinary generation runs tokenizer/admission → prefill → decode/logits →
 sampling → transactional publication. Speculation adds target verification;

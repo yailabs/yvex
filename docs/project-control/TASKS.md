@@ -15,10 +15,10 @@ publication: {html: true, pdf: true, index: true}
 [Up](README.md)
 
 Selected program: **YVEX shared compiler/runtime delivery**.
-Current phase: **Rust product-shell migration COMPLETE; bounded prefill published with external qualification gates BLOCKED; A03 is READY**.
+Current phase: **Rust shell, initial macOS/Metal integration and public documentation alignment COMPLETE; bounded prefill retains external qualification gates; A03 is READY**.
 The next selected implementation boundary remains **A03 encoder-decoder**;
-it is READY, with no implementation started by this independently authorized
-interface Task Pack.
+it remains READY and unstarted. The independently authorized documentation
+alignment selects no runtime implementation.
 
 The independently authorized YVEX repair
 `RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` has a qualified bounded producer and
@@ -69,10 +69,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 43 | 35 | 0 | 1 | 7 |
+| 44 | 36 | 0 | 1 | 7 |
 <!-- task-counts:end -->
 
-**35/43 selected Tasks complete.** This denominator includes the significant
+**36/44 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -181,6 +181,32 @@ Metal, unsupported Mac leak instrumentation and external live/release gates
 retain their separate limits. `progression_decision=proceed`,
 `downstream_safe=true` for the bounded integration, native CPU, Qwen CPU and
 Metal primitive claims only. No successor implementation Task is selected.
+
+## macOS and Metal documentation alignment
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `PROJECT.DOCS.MACOS.METAL.ALIGNMENT.0` | Reconcile public entry points and architecture with the integrated early Metal backend | Closed | ✅ COMPLETE | README/badges, platform routes, architecture projections, build/quickstart, product and agent guidance match integrated main. Docs/publication and all 17 mapped structural checks pass; Metal remains an early primitive backend, Qwen Mac generation remains CPU evidence. |
+
+The operator selected this documentation-only outcome on 2026-10-03 after the
+Spark fast-forward to integrated main. Metal is an implemented backend in main
+at its qualified device/storage/F32-embedding scope. Native macOS CPU execution
+and the exact Qwen 0.8B CPU observations remain distinct from future Metal model
+admission. Keep dated qualification records and existing numerical limits;
+the public pages route to their canonical owners. No runtime change, new backend
+operation or successor implementation is selected. A03 remains READY.
+
+Qualification: `make docs-check docs-site` passes with 109 reachable canonical
+owners and 13 planes; generated diagrams remain synchronized. The source-stable
+`python3 tools/qa.py run --changed 0408e2d32388f2a68e3135c71fb8f667bd41b135`
+selection passes 17/17, with zero FAIL/SKIP/BLOCKED/ERROR, under receipt
+`3eec07f5dca5de5a84103dd96459dee542dc3ab39b5b0b908b59a875fe1614c9`.
+The final Task/count closure is rechecked by the documentation and project-control
+validators. No production code, ABI, capability-maturity row, ADR selection,
+runtime observation or sibling repository changes. Existing Mac/Metal evidence
+is routed rather than rerun; no live GPU or model claim is added.
+`progression_decision=proceed`, `downstream_safe=true` for this documentation
+alignment only.
 
 ## Delivery progression
 

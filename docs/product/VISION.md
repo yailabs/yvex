@@ -64,6 +64,9 @@ refusal, reuse and independent usefulness separately.
 generation and scheduling without weakening the requested computation.
 
 Typed measurement, admitted CPU/CUDA classes and negative-path controls exist.
+Apple Silicon Metal is an integrated early backend with independently qualified
+device, storage and F32-embedding primitives. Its model-execution and performance
+frontiers remain open under the same [backend contract](../architecture/backend-execution.md).
 Competitive performance and release-wide behavior are not established. Evaluate
 latency/throughput, memory, preparation and numerics under exact comparable
 configurations; retain failed and unavailable results.

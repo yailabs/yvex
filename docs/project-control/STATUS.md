@@ -38,6 +38,10 @@ publication: {html: true, pdf: true, index: true}
   dynamic ready-sequence join/leave is not established.
 - **Interfaces:** local protocol v24, bounded OpenAI adapter, real provider progress;
   remote identity/status bootstrap does not establish mutating remote management.
+- **Platforms:** main integrates the Rust shell, native macOS CPU execution and
+  an early Apple Silicon Metal backend. Metal device/storage/F32-embedding
+  primitives are qualified; full-model Metal admission and execution remain open.
+  [Combined-source evidence](../evaluation/macos-main-integration.md) bounds the claim.
 - **Evidence:** a passing output head, decoded-forensic CPU/CUDA agreement or an
   internal replay does not establish upstream whole-model conformance.
 
@@ -52,9 +56,13 @@ publication: {html: true, pdf: true, index: true}
 | [Mamba-Codestral](../model-families/mamba2.md) | Exact 64-layer CPU artifact execution and recurrent-state/readout controls | Hosted conversation, whole-model oracle, CUDA SSM |
 | [Laya typed decisions](../model-families/laya.md) | Exact CPU finite model and bounded local text producer | CUDA, calibrated confidence, general checkpoint/head breadth |
 
-CPU and CUDA evidence applies to the named admitted class. GB10 controls do not
-qualify another GPU, operating system or numerical representation. Fixture
-execution is labeled separately from real model observations.
+CPU and CUDA model evidence applies to the named admitted class. Metal's tested
+M5 Pro device, shared storage and F32 embedding are a separate primitive scope;
+the Qwen 0.8B Mac result uses CPU. GB10 controls do not qualify Apple GPU execution,
+and Metal primitive controls do not qualify model engines. Fixture execution is
+labeled separately from real model observations. See the
+[backend owner](../architecture/backend-execution.md#apple-silicon-metal-foundation)
+for current numerical, memory-admission and specialization-lifetime limits.
 
 The [dated CUDA producer repair](../evaluation/retained-observations.md#deepseek-cuda-producer-reconciliation-2026-09-29)
 qualifies the mixed DSpark artifact's bounded synthetic request and decoded-dot

@@ -23,8 +23,9 @@ CUDA execution still refuses without an admitted kernel bundle. Start with
 `make check` and registered `make qa-*` lanes are software qualification, not
 release or model-quality claims. [QA](../evaluation/qa.md) owns lane selection.
 
-`make lib` builds only the C/CUDA computational archive without Cargo or the
-Rust shell. `make client` builds the canonical Rust `yvex` against that archive.
+`make lib` builds only the native computational archive without Cargo or the
+Rust shell, including the platform's admitted backend implementations.
+`make client` builds the canonical Rust `yvex` against that archive.
 Cargo owns Rust dependency tracking; Make owns native compilation, authenticated
 REPLAI source, native link inputs and atomic executable publication. There is no
 legacy C CLI fallback or second daemon executable.
@@ -114,7 +115,7 @@ a separate supported build path, not a substitute claim for leak detection.
 
 [Native qualification and remaining limits](../evaluation/macos-native.md)
 cover CPU fixtures, Unix peers, immutable state and real terminal lifecycle.
-Metal, an 8B/14B conversation model and the complete YAI/Studio/SDK product chain
+Full-model Metal, an 8B/14B conversation model and the complete YAI/Studio/SDK product chain
 retain separate execution gates. An explicit artifact cache-eviction request
 returns unsupported on Darwin; optional cache release is omitted without
 weakening byte authentication.
@@ -128,6 +129,11 @@ execution, not available host capacity. Keep it unset for local model-admission
 qualification; the evaluation report records the distinction.
 
 ## Apple Silicon Metal foundation
+
+Metal is included in main at an early backend stage. Use the inspection and
+primitive qualification commands below to exercise that boundary. The exact
+[Qwen 0.8B Mac generation evidence](../evaluation/macos-small-model.md) uses CPU;
+Metal model loading and generation are not admitted yet.
 
 On native macOS arm64 the same build compiles the manifest-owned Objective-C
 backend with required ARC and links the system Foundation/Metal frameworks.

@@ -24,6 +24,7 @@ publication: {html: true, pdf: true, index: true}
 | Add a model family | [Family integration](model-families/integration.md) | [Compiler](architecture/compiler-ir.md) → [Evaluation](evaluation/README.md) |
 | Evaluate performance | [Benchmarks](evaluation/benchmarks/README.md) | Methodology → exact observation → limitations |
 | Operate YVEX | [Quick Start](guides/quickstart.md) | [Model lifecycle](guides/model-lifecycle.md) → [Runbook](guides/operator-runbook.md) |
+| Develop on macOS / Apple Silicon | [Native build](guides/build.md#macos-native-cpu-build) | [Early Metal backend](architecture/backend-execution.md#apple-silicon-metal-foundation) → [Integrated evidence](evaluation/macos-main-integration.md) |
 | Integrate an application | [Contracts](contracts/README.md) | C / local protocol / OpenAI / remote bootstrap |
 | Work as an agent | [AGENTS](../AGENTS.md) | [Selected Tasks](project-control/TASKS.md) → affected plane → evidence |
 
