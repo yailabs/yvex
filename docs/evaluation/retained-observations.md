@@ -19,6 +19,165 @@ The undated observations below were retained at the pre-migration source
 They are not rerun by documentation validation. Scope and missing provenance
 remain visible; [Status](../project-control/STATUS.md) alone owns current maturity.
 
+## Rust product-shell qualification (2026-10-03)
+
+`INTERFACES.CLI.RUST.PRODUCT.SHELL.MIGRATION.0` moves operator ownership,
+not computational semantics. [ADR 0009](../decisions/0009-rust-product-shell.md)
+owns the structural choice. The source authority starts at main
+`67a7905ea9deb98b0704629a1f979634e19007fb`, tree
+`8734e779c19c78cda6d2612f08062234066e7caf`. One generated registry projects
+143 active CLI paths and 19 slash operations. Rust owns parsing, dispatch,
+serialization, presentation and native chat; typed C owners supply facts and
+retain source, artifact, compiler, runtime and transport meaning.
+
+The retained C reference is an immutable comparison executable, not a fallback.
+Compiler-derived FFI records, independent C readers and JSON/CSV differentials
+qualify machine boundaries. Legacy human-byte expectations are replaced only
+where they protect retired formatting. Report-only target blockers and non-claims
+now cross typed facts instead of disappearing with old C-rendered rows. Native
+client transport failures retain their established exit status and exact error
+identity. Completed acquisition resumes authenticate the retained receipt under
+the transfer lease, preserve stale-lock refusal and never repeat a completed
+transfer merely to refresh presentation.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Operator contracts | Registry, existing JSON schemas, typed C operations and retained C executable | Isolated source/artifact/profile/account/model/engineering fixtures | Equivalent machine facts, refusal and publication boundaries | Native differential controls pass; no legacy dispatcher | Exact schema values, exit identities and emitted bytes where contractual | PASS | Exercised operator contracts, not whole-model execution |
+| Chat and host logs | REPLAI interaction contract and typed local events | Real PTYs at 40/80/180 columns; styled/plain/NO_COLOR/dumb; Unicode | Safe completion, resize, exact channels, cancellation/resync and terminal restoration | Qualified fixture controls pass; SIGINT/EPIPE detach leaves host alive | No alternate screen, opaque background or stale-draft mutation | PASS | Terminal/lifecycle behavior under isolated fixtures |
+| Native C consumers | Installed headers, typed C client and private protocol v24 | Independent C readers and C/C++ public-record compilation | Same records, one server owner, no upward Rust dependency | Independent consumer and package controls pass | Exact layouts; 40 public records; one executable | PASS | Preserved C ABI and tested local protocol scope |
+| GNU Make | Build rules, source/package manifests and Cargo lock | Incremental/relink/clean/DESTDIR/invalid-path checks | Correct ownership and complete atomic product publication | Eleven focused build checks pass | No arbitrary root cleanup; library build independent of Cargo | PASS | Tested build and staging contracts, not legal release permission |
+
+These isolated software/PTY results do not qualify model quality, GPU inference,
+Metal or the YAI/Studio chain. The source-stable mapped campaign
+`520ce2f224a8924c9a713d1b2058f658f5911c32b994f442e9fab93bcdf4b7a2`
+returns 130 PASS, zero FAIL/SKIP/ERROR and 33 BLOCKED across 163 selected
+assertions. Its start/finish delta is
+`dd1d6d95de5fa4b28c99e7748319a298c6397afd367eef661a68481318839d58`;
+source stability is valid. The mandatory unavailable live/reference assets
+keep the aggregate non-green; isolated shell/software evidence does not replace
+them. Both mapped ASan/LeakSanitizer and UBSan lanes pass, including the final
+Rust-to-instrumented-C link, HTTP, real tiny CPU model and terminal lifecycle.
+Rust checks pass 49 unit tests and five structural tests; the isolated worker
+lifetime test executes the deliberately ignored signal test in its own process.
+The official Python 2.50.0 and JavaScript 7.1.0 OpenAI consumers also pass
+model/chat/Responses/SSE/tool-loop fixtures, not real producer inference.
+Actual hosted macOS Rust qualification remains a separate closure gate. The running public
+DeepSeek producer remains the previously qualified phase-geometry executable;
+interface tests do not replace it. The compiled software package retains
+`distribution.legal.v1`'s UNQUALIFIED marker: Cargo's exact shipped components
+still require recipient notices/source closure before customer distribution.
+No REPLAI producer, sibling repository, A03 or Laya work is included.
+
+Operator startup characterization uses 20 samples after three warmups, plain
+100-column output, an isolated empty catalog and read-only live host status.
+This is not a source-identical speedup or inference benchmark. The C reference
+digest is `e90be38aef648c5b4b600437f36a68da248d1093cd991d49c1c1be34b399fa6c`;
+Rust release is `ec5ef403627ffe4f6a92273836a1cc866c72a4822e5457d1de635cef2d28c36d`.
+Their executable sizes are 29,972,592 and 46,222,104 bytes respectively, including
+the retained release debug information. Raw observations are retained outside Git
+at `/tmp/yvex-shell-characterization-final-144.json`.
+
+| Operation | C median (min–max), ms | Rust median (min–max), ms | C / Rust maximum RSS, KiB |
+| --- | ---: | ---: | ---: |
+| `version --json` | 1.943 (1.918–2.192) | 8.020 (6.158–10.820) | 4,856 / 10,248 |
+| `help` | 1.845 (0.736–2.111) | 9.853 (7.590–11.052) | 5,256 / 10,496 |
+| `model list` | 1.850 (1.386–2.481) | 7.883 (6.565–8.077) | 6,216 / 11,068 |
+| `host status` | 1.828 (1.492–2.289) | 9.976 (9.156–12.180) | 5,816 / 11,084 |
+
+The Rust build has a measured few-millisecond startup and roughly 5 MiB
+process-residency tradeoff; this whole-process measurement does not isolate
+registry deserialization, dynamic loading or presentation cost. No startup
+speedup is claimed. Driven PTY resize is observed within
+0.32–0.78 ms in the focused three-width capture, not a terminal-platform SLA.
+Actual DESTDIR staging installs one Rust `yvex` and preserves its UNQUALIFIED
+legal receipt. The public producer's loaded digest remains
+`245561033921a35b8641b3f1731a9a864bdbbb581db6ae7dc082bdc98d12738f`;
+the interface binary is not substituted into that running service.
+
+## Phase-specific prompt geometry (2026-10-01)
+
+`V010.RUNTIME.DEEPSEEK.GB10.PREFILL.PHASE.GEOMETRY.2` separates real prompt
+work from the model's speculative verification envelope. The prior six-position
+cap caused repeated prompt batches even with a configured 64-token chunk. The
+generic candidate admits up to 32 prompt positions without changing source
+verification, expert routing, ordered numerical class, attention or transactional
+publication. [Specialization](../architecture/deployment-specialization.md)
+owns the admitted masks; [generation](../architecture/generation-decode.md)
+owns suffix batching. This does not reopen the previous pipeline's earned gains.
+
+The [structured observation](benchmarks/data/deepseek-gb10-prefill-phase.json)
+is the sole measurement owner; its
+[generated view](benchmarks/generated/deepseek-gb10-prefill-phase.md) projects
+the comparable controls. Reference main is `67a7905ea9deb98b0704629a1f979634e19007fb`,
+tree `8734e779c19c78cda6d2612f08062234066e7caf`. Clean reference executable is
+`c2b329083d1737253f5f86a9369f55b4e97e1001923c632ec1553cf2d4a630ca`;
+candidate is `245561033921a35b8641b3f1731a9a864bdbbb581db6ae7dc082bdc98d12738f`,
+compiled delta `d58e6ed3cfef97c05c9dc7a58449a6dda0a769d57e305fa8b134e4da68adcaf3`.
+Candidate compilation includes the separately staged C server-loader extraction
+and metadata, not the uninstalled Rust shell. Each run froze its inputs; exact
+compiler provenance, source variants and raw-receipt hashes remain in the record.
+
+Both use the same admitted mixed DeepSeek/DSpark artifact/binding, GB10 UUID,
+driver, context 32768 and warm single-worker synthetic requests. Two samples
+per control retain exact request bytes, token counts and result hashes at
+22/106/346 input and three committed output tokens. Wider prompt geometry
+materially improves the medium/longer complete requests; the short HTTP samples
+do not establish a stable gain. Telemetry confirms fewer actual prefill batches
+and synchronization boundaries, not more concurrent sequences. Wider physical
+arenas increase session setup/cleanup and peak RSS; the separate one-sample
+resource controls quantify that cost. Nested device/component spans and mapped
+versus RSS byte classes must not be added.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Host component owners | Canonical phase masks, expert worklist and state contracts | Eight selected runtime/worklist units, stale masks and malformed populations | Separate prompt/verification admission; unchanged associations and refusal | All eight pass | Exact masks, pair associations and untouched refusal outputs | PASS | Bounded component admission, not full-model upstream conformance |
+| CUDA components | CPU decoded-dot reference with existing ordered class | Wide 32-row expert populations across IQ2_XXS/Q2_K; finite and NaN controls | Finite outputs within existing publication tolerance; canaries intact | Three selected CUDA owners pass | Existing BF16 publication tolerance; no relaxed check | PASS | Exercised wide CUDA primitive correctness |
+| Real producer | Exact admitted artifact/binding and reference executable | Two warm samples each of three synthetic prompt sizes | Valid generation; exact request/usage/result agreement; no invalid status | All six candidate requests succeed and agree | Exact usage and content hash; timings retained separately | PASS | These bounded producer workloads and their measured latency delta |
+| Refusal and recovery | Existing OpenAI/local lifecycle contract | Generation mismatch, output over-capacity, unloaded model; disconnect during 650-token prefill | Typed refusal; no invalid result; retire temporary work; subsequent request succeeds | HTTP 409/413/404; cancellation after 32 real input positions; recovery 200 | Zero active work and physical session state after each isolated turn | PASS | Exercised fail-closed admission and cancellation cleanup |
+
+The operator authorized replacement only after zero active requests, queue,
+HTTP work, attached clients and model leases were verified. The sole prior
+session was empty. Supported close/stop retired the original process; isolated
+hosts exited normally and removed their sockets. Public PID 2359674 uses the
+candidate digest above at the original native socket and HTTP port 8001;
+health/catalog are 200. Its recreated `main` has zero position/turns and no
+attached client. Readiness verification correctly accepts a newly created
+`ready` session as unbound; it does not infer attachment from that state label.
+No operator Case, prompt payload or indeterminate SEND is reused.
+
+### Source-stable software and official input qualification
+
+The isolated producer-only source snapshot passes 127 mapped tests, with one
+temporary REPLAI download failure and 34 BLOCKED tests in receipt
+`dd118beedf3884e5eda36d81707fe7de9341b7a9ee20f9b8c00aa0bcf8c104f6`.
+Repeating only `cuda.no-nvcc` against the unchanged snapshot passes in receipt
+`51adfbf81c39b7cb799e477396ab5897b2783de8eef16b300af68cbc4f1e5b9a`.
+Both verify source stability. The resolved selection is **128 PASS / 34 BLOCKED**,
+not one all-green aggregate receipt. Host sanitizers and the mapped numerical,
+structural, protocol and unit lanes pass within their own scope. Unconfigured
+assets are missing qualification inputs, not proof that those assets do not
+exist or that their producers fail.
+
+With the exact admitted artifact, binding, source revision and independent
+tokenizer environment supplied, `reference.deepseek.official-encoding` passes
+in source-stable receipt
+`ce86fe981d3662365898e175a50ee49b4cd437aec881fa2fda8571c63c6c4580`.
+The source-authored upstream encoder supplies four vectors; four native BPE
+controls and one native request-prefix control also pass. Independent
+`tokenizers` 0.20.3 parity covers 13 cases and three prompt cases. Full native
+transcript/tool/developer/reminder projection remains unqualified; whole-model
+logits were not run. This is input-contract evidence, not an upstream inference
+oracle for the prefill optimization.
+
+This is not 14K/32K latency qualification, sustained decode, a release/SLA,
+official full-model numerical conformance or YAI product-chain closure. Focused
+publication remains pending. The distinct legacy bootstrap `cuda.native` asset
+blocker and retained broader numerical gates remain explicit; this pass does
+not erase earlier pipeline numerical failures or turn them into missing assets.
+Raw synthetic evidence stays outside Git at
+`/home/dgmothx/lab/models/evidence/yvex-prefill-phase-20261001.2qPmxM`.
+A03 stays READY; YAI, SDK and Studio remain untouched.
+
 ## Native interface composition (2026-09-30)
 
 `INTERFACES.CLI.REPLAI.PRODUCT.SURFACE.REFOUNDATION.0` qualifies a shared human

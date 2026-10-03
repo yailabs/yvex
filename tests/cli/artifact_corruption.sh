@@ -24,7 +24,7 @@ contains_any_code() {
     old_ifs=$IFS
     IFS=,
     for code in $codes; do
-        if grep -F "error_0_code: $code" "$file" >/dev/null; then
+        if python3 tests/support/human_field.py "$file" "error_0_code: $code"; then
             IFS=$old_ifs
             return 0
         fi

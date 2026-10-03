@@ -15,7 +15,7 @@ publication: {html: true, pdf: true, index: true}
 [Up](README.md)
 
 Selected program: **YVEX shared compiler/runtime delivery**.
-Current phase: **interface refoundation COMPLETE; selected A03 execution is READY**.
+Current phase: **Phase-specific prefill and Rust product-shell migration IN PROGRESS; A03 is READY**.
 The next selected implementation boundary remains **A03 encoder-decoder**;
 it is READY, with no implementation started by this independently authorized
 interface Task Pack.
@@ -69,10 +69,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 38 | 31 | 0 | 1 | 6 |
+| 40 | 31 | 2 | 1 | 6 |
 <!-- task-counts:end -->
 
-**31/38 selected Tasks complete.** This denominator includes the significant
+**31/40 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -201,6 +201,8 @@ already completed correction at `6ae29730`; it does not invent a historical ID.
 | --- | --- | --- | --- | --- |
 | `PROJECT.DOCS.YVEX.REFOUNDATION.2` | Qualify the YVEX documentation architecture | Closed | ✅ COMPLETE | [Qualification](../evaluation/documentation-migration.md): coverage, Markdown/Mermaid, HTML/PDF, benchmarks and mapped QA |
 | `INTERFACES.CLI.REPLAI.PRODUCT.SURFACE.REFOUNDATION.0` | Coherent CLI/chat over a qualified generic REPLAI C presentation boundary | Closed | ✅ COMPLETE | Independent producer, immutable repin, native terminal/CPU composition and repaired hosted qualification earned; [evidence](../evaluation/retained-observations.md#native-interface-composition-2026-09-30) |
+| `INTERFACES.CLI.RUST.PRODUCT.SHELL.MIGRATION.0` | One Rust operator shell over the C/CUDA computational library | P1 | 🔵 IN PROGRESS | Complete command/slash ownership, typed FFI, native pinned REPLAI, retired C shell, preserved machine contracts, build/package and Linux/macOS qualification |
+| `V010.RUNTIME.DEEPSEEK.GB10.PREFILL.PHASE.GEOMETRY.2` | Admit and qualify wider real prompt work independently of speculative verification | P1 | 🔵 IN PROGRESS | Source-stable bounded/longer synthetic controls; phase-qualified physical widths; preserved numerics, populations, refusal, transactions and cleanup; no Case retry or sibling changes |
 | `V010.RUNTIME.DEEPSEEK.GB10.INFERENCE.PIPELINE.1` | Reduce dominant warm GB10 inference-pipeline latency | P1 | ⛔ BLOCKED | Bounded performance, Makefile and official encoding-vector evidence earned; mandatory QA retains external gaps and unchanged baseline numerical failures; [evidence](../evaluation/retained-observations.md#deepseek-gb10-inference-pipeline-2026-09-30); no follow-up selected |
 | `RUNTIME.CUDA.MOE.NUMERICAL.CORRECTNESS.0` | Restore bounded DeepSeek CUDA/MoE numerical correctness | P1 | ⛔ BLOCKED | Bounded producer/component repair qualified; mandatory `cuda.native` needs the distinct unavailable bootstrap-Q2 artifact; [evidence](../evaluation/retained-observations.md#deepseek-cuda-producer-reconciliation-2026-09-29) |
 | `SPECTRUM.FLAN.T5.ENCODER.DECODER.0` | A03 exact encoder-decoder execution | Next selected | ⬜ READY | Immutable target, retained encoder state, cross-attention, independent numerics and lifecycle evidence |
@@ -208,6 +210,175 @@ already completed correction at `6ae29730`; it does not invent a historical ID.
 The old ROADMAP called A03 ACTIVE to identify the selected next boundary. READY
 now distinguishes selection from execution. Its scope and selection survive;
 this milestone does not acquire a model or start implementation.
+
+### Current Rust product-shell migration
+
+The operator independently authorized `INTERFACES.CLI.RUST.PRODUCT.SHELL.MIGRATION.0`
+on 2026-10-01. The canonical working checkout is Spark `main`, starting at
+`67a7905ea9deb98b0704629a1f979634e19007fb`, tree
+`8734e779c19c78cda6d2612f08062234066e7caf`. PR #16 is already merged at that
+commit; native macOS CPU/terminal evidence is part of the common foundation.
+The initial reconciliation found no Metal delta; independent Metal producer
+work has since advanced on its published branch. That branch is not merged
+into this intermediate shell state and its implementation or qualification
+claims are not owned by this Task.
+
+Implementation and repair gates remain one Task:
+
+1. Retain a source-bound C-shell reference and inventory every registry path,
+   machine schema, typed domain owner and current platform obligation.
+2. Establish generated Rust grammar, canonical Cargo/Make ownership, one exact
+   REPLAI source pin and an auditable typed computational/client FFI boundary.
+3. Migrate all product command, serialization, presentation and chat ownership;
+   remove superseded C parsing/rendering/editor production membership. A Rust
+   wrapper dispatching the old C CLI is not an exit.
+4. Qualify contract differentials, runtime/PTY/refusal/cleanup, independent C
+   consumers, install/package/incremental builds, Rust checks and the current
+   Linux/macOS interface scope; characterize startup/interaction overhead.
+5. Reconcile architecture, contracts, source ownership and evidence, then publish
+   focused qualified commits with no model/runtime maturity promotion.
+
+Cross-branch integration uses architectural checkpoints, not periodic merges:
+checkpoint 0 is the integrated native macOS foundation; checkpoint 1 is this
+complete qualified Rust shell; checkpoint 2 requires a separately coordinated
+material generic runtime/backend change; checkpoint 3 belongs to independently
+qualified Metal work and its final regression/integration. Intermediate shell
+states are not Metal synchronization points. This session remains on `main` and
+does not merge, rebase or change the Metal branch. Shared build/source/QA and
+generic runtime contracts require semantic reconciliation before publication.
+
+The production host is not test state. DeepSeek optimization is not part of
+this interface Task; its separately selected prefill outcome below retains an
+independent qualification and commit boundary. A03, Laya lifecycle convergence,
+remote mutation and YAI/Studio/SDK work remain excluded.
+REPLAI remains an independently owned producer; no speculative producer change
+or release follows from the shell migration.
+
+The working staging shell owns generated grammar/help/completion, catalog
+projections, foreground host lifecycle, typed runtime administration, provider
+account projections and native REPLAI chat. Native source inventories, identity
+verification, controlled emission, templates, bounded conversion, materialization
+and model/materialization gates also have typed staging projections. Quantization
+documents and physical-variant plan/probe/emission use their admitted native
+owners; remote discovery does not acquire or infer runtime support. Model storage,
+immutable export and eviction use native identity/accounting, and local acquisition
+supports both managed storage and external references without a sibling checkout.
+All 23 attention operation leaves now use typed native execution and retained
+cleanup; sealed benchmark comparison/publication retains native identity and
+no-clobber semantics. Differential JSON/CSV and malformed/stale controls qualify
+the projections, not new GPU or model execution capability.
+The six MoE/transformer execution leaves also cross typed native operations;
+an independently compiled tiny CPU model qualifies execution, decode, logits,
+sampling and bounded generation, including budget refusal and subsequent recovery.
+Explicit runtime-input preparation and the four component/media leaves retain
+native geometry, numerical validation, cancellation and no-clobber publication.
+Real CPU publication controls qualify exact AVI bytes and refusal/recovery, not
+new media-model or GPU support.
+Advanced artifact/context/MoE inventory and bounded full-model allocation proofs
+now project native roles and cleanup without implying full payload residency or
+generation qualification. Source/target catalog views come from immutable native
+records, not parsed human rows. Model preparation now has a typed native lease
+for source authentication, sealed physical plans and historical binding recovery;
+Rust owns phase composition, emission calls, registry publication and presentation.
+The staging artifact preparation/check workflows now consume native conversion,
+integrity, materialization and bounded plan owners (15 and 23 isolated controls,
+including emitted-byte and exit differentials against C). Artifact discovery is
+a native bounded catalog shared by both consumers: 22 controls preserve its JSON,
+source-sidecar blockers and family selection; ambiguous selections and population
+overflow refuse rather than truncate. Discovery does not authenticate payloads
+or qualify runtime readiness. Provider supervision and target engineering reports
+now have typed Rust projections, isolated positive/refusal controls and
+immutable loaded-image worker qualification. Make now publishes the Rust shell;
+the retired C parser, renderers and editor adapter are absent from production.
+Dry-run, malformed/unknown selections and acquisition-followed-by-refusal controls
+remain separate from real full-model preparation evidence.
+Differential controls cover malformed ranges/shapes, digest refusals, retained
+failure facts, mutation boundaries and resource retirement; these are not
+full-model execution claims. No active advanced operation is intentionally
+delegated to a legacy C command dispatcher.
+Independent C readers agree with
+Rust host/engine/memory/event JSON; isolated Rust host stop retires its socket
+and workers. Chat PTYs cover three widths, plain/styled output, Unicode, rich
+completion, driven resize, cancellation before admission and during execution,
+indeterminate delivery without retry, resynchronization, exact output channels
+and terminal restoration. Rust unit/clippy/structural checks qualify these
+seams, not the whole product. The default catalog again includes source-only
+entries outside the working set; styled, plain and JSON projections retain the
+same membership, qualified at 40/80/180 columns. Foreground acquisition-client
+interruption detaches observation without cancelling the supervised operation;
+explicit source stop remains the cancellation owner. Source audit retains native
+header/extent diagnostics without promoting payload authentication. Human host
+logs now share compact producer UTC time, activity and exact request identity;
+unit and isolated PTY controls cover intact metric fields, 40/80/180-column
+layout, semantic colors/plain parity, unchanged JSONL, interrupt and broken-pipe
+detach without stopping the host. Diagnostic noise is available under verbose,
+not silently erased from machine evidence. The focused
+Make review passes 11 checks. All 30 legacy CLI sections and client cutover now
+pass against the Rust shell, including canonical grammar hints and established
+transport-error exits. Rust unit/structural, native contract and PTY controls
+are retained in the [shell observation](../evaluation/retained-observations.md#rust-product-shell-qualification-2026-10-03).
+Source-stable mapped QA returns 130 PASS, zero FAIL/SKIP/ERROR and 33 BLOCKED
+for unavailable mandatory external assets; it is not a green whole-product
+release gate. Both mapped sanitizer lanes pass. Manifest-derived installation
+has been exercised in an isolated DESTDIR; hosted macOS Rust qualification and
+publication remain pending. The production service
+continues using its previously qualified executable and is not replaced by
+interface qualification. macOS SSH is reachable but rejects the available
+credentials; the new Rust macOS claim remains unearned.
+
+### Current phase-specific prefill
+
+On 2026-10-01 the operator selected YVEX producer latency as the first priority,
+with completion of the already active Rust shell immediately afterward. The
+read-only Tech Infra investigation observed exact 14,253-token producer
+preflight, 2,070 tokens processed in 308.878 seconds, then disconnect/cancellation
+with no generated token. That operator request is not a fixture or retry.
+
+This independent outcome is `V010.RUNTIME.DEEPSEEK.GB10.PREFILL.PHASE.GEOMETRY.2`.
+The previous pipeline result and its separate numerical/asset gates survive.
+The current specialization uses source verification width to bound prompt work;
+configured chunks are not proof of physical parallelism. The selected boundary
+is generic phase-specific implementation admission, not altered model mathematics.
+
+1. Bind the existing executable, exact artifact/binding/device and independent
+   synthetic workloads; preserve the operator-owned host and state.
+2. Separate prefill width from verification and multi-sequence scheduling at
+   their canonical owners. Real populations, capacity and numerical classes
+   remain authoritative; unsupported or malformed requests fail closed.
+3. Qualify component/reference, prefix/state, cancellation, capacity and cleanup
+   before equivalent real GB10 complete-request comparisons. Reject candidates
+   with numerical or lifecycle regressions rather than retaining a timing gain.
+4. Retain source-stable observations, architectural decisions and remaining
+   gates, publish focused producer work when qualified, then finish the Rust
+   shell Task. A03 remains READY; no YAI/SDK/Studio edits or indeterminate SEND.
+
+Any live-service replacement requires supported lifecycle and evidence that no
+operator work or state is destroyed. A model fitting context capacity is not a
+latency promise; this Task does not claim universal model or hardware support.
+
+The candidate separates a bounded 32-position prompt implementation envelope
+from the unchanged source verification width and multi-sequence scheduling.
+Eight targeted host-side unit owners and three CUDA component owners pass,
+including exact expert-pair associations, wide encoded expert rows, nonfinite
+refusal and ordered projection oracles. An independently authorized maintenance
+window retired only the idle producer and its empty `main`, through supported
+lifecycle. Source-stable sequential reference/candidate runs retain two samples
+each at 22, 106 and 346 input tokens, with exact request/usage/result agreement.
+The larger controls improve complete-request latency; wider arena preparation
+prevents a stable short-request HTTP gain. Stale-generation, capacity and unknown
+model refusals, real prefill cancellation and subsequent independent recovery
+pass with zero temporary session/work ownership. The public candidate is online
+at the original endpoints with exact loaded executable identity and a recreated
+empty, unbound `main`; no Case retry occurred. The
+[retained observation](../evaluation/retained-observations.md#phase-specific-prompt-geometry-2026-10-01)
+owns exact identities, timings and memory tradeoffs. Source-stable mapped
+qualification resolves to 128 PASS and 34 BLOCKED across the full run and its
+isolated download retry; there is no remaining FAIL in that selection. The
+official encoding lane separately passes four upstream encoding vectors, four
+native BPE controls, one native request-prefix control and tokenizer-reference
+parity. It does not qualify full native transcripts or whole-model logits.
+Broader numerical and missing-asset gates remain explicit. Focused producer
+publication remains pending; the Rust shell is not complete.
 
 ### Completed interface Task Pack
 

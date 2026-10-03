@@ -105,13 +105,13 @@ static int render_finish(render_builder *builder, unsigned char **output,
     return YVEX_OK;
 }
 
-const char *openai_capacity_error_code(int status)
+const char *yvex_openai_capacity_error_code(int status)
 {
     return status == YVEX_ERR_INPUT_CAPACITY ? "input_token_capacity_exceeded" :
            status == YVEX_ERR_OUTPUT_CAPACITY ? "output_token_capacity_exceeded" : NULL;
 }
 
-int openai_json_error(int status, const char *type, const char *param,
+int yvex_openai_json_error(int status, const char *type, const char *param,
                       const char *code, const char *message,
                       unsigned char **output, unsigned long long *count,
                       yvex_error *err)
@@ -193,7 +193,7 @@ static int render_capacity(render_builder *builder,
         render_append(builder, limits, (unsigned long long)length, err) : YVEX_ERR_BOUNDS;
 }
 
-int openai_json_preflight(
+int yvex_openai_json_preflight(
     const yvex_client_message *message, const char *request_identity,
     unsigned char **output, unsigned long long *count, yvex_error *err)
 {
@@ -237,7 +237,7 @@ int openai_json_preflight(
     return render_finish(&builder, output, count, err);
 }
 
-int openai_json_models(const yvex_server_engine_summary *engines,
+int yvex_openai_json_models(const yvex_server_engine_summary *engines,
                        unsigned long long engine_count, int list,
                        unsigned char **output, unsigned long long *count,
                        yvex_error *err)
@@ -451,7 +451,7 @@ static int render_responses_result(render_builder *builder, const char *id,
     return rc == YVEX_OK ? render_literal(builder, "}", err) : rc;
 }
 
-int openai_json_result(openai_endpoint endpoint, const char *id,
+int yvex_openai_json_result(openai_endpoint endpoint, const char *id,
                        const char *model, unsigned long long created,
                        const openai_generation_result *result,
                        unsigned char **output, unsigned long long *count,
@@ -584,7 +584,7 @@ static int render_response_chunk(render_builder *builder, const char *id,
     return rc == YVEX_OK ? render_literal(builder, "}}", err) : rc;
 }
 
-int openai_json_stream_chunk(openai_endpoint endpoint, const char *id,
+int yvex_openai_json_stream_chunk(openai_endpoint endpoint, const char *id,
                              const char *model, unsigned long long created,
                              const yvex_client_message *message,
                              unsigned long long tool_index, int initial,
@@ -604,7 +604,7 @@ int openai_json_stream_chunk(openai_endpoint endpoint, const char *id,
     return render_finish(&builder, output, count, err);
 }
 
-int openai_json_chat_usage_chunk(const char *id, const char *model,
+int yvex_openai_json_chat_usage_chunk(const char *id, const char *model,
                                  unsigned long long created,
                                  const openai_generation_result *result,
                                  unsigned char **output,
@@ -875,7 +875,7 @@ static int render_response_event_payload(
         if (rc == YVEX_OK) rc = render_text(builder, model, err);
         if (rc == YVEX_OK) rc = render_literal(builder, ",\"error\":{\"code\":", err);
         if (rc == YVEX_OK) {
-            const char *code = result ? openai_capacity_error_code(result->failure.code) : NULL;
+            const char *code = result ? yvex_openai_capacity_error_code(result->failure.code) : NULL;
             rc = render_text(builder, code ? code : "server_error", err);
         }
         if (rc == YVEX_OK) rc = render_literal(builder, ",\"message\":", err);
@@ -887,7 +887,7 @@ static int render_response_event_payload(
     return rc;
 }
 
-int openai_json_response_event(openai_response_event_kind kind,
+int yvex_openai_json_response_event(openai_response_event_kind kind,
                                const char *id, const char *model,
                                unsigned long long created,
                                const yvex_client_message *message,

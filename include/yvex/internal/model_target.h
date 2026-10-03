@@ -172,6 +172,16 @@ typedef struct yvex_model_target_request {
     int write_sidecar;
     char sidecar_path[512];
 } yvex_model_target_request;
+/* Typed observations are independent from legacy human rows. Consumers never
+ * recover a fact by parsing a renderer or a formatted report line. */
+typedef enum { YVEX_MODEL_TARGET_FACT_TEXT = 1, YVEX_MODEL_TARGET_FACT_U64 = 2 }
+    yvex_model_target_fact_kind;
+typedef struct {
+    char name[96];
+    yvex_model_target_fact_kind kind;
+    char text[YVEX_MODEL_TARGET_TEXT_CAP];
+    unsigned long long number;
+} yvex_model_target_fact;
 typedef struct yvex_model_target_report {
     yvex_model_target_command_kind kind;
     yvex_model_target_render_mode mode;
@@ -193,6 +203,9 @@ typedef struct yvex_model_target_report {
     char next_row[128];
     char boundary[256];
     char reason[256];
+    yvex_model_target_fact facts[YVEX_MODEL_TARGET_ROW_CAP];
+    unsigned long fact_count;
+    int fact_failed; /* Sticky: a later status assignment cannot clear lost facts. */
     yvex_model_target_text_value rows[YVEX_MODEL_TARGET_ROW_CAP];
     unsigned long row_count;
     yvex_model_target_text_value error_rows[64];
@@ -241,6 +254,7 @@ typedef struct {
     yvex_model_target_row_kind kind;
     const char *format;
     size_t value_offset;
+    const char *name;
 } yvex_model_target_row_spec;
 typedef struct {
     const char *status;
@@ -275,6 +289,17 @@ void yvex_model_target_report_prepare(
 int yvex_model_target_report_add_row(yvex_model_target_report *report,
                                      const char *fmt,
                                      ...);
+int yvex_model_target_report_fact_text(yvex_model_target_report *report,
+    const char *name, const char *text);
+int yvex_model_target_report_fact_u64(yvex_model_target_report *report,
+    const char *name, unsigned long long number);
+typedef struct {
+    const char *id, *class_name, *stage, *eligibility, *status, *reason, *next;
+    const char *blocker, *secondary_blocker;
+} yvex_model_target_candidate_projection;
+unsigned long yvex_model_target_candidate_count(void);
+int yvex_model_target_candidate_at(unsigned long index, int dense,
+    yvex_model_target_candidate_projection *out, yvex_error *err);
 struct yvex_semantic_model_ir;
 struct yvex_transform_ir;
 int yvex_model_target_report_project_semantic_detail(
@@ -351,8 +376,6 @@ int yvex_model_target_report_add_table_row(yvex_model_target_report *report,
 int yvex_model_target_report_build(const yvex_model_target_request *request,
                                    yvex_model_target_report *report,
                                    yvex_error *err);
-int yvex_model_target_help_report_build(yvex_model_target_report *report,
-                                        yvex_error *err);
 void yvex_model_target_report_close(yvex_model_target_report *report);
 
 /* Target catalog. */
@@ -379,6 +402,20 @@ typedef struct {
     const char *generation;
     const char *external_reference;
 } yvex_model_target_record;
+/* Immutable process-lifetime catalog views. These are source/target facts,
+ * not artifact presence, engine admission or generation qualification. */
+unsigned long yvex_model_target_catalog_count(void);
+const yvex_model_target_record *yvex_model_target_catalog_at(unsigned long index);
+unsigned long yvex_model_target_class_count(void);
+const yvex_model_target_class_record *yvex_model_target_class_at(unsigned long index);
+typedef struct {
+    const char *source_status, *artifact_status, *runtime_status;
+    const char *next, *boundary;
+    const yvex_source_target_identity *release_identity;
+    int release_selected;
+} yvex_model_target_summary;
+int yvex_model_target_summary_get(const char *target_id,
+                                   yvex_model_target_summary *out, yvex_error *err);
 int yvex_model_target_release_source_paths(
     const yvex_model_target_request *request,
     char *models_root,

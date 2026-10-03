@@ -48,21 +48,26 @@ cp "$MODEL" "$STALE_MODEL"
   --registry "$REG" \
   --support-level selected-tensor-materialized \
   >"$OUT_DIR/add.out" 2>"$OUT_DIR/add.err"
-contains "$OUT_DIR/add.out" "registered_file_size:"
-contains "$OUT_DIR/add.out" "registered_sha256:"
-contains "$OUT_DIR/add.out" "registered_format: gguf"
-contains "$OUT_DIR/add.out" "registered_architecture: deepseek"
-contains "$OUT_DIR/add.out" "registered_tensor_count: 1"
-contains "$OUT_DIR/add.out" "registered_known_tensor_bytes: 64"
-contains "$OUT_DIR/add.out" "registered_primary_tensor: token_embd.weight"
-contains "$OUT_DIR/add.out" "registered_primary_role: token_embedding"
-contains "$OUT_DIR/add.out" "registered_primary_dtype: F16"
-contains "$OUT_DIR/add.out" "registered_primary_dims: [4,8]"
-contains "$OUT_DIR/add.out" "registered_selected_embedding_ready: true"
+# Creation prints a compact receipt. Exact metadata lives in the native registry,
+# not in a mandatory multi-page human transcript.
+python3 - "$REG" "$MODEL" <<'PY'
+import hashlib, json, pathlib, sys
+entry = json.loads(pathlib.Path(sys.argv[1]).read_text())["models"][0]
+model = pathlib.Path(sys.argv[2])
+assert entry["file_size"] == model.stat().st_size
+assert entry["sha256"] == hashlib.sha256(model.read_bytes()).hexdigest()
+for key, expected in {
+    "format": "gguf", "architecture": "deepseek", "tensor_count": 1,
+    "known_tensor_bytes": 64, "primary_tensor_name": "token_embd.weight",
+    "primary_tensor_role": "token_embedding", "primary_tensor_dtype": "F16",
+    "primary_tensor_dims": "[4,8]", "selected_embedding_ready": True,
+}.items():
+    assert entry[key] == expected, (key, entry[key], expected)
+PY
 contains "$OUT_DIR/add.out" "identity_status: recorded"
 contains "$OUT_DIR/add.out" "status: models-added"
 
-GOOD_SHA=$(awk '$1 == "registered_sha256" || $1 == "registered_sha256:" { print $2 }' "$OUT_DIR/add.out")
+GOOD_SHA=$(awk '$1 == "registered_sha256" || $1 == "registered_sha256:" || $1 == "sha256" { print $2 }' "$OUT_DIR/add.out")
 test -n "$GOOD_SHA" || fail "missing registered sha"
 
 "$YVEX_BIN" profile verify "$ALIAS" --registry "$REG" --audit \
@@ -120,7 +125,13 @@ YVEX_MODELS_REGISTRY="$STALE_REG" "$YVEX_BIN" artifact materialize \
   >"$OUT_DIR/materialize-stale.out" 2>"$OUT_DIR/materialize-stale.err" && \
   fail "materialize stale alias unexpectedly passed" || true
 contains "$OUT_DIR/materialize-stale.out" "identity_status: fail"
-contains "$OUT_DIR/materialize-stale.out" "status: models-identity-fail"
+if ! python3 tests/support/human_field.py "$OUT_DIR/materialize-stale.out" "status: models-identity-fail"; then
+    contains "$OUT_DIR/materialize-stale.out" "status: materialization-integrity-fail"
+    contains "$OUT_DIR/materialize-stale.out" "materialization_phase: preflight"
+    contains "$OUT_DIR/materialize-stale.out" "backend_status: not-opened"
+    contains "$OUT_DIR/materialize-stale.out" "allocation_attempted: false"
+    contains "$OUT_DIR/materialize-stale.out" "transfer_attempted: false"
+fi
 not_contains "$OUT_DIR/materialize-stale.out" "status: weights-materialized"
 
 "$YVEX_BIN" artifact verify model \

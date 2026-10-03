@@ -15,6 +15,10 @@ fail() {
     exit 1
 }
 
+contains() {
+    python3 tests/support/human_field.py "$1" "$2" || fail "$1 missing: $2"
+}
+
 yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
@@ -25,33 +29,38 @@ mkdir -p "$OUT_DIR"
     --overwrite > "$OUT_DIR/emit.out" 2> "$OUT_DIR/emit.err" || fail "emit failed"
 
 test -f "$OUT" || fail "emitted file missing"
-grep 'gguf emit: controlled' "$OUT_DIR/emit.out" >/dev/null || fail "missing emit heading"
-grep 'status: gguf-written' "$OUT_DIR/emit.out" >/dev/null || fail "missing written status"
-grep 'roundtrip_validated: yes' "$OUT_DIR/emit.out" >/dev/null || fail "missing roundtrip proof"
+grep -E 'gguf emit: controlled|ARTIFACT EMIT  controlled' "$OUT_DIR/emit.out" >/dev/null || fail "missing emit heading"
+contains "$OUT_DIR/emit.out" 'status: gguf-written'
+contains "$OUT_DIR/emit.out" 'roundtrip_validated: yes'
 
 "$YVEX_BIN" artifact show "$OUT" > "$OUT_DIR/inspect.out" 2> "$OUT_DIR/inspect.err" || fail "inspect failed"
-grep 'format: gguf' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect format"
-grep 'version: 3' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect version"
-grep 'architecture: llama' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect arch"
-grep 'model_name: yvex-owned-gguf-test' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect model"
-grep 'tensor_count: 1' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect tensor count"
-grep 'known_tensor_bytes: 128' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect bytes"
-grep 'status: descriptor-only' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect status"
+contains "$OUT_DIR/inspect.out" 'format: gguf'
+contains "$OUT_DIR/inspect.out" 'version: 3'
+contains "$OUT_DIR/inspect.out" 'architecture: llama'
+contains "$OUT_DIR/inspect.out" 'model_name: yvex-owned-gguf-test'
+contains "$OUT_DIR/inspect.out" 'tensor_count: 1'
+contains "$OUT_DIR/inspect.out" 'known_tensor_bytes: 128'
+contains "$OUT_DIR/inspect.out" 'status: descriptor-only'
 
 "$YVEX_BIN" inspect artifact metadata "$OUT" > "$OUT_DIR/metadata.out" 2> "$OUT_DIR/metadata.err" || fail "metadata failed"
-grep 'metadata_count: 12' "$OUT_DIR/metadata.out" >/dev/null || fail "missing metadata count"
+contains "$OUT_DIR/metadata.out" 'metadata_count: 12'
 
 "$YVEX_BIN" inspect artifact tensors "$OUT" > "$OUT_DIR/tensors.out" 2> "$OUT_DIR/tensors.err" || fail "tensors failed"
 grep 'token_embd.weight' "$OUT_DIR/tensors.out" >/dev/null || fail "missing tensor name"
-grep 'dims=\[4,8\]' "$OUT_DIR/tensors.out" >/dev/null || fail "missing tensor dims"
-grep 'dtype=F32' "$OUT_DIR/tensors.out" >/dev/null || fail "missing tensor dtype"
+if ! grep 'dims=\[4,8\]' "$OUT_DIR/tensors.out" >/dev/null; then
+    contains "$OUT_DIR/tensors.out" 'dims: [4, 8]'
+fi
+if ! grep 'dtype=F32' "$OUT_DIR/tensors.out" >/dev/null; then
+    contains "$OUT_DIR/tensors.out" 'dtype: F32'
+fi
 
 "$YVEX_BIN" artifact materialize --model "$OUT" --backend cpu > "$OUT_DIR/materialize-cpu.out" 2> "$OUT_DIR/materialize-cpu.err" || fail "cpu materialize failed"
-grep 'materialization status: materialized' "$OUT_DIR/materialize-cpu.out" >/dev/null || fail "missing materialized status"
+python3 tests/support/human_field.py --regex "$OUT_DIR/materialize-cpu.out" \
+    'materialization[ _]status: materialized' || fail "missing materialized status"
 python3 tests/support/human_field.py "$OUT_DIR/materialize-cpu.out" 'tensors_materialized: 1' || fail "missing materialized tensor count"
 python3 tests/support/human_field.py "$OUT_DIR/materialize-cpu.out" 'bytes_materialized: 128' || fail "missing materialized bytes"
 python3 tests/support/human_field.py "$OUT_DIR/materialize-cpu.out" 'execution_ready: false' || fail "missing execution false"
 python3 tests/support/human_field.py "$OUT_DIR/materialize-cpu.out" 'status: weights-materialized' || fail "missing weights status"
 
 "$YVEX_BIN" compile artifact emit --help > "$OUT_DIR/help.out" 2> "$OUT_DIR/help.err" || fail "help failed"
-grep 'usage: yvex compile artifact emit' "$OUT_DIR/help.out" >/dev/null || fail "missing help usage"
+grep -E '^(usage: )?yvex compile artifact emit' "$OUT_DIR/help.out" >/dev/null || fail "missing help usage"

@@ -9,6 +9,7 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/io.h>
 #include <yvex/internal/model_artifact.h>
+#include <yvex/internal/registry.h>
 
 #include <ctype.h>
 #include <dirent.h>
@@ -1221,28 +1222,20 @@ static int split_canonical_stem(const char *stem,
            qprofile[0] && calibration[0];
 }
 
-int yvex_model_registry_entry_derive_from_path(yvex_model_registry_entry *entry,
-                                               const char *path,
-                                               yvex_error *err)
+int yvex_model_registry_derive(yvex_model_registry_derivation *out,
+                               const char *path, yvex_error *err)
 {
-    static char alias[256];
-    static char family[128];
-    static char model[128];
-    static char scope[64];
-    static char artifact_class[128];
-    static char qprofile[64];
-    static char calibration[128];
-    static char producer[64];
-    static char schema[64];
-    static char path_copy[4096];
+    yvex_model_registry_entry *entry;
     char stem[1024];
     const char *base;
     size_t len;
 
-    if (!entry || !path || !path[0]) {
+    if (!out || !path || !path[0]) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_registry_derive", "entry and path are required");
         return YVEX_ERR_INVALID_ARG;
     }
+    memset(out, 0, sizeof(*out));
+    entry = &out->entry;
     base = strrchr(path, '/');
     base = base ? base + 1 : path;
     len = strlen(base);
@@ -1252,29 +1245,30 @@ int yvex_model_registry_entry_derive_from_path(yvex_model_registry_entry *entry,
     }
     memcpy(stem, base, len - 5u);
     stem[len - 5u] = '\0';
-    if (!split_canonical_stem(stem, family, sizeof(family), model, sizeof(model),
-                              scope, sizeof(scope), artifact_class, sizeof(artifact_class),
-                              qprofile, sizeof(qprofile), calibration, sizeof(calibration),
-                              producer, sizeof(producer), schema, sizeof(schema),
-                              alias, sizeof(alias))) {
+    if (!split_canonical_stem(stem, out->family, sizeof(out->family),
+                              out->model, sizeof(out->model), out->scope, sizeof(out->scope),
+                              out->artifact_class, sizeof(out->artifact_class),
+                              out->qprofile, sizeof(out->qprofile), out->calibration, sizeof(out->calibration),
+                              out->producer, sizeof(out->producer), out->artifact_schema, sizeof(out->artifact_schema),
+                              out->alias, sizeof(out->alias))) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "model_registry_derive",
                        "filename does not match YVEX artifact naming grammar");
         return YVEX_ERR_FORMAT;
     }
-    if (yvex_model_alias_validate(alias, err) != YVEX_OK) return yvex_error_code(err);
-    snprintf(path_copy, sizeof(path_copy), "%s", path);
+    if (yvex_model_alias_validate(out->alias, err) != YVEX_OK) return yvex_error_code(err);
+    snprintf(out->path, sizeof(out->path), "%s", path);
     memset(entry, 0, sizeof(*entry));
     entry->schema_version = YVEX_MODEL_REGISTRY_ENTRY_SCHEMA_CURRENT;
-    entry->alias = alias;
-    entry->family = family;
-    entry->model = model;
-    entry->scope = scope;
-    entry->artifact_class = artifact_class;
-    entry->qprofile = qprofile;
-    entry->calibration = calibration;
-    entry->producer = producer;
-    entry->artifact_schema = schema;
-    entry->path = path_copy;
+    entry->alias = out->alias;
+    entry->family = out->family;
+    entry->model = out->model;
+    entry->scope = out->scope;
+    entry->artifact_class = out->artifact_class;
+    entry->qprofile = out->qprofile;
+    entry->calibration = out->calibration;
+    entry->producer = out->producer;
+    entry->artifact_schema = out->artifact_schema;
+    entry->path = out->path;
     entry->sha256 = "";
     entry->file_size = 0ull;
     entry->format = "";
@@ -1303,6 +1297,20 @@ int yvex_model_registry_entry_derive_from_path(yvex_model_registry_entry *entry,
     entry->runtime_execution_strategy = "";
     entry->runtime_context = 0ull;
     return YVEX_OK;
+}
+
+int yvex_model_registry_entry_derive_from_path(yvex_model_registry_entry *entry,
+                                               const char *path, yvex_error *err)
+{
+    static yvex_model_registry_derivation storage;
+    int rc;
+    if (!entry) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_registry_derive", "entry is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = yvex_model_registry_derive(&storage, path, err);
+    if (rc == YVEX_OK) *entry = storage.entry;
+    return rc;
 }
 
 static int read_file(const char *path, char **out, yvex_error *err)

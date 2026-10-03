@@ -15,6 +15,37 @@
 #include <stdlib.h>
 #include <string.h>
 
+int yvex_component_target_profile(const char *target,
+                                   yvex_media_target_profile *out,
+                                   yvex_error *err)
+{
+    const yvex_component_variant_adapter *adapter;
+    yvex_media_target_profile candidate;
+    int rc;
+    if (!target || !target[0] || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "component.target-profile",
+                       "target and profile output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    adapter = yvex_graph_component_variant_find(target);
+    if (!adapter || !adapter->media_target_profile) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "component.target-profile",
+                       "target has no admitted media profile");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    memset(&candidate, 0, sizeof(candidate));
+    rc = adapter->media_target_profile(&candidate, err);
+    if (rc != YVEX_OK) return rc;
+    if (candidate.schema_version != YVEX_MEDIA_TARGET_PROFILE_SCHEMA_V2) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "component.target-profile",
+                       "registered media profile schema is unsupported");
+        return YVEX_ERR_FORMAT;
+    }
+    *out = candidate;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 typedef int (*tokenizer_policy_provider)(yvex_tokenizer_family_policy *, yvex_error *);
 
 #define DECLARE_FAMILY_DESCRIPTOR(name) \

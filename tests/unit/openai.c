@@ -20,7 +20,7 @@ static int admit_fixture(const char *json, openai_endpoint endpoint,
 
     request.body = (unsigned char *)json;
     request.body_count = strlen(json);
-    return openai_json_admit(&request, endpoint,
+    return yvex_openai_json_admit(&request, endpoint,
                              YVEX_REASONING_SOURCE_DEFAULT,
                              admitted, err);
 }
@@ -64,7 +64,7 @@ static int test_chat_admission(void)
     YVEX_TEST_ASSERT(admitted.provider->reasoning_policy ==
                          YVEX_REASONING_MAXIMUM,
                      "maximum source reasoning policy must remain typed");
-    openai_admitted_request_clear(&admitted);
+    yvex_openai_admitted_request_clear(&admitted);
     rc = admit_fixture(json, OPENAI_ENDPOINT_CHAT, &admitted, &err);
 
     YVEX_TEST_ASSERT(rc == YVEX_OK, "Chat request must admit");
@@ -86,17 +86,17 @@ static int test_chat_admission(void)
     YVEX_TEST_ASSERT(
         admitted.provider->reasoning_policy == YVEX_REASONING_SOURCE_DEFAULT,
         "omitted reasoning effort remains source-owned until model admission");
-    openai_admitted_request_clear(&admitted);
+    yvex_openai_admitted_request_clear(&admitted);
     rc = admit_fixture(none, OPENAI_ENDPOINT_CHAT, &admitted, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && admitted.provider->reasoning_policy ==
                          YVEX_REASONING_DISABLED,
                      "explicit non-thinking policy must override the model default");
-    openai_admitted_request_clear(&admitted);
+    yvex_openai_admitted_request_clear(&admitted);
     rc = admit_fixture(low, OPENAI_ENDPOINT_CHAT, &admitted, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && admitted.provider->reasoning_policy ==
                          YVEX_REASONING_LOW,
                      "low source reasoning policy remains typed");
-    openai_admitted_request_clear(&admitted);
+    yvex_openai_admitted_request_clear(&admitted);
     return 0;
 }
 
@@ -194,7 +194,7 @@ static int test_responses_admission(void)
                      "Responses named function choice must remain typed");
     YVEX_TEST_ASSERT_STREQ(admitted.provider->tool_choice.function_name,
                            "lookup", "Responses flat function name must map");
-    openai_admitted_request_clear(&admitted);
+    yvex_openai_admitted_request_clear(&admitted);
     return 0;
 }
 
@@ -213,7 +213,7 @@ static int test_rendering(void)
     result.total_tokens = 4u;
     result.finish = YVEX_PROVIDER_FINISH_STOP;
     result.complete = 1;
-    YVEX_TEST_ASSERT(openai_json_result(
+    YVEX_TEST_ASSERT(yvex_openai_json_result(
         OPENAI_ENDPOINT_CHAT, "chatcmpl_test", "deepseek4-v4-flash-dspark", 7u,
         &result, &json, &count, &err) == YVEX_OK,
         "Chat result must render");
@@ -222,7 +222,7 @@ static int test_rendering(void)
                      "Chat result must be valid JSON");
     free(json);
     json = NULL;
-    YVEX_TEST_ASSERT(openai_json_result(
+    YVEX_TEST_ASSERT(yvex_openai_json_result(
         OPENAI_ENDPOINT_RESPONSES, "resp_test", "deepseek4-v4-flash-dspark", 7u,
         &result, &json, &count, &err) == YVEX_OK,
         "Responses result must render");
@@ -235,7 +235,7 @@ static int test_rendering(void)
     memcpy(fragment.bytes, "hel", 3u);
     fragment.byte_count = 3u;
     fragment.provider_output_kind = YVEX_PROVIDER_OUTPUT_ASSISTANT_TEXT;
-    YVEX_TEST_ASSERT(openai_json_stream_chunk(
+    YVEX_TEST_ASSERT(yvex_openai_json_stream_chunk(
         OPENAI_ENDPOINT_RESPONSES, "resp_test", "deepseek4-v4-flash-dspark", 7u,
         &fragment, 0u, 0, &json, &count, &err) == YVEX_OK,
         "Responses delta must render");
@@ -261,7 +261,7 @@ static int test_rendering(void)
         tools.finish = YVEX_PROVIDER_FINISH_TOOL_CALLS;
         tools.complete = 1;
         YVEX_TEST_ASSERT(
-            openai_json_result(OPENAI_ENDPOINT_CHAT, "chatcmpl_tools",
+            yvex_openai_json_result(OPENAI_ENDPOINT_CHAT, "chatcmpl_tools",
                                "deepseek4-v4-flash-dspark", 7u, &tools,
                                &json, &count, &err) == YVEX_OK &&
                 strstr((char *)json, "\"reasoning_content\":\"why\"") &&
@@ -271,7 +271,7 @@ static int test_rendering(void)
         free(json);
         json = NULL;
         YVEX_TEST_ASSERT(
-            openai_json_result(OPENAI_ENDPOINT_RESPONSES, "resp_tools",
+            yvex_openai_json_result(OPENAI_ENDPOINT_RESPONSES, "resp_tools",
                                "deepseek4-v4-flash-dspark", 7u, &tools,
                                &json, &count, &err) == YVEX_OK &&
                 yvex_provider_json_value_validate(json, count, 1, &err) ==
@@ -289,7 +289,7 @@ static int test_rendering(void)
         memcpy(call_fragment.bytes, "{\"x\":2}", 7u);
         call_fragment.byte_count = 7u;
         YVEX_TEST_ASSERT(
-            openai_json_stream_chunk(
+            yvex_openai_json_stream_chunk(
                 OPENAI_ENDPOINT_CHAT, "chatcmpl_tools",
                 "deepseek4-v4-flash-dspark", 7u, &call_fragment, 1u, 0,
                 &json, &count, &err) == YVEX_OK &&
@@ -308,13 +308,13 @@ static int test_model_catalog_rendering(void)
     yvex_error err;
     strcpy(engines[0].alias, "deepseek");
     strcpy(engines[1].alias, "minimax");
-    YVEX_TEST_ASSERT(openai_json_models(NULL, 0ull, 1, &json, &count, &err) ==
+    YVEX_TEST_ASSERT(yvex_openai_json_models(NULL, 0ull, 1, &json, &count, &err) ==
                          YVEX_OK &&
                          strstr((char *)json, "\"data\":[]"),
                      "a healthy zero-engine host must expose an empty model catalog");
     free(json);
     json = NULL;
-    YVEX_TEST_ASSERT(openai_json_models(engines, 2ull, 1, &json, &count, &err) ==
+    YVEX_TEST_ASSERT(yvex_openai_json_models(engines, 2ull, 1, &json, &count, &err) ==
                          YVEX_OK &&
                          strstr((char *)json, "\"id\":\"deepseek\"") &&
                          strstr((char *)json, "\"id\":\"minimax\"") &&
@@ -323,12 +323,12 @@ static int test_model_catalog_rendering(void)
                      "the OpenAI catalog must project every loaded engine alias");
     free(json);
     json = NULL;
-    YVEX_TEST_ASSERT(openai_json_models(&engines[1], 1ull, 0, &json, &count,
+    YVEX_TEST_ASSERT(yvex_openai_json_models(&engines[1], 1ull, 0, &json, &count,
                                         &err) == YVEX_OK &&
                          strstr((char *)json, "\"id\":\"minimax\""),
                      "one exact model lookup must render only the selected engine");
     free(json);
-    YVEX_TEST_ASSERT(openai_json_models(engines, 2ull, 0, &json, &count, &err) ==
+    YVEX_TEST_ASSERT(yvex_openai_json_models(engines, 2ull, 0, &json, &count, &err) ==
                          YVEX_ERR_INVALID_ARG,
                      "an ambiguous singular model projection must refuse");
     return 0;
@@ -345,24 +345,24 @@ static int test_response_engine_generation(void)
     YVEX_TEST_ASSERT(admit_fixture(json, OPENAI_ENDPOINT_RESPONSES, &admitted,
                                    &err) == YVEX_OK,
                      "response-state fixture must admit");
-    YVEX_TEST_ASSERT(openai_state_store(&gateway, "resp_a", "session-a", 0ull,
+    YVEX_TEST_ASSERT(yvex_openai_state_store(&gateway, "resp_a", "session-a", 0ull,
                                         admitted.provider, 10ull, &err) ==
                          YVEX_ERR_INVALID_ARG,
                      "response state without an engine generation must refuse");
-    YVEX_TEST_ASSERT(openai_state_store(&gateway, "resp_a", "session-a", 7ull,
+    YVEX_TEST_ASSERT(yvex_openai_state_store(&gateway, "resp_a", "session-a", 7ull,
                                         admitted.provider, 10ull, &err) == YVEX_OK,
                      "response state must retain one exact engine generation");
-    record = openai_state_find(&gateway, "resp_a", 11ull);
+    record = yvex_openai_state_find(&gateway, "resp_a", 11ull);
     YVEX_TEST_ASSERT(record && record->engine_generation == 7ull &&
                          !strcmp(record->model, "deepseek"),
                      "retained response state must expose model and generation lineage");
-    YVEX_TEST_ASSERT(openai_state_replace(&gateway, record, "resp_b", 8ull,
+    YVEX_TEST_ASSERT(yvex_openai_state_replace(&gateway, record, "resp_b", 8ull,
                                           admitted.provider, 12ull, &err) ==
                          YVEX_OK &&
                          record->engine_generation == 8ull,
                      "response replacement must update its explicit generation lineage");
-    openai_state_clear(&gateway);
-    openai_admitted_request_clear(&admitted);
+    yvex_openai_state_clear(&gateway);
+    yvex_openai_admitted_request_clear(&admitted);
     return 0;
 }
 
@@ -383,12 +383,12 @@ static int test_http_admission(void)
     YVEX_TEST_ASSERT(write(pair[0], good, sizeof(good) - 1u) ==
                          (ssize_t)(sizeof(good) - 1u),
                      "complete HTTP fixture must write");
-    YVEX_TEST_ASSERT(openai_http_read(pair[1], &request, &err) == YVEX_OK,
+    YVEX_TEST_ASSERT(yvex_openai_http_read(pair[1], &request, &err) == YVEX_OK,
                      "bounded HTTP request must admit");
     YVEX_TEST_ASSERT_STREQ(request.method, "POST", "HTTP method must parse");
     YVEX_TEST_ASSERT_STREQ(request.path, "/v1/responses",
                            "HTTP path must parse");
-    openai_http_request_clear(&request);
+    yvex_openai_http_request_clear(&request);
     close(pair[0]);
     close(pair[1]);
 
@@ -397,7 +397,7 @@ static int test_http_admission(void)
     YVEX_TEST_ASSERT(write(pair[0], duplicate, sizeof(duplicate) - 1u) ==
                          (ssize_t)(sizeof(duplicate) - 1u),
                      "duplicate-header fixture must write");
-    YVEX_TEST_ASSERT(openai_http_read(pair[1], &request, &err) != YVEX_OK,
+    YVEX_TEST_ASSERT(yvex_openai_http_read(pair[1], &request, &err) != YVEX_OK,
                      "duplicate Content-Length must refuse");
     close(pair[0]);
     close(pair[1]);
@@ -412,7 +412,7 @@ static int test_http_status_observation(void)
     yvex_error err;
     YVEX_TEST_ASSERT(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0,
                      "HTTP status fixture must open");
-    YVEX_TEST_ASSERT(openai_http_json(pair[1], 404, body, 2u, &status, &err) == YVEX_OK &&
+    YVEX_TEST_ASSERT(yvex_openai_http_json(pair[1], 404, body, 2u, &status, &err) == YVEX_OK &&
                          status == 404,
                      "observed status must match the written rejection header");
     YVEX_TEST_ASSERT(read(pair[0], header, sizeof(header) - 1u) > 0 &&
@@ -420,21 +420,21 @@ static int test_http_status_observation(void)
                      "peer must receive the observed 404 status");
     close(pair[0]);
     status = 0;
-    YVEX_TEST_ASSERT(openai_http_json(pair[1], 200, body, 2u, &status, &err) == YVEX_ERR_IO &&
+    YVEX_TEST_ASSERT(yvex_openai_http_json(pair[1], 200, body, 2u, &status, &err) == YVEX_ERR_IO &&
                          status == 0,
                      "a failed header write must not manufacture HTTP 200");
-    YVEX_TEST_ASSERT(openai_http_sse_begin(pair[1], &status, &err) == YVEX_ERR_IO && status == 0,
+    YVEX_TEST_ASSERT(yvex_openai_http_sse_begin(pair[1], &status, &err) == YVEX_ERR_IO && status == 0,
                      "failed SSE header write must keep status unavailable");
     close(pair[1]);
     YVEX_TEST_ASSERT(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0,
                      "SSE status fixture must open");
-    YVEX_TEST_ASSERT(openai_http_sse_begin(pair[1], &status, &err) == YVEX_OK && status == 200,
+    YVEX_TEST_ASSERT(yvex_openai_http_sse_begin(pair[1], &status, &err) == YVEX_OK && status == 200,
                      "SSE header publication must record HTTP 200");
-    YVEX_TEST_ASSERT(openai_http_json(pair[1], 503, body, 2u, &status, &err) == YVEX_OK &&
+    YVEX_TEST_ASSERT(yvex_openai_http_json(pair[1], 503, body, 2u, &status, &err) == YVEX_OK &&
                          status == 200,
                      "a later error write cannot overwrite the first published HTTP status");
     close(pair[0]);
-    YVEX_TEST_ASSERT(openai_http_sse_event(pair[1], "error", body, 2u, &err) == YVEX_ERR_IO &&
+    YVEX_TEST_ASSERT(yvex_openai_http_sse_event(pair[1], "error", body, 2u, &err) == YVEX_ERR_IO &&
                          status == 200,
                      "stream failure must not rewrite an already sent HTTP status");
     close(pair[1]);
@@ -447,11 +447,11 @@ static int test_http_peer_liveness(void)
     yvex_error err;
     YVEX_TEST_ASSERT(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0,
                      "HTTP peer-liveness socket pair must open");
-    YVEX_TEST_ASSERT(openai_http_peer_wait(pair[1], 1u, &closed, &err) == YVEX_OK &&
+    YVEX_TEST_ASSERT(yvex_openai_http_peer_wait(pair[1], 1u, &closed, &err) == YVEX_OK &&
                          !closed,
                      "an idle connected HTTP peer must remain live");
     close(pair[0]);
-    YVEX_TEST_ASSERT(openai_http_peer_wait(pair[1], 100u, &closed, &err) == YVEX_OK &&
+    YVEX_TEST_ASSERT(yvex_openai_http_peer_wait(pair[1], 100u, &closed, &err) == YVEX_OK &&
                          closed,
                      "HTTP peer FIN must be observed without a response write");
     close(pair[1]);
@@ -470,7 +470,7 @@ static int test_capacity_projection(void)
         "\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"}],\"temperature\":0}";
     YVEX_TEST_ASSERT(admit_fixture(pin, OPENAI_ENDPOINT_CHAT, &admitted, &err) == YVEX_OK &&
         admitted.engine_generation == 7ull, "exact engine pin is outside provider semantics");
-    openai_admitted_request_clear(&admitted);
+    yvex_openai_admitted_request_clear(&admitted);
     message.kind = YVEX_CLIENT_MESSAGE_PREFLIGHT;
     engine->engine_kind = YVEX_SERVER_ENGINE_TEXT;
     engine->generation = 7ull;
@@ -487,7 +487,7 @@ static int test_capacity_projection(void)
     message.preflight.violations = YVEX_EXECUTION_INPUT_CAPACITY_EXCEEDED;
     memset(message.preflight.tokenizer_identity, 'a', 64u);
     memset(message.preflight.prompt_identity, 'b', 64u);
-    YVEX_TEST_ASSERT(openai_json_preflight(&message, "", &json, &count, &err) == YVEX_OK &&
+    YVEX_TEST_ASSERT(yvex_openai_json_preflight(&message, "", &json, &count, &err) == YVEX_OK &&
         strstr((char *)json, "\"token_capacity_compatible\":false") &&
         strstr((char *)json, "\"input_capacity_exceeded\":true") &&
         strstr((char *)json, "\"output_capacity_exceeded\":false") &&
@@ -501,7 +501,7 @@ static int test_capacity_projection(void)
     free(json);
     json = NULL;
     engine->engine_kind = YVEX_SERVER_ENGINE_MEDIA;
-    YVEX_TEST_ASSERT(openai_json_models(engine, 1ull, 0, &json, &count, &err) == YVEX_OK &&
+    YVEX_TEST_ASSERT(yvex_openai_json_models(engine, 1ull, 0, &json, &count, &err) == YVEX_OK &&
         strstr((char *)json, "\"yvex_capacity\":null") &&
         !strstr((char *)json, "runtime_input_tokens"),
         "media execution is not misrepresented by a text token envelope");
@@ -511,7 +511,7 @@ static int test_capacity_projection(void)
         yvex_error_set(&result.failure, YVEX_ERR_INPUT_CAPACITY, "fixture",
                        "input token capacity exceeded: limit=512");
         json = NULL;
-        YVEX_TEST_ASSERT(openai_json_response_event(OPENAI_RESPONSE_EVENT_FAILED,
+        YVEX_TEST_ASSERT(yvex_openai_json_response_event(OPENAI_RESPONSE_EVENT_FAILED,
             "response_fixture", "fixture", 0ull, NULL, &result, 0ull, 1ull,
             &json, &count, &err) == YVEX_OK &&
             strstr((char *)json, "input_token_capacity_exceeded") &&

@@ -15,6 +15,10 @@ fail() {
     exit 1
 }
 
+contains() {
+    python3 tests/support/human_field.py "$1" "$2" || fail "$1 missing: $2"
+}
+
 yvex_test_cleanup "$OUT_DIR"
 mkdir -p "$NATIVE"
 
@@ -46,7 +50,7 @@ cat > "$OUT_DIR/policy.json" <<'JSON'
 JSON
 
 "$YVEX_BIN" inspect qtype > "$OUT_DIR/qtype.out" 2> "$OUT_DIR/qtype.err" || fail "qtype support failed"
-grep 'status: qtype-support' "$OUT_DIR/qtype.out" >/dev/null || fail "missing qtype status"
+contains "$OUT_DIR/qtype.out" 'status: qtype-support'
 
 "$YVEX_BIN" compile quant convert plan \
   --arch qwen3 \
@@ -54,7 +58,7 @@ grep 'status: qtype-support' "$OUT_DIR/qtype.out" >/dev/null || fail "missing qt
   --quant-policy "$OUT_DIR/policy.json" \
   --out-plan "$OUT_DIR/plan.json" > "$OUT_DIR/plan.out" 2> "$OUT_DIR/plan.err" || fail "plan failed"
 test -f "$OUT_DIR/plan.json" || fail "plan missing"
-grep 'status: conversion-plan-written' "$OUT_DIR/plan.out" >/dev/null || fail "missing plan status"
+contains "$OUT_DIR/plan.out" 'status: conversion-plan-written'
 
 "$YVEX_BIN" compile quant convert emit \
   --arch qwen3 \
@@ -63,11 +67,11 @@ grep 'status: conversion-plan-written' "$OUT_DIR/plan.out" >/dev/null || fail "m
   --target-qtype F32 \
   --out "$OUT_DIR/qwen3-8b-selected-embed-F32-noimatrix-yvex-v1.gguf" \
   --overwrite > "$OUT_DIR/emit.out" 2> "$OUT_DIR/emit.err" || fail "emit failed"
-grep 'status: conversion-gguf-written' "$OUT_DIR/emit.out" >/dev/null || fail "missing emit status"
+contains "$OUT_DIR/emit.out" 'status: conversion-gguf-written'
 
 "$YVEX_BIN" artifact show "$OUT_DIR/qwen3-8b-selected-embed-F32-noimatrix-yvex-v1.gguf" > "$OUT_DIR/inspect.out" 2> "$OUT_DIR/inspect.err" || fail "inspect failed"
-grep 'status: descriptor-only' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect status"
+contains "$OUT_DIR/inspect.out" 'status: descriptor-only'
 "$YVEX_BIN" artifact materialize --model "$OUT_DIR/qwen3-8b-selected-embed-F32-noimatrix-yvex-v1.gguf" --backend cpu > "$OUT_DIR/materialize.out" 2> "$OUT_DIR/materialize.err" || fail "materialize failed"
-grep 'status: weights-materialized' "$OUT_DIR/materialize.out" >/dev/null || fail "missing materialize status"
+contains "$OUT_DIR/materialize.out" 'status: weights-materialized'
 "$YVEX_BIN" compile quant convert --help > "$OUT_DIR/help.out" 2> "$OUT_DIR/help.err" || fail "help failed"
-grep 'usage: yvex compile quant convert' "$OUT_DIR/help.out" >/dev/null || fail "missing help"
+grep -E '^(usage: )?yvex compile quant convert' "$OUT_DIR/help.out" >/dev/null || fail "missing help"

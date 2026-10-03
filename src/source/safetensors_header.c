@@ -35,10 +35,11 @@ static unsigned long long st_le64(const unsigned char b[8]) {
            ((unsigned long long)b[6] << 48) | ((unsigned long long)b[7] << 56);
 }
 
-int yvex_safetensors_read_header_file_with_facts(const char *abs_path,
+static int safetensors_read_header(const char *abs_path,
                                                  const char *shard_path,
                                                  yvex_native_weight_table *table,
                                                  yvex_safetensors_file_facts *facts,
+                                                 int inspect_incomplete,
                                                  yvex_error *err) {
     FILE *fp;
     int fd;
@@ -119,7 +120,8 @@ int yvex_safetensors_read_header_file_with_facts(const char *abs_path,
     table->header_read_count++;
     table->header_bytes += header_len;
     payload_bytes = file_size - 8 - header_len;
-    rc = safetensors_parse_header(json, payload_bytes, shard_path, table, err);
+    rc = safetensors_parse_header(json, inspect_incomplete ? ~0ull : payload_bytes,
+                                 shard_path, table, err);
     if (rc != YVEX_OK) {
         table->summary.malformed_shard_count++;
         table->header_error_count++;
@@ -133,6 +135,44 @@ int yvex_safetensors_read_header_file_with_facts(const char *abs_path,
             YVEX_CORE_OBSERVE_SOURCE_HEADER, 1ull);
     }
     free(json);
+    return rc;
+}
+
+int yvex_safetensors_read_header_file_with_facts(const char *path, const char *shard,
+    yvex_native_weight_table *table, yvex_safetensors_file_facts *facts, yvex_error *err)
+{
+    return safetensors_read_header(path, shard, table, facts, 0, err);
+}
+
+int yvex_safetensors_inspect_extent(const char *path,
+    yvex_safetensors_extent *out, yvex_error *err)
+{
+    yvex_native_weight_table *table;
+    yvex_safetensors_file_facts facts = {0};
+    yvex_safetensors_extent status = YVEX_SAFETENSORS_EXTENT_VALID;
+    unsigned long long index;
+    int rc;
+    if (!path || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source.safetensors.extent", "path and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    table = calloc(1, sizeof(*table));
+    if (!table) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "source.safetensors.extent", "header observation allocation failed");
+        return YVEX_ERR_NOMEM;
+    }
+    rc = safetensors_read_header(path, path, table, &facts, 1, err);
+    if (rc == YVEX_ERR_FORMAT || rc == YVEX_ERR_BOUNDS) {
+        status = YVEX_SAFETENSORS_EXTENT_INVALID_HEADER;
+        rc = YVEX_OK;
+        yvex_error_clear(err);
+    } else if (rc == YVEX_OK) {
+        for (index = 0; index < table->count; ++index)
+            if (table->items[index].data_end > facts.payload_bytes)
+                status = YVEX_SAFETENSORS_EXTENT_TRUNCATED;
+    }
+    yvex_native_weight_table_close(table);
+    if (rc == YVEX_OK) *out = status;
     return rc;
 }
 

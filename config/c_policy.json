@@ -3,7 +3,7 @@
   "production_roots": ["src", "include"],
   "owned_roots": ["src", "include", "tests", "tools", "scripts", "schema", "config"],
   "production_suffixes": [".c", ".h", ".cu"],
-  "owned_suffixes": [".c", ".h", ".cu", ".sh", ".py", ".json", ".def", ".tsv"],
+  "owned_suffixes": [".c", ".h", ".cu", ".rs", ".sh", ".py", ".json", ".def", ".tsv"],
   "header_tiers": {
     "public_root": "include/yvex",
     "internal_root": "include/yvex/internal",
@@ -111,9 +111,7 @@
     "required_internal_entrypoints": ["yvex_backend_attention_execute", "yvex_component_joint_program_execute"]
   },
   "archive": {
-    "path": "build/lib/libyvex.a",
-    "member_prefix": "build/obj/",
-    "source_variables": ["CORE_SRCS", "YVEX_SRCS", "DAEMON_SRCS", "OPENAI_ADAPTER_SRCS", "CUDA_SRCS", "CUDA_CU_SRCS"],
+    "source_variables": ["CORE_SRCS", "OPENAI_ADAPTER_SRCS", "CUDA_SRCS", "CUDA_CU_SRCS"],
     "object_variable": "CORE_OBJS"
   },
   "analysis": {

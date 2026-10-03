@@ -22,7 +22,7 @@ capability table.
 ## Membership authority
 
 [`config/source_owners.tsv`](../../config/source_owners.tsv) is the sole
-handwritten production membership authority. Every C, CUDA, and header file
+handwritten production membership authority. Every C, CUDA, Rust, and header file
 under `src/` and `include/` appears exactly once. Inspect that manifest for
 current paths rather than copying a mutable file catalog into documentation.
 
@@ -43,6 +43,16 @@ The deterministic generator validates filesystem parity and produces
 Makefile consumes this projection; it neither repeats production path lists
 nor admits arbitrary files through wildcards. Source-relative object/archive
 identities preserve namespace and prevent basename collisions.
+
+The Rust product shell is a separate `RUST_SHELL_SRCS` projection, never a C
+archive member. Rust syntax/lints and physical function limits are checked by
+`make test-rust-shell`; its AST test emits an exact-source FFI consumer index.
+The C ABI guard accepts those verified call/reference sites as real consumers,
+not comments, strings or a handwritten symbol exemption. A missing/stale index
+fails the architecture gate and is rebuilt through `make rust-ffi-index`.
+The generator rejects any return of C product-shell membership under `src/cli`.
+Cargo owns Rust compilation; Make assembles the sole executable from that shell
+and the independently buildable C/CUDA library.
 
 ## Changing an owner
 

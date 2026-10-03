@@ -10,6 +10,8 @@
 
 #include <yvex/source.h>
 #include <yvex/internal/core.h>
+#include <yvex/internal/source.h>
+#include <yvex/internal/source_acquisition.h>
 
 static int make_dir(const char *path)
 {
@@ -52,6 +54,8 @@ int yvex_test_safetensors_header(void)
     const yvex_native_weight_info *row;
     yvex_core_execution_observation observed_before, observed_after, observed_delta;
     yvex_error err;
+    yvex_safetensors_extent extent;
+    yvex_source_acquisition_tree acquisition;
     int rc;
 
     YVEX_TEST_ASSERT(system("rm -rf build/tests/safetensors-header") == 0,
@@ -87,6 +91,25 @@ int yvex_test_safetensors_header(void)
     YVEX_TEST_ASSERT(row->data_start == 0 && row->data_end == 12 && row->data_bytes == 12, "data offsets parse");
     yvex_native_weight_table_close(table);
 
+    YVEX_TEST_ASSERT(yvex_safetensors_inspect_extent(
+        "build/tests/safetensors-header/model-00001.safetensors", &extent, &err) == YVEX_OK &&
+        extent == YVEX_SAFETENSORS_EXTENT_VALID, "explicit extent audit observes a complete shard");
+    YVEX_TEST_ASSERT(write_safetensors("build/tests/safetensors-header/truncated.safetensors",
+        "{\"x\":{\"dtype\":\"F16\",\"shape\":[8],\"data_offsets\":[0,16]}}", 4),
+        "write structurally valid header with short payload");
+    YVEX_TEST_ASSERT(yvex_safetensors_inspect_extent(
+        "build/tests/safetensors-header/truncated.safetensors", &extent, &err) == YVEX_OK &&
+        extent == YVEX_SAFETENSORS_EXTENT_TRUNCATED, "audit distinguishes truncation from invalid JSON");
+    YVEX_TEST_ASSERT(yvex_source_acquisition_scan(root, NULL, &acquisition, &err) == YVEX_OK &&
+        acquisition.shards == 2 && acquisition.checked_shards == 0,
+        "routine acquisition progress does not read tensor headers");
+    YVEX_TEST_ASSERT(yvex_source_acquisition_inspect(root, NULL, &acquisition, &err) == YVEX_OK &&
+        acquisition.checked_shards == 2 && acquisition.truncated_shards == 1 && acquisition.invalid_shards == 0,
+        "explicit source audit projects typed extent facts");
+    table = NULL;
+    YVEX_TEST_ASSERT(yvex_native_weight_table_open(&table, &options, &err) != YVEX_OK,
+        "extent diagnostics never admit truncated payloads for native inventory");
+
     YVEX_TEST_ASSERT(system("rm -rf build/tests/safetensors-header") == 0,
                      "clear short safetensors fixture");
     YVEX_TEST_ASSERT(make_dir(root), "make bad short root");
@@ -94,6 +117,9 @@ int yvex_test_safetensors_header(void)
     table = NULL;
     rc = yvex_native_weight_table_open(&table, &options, &err);
     YVEX_TEST_ASSERT(rc != YVEX_OK, "bad short file rejected");
+    YVEX_TEST_ASSERT(yvex_safetensors_inspect_extent(
+        "build/tests/safetensors-header/model-00001.safetensors", &extent, &err) == YVEX_OK &&
+        extent == YVEX_SAFETENSORS_EXTENT_INVALID_HEADER, "short header remains invalid in diagnostic audit");
 
     YVEX_TEST_ASSERT(system("rm -rf build/tests/safetensors-header") == 0,
                      "clear malformed JSON fixture");

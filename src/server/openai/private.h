@@ -103,50 +103,50 @@ typedef struct {
     server_telemetry *telemetry;
     openai_response_record records[OPENAI_RESPONSE_RECORD_MAX];
 } openai_gateway;
-int openai_http_read(int fd, openai_http_request *request, yvex_error *err);
-void openai_http_request_clear(openai_http_request *request);
-int openai_http_json(int fd, int status, const unsigned char *body,
+int yvex_openai_http_read(int fd, openai_http_request *request, yvex_error *err);
+void yvex_openai_http_request_clear(openai_http_request *request);
+int yvex_openai_http_json(int fd, int status, const unsigned char *body,
                      unsigned long long count, int *sent_status, yvex_error *err);
-int openai_http_sse_begin(int fd, int *sent_status, yvex_error *err);
-int openai_http_sse_event(int fd, const char *event,
+int yvex_openai_http_sse_begin(int fd, int *sent_status, yvex_error *err);
+int yvex_openai_http_sse_event(int fd, const char *event,
                           const unsigned char *json,
                           unsigned long long count, yvex_error *err);
-int openai_http_sse_done(int fd, yvex_error *err);
-int openai_http_sse_progress(int fd, yvex_error *err);
-int openai_http_peer_wait(int fd, unsigned int milliseconds, int *closed,
+int yvex_openai_http_sse_done(int fd, yvex_error *err);
+int yvex_openai_http_sse_progress(int fd, yvex_error *err);
+int yvex_openai_http_peer_wait(int fd, unsigned int milliseconds, int *closed,
                           yvex_error *err);
-int openai_json_admit(const openai_http_request *http, openai_endpoint endpoint,
+int yvex_openai_json_admit(const openai_http_request *http, openai_endpoint endpoint,
     yvex_reasoning_policy default_reasoning, openai_admitted_request *request,
     yvex_error *err);
-void openai_admitted_request_clear(openai_admitted_request *request);
-const char *openai_capacity_error_code(int execution_status);
-int openai_json_error(int status, const char *type, const char *param,
+void yvex_openai_admitted_request_clear(openai_admitted_request *request);
+const char *yvex_openai_capacity_error_code(int execution_status);
+int yvex_openai_json_error(int status, const char *type, const char *param,
                       const char *code, const char *message,
                       unsigned char **output, unsigned long long *count,
                       yvex_error *err);
-int openai_json_preflight(
+int yvex_openai_json_preflight(
     const yvex_client_message *, const char *, unsigned char **, unsigned long long *, yvex_error *);
-int openai_json_models(const yvex_server_engine_summary *engines,
+int yvex_openai_json_models(const yvex_server_engine_summary *engines,
                        unsigned long long engine_count, int list,
                        unsigned char **output, unsigned long long *count,
                        yvex_error *err);
-int openai_json_result(openai_endpoint endpoint, const char *id,
+int yvex_openai_json_result(openai_endpoint endpoint, const char *id,
                        const char *model, unsigned long long created,
                        const openai_generation_result *result,
                        unsigned char **output, unsigned long long *count,
                        yvex_error *err);
-int openai_json_stream_chunk(openai_endpoint endpoint, const char *id,
+int yvex_openai_json_stream_chunk(openai_endpoint endpoint, const char *id,
                              const char *model, unsigned long long created,
                              const yvex_client_message *message,
                              unsigned long long tool_index, int initial,
                              unsigned char **output, unsigned long long *count,
                              yvex_error *err);
-int openai_json_chat_usage_chunk(const char *id, const char *model,
+int yvex_openai_json_chat_usage_chunk(const char *id, const char *model,
                                  unsigned long long created,
                                  const openai_generation_result *result,
                                  unsigned char **output,
                                  unsigned long long *count, yvex_error *err);
-int openai_json_response_event(openai_response_event_kind kind,
+int yvex_openai_json_response_event(openai_response_event_kind kind,
                                const char *id, const char *model,
                                unsigned long long created,
                                const yvex_client_message *message,
@@ -155,20 +155,20 @@ int openai_json_response_event(openai_response_event_kind kind,
                                unsigned long long sequence,
                                unsigned char **output,
                                unsigned long long *count, yvex_error *err);
-openai_response_record *openai_state_find(openai_gateway *gateway,
+openai_response_record *yvex_openai_state_find(openai_gateway *gateway,
                                           const char *response_id,
                                           unsigned long long now);
-int openai_state_store(openai_gateway *gateway, const char *response_id,
+int yvex_openai_state_store(openai_gateway *gateway, const char *response_id,
                        const char *session_name,
                        unsigned long long engine_generation,
                        const yvex_provider_request *context,
                        unsigned long long now, yvex_error *err);
-int openai_state_replace(openai_gateway *gateway,
+int yvex_openai_state_replace(openai_gateway *gateway,
                          openai_response_record *record,
                          const char *response_id,
                          unsigned long long engine_generation,
                          const yvex_provider_request *context,
                          unsigned long long now, yvex_error *err);
-void openai_state_remove(openai_response_record *record);
-void openai_state_clear(openai_gateway *gateway);
+void yvex_openai_state_remove(openai_response_record *record);
+void yvex_openai_state_clear(openai_gateway *gateway);
 #endif

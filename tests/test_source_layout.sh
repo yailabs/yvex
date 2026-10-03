@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 make_inputs=$(make --no-print-directory -s print-build-inputs)
 
-grep -nF 'test-layout: $(LIBYVEX) $(YVEX_BIN) $(TEST_REFERENCE_OBJS) tests/test_source_layout.sh' \
+grep -nF 'test-layout: $(LIBYVEX) $(YVEX_BIN) $(TEST_REFERENCE_OBJS) $(OPERATOR_REGISTRY_OBJ) tests/test_source_layout.sh rust-ffi-index' \
   $make_inputs >/dev/null || {
   echo "source layout: test-layout lacks required production dependencies" >&2
   exit 1
@@ -16,7 +16,7 @@ sh tests/test_repository_layout.sh
 sh tests/test_architecture_boundaries.sh
 
 required_paths='
-src/cli/main.c
+src/cli/rust/main.rs
 src/core/status.c
 include/yvex/internal/source.h
 include/yvex/internal/source_payload.h

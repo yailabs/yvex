@@ -34,7 +34,7 @@ contains "$OUT_DIR/help.out" "--latent-steps"
 
 run_code missing 2 "$YVEX_BIN" bench component audio-vae
 contains "$OUT_DIR/missing.err" \
-    "requires target, artifact, backend, input file, latent steps, and output path"
+    "--latent-steps is required"
 
 run_code wrong_target 5 "$YVEX_BIN" bench component audio-vae \
     --target wrong --artifact /tmp/missing.gguf --backend cpu \

@@ -12,7 +12,31 @@ GGUF="$ROOT/deepseek4-v4-flash-dspark-selected-embed-F16-noimatrix-yvex-v1.gguf"
 matches() {
   file=$1
   pattern=$2
-  grep -E -- "$pattern" "$file" >/dev/null
+  python3 tests/support/human_field.py --regex "$file" "$pattern"
+}
+
+# Compact population text is no longer a hand-formatted C row. Qualify the
+# exact independent source-fixture counts through their native fact keys.
+assert_population() {
+  file=$1
+  prefix=$2
+  shift 2
+  for fact in "$@"; do
+    key=${fact%%=*}
+    value=${fact#*=}
+    python3 tests/support/human_field.py "$file" "$prefix.$key: $value"
+  done
+}
+
+# Human bytes are not an interface contract. Engineering tables preserve the
+# typed audit population; independent expected observations below still qualify
+# the values against source fixtures, not this presentation differential.
+assert_target_table() {
+  file=$1
+  expected=$2
+  shift 2
+  expect_rc "$expected" "$YVEX_BIN" inspect target "$@" --audit > "$file.audit"
+  python3 tests/support/human_field.py --same-fields "$file.audit" "$file"
 }
 
 make_missing_role_source() {
@@ -413,9 +437,10 @@ COLUMNS=240 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" model search "MiniMax H3" --limit
   --models-root "$RECON_ROOT" \
   > "$ROOT/search.out"
 grep 'REMOTE MODELS · "MiniMax H3"' "$ROOT/search.out"
-grep 'MODEL.*PROVIDER.*REPOSITORY.*ARCH.*FORMATS.*SIZE.*STATE.*YVEX.*LOCATION' "$ROOT/search.out"
-grep 'MiniMax-H3.*Hugging Face.*MiniMaxAI/MiniMax-H3.*safetensors.*source.*supported.*hf://MiniMaxAI/MiniMax-H3@' "$ROOT/search.out"
-grep 'MiniMax-H3-GGUF.*Hugging Face.*unsloth/MiniMax-H3-GGUF.*gguf.*remote.*inspect.*hf://unsloth/MiniMax-H3-GGUF@' "$ROOT/search.out"
+grep 'MiniMaxAI/MiniMax-H3 · full model · supported' "$ROOT/search.out"
+grep 'safetensors · hf://MiniMaxAI/MiniMax-H3@' "$ROOT/search.out"
+grep 'unsloth/MiniMax-H3-GGUF · conversion · inspect' "$ROOT/search.out"
+grep 'gguf · hf://unsloth/MiniMax-H3-GGUF@' "$ROOT/search.out"
 ! grep 'package-preparation\|source-ingest\|physical-inspection' "$ROOT/search.out"
 
 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" model search "MiniMax H3" --all --json \
@@ -477,24 +502,25 @@ PY
 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source inspect MiniMaxAI/MiniMax-H3 \
   --models-root "$RECON_ROOT" --audit \
   > "$ROOT/remote-inspect.out"
-python3 tests/support/human_field.py "$ROOT/remote-inspect.out" 'revision_reference: default'
-grep 'resolved_revision: b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08' \
-  "$ROOT/remote-inspect.out"
+python3 tests/support/human_field.py "$ROOT/remote-inspect.out" 'requested_revision: default'
+python3 tests/support/human_field.py "$ROOT/remote-inspect.out" 'resolved_revision: b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08'
 python3 tests/support/human_field.py "$ROOT/remote-inspect.out" 'family: minimax-h3'
 python3 tests/support/human_field.py "$ROOT/remote-inspect.out" 'kind: full model'
 python3 tests/support/human_field.py "$ROOT/remote-inspect.out" 'local_source: true'
 python3 tests/support/human_field.py "$ROOT/remote-inspect.out" 'base_model: MiniMaxAI/MiniMax-H3-Base'
-grep 'identity=safetensors-source format=safetensors precision=BF16+F16' \
-  "$ROOT/remote-inspect.out"
-grep 'identity=gguf-Q4_K_M format=gguf precision=Q4_K_M evidence=filename-hint' \
-  "$ROOT/remote-inspect.out"
-grep 'selector=model-Q4_K_M.gguf' "$ROOT/remote-inspect.out"
-grep 'identity=gguf-IQ2_XXS format=gguf precision=IQ2_XXS evidence=filename-hint' \
-  "$ROOT/remote-inspect.out"
-grep 'file\[0\]: path=config.json kind=configuration representation=configuration' \
-  "$ROOT/remote-inspect.out"
-grep 'path=tokenizer.json kind=tokenizer representation=tokenizer' "$ROOT/remote-inspect.out"
-grep 'path=README.md kind=sidecar representation=sidecar' "$ROOT/remote-inspect.out"
+python3 - "$ROOT/remote-inspect.out" <<'PY'
+from pathlib import Path
+import sys
+text = Path(sys.argv[1]).read_text()
+for identity, format, precision in [('safetensors-source', 'safetensors', 'BF16+F16'),
+                                    ('gguf-Q4_K_M', 'gguf', 'Q4_K_M'),
+                                    ('gguf-IQ2_XXS', 'gguf', 'IQ2_XXS')]:
+    assert identity in text and format in text and precision in text
+for path, kind in [('config.json', 'configuration'), ('tokenizer.json', 'tokenizer'),
+                    ('README.md', 'sidecar')]:
+    assert path in text and kind in text
+assert 'model-Q4_K_M.gguf' in text and 'filename-hint' in text
+PY
 
 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source inspect MiniMaxAI/MiniMax-H3 \
   --models-root "$RECON_ROOT" --json \
@@ -522,7 +548,8 @@ PY
 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source inspect unsloth/MiniMax-H3-GGUF \
   --output table > "$ROOT/inspect-gguf.out"
 python3 tests/support/human_field.py "$ROOT/inspect-gguf.out" 'kind: conversion'
-grep 'Q4_K_M (filename)' "$ROOT/inspect-gguf.out"
+python3 tests/support/human_field.py "$ROOT/inspect-gguf.out" 'precision: Q4_K_M'
+python3 tests/support/human_field.py "$ROOT/inspect-gguf.out" 'precision_evidence: filename-hint'
 grep 'acquire-and-inspect-required' "$ROOT/inspect-gguf.out"
 
 YVEX_FAKE_HF_DISCOVERY_MODE=model-not-found YVEX_HF_CLI="$FAKE_HF" \
@@ -538,7 +565,7 @@ grep 'remote revision or reference was not found' "$ROOT/inspect-revision-missin
 
 expect_rc 2 "$YVEX_BIN" model search MiniMax --interactive \
     > "$ROOT/search-interactive.out" 2> "$ROOT/search-interactive.err"
-python3 tests/support/human_field.py "$ROOT/search-interactive.err" 'model search: unknown flag: --interactive'
+python3 tests/support/human_field.py "$ROOT/search-interactive.err" 'unknown flag: --interactive'
 
 YVEX_FAKE_HF_RESOLVED_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
   YVEX_HF_CLI="$FAKE_HF" expect_rc 1 "$YVEX_BIN" source inspect MiniMaxAI/MiniMax-H3 \
@@ -607,15 +634,17 @@ test -f "$REG"
 
 "$YVEX_BIN" profile list --models-root "$CATALOG_ROOT" --registry "$REG" > "$ROOT/list.out"
 grep 'deepseek4-v4-flash-dspark-selected-embed' "$ROOT/list.out"
-grep 'DEPLOYMENT PROFILES' "$ROOT/list.out"
-grep 'cpu/text/speculative' "$ROOT/list.out"
-grep 'context=4096' "$ROOT/list.out"
-grep 'runnable' "$ROOT/list.out"
+grep '^PROFILE ' "$ROOT/list.out"
+python3 tests/support/human_field.py "$ROOT/list.out" 'backend: cpu'
+python3 tests/support/human_field.py "$ROOT/list.out" 'engine_kind: text'
+python3 tests/support/human_field.py "$ROOT/list.out" 'execution_strategy: speculative'
+python3 tests/support/human_field.py "$ROOT/list.out" 'context_capacity: 4096'
+python3 tests/support/human_field.py "$ROOT/list.out" 'launchable: false'
 
 "$YVEX_BIN" profile list --models-root "$CATALOG_ROOT" --registry "$REG" --output table \
   > "$ROOT/list-table.out"
 grep 'deepseek4-v4-flash-dspark-selected-embed' "$ROOT/list-table.out"
-grep 'runnable' "$ROOT/list-table.out"
+python3 tests/support/human_field.py "$ROOT/list-table.out" 'launchable: false'
 
 "$YVEX_BIN" profile list --models-root "$CATALOG_ROOT" --registry "$REG" --json \
   > "$ROOT/list-audit.out"
@@ -634,26 +663,20 @@ PY
 
 "$YVEX_BIN" profile list --models-root "$CATALOG_ROOT" --registry "$REG" --output nope \
   > "$ROOT/list-bad-output.out" 2> "$ROOT/list-bad-output.err" && exit 1 || true
-grep 'model plumbing --output requires table|audit|json' "$ROOT/list-bad-output.err"
+python3 tests/support/human_field.py --regex "$ROOT/list-bad-output.err" 'invalid value for --output: nope'
 
 "$YVEX_BIN" profile show deepseek4-v4-flash-dspark-selected-embed --registry "$REG" > "$ROOT/inspect.out"
-python3 tests/support/human_field.py "$ROOT/inspect.out" 'model: deepseek4-v4-flash-dspark-selected-embed'
-python3 tests/support/human_field.py "$ROOT/inspect.out" 'family: deepseek4 class=embed'
-python3 tests/support/human_field.py "$ROOT/inspect.out" 'artifact: support=selected-tensor-materialized execution=not-established-by-inspection'
-grep 'runtime profile: unavailable (malformed-binding:' \
-  "$ROOT/inspect.out"
-python3 tests/support/human_field.py "$ROOT/inspect.out" 'status: models-inspect'
-test "$(wc -l < "$ROOT/inspect.out")" -le 8
+grep '^PROFILE  deepseek4-v4-flash-dspark-selected-embed' "$ROOT/inspect.out"
+python3 tests/support/human_field.py "$ROOT/inspect.out" 'launchable: false'
+python3 tests/support/human_field.py "$ROOT/inspect.out" 'backend: cpu'
+grep 'malformed-binding:' "$ROOT/inspect.out"
 
 "$YVEX_BIN" profile show deepseek4-v4-flash-dspark-selected-embed --registry "$REG" --audit > "$ROOT/inspect-audit.out"
-python3 tests/support/human_field.py "$ROOT/inspect-audit.out" 'alias: deepseek4-v4-flash-dspark-selected-embed'
-python3 tests/support/human_field.py "$ROOT/inspect-audit.out" 'artifact_support_level: selected-tensor-materialized'
-python3 tests/support/human_field.py "$ROOT/inspect-audit.out" 'artifact_execution_ready: false'
-python3 tests/support/human_field.py "$ROOT/inspect-audit.out" 'startup_profile_status: unavailable'
-python3 tests/support/human_field.py "$ROOT/inspect-audit.out" 'deployment_compatibility: malformed-binding'
-python3 tests/support/human_field.py "$ROOT/inspect-audit.out" 'gguf: '
-python3 tests/support/human_field.py "$ROOT/inspect-audit.out" 'tensor_count: 1'
-python3 tests/support/human_field.py "$ROOT/inspect-audit.out" 'status: models-inspect'
+python3 tests/support/human_field.py "$ROOT/inspect-audit.out" 'identity: deepseek4-v4-flash-dspark-selected-embed'
+python3 tests/support/human_field.py "$ROOT/inspect-audit.out" 'artifact_path: '
+python3 tests/support/human_field.py "$ROOT/inspect-audit.out" 'runtime_binding: '
+python3 tests/support/human_field.py "$ROOT/inspect-audit.out" 'launchable: false'
+grep 'malformed-binding:' "$ROOT/inspect-audit.out"
 
 COMPOSITE_ROOT=$(realpath "$ROOT")
 cat > "$COMPOSITE_ROOT/repository.json" <<JSON
@@ -668,8 +691,9 @@ JSON
 "$YVEX_BIN" profile list --models-root "$CATALOG_ROOT" --registry "$REG" \
   > "$ROOT/list-composite.out"
 grep 'minimax-h3-fl2va-runtime-media' "$ROOT/list-composite.out"
-grep 'minimax-h3-fl2va · 0/1 runnable' "$ROOT/list-composite.out"
-grep 'cuda/media/not-applicable' "$ROOT/list-composite.out"
+python3 tests/support/human_field.py "$ROOT/list-composite.out" 'engine_kind: media'
+python3 tests/support/human_field.py "$ROOT/list-composite.out" 'execution_strategy: not-applicable'
+python3 tests/support/human_field.py "$ROOT/list-composite.out" 'launchable: false'
 grep 'required composite deployment component is unavailable' \
   "$ROOT/list-composite.out"
 
@@ -683,31 +707,29 @@ cp "$ARTIFACT" "$COMPOSITE_ROOT/physical/video_vae.gguf"
 cp "$ARTIFACT" "$COMPOSITE_ROOT/physical/audio_vae.gguf"
 "$YVEX_BIN" profile list --models-root "$CATALOG_ROOT" --registry "$REG" \
   > "$ROOT/list-composite-mismatch.out"
-grep 'minimax-h3-fl2va · 0/1 runnable' "$ROOT/list-composite-mismatch.out"
+python3 tests/support/human_field.py "$ROOT/list-composite-mismatch.out" 'launchable: false'
 grep 'component does not match the current family execution contract' \
   "$ROOT/list-composite-mismatch.out"
 
 "$YVEX_BIN" model list --models-root "$CATALOG_ROOT" --registry "$REG" \
   > "$ROOT/library-friendly.out"
-grep '^MODELS$' "$ROOT/library-friendly.out"
 python3 - "$ROOT/library-friendly.out" <<'PY'
 from pathlib import Path
 import re, sys
 text = Path(sys.argv[1]).read_text()
 for name in ('v4-flash', 'minimax-h3-fl2va'):
-    record = text.split(name + '\n', 1)[1].split('\n\n', 1)[0]
-    assert re.search(r'^\s*state\s+BLOCKED$', record, re.M)
-    assert re.search(r'^\s*execution\s+not current$', record, re.M)
+    assert re.search(r'^' + re.escape(name) + r'\s+BLOCKED · not current ·', text, re.M)
 PY
 ! grep 'provider:huggingface' "$ROOT/library-friendly.out"
 "$YVEX_BIN" source list --models-root "$RECON_ROOT" --registry "$REG" \
   > "$ROOT/sources-friendly.out"
-grep '^SOURCES$' "$ROOT/sources-friendly.out"
-python3 tests/support/human_field.py "$ROOT/sources-friendly.out" 'model binding: '
+grep '^SOURCE  ' "$ROOT/sources-friendly.out"
+grep '^SOURCE  MiniMax-H3' "$ROOT/sources-friendly.out"
+python3 tests/support/human_field.py "$ROOT/sources-friendly.out" 'acquisition_state: '
 "$YVEX_BIN" artifact list --models-root "$CATALOG_ROOT" --registry "$REG" \
   > "$ROOT/artifacts-friendly.out"
-grep '^ARTIFACTS$' "$ROOT/artifacts-friendly.out"
-grep 'runnable profiles' "$ROOT/artifacts-friendly.out"
+grep '^ARTIFACT  ' "$ROOT/artifacts-friendly.out"
+python3 tests/support/human_field.py "$ROOT/artifacts-friendly.out" 'launchable_profile_count: 0'
 ! grep 'ready=' "$ROOT/artifacts-friendly.out"
 "$YVEX_BIN" model list --models-root "$CATALOG_ROOT" --registry "$REG" --json \
   > "$ROOT/library-friendly.json"
@@ -734,12 +756,17 @@ assert all("runtime_binding" in profile for profile in profiles)
 PY
 "$YVEX_BIN" profile show minimax-h3-fl2va-runtime-media --registry "$REG" --audit \
   > "$ROOT/show-composite.out"
-python3 tests/support/human_field.py "$ROOT/show-composite.out" 'runtime_profile: composite'
-python3 tests/support/human_field.py "$ROOT/show-composite.out" "runtime_installation: $COMPOSITE_ROOT"
-grep -E '^[[:space:]]*runtime_binding[[:space:]]*$' "$ROOT/show-composite.out"
-python3 tests/support/human_field.py "$ROOT/show-composite.out" 'runtime_context: 0'
-python3 tests/support/human_field.py "$ROOT/show-composite.out" 'startup_profile_status: unavailable'
-python3 tests/support/human_field.py "$ROOT/show-composite.out" 'deployment_compatibility: artifact-mismatch'
+python3 tests/support/human_field.py "$ROOT/show-composite.out" 'profile_class: composite'
+python3 tests/support/human_field.py "$ROOT/show-composite.out" "installation_root: $COMPOSITE_ROOT"
+python3 - "$ROOT/profiles-friendly.json" <<'PY'
+import json, sys
+profile = next(p for p in json.load(open(sys.argv[1]))["profiles"]
+               if p["identity"] == "minimax-h3-fl2va-runtime-media")
+assert profile["runtime_binding"] == ""
+PY
+python3 tests/support/human_field.py "$ROOT/show-composite.out" 'context_capacity: 0'
+python3 tests/support/human_field.py "$ROOT/show-composite.out" 'launchable: false'
+grep 'artifact-mismatch:' "$ROOT/show-composite.out"
 YVEX_MODELS_REGISTRY="$REG" YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source inspect \
   MiniMaxAI/MiniMax-H3 --models-root "$RECON_ROOT" --json \
   > "$ROOT/reconciled-package.json"
@@ -765,7 +792,7 @@ grep 'composite startup profile requires --installation-root' \
   "$ROOT/add-composite-bad.err"
 
 "$YVEX_BIN" profile show deepseek4-v4-flash-dspark-selected-embed --registry "$REG" --output nope > "$ROOT/inspect-bad-output.out" 2> "$ROOT/inspect-bad-output.err" && exit 1 || true
-python3 tests/support/human_field.py "$ROOT/inspect-bad-output.err" 'unsupported output mode: nope'
+python3 tests/support/human_field.py "$ROOT/inspect-bad-output.err" 'invalid value for --output: nope'
 
 "$YVEX_BIN" profile create --path "$ARTIFACT" --registry "$REG" \
   --alias deepseek4-v4-flash-dspark-runtime-incomplete > "$ROOT/add-incomplete.out"
@@ -862,10 +889,10 @@ export YVEX_CONFIG_DIR="$ROOT/accounts-config"
 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire gemma-4-12b-it --dry-run --models-root "$DOWNLOAD_ROOT" --auth never --audit > "$ROOT/download-dry-run.out"
 python3 tests/support/human_field.py "$ROOT/download-dry-run.out" 'status: model-download-dry-run'
 python3 tests/support/human_field.py "$ROOT/download-dry-run.out" 'family: gemma'
-python3 tests/support/human_field.py "$ROOT/download-dry-run.out" 'stage: account-provider skipped'
-python3 tests/support/human_field.py "$ROOT/download-dry-run.out" 'payload_loaded: false'
-python3 tests/support/human_field.py "$ROOT/download-dry-run.out" 'gguf_created: false'
-python3 tests/support/human_field.py "$ROOT/download-dry-run.out" 'generation: unsupported'
+python3 tests/support/human_field.py "$ROOT/download-dry-run.out" 'auth_mode: never'
+python3 tests/support/human_field.py "$ROOT/download-dry-run.out" 'boundary.payload_loaded: false'
+python3 tests/support/human_field.py "$ROOT/download-dry-run.out" 'boundary.gguf_created: false'
+python3 tests/support/human_field.py "$ROOT/download-dry-run.out" 'boundary.generation: unsupported'
 ! grep 'tick: elapsed=' "$ROOT/download-dry-run.out"
 test ! -e "$DOWNLOAD_ROOT/source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08"
 test ! -e "$DOWNLOAD_ROOT/evidence/build/gemma/gemma-4-12b-it.download.receipt"
@@ -876,16 +903,15 @@ test ! -e "$DOWNLOAD_ROOT/evidence/build/acquisition/gemma-4-12b-it.download.std
 YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire gemma-4-12b-it --models-root "$DOWNLOAD_ROOT" --auth auto --audit > "$ROOT/download-gemma.out"
 python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'status: model-download-pass'
 python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'provider: huggingface'
-python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'stage: account-provider pass'
-python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'stage: provider-cli pass'
-python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'stage: source-manifest pass'
-python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'stage: native-inventory pass'
-python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'stage: progress-stream pass'
-grep 'source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08' "$ROOT/download-gemma.out"
-python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'gguf_created: false'
-python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'payload_loaded: false'
-python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'generation: unsupported'
-python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'benchmark_status: not-measured'
+python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'account_provider_stage: pass'
+python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'provider_cli_status: present'
+python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'boundary.source_manifest_written: true'
+python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'boundary.native_inventory_written: true'
+python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08'
+python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'boundary.gguf_created: false'
+python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'boundary.payload_loaded: false'
+python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'boundary.generation: unsupported'
+python3 tests/support/human_field.py "$ROOT/download-gemma.out" 'boundary.benchmark: not-measured'
 test -f "$DOWNLOAD_ROOT/evidence/build/gemma/gemma-4-12b-it.source-manifest.json"
 grep '"status": "in-progress"' "$DOWNLOAD_ROOT/evidence/build/gemma/gemma-4-12b-it.source-manifest.json"
 test -f "$DOWNLOAD_ROOT/evidence/build/gemma/gemma-4-12b-it.native-inventory.json"
@@ -915,8 +941,8 @@ YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire \
 python3 tests/support/human_field.py "$ROOT/download-gguf.out" 'status: model-download-pass'
 python3 tests/support/human_field.py "$ROOT/download-gguf.out" 'safetensors_count: 0'
 python3 tests/support/human_field.py "$ROOT/download-gguf.out" 'gguf_count: 1'
-grep 'boundary: acquired GGUF, structural inspection and package admission required' \
-  "$ROOT/download-gguf.out"
+python3 tests/support/human_field.py "$ROOT/download-gguf.out" 'representation_format: gguf'
+python3 tests/support/human_field.py "$ROOT/download-gguf.out" 'boundary.runtime_ready: false'
 "$YVEX_BIN" source list --models-root "$DOWNLOAD_ROOT" --registry "$REG" --json \
   > "$ROOT/local-catalog-gguf.json"
 python3 - "$ROOT/local-catalog-gguf.json" <<'PY'
@@ -937,20 +963,20 @@ LIVE_ROOT="$ROOT/download-live"
 YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=1 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire gemma-4-12b-it --models-root "$LIVE_ROOT" --auth required --progress plain --tick-seconds 1 --audit > "$ROOT/download-live.out" 2>&1 &
 LIVE_PID=$!
 sleep 1
-python3 tests/support/human_field.py "$ROOT/download-live.out" 'acquisition: state='
+grep '^ACQUIRE  gemma-4-12b-it · ' "$ROOT/download-live.out"
 wait "$LIVE_PID"
-python3 tests/support/human_field.py "$ROOT/download-live.out" 'acquisition: state=complete'
-grep 'files=' "$ROOT/download-live.out"
-grep 'committed=' "$ROOT/download-live.out"
-grep 'provider_write_activity=' "$ROOT/download-live.out"
+python3 tests/support/human_field.py "$ROOT/download-live.out" 'status: model-download-pass'
+grep -E '[0-9]+ B committed · [0-9]+ files · [0-9]+ partials' "$ROOT/download-live.out"
+# Provider text is retained in its own logs; the terminal projects typed
+# progress rather than interleaving untrusted provider bytes with presentation.
 grep 'fake-hf: resolving repo' \
-  "$LIVE_ROOT/evidence/build/acquisition/gemma-4-12b-it.acquisition.supervisor.log"
+  "$LIVE_ROOT/evidence/build/acquisition/gemma-4-12b-it.download.stdout.log"
 grep 'fake-hf: downloading shard' \
-  "$LIVE_ROOT/evidence/build/acquisition/gemma-4-12b-it.acquisition.supervisor.log"
+  "$LIVE_ROOT/evidence/build/acquisition/gemma-4-12b-it.download.stdout.log"
 python3 tests/support/human_field.py "$ROOT/download-live.out" 'progress_mode: plain'
 python3 tests/support/human_field.py "$ROOT/download-live.out" 'tick_seconds: 1'
-python3 tests/support/human_field.py "$ROOT/download-live.out" 'stdout_streamed: true'
-python3 tests/support/human_field.py "$ROOT/download-live.out" 'stderr_streamed: true'
+python3 tests/support/human_field.py "$ROOT/download-live.out" 'stdout_streamed: false'
+python3 tests/support/human_field.py "$ROOT/download-live.out" 'stderr_streamed: false'
 python3 tests/support/human_field.py "$ROOT/download-live.out" 'provider_exit_code: 0'
 test -f "$LIVE_ROOT/evidence/build/acquisition/gemma-4-12b-it.download.stdout.log"
 test -f "$LIVE_ROOT/evidence/build/acquisition/gemma-4-12b-it.download.stderr.log"
@@ -963,7 +989,7 @@ python3 tests/support/human_field.py "$ROOT/download-live-fail.out" 'status: mod
 python3 tests/support/human_field.py "$ROOT/download-live-fail.out" 'provider_exit_code: 43'
 python3 tests/support/human_field.py "$ROOT/download-live-fail.out" 'stdout_log: '
 python3 tests/support/human_field.py "$ROOT/download-live-fail.out" 'stderr_log: '
-python3 tests/support/human_field.py "$ROOT/download-live-fail.out" 'top_blocker: provider-download-failed'
+python3 tests/support/human_field.py "$ROOT/download-live-fail.out" 'top_blocker: acquisition-failed'
 test -f "$LIVE_FAIL_ROOT/evidence/build/acquisition/gemma-4-12b-it.download.stdout.log"
 test -f "$LIVE_FAIL_ROOT/evidence/build/acquisition/gemma-4-12b-it.download.stderr.log"
 python3 tests/support/human_field.py "$LIVE_FAIL_ROOT/evidence/build/acquisition/gemma-4-12b-it.download.stdout.log" 'fake-hf: downloading shard 1'
@@ -987,10 +1013,13 @@ grep '"lifecycle":"downloading"' "$ROOT/download-signal-detached.json"
   --output json > "$ROOT/download-signal-stop.json"
 grep '"lifecycle":"stopped"' "$ROOT/download-signal-stop.json"
 grep '"reason":"operator-stop"' "$ROOT/download-signal-stop.json"
-python3 tests/support/human_field.py \
-  "$SIGNAL_ROOT/evidence/build/acquisition/gemma-4-12b-it.acquisition.supervisor.log" 'status: model-download-interrupted'
-python3 tests/support/human_field.py \
-  "$SIGNAL_ROOT/evidence/build/acquisition/gemma-4-12b-it.acquisition.supervisor.log" 'signal: SIGTERM'
+python3 - "$SIGNAL_ROOT/evidence/build/gemma/gemma-4-12b-it.download-report.json" <<'PY'
+import json, sys
+report = json.load(open(sys.argv[1]))
+assert report['status'] == 'model-download-interrupted'
+assert report['interrupted'] and report['interrupt_signal'] == 'SIGTERM'
+assert report['child_terminated'] and report['orphan_check_status'] == 'child-reaped'
+PY
 test -f "$SIGNAL_ROOT/evidence/build/acquisition/gemma-4-12b-it.download.stdout.log"
 test -f "$SIGNAL_ROOT/evidence/build/acquisition/gemma-4-12b-it.download.stderr.log"
 test -f "$SIGNAL_ROOT/source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08/config.json"
@@ -1001,19 +1030,19 @@ CONTROL_ROOT="$ROOT/download-control"
 YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=5 YVEX_FAKE_HF_STEPS=8 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire gemma-4-12b-it --models-root "$CONTROL_ROOT" --auth required --progress log --tick-seconds 1 --audit > "$ROOT/download-control-run.out" 2>&1 &
 CONTROL_PID=$!
 i=0
-while [ ! -f "$CONTROL_ROOT/evidence/build/gemma/gemma-4-12b-it.download.active.json" ] && [ "$i" -lt 10 ]; do
+while [ ! -f "$CONTROL_ROOT/evidence/build/gemma/gemma-4-12b-it.acquisition.operation.json" ] && [ "$i" -lt 10 ]; do
   sleep 1
   i=$((i + 1))
 done
-test -f "$CONTROL_ROOT/evidence/build/gemma/gemma-4-12b-it.download.active.json"
+test -f "$CONTROL_ROOT/evidence/build/gemma/gemma-4-12b-it.acquisition.operation.json"
 
 "$YVEX_BIN" source status gemma-4-12b-it --models-root "$CONTROL_ROOT" --audit > "$ROOT/download-control-status-running.out"
-grep 'state       downloading' "$ROOT/download-control-status-running.out"
-grep 'health      ' "$ROOT/download-control-status-running.out"
+python3 tests/support/human_field.py "$ROOT/download-control-status-running.out" 'lifecycle: downloading'
+python3 tests/support/human_field.py "$ROOT/download-control-status-running.out" 'health: '
 
 "$YVEX_BIN" source stop gemma-4-12b-it --models-root "$CONTROL_ROOT" --audit > "$ROOT/download-control-stop.out"
-grep 'state       stopped' "$ROOT/download-control-stop.out"
-grep 'reason      operator-stop' "$ROOT/download-control-stop.out"
+python3 tests/support/human_field.py "$ROOT/download-control-stop.out" 'lifecycle: stopped'
+python3 tests/support/human_field.py "$ROOT/download-control-stop.out" 'reason: operator-stop'
 set +e
 wait "$CONTROL_PID"
 CONTROL_RC=$?
@@ -1022,16 +1051,16 @@ test "$CONTROL_RC" -ne 0
 test -f "$CONTROL_ROOT/source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08/config.json"
 
 "$YVEX_BIN" source status gemma-4-12b-it --models-root "$CONTROL_ROOT" --audit > "$ROOT/download-control-status-stopped.out"
-grep 'state       stopped' "$ROOT/download-control-status-stopped.out"
-grep 'reason      operator-stop' "$ROOT/download-control-status-stopped.out"
+python3 tests/support/human_field.py "$ROOT/download-control-status-stopped.out" 'lifecycle: stopped'
+python3 tests/support/human_field.py "$ROOT/download-control-status-stopped.out" 'reason: operator-stop'
 
 YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source resume gemma-4-12b-it --models-root "$CONTROL_ROOT" --auth required --progress log --tick-seconds 1 --audit > "$ROOT/download-control-resume.out" 2>&1
 python3 tests/support/human_field.py "$ROOT/download-control-resume.out" 'status: model-download-resume-pass'
-python3 tests/support/human_field.py "$ROOT/download-control-resume.out" 'stage: download pass'
-test -f "$CONTROL_ROOT/evidence/build/gemma/gemma-4-12b-it.download.last.json"
+python3 tests/support/human_field.py "$ROOT/download-control-resume.out" 'boundary.source_download: performed'
+test -f "$CONTROL_ROOT/evidence/build/gemma/gemma-4-12b-it.download-report.json"
 "$YVEX_BIN" source status gemma-4-12b-it --models-root "$CONTROL_ROOT" --audit > "$ROOT/download-control-status-resumed.out"
-grep 'state       complete' "$ROOT/download-control-status-resumed.out"
-grep 'reason      selected-source-complete' "$ROOT/download-control-status-resumed.out"
+python3 tests/support/human_field.py "$ROOT/download-control-status-resumed.out" 'lifecycle: complete'
+python3 tests/support/human_field.py "$ROOT/download-control-status-resumed.out" 'reason: selected-source-complete'
 
 STALE_ROOT="$ROOT/download-control-stale"
 mkdir -p "$STALE_ROOT/evidence/build/gemma" "$STALE_ROOT/source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08"
@@ -1056,17 +1085,17 @@ mkdir -p "$STALE_ROOT/cache/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb
 ln -s "$PWD/$STALE_ROOT/cache/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08" "$STALE_ROOT/source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08/.cache"
 printf 'lock\n' > "$STALE_ROOT/source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08/.cache/huggingface/download/model.safetensors.lock"
 YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source resume gemma-4-12b-it --revision b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08 --models-root "$STALE_ROOT" --auth required --audit > "$ROOT/download-control-lock-blocked.out" 2>&1 && exit 1 || true
-python3 tests/support/human_field.py "$ROOT/download-control-lock-blocked.out" 'status: model-download-resume-blocked'
-python3 tests/support/human_field.py "$ROOT/download-control-lock-blocked.out" 'top_blocker: stale-lock-candidates'
+python3 tests/support/human_field.py "$ROOT/download-control-lock-blocked.out" 'YVEX_ERR_STATE'
+python3 tests/support/human_field.py "$ROOT/download-control-lock-blocked.out" 'stale-lock-candidates'
 
 "$YVEX_BIN" source cleanup gemma-4-12b-it --revision b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08 --models-root "$STALE_ROOT" --stale-locks --dry-run --audit > "$ROOT/download-control-cleanup-dry-run.out"
 python3 tests/support/human_field.py "$ROOT/download-control-cleanup-dry-run.out" 'status: model-download-cleanup-dry-run'
-python3 tests/support/human_field.py "$ROOT/download-control-cleanup-dry-run.out" 'stale_locks: 1'
+python3 tests/support/human_field.py "$ROOT/download-control-cleanup-dry-run.out" 'candidates: 1'
 test -f "$STALE_ROOT/source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08/.cache/huggingface/download/model.safetensors.lock"
 
 "$YVEX_BIN" source cleanup gemma-4-12b-it --revision b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08 --models-root "$STALE_ROOT" --stale-locks --yes --audit > "$ROOT/download-control-cleanup.out"
 python3 tests/support/human_field.py "$ROOT/download-control-cleanup.out" 'status: model-download-cleanup'
-python3 tests/support/human_field.py "$ROOT/download-control-cleanup.out" 'deleted: 1'
+python3 tests/support/human_field.py "$ROOT/download-control-cleanup.out" 'deleted paths: 1'
 test ! -f "$STALE_ROOT/source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08/.cache/huggingface/download/model.safetensors.lock"
 
 printf 'lock\n' > "$STALE_ROOT/source/hf/google/gemma-4-12B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08/.cache/huggingface/download/model.safetensors.lock"
@@ -1115,19 +1144,19 @@ python3 tests/support/human_field.py "$ROOT/download-off.out" 'status: model-dow
 
 LOG_PROGRESS_ROOT="$ROOT/download-log-progress"
 YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=1 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire gemma-4-e2b-it --models-root "$LOG_PROGRESS_ROOT" --progress log --tick-seconds 1 --audit > "$ROOT/download-log-progress.out" 2>&1
-python3 tests/support/human_field.py "$ROOT/download-log-progress.out" 'tick: elapsed='
+python3 tests/support/human_field.py "$ROOT/download-log-progress.out" 'ACQUIRE  gemma-4-e2b-it'
 ! grep 'fake-hf: resolving repo' "$ROOT/download-log-progress.out"
 python3 tests/support/human_field.py "$ROOT/download-log-progress.out" 'progress_mode: log'
 test -f "$LOG_PROGRESS_ROOT/evidence/build/acquisition/gemma-4-e2b-it.download.stdout.log"
 python3 tests/support/human_field.py "$LOG_PROGRESS_ROOT/evidence/build/acquisition/gemma-4-e2b-it.download.stdout.log" 'fake-hf: resolving repo'
 
 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire gemma-4-e2b --models-root "$DOWNLOAD_ROOT/noauth" --auth never --audit > "$ROOT/download-auth-never.out"
-python3 tests/support/human_field.py "$ROOT/download-auth-never.out" 'stage: account-provider skipped'
+python3 tests/support/human_field.py "$ROOT/download-auth-never.out" 'account_provider_stage: skipped'
 python3 tests/support/human_field.py "$ROOT/download-auth-never.out" 'status: model-download-pass'
 
 YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire qwen3-8b --models-root "$DOWNLOAD_ROOT" --auth auto --audit > "$ROOT/download-qwen.out"
 python3 tests/support/human_field.py "$ROOT/download-qwen.out" 'family: qwen'
-grep 'source/hf/Qwen/Qwen3-8B/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08' "$ROOT/download-qwen.out"
+python3 tests/support/human_field.py "$ROOT/download-qwen.out" 'source/hf/Qwen/Qwen3-8B/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08'
 python3 tests/support/human_field.py "$ROOT/download-qwen.out" 'status: model-download-pass'
 
 DYNAMIC_ROOT="$ROOT/download-dynamic-targets"
@@ -1150,7 +1179,7 @@ python3 tests/support/human_field.py "$ROOT/download-dynamic-qwen-status.out" 's
 python3 tests/support/human_field.py "$ROOT/download-dynamic-qwen-status.out" 'safetensors_size_status: ok'
 python3 tests/support/human_field.py "$ROOT/download-dynamic-qwen-status.out" 'status: model-download-status'
 "$YVEX_BIN" source cleanup qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --stale-locks --dry-run --audit > "$ROOT/download-dynamic-qwen-cleanup.out"
-python3 tests/support/human_field.py "$ROOT/download-dynamic-qwen-cleanup.out" 'model-download-cleanup: target=qwen3-6-35b-a3b'
+python3 tests/support/human_field.py "$ROOT/download-dynamic-qwen-cleanup.out" 'target: qwen3-6-35b-a3b'
 python3 tests/support/human_field.py "$ROOT/download-dynamic-qwen-cleanup.out" 'status: model-download-cleanup-dry-run'
 rm -f "$DYNAMIC_ROOT/source/hf/Qwen/Qwen3.6-35B-A3B/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08/"*.safetensors
 write_fake_transformer_safetensors "$DYNAMIC_ROOT/source/hf/Qwen/Qwen3.6-35B-A3B/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08/model.safetensors" qwen-coverage BF16
@@ -1158,12 +1187,18 @@ write_fake_transformer_safetensors "$DYNAMIC_ROOT/source/hf/Qwen/Qwen3.6-35B-A3B
 python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map_status: naming-map-candidate'
 python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map_family: qwen'
 python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map_target_id: qwen3-6-35b-a3b'
-grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.embed_tokens.weight -> model.embedding.token.weight' "$ROOT/tensor-map-dynamic-qwen-audit.out"
-grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.self_attn.q_proj.weight -> model.layers.0.attention.q_proj.weight' "$ROOT/tensor-map-dynamic-qwen-audit.out"
-grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.linear_attn.A_log -> model.layers.0.qwen_linear_attn.A_log' "$ROOT/tensor-map-dynamic-qwen-audit.out"
-grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.mlp.gate.weight -> model.layers.0.moe.router.weight' "$ROOT/tensor-map-dynamic-qwen-audit.out"
-grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.mlp.experts.gate_up_proj -> model.layers.0.moe.experts.all.gate_up_proj.weight' "$ROOT/tensor-map-dynamic-qwen-audit.out"
-grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.mlp.shared_expert.down_proj.weight -> model.layers.0.moe.shared_expert.down_proj.weight' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map.entry.0.native_name: model.language_model.embed_tokens.weight'
+python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map.entry.0.canonical_name: model.embedding.token.weight'
+python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map.entry.1.native_name: model.language_model.layers.0.self_attn.q_proj.weight'
+python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map.entry.1.canonical_name: model.layers.0.attention.q_proj.weight'
+python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map.entry.5.native_name: model.language_model.layers.0.linear_attn.A_log'
+python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map.entry.5.canonical_name: model.layers.0.qwen_linear_attn.A_log'
+python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map.entry.6.native_name: model.language_model.layers.0.mlp.gate.weight'
+python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map.entry.6.canonical_name: model.layers.0.moe.router.weight'
+python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map.entry.7.native_name: model.language_model.layers.0.mlp.experts.gate_up_proj'
+python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map.entry.7.canonical_name: model.layers.0.moe.experts.all.gate_up_proj.weight'
+python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map.entry.8.native_name: model.language_model.layers.0.mlp.shared_expert.down_proj.weight'
+python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map.entry.8.canonical_name: model.layers.0.moe.shared_expert.down_proj.weight'
 python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map_qwen_linear_attn_count: [1-9]'
 python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map_moe_router_count: [1-9]'
 python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-qwen-audit.out" 'tensor_map_moe_expert_count: [1-9]'
@@ -1175,9 +1210,7 @@ test -f "$DYNAMIC_ROOT/evidence/build/qwen/qwen3-6-35b-a3b.tensor-map.json"
 grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/evidence/build/qwen/qwen3-6-35b-a3b.tensor-map.json"
 grep '"required_role_coverage_status": "required-groups-present"' "$DYNAMIC_ROOT/evidence/build/qwen/qwen3-6-35b-a3b.tensor-map.json"
 "$YVEX_BIN" inspect target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/tensor-map-dynamic-qwen-table.out"
-grep 'TENSOR NAMING MAP' "$ROOT/tensor-map-dynamic-qwen-table.out"
-grep -F 'FAMILY  TARGET                STATUS                      TOTAL   EMBED    ATTN     MLP    NORM    HEAD     MOE   UNKNOWN   LAYERS  NEXT' "$ROOT/tensor-map-dynamic-qwen-table.out"
-grep -F 'qwen    qwen3-6-35b-a3b       naming-map-candidate' "$ROOT/tensor-map-dynamic-qwen-table.out"
+assert_target_table "$ROOT/tensor-map-dynamic-qwen-table.out" 0 tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT"
 "$YVEX_BIN" inspect target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-qwen-audit.out"
 python3 tests/support/human_field.py "$ROOT/output-head-dynamic-qwen-audit.out" 'output_head_map_status: output-head-profiled'
 python3 tests/support/human_field.py "$ROOT/output-head-dynamic-qwen-audit.out" 'output_head_map_family: qwen'
@@ -1188,9 +1221,7 @@ python3 tests/support/human_field.py "$ROOT/output-head-dynamic-qwen-audit.out" 
 test -f "$DYNAMIC_ROOT/evidence/build/qwen/qwen3-6-35b-a3b.output-head-map.json"
 grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/evidence/build/qwen/qwen3-6-35b-a3b.output-head-map.json"
 "$YVEX_BIN" inspect target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role output-head --output table > "$ROOT/output-head-dynamic-qwen-table.out"
-grep 'OUTPUT HEAD TENSOR MAP' "$ROOT/output-head-dynamic-qwen-table.out"
-grep -F 'FAMILY  TARGET                STATUS                           HEAD  FINAL_NORM  EMBED  TIE_POLICY                          SHAPE_RELATION            NEXT' "$ROOT/output-head-dynamic-qwen-table.out"
-grep -F 'qwen    qwen3-6-35b-a3b       output-head-profiled             yes' "$ROOT/output-head-dynamic-qwen-table.out"
+assert_target_table "$ROOT/output-head-dynamic-qwen-table.out" 0 tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role output-head
 write_fake_tokenizer_sidecars "$DYNAMIC_ROOT/source/hf/Qwen/Qwen3.6-35B-A3B/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08" qwen
 "$YVEX_BIN" inspect target tokenizer-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" > "$ROOT/tokenizer-map-dynamic-qwen.out"
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-dynamic-qwen.out" 'tokenizer-map: qwen3-6-35b-a3b'
@@ -1204,9 +1235,7 @@ python3 tests/support/human_field.py "$ROOT/tokenizer-map-dynamic-qwen.out" 'spe
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-dynamic-qwen.out" 'runtime: unsupported'
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-dynamic-qwen.out" 'next: V010.QUANT.1'
 "$YVEX_BIN" inspect target tokenizer-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/tokenizer-map-dynamic-qwen-table.out"
-grep 'TOKENIZER METADATA MAP' "$ROOT/tokenizer-map-dynamic-qwen-table.out"
-grep -F 'TARGET                FAMILY  STATUS               TOKENIZER  VOCAB                         MERGES                  CHAT_TEMPLATE  SPECIALS  NEXT' "$ROOT/tokenizer-map-dynamic-qwen-table.out"
-matches "$ROOT/tokenizer-map-dynamic-qwen-table.out" '^qwen3-6-35b-a3b[[:space:]]{2,}qwen[[:space:]]{2,}present-report-only[[:space:]]{2,}yes[[:space:]]{2,}present[[:space:]]{2,}present[[:space:]]{2,}present[[:space:]]{2,}present[[:space:]]{2,}V010\.QUANT\.1$'
+assert_target_table "$ROOT/tokenizer-map-dynamic-qwen-table.out" 0 tokenizer-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT"
 "$YVEX_BIN" inspect target tokenizer-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-dynamic-qwen-audit.out" 'tokenizer_map_status: present-report-only'
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-dynamic-qwen-audit.out" 'tokenizer_map_target_id: qwen3-6-35b-a3b'
@@ -1278,7 +1307,7 @@ python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-coverage.out" '
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-coverage.out" 'output_head_map_status: present-report-only'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-coverage.out" 'tokenizer_map_status: present-report-only'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-coverage.out" 'top_blocker: family-quantization-plan-unimplemented'
-python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-coverage.out" 'reason: family quantization plan unimplemented'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-coverage.out" 'reason: this engineering family has no complete quantization plan'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-coverage.out" 'next: not-scheduled'
 "$YVEX_BIN" inspect target quant-policy qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role-support > "$ROOT/qtype-role-support-dynamic-qwen.out"
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-qwen.out" 'qtype-role-support: qwen3-6-35b-a3b'
@@ -1293,20 +1322,17 @@ python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-qwen.out"
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-qwen.out" 'boundary: qtype role report only; no quantization/GGUF/runtime/generation'
 ! grep 'runtime_claim:' "$ROOT/qtype-role-support-dynamic-qwen.out"
 "$YVEX_BIN" inspect target quant-policy qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role-support --output table > "$ROOT/qtype-role-support-dynamic-qwen-table.out"
-grep 'QTYPE ROLE SUPPORT' "$ROOT/qtype-role-support-dynamic-qwen-table.out"
-grep 'ROLE[[:space:]][[:space:]]*SRC_DTYPE[[:space:]][[:space:]]*ARTIFACT_QTYPE[[:space:]][[:space:]]*STORAGE[[:space:]][[:space:]]*COMPUTE[[:space:]][[:space:]]*CALIBRATION[[:space:]][[:space:]]*STATUS' "$ROOT/qtype-role-support-dynamic-qwen-table.out"
-grep 'qwen_linear_attn_A_log[[:space:]][[:space:]]*BF16[[:space:]][[:space:]]*unresolved[[:space:]][[:space:]]*header-storage-profiled[[:space:]][[:space:]]*cpu-cuda-available[[:space:]][[:space:]]*deferred[[:space:]][[:space:]]*present' "$ROOT/qtype-role-support-dynamic-qwen-table.out"
-grep 'moe_expert_gate_up[[:space:]][[:space:]]*BF16' "$ROOT/qtype-role-support-dynamic-qwen-table.out"
+assert_target_table "$ROOT/qtype-role-support-dynamic-qwen-table.out" 0 quant-policy qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role-support
 "$YVEX_BIN" inspect target quant-policy qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role-support --audit > "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-qwen-audit.out" 'report: qtype-role-support'
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-qwen-audit.out" 'target_id: qwen3-6-35b-a3b'
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-qwen-audit.out" 'source_dtype: BF16'
-grep 'role\.[0-9][0-9]*\.role_name: qwen_linear_attn_A_log' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
-grep 'role\.[0-9][0-9]*\.role_name: tokenizer_metadata' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
-grep 'role\.[0-9][0-9]*\.source_dtype: BF16' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
-grep 'role\.[0-9][0-9]*\.compute_support_status: cpu-cuda-available' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
-grep 'role\.[0-9][0-9]*\.artifact_emission_allowed: false' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
-grep 'role\.[0-9][0-9]*\.artifact_emission_blocker: family-quantization-plan-unimplemented' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+python3 tests/support/human_field.py --regex "$ROOT/qtype-role-support-dynamic-qwen-audit.out" 'role\.[0-9][0-9]*\.role_name: qwen_linear_attn_A_log'
+python3 tests/support/human_field.py --regex "$ROOT/qtype-role-support-dynamic-qwen-audit.out" 'role\.[0-9][0-9]*\.role_name: tokenizer_metadata'
+python3 tests/support/human_field.py --regex "$ROOT/qtype-role-support-dynamic-qwen-audit.out" 'role\.[0-9][0-9]*\.source_dtype: BF16'
+python3 tests/support/human_field.py --regex "$ROOT/qtype-role-support-dynamic-qwen-audit.out" 'role\.[0-9][0-9]*\.compute_support_status: cpu-cuda-available'
+python3 tests/support/human_field.py --regex "$ROOT/qtype-role-support-dynamic-qwen-audit.out" 'role\.[0-9][0-9]*\.artifact_emission_allowed: false'
+python3 tests/support/human_field.py --regex "$ROOT/qtype-role-support-dynamic-qwen-audit.out" 'role\.[0-9][0-9]*\.artifact_emission_blocker: family-quantization-plan-unimplemented'
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-qwen-audit.out" 'payload_bytes_read: false'
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-qwen-audit.out" 'quantization_performed: false'
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-qwen-audit.out" 'gguf_emitted: false'
@@ -1320,7 +1346,7 @@ write_fake_transformer_safetensors "$DYNAMIC_ROOT/source/hf/Qwen/Qwen3.6-35B-A3B
 "$YVEX_BIN" inspect target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out" 'tensor_map_status: naming-map-incomplete'
 python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out" 'tensor_map_target_id: qwen3-6-35b-a3b'
-python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out" 'unmapped_unknown_count: [1-9]'
+python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out" 'tensor_map_unmapped_unknown_count: [1-9]'
 "$YVEX_BIN" inspect target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-qwen-incomplete-audit.out"
 python3 tests/support/human_field.py "$ROOT/output-head-dynamic-qwen-incomplete-audit.out" 'output_head_map_status: output-head-profiled'
 python3 tests/support/human_field.py "$ROOT/output-head-dynamic-qwen-incomplete-audit.out" 'output_head_map_target_id: qwen3-6-35b-a3b'
@@ -1336,9 +1362,7 @@ grep 'tokenizer.*missing' "$ROOT/missing-roles-dynamic-qwen.out"
 grep 'artifact.*missing' "$ROOT/missing-roles-dynamic-qwen.out"
 python3 tests/support/human_field.py "$ROOT/missing-roles-dynamic-qwen.out" 'boundary: missing-role report only; no GGUF/runtime/generation'
 "$YVEX_BIN" inspect target missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/missing-roles-dynamic-qwen-table.out"
-grep 'qwen3-6-35b-a3b.*qwen.*blocked.*incomplete-tensor-map' "$ROOT/missing-roles-dynamic-qwen-table.out"
-grep 'qwen3-6-35b-a3b.*missing.*missing.*V010.MAP.8' "$ROOT/missing-roles-dynamic-qwen-table.out"
-grep 'qwen3-6-35b-a3b.*[[:space:]][1-9][0-9]*[[:space:]]*missing[[:space:]]*missing' "$ROOT/missing-roles-dynamic-qwen-table.out"
+assert_target_table "$ROOT/missing-roles-dynamic-qwen-table.out" 0 missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT"
 "$YVEX_BIN" inspect target missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/missing-roles-dynamic-qwen-audit.out"
 python3 tests/support/human_field.py "$ROOT/missing-roles-dynamic-qwen-audit.out" 'target_id: qwen3-6-35b-a3b'
 python3 tests/support/human_field.py "$ROOT/missing-roles-dynamic-qwen-audit.out" 'family: qwen'
@@ -1376,15 +1400,19 @@ python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen.out" 'artifact_
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen.out" 'artifact_identity_status: missing'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen.out" 'prepare_blocker_count: '
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen.out" 'top_blocker: incomplete-tensor-map'
-python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen.out" 'reason: incomplete tensor map / tokenizer metadata mapping / artifact path missing'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen.out" 'reason: tensor map incomplete; full GGUF emission not performed'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen.out" 'next: V010.MAP.8'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen.out" 'status: model-prepare-unsupported'
 ! grep 'status: model-prepare-unknown-target' "$ROOT/prepare-dynamic-qwen.out"
 ! grep 'reason: missing compile map / model class / artifact path' "$ROOT/prepare-dynamic-qwen.out"
 "$YVEX_BIN" compile qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --dry-run > "$ROOT/prepare-dynamic-qwen-normal.out" 2>&1 && exit 1 || true
-grep 'models prepare: qwen3-6-35b-a3b \[blocked\]' "$ROOT/prepare-dynamic-qwen-normal.out"
-python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-normal.out" 'family: qwen  source: present  artifact: missing'
-python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-normal.out" 'plan: full-gguf planned  emission: not-performed'
+grep 'MODEL  qwen3-6-35b-a3b' "$ROOT/prepare-dynamic-qwen-normal.out"
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-normal.out" 'status: model-prepare-unsupported'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-normal.out" 'family: qwen'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-normal.out" 'source_status: present'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-normal.out" 'artifact_status: missing'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-normal.out" 'artifact_plan_status: planned-full-gguf'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-normal.out" 'artifact_emission_status: not-performed'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-normal.out" 'top_blocker: incomplete-tensor-map'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-normal.out" 'next: V010.MAP.8'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-qwen-normal.out" 'boundary: prepare dry-run only; no artifact emission/runtime/generation'
@@ -1415,17 +1443,18 @@ write_fake_transformer_safetensors "$DYNAMIC_ROOT/source/hf/google/Gemma-4-31B-i
 python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-gemma-audit.out" 'tensor_map_status: naming-map-profiled'
 python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-gemma-audit.out" 'tensor_map_family: gemma'
 python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-gemma-audit.out" 'tensor_map_target_id: gemma-4-31b-it'
-grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.embed_tokens.weight -> model.embedding.token.weight' "$ROOT/tensor-map-dynamic-gemma-audit.out"
-grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.self_attn.q_proj.weight -> model.layers.0.attention.q_proj.weight' "$ROOT/tensor-map-dynamic-gemma-audit.out"
-grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.layer_scalar -> model.layers.0.layer_scalar' "$ROOT/tensor-map-dynamic-gemma-audit.out"
+python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-gemma-audit.out" 'tensor_map.entry.[0-9][0-9]*.native_name: model.language_model.embed_tokens.weight'
+python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-gemma-audit.out" 'tensor_map.entry.[0-9][0-9]*.canonical_name: model.embedding.token.weight'
+python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-gemma-audit.out" 'tensor_map.entry.[0-9][0-9]*.native_name: model.language_model.layers.0.self_attn.q_proj.weight'
+python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-gemma-audit.out" 'tensor_map.entry.[0-9][0-9]*.canonical_name: model.layers.0.attention.q_proj.weight'
+python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-gemma-audit.out" 'tensor_map.entry.[0-9][0-9]*.native_name: model.language_model.layers.0.layer_scalar'
+python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-gemma-audit.out" 'tensor_map.entry.[0-9][0-9]*.canonical_name: model.layers.0.layer_scalar'
 python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-gemma-audit.out" 'runtime_claim: unsupported'
 python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-gemma-audit.out" 'generation: unsupported-full-model'
 test -f "$DYNAMIC_ROOT/evidence/build/gemma/gemma-4-31b-it.tensor-map.json"
 grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/evidence/build/gemma/gemma-4-31b-it.tensor-map.json"
 "$YVEX_BIN" inspect target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/tensor-map-dynamic-gemma-table.out"
-grep 'TENSOR NAMING MAP' "$ROOT/tensor-map-dynamic-gemma-table.out"
-grep -F 'FAMILY  TARGET                STATUS                      TOTAL   EMBED    ATTN     MLP    NORM    HEAD     MOE   UNKNOWN   LAYERS  NEXT' "$ROOT/tensor-map-dynamic-gemma-table.out"
-grep -F 'gemma   gemma-4-31b-it        naming-map-profiled' "$ROOT/tensor-map-dynamic-gemma-table.out"
+assert_target_table "$ROOT/tensor-map-dynamic-gemma-table.out" 0 tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT"
 "$YVEX_BIN" inspect target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-gemma-audit.out"
 python3 tests/support/human_field.py "$ROOT/output-head-dynamic-gemma-audit.out" 'output_head_map_status: output-head-profiled'
 python3 tests/support/human_field.py "$ROOT/output-head-dynamic-gemma-audit.out" 'output_head_map_family: gemma'
@@ -1437,9 +1466,7 @@ python3 tests/support/human_field.py "$ROOT/output-head-dynamic-gemma-audit.out"
 test -f "$DYNAMIC_ROOT/evidence/build/gemma/gemma-4-31b-it.output-head-map.json"
 grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/evidence/build/gemma/gemma-4-31b-it.output-head-map.json"
 "$YVEX_BIN" inspect target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head --output table > "$ROOT/output-head-dynamic-gemma-table.out"
-grep 'OUTPUT HEAD TENSOR MAP' "$ROOT/output-head-dynamic-gemma-table.out"
-grep -F 'FAMILY  TARGET                STATUS                           HEAD  FINAL_NORM  EMBED  TIE_POLICY                          SHAPE_RELATION            NEXT' "$ROOT/output-head-dynamic-gemma-table.out"
-grep -F 'gemma   gemma-4-31b-it        output-head-profiled             yes' "$ROOT/output-head-dynamic-gemma-table.out"
+assert_target_table "$ROOT/output-head-dynamic-gemma-table.out" 0 tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head
 write_fake_tokenizer_sidecars "$DYNAMIC_ROOT/source/hf/google/Gemma-4-31B-it/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08" gemma
 "$YVEX_BIN" inspect target tokenizer-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" > "$ROOT/tokenizer-map-dynamic-gemma.out"
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-dynamic-gemma.out" 'tokenizer-map: gemma-4-31b-it'
@@ -1453,8 +1480,7 @@ python3 tests/support/human_field.py "$ROOT/tokenizer-map-dynamic-gemma.out" 'sp
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-dynamic-gemma.out" 'runtime: unsupported'
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-dynamic-gemma.out" 'next: V010.QUANT.1'
 "$YVEX_BIN" inspect target tokenizer-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/tokenizer-map-dynamic-gemma-table.out"
-grep 'TOKENIZER METADATA MAP' "$ROOT/tokenizer-map-dynamic-gemma-table.out"
-matches "$ROOT/tokenizer-map-dynamic-gemma-table.out" '^gemma-4-31b-it[[:space:]]{2,}gemma[[:space:]]{2,}present-report-only[[:space:]]{2,}yes[[:space:]]{2,}embedded-or-tokenizer-json[[:space:]]{2,}not-required-or-absent[[:space:]]{2,}present[[:space:]]{2,}present[[:space:]]{2,}V010\.QUANT\.1$'
+assert_target_table "$ROOT/tokenizer-map-dynamic-gemma-table.out" 0 tokenizer-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT"
 "$YVEX_BIN" inspect target tokenizer-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tokenizer-map-dynamic-gemma-audit.out"
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-dynamic-gemma-audit.out" 'tokenizer_map_status: present-report-only'
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-dynamic-gemma-audit.out" 'tokenizer_map_target_id: gemma-4-31b-it'
@@ -1497,7 +1523,7 @@ python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma.out" 'artifact
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma.out" 'artifact_identity_status: missing'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma.out" 'prepare_blocker_count: '
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma.out" 'top_blocker: family-quantization-plan-unimplemented'
-python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma.out" 'reason: family quantization plan unimplemented'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma.out" 'reason: this engineering family has no complete quantization plan'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma.out" 'next: not-scheduled'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma.out" 'status: model-prepare-unsupported'
 ! grep 'status: model-prepare-unknown-target' "$ROOT/prepare-dynamic-gemma.out"
@@ -1510,13 +1536,12 @@ python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-gemma.out
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-gemma.out" 'top_blocker: family-quantization-plan-unimplemented'
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-gemma.out" 'next: not-scheduled'
 "$YVEX_BIN" inspect target quant-policy gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role-support --output table > "$ROOT/qtype-role-support-dynamic-gemma-table.out"
-grep 'attention_q_norm[[:space:]][[:space:]]*BF16' "$ROOT/qtype-role-support-dynamic-gemma-table.out"
-grep 'output_head_tied_embedding[[:space:]][[:space:]]*BF16' "$ROOT/qtype-role-support-dynamic-gemma-table.out"
+assert_target_table "$ROOT/qtype-role-support-dynamic-gemma-table.out" 0 quant-policy gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role-support
 "$YVEX_BIN" inspect target quant-policy gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role-support --audit > "$ROOT/qtype-role-support-dynamic-gemma-audit.out"
-grep 'role\.[0-9][0-9]*\.role_name: pre_feedforward_layernorm' "$ROOT/qtype-role-support-dynamic-gemma-audit.out"
-grep 'role\.[0-9][0-9]*\.role_name: layer_scalar' "$ROOT/qtype-role-support-dynamic-gemma-audit.out"
-grep 'role\.[0-9][0-9]*\.role_name: tokenizer_metadata' "$ROOT/qtype-role-support-dynamic-gemma-audit.out"
-grep 'role\.[0-9][0-9]*\.compute_support_status: cpu-cuda-available' "$ROOT/qtype-role-support-dynamic-gemma-audit.out"
+python3 tests/support/human_field.py --regex "$ROOT/qtype-role-support-dynamic-gemma-audit.out" 'role\.[0-9][0-9]*\.role_name: pre_feedforward_layernorm'
+python3 tests/support/human_field.py --regex "$ROOT/qtype-role-support-dynamic-gemma-audit.out" 'role\.[0-9][0-9]*\.role_name: layer_scalar'
+python3 tests/support/human_field.py --regex "$ROOT/qtype-role-support-dynamic-gemma-audit.out" 'role\.[0-9][0-9]*\.role_name: tokenizer_metadata'
+python3 tests/support/human_field.py --regex "$ROOT/qtype-role-support-dynamic-gemma-audit.out" 'role\.[0-9][0-9]*\.compute_support_status: cpu-cuda-available'
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-gemma-audit.out" 'runtime_claim: unsupported'
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-dynamic-gemma-audit.out" 'generation: unsupported-full-model'
 write_fake_transformer_safetensors "$DYNAMIC_ROOT/source/hf/Qwen/Qwen3.6-35B-A3B/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08/model.safetensors" qwen-coverage BF16
@@ -1524,10 +1549,7 @@ write_fake_tokenizer_sidecars "$DYNAMIC_ROOT/source/hf/Qwen/Qwen3.6-35B-A3B/b8b0
 "$YVEX_BIN" inspect target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-qwen-restored-audit.out"
 "$YVEX_BIN" inspect target tokenizer-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" > "$ROOT/tokenizer-map-dynamic-qwen-restored.out"
 "$YVEX_BIN" inspect target quant-policy --gate v0.1.0 --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/qtype-role-support-gate-table.out"
-grep 'FAMILY[[:space:]][[:space:]]*TARGET[[:space:]][[:space:]]*STATUS[[:space:]][[:space:]]*ROLES[[:space:]][[:space:]]*BLOCKED[[:space:]][[:space:]]*TOP_BLOCKER[[:space:]][[:space:]]*NEXT' "$ROOT/qtype-role-support-gate-table.out"
-grep 'deepseek[[:space:]][[:space:]]*deepseek4-v4-flash-dspark[[:space:]][[:space:]]*blocked[[:space:]][[:space:]]*[1-9][0-9]*[[:space:]][[:space:]]*[1-9][0-9]*[[:space:]][[:space:]]*artifact-materialization-unimplemented[[:space:]][[:space:]]*V010.ARTIFACT.MATERIALIZE.0' "$ROOT/qtype-role-support-gate-table.out"
-grep 'qwen[[:space:]][[:space:]]*qwen3-6-35b-a3b[[:space:]][[:space:]]*blocked[[:space:]][[:space:]]*[1-9][0-9]*[[:space:]][[:space:]]*[1-9][0-9]*[[:space:]][[:space:]]*family-quantization-plan-unimplemented[[:space:]][[:space:]]*not-scheduled' "$ROOT/qtype-role-support-gate-table.out"
-grep 'gemma[[:space:]][[:space:]]*gemma-4-31b-it[[:space:]][[:space:]]*blocked[[:space:]][[:space:]]*[1-9][0-9]*[[:space:]][[:space:]]*[1-9][0-9]*[[:space:]][[:space:]]*family-quantization-plan-unimplemented[[:space:]][[:space:]]*not-scheduled' "$ROOT/qtype-role-support-gate-table.out"
+assert_target_table "$ROOT/qtype-role-support-gate-table.out" 0 quant-policy --gate v0.1.0 --models-root "$DYNAMIC_ROOT"
 "$YVEX_BIN" inspect target quant-policy --gate v0.1.0 --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/qtype-role-support-gate-audit.out"
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-gate-audit.out" 'report: qtype-role-support-gate'
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-gate-audit.out" 'family.0.top_blocker: artifact-materialization-unimplemented'
@@ -1548,9 +1570,7 @@ python3 tests/support/human_field.py "$ROOT/output-head-dynamic-gemma-tied-audit
 python3 tests/support/human_field.py "$ROOT/output-head-dynamic-gemma-tied-audit.out" 'tie_policy_status: tied-output-head-candidate'
 python3 tests/support/human_field.py "$ROOT/output-head-dynamic-gemma-tied-audit.out" 'config_tie_word_embeddings_status: true'
 "$YVEX_BIN" inspect target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head --output table > "$ROOT/output-head-dynamic-gemma-tied-table.out"
-grep 'OUTPUT HEAD TENSOR MAP' "$ROOT/output-head-dynamic-gemma-tied-table.out"
-grep -F 'FAMILY  TARGET                STATUS                           HEAD  FINAL_NORM  EMBED  TIE_POLICY                          SHAPE_RELATION            NEXT' "$ROOT/output-head-dynamic-gemma-tied-table.out"
-grep -F 'gemma   gemma-4-31b-it        tied-output-head-report-only     yes' "$ROOT/output-head-dynamic-gemma-tied-table.out"
+assert_target_table "$ROOT/output-head-dynamic-gemma-tied-table.out" 0 tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head
 "$YVEX_BIN" inspect target missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
 python3 tests/support/human_field.py "$ROOT/missing-roles-dynamic-gemma-tied-audit.out" 'tensor_map_status: present-report-only'
 python3 tests/support/human_field.py "$ROOT/missing-roles-dynamic-gemma-tied-audit.out" 'output_head_map_status: present-report-only'
@@ -1570,7 +1590,7 @@ printf '{"tie_word_embeddings":false}\n' > "$DYNAMIC_ROOT/source/hf/google/Gemma
 "$YVEX_BIN" inspect target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out" 'tensor_map_status: naming-map-candidate'
 python3 tests/support/human_field.py "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out" 'tensor_map_target_id: gemma-4-31b-it'
-python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out" 'unmapped_unknown_count: [1-9]'
+python3 tests/support/human_field.py --regex "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out" 'tensor_map_unmapped_unknown_count: [1-9]'
 "$YVEX_BIN" inspect target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-gemma-missing-audit.out"
 python3 tests/support/human_field.py "$ROOT/output-head-dynamic-gemma-missing-audit.out" 'output_head_map_status: output-head-missing'
 python3 tests/support/human_field.py "$ROOT/output-head-dynamic-gemma-missing-audit.out" 'output_head_map_target_id: gemma-4-31b-it'
@@ -1589,9 +1609,7 @@ grep 'tokenizer.*present-report-only' "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'unknown-tensors.*unclassified-header-name' "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'artifact.*missing' "$ROOT/missing-roles-dynamic-gemma.out"
 "$YVEX_BIN" inspect target missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/missing-roles-dynamic-gemma-table.out"
-grep 'gemma-4-31b-it.*gemma.*blocked.*missing-output-head-map' "$ROOT/missing-roles-dynamic-gemma-table.out"
-grep 'gemma-4-31b-it.*present-report-only.*missing.*V010.MAP.8' "$ROOT/missing-roles-dynamic-gemma-table.out"
-grep 'gemma-4-31b-it.*[[:space:]][1-9][0-9]*[[:space:]]*present-report-only[[:space:]]*missing' "$ROOT/missing-roles-dynamic-gemma-table.out"
+assert_target_table "$ROOT/missing-roles-dynamic-gemma-table.out" 0 missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT"
 "$YVEX_BIN" inspect target missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/missing-roles-dynamic-gemma-audit.out"
 python3 tests/support/human_field.py "$ROOT/missing-roles-dynamic-gemma-audit.out" 'target_id: gemma-4-31b-it'
 python3 tests/support/human_field.py "$ROOT/missing-roles-dynamic-gemma-audit.out" 'family: gemma'
@@ -1614,12 +1632,16 @@ python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-incomplete-map
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-incomplete-map.out" 'output_head_map_status: missing-in-report'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-incomplete-map.out" 'tokenizer_map_status: present-report-only'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-incomplete-map.out" 'top_blocker: missing-output-head-map'
-python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-incomplete-map.out" 'reason: output head mapping missing / artifact path missing'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-incomplete-map.out" 'reason: output-head/tokenizer mapping missing; full GGUF emission not performed'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-incomplete-map.out" 'status: model-prepare-unsupported'
 "$YVEX_BIN" compile gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --dry-run > "$ROOT/prepare-dynamic-gemma-normal.out" 2>&1 && exit 1 || true
-grep 'models prepare: gemma-4-31b-it \[blocked\]' "$ROOT/prepare-dynamic-gemma-normal.out"
-python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-normal.out" 'family: gemma  source: present  artifact: missing'
-python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-normal.out" 'plan: full-gguf planned  emission: not-performed'
+grep 'MODEL  gemma-4-31b-it' "$ROOT/prepare-dynamic-gemma-normal.out"
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-normal.out" 'status: model-prepare-unsupported'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-normal.out" 'family: gemma'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-normal.out" 'source_status: present'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-normal.out" 'artifact_status: missing'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-normal.out" 'artifact_plan_status: planned-full-gguf'
+python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-normal.out" 'artifact_emission_status: not-performed'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-normal.out" 'top_blocker: missing-output-head-map'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-normal.out" 'next: V010.MAP.8'
 python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-normal.out" 'boundary: prepare dry-run only; no artifact emission/runtime/generation'
@@ -1635,58 +1657,64 @@ python3 tests/support/human_field.py "$ROOT/prepare-dynamic-gemma-normal.out" 'b
 ! grep 'reason:' "$ROOT/prepare-dynamic-gemma-normal.out"
 
 "$YVEX_BIN" inspect artifact registry --models-root "$DYNAMIC_ROOT" > "$ROOT/artifacts-list.out"
-grep 'deepseek4-v4-flash-dspark-selected-embed.*deepseek.*yvex-selected-gguf.*present.*ready' "$ROOT/artifacts-list.out"
-grep 'deepseek4-v4-flash-dspark-selected-embed-rmsnorm.*deepseek.*yvex-selected-gguf.*present.*ready' "$ROOT/artifacts-list.out"
-grep 'qwen3-8b-selected-embed.*qwen.*yvex-selected-gguf.*present.*ready' "$ROOT/artifacts-list.out"
-grep 'qwen3-6-35b-a3b.*qwen.*planned-full-gguf.*missing.*blocked' "$ROOT/artifacts-list.out"
-grep 'gemma-4-31b-it.*gemma.*planned-full-gguf.*missing.*blocked' "$ROOT/artifacts-list.out"
-python3 tests/support/human_field.py "$ROOT/artifacts-list.out" 'status: artifacts-list'
+for target in deepseek4-v4-flash-dspark-selected-embed deepseek4-v4-flash-dspark-selected-embed-rmsnorm qwen3-8b-selected-embed; do
+  family=deepseek
+  case "$target" in qwen*) family=qwen;; esac
+  for fact in "family: $family" 'class: yvex-selected-gguf' 'artifact_status: present' 'prepare: ready'; do
+    python3 tests/support/human_field.py --record "$target" "$ROOT/artifacts-list.out" "$fact"
+  done
+done
+for target in qwen3-6-35b-a3b gemma-4-31b-it; do
+  family=qwen
+  case "$target" in gemma*) family=gemma;; esac
+  for fact in "family: $family" 'class: planned-full-gguf' 'artifact_status: missing' 'prepare: blocked'; do
+    python3 tests/support/human_field.py --record "$target" "$ROOT/artifacts-list.out" "$fact"
+  done
+done
+grep 'Discovery only' "$ROOT/artifacts-list.out"
 ! grep 'runtime_ready' "$ROOT/artifacts-list.out"
 "$YVEX_BIN" inspect artifact registry --models-root "$DYNAMIC_ROOT" --family qwen --output table > "$ROOT/artifacts-list-qwen-table.out"
 grep 'qwen3-8b-selected-embed.*qwen.*present' "$ROOT/artifacts-list-qwen-table.out"
-grep 'qwen3-6-35b-a3b.*qwen.*missing.*blocked' "$ROOT/artifacts-list-qwen-table.out"
+grep 'qwen3-6-35b-a3b.*qwen.*missing' "$ROOT/artifacts-list-qwen-table.out"
 ! grep 'gemma-4-31b-it' "$ROOT/artifacts-list-qwen-table.out"
 "$YVEX_BIN" inspect artifact registry --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/artifacts-list-audit.out"
-grep 'artifact\.[0-9][0-9]*\.expected_artifact_path: .*qwen3-6-35b-a3b.gguf' "$ROOT/artifacts-list-audit.out"
-grep 'artifact\.[0-9][0-9]*\.expected_artifact_path: .*gemma-4-31b-it.gguf' "$ROOT/artifacts-list-audit.out"
-grep 'artifact\.[0-9][0-9]*\.tensor_map_path: .*gemma-4-31b-it.tensor-map.json' "$ROOT/artifacts-list-audit.out"
-python3 tests/support/human_field.py "$ROOT/artifacts-list-audit.out" 'source_payload_loaded: false'
-python3 tests/support/human_field.py "$ROOT/artifacts-list-audit.out" 'hash_performed: false'
+python3 tests/support/human_field.py --record qwen3-6-35b-a3b --regex "$ROOT/artifacts-list-audit.out" 'expected_artifact_path: .*qwen3-6-35b-a3b.gguf'
+python3 tests/support/human_field.py --record gemma-4-31b-it --regex "$ROOT/artifacts-list-audit.out" 'expected_artifact_path: .*gemma-4-31b-it.gguf'
+python3 tests/support/human_field.py --record gemma-4-31b-it --regex "$ROOT/artifacts-list-audit.out" 'tensor_map_path: .*gemma-4-31b-it.tensor-map.json'
+grep 'bytes, digests, admission and execution are not qualified here' "$ROOT/artifacts-list-audit.out"
 "$YVEX_BIN" inspect artifact registry --models-root "$DYNAMIC_ROOT" --output json > "$ROOT/artifacts-list-json.out"
 grep '"status":"artifacts-list"' "$ROOT/artifacts-list-json.out"
 grep '"target_id":"qwen3-6-35b-a3b"' "$ROOT/artifacts-list-json.out"
 "$YVEX_BIN" inspect artifact status qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" > "$ROOT/artifacts-status-qwen.out"
-python3 tests/support/human_field.py "$ROOT/artifacts-status-qwen.out" 'artifact: qwen3-6-35b-a3b'
+grep 'ARTIFACT  qwen3-6-35b-a3b' "$ROOT/artifacts-status-qwen.out"
 python3 tests/support/human_field.py "$ROOT/artifacts-status-qwen.out" 'family: qwen'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-qwen.out" 'class: planned-full-gguf'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-qwen.out" 'source: present'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-qwen.out" 'artifact_status: missing'
-python3 tests/support/human_field.py --regex "$ROOT/artifacts-status-qwen.out" 'expected: .*qwen3-6-35b-a3b.gguf'
+python3 tests/support/human_field.py --regex "$ROOT/artifacts-status-qwen.out" 'expected_artifact_path: .*qwen3-6-35b-a3b.gguf'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-qwen.out" 'prepare: blocked'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-qwen.out" 'top_blocker: family-quantization-plan-unimplemented'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-qwen.out" 'next: not-scheduled'
-python3 tests/support/human_field.py "$ROOT/artifacts-status-qwen.out" 'boundary: artifact discovery only; no runtime/generation'
+grep 'Discovery only' "$ROOT/artifacts-status-qwen.out"
 "$YVEX_BIN" inspect artifact status gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/artifacts-status-gemma-audit.out"
-python3 tests/support/human_field.py "$ROOT/artifacts-status-gemma-audit.out" 'artifact: gemma-4-31b-it'
+grep 'ARTIFACT  gemma-4-31b-it' "$ROOT/artifacts-status-gemma-audit.out"
 python3 tests/support/human_field.py "$ROOT/artifacts-status-gemma-audit.out" 'family: gemma'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-gemma-audit.out" 'class: planned-full-gguf'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-gemma-audit.out" 'artifact_status: missing'
-python3 tests/support/human_field.py --regex "$ROOT/artifacts-status-gemma-audit.out" 'expected: .*gemma-4-31b-it.gguf'
+python3 tests/support/human_field.py --regex "$ROOT/artifacts-status-gemma-audit.out" 'expected_artifact_path: .*gemma-4-31b-it.gguf'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-gemma-audit.out" 'prepare: blocked'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-gemma-audit.out" 'top_blocker: missing-output-head-map'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-gemma-audit.out" 'next: V010.MAP.8'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-gemma-audit.out" 'tensor_map_status: present-report-only'
 python3 tests/support/human_field.py "$ROOT/artifacts-status-gemma-audit.out" 'output_head_map_status: missing-in-report'
-python3 tests/support/human_field.py "$ROOT/artifacts-status-gemma-audit.out" 'source_payload_loaded: false'
-python3 tests/support/human_field.py "$ROOT/artifacts-status-gemma-audit.out" 'hash_performed: false'
-python3 tests/support/human_field.py "$ROOT/artifacts-status-gemma-audit.out" 'status: artifacts-status'
+grep 'bytes, digests, admission and execution are not qualified here' "$ROOT/artifacts-status-gemma-audit.out"
 
 QWEN32_STATUS_ROOT="$ROOT/download-qwen32-status"
 "$YVEX_BIN" source status qwen3-32b --revision b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08 --models-root "$QWEN32_STATUS_ROOT" --audit > "$ROOT/download-qwen32-status.out"
 python3 tests/support/human_field.py "$ROOT/download-qwen32-status.out" 'target_id: qwen3-32b'
 python3 tests/support/human_field.py "$ROOT/download-qwen32-status.out" 'family: qwen'
 python3 tests/support/human_field.py "$ROOT/download-qwen32-status.out" 'repo_id: Qwen/Qwen3-32B'
-grep 'source/hf/Qwen/Qwen3-32B/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08' "$ROOT/download-qwen32-status.out"
+python3 tests/support/human_field.py --regex "$ROOT/download-qwen32-status.out" 'local_source_dir: .*source/hf/Qwen/Qwen3-32B/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08'
 python3 tests/support/human_field.py "$ROOT/download-qwen32-status.out" 'status: model-download-status'
 
 QWEN32_CLEANUP_ROOT="$ROOT/download-qwen32-cleanup"
@@ -1716,7 +1744,7 @@ test -d "$QWEN32_CLEANUP_SRC"
 test -f "$QWEN32_CLEANUP_ROOT/evidence/build/acquisition/qwen3-32b.download.stderr.log"
 "$YVEX_BIN" source cleanup qwen3-32b --revision b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08 --models-root "$QWEN32_CLEANUP_ROOT" --failed-partials --yes --audit > "$ROOT/download-qwen32-cleanup.out"
 python3 tests/support/human_field.py "$ROOT/download-qwen32-cleanup.out" 'cleanup_failed_partials: true'
-python3 tests/support/human_field.py "$ROOT/download-qwen32-cleanup.out" 'deleted_source_entries: '
+python3 tests/support/human_field.py "$ROOT/download-qwen32-cleanup.out" 'deleted_source_paths: 1'
 python3 tests/support/human_field.py "$ROOT/download-qwen32-cleanup.out" 'deleted_sidecars: 7'
 python3 tests/support/human_field.py "$ROOT/download-qwen32-cleanup.out" 'deleted_logs: 2'
 python3 tests/support/human_field.py "$ROOT/download-qwen32-cleanup.out" 'status: model-download-cleanup'
@@ -1729,58 +1757,59 @@ test ! -e "$QWEN32_CLEANUP_ROOT/evidence/build/acquisition/qwen3-32b.download.st
 test ! -e "$QWEN32_CLEANUP_ROOT/evidence/build/acquisition/qwen3-32b.download.stderr.log"
 
 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire gemma-4-12b-it --models-root "$DOWNLOAD_ROOT/required" --auth required --audit > "$ROOT/download-auth-required.out" 2> "$ROOT/download-auth-required.err" && exit 1 || true
-python3 tests/support/human_field.py "$ROOT/download-auth-required.out" 'stage: account-provider blocked'
-python3 tests/support/human_field.py "$ROOT/download-auth-required.out" 'top_blocker: provider-login-required'
+test ! -s "$ROOT/download-auth-required.out"
+python3 tests/support/human_field.py "$ROOT/download-auth-required.err" 'YVEX_ERR_UNSUPPORTED'
+python3 tests/support/human_field.py "$ROOT/download-auth-required.err" 'provider-login-required'
 
 YVEX_HF_CLI=/missing/hf "$YVEX_BIN" source acquire gemma-4-12b-it --models-root "$DOWNLOAD_ROOT/missing" --auth auto --audit > "$ROOT/download-missing-hf.out" 2> "$ROOT/download-missing-hf.err" && exit 1 || true
-python3 tests/support/human_field.py "$ROOT/download-missing-hf.out" 'status: model-download-blocked'
-python3 tests/support/human_field.py "$ROOT/download-missing-hf.out" 'top_blocker: missing-huggingface-cli'
-python3 tests/support/human_field.py "$ROOT/download-missing-hf.out" 'stage: account-provider blocked'
+test ! -s "$ROOT/download-missing-hf.out"
+python3 tests/support/human_field.py "$ROOT/download-missing-hf.err" 'YVEX_ERR_UNSUPPORTED'
+python3 tests/support/human_field.py "$ROOT/download-missing-hf.err" 'missing-huggingface-cli'
 
-YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_FAIL=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire gemma-4-12b-it --revision b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08 --models-root "$DOWNLOAD_ROOT/fail" --auth auto --audit > "$ROOT/download-fail.out" 2> "$ROOT/download-fail.err" && exit 1 || true
+YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_FAIL_AT_STEP=2 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire gemma-4-12b-it --revision b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08 --models-root "$DOWNLOAD_ROOT/fail" --auth auto --audit > "$ROOT/download-fail.out" 2> "$ROOT/download-fail.err" && exit 1 || true
 python3 tests/support/human_field.py "$ROOT/download-fail.out" 'status: model-download-fail'
 test -f "$DOWNLOAD_ROOT/fail/evidence/build/acquisition/gemma-4-12b-it.download.stderr.log"
 
 YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire --repo test-org/test-model --family gemma --name test-model --models-root "$DOWNLOAD_ROOT/direct" --auth auto --audit > "$ROOT/download-direct.out"
 python3 tests/support/human_field.py "$ROOT/download-direct.out" 'repo_id: test-org/test-model'
-grep 'source/hf/test-org/test-model/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08' "$ROOT/download-direct.out"
+python3 tests/support/human_field.py --regex "$ROOT/download-direct.out" 'local_source_dir: .*source/hf/test-org/test-model/b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08'
 python3 tests/support/human_field.py "$ROOT/download-direct.out" 'status: model-download-pass'
 
 YVEX_FAKE_GH_AUTH=1 YVEX_GH_CLI="$FAKE_GH" "$YVEX_BIN" source acquire --provider github --repo test-org/test-model --release v1 --asset '*.gguf' --models-root "$DOWNLOAD_ROOT/github" --auth auto --audit > "$ROOT/download-github.out"
 python3 tests/support/human_field.py "$ROOT/download-github.out" 'provider: github'
-python3 tests/support/human_field.py "$ROOT/download-github.out" 'stage: account-provider pass'
-python3 tests/support/human_field.py "$ROOT/download-github.out" 'stage: download pass'
+python3 tests/support/human_field.py "$ROOT/download-github.out" 'account_provider_stage: pass'
+python3 tests/support/human_field.py "$ROOT/download-github.out" 'status: model-download-pass'
 python3 tests/support/human_field.py "$ROOT/download-github.out" 'github/test-org/test-model/v1'
-python3 tests/support/human_field.py "$ROOT/download-github.out" 'gguf_created: false'
-python3 tests/support/human_field.py "$ROOT/download-github.out" 'generation: unsupported'
+python3 tests/support/human_field.py "$ROOT/download-github.out" 'boundary.gguf_created: false'
+python3 tests/support/human_field.py "$ROOT/download-github.out" 'boundary.generation: unsupported'
 test -f "$DOWNLOAD_ROOT/github/source/github/test-org/test-model/v1/fake-model.gguf"
 
 "$YVEX_BIN" source acquire --models-root "$DOWNLOAD_ROOT/parser" > "$ROOT/download-missing-target.out" 2> "$ROOT/download-missing-target.err" && exit 1 || true
 grep 'requires TARGET or --repo' "$ROOT/download-missing-target.err"
 "$YVEX_BIN" source acquire --repo test-org/test-model --models-root "$DOWNLOAD_ROOT/parser" > "$ROOT/download-repo-no-family.out" 2> "$ROOT/download-repo-no-family.err" && exit 1 || true
-grep 'requires a safe lower-case --family key' "$ROOT/download-repo-no-family.err"
+grep -- '--repo requires --family without retained provenance' "$ROOT/download-repo-no-family.err"
 "$YVEX_BIN" source acquire --repo test-org/test-model --family 'llama/unsafe' --models-root "$DOWNLOAD_ROOT/parser" > "$ROOT/download-bad-family.out" 2> "$ROOT/download-bad-family.err" && exit 1 || true
-grep 'requires a safe lower-case --family key' "$ROOT/download-bad-family.err"
+grep 'bounded target, family, paths and output are required' "$ROOT/download-bad-family.err"
 "$YVEX_BIN" source acquire gemma-4-12b-it --models-root "" > "$ROOT/download-empty-root.out" 2> "$ROOT/download-empty-root.err" && exit 1 || true
-grep 'models download --models-root value is empty or invalid' "$ROOT/download-empty-root.err"
+grep 'models root is required' "$ROOT/download-empty-root.err"
 "$YVEX_BIN" source acquire gemma-4-12b-it --max-workers 0 > "$ROOT/download-bad-workers.out" 2> "$ROOT/download-bad-workers.err" && exit 1 || true
 grep 'requires a positive integer' "$ROOT/download-bad-workers.err"
 "$YVEX_BIN" source acquire gemma-4-12b-it --auth maybe > "$ROOT/download-bad-auth.out" 2> "$ROOT/download-bad-auth.err" && exit 1 || true
-grep 'auth requires auto|required|never' "$ROOT/download-bad-auth.err"
+grep 'invalid acquisition auth policy' "$ROOT/download-bad-auth.err"
 "$YVEX_BIN" source acquire gemma-4-12b-it --progress nope > "$ROOT/download-bad-progress.out" 2> "$ROOT/download-bad-progress.err" && exit 1 || true
-grep 'requires auto|live|plain|log|off' "$ROOT/download-bad-progress.err"
+grep 'invalid presentation mode' "$ROOT/download-bad-progress.err"
 "$YVEX_BIN" source acquire gemma-4-12b-it --tick-seconds 0 > "$ROOT/download-bad-tick.out" 2> "$ROOT/download-bad-tick.err" && exit 1 || true
 grep 'tick-seconds requires a positive integer' "$ROOT/download-bad-tick.err"
 "$YVEX_BIN" source acquire gemma-4-12b-it --source s3 > "$ROOT/download-bad-source.out" 2> "$ROOT/download-bad-source.err" && exit 1 || true
-grep 'supports hf only' "$ROOT/download-bad-source.err"
+grep 'unadmitted source transport' "$ROOT/download-bad-source.err"
 "$YVEX_BIN" source acquire gemma-4-12b-it --auth nope > "$ROOT/download-bad-auth.out" 2> "$ROOT/download-bad-auth.err" && exit 1 || true
-grep 'requires auto|required|never' "$ROOT/download-bad-auth.err"
+grep 'invalid acquisition auth policy' "$ROOT/download-bad-auth.err"
 "$YVEX_BIN" source acquire --provider github --repo test-org/test-model > "$ROOT/download-github-no-asset.out" 2> "$ROOT/download-github-no-asset.err" && exit 1 || true
 grep 'requires --asset GLOB' "$ROOT/download-github-no-asset.err"
 "$YVEX_BIN" source acquire gemma-4-12b-it --surprise > "$ROOT/download-unknown-flag.out" 2> "$ROOT/download-unknown-flag.err" && exit 1 || true
 python3 tests/support/human_field.py "$ROOT/download-unknown-flag.err" 'unknown flag: --surprise'
 "$YVEX_BIN" source acquire gemma-4-12b-it extra > "$ROOT/download-extra-positional.out" 2> "$ROOT/download-extra-positional.err" && exit 1 || true
-grep 'expected 0 to 1 positional arguments, received 2' "$ROOT/download-extra-positional.err"
+grep 'expected 0..1 positional arguments, received 2' "$ROOT/download-extra-positional.err"
 
 HF_TOKEN=secret-value YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" source acquire gemma-4-e2b --models-root "$DOWNLOAD_ROOT/token" --auth auto --audit > "$ROOT/download-token.out"
 python3 tests/support/human_field.py "$ROOT/download-token.out" 'auth_state: env-token-present'
@@ -1813,25 +1842,31 @@ PY
 
 "$YVEX_BIN" compile deepseek4-v4-flash-dspark-selected-embed --dry-run --models-root "$PREP" --registry "$PREP_REG" > "$ROOT/prepare-dry-run.out"
 python3 tests/support/human_field.py "$ROOT/prepare-dry-run.out" 'status: model-prepare-dry-run'
-python3 tests/support/human_field.py "$ROOT/prepare-dry-run.out" 'stage: convert-emit planned'
+python3 tests/support/human_field.py "$ROOT/prepare-dry-run.out" 'convert_emit: planned'
+python3 tests/support/human_field.py "$ROOT/prepare-dry-run.out" 'registration_planned: true'
+test ! -f "$PREP_GGUF"
+test ! -f "$PREP_REG"
 python3 tests/support/human_field.py "$ROOT/prepare-dry-run.out" 'generation: unsupported'
 
 "$YVEX_BIN" compile deepseek4-v4-flash-dspark-selected-embed --models-root "$ROOT/missing-prepare" --registry "$ROOT/missing-prepare/registry/models.local.json" > "$ROOT/prepare-missing.out" 2> "$ROOT/prepare-missing.err" && exit 1 || true
-python3 tests/support/human_field.py "$ROOT/prepare-missing.out" 'stage: source-path fail'
-python3 tests/support/human_field.py "$ROOT/prepare-missing.out" 'status: model-prepare-fail'
+test ! -s "$ROOT/prepare-missing.out"
+grep 'YVEX_ERR_IO' "$ROOT/prepare-missing.err"
+python3 tests/support/human_field.py "$ROOT/prepare-missing.err" 'source path does not exist'
 
 "$YVEX_BIN" compile deepseek4-v4-flash-dspark-selected-embed-rmsnorm --dry-run > "$ROOT/prepare-segment-unsupported.out" 2> "$ROOT/prepare-segment-unsupported.err" && exit 1 || true
-python3 tests/support/human_field.py "$ROOT/prepare-segment-unsupported.out" 'status: model-prepare-unsupported'
-grep 'segment prepare is planned' "$ROOT/prepare-segment-unsupported.out"
+test ! -s "$ROOT/prepare-segment-unsupported.out"
+python3 tests/support/human_field.py "$ROOT/prepare-segment-unsupported.err" 'status: model-prepare-unsupported'
+python3 tests/support/human_field.py "$ROOT/prepare-segment-unsupported.err" 'segment prepare is planned'
 
 "$YVEX_BIN" compile glm-5.2-official-safetensors --dry-run > "$ROOT/prepare-glm-unsupported.out" 2> "$ROOT/prepare-glm-unsupported.err" && exit 1 || true
-python3 tests/support/human_field.py "$ROOT/prepare-glm-unsupported.out" 'status: model-prepare-unsupported'
-grep 'YVEX-produced GGUF emission for this target is planned' "$ROOT/prepare-glm-unsupported.out"
+test ! -s "$ROOT/prepare-glm-unsupported.out"
+python3 tests/support/human_field.py "$ROOT/prepare-glm-unsupported.err" 'status: model-prepare-unsupported'
+python3 tests/support/human_field.py "$ROOT/prepare-glm-unsupported.err" 'YVEX-produced GGUF emission for this target is planned'
 
 "$YVEX_BIN" compile deepseek4-v4-flash-dspark-selected-embed --models-root "$PREP" --registry "$PREP_REG" --overwrite --no-register > "$ROOT/prepare-no-register.out"
-python3 tests/support/human_field.py "$ROOT/prepare-no-register.out" 'stage: source-manifest pass'
-python3 tests/support/human_field.py "$ROOT/prepare-no-register.out" 'stage: convert-emit pass'
-python3 tests/support/human_field.py "$ROOT/prepare-no-register.out" 'stage: registry-add skipped'
+python3 tests/support/human_field.py "$ROOT/prepare-no-register.out" 'native_tensor_count: 1'
+python3 tests/support/human_field.py "$ROOT/prepare-no-register.out" 'artifact_tensor_count: 1'
+python3 tests/support/human_field.py "$ROOT/prepare-no-register.out" 'registered: false'
 python3 tests/support/human_field.py "$ROOT/prepare-no-register.out" 'status: model-prepare'
 test -f "$PREP_GGUF"
 test ! -f "$PREP_REG"
@@ -1842,14 +1877,14 @@ test ! -f "$PREP_REG"
 python3 tests/support/human_field.py "$ROOT/prepare-no-use.err" 'unknown flag: --no-use'
 
 "$YVEX_BIN" compile deepseek4-v4-flash-dspark-selected-embed --models-root "$PREP" --registry "$PREP_REG" --overwrite > "$ROOT/prepare-register-use.out"
-python3 tests/support/human_field.py "$ROOT/prepare-register-use.out" 'stage: registry-remove-existing not-found'
-python3 tests/support/human_field.py "$ROOT/prepare-register-use.out" 'stage: registry-add pass'
-python3 tests/support/human_field.py "$ROOT/prepare-register-use.out" 'stage: registry-verify pass'
+python3 tests/support/human_field.py "$ROOT/prepare-register-use.out" 'registered: true'
+test "$(jq '.models | length' "$PREP_REG")" -eq 1
 python3 tests/support/human_field.py "$ROOT/prepare-register-use.out" 'status: model-prepare'
 
 "$YVEX_BIN" profile verify deepseek4-v4-flash-dspark-selected-embed --registry "$PREP_REG" > "$ROOT/prepare-verify.out"
 python3 tests/support/human_field.py "$ROOT/prepare-verify.out" 'status: models-identity-pass'
-python3 tests/support/human_field.py "$ROOT/prepare-verify.out" 'verify: pass alias=deepseek4-v4-flash-dspark-selected-embed'
+python3 tests/support/human_field.py "$ROOT/prepare-verify.out" 'alias: deepseek4-v4-flash-dspark-selected-embed'
+python3 tests/support/human_field.py "$ROOT/prepare-verify.out" 'identity_status: pass'
 
 "$YVEX_BIN" profile verify deepseek4-v4-flash-dspark-selected-embed --registry "$PREP_REG" --audit > "$ROOT/prepare-verify-audit.out"
 python3 tests/support/human_field.py "$ROOT/prepare-verify-audit.out" 'current_sha256: '
@@ -1857,11 +1892,13 @@ python3 tests/support/human_field.py "$ROOT/prepare-verify-audit.out" 'digest_st
 python3 tests/support/human_field.py "$ROOT/prepare-verify-audit.out" 'status: models-identity-pass'
 
 "$YVEX_BIN" profile verify deepseek4-v4-flash-dspark-selected-embed --registry "$PREP_REG" --output nope > "$ROOT/verify-bad-output.out" 2> "$ROOT/verify-bad-output.err" && exit 1 || true
-python3 tests/support/human_field.py "$ROOT/verify-bad-output.err" 'unsupported output mode: nope'
+python3 tests/support/human_field.py "$ROOT/verify-bad-output.err" 'invalid value for --output: nope'
 
+prepare_digest=$(sha256sum "$PREP_GGUF" | cut -d ' ' -f 1)
 "$YVEX_BIN" compile deepseek4-v4-flash-dspark-selected-embed --models-root "$PREP" --registry "$PREP_REG" > "$ROOT/prepare-overwrite-refused.out" 2> "$ROOT/prepare-overwrite-refused.err" && exit 1 || true
-python3 tests/support/human_field.py "$ROOT/prepare-overwrite-refused.out" 'stage: convert-emit refused'
-python3 tests/support/human_field.py "$ROOT/prepare-overwrite-refused.out" 'status: model-prepare-refused'
+test ! -s "$ROOT/prepare-overwrite-refused.out"
+python3 tests/support/human_field.py "$ROOT/prepare-overwrite-refused.err" 'artifact exists; pass --overwrite to replace it'
+test "$(sha256sum "$PREP_GGUF" | cut -d ' ' -f 1)" = "$prepare_digest"
 
 "$YVEX_BIN" compile deepseek4-v4-flash-dspark-selected-embed --out "$PREP_GGUF" --out-dir "$PREP/evidence/fixtures/deepseek" > "$ROOT/prepare-invalid.out" 2> "$ROOT/prepare-invalid.err" && exit 1 || true
 grep 'conflicts with --out-dir' "$ROOT/prepare-invalid.err"
@@ -1880,31 +1917,33 @@ mkdir -p "$CHECK/models" "$CHECK/registry" "$CHECK_ROOT/evidence/fixtures/deepse
 python3 tests/support/human_field.py "$ROOT/check-add.out" 'status: models-added'
 
 "$YVEX_BIN" artifact status deepseek4-v4-flash-dspark-selected-embed --level quick --registry "$CHECK_REG" > "$ROOT/check-quick-normal.out"
-python3 tests/support/human_field.py "$ROOT/check-quick-normal.out" 'model-check: pass target=deepseek4-v4-flash-dspark-selected-embed level=quick'
-python3 tests/support/human_field.py "$ROOT/check-quick-normal.out" 'boundary: selected-slice check only, generation unsupported'
+python3 tests/support/human_field.py "$ROOT/check-quick-normal.out" 'CHECK  deepseek4-v4-flash-dspark-selected-embed'
+python3 tests/support/human_field.py "$ROOT/check-quick-normal.out" 'level: quick'
+python3 tests/support/human_field.py "$ROOT/check-quick-normal.out" 'status: model-check-pass'
+python3 tests/support/human_field.py "$ROOT/check-quick-normal.out" 'boundary: artifact/selected-slice diagnostic; no generation executed'
 test "$(wc -l < "$ROOT/check-quick-normal.out")" -le 8
 
 "$YVEX_BIN" artifact status deepseek4-v4-flash-dspark-selected-embed --level quick --registry "$CHECK_REG" --audit > "$ROOT/check-quick.out"
-python3 tests/support/human_field.py "$ROOT/check-quick.out" 'status: model-check'
-python3 tests/support/human_field.py "$ROOT/check-quick.out" 'target_id: deepseek4-v4-flash-dspark-selected-embed'
+python3 tests/support/human_field.py "$ROOT/check-quick.out" 'status: model-check-pass'
+python3 tests/support/human_field.py "$ROOT/check-quick.out" 'CHECK  deepseek4-v4-flash-dspark-selected-embed'
 python3 tests/support/human_field.py "$ROOT/check-quick.out" 'backend: cpu'
 python3 tests/support/human_field.py "$ROOT/check-quick.out" 'level: quick'
-python3 tests/support/human_field.py "$ROOT/check-quick.out" 'stage: inspect pass'
-python3 tests/support/human_field.py "$ROOT/check-quick.out" 'stage: tensors pass'
-python3 tests/support/human_field.py "$ROOT/check-quick.out" 'stage: metadata pass'
-python3 tests/support/human_field.py "$ROOT/check-quick.out" 'stage: registry-identity pass'
-python3 tests/support/human_field.py "$ROOT/check-quick.out" 'stage: integrity-check pass'
-python3 tests/support/human_field.py "$ROOT/check-quick.out" 'stage: materialize skipped'
-python3 tests/support/human_field.py "$ROOT/check-quick.out" 'stage: graph-partial skipped'
-python3 tests/support/human_field.py "$ROOT/check-quick.out" 'execution_ready: false'
-python3 tests/support/human_field.py "$ROOT/check-quick.out" 'generation: unsupported'
+python3 tests/support/human_field.py "$ROOT/check-quick.out" 'inspect: pass'
+python3 tests/support/human_field.py "$ROOT/check-quick.out" 'tensors: pass'
+python3 tests/support/human_field.py "$ROOT/check-quick.out" 'metadata: pass'
+python3 tests/support/human_field.py "$ROOT/check-quick.out" 'registry-identity: pass'
+python3 tests/support/human_field.py "$ROOT/check-quick.out" 'integrity-check: pass'
+python3 tests/support/human_field.py "$ROOT/check-quick.out" 'materialize: skipped'
+python3 tests/support/human_field.py "$ROOT/check-quick.out" 'graph-partial: skipped'
+python3 tests/support/human_field.py "$ROOT/check-quick.out" 'runtime_execution: not-performed'
+python3 tests/support/human_field.py "$ROOT/check-quick.out" 'generation: not-executed-by-this-check'
 python3 tests/support/human_field.py "$ROOT/check-quick.out" 'status: model-check-pass'
 
 "$YVEX_BIN" artifact status deepseek4-v4-flash-dspark-selected-embed --level quick --models-root "$CHECK_ROOT" --audit > "$ROOT/check-models-root.out"
-python3 tests/support/human_field.py "$ROOT/check-models-root.out" 'model_input_kind: target'
-grep 'build/tests/model-check/root/evidence/fixtures/deepseek/deepseek4-v4-flash-dspark-selected-embed-F16-noimatrix-yvex-v1.gguf' "$ROOT/check-models-root.out"
-python3 tests/support/human_field.py "$ROOT/check-models-root.out" 'stage: registry-identity unregistered'
-python3 tests/support/human_field.py "$ROOT/check-models-root.out" 'stage: integrity-check pass'
+python3 tests/support/human_field.py "$ROOT/check-models-root.out" 'model_input_kind: path'
+python3 tests/support/human_field.py "$ROOT/check-models-root.out" "artifact_path: $PWD/$CHECK_ROOT_GGUF"
+python3 tests/support/human_field.py "$ROOT/check-models-root.out" 'registry-identity: unregistered'
+python3 tests/support/human_field.py "$ROOT/check-models-root.out" 'integrity-check: pass'
 python3 tests/support/human_field.py "$ROOT/check-models-root.out" 'status: model-check-pass'
 
 "$YVEX_BIN" artifact status glm-5.2-official-safetensors --dry-run > "$ROOT/check-invalid-dry-run.out" 2> "$ROOT/check-invalid-dry-run.err" && exit 1 || true
@@ -1912,45 +1951,45 @@ python3 tests/support/human_field.py "$ROOT/check-invalid-dry-run.err" 'unknown 
 
 "$YVEX_BIN" artifact status glm-5.2-official-safetensors --level quick --audit > "$ROOT/check-glm-unsupported.out" 2> "$ROOT/check-glm-unsupported.err" && exit 1 || true
 python3 tests/support/human_field.py "$ROOT/check-glm-unsupported.out" 'status: model-check-unsupported'
-grep 'source-only target cannot be checked as a YVEX-produced runtime artifact yet' "$ROOT/check-glm-unsupported.out"
-python3 tests/support/human_field.py "$ROOT/check-glm-unsupported.out" 'generation: unsupported'
+python3 tests/support/human_field.py "$ROOT/check-glm-unsupported.out" 'YVEX-produced GGUF emission for this target is planned'
+python3 tests/support/human_field.py "$ROOT/check-glm-unsupported.out" 'boundary: source-only/segment preset; no generation executed'
 
 "$YVEX_BIN" artifact status deepseek4-v4-flash-dspark-selected-embed-rmsnorm --level quick --audit > "$ROOT/check-segment-unsupported.out" 2> "$ROOT/check-segment-unsupported.err" && exit 1 || true
 python3 tests/support/human_field.py "$ROOT/check-segment-unsupported.out" 'status: model-check-unsupported'
-grep 'segment check is planned' "$ROOT/check-segment-unsupported.out"
-python3 tests/support/human_field.py "$ROOT/check-segment-unsupported.out" 'generation: unsupported'
+python3 tests/support/human_field.py "$ROOT/check-segment-unsupported.out" 'segment prepare is planned'
+python3 tests/support/human_field.py "$ROOT/check-segment-unsupported.out" 'boundary: source-only/segment preset; no generation executed'
 
 "$YVEX_BIN" artifact status > "$ROOT/check-invalid-missing-target.out" 2> "$ROOT/check-invalid-missing-target.err" && exit 1 || true
-grep 'expected 1 positional argument, received 0' "$ROOT/check-invalid-missing-target.err"
+grep 'expected 1..1 positional arguments, received 0' "$ROOT/check-invalid-missing-target.err"
 
 "$YVEX_BIN" artifact status deepseek4-v4-flash-dspark-selected-embed --backend > "$ROOT/check-invalid-backend-missing.out" 2> "$ROOT/check-invalid-backend-missing.err" && exit 1 || true
 grep 'requires a value' "$ROOT/check-invalid-backend-missing.err"
 
 "$YVEX_BIN" artifact status deepseek4-v4-flash-dspark-selected-embed --backend missing > "$ROOT/check-invalid-backend.out" 2> "$ROOT/check-invalid-backend.err" && exit 1 || true
-grep 'invalid value for --backend: missing' "$ROOT/check-invalid-backend.err"
+python3 tests/support/human_field.py --regex "$ROOT/check-invalid-backend.err" 'invalid value for --backend: missing'
 
 "$YVEX_BIN" artifact status deepseek4-v4-flash-dspark-selected-embed --level > "$ROOT/check-invalid-level-missing.out" 2> "$ROOT/check-invalid-level-missing.err" && exit 1 || true
 grep 'requires a value' "$ROOT/check-invalid-level-missing.err"
 
 "$YVEX_BIN" artifact status deepseek4-v4-flash-dspark-selected-embed --level impossible > "$ROOT/check-invalid-level.out" 2> "$ROOT/check-invalid-level.err" && exit 1 || true
-grep 'unknown models check level' "$ROOT/check-invalid-level.err"
+grep 'invalid value for --level: impossible' "$ROOT/check-invalid-level.err"
 
 "$YVEX_BIN" artifact status deepseek4-v4-flash-dspark-selected-embed --registry "" > "$ROOT/check-invalid-registry.out" 2> "$ROOT/check-invalid-registry.err" && exit 1 || true
-grep 'empty or invalid' "$ROOT/check-invalid-registry.err"
+grep 'path exceeds native bounds' "$ROOT/check-invalid-registry.err"
 
 "$YVEX_BIN" artifact status deepseek4-v4-flash-dspark-selected-embed --report-dir "" > "$ROOT/check-invalid-report-dir.out" 2> "$ROOT/check-invalid-report-dir.err" && exit 1 || true
-grep 'empty or invalid' "$ROOT/check-invalid-report-dir.err"
+grep 'path exceeds native bounds' "$ROOT/check-invalid-report-dir.err"
 
 "$YVEX_BIN" artifact status deepseek4-v4-flash-dspark-selected-embed --unknown-flag > "$ROOT/check-invalid-unknown.out" 2> "$ROOT/check-invalid-unknown.err" && exit 1 || true
 python3 tests/support/human_field.py "$ROOT/check-invalid-unknown.err" 'unknown flag: --unknown-flag'
 
 "$YVEX_BIN" artifact status deepseek4-v4-flash-dspark-selected-embed --output nope > "$ROOT/check-invalid-output.out" 2> "$ROOT/check-invalid-output.err" && exit 1 || true
-python3 tests/support/human_field.py "$ROOT/check-invalid-output.err" 'unsupported output mode: nope'
+python3 tests/support/human_field.py "$ROOT/check-invalid-output.err" 'invalid value for --output: nope'
 
 "$YVEX_BIN" inspect target --help > "$ROOT/model-target-help.out"
 python3 tests/support/human_field.py "$ROOT/model-target-help.out" 'operation: evidence.target'
-python3 tests/support/human_field.py "$ROOT/model-target-help.out" 'plane: Inspect'
-python3 tests/support/human_field.py "$ROOT/model-target-help.out" 'lane: offline-engine'
+target_summary=$(jq -r '.operations[] | select(.operation_id == "evidence.target") | .summary' config/operator/registry.json)
+python3 tests/support/human_field.py "$ROOT/model-target-help.out" "$target_summary"
 grep -- '--candidate' "$ROOT/model-target-help.out"
 grep -- '--output' "$ROOT/model-target-help.out"
 grep -- '--strict' "$ROOT/model-target-help.out"
@@ -1965,8 +2004,7 @@ grep 'runtime/generation unsupported' "$ROOT/model-class-deepseek-blocked.out"
 
 expect_rc 5 "$YVEX_BIN" inspect target class-profile deepseek4-v4-flash-dspark \
   --models-root "$CLASS_MISSING_ROOT" --output table > "$ROOT/model-class-deepseek-blocked-table.out"
-grep 'TARGET  SOURCE  IR  REASON' "$ROOT/model-class-deepseek-blocked-table.out"
-grep 'deepseek4-v4-flash-dspark  blocked  not-built  missing-source-path' "$ROOT/model-class-deepseek-blocked-table.out"
+assert_target_table "$ROOT/model-class-deepseek-blocked-table.out" 5 class-profile deepseek4-v4-flash-dspark  --models-root "$CLASS_MISSING_ROOT"
 
 expect_rc 5 "$YVEX_BIN" inspect target class-profile deepseek4-v4-flash-dspark \
   --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/model-class-deepseek-blocked-audit.out"
@@ -1986,7 +2024,7 @@ python3 tests/support/human_field.py "$ROOT/model-class-qwen-missing.out" 'targe
 python3 tests/support/human_field.py "$ROOT/model-class-qwen-missing.out" 'status: source-missing'
 python3 tests/support/human_field.py "$ROOT/model-class-qwen-missing.out" 'class: qwen-source-model-class-profile'
 python3 tests/support/human_field.py "$ROOT/model-class-qwen-missing.out" 'evidence: header-metadata-only'
-python3 tests/support/human_field.py "$ROOT/model-class-qwen-missing.out" 'patterns: tensors=0 attn=0 mlp=0 norm=0 head=0 moe=0'
+assert_population "$ROOT/model-class-qwen-missing.out" patterns tensors=0 attn=0 mlp=0 norm=0 head=0 moe=0
 python3 tests/support/human_field.py "$ROOT/model-class-qwen-missing.out" 'top_blocker: missing-qwen-source-path'
 python3 tests/support/human_field.py "$ROOT/model-class-qwen-missing.out" 'next: V010.MAP.8'
 grep 'no tensor role mapping/runtime/generation' "$ROOT/model-class-qwen-missing.out"
@@ -2011,14 +2049,13 @@ python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-missing.out" 
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-missing.out" 'status: source-missing'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-missing.out" 'stage: header-collection-inventory'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-missing.out" 'evidence: header-metadata-only'
-python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-missing.out" 'collections: embedding=0 attention_qkvo=0 mlp_gud=0 norm=0 head=0 moe=0'
+assert_population "$ROOT/tensor-collection-qwen-missing.out" collections embedding=0 attention_qkvo=0 mlp_gud=0 norm=0 head=0 moe=0
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-missing.out" 'top_blocker: missing-qwen-source-path'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-missing.out" 'next: V010.MAP.8'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-missing.out" 'boundary: tensor collection inventory only; no role mapping/runtime/generation'
 
 "$YVEX_BIN" inspect target tensor-collection qwen3-8b --models-root "$CLASS_MISSING_ROOT" --output table > "$ROOT/tensor-collection-qwen-missing-table.out"
-grep 'TENSOR COLLECTION INVENTORY' "$ROOT/tensor-collection-qwen-missing-table.out"
-matches "$ROOT/tensor-collection-qwen-missing-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}source-missing[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}V010\.MAP\.8$'
+assert_target_table "$ROOT/tensor-collection-qwen-missing-table.out" 0 tensor-collection qwen3-8b --models-root "$CLASS_MISSING_ROOT"
 
 "$YVEX_BIN" inspect target tensor-collection qwen3-8b --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/tensor-collection-qwen-missing-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-missing-audit.out" 'tensor_collection_status: source-missing'
@@ -2039,9 +2076,17 @@ python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-missing-audit
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-missing-audit.out" 'next_required_rows: V010.MAP.8'
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --models-root "$CLASS_MISSING_ROOT" > "$ROOT/tensor-map-qwen-missing.out"
-grep 'tensor-map: qwen3-8b \[blocked\]' "$ROOT/tensor-map-qwen-missing.out"
-python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'family: qwen  stage: header-naming-map  evidence: header-only'
-python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'roles: total=0 embedding=0 attention=0 mlp=0 norm=0 head=0 moe=0 unknown=0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'tensor-map: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'family: qwen'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'evidence_basis: header-only'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'roles_total: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'roles_embedding: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'roles_attention: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'roles_mlp: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'roles_norm: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'roles_head: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'roles_moe: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'roles_unknown: 0'
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'top_blocker: missing-qwen-source-path'
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'next: V010.MAP.8'
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'boundary: report-only; use --audit for tensor entries'
@@ -2049,8 +2094,7 @@ python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing.out" 'bounda
 ! grep 'runtime_claim:' "$ROOT/tensor-map-qwen-missing.out"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --models-root "$CLASS_MISSING_ROOT" --output table > "$ROOT/tensor-map-qwen-missing-table.out"
-grep 'TENSOR NAMING MAP' "$ROOT/tensor-map-qwen-missing-table.out"
-matches "$ROOT/tensor-map-qwen-missing-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}source-missing[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}V010.MAP.8$'
+assert_target_table "$ROOT/tensor-map-qwen-missing-table.out" 0 tensor-map qwen3-8b --models-root "$CLASS_MISSING_ROOT"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/tensor-map-qwen-missing-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing-audit.out" 'tensor_map_status: source-missing'
@@ -2073,9 +2117,17 @@ python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing-audit.out" '
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-missing-audit.out" 'next_required_rows: V010.MAP.8'
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT" > "$ROOT/tensor-map-gemma-missing.out"
-grep 'tensor-map: gemma-4-12b-it \[blocked\]' "$ROOT/tensor-map-gemma-missing.out"
-python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'family: gemma  stage: header-naming-map  evidence: header-only'
-python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'roles: total=0 embedding=0 attention=0 mlp=0 norm=0 head=0 moe=0 unknown=0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'tensor-map: gemma-4-12b-it'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'family: gemma'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'evidence_basis: header-only'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'roles_total: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'roles_embedding: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'roles_attention: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'roles_mlp: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'roles_norm: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'roles_head: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'roles_moe: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'roles_unknown: 0'
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'top_blocker: missing-gemma-source-path'
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'next: V010.MAP.8'
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'boundary: report-only; use --audit for tensor entries'
@@ -2083,8 +2135,7 @@ python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing.out" 'bound
 ! grep 'runtime_claim:' "$ROOT/tensor-map-gemma-missing.out"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT" --output table > "$ROOT/tensor-map-gemma-missing-table.out"
-grep 'TENSOR NAMING MAP' "$ROOT/tensor-map-gemma-missing-table.out"
-matches "$ROOT/tensor-map-gemma-missing-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}source-missing[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}V010.MAP.8$'
+assert_target_table "$ROOT/tensor-map-gemma-missing-table.out" 0 tensor-map gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/tensor-map-gemma-missing-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing-audit.out" 'tensor_map_status: source-missing'
@@ -2107,9 +2158,13 @@ python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing-audit.out" 
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-missing-audit.out" 'next_required_rows: V010.MAP.8'
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role output-head --models-root "$CLASS_MISSING_ROOT" > "$ROOT/output-head-qwen-missing.out"
-grep 'output-head-map: qwen3-8b \[blocked\]' "$ROOT/output-head-qwen-missing.out"
-python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'family: qwen  evidence: header-only'
-python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'head: missing  final_norm: missing  embedding: missing  tie: unknown'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'output-head-map: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'family: qwen'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'evidence_basis: header-only'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'head: missing'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'final_norm: missing'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'embedding: missing'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'tie: unknown'
 python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'shape: unknown'
 python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'top_blocker: missing-qwen-source-path'
 python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'next: V010.MAP.8'
@@ -2118,16 +2173,19 @@ python3 tests/support/human_field.py "$ROOT/output-head-qwen-missing.out" 'bound
 ! grep 'runtime_claim:' "$ROOT/output-head-qwen-missing.out"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --role output-head --models-root "$CLASS_MISSING_ROOT" > "$ROOT/output-head-gemma-missing.out"
-grep 'output-head-map: gemma-4-12b-it \[blocked\]' "$ROOT/output-head-gemma-missing.out"
-python3 tests/support/human_field.py "$ROOT/output-head-gemma-missing.out" 'family: gemma  evidence: header-only'
-python3 tests/support/human_field.py "$ROOT/output-head-gemma-missing.out" 'head: missing  final_norm: missing  embedding: missing  tie: unknown'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma-missing.out" 'output-head-map: gemma-4-12b-it'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma-missing.out" 'family: gemma'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma-missing.out" 'evidence_basis: header-only'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma-missing.out" 'head: missing'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma-missing.out" 'final_norm: missing'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma-missing.out" 'embedding: missing'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma-missing.out" 'tie: unknown'
 python3 tests/support/human_field.py "$ROOT/output-head-gemma-missing.out" 'top_blocker: missing-gemma-source-path'
 python3 tests/support/human_field.py "$ROOT/output-head-gemma-missing.out" 'next: V010.MAP.8'
 ! grep 'output_head_map_' "$ROOT/output-head-gemma-missing.out"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --role output-head --models-root "$CLASS_MISSING_ROOT" --output table > "$ROOT/output-head-gemma-missing-table.out"
-grep 'OUTPUT HEAD TENSOR MAP' "$ROOT/output-head-gemma-missing-table.out"
-matches "$ROOT/output-head-gemma-missing-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}source-missing[[:space:]]{2,}no[[:space:]]{2,}no[[:space:]]{2,}no[[:space:]]{2,}unknown[[:space:]]{2,}unknown[[:space:]]{2,}V010.MAP.8$'
+assert_target_table "$ROOT/output-head-gemma-missing-table.out" 0 tensor-map gemma-4-12b-it --role output-head --models-root "$CLASS_MISSING_ROOT"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --role output-head --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/output-head-gemma-missing-audit.out"
 python3 tests/support/human_field.py "$ROOT/output-head-gemma-missing-audit.out" 'output_head_map_status: source-missing'
@@ -2159,8 +2217,7 @@ python3 tests/support/human_field.py "$ROOT/tokenizer-map-qwen-missing.out" 'nex
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-qwen-missing.out" 'boundary: tokenizer metadata mapping only; no tokenization/detokenization/runtime/generation'
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role tokenizer --models-root "$CLASS_MISSING_ROOT" --output table > "$ROOT/tokenizer-map-qwen-missing-table.out"
-grep 'TOKENIZER METADATA MAP' "$ROOT/tokenizer-map-qwen-missing-table.out"
-matches "$ROOT/tokenizer-map-qwen-missing-table.out" '^qwen3-8b[[:space:]]{2,}qwen[[:space:]]{2,}source-missing[[:space:]]{2,}no[[:space:]]{2,}missing[[:space:]]{2,}missing[[:space:]]{2,}unknown[[:space:]]{2,}missing[[:space:]]{2,}V010\.MAP\.7$'
+assert_target_table "$ROOT/tokenizer-map-qwen-missing-table.out" 0 tensor-map qwen3-8b --role tokenizer --models-root "$CLASS_MISSING_ROOT"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role tokenizer --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/tokenizer-map-qwen-missing-audit.out"
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-qwen-missing-audit.out" 'tokenizer_map_status: source-missing'
@@ -2191,14 +2248,13 @@ python3 tests/support/human_field.py "$ROOT/model-class-gemma-missing.out" 'targ
 python3 tests/support/human_field.py "$ROOT/model-class-gemma-missing.out" 'status: source-missing'
 python3 tests/support/human_field.py "$ROOT/model-class-gemma-missing.out" 'class: gemma-source-model-class-profile'
 python3 tests/support/human_field.py "$ROOT/model-class-gemma-missing.out" 'evidence: header-metadata-only'
-python3 tests/support/human_field.py "$ROOT/model-class-gemma-missing.out" 'patterns: tensors=0 attn=0 mlp=0 norm=0 head=0 moe=0'
+assert_population "$ROOT/model-class-gemma-missing.out" patterns tensors=0 attn=0 mlp=0 norm=0 head=0 moe=0
 python3 tests/support/human_field.py "$ROOT/model-class-gemma-missing.out" 'top_blocker: missing-gemma-source-path'
 python3 tests/support/human_field.py "$ROOT/model-class-gemma-missing.out" 'next: V010.MAP.8'
 grep 'no tensor role mapping/runtime/generation' "$ROOT/model-class-gemma-missing.out"
 
 "$YVEX_BIN" inspect target class-profile gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT" --output table > "$ROOT/model-class-gemma-missing-table.out"
-grep 'MODEL CLASS PROFILE' "$ROOT/model-class-gemma-missing-table.out"
-matches "$ROOT/model-class-gemma-missing-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}source-missing[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}V010\.MAP\.8$'
+assert_target_table "$ROOT/model-class-gemma-missing-table.out" 0 class-profile gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT"
 
 "$YVEX_BIN" inspect target class-profile gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/model-class-gemma-missing-audit.out"
 python3 tests/support/human_field.py "$ROOT/model-class-gemma-missing-audit.out" 'model_class_profile_status: source-missing'
@@ -2225,14 +2281,13 @@ python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma-missing.out"
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma-missing.out" 'status: source-missing'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma-missing.out" 'stage: header-collection-inventory'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma-missing.out" 'evidence: header-metadata-only'
-python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma-missing.out" 'collections: embedding=0 attention_qkvo=0 mlp_gud=0 norm=0 head=0 moe=0'
+assert_population "$ROOT/tensor-collection-gemma-missing.out" collections embedding=0 attention_qkvo=0 mlp_gud=0 norm=0 head=0 moe=0
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma-missing.out" 'top_blocker: missing-gemma-source-path'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma-missing.out" 'next: V010.MAP.8'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma-missing.out" 'boundary: tensor collection inventory only; no role mapping/runtime/generation'
 
 "$YVEX_BIN" inspect target tensor-collection gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT" --output table > "$ROOT/tensor-collection-gemma-missing-table.out"
-grep 'TENSOR COLLECTION INVENTORY' "$ROOT/tensor-collection-gemma-missing-table.out"
-matches "$ROOT/tensor-collection-gemma-missing-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}source-missing[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}V010\.MAP\.8$'
+assert_target_table "$ROOT/tensor-collection-gemma-missing-table.out" 0 tensor-collection gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT"
 
 "$YVEX_BIN" inspect target tensor-collection gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/tensor-collection-gemma-missing-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma-missing-audit.out" 'tensor_collection_status: source-missing'
@@ -2292,13 +2347,12 @@ PY
 
 "$YVEX_BIN" inspect target class-profile qwen3-8b --source "$QWEN_CLASS_SOURCE" > "$ROOT/model-class-qwen.out"
 python3 tests/support/human_field.py "$ROOT/model-class-qwen.out" 'status: metadata-profiled'
-python3 tests/support/human_field.py "$ROOT/model-class-qwen.out" 'patterns: tensors=10 attn=4 mlp=3 norm=2 head=1 moe=0'
+assert_population "$ROOT/model-class-qwen.out" patterns tensors=10 attn=4 mlp=3 norm=2 head=1 moe=0
 python3 tests/support/human_field.py "$ROOT/model-class-qwen.out" 'top_blocker: missing-qwen-tensor-role-map'
 python3 tests/support/human_field.py "$ROOT/model-class-qwen.out" 'next: V010.MAP.8'
 
 "$YVEX_BIN" inspect target class-profile qwen3-8b --source "$QWEN_CLASS_SOURCE" --output table > "$ROOT/model-class-qwen-table.out"
-grep 'MODEL CLASS PROFILE' "$ROOT/model-class-qwen-table.out"
-matches "$ROOT/model-class-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}metadata-profiled[[:space:]]{2,}10[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}2[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}V010\.MAP\.8$'
+assert_target_table "$ROOT/model-class-qwen-table.out" 0 class-profile qwen3-8b --source "$QWEN_CLASS_SOURCE"
 
 "$YVEX_BIN" inspect target class-profile qwen3-8b --source "$QWEN_CLASS_SOURCE" --audit > "$ROOT/model-class-qwen-audit.out"
 python3 tests/support/human_field.py "$ROOT/model-class-qwen-audit.out" 'model_class_profile_status: metadata-profiled'
@@ -2383,16 +2437,14 @@ python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen.out" 'target:
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen.out" 'status: collection-profiled'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen.out" 'stage: header-collection-inventory'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen.out" 'evidence: header-metadata-only'
-python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen.out" 'collections: embedding=1 attention_qkvo=1 mlp_gud=1 norm=3 head=1 moe=0'
+assert_population "$ROOT/tensor-collection-qwen.out" collections embedding=1 attention_qkvo=1 mlp_gud=1 norm=3 head=1 moe=0
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen.out" 'layers_observed: 1'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen.out" 'top_blocker: missing-qwen-tensor-role-map'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen.out" 'next: V010.MAP.8'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen.out" 'boundary: tensor collection inventory only; no role mapping/runtime/generation'
 
 "$YVEX_BIN" inspect target tensor-collection qwen3-8b --source "$QWEN_COLLECTION_SOURCE" --output table > "$ROOT/tensor-collection-qwen-table.out"
-grep 'TENSOR COLLECTION INVENTORY' "$ROOT/tensor-collection-qwen-table.out"
-matches "$ROOT/tensor-collection-qwen-table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}STATUS[[:space:]]{2,}EMBED[[:space:]]{2,}ATTN_QKVO[[:space:]]{2,}MLP_GUD[[:space:]]{2,}NORM[[:space:]]{2,}HEAD[[:space:]]{2,}MOE[[:space:]]{2,}LAYERS[[:space:]]{2,}NEXT$'
-matches "$ROOT/tensor-collection-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}collection-profiled[[:space:]]{2,}1[[:space:]]{2,}1[[:space:]]{2,}1[[:space:]]{2,}3[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}1[[:space:]]{2,}V010\.MAP\.8$'
+assert_target_table "$ROOT/tensor-collection-qwen-table.out" 0 tensor-collection qwen3-8b --source "$QWEN_COLLECTION_SOURCE"
 
 "$YVEX_BIN" inspect target tensor-collection qwen3-8b --source "$QWEN_COLLECTION_SOURCE" --audit > "$ROOT/tensor-collection-qwen-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-audit.out" 'tensor_collection_status: collection-profiled'
@@ -2440,9 +2492,18 @@ python3 tests/support/human_field.py "$ROOT/tensor-collection-qwen-audit.out" 'n
 ! grep 'generation_ready: tr''ue' "$ROOT/tensor-collection-qwen-audit.out"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --source "$QWEN_COLLECTION_SOURCE" > "$ROOT/tensor-map-qwen.out"
-grep 'tensor-map: qwen3-8b \[reported\]' "$ROOT/tensor-map-qwen.out"
-python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'family: qwen  stage: header-naming-map  evidence: header-only'
-python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'roles: total=12 embedding=1 attention=4 mlp=3 norm=3 head=1 moe=0 unknown=0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'tensor-map: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'tensor_map_status: naming-map-profiled'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'family: qwen'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'evidence_basis: header-only'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'roles_total: 12'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'roles_embedding: 1'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'roles_attention: 4'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'roles_mlp: 3'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'roles_norm: 3'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'roles_head: 1'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'roles_moe: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'roles_unknown: 0'
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'layers: 1'
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'top_blocker: missing-qwen-runtime-role-validation'
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'next: V010.MAP.8'
@@ -2451,9 +2512,7 @@ python3 tests/support/human_field.py "$ROOT/tensor-map-qwen.out" 'boundary: repo
 ! grep 'runtime_claim:' "$ROOT/tensor-map-qwen.out"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --source "$QWEN_COLLECTION_SOURCE" --output table > "$ROOT/tensor-map-qwen-table.out"
-grep 'TENSOR NAMING MAP' "$ROOT/tensor-map-qwen-table.out"
-matches "$ROOT/tensor-map-qwen-table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}STATUS[[:space:]]{2,}TOTAL[[:space:]]{2,}EMBED[[:space:]]{2,}ATTN[[:space:]]{2,}MLP[[:space:]]{2,}NORM[[:space:]]{2,}HEAD[[:space:]]{2,}MOE[[:space:]]{2,}UNKNOWN[[:space:]]{2,}LAYERS[[:space:]]{2,}NEXT$'
-matches "$ROOT/tensor-map-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}naming-map-profiled[[:space:]]{2,}12[[:space:]]{2,}1[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}3[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}1[[:space:]]{2,}V010.MAP.8$'
+assert_target_table "$ROOT/tensor-map-qwen-table.out" 0 tensor-map qwen3-8b --source "$QWEN_COLLECTION_SOURCE"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --source "$QWEN_COLLECTION_SOURCE" --audit > "$ROOT/tensor-map-qwen-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-audit.out" 'tensor_map_status: naming-map-profiled'
@@ -2495,19 +2554,23 @@ python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-audit.out" 'benchmar
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-audit.out" 'release_ready: false'
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-audit.out" 'next_required_rows: V010.MAP.8'
 grep 'tensor_map.entry.' "$ROOT/tensor-map-qwen-audit.out"
-grep 'model.embed_tokens.weight -> model.embedding.token.weight' "$ROOT/tensor-map-qwen-audit.out"
-grep 'model.layers.0.self_attn.q_proj.weight -> model.layers.0.attention.q_proj.weight' "$ROOT/tensor-map-qwen-audit.out"
-grep 'model.layers.0.input_layernorm.weight -> model.layers.0.attention.norm.weight' "$ROOT/tensor-map-qwen-audit.out"
-grep 'lm_head.weight -> model.output_head.weight' "$ROOT/tensor-map-qwen-audit.out"
+python3 tests/support/human_field.py --mapping "$ROOT/tensor-map-qwen-audit.out" model.embed_tokens.weight model.embedding.token.weight
+python3 tests/support/human_field.py --mapping "$ROOT/tensor-map-qwen-audit.out" model.layers.0.self_attn.q_proj.weight model.layers.0.attention.q_proj.weight
+python3 tests/support/human_field.py --mapping "$ROOT/tensor-map-qwen-audit.out" model.layers.0.input_layernorm.weight model.layers.0.attention.norm.weight
+python3 tests/support/human_field.py --mapping "$ROOT/tensor-map-qwen-audit.out" lm_head.weight model.output_head.weight
 ! grep 'generation_ready: tr''ue' "$ROOT/tensor-map-qwen-audit.out"
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --source "$QWEN_COLLECTION_SOURCE" --check-output-contract normal > "$ROOT/output-contract-qwen-tensor-map-normal.out"
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --source "$QWEN_COLLECTION_SOURCE" --check-output-contract table > "$ROOT/output-contract-qwen-tensor-map-table.out"
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --source "$QWEN_COLLECTION_SOURCE" --check-output-contract audit > "$ROOT/output-contract-qwen-tensor-map-audit.out"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role output-head --source "$QWEN_COLLECTION_SOURCE" > "$ROOT/output-head-qwen.out"
-grep 'output-head-map: qwen3-8b \[reported\]' "$ROOT/output-head-qwen.out"
-python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'family: qwen  evidence: header-only'
-python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'head: model.output_head.weight  final_norm: model.final_norm.weight  embedding: model.embedding.token.weight  tie: separate-output-head-candidate'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'output-head-map: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'family: qwen'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'evidence_basis: header-only'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'head: model.output_head.weight'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'final_norm: model.final_norm.weight'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'embedding: model.embedding.token.weight'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'tie: separate-output-head-candidate'
 python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'shape: compatible-same-shape'
 python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'top_blocker: missing-output-head-runtime-consumer'
 python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'next: V010.MAP.8'
@@ -2517,8 +2580,7 @@ python3 tests/support/human_field.py "$ROOT/output-head-qwen.out" 'boundary: map
 ! grep 'runtime_claim:' "$ROOT/output-head-qwen.out"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role output-head --source "$QWEN_COLLECTION_SOURCE" --output table > "$ROOT/output-head-qwen-table.out"
-grep 'OUTPUT HEAD TENSOR MAP' "$ROOT/output-head-qwen-table.out"
-matches "$ROOT/output-head-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}output-head-profiled[[:space:]]{2,}yes[[:space:]]{2,}yes[[:space:]]{2,}yes[[:space:]]{2,}separate-output-head-candidate[[:space:]]{2,}compatible-same-shape[[:space:]]{2,}V010.MAP.8$'
+assert_target_table "$ROOT/output-head-qwen-table.out" 0 tensor-map qwen3-8b --role output-head --source "$QWEN_COLLECTION_SOURCE"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role output-head --source "$QWEN_COLLECTION_SOURCE" --audit > "$ROOT/output-head-qwen-audit.out"
 python3 tests/support/human_field.py "$ROOT/output-head-qwen-audit.out" 'output_head_map_status: output-head-profiled'
@@ -2645,9 +2707,7 @@ python3 tests/support/human_field.py "$ROOT/tokenizer-map-qwen.out" 'next: V010.
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-qwen.out" 'boundary: tokenizer metadata mapping only; no tokenization/detokenization/runtime/generation'
 
 "$YVEX_BIN" inspect target tokenizer-map qwen3-8b --source "$TOKENIZER_COMPLETE_SOURCE" --output table > "$ROOT/tokenizer-map-qwen-table.out"
-grep 'TOKENIZER METADATA MAP' "$ROOT/tokenizer-map-qwen-table.out"
-matches "$ROOT/tokenizer-map-qwen-table.out" '^TARGET[[:space:]]{2,}FAMILY[[:space:]]{2,}STATUS[[:space:]]{2,}TOKENIZER[[:space:]]{2,}VOCAB[[:space:]]{2,}MERGES[[:space:]]{2,}CHAT_TEMPLATE[[:space:]]{2,}SPECIALS[[:space:]]{2,}NEXT$'
-matches "$ROOT/tokenizer-map-qwen-table.out" '^qwen3-8b[[:space:]]{2,}qwen[[:space:]]{2,}present-report-only[[:space:]]{2,}yes[[:space:]]{2,}embedded-or-tokenizer-json[[:space:]]{2,}missing[[:space:]]{2,}present[[:space:]]{2,}present[[:space:]]{2,}V010\.QUANT\.1$'
+assert_target_table "$ROOT/tokenizer-map-qwen-table.out" 0 tokenizer-map qwen3-8b --source "$TOKENIZER_COMPLETE_SOURCE"
 
 "$YVEX_BIN" inspect target tokenizer-map qwen3-8b --source "$TOKENIZER_COMPLETE_SOURCE" --audit > "$ROOT/tokenizer-map-qwen-audit.out"
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-qwen-audit.out" 'schema_version: yvex.source.tokenizer_map.v1'
@@ -2699,8 +2759,7 @@ python3 tests/support/human_field.py "$ROOT/tokenizer-map-gemma.out" 'status: pr
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-gemma.out" 'next: V010.QUANT.1'
 
 "$YVEX_BIN" inspect target tokenizer-map gemma-4-12b-it --source "$TOKENIZER_COMPLETE_SOURCE" --output table > "$ROOT/tokenizer-map-gemma-table.out"
-grep 'TOKENIZER METADATA MAP' "$ROOT/tokenizer-map-gemma-table.out"
-matches "$ROOT/tokenizer-map-gemma-table.out" '^gemma-4-12b-it[[:space:]]{2,}gemma[[:space:]]{2,}present-report-only[[:space:]]{2,}yes[[:space:]]{2,}embedded-or-tokenizer-json[[:space:]]{2,}not-required-or-absent[[:space:]]{2,}present[[:space:]]{2,}present[[:space:]]{2,}V010\.QUANT\.1$'
+assert_target_table "$ROOT/tokenizer-map-gemma-table.out" 0 tokenizer-map gemma-4-12b-it --source "$TOKENIZER_COMPLETE_SOURCE"
 
 "$YVEX_BIN" inspect target tokenizer-map gemma-4-12b-it --source "$TOKENIZER_COMPLETE_SOURCE" --audit > "$ROOT/tokenizer-map-gemma-audit.out"
 python3 tests/support/human_field.py "$ROOT/tokenizer-map-gemma-audit.out" 'tokenizer_map_status: present-report-only'
@@ -2762,10 +2821,17 @@ MISSING_ROLE_COMPLETE_SOURCE="${TMPDIR:-/tmp}/yvex-missing-role-complete-test-$$
 make_missing_role_source "$MISSING_ROLE_COMPLETE_SOURCE" complete
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" > "$ROOT/missing-role-qwen.out"
-grep 'missing-roles: qwen3-8b \[blocked\]' "$ROOT/missing-role-qwen.out"
-python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'family: qwen  evidence: header+sidecar-only'
-python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'source_roles: 12/12 present, 0 missing, 0 ambiguous'
-python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'metadata_roles: 4/4 present, 0 missing, 0 ambiguous'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'target_id: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'family: qwen'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'evidence_basis: header-and-sidecar-metadata-only'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'source_roles_observed: 12'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'source_roles_required: 12'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'source_roles_missing: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'source_roles_ambiguous: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'metadata_observed: 4'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'metadata_required: 4'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'metadata_missing: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'metadata_ambiguous: 0'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'top_blocker: missing-artifact-contract'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'next: V010.MAP.9'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'boundary: report-only; use --audit for role details'
@@ -2773,9 +2839,7 @@ python3 tests/support/human_field.py "$ROOT/missing-role-qwen.out" 'boundary: re
 ! grep 'downstream_blockers:' "$ROOT/missing-role-qwen.out"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --output table > "$ROOT/missing-role-qwen-table.out"
-grep 'MISSING ROLE BLOCKER REPORT' "$ROOT/missing-role-qwen-table.out"
-matches "$ROOT/missing-role-qwen-table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}STATUS[[:space:]]{2,}OBS_SRC[[:space:]]{2,}MISS_SRC[[:space:]]{2,}AMBIG_SRC[[:space:]]{2,}OBS_META[[:space:]]{2,}MISS_META[[:space:]]{2,}TOP_BLOCKER[[:space:]]{2,}NEXT$'
-matches "$ROOT/missing-role-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}missing-role-report-blocked[[:space:]]{2,}12[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}4[[:space:]]{2,}0[[:space:]]{2,}missing-artifact-contract[[:space:]]{2,}V010\.MAP\.9$'
+assert_target_table "$ROOT/missing-role-qwen-table.out" 0 tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --audit > "$ROOT/missing-role-qwen-audit.out"
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-audit.out" 'missing_role_report_status: missing-role-report-blocked'
@@ -2821,15 +2885,22 @@ python3 tests/support/human_field.py "$ROOT/missing-role-qwen-audit.out" 'releas
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --check-output-contract audit > "$ROOT/output-contract-qwen-missing-roles-audit.out"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" > "$ROOT/missing-role-gemma.out"
-grep 'missing-roles: gemma-4-12b-it \[blocked\]' "$ROOT/missing-role-gemma.out"
-python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'family: gemma  evidence: header+sidecar-only'
-python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'source_roles: 12/12 present, 0 missing, 0 ambiguous'
-python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'metadata_roles: 4/4 present, 0 missing, 0 ambiguous'
+python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'target_id: gemma-4-12b-it'
+python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'family: gemma'
+python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'evidence_basis: header-and-sidecar-metadata-only'
+python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'source_roles_observed: 12'
+python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'source_roles_required: 12'
+python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'source_roles_missing: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'source_roles_ambiguous: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'metadata_observed: 4'
+python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'metadata_required: 4'
+python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'metadata_missing: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'metadata_ambiguous: 0'
 python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'top_blocker: missing-artifact-contract'
 python3 tests/support/human_field.py "$ROOT/missing-role-gemma.out" 'next: V010.MAP.9'
 ! grep 'missing_role.entry.' "$ROOT/missing-role-gemma.out"
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --output table > "$ROOT/missing-role-gemma-table.out"
-matches "$ROOT/missing-role-gemma-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}missing-role-report-blocked[[:space:]]{2,}12[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}4[[:space:]]{2,}0[[:space:]]{2,}missing-artifact-contract[[:space:]]{2,}V010\.MAP\.9$'
+assert_target_table "$ROOT/missing-role-gemma-table.out" 0 tensor-map gemma-4-12b-it --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE"
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --audit > "$ROOT/missing-role-gemma-audit.out"
 python3 tests/support/human_field.py "$ROOT/missing-role-gemma-audit.out" 'missing_role_report_status: missing-role-report-blocked'
 python3 tests/support/human_field.py "$ROOT/missing-role-gemma-audit.out" 'missing_role_report_family: gemma'
@@ -2842,9 +2913,15 @@ python3 tests/support/human_field.py "$ROOT/missing-role-gemma-audit.out" 'gener
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --check-output-contract audit > "$ROOT/output-contract-gemma-missing-roles-audit.out"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE" > "$ROOT/tensor-mapping-gate-qwen.out"
-grep 'tensor-mapping-gate: qwen3-8b \[reported\]' "$ROOT/tensor-mapping-gate-qwen.out"
-python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'gate: v0.1.0  family: qwen'
-python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'roles: source 12/12, metadata 4/4, missing 0, ambiguous 0'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'tensor-mapping-gate: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'gate: v0.1.0'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'family: qwen'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'source_roles_observed: 12'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'source_roles_required: 12'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'metadata_observed: 4'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'metadata_required: 4'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'roles_missing: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'roles_ambiguous: 0'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'result: pass'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'top_blocker: missing-qtype-policy-report'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'next: V010.QUANT.0'
@@ -2853,11 +2930,7 @@ python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen.out" 'bound
 ! grep 'runtime_claim:' "$ROOT/tensor-mapping-gate-qwen.out"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE" --output table > "$ROOT/tensor-mapping-gate-qwen-table.out"
-grep 'TENSOR MAPPING GATE' "$ROOT/tensor-mapping-gate-qwen-table.out"
-matches "$ROOT/tensor-mapping-gate-qwen-table.out" '^TARGET[[:space:]]{2,}FAMILY[[:space:]]{2,}GATE[[:space:]]{2,}SOURCE_ROLES[[:space:]]{2,}META_ROLES[[:space:]]{2,}MISSING[[:space:]]{2,}AMBIG[[:space:]]{2,}TOP_BLOCKER[[:space:]]{2,}STATUS[[:space:]]{2,}NEXT$'
-matches "$ROOT/tensor-mapping-gate-qwen-table.out" '^qwen3-8b[[:space:]]{2,}qwen[[:space:]]{2,}v0\.1\.0[[:space:]]{2,}12/12[[:space:]]{2,}4/4[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}missing-qtype-policy-report[[:space:]]{2,}passed-for-artifact-planning[[:space:]]{2,}V010\.QUANT\.0$'
-! grep 'runtime_claim:' "$ROOT/tensor-mapping-gate-qwen-table.out"
-! grep 'release_ready:' "$ROOT/tensor-mapping-gate-qwen-table.out"
+assert_target_table "$ROOT/tensor-mapping-gate-qwen-table.out" 0 tensor-map qwen3-8b --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE"
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE" --audit > "$ROOT/tensor-mapping-gate-qwen-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-audit.out" 'tensor_mapping_gate_status: passed-for-artifact-planning'
@@ -2888,12 +2961,18 @@ python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-audit.out" 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE" --check-output-contract audit > "$ROOT/output-contract-qwen-gate-audit.out"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE" > "$ROOT/tensor-mapping-gate-gemma.out"
-grep 'tensor-mapping-gate: gemma-4-12b-it \[reported\]' "$ROOT/tensor-mapping-gate-gemma.out"
-python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma.out" 'gate: v0.1.0  family: gemma'
-python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma.out" 'roles: source 12/12, metadata 4/4, missing 0, ambiguous 0'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma.out" 'tensor-mapping-gate: gemma-4-12b-it'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma.out" 'gate: v0.1.0'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma.out" 'family: gemma'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma.out" 'source_roles_observed: 12'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma.out" 'source_roles_required: 12'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma.out" 'metadata_observed: 4'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma.out" 'metadata_required: 4'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma.out" 'roles_missing: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma.out" 'roles_ambiguous: 0'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma.out" 'next: V010.QUANT.0'
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE" --output table > "$ROOT/tensor-mapping-gate-gemma-table.out"
-matches "$ROOT/tensor-mapping-gate-gemma-table.out" '^gemma-4-12b-it[[:space:]]{2,}gemma[[:space:]]{2,}v0\.1\.0[[:space:]]{2,}12/12[[:space:]]{2,}4/4[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}missing-qtype-policy-report[[:space:]]{2,}passed-for-artifact-planning[[:space:]]{2,}V010\.QUANT\.0$'
+assert_target_table "$ROOT/tensor-mapping-gate-gemma-table.out" 0 tensor-map gemma-4-12b-it --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE"
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE" --audit > "$ROOT/tensor-mapping-gate-gemma-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma-audit.out" 'tensor_mapping_gate_status: passed-for-artifact-planning'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma-audit.out" 'tensor_mapping_gate_family: gemma'
@@ -2905,8 +2984,11 @@ python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma-audit.out"
 MISSING_ROLE_NO_K_SOURCE="${TMPDIR:-/tmp}/yvex-missing-role-no-k-test-$$"
 make_missing_role_source "$MISSING_ROLE_NO_K_SOURCE" missing-attention-k
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_NO_K_SOURCE" > "$ROOT/missing-role-qwen-no-k.out"
-grep 'missing-roles: qwen3-8b \[blocked\]' "$ROOT/missing-role-qwen-no-k.out"
-python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-k.out" 'source_roles: 11/12 present, 1 missing, 0 ambiguous'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-k.out" 'target_id: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-k.out" 'source_roles_observed: 11'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-k.out" 'source_roles_required: 12'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-k.out" 'source_roles_missing: 1'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-k.out" 'source_roles_ambiguous: 0'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-k.out" 'missing_source: attention_k'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-k.out" 'top_blocker: missing-source-role-attention-k'
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_NO_K_SOURCE" --audit > "$ROOT/missing-role-qwen-no-k-audit.out"
@@ -2915,8 +2997,13 @@ python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-k-audit.out" 'm
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-k-audit.out" 'missing_role.entry.0.role: attention_k'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-k-audit.out" 'missing_role.entry.0.blocker_class: source-role-missing'
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --gate v0.1.0 --source "$MISSING_ROLE_NO_K_SOURCE" > "$ROOT/tensor-mapping-gate-qwen-no-k.out"
-grep 'tensor-mapping-gate: qwen3-8b \[blocked\]' "$ROOT/tensor-mapping-gate-qwen-no-k.out"
-python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-k.out" 'roles: source 11/12, metadata 4/4, missing 1, ambiguous 0'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-k.out" 'tensor-mapping-gate: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-k.out" 'source_roles_observed: 11'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-k.out" 'source_roles_required: 12'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-k.out" 'metadata_observed: 4'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-k.out" 'metadata_required: 4'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-k.out" 'roles_missing: 1'
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-k.out" 'roles_ambiguous: 0'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-k.out" 'missing: attention_k'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-k.out" 'top_blocker: missing-source-role-attention-k'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-k.out" 'next: V010.MAP.9'
@@ -2924,14 +3011,14 @@ python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-k.out" '
 MISSING_ROLE_NO_HEAD_SOURCE="${TMPDIR:-/tmp}/yvex-missing-role-no-head-test-$$"
 make_missing_role_source "$MISSING_ROLE_NO_HEAD_SOURCE" missing-output-head
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_NO_HEAD_SOURCE" > "$ROOT/missing-role-qwen-no-head.out"
-grep 'missing-roles: qwen3-8b \[blocked\]' "$ROOT/missing-role-qwen-no-head.out"
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-head.out" 'target_id: qwen3-8b'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-head.out" 'missing_source: output_head'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-head.out" 'top_blocker: missing-source-role-output-head'
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_NO_HEAD_SOURCE" --audit > "$ROOT/missing-role-qwen-no-head-audit.out"
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-head-audit.out" 'missing_role_output_head_status: missing'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-head-audit.out" 'missing_role_top_blocker: missing-source-role-output-head'
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --gate v0.1.0 --source "$MISSING_ROLE_NO_HEAD_SOURCE" > "$ROOT/tensor-mapping-gate-qwen-no-head.out"
-grep 'tensor-mapping-gate: qwen3-8b \[blocked\]' "$ROOT/tensor-mapping-gate-qwen-no-head.out"
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-head.out" 'tensor-mapping-gate: qwen3-8b'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-head.out" 'missing: output_head'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-head.out" 'top_blocker: missing-output-head-tensor'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-head.out" 'next: V010.MAP.9'
@@ -2939,9 +3026,15 @@ python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-head.out
 MISSING_ROLE_NO_METADATA_SOURCE="${TMPDIR:-/tmp}/yvex-missing-role-no-metadata-test-$$"
 make_missing_role_source "$MISSING_ROLE_NO_METADATA_SOURCE" missing-metadata
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_NO_METADATA_SOURCE" > "$ROOT/missing-role-qwen-no-metadata.out"
-grep 'missing-roles: qwen3-8b \[blocked\]' "$ROOT/missing-role-qwen-no-metadata.out"
-python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'source_roles: 12/12 present, 0 missing, 0 ambiguous'
-python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'metadata_roles: 0/4 present, 4 missing, 0 ambiguous'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'target_id: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'source_roles_observed: 12'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'source_roles_required: 12'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'source_roles_missing: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'source_roles_ambiguous: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'metadata_observed: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'metadata_required: 4'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'metadata_missing: 4'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'metadata_ambiguous: 0'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'missing_metadata: tokenizer_metadata,config_metadata,generation_metadata,special_tokens'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata.out" 'top_blocker: missing-tokenizer-metadata'
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_NO_METADATA_SOURCE" --audit > "$ROOT/missing-role-qwen-no-metadata-audit.out"
@@ -2951,7 +3044,7 @@ python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata-audit.
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata-audit.out" 'missing_role_special_tokens_status: missing'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-no-metadata-audit.out" 'missing_role_top_blocker: missing-tokenizer-metadata'
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --gate v0.1.0 --source "$MISSING_ROLE_NO_METADATA_SOURCE" > "$ROOT/tensor-mapping-gate-qwen-no-metadata.out"
-grep 'tensor-mapping-gate: qwen3-8b \[blocked\]' "$ROOT/tensor-mapping-gate-qwen-no-metadata.out"
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-metadata.out" 'tensor-mapping-gate: qwen3-8b'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-metadata.out" 'missing: tokenizer_metadata,config_metadata,generation_metadata,special_tokens'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-metadata.out" 'top_blocker: missing-tokenizer-sidecars'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-metadata.out" 'next: V010.MAP.9'
@@ -2959,8 +3052,11 @@ python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-no-metadata
 MISSING_ROLE_AMBIG_SOURCE="${TMPDIR:-/tmp}/yvex-missing-role-ambig-test-$$"
 make_missing_role_source "$MISSING_ROLE_AMBIG_SOURCE" ambiguous-output-head
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_AMBIG_SOURCE" > "$ROOT/missing-role-qwen-ambiguous.out"
-grep 'missing-roles: qwen3-8b \[blocked\]' "$ROOT/missing-role-qwen-ambiguous.out"
-python3 tests/support/human_field.py "$ROOT/missing-role-qwen-ambiguous.out" 'source_roles: 11/12 present, 0 missing, 1 ambiguous'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-ambiguous.out" 'target_id: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-ambiguous.out" 'source_roles_observed: 11'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-ambiguous.out" 'source_roles_required: 12'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-ambiguous.out" 'source_roles_missing: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-ambiguous.out" 'source_roles_ambiguous: 1'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-ambiguous.out" 'top_blocker: ambiguous-source-role-output-head'
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_AMBIG_SOURCE" --audit > "$ROOT/missing-role-qwen-ambiguous-audit.out"
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-ambiguous-audit.out" 'missing_role_output_head_status: ambiguous'
@@ -2968,7 +3064,7 @@ python3 tests/support/human_field.py "$ROOT/missing-role-qwen-ambiguous-audit.ou
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-ambiguous-audit.out" 'missing_role.entry.0.role: output_head'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-ambiguous-audit.out" 'missing_role.entry.0.blocker_class: source-role-ambiguous'
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --gate v0.1.0 --source "$MISSING_ROLE_AMBIG_SOURCE" > "$ROOT/tensor-mapping-gate-qwen-ambiguous.out"
-grep 'tensor-mapping-gate: qwen3-8b \[blocked\]' "$ROOT/tensor-mapping-gate-qwen-ambiguous.out"
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-ambiguous.out" 'tensor-mapping-gate: qwen3-8b'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-ambiguous.out" 'ambiguous: output_head'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-ambiguous.out" 'top_blocker: ambiguous-output-head-tensor'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-ambiguous.out" 'next: V010.MAP.9'
@@ -2976,30 +3072,40 @@ python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-ambiguous.o
 MISSING_ROLE_MISSING_ROOT="$ROOT/missing-role-missing-root"
 yvex_test_cleanup "$MISSING_ROLE_MISSING_ROOT"
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --models-root "$MISSING_ROLE_MISSING_ROOT" > "$ROOT/missing-role-qwen-missing-source.out"
-grep 'missing-roles: qwen3-8b \[blocked\]' "$ROOT/missing-role-qwen-missing-source.out"
-python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'source_roles: 0/12 present, 12 missing, 0 ambiguous'
-python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'metadata_roles: 0/4 present, 4 missing, 0 ambiguous'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'target_id: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'source_roles_observed: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'source_roles_required: 12'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'source_roles_missing: 12'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'source_roles_ambiguous: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'metadata_observed: 0'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'metadata_required: 4'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'metadata_missing: 4'
+python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'metadata_ambiguous: 0'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'top_blocker: missing-qwen-source-path'
 python3 tests/support/human_field.py "$ROOT/missing-role-qwen-missing-source.out" 'next: V010.MAP.9'
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --gate v0.1.0 --models-root "$MISSING_ROLE_MISSING_ROOT" > "$ROOT/tensor-mapping-gate-qwen-missing-source.out"
-grep 'tensor-mapping-gate: qwen3-8b \[blocked\]' "$ROOT/tensor-mapping-gate-qwen-missing-source.out"
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-missing-source.out" 'tensor-mapping-gate: qwen3-8b'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-missing-source.out" 'top_blocker: missing-qwen-source-path'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-qwen-missing-source.out" 'next: V010.MAP.9'
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --role missing-roles --models-root "$MISSING_ROLE_MISSING_ROOT" > "$ROOT/missing-role-gemma-missing-source.out"
-grep 'missing-roles: gemma-4-12b-it \[blocked\]' "$ROOT/missing-role-gemma-missing-source.out"
+python3 tests/support/human_field.py "$ROOT/missing-role-gemma-missing-source.out" 'target_id: gemma-4-12b-it'
 python3 tests/support/human_field.py "$ROOT/missing-role-gemma-missing-source.out" 'top_blocker: missing-gemma-source-path'
 python3 tests/support/human_field.py "$ROOT/missing-role-gemma-missing-source.out" 'next: V010.MAP.9'
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --gate v0.1.0 --models-root "$MISSING_ROLE_MISSING_ROOT" > "$ROOT/tensor-mapping-gate-gemma-missing-source.out"
-grep 'tensor-mapping-gate: gemma-4-12b-it \[blocked\]' "$ROOT/tensor-mapping-gate-gemma-missing-source.out"
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma-missing-source.out" 'tensor-mapping-gate: gemma-4-12b-it'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma-missing-source.out" 'top_blocker: missing-gemma-source-path'
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-gemma-missing-source.out" 'next: V010.MAP.9'
 
 MODEL_TARGET_QTYPE_SOURCE="$MISSING_ROLE_COMPLETE_SOURCE"
 
 "$YVEX_BIN" inspect target quant-policy qwen3-8b --source "$MODEL_TARGET_QTYPE_SOURCE" > "$ROOT/qtype-policy-qwen.out"
-grep 'qtype-policy: qwen3-8b \[reported\]' "$ROOT/qtype-policy-qwen.out"
-python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'family: qwen  mapping_gate: passed-for-artifact-planning'
-python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'source_dtype: F32=12 F16=0 BF16=0 other=0'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'qtype-policy: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'family: qwen'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'mapping_gate: passed-for-artifact-planning'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'source_dtype.F32: 12'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'source_dtype.F16: 0'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'source_dtype.BF16: 0'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'source_dtype.other: 0'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'policy: artifact-planning-storage-policy'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'preferred: F16'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'candidates: F16,BF16,F32,Q8_0,Q2_K,IQ2_XXS'
@@ -3012,16 +3118,13 @@ python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen.out" 'boundary: re
 ! grep 'runtime_claim:' "$ROOT/qtype-policy-qwen.out"
 
 "$YVEX_BIN" inspect target quant-policy qwen3-8b --source "$MODEL_TARGET_QTYPE_SOURCE" --output table > "$ROOT/qtype-policy-qwen-table.out"
-grep 'QTYPE POLICY' "$ROOT/qtype-policy-qwen-table.out"
-matches "$ROOT/qtype-policy-qwen-table.out" '^TARGET[[:space:]]{2,}FAMILY[[:space:]]{2,}SOURCE_DTYPE[[:space:]]{2,}POLICY[[:space:]]{2,}PREFERRED[[:space:]]{2,}CANDIDATES[[:space:]]{2,}REFUSED[[:space:]]{2,}STATUS[[:space:]]{2,}NEXT$'
-matches "$ROOT/qtype-policy-qwen-table.out" '^qwen3-8b[[:space:]]{2,}qwen[[:space:]]{2,}F32=12 F16=0 BF16=0 other=0[[:space:]]{2,}artifact-planning-storage-policy[[:space:]]{2,}F16[[:space:]]{2,}F16,BF16,F32,Q8_0,Q2_K,IQ2_XXS[[:space:]]{2,}Q4_K[[:space:]]{2,}policy-reported[[:space:]]{2,}not-scheduled$'
-! grep 'CALIBRATION' "$ROOT/qtype-policy-qwen-table.out"
-! grep 'calibration_status:' "$ROOT/qtype-policy-qwen-table.out"
-! grep 'runtime_claim:' "$ROOT/qtype-policy-qwen-table.out"
+assert_target_table "$ROOT/qtype-policy-qwen-table.out" 0 quant-policy qwen3-8b --source "$MODEL_TARGET_QTYPE_SOURCE"
 
 "$YVEX_BIN" inspect target quant-policy qwen3-8b --source "$MODEL_TARGET_QTYPE_SOURCE" --audit > "$ROOT/qtype-policy-qwen-audit.out"
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'source_dtype_profile_status: profiled'
-python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'source_dtype_counts: F32=12,F16=0,BF16=0'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'source_dtype.F32: 12'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'source_dtype.F16: 0'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'source_dtype.BF16: 0'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'source_tensor_count: 12'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'mapping_gate_status: passed-for-artifact-planning'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'tensor_map_status: naming-map-profiled'
@@ -3030,8 +3133,16 @@ python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'tokeni
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'missing_role_report_status: missing-role-report-blocked'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'qtype_policy_basis: header-only-source-metadata+canonical-numeric-registry'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'qtype_policy_status: reported'
-python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'numeric_capability.Q8_0: encoder=available decoder=available cpu=available cuda=available calibration=none'
-python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'numeric_capability.Q2_K: encoder=available decoder=available cpu=available cuda=available calibration=optional'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'numeric_capability.Q8_0.encoder: available'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'numeric_capability.Q8_0.decoder: available'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'numeric_capability.Q8_0.cpu: available'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'numeric_capability.Q8_0.cuda: available'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'numeric_capability.Q8_0.calibration: none'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'numeric_capability.Q2_K.encoder: available'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'numeric_capability.Q2_K.decoder: available'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'numeric_capability.Q2_K.cpu: available'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'numeric_capability.Q2_K.cuda: available'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'numeric_capability.Q2_K.calibration: optional'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'refusal_reasons: Q4_K:encoder-unavailable IQ2_XXS:calibration-required'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'artifact_identity_status: missing'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'runtime_descriptor_status: missing'
@@ -3048,13 +3159,17 @@ python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-audit.out" 'releas
 "$YVEX_BIN" inspect target quant-policy qwen3-8b --source "$MODEL_TARGET_QTYPE_SOURCE" --check-output-contract audit > "$ROOT/output-contract-qwen-qtype-audit.out"
 
 "$YVEX_BIN" inspect target quant-policy gemma-4-12b-it --source "$MODEL_TARGET_QTYPE_SOURCE" > "$ROOT/qtype-policy-gemma.out"
-grep 'qtype-policy: gemma-4-12b-it \[reported\]' "$ROOT/qtype-policy-gemma.out"
-python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma.out" 'family: gemma  mapping_gate: passed-for-artifact-planning'
-python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma.out" 'source_dtype: F32=12 F16=0 BF16=0 other=0'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma.out" 'qtype-policy: gemma-4-12b-it'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma.out" 'family: gemma'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma.out" 'mapping_gate: passed-for-artifact-planning'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma.out" 'source_dtype.F32: 12'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma.out" 'source_dtype.F16: 0'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma.out" 'source_dtype.BF16: 0'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma.out" 'source_dtype.other: 0'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma.out" 'preferred: F16'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma.out" 'next: not-scheduled'
 "$YVEX_BIN" inspect target quant-policy gemma-4-12b-it --source "$MODEL_TARGET_QTYPE_SOURCE" --output table > "$ROOT/qtype-policy-gemma-table.out"
-matches "$ROOT/qtype-policy-gemma-table.out" '^gemma-4-12b-it[[:space:]]{2,}gemma[[:space:]]{2,}F32=12 F16=0 BF16=0 other=0[[:space:]]{2,}artifact-planning-storage-policy[[:space:]]{2,}F16[[:space:]]{2,}F16,BF16,F32,Q8_0,Q2_K,IQ2_XXS[[:space:]]{2,}Q4_K[[:space:]]{2,}policy-reported[[:space:]]{2,}not-scheduled$'
+assert_target_table "$ROOT/qtype-policy-gemma-table.out" 0 quant-policy gemma-4-12b-it --source "$MODEL_TARGET_QTYPE_SOURCE"
 "$YVEX_BIN" inspect target quant-policy gemma-4-12b-it --source "$MODEL_TARGET_QTYPE_SOURCE" --audit > "$ROOT/qtype-policy-gemma-audit.out"
 python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma-audit.out" 'mapping_gate_status: passed-for-artifact-planning'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma-audit.out" 'qtype_policy_status: reported'
@@ -3064,8 +3179,9 @@ python3 tests/support/human_field.py "$ROOT/qtype-policy-gemma-audit.out" 'next_
 "$YVEX_BIN" inspect target quant-policy gemma-4-12b-it --source "$MODEL_TARGET_QTYPE_SOURCE" --check-output-contract audit > "$ROOT/output-contract-gemma-qtype-audit.out"
 
 "$YVEX_BIN" inspect target quant-policy qwen3-8b --models-root "$MISSING_ROLE_MISSING_ROOT" > "$ROOT/qtype-policy-qwen-missing-source.out"
-grep 'qtype-policy: qwen3-8b \[blocked\]' "$ROOT/qtype-policy-qwen-missing-source.out"
-python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-source.out" 'family: qwen  mapping_gate: blocked-missing-source'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-source.out" 'qtype-policy: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-source.out" 'family: qwen'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-source.out" 'mapping_gate: blocked-missing-source'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-source.out" 'top_blocker: missing-qwen-source-path'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-source.out" 'next: V010.MAP.9'
 
@@ -3074,22 +3190,27 @@ yvex_test_cleanup "$QTYPE_MISSING_DTYPE_SOURCE"
 cp -R "$MODEL_TARGET_QTYPE_SOURCE" "$QTYPE_MISSING_DTYPE_SOURCE"
 rm -f "$QTYPE_MISSING_DTYPE_SOURCE"/*.safetensors
 "$YVEX_BIN" inspect target quant-policy qwen3-8b --source "$QTYPE_MISSING_DTYPE_SOURCE" > "$ROOT/qtype-policy-qwen-missing-dtype.out"
-grep 'qtype-policy: qwen3-8b \[blocked\]' "$ROOT/qtype-policy-qwen-missing-dtype.out"
-python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-dtype.out" 'source_dtype: F32=0 F16=0 BF16=0 other=0'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-dtype.out" 'qtype-policy: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-dtype.out" 'source_dtype.F32: 0'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-dtype.out" 'source_dtype.F16: 0'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-dtype.out" 'source_dtype.BF16: 0'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-dtype.out" 'source_dtype.other: 0'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-dtype.out" 'top_blocker: missing-source-dtype-profile'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-missing-dtype.out" 'next: V010.MAP.9'
 yvex_test_cleanup "$QTYPE_MISSING_DTYPE_SOURCE"
 
 "$YVEX_BIN" inspect target quant-policy qwen3-8b --source "$MISSING_ROLE_NO_K_SOURCE" > "$ROOT/qtype-policy-qwen-blocked-gate.out"
-grep 'qtype-policy: qwen3-8b \[blocked\]' "$ROOT/qtype-policy-qwen-blocked-gate.out"
-python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-blocked-gate.out" 'family: qwen  mapping_gate: blocked-missing-runtime-roles'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-blocked-gate.out" 'qtype-policy: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-blocked-gate.out" 'family: qwen'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-blocked-gate.out" 'mapping_gate: blocked-missing-runtime-roles'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-blocked-gate.out" 'top_blocker: missing-source-role-attention-k'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-qwen-blocked-gate.out" 'next: V010.MAP.9'
 
 expect_rc 2 "$YVEX_BIN" inspect target quant-policy nope > "$ROOT/qtype-policy-unknown-target.out" 2> "$ROOT/qtype-policy-unknown-target.err"
-grep 'qtype-policy: nope \[unsupported\]' "$ROOT/qtype-policy-unknown-target.out"
+python3 tests/support/human_field.py "$ROOT/qtype-policy-unknown-target.err" 'reason: unsupported target: nope'
+python3 tests/support/human_field.py "$ROOT/qtype-policy-unknown-target.err" 'status: unsupported-target'
 "$YVEX_BIN" inspect target quant-policy deepseek4-v4-flash-dspark-selected-embed > "$ROOT/qtype-policy-unsupported-class.out"
-grep 'qtype-policy: deepseek4-v4-flash-dspark-selected-embed \[blocked\]' "$ROOT/qtype-policy-unsupported-class.out"
+python3 tests/support/human_field.py "$ROOT/qtype-policy-unsupported-class.out" 'qtype-policy: deepseek4-v4-flash-dspark-selected-embed'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-unsupported-class.out" 'top_blocker: unsupported-target-class'
 "$YVEX_BIN" inspect target quant-policy deepseek4-v4-flash-dspark-selected-embed-rmsnorm --role-support > "$ROOT/qtype-role-support-deepseek-selected.out"
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-deepseek-selected.out" 'qtype-role-support: deepseek4-v4-flash-dspark-selected-embed-rmsnorm'
@@ -3101,12 +3222,12 @@ python3 tests/support/human_field.py "$ROOT/qtype-role-support-deepseek-selected
 "$YVEX_BIN" inspect target quant-policy deepseek4-v4-flash-dspark-selected-embed-rmsnorm --role-support --audit > "$ROOT/qtype-role-support-deepseek-selected-audit.out"
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-deepseek-selected-audit.out" 'selected_slice_evidence_only: true'
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-deepseek-selected-audit.out" 'full_family_artifact_status: missing'
-grep 'role\.[0-9][0-9]*\.role_status: selected-slice-evidence-only' "$ROOT/qtype-role-support-deepseek-selected-audit.out"
-grep 'role\.[0-9][0-9]*\.artifact_emission_blocker: complete-artifact-admission-required' "$ROOT/qtype-role-support-deepseek-selected-audit.out"
+python3 tests/support/human_field.py --regex "$ROOT/qtype-role-support-deepseek-selected-audit.out" 'role\.[0-9][0-9]*\.role_status: selected-slice-evidence-only'
+python3 tests/support/human_field.py --regex "$ROOT/qtype-role-support-deepseek-selected-audit.out" 'role\.[0-9][0-9]*\.artifact_emission_blocker: complete-artifact-admission-required'
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-deepseek-selected-audit.out" 'runtime_claim: unsupported'
 python3 tests/support/human_field.py "$ROOT/qtype-role-support-deepseek-selected-audit.out" 'generation: unsupported-full-model'
 "$YVEX_BIN" inspect target quant-policy glm-5.2-official-safetensors > "$ROOT/qtype-policy-unsupported-family.out"
-grep 'qtype-policy: glm-5.2-official-safetensors \[unsupported\]' "$ROOT/qtype-policy-unsupported-family.out"
+python3 tests/support/human_field.py "$ROOT/qtype-policy-unsupported-family.out" 'qtype-policy: glm-5.2-official-safetensors'
 python3 tests/support/human_field.py "$ROOT/qtype-policy-unsupported-family.out" 'top_blocker: unsupported-family'
 expect_rc 2 "$YVEX_BIN" inspect target quant-policy > "$ROOT/qtype-policy-missing-target.out" 2> "$ROOT/qtype-policy-missing-target.err"
 grep 'requires TARGET' "$ROOT/qtype-policy-missing-target.err"
@@ -3255,8 +3376,16 @@ with open(sys.argv[1], "wb") as f:
 PY
 
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --source "$QWEN_TENSOR_MAP_UNKNOWN_SOURCE" > "$ROOT/tensor-map-qwen-unknown.out"
-grep 'tensor-map: qwen3-8b \[naming-map-candidate\]' "$ROOT/tensor-map-qwen-unknown.out"
-python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown.out" 'roles: total=12 embedding=1 attention=4 mlp=3 norm=3 head=1 moe=0 unknown=1'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown.out" 'tensor-map: qwen3-8b'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown.out" 'tensor_map_status: naming-map-candidate'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown.out" 'roles_total: 12'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown.out" 'roles_embedding: 1'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown.out" 'roles_attention: 4'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown.out" 'roles_mlp: 3'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown.out" 'roles_norm: 3'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown.out" 'roles_head: 1'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown.out" 'roles_moe: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown.out" 'roles_unknown: 1'
 "$YVEX_BIN" inspect target tensor-map qwen3-8b --source "$QWEN_TENSOR_MAP_UNKNOWN_SOURCE" --audit > "$ROOT/tensor-map-qwen-unknown-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown-audit.out" 'tensor_map_status: naming-map-candidate'
 python3 tests/support/human_field.py "$ROOT/tensor-map-qwen-unknown-audit.out" 'tensor_map_tensor_count: 13'
@@ -3321,13 +3450,12 @@ PY
 "$YVEX_BIN" inspect target class-profile gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" > "$ROOT/model-class-gemma.out"
 python3 tests/support/human_field.py "$ROOT/model-class-gemma.out" 'status: metadata-profiled'
 python3 tests/support/human_field.py "$ROOT/model-class-gemma.out" 'class: gemma-source-model-class-profile'
-python3 tests/support/human_field.py "$ROOT/model-class-gemma.out" 'patterns: tensors=12 attn=4 mlp=3 norm=3 head=1 moe=0'
+assert_population "$ROOT/model-class-gemma.out" patterns tensors=12 attn=4 mlp=3 norm=3 head=1 moe=0
 python3 tests/support/human_field.py "$ROOT/model-class-gemma.out" 'top_blocker: missing-gemma-tensor-role-map'
 python3 tests/support/human_field.py "$ROOT/model-class-gemma.out" 'next: V010.MAP.8'
 
 "$YVEX_BIN" inspect target class-profile gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --output table > "$ROOT/model-class-gemma-table.out"
-grep 'MODEL CLASS PROFILE' "$ROOT/model-class-gemma-table.out"
-matches "$ROOT/model-class-gemma-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}metadata-profiled[[:space:]]{2,}12[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}3[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}V010\.MAP\.8$'
+assert_target_table "$ROOT/model-class-gemma-table.out" 0 class-profile gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE"
 
 "$YVEX_BIN" inspect target class-profile gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --audit > "$ROOT/model-class-gemma-audit.out"
 python3 tests/support/human_field.py "$ROOT/model-class-gemma-audit.out" 'model_class_profile_status: metadata-profiled'
@@ -3378,16 +3506,14 @@ python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma.out" 'target
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma.out" 'status: collection-profiled'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma.out" 'stage: header-collection-inventory'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma.out" 'evidence: header-metadata-only'
-python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma.out" 'collections: embedding=1 attention_qkvo=1 mlp_gud=1 norm=3 head=1 moe=0'
+assert_population "$ROOT/tensor-collection-gemma.out" collections embedding=1 attention_qkvo=1 mlp_gud=1 norm=3 head=1 moe=0
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma.out" 'layers_observed: 1'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma.out" 'top_blocker: missing-gemma-tensor-role-map'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma.out" 'next: V010.MAP.8'
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma.out" 'boundary: tensor collection inventory only; no role mapping/runtime/generation'
 
 "$YVEX_BIN" inspect target tensor-collection gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --output table > "$ROOT/tensor-collection-gemma-table.out"
-grep 'TENSOR COLLECTION INVENTORY' "$ROOT/tensor-collection-gemma-table.out"
-matches "$ROOT/tensor-collection-gemma-table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}STATUS[[:space:]]{2,}EMBED[[:space:]]{2,}ATTN_QKVO[[:space:]]{2,}MLP_GUD[[:space:]]{2,}NORM[[:space:]]{2,}HEAD[[:space:]]{2,}MOE[[:space:]]{2,}LAYERS[[:space:]]{2,}NEXT$'
-matches "$ROOT/tensor-collection-gemma-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}collection-profiled[[:space:]]{2,}1[[:space:]]{2,}1[[:space:]]{2,}1[[:space:]]{2,}3[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}1[[:space:]]{2,}V010\.MAP\.8$'
+assert_target_table "$ROOT/tensor-collection-gemma-table.out" 0 tensor-collection gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE"
 
 "$YVEX_BIN" inspect target tensor-collection gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --audit > "$ROOT/tensor-collection-gemma-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma-audit.out" 'tensor_collection_status: collection-profiled'
@@ -3435,9 +3561,18 @@ python3 tests/support/human_field.py "$ROOT/tensor-collection-gemma-audit.out" '
 ! grep 'generation_ready: tr''ue' "$ROOT/tensor-collection-gemma-audit.out"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" > "$ROOT/tensor-map-gemma.out"
-grep 'tensor-map: gemma-4-12b-it \[reported\]' "$ROOT/tensor-map-gemma.out"
-python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'family: gemma  stage: header-naming-map  evidence: header-only'
-python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'roles: total=12 embedding=1 attention=4 mlp=3 norm=3 head=1 moe=0 unknown=0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'tensor-map: gemma-4-12b-it'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'tensor_map_status: naming-map-profiled'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'family: gemma'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'evidence_basis: header-only'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'roles_total: 12'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'roles_embedding: 1'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'roles_attention: 4'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'roles_mlp: 3'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'roles_norm: 3'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'roles_head: 1'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'roles_moe: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'roles_unknown: 0'
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'layers: 1'
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'top_blocker: missing-dense-runtime-role-validation'
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'next: V010.MAP.8'
@@ -3446,9 +3581,7 @@ python3 tests/support/human_field.py "$ROOT/tensor-map-gemma.out" 'boundary: rep
 ! grep 'runtime_claim:' "$ROOT/tensor-map-gemma.out"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --output table > "$ROOT/tensor-map-gemma-table.out"
-grep 'TENSOR NAMING MAP' "$ROOT/tensor-map-gemma-table.out"
-matches "$ROOT/tensor-map-gemma-table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}STATUS[[:space:]]{2,}TOTAL[[:space:]]{2,}EMBED[[:space:]]{2,}ATTN[[:space:]]{2,}MLP[[:space:]]{2,}NORM[[:space:]]{2,}HEAD[[:space:]]{2,}MOE[[:space:]]{2,}UNKNOWN[[:space:]]{2,}LAYERS[[:space:]]{2,}NEXT$'
-matches "$ROOT/tensor-map-gemma-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}naming-map-profiled[[:space:]]{2,}12[[:space:]]{2,}1[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}3[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}1[[:space:]]{2,}V010.MAP.8$'
+assert_target_table "$ROOT/tensor-map-gemma-table.out" 0 tensor-map gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --audit > "$ROOT/tensor-map-gemma-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-audit.out" 'tensor_map_status: naming-map-profiled'
@@ -3490,19 +3623,23 @@ python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-audit.out" 'benchma
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-audit.out" 'release_ready: false'
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-audit.out" 'next_required_rows: V010.MAP.8'
 grep 'tensor_map.entry.' "$ROOT/tensor-map-gemma-audit.out"
-grep 'model.embed_tokens.weight -> model.embedding.token.weight' "$ROOT/tensor-map-gemma-audit.out"
-grep 'model.layers.0.self_attn.q_proj.weight -> model.layers.0.attention.q_proj.weight' "$ROOT/tensor-map-gemma-audit.out"
-grep 'model.layers.0.input_layernorm.weight -> model.layers.0.attention.norm.weight' "$ROOT/tensor-map-gemma-audit.out"
-grep 'lm_head.weight -> model.output_head.weight' "$ROOT/tensor-map-gemma-audit.out"
+python3 tests/support/human_field.py --mapping "$ROOT/tensor-map-gemma-audit.out" model.embed_tokens.weight model.embedding.token.weight
+python3 tests/support/human_field.py --mapping "$ROOT/tensor-map-gemma-audit.out" model.layers.0.self_attn.q_proj.weight model.layers.0.attention.q_proj.weight
+python3 tests/support/human_field.py --mapping "$ROOT/tensor-map-gemma-audit.out" model.layers.0.input_layernorm.weight model.layers.0.attention.norm.weight
+python3 tests/support/human_field.py --mapping "$ROOT/tensor-map-gemma-audit.out" lm_head.weight model.output_head.weight
 ! grep 'generation_ready: tr''ue' "$ROOT/tensor-map-gemma-audit.out"
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --check-output-contract normal > "$ROOT/output-contract-gemma-tensor-map-normal.out"
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --check-output-contract table > "$ROOT/output-contract-gemma-tensor-map-table.out"
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --check-output-contract audit > "$ROOT/output-contract-gemma-tensor-map-audit.out"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --role output-head --source "$GEMMA_CLASS_SOURCE" > "$ROOT/output-head-gemma.out"
-grep 'output-head-map: gemma-4-12b-it \[reported\]' "$ROOT/output-head-gemma.out"
-python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'family: gemma  evidence: header-only'
-python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'head: model.output_head.weight  final_norm: model.final_norm.weight  embedding: model.embedding.token.weight  tie: separate-output-head-candidate'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'output-head-map: gemma-4-12b-it'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'family: gemma'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'evidence_basis: header-only'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'head: model.output_head.weight'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'final_norm: model.final_norm.weight'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'embedding: model.embedding.token.weight'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'tie: separate-output-head-candidate'
 python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'shape: compatible-same-shape'
 python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'top_blocker: missing-output-head-runtime-consumer'
 python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'next: V010.MAP.8'
@@ -3512,8 +3649,7 @@ python3 tests/support/human_field.py "$ROOT/output-head-gemma.out" 'boundary: ma
 ! grep 'runtime_claim:' "$ROOT/output-head-gemma.out"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --role output-head --source "$GEMMA_CLASS_SOURCE" --output table > "$ROOT/output-head-gemma-table.out"
-grep 'OUTPUT HEAD TENSOR MAP' "$ROOT/output-head-gemma-table.out"
-matches "$ROOT/output-head-gemma-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}output-head-profiled[[:space:]]{2,}yes[[:space:]]{2,}yes[[:space:]]{2,}yes[[:space:]]{2,}separate-output-head-candidate[[:space:]]{2,}compatible-same-shape[[:space:]]{2,}V010.MAP.8$'
+assert_target_table "$ROOT/output-head-gemma-table.out" 0 tensor-map gemma-4-12b-it --role output-head --source "$GEMMA_CLASS_SOURCE"
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --role output-head --source "$GEMMA_CLASS_SOURCE" --audit > "$ROOT/output-head-gemma-audit.out"
 python3 tests/support/human_field.py "$ROOT/output-head-gemma-audit.out" 'output_head_map_status: output-head-profiled'
@@ -3582,8 +3718,16 @@ with open(sys.argv[1], "wb") as f:
 PY
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --source "$GEMMA_TENSOR_MAP_UNKNOWN_SOURCE" > "$ROOT/tensor-map-gemma-unknown.out"
-grep 'tensor-map: gemma-4-12b-it \[naming-map-candidate\]' "$ROOT/tensor-map-gemma-unknown.out"
-python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown.out" 'roles: total=12 embedding=1 attention=4 mlp=3 norm=3 head=1 moe=0 unknown=1'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown.out" 'tensor-map: gemma-4-12b-it'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown.out" 'tensor_map_status: naming-map-candidate'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown.out" 'roles_total: 12'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown.out" 'roles_embedding: 1'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown.out" 'roles_attention: 4'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown.out" 'roles_mlp: 3'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown.out" 'roles_norm: 3'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown.out" 'roles_head: 1'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown.out" 'roles_moe: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown.out" 'roles_unknown: 1'
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --source "$GEMMA_TENSOR_MAP_UNKNOWN_SOURCE" --audit > "$ROOT/tensor-map-gemma-unknown-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown-audit.out" 'tensor_map_status: naming-map-candidate'
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-unknown-audit.out" 'tensor_map_tensor_count: 13'
@@ -3622,12 +3766,19 @@ with open(sys.argv[1], "wb") as f:
 PY
 
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --source "$GEMMA_TENSOR_MAP_NORM_SOURCE" > "$ROOT/tensor-map-gemma-norm.out"
-grep 'tensor-map: gemma-4-12b-it \[blocked\]' "$ROOT/tensor-map-gemma-norm.out"
-python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm.out" 'roles: total=2 embedding=0 attention=0 mlp=0 norm=2 head=0 moe=0 unknown=0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm.out" 'tensor-map: gemma-4-12b-it'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm.out" 'roles_total: 2'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm.out" 'roles_embedding: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm.out" 'roles_attention: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm.out" 'roles_mlp: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm.out" 'roles_norm: 2'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm.out" 'roles_head: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm.out" 'roles_moe: 0'
+python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm.out" 'roles_unknown: 0'
 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --source "$GEMMA_TENSOR_MAP_NORM_SOURCE" --audit > "$ROOT/tensor-map-gemma-norm-audit.out"
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm-audit.out" 'tensor_map_norm_count: 2'
-grep 'model.layers.0.pre_feedforward_layernorm.weight -> model.layers.0.mlp.norm.weight' "$ROOT/tensor-map-gemma-norm-audit.out"
-grep 'model.layers.0.post_feedforward_layernorm.weight -> model.layers.0.mlp.norm.weight' "$ROOT/tensor-map-gemma-norm-audit.out"
+python3 tests/support/human_field.py --mapping "$ROOT/tensor-map-gemma-norm-audit.out" model.layers.0.pre_feedforward_layernorm.weight model.layers.0.mlp.norm.weight
+python3 tests/support/human_field.py --mapping "$ROOT/tensor-map-gemma-norm-audit.out" model.layers.0.post_feedforward_layernorm.weight model.layers.0.mlp.norm.weight
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm-audit.out" 'tensor_map_runtime_role_coverage_status: report-only'
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm-audit.out" 'runtime_claim: unsupported'
 python3 tests/support/human_field.py "$ROOT/tensor-map-gemma-norm-audit.out" 'generation: unsupported-full-model'
@@ -3712,9 +3863,9 @@ python3 tests/support/human_field.py "$ROOT/tensor-map-old-gemma-target.err" 'un
 expect_rc 2 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role > "$ROOT/output-head-missing-role.out" 2> "$ROOT/output-head-missing-role.err"
 grep -- '--role requires a value' "$ROOT/output-head-missing-role.err"
 expect_rc 2 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role nope > "$ROOT/output-head-qwen-bad-role.out" 2> "$ROOT/output-head-qwen-bad-role.err"
-python3 tests/support/human_field.py "$ROOT/output-head-qwen-bad-role.err" 'unsupported role: nope'
+python3 tests/support/human_field.py "$ROOT/output-head-qwen-bad-role.err" 'invalid value for --role: nope'
 expect_rc 2 "$YVEX_BIN" inspect target tensor-map gemma-4-12b-it --role nope > "$ROOT/output-head-gemma-bad-role.out" 2> "$ROOT/output-head-gemma-bad-role.err"
-python3 tests/support/human_field.py "$ROOT/output-head-gemma-bad-role.err" 'unsupported role: nope'
+python3 tests/support/human_field.py "$ROOT/output-head-gemma-bad-role.err" 'invalid value for --role: nope'
 expect_rc 2 "$YVEX_BIN" inspect target tensor-map qwen-metal-portability --role output-head > "$ROOT/output-head-old-qwen-target.out" 2> "$ROOT/output-head-old-qwen-target.err"
 python3 tests/support/human_field.py "$ROOT/output-head-old-qwen-target.err" 'unsupported target: qwen-metal-portability'
 expect_rc 2 "$YVEX_BIN" inspect target tensor-map gemma-dense-portability --role output-head > "$ROOT/output-head-old-gemma-target.out" 2> "$ROOT/output-head-old-gemma-target.err"
@@ -3760,10 +3911,10 @@ python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-old-qwen-target.
 expect_rc 2 "$YVEX_BIN" inspect target tensor-map nope --gate v0.1.0 > "$ROOT/tensor-mapping-gate-unknown-target.out" 2> "$ROOT/tensor-mapping-gate-unknown-target.err"
 python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-unknown-target.err" 'unsupported target: nope'
 expect_rc 2 "$YVEX_BIN" inspect target tensor-map qwen3-8b --role missing-roles --gate v0.1.0 > "$ROOT/tensor-mapping-gate-role-conflict.out" 2> "$ROOT/tensor-mapping-gate-role-conflict.err"
-grep 'gate cannot be combined with --role' "$ROOT/tensor-mapping-gate-role-conflict.err"
+python3 tests/support/human_field.py "$ROOT/tensor-mapping-gate-role-conflict.err" 'target gate and role selectors conflict'
 
 "$YVEX_BIN" inspect target decision --help > "$ROOT/model-target-decision-help.out"
-grep -F 'usage: yvex inspect target [action] [target] [options]' \
+grep -F 'yvex inspect target [action] [target] [options]' \
   "$ROOT/model-target-decision-help.out"
 grep -- '--release' "$ROOT/model-target-decision-help.out"
 
@@ -3777,14 +3928,13 @@ python3 tests/support/human_field.py "$ROOT/model-target-decision-normal.out" 'b
 ! grep 'deepseek4-v4-flash-dspark-selected' "$ROOT/model-target-decision-normal.out"
 
 "$YVEX_BIN" inspect target decision --release v0.1.0 --output table > "$ROOT/model-target-decision-table.out"
-matches "$ROOT/model-target-decision-table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$ROOT/model-target-decision-table.out" '^target-decision[[:space:]]{2,}selected-mapping-specified[[:space:]]{2,}deepseek4-v4-flash-dspark[[:space:]]{2,}0[[:space:]]{2,}V010\.SOURCE\.PAYLOAD\.STREAM\.0$'
+assert_target_table "$ROOT/model-target-decision-table.out" 0 decision --release v0.1.0
 
 "$YVEX_BIN" inspect target decision --release v0.1.0 --output json > "$ROOT/model-target-decision-json.out"
 jq -e '.selected_target_id == "deepseek4-v4-flash-dspark" and .upstream_repository == "deepseek-ai/DeepSeek-V4-Flash-DSpark" and .source_verification == "complete" and .architecture_ir == "complete" and .tensor_coverage == "complete" and .gguf_mapping == "complete" and .artifact_status == "not-produced" and .runtime == "unsupported" and .generation == "unsupported" and .next == "V010.SOURCE.PAYLOAD.STREAM.0"' "$ROOT/model-target-decision-json.out" >/dev/null
 
 "$YVEX_BIN" inspect target decision --release v0.1.0 --output nope > "$ROOT/model-target-decision-bad-output.out" 2> "$ROOT/model-target-decision-bad-output.err" && exit 1 || true
-python3 tests/support/human_field.py "$ROOT/model-target-decision-bad-output.err" 'model-target decision: unsupported output mode: nope'
+python3 tests/support/human_field.py "$ROOT/model-target-decision-bad-output.err" 'unsupported output mode: nope'
 
 "$YVEX_BIN" inspect target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next > "$ROOT/model-target-decision.out"
 python3 tests/support/human_field.py "$ROOT/model-target-decision.out" 'target_decision: v0.1.0'

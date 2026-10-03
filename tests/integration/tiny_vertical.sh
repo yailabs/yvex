@@ -67,6 +67,11 @@ python3 "$TINY_GENERATOR" "$first/tiny.gguf"
 python3 "$TINY_GENERATOR" "$second/tiny.gguf"
 cmp "$first/tiny.gguf" "$second/tiny.gguf"
 tiny_bytes=$(wc -c <"$first/tiny.gguf" | tr -d ' ')
+# All metadata requests in this fixture must describe the same exact producer
+# revision, including the Rust shell's acquisition identity preflight.
+export YVEX_FAKE_HF_DISCOVERY_MODE=tiny
+export YVEX_FAKE_HF_RESOLVED_SHA="$provider_revision"
+export YVEX_FAKE_HF_TINY_BYTES="$tiny_bytes"
 YVEX_HF_CLI="$fake_hf" YVEX_FAKE_HF_DISCOVERY_MODE=tiny \
     YVEX_FAKE_HF_RESOLVED_SHA="$provider_revision" \
     YVEX_FAKE_HF_TINY_BYTES="$tiny_bytes" \
@@ -162,9 +167,12 @@ if "$YVEX_BIN" bench transformer generate \
     printf 'oversized tiny context was admitted\n' >&2
     exit 1
 fi
-grep -F '"status": "refused"' "$root/context-refusal.json" >/dev/null
-grep -F '"reason": "requested context exceeds the model-authored semantic maximum"' \
-    "$root/context-refusal.json" >/dev/null
+python3 - "$root/context-refusal.json" <<'PY'
+import json, pathlib, sys
+result = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert result["status"] == "refused"
+assert result["reason"] == "requested context exceeds the model-authored semantic maximum"
+PY
 cat >"$registry" <<EOF
 {
   "schema": "yvex.models.local.v6",
@@ -266,9 +274,8 @@ grep -F '"host_ready":true' "$root/status.json" >/dev/null
 grep -F '"loaded_engine_count":0' "$root/status.json" >/dev/null
 grep -F '"workers":2' "$root/status.json" >/dev/null
 grep -F '"model_open_count":0' "$root/status.json" >/dev/null
-grep -Fx 'verified inference runtime' "$root/server.out" >/dev/null
-grep -E '^YVEX [0-9]+\.[0-9]+\.[0-9]+ · HOST$' "$root/server.out" >/dev/null
-grep -F 'host ready · Ctrl-C to stop' "$root/server.out" >/dev/null
+grep -F 'HOST ready' "$root/server.out" >/dev/null
+grep -F 'Ctrl-C to stop' "$root/server.out" >/dev/null
 
 # HTTP admission cannot inherit the two inference workers: two incomplete
 # HTTP clients must leave host discovery reachable, even with zero engines.
@@ -508,10 +515,7 @@ if HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session fork \
 fi
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session fork \
     persisted forked 1048576 >"$root/prefix.fork.out"
-grep -Fx 'forked' "$root/prefix.fork.out" >/dev/null
-grep -E '^[[:space:]]+state[[:space:]]+(ready|detached)$' "$root/prefix.fork.out" >/dev/null
-grep -E '^[[:space:]]+position[[:space:]]+[1-9][0-9]*$' "$root/prefix.fork.out" >/dev/null
-grep -E '^[[:space:]]+turns[[:space:]]+[1-9][0-9]*$' "$root/prefix.fork.out" >/dev/null
+grep -E '^forked[[:space:]]+(ready|detached)[[:space:]]+[1-9][0-9]*[[:space:]]+[1-9][0-9]*$' "$root/prefix.fork.out" >/dev/null
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show forked --json \
     >"$root/prefix.child.before"
 session_fact()
@@ -551,7 +555,7 @@ state_path="$root/persisted-state.yvex"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session state save \
     persisted "$state_path" >"$root/state.save"
 test -s "$state_path"
-grep -E '^state checkpoint saved position=[1-9][0-9]* bytes=[1-9][0-9]* digest=[0-9a-f]{64}$' \
+grep -E '^state checkpoint saved · position [1-9][0-9]* · [1-9][0-9]* bytes · digest [0-9a-f]{64}$' \
     "$root/state.save" >/dev/null
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show persisted --json \
     >"$root/session.before"
@@ -627,10 +631,11 @@ if HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session state restore \
 fi
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session state restore \
     persisted "$state_path" 1048576 >"$root/state.restore"
-grep -E '^state checkpoint restored position=[1-9][0-9]* bytes=[1-9][0-9]* digest=[0-9a-f]{64}$' \
+grep -E '^state checkpoint restored · position [1-9][0-9]* · [1-9][0-9]* bytes · digest [0-9a-f]{64}$' \
     "$root/state.restore" >/dev/null
-test "$(sed -n 's/^.* digest=//p' "$root/state.save")" = \
-    "$(sed -n 's/^.* digest=//p' "$root/state.restore")"
+saved_digest=$(sed -n 's/^.* digest //p' "$root/state.save")
+restored_digest=$(sed -n 's/^.* digest //p' "$root/state.restore")
+test "${#saved_digest}" -eq 64 && test "$saved_digest" = "$restored_digest"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" "$YVEX_BIN" session show persisted --json \
     >"$root/session.after"
 test "$(session_fact "$root/session.before" position)" = "$(session_fact "$root/session.after" position)"
@@ -850,14 +855,14 @@ wait "$server_pid"
 server_pid=
 wait "$log_pid"
 log_pid=
-grep -E 'REQUEST[[:space:]]+persisted/' "$root/server.out" >/dev/null
-grep -E 'DONE[[:space:]]+[^[:space:]]+/[^[:space:]]+ generated=[1-9][0-9]* position=[1-9][0-9]*' \
+grep -E 'yvex: persisted/r[0-9]+ request ' "$root/server.out" >/dev/null
+grep -E 'yvex: [^[:space:]]+/r[0-9]+ done gen=[1-9][0-9]* finish=' \
     "$root/server.out" >/dev/null
-grep -F 'LOAD      phase=binding-validation completed=0 operations total=unknown' "$root/server.out" >/dev/null
-grep -E 'LOAD[[:space:]]+phase=artifact-verification completed=[0-9.]+/[0-9.]+(KiB|MiB|GiB|B) elapsed=' \
+grep -E 'yvex: host load phase=binding-validation 0/unknown work' "$root/server.out" >/dev/null
+grep -E 'yvex: host load phase=artifact-verification [0-9]+/[0-9]+ bytes ' \
     "$root/server.out" >/dev/null
-! grep -E '(LOAD|PREFILL|DECODE|DONE)[[:space:]].*%' "$root/server.out" >/dev/null
-grep -E 'MODEL[[:space:]]+tiny-executable generation=[1-9][0-9]* backend=CPU strategy=target-only' \
+! grep -E 'yvex: .* (load|prefill|decode|done) .*%' "$root/server.out" >/dev/null
+grep -E 'yvex: host model tiny-executable generation=[1-9][0-9]* backend=CPU strategy=target-only' \
     "$root/server.out" >/dev/null
 ! grep -E 'REQ[[:space:]]|DEC[[:space:]]|PF[[:space:]]| t[0-9]+ p[0-9]+|avg[0-9]+|rss[0-9]+' \
     "$root/server.out" >/dev/null

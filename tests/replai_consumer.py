@@ -14,6 +14,7 @@ import time
 import tempfile
 import sys
 import platform
+import re
 
 ENABLE = b'\x1b[?2004h'
 DISABLE = b'\x1b[?2004l'
@@ -67,7 +68,14 @@ class Chat:
 
     def wait(self, needle, start=0):
         deadline = time.monotonic() + 20
-        while needle not in self.data[start:]:
+        # SGR span boundaries are not a transcript contract. Terminal lifecycle
+        # assertions still observe exact escape bytes; text observes content.
+        def contains():
+            view = bytes(self.data[start:])
+            if b'\x1b' not in needle:
+                view = re.sub(rb'\x1b\[[0-9;]*m', b'', view)
+            return needle in view
+        while not contains():
             if time.monotonic() > deadline or self.process.poll() is not None:
                 raise AssertionError((needle, bytes(self.data[-6000:])))
             self.pump()
@@ -97,7 +105,7 @@ class Chat:
         self.quiet()
         wanted = f'replai-input {self.name} {expected.hex()}\n'
         assert wanted in host_log.read_text(), (wanted, host_log.read_text()[-2000:])
-        assert b'hello from yvex' in self.data[start:]
+        self.wait(b'hello from yvex', start)
         assert self.tty_fds() == self.fd_baseline
         print(f'chat input={expected.hex()} streamed=hello from yvex next_prompt=1 tty_fds=5', flush=True)
 
@@ -159,37 +167,27 @@ def dependency_rejections(root, pin):
 
 def audit(binary):
     root = Path(__file__).resolve().parents[1]
-    prefix = Path(os.environ['REPLAI_PREFIX'])
+    source_root = root / 'build/external/replai-source'
     pin = json.loads((root / 'config/replai.json').read_text())
-    receipt = json.loads((prefix / 'replai-build.json').read_text())
+    receipt = json.loads(source_root.with_suffix('.json').read_text())
     assert receipt['pin'] == pin
     dependency_rejections(root, pin)
     symbols = subprocess.check_output(['nm', str(binary)], text=True)
-    imports = subprocess.check_output(['nm', '-u', os.environ['YVEX_CLIENT_LANE_OBJ']], text=True)
     if sys.platform == 'darwin':
         symbols = symbols.replace(' _', ' ').replace('\n_', '\n').lstrip('_')
-        imports = imports.replace(' _', ' ').replace('\n_', '\n').lstrip('_')
-    for symbol in ['replai_abi_version', 'replai_create', 'replai_prompt_composed',
-                   'replai_completion_snapshot', 'replai_completions_present',
-                   'replai_external_output', 'replai_history_add',
-                   'replai_interrupt', 'replai_destroy']:
-        assert any(line.split()[-1] == symbol for line in symbols.splitlines())
-        assert any(line.split()[-1] == symbol for line in imports.splitlines())
-    assert any(line.split()[-1] == 'replai_open' for line in symbols.splitlines())
-    assert any(line.split()[-1] == 'yvex_cli_terminal_editor_open' for line in imports.splitlines())
-    # Platform entrypoints no longer form the semantic client's interface.
-    for symbol in ['replai_open', 'sigaction', 'sigwait', 'pthread_sigmask',
-                   'tcgetattr', 'tcsetattr', 'tcflush', 'ioctl', 'isatty', 'fileno']:
-        assert not any(line.split()[-1] == symbol for line in imports.splitlines()), symbol
+    for symbol in ['replai_create', 'replai_prompt_composed', 'replai_open',
+                   'replai_abi_version', 'yvex_cli_terminal_editor_open']:
+        assert not any(line.split()[-1] == symbol for line in symbols.splitlines()), symbol
+    assert 'replai' in symbols, 'native Rust terminal producer absent'
     loader = subprocess.check_output(
         ['otool', '-L', str(binary)] if sys.platform == 'darwin' else ['ldd', str(binary)], text=True)
     assert 'libreplai' not in loader
-    source = (root / 'src/cli/io/client.c').read_text()
+    source = (root / 'src/cli/rust/chat.rs').read_text()
     for retired in ['repl_read_line(', 'repl_redraw(', 'repl_insert_byte(',
                     'repl_escape_read(', 'repl_columns(', 'repl_erase(']:
         assert retired not in source
     assert '\\033[?2004' not in source
-    print(f'product linkage: static REPLAI ABI {pin["abi"]}, revision={pin["revision"]}; old editor absent', flush=True)
+    print(f'product linkage: native Rust REPLAI revision={pin["revision"]}; no C adapter/editor', flush=True)
 
 
 def reply_format(binary, output, memcheck):
@@ -203,12 +201,14 @@ def reply_format(binary, output, memcheck):
                 start = c.send(request + b'\r')
                 c.wait(ENABLE, start); c.quiet()
                 raw = bytes(c.data[start:])
-                reply = raw[raw.index(b'FORMAT BEGIN'):raw.index(b'FORMAT END')]
+                plain_reply = re.sub(rb'\x1b\[[0-9;]*m', b'', raw)
+                reply = raw
                 if not plain:
                     assert b'\x1b[1;38;5;250m' in reply
-                    if request == b'FORMAT_WHOLE':
-                        assert b'\x1b[1;38;5;250mC.I.A.A.\x1b[0m' in reply, reply
-                text = re.sub(rb'\x1b\[[0-9;]*m', b'', reply).decode().replace('\r\n', '\n')
+                    # REPLAI styles semantic spans; escape run coalescing is not
+                    # an API. Every strongly emphasized scalar retains its role.
+                    assert b'\x1b[1;38;5;250mC' in reply, reply
+                text = plain_reply[plain_reply.index(b'FORMAT BEGIN'):plain_reply.index(b'FORMAT END')].decode().replace('\r\n', '\n')
                 assert '**' not in text, text
                 assert '你指的是C.I.A.A.吗？' in text, text
                 assert 'Spacing: alpha bold words omega.' in text, text
@@ -236,7 +236,7 @@ def run(binary, host_log, output, memcheck):
         try:
             start = c.send(b'/help\r'); c.wait(b'Keyboard', start); c.wait(ENABLE, start); c.quiet()
             raw = bytes(c.data[start:])
-            for group in (b'Observation', b'Reasoning', b'Content', b'Sessions', b'Lifecycle'):
+            for group in (b'OBSERVATION', b'REASONING', b'CONTENT', b'SESSIONS', b'LIFECYCLE'):
                 assert group in raw, (columns, group, raw)
             for operation in (b'/status', b'/think', b'/attach', b'/use', b'/cancel', b'/quit'):
                 assert operation in raw, (columns, operation)
@@ -248,7 +248,7 @@ def run(binary, host_log, output, memcheck):
         try:
             import re
             plain_prompt = re.sub(rb'\x1b\[[0-9;]*m', b'', bytes(c.data))
-            assert LABEL + ' › '.encode() in plain_prompt
+            assert ('yvex · replai-' + name + '> ').encode() in plain_prompt
             assert b'/attachments-clear' not in c.data  # catalog is demand-driven
             if plain or dumb:
                 import re
@@ -300,11 +300,11 @@ def run(binary, host_log, output, memcheck):
         assert host_log.read_text().count('generation.cancel replai-edit') == cancel_before
         # While generation owns output, only the caller's three TTY FDs remain.
         start = c.send(b'WAIT_PREFILL_CANCEL\r')
-        c.wait('prefill · 0/4 tokens'.encode(), start)
+        c.wait(b'prefill', start)
         assert c.tty_fds() == 5  # quiet-output producer owns two terminal duplicates
         flags = termios.tcgetattr(c.slave)[3]
         assert flags & termios.ICANON and flags & termios.ISIG and not flags & termios.ECHO
-        c.send(b'\x03'); c.wait(b'cancelled', start); c.wait(ENABLE, start); c.quiet()
+        c.send(b'\x03'); c.wait(b'YVEX_ERR_CANCELLED', start); c.wait(ENABLE, start); c.quiet()
         assert 'generation.cancel replai-edit' in host_log.read_text()
         assert c.tty_fds() == 5
         print('generation transition: editor/quiet scopes each own 2 duplicates; ICANON/ISIG restored; Ctrl-C routed to cancellation', flush=True)

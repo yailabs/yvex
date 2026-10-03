@@ -12,14 +12,14 @@
 
 #include <yvex/internal/core.h>
 
-void openai_state_remove(openai_response_record *record)
+void yvex_openai_state_remove(openai_response_record *record)
 {
     if (!record) return;
     yvex_provider_request_close(&record->context);
     memset(record, 0, sizeof(*record));
 }
 
-openai_response_record *openai_state_find(openai_gateway *gateway,
+openai_response_record *yvex_openai_state_find(openai_gateway *gateway,
                                           const char *response_id,
                                           unsigned long long now)
 {
@@ -37,7 +37,7 @@ openai_response_record *openai_state_find(openai_gateway *gateway,
     return NULL;
 }
 
-int openai_state_store(openai_gateway *gateway, const char *response_id,
+int yvex_openai_state_store(openai_gateway *gateway, const char *response_id,
                        const char *session_name,
                        unsigned long long engine_generation,
                        const yvex_provider_request *context,
@@ -77,7 +77,7 @@ int openai_state_store(openai_gateway *gateway, const char *response_id,
     return YVEX_OK;
 }
 
-int openai_state_replace(openai_gateway *gateway,
+int yvex_openai_state_replace(openai_gateway *gateway,
                          openai_response_record *record,
                          const char *response_id,
                          unsigned long long engine_generation,
@@ -103,10 +103,10 @@ int openai_state_replace(openai_gateway *gateway,
     return YVEX_OK;
 }
 
-void openai_state_clear(openai_gateway *gateway)
+void yvex_openai_state_clear(openai_gateway *gateway)
 {
     unsigned long long index;
     if (!gateway) return;
     for (index = 0u; index < OPENAI_RESPONSE_RECORD_MAX; ++index)
-        openai_state_remove(&gateway->records[index]);
+        yvex_openai_state_remove(&gateway->records[index]);
 }

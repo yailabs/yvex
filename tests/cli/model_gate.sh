@@ -49,4 +49,4 @@ fi
 
 grep 'status: model-gate-fail' "$OUT_DIR/bad-report.txt" >/dev/null || fail "missing fail status"
 "$YVEX_BIN" artifact verify model --help > "$OUT_DIR/help.out"
-grep 'usage: yvex artifact verify model' "$OUT_DIR/help.out" >/dev/null || fail "missing help"
+grep -E '^(usage: )?yvex artifact verify model' "$OUT_DIR/help.out" >/dev/null || fail "missing help"

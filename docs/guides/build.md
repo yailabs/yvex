@@ -16,12 +16,18 @@ publication: {html: true, pdf: true, index: true}
 
 ## Developer and packager entry points
 
-GNU Make 4.3 or newer, a C11 compiler, Python 3 and the pinned REPLAI build
-toolchain are required. CUDA is optional at build time; an explicitly requested
+GNU Make 4.3 or newer, a C11 compiler, Python 3, Rust/Cargo 1.98.1 and libclang
+for compiler-derived private FFI are required for the complete product. CUDA is optional at build time; an explicitly requested
 CUDA execution still refuses without an admitted kernel bundle. Start with
 `make help`, then `make -j4` (library plus the single `yvex` executable).
 `make check` and registered `make qa-*` lanes are software qualification, not
 release or model-quality claims. [QA](../evaluation/qa.md) owns lane selection.
+
+`make lib` builds only the C/CUDA computational archive without Cargo or the
+Rust shell. `make client` builds the canonical Rust `yvex` against that archive.
+Cargo owns Rust dependency tracking; Make owns native compilation, authenticated
+REPLAI source, native link inputs and atomic executable publication. There is no
+legacy C CLI fallback or second daemon executable.
 
 The root Makefile is the entry point. `config/make/config.mk` owns toolchain
 configuration; `rules.mk` owns source-relative compilation, generated inputs and
@@ -37,6 +43,13 @@ link flags invalidate their consumers; C and CUDA transitive header dependencies
 are generated, including PTX and native CUBIN. Concurrent image/archive publication
 uses complete staged files. Use an independent build directory for separate
 toolchain variants; this is not an out-of-source configure interface.
+
+Rust overrides are `CARGO`, `RUSTC`, `RUSTFLAGS`, `RUST_PROFILE` (default
+`release`) and `RUST_CARGO_TARGET_DIR` (default inside `BUILD_DIR`). `Cargo.lock`
+is mandatory. `config/replai.json` authenticates the single producer source staged
+at `build/external/replai-source`; Cargo consumes that exact source, never a
+floating branch or adjacent checkout. Native and Rust toolchain/flag identities
+are recorded separately. `LDFLAGS` and `LDLIBS` also reach the final Rust link.
 
 For an executable **software candidate**, including its current manifest and
 license receipts:
@@ -59,7 +72,10 @@ root objects or historical executables.
 
 ## macOS native CPU build
 
-The native Darwin path supports the same single executable and local protocol.
+The retained native Darwin qualification covers the prior C-shell/CPU/terminal
+snapshot, not the new Rust product shell. Requalify the Rust shell on macOS with
+the native lane before extending that claim. The intended Darwin path retains
+the same single executable and local protocol.
 Install the Xcode Command Line Tools and modern GNU Make; Apple's bundled Make
 3.81 cannot parse the build. The qualified toolchain uses Rust 1.98.1 for the
 pinned REPLAI producer and Python 3.14 for QA:
@@ -73,11 +89,9 @@ make -j4
 python3 tools/qa.py run native
 ```
 
-Use a separate REPLAI staging prefix for each host/architecture; its receipt
-binds the staged native library to that target. Older receipts without a target
-are refused: retain the old prefix and select an empty one, for example
-`make REPLAI_PREFIX=build/external/replai-native`. This also applies when
-updating an existing Linux checkout. Darwin archives preserve
+REPLAI is compiled natively by Cargo from authenticated source; a historical
+C-ABI staging prefix is no longer a YVEX product dependency. Cargo target/profile
+directories distinguish native build variants. Darwin archives preserve
 source-relative object identities using BSD member names and the native symbol
 indexer. No external REPLAI pin or public wire layout changes are required.
 

@@ -1293,8 +1293,8 @@ int yvex_source_selection_identity(const char *const *includes, size_t include_c
     return YVEX_OK;
 }
 
-int yvex_source_acquisition_lock(const char *models_root, const char *repository,
-                                  const char *revision, int *descriptor, yvex_error *err)
+static int acquisition_lock(const char *models_root, const char *repository,
+                               const char *revision, int wait, int *descriptor, yvex_error *err)
 {
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
@@ -1314,13 +1314,28 @@ int yvex_source_acquisition_lock(const char *models_root, const char *repository
     if (rc != YVEX_OK) return rc;
     fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
     if (fd < 0) return distribution_refuse(err, YVEX_ERR_IO, "source.acquire", "cannot open acquisition lease");
-    do { rc = flock(fd, LOCK_EX); } while (rc < 0 && errno == EINTR);
+    do { rc = flock(fd, LOCK_EX | (wait ? 0 : LOCK_NB)); } while (rc < 0 && errno == EINTR);
     if (rc != 0) {
+        int occupied = errno == EWOULDBLOCK || errno == EAGAIN;
         (void)close(fd);
-        return distribution_refuse(err, YVEX_ERR_IO, "source.acquire", "cannot lock acquisition");
+        return distribution_refuse(err, occupied ? YVEX_ERR_STATE : YVEX_ERR_IO,
+                                    "source.acquire", occupied ? "acquisition transfer is active" :
+                                    "cannot lock acquisition");
     }
     *descriptor = fd;
     return YVEX_OK;
+}
+
+int yvex_source_acquisition_lock(const char *models_root, const char *repository,
+                                  const char *revision, int *descriptor, yvex_error *err)
+{
+    return acquisition_lock(models_root, repository, revision, 1, descriptor, err);
+}
+
+int yvex_source_acquisition_try_lock(const char *models_root, const char *repository,
+                                      const char *revision, int *descriptor, yvex_error *err)
+{
+    return acquisition_lock(models_root, repository, revision, 0, descriptor, err);
 }
 
 static int acquisition_patterns_match(const char *record, const char *key,

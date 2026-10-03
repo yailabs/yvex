@@ -20,6 +20,10 @@ int yvex_platform_boot_id(char *out, size_t capacity);
 int yvex_platform_process_start(pid_t pid, unsigned long long *out);
 ssize_t yvex_platform_executable(char *out, size_t capacity);
 int yvex_platform_process_write_bytes(pid_t pid, unsigned long long *out);
+/* Same-user process snapshot, matching a whole argv element, never prose.
+ * 0 success, -1 incomplete/unavailable; output is unchanged on failure.
+ * This observation does not authorize signalling a PID. */
+int yvex_platform_process_argument_count(const char *argument, unsigned long long *out);
 int yvex_platform_system_memory(unsigned long long *total,
                                 unsigned long long *available);
 int yvex_platform_process_memory(unsigned long long *current,

@@ -23,6 +23,9 @@
 #include <yvex/source.h>
 #include <yvex/internal/provider.h>
 
+static int provider_child_environment(int anonymous, const char *token,
+                                      const char *hf_hub_cache, const char *hf_xet_cache);
+
 static int account_refuse(yvex_error *err,
                           yvex_status status,
                           const char *where,
@@ -336,7 +339,7 @@ int yvex_provider_capture(yvex_account_capture_options *options,
         (void)dup2(stderr_pipe[1], STDERR_FILENO);
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
-        if (yvex_provider_child_environment(anonymous, NULL, NULL, NULL) != 0)
+        if (provider_child_environment(anonymous, NULL, NULL, NULL) != 0)
             _exit(127);
         if (offline && setenv("HF_HUB_OFFLINE", "1", 1) != 0) _exit(127);
         execv(options->args[0], (char *const *)options->args);
@@ -593,7 +596,7 @@ int yvex_account_observe(const yvex_account_observe_options *options,
         snprintf(out->account_hint, sizeof(out->account_hint), "unknown");
         snprintf(out->status, sizeof(out->status), "account-provider-blocked");
         snprintf(out->top_blocker, sizeof(out->top_blocker), "provider-login-required");
-        snprintf(out->next, sizeof(out->next), "yvex accounts login %s", out->provider_name);
+        snprintf(out->next, sizeof(out->next), "yvex source accounts login %s", out->provider_name);
     }
     return YVEX_OK;
 }
@@ -681,12 +684,12 @@ int yvex_account_ensure(const yvex_account_ensure_options *options,
          (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO)))) {
         snprintf(out->status, sizeof(out->status), "account-ensure-blocked");
         snprintf(out->top_blocker, sizeof(out->top_blocker), "provider-login-required");
-        snprintf(out->next, sizeof(out->next), "yvex accounts login %s", out->provider_name);
+        snprintf(out->next, sizeof(out->next), "yvex source accounts login %s", out->provider_name);
         return YVEX_OK;
     }
     snprintf(out->status, sizeof(out->status), "account-ensure-login-required");
     snprintf(out->top_blocker, sizeof(out->top_blocker), "provider-login-required");
-    snprintf(out->next, sizeof(out->next), "yvex accounts login %s", out->provider_name);
+    snprintf(out->next, sizeof(out->next), "yvex source accounts login %s", out->provider_name);
     return YVEX_OK;
 }
 
@@ -696,7 +699,7 @@ int yvex_accounts_capture_provider_command(yvex_account_capture_options *options
     return yvex_provider_capture(options, 0, 0, err);
 }
 
-int yvex_provider_child_environment(int anonymous, const char *token,
+static int provider_child_environment(int anonymous, const char *token,
                                     const char *hf_hub_cache,
                                     const char *hf_xet_cache)
 {

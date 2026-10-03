@@ -126,7 +126,7 @@ malformed:
  *
  * Frees partial storage and refuses timeouts, truncation, or extent overflow.
  */
-int openai_http_read(int fd, openai_http_request *request, yvex_error *err)
+int yvex_openai_http_read(int fd, openai_http_request *request, yvex_error *err)
 {
     char header[OPENAI_HTTP_HEADER_MAX + 1u];
     size_t used = 0u, body_offset;
@@ -172,18 +172,18 @@ int openai_http_read(int fd, openai_http_request *request, yvex_error *err)
                    "HTTP header extent exceeds the gateway limit");
     return YVEX_ERR_BOUNDS;
 incomplete:
-    openai_http_request_clear(request);
+    yvex_openai_http_request_clear(request);
     yvex_error_set(err, YVEX_ERR_IO, "gateway.http.read",
                    "HTTP client closed before the request completed");
     return YVEX_ERR_IO;
 malformed:
-    openai_http_request_clear(request);
+    yvex_openai_http_request_clear(request);
     yvex_error_set(err, YVEX_ERR_FORMAT, "gateway.http.body",
                    "bytes beyond Content-Length are refused");
     return YVEX_ERR_FORMAT;
 }
 
-void openai_http_request_clear(openai_http_request *request)
+void yvex_openai_http_request_clear(openai_http_request *request)
 {
     if (!request) return;
     free(request->body);
@@ -208,7 +208,7 @@ static const char *status_reason(int status)
     }
 }
 
-int openai_http_json(int fd, int status, const unsigned char *body,
+int yvex_openai_http_json(int fd, int status, const unsigned char *body,
                      unsigned long long count, int *sent_status, yvex_error *err)
 {
     char header[512];
@@ -228,7 +228,7 @@ int openai_http_json(int fd, int status, const unsigned char *body,
     return write_all(fd, body, (size_t)count, err);
 }
 
-int openai_http_sse_begin(int fd, int *sent_status, yvex_error *err)
+int yvex_openai_http_sse_begin(int fd, int *sent_status, yvex_error *err)
 {
     static const char header[] =
         "HTTP/1.1 200 OK\r\n"
@@ -242,7 +242,7 @@ int openai_http_sse_begin(int fd, int *sent_status, yvex_error *err)
     return rc;
 }
 
-int openai_http_sse_event(int fd, const char *event,
+int yvex_openai_http_sse_event(int fd, const char *event,
                           const unsigned char *json,
                           unsigned long long count, yvex_error *err)
 {
@@ -263,19 +263,19 @@ int openai_http_sse_event(int fd, const char *event,
  *
  * Reports transport failure and never retries past caller ownership.
  */
-int openai_http_sse_done(int fd, yvex_error *err)
+int yvex_openai_http_sse_done(int fd, yvex_error *err)
 {
     return write_all(fd, "data: [DONE]\n\n", 14u, err);
 }
 
 /* A comment observes real execution progress without inventing an output delta. */
-int openai_http_sse_progress(int fd, yvex_error *err)
+int yvex_openai_http_sse_progress(int fd, yvex_error *err)
 {
     static const char comment[] = ": yvex execution progress\n\n";
     return write_all(fd, comment, sizeof(comment) - 1u, err);
 }
 
-int openai_http_peer_wait(int fd, unsigned int milliseconds, int *closed,
+int yvex_openai_http_peer_wait(int fd, unsigned int milliseconds, int *closed,
                           yvex_error *err)
 {
     struct pollfd peer;

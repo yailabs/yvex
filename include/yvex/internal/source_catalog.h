@@ -3,10 +3,38 @@
 #define INCLUDE_YVEX_INTERNAL_SOURCE_CATALOG_H_INCLUDED
 
 #include <stddef.h>
+#include <yvex/core.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* Acquisition provenance is a source record, not a parser or readiness claim.
+ * Caller-owned fixed storage; paths are formed before reading record facts.
+ * Resolve returns 1 found / 0 absent / -1 ambiguous or invalid. */
+#define YVEX_SOURCE_ACQUISITION_PATTERN_CAP 32u
+typedef struct {
+    int found;
+    char includes[YVEX_SOURCE_ACQUISITION_PATTERN_CAP][1024];
+    char excludes[YVEX_SOURCE_ACQUISITION_PATTERN_CAP][1024];
+    char source_payload_digest[65];
+    unsigned int include_count, exclude_count;
+    char target_id[128], family[32], provider[32], repo_id[256], revision[128], local_name[128];
+    char local_source_dir[YVEX_PATH_CAP], registry_path[YVEX_PATH_CAP];
+    char download_report_path[YVEX_PATH_CAP], manifest_path[YVEX_PATH_CAP], native_inventory_path[YVEX_PATH_CAP];
+    char operation_path[YVEX_PATH_CAP], supervisor_log_path[YVEX_PATH_CAP], provider_event_path[YVEX_PATH_CAP];
+} yvex_source_acquisition_provenance;
+int yvex_source_acquisition_provenance_paths(const char *target, const char *family,
+    const yvex_operator_paths *paths, yvex_source_acquisition_provenance *out, yvex_error *err);
+int yvex_source_acquisition_provenance_read(const char *path, const char *target,
+    const char *family, yvex_source_acquisition_provenance *out);
+int yvex_source_acquisition_provenance_resolve(const char *target, const yvex_operator_paths *paths,
+    yvex_source_acquisition_provenance *out, yvex_error *err);
+/* Generic provider-source selection; does not admit architecture or payload. */
+const char *const *yvex_source_acquisition_default_patterns(int exclude, size_t *count);
+/* Header/sidecar observations only; neither proves payload or package admission. */
+void yvex_source_mapping_status(const char *tensor_map_path, const char *output_head_map_path,
+    int *tensor_map_incomplete, int *output_head_map_missing);
 
 typedef enum {
     YVEX_SOURCE_CONFIG_VALIDATION_DEEPSEEK_V4 = 0,
@@ -129,6 +157,11 @@ int yvex_source_target_path(char *out, size_t cap, const char *models_root,
  * independently of family classification or the user's display alias. */
 int yvex_source_provider_path(char *out, size_t cap, const char *models_root,
                               const char *repository, const char *revision);
+/* Source-qualified operator defaults remain source-owned, not CLI render facts. */
+int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths,
+                                      const char *family, const char *kind,
+                                      char *out, size_t cap, int *out_exists,
+                                      yvex_error *err);
 
 #ifdef __cplusplus
 }

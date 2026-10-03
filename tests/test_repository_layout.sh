@@ -61,8 +61,8 @@ rg -q '^YVEX_BUILD_IDENTITY[[:space:]]+[?]=' $make_inputs ||
     fail "compiler/link/CUDA build provenance is missing"
 rg -q '^YVEX_BUILD_SOURCE_ROOT[[:space:]]+[?]=' $make_inputs ||
     fail "external benchmark path boundary lacks a generated source root"
-rg -q '^\$\(OBJ_DIR\)/src/cli/commands/graph\.o: \$\(BUILD_COMMIT_HEADER\)' $make_inputs ||
-    fail "operator object does not depend on build commit provenance"
+rg -q '^rust-client:.*\$\(BUILD_COMMIT_HEADER\).*\$\(RUST_BUILD_CONFIG\)' $make_inputs ||
+    fail "Rust shell does not depend on native and toolchain build provenance"
 rg -q '^\$\(OBJ_DIR\)/src/runtime/benchmark\.o: \$\(BUILD_COMMIT_HEADER\)' $make_inputs ||
     fail "runtime benchmark object does not depend on build commit provenance"
 rg -q '^\$\(BUILD_COMMIT_HEADER\): FORCE' $make_inputs ||
@@ -74,9 +74,9 @@ for field in YVEX_BUILD_SOURCE_STATE YVEX_BUILD_SOURCE_DELTA_IDENTITY \
 done
 rg -q 'YVEX_BUILD_SOURCE_TREE' src/runtime/evidence.c ||
     fail "execution qualification records do not consume source-tree provenance"
-rg -q 'YVEX_BUILD_SOURCE_ROOT' src/cli/commands/graph.c ||
+rg -q 'YVEX_BUILD_SOURCE_ROOT' src/cli/rust/build.rs ||
     fail "operator benchmark paths do not consume the generated source-root boundary"
-if rg -n 'git[[:space:]]+(status|diff|rev-parse)' src/runtime src/cli/commands/graph.c; then
+if rg -n 'git[[:space:]]+(status|diff|rev-parse)' src/runtime src/cli/rust; then
     fail "runtime benchmark provenance must not inspect the repository at execution time"
 fi
 

@@ -32,6 +32,12 @@ stale PID or a foreign generation cannot silently resume a different transfer.
 Unknown provider progress remains unknown. A successful download does not
 establish a model's architecture or executable support.
 
+Explicit source-status audit uses the native safetensors header owner to
+distinguish malformed headers from declared tensor extents beyond the available
+payload. This is a bounded structural observation, not payload authentication
+or admission. Routine acquisition progress counts files and bytes without
+reading tensor headers; an audit never makes a truncated source admissible.
+
 ## Source, library and recommendation
 
 The Model Library joins remote representations, local sources, packages and

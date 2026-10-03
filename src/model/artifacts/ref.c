@@ -16,6 +16,7 @@
 #include <yvex/artifact.h>
 #include <yvex/internal/core.h>
 #include <yvex/model.h>
+#include <yvex/internal/registry.h>
 
 static void metadata_dims_text(const unsigned long long *dims,
                                unsigned int rank,
@@ -78,6 +79,210 @@ void yvex_model_ref_registry_entry_view(const yvex_model_ref *ref,
     entry->selected_embedding_output_count = ref->selected_embedding_output_count;
     entry->selected_embedding_slice_bytes = ref->selected_embedding_slice_bytes;
     entry->execution_ready = ref->execution_ready;
+}
+
+static void registry_apply_metadata(yvex_model_registry_entry *entry,
+                                    const yvex_artifact_file_identity *identity,
+                                    const yvex_model_metadata_snapshot *snapshot)
+{
+    entry->sha256 = identity->sha256;
+    entry->file_size = identity->file_size;
+    entry->format = snapshot->format;
+    entry->architecture = snapshot->architecture;
+    entry->tensor_count = snapshot->entry.tensor_count;
+    entry->known_tensor_bytes = snapshot->entry.known_tensor_bytes;
+    entry->primary_tensor_name = snapshot->primary_tensor_name;
+    entry->primary_tensor_role = snapshot->primary_tensor_role;
+    entry->primary_tensor_dtype = snapshot->primary_tensor_dtype;
+    entry->primary_tensor_dims = snapshot->primary_tensor_dims;
+    entry->primary_tensor_rank = snapshot->entry.primary_tensor_rank;
+    entry->primary_tensor_bytes = snapshot->entry.primary_tensor_bytes;
+    entry->selected_embedding_ready = snapshot->entry.selected_embedding_ready;
+    entry->selected_embedding_hidden_size = snapshot->entry.selected_embedding_hidden_size;
+    entry->selected_embedding_vocab_size = snapshot->entry.selected_embedding_vocab_size;
+    entry->selected_embedding_output_count = snapshot->entry.selected_embedding_output_count;
+    entry->selected_embedding_slice_bytes = snapshot->entry.selected_embedding_slice_bytes;
+    entry->execution_ready = 0;
+}
+
+int yvex_model_registry_create(const yvex_model_registry_entry *requested,
+                                const char *expected_sha256, const char *registry_path,
+                                int replace_existing, yvex_model_registry_creation *out,
+                                yvex_error *err)
+{
+    yvex_model_registry_derivation derived;
+    yvex_model_registry_entry entry;
+    yvex_model_metadata_snapshot metadata;
+    yvex_artifact_file_identity identity;
+    yvex_model_registry_options options = {registry_path, 1};
+    yvex_model_registry *registry = NULL;
+    int rc;
+    if (!requested || !requested->path || !out ||
+        requested->schema_version != YVEX_MODEL_REGISTRY_ENTRY_SCHEMA_CURRENT) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_registry_create",
+                       "current entry, path and result are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(out, 0, sizeof(*out));
+    entry = *requested;
+    memset(&derived, 0, sizeof(derived));
+    if (yvex_model_registry_derive(&derived, entry.path, err) == YVEX_OK) {
+        if (!entry.alias) entry.alias = derived.entry.alias;
+        if (!entry.family) entry.family = derived.entry.family;
+        if (!entry.model) entry.model = derived.entry.model;
+        if (!entry.scope) entry.scope = derived.entry.scope;
+        if (!entry.artifact_class) entry.artifact_class = derived.entry.artifact_class;
+        if (!entry.qprofile) entry.qprofile = derived.entry.qprofile;
+        if (!entry.calibration) entry.calibration = derived.entry.calibration;
+        if (!entry.producer) entry.producer = derived.entry.producer;
+        if (!entry.artifact_schema) entry.artifact_schema = derived.entry.artifact_schema;
+    }
+    yvex_error_clear(err);
+    if (!entry.producer) entry.producer = "yvex";
+    if (!entry.artifact_schema) entry.artifact_schema = "v1";
+    if (!entry.support_level) entry.support_level = "";
+    if (!entry.alias || !entry.alias[0]) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_registry_create",
+                       "alias is required when filename is not canonical");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = yvex_artifact_identity_read(entry.path, &identity, err);
+    if (rc == YVEX_OK) rc = yvex_model_metadata_snapshot_read(&metadata, entry.path, err);
+    if (rc != YVEX_OK) return rc;
+    if (expected_sha256 && expected_sha256[0] && strcmp(expected_sha256, identity.sha256)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "model_registry_create", "sha256 mismatch for requested artifact");
+        return YVEX_ERR_STATE;
+    }
+    registry_apply_metadata(&entry, &identity, &metadata);
+    if (entry.runtime_profile && entry.runtime_profile[0]) {
+        rc = yvex_model_registry_startup_validate(&entry, err);
+        if (rc != YVEX_OK) return rc;
+    }
+    rc = yvex_model_registry_open(&registry, &options, err);
+    if (rc == YVEX_OK && replace_existing && yvex_model_registry_find(registry, entry.alias))
+        rc = yvex_model_registry_remove(registry, entry.alias, err);
+    if (rc == YVEX_OK) rc = yvex_model_registry_add(registry, &entry, err);
+    if (rc == YVEX_OK) rc = yvex_model_registry_save(registry, registry_path, err);
+    if (rc == YVEX_OK) {
+        snprintf(out->alias, sizeof(out->alias), "%s", entry.alias);
+        snprintf(out->sha256, sizeof(out->sha256), "%s", identity.sha256);
+        out->file_size = identity.file_size;
+    }
+    yvex_model_registry_close(registry);
+    return rc;
+}
+
+int yvex_model_registry_verify(const yvex_model_registry_entry *entry,
+                                yvex_model_registry_verification *out, yvex_error *err)
+{
+    const char *identity_status = "fail", *status = "models-identity-fail";
+    const char *reason = "";
+    int rc;
+    if (!entry || !entry->path || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_registry_verify", "entry, path and result are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(out, 0, sizeof(*out));
+    snprintf(out->metadata_status, sizeof(out->metadata_status), "not-checked");
+    snprintf(out->readiness_status, sizeof(out->readiness_status), "not-checked");
+    rc = yvex_artifact_identity_read(entry->path, &out->identity, err);
+    if (rc != YVEX_OK) {
+        reason = yvex_error_message(err);
+    } else if (!entry->sha256 || !yvex_sha256_hex_is_valid(entry->sha256)) {
+        identity_status = "missing";
+        status = "models-identity-missing";
+        reason = "registered alias lacks digest identity; re-add model";
+    } else if (strcmp(entry->sha256, out->identity.sha256) ||
+               (entry->file_size && entry->file_size != out->identity.file_size)) {
+        reason = "digest mismatch for registered alias";
+    } else {
+        identity_status = "pass";
+        status = "models-metadata-drift";
+        rc = yvex_model_metadata_snapshot_read(&out->current, entry->path, err);
+        if (rc == YVEX_OK) {
+            out->metadata_checked = 1;
+            rc = yvex_model_registry_compare_metadata(entry, &out->current.entry, &out->drift, err);
+        }
+        if (rc != YVEX_OK) {
+            snprintf(out->metadata_status, sizeof(out->metadata_status), "fail");
+            snprintf(out->readiness_status, sizeof(out->readiness_status), "fail");
+            reason = "current artifact metadata could not be compared";
+        } else {
+            snprintf(out->metadata_status, sizeof(out->metadata_status), "%s", out->drift.metadata_status);
+            snprintf(out->readiness_status, sizeof(out->readiness_status), "%s", out->drift.readiness_status);
+            if (!strcmp(out->metadata_status, "pass") && !strcmp(out->readiness_status, "pass")) {
+                out->passed = 1;
+                status = "models-identity-pass";
+                reason = "current file identity matches registered alias";
+            } else if (!strcmp(out->metadata_status, "missing") || !strcmp(out->readiness_status, "missing")) {
+                status = "models-metadata-missing";
+                reason = "registered alias lacks metadata summary; re-add model";
+            } else {
+                reason = "registered alias metadata does not match current artifact facts";
+            }
+        }
+    }
+    snprintf(out->identity_status, sizeof(out->identity_status), "%s", identity_status);
+    snprintf(out->status, sizeof(out->status), "%s", status);
+    snprintf(out->reason, sizeof(out->reason), "%s", reason);
+    if (!out->passed) {
+        yvex_error_set(err, YVEX_ERR_STATE, "model_registry_verify", out->reason);
+        return YVEX_ERR_STATE;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_model_ref_verify_integrity(const yvex_model_ref *ref,
+                                    const yvex_artifact_integrity_report *integrity,
+                                    yvex_model_registry_verification *out, yvex_error *err)
+{
+    yvex_model_registry_entry registered;
+    const char *identity = "unregistered", *metadata = "unregistered", *readiness = "not-checked";
+    int alias, rc;
+    if (!ref || !ref->path || !integrity || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_ref_verify_integrity", "reference and reports are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(out, 0, sizeof(*out));
+    alias = ref->kind == YVEX_MODEL_REF_ALIAS;
+    out->passed = integrity->passed;
+    if (alias) {
+        if (!ref->sha256 || !yvex_sha256_hex_is_valid(ref->sha256)) identity = "missing";
+        else if (!strcmp(integrity->digest_status, "pass") &&
+                 (!ref->registered_file_size || ref->registered_file_size == integrity->file_size)) identity = "pass";
+        else identity = "fail";
+        if (strcmp(identity, "pass")) out->passed = 0;
+    }
+    if (integrity->passed) {
+        rc = yvex_model_metadata_snapshot_read(&out->current, ref->path, err);
+        if (rc == YVEX_OK) {
+            out->metadata_checked = 1;
+            if (alias && !strcmp(identity, "pass")) {
+                yvex_model_ref_registry_entry_view(ref, &registered);
+                rc = yvex_model_registry_compare_metadata(&registered, &out->current.entry, &out->drift, err);
+                metadata = rc == YVEX_OK ? out->drift.metadata_status : "fail";
+                readiness = rc == YVEX_OK ? out->drift.readiness_status : "fail";
+                if (strcmp(metadata, "pass") || strcmp(readiness, "pass")) out->passed = 0;
+                if (ref->support_level && ref->support_level[0]) out->current.entry.support_level = ref->support_level;
+            } else if (alias) {
+                metadata = "not-checked";
+            } else if (out->current.entry.selected_embedding_ready) readiness = "pass";
+        } else if (alias && !strcmp(identity, "pass")) {
+            metadata = "fail";
+            readiness = "fail";
+            out->passed = 0;
+        }
+    }
+    snprintf(out->identity_status, sizeof(out->identity_status), "%s", identity);
+    snprintf(out->metadata_status, sizeof(out->metadata_status), "%s", metadata);
+    snprintf(out->readiness_status, sizeof(out->readiness_status), "%s", readiness);
+    if (!out->passed) {
+        yvex_error_set(err, YVEX_ERR_STATE, "model_ref_verify_integrity", "integrity or registered metadata refused");
+        return YVEX_ERR_STATE;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 int yvex_model_metadata_snapshot_read(yvex_model_metadata_snapshot *snapshot,

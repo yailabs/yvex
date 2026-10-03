@@ -81,7 +81,7 @@ PY
 
 "$YVEX_BIN" artifact verify "$MODEL" --require-token-embedding --partial-token 0 \
   >"$OUT_DIR/integrity-pass.out" 2>"$OUT_DIR/integrity-pass.err"
-contains "$OUT_DIR/integrity-pass.out" "artifact_integrity: check"
+contains "$OUT_DIR/integrity-pass.out" "ARTIFACT INTEGRITY  PASS"
 contains "$OUT_DIR/integrity-pass.out" "format: gguf"
 contains "$OUT_DIR/integrity-pass.out" "version: 3"
 contains "$OUT_DIR/integrity-pass.out" "architecture: deepseek"
@@ -108,7 +108,7 @@ contains "$OUT_DIR/integrity-pass.out" "integrity_status: pass"
 contains "$OUT_DIR/integrity-pass.out" "status: artifact-integrity-pass"
 
 "$YVEX_BIN" artifact verify --help >"$OUT_DIR/help.out" 2>"$OUT_DIR/help.err"
-contains "$OUT_DIR/help.out" "usage: yvex artifact verify artifact"
+contains "$OUT_DIR/help.out" "yvex artifact verify <artifact>"
 
 "$YVEX_BIN" artifact verify tests/fixtures/gguf/bad-magic.gguf \
   >"$OUT_DIR/bad-magic.out" 2>"$OUT_DIR/bad-magic.err" && fail "bad magic passed" || true
@@ -154,7 +154,9 @@ contains "$OUT_DIR/token-range.out" "error_0_code: token-out-of-range"
 
 "$YVEX_BIN" artifact materialize --model tests/fixtures/gguf/tensor-offset-out-of-bounds.gguf --backend cpu \
   >"$OUT_DIR/materialize-range.out" 2>"$OUT_DIR/materialize-range.err" && fail "materialize corrupt range passed" || true
-contains "$OUT_DIR/materialize-range.err" "first-offset-not-zero"
+contains "$OUT_DIR/materialize-range.out" "first-offset-not-zero"
+contains "$OUT_DIR/materialize-range.out" "allocation_attempted: false"
+contains "$OUT_DIR/materialize-range.out" "execution_ready: false"
 not_contains "$OUT_DIR/materialize-range.out" "status: weights-materialized"
 
 echo "cli artifact integrity: ok"

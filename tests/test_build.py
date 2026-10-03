@@ -60,6 +60,61 @@ class BuildContract(unittest.TestCase):
         self.assertIn(" -c ", self.make("CPPFLAGS=-DPACKAGER_FLAG=2", "CFLAGS=-O0 -std=c11", target))
         self.assertIn(str(header), Path(target).with_suffix(".d").read_text())
 
+    def test_structural_archive_identity_follows_build_layout(self):
+        archive = self.root / "alternate/libyvex.a"
+        objects = self.root / "alternate/objects"
+        output = self.make(f"LIBYVEX={archive}", f"OBJ_DIR={objects}", "-s", "print-archive-layout")
+        self.assertEqual(output.splitlines()[-2:], [str(archive), str(objects) + "/"])
+
+    def test_library_remains_independent_of_rust_and_terminal_source(self):
+        _, target = self.fixture()
+        archive = self.build / "lib/libyvex.a"
+        self.make("CPPFLAGS=-DPACKAGER_FLAG=1", "CARGO=false", "RUSTC=false",
+                  "OPENAI_ADAPTER_SRCS=", "CUDA_SRCS=", "NVCC=__unavailable__", "lib")
+        self.assertTrue(archive.is_file())
+        self.assertTrue(Path(target).is_file())
+        self.assertFalse((self.build / "cargo").exists())
+
+    def test_rust_configuration_is_material_and_content_stable(self):
+        stamp = self.build / "generated/rust_build_config"
+        # Explicit baselines also work when this test inherits MAKEFLAGS from
+        # a dev-profile parent qualification invocation.
+        self.make("RUST_PROFILE=release", str(stamp))
+        before = stamp.stat().st_mtime_ns
+        self.make("RUST_PROFILE=release", str(stamp))
+        self.assertEqual(before, stamp.stat().st_mtime_ns)
+        self.make("RUST_PROFILE=release", "RUSTFLAGS=-C debuginfo=0", str(stamp))
+        self.assertNotEqual(before, stamp.stat().st_mtime_ns)
+        self.assertIn("rustflags=-C debuginfo=0", stamp.read_text())
+        identity = stamp.read_text().splitlines()[0]
+        self.make("RUSTFLAGS=-C debuginfo=0", "RUST_PROFILE=dev", str(stamp))
+        self.assertNotEqual(identity, stamp.read_text().splitlines()[0])
+
+    def test_rust_product_publication_keeps_previous_on_cargo_failure(self):
+        product = self.root / "bin/yvex"
+        product.parent.mkdir()
+        product.write_bytes(b"previous complete product")
+        # Only the Make/Cargo publication contract is mocked here. Production
+        # compilation, FFI and CLI semantics are qualified by the real Rust lane.
+        fake = self.root / "cargo-fixture"
+        fake.write_text('#!/bin/sh\nset -eu\n'
+                        'if test "$1" = --version; then echo fixture-cargo; exit 0; fi\n'
+                        'test "$1" = build\n'
+                        'mkdir -p "$CARGO_TARGET_DIR/debug"\n'
+                        'printf "qualified Make publication fixture\\n" >"$CARGO_TARGET_DIR/debug/yvex"\n')
+        fake.chmod(0o755)
+        bypass = ("-o", "lib", "-o", "generate-operator-registry", "-o", "replai-rust-dependency",
+                  "-o", str(self.build / "generated/build_commit.h"))
+        self.make(*bypass, f"YVEX_BIN={product}", f"CARGO={fake}", "RUST_PROFILE=dev", "client")
+        self.assertEqual(product.read_text(), "qualified Make publication fixture\n")
+        self.assertEqual(product.stat().st_mode & 0o777, 0o755)
+        before = product.stat().st_mtime_ns
+        self.make(*bypass, f"YVEX_BIN={product}", f"CARGO={fake}", "RUST_PROFILE=dev", "client")
+        self.assertEqual(before, product.stat().st_mtime_ns)
+        self.make(*bypass, f"YVEX_BIN={product}", "CARGO=false", "RUST_PROFILE=dev", "client", succeeds=False)
+        self.assertEqual(product.read_text(), "qualified Make publication fixture\n")
+        self.assertEqual(list(product.parent.glob("*.tmp.*")), [])
+
     @unittest.skipUnless(shutil.which("nvcc"), "CUDA compiler not installed")
     def test_cuda_transitive_header_and_flags(self):
         header, target = self.fixture(cuda=True)

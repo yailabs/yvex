@@ -16,6 +16,11 @@ publication: {html: true, pdf: true, index: true}
 
 Date: 2026-09-05
 
+The generic substrate/pin decision remains accepted. Its C-consumer adapter
+and staging mechanism are superseded by [ADR 0009](0009-rust-product-shell.md).
+The C-specific implementation below records that decision's qualified lineage;
+it is not the current Rust product-shell route.
+
 ## Context
 
 The chat protocol client previously implemented byte input, raw mode, cursor
@@ -26,7 +31,8 @@ presentation grammar. Keeping two live editors would leave ownership ambiguous.
 
 ## Decision
 
-`src/cli/io/client.c` consumes REPLAI C ABI 1 through its installed header. The
+The historical [C chat consumer](https://github.com/yailabs/yvex/blob/67a7905ea9deb98b0704629a1f979634e19007fb/src/cli/io/client.c)
+consumed REPLAI C ABI 1 through its installed header. The
 exact revision, Git tree and downloaded archive checksum are owned by
 `config/replai.json`: active revision `93d62f6d34cfb933a1f59407ade027152e1ef2ba`.
 Base C ABI 1 remains unchanged; the separately queried presentation extension 1

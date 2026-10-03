@@ -10,6 +10,10 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/source_distribution.h>
 #include <yvex/internal/source_catalog.h>
+#include <yvex/internal/registry.h>
+#include <yvex/internal/model_target.h>
+#include <yvex/internal/model_preparation.h>
+#include <yvex/internal/artifact_catalog.h>
 
 #include "tests/test.h"
 
@@ -187,6 +191,57 @@ static int test_derive_metadata(void)
     YVEX_TEST_ASSERT(entry.schema_version == YVEX_MODEL_REGISTRY_ENTRY_SCHEMA_CURRENT,
                      "derived entry schema");
     YVEX_TEST_ASSERT_STREQ(entry.artifact_schema, "v1", "derived artifact schema");
+    return 0;
+}
+
+static int test_owned_derivation(void)
+{
+    yvex_model_registry_derivation first, second;
+    yvex_error err;
+    const char *a = "/owned/deepseek4-v4-flash-dspark-selected-embed-F16-noimatrix-yvex-v1.gguf";
+    const char *b = "/owned/qwen3-8b-selected-embed-F32-noimatrix-yvex-v1.gguf";
+    YVEX_TEST_ASSERT(yvex_model_registry_derive(&first, a, &err) == YVEX_OK,
+                     "first caller-owned derivation");
+    YVEX_TEST_ASSERT(yvex_model_registry_derive(&second, b, &err) == YVEX_OK,
+                     "second caller-owned derivation");
+    YVEX_TEST_ASSERT_STREQ(first.entry.alias, "deepseek4-v4-flash-dspark-selected-embed",
+                           "second derivation cannot invalidate another owner");
+    YVEX_TEST_ASSERT(first.entry.alias == first.alias && second.entry.alias == second.alias,
+                     "borrowed views belong to their explicit caller buffers");
+    YVEX_TEST_ASSERT(yvex_model_registry_derive(NULL, a, &err) == YVEX_ERR_INVALID_ARG &&
+        yvex_model_registry_derive(&second, "not-canonical.gguf", &err) == YVEX_ERR_FORMAT,
+                     "malformed derivation fails closed");
+    return 0;
+}
+
+static int test_integrity_metadata_admission(void)
+{
+    yvex_model_ref ref = {0};
+    yvex_artifact_integrity_options options = {0};
+    yvex_artifact_integrity_report integrity;
+    yvex_model_registry_verification verified;
+    yvex_error err;
+    ref.path = "tests/fixtures/gguf/valid-tokenizer-simple.gguf";
+    ref.kind = YVEX_MODEL_REF_PATH;
+    YVEX_TEST_ASSERT(yvex_artifact_integrity_check_path(ref.path, &options, &integrity, &err) == YVEX_OK,
+                     "bounded valid descriptor");
+    YVEX_TEST_ASSERT(yvex_model_ref_verify_integrity(&ref, &integrity, &verified, &err) == YVEX_OK &&
+        verified.metadata_checked && verified.current.entry.primary_tensor_bytes == 128,
+                     "path report copies native descriptor facts without runtime promotion");
+    ref.kind = YVEX_MODEL_REF_ALIAS;
+    YVEX_TEST_ASSERT(yvex_model_ref_verify_integrity(&ref, &integrity, &verified, &err) == YVEX_ERR_STATE,
+                     "alias cannot obtain identity from a successful descriptor alone");
+    YVEX_TEST_ASSERT_STREQ(verified.identity_status, "missing", "alias digest remains required");
+    options.expect_sha256 = "0000000000000000000000000000000000000000000000000000000000000000";
+    YVEX_TEST_ASSERT(yvex_artifact_integrity_check_path(ref.path, &options, &integrity, &err) != YVEX_OK,
+                     "recipient expected-digest mismatch");
+    ref.sha256 = integrity.sha256;
+    YVEX_TEST_ASSERT(yvex_model_ref_verify_integrity(&ref, &integrity, &verified, &err) == YVEX_ERR_STATE &&
+        !verified.metadata_checked && !verified.passed,
+                     "matching registered digest cannot override refused expected digest");
+    YVEX_TEST_ASSERT_STREQ(verified.identity_status, "fail", "admission uses this report rather than rehashing");
+    YVEX_TEST_ASSERT(yvex_model_ref_verify_integrity(NULL, &integrity, &verified, &err) == YVEX_ERR_INVALID_ARG,
+                     "invalid references remain fail closed");
     return 0;
 }
 
@@ -849,10 +904,143 @@ static int test_staging_collision(void)
     return 0;
 }
 
+static int test_target_catalog_views(void)
+{
+    unsigned long index, count = yvex_model_target_catalog_count();
+    yvex_model_target_summary summary;
+    yvex_error err;
+
+    YVEX_TEST_ASSERT(count > 0u && !yvex_model_target_catalog_at(count) &&
+        !yvex_model_target_class_at(yvex_model_target_class_count()),
+        "immutable target and class extents refuse out-of-range records");
+    for (index = 0u; index < count; ++index) {
+        const yvex_model_target_record *record = yvex_model_target_catalog_at(index);
+        YVEX_TEST_ASSERT(record && yvex_model_target_find(record->target_id) == record &&
+            yvex_model_target_summary_get(record->target_id, &summary, &err) == YVEX_OK &&
+            summary.source_status && summary.artifact_status && summary.runtime_status &&
+            summary.next && summary.boundary,
+            "native discovery consumers share exact canonical records and bounded summaries");
+        YVEX_TEST_ASSERT(summary.release_selected == (summary.release_identity != NULL),
+            "only exact release-source selection carries the immutable upstream identity");
+    }
+    for (index = 0u; index < yvex_model_target_class_count(); ++index) {
+        const yvex_model_target_class_record *record = yvex_model_target_class_at(index);
+        YVEX_TEST_ASSERT(record && record->class_id && record->description,
+            "class projection retains the native interpretation without a renderer");
+    }
+    YVEX_TEST_ASSERT(yvex_model_target_summary_get("not-a-target", &summary, &err) ==
+        YVEX_ERR_INVALID_ARG && !summary.source_status && !summary.release_identity,
+        "unknown selection does not publish stale facts");
+    YVEX_TEST_ASSERT(yvex_model_target_summary_get(NULL, &summary, &err) == YVEX_ERR_INVALID_ARG &&
+        yvex_model_target_summary_get(YVEX_SOURCE_RELEASE_TARGET_ID, NULL, &err) == YVEX_ERR_INVALID_ARG,
+        "missing target or caller output is refused");
+    return 0;
+}
+
+static int test_preparation_refusals(void)
+{
+    yvex_model_preparation_recipe recipe = {0};
+    yvex_model_preparation_request request = {0};
+    yvex_model_preparation_view view = {0};
+    yvex_model_preparation *context = NULL;
+    yvex_error err;
+    int published = 1, cached = 1;
+    view.artifact = "stale";
+    YVEX_TEST_ASSERT(yvex_model_preparation_open(&context, NULL, 0u, &request, &err) ==
+        YVEX_ERR_INVALID_ARG && !context, "invalid preparation does not lend an incomplete context");
+    YVEX_TEST_ASSERT(yvex_model_preparation_view_get(NULL, &view, &err) == YVEX_ERR_INVALID_ARG &&
+        !view.artifact && !view.binding, "failed preparation does not publish stale identities");
+    YVEX_TEST_ASSERT(yvex_model_preparation_verify(NULL, &err) == YVEX_ERR_STATE &&
+        yvex_model_preparation_store_plan(NULL, &err) == YVEX_ERR_STATE &&
+        yvex_model_preparation_artifact_verify(NULL, &err) == YVEX_ERR_STATE,
+        "preparation phases require an authenticated native context");
+    YVEX_TEST_ASSERT(yvex_model_preparation_binding_publish(NULL, &published, &err) ==
+        YVEX_ERR_STATE && !published, "missing context cannot claim binding publication");
+    YVEX_TEST_ASSERT(yvex_model_preparation_cached(NULL, NULL, 0u, &cached, &err) ==
+        YVEX_ERR_STATE && !cached, "missing catalog cannot claim a verified cached representation");
+    YVEX_TEST_ASSERT(yvex_model_preparation_ready_verify(NULL, 0u, &request, &err) ==
+        YVEX_ERR_INVALID_ARG, "readiness cannot be inferred without native catalog authority");
+    yvex_model_preparation_close(NULL);
+    YVEX_TEST_ASSERT(yvex_model_preparation_recipe_get(NULL, &recipe, &err) ==
+        YVEX_ERR_INVALID_ARG && !recipe.implemented, "recipe requires an exact target");
+    YVEX_TEST_ASSERT(yvex_model_preparation_recipe_get(
+        "deepseek4-v4-flash-dspark-selected-embed", &recipe, &err) == YVEX_OK &&
+        recipe.implemented && strcmp(recipe.tensor, "embed.weight") == 0,
+        "diagnostic conversion uses the canonical selected tensor");
+    YVEX_TEST_ASSERT(yvex_model_preparation_recipe_get("unknown", &recipe, &err) ==
+        YVEX_ERR_INVALID_ARG && !recipe.implemented && !recipe.target,
+        "unknown recipe clears stale facts rather than publishing an earlier selection");
+    YVEX_TEST_ASSERT(yvex_model_preparation_recipe_get(
+        "glm-5.2-official-safetensors", &recipe, &err) == YVEX_OK &&
+        !recipe.implemented && recipe.reason, "known source-only recipe stays explicitly unsupported");
+    return 0;
+}
+
+static int test_discovery_refusals(void)
+{
+    yvex_artifact_catalog *catalog = NULL;
+    yvex_operator_paths paths = {0};
+    yvex_source_acquisition_provenance source = {0};
+    yvex_error err;
+    YVEX_TEST_ASSERT(yvex_artifact_catalog_open(&catalog, NULL, NULL, &err) ==
+        YVEX_ERR_INVALID_ARG && !catalog, "missing discovery paths cannot lend a catalog");
+    YVEX_TEST_ASSERT(yvex_artifact_catalog_open(&catalog, &paths, "../invalid", &err) ==
+        YVEX_ERR_INVALID_ARG && !catalog, "discovery family is a namespace, not a free path");
+    YVEX_TEST_ASSERT(!yvex_artifact_catalog_count(NULL) &&
+        !yvex_artifact_catalog_at(NULL, 0u), "absent discovery has no borrowed rows");
+    yvex_artifact_catalog_close(NULL);
+    YVEX_TEST_ASSERT(!yvex_source_acquisition_provenance_paths("../escape", "deepseek", &paths,
+        &source, &err) && err.code == YVEX_ERR_INVALID_ARG,
+        "source provenance rejects target path traversal");
+    YVEX_TEST_ASSERT(!yvex_source_acquisition_provenance_paths("target", "../escape", &paths,
+        &source, &err) && err.code == YVEX_ERR_INVALID_ARG,
+        "source provenance rejects family path traversal");
+    YVEX_TEST_ASSERT(!yvex_source_acquisition_provenance_read(NULL, "target", "deepseek", &source) &&
+        !source.found, "missing sidecar cannot assert selected payload provenance");
+    return 0;
+}
+
+static int test_target_fact_population(void)
+{
+    yvex_model_target_report *report = calloc(1u, sizeof(*report));
+    yvex_model_target_candidate_projection candidate = {0};
+    yvex_error err;
+    unsigned long index;
+    YVEX_TEST_ASSERT(report, "bounded target observation storage");
+    report->mode = YVEX_MODEL_TARGET_OUTPUT_JSON;
+    YVEX_TEST_ASSERT(yvex_model_target_report_fact_text(report, "state", "blocked") &&
+        report->fact_count == 1u && !report->row_count &&
+        yvex_model_target_report_fact_u64(report, "state", 7u) && report->fact_count == 1u &&
+        report->facts[0].kind == YVEX_MODEL_TARGET_FACT_U64 && report->facts[0].number == 7u,
+        "typed observations do not require human rows and replacement has one owner");
+    for (index = 1u; index < YVEX_MODEL_TARGET_ROW_CAP; ++index) {
+        char name[32];
+        snprintf(name, sizeof(name), "fact.%lu", index);
+        YVEX_TEST_ASSERT(yvex_model_target_report_fact_u64(report, name, index), "bounded fact population");
+    }
+    YVEX_TEST_ASSERT(!yvex_model_target_report_fact_u64(report, "overflow", 0u) &&
+        report->fact_count == YVEX_MODEL_TARGET_ROW_CAP && report->exit_code == 4 && report->fact_failed,
+        "overflow refuses instead of returning a truncated successful projection");
+    free(report);
+    YVEX_TEST_ASSERT(yvex_model_target_candidate_count() > 0u &&
+        yvex_model_target_candidate_at(0u, 1, &candidate, &err) == YVEX_OK && candidate.id &&
+        candidate.eligibility && candidate.blocker, "candidate dispositions come from native records");
+    YVEX_TEST_ASSERT(yvex_model_target_candidate_at(yvex_model_target_candidate_count(), 0,
+        &candidate, &err) == YVEX_ERR_INVALID_ARG && !candidate.id && !candidate.blocker,
+        "invalid candidate ordinal cannot lend stale facts");
+    return 0;
+}
+
 int yvex_test_model_registry(void)
 {
+    if (test_discovery_refusals() != 0) return 1;
+    if (test_target_fact_population() != 0) return 1;
+    if (test_preparation_refusals() != 0) return 1;
+    if (test_target_catalog_views() != 0) return 1;
     if (test_alias_validation() != 0) return 1;
     if (test_derive_metadata() != 0) return 1;
+    if (test_owned_derivation() != 0) return 1;
+    if (test_integrity_metadata_admission() != 0) return 1;
     if (test_registry_lifecycle() != 0) return 1;
     if (test_composite_profile() != 0) return 1;
     if (test_legacy_startup_axes() != 0) return 1;

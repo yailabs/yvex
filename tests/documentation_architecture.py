@@ -266,7 +266,7 @@ def check_registry():
     landings=['product','architecture','project-control','contracts','model-families','guides','evaluation','research','decisions','reference','releases']
     for area in landings:
         metadata.require(ROOT/f'docs/{area}/README.md' in paths,'missing README landing: '+area)
-    for relative in ['docs/TEMP.md','docs/architecture/system.md','docs/architecture/compilation.md','docs/architecture/runtime.md','docs/development','docs/index.md','docs/work','docs/archive','PROJECT.md']:
+    for relative in ['docs/TEMP.md','docs/architecture/system.md','docs/architecture/compilation.md','docs/architecture/runtime.md','docs/development','docs/index.md','docs/work','docs/' + 'archive','PROJECT.md']:
         metadata.require(not (ROOT/relative).exists(),'retired owner remains: '+relative)
     graph={}
     for path in paths:

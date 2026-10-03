@@ -8,6 +8,20 @@
   },
   "change_classes": [
     {
+      "id": "materialization-outcome",
+      "patterns": ["src/model/materialization.c", "include/yvex/internal/materialization.h", "tests/unit/materialize_cpu.c"],
+      "lanes": ["fast", "structural", "sanitizer"],
+      "tests": ["unit.materialize_cpu", "unit.materialize_gate", "unit.model_gate", "integration.cli"],
+      "reason": "private outcome retention must preserve native byte/phase facts, failure atomicity and observed resource retirement without changing the installed API or claiming execution readiness"
+    },
+    {
+      "id": "rust-product-shell",
+      "patterns": ["src/cli/rust/**", "Cargo.toml", "Cargo.lock", "tests/rust_*.py", "tests/rust_structure.rs"],
+      "lanes": ["native", "structural"],
+      "tests": ["integration.rust-shell", "unit.protocol", "unit.server", "integration.cli", "integration.tiny-vertical"],
+      "reason": "native Rust grammar/projection/interaction must preserve typed C and private-wire ownership; PTY fixtures alone do not qualify model execution or final shell cutover"
+    },
+    {
       "id": "native-platform",
       "patterns": ["src/core/platform.c", "include/yvex/internal/platform.h", "src/core/fs.c",
                    "src/graph/state_pages.c", "src/runtime/capacity.c", "src/server/core.c",
@@ -159,8 +173,8 @@
     {
       "id": "source-acquisition-lifecycle",
       "patterns": ["src/source/acquisition.c", "include/yvex/internal/source_acquisition.h",
-                   "src/cli/model_artifacts/acquisition.c", "src/cli/model_artifacts/download.c",
-                   "src/cli/commands/model_artifacts.c", "src/accounts/provider.c",
+                   "src/cli/rust/acquisition*.rs", "src/cli/rust/model.rs",
+                   "src/cli/rust/ffi/acquisition.rs", "src/accounts/provider.c",
                    "include/yvex/internal/provider.h", "tests/source_acquisition_lifecycle.sh",
                    "tests/unit/source_acquisition.c"],
       "lanes": ["fast", "structural", "runtime", "sanitizer"],
@@ -355,14 +369,14 @@
     },
     {
       "id": "cli",
-      "patterns": ["src/cli/**", "include/yvex/internal/cli_presentation.h", "config/operator/registry.json", "tools/generate_operator_registry.py"],
+      "patterns": ["src/cli/**", "config/operator/registry.json", "tools/generate_operator_registry.py"],
       "lanes": ["fast", "structural", "runtime"],
       "tests": ["integration.cli", "structural.operator-registry"],
       "reason": "operator grammar changes require generated-authority and executable CLI acceptance"
     },
     {
       "id": "remote-management-bootstrap",
-      "patterns": ["src/cli/io/management.c", "tests/integration/remote_management.sh", "docs/contracts/remote-management.md"],
+      "patterns": ["src/cli/rust/management.rs", "tests/integration/remote_management.sh", "docs/contracts/remote-management.md"],
       "lanes": ["runtime", "structural"],
       "tests": ["integration.remote-management", "structural.operator-registry"],
       "reason": "remote identity and forced-command transport require authentication and refusal evidence"

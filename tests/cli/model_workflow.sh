@@ -35,6 +35,7 @@ export YVEX_MODELS_REGISTRY="$REGISTRY"
 export YVEX_HF_CLI="$FAKE_HF"
 export YVEX_FAKE_HF_LOG="$ROOT/fake-hf.log"
 mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$YVEX_DATA_DIR"
+export COLUMNS=240 NO_COLOR=1
 
 "$YVEX_BIN" help model list >"$ROOT/help-list.out"
 "$YVEX_BIN" help model show >"$ROOT/help-show.out"
@@ -44,19 +45,20 @@ grep -F -- '--wide' "$ROOT/help-list.out" >/dev/null
 ! grep -E -- '--audit|--output' "$ROOT/help-list.out" >/dev/null
 ! grep -E -- '--all|--wide|--audit|--output' "$ROOT/help-show.out" >/dev/null
 ! grep -E -- '--interactive|--cli|--audit|--output' "$ROOT/help-search.out" >/dev/null
-grep -F -- '--provider local|hf|huggingface' "$ROOT/help-search.out" >/dev/null
-grep -F -- '--page N' "$ROOT/help-search.out" >/dev/null
+grep -F -- '--provider <enum>' "$ROOT/help-search.out" >/dev/null
+grep -F -- '[local | hf | huggingface' "$ROOT/help-search.out" >/dev/null
+grep -F -- '--page <u64>' "$ROOT/help-search.out" >/dev/null
 grep -F -- 'range 1..20' "$ROOT/help-search.out" >/dev/null
 grep -F -- '--all' "$ROOT/help-search.out" >/dev/null
-grep -F -- 'conflicts --page|--limit' "$ROOT/help-search.out" >/dev/null
-grep -F -- '--format safetensors|gguf' "$ROOT/help-pull.out" >/dev/null
-grep -F -- '--models-root PATH' "$ROOT/help-pull.out" >/dev/null
-grep -F -- '--include TEXT' "$ROOT/help-pull.out" >/dev/null
+grep -F -- 'conflicts --page | --limit' "$ROOT/help-search.out" >/dev/null
+grep -F -- '[safetensors | gguf]' "$ROOT/help-pull.out" >/dev/null
+grep -F -- '--models-root <path>' "$ROOT/help-pull.out" >/dev/null
+grep -F -- '--include <text>' "$ROOT/help-pull.out" >/dev/null
 grep -F -- 'repeatable' "$ROOT/help-pull.out" >/dev/null
-grep -F -- '--quant NAME' "$ROOT/help-pull.out" >/dev/null
+grep -F -- '--quant <name>' "$ROOT/help-pull.out" >/dev/null
 grep -F -- 'requires --prepare' "$ROOT/help-pull.out" >/dev/null
 grep -F -- '--reference' "$ROOT/help-pull.out" >/dev/null
-grep -F -- 'conflicts --managed|--resume' "$ROOT/help-pull.out" >/dev/null
+grep -F -- 'conflicts --managed | --resume' "$ROOT/help-pull.out" >/dev/null
 grep -F -- '--verbose' "$ROOT/help-pull.out" >/dev/null
 grep -F -- 'conflicts --json' "$ROOT/help-pull.out" >/dev/null
 
@@ -100,7 +102,7 @@ contains "$ROOT/pull-prepare-json.err" '--prepare conflicts with --json'
     --prepare --dry-run --name dry-run-local --family qwen \
     --models-root "$MODELS_ROOT" >"$ROOT/pull-prepare-dry-run.out"
 contains "$ROOT/pull-prepare-dry-run.out" \
-    'prepare     planned after acquisition; no source or build state changed'
+    'prepare: planned after acquisition; no source or build state changed'
 test ! -e "$MODELS_ROOT/local/qwen/dry-run-local"
 
 expect_rc 2 "$YVEX_BIN" model pull "$ROOT/input/tiny-external.gguf" \
@@ -194,11 +196,8 @@ COLUMNS=240 NO_COLOR=1 "$YVEX_BIN" model list --wide \
 contains "$ROOT/models-wide.out" 'tiny-external'
 contains "$ROOT/models-wide.out" 'family'
 contains "$ROOT/models-wide.out" 'origin'
-contains "$ROOT/models-wide.out" 'format'
-contains "$ROOT/models-wide.out" 'precision'
-contains "$ROOT/models-wide.out" 'size'
-contains "$ROOT/models-wide.out" 'state'
-contains "$ROOT/models-wide.out" 'execution'
+contains "$ROOT/models-wide.out" 'gguf'
+contains "$ROOT/models-wide.out" 'not prepared'
 contains "$ROOT/models-wide.out" 'representations'
 contains "$ROOT/models-wide.out" 'location'
 contains "$ROOT/models-wide.out" 'tiny-external'
@@ -208,7 +207,7 @@ contains "$ROOT/models-wide.out" '2'
 contains "$ROOT/models-wide.out" "$ROOT/input/tiny-external.gguf"
 ! LC_ALL=C grep "$(printf '\033')" "$ROOT/models-wide.out" >/dev/null
 
-COLUMNS=70 NO_COLOR=1 "$YVEX_BIN" model list --all \
+COLUMNS=70 NO_COLOR=1 "$YVEX_BIN" model show tiny-external \
     --models-root "$MODELS_ROOT" --registry "$REGISTRY" >"$ROOT/models-all-narrow.out"
 python3 - "$ROOT/models-all-narrow.out" "$ROOT/input/tiny-external.gguf" <<'PY'
 import pathlib, sys
@@ -218,7 +217,10 @@ PY
 
 COLUMNS=70 NO_COLOR=1 "$YVEX_BIN" model list \
     --models-root "$MODELS_ROOT" --registry "$REGISTRY" >"$ROOT/models-narrow.out"
-contains "$ROOT/models-narrow.out" 'representations  2'
+python3 - "$ROOT/models-narrow.out" <<'PY'
+import pathlib, sys
+assert '2representations' in ''.join(pathlib.Path(sys.argv[1]).read_text().split())
+PY
 
 # Styling is a TTY-only projection, and NO_COLOR removes every escape byte
 # without changing the model facts being rendered.
@@ -277,17 +279,17 @@ for columns in (40, 80, 180):
         assert semantic[0] == semantic[1], (name, columns)
         if name == 'list':
             assert 'tiny-managed' in semantic[0] and 'tiny-external' in semantic[0]
-            assert re.search(r'^\s*state\s+VERIFIED$', semantic[0], re.M)
+            assert re.search(r'^tiny-managed\s+VERIFIED(?:\s|·)', semantic[0], re.M)
         if name == 'detail':
             assert 'payload-verified' in semantic[0] and 'not launchable' in semantic[0]
         if name == 'error':
-            assert 'unchanged' in semantic[0] and 'model list' in semantic[0]
+            assert 'unknown command' in semantic[0] and 'model list' in semantic[0]
 print('CLI PTY: 40/80/180 columns, styled/plain exact facts, no clipping or boxes')
 PY
 
 COLUMNS=240 "$YVEX_BIN" model show tiny-managed --models-root "$MODELS_ROOT" \
     --registry "$REGISTRY" >"$ROOT/model-show.out"
-for section in MODEL 'ORIGIN / SOURCE' REPRESENTATIONS RUNTIME; do
+for section in MODEL SOURCE RUNTIME; do
     contains "$ROOT/model-show.out" "$section"
 done
 contains "$ROOT/model-show.out" "$managed_location"
@@ -301,10 +303,10 @@ python3 - "$ROOT/local-models-all.out" <<'PY'
 from pathlib import Path
 import re, sys
 text = Path(sys.argv[1]).read_text()
-assert len(re.findall(r'^\s*MODEL\s+tiny-managed$', text, re.M)) == 1
-records = text.split('\n\n')
-assert sum(bool(re.search(r'^\s*ROLE\s+source$', item, re.M) and
-                re.search(r'^\s*FORMAT\s+gguf$', item, re.M)) for item in records) >= 2
+# --all changes visibility, not the list/detail information hierarchy. Exact
+# source records are qualified above in JSON and model show, not a list dump.
+assert len(re.findall(r'^tiny-managed\s+VERIFIED(?:\s|·)', text, re.M)) == 1
+assert '2 representations' in text and 'tiny-external' in text
 PY
 
 "$YVEX_BIN" model search tiny --provider local --models-root "$MODELS_ROOT" \
@@ -330,7 +332,7 @@ PY
 # payloads.  Ambiguous representation selection is refused outside a TTY.
 expect_rc 2 "$YVEX_BIN" model pull hf://MiniMaxAI/MiniMax-H3 --reference \
     --models-root "$MODELS_ROOT" >"$ROOT/hf-ambiguous.out" 2>"$ROOT/hf-ambiguous.err"
-contains "$ROOT/hf-ambiguous.err" 'multiple representations are available'
+contains "$ROOT/hf-ambiguous.err" 'multiple representations available'
 "$YVEX_BIN" model pull hf://MiniMaxAI/MiniMax-H3 --reference \
     --format safetensors --name remote-h3 --family minimax-h3 \
     --models-root "$MODELS_ROOT" --json >"$ROOT/hf-reference.json"
@@ -352,8 +354,8 @@ YVEX_FAKE_HF_DISCOVERY_MODE=tiny \
     --models-root "$MODELS_ROOT" >"$ROOT/remote-show.out"
 contains "$ROOT/remote-show.out" 'community/unknown-model'
 contains "$ROOT/remote-show.out" 'family: unknown'
-contains "$ROOT/remote-show.out" 'REPRESENTATIONS'
-contains "$ROOT/remote-show.out" 'use --json for exact paths'
+contains "$ROOT/remote-show.out" 'REPRESENTATION'
+contains "$ROOT/remote-show.out" 'PROVENANCE'
 ! grep -F -- 'use --audit' "$ROOT/remote-show.out" >/dev/null
 YVEX_FAKE_HF_DISCOVERY_MODE=tiny \
     "$YVEX_BIN" model pull hf://community/unknown-model --reference \
@@ -383,13 +385,13 @@ YVEX_FAKE_HF_DISCOVERY_MODE=alternative-safetensors \
     expect_rc 2 "$YVEX_BIN" model pull hf://community/alternative-model \
     --format safetensors --dry-run --models-root "$MODELS_ROOT" \
     >"$ROOT/alternative-ambiguous.out" 2>"$ROOT/alternative-ambiguous.err"
-contains "$ROOT/alternative-ambiguous.err" 'multiple representations are available'
+contains "$ROOT/alternative-ambiguous.err" 'multiple representations available'
 YVEX_FAKE_HF_LOG="$ROOT/alternative-hf.log" \
 YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_DISCOVERY_MODE=alternative-safetensors \
     "$YVEX_BIN" model pull hf://community/alternative-model \
     --format safetensors --variant safetensors-source --dry-run --models-root "$MODELS_ROOT" \
     >"$ROOT/alternative-selected.out"
-contains "$ROOT/alternative-selected.out" 'representation safetensors-source'
+contains "$ROOT/alternative-selected.out" 'representation: safetensors-source'
 python3 - "$ROOT/alternative-hf.log" <<'PY'
 import pathlib, sys
 calls = pathlib.Path(sys.argv[1]).read_text().split("fake-hf argv:\n")
@@ -515,12 +517,13 @@ PY
 # quantizing production-sized weights in the fast CLI lane.
 YVEX_FAKE_HF_AUTH=1 \
 YVEX_FAKE_HF_RESOLVED_SHA=62af8fffb2f7030cac4de2f0169f5b8d1101b646 \
+HF_TOKEN=workflow-private-token \
     "$YVEX_BIN" model pull hf://deepseek-ai/DeepSeek-V4-Flash-DSpark \
     --format safetensors --name dry-run-dspark --family deepseek \
     --models-root "$MODELS_ROOT" --dry-run >"$ROOT/deepseek-pull-dry-run.out"
 contains "$ROOT/deepseek-pull-dry-run.out" 'status: model-download-dry-run'
-contains "$ROOT/deepseek-pull-dry-run.out" 'model-download: plan target=dry-run-dspark'
-contains "$ROOT/deepseek-pull-dry-run.out" 'stage: download planned (dry-run)'
+contains "$ROOT/deepseek-pull-dry-run.out" 'target: dry-run-dspark'
+contains "$ROOT/deepseek-pull-dry-run.out" 'SOURCE  planned'
 ! grep 'fake-hf: dry-run' "$ROOT/deepseek-pull-dry-run.out" >/dev/null
 ! grep 'model-download: start' "$ROOT/deepseek-pull-dry-run.out" >/dev/null
 ! grep 'stage: download running' "$ROOT/deepseek-pull-dry-run.out" >/dev/null
@@ -532,11 +535,16 @@ test ! -e "$MODELS_ROOT/evidence/build/acquisition/dry-run-dspark.download.stdou
 test ! -e "$MODELS_ROOT/evidence/build/acquisition/dry-run-dspark.download.stderr.log"
 YVEX_FAKE_HF_AUTH=1 \
 YVEX_FAKE_HF_RESOLVED_SHA=62af8fffb2f7030cac4de2f0169f5b8d1101b646 \
+HF_TOKEN=workflow-private-token \
     "$YVEX_BIN" model pull hf://deepseek-ai/DeepSeek-V4-Flash-DSpark \
     --format safetensors --name dry-run-dspark --family deepseek \
     --models-root "$MODELS_ROOT" --dry-run --verbose \
     >"$ROOT/deepseek-pull-dry-run-verbose.out"
-contains "$ROOT/deepseek-pull-dry-run-verbose.out" 'fake-hf: dry-run'
+contains "$ROOT/deepseek-pull-dry-run-verbose.out" 'provider_exit_code: 0'
+contains "$ROOT/deepseek-pull-dry-run-verbose.out" 'boundary.source_download: dry-run'
+contains "$ROOT/deepseek-pull-dry-run-verbose.out" 'token_value_redacted: true'
+! grep 'workflow-private-token' "$ROOT/deepseek-pull-dry-run-verbose.out" >/dev/null
+! grep 'fake-hf: dry-run' "$ROOT/deepseek-pull-dry-run-verbose.out" >/dev/null
 YVEX_FAKE_HF_AUTH=1 \
 YVEX_FAKE_HF_RESOLVED_SHA=62af8fffb2f7030cac4de2f0169f5b8d1101b646 \
     "$YVEX_BIN" model pull hf://deepseek-ai/DeepSeek-V4-Flash-DSpark \
@@ -600,23 +608,16 @@ assert matches[0]["representation_count"] == 2
 PY
 "$YVEX_BIN" model list --all --models-root "$MODELS_ROOT" --registry "$REGISTRY" \
     >"$ROOT/models-all.out"
-test "$(grep -c 'MODEL.*workflow-demo' "$ROOT/models-all.out")" -eq 1
-python3 - "$ROOT/models-all.out" <<'PY'
-from pathlib import Path
-import re, sys
-records = Path(sys.argv[1]).read_text().split('\n\n')
-def field(item, label, value):
-    return bool(re.search(r'^\s*' + label + r'\s+' + re.escape(value) + '$', item, re.M))
-assert sum(field(item, 'ROLE', 'alternate') and field(item, 'FORMAT', 'gguf') for item in records) == 2
-assert sum(field(item, 'STATE', 'BLOCKED') and field(item, 'EXEC', 'not current') for item in records) == 2
-PY
+# --all changes visibility, not the list/detail boundary. Native JSON above
+# qualifies both representations and all three nonlaunchable profiles.
+test "$(grep -Ec '^workflow-demo[[:space:]]+BLOCKED' "$ROOT/models-all.out")" -eq 1
 "$YVEX_BIN" model show workflow-demo --models-root "$MODELS_ROOT" \
     --registry "$REGISTRY" >"$ROOT/workflow-show.out"
-contains "$ROOT/workflow-show.out" 'State: BLOCKED'
-contains "$ROOT/workflow-show.out" 'Execution: not current'
+contains "$ROOT/workflow-show.out" 'BLOCKED'
+contains "$ROOT/workflow-show.out" 'not current'
 contains "$ROOT/workflow-show.out" 'FP16'
 contains "$ROOT/workflow-show.out" 'FP32'
-contains "$ROOT/workflow-show.out" 'not launchable; run `yvex model prepare MODEL`'
+contains "$ROOT/workflow-show.out" 'not launchable'
 ! grep -F 'DEPLOYS' "$ROOT/workflow-show.out" >/dev/null
 
 expect_rc 3 "$YVEX_BIN" model prepare workflow-demo --models-root "$MODELS_ROOT" \
@@ -686,7 +687,7 @@ contains "$ROOT/unknown-selector.err" 'not found'
     --execution-strategy target-only --ctx 1024 >/dev/null
 expect_rc 2 "$YVEX_BIN" model load v4-flash-dspark \
     >"$ROOT/ambiguous-selector.out" 2>"$ROOT/ambiguous-selector.err"
-contains "$ROOT/ambiguous-selector.err" 'ambiguous; use the exact identity'
+contains "$ROOT/ambiguous-selector.err" 'ambiguous model; use an exact identity'
 expect_rc 1 "$YVEX_BIN" model load family:deepseek4/model:v4-flash \
     >"$ROOT/exact-selector.out" 2>"$ROOT/exact-selector.err"
 contains "$ROOT/exact-selector.err" 'model is not launchable: v4-flash'

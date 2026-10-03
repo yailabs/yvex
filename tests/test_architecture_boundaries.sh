@@ -2,6 +2,7 @@
 set -eu
 
 cd "$(dirname "$0")/.."
+native_build=${BUILD_DIR:-build}
 
 make_inputs=$(make --no-print-directory -s print-build-inputs)
 
@@ -634,7 +635,7 @@ family_neutral_sources=$(
         find src/runtime -maxdepth 1 -type f \( -name '*.c' -o -name '*.h' \)
         find src/backend -maxdepth 1 -type f \( -name '*.c' -o -name '*.h' \)
         find src/backend/cuda -maxdepth 1 -type f \( -name '*.c' -o -name '*.h' -o -name '*.cu' \)
-        printf '%s\n' src/artifact/materialize.c src/cli/commands/graph.c src/cli/input/graph.c
+        printf '%s\n' src/artifact/materialize.c src/cli/rust/pipeline.rs src/cli/rust/ffi/pipeline.rs
     } | LC_ALL=C sort -u
 )
 while IFS= read -r source; do
@@ -656,36 +657,38 @@ while IFS= read -r source; do
 done <<EOF
 $generic_cuda_sources
 EOF
-if rg -n "$cli_family_helper_pattern" src/cli/commands/graph.c; then
+if rg -n "$cli_family_helper_pattern" src/cli/rust/pipeline.rs src/cli/rust/ffi/pipeline.rs; then
     fail "common graph CLI bypasses typed runtime-family preparation facts"
 fi
 if rg -n -i "$cli_family_abi_pattern" \
-    src/cli/commands/graph.c src/cli/input/graph.c src/cli/input/private.h; then
+    src/cli/rust/pipeline.rs src/cli/rust/ffi/pipeline.rs src/cli/rust/build.rs; then
     fail "common graph CLI imports or names a concrete family ABI"
 fi
-if rg -n -i "$cli_family_representation_pattern" src/cli/render/model_target.c; then
+if rg -n -i "$cli_family_representation_pattern" src/cli/rust/target.rs; then
     fail "model-target rendering imports or names a concrete family ABI"
 fi
-if rg -n -i "$cli_family_representation_pattern" src/cli/commands/quant.c; then
+if rg -n -i "$cli_family_representation_pattern" src/cli/rust/quant.rs src/cli/rust/variant.rs; then
     fail "physical-variant CLI imports or names a concrete family ABI"
 fi
 if rg -n -i "$cli_family_representation_pattern" \
     src/model/target/report.c src/model/target/mapping_gate.c; then
     fail "model-target coordination imports or names a concrete family ABI"
 fi
-if rg -n "$cli_preparation_call_pattern" src/cli/commands/graph.c; then
+if rg -n "$cli_preparation_call_pattern" src/cli/rust/pipeline.rs src/cli/rust/ffi/pipeline.rs; then
     fail "common graph CLI directly constructs compiler preparation truth"
 fi
-if rg -n "$cli_runtime_lifecycle_pattern" src/cli/commands/graph.c; then
+if rg -n "$cli_runtime_lifecycle_pattern" src/cli/rust/pipeline.rs src/cli/rust/ffi/pipeline.rs; then
     fail "common graph CLI owns model-engine, session, or residency lifecycle"
 fi
 if rg -n -i "(families/|$generic_family_symbol_pattern)" \
     include/yvex/internal/compiler.h src/graph/component.c src/runtime/residency.c; then
     fail "generic component compilation or runtime owns concrete family semantics"
 fi
-rg -n 'yvex_runtime_component_api_get\(\)->plan_build' src/cli/commands/graph.c >/dev/null ||
+rg -n 'raw::yvex_runtime_component_api_get\(\)' src/cli/rust/ffi/media.rs >/dev/null ||
     fail "component CLI bypasses compiled family geometry"
-rg -n 'yvex_runtime_component_api_get\(\)->execute' src/cli/commands/graph.c >/dev/null ||
+rg -n 'api.plan_build.ok_or_else' src/cli/rust/ffi/media.rs >/dev/null ||
+    fail "component CLI bypasses compiled family geometry"
+rg -n 'api.execute.ok_or_else' src/cli/rust/ffi/media.rs >/dev/null ||
     fail "component CLI bypasses the generic runtime lifecycle"
 if rg -n '(audio|video)_vae_execute_artifact_cpu' \
     src/graph/families/minimax_h3.c include/yvex/internal/families/minimax_h3.h; then
@@ -715,7 +718,7 @@ fi
 if rg -n 'prepare_deepseek_runtime_binding|yvex_graph_family_preparation' src include; then
     fail "legacy family preparation authority survived compiler-adapter cutover"
 fi
-if rg -n "$family_preparation_leak_pattern" src/runtime src/cli/commands/graph.c; then
+if rg -n "$family_preparation_leak_pattern" src/runtime src/cli/rust/pipeline.rs src/cli/rust/ffi/pipeline.rs; then
     fail "family-specific cold preparation leaked into common runtime/CLI owners"
 fi
 if rg -n "$moe_family_registry_pattern" src include; then
@@ -895,7 +898,10 @@ rg -n 'yvex_runtime_binding_import_graph[[:space:]]*\(' src/runtime/core.c >/dev
     fail "runtime model-open no longer imports the sealed execution graph"
 rg -n 'binding_summary[.]physical_execution_identity' src/runtime/core.c >/dev/null ||
     fail "runtime model-open does not authenticate the imported physical plan"
-runtime_objects=$(find build/obj/src/runtime -type f -name '*.o' 2>/dev/null | LC_ALL=C sort)
+# Inspect registered production objects, not retired files from incremental builds.
+runtime_objects=$(awk -F '\t' -v root="$native_build/obj/" \
+    '$1 ~ /^src\/runtime\/.*\.c$/ { sub(/\.c$/, ".o", $1); print root $1 }' \
+    config/source_owners.tsv)
 [ -n "$runtime_objects" ] || fail "runtime object inventory is unavailable"
 runtime_planning_symbols=$(
     nm -u $runtime_objects | awk '{ print $NF }' |
@@ -940,7 +946,7 @@ fi
 if rg -n "$backend_digest_alias_pattern" src/runtime src/cli; then
     fail "deprecated output_digest acquired backend-specific semantics"
 fi
-if rg -n '"output_digest"' src/cli/render/graph.c; then
+if rg -n '"output_digest"' src/cli/rust/attention_projection.rs; then
     fail "deprecated output_digest remains exposed by the operator surface"
 fi
 if rg -w output_digest include/yvex/internal/runtime.h src/runtime/graph.c >/dev/null; then
@@ -949,18 +955,18 @@ fi
 
 # Typed attention facts remain at their renderer owner. A key may appear in
 # distinct report projections, but no historical .def catalog shadows them.
-attention_render_fields=$(sed -nE \
-    's/.*ATTENTION_(FIELD|TIMING|BENCHMARK_FIELD)\("([^"]+)".*/\2/p' \
-    src/cli/render/graph.c | wc -l)
-[ "$attention_render_fields" -gt 0 ] || fail "attention renderer has no typed fields"
+for field in execution_evidence_digest execution_identity runtime_binding_identity; do
+    rg -q "\"$field\"" src/cli/rust/attention_projection.rs ||
+        fail "typed attention projection lost $field"
+done
 
 # The command system has one reviewable source and one generated immutable
 # projection. No route table, slash catalog, or retired executable is a second
 # semantic authority.
 [ -f config/operator/registry.json ] || fail "canonical operator registry is missing"
 [ -f tools/generate_operator_registry.py ] || fail "operator registry generator is missing"
-[ -f build/generated/operator/registry.c ] || fail "generated operator descriptors are missing"
-[ -f build/obj/generated/operator/registry.o ] || fail "compiled operator descriptors are missing"
+[ -f "$native_build/generated/operator/registry.json" ] || fail "generated operator descriptors are missing"
+[ -f "$native_build/obj/generated/operator/registry.o" ] || fail "independent C descriptor projection is missing"
 [ ! -d src/cli/catalog ] || fail "orphan CLI catalogs remain"
 registry_sources=$(find config -type f -name '*registry*.json' -path '*/operator/*' | wc -l)
 [ "$registry_sources" -eq 1 ] || fail "operator command registry source count is not one"
@@ -974,11 +980,11 @@ fi
 if rg -n 'yvex-dev|yvex-openai|"eval"' config/operator/registry.json; then
     fail "operator registry exposes retired or unavailable products"
 fi
-if nm -u build/obj/generated/operator/registry.o | grep . >/dev/null; then
+if nm -u "$native_build/obj/generated/operator/registry.o" | grep . >/dev/null; then
     fail "generated operator descriptors depend on executable behavior"
 fi
 if rg -n 'yvex_(artifact|backend|generation|graph|protocol|runtime|server)_|malloc\(|fopen\(' \
-    build/generated/operator/registry.c; then
+    "$native_build/generated/operator/registry.c"; then
     fail "generated operator descriptors contain domain logic or resource behavior"
 fi
 
@@ -1098,10 +1104,10 @@ for product in "${YVEX_LIB:-build/lib/libyvex.a}" "${YVEX_BIN:-./yvex}"; do
     fi
 done
 
-# The unified ELF may contain offline engine commands, but runtime-facing dispatch
-# remains one protocol-only object lane and the product retains one process entrypoint.
-client_lane=${YVEX_CLIENT_LANE_OBJ:-build/obj/src/cli/io/client.o}
-[ -f "$client_lane" ] || fail "runtime-client lane object is missing: $client_lane"
+# Runtime-facing shell requests use the typed native protocol client, not an
+# engine. Offline engineering projections are separate owners in the same product.
+client_lane="$native_build/obj/src/server/transport.o"
+[ -f "$client_lane" ] || fail "typed native transport owner is missing: $client_lane"
 if nm -u "$client_lane" | rg \
     'yvex_(model_engine_open|artifact_materialize|runtime_transformer|runtime_generation_operator_execute|backend_cuda)'; then
     fail "runtime-client lane gained an engine dependency"
@@ -1112,8 +1118,11 @@ main_symbol=main
 if test "$(uname -s)" = Darwin; then main_symbol=_main; fi
 main_count=$(nm "$product" | awk -v entry="$main_symbol" '$NF == entry { count++ } END { print count + 0 }')
 [ "$main_count" -eq 1 ] || fail "role product does not own exactly one main: $product"
-nm "$product" | rg 'yvex_cli_server_dispatch' >/dev/null ||
+nm "$product" | rg 'yvex_server_serve' >/dev/null ||
     fail "yvex does not contain its foreground server entrypoint"
+if nm "$product" | rg 'yvex_cli_'; then
+    fail "superseded C product shell remains in the executable"
+fi
 [ ! -e ./yvexd ] || fail "retired hidden server executable remains"
 [ ! -d src/gateway/openai ] || fail "retired standalone OpenAI source owner remains"
 if rg -n '(^|[[:space:]])int[[:space:]]+main[[:space:]]*\(' src/server/openai; then

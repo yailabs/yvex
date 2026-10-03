@@ -10,9 +10,53 @@ import pathlib
 import re
 import sys
 
-regex = sys.argv[1] == "--regex"
-args = sys.argv[2:] if regex else sys.argv[1:]
+def report_fields(path):
+    """Decode the test presentation oracle, never an operator/machine API."""
+    fields = {}
+    name = None
+    column = 0
+    for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines():
+        if name is not None and column and line.startswith(' ' * column) and line.strip():
+            fields[name] += line[column:]
+            continue
+        match = re.fullmatch(r"[ \t]*([a-z][a-z0-9_.-]*)(?:[ \t]*:[ \t]*|[ \t]{2,})(.*)", line)
+        name = match[1] if match else None
+        if name is not None:
+            assert name not in fields, (path, 'duplicate field', name)
+            fields[name] = match[2]
+            column = match.start(2)
+    return fields
+
+if sys.argv[1] == '--same-fields':
+    expected = report_fields(sys.argv[2])
+    observed = report_fields(sys.argv[3])
+    assert expected, ('empty presentation oracle', sys.argv[2])
+    assert expected == observed, (sys.argv[2:], expected, observed)
+    raise SystemExit(0)
+
+if sys.argv[1] == '--mapping':
+    fields = report_fields(sys.argv[2])
+    native, canonical = sys.argv[3:5]
+    prefixes = [key.removesuffix('.native_name') for key, value in fields.items()
+                if key.endswith('.native_name') and value == native]
+    assert len(prefixes) == 1, (sys.argv[2], native, 'mapping absent or ambiguous')
+    assert fields.get(prefixes[0] + '.canonical_name') == canonical, (native, canonical, fields)
+    raise SystemExit(0)
+
+arguments = sys.argv[1:]
+record = None
+if arguments[0] == '--record':
+    record, arguments = arguments[1], arguments[2:]
+regex = arguments[0] == "--regex"
+args = arguments[1:] if regex else arguments
 content = pathlib.Path(args[0]).read_text(encoding="utf-8")
+if record is not None:
+    # Scoped record assertions preserve identity/value association after a
+    # deliberate row-to-record presentation migration.
+    blocks = re.split(r'(?m)^(?=ARTIFACT  )', content)
+    matches = [block for block in blocks if block and block.splitlines()[0] == 'ARTIFACT  ' + record]
+    assert len(matches) == 1, (args[0], record, 'record absent or ambiguous')
+    content = matches[0]
 wanted = args[1]
 if (re.search(wanted, content) if regex else wanted in content):
     raise SystemExit(0)

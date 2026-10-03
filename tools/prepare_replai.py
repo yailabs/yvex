@@ -29,6 +29,61 @@ def command(argv, **kwargs):
     return subprocess.check_output(argv, text=True, **kwargs).strip()
 
 
+def prepare_rust_source(destination):
+    """Realize the same authenticated pin for Cargo without building the C adapter.
+
+    Cargo's path dependency is a generated external source workspace. There is
+    no second authored revision, floating dependency or sibling checkout.
+    Every reuse checks the exact file inventory, not just an old receipt.
+    """
+    pin = json.loads(PIN.read_text())
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    receipt_path = destination.parent / (destination.name + '.json')
+    with (destination.parent / (destination.name + '.lock')).open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if destination.is_symlink():
+            raise RuntimeError('REPLAI Rust source must not be a symlink')
+        if destination.exists():
+            if not receipt_path.is_file():
+                raise RuntimeError('REPLAI Rust source exists without an authenticated receipt')
+            receipt = json.loads(receipt_path.read_text())
+            if receipt.get('pin') != pin:
+                raise RuntimeError('REPLAI Rust source has an incompatible pin')
+            actual = {}
+            for path in sorted(destination.rglob('*')):
+                if path.is_symlink():
+                    raise RuntimeError('REPLAI Rust source contains a symlink')
+                if path.is_file():
+                    actual[path.relative_to(destination).as_posix()] = digest(path)
+            if actual != receipt.get('sha256'):
+                raise RuntimeError('REPLAI Rust source integrity failure')
+            return
+        if receipt_path.exists():
+            raise RuntimeError('REPLAI Rust receipt exists without its source')
+        with tempfile.TemporaryDirectory(prefix='replai-rust-', dir=destination.parent) as temp:
+            work = Path(temp)
+            archive = work / 'source.tar.gz'
+            url = f"https://codeload.github.com/mothx9/replai/tar.gz/{pin['revision']}"
+            with urllib.request.urlopen(url, timeout=60) as incoming, archive.open('wb') as output:
+                shutil.copyfileobj(incoming, output)
+            if digest(archive) != pin['archive_sha256']:
+                raise RuntimeError('REPLAI Rust source archive checksum mismatch')
+            with tarfile.open(archive) as bundle:
+                bundle.extractall(work, filter='data')
+            source = work / ('replai-' + pin['revision'])
+            files = {}
+            for path in sorted(source.rglob('*')):
+                if path.is_symlink():
+                    raise RuntimeError('REPLAI Rust archive contains a symlink')
+                if path.is_file():
+                    files[path.relative_to(source).as_posix()] = digest(path)
+            record = work / 'receipt.json'
+            record.write_text(json.dumps({'pin': pin, 'sha256': files}, indent=2) + '\n')
+            # Both objects remain under the lock. A crash in between fails closed.
+            source.rename(destination)
+            record.replace(receipt_path)
+
+
 def prepare(prefix, source_override):
     pin = json.loads(PIN.read_text())
     target = {'system': platform.system(), 'machine': platform.machine()}
@@ -102,10 +157,18 @@ def prepare(prefix, source_override):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--prefix', required=True, type=Path)
+    parser.add_argument('--prefix', type=Path)
     parser.add_argument('--source', type=Path)
+    parser.add_argument('--rust-source', type=Path)
     args = parser.parse_args()
     try:
-        prepare(args.prefix.resolve(), args.source)
+        if bool(args.prefix) == bool(args.rust_source):
+            raise RuntimeError('select exactly one of --prefix and --rust-source')
+        if args.rust_source:
+            if args.source:
+                raise RuntimeError('Rust source realization requires the authenticated archive')
+            prepare_rust_source(args.rust_source.absolute())
+        else:
+            prepare(args.prefix.resolve(), args.source)
     except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
         raise SystemExit(f'REPLAI dependency: {error}') from error

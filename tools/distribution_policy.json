@@ -5,10 +5,10 @@
   "first_party_terms": "MIT",
   "profiles": {
     "product": {
-      "build_inputs": ["Makefile", "config/make/config.mk", "config/make/rules.mk", "config/make/qa.mk", "config/make/docs.mk", "config/make/distribution.mk", "config/package_manifest.tsv", "config/replai.json", "tools/prepare_replai.py", "LICENSE", "NOTICE.md"],
-      "cargo_manifests": [],
+      "build_inputs": ["Makefile", "config/make/config.mk", "config/make/rules.mk", "config/make/qa.mk", "config/make/docs.mk", "config/make/distribution.mk", "config/package_manifest.tsv", "config/replai.json", "tools/prepare_replai.py", "Cargo.toml", "Cargo.lock", "src/cli/rust/build.rs", "LICENSE", "NOTICE.md"],
+      "cargo_manifests": ["Cargo.toml"],
       "unresolved": [
-        "The pinned REPLAI build receipt lacks its complete compiled dependency/toolchain legal closure.",
+        "The exact Rust-shell/Cargo/native compiled distribution closure requires artifact-bound notices; the authenticated REPLAI source receipt alone is not a binary legal closure.",
         "The exact package's native and compiler-generated inputs need artifact-bound membership and redistribution classification."
       ]
     }

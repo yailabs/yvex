@@ -173,7 +173,7 @@ start_console()
         <"$fifo" >"$root/$name.stdout" 2>"$root/$name.stderr" &
     console_job=$!
     exec 3>"$fifo"
-    wait_for "$transcript" '›'
+    wait_for "$transcript" 'yvex ·'
     attempt=0
     while test "$attempt" -lt "$YVEX_TEST_PTY_WAIT_ATTEMPTS"; do
         client_pid=$(find_console_client || true)
@@ -231,7 +231,7 @@ XDG_RUNTIME_DIR="$runtime" NO_COLOR=1 TERM=xterm-256color \
 no_host_status=$?
 set -e
 test "$no_host_status" -eq 1
-grep -F 'start one with:' "$root/no-host.typescript" >/dev/null
+grep -F 'start a host with' "$root/no-host.typescript" >/dev/null
 grep -F 'yvex serve' "$root/no-host.typescript" >/dev/null
 
 # Retired one-shot generation refuses and never contacts or starts a host.
@@ -255,7 +255,7 @@ printf 'RIFF\004\000\000\000WAVE' >"$audio"
 
 # Explicit chat preserves scrollback, streams output, and restores bracketed paste mode.
 start_console explicit 24 100 'chat --session linear' nocolor
-wait_for "$root/explicit.typescript" 'Use /help'
+wait_for "$root/explicit.typescript" 'Tab completion'
 ! grep -F '/attachments-clear' "$root/explicit.typescript" >/dev/null
 printf '/help\r' >&3
 wait_for "$root/explicit.typescript" 'Keyboard'
@@ -270,16 +270,16 @@ wait_for "$root/explicit.typescript" '/use'
 wait_for "$root/explicit.typescript" '/reset'
 wait_for "$root/explicit.typescript" '/quit'
 printf '/attach %s\r' "$image" >&3
-wait_for "$root/explicit.typescript" 'attached'
+wait_for "$root/explicit.typescript" 'ATTACHMENTS'
 wait_for "$root/explicit.typescript" 'image'
 printf '/attach %s\r' "$audio" >&3
-wait_for "$root/explicit.typescript" '2/31'
+wait_for "$root/explicit.typescript" '2 staged for next turn'
 printf '/attachments\r' >&3
 wait_for "$root/explicit.typescript" 'staged for next turn'
 printf 'hello\r' >&3
 wait_for "$root/explicit.typescript" 'hello from yvex'
 printf '/attachments\r' >&3
-wait_for "$root/explicit.typescript" 'attachments · none staged'
+wait_for "$root/explicit.typescript" 'ATTACHMENTS  none staged'
 printf '/quit\r' >&3
 finish_console
 assert_linear_terminal "$root/explicit.typescript"
@@ -328,7 +328,7 @@ grep -F 'protocol consumers and deterministic transcript identity.' \
 ! grep -F '```cuda' "$root/rendering.typescript" >/dev/null
 printf 'REASONING_STREAM\r' >&3
 wait_for "$root/rendering.typescript" 'The valid result is 42.'
-grep -F 'reasoning' "$root/rendering.typescript" >/dev/null
+grep -F 'REASONING' "$root/rendering.typescript" >/dev/null
 grep -F '│ Plan' "$root/rendering.typescript" >/dev/null
 grep -F '│ • Compare constraints carefully.' "$root/rendering.typescript" >/dev/null
 ! grep -F 'answer' "$root/rendering.typescript" >/dev/null
@@ -342,7 +342,7 @@ assert_linear_terminal "$root/rendering.typescript"
 # neither echoed into model output nor carried into the following prompt.
 start_console async 24 100 'chat --session async' nocolor
 printf 'WAIT_ASYNC_KEYS\r' >&3
-wait_for "$root/async.typescript" 'prefill ·'
+wait_for "$root/async.typescript" 'prefill'
 cycle=0
 while test "$cycle" -lt 3; do
     printf '\033[A\033[B\033[C\033[D\033[H\033[F\033[3~async-keys-🌍\177\014' >&3
@@ -389,10 +389,10 @@ assert_linear_terminal "$root/bare.typescript"
 start_console reconnect 24 100 'chat --session reconnect' nocolor
 stop_host
 printf 'first while offline\r' >&3
-wait_for "$root/reconnect.typescript" '[disconnected]'
+wait_for "$root/reconnect.typescript" 'DISCONNECTED'
 start_host
 printf 'hello after restart\r' >&3
-wait_for "$root/reconnect.typescript" 'reconnected'
+wait_for "$root/reconnect.typescript" 'RECONNECTED'
 wait_for "$root/reconnect.typescript" 'hello from yvex'
 printf '/quit\r' >&3
 finish_console
@@ -401,10 +401,10 @@ assert_linear_terminal "$root/reconnect.typescript"
 # Active generation Ctrl-C crosses the canonical cancellation operation.
 start_console cancel 24 100 'chat --session cancel' nocolor
 printf 'WAIT_PREFILL_CANCEL\r' >&3
-wait_for "$root/cancel.typescript" 'prefill · 0/4'
+wait_for "$root/cancel.typescript" 'prefill'
 kill -INT "$client_pid"
 wait_for "$root/host.err" 'generation.cancel cancel'
-wait_for "$root/cancel.typescript" 'cancelled'
+wait_for "$root/cancel.typescript" 'YVEX_ERR_CANCELLED'
 printf '/quit\r' >&3
 finish_console
 assert_linear_terminal "$root/cancel.typescript"

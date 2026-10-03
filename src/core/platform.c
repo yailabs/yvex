@@ -2,6 +2,7 @@
 #include <yvex/internal/platform.h>
 
 #include <errno.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdint.h>
@@ -20,6 +21,106 @@
 #else
 #include <sys/syscall.h>
 #endif
+
+static int platform_argument_matches(const char *bytes, size_t length, const char *argument)
+{
+    size_t cursor = 0u, wanted = strlen(argument);
+    while (cursor < length) {
+        const char *ending = memchr(bytes + cursor, '\0', length - cursor);
+        size_t count;
+        if (!ending) return -1;
+        count = (size_t)(ending - bytes - cursor);
+        if (count == wanted && !memcmp(bytes + cursor, argument, wanted)) return 1;
+        cursor += count + 1u;
+    }
+    return 0;
+}
+
+int yvex_platform_process_argument_count(const char *argument, unsigned long long *out)
+{
+    const size_t capacity = 256u * 1024u;
+    unsigned long long matched = 0ull;
+    char *bytes;
+    int rc = 0;
+    if (!argument || !argument[0] || !out) return -1;
+    bytes = malloc(capacity);
+    if (!bytes) return -1;
+#ifdef __APPLE__
+    {
+        int total = proc_listallpids(NULL, 0), count, index;
+        pid_t *pids;
+        if (total <= 0 || total > 1000000) { free(bytes); return -1; }
+        total += 256;
+        pids = calloc((size_t)total, sizeof(*pids));
+        if (!pids) { free(bytes); return -1; }
+        count = proc_listallpids(pids, total * (int)sizeof(*pids));
+        if (count <= 0 || count >= total) rc = -1;
+        for (index = 0; rc == 0 && index < count; ++index) {
+            struct proc_bsdinfo info;
+            int mib[3] = {CTL_KERN, KERN_PROCARGS2, pids[index]}, argc, item, match;
+            size_t length = capacity, cursor = sizeof(argc), end;
+            if (pids[index] <= 0 || pids[index] == getpid()) continue;
+            if (proc_pidinfo(pids[index], PROC_PIDTBSDINFO, 0, &info, sizeof(info)) != sizeof(info)) continue;
+            if (info.pbi_uid != geteuid()) continue;
+            if (sysctl(mib, 3, bytes, &length, NULL, 0) != 0) {
+                if (errno != ESRCH) rc = -1;
+                continue;
+            }
+            if (length <= sizeof(argc)) { rc = -1; break; }
+            memcpy(&argc, bytes, sizeof(argc));
+            if (argc <= 0 || argc > 65536) { rc = -1; break; }
+            while (cursor < length && bytes[cursor]) ++cursor;
+            while (cursor < length && !bytes[cursor]) ++cursor;
+            end = cursor;
+            for (item = 0; item < argc; ++item) {
+                const char *ending = memchr(bytes + end, '\0', length - end);
+                if (!ending) { rc = -1; break; }
+                end = (size_t)(ending - bytes) + 1u;
+            }
+            if (rc) break;
+            match = platform_argument_matches(bytes + cursor, end - cursor, argument);
+            if (match < 0) rc = -1;
+            else matched += (unsigned int)match;
+        }
+        free(pids);
+    }
+#else
+    {
+        DIR *directory = opendir("/proc");
+        struct dirent *entry;
+        if (!directory) { free(bytes); return -1; }
+        for (;;) {
+            char path[128], *ending;
+            struct stat status;
+            long pid;
+            int descriptor, match;
+            ssize_t length;
+            errno = 0;
+            entry = readdir(directory);
+            if (!entry) { if (errno) rc = -1; break; }
+            if (entry->d_name[0] < '0' || entry->d_name[0] > '9') continue;
+            pid = strtol(entry->d_name, &ending, 10);
+            if (*ending || pid <= 0 || pid == (long)getpid()) continue;
+            if (snprintf(path, sizeof(path), "/proc/%ld", pid) >= (int)sizeof(path)) { rc = -1; break; }
+            if (stat(path, &status) != 0) { if (errno == ENOENT) continue; rc = -1; break; }
+            if (status.st_uid != geteuid()) continue;
+            if (snprintf(path, sizeof(path), "/proc/%ld/cmdline", pid) >= (int)sizeof(path)) { rc = -1; break; }
+            descriptor = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+            if (descriptor < 0) { if (errno == ENOENT) continue; rc = -1; break; }
+            do { length = read(descriptor, bytes, capacity); } while (length < 0 && errno == EINTR);
+            close(descriptor);
+            if (length < 0 || (size_t)length == capacity) { rc = -1; break; }
+            match = platform_argument_matches(bytes, (size_t)length, argument);
+            if (match < 0) { rc = -1; break; }
+            matched += (unsigned int)match;
+        }
+        closedir(directory);
+    }
+#endif
+    free(bytes);
+    if (rc == 0) *out = matched;
+    return rc;
+}
 
 struct timespec yvex_platform_stat_mtime(const struct stat *status)
 {

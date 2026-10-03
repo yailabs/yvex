@@ -36,7 +36,7 @@ contains "$OUT_DIR/help.out" "--latent-width"
 
 run_code missing 2 "$YVEX_BIN" bench component video-vae
 contains "$OUT_DIR/missing.err" \
-    "requires target, artifact, backend, input file, latent geometry, and output path"
+    "--latent-frames is required"
 
 run_code wrong_batch 2 "$YVEX_BIN" bench component video-vae \
     --target minimax-h3-fl2va --artifact /tmp/missing.gguf --backend cpu \

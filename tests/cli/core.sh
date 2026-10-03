@@ -47,7 +47,7 @@ omits() {
 
 run_ok no_args "$YVEX_BIN"
 contains "$OUT_DIR/no_args.out" "YVEX native model execution"
-contains "$OUT_DIR/no_args.out" "RUNTIME"
+contains "$OUT_DIR/no_args.out" "COMMAND"
 contains "$OUT_DIR/no_args.out" "serve"
 contains "$OUT_DIR/no_args.out" "chat"
 contains "$OUT_DIR/no_args.out" "model"
@@ -59,12 +59,13 @@ contains "$OUT_DIR/chat_non_tty.err" "configured provider API"
 
 run_ok help "$YVEX_BIN" --help
 contains "$OUT_DIR/help.out" "YVEX native model execution"
-contains "$OUT_DIR/help.out" "USE"
-contains "$OUT_DIR/help.out" "RUNTIME"
-contains "$OUT_DIR/help.out" "TOOLS"
-contains "$OUT_DIR/help.out" "META"
-contains "$OUT_DIR/help.out" "model search -> model pull -> model prepare -> serve -> model load -> chat"
-contains "$OUT_DIR/help.out" 'Use `yvex help model`'
+contains "$OUT_DIR/help.out" "COMMAND"
+contains "$OUT_DIR/help.out" "PURPOSE"
+contains "$OUT_DIR/help.out" "LIFECYCLE"
+contains "$OUT_DIR/help.out" "READ"
+contains "$OUT_DIR/help.out" "model search → model pull → model prepare"
+contains "$OUT_DIR/help.out" "serve → model load → chat"
+contains "$OUT_DIR/help.out" 'Use yvex help COMMAND'
 contains "$OUT_DIR/help.out" "yvex host status / memory / logs"
 omits "$OUT_DIR/help.out" "yvex run"
 omits "$OUT_DIR/help.out" "yvex server"
@@ -97,14 +98,18 @@ contains "$OUT_DIR/tokenize.out" "ids: 3 4 5"
 run_ok detokenize "$YVEX_BIN" inspect tokenizer decode "$FIXTURE" --ids 3,4,5
 contains "$OUT_DIR/detokenize.out" "text: \"hello world\""
 run_ok prompt "$YVEX_BIN" inspect tokenizer prompt "$FIXTURE" --user "hello world"
-contains "$OUT_DIR/prompt.out" "status: rendered"
+contains "$OUT_DIR/prompt.out" "PROMPT  source-authored"
+contains "$OUT_DIR/prompt.out" "hello world"
+contains "$OUT_DIR/prompt.out" "generation_ready: false"
 
 run_ok materialize "$YVEX_BIN" artifact materialize --model "$FIXTURE" --backend cpu
 contains "$OUT_DIR/materialize.out" "status: weights-materialized"
 contains "$OUT_DIR/materialize.out" "execution_ready: false"
 
 run_ok backend "$YVEX_BIN" inspect backend cpu
-contains "$OUT_DIR/backend.out" "status: backend-capabilities"
+contains "$OUT_DIR/backend.out" "BACKEND  cpu · ready"
+contains "$OUT_DIR/backend.out" "tensor_alloc"
+contains "$OUT_DIR/backend.out" "Primitive capability is not model execution qualification."
 run_ok paths "$YVEX_BIN" inspect paths
 contains "$OUT_DIR/paths.out" "models_root:"
 
@@ -118,7 +123,7 @@ contains "$OUT_DIR/retired_server.err" "yvex host"
 run_code unknown 2 "$YVEX_BIN" unknown
 contains "$OUT_DIR/unknown.err" "unknown command: unknown"
 run_code unknown_help 2 "$YVEX_BIN" help unknown
-contains "$OUT_DIR/unknown_help.err" "unknown help path unknown"
+contains "$OUT_DIR/unknown_help.err" "unknown help path: unknown"
 
 for retired in materialize quant-policy metadata tensor-map model-target fullmodel; do
     run_code "retired_$retired" 2 "$YVEX_BIN" "$retired"

@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 
-PRODUCTION_SUFFIXES = {".c", ".cu", ".h"}
+PRODUCTION_SUFFIXES = {".c", ".cu", ".h", ".rs"}
 MANIFEST_FIELDS = 9
 
 
@@ -78,16 +78,11 @@ def classify_production(rows: list[list[str]]) -> dict[str, list[str]]:
     classes: dict[str, list[str]] = {
         "OWNED_PRODUCTION_SRCS": [],
         "OWNED_PRODUCTION_HEADERS": [],
+        "RUST_SHELL_SRCS": [],
         "CORE_SRCS": [],
-        "YVEX_SRCS": [],
         "OPENAI_ADAPTER_SRCS": [],
         "CUDA_SRCS": [],
         "CUDA_CU_SRCS": [],
-        "CLI_COMMAND_SRCS": [],
-        "CLI_INPUT_SRCS": [],
-        "CLI_MODEL_ARTIFACT_SRCS": [],
-        "CLI_RENDER_SRCS": [],
-        "CLI_IO_SRCS": [],
     }
     for row in rows:
         path = row[0]
@@ -96,18 +91,12 @@ def classify_production(rows: list[list[str]]) -> dict[str, list[str]]:
             classes["OWNED_PRODUCTION_HEADERS"].append(path)
             continue
         classes["OWNED_PRODUCTION_SRCS"].append(path)
-        if path.startswith("src/cli/"):
-            classes["YVEX_SRCS"].append(path)
-            if path.startswith("src/cli/commands/"):
-                classes["CLI_COMMAND_SRCS"].append(path)
-            elif path.startswith("src/cli/input/"):
-                classes["CLI_INPUT_SRCS"].append(path)
-            elif path.startswith("src/cli/model_artifacts/"):
-                classes["CLI_MODEL_ARTIFACT_SRCS"].append(path)
-            elif path.startswith("src/cli/render/"):
-                classes["CLI_RENDER_SRCS"].append(path)
-            elif path.startswith("src/cli/io/") and not path.endswith("/client.c"):
-                classes["CLI_IO_SRCS"].append(path)
+        if suffix == ".rs":
+            if not path.startswith("src/cli/rust/"):
+                fail(f"Rust production is outside the product shell: {path}")
+            classes["RUST_SHELL_SRCS"].append(path)
+        elif path.startswith("src/cli/"):
+            fail(f"superseded C product-shell ownership returned: {path}")
         elif path.startswith("src/server/openai/"):
             classes["OPENAI_ADAPTER_SRCS"].append(path)
         elif path.startswith("src/backend/cuda/") and suffix == ".cu":
@@ -119,10 +108,10 @@ def classify_production(rows: list[list[str]]) -> dict[str, list[str]]:
 
     product = (
         classes["CORE_SRCS"]
-        + classes["YVEX_SRCS"]
         + classes["OPENAI_ADAPTER_SRCS"]
         + classes["CUDA_SRCS"]
         + classes["CUDA_CU_SRCS"]
+        + classes["RUST_SHELL_SRCS"]
     )
     if sorted(product) != classes["OWNED_PRODUCTION_SRCS"] or len(product) != len(set(product)):
         fail("production classification is incomplete or overlapping")

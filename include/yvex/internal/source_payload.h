@@ -560,7 +560,10 @@ typedef struct {
     yvex_source_report_semantics semantics;
     int exit_code;
 } yvex_source_report;
-const yvex_source_family_profile *yvex_source_report_find_profile(const char *family);
+/* Resolve family and target selection from canonical catalog/path provenance.
+ * Borrowed request strings remain caller-owned throughout report construction. */
+int yvex_source_report_request_prepare(yvex_source_report_request *request,
+                                        yvex_error *err);
 int yvex_source_report_build(const yvex_source_report_request *request,
                              yvex_source_report *report,
                              yvex_error *err);

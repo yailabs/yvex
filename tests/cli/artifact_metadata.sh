@@ -134,14 +134,21 @@ mkdir -p "$OUT_DIR"
   --registry "$REG" \
   --support-level selected-tensor-materialized \
   >"$OUT_DIR/add.out" 2>"$OUT_DIR/add.err"
-contains "$OUT_DIR/add.out" "registered_architecture: deepseek"
-contains "$OUT_DIR/add.out" "registered_tensor_count: 1"
-contains "$OUT_DIR/add.out" "registered_known_tensor_bytes: 64"
-contains "$OUT_DIR/add.out" "registered_primary_tensor: token_embd.weight"
-contains "$OUT_DIR/add.out" "registered_primary_role: token_embedding"
-contains "$OUT_DIR/add.out" "registered_primary_dtype: F16"
-contains "$OUT_DIR/add.out" "registered_primary_dims: [4,8]"
-contains "$OUT_DIR/add.out" "registered_selected_embedding_ready: true"
+contains "$OUT_DIR/add.out" "identity_status: recorded"
+# Creation is a compact receipt. The persisted native metadata, rather than
+# default human output density, remains the exact registration oracle.
+python3 - "$REG" <<'PY'
+import json, sys
+entry = json.load(open(sys.argv[1]))["models"][0]
+assert entry["architecture"] == "deepseek"
+assert entry["tensor_count"] == 1
+assert entry["known_tensor_bytes"] == 64
+assert entry["primary_tensor_name"] == "token_embd.weight"
+assert entry["primary_tensor_role"] == "token_embedding"
+assert entry["primary_tensor_dtype"] == "F16"
+assert entry["primary_tensor_dims"] == "[4,8]"
+assert entry["selected_embedding_ready"] is True
+PY
 
 "$YVEX_BIN" profile verify "$ALIAS" --registry "$REG" --audit \
   >"$OUT_DIR/verify-pass.out" 2>"$OUT_DIR/verify-pass.err"
@@ -193,8 +200,12 @@ contains "$OUT_DIR/verify-arch.out" "status: models-metadata-drift"
   --registry "$READY_REG" \
   --support-level selected-tensor-materialized \
   >"$OUT_DIR/add-f32.out" 2>"$OUT_DIR/add-f32.err"
-contains "$OUT_DIR/add-f32.out" "registered_primary_dtype: F32"
-contains "$OUT_DIR/add-f32.out" "registered_selected_embedding_ready: false"
+python3 - "$READY_REG" <<'PY'
+import json, sys
+entry = json.load(open(sys.argv[1]))["models"][0]
+assert entry["primary_tensor_dtype"] == "F32"
+assert entry["selected_embedding_ready"] is False
+PY
 force_selected_embedding_ready "$READY_REG" "$READY_REG"
 "$YVEX_BIN" profile verify "$ALIAS" --registry "$READY_REG" --audit \
   >"$OUT_DIR/verify-readiness.out" 2>"$OUT_DIR/verify-readiness.err" && \
@@ -210,7 +221,9 @@ YVEX_MODELS_REGISTRY="$DTYPE_REG" "$YVEX_BIN" artifact materialize \
   >"$OUT_DIR/materialize-drift.out" 2>"$OUT_DIR/materialize-drift.err" && \
   fail "materialize metadata drift unexpectedly passed" || true
 contains "$OUT_DIR/materialize-drift.out" "metadata_status: fail"
-contains "$OUT_DIR/materialize-drift.out" "status: models-metadata-drift"
+contains "$OUT_DIR/materialize-drift.out" "status: materialization-integrity-fail"
+contains "$OUT_DIR/materialize-drift.out" "allocation_attempted: false"
+contains "$OUT_DIR/materialize-drift.out" "transfer_attempted: false"
 not_contains "$OUT_DIR/materialize-drift.out" "status: weights-materialized"
 
 "$YVEX_BIN" artifact verify "$MODEL" \

@@ -15,6 +15,14 @@ contains() {
     grep -F "$2" "$1" >/dev/null || fail "$1 missing: $2"
 }
 
+human_matches() {
+    python3 tests/support/human_field.py --regex "$1" "$2" || fail "$1 missing pattern: $2"
+}
+
+human_contains() {
+    python3 tests/support/human_field.py "$1" "$2" || fail "$1 missing: $2"
+}
+
 make -pn YVEX_CUDA_ARCH=auto CUDA_AUTO_ARCH=sm_121 >"$OUT_DIR/make-auto.out"
 contains "$OUT_DIR/make-auto.out" "CUDA_EFFECTIVE_ARCH := sm_121"
 make -pn YVEX_CUDA_ARCH=sm_90 CUDA_AUTO_ARCH=sm_121 >"$OUT_DIR/make-explicit.out"
@@ -49,34 +57,24 @@ rc=$?
 set -e
 
 if [ "$rc" -eq 5 ]; then
-    contains "$OUT_DIR/backend.out" "backend: cuda"
-    contains "$OUT_DIR/backend.out" "status: unsupported"
-    contains "$OUT_DIR/backend.out" "status: backend-unsupported"
+    contains "$OUT_DIR/backend.out" "BACKEND  cuda · unavailable"
+    human_matches "$OUT_DIR/backend.out" '(?m)^\s*reason\s+\S+'
     echo "cuda no-nvcc fail-closed: driver unavailable"
     exit 0
 fi
 [ "$rc" -eq 0 ] || fail "backend cuda returned $rc"
 
-contains "$OUT_DIR/backend.out" "status: context-ready"
-contains "$OUT_DIR/backend.out" "tensor_alloc: yes"
-contains "$OUT_DIR/backend.out" "tensor_read_write: yes"
-contains "$OUT_DIR/backend.out" "op_embed: no"
-contains "$OUT_DIR/backend.out" "op_rms_norm: no"
-contains "$OUT_DIR/backend.out" "op_rope: no"
-contains "$OUT_DIR/backend.out" "op_attention: no"
-contains "$OUT_DIR/backend.out" "op_matmul: no"
-contains "$OUT_DIR/backend.out" "op_mlp: no"
-contains "$OUT_DIR/backend.out" "context_available: yes"
-contains "$OUT_DIR/backend.out" "kernel_bundle: absent"
-contains "$OUT_DIR/backend.out" "kernel_bundle_reason: kernel-bundle-absent"
-contains "$OUT_DIR/backend.out" "kernel_bundle_native: no"
-contains "$OUT_DIR/backend.out" "kernel_bundle_architecture: unavailable"
-contains "$OUT_DIR/backend.out" "kernel_bundle_identity: unavailable"
-contains "$OUT_DIR/backend.out" "embed-f32-to-f32: unsupported (kernel-bundle-absent)"
-contains "$OUT_DIR/backend.out" "attention-noncausal-f32: unsupported (kernel-bundle-absent)"
-contains "$OUT_DIR/backend.out" "qtype-row-dot: unsupported (kernel-bundle-absent)"
-contains "$OUT_DIR/backend.out" "encoded-attention: unsupported (kernel-bundle-absent)"
-contains "$OUT_DIR/backend.out" "status: backend-capabilities"
+contains "$OUT_DIR/backend.out" "BACKEND  cuda · context-ready"
+human_contains "$OUT_DIR/backend.out" "tensor_alloc: supported"
+human_contains "$OUT_DIR/backend.out" "tensor_read_write: supported"
+for primitive in op_embed op_rms_norm op_rope op_attention op_matmul op_mlp; do
+    human_contains "$OUT_DIR/backend.out" "$primitive: unsupported"
+done
+contains "$OUT_DIR/backend.out" "CUDA  context available · bundle absent · unavailable · no executable image"
+contains "$OUT_DIR/backend.out" "BUNDLE  unavailable · kernel-bundle-absent"
+for variant in embed-f32-to-f32 attention-noncausal-f32 qtype-row-dot encoded-attention; do
+    human_matches "$OUT_DIR/backend.out" "(?m)^$variant\s+unsupported\s+kernel-bundle-absent$"
+done
 
 set +e
 "$YVEX_BIN" bench attention execute --target deepseek4-v4-flash-dspark --backend cuda \

@@ -145,6 +145,9 @@ int yvex_source_selection_identity(const char *const *includes, size_t include_c
                                     char out[YVEX_SHA256_HEX_CAP], yvex_error *err);
 int yvex_source_acquisition_lock(const char *models_root, const char *repository,
                                   const char *revision, int *descriptor, yvex_error *err);
+/* Cleanup/worker admission must refuse an occupied transfer, not wait for it. */
+int yvex_source_acquisition_try_lock(const char *models_root, const char *repository,
+                                      const char *revision, int *descriptor, yvex_error *err);
 typedef struct {
     unsigned long long logical_bytes, allocated_bytes;
     int changed, local;

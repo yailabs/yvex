@@ -878,19 +878,79 @@ static int tiny_generation_capacity_refusal(
     return rc;
 }
 
+static int tiny_operator_inputs(const char *artifact, const char *binding,
+                                 const char *prefix, yvex_error *err)
+{
+    yvex_model_engine *model = NULL;
+    yvex_model_engine_failure failure = {0};
+    yvex_model_engine_open_request request = {
+        .artifact_path = artifact, .runtime_binding_path = binding,
+        .target_id = "tiny-executable", .residency_backend = YVEX_BACKEND_KIND_CPU};
+    yvex_transformer_input_summary input = {
+        .schema_version = YVEX_TRANSFORMER_INPUT_SCHEMA_V1, .token_count = 3ull};
+    yvex_moe_input_summary moe_input = {
+        .schema_version = YVEX_MOE_INPUT_SCHEMA_V1, .token_count = 3ull, .layer_count = 1ull};
+    yvex_moe_input_layer_record layer = {0};
+    const yvex_model_engine_view *view;
+    const yvex_transformer_plan_summary *transformer;
+    const yvex_moe_plan_summary *moe;
+    const yvex_moe_layer_plan *moe_layer;
+    const unsigned int tokens[] = {1u, 2u, 3u};
+    float activations[192] = {0};
+    char token_path[YVEX_PATH_CAP], moe_path[YVEX_PATH_CAP];
+    int rc = yvex_model_engine_open(&model, &request, &failure, err);
+    if (rc != YVEX_OK) goto done;
+    view = yvex_model_engine_view_get(model);
+    transformer = view ? yvex_transformer_plan_summary_get(view->transformer) : NULL;
+    moe = view ? yvex_moe_plan_summary_get(view->moe) : NULL;
+    moe_layer = view ? yvex_moe_plan_layer_at(view->moe, 0ull) : NULL;
+    if (!transformer || !moe || !moe_layer || moe->layer_count != 1ull ||
+        moe_layer->expanded_width > 64ull ||
+        snprintf(token_path, sizeof(token_path), "%s-transformer", prefix) >= (int)sizeof(token_path) ||
+        snprintf(moe_path, sizeof(moe_path), "%s-moe", prefix) >= (int)sizeof(moe_path)) {
+        rc = YVEX_ERR_BOUNDS;
+        yvex_error_set(err, rc, "tiny.operator-input", "fixture geometry or output path is invalid");
+        goto done;
+    }
+    input.vocabulary_size = transformer->vocabulary_size;
+    memcpy(input.logical_model_identity, transformer->logical_model_identity, sizeof(input.logical_model_identity));
+    memcpy(input.runtime_numeric_identity, transformer->runtime_numeric_identity, sizeof(input.runtime_numeric_identity));
+    memcpy(input.runtime_descriptor_identity, transformer->runtime_descriptor_identity, sizeof(input.runtime_descriptor_identity));
+    memcpy(input.transformer_plan_identity, transformer->transformer_plan_identity, sizeof(input.transformer_plan_identity));
+    rc = yvex_transformer_input_seal(&input, tokens, err);
+    if (rc == YVEX_OK) rc = yvex_transformer_input_write(token_path, &input, tokens, err);
+    memcpy(moe_input.logical_model_identity, moe->logical_model_identity, sizeof(moe_input.logical_model_identity));
+    memcpy(moe_input.runtime_numeric_identity, moe->runtime_numeric_identity, sizeof(moe_input.runtime_numeric_identity));
+    memcpy(moe_input.runtime_descriptor_identity, moe->runtime_descriptor_identity, sizeof(moe_input.runtime_descriptor_identity));
+    memcpy(moe_input.moe_plan_identity, moe->moe_plan_identity, sizeof(moe_input.moe_plan_identity));
+    layer.layer_index = moe_layer->layer_index;
+    layer.width = layer.stride = moe_layer->expanded_width;
+    layer.payload_bytes = 3ull * layer.stride * sizeof(float);
+    moe_input.activation_payload_bytes = layer.payload_bytes;
+    moe_input.token_id_payload_bytes = sizeof(tokens);
+    memcpy(layer.layer_identity, moe_layer->layer_identity, sizeof(layer.layer_identity));
+    if (rc == YVEX_OK) rc = yvex_moe_input_seal(&moe_input, &layer, activations, tokens, err);
+    if (rc == YVEX_OK) rc = yvex_moe_input_write(moe_path, &moe_input, &layer, activations, tokens, err);
+done:
+    yvex_model_engine_close(&model);
+    return rc;
+}
+
 int main(int argc, char **argv)
 {
     yvex_runtime_binding_prepare_result result = {0};
     yvex_error err;
     int rc;
-    if (argc != 3) {
-        fprintf(stderr, "usage: %s ARTIFACT OUTPUT_DIRECTORY\n", argv[0]);
+    if (argc != 3 && argc != 4) {
+        fprintf(stderr, "usage: %s ARTIFACT OUTPUT_DIRECTORY [OPERATOR_INPUT_PREFIX]\n", argv[0]);
         return 2;
     }
     yvex_error_clear(&err);
     rc = tiny_compile(argv[1], argv[2], &result, &err);
     if (rc == YVEX_OK)
         rc = tiny_generation_capacity_refusal(argv[1], result.path, &err);
+    if (rc == YVEX_OK && argc == 4)
+        rc = tiny_operator_inputs(argv[1], result.path, argv[3], &err);
     if (rc != YVEX_OK) {
         fprintf(stderr, "tiny compile failed: %s: %s\n",
                 yvex_error_where(&err), yvex_error_message(&err));

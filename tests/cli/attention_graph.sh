@@ -108,12 +108,12 @@ expect_status 2 "$YVEX_BIN" inspect attention describe --target deepseek4-v4-fla
     --physical-variant-plan /tmp/missing.plan --quant-preset source-faithful \
     >"$OUT_DIR/variant-wrong-action.out" 2>"$OUT_DIR/variant-wrong-action.err"
 contains "$OUT_DIR/variant-wrong-action.err" \
-    "physical-variant options require bench attention prepare"
+    "source/physical-variant options require bench attention prepare"
 
 expect_status 2 "$YVEX_BIN" bench transformer generate \
     >"$OUT_DIR/generate-missing.out" 2>"$OUT_DIR/generate-missing.err"
 contains "$OUT_DIR/generate-missing.err" \
-    "bench transformer generate requires target, artifact, runtime binding, backend, prompt, and context capacity"
+    "generation requires exactly one text or user prompt; system requires user"
 
 expect_status 2 "$YVEX_BIN" bench transformer generate --target deepseek4-v4-flash-dspark \
     --artifact /tmp/missing.gguf --runtime-binding /tmp/missing.binding \
@@ -142,7 +142,7 @@ contains "$OUT_DIR/generate-refusal.err" "runtime binding open failed"
 expect_status 2 "$YVEX_BIN" bench transformer sample \
     >"$OUT_DIR/sample-missing.out" 2>"$OUT_DIR/sample-missing.err"
 contains "$OUT_DIR/sample-missing.err" \
-    "decode/logits/sample requires target, artifact, runtime binding, backend, token input, prefill split, and context capacity"
+    "--target is required"
 
 expect_status 2 "$YVEX_BIN" bench transformer sample --target deepseek4-v4-flash-dspark \
     --artifact /tmp/missing.gguf --runtime-binding /tmp/missing.binding \
@@ -173,7 +173,7 @@ contains "$OUT_DIR/sample-refusal.err" "runtime binding open failed"
 expect_status 2 "$YVEX_BIN" bench transformer logits \
     >"$OUT_DIR/logits-missing.out" 2>"$OUT_DIR/logits-missing.err"
 contains "$OUT_DIR/logits-missing.err" \
-    "decode/logits/sample requires target, artifact, runtime binding, backend, token input, prefill split, and context capacity"
+    "--target is required"
 
 expect_status 3 "$YVEX_BIN" bench transformer logits --target deepseek4-v4-flash-dspark \
     --artifact /tmp/missing.gguf --runtime-binding /tmp/missing.binding \
@@ -195,7 +195,7 @@ contains "$OUT_DIR/logits-refusal.err" "runtime binding open failed"
 expect_status 2 "$YVEX_BIN" bench transformer decode \
     >"$OUT_DIR/decode-missing.out" 2>"$OUT_DIR/decode-missing.err"
 contains "$OUT_DIR/decode-missing.err" \
-    "decode/logits/sample requires target, artifact, runtime binding, backend, token input, prefill split, and context capacity"
+    "--target is required"
 
 expect_status 3 "$YVEX_BIN" bench transformer decode --target deepseek4-v4-flash-dspark \
     --artifact /tmp/missing.gguf --runtime-binding /tmp/missing.binding \
@@ -235,7 +235,7 @@ contains "$OUT_DIR/decode-refusal-csv.err" "runtime binding open failed"
 expect_status 2 "$YVEX_BIN" bench transformer execute \
     >"$OUT_DIR/transformer-missing.out" 2>"$OUT_DIR/transformer-missing.err"
 contains "$OUT_DIR/transformer-missing.err" \
-    "requires target, artifact, runtime binding, backend, token input, chunk tokens, and context capacity"
+    "--target is required"
 
 expect_status 2 "$YVEX_BIN" bench transformer execute --target deepseek4-v4-flash-dspark \
     --artifact /tmp/missing.gguf --runtime-binding /tmp/missing.binding \
@@ -257,7 +257,7 @@ contains "$OUT_DIR/transformer-refusal.err" "runtime binding open failed"
 expect_status 2 "$YVEX_BIN" bench moe \
     >"$OUT_DIR/moe-missing-options.out" 2>"$OUT_DIR/moe-missing-options.err"
 contains "$OUT_DIR/moe-missing-options.err" \
-    "requires target, artifact, runtime binding, backend, and tensor-file input"
+    "requires --input tensor-file"
 
 expect_status 2 "$YVEX_BIN" bench moe --target deepseek4-v4-flash-dspark \
     --artifact /tmp/missing.gguf --runtime-binding /tmp/missing.binding \
@@ -287,19 +287,19 @@ contains "$OUT_DIR/moe-runtime-refusal.err" "runtime binding open failed"
 expect_status 2 "$YVEX_BIN" bench attention qualify \
     --target deepseek4-v4-flash-dspark \
     >"$OUT_DIR/qualify-backend.out" 2>"$OUT_DIR/qualify-backend.err"
-contains "$OUT_DIR/qualify-backend.err" "requires --backend cpu|cuda"
+contains "$OUT_DIR/qualify-backend.err" "requires exactly one backend or --compare-backends"
 
 expect_status 2 "$YVEX_BIN" bench attention benchmark compare \
     --baseline "$OUT_DIR/missing-baseline.yvex-benchmark" \
     >"$OUT_DIR/benchmark-compare-paths.out" 2>"$OUT_DIR/benchmark-compare-paths.err"
-contains "$OUT_DIR/benchmark-compare-paths.err" "requires --baseline FILE and --current FILE"
+contains "$OUT_DIR/benchmark-compare-paths.err" "--current is required"
 
 expect_status 2 "$YVEX_BIN" bench attention component \
     --target deepseek4-v4-flash-dspark --backend cpu \
     --max-regression-bps 0 \
     >"$OUT_DIR/benchmark-threshold-owner.out" 2>"$OUT_DIR/benchmark-threshold-owner.err"
 contains "$OUT_DIR/benchmark-threshold-owner.err" \
-    "regression thresholds require bench attention benchmark compare"
+    "regression thresholds require benchmark compare"
 
 expect_status 2 "$YVEX_BIN" graph attention \
     >"$OUT_DIR/missing-action.out" 2>"$OUT_DIR/missing-action.err"
@@ -311,27 +311,27 @@ contains "$OUT_DIR/unknown-action.err" "removed command: graph"
 
 expect_status 2 "$YVEX_BIN" bench attention execute --backend cpu \
     >"$OUT_DIR/missing-target.out" 2>"$OUT_DIR/missing-target.err"
-contains "$OUT_DIR/missing-target.err" "requires --target TARGET"
+contains "$OUT_DIR/missing-target.err" "--target is required"
 
 expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --compare-backends \
     >"$OUT_DIR/backend-conflict.out" 2>"$OUT_DIR/backend-conflict.err"
-contains "$OUT_DIR/backend-conflict.err" "cannot be combined with --backend"
+contains "$OUT_DIR/backend-conflict.err" "requires exactly one backend or --compare-backends"
 
 expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --probe fixture \
     >"$OUT_DIR/probe-refusal.out" 2>"$OUT_DIR/probe-refusal.err"
-contains "$OUT_DIR/probe-refusal.err" "unsupported attention probe: fixture"
+contains "$OUT_DIR/probe-refusal.err" "unsupported --probe: fixture"
 
 expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --scope reduced \
     >"$OUT_DIR/scope-refusal.out" 2>"$OUT_DIR/scope-refusal.err"
-contains "$OUT_DIR/scope-refusal.err" "unsupported attention scope: reduced"
+contains "$OUT_DIR/scope-refusal.err" "unsupported attention scope"
 
 expect_status 2 "$YVEX_BIN" inspect attention capabilities \
     --target deepseek4-v4-flash-dspark --output json \
     >"$OUT_DIR/capability-backend.out" 2>"$OUT_DIR/capability-backend.err"
-contains "$OUT_DIR/capability-backend.err" "requires --backend cpu|cuda"
+contains "$OUT_DIR/capability-backend.err" "attention inspection requires --backend"
 
 expect_status 2 "$YVEX_BIN" inspect attention plan \
     --target deepseek4-v4-flash-dspark --backend metal --output json \
@@ -341,17 +341,17 @@ contains "$OUT_DIR/plan-backend.err" "invalid value for --backend: metal"
 expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --phase generation \
     >"$OUT_DIR/phase-refusal.out" 2>"$OUT_DIR/phase-refusal.err"
-contains "$OUT_DIR/phase-refusal.err" "unsupported attention phase: generation"
+contains "$OUT_DIR/phase-refusal.err" "unsupported attention phase"
 
 expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --mode fallback \
     >"$OUT_DIR/mode-refusal.out" 2>"$OUT_DIR/mode-refusal.err"
-contains "$OUT_DIR/mode-refusal.err" "unsupported attention mode: fallback"
+contains "$OUT_DIR/mode-refusal.err" "unsupported attention mode"
 
 expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --operation-scope transformer \
     >"$OUT_DIR/operation-scope.out" 2>"$OUT_DIR/operation-scope.err"
-contains "$OUT_DIR/operation-scope.err" "unsupported attention operation scope: transformer"
+contains "$OUT_DIR/operation-scope.err" "unsupported --operation-scope: transformer"
 
 expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --scope quick \
@@ -363,7 +363,7 @@ contains "$OUT_DIR/release-scope.err" \
 expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --trace-level everything \
     >"$OUT_DIR/trace-refusal.out" 2>"$OUT_DIR/trace-refusal.err"
-contains "$OUT_DIR/trace-refusal.err" "unsupported attention trace level: everything"
+contains "$OUT_DIR/trace-refusal.err" "unsupported --trace-level: everything"
 
 expect_status 3 "$YVEX_BIN" bench attention trace \
     --target deepseek4-v4-flash-dspark --backend cpu --trace-level stages \
@@ -378,7 +378,10 @@ for control in "--layer-start 0 --layer-count 2" \
     expect_status 2 "$YVEX_BIN" bench attention execute \
         --target deepseek4-v4-flash-dspark --backend cpu $control \
         >"$OUT_DIR/control-refusal.out" 2>"$OUT_DIR/control-refusal.err"
-    contains "$OUT_DIR/control-refusal.err" "unavailable until"
+    case "$control" in
+        --layer-start*) contains "$OUT_DIR/control-refusal.err" "multi-layer ranges are unavailable" ;;
+        *) contains "$OUT_DIR/control-refusal.err" "explicit state capacities are not admitted" ;;
+    esac
 done
 expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --input tensor-file \
@@ -412,13 +415,13 @@ expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --capture-bucket decode-1 \
     >"$OUT_DIR/capture-bucket-refusal.out" 2>"$OUT_DIR/capture-bucket-refusal.err"
 contains "$OUT_DIR/capture-bucket-refusal.err" \
-    "--capture-bucket requires CUDA piecewise, full, or auto mode"
+    "--capture-bucket requires CUDA graph mode"
 
 expect_status 2 "$YVEX_BIN" bench attention capture \
     --target deepseek4-v4-flash-dspark --mode eager \
     >"$OUT_DIR/capture-eager.out" 2>"$OUT_DIR/capture-eager.err"
 contains "$OUT_DIR/capture-eager.err" \
-    "CUDA graph actions require piecewise, full, or auto mode"
+    "CUDA graph actions require CUDA piecewise, full, or auto mode"
 
 expect_status 3 "$YVEX_BIN" bench attention capture \
     --target deepseek4-v4-flash-dspark --mode piecewise --capture-bucket decode-1 \
@@ -429,7 +432,7 @@ contains "$OUT_DIR/capture-piecewise.err" "runtime binding"
 expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --baseline baseline.yvex-benchmark \
     >"$OUT_DIR/baseline-action.out" 2>"$OUT_DIR/baseline-action.err"
-contains "$OUT_DIR/baseline-action.err" "require bench attention component or profile"
+contains "$OUT_DIR/baseline-action.err" "baseline/chart options require benchmark or profile"
 
 expect_status 2 "$YVEX_BIN" bench attention component \
     --target deepseek4-v4-flash-dspark --backend cpu --write-baseline \
@@ -439,7 +442,7 @@ contains "$OUT_DIR/baseline-path.err" "--write-baseline requires --baseline FILE
 expect_status 2 "$YVEX_BIN" bench attention component \
     --target deepseek4-v4-flash-dspark --backend cpu --chart benchmark.png \
     >"$OUT_DIR/chart-suffix.out" 2>"$OUT_DIR/chart-suffix.err"
-contains "$OUT_DIR/chart-suffix.err" "--chart path must end in .svg"
+contains "$OUT_DIR/chart-suffix.err" "--chart requires a .svg path"
 
 expect_status 2 "$YVEX_BIN" bench attention component \
     --target deepseek4-v4-flash-dspark --backend cpu --chart benchmark.svg \
@@ -463,7 +466,7 @@ contains "$OUT_DIR/baseline-relative.err" \
 expect_status 2 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --max-device-bytes 1 \
     >"$OUT_DIR/device-budget.out" 2>"$OUT_DIR/device-budget.err"
-contains "$OUT_DIR/device-budget.err" "--max-device-bytes requires a CUDA execution path"
+contains "$OUT_DIR/device-budget.err" "--max-device-bytes requires accelerator execution"
 
 expect_status 3 "$YVEX_BIN" bench attention execute \
     --target deepseek4-v4-flash-dspark --backend cpu --max-host-bytes 1 --require-mode \
@@ -638,32 +641,27 @@ expect_status 1 "$YVEX_BIN" inspect attention describe \
     --runtime-binding-dir "$OUT_DIR/ambiguous-bindings" --output json \
     >"$OUT_DIR/ambiguous-binding.out" 2>"$OUT_DIR/ambiguous-binding.err"
 test ! -s "$OUT_DIR/ambiguous-binding.out" || fail "ambiguous binding polluted JSON stdout"
-contains "$OUT_DIR/ambiguous-binding.err" "runtime binding registry is ambiguous"
+contains "$OUT_DIR/ambiguous-binding.err" "runtime binding registry is missing or ambiguous"
 
 if rg -n '\b(system|popen|fork|exec[lvpe]*)[[:space:]]*\(' \
-    src/cli/commands/graph.c >"$OUT_DIR/indirection-functions.out"; then
+    src/cli/rust/attention.rs src/cli/rust/ffi/execution.rs >"$OUT_DIR/indirection-functions.out"; then
     fail "graph attention CLI gained process indirection"
 fi
 if rg -n 'tests/|build/tests|make (test|check)|deepseek_attention_reference' \
-    src/cli/commands/graph.c >"$OUT_DIR/indirection-paths.out"; then
+    src/cli/rust/attention.rs src/cli/rust/ffi/execution.rs >"$OUT_DIR/indirection-paths.out"; then
     fail "graph attention CLI references test or oracle ownership"
 fi
 if nm -a "$YVEX_BIN" 2>/dev/null | rg 'deepseek_attention_reference' \
     >"$OUT_DIR/oracle-linkage.out"; then
     fail "production yvex binary links the test-only attention oracle"
 fi
-python3 - src/cli/render/graph.c <<'PY'
+python3 - src/cli/rust/attention_projection.rs <<'PY'
 import pathlib
 import sys
 
 source = " ".join(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").split())
-rules = source.split("static const attention_presence_rule attention_presence_rules[]", 1)[1]
-rules = rules.split("#undef ATTENTION_GROUP", 1)[0]
-assert "ATTENTION_FIELDS_BENCHMARK_BASELINE" in rules
-baseline_rule = rules.split("ATTENTION_FIELDS_BENCHMARK_BASELINE", 1)[1]
-baseline_rule = baseline_rule.split("},", 1)[0]
-assert "benchmark.baseline_identity" in baseline_rule
-assert "ATTENTION_PRESENCE_TEXT" in baseline_rule
+rules = source.split("pub(crate) fn fields(", 1)[1].split("pub(crate) fn json(", 1)[0]
+assert "if result.benchmark.baseline_identity[0] != 0 { benchmark_baseline(result, &mut fields); }" in rules
 assert "delta_seconds" not in rules
 PY
 

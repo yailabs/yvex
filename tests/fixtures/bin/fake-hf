@@ -77,6 +77,12 @@ if [ "$#" -ge 2 ] && [ "$1" = "models" ]; then
     exit 0
   fi
   if [ "$2" = "info" ]; then
+    if [ -n "${YVEX_FAKE_HF_INFO_MARKER:-}" ]; then
+      printf 'fixture provider metadata entered\n' > "$YVEX_FAKE_HF_INFO_MARKER"
+    fi
+    if [ "${YVEX_FAKE_HF_INFO_DELAY:-0}" != 0 ]; then
+      sleep "$YVEX_FAKE_HF_INFO_DELAY"
+    fi
     repo=${3:-MiniMaxAI/MiniMax-H3}
     if [ "${YVEX_FAKE_HF_DISCOVERY_MODE:-mixed}" = "model-not-found" ]; then
       printf 'fake-hf: repository not found\n' >&2
@@ -87,6 +93,17 @@ if [ "$#" -ge 2 ] && [ "$1" = "models" ]; then
       exit 44
     fi
     resolved_sha=${YVEX_FAKE_HF_RESOLVED_SHA:-b8b09e34f8d2b9d1b7a51982ccb26ae2b8b9ef08}
+    # Synthetic fixture repositories admit the requested immutable revision.
+    # An explicit override remains available for mismatched-revision refusal.
+    if [ -z "${YVEX_FAKE_HF_RESOLVED_SHA:-}" ]; then
+      previous=
+      for argument in "$@"; do
+        if [ "$previous" = --revision ] && [ "${#argument}" -eq 40 ]; then
+          case "$argument" in *[!0-9a-f]*) ;; *) resolved_sha=$argument ;; esac
+        fi
+        previous=$argument
+      done
+    fi
     gated=false
     [ "${YVEX_FAKE_HF_DISCOVERY_MODE:-mixed}" = "gated" ] && gated='"manual"'
     if [ "${YVEX_FAKE_HF_DISCOVERY_MODE:-mixed}" = "tiny" ]; then
@@ -187,7 +204,7 @@ shift 2
 local_dir=
 dry_run=0
 gguf_download=0
-release_filename=model.gguf
+release_filename=${YVEX_FAKE_HF_RELEASE_NAME:-model.gguf}
 
 while [ "$#" -gt 0 ]; do
   case "$1" in

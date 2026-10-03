@@ -2,6 +2,8 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "$0")/../.." && pwd)
+yvex_bin=${YVEX_BIN:-"$repo_dir/yvex"}
+yvex_bin=$(cd "$(dirname "$yvex_bin")" && pwd)/$(basename "$yvex_bin")
 . "$repo_dir/tests/support/cleanup.sh"
 cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}
 mkdir -p "$cache_dir"
@@ -39,18 +41,18 @@ ssh-keygen -q -N '' -t ed25519 -f "$fixture_dir/peer-a"
 ssh-keygen -q -N '' -t ed25519 -f "$fixture_dir/peer-b"
 ssh-keygen -q -N '' -t ed25519 -f "$fixture_dir/unknown"
 mkdir -m 700 "$fixture_dir/runtime"
-"$repo_dir/yvex" management trust-init "$fixture_dir/authorized_keys"
-if "$repo_dir/yvex" management enroll >/dev/null 2>&1; then
+"$yvex_bin" management trust-init "$fixture_dir/authorized_keys"
+if "$yvex_bin" management enroll >/dev/null 2>&1; then
     echo 'incomplete enrollment unexpectedly accepted' >&2
     exit 1
 fi
-peer_a=$("$repo_dir/yvex" management identity "$fixture_dir/peer-a.pub")
-peer_b=$("$repo_dir/yvex" management identity "$fixture_dir/peer-b.pub")
-device=$("$repo_dir/yvex" management identity "$fixture_dir/host.pub")
-"$repo_dir/yvex" management enroll "$fixture_dir/peer-a.pub" \
+peer_a=$("$yvex_bin" management identity "$fixture_dir/peer-a.pub")
+peer_b=$("$yvex_bin" management identity "$fixture_dir/peer-b.pub")
+device=$("$yvex_bin" management identity "$fixture_dir/host.pub")
+"$yvex_bin" management enroll "$fixture_dir/peer-a.pub" \
     "$fixture_dir/authorized_keys" "$fixture_dir/host.pub" \
     "${peer_a#ssh-ed25519:sha256:}" >/dev/null
-"$repo_dir/yvex" management enroll "$fixture_dir/peer-b.pub" \
+"$yvex_bin" management enroll "$fixture_dir/peer-b.pub" \
     "$fixture_dir/authorized_keys" "$fixture_dir/host.pub" \
     "${peer_b#ssh-ed25519:sha256:}" >/dev/null
 
@@ -117,7 +119,7 @@ if [[ -n ${YVEX_SDK_MANAGEMENT_EXAMPLE:-} ]]; then
     fi
 fi
 [[ $(ssh_request "$fixture_dir/peer-a") == "$first" ]]
-if "$repo_dir/yvex" management enroll "$fixture_dir/unknown.pub" \
+if "$yvex_bin" management enroll "$fixture_dir/unknown.pub" \
     "$fixture_dir/authorized_keys" "$fixture_dir/host.pub" \
     "${peer_a#ssh-ed25519:sha256:}" >/dev/null 2>&1; then
     echo 'peer identity mismatch unexpectedly enrolled' >&2
@@ -156,7 +158,7 @@ ssh -M -N -f -S "$fixture_dir/control" -T -F /dev/null \
     -o BatchMode=yes -o IdentitiesOnly=yes \
     -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$fixture_dir/known_hosts" \
     -i "$fixture_dir/peer-a" -p "$port" "$(id -un)@127.0.0.1"
-XDG_RUNTIME_DIR="$fixture_dir/runtime" "$repo_dir/yvex" serve \
+XDG_RUNTIME_DIR="$fixture_dir/runtime" "$yvex_bin" serve \
     --openai off --logs off >"$fixture_dir/host.log" 2>&1 &
 host_pid=$!
 for attempt in {1..40}; do
@@ -178,7 +180,7 @@ wait "$host_pid"
 host_pid=
 [[ $(ssh_request "$fixture_dir/peer-a") == *'"host_state":"stopped"'* ]]
 
-"$repo_dir/yvex" management revoke "${peer_a#ssh-ed25519:sha256:}" \
+"$yvex_bin" management revoke "${peer_a#ssh-ed25519:sha256:}" \
     "$fixture_dir/authorized_keys" >/dev/null
 revoked_over_existing_transport=$(printf '%s\n' "$request" | \
     ssh -S "$fixture_dir/control" -T -F /dev/null \
