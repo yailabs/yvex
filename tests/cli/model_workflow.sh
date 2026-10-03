@@ -235,7 +235,7 @@ NO_COLOR=1 COLUMNS=180 TERM=xterm-256color \
 # Actual terminal geometry and styling use the same semantic content. Capture
 # these owned synthetic catalogs, never an operator model registry or Case.
 python3 - "$YVEX_BIN" "$MODELS_ROOT" "$REGISTRY" "$ROOT" <<'PY'
-import fcntl, os, pathlib, pty, re, select, struct, subprocess, sys, termios
+import fcntl, os, pathlib, pty, re, select, struct, subprocess, sys, termios, time
 binary, models, registry, root = sys.argv[1:]
 binary = str(pathlib.Path(binary).resolve())
 commands = {
@@ -259,16 +259,25 @@ for columns in (40, 80, 180):
             if not styled: env['NO_COLOR'] = '1'
             child = subprocess.Popen([binary, *arguments], stdout=slave, stderr=slave,
                                      stdin=subprocess.DEVNULL, env=env)
-            os.close(slave)
             data = bytearray()
-            while True:
-                if not select.select([master], [], [], 10)[0]:
-                    raise AssertionError('terminal render stalled')
-                try: part = os.read(master, 65536)
-                except OSError: break
-                if not part: break
-                data.extend(part)
-            os.close(master)
+            deadline = time.monotonic() + 10
+            try:
+                while True:
+                    # Preserve the slave while draining: Darwin otherwise
+                    # discards pending output when the short-lived child exits.
+                    if select.select([master], [], [], 0.05)[0]:
+                        part = os.read(master, 65536)
+                        assert part, 'terminal closed before output was drained'
+                        data.extend(part)
+                    elif child.poll() is not None:
+                        break
+                    assert time.monotonic() < deadline, 'terminal render stalled'
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                    child.wait(timeout=5)
+                os.close(master)
+                os.close(slave)
             assert child.wait() == (2 if name == 'error' else 0)
             text = ansi.sub(b'', data).decode().replace('\r\n', '\n')
             assert '\x1b' not in text, 'unexpected terminal control in one-shot output'

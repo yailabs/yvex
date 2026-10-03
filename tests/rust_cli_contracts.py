@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import errno
 import hashlib
 import json
 import os
@@ -12,6 +11,7 @@ import pty
 from pathlib import Path
 import re
 import runpy
+import select
 import shutil
 import subprocess
 import struct
@@ -41,27 +41,29 @@ def normalized(value):
 def terminal_output(binary: Path, words: list[str], environment: dict[str, str]) -> str:
     """Capture bounded catalog output through a real terminal, without a host."""
     master, slave = pty.openpty()
+    child = None
     try:
-        result = subprocess.run([str(binary), *words], cwd=ROOT, env=environment,
-                                stdout=slave, stderr=subprocess.PIPE, timeout=15)
-        assert result.returncode == 0, result.stderr
-        os.close(slave)
-        slave = -1
+        child = subprocess.Popen([str(binary), *words], cwd=ROOT, env=environment,
+                                 stdout=slave, stderr=slave, stdin=subprocess.DEVNULL)
         chunks = []
+        deadline = time.monotonic() + 15
         while True:
-            try:
+            # Keep a slave open until buffered output is drained. Darwin can
+            # discard unread terminal output when the last slave closes.
+            if select.select([master], [], [], 0.05)[0]:
                 chunk = os.read(master, 4096)
-            except OSError as error:
-                if error.errno == errno.EIO:
-                    break
-                raise
-            if not chunk:
+                assert chunk, "terminal closed before output was drained"
+                chunks.append(chunk)
+            elif child.poll() is not None:
                 break
-            chunks.append(chunk)
+            assert time.monotonic() < deadline, "terminal render stalled"
+        assert child.wait(timeout=1) == 0, b"".join(chunks)
         return b"".join(chunks).decode().replace("\r\n", "\n")
     finally:
-        if slave >= 0:
-            os.close(slave)
+        if child is not None and child.poll() is None:
+            child.kill()
+            child.wait(timeout=5)
+        os.close(slave)
         os.close(master)
 
 
