@@ -36,11 +36,13 @@ class Chat:
         env.pop('NO_COLOR', None)
         env['TERM'] = 'dumb' if dumb else 'xterm-256color'
         self.termios_receipt = output / (name + '.termios.json')
+        self.drive_trace = output / (name + '.drive.trace')
         if sys.platform == 'darwin':
             probe = Path(env['YVEX_TEST_TERMIOS_PROBE'])
             assert probe.is_file(), 'Darwin terminal observation probe is required'
             env['DYLD_INSERT_LIBRARIES'] = str(probe)
             env['YVEX_TEST_TERMIOS_RECEIPT'] = str(self.termios_receipt)
+            env['YVEX_TEST_DRIVE_TRACE'] = str(self.drive_trace)
         if plain: env['NO_COLOR'] = ''
         command = [str(binary), 'chat', '--session', name]
         if model: command += ['--model', model, '--max-new-tokens', '3']
@@ -77,7 +79,8 @@ class Chat:
             return needle in view
         while not contains():
             if time.monotonic() > deadline or self.process.poll() is not None:
-                raise AssertionError((needle, bytes(self.data[-6000:])))
+                trace = self.drive_trace.read_text().splitlines()[-45:] if self.drive_trace.exists() else []
+                raise AssertionError((needle, bytes(self.data[-6000:]), trace))
             self.pump()
         return bytes(self.data[start:])
 

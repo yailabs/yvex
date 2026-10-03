@@ -82,8 +82,18 @@ impl Notifications {
             deadline.map(|d| d.at().saturating_duration_since(Instant::now()))
         };
         // Neither borrowed source survives advancement, close or reopen.
+        #[cfg(debug_assertions)]
+        trace_drive("wait", format!("{interest:?} timeout={timeout:?}"));
         let (input, notification) =
             wait(interaction.input_source()?, self.source.as_fd(), timeout)?;
+        #[cfg(debug_assertions)]
+        trace_drive(
+            "wake",
+            format!(
+                "input={input} notification={notification} due={:?}",
+                deadline.map(|d| d.at().saturating_duration_since(Instant::now()))
+            ),
+        );
         if notification {
             let events = self.take()?;
             if events & 4 != 0 {
@@ -97,12 +107,45 @@ impl Notifications {
             }
         }
         if input || interest == WaitInterest::Ready {
-            Ok(interaction.advance(Wake::InputReady)?)
+            let outcome = interaction.advance(Wake::InputReady)?;
+            #[cfg(debug_assertions)]
+            trace_drive(
+                "input",
+                format!(
+                    "event={:?} next={:?}",
+                    outcome.as_ref().map(std::mem::discriminant),
+                    interaction.wait_interest()?
+                ),
+            );
+            Ok(outcome)
         } else if let Some(due) = deadline.filter(|d| Instant::now() >= d.at()) {
-            Ok(interaction.advance(Wake::Deadline(due))?)
+            let outcome = interaction.advance(Wake::Deadline(due))?;
+            #[cfg(debug_assertions)]
+            trace_drive(
+                "deadline",
+                format!(
+                    "event={:?} next={:?}",
+                    outcome.as_ref().map(std::mem::discriminant),
+                    interaction.wait_interest()?
+                ),
+            );
+            Ok(outcome)
         } else {
             Ok(None)
         }
+    }
+}
+
+// Temporary debug-only qualification probe: no input text or domain data.
+#[cfg(debug_assertions)]
+fn trace_drive(stage: &str, value: String) {
+    if let Some(path) = std::env::var_os("YVEX_TEST_DRIVE_TRACE")
+        && let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+    {
+        let _ = writeln!(file, "{:?} {stage} {value}", Instant::now());
     }
 }
 
@@ -263,5 +306,18 @@ mod tests {
             wait(input.as_fd(), source.as_fd(), Some(Duration::ZERO)).unwrap(),
             (false, true)
         );
+    }
+
+    #[test]
+    fn wake_timeout_is_not_input_readiness() {
+        let (source, _sink) = UnixStream::pair().unwrap();
+        let (input, _other) = UnixStream::pair().unwrap();
+        let started = Instant::now();
+        let timeout = Duration::from_millis(25);
+        assert_eq!(
+            wait(input.as_fd(), source.as_fd(), Some(timeout)).unwrap(),
+            (false, false)
+        );
+        assert!(started.elapsed() >= timeout);
     }
 }
