@@ -2517,7 +2517,7 @@ static int session_identity_open(
     session_identity_text(engine->summary.runtime_model_identity, 'a');
     session_identity_text(engine->summary.runtime_binding_identity, 'b');
     specialization->summary.schema_version =
-        YVEX_ENGINE_SPECIALIZATION_SCHEMA_V1;
+        YVEX_ENGINE_SPECIALIZATION_SCHEMA_V2;
     specialization->summary.backend = YVEX_BACKEND_KIND_CPU;
     session_identity_text(specialization->summary.identity, 'c');
     engine->specializations[YVEX_BACKEND_KIND_CPU] = specialization;

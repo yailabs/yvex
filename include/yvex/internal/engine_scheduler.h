@@ -93,6 +93,11 @@ int yvex_runtime_execution_leave(
 int yvex_model_engine_scheduler_maximum_width_copy(
     const struct yvex_model_engine *model, unsigned long long *width,
     yvex_error *err);
+/* Zero PREFILL width means no routed consumer imposes a row bound. Other
+ * phases retain the source-qualified verification/scheduling envelope. */
+int yvex_model_engine_phase_maximum_width_copy(
+    const struct yvex_model_engine *model, yvex_execution_phase phase,
+    unsigned long long *width, yvex_error *err);
 int yvex_model_engine_scheduler_summary_copy(
     const struct yvex_model_engine *model,
     yvex_engine_scheduler_summary *out, yvex_error *err);

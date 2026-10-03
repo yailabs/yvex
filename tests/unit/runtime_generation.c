@@ -14,6 +14,49 @@
 
 #include "src/runtime/private.h"
 
+/* A transient policy fixture, not an executable model or generation oracle. */
+static int generation_phase_width_policy(void)
+{
+    yvex_engine_implementation_record policy = {0}, changed;
+    const unsigned long long verification = (1ull << 7u) - 2ull;
+    const unsigned long long prefill = (1ull << 33u) - 2ull;
+    policy.schema_version = YVEX_ENGINE_SPECIALIZATION_SCHEMA_V2;
+    policy.supported_width_mask = policy.worklist_width_mask = verification;
+    policy.prefill_width_mask = policy.prefill_worklist_width_mask = prefill;
+    YVEX_TEST_ASSERT(yvex_runtime_specialization_phase_width_mask(
+        &policy, YVEX_EXECUTION_PHASE_PREFILL, 1) == prefill,
+        "prefill must admit its own real row population independently of proposals");
+    for (unsigned int phase = YVEX_EXECUTION_PHASE_DECODE;
+         phase <= YVEX_EXECUTION_PHASE_CORRECTION; ++phase)
+        YVEX_TEST_ASSERT(yvex_runtime_specialization_phase_width_mask(
+            &policy, (yvex_execution_phase)phase, 1) == verification,
+            "wider prompt work must not widen decode, draft, verification or correction");
+    changed = policy;
+    changed.schema_version = 1u;
+    YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(
+        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1),
+        "old layouts must refuse before accessing phase-specific fields");
+    changed = policy;
+    changed.prefill_worklist_width_mask |= 1ull << 34u;
+    YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(
+        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1),
+        "worklist widths outside their implementation envelope must refuse");
+    changed = policy;
+    changed.prefill_width_mask |= 1ull << 63u;
+    YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(
+        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1),
+        "unrepresentable physical widths must refuse");
+    changed = policy;
+    changed.prefill_width_mask |= 1ull;
+    YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(
+        &changed, YVEX_EXECUTION_PHASE_PREFILL, 1), "zero-row admission must refuse");
+    YVEX_TEST_ASSERT(!yvex_runtime_specialization_phase_width_mask(NULL, YVEX_EXECUTION_PHASE_PREFILL, 1) &&
+        !yvex_runtime_specialization_phase_width_mask(&policy, YVEX_EXECUTION_PHASE_MIXED, 1) &&
+        !yvex_runtime_specialization_phase_width_mask(&policy, (yvex_execution_phase)-1, 1),
+        "missing or ambiguous phase authority must refuse");
+    return 0;
+}
+
 static const char profile_id_a[] =
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 static const char profile_id_b[] =
@@ -1328,6 +1371,7 @@ static int generation_test_release_close_interleaving(void)
 
 int yvex_test_runtime_generation(void)
 {
+    if (generation_phase_width_policy() != 0) return 1;
     if (generation_test_release_close_interleaving() != 0) return 1;
     if (generation_test_program_input_identity() != 0) return 1;
     if (generation_test_engine_scheduling() != 0) return 1;

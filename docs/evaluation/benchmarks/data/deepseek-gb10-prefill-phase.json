@@ -1,0 +1,1797 @@
+{
+  "schema": "yvex.evaluation.observation.v1",
+  "id": "deepseek-gb10-prefill-phase",
+  "title": "DeepSeek GB10 phase-specific prefill characterization",
+  "kind": "characterization",
+  "context": {
+    "source_commit": "67a7905ea9deb98b0704629a1f979634e19007fb",
+    "source_tree": "8734e779c19c78cda6d2612f08062234066e7caf",
+    "source_stability": "frozen",
+    "date": "2026-10-01",
+    "run_id": "yvex-prefill-phase-20261001.2qPmxM",
+    "model": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
+    "model_revision": "62af8fffb2f7030cac4de2f0169f5b8d1101b646",
+    "artifact_identity": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "binding_identity": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "representation": "deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1",
+    "backend": "CUDA SM121",
+    "device": "NVIDIA GB10, GPU-7659fe74-b7c2-6e3e-bf99-f66c430366bc, driver 580.159.03",
+    "runtime_configuration": {
+      "context_capacity": 32768,
+      "configured_prefill_chunk": 64,
+      "physical_prompt_width": {
+        "baseline": 6,
+        "candidate": 32
+      },
+      "verification_width": 6,
+      "physical_sequence_width": 1,
+      "workers": 1,
+      "strategy": "speculative",
+      "temperature": 0,
+      "max_tokens": 4,
+      "prefix_reuse": false,
+      "profiler_during_samples": false,
+      "source_variants": {
+        "baseline": {
+          "compiler_provenance": {
+            "YVEX_BUILD_COMMIT": "67a7905ea9deb98b0704629a1f979634e19007fb",
+            "YVEX_BUILD_SOURCE_TREE": "8734e779c19c78cda6d2612f08062234066e7caf",
+            "YVEX_BUILD_SOURCE_STATE": "clean",
+            "YVEX_BUILD_SOURCE_DELTA_IDENTITY": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "YVEX_BUILD_IDENTITY": "9363820c56b703b657c3535b01dfd2606aae3e0620690394d5e4d927902d3c73",
+            "YVEX_BUILD_SOURCE_ROOT": "/tmp/yvex-prefill-baseline.ICZ1KN"
+          },
+          "executable": "c2b329083d1737253f5f86a9369f55b4e97e1001923c632ec1553cf2d4a630ca",
+          "engine": {
+            "active_work": 0,
+            "activity": "idle",
+            "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
+            "attached_clients": 0,
+            "backend": 1,
+            "capabilities": {
+              "input_mask": 1,
+              "inputs": [
+                "text"
+              ],
+              "maximum_input_parts": 32,
+              "output_mask": 1,
+              "outputs": [
+                "text"
+              ],
+              "properties": 15
+            },
+            "capacity": {
+              "compatible_operation_batching": false,
+              "continuous_batching": false,
+              "cooperative_scheduling": false,
+              "physical_sequence_width": 1,
+              "runnable_work": 1,
+              "sessions": 8
+            },
+            "configured_physical_sequence_width": 1,
+            "context_capacity": 32768,
+            "continuous_batching": false,
+            "engine_kind": "text",
+            "execution_ready": true,
+            "execution_strategy": "speculative",
+            "generation": 1,
+            "mapped_package_bytes": 95050210272,
+            "maximum_new_tokens": 32768,
+            "maximum_sessions": 8,
+            "model_identity": "cf8ebc69dae8e38f96a47418e8efcebdc47bc4ed05bac76d6974ccc1379e0e7e",
+            "model_leases": 0,
+            "prefill_chunk_tokens": 64,
+            "prepared_bytes": 0,
+            "resident_device_bytes": 0,
+            "resident_host_bytes": 0,
+            "resources": {
+              "activation_arena_current_bytes": 0,
+              "activation_arena_peak_bytes": 0,
+              "available": 129,
+              "components": 1,
+              "logical_download_bytes": 0,
+              "logical_upload_bytes": 0,
+              "model_artifact_bytes": 95050210272,
+              "model_device_addressable_bytes": 95050210272,
+              "model_explicit_device_bytes": 0,
+              "model_explicit_host_bytes": 0,
+              "model_mapped_bytes": 95050210272,
+              "model_prepared_bytes": 0,
+              "physical_residency_known": false,
+              "placement": "mapped-device-addressable",
+              "process_rss_current_bytes": 0,
+              "process_rss_peak_bytes": 0,
+              "schema_version": 1,
+              "session_attention_allocated_bytes": 0,
+              "session_attention_page_table_bytes": 0,
+              "session_attention_resident_bytes": 0,
+              "session_attention_virtual_bytes": 0,
+              "session_candidate_state_bytes": 0,
+              "session_convolution_state_bytes": 0,
+              "session_physical_state_bytes": 0,
+              "session_recurrent_state_bytes": 0,
+              "transient_current_bytes": 0,
+              "transient_peak_bytes": 0,
+              "unified_memory": true,
+              "workspace_current_bytes": 0,
+              "workspace_peak_bytes": 0
+            },
+            "sessions": 0,
+            "specialization_identity": "7604985ea75253a9338877e3867d2f18daac3be036ffa66babe84aca8ae2554e",
+            "state": "loaded",
+            "target": "deepseek4-v4-flash-dspark"
+          },
+          "raw_receipt_sha256": "1b934333ebfdc9f4b0211909da267e8a22ce27a0b647f6d138f0bf68f889f9d1",
+          "samples": [
+            {
+              "lane": "short",
+              "repetition": 0,
+              "usage": {
+                "completion_tokens": 3,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "prompt_tokens": 22,
+                "total_tokens": 25
+              },
+              "request_sha256": "0ad1cc1f40236e12b0a9dc50884370ca10e72f753dc858217b6779b0bc559572",
+              "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+              "active_work": 0,
+              "physical_state": 0,
+              "http_s": 5.083008214016445,
+              "prefill_s": 3.44923506,
+              "ttft_turn_s": 4.13829546,
+              "profile": {
+                "target": {
+                  "seconds": 4.13845639,
+                  "a": 6,
+                  "b": 26,
+                  "c": 0
+                },
+                "prefill": {
+                  "seconds": 3.4492072,
+                  "a": 22,
+                  "b": 0,
+                  "c": 22
+                },
+                "first-decode": {
+                  "seconds": 0.688915726,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "subsequent-decode": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 0,
+                  "c": 0
+                },
+                "tokenizer": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 22,
+                  "c": 0
+                },
+                "prompt-rendering": {
+                  "seconds": 9.9632e-05,
+                  "a": 1,
+                  "b": 22,
+                  "c": 0
+                },
+                "attention": {
+                  "seconds": 3.04667772,
+                  "a": 4,
+                  "b": 688,
+                  "c": 0
+                },
+                "model-component": {
+                  "seconds": 2.89451137,
+                  "a": 5676,
+                  "b": 0,
+                  "c": 32484497232
+                },
+                "output-head": {
+                  "seconds": 0.010302904,
+                  "a": 9,
+                  "b": 24,
+                  "c": 0
+                },
+                "logits-publication": {
+                  "seconds": 7.216e-06,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "sampling": {
+                  "seconds": 0.00023216,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "synchronization": {
+                  "seconds": 0,
+                  "a": 881,
+                  "b": 0,
+                  "c": 1048
+                },
+                "publication": {
+                  "seconds": 4.4111e-05,
+                  "a": 3,
+                  "b": 0,
+                  "c": 0
+                },
+                "unattributed": {
+                  "seconds": 0.000233824,
+                  "a": 4138222562,
+                  "b": 4138456386,
+                  "c": 233824
+                }
+              }
+            },
+            {
+              "lane": "short",
+              "repetition": 1,
+              "usage": {
+                "completion_tokens": 3,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "prompt_tokens": 22,
+                "total_tokens": 25
+              },
+              "request_sha256": "0ad1cc1f40236e12b0a9dc50884370ca10e72f753dc858217b6779b0bc559572",
+              "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+              "active_work": 0,
+              "physical_state": 0,
+              "http_s": 5.1813554770778865,
+              "prefill_s": 3.45022191,
+              "ttft_turn_s": 4.13447946,
+              "profile": {
+                "target": {
+                  "seconds": 4.13464687,
+                  "a": 6,
+                  "b": 26,
+                  "c": 0
+                },
+                "prefill": {
+                  "seconds": 3.45018195,
+                  "a": 22,
+                  "b": 0,
+                  "c": 22
+                },
+                "first-decode": {
+                  "seconds": 0.684111145,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "subsequent-decode": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 0,
+                  "c": 0
+                },
+                "tokenizer": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 22,
+                  "c": 0
+                },
+                "prompt-rendering": {
+                  "seconds": 0.000101504,
+                  "a": 1,
+                  "b": 22,
+                  "c": 0
+                },
+                "attention": {
+                  "seconds": 3.05041569,
+                  "a": 4,
+                  "b": 688,
+                  "c": 0
+                },
+                "model-component": {
+                  "seconds": 2.89778759,
+                  "a": 5676,
+                  "b": 0,
+                  "c": 32484497232
+                },
+                "output-head": {
+                  "seconds": 0.0109514,
+                  "a": 9,
+                  "b": 24,
+                  "c": 0
+                },
+                "logits-publication": {
+                  "seconds": 7.152e-06,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "sampling": {
+                  "seconds": 0.000229344,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "synchronization": {
+                  "seconds": 0,
+                  "a": 881,
+                  "b": 0,
+                  "c": 1048
+                },
+                "publication": {
+                  "seconds": 4.4448e-05,
+                  "a": 3,
+                  "b": 0,
+                  "c": 0
+                },
+                "unattributed": {
+                  "seconds": 0.000252272,
+                  "a": 4134394595,
+                  "b": 4134646867,
+                  "c": 252272
+                }
+              }
+            },
+            {
+              "lane": "medium",
+              "repetition": 0,
+              "usage": {
+                "completion_tokens": 3,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "prompt_tokens": 106,
+                "total_tokens": 109
+              },
+              "request_sha256": "e1c2a743fdebbc0fa7192cb622739624ea97aa56b5a1c2b5993c7df5bf172300",
+              "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+              "active_work": 0,
+              "physical_state": 0,
+              "http_s": 16.912715426064096,
+              "prefill_s": 15.160022,
+              "ttft_turn_s": 15.8799158,
+              "profile": {
+                "target": {
+                  "seconds": 15.8801208,
+                  "a": 20,
+                  "b": 110,
+                  "c": 0
+                },
+                "prefill": {
+                  "seconds": 15.159997,
+                  "a": 106,
+                  "b": 0,
+                  "c": 106
+                },
+                "first-decode": {
+                  "seconds": 0.719722249,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "subsequent-decode": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 0,
+                  "c": 0
+                },
+                "tokenizer": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 106,
+                  "c": 0
+                },
+                "prompt-rendering": {
+                  "seconds": 0.000148527,
+                  "a": 1,
+                  "b": 106,
+                  "c": 0
+                },
+                "attention": {
+                  "seconds": 14.3794134,
+                  "a": 18,
+                  "b": 3096,
+                  "c": 0
+                },
+                "model-component": {
+                  "seconds": 13.7918993,
+                  "a": 27348,
+                  "b": 0,
+                  "c": 151117064928
+                },
+                "output-head": {
+                  "seconds": 0.01032812,
+                  "a": 9,
+                  "b": 24,
+                  "c": 0
+                },
+                "logits-publication": {
+                  "seconds": 7.072e-06,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "sampling": {
+                  "seconds": 0.000233456,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "synchronization": {
+                  "seconds": 0,
+                  "a": 3961,
+                  "b": 0,
+                  "c": 4716
+                },
+                "publication": {
+                  "seconds": 7.0336e-05,
+                  "a": 3,
+                  "b": 0,
+                  "c": 0
+                },
+                "unattributed": {
+                  "seconds": 0.000253072,
+                  "a": 15879867744,
+                  "b": 15880120816,
+                  "c": 253072
+                }
+              }
+            },
+            {
+              "lane": "medium",
+              "repetition": 1,
+              "usage": {
+                "completion_tokens": 3,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "prompt_tokens": 106,
+                "total_tokens": 109
+              },
+              "request_sha256": "e1c2a743fdebbc0fa7192cb622739624ea97aa56b5a1c2b5993c7df5bf172300",
+              "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+              "active_work": 0,
+              "physical_state": 0,
+              "http_s": 16.961849616025575,
+              "prefill_s": 15.2127829,
+              "ttft_turn_s": 15.9073305,
+              "profile": {
+                "target": {
+                  "seconds": 15.9075641,
+                  "a": 20,
+                  "b": 110,
+                  "c": 0
+                },
+                "prefill": {
+                  "seconds": 15.2127598,
+                  "a": 106,
+                  "b": 0,
+                  "c": 106
+                },
+                "first-decode": {
+                  "seconds": 0.694358596,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "subsequent-decode": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 0,
+                  "c": 0
+                },
+                "tokenizer": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 106,
+                  "c": 0
+                },
+                "prompt-rendering": {
+                  "seconds": 0.000128512,
+                  "a": 1,
+                  "b": 106,
+                  "c": 0
+                },
+                "attention": {
+                  "seconds": 14.4322893,
+                  "a": 18,
+                  "b": 3096,
+                  "c": 0
+                },
+                "model-component": {
+                  "seconds": 13.8323446,
+                  "a": 27348,
+                  "b": 0,
+                  "c": 151117064928
+                },
+                "output-head": {
+                  "seconds": 0.010424601,
+                  "a": 9,
+                  "b": 24,
+                  "c": 0
+                },
+                "logits-publication": {
+                  "seconds": 6.976e-06,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "sampling": {
+                  "seconds": 0.000235328,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "synchronization": {
+                  "seconds": 0,
+                  "a": 3961,
+                  "b": 0,
+                  "c": 4716
+                },
+                "publication": {
+                  "seconds": 4.8224e-05,
+                  "a": 3,
+                  "b": 0,
+                  "c": 0
+                },
+                "unattributed": {
+                  "seconds": 0.000317216,
+                  "a": 15907246905,
+                  "b": 15907564121,
+                  "c": 317216
+                }
+              }
+            },
+            {
+              "lane": "longer",
+              "repetition": 0,
+              "usage": {
+                "completion_tokens": 3,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "prompt_tokens": 346,
+                "total_tokens": 349
+              },
+              "request_sha256": "ad7f1f1cd44af1177c3af053fa37b74b9003a5bc0ee5267f62d58afe4318f2d1",
+              "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+              "active_work": 0,
+              "physical_state": 0,
+              "http_s": 51.038994704023935,
+              "prefill_s": 49.1937944,
+              "ttft_turn_s": 49.9214727,
+              "profile": {
+                "target": {
+                  "seconds": 49.9218401,
+                  "a": 60,
+                  "b": 350,
+                  "c": 0
+                },
+                "prefill": {
+                  "seconds": 49.1937554,
+                  "a": 346,
+                  "b": 0,
+                  "c": 346
+                },
+                "first-decode": {
+                  "seconds": 0.727394677,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "subsequent-decode": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 0,
+                  "c": 0
+                },
+                "tokenizer": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 346,
+                  "c": 0
+                },
+                "prompt-rendering": {
+                  "seconds": 0.000222592,
+                  "a": 1,
+                  "b": 346,
+                  "c": 0
+                },
+                "attention": {
+                  "seconds": 47.3002715,
+                  "a": 58,
+                  "b": 9976,
+                  "c": 0
+                },
+                "model-component": {
+                  "seconds": 45.4528289,
+                  "a": 89268,
+                  "b": 0,
+                  "c": 511422257568
+                },
+                "output-head": {
+                  "seconds": 0.010614266,
+                  "a": 9,
+                  "b": 24,
+                  "c": 0
+                },
+                "logits-publication": {
+                  "seconds": 7.248e-06,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "sampling": {
+                  "seconds": 0.00023776,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "synchronization": {
+                  "seconds": 0,
+                  "a": 12761,
+                  "b": 0,
+                  "c": 15196
+                },
+                "publication": {
+                  "seconds": 5.5088e-05,
+                  "a": 3,
+                  "b": 0,
+                  "c": 0
+                },
+                "unattributed": {
+                  "seconds": 0.000467488,
+                  "a": 49921372637,
+                  "b": 49921840125,
+                  "c": 467488
+                }
+              }
+            },
+            {
+              "lane": "longer",
+              "repetition": 1,
+              "usage": {
+                "completion_tokens": 3,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "prompt_tokens": 346,
+                "total_tokens": 349
+              },
+              "request_sha256": "ad7f1f1cd44af1177c3af053fa37b74b9003a5bc0ee5267f62d58afe4318f2d1",
+              "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+              "active_work": 0,
+              "physical_state": 0,
+              "http_s": 51.08622121496592,
+              "prefill_s": 49.3023617,
+              "ttft_turn_s": 50.0105046,
+              "profile": {
+                "target": {
+                  "seconds": 50.01093,
+                  "a": 60,
+                  "b": 350,
+                  "c": 0
+                },
+                "prefill": {
+                  "seconds": 49.3023331,
+                  "a": 346,
+                  "b": 0,
+                  "c": 346
+                },
+                "first-decode": {
+                  "seconds": 0.707859617,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "subsequent-decode": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 0,
+                  "c": 0
+                },
+                "tokenizer": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 346,
+                  "c": 0
+                },
+                "prompt-rendering": {
+                  "seconds": 0.000243952,
+                  "a": 1,
+                  "b": 346,
+                  "c": 0
+                },
+                "attention": {
+                  "seconds": 47.3938627,
+                  "a": 58,
+                  "b": 9976,
+                  "c": 0
+                },
+                "model-component": {
+                  "seconds": 45.5220696,
+                  "a": 89268,
+                  "b": 0,
+                  "c": 511422257568
+                },
+                "output-head": {
+                  "seconds": 0.010699355,
+                  "a": 9,
+                  "b": 24,
+                  "c": 0
+                },
+                "logits-publication": {
+                  "seconds": 7.312e-06,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "sampling": {
+                  "seconds": 0.000238592,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "synchronization": {
+                  "seconds": 0,
+                  "a": 12761,
+                  "b": 0,
+                  "c": 15196
+                },
+                "publication": {
+                  "seconds": 6.8992e-05,
+                  "a": 3,
+                  "b": 0,
+                  "c": 0
+                },
+                "unattributed": {
+                  "seconds": 0.000493312,
+                  "a": 50010436653,
+                  "b": 50010929965,
+                  "c": 493312
+                }
+              }
+            }
+          ]
+        },
+        "candidate": {
+          "compiler_provenance": {
+            "YVEX_BUILD_COMMIT": "67a7905ea9deb98b0704629a1f979634e19007fb",
+            "YVEX_BUILD_SOURCE_TREE": "8734e779c19c78cda6d2612f08062234066e7caf",
+            "YVEX_BUILD_SOURCE_STATE": "dirty",
+            "YVEX_BUILD_SOURCE_DELTA_IDENTITY": "d58e6ed3cfef97c05c9dc7a58449a6dda0a769d57e305fa8b134e4da68adcaf3",
+            "YVEX_BUILD_IDENTITY": "27110e87f3e4f14006718dc3021cb63be5f3bbbd5fb59d0d9ebd142979ebb1ec",
+            "YVEX_BUILD_SOURCE_ROOT": "/home/dgmothx/lab/yvex"
+          },
+          "executable": "245561033921a35b8641b3f1731a9a864bdbbb581db6ae7dc082bdc98d12738f",
+          "engine": {
+            "active_work": 0,
+            "activity": "idle",
+            "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
+            "attached_clients": 0,
+            "backend": 1,
+            "capabilities": {
+              "input_mask": 1,
+              "inputs": [
+                "text"
+              ],
+              "maximum_input_parts": 32,
+              "output_mask": 1,
+              "outputs": [
+                "text"
+              ],
+              "properties": 15
+            },
+            "capacity": {
+              "compatible_operation_batching": false,
+              "continuous_batching": false,
+              "cooperative_scheduling": false,
+              "physical_sequence_width": 1,
+              "runnable_work": 1,
+              "sessions": 8
+            },
+            "configured_physical_sequence_width": 1,
+            "context_capacity": 32768,
+            "continuous_batching": false,
+            "engine_kind": "text",
+            "execution_ready": true,
+            "execution_strategy": "speculative",
+            "generation": 1,
+            "mapped_package_bytes": 95050210272,
+            "maximum_new_tokens": 32768,
+            "maximum_sessions": 8,
+            "model_identity": "cf8ebc69dae8e38f96a47418e8efcebdc47bc4ed05bac76d6974ccc1379e0e7e",
+            "model_leases": 0,
+            "prefill_chunk_tokens": 64,
+            "prepared_bytes": 0,
+            "resident_device_bytes": 0,
+            "resident_host_bytes": 0,
+            "resources": {
+              "activation_arena_current_bytes": 0,
+              "activation_arena_peak_bytes": 0,
+              "available": 129,
+              "components": 1,
+              "logical_download_bytes": 0,
+              "logical_upload_bytes": 0,
+              "model_artifact_bytes": 95050210272,
+              "model_device_addressable_bytes": 95050210272,
+              "model_explicit_device_bytes": 0,
+              "model_explicit_host_bytes": 0,
+              "model_mapped_bytes": 95050210272,
+              "model_prepared_bytes": 0,
+              "physical_residency_known": false,
+              "placement": "mapped-device-addressable",
+              "process_rss_current_bytes": 0,
+              "process_rss_peak_bytes": 0,
+              "schema_version": 1,
+              "session_attention_allocated_bytes": 0,
+              "session_attention_page_table_bytes": 0,
+              "session_attention_resident_bytes": 0,
+              "session_attention_virtual_bytes": 0,
+              "session_candidate_state_bytes": 0,
+              "session_convolution_state_bytes": 0,
+              "session_physical_state_bytes": 0,
+              "session_recurrent_state_bytes": 0,
+              "transient_current_bytes": 0,
+              "transient_peak_bytes": 0,
+              "unified_memory": true,
+              "workspace_current_bytes": 0,
+              "workspace_peak_bytes": 0
+            },
+            "sessions": 0,
+            "specialization_identity": "6c3e33a0ea61e9a371dc551d595b5a68e6f28e3059cde0ee49fc1370939c8350",
+            "state": "loaded",
+            "target": "deepseek4-v4-flash-dspark"
+          },
+          "raw_receipt_sha256": "6e6bfb2e7476663f4cfcd1424a272a9150c8429c389406a27aba65406882f133",
+          "samples": [
+            {
+              "lane": "short",
+              "repetition": 0,
+              "usage": {
+                "completion_tokens": 3,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "prompt_tokens": 22,
+                "total_tokens": 25
+              },
+              "request_sha256": "0ad1cc1f40236e12b0a9dc50884370ca10e72f753dc858217b6779b0bc559572",
+              "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+              "active_work": 0,
+              "physical_state": 0,
+              "http_s": 5.159415247966535,
+              "prefill_s": 2.44120637,
+              "ttft_turn_s": 3.15438699,
+              "profile": {
+                "target": {
+                  "seconds": 3.15450567,
+                  "a": 3,
+                  "b": 26,
+                  "c": 0
+                },
+                "prefill": {
+                  "seconds": 2.44115998,
+                  "a": 22,
+                  "b": 0,
+                  "c": 22
+                },
+                "first-decode": {
+                  "seconds": 0.713048525,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "subsequent-decode": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 0,
+                  "c": 0
+                },
+                "tokenizer": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 22,
+                  "c": 0
+                },
+                "prompt-rendering": {
+                  "seconds": 9.5424e-05,
+                  "a": 1,
+                  "b": 22,
+                  "c": 0
+                },
+                "attention": {
+                  "seconds": 2.08412345,
+                  "a": 1,
+                  "b": 172,
+                  "c": 0
+                },
+                "model-component": {
+                  "seconds": 1.97841205,
+                  "a": 5676,
+                  "b": 0,
+                  "c": 19387353720
+                },
+                "output-head": {
+                  "seconds": 0.010202108,
+                  "a": 9,
+                  "b": 24,
+                  "c": 0
+                },
+                "logits-publication": {
+                  "seconds": 7.152e-06,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "sampling": {
+                  "seconds": 0.000243056,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "synchronization": {
+                  "seconds": 0,
+                  "a": 221,
+                  "b": 0,
+                  "c": 262
+                },
+                "publication": {
+                  "seconds": 5.5568e-05,
+                  "a": 3,
+                  "b": 0,
+                  "c": 0
+                },
+                "unattributed": {
+                  "seconds": 0.000201744,
+                  "a": 3154303930,
+                  "b": 3154505674,
+                  "c": 201744
+                }
+              }
+            },
+            {
+              "lane": "short",
+              "repetition": 1,
+              "usage": {
+                "completion_tokens": 3,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "prompt_tokens": 22,
+                "total_tokens": 25
+              },
+              "request_sha256": "0ad1cc1f40236e12b0a9dc50884370ca10e72f753dc858217b6779b0bc559572",
+              "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+              "active_work": 0,
+              "physical_state": 0,
+              "http_s": 5.265490607009269,
+              "prefill_s": 2.44519041,
+              "ttft_turn_s": 3.16352814,
+              "profile": {
+                "target": {
+                  "seconds": 3.16367419,
+                  "a": 3,
+                  "b": 26,
+                  "c": 0
+                },
+                "prefill": {
+                  "seconds": 2.44516888,
+                  "a": 22,
+                  "b": 0,
+                  "c": 22
+                },
+                "first-decode": {
+                  "seconds": 0.718212081,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "subsequent-decode": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 0,
+                  "c": 0
+                },
+                "tokenizer": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 22,
+                  "c": 0
+                },
+                "prompt-rendering": {
+                  "seconds": 0.000109872,
+                  "a": 1,
+                  "b": 22,
+                  "c": 0
+                },
+                "attention": {
+                  "seconds": 2.08905938,
+                  "a": 1,
+                  "b": 172,
+                  "c": 0
+                },
+                "model-component": {
+                  "seconds": 1.98057526,
+                  "a": 5676,
+                  "b": 0,
+                  "c": 19387353720
+                },
+                "output-head": {
+                  "seconds": 0.010614684,
+                  "a": 9,
+                  "b": 24,
+                  "c": 0
+                },
+                "logits-publication": {
+                  "seconds": 7.424e-06,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "sampling": {
+                  "seconds": 0.00023344,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "synchronization": {
+                  "seconds": 0,
+                  "a": 221,
+                  "b": 0,
+                  "c": 262
+                },
+                "publication": {
+                  "seconds": 8.0832e-05,
+                  "a": 3,
+                  "b": 0,
+                  "c": 0
+                },
+                "unattributed": {
+                  "seconds": 0.00018336,
+                  "a": 3163490832,
+                  "b": 3163674192,
+                  "c": 183360
+                }
+              }
+            },
+            {
+              "lane": "medium",
+              "repetition": 0,
+              "usage": {
+                "completion_tokens": 3,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "prompt_tokens": 106,
+                "total_tokens": 109
+              },
+              "request_sha256": "e1c2a743fdebbc0fa7192cb622739624ea97aa56b5a1c2b5993c7df5bf172300",
+              "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+              "active_work": 0,
+              "physical_state": 0,
+              "http_s": 12.92290533799678,
+              "prefill_s": 10.0791622,
+              "ttft_turn_s": 10.7931363,
+              "profile": {
+                "target": {
+                  "seconds": 10.7933054,
+                  "a": 6,
+                  "b": 110,
+                  "c": 0
+                },
+                "prefill": {
+                  "seconds": 10.0791389,
+                  "a": 106,
+                  "b": 0,
+                  "c": 106
+                },
+                "first-decode": {
+                  "seconds": 0.713789248,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "subsequent-decode": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 0,
+                  "c": 0
+                },
+                "tokenizer": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 106,
+                  "c": 0
+                },
+                "prompt-rendering": {
+                  "seconds": 0.000140816,
+                  "a": 1,
+                  "b": 106,
+                  "c": 0
+                },
+                "attention": {
+                  "seconds": 9.52974505,
+                  "a": 4,
+                  "b": 688,
+                  "c": 0
+                },
+                "model-component": {
+                  "seconds": 9.20041229,
+                  "a": 27348,
+                  "b": 0,
+                  "c": 68935626480
+                },
+                "output-head": {
+                  "seconds": 0.01121374,
+                  "a": 9,
+                  "b": 24,
+                  "c": 0
+                },
+                "logits-publication": {
+                  "seconds": 7.504e-06,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "sampling": {
+                  "seconds": 0.000238976,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "synchronization": {
+                  "seconds": 0,
+                  "a": 881,
+                  "b": 0,
+                  "c": 1048
+                },
+                "publication": {
+                  "seconds": 6.7616e-05,
+                  "a": 3,
+                  "b": 0,
+                  "c": 0
+                },
+                "unattributed": {
+                  "seconds": 0.000236512,
+                  "a": 10793068926,
+                  "b": 10793305438,
+                  "c": 236512
+                }
+              }
+            },
+            {
+              "lane": "medium",
+              "repetition": 1,
+              "usage": {
+                "completion_tokens": 3,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "prompt_tokens": 106,
+                "total_tokens": 109
+              },
+              "request_sha256": "e1c2a743fdebbc0fa7192cb622739624ea97aa56b5a1c2b5993c7df5bf172300",
+              "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+              "active_work": 0,
+              "physical_state": 0,
+              "http_s": 13.120162067003548,
+              "prefill_s": 10.2286814,
+              "ttft_turn_s": 10.9301145,
+              "profile": {
+                "target": {
+                  "seconds": 10.930312,
+                  "a": 6,
+                  "b": 110,
+                  "c": 0
+                },
+                "prefill": {
+                  "seconds": 10.2286576,
+                  "a": 106,
+                  "b": 0,
+                  "c": 106
+                },
+                "first-decode": {
+                  "seconds": 0.701255697,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "subsequent-decode": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 0,
+                  "c": 0
+                },
+                "tokenizer": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 106,
+                  "c": 0
+                },
+                "prompt-rendering": {
+                  "seconds": 0.000139792,
+                  "a": 1,
+                  "b": 106,
+                  "c": 0
+                },
+                "attention": {
+                  "seconds": 9.67992828,
+                  "a": 4,
+                  "b": 688,
+                  "c": 0
+                },
+                "model-component": {
+                  "seconds": 9.35021464,
+                  "a": 27348,
+                  "b": 0,
+                  "c": 68935626480
+                },
+                "output-head": {
+                  "seconds": 0.010309373,
+                  "a": 9,
+                  "b": 24,
+                  "c": 0
+                },
+                "logits-publication": {
+                  "seconds": 7.44e-06,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "sampling": {
+                  "seconds": 0.0002316,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "synchronization": {
+                  "seconds": 0,
+                  "a": 881,
+                  "b": 0,
+                  "c": 1048
+                },
+                "publication": {
+                  "seconds": 7.5376e-05,
+                  "a": 3,
+                  "b": 0,
+                  "c": 0
+                },
+                "unattributed": {
+                  "seconds": 0.000258928,
+                  "a": 10930053077,
+                  "b": 10930312005,
+                  "c": 258928
+                }
+              }
+            },
+            {
+              "lane": "longer",
+              "repetition": 0,
+              "usage": {
+                "completion_tokens": 3,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "prompt_tokens": 346,
+                "total_tokens": 349
+              },
+              "request_sha256": "ad7f1f1cd44af1177c3af053fa37b74b9003a5bc0ee5267f62d58afe4318f2d1",
+              "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+              "active_work": 0,
+              "physical_state": 0,
+              "http_s": 34.063236964982934,
+              "prefill_s": 31.3256713,
+              "ttft_turn_s": 32.0462162,
+              "profile": {
+                "target": {
+                  "seconds": 32.0464662,
+                  "a": 13,
+                  "b": 350,
+                  "c": 0
+                },
+                "prefill": {
+                  "seconds": 31.3256426,
+                  "a": 346,
+                  "b": 0,
+                  "c": 346
+                },
+                "first-decode": {
+                  "seconds": 0.720252235,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "subsequent-decode": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 0,
+                  "c": 0
+                },
+                "tokenizer": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 346,
+                  "c": 0
+                },
+                "prompt-rendering": {
+                  "seconds": 0.000230672,
+                  "a": 1,
+                  "b": 346,
+                  "c": 0
+                },
+                "attention": {
+                  "seconds": 30.2096066,
+                  "a": 11,
+                  "b": 1892,
+                  "c": 0
+                },
+                "model-component": {
+                  "seconds": 29.3661775,
+                  "a": 89268,
+                  "b": 0,
+                  "c": 205142560872
+                },
+                "output-head": {
+                  "seconds": 0.010394397,
+                  "a": 9,
+                  "b": 24,
+                  "c": 0
+                },
+                "logits-publication": {
+                  "seconds": 7.552e-06,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "sampling": {
+                  "seconds": 0.000230848,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "synchronization": {
+                  "seconds": 0,
+                  "a": 2421,
+                  "b": 0,
+                  "c": 2882
+                },
+                "publication": {
+                  "seconds": 5.8896e-05,
+                  "a": 3,
+                  "b": 0,
+                  "c": 0
+                },
+                "unattributed": {
+                  "seconds": 0.000340704,
+                  "a": 32046125510,
+                  "b": 32046466214,
+                  "c": 340704
+                }
+              }
+            },
+            {
+              "lane": "longer",
+              "repetition": 1,
+              "usage": {
+                "completion_tokens": 3,
+                "completion_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "prompt_tokens": 346,
+                "total_tokens": 349
+              },
+              "request_sha256": "ad7f1f1cd44af1177c3af053fa37b74b9003a5bc0ee5267f62d58afe4318f2d1",
+              "content_sha256": "1857467cebc44a1ab59522280b74b4ed64732c4c6269a02d4f606626cd26853a",
+              "active_work": 0,
+              "physical_state": 0,
+              "http_s": 34.004897146020085,
+              "prefill_s": 31.3706952,
+              "ttft_turn_s": 32.0874413,
+              "profile": {
+                "target": {
+                  "seconds": 32.0877345,
+                  "a": 13,
+                  "b": 350,
+                  "c": 0
+                },
+                "prefill": {
+                  "seconds": 31.3706663,
+                  "a": 346,
+                  "b": 0,
+                  "c": 346
+                },
+                "first-decode": {
+                  "seconds": 0.716465387,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "subsequent-decode": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 0,
+                  "c": 0
+                },
+                "tokenizer": {
+                  "seconds": 0,
+                  "a": 0,
+                  "b": 346,
+                  "c": 0
+                },
+                "prompt-rendering": {
+                  "seconds": 0.000238032,
+                  "a": 1,
+                  "b": 346,
+                  "c": 0
+                },
+                "attention": {
+                  "seconds": 30.3437342,
+                  "a": 11,
+                  "b": 1892,
+                  "c": 0
+                },
+                "model-component": {
+                  "seconds": 29.5451673,
+                  "a": 89268,
+                  "b": 0,
+                  "c": 205142560872
+                },
+                "output-head": {
+                  "seconds": 0.010917005,
+                  "a": 9,
+                  "b": 24,
+                  "c": 0
+                },
+                "logits-publication": {
+                  "seconds": 7.408e-06,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "sampling": {
+                  "seconds": 0.000286624,
+                  "a": 1,
+                  "b": 0,
+                  "c": 0
+                },
+                "synchronization": {
+                  "seconds": 0,
+                  "a": 2421,
+                  "b": 0,
+                  "c": 2882
+                },
+                "publication": {
+                  "seconds": 6.5872e-05,
+                  "a": 3,
+                  "b": 0,
+                  "c": 0
+                },
+                "unattributed": {
+                  "seconds": 0.000364752,
+                  "a": 32087369745,
+                  "b": 32087734497,
+                  "c": 364752
+                }
+              }
+            }
+          ]
+        }
+      },
+      "resource_controls": {
+        "baseline": {
+          "resources": {
+            "activation_arena_peak_bytes": 0,
+            "process_rss_current_bytes": 95687204864,
+            "process_rss_peak_bytes": 96966696960,
+            "transient_current_bytes": 0,
+            "transient_peak_bytes": 0,
+            "workspace_current_bytes": 0,
+            "workspace_peak_bytes": 0
+          },
+          "http_s": 5.166255044052377,
+          "created_to_turn_start_s": 0.586143506,
+          "completed_to_session_closed_s": 0.374985708,
+          "samples": 1,
+          "raw_receipt_sha256": "5383ea1a44ff02dce46572dfefb18b3dbe2713f95fffc5a463dbd41a3db7f0b8"
+        },
+        "candidate": {
+          "resources": {
+            "activation_arena_peak_bytes": 0,
+            "process_rss_current_bytes": 95743840256,
+            "process_rss_peak_bytes": 98352037888,
+            "transient_current_bytes": 0,
+            "transient_peak_bytes": 0,
+            "workspace_current_bytes": 0,
+            "workspace_peak_bytes": 0
+          },
+          "http_s": 4.8712593369418755,
+          "created_to_turn_start_s": 1.103772471,
+          "completed_to_session_closed_s": 0.595450191,
+          "samples": 1,
+          "raw_receipt_sha256": "9b75f2bd1c0514f5917b3d777b4c888a0eac5e501a6aabfd3187b48c652fd400"
+        }
+      },
+      "lifecycle_controls": [
+        {
+          "lane": "stale-generation",
+          "status": 409,
+          "seconds": 0.0015607669483870268,
+          "error": {
+            "code": "incompatible_state",
+            "message": "requested engine generation is stale",
+            "param": null,
+            "type": "incompatible_state"
+          },
+          "active_work": 0,
+          "physical_state": 0
+        },
+        {
+          "lane": "output-capacity",
+          "status": 413,
+          "seconds": 0.1376508129760623,
+          "error": {
+            "code": "output_token_capacity_exceeded",
+            "message": "requested output token capacity exceeded: requested=32769 limit=32768",
+            "param": null,
+            "type": "invalid_request_error"
+          },
+          "active_work": 0,
+          "physical_state": 0
+        },
+        {
+          "lane": "unknown-model",
+          "status": 404,
+          "seconds": 0.0009735990315675735,
+          "error": {
+            "code": "model_not_found",
+            "message": "requested model is not loaded",
+            "param": null,
+            "type": "invalid_request_error"
+          },
+          "active_work": 0,
+          "physical_state": 0
+        },
+        {
+          "lane": "disconnect-cancellation",
+          "completed_input": 32,
+          "total_input": 650,
+          "active_work": 0,
+          "physical_state": 0,
+          "cancelled_http_requests": 1
+        },
+        {
+          "lane": "post-cancellation-recovery",
+          "status": 200,
+          "seconds": 4.958347694016993,
+          "active_work": 0,
+          "physical_state": 0
+        }
+      ],
+      "synthetic_workloads": {
+        "short": "system: Synthetic YAI provider contract probe. No Case data.; user: Return exactly YAI_OK.",
+        "medium": "8 records",
+        "longer": "32 records",
+        "record_format": "Record {row:03d}: alpha beta gamma delta epsilon.",
+        "records_system": "Synthetic input geometry control. Read the records; reply exactly YAI_OK.",
+        "records_suffix": "Reply exactly YAI_OK."
+      }
+    },
+    "workload": "Fixed synthetic 22/106/346 input-token controls, each committing 3 tokens; no Case content",
+    "warm_state": "warm",
+    "concurrency": 1,
+    "sequence_lengths": {
+      "short": [
+        22,
+        3
+      ],
+      "medium": [
+        106,
+        3
+      ],
+      "longer": [
+        346,
+        3
+      ]
+    },
+    "memory": {
+      "mapped_device_addressable_bytes": 95050210272,
+      "physical_residency_known": false,
+      "note": "RSS overlaps mapped/device-addressable storage. Resource control peaks cover primer plus short turn; do not add these classes."
+    },
+    "limitations": [
+      "Bounded warm characterization, not release performance, an SLA, long-context qualification, sustained decode or upstream full-model conformance.",
+      "Two wall samples per main control, plus separate smoke/resource confirmations. Resource/setup/cleanup spans have one sample each.",
+      "Candidate source includes the staged C server-loader extraction and registry metadata, not the uninstalled Rust shell. Complete compiler provenance and exact source delta are retained.",
+      "Wider physical rows increase session preparation and peak RSS. Short complete-HTTP samples do not establish a stable improvement; medium/longer controls do.",
+      "Turn-first-token telemetry excludes pre-turn session preparation; HTTP measurements retain preparation and cleanup. Nested attention/component durations must not be summed.",
+      "Verification population, source reasoning policy, artifact/binding identities and ordered numerical class are unchanged; engine specialization/capacity identity intentionally changes.",
+      "Cancellation reached real prefill at 32 of 650 input tokens. Work and physical session state retire to zero; an independent subsequent request succeeds.",
+      "Legacy bootstrap-Q2 cuda.native remains externally blocked; broader previously retained numerical gates are not qualified by these controls."
+    ],
+    "recorded_from": "Raw synthetic receipts and probe at /home/dgmothx/lab/models/evidence/yvex-prefill-phase-20261001.2qPmxM; complete per-variant samples/hashes above. See ../retained-observations.md#phase-specific-prompt-geometry-2026-10-01."
+  },
+  "measurements": [
+    {
+      "id": "baseline-short-prefill_s",
+      "label": "baseline 22 input prefill_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 3.4497284849999996,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "completed prefill; 22 input / 3 output tokens"
+    },
+    {
+      "id": "baseline-short-ttft_turn_s",
+      "label": "baseline 22 input ttft_turn_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 4.13638746,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "first committed token from turn start, not HTTP ingress; 22 input / 3 output tokens"
+    },
+    {
+      "id": "baseline-short-http_s",
+      "label": "baseline 22 input http_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 5.132181845547166,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "complete HTTP including admission and session cleanup; 22 input / 3 output tokens"
+    },
+    {
+      "id": "baseline-medium-prefill_s",
+      "label": "baseline 106 input prefill_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 15.18640245,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "completed prefill; 106 input / 3 output tokens"
+    },
+    {
+      "id": "baseline-medium-ttft_turn_s",
+      "label": "baseline 106 input ttft_turn_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 15.89362315,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "first committed token from turn start, not HTTP ingress; 106 input / 3 output tokens"
+    },
+    {
+      "id": "baseline-medium-http_s",
+      "label": "baseline 106 input http_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 16.937282521044835,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "complete HTTP including admission and session cleanup; 106 input / 3 output tokens"
+    },
+    {
+      "id": "baseline-longer-prefill_s",
+      "label": "baseline 346 input prefill_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 49.248078050000004,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "completed prefill; 346 input / 3 output tokens"
+    },
+    {
+      "id": "baseline-longer-ttft_turn_s",
+      "label": "baseline 346 input ttft_turn_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 49.96598865,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "first committed token from turn start, not HTTP ingress; 346 input / 3 output tokens"
+    },
+    {
+      "id": "baseline-longer-http_s",
+      "label": "baseline 346 input http_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 51.062607959494926,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "complete HTTP including admission and session cleanup; 346 input / 3 output tokens"
+    },
+    {
+      "id": "candidate-short-prefill_s",
+      "label": "candidate 22 input prefill_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 2.44319839,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "completed prefill; 22 input / 3 output tokens"
+    },
+    {
+      "id": "candidate-short-ttft_turn_s",
+      "label": "candidate 22 input ttft_turn_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 3.1589575649999997,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "first committed token from turn start, not HTTP ingress; 22 input / 3 output tokens"
+    },
+    {
+      "id": "candidate-short-http_s",
+      "label": "candidate 22 input http_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 5.212452927487902,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "complete HTTP including admission and session cleanup; 22 input / 3 output tokens"
+    },
+    {
+      "id": "candidate-medium-prefill_s",
+      "label": "candidate 106 input prefill_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 10.153921799999999,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "completed prefill; 106 input / 3 output tokens"
+    },
+    {
+      "id": "candidate-medium-ttft_turn_s",
+      "label": "candidate 106 input ttft_turn_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 10.861625400000001,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "first committed token from turn start, not HTTP ingress; 106 input / 3 output tokens"
+    },
+    {
+      "id": "candidate-medium-http_s",
+      "label": "candidate 106 input http_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 13.021533702500165,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "complete HTTP including admission and session cleanup; 106 input / 3 output tokens"
+    },
+    {
+      "id": "candidate-longer-prefill_s",
+      "label": "candidate 346 input prefill_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 31.348183249999998,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "completed prefill; 346 input / 3 output tokens"
+    },
+    {
+      "id": "candidate-longer-ttft_turn_s",
+      "label": "candidate 346 input ttft_turn_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 32.06682875,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "first committed token from turn start, not HTTP ingress; 346 input / 3 output tokens"
+    },
+    {
+      "id": "candidate-longer-http_s",
+      "label": "candidate 346 input http_s",
+      "metric": "wall-duration",
+      "unit": "s",
+      "value": 34.03406705550151,
+      "samples": 2,
+      "statistic": "arithmetic mean",
+      "scope": "complete HTTP including admission and session cleanup; 346 input / 3 output tokens"
+    }
+  ]
+}

@@ -97,6 +97,24 @@ hidden chain of thought. Terminal Markdown and operational rendering are
 projections of canonical bytes and typed events; raw and redirected output stay
 byte-preserving and free of terminal controls.
 
+### Phase-specific geometry refinement (2026-10-01)
+
+Deployment specialization admits prompt work independently of the source's
+speculative verification population. A verification width is not a maximum
+prefill width; a configured prompt chunk is not proof of a physically admitted
+batch. The private specialization schema V2 seals separate phase masks, and
+scheduler/runtime consumers intersect requested work with the matching mask
+before capacity admission or numerical mutation. Verification continues to
+consume the unchanged source-authored width; sequence scheduling remains a
+different identity. No model-family or prompt-specific branch selects geometry.
+
+Capacity preparation uses the corresponding admitted phase envelope. Wider
+prompt work can increase preparation and peak memory; complete-request
+measurements, not prefill timing alone, decide whether a candidate is useful.
+The [retained observation](../evaluation/retained-observations.md#phase-specific-prompt-geometry-2026-10-01)
+records bounded evidence and non-claims. This refinement changes no public
+record or private wire layout, numerical class, routing or transaction rule.
+
 ## Consequences
 
 - The GB10 optimization work can change packing, placement, kernels, graph

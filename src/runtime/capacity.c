@@ -802,10 +802,10 @@ static int capacity_physical_row_capacity(
      * Match generation_prefill before sizing per-row activation/staging arenas. */
     /* Before specialization exists, pre-residency admission retains the
      * conservative configured width. A live engine supplies the sealed bound. */
-    if (context->model && yvex_model_engine_scheduler_maximum_width_copy(
-            context->model, &admitted_width, err) != YVEX_OK)
+    if (context->model && yvex_model_engine_phase_maximum_width_copy(
+            context->model, YVEX_EXECUTION_PHASE_PREFILL, &admitted_width, err) != YVEX_OK)
         return yvex_error_code(err);
-    if (admitted_width > 1ull && *capacity > admitted_width)
+    if (admitted_width && *capacity > admitted_width)
         *capacity = admitted_width;
     if (context->options.mode == YVEX_EXECUTION_GENERATION_SPECULATIVE) {
         if (!speculation ||

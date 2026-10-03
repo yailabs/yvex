@@ -83,6 +83,16 @@ from compatible eager/degraded execution. Consumers re-admit the sealed profile
 against the current engine and backend and refuse stale, malformed or stronger
 claims. It is not a second permanent execution plan.
 
+The non-persisted implementation catalog admits prompt-position widths
+separately from source-authored speculative verification widths. Catalog schema
+v2 seals both policies into specialization identity; a stale schema or malformed
+mask refuses before dispatch. The current generic prompt implementation admits
+at most 32 real positions per physical batch, independently of verification
+and cross-sequence scheduling. This is an implementation envelope, not a model
+context limit. Routed gate/up and down consumers must agree; arena planning
+reserves their admitted physical population before execution. Wider prompt work
+does not widen a draft proposal or its target-verification population.
+
 Durable generation checkpoints bind a plan-compatibility projection rather
 than the current engine-generation profile identity. After engine reopen, the
 new generation derives and admits its own exact profile before restoring the
