@@ -72,21 +72,25 @@ root objects or historical executables.
 
 ## macOS native CPU build
 
-The original native Darwin report covers the prior C-shell/CPU/terminal snapshot.
-The [integration checkpoint](../evaluation/macos-main-integration.md) separately
-qualifies the new Rust product shell through the 15-case native lane on Mac and
-Linux. The same single executable and local protocol remain authoritative;
-publication into main still follows the operator's integration gate.
+The native Darwin lane qualifies the Rust product shell, bounded CPU/host
+composition and terminal lifecycle. Its hosted 14-test receipt remains distinct
+from the earlier actual-memory C-shell foundation. The
+[integration checkpoint](../evaluation/macos-main-integration.md) separately
+qualifies the composed Metal branch through the 15-case native lane on Mac and
+Linux without a fixture-capacity override. Both retain the same single executable
+and private local protocol; native-lane results alone do not qualify a full model.
+The operator has resumed main integration after final-main publication; the latest
+combined source is being requalified before publication.
 Install the Xcode Command Line Tools and modern GNU Make; Apple's bundled Make
 3.81 cannot parse the build. The qualified toolchain uses Rust 1.98.1 for the
 pinned REPLAI producer and Python 3.14 for QA:
 
 ```sh
 brew install make pkg-config ripgrep coreutils python@3.14
-rustup toolchain install 1.98.1
-rustup component add --toolchain 1.98.1 rustfmt clippy
+rustup toolchain install 1.98.1 --component rustfmt --component clippy
 export PATH="$(brew --prefix make)/libexec/gnubin:$(brew --prefix coreutils)/libexec/gnubin:$(brew --prefix python@3.14)/libexec/bin:$PATH"
 export RUSTUP_TOOLCHAIN=1.98.1
+export LIBCLANG_PATH="$(dirname "$(dirname "$(xcrun --find clang)")")/lib"
 make -j4
 python3 tools/qa.py run native
 ```
@@ -109,7 +113,8 @@ weakening byte authentication.
 
 The `native` lane uses actual host memory by default and retains the runtime's
 minimum system reserve. The hosted macOS job explicitly sets
-`YVEX_TEST_FIXTURE_CAPACITY=1` for two tiny model-admission fixtures; their
+`YVEX_TEST_FIXTURE_CAPACITY=1` for the binding, tiny-vertical and Rust native
+pipeline model-admission fixtures; their
 declared envelope is reported in the test logs. That CI mode qualifies fixture
 execution, not available host capacity. Keep it unset for local model-admission
 qualification; the evaluation report records the distinction.

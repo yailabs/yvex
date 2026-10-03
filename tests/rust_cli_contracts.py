@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -15,6 +16,7 @@ import select
 import shutil
 import subprocess
 import struct
+import sys
 import tempfile
 import termios
 import time
@@ -45,29 +47,49 @@ def terminal_output(binary: Path, words: list[str], environment: dict[str, str])
     attributes = termios.tcgetattr(slave)
     attributes[1] &= ~termios.OPOST
     termios.tcsetattr(slave, termios.TCSANOW, attributes)
-    child = None
+    process = None
     try:
-        child = subprocess.Popen([str(binary), *words], cwd=ROOT, env=environment,
-                                 stdout=slave, stderr=slave, stdin=subprocess.DEVNULL)
+        os.set_blocking(master, False)
+        process = subprocess.Popen([str(binary), *words], cwd=ROOT, env=environment,
+                                   stdout=slave, stderr=subprocess.PIPE,
+                                   stdin=subprocess.DEVNULL)
         chunks = []
         deadline = time.monotonic() + 15
         while True:
-            # Keep a slave open until buffered output is drained. Darwin can
-            # discard unread terminal output when the last slave closes.
-            if select.select([master], [], [], 0.05)[0]:
-                chunk = os.read(master, 4096)
-                assert chunk, "terminal closed before output was drained"
+            assert time.monotonic() < deadline, ("terminal output timeout", words)
+            while select.select([master], [], [], 0.02 if process.poll() is None else 0)[0]:
+                try:
+                    chunk = os.read(master, 4096)
+                except OSError as error:
+                    if error.errno in (errno.EIO, errno.EAGAIN):
+                        break
+                    raise
+                if not chunk:
+                    break
                 chunks.append(chunk)
-            elif child.poll() is not None:
+            if process.poll() is not None:
+                # Drain before closing the caller-owned slave: Darwin may
+                # discard pending output when the last slave disappears.
+                while select.select([master], [], [], 0)[0]:
+                    try:
+                        chunk = os.read(master, 4096)
+                    except OSError as error:
+                        if error.errno in (errno.EIO, errno.EAGAIN):
+                            break
+                        raise
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
                 break
-            assert time.monotonic() < deadline, "terminal render stalled"
-        assert child.wait(timeout=1) == 0, b"".join(chunks)
+        _, error = process.communicate(timeout=1)
+        assert process.returncode == 0, error
         return b"".join(chunks).decode().replace("\r\n", "\n")
     finally:
-        if child is not None and child.poll() is None:
-            child.kill()
-            child.wait(timeout=5)
-        os.close(slave)
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+        if slave >= 0:
+            os.close(slave)
         os.close(master)
 
 
@@ -1678,6 +1700,39 @@ def computational_semantics(value):
     return value
 
 
+def native_pipeline_capacity(environment: dict[str, str]) -> dict[str, str]:
+    """Declare fixture capacity only on explicit hosted opt-in, never host admission."""
+    result = environment.copy()
+    if result.get("YVEX_TEST_FIXTURE_CAPACITY") != "1":
+        return result
+    variables = ("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES",
+                 "YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES",
+                 "YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES")
+    assert not any(name in result for name in variables), (
+        "native pipeline fixture cannot replace caller-injected capacity facts")
+    result[variables[0]] = result[variables[1]] = "137438953472"
+    return result
+
+
+def native_pipeline_capacity_controls() -> None:
+    ordinary = {"NO_COLOR": "1", "YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES": "1"}
+    assert native_pipeline_capacity(ordinary) == ordinary
+    hosted = {"NO_COLOR": "1", "YVEX_TEST_FIXTURE_CAPACITY": "1"}
+    declared = native_pipeline_capacity(hosted)
+    assert declared["YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES"] == "137438953472"
+    assert declared["YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES"] == "137438953472"
+    assert "YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES" not in hosted
+    for name in ("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES",
+                 "YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES",
+                 "YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES"):
+        try:
+            native_pipeline_capacity({**hosted, name: "1"})
+        except AssertionError as error:
+            assert "cannot replace" in str(error)
+        else:
+            raise AssertionError(f"declared fixture capacity overwrote {name}")
+
+
 def native_pipeline(binary: Path, reference: Path | None, compiler: Path) -> int:
     """Real compiled CPU computation, not a producer fixture response or model qualification."""
     count = 0
@@ -1685,13 +1740,19 @@ def native_pipeline(binary: Path, reference: Path | None, compiler: Path) -> int
         directory = Path(temporary).resolve()
         environment = {**os.environ, "YVEX_CONFIG_DIR": str(directory / "config"),
                        "YVEX_DATA_DIR": str(directory / "data"), "NO_COLOR": "1"}
+        native_pipeline_capacity_controls()
+        environment = native_pipeline_capacity(environment)
+        if environment.get("YVEX_TEST_FIXTURE_CAPACITY") == "1":
+            print("native pipeline fixture: declared 128 GiB admission capacity; not host memory evidence",
+                  flush=True)
         artifact = directory / "tiny.gguf"
         (directory / "bindings").mkdir()
         subprocess.run(["python3", str(ROOT / "tests/integration/tiny_model.py"), str(artifact)],
                        check=True, capture_output=True, text=True, timeout=15)
         compiled = subprocess.run([str(compiler), str(artifact), str(directory / "bindings"),
-                                   str(directory / "input")], check=True, capture_output=True,
+                                   str(directory / "input")], capture_output=True,
                                   text=True, env=environment, timeout=15)
+        assert compiled.returncode == 0, ("native fixture compilation failed", compiled)
         binding = dict(line.split("=", 1) for line in compiled.stdout.splitlines())["binding_path"]
         common = ["--target", "tiny-executable", "--artifact", str(artifact), "--runtime-binding", binding,
                   "--backend", "cpu"]
@@ -2787,15 +2848,20 @@ def supervised_acquisition(binary: Path, reference: Path | None) -> int:
         assert removed["deleted_paths"] == 1 and not lock.exists() and partial.exists(), removed
         count += 3
         # Exact argv matching blocks cleanup while another owner uses this source.
-        # Retain the shell and its exact source argument: some shells exec a
-        # sole final command, replacing argv with sleep's unrelated arguments.
-        owner = subprocess.Popen(["/bin/sh", "-c", "sleep 5; :", str(source)])
+        # A shell can exec sleep and lose its source argv. Use an explicit
+        # process that retains the exact argument, and observe its readiness.
+        owner = subprocess.Popen([sys.executable, "-c",
+                                  "import time; print('ready', flush=True); time.sleep(30)",
+                                  str(source)], stdout=subprocess.PIPE, text=True)
         try:
-            time.sleep(0.05)
+            assert select.select([owner.stdout], [], [], 5)[0], "source owner did not become ready"
+            assert owner.stdout.readline() == "ready\n" and owner.poll() is None
             checked("cleanup", root, "--failed-partials", "--yes", expected=1)
+            assert owner.poll() is None and source.exists() and partial.exists()
         finally:
             owner.terminate()
             owner.wait(timeout=6)
+            owner.stdout.close()
         record_path = root / "registry/gemma/gemma-4-12b-it.download.json"
         record = record_path.read_bytes()
         victim = directory / "foreign-data"

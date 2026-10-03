@@ -71,8 +71,12 @@ def run(binary, fixture, output):
                         # Escape prefix. Start the idle interval from that
                         # observed transition, not from the PTY write above.
                         chat.wait(b"\r\x1b[2K\x1b[1B", dismiss)
-                        chat.quiet()
-                        chat.quiet()  # preserve the decoder's fragmented-sequence deadline
+                        # This is a semantic control, not a deadline-latency
+                        # benchmark. Hosted Darwin observed a 344 ms wake for
+                        # a 250 ms deadline; allow scheduler delivery margin
+                        # after consumption without changing the producer timer.
+                        for _ in range(4):
+                            chat.quiet()
                         chat.send(b"\x01\x0b")
                         start = chat.send(b"/think-max\r")
                         chat.wait(b"REASONING", start)
