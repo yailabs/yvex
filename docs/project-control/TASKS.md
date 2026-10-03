@@ -69,10 +69,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 43 | 34 | 1 | 1 | 7 |
+| 43 | 35 | 0 | 1 | 7 |
 <!-- task-counts:end -->
 
-**34/43 selected Tasks complete.** This denominator includes the significant
+**35/43 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -154,7 +154,7 @@ and retained Metal primitive bounds. No next Metal/model milestone is selected.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `INTEGRATION.MACOS.METAL.MAIN.0` | Reconcile the closed Metal/Qwen pressure branch with published main, qualify the combined product and integrate before creating the successor branch | P1 | 🔵 IN PROGRESS | Published, clean Spark/main `06f234b6`; retain the Rust product shell, native Metal primitive and bounded Qwen CPU semantics. Reconcile build/source ownership, backend inspection and affected QA; publish the qualified integration and create `feature/macos-metal2` from integrated main. |
+| `INTEGRATION.MACOS.METAL.MAIN.0` | Reconcile the closed Metal/Qwen pressure branch with published main, qualify the combined product and integrate before creating the successor branch | Closed | ✅ COMPLETE | Published histories through `fb13e4cf` merge into qualified `d47f468d`: Mac/Linux CI 121 each, final native 15 each, Metal 2, exact Qwen CPU prefixes, Linux sanitizer 2 and repaired Mac runtime UBSan. Qualified main is published; `feature/macos-metal2` starts from it. [Evidence and external gate limits](../evaluation/macos-main-integration.md). |
 
 The operator authorized this integration sequence, initially paused it for
 unfinished main work, and resumed it on 2026-10-03. Live Spark checkout and
@@ -166,16 +166,21 @@ current owner rather than restoring the removed C CLI. Existing exact model
 and primitive evidence remain historical until combined-source regression is
 earned. This Task does not select full-model Metal or any successor milestone.
 
-The [2026-10-03 checkpoint](../evaluation/macos-main-integration.md) records
-source-stable Mac/Linux native 15 PASS, Metal 2 PASS and both exact Qwen CPU
-continuations at `cb457a83`, including published main through `0ffe591d`.
-Intermediate Mac/Linux CI each passes 121 tests at its recorded source. The
-operator retained a publication hold at that checkpoint, then explicitly lifted
-it after final-main publication at clean `fb13e4cf21b06b69d03468b234613f7d0ecc3fc5`.
-Reconcile and qualify that published delta locally on Mac and in the isolated
-Linux checkout, publish the integrated main and create `feature/macos-metal2`.
-The canonical DGX session can then pull main and continue; its separate approval
-is not an additional integration gate.
+The [2026-10-03 integration report](../evaluation/macos-main-integration.md)
+retains the initial checkpoint and publication hold, then records the operator's
+explicit resumption after final main `fb13e4cf`. Final executable source is clean
+`d47f468d417b8f700b8fca28218df02d23495986`: native 15 PASS per host, Metal 2 PASS,
+exact Qwen CPU continuations and repaired Mac UBSan. Common CI 121 per host and
+Linux sanitizer 2 PASS retain their exact earlier merge source `b878716f`; its
+C/CUDA implementations are unchanged by the Darwin link repair. Mac admission
+uses actual memory; final Linux fixture receipts explicitly declare capacity.
+Main and both Metal refs are published at the integrated history; the successor
+is created from main. The primary DGX checkout is preserved and its canonical
+session can pull to continue. Only this integration Task closes; full-model
+Metal, unsupported Mac leak instrumentation and external live/release gates
+retain their separate limits. `progression_decision=proceed`,
+`downstream_safe=true` for the bounded integration, native CPU, Qwen CPU and
+Metal primitive claims only. No successor implementation Task is selected.
 
 ## Delivery progression
 

@@ -75,12 +75,14 @@ root objects or historical executables.
 The native Darwin lane qualifies the Rust product shell, bounded CPU/host
 composition and terminal lifecycle. Its hosted 14-test receipt remains distinct
 from the earlier actual-memory C-shell foundation. The
-[integration checkpoint](../evaluation/macos-main-integration.md) separately
-qualifies the composed Metal branch through the 15-case native lane on Mac and
-Linux without a fixture-capacity override. Both retain the same single executable
+[integration report](../evaluation/macos-main-integration.md) preserves the
+15-case actual-capacity checkpoint on Mac and Linux, then qualifies the final
+composed native source with each host's capacity mode stated explicitly. Both retain the same single executable
 and private local protocol; native-lane results alone do not qualify a full model.
-The operator has resumed main integration after final-main publication; the latest
-combined source is being requalified before publication.
+The final main reconciliation passes the native lane on both hosts and the
+separate Metal foundation lane on the tested Mac; the qualified source is
+integrated into main. Linux final fixtures explicitly declare capacity under
+live memory pressure; the Mac native receipt uses actual host capacity.
 Install the Xcode Command Line Tools and modern GNU Make; Apple's bundled Make
 3.81 cannot parse the build. The qualified toolchain uses Rust 1.98.1 for the
 pinned REPLAI producer and Python 3.14 for QA:

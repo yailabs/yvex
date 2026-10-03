@@ -27,7 +27,7 @@ Software correctness, independent numerical conformance, artifact integrity, run
 - [Native macOS Qualification](macos-native.md)
 - [Apple Silicon Metal Foundation](macos-metal.md)
 - [macOS Small-Model CPU Qualification](macos-small-model.md)
-- [macOS Metal and Rust Shell Integration Checkpoint](macos-main-integration.md)
+- [macOS Metal and Rust Shell Main Integration](macos-main-integration.md)
 <!-- docs:diagram evidence_promotion -->
 ```mermaid
 %% yvex-figure: evidence_promotion
