@@ -16,6 +16,7 @@ import select
 import shutil
 import subprocess
 import struct
+import sys
 import tempfile
 import time
 
@@ -2842,13 +2843,20 @@ def supervised_acquisition(binary: Path, reference: Path | None) -> int:
         assert removed["deleted_paths"] == 1 and not lock.exists() and partial.exists(), removed
         count += 3
         # Exact argv matching blocks cleanup while another owner uses this source.
-        owner = subprocess.Popen(["/bin/sh", "-c", "sleep 5", str(source)])
+        # A shell can exec sleep and lose its source argv. Use an explicit
+        # process that retains the exact argument, and observe its readiness.
+        owner = subprocess.Popen([sys.executable, "-c",
+                                  "import time; print('ready', flush=True); time.sleep(30)",
+                                  str(source)], stdout=subprocess.PIPE, text=True)
         try:
-            time.sleep(0.05)
+            assert select.select([owner.stdout], [], [], 5)[0], "source owner did not become ready"
+            assert owner.stdout.readline() == "ready\n" and owner.poll() is None
             checked("cleanup", root, "--failed-partials", "--yes", expected=1)
+            assert owner.poll() is None and source.exists() and partial.exists()
         finally:
             owner.terminate()
             owner.wait(timeout=6)
+            owner.stdout.close()
         record_path = root / "registry/gemma/gemma-4-12b-it.download.json"
         record = record_path.read_bytes()
         victim = directory / "foreign-data"

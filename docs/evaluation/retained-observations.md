@@ -104,6 +104,10 @@ It declares 128 GiB, refuses any caller-injected capacity override, retains the
 explicit low-budget refusal/recovery controls and does not establish host memory
 admission. Ordinary local execution still uses actual capacity. Compilation
 failures retain captured diagnostics rather than hiding stderr in an exception.
+The active-source cleanup control uses an explicitly ready process that retains
+the exact source argument. Shell tail-exec optimization is not evidence of an
+active argument owner; cleanup must refuse while the actual owner remains live
+and preserve both source and partial state.
 
 Actual hosted macOS Rust qualification remains a separate closure gate. The running public
 DeepSeek producer remains the previously qualified phase-geometry executable;
