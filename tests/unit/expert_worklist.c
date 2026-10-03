@@ -332,11 +332,86 @@ static int worklist_test_multi_session_sources(void)
     return 0;
 }
 
+static int worklist_test_prompt_population(void)
+{
+    enum { ROWS = 32, TOPK = 2, PAIRS = ROWS * TOPK };
+    unsigned long long selected[PAIRS], experts[2], offsets[3], populations[2];
+    unsigned long long pairs[PAIRS], rows[PAIRS], destinations[PAIRS];
+    float weights[PAIRS], ordered_weights[PAIRS];
+    yvex_execution_batch_source source = {1ull, 1ull, {0}};
+    yvex_execution_batch_row batch_rows[ROWS] = {{0}};
+    yvex_execution_batch batch = {0};
+    yvex_expert_worklist_policy policy = {0};
+    yvex_expert_worklist_request request = {0};
+    yvex_expert_worklist_storage storage = {
+        experts, offsets, populations, pairs, rows, destinations,
+        ordered_weights, 2ull, PAIRS};
+    yvex_expert_worklist worklist = {0};
+    yvex_error err = {0};
+    batch.schema_version = YVEX_EXECUTION_BATCH_SCHEMA_V2;
+    batch.phase = YVEX_EXECUTION_PHASE_PREFILL;
+    batch.provenance = YVEX_EXECUTION_BATCH_PREFILL;
+    batch.row_count = ROWS;
+    batch.source_count = batch.engine_generation = 1ull;
+    batch.sources = &source;
+    batch.rows = batch_rows;
+    worklist_test_identity(source.identity, '0');
+    worklist_test_identity(batch.execution_profile_identity, '4');
+    worklist_test_identity(batch.operation_identity, '5');
+    for (unsigned long long row = 0ull; row < ROWS; ++row) {
+        batch_rows[row].source_row = row;
+        batch_rows[row].sequence_position = 100ull + row;
+        batch_rows[row].publication_ordinal = row;
+        for (unsigned long long rank = 0ull; rank < TOPK; ++rank) {
+            selected[row * TOPK + rank] = rank;
+            weights[row * TOPK + rank] = rank ? 0.75f : 0.25f;
+        }
+    }
+    YVEX_TEST_ASSERT(yvex_execution_batch_seal(&batch, &err) == YVEX_OK,
+                     "32 real prompt positions seal independently of verification");
+    policy.schema_version = YVEX_EXPERT_WORKLIST_POLICY_SCHEMA_V2;
+    policy.supported_width_mask = (1ull << (ROWS + 1u)) - 2ull;
+    policy.row_implementation = YVEX_ENGINE_IMPLEMENTATION_DEVICE_ENCODED_ROW;
+    policy.matrix_implementation = YVEX_ENGINE_IMPLEMENTATION_COUNT;
+    YVEX_TEST_ASSERT(yvex_expert_worklist_policy_seal(&policy, &err) == YVEX_OK,
+                     "bounded prompt geometry seals without matrix admission");
+    request.schema_version = YVEX_EXPERT_WORKLIST_SCHEMA_V1;
+    request.batch = &batch;
+    request.policy = &policy;
+    request.expert_count = request.experts_per_row = TOPK;
+    request.pair_count = PAIRS;
+    request.selected_experts = selected;
+    request.route_weights = weights;
+    YVEX_TEST_ASSERT(yvex_expert_worklist_build(&request, &storage, &worklist, &err) == YVEX_OK &&
+                         worklist.actual_width == ROWS && worklist.pair_count == PAIRS &&
+                         worklist.maximum_bucket_population == ROWS &&
+                         worklist.population_histogram[YVEX_EXPERT_WORKLIST_HISTOGRAM_CAP - 1u] == 2ull,
+                     "wide prompt preserves every expert pair and saturating histogram");
+    for (unsigned long long pair = 0ull; pair < PAIRS; ++pair) {
+        unsigned long long source_pair = (pair % ROWS) * TOPK + pair / ROWS;
+        YVEX_TEST_ASSERT(pairs[pair] == source_pair && rows[pair] == pair % ROWS &&
+                             destinations[pair] == source_pair &&
+                             ordered_weights[pair] == weights[source_pair],
+                         "expert-major ordering preserves prompt position, route and publication");
+    }
+    policy.supported_width_mask = (1ull << 7u) - 2ull;
+    YVEX_TEST_ASSERT(yvex_expert_worklist_policy_seal(&policy, &err) == YVEX_OK &&
+                         yvex_expert_worklist_build(&request, &storage, &worklist, &err) != YVEX_OK,
+                     "verification-only envelope must refuse 32 prompt rows");
+    policy.supported_width_mask = (1ull << (ROWS + 1u)) - 2ull;
+    weights[PAIRS - 1u] = NAN;
+    YVEX_TEST_ASSERT(yvex_expert_worklist_policy_seal(&policy, &err) == YVEX_OK &&
+                         yvex_expert_worklist_build(&request, &storage, &worklist, &err) != YVEX_OK,
+                     "wide prompt routing remains fail-closed on nonfinite weight");
+    return 0;
+}
+
 int yvex_test_expert_worklist(void)
 {
     if (worklist_test_compatibility() != 0) return 1;
     if (worklist_test_build() != 0) return 1;
     if (worklist_test_refusals() != 0) return 1;
     if (worklist_test_multi_session_sources() != 0) return 1;
+    if (worklist_test_prompt_population() != 0) return 1;
     return worklist_test_observation();
 }

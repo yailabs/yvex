@@ -9,6 +9,7 @@
 #include <yvex/core.h>
 #include <yvex/gguf.h>
 #include <yvex/internal/core.h>
+#include <yvex/internal/materialization.h>
 #include <yvex/model.h>
 
 struct yvex_materialized_weight {
@@ -304,12 +305,56 @@ static int materialize_one(yvex_weight_table *table,
     return YVEX_OK;
 }
 
-int yvex_weight_table_materialize(yvex_weight_table **out,
+static void materialize_report_initial(yvex_materialize_summary *report,
+                                       const char *backend_name,
+                                       const yvex_backend *backend)
+{
+    if (!report) return;
+    memset(report, 0, sizeof(*report));
+    report->status = YVEX_WEIGHT_STATUS_FAILED;
+    report->backend_name = backend_name;
+    report->materialization_gate = "fail";
+    report->materialization_phase = "preflight";
+    report->shape_status = "unchecked";
+    report->range_status = "unchecked";
+    report->backend_status = backend ? "ready" : "not-opened";
+    report->cleanup_status = "not-needed";
+}
+
+static void materialize_report_retire(yvex_weight_table *table,
+                                      yvex_materialize_summary *report,
+                                      const char *backend_name,
+                                      int accounting_known,
+                                      unsigned long long initial_bytes)
+{
+    yvex_backend *backend = table->backend;
+    if (report && table->summary.backend_name) {
+        *report = table->summary;
+        report->backend_name = backend_name;
+        report->status = YVEX_WEIGHT_STATUS_FAILED;
+        report->materialization_gate = "fail";
+        report->cleanup_attempted = table->summary.bytes_allocated != 0;
+    }
+    yvex_weight_table_close(table);
+    if (report && report->cleanup_attempted) {
+        yvex_backend_memory_stats stats;
+        yvex_error accounting_error;
+        report->cleanup_status = "unverified";
+        if (accounting_known &&
+            yvex_backend_get_memory_stats(backend, &stats, &accounting_error) == YVEX_OK) {
+            report->backend_allocated_bytes = stats.allocated_bytes;
+            report->cleanup_status = stats.allocated_bytes == initial_bytes ? "pass" : "fail";
+        }
+    }
+}
+
+static int weight_table_materialize(yvex_weight_table **out,
                                   const yvex_artifact *artifact,
                                   const yvex_gguf *gguf,
                                   const yvex_tensor_table *tensors,
                                   yvex_backend *backend,
                                   const yvex_materialize_options *options,
+                                  yvex_materialize_summary *report,
                                   yvex_error *err)
 {
     yvex_weight_table *table;
@@ -320,6 +365,13 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
     int require_all = 0;
     int allow_unsupported = 0;
     int rc = YVEX_OK;
+    unsigned long long initial_bytes = 0;
+    int accounting_known = 0;
+    const char *backend_name = options && options->backend_name
+        ? options->backend_name
+        : yvex_backend_kind_name(yvex_backend_kind_of(backend));
+
+    materialize_report_initial(report, backend_name, backend);
 
     if (!out) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_weight_table_materialize", "out is required");
@@ -331,6 +383,11 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_weight_table_materialize",
                        "artifact, gguf, tensors and backend are required");
         return YVEX_ERR_INVALID_ARG;
+    }
+    if (report) {
+        yvex_error accounting_error;
+        accounting_known = yvex_backend_get_memory_stats(backend, &stats, &accounting_error) == YVEX_OK;
+        if (accounting_known) initial_bytes = stats.allocated_bytes;
     }
 
     rc = yvex_gguf_layout_validate(artifact, gguf, &layout, err);
@@ -356,10 +413,10 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
     table->items = (yvex_materialized_weight *)calloc((size_t)(tensor_count ? tensor_count : 1),
                                                       sizeof(*table->items));
     if (!table->backend_name || !table->items) {
-        yvex_weight_table_close(table);
         yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_weight_table_materialize",
                        "failed to allocate materialized weight rows");
-        return YVEX_ERR_NOMEM;
+        rc = YVEX_ERR_NOMEM;
+        goto fail;
     }
 
     table->summary.backend_name = table->backend_name;
@@ -378,27 +435,26 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
 
         if (!tensor) {
             if (require_all) {
-                yvex_weight_table_close(table);
                 yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_weight_table_materialize",
                                "missing tensor table row");
-                return YVEX_ERR_INVALID_ARG;
+                rc = YVEX_ERR_INVALID_ARG;
+                goto fail;
             }
             continue;
         }
         if (tensor->storage_bytes == 0) {
             if (require_all && !allow_unsupported) {
-                yvex_weight_table_close(table);
                 yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_weight_table_materialize",
                                 "tensor %s has unsupported storage accounting", tensor->name);
-                return YVEX_ERR_UNSUPPORTED;
+                rc = YVEX_ERR_UNSUPPORTED;
+                goto fail;
             }
             continue;
         }
         memset(&range, 0, sizeof(range));
         rc = yvex_tensor_range_validate(artifact, gguf, tensor, &range, err);
         if (rc != YVEX_OK) {
-            yvex_weight_table_close(table);
-            return rc;
+            goto fail;
         }
         table->summary.bytes_planned += range.tensor_bytes;
     }
@@ -446,8 +502,7 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
     }
 
     if (rc != YVEX_OK) {
-        yvex_weight_table_close(table);
-        return rc;
+        goto fail;
     }
 
     if (table->summary.tensors_materialized == tensor_count &&
@@ -468,8 +523,45 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
     }
 
     *out = table;
+    if (report) {
+        *report = table->summary;
+        report->backend_name = backend_name;
+    }
     yvex_error_clear(err);
     return YVEX_OK;
+
+fail:
+    materialize_report_retire(table, report, backend_name, accounting_known, initial_bytes);
+    return rc;
+}
+
+int yvex_weight_table_materialize(yvex_weight_table **out,
+                                  const yvex_artifact *artifact,
+                                  const yvex_gguf *gguf,
+                                  const yvex_tensor_table *tensors,
+                                  yvex_backend *backend,
+                                  const yvex_materialize_options *options,
+                                  yvex_error *err)
+{
+    return weight_table_materialize(out, artifact, gguf, tensors, backend, options, NULL, err);
+}
+
+int yvex_weight_table_materialize_report(yvex_weight_table **out,
+                                         const yvex_artifact *artifact,
+                                         const yvex_gguf *gguf,
+                                         const yvex_tensor_table *tensors,
+                                         yvex_backend *backend,
+                                         const yvex_materialize_options *options,
+                                         yvex_materialize_summary *report,
+                                         yvex_error *err)
+{
+    if (!report) {
+        if (out) *out = NULL;
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_weight_table_materialize_report",
+                       "report is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    return weight_table_materialize(out, artifact, gguf, tensors, backend, options, report, err);
 }
 
 int yvex_weight_table_get_summary(const yvex_weight_table *weights,

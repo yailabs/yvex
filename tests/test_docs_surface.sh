@@ -80,7 +80,7 @@ if test -x "$YVEX_BIN"; then
       fail "built yvex help exposes retired command: $retired"
   done
   advanced=$("$YVEX_BIN" help --advanced)
-  for command in 'yvex bench attention execute' 'yvex engine load [PROFILE]' \
+  for command in 'yvex bench attention execute' 'yvex engine load' \
                  'yvex source list' 'yvex artifact list' 'yvex profile list'
   do
     require_human "$advanced" "$command" "advanced help lacks canonical command: $command"
@@ -104,5 +104,9 @@ require_human "$serve_help" 'operation: host.serve' 'serve help lacks foreground
 printf '%s\n' "$serve_help" | grep -F -- 'engine load' >/dev/null &&
   fail 'serve help embeds engine administration'
 engine_help=$("$YVEX_BIN" help engine)
-require_human "$engine_help" 'yvex engine load [PROFILE]' 'engine help lacks explicit profile load'
-require_human "$engine_help" 'yvex engine unload ENGINE' 'engine help lacks independent unload'
+require_human "$engine_help" 'yvex engine load' 'engine help lacks explicit profile load'
+require_human "$engine_help" 'yvex engine unload' 'engine help lacks independent unload'
+engine_load_help=$("$YVEX_BIN" engine load --help)
+require_human "$engine_load_help" 'yvex engine load [PROFILE]' 'leaf help lacks optional profile argument'
+engine_unload_help=$("$YVEX_BIN" engine unload --help)
+require_human "$engine_unload_help" 'yvex engine unload <ENGINE>' 'leaf help lacks required engine argument'

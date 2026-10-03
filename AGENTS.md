@@ -128,6 +128,12 @@ semantics, not an implementation. CLI consumes typed APIs: input adapters
 parse, renderers format, and only CLI I/O/server entrypoints write operator
 output. UIs do not parse human output or invent telemetry.
 
+The product shell is Rust under `src/cli/rust/`; C/CUDA computational owners do
+not depend on it. The `ffi` module alone crosses native ownership. Cargo derives
+bindings from actual C headers and embeds the generated operator registry;
+neither hand-authored ABI layouts nor a legacy C dispatcher is an alternative.
+`make lib` remains independent of Cargo; `make client` builds the Rust product.
+
 ## Evidence and completion
 
 Keep software tests, independent numerical conformance, runtime lifecycle

@@ -90,6 +90,13 @@ actual working set remain unmeasured through explicit absent known bits. Legacy
 dedicated/free GPU-memory and CUDA capability fields remain unavailable, not a
 measured zero or a promise that all system RAM is usable.
 
+The Rust product shell consumes the same copied backend report through generated
+private FFI bindings. Backend selection delegates to the common kind parser;
+resource rendering preserves known-zero versus unmeasured facts and shared
+system-memory semantics. It does not restore the retired C CLI or derive model
+admission from primitive availability. Make supplies the native framework link
+inputs to Cargo, while Linux excludes the Objective-C implementation.
+
 The first operation is existing F32 embedding row selection: integer loads and
 stores preserve source F32 representations exactly. Every other numerical
 variant, including F16 embedding, matmul, normalization, attention and quantized

@@ -79,7 +79,12 @@ mkdir -p "$OUT_DIR"
   --require-token-embedding \
   --partial-token 0 \
   >"$OUT_DIR/raw-backend-normal.out" 2>"$OUT_DIR/raw-backend-normal.err"
-contains "$OUT_DIR/raw-backend-normal.out" "integrity: pass model=$MODEL backend=cpu"
+if ! grep -F "integrity: pass model=$MODEL backend=cpu" "$OUT_DIR/raw-backend-normal.out" >/dev/null; then
+    contains "$OUT_DIR/raw-backend-normal.out" "integrity_status: pass"
+    contains "$OUT_DIR/raw-backend-normal.out" "model: $(basename "$MODEL")"
+    contains "$OUT_DIR/raw-backend-normal.out" "backend: cpu"
+    contains "$OUT_DIR/raw-backend-normal.out" "materialization_preflight: pass"
+fi
 contains "$OUT_DIR/raw-backend-normal.out" "boundary: integrity gate only, generation unsupported"
 contains "$OUT_DIR/raw-backend-normal.out" "status: integrity-report-pass"
 test "$(wc -l < "$OUT_DIR/raw-backend-normal.out")" -le 8
@@ -98,7 +103,8 @@ contains "$OUT_DIR/raw-bad-output.err" "unsupported output mode: nope"
   --partial-token 0 \
   --audit \
   >"$OUT_DIR/raw-pass.out" 2>"$OUT_DIR/raw-pass.err"
-contains "$OUT_DIR/raw-pass.out" "artifact_integrity_report: summary"
+grep -E 'artifact_integrity_report: summary|ARTIFACT INTEGRITY  PASS' "$OUT_DIR/raw-pass.out" >/dev/null ||
+    fail "integrity report heading missing"
 contains "$OUT_DIR/raw-pass.out" "model_input_kind: path"
 contains "$OUT_DIR/raw-pass.out" "identity_status: unregistered"
 contains "$OUT_DIR/raw-pass.out" "digest_status: not-requested"

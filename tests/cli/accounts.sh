@@ -14,13 +14,14 @@ mkdir -p "$ROOT"
 "$YVEX_BIN" source accounts --help > "$ROOT/help.out"
 grep 'yvex source accounts providers' "$ROOT/help.out"
 grep 'yvex source accounts status' "$ROOT/help.out"
-grep 'yvex source accounts whoami PROVIDER' "$ROOT/help.out"
-grep 'yvex source accounts login PROVIDER' "$ROOT/help.out"
-grep 'yvex source accounts logout PROVIDER' "$ROOT/help.out"
-grep 'yvex source accounts ensure PROVIDER' "$ROOT/help.out"
+grep 'yvex source accounts whoami' "$ROOT/help.out"
+grep 'yvex source accounts login' "$ROOT/help.out"
+grep 'yvex source accounts logout' "$ROOT/help.out"
+grep 'yvex source accounts ensure' "$ROOT/help.out"
 "$YVEX_BIN" source accounts login --help > "$ROOT/login-help.out"
 python3 tests/support/human_field.py "$ROOT/login-help.out" "operation: provider.account.login"
 grep -- '--force' "$ROOT/login-help.out"
+grep '<PROVIDER>' "$ROOT/login-help.out"
 grep -- '--add-to-git-credential' "$ROOT/login-help.out"
 ! grep -- '--token-stdin' "$ROOT/login-help.out"
 
@@ -28,10 +29,9 @@ YVEX_CONFIG_DIR="$ROOT/missing-config" \
 YVEX_HF_CLI=/missing/hf \
 YVEX_GH_CLI=/missing/gh \
   "$YVEX_BIN" source accounts status --output audit > "$ROOT/status-missing.out"
-grep 'provider_0_top_blocker: missing-huggingface-cli' "$ROOT/status-missing.out"
-grep 'provider_1_top_blocker: missing-github-cli' "$ROOT/status-missing.out"
-grep 'raw_token_stored_by_yvex: false' "$ROOT/status-missing.out"
-grep 'status: accounts-status' "$ROOT/status-missing.out"
+python3 tests/support/human_field.py "$ROOT/status-missing.out" 'blocker: missing-huggingface-cli'
+python3 tests/support/human_field.py "$ROOT/status-missing.out" 'blocker: missing-github-cli'
+python3 tests/support/human_field.py "$ROOT/status-missing.out" 'raw_token_stored_by_yvex: false'
 
 YVEX_CONFIG_DIR="$ROOT/providers-config" \
 YVEX_HF_CLI="$FAKE_HF" \
@@ -39,29 +39,29 @@ YVEX_GH_CLI="$FAKE_GH" \
   "$YVEX_BIN" source accounts providers --output table > "$ROOT/providers-table.out"
 grep 'huggingface' "$ROOT/providers-table.out"
 grep 'github' "$ROOT/providers-table.out"
-grep 'status: account-providers' "$ROOT/providers-table.out"
+grep 'PROVIDER' "$ROOT/providers-table.out"
 
 YVEX_CONFIG_DIR="$ROOT/providers-plain-config" \
 YVEX_HF_CLI="$FAKE_HF" \
 YVEX_GH_CLI="$FAKE_GH" \
   "$YVEX_BIN" source accounts providers > "$ROOT/providers-plain.out"
-grep 'authentication is delegated to installed CLIs' "$ROOT/providers-plain.out"
+grep 'Authentication is delegated to provider tooling' "$ROOT/providers-plain.out"
 ! grep 'no login' "$ROOT/providers-plain.out"
 
 YVEX_CONFIG_DIR="$ROOT/hf-whoami-config" \
 YVEX_HF_CLI="$FAKE_HF" \
 YVEX_FAKE_HF_AUTH=1 \
   "$YVEX_BIN" source accounts whoami huggingface --output audit > "$ROOT/hf-whoami.out"
-grep 'provider: huggingface' "$ROOT/hf-whoami.out"
-grep 'auth_state: logged-in' "$ROOT/hf-whoami.out"
-grep 'status: account-whoami-pass' "$ROOT/hf-whoami.out"
+python3 tests/support/human_field.py "$ROOT/hf-whoami.out" 'provider: huggingface'
+python3 tests/support/human_field.py "$ROOT/hf-whoami.out" 'auth_state: logged-in'
+python3 tests/support/human_field.py "$ROOT/hf-whoami.out" 'status: account-whoami-pass'
 
 YVEX_CONFIG_DIR="$ROOT/hf-login-config" \
 YVEX_HF_CLI="$FAKE_HF" \
 YVEX_FAKE_HF_STATE="$ROOT/hf-login.state" \
 YVEX_FAKE_HF_LOGIN_OK=1 \
   "$YVEX_BIN" source accounts login huggingface --output audit > "$ROOT/hf-login.out"
-grep 'status: account-login-pass' "$ROOT/hf-login.out"
+python3 tests/support/human_field.py "$ROOT/hf-login.out" 'status: account-login-pass'
 test -f "$ROOT/hf-login-config/accounts.local.json"
 grep 'token_value_redacted' "$ROOT/hf-login-config/accounts.local.json"
 grep 'raw_token_stored_by_yvex": false' "$ROOT/hf-login-config/accounts.local.json"
@@ -69,16 +69,16 @@ grep 'raw_token_stored_by_yvex": false' "$ROOT/hf-login-config/accounts.local.js
 YVEX_CONFIG_DIR="$ROOT/hf-ensure-config" \
 YVEX_HF_CLI="$FAKE_HF" \
   "$YVEX_BIN" source accounts ensure huggingface --interactive never --output audit > "$ROOT/hf-ensure.out" 2> "$ROOT/hf-ensure.err" && exit 1 || true
-grep 'status: account-ensure-blocked' "$ROOT/hf-ensure.out"
-grep 'top_blocker: provider-login-required' "$ROOT/hf-ensure.out"
+python3 tests/support/human_field.py "$ROOT/hf-ensure.out" 'status: account-ensure-blocked'
+python3 tests/support/human_field.py "$ROOT/hf-ensure.out" 'blocker: provider-login-required'
 
 YVEX_CONFIG_DIR="$ROOT/gh-login-config" \
 YVEX_GH_CLI="$FAKE_GH" \
 YVEX_FAKE_GH_STATE="$ROOT/gh-login.state" \
 YVEX_FAKE_GH_LOGIN_OK=1 \
   "$YVEX_BIN" source accounts login github --output audit > "$ROOT/gh-login.out"
-grep 'provider: github' "$ROOT/gh-login.out"
-grep 'status: account-login-pass' "$ROOT/gh-login.out"
+python3 tests/support/human_field.py "$ROOT/gh-login.out" 'provider: github'
+python3 tests/support/human_field.py "$ROOT/gh-login.out" 'status: account-login-pass'
 test -f "$ROOT/gh-login-config/accounts.local.json"
 
 HF_TOKEN=super-secret \
@@ -87,7 +87,7 @@ YVEX_CONFIG_DIR="$ROOT/token-config" \
 YVEX_HF_CLI="$FAKE_HF" \
 YVEX_GH_CLI="$FAKE_GH" \
   "$YVEX_BIN" source accounts status --output audit > "$ROOT/token-status.out"
-grep 'token_value_redacted: true' "$ROOT/token-status.out"
+python3 tests/support/human_field.py "$ROOT/token-status.out" 'token_value_redacted: true'
 ! grep 'super-secret' "$ROOT/token-status.out"
 ! grep 'other-secret' "$ROOT/token-status.out"
 ! grep -R 'super-secret' "$ROOT/token-config"

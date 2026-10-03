@@ -401,10 +401,11 @@ static int generation_prefill(
             completed_chunks, profile, err);
     suffix_count = encoded->tokens.len - reusable_prefix;
     maximum_chunk = context->options.prefill_chunk_tokens;
-    rc = yvex_model_engine_scheduler_maximum_width_copy(context->model, &compiled_row_width, err);
+    rc = yvex_model_engine_phase_maximum_width_copy(
+        context->model, YVEX_EXECUTION_PHASE_PREFILL, &compiled_row_width, err);
     if (rc != YVEX_OK) return rc;
-    /* Configured prefill remains bounded by the compiler-sealed routed-row envelope. */
-    if (compiled_row_width > 1ull && maximum_chunk > compiled_row_width) maximum_chunk = compiled_row_width;
+    /* Prompt rows use their admitted phase envelope, not draft verification width. */
+    if (compiled_row_width && maximum_chunk > compiled_row_width) maximum_chunk = compiled_row_width;
     if (maximum_chunk > suffix_count) maximum_chunk = suffix_count;
     if (!plan || !yvex_core_u64_mul(maximum_chunk, plan->hidden_width,
                                     &maximum_values) ||

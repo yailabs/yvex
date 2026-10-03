@@ -6,11 +6,47 @@
  */
 #include <yvex/internal/core.h>
 #include <yvex/internal/model_target.h>
+#include <yvex/internal/model_preparation.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+/* Historical diagnostic recipes belong to the target catalog, not runtime.
+ * The moving revision label is inspection-only, never source authentication. */
+static const yvex_model_preparation_recipe catalog_preparation_recipes[] = {
+    {.target = "deepseek4-v4-flash-dspark-selected-embed", .family = "deepseek",
+     .architecture = "deepseek4", .tensor = "embed.weight", .qtype = "F16",
+     .artifact_leaf = "deepseek4-v4-flash-dspark-selected-embed-F16-noimatrix-yvex-v1.gguf",
+     .plan_leaf = "deepseek-selected-plan.json", .revision = "main",
+     .artifact_tensor = "token_embd.weight", .gate_label = "deepseek-v4-flash-dspark-selected-embedding",
+     .gate_dims = {4096ull, 129280ull}, .gate_bytes = 1059061760ull, .implemented = 1},
+    {.target = "deepseek4-v4-flash-dspark-selected-embed-rmsnorm",
+     .reason = "segment prepare is planned, not implemented by this preset"},
+    {.target = "glm-5.2-official-safetensors",
+     .reason = "YVEX-produced GGUF emission for this target is planned, not implemented"}
+};
+
+int yvex_model_preparation_recipe_get(const char *target,
+    yvex_model_preparation_recipe *out, yvex_error *err)
+{
+    size_t index;
+    if (out) memset(out, 0, sizeof(*out));
+    if (!target || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "preparation_recipe", "target and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    for (index = 0; index < sizeof(catalog_preparation_recipes) / sizeof(catalog_preparation_recipes[0]); ++index) {
+        if (strcmp(target, catalog_preparation_recipes[index].target) == 0) {
+            *out = catalog_preparation_recipes[index];
+            if (out->implemented) out->repository = yvex_source_release_identity()->upstream_repo_id;
+            return YVEX_OK;
+        }
+    }
+    yvex_error_set(err, YVEX_ERR_INVALID_ARG, "preparation_recipe", "unknown artifact preparation target");
+    return YVEX_ERR_INVALID_ARG;
+}
 
 static const yvex_model_target_class_record catalog_model_target_classes[] = {
     {"release-source-target", "false", "unsupported", "unsupported",
@@ -129,24 +165,24 @@ const yvex_model_target_record *yvex_model_target_find(const char *target_id)
     return NULL;
 }
 
-static unsigned long target_count(void)
+unsigned long yvex_model_target_catalog_count(void)
 {
     return sizeof(catalog_model_targets) / sizeof(catalog_model_targets[0]);
 }
 
-static const yvex_model_target_record *target_at(unsigned long index)
+const yvex_model_target_record *yvex_model_target_catalog_at(unsigned long index)
 {
-    return index < target_count() ? &catalog_model_targets[index] : NULL;
+    return index < yvex_model_target_catalog_count() ? &catalog_model_targets[index] : NULL;
 }
 
-static unsigned long target_class_count(void)
+unsigned long yvex_model_target_class_count(void)
 {
     return sizeof(catalog_model_target_classes) / sizeof(catalog_model_target_classes[0]);
 }
 
-static const yvex_model_target_class_record *target_class_at(unsigned long index)
+const yvex_model_target_class_record *yvex_model_target_class_at(unsigned long index)
 {
-    return index < target_class_count()
+    return index < yvex_model_target_class_count()
                ? &catalog_model_target_classes[index]
                : NULL;
 }
@@ -180,10 +216,10 @@ int yvex_model_target_supported_source_target(const char *target_id)
 
 void yvex_model_target_report_common_tail(yvex_model_target_report *report)
 {
-    yvex_model_target_report_add_row(report, "runtime_claim: unsupported");
-    yvex_model_target_report_add_row(report, "generation: unsupported-full-model");
-    yvex_model_target_report_add_row(report, "benchmark_status: not-measured");
-    yvex_model_target_report_add_row(report, "release_ready: false");
+    yvex_model_target_report_fact_text(report, "runtime_claim", "unsupported");
+    yvex_model_target_report_fact_text(report, "generation", "unsupported-full-model");
+    yvex_model_target_report_fact_text(report, "benchmark_status", "not-measured");
+    yvex_model_target_report_fact_text(report, "release_ready", "false");
 }
 
 static const char *catalog_models_root(const yvex_model_target_request *request,
@@ -290,55 +326,45 @@ static void catalog_path_report(const yvex_model_target_request *request,
     (void)snprintf(registry_dir, sizeof(registry_dir), "%s/registry", root_abs);
 
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
-        yvex_model_target_report_add_row(report, "target_id: %s", record->target_id);
-        yvex_model_target_report_add_row(report, "models_root_source: %s", root_source);
-        yvex_model_target_report_add_row(report, "models_root: %s", root_abs);
-        yvex_model_target_report_add_row(report, "source_path: %s", source_path);
-        yvex_model_target_report_add_row(report, "source_exists: %s",
-                                         catalog_exists_name(source_path));
-        yvex_model_target_report_add_row(report, "artifact_path: %s", artifact_path);
-        yvex_model_target_report_add_row(report, "artifact_exists: %s",
-                                         artifact_planned_only || artifact_unselected
+        yvex_model_target_report_fact_text(report, "target_id", record->target_id);
+        yvex_model_target_report_fact_text(report, "models_root_source", root_source);
+        yvex_model_target_report_fact_text(report, "models_root", root_abs);
+        yvex_model_target_report_fact_text(report, "source_path", source_path);
+        yvex_model_target_report_fact_text(report, "source_exists", catalog_exists_name(source_path));
+        yvex_model_target_report_fact_text(report, "artifact_path", artifact_path);
+        yvex_model_target_report_fact_text(report, "artifact_exists", artifact_planned_only || artifact_unselected
                                              ? "false"
                                              : catalog_exists_name(artifact_path));
-        yvex_model_target_report_add_row(report, "report_dir: %s", report_dir);
-        yvex_model_target_report_add_row(report, "report_dir_exists: %s",
-                                         catalog_exists_name(report_dir));
-        yvex_model_target_report_add_row(report, "reference_dir: %s", reference_dir);
-        yvex_model_target_report_add_row(report, "reference_dir_exists: %s",
-                                         catalog_exists_name(reference_dir));
-        yvex_model_target_report_add_row(report, "registry_dir: %s", registry_dir);
-        yvex_model_target_report_add_row(report, "registry_dir_exists: %s",
-                                         catalog_exists_name(registry_dir));
-        yvex_model_target_report_add_row(report, "registry_alias: %s",
-                                         catalog_registry_alias(record));
-        yvex_model_target_report_add_row(report, "source_artifact_class: %s", record->source_artifact_class);
-        yvex_model_target_report_add_row(report, "source_artifact_status: %s",
-                                         catalog_source_status(record));
-        yvex_model_target_report_add_row(report, "source_tensor_payload_status: not-present");
-        yvex_model_target_report_add_row(report, "target_artifact_class: %s", record->target_artifact_class);
-        yvex_model_target_report_add_row(report, "target_artifact_status: %s",
-                                         catalog_artifact_status(record));
-        yvex_model_target_report_add_row(report, "yvex_produced_artifact_status: %s",
-                                         catalog_artifact_status(record));
-        yvex_model_target_report_add_row(report, "runtime_execution: %s",
-                                         catalog_runtime_status(record));
-        yvex_model_target_report_add_row(report, "generation: %s", record->generation);
+        yvex_model_target_report_fact_text(report, "report_dir", report_dir);
+        yvex_model_target_report_fact_text(report, "report_dir_exists", catalog_exists_name(report_dir));
+        yvex_model_target_report_fact_text(report, "reference_dir", reference_dir);
+        yvex_model_target_report_fact_text(report, "reference_dir_exists", catalog_exists_name(reference_dir));
+        yvex_model_target_report_fact_text(report, "registry_dir", registry_dir);
+        yvex_model_target_report_fact_text(report, "registry_dir_exists", catalog_exists_name(registry_dir));
+        yvex_model_target_report_fact_text(report, "registry_alias", catalog_registry_alias(record));
+        yvex_model_target_report_fact_text(report, "source_artifact_class", record->source_artifact_class);
+        yvex_model_target_report_fact_text(report, "source_artifact_status", catalog_source_status(record));
+        yvex_model_target_report_fact_text(report, "source_tensor_payload_status", "not-present");
+        yvex_model_target_report_fact_text(report, "target_artifact_class", record->target_artifact_class);
+        yvex_model_target_report_fact_text(report, "target_artifact_status", catalog_artifact_status(record));
+        yvex_model_target_report_fact_text(report, "yvex_produced_artifact_status", catalog_artifact_status(record));
+        yvex_model_target_report_fact_text(report, "runtime_execution", catalog_runtime_status(record));
+        yvex_model_target_report_fact_text(report, "generation", record->generation);
     } else {
-        yvex_model_target_report_add_row(report, "target: %s", record->target_id);
+        yvex_model_target_report_fact_text(report, "target", record->target_id);
         yvex_model_target_report_add_row(report, "source: %s  %s",
                                          access(source_path, F_OK) == 0
                                              ? "present-unverified"
                                              : "missing",
                                          source_path);
-        yvex_model_target_report_add_row(report, "source_class: %s", record->source_artifact_class);
+        yvex_model_target_report_fact_text(report, "source_class", record->source_artifact_class);
         yvex_model_target_report_add_row(report, "artifact: %s  %s",
                                          catalog_artifact_status(record),
                                          artifact_path);
-        yvex_model_target_report_add_row(report, "artifact_class: %s", record->target_artifact_class);
-        yvex_model_target_report_add_row(report, "reports: %s", report_dir);
-        yvex_model_target_report_add_row(report, "registry: %s", registry_dir);
-        yvex_model_target_report_add_row(report, "boundary: %s", record->runtime_boundary);
+        yvex_model_target_report_fact_text(report, "artifact_class", record->target_artifact_class);
+        yvex_model_target_report_fact_text(report, "reports", report_dir);
+        yvex_model_target_report_fact_text(report, "registry", registry_dir);
+        yvex_model_target_report_fact_text(report, "boundary", record->runtime_boundary);
     }
 }
 
@@ -436,6 +462,32 @@ static const char *catalog_boundary(const yvex_model_target_record *rec)
     return catalog_projection(rec, CATALOG_PROJECTION_BOUNDARY);
 }
 
+int yvex_model_target_summary_get(const char *target_id,
+                                   yvex_model_target_summary *out, yvex_error *err)
+{
+    const yvex_model_target_record *record;
+
+    if (!target_id || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_target_summary",
+                       "target and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(out, 0, sizeof(*out));
+    record = yvex_model_target_find(target_id);
+    if (!record) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_target_summary", "unknown target");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    out->source_status = catalog_source_status(record);
+    out->artifact_status = catalog_artifact_status(record);
+    out->runtime_status = catalog_runtime_status(record);
+    out->next = catalog_next_row(record);
+    out->boundary = catalog_boundary(record);
+    out->release_selected = yvex_source_is_release_target(target_id);
+    out->release_identity = out->release_selected ? yvex_source_release_identity() : NULL;
+    return YVEX_OK;
+}
+
 static const char *catalog_runtime_shape(const yvex_model_target_record *rec)
 {
     if (yvex_source_is_release_target(rec->target_id)) {
@@ -474,104 +526,109 @@ typedef struct {
     const char *artifact_status;
 } catalog_audit_facts;
 
-#define CATALOG_STRING_ROW(format_, member_) \
-    {YVEX_MODEL_TARGET_ROW_STRING, format_, offsetof(catalog_audit_facts, member_)}
+#define CATALOG_STRING_ROW(key_, format_, member_) \
+    {YVEX_MODEL_TARGET_ROW_STRING, format_, offsetof(catalog_audit_facts, member_), key_}
+#define CATALOG_TEXT(key, value) { YVEX_MODEL_TARGET_ROW_LITERAL, (value), 0u, key }
 #define CATALOG_LITERAL_ROW(text_) \
-    {YVEX_MODEL_TARGET_ROW_LITERAL, text_, 0u}
+    {YVEX_MODEL_TARGET_ROW_LITERAL, text_, 0u, NULL}
 
 static const yvex_model_target_row_spec catalog_inspect_prefix_rows[] = {
-    CATALOG_STRING_ROW("target_id: %s", target_id),
-    CATALOG_STRING_ROW("family: %s", family),
-    CATALOG_STRING_ROW("model: %s", model),
-    CATALOG_STRING_ROW("target_class: %s", target_class)
+    CATALOG_STRING_ROW("target_id", "target_id: %s", target_id),
+    CATALOG_STRING_ROW("family", "family: %s", family),
+    CATALOG_STRING_ROW("model", "model: %s", model),
+    CATALOG_STRING_ROW("target_class", "target_class: %s", target_class)
 };
 
 static const yvex_model_target_row_spec catalog_inspect_rows[] = {
-    CATALOG_STRING_ROW("source_artifact_class: %s", source_class),
-    CATALOG_STRING_ROW("source_artifact_status: %s", source_status),
-    CATALOG_STRING_ROW("source_provenance_status: %s", source_status),
-    CATALOG_LITERAL_ROW("source_origin: planned-official"),
-    CATALOG_LITERAL_ROW("source_authority: upstream-official-planned"),
-    CATALOG_LITERAL_ROW("source_revision_status: unknown"),
-    CATALOG_STRING_ROW("source_identity_status: %s", identity_status),
-    CATALOG_LITERAL_ROW("source_hash_status: not-computed"),
-    CATALOG_LITERAL_ROW("source_verification_status: not-verified"),
-    CATALOG_STRING_ROW("native_inventory_status: %s", source_status),
-    CATALOG_LITERAL_ROW("native_tensor_count: 0"),
-    CATALOG_LITERAL_ROW("native_safetensors_payload_loaded: false"),
-    CATALOG_STRING_ROW("source_tensor_metadata_status: %s", source_status),
-    CATALOG_LITERAL_ROW("source_tensor_count: 0"),
-    CATALOG_LITERAL_ROW("source_tensor_metadata_payload_loaded: false"),
-    CATALOG_STRING_ROW("model_class_profile_status: %s", profile_status),
-    CATALOG_STRING_ROW("model_class_target_id: %s", target_id),
-    CATALOG_STRING_ROW("model_class_runtime_shape: %s", runtime_shape),
-    CATALOG_STRING_ROW("model_class_evidence_basis: %s", evidence),
-    CATALOG_STRING_ROW("model_class_pattern_status: %s", pattern),
-    CATALOG_STRING_ROW("model_class_role_mapping_status: %s", role_mapping),
-    CATALOG_LITERAL_ROW("model_class_runtime_status: unsupported"),
-    CATALOG_LITERAL_ROW("tensor_collection_status: command-visible"),
-    CATALOG_STRING_ROW("tensor_collection_family: %s", family),
-    CATALOG_STRING_ROW("tensor_collection_target_id: %s", target_id),
-    CATALOG_LITERAL_ROW("tensor_collection_stage: header-collection-inventory"),
-    CATALOG_LITERAL_ROW("tensor_collection_evidence_basis: header-metadata-only"),
-    CATALOG_LITERAL_ROW("tensor_collection_validation_status: lexical-and-header-only"),
-    CATALOG_STRING_ROW("tensor_collection_role_mapping_status: %s", role_mapping),
-    CATALOG_LITERAL_ROW("tensor_collection_runtime_descriptor_status: not-implemented"),
-    CATALOG_LITERAL_ROW("tensor_collection_graph_consumer_status: not-implemented"),
-    CATALOG_STRING_ROW("output_head_map_status: %s", output_status),
-    CATALOG_STRING_ROW("output_head_map_family: %s", family),
-    CATALOG_STRING_ROW("output_head_map_target_id: %s", target_id),
-    CATALOG_LITERAL_ROW("output_head_map_stage: header-output-head-map"),
-    CATALOG_STRING_ROW("output_head_map_next: %s", output_next),
-    CATALOG_STRING_ROW("tokenizer_map_status: %s", tokenizer_status),
-    CATALOG_STRING_ROW("tokenizer_map_family: %s", family),
-    CATALOG_STRING_ROW("tokenizer_map_target_id: %s", target_id),
-    CATALOG_LITERAL_ROW("tokenizer_map_stage: metadata-tokenizer-map"),
-    CATALOG_LITERAL_ROW("tokenizer_runtime_status: not-implemented"),
-    CATALOG_STRING_ROW("tokenizer_map_next: %s", tokenizer_next),
-    CATALOG_LITERAL_ROW("missing_role_report_status: not-run"),
-    CATALOG_LITERAL_ROW("missing_role_report_stage: missing-role-blocker-report"),
-    CATALOG_STRING_ROW("missing_role_next_required_row: %s", missing_next),
-    CATALOG_STRING_ROW("tensor_mapping_gate_status: %s", gate_status),
-    CATALOG_LITERAL_ROW("tensor_mapping_gate: v0.1.0-tensor-mapping"),
-    CATALOG_STRING_ROW("tensor_mapping_gate_next_required_row: %s", gate_next),
-    CATALOG_STRING_ROW("target_artifact_class: %s", artifact_class),
-    CATALOG_STRING_ROW("target_artifact_status: %s", artifact_status),
-    CATALOG_LITERAL_ROW("benchmark_status: not-measured"),
-    CATALOG_LITERAL_ROW("runtime_execution: unsupported"),
-    CATALOG_LITERAL_ROW("generation: unsupported")
-};
+    CATALOG_STRING_ROW("source_artifact_class", "source_artifact_class: %s", source_class),
+    CATALOG_STRING_ROW("source_artifact_status", "source_artifact_status: %s", source_status),
+    CATALOG_STRING_ROW("source_provenance_status", "source_provenance_status: %s", source_status),
+    CATALOG_TEXT("source_origin", "planned-official"),
+    CATALOG_TEXT("source_authority", "upstream-official-planned"),
+    CATALOG_TEXT("source_revision_status", "unknown"),
+    CATALOG_STRING_ROW("source_identity_status", "source_identity_status: %s", identity_status),
+    CATALOG_TEXT("source_hash_status", "not-computed"),
+    CATALOG_TEXT("source_verification_status", "not-verified"),
+    CATALOG_STRING_ROW("native_inventory_status", "native_inventory_status: %s", source_status),
+    CATALOG_TEXT("native_tensor_count", "0"),
+    CATALOG_TEXT("native_safetensors_payload_loaded", "false"),
+    CATALOG_STRING_ROW("source_tensor_metadata_status", "source_tensor_metadata_status: %s", source_status),
+    CATALOG_TEXT("source_tensor_count", "0"),
+    CATALOG_TEXT("source_tensor_metadata_payload_loaded", "false"),
+    CATALOG_STRING_ROW("model_class_profile_status", "model_class_profile_status: %s", profile_status),
+    CATALOG_STRING_ROW("model_class_target_id", "model_class_target_id: %s", target_id),
+    CATALOG_STRING_ROW("model_class_runtime_shape", "model_class_runtime_shape: %s", runtime_shape),
+    CATALOG_STRING_ROW("model_class_evidence_basis", "model_class_evidence_basis: %s", evidence),
+    CATALOG_STRING_ROW("model_class_pattern_status", "model_class_pattern_status: %s", pattern),
+    CATALOG_STRING_ROW("model_class_role_mapping_status", "model_class_role_mapping_status: %s",
+                       role_mapping),
+    CATALOG_TEXT("model_class_runtime_status", "unsupported"),
+    CATALOG_TEXT("tensor_collection_status", "command-visible"),
+    CATALOG_STRING_ROW("tensor_collection_family", "tensor_collection_family: %s", family),
+    CATALOG_STRING_ROW("tensor_collection_target_id", "tensor_collection_target_id: %s", target_id),
+    CATALOG_TEXT("tensor_collection_stage", "header-collection-inventory"),
+    CATALOG_TEXT("tensor_collection_evidence_basis", "header-metadata-only"),
+    CATALOG_TEXT("tensor_collection_validation_status", "lexical-and-header-only"),
+    CATALOG_STRING_ROW("tensor_collection_role_mapping_status", "tensor_collection_role_mapping_status: %s",
+                       role_mapping),
+    CATALOG_TEXT("tensor_collection_runtime_descriptor_status", "not-implemented"),
+    CATALOG_TEXT("tensor_collection_graph_consumer_status", "not-implemented"),
+    CATALOG_STRING_ROW("output_head_map_status", "output_head_map_status: %s", output_status),
+    CATALOG_STRING_ROW("output_head_map_family", "output_head_map_family: %s", family),
+    CATALOG_STRING_ROW("output_head_map_target_id", "output_head_map_target_id: %s", target_id),
+    CATALOG_TEXT("output_head_map_stage", "header-output-head-map"),
+    CATALOG_STRING_ROW("output_head_map_next", "output_head_map_next: %s", output_next),
+    CATALOG_STRING_ROW("tokenizer_map_status", "tokenizer_map_status: %s", tokenizer_status),
+    CATALOG_STRING_ROW("tokenizer_map_family", "tokenizer_map_family: %s", family),
+    CATALOG_STRING_ROW("tokenizer_map_target_id", "tokenizer_map_target_id: %s", target_id),
+    CATALOG_TEXT("tokenizer_map_stage", "metadata-tokenizer-map"),
+    CATALOG_TEXT("tokenizer_runtime_status", "not-implemented"),
+    CATALOG_STRING_ROW("tokenizer_map_next", "tokenizer_map_next: %s", tokenizer_next),
+    CATALOG_TEXT("missing_role_report_status", "not-run"),
+    CATALOG_TEXT("missing_role_report_stage", "missing-role-blocker-report"),
+    CATALOG_STRING_ROW("missing_role_next_required_row", "missing_role_next_required_row: %s", missing_next),
+    CATALOG_STRING_ROW("tensor_mapping_gate_status", "tensor_mapping_gate_status: %s", gate_status),
+    CATALOG_TEXT("tensor_mapping_gate", "v0.1.0-tensor-mapping"),
+    CATALOG_STRING_ROW("tensor_mapping_gate_next_required_row", "tensor_mapping_gate_next_required_row: %s",
+                       gate_next),
+    CATALOG_STRING_ROW("target_artifact_class", "target_artifact_class: %s", artifact_class),
+    CATALOG_STRING_ROW("target_artifact_status", "target_artifact_status: %s", artifact_status),
+    CATALOG_TEXT("benchmark_status", "not-measured"),
+    CATALOG_TEXT("runtime_execution", "unsupported"),
+    CATALOG_TEXT("generation", "unsupported")};
 
 static const yvex_model_target_row_spec catalog_list_audit_rows[] = {
-    CATALOG_STRING_ROW("target: %s", target_id),
-    CATALOG_STRING_ROW("target_class: %s", target_class),
-    CATALOG_STRING_ROW("model_class_profile_status: %s", profile_status),
-    CATALOG_STRING_ROW("model_class_target_id: %s", target_id),
-    CATALOG_STRING_ROW("model_class_evidence_basis: %s", evidence),
-    CATALOG_STRING_ROW("model_class_pattern_status: %s", pattern),
-    CATALOG_STRING_ROW("model_class_role_mapping_status: %s", role_mapping),
-    CATALOG_LITERAL_ROW("tensor_collection_status: command-visible"),
-    CATALOG_STRING_ROW("tensor_collection_family: %s", family),
-    CATALOG_STRING_ROW("tensor_collection_target_id: %s", target_id),
-    CATALOG_LITERAL_ROW("tensor_collection_stage: header-collection-inventory"),
-    CATALOG_LITERAL_ROW("tensor_collection_validation_status: lexical-and-header-only"),
-    CATALOG_STRING_ROW("tensor_collection_role_mapping_status: %s", role_mapping),
-    CATALOG_STRING_ROW("output_head_map_status: %s", output_status),
-    CATALOG_STRING_ROW("output_head_map_family: %s", family),
-    CATALOG_STRING_ROW("output_head_map_target_id: %s", target_id),
-    CATALOG_STRING_ROW("output_head_map_next: %s", output_next),
-    CATALOG_STRING_ROW("tokenizer_map_status: %s", tokenizer_status),
-    CATALOG_STRING_ROW("tokenizer_map_family: %s", family),
-    CATALOG_STRING_ROW("tokenizer_map_target_id: %s", target_id),
-    CATALOG_LITERAL_ROW("tokenizer_runtime_status: not-implemented"),
-    CATALOG_STRING_ROW("tokenizer_map_next: %s", tokenizer_next),
-    CATALOG_LITERAL_ROW("missing_role_report_status: not-run"),
-    CATALOG_STRING_ROW("missing_role_report_target_id: %s", target_id),
-    CATALOG_STRING_ROW("missing_role_next_required_row: %s", missing_next),
-    CATALOG_STRING_ROW("tensor_mapping_gate_status: %s", gate_status),
-    CATALOG_STRING_ROW("tensor_mapping_gate_target_id: %s", target_id),
-    CATALOG_STRING_ROW("tensor_mapping_gate_next_required_row: %s", gate_next)
-};
+    CATALOG_STRING_ROW("target", "target: %s", target_id),
+    CATALOG_STRING_ROW("target_class", "target_class: %s", target_class),
+    CATALOG_STRING_ROW("model_class_profile_status", "model_class_profile_status: %s", profile_status),
+    CATALOG_STRING_ROW("model_class_target_id", "model_class_target_id: %s", target_id),
+    CATALOG_STRING_ROW("model_class_evidence_basis", "model_class_evidence_basis: %s", evidence),
+    CATALOG_STRING_ROW("model_class_pattern_status", "model_class_pattern_status: %s", pattern),
+    CATALOG_STRING_ROW("model_class_role_mapping_status", "model_class_role_mapping_status: %s",
+                       role_mapping),
+    CATALOG_TEXT("tensor_collection_status", "command-visible"),
+    CATALOG_STRING_ROW("tensor_collection_family", "tensor_collection_family: %s", family),
+    CATALOG_STRING_ROW("tensor_collection_target_id", "tensor_collection_target_id: %s", target_id),
+    CATALOG_TEXT("tensor_collection_stage", "header-collection-inventory"),
+    CATALOG_TEXT("tensor_collection_validation_status", "lexical-and-header-only"),
+    CATALOG_STRING_ROW("tensor_collection_role_mapping_status", "tensor_collection_role_mapping_status: %s",
+                       role_mapping),
+    CATALOG_STRING_ROW("output_head_map_status", "output_head_map_status: %s", output_status),
+    CATALOG_STRING_ROW("output_head_map_family", "output_head_map_family: %s", family),
+    CATALOG_STRING_ROW("output_head_map_target_id", "output_head_map_target_id: %s", target_id),
+    CATALOG_STRING_ROW("output_head_map_next", "output_head_map_next: %s", output_next),
+    CATALOG_STRING_ROW("tokenizer_map_status", "tokenizer_map_status: %s", tokenizer_status),
+    CATALOG_STRING_ROW("tokenizer_map_family", "tokenizer_map_family: %s", family),
+    CATALOG_STRING_ROW("tokenizer_map_target_id", "tokenizer_map_target_id: %s", target_id),
+    CATALOG_TEXT("tokenizer_runtime_status", "not-implemented"),
+    CATALOG_STRING_ROW("tokenizer_map_next", "tokenizer_map_next: %s", tokenizer_next),
+    CATALOG_TEXT("missing_role_report_status", "not-run"),
+    CATALOG_STRING_ROW("missing_role_report_target_id", "missing_role_report_target_id: %s", target_id),
+    CATALOG_STRING_ROW("missing_role_next_required_row", "missing_role_next_required_row: %s", missing_next),
+    CATALOG_STRING_ROW("tensor_mapping_gate_status", "tensor_mapping_gate_status: %s", gate_status),
+    CATALOG_STRING_ROW("tensor_mapping_gate_target_id", "tensor_mapping_gate_target_id: %s", target_id),
+    CATALOG_STRING_ROW("tensor_mapping_gate_next_required_row", "tensor_mapping_gate_next_required_row: %s",
+                       gate_next)};
 
 static catalog_audit_facts catalog_audit_project(const yvex_model_target_record *rec)
 {
@@ -614,21 +671,14 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
     if (yvex_source_is_release_target(rec->target_id)) {
         const yvex_source_target_identity *identity =
             yvex_source_release_identity();
-        yvex_model_target_report_add_row(report, "release_selected: true");
-        yvex_model_target_report_add_row(report, "upstream_repository: %s",
-                                         identity->upstream_repo_id);
-        yvex_model_target_report_add_row(report, "source_directory_leaf: %s",
-                                         identity->source_dir_leaf);
-        yvex_model_target_report_add_row(report, "config_model_type: %s",
-                                         identity->config_model_type);
-        yvex_model_target_report_add_row(report, "config_architecture: %s",
-                                         identity->config_architecture);
-        yvex_model_target_report_add_row(report,
-                                         "architecture_ir_owner: src/model/families/deepseek_v4.c");
-        yvex_model_target_report_add_row(report,
-                                         "architecture_ir_consumer: canonical-deepseek-gguf-map");
-        yvex_model_target_report_add_row(report,
-                                         "release_target_next: V010.SOURCE.PAYLOAD.STREAM.0");
+        yvex_model_target_report_fact_text(report, "release_selected", "true");
+        yvex_model_target_report_fact_text(report, "upstream_repository", identity->upstream_repo_id);
+        yvex_model_target_report_fact_text(report, "source_directory_leaf", identity->source_dir_leaf);
+        yvex_model_target_report_fact_text(report, "config_model_type", identity->config_model_type);
+        yvex_model_target_report_fact_text(report, "config_architecture", identity->config_architecture);
+        yvex_model_target_report_fact_text(report, "architecture_ir_owner", "src/model/families/deepseek_v4.c");
+        yvex_model_target_report_fact_text(report, "architecture_ir_consumer", "canonical-deepseek-gguf-map");
+        yvex_model_target_report_fact_text(report, "release_target_next", "V010.SOURCE.PAYLOAD.STREAM.0");
     }
     yvex_model_target_report_project_rows(
         report, catalog_inspect_rows,
@@ -667,13 +717,13 @@ int yvex_model_target_catalog_report_build(
 
     if (request->kind == YVEX_MODEL_TARGET_COMMAND_CLASSES) {
         report->status = "model-target-classes";
-        yvex_model_target_report_add_row(report, "status: model-target-classes");
-        for (i = 0; i < target_class_count(); ++i) {
-            const yvex_model_target_class_record *cls = target_class_at(i);
-            yvex_model_target_report_add_row(report, "class: %s", cls->class_id);
-            yvex_model_target_report_add_row(report, "capability_claim: %s", cls->capability_claim);
-            yvex_model_target_report_add_row(report, "runtime_execution: %s", cls->runtime_execution);
-            yvex_model_target_report_add_row(report, "generation: %s", cls->generation);
+        yvex_model_target_report_fact_text(report, "status", "model-target-classes");
+        for (i = 0; i < yvex_model_target_class_count(); ++i) {
+            const yvex_model_target_class_record *cls = yvex_model_target_class_at(i);
+            yvex_model_target_report_fact_text(report, "class", cls->class_id);
+            yvex_model_target_report_fact_text(report, "capability_claim", cls->capability_claim);
+            yvex_model_target_report_fact_text(report, "runtime_execution", cls->runtime_execution);
+            yvex_model_target_report_fact_text(report, "generation", cls->generation);
         }
         return YVEX_OK;
     }
@@ -682,8 +732,8 @@ int yvex_model_target_catalog_report_build(
         if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
             yvex_model_target_report_add_row(report,
                                              "{\"status\":\"model-target-list\",\"targets\":[");
-            for (i = 0; i < target_count(); ++i) {
-                const yvex_model_target_record *rec = target_at(i);
+            for (i = 0; i < yvex_model_target_catalog_count(); ++i) {
+                const yvex_model_target_record *rec = yvex_model_target_catalog_at(i);
                 yvex_model_target_report_add_row(
                     report,
                     "%s{\"target_id\":\"%s\",\"family\":\"%s\","
@@ -700,42 +750,43 @@ int yvex_model_target_catalog_report_build(
             return YVEX_OK;
         }
         yvex_model_target_report_add_row(report, "MODEL TARGETS  count=%lu",
-                                         target_count());
+                                         yvex_model_target_catalog_count());
         yvex_model_target_report_add_row(report, "TARGET  FAMILY  CLASS  RUNTIME  GENERATION");
-        for (i = 0; i < target_count(); ++i) {
-            const yvex_model_target_record *rec = target_at(i);
+        for (i = 0; i < yvex_model_target_catalog_count(); ++i) {
+            const yvex_model_target_record *rec = yvex_model_target_catalog_at(i);
             yvex_model_target_report_add_row(report, "%s  %s  %s  %s  %s",
                                              rec->target_id, rec->family,
                                              rec->target_class,
                                              rec->runtime_execution,
                                              rec->generation);
         }
-        yvex_model_target_report_add_row(report, "status: model-target-list");
+        yvex_model_target_report_fact_text(report, "status", "model-target-list");
         if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
-            for (i = 0; i < target_count(); ++i) {
-                const yvex_model_target_record *rec = target_at(i);
+            for (i = 0; i < yvex_model_target_catalog_count(); ++i) {
+                const yvex_model_target_record *rec = yvex_model_target_catalog_at(i);
                 catalog_emit_list_audit_target(rec, report);
             }
             yvex_model_target_report_add_row(report, "source_provenance_status:");
             yvex_model_target_report_add_row(report, "source_origin:");
             yvex_model_target_report_add_row(report, "source_authority:");
-            yvex_model_target_report_add_row(report, "source_revision_status: unknown");
+            yvex_model_target_report_fact_text(report, "source_revision_status", "unknown");
             yvex_model_target_report_add_row(report, "source_identity_status:");
-            yvex_model_target_report_add_row(report, "source_hash_status: not-computed");
-            yvex_model_target_report_add_row(report, "source_verification_status: not-verified");
+            yvex_model_target_report_fact_text(report, "source_hash_status", "not-computed");
+            yvex_model_target_report_fact_text(report, "source_verification_status", "not-verified");
             yvex_model_target_report_add_row(report, "native_inventory_status:");
-            yvex_model_target_report_add_row(report, "native_tensor_count: 0");
-            yvex_model_target_report_add_row(report, "native_safetensors_payload_loaded: false");
+            yvex_model_target_report_fact_text(report, "native_tensor_count", "0");
+            yvex_model_target_report_fact_text(report, "native_safetensors_payload_loaded", "false");
             yvex_model_target_report_add_row(report, "source_tensor_metadata_status:");
-            yvex_model_target_report_add_row(report, "source_tensor_count: 0");
-            yvex_model_target_report_add_row(report, "source_tensor_metadata_payload_loaded: false");
-            yvex_model_target_report_add_row(report, "runtime_execution: unsupported");
-            yvex_model_target_report_add_row(report, "generation: unsupported");
+            yvex_model_target_report_fact_text(report, "source_tensor_count", "0");
+            yvex_model_target_report_fact_text(report, "source_tensor_metadata_payload_loaded", "false");
+            yvex_model_target_report_fact_text(report, "runtime_execution", "unsupported");
+            yvex_model_target_report_fact_text(report, "generation", "unsupported");
         }
         return YVEX_OK;
     }
     if (request->kind == YVEX_MODEL_TARGET_COMMAND_INSPECT) {
         const yvex_model_target_record *rec;
+        yvex_model_target_summary summary;
         if (!request->target_id[0]) {
             report->exit_code = 2;
             yvex_model_target_report_add_error(report, "model-target inspect: requires TARGET");
@@ -747,11 +798,11 @@ int yvex_model_target_catalog_report_build(
             yvex_model_target_report_add_error(report, "model-target: unknown target: %s", request->target_id);
             return YVEX_OK;
         }
+        if (yvex_model_target_summary_get(rec->target_id, &summary, err) != YVEX_OK)
+            return err ? err->code : YVEX_ERR_STATE;
         if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
             const yvex_source_target_identity *identity =
-                yvex_source_is_release_target(rec->target_id)
-                    ? yvex_source_release_identity()
-                    : NULL;
+                summary.release_identity;
             yvex_model_target_report_add_row(
                 report,
                 "{\"status\":\"model-target\",\"target_id\":\"%s\","
@@ -762,9 +813,9 @@ int yvex_model_target_catalog_report_build(
                 rec->target_id, rec->family, rec->target_class,
                 identity ? "true" : "false",
                 identity ? "\"" : "", identity ? identity->upstream_repo_id : "null",
-                identity ? "\"" : "", catalog_source_status(rec),
-                catalog_artifact_status(rec), catalog_runtime_status(rec),
-                rec->generation, catalog_next_row(rec));
+                identity ? "\"" : "", summary.source_status,
+                summary.artifact_status, summary.runtime_status,
+                rec->generation, summary.next);
             return YVEX_OK;
         }
         if (request->include_paths) {
@@ -776,26 +827,23 @@ int yvex_model_target_catalog_report_build(
             return YVEX_OK;
         }
         report->status = "model-target";
-        yvex_model_target_report_add_row(report, "status: model-target");
-        yvex_model_target_report_add_row(report, "target: %s", rec->target_id);
+        yvex_model_target_report_fact_text(report, "status", "model-target");
+        yvex_model_target_report_fact_text(report, "target", rec->target_id);
         yvex_model_target_report_add_row(report, "family: %s  class=%s",
                                          rec->family, rec->target_class);
-        yvex_model_target_report_add_row(report, "model: %s", rec->model);
+        yvex_model_target_report_fact_text(report, "model", rec->model);
         yvex_model_target_report_add_row(report, "source: %s  status=%s",
                                          rec->source_artifact_class,
                                          catalog_source_status(rec));
         yvex_model_target_report_add_row(report, "artifact: %s  status=%s",
                                          rec->target_artifact_class,
                                          catalog_artifact_status(rec));
-        yvex_model_target_report_add_row(report, "runtime: %s",
-                                         catalog_runtime_status(rec));
-        yvex_model_target_report_add_row(report, "generation: %s", rec->generation);
+        yvex_model_target_report_fact_text(report, "runtime", catalog_runtime_status(rec));
+        yvex_model_target_report_fact_text(report, "generation", rec->generation);
         if (catalog_next_row(rec)[0]) {
-            yvex_model_target_report_add_row(report, "next: %s",
-                                             catalog_next_row(rec));
+            yvex_model_target_report_fact_text(report, "next", catalog_next_row(rec));
         }
-        yvex_model_target_report_add_row(report, "boundary: %s",
-                                         catalog_boundary(rec));
+        yvex_model_target_report_fact_text(report, "boundary", catalog_boundary(rec));
         return YVEX_OK;
     }
     return catalog_unknown_subcommand(request, report);

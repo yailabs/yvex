@@ -60,92 +60,101 @@ typedef struct {
     const char *tied_head;
 } missing_role_dynamic_facts;
 
+#define MISSING_TEXT(key, value) { YVEX_MODEL_TARGET_ROW_LITERAL, (value), 0u, key }
 #define MISSING_LITERAL(text) \
-    { YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u }
-#define MISSING_SOURCE_STRING(field, format) \
-    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(missing_role_source_facts, field) }
-#define MISSING_SOURCE_INT(field, format) \
-    { YVEX_MODEL_TARGET_ROW_INT, (format), offsetof(missing_role_source_facts, field) }
-#define MISSING_DYNAMIC_STRING(field, format) \
-    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(missing_role_dynamic_facts, field) }
+    { YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u, NULL }
+#define MISSING_SOURCE_STRING(field, key, format) \
+    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(missing_role_source_facts, field), key }
+#define MISSING_SOURCE_INT(field, key, format) \
+    { YVEX_MODEL_TARGET_ROW_INT, (format), offsetof(missing_role_source_facts, field), key }
+#define MISSING_DYNAMIC_STRING(field, key, format) \
+    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(missing_role_dynamic_facts, field), key }
 
 static const yvex_model_target_row_spec missing_role_source_rows[] = {
-    MISSING_LITERAL("missing_role_report_status: missing-role-report-blocked"),
-    MISSING_SOURCE_STRING(family, "missing_role_report_family: %s"),
-    MISSING_SOURCE_STRING(target, "missing_role_report_target_id: %s"),
-    MISSING_LITERAL("missing_role_report_stage: missing-role-blocker-report"),
-    MISSING_LITERAL(
-        "missing_role_report_evidence_basis: header-and-sidecar-metadata-only"),
-    MISSING_LITERAL("missing_role_source_role_required_count: 12"),
-    MISSING_SOURCE_INT(source_observed, "missing_role_source_role_observed_count: %d"),
-    MISSING_SOURCE_INT(source_missing, "missing_role_source_role_missing_count: %d"),
-    MISSING_LITERAL("missing_role_metadata_required_count: 4"),
-    MISSING_SOURCE_INT(metadata_observed, "missing_role_metadata_observed_count: %d"),
-    MISSING_SOURCE_INT(metadata_missing, "missing_role_metadata_missing_count: %d"),
-    MISSING_LITERAL("missing_role_embedding_status: present"),
-    MISSING_LITERAL("missing_role_attention_norm_status: present"),
-    MISSING_LITERAL("missing_role_attention_q_status: present"),
-    MISSING_SOURCE_STRING(attention_k, "missing_role_attention_k_status: %s"),
-    MISSING_LITERAL("missing_role_attention_v_status: present"),
-    MISSING_LITERAL("missing_role_attention_o_status: present"),
-    MISSING_LITERAL("missing_role_mlp_norm_status: present"),
-    MISSING_LITERAL("missing_role_mlp_gate_status: present"),
-    MISSING_LITERAL("missing_role_mlp_up_status: present"),
-    MISSING_LITERAL("missing_role_mlp_down_status: present"),
-    MISSING_LITERAL("missing_role_final_norm_status: present"),
-    MISSING_SOURCE_STRING(output_head, "missing_role_output_head_status: %s"),
-    MISSING_SOURCE_STRING(tokenizer, "missing_role_tokenizer_metadata_status: %s"),
-    MISSING_SOURCE_STRING(config, "missing_role_config_metadata_status: %s"),
-    MISSING_SOURCE_STRING(generation, "missing_role_generation_metadata_status: %s"),
-    MISSING_SOURCE_STRING(specials, "missing_role_special_tokens_status: %s"),
-    MISSING_LITERAL("missing_role_artifact_contract_status: missing"),
-    MISSING_LITERAL("missing_role_runtime_descriptor_status: missing"),
-    MISSING_LITERAL("missing_role_graph_consumer_status: missing"),
-    MISSING_LITERAL("missing_role_logits_runtime_status: missing"),
-    MISSING_LITERAL("missing_role_tokenizer_runtime_status: missing"),
-    MISSING_SOURCE_STRING(top, "missing_role_top_blocker: %s"),
-    MISSING_LITERAL("missing_role_next_required_row: V010.MAP.9")
-};
+    MISSING_TEXT("missing_role_report_status", "missing-role-report-blocked"),
+    MISSING_SOURCE_STRING(family, "missing_role_report_family", "missing_role_report_family: %s"),
+    MISSING_SOURCE_STRING(target, "missing_role_report_target_id", "missing_role_report_target_id: %s"),
+    MISSING_TEXT("missing_role_report_stage", "missing-role-blocker-report"),
+    MISSING_TEXT("missing_role_report_evidence_basis", "header-and-sidecar-metadata-only"),
+    MISSING_TEXT("missing_role_source_role_required_count", "12"),
+    MISSING_SOURCE_INT(source_observed, "missing_role_source_role_observed_count",
+                       "missing_role_source_role_observed_count: %d"),
+    MISSING_SOURCE_INT(source_missing, "missing_role_source_role_missing_count",
+                       "missing_role_source_role_missing_count: %d"),
+    MISSING_TEXT("missing_role_metadata_required_count", "4"),
+    MISSING_SOURCE_INT(metadata_observed, "missing_role_metadata_observed_count",
+                       "missing_role_metadata_observed_count: %d"),
+    MISSING_SOURCE_INT(metadata_missing, "missing_role_metadata_missing_count",
+                       "missing_role_metadata_missing_count: %d"),
+    MISSING_TEXT("missing_role_embedding_status", "present"),
+    MISSING_TEXT("missing_role_attention_norm_status", "present"),
+    MISSING_TEXT("missing_role_attention_q_status", "present"),
+    MISSING_SOURCE_STRING(attention_k, "missing_role_attention_k_status",
+                          "missing_role_attention_k_status: %s"),
+    MISSING_TEXT("missing_role_attention_v_status", "present"),
+    MISSING_TEXT("missing_role_attention_o_status", "present"),
+    MISSING_TEXT("missing_role_mlp_norm_status", "present"),
+    MISSING_TEXT("missing_role_mlp_gate_status", "present"),
+    MISSING_TEXT("missing_role_mlp_up_status", "present"),
+    MISSING_TEXT("missing_role_mlp_down_status", "present"),
+    MISSING_TEXT("missing_role_final_norm_status", "present"),
+    MISSING_SOURCE_STRING(output_head, "missing_role_output_head_status",
+                          "missing_role_output_head_status: %s"),
+    MISSING_SOURCE_STRING(tokenizer, "missing_role_tokenizer_metadata_status",
+                          "missing_role_tokenizer_metadata_status: %s"),
+    MISSING_SOURCE_STRING(config, "missing_role_config_metadata_status",
+                          "missing_role_config_metadata_status: %s"),
+    MISSING_SOURCE_STRING(generation, "missing_role_generation_metadata_status",
+                          "missing_role_generation_metadata_status: %s"),
+    MISSING_SOURCE_STRING(specials, "missing_role_special_tokens_status",
+                          "missing_role_special_tokens_status: %s"),
+    MISSING_TEXT("missing_role_artifact_contract_status", "missing"),
+    MISSING_TEXT("missing_role_runtime_descriptor_status", "missing"),
+    MISSING_TEXT("missing_role_graph_consumer_status", "missing"),
+    MISSING_TEXT("missing_role_logits_runtime_status", "missing"),
+    MISSING_TEXT("missing_role_tokenizer_runtime_status", "missing"),
+    MISSING_SOURCE_STRING(top, "missing_role_top_blocker", "missing_role_top_blocker: %s"),
+    MISSING_TEXT("missing_role_next_required_row", "V010.MAP.9")};
 
 static const yvex_model_target_row_spec missing_role_dynamic_prefix[] = {
-    MISSING_DYNAMIC_STRING(target, "target_id: %s"),
-    MISSING_DYNAMIC_STRING(family, "family: %s"),
-    MISSING_LITERAL("source_status: present"),
-    MISSING_DYNAMIC_STRING(tensor, "tensor_map_status: %s"),
-    MISSING_DYNAMIC_STRING(tensor_path, "tensor_map_path: %s")
+    MISSING_DYNAMIC_STRING(target, "target_id", "target_id: %s"),
+    MISSING_DYNAMIC_STRING(family, "family", "family: %s"),
+    MISSING_TEXT("source_status", "present"),
+    MISSING_DYNAMIC_STRING(tensor, "tensor_map_status", "tensor_map_status: %s"),
+    MISSING_DYNAMIC_STRING(tensor_path, "tensor_map_path", "tensor_map_path: %s")
 };
 
 static const yvex_model_target_row_spec missing_role_dynamic_suffix[] = {
-    MISSING_DYNAMIC_STRING(head, "output_head_map_status: %s"),
-    MISSING_DYNAMIC_STRING(tokenizer, "tokenizer_map_status: %s"),
-    MISSING_LITERAL("artifact_status: missing"),
-    MISSING_DYNAMIC_STRING(artifact_path, "expected_artifact_path: %s"),
-    MISSING_LITERAL("artifact_emission_status: not-performed"),
-    MISSING_LITERAL("artifact_identity_status: missing"),
-    MISSING_LITERAL("prepare_blocker_count: 3"),
-    MISSING_DYNAMIC_STRING(top, "top_blocker: %s"),
-    MISSING_DYNAMIC_STRING(next, "next: %s"),
-    MISSING_LITERAL("runtime_execution: not-performed"),
-    MISSING_LITERAL("generation: unsupported"),
-    MISSING_LITERAL("benchmark_status: not-measured")
+    MISSING_DYNAMIC_STRING(head, "output_head_map_status", "output_head_map_status: %s"),
+    MISSING_DYNAMIC_STRING(tokenizer, "tokenizer_map_status", "tokenizer_map_status: %s"),
+    MISSING_TEXT("artifact_status", "missing"),
+    MISSING_DYNAMIC_STRING(artifact_path, "expected_artifact_path", "expected_artifact_path: %s"),
+    MISSING_TEXT("artifact_emission_status", "not-performed"),
+    MISSING_TEXT("artifact_identity_status", "missing"),
+    MISSING_TEXT("prepare_blocker_count", "3"),
+    MISSING_DYNAMIC_STRING(top, "top_blocker", "top_blocker: %s"),
+    MISSING_DYNAMIC_STRING(next, "next", "next: %s"),
+    MISSING_TEXT("runtime_execution", "not-performed"),
+    MISSING_TEXT("generation", "unsupported"),
+    MISSING_TEXT("benchmark_status", "not-measured")
 };
 
 static const yvex_model_target_row_spec missing_role_normal_prefix[] = {
-    MISSING_DYNAMIC_STRING(status, "status: %s"),
-    MISSING_DYNAMIC_STRING(family, "family: %s"),
-    MISSING_DYNAMIC_STRING(top, "top_blocker: %s")
+    MISSING_DYNAMIC_STRING(status, "status", "status: %s"),
+    MISSING_DYNAMIC_STRING(family, "family", "family: %s"),
+    MISSING_DYNAMIC_STRING(top, "top_blocker", "top_blocker: %s")
 };
 
 static const yvex_model_target_row_spec missing_role_normal_suffix[] = {
-    MISSING_DYNAMIC_STRING(role_status, "moe-router: %s"),
-    MISSING_DYNAMIC_STRING(role_status, "moe-experts: %s"),
-    MISSING_DYNAMIC_STRING(role_status, "shared-expert: %s"),
-    MISSING_DYNAMIC_STRING(output_head, "output-head: %s"),
-    MISSING_DYNAMIC_STRING(tied_head, "tied-head-policy: %s"),
-    MISSING_LITERAL("unknown-tensors: unclassified-header-name"),
-    MISSING_DYNAMIC_STRING(tokenizer, "tokenizer: %s"),
-    MISSING_LITERAL("artifact: missing"),
-    MISSING_DYNAMIC_STRING(next, "next: %s")
+    MISSING_DYNAMIC_STRING(role_status, "moe-router", "moe-router: %s"),
+    MISSING_DYNAMIC_STRING(role_status, "moe-experts", "moe-experts: %s"),
+    MISSING_DYNAMIC_STRING(role_status, "shared-expert", "shared-expert: %s"),
+    MISSING_DYNAMIC_STRING(output_head, "output-head", "output-head: %s"),
+    MISSING_DYNAMIC_STRING(tied_head, "tied-head-policy", "tied-head-policy: %s"),
+    MISSING_TEXT("unknown-tensors", "unclassified-header-name"),
+    MISSING_DYNAMIC_STRING(tokenizer, "tokenizer", "tokenizer: %s"),
+    MISSING_TEXT("artifact", "missing"),
+    MISSING_DYNAMIC_STRING(next, "next", "next: %s")
 };
 
 #undef MISSING_LITERAL
@@ -400,8 +409,8 @@ static int missing_role_validate(const yvex_model_target_request *request,
     if (!yvex_model_target_supported_source_target(target)) {
         report->status = "unsupported-target";
         report->exit_code = 2;
-        yvex_model_target_report_add_row(report, "status: unsupported-target");
-        yvex_model_target_report_add_row(report, "target_id: %s", target);
+        yvex_model_target_report_fact_text(report, "status", "unsupported-target");
+        yvex_model_target_report_fact_text(report, "target_id", target);
         yvex_model_target_report_add_error(report, "unsupported target: %s", target);
         return 1;
     }
@@ -440,46 +449,40 @@ static void missing_role_render_audit_facts(const char *family,
     unsigned long count;
     unsigned long i;
 
-    yvex_model_target_report_add_row(report, "report: missing-runtime-roles");
-    yvex_model_target_report_add_row(report, "status: missing-role-report");
-    yvex_model_target_report_add_row(report, "target_id: %s", report->target_id);
-    yvex_model_target_report_add_row(report, "family: %s", family);
-    yvex_model_target_report_add_row(report, "tensor_map_status: present-report-only");
-    yvex_model_target_report_add_row(report, "output_head_map_status: present-report-only");
-    yvex_model_target_report_add_row(report, "tokenizer_map_status: present-report-only");
+    yvex_model_target_report_fact_text(report, "report", "missing-runtime-roles");
+    yvex_model_target_report_fact_text(report, "status", "missing-role-report");
+    yvex_model_target_report_fact_text(report, "target_id", report->target_id);
+    yvex_model_target_report_fact_text(report, "family", family);
+    yvex_model_target_report_fact_text(report, "tensor_map_status", "present-report-only");
+    yvex_model_target_report_fact_text(report, "output_head_map_status", "present-report-only");
+    yvex_model_target_report_fact_text(report, "tokenizer_map_status", "present-report-only");
     rows = missing_role_rows(family, &count);
     for (i = 0; i < count; ++i) {
         yvex_model_target_report_add_row(report, "role.%lu.name: %s", i, rows[i].name);
         yvex_model_target_report_add_row(report, "role.%lu.status: %s", i, rows[i].status);
         yvex_model_target_report_add_row(report, "role.%lu.blocker: %s", i, rows[i].blocker);
     }
-    yvex_model_target_report_add_row(report, "role_group.qwen_linear_attn.status: %s",
-                                     strcmp(family, "qwen") == 0
+    yvex_model_target_report_fact_text(report, "role_group.qwen_linear_attn.status", strcmp(family, "qwen") == 0
                                          ? "present"
                                          : "not-applicable");
-    yvex_model_target_report_add_row(report, "role_group.moe_router.status: %s",
-                                     strcmp(family, "qwen") == 0
+    yvex_model_target_report_fact_text(report, "role_group.moe_router.status", strcmp(family, "qwen") == 0
                                          ? "present"
                                          : "not-applicable");
-    yvex_model_target_report_add_row(report, "role_group.moe_experts.status: %s",
-                                     strcmp(family, "qwen") == 0
+    yvex_model_target_report_fact_text(report, "role_group.moe_experts.status", strcmp(family, "qwen") == 0
                                          ? "present"
                                          : "not-applicable");
-    yvex_model_target_report_add_row(report, "role_group.shared_expert.status: %s",
-                                     strcmp(family, "qwen") == 0
+    yvex_model_target_report_fact_text(report, "role_group.shared_expert.status", strcmp(family, "qwen") == 0
                                          ? "present"
                                          : "not-applicable");
-    yvex_model_target_report_add_row(report,
-                                     "role_group.unknown_tensors.status: unclassified-header-name");
-    yvex_model_target_report_add_row(report, "role_group.output_head.status: present");
-    yvex_model_target_report_add_row(
-        report,
-        "role_group.tied_head_policy.status: %s",
+    yvex_model_target_report_fact_text(report, "role_group.unknown_tensors.status", "unclassified-header-name");
+    yvex_model_target_report_fact_text(report, "role_group.output_head.status", "present");
+    yvex_model_target_report_fact_text(
+        report, "role_group.tied_head_policy.status",
         state && state->output_head_map_tied
             ? "tied-output-head-candidate"
             : (state && state->output_head_map_missing ? "not-proven" : "not-applicable"));
-    yvex_model_target_report_add_row(report, "top_blocker: quant-policy-or-artifact-emitter");
-    yvex_model_target_report_add_row(report, "next: V010.QUANT.1");
+    yvex_model_target_report_fact_text(report, "top_blocker", "quant-policy-or-artifact-emitter");
+    yvex_model_target_report_fact_text(report, "next", "V010.QUANT.1");
     yvex_model_target_report_common_tail(report);
 }
 
@@ -491,14 +494,14 @@ static void missing_role_render_source_audit(const missing_role_source_facts *fa
         sizeof(missing_role_source_rows) / sizeof(missing_role_source_rows[0]),
         facts);
     if (strcmp(facts->top, "missing-source-role-attention-k") == 0) {
-        yvex_model_target_report_add_row(report, "missing_role.entry.0.role: attention_k");
-        yvex_model_target_report_add_row(report, "missing_role.entry.0.blocker_class: source-role-missing");
+        yvex_model_target_report_fact_text(report, "missing_role.entry.0.role", "attention_k");
+        yvex_model_target_report_fact_text(report, "missing_role.entry.0.blocker_class", "source-role-missing");
     } else if (strcmp(facts->top, "missing-source-role-output-head") == 0) {
-        yvex_model_target_report_add_row(report, "missing_role.entry.0.role: output_head");
-        yvex_model_target_report_add_row(report, "missing_role.entry.0.blocker_class: source-role-missing");
+        yvex_model_target_report_fact_text(report, "missing_role.entry.0.role", "output_head");
+        yvex_model_target_report_fact_text(report, "missing_role.entry.0.blocker_class", "source-role-missing");
     } else if (strcmp(facts->top, "ambiguous-source-role-output-head") == 0) {
-        yvex_model_target_report_add_row(report, "missing_role.entry.0.role: output_head");
-        yvex_model_target_report_add_row(report, "missing_role.entry.0.blocker_class: source-role-ambiguous");
+        yvex_model_target_report_fact_text(report, "missing_role.entry.0.role", "output_head");
+        yvex_model_target_report_fact_text(report, "missing_role.entry.0.blocker_class", "source-role-ambiguous");
     }
     yvex_model_target_report_common_tail(report);
 }
@@ -512,7 +515,7 @@ static void missing_role_render_dynamic_audit(const missing_role_dynamic_facts *
         sizeof(missing_role_dynamic_prefix) / sizeof(missing_role_dynamic_prefix[0]),
         facts);
     if (state && state->tensor_map_incomplete) {
-        yvex_model_target_report_add_row(report, "tensor_map_unmapped_unknown_count: 1");
+        yvex_model_target_report_fact_text(report, "tensor_map_unmapped_unknown_count", "1");
     }
     yvex_model_target_report_project_rows(
         report, missing_role_dynamic_suffix,
@@ -556,6 +559,22 @@ int yvex_missing_role_report_build(const yvex_model_target_request *request,
         missing_role_source_facts facts =
             missing_role_source_view(family, &state, report->target_id);
 
+        /* Typed observations are independent of the legacy display density. */
+        yvex_model_target_report_fact_text(report, "evidence_basis", "header-and-sidecar-metadata-only");
+        yvex_model_target_report_fact_u64(report, "source_roles_required", 12);
+        yvex_model_target_report_fact_u64(report, "source_roles_observed", (unsigned long long)facts.source_observed);
+        yvex_model_target_report_fact_u64(report, "source_roles_missing", (unsigned long long)facts.source_missing);
+        yvex_model_target_report_fact_u64(report, "source_roles_ambiguous", (unsigned long long)facts.source_ambiguous);
+        yvex_model_target_report_fact_u64(report, "metadata_required", 4);
+        yvex_model_target_report_fact_u64(report, "metadata_observed", (unsigned long long)facts.metadata_observed);
+        yvex_model_target_report_fact_u64(report, "metadata_missing", (unsigned long long)facts.metadata_missing);
+        yvex_model_target_report_fact_u64(report, "metadata_ambiguous", 0u);
+        yvex_model_target_report_fact_text(report, "top_blocker", facts.top);
+        yvex_model_target_report_fact_text(report, "next", "V010.MAP.9");
+        if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
+            report->status = "missing-role-source-report";
+            return YVEX_OK;
+        }
         if (request->output_contract[0]) {
             yvex_model_target_report_add_output_contract(
                 report, "missing-roles", request->output_contract);
@@ -581,21 +600,20 @@ int yvex_missing_role_report_build(const yvex_model_target_request *request,
             report, "metadata_roles: %d/4 present, %d missing, 0 ambiguous",
             facts.metadata_observed, facts.metadata_missing);
         if (!state.source.attention_k_present && state.source.header_present) {
-            yvex_model_target_report_add_row(report, "missing_source: attention_k");
+            yvex_model_target_report_fact_text(report, "missing_source", "attention_k");
         }
         if (strcmp(facts.output_head, "missing") == 0 &&
             state.source.header_present) {
-            yvex_model_target_report_add_row(report, "missing_source: output_head");
+            yvex_model_target_report_fact_text(report, "missing_source", "output_head");
         }
         if (!state.source.metadata_present && state.source.header_present) {
-            yvex_model_target_report_add_row(
-                report,
-                "missing_metadata: tokenizer_metadata,config_metadata,generation_metadata,special_tokens");
+            yvex_model_target_report_fact_text(
+                report, "missing_metadata",
+                "tokenizer_metadata,config_metadata,generation_metadata,special_tokens");
         }
-        yvex_model_target_report_add_row(report, "top_blocker: %s", facts.top);
-        yvex_model_target_report_add_row(report, "next: V010.MAP.9");
-        yvex_model_target_report_add_row(report,
-                                         "boundary: report-only; use --audit for role details");
+        yvex_model_target_report_fact_text(report, "top_blocker", facts.top);
+        yvex_model_target_report_fact_text(report, "next", "V010.MAP.9");
+        yvex_model_target_report_fact_text(report, "boundary", "report-only; use --audit for role details");
         return YVEX_OK;
     }
 
@@ -614,6 +632,16 @@ int yvex_missing_role_report_build(const yvex_model_target_request *request,
         return YVEX_OK;
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
+        report->status = "missing-role-report";
+        yvex_model_target_report_fact_text(report, "target_id", report->target_id);
+        yvex_model_target_report_fact_text(report, "top_blocker", dynamic.top);
+        yvex_model_target_report_fact_text(report, "qwen_linear_attn",
+                                           state.tensor_map_incomplete ? "missing" : "present");
+        yvex_model_target_report_fact_text(report, "shared_expert",
+                                           state.tensor_map_incomplete ? "missing" : "present");
+        yvex_model_target_report_fact_text(report, "tokenizer",
+                                           state.tokenizer_map_present ? "present-report-only" : "missing");
+        yvex_model_target_report_fact_text(report, "next", dynamic.next);
         yvex_model_target_report_add_row(
             report,
             "{\"status\":\"missing-role-report\",\"target_id\":\"%s\","
@@ -628,14 +656,14 @@ int yvex_missing_role_report_build(const yvex_model_target_request *request,
             dynamic.next);
         return YVEX_OK;
     }
-    yvex_model_target_report_add_row(report, "missing-roles: %s", report->target_id);
+    yvex_model_target_report_fact_text(report, "missing-roles", report->target_id);
     yvex_model_target_report_project_rows(
         report, missing_role_normal_prefix,
         sizeof(missing_role_normal_prefix) / sizeof(missing_role_normal_prefix[0]),
         &dynamic);
-    yvex_model_target_report_add_row(report, "%s-linear-attn: %s",
-                                     strcmp(family, "qwen") == 0 ? "qwen" : "gemma",
-                                     dynamic.role_status);
+    yvex_model_target_report_fact_text(report,
+        strcmp(family, "qwen") == 0 ? "qwen-linear-attn" : "gemma-linear-attn",
+        dynamic.role_status);
     yvex_model_target_report_project_rows(
         report, missing_role_normal_suffix,
         sizeof(missing_role_normal_suffix) / sizeof(missing_role_normal_suffix[0]),
@@ -643,8 +671,7 @@ int yvex_missing_role_report_build(const yvex_model_target_request *request,
     if (strcmp(dynamic.top, "quant-policy-or-artifact-emitter") == 0) {
         yvex_model_target_report_common_tail(report);
     } else {
-        yvex_model_target_report_add_row(report,
-                                         "boundary: missing-role report only; no GGUF/runtime/generation");
+        yvex_model_target_report_fact_text(report, "boundary", "missing-role report only; no GGUF/runtime/generation");
     }
     return YVEX_OK;
 }

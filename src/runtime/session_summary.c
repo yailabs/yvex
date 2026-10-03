@@ -348,7 +348,7 @@ int yvex_runtime_session_committed_state_summary_copy(
         session->specialization !=
             session->engine->specializations[session->summary.backend] ||
         session->specialization->summary.schema_version !=
-            YVEX_ENGINE_SPECIALIZATION_SCHEMA_V1 ||
+            YVEX_ENGINE_SPECIALIZATION_SCHEMA_V2 ||
         session->specialization->summary.backend != session->summary.backend ||
         !yvex_sha256_hex_valid(
             session->summary.engine_specialization_identity) ||

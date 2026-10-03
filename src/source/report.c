@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <yvex/internal/core.h>
 #include <yvex/internal/source_payload.h>
+#include <yvex/catalog.h>
 
 #define YVEX_SOURCE_MANIFEST_PROBE_CAP 8192u
 
@@ -277,7 +278,7 @@ static void source_report_project_u64(yvex_source_report *report,
                 *(const unsigned long long *)(const void *)(source + rows[row].input);
 }
 
-const yvex_source_family_profile *yvex_source_report_find_profile(const char *family) {
+static const yvex_source_family_profile *source_report_find_profile(const char *family) {
     unsigned long i;
 
     if (!family) {
@@ -1371,6 +1372,48 @@ static int source_report_scan_source(const yvex_source_report_request *options,
             return rc;
         source_report_apply_deepseek_verification(report);
     }
+    return YVEX_OK;
+}
+
+int yvex_source_report_request_prepare(yvex_source_report_request *request,
+                                        yvex_error *err) {
+    const char *base;
+    yvex_local_source_record source;
+    yvex_error ignored;
+
+    if (!request || !request->family || !request->release ||
+        strcmp(request->release, "v0.1.0") != 0 ||
+        !(request->profile = source_report_find_profile(request->family))) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_report_request_prepare",
+                       "an admitted family and v0.1.0 report release are required; strict is DeepSeek-only");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (request->strict && strcmp(request->family, "deepseek") != 0) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_report_request_prepare",
+                       "--strict is available only for the canonical DeepSeek target");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!request->target && request->source && request->models_root) {
+        yvex_error_clear(&ignored);
+        if (yvex_local_catalog_source_resolve(request->models_root, request->source,
+                                               &source, &ignored) == YVEX_OK &&
+            strcmp(source.family, request->family) == 0) {
+            yvex_core_text_copy(request->resolved_target, sizeof(request->resolved_target), source.name);
+            request->target = request->resolved_target;
+        }
+    }
+    base = request->source ? yvex_source_path_basename(request->source) : NULL;
+    if (!request->target && base &&
+        yvex_source_target_matches_family_name(request->profile->family_key, base)) {
+        if (strlen(base) >= sizeof(request->resolved_target)) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "source_report_request_prepare", "source target is too long");
+            return YVEX_ERR_BOUNDS;
+        }
+        yvex_core_text_copy(request->resolved_target, sizeof(request->resolved_target), base);
+        request->target = request->resolved_target;
+    }
+    if (!request->target) request->target = request->profile->target_id;
+    yvex_error_clear(err);
     return YVEX_OK;
 }
 

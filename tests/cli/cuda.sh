@@ -20,46 +20,40 @@ contains() {
     python3 tests/support/human_field.py "$file" "$value" || fail "$file missing: $value"
 }
 
+matches() {
+    python3 tests/support/human_field.py --regex "$1" "$2" || fail "$1 missing pattern: $2"
+}
+
 "$YVEX_BIN" inspect cuda >"$OUT_DIR/cuda_info.out" 2>"$OUT_DIR/cuda_info.err"
 rc=$?
 if [ "$rc" -eq 5 ]; then
-    contains "$OUT_DIR/cuda_info.out" "cuda: unavailable"
-    contains "$OUT_DIR/cuda_info.out" "status: cuda-unavailable"
+    contains "$OUT_DIR/cuda_info.out" "BACKEND  cuda · unavailable"
     printf 'cli cuda smoke: skip\n'
     exit 77
 fi
 [ "$rc" -eq 0 ] || fail "cuda-info exit code was $rc"
-contains "$OUT_DIR/cuda_info.out" "cuda: available"
-contains "$OUT_DIR/cuda_info.out" "kernel_bundle: admitted"
-contains "$OUT_DIR/cuda_info.out" "kernel_bundle_native:"
-contains "$OUT_DIR/cuda_info.out" "kernel_bundle_architecture:"
-contains "$OUT_DIR/cuda_info.out" "kernel_bundle_identity:"
-contains "$OUT_DIR/cuda_info.out" "status: cuda-info"
+contains "$OUT_DIR/cuda_info.out" "BACKEND  cuda · ready"
+matches "$OUT_DIR/cuda_info.out" 'CUDA  context available · bundle admitted · [^ ·]+ · (native|PTX)'
+matches "$OUT_DIR/cuda_info.out" 'BUNDLE  [0-9a-f]{64} · none'
 
 "$YVEX_BIN" inspect cuda bandwidth >"$OUT_DIR/bandwidth.out" 2>"$OUT_DIR/bandwidth.err"
 rc=$?
 [ "$rc" -eq 0 ] || fail "cuda bandwidth exit code was $rc"
-contains "$OUT_DIR/bandwidth.out" "sample_count: 5"
-contains "$OUT_DIR/bandwidth.out" "sustainable_read_bytes_per_second:"
-contains "$OUT_DIR/bandwidth.out" "sustainable_coherent_host_bytes_per_second:"
-contains "$OUT_DIR/bandwidth.out" "status: cuda-bandwidth"
+matches "$OUT_DIR/bandwidth.out" 'BANDWIDTH  [0-9]+ B working set · [0-9]+ iterations · 5 samples'
+matches "$OUT_DIR/bandwidth.out" 'RATE  read [0-9.]+ GB/s · copy [0-9.]+ GB/s · coherent host [0-9.]+ GB/s'
 
 "$YVEX_BIN" inspect backend cuda >"$OUT_DIR/backend.out" 2>"$OUT_DIR/backend.err"
 rc=$?
 [ "$rc" -eq 0 ] || fail "backend cuda exit code was $rc"
-contains "$OUT_DIR/backend.out" "backend: cuda"
-contains "$OUT_DIR/backend.out" "status: ready"
-contains "$OUT_DIR/backend.out" "kernel_bundle: admitted"
-contains "$OUT_DIR/backend.out" "kernel_bundle_native:"
-contains "$OUT_DIR/backend.out" "kernel_bundle_architecture:"
-contains "$OUT_DIR/backend.out" "kernel_bundle_identity:"
-contains "$OUT_DIR/backend.out" "status: backend-capabilities"
+contains "$OUT_DIR/backend.out" "BACKEND  cuda · ready"
+matches "$OUT_DIR/backend.out" 'CUDA  context available · bundle admitted · [^ ·]+ · (native|PTX)'
+matches "$OUT_DIR/backend.out" 'BUNDLE  [0-9a-f]{64} · none'
 
 "$YVEX_BIN" artifact materialize --model "$FIXTURE" --backend cuda \
     >"$OUT_DIR/materialize.out" 2>"$OUT_DIR/materialize.err"
 rc=$?
 [ "$rc" -eq 0 ] || fail "materialize cuda exit code was $rc"
-contains "$OUT_DIR/materialize.out" "materialization status: materialized"
+contains "$OUT_DIR/materialize.out" "materialization_status: materialized"
 contains "$OUT_DIR/materialize.out" "backend: cuda"
 contains "$OUT_DIR/materialize.out" "status: weights-materialized"
 

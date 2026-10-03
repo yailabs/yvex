@@ -53,96 +53,94 @@ typedef struct {
     const char *next;
 } tokenizer_report_facts;
 
+#define TOKENIZER_TEXT(key, value) { YVEX_MODEL_TARGET_ROW_LITERAL, (value), 0u, key }
 #define TOKENIZER_LITERAL(text) \
-    { YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u }
-#define TOKENIZER_STRING(field, format) \
-    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(tokenizer_report_facts, field) }
-#define TOKENIZER_U64(field, format) \
-    { YVEX_MODEL_TARGET_ROW_U64, (format), offsetof(tokenizer_report_facts, field) }
+    { YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u, NULL }
+#define TOKENIZER_STRING(field, key, format) \
+    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(tokenizer_report_facts, field), key }
+#define TOKENIZER_U64(field, key, format) \
+    { YVEX_MODEL_TARGET_ROW_U64, (format), offsetof(tokenizer_report_facts, field), key }
 
 static const yvex_model_target_row_spec tokenizer_audit_prefix[] = {
-    TOKENIZER_STRING(status, "tokenizer_map_status: %s"),
-    TOKENIZER_STRING(family, "tokenizer_map_family: %s"),
-    TOKENIZER_STRING(target, "tokenizer_map_target_id: %s"),
-    TOKENIZER_LITERAL("tokenizer_map_stage: metadata-tokenizer-map"),
-    TOKENIZER_LITERAL("tokenizer_map_evidence_basis: sidecar-json-only"),
-    TOKENIZER_STRING(source_status, "tokenizer_map_source_status: %s"),
-    TOKENIZER_LITERAL("schema_version: yvex.source.tokenizer_map.v1"),
-    TOKENIZER_STRING(tokenizer_json_status, "tokenizer_json_status: %s"),
-    TOKENIZER_STRING(tokenizer_config_status, "tokenizer_config_status: %s"),
-    TOKENIZER_STRING(special_tokens_status, "special_tokens_map_status: %s"),
-    TOKENIZER_STRING(generation_config_status, "generation_config_status: %s"),
-    TOKENIZER_STRING(config_json_status, "config_json_status: %s"),
-    TOKENIZER_STRING(tokenizer_class, "tokenizer_class: %s"),
-    TOKENIZER_STRING(family, "model_type: %s"),
-    TOKENIZER_STRING(vocab_size_status, "vocab_size_status: %s")
+    TOKENIZER_STRING(status, "tokenizer_map_status", "tokenizer_map_status: %s"),
+    TOKENIZER_STRING(family, "tokenizer_map_family", "tokenizer_map_family: %s"),
+    TOKENIZER_STRING(target, "tokenizer_map_target_id", "tokenizer_map_target_id: %s"),
+    TOKENIZER_TEXT("tokenizer_map_stage", "metadata-tokenizer-map"),
+    TOKENIZER_TEXT("tokenizer_map_evidence_basis", "sidecar-json-only"),
+    TOKENIZER_STRING(source_status, "tokenizer_map_source_status", "tokenizer_map_source_status: %s"),
+    TOKENIZER_TEXT("schema_version", "yvex.source.tokenizer_map.v1"),
+    TOKENIZER_STRING(tokenizer_json_status, "tokenizer_json_status", "tokenizer_json_status: %s"),
+    TOKENIZER_STRING(tokenizer_config_status, "tokenizer_config_status", "tokenizer_config_status: %s"),
+    TOKENIZER_STRING(special_tokens_status, "special_tokens_map_status", "special_tokens_map_status: %s"),
+    TOKENIZER_STRING(generation_config_status, "generation_config_status", "generation_config_status: %s"),
+    TOKENIZER_STRING(config_json_status, "config_json_status", "config_json_status: %s"),
+    TOKENIZER_STRING(tokenizer_class, "tokenizer_class", "tokenizer_class: %s"),
+    TOKENIZER_STRING(family, "model_type", "model_type: %s"),
+    TOKENIZER_STRING(vocab_size_status, "vocab_size_status", "vocab_size_status: %s")
 };
 
 static const yvex_model_target_row_spec tokenizer_vocab_rows[] = {
-    TOKENIZER_U64(vocab_size, "vocab_size: %llu"),
-    TOKENIZER_U64(vocab_size, "config_vocab_size: %llu"),
-    TOKENIZER_LITERAL("output_head_vocab_dim_candidate: 16"),
-    TOKENIZER_STRING(vocab_relation, "output_head_vocab_relation_status: %s")
+    TOKENIZER_U64(vocab_size, "vocab_size", "vocab_size: %llu"),
+    TOKENIZER_U64(vocab_size, "config_vocab_size", "config_vocab_size: %llu"),
+    TOKENIZER_TEXT("output_head_vocab_dim_candidate", "16"),
+    TOKENIZER_STRING(vocab_relation, "output_head_vocab_relation_status", "output_head_vocab_relation_status: %s")
 };
 
 static const yvex_model_target_row_spec tokenizer_special_rows[] = {
-    TOKENIZER_STRING(additional_special_status,
+    TOKENIZER_STRING(additional_special_status, "additional_special_tokens_status",
                      "additional_special_tokens_status: %s"),
-    TOKENIZER_STRING(additional_special_count,
+    TOKENIZER_STRING(additional_special_count, "additional_special_tokens_count",
                      "additional_special_tokens_count: %s"),
-    TOKENIZER_STRING(chat_template_status, "chat_template_status: %s"),
-    TOKENIZER_STRING(chat_template_present, "chat_template_present: %s"),
-    TOKENIZER_LITERAL("evidence_basis: sidecar-json-only"),
-    TOKENIZER_STRING(vocab, "vocab_status: %s"),
-    TOKENIZER_STRING(merges, "merges_status: %s"),
-    TOKENIZER_STRING(backend, "tokenizer_backend_type: %s"),
-    TOKENIZER_STRING(added_tokens, "added_tokens_count: %s"),
-    TOKENIZER_STRING(special_status, "special_tokens_status: %s")
-};
+    TOKENIZER_STRING(chat_template_status, "chat_template_status", "chat_template_status: %s"),
+    TOKENIZER_STRING(chat_template_present, "chat_template_present", "chat_template_present: %s"),
+    TOKENIZER_TEXT("evidence_basis", "sidecar-json-only"),
+    TOKENIZER_STRING(vocab, "vocab_status", "vocab_status: %s"),
+    TOKENIZER_STRING(merges, "merges_status", "merges_status: %s"),
+    TOKENIZER_STRING(backend, "tokenizer_backend_type", "tokenizer_backend_type: %s"),
+    TOKENIZER_STRING(added_tokens, "added_tokens_count", "added_tokens_count: %s"),
+    TOKENIZER_STRING(special_status, "special_tokens_status", "special_tokens_status: %s")};
 
 static const yvex_model_target_row_spec tokenizer_present_ids[] = {
-    TOKENIZER_STRING(token_status, "bos_token_id_status: %s"),
-    TOKENIZER_LITERAL("bos_token_id: 1"),
-    TOKENIZER_STRING(token_status, "eos_token_id_status: %s"),
-    TOKENIZER_LITERAL("eos_token_id: 2"),
-    TOKENIZER_STRING(token_status, "pad_token_id_status: %s"),
-    TOKENIZER_LITERAL("pad_token_id: 0"),
-    TOKENIZER_STRING(token_status, "unk_token_id_status: %s"),
-    TOKENIZER_LITERAL("unk_token_id: 3")
+    TOKENIZER_STRING(token_status, "bos_token_id_status", "bos_token_id_status: %s"),
+    TOKENIZER_TEXT("bos_token_id", "1"),
+    TOKENIZER_STRING(token_status, "eos_token_id_status", "eos_token_id_status: %s"),
+    TOKENIZER_TEXT("eos_token_id", "2"),
+    TOKENIZER_STRING(token_status, "pad_token_id_status", "pad_token_id_status: %s"),
+    TOKENIZER_TEXT("pad_token_id", "0"),
+    TOKENIZER_STRING(token_status, "unk_token_id_status", "unk_token_id_status: %s"),
+    TOKENIZER_TEXT("unk_token_id", "3")
 };
 
 static const yvex_model_target_row_spec tokenizer_missing_ids[] = {
-    TOKENIZER_STRING(token_status, "bos_token_id_status: %s"),
-    TOKENIZER_STRING(token_status, "eos_token_id_status: %s"),
-    TOKENIZER_STRING(token_status, "pad_token_id_status: %s"),
-    TOKENIZER_STRING(token_status, "unk_token_id_status: %s")
+    TOKENIZER_STRING(token_status, "bos_token_id_status", "bos_token_id_status: %s"),
+    TOKENIZER_STRING(token_status, "eos_token_id_status", "eos_token_id_status: %s"),
+    TOKENIZER_STRING(token_status, "pad_token_id_status", "pad_token_id_status: %s"),
+    TOKENIZER_STRING(token_status, "unk_token_id_status", "unk_token_id_status: %s")
 };
 
 static const yvex_model_target_row_spec tokenizer_audit_suffix[] = {
-    TOKENIZER_STRING(hash_status, "chat_template_hash_status: %s"),
-    TOKENIZER_STRING(prompt_status, "prompt_template_status: %s"),
-    TOKENIZER_LITERAL("tokenizer_runtime_status: not-implemented"),
-    TOKENIZER_LITERAL("tokenization_status: not-implemented"),
-    TOKENIZER_LITERAL("detokenization_status: not-implemented"),
-    TOKENIZER_LITERAL("gguf_tokenizer_contract_status: planned"),
-    TOKENIZER_LITERAL("eos_stop_policy_status: not-implemented")
+    TOKENIZER_STRING(hash_status, "chat_template_hash_status", "chat_template_hash_status: %s"),
+    TOKENIZER_STRING(prompt_status, "prompt_template_status", "prompt_template_status: %s"),
+    TOKENIZER_TEXT("tokenizer_runtime_status", "not-implemented"),
+    TOKENIZER_TEXT("tokenization_status", "not-implemented"),
+    TOKENIZER_TEXT("detokenization_status", "not-implemented"),
+    TOKENIZER_TEXT("gguf_tokenizer_contract_status", "planned"),
+    TOKENIZER_TEXT("eos_stop_policy_status", "not-implemented")
 };
 
 static const yvex_model_target_row_spec tokenizer_normal_rows[] = {
-    TOKENIZER_STRING(target, "tokenizer-map: %s"),
-    TOKENIZER_STRING(family, "family: %s"),
-    TOKENIZER_STRING(status, "status: %s"),
-    TOKENIZER_STRING(source_status, "tokenizer: %s"),
-    TOKENIZER_STRING(vocab, "vocab: %s"),
-    TOKENIZER_STRING(merges, "merges: %s"),
-    TOKENIZER_STRING(chat_template, "chat_template: %s"),
-    TOKENIZER_STRING(special_status, "specials: %s"),
-    TOKENIZER_LITERAL("runtime: unsupported"),
-    TOKENIZER_STRING(top_blocker, "top_blocker: %s"),
-    TOKENIZER_STRING(next, "next: %s"),
-    TOKENIZER_LITERAL(
-        "boundary: tokenizer metadata mapping only; no "
-        "tokenization/detokenization/runtime/generation")
+    TOKENIZER_STRING(target, "tokenizer-map", "tokenizer-map: %s"),
+    TOKENIZER_STRING(family, "family", "family: %s"),
+    TOKENIZER_STRING(status, "status", "status: %s"),
+    TOKENIZER_STRING(source_status, "tokenizer", "tokenizer: %s"),
+    TOKENIZER_STRING(vocab, "vocab", "vocab: %s"),
+    TOKENIZER_STRING(merges, "merges", "merges: %s"),
+    TOKENIZER_STRING(chat_template, "chat_template", "chat_template: %s"),
+    TOKENIZER_STRING(special_status, "specials", "specials: %s"),
+    TOKENIZER_TEXT("runtime", "unsupported"),
+    TOKENIZER_STRING(top_blocker, "top_blocker", "top_blocker: %s"),
+    TOKENIZER_STRING(next, "next", "next: %s"),
+    TOKENIZER_TEXT("boundary", "tokenizer metadata mapping only; no tokenization/detokenization/runtime/generation")
 };
 
 #undef TOKENIZER_LITERAL
@@ -360,6 +358,12 @@ int yvex_tokenizer_map_report_build(
         tokenizer_write_sidecar(request, family);
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
+        report->status = status;
+        yvex_model_target_report_fact_text(report, "target_id", request->target_id);
+        yvex_model_target_report_fact_text(report, "vocab_status", strcmp(status, "source-missing") == 0
+            ? "missing" : tokenizer_vocab_status(family));
+        yvex_model_target_report_fact_text(report, "next", strcmp(status, "source-missing") == 0
+            ? "V010.MAP.7" : "V010.QUANT.1");
         tokenizer_json_report(report, request, family, status);
         return YVEX_OK;
     }
@@ -400,7 +404,7 @@ int yvex_tokenizer_map_report_build(
             sizeof(tokenizer_special_rows) / sizeof(tokenizer_special_rows[0]),
             &facts);
         if (source_present) {
-            yvex_model_target_report_add_row(report, "stop_token_candidate.0.id: 1");
+            yvex_model_target_report_fact_text(report, "stop_token_candidate.0.id", "1");
         }
         yvex_model_target_report_project_rows(
             report, tokenizer_audit_suffix,
@@ -415,10 +419,9 @@ int yvex_tokenizer_map_report_build(
                                 : strcmp(status, "metadata-missing") == 0
                                     ? "missing-tokenizer-sidecars"
                                     : "tokenizer-metadata-incomplete";
-            yvex_model_target_report_add_row(report, "top_blocker: %s",
-                                             facts.top_blocker);
+            yvex_model_target_report_fact_text(report, "top_blocker", facts.top_blocker);
         }
-        yvex_model_target_report_add_row(report, "next_required_rows: %s", next);
+        yvex_model_target_report_fact_text(report, "next_required_rows", next);
         return YVEX_OK;
     }
     if (strcmp(status, "present-report-only") != 0) {

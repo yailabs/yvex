@@ -836,7 +836,7 @@ static int responses_input(yvex_json *json, yvex_provider_request *request,
  *
  * Allocates, validates, and identity-seals one provider-neutral request graph.
  */
-int openai_json_admit(const openai_http_request *http, openai_endpoint endpoint,
+int yvex_openai_json_admit(const openai_http_request *http, openai_endpoint endpoint,
     yvex_reasoning_policy default_reasoning, openai_admitted_request *admitted,
     yvex_error *err)
 {
@@ -987,7 +987,7 @@ failure:
     return rc;
 }
 
-void openai_admitted_request_clear(openai_admitted_request *request)
+void yvex_openai_admitted_request_clear(openai_admitted_request *request)
 {
     if (!request) return;
     yvex_provider_request_close(&request->provider);

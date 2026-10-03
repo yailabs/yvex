@@ -4,9 +4,14 @@ set -eu
 cd "$(dirname "$0")/.."
 
 test -f include/yvex/api.h
-test -f src/cli/main.c
-test -f src/cli/input/private.h
-test -f src/cli/render/private.h
+test -f src/cli/rust/main.rs
+test -f src/cli/rust/registry.rs
+test -f src/cli/rust/presentation.rs
+test -f src/cli/rust/ffi.rs
+if rg --files src/cli -g '*.c' -g '*.h' | grep .; then
+  echo 'surface: superseded C product shell returned' >&2
+  exit 1
+fi
 
 for retired_header in runtime generation metrics; do
   test ! -e "include/yvex/$retired_header.h" || {
@@ -37,38 +42,16 @@ test ! -d src/generation || {
   exit 1
 }
 
-for surface in backend graph model_artifacts model_target source; do
-  test -f "src/cli/commands/$surface.c" || {
-    echo "surface: missing command adapter: $surface" >&2
-    exit 1
-  }
-  test -f "src/cli/input/$surface.c" || {
-    echo "surface: missing typed input owner: $surface" >&2
+for surface in backend pipeline attention target source artifact catalog quant; do
+  test -f "src/cli/rust/$surface.rs" || {
+    echo "surface: missing typed Rust product projection: $surface" >&2
     exit 1
   }
 done
-
-for surface in backend graph model_artifacts model_target source; do
-  test -f "src/cli/render/$surface.c" || {
-    echo "surface: missing typed render owner: $surface" >&2
-    exit 1
-  }
-done
-
-test -f src/cli/io/out.c || {
-  echo "surface: missing canonical CLI byte writer" >&2
+rg -q 'serde_json::' src/cli/rust/client.rs || {
+  echo 'surface: machine output lost the typed JSON serializer' >&2
   exit 1
 }
-grep -q '^void yvex_cli_json_begin' src/cli/io/out.c || {
-  echo "surface: CLI byte writer lost JSON projection" >&2
-  exit 1
-}
-
-if grep -RInE '(^|[^a-zA-Z_])(printf|fprintf|vprintf|vfprintf|puts|fputs|putchar|perror)[[:space:]]*\(' \
-    src/cli/commands src/cli/input; then
-  echo "surface: command/input owner writes operator output" >&2
-  exit 1
-fi
 
 if grep -RInE '\b(argc|argv)\b|usage:[[:space:]]*yvex' \
     src/model src/graph src/runtime src/backend src/source src/artifact src/gguf; then
@@ -81,4 +64,4 @@ if find . -maxdepth 1 -type f \( -name 'yvex_*.c' -o -name 'yvex_*_private.h' \)
   exit 1
 fi
 
-echo "surface topology: ok typed-command-input-render triples=5 writers=1"
+echo "surface topology: Rust product projections; isolated typed FFI; no C shell"

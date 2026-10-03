@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <yvex/internal/source_acquisition.h>
@@ -142,9 +143,59 @@ static int test_reconciliation(void)
     return 0;
 }
 
+static int test_source_observation(void)
+{
+    char root[] = "/tmp/yvex-source-observation-XXXXXX";
+    char source[YVEX_PATH_CAP], cache[YVEX_PATH_CAP], payload[YVEX_PATH_CAP];
+    char partial[YVEX_PATH_CAP], event[YVEX_PATH_CAP], link[YVEX_PATH_CAP];
+    yvex_source_acquisition_tree scan;
+    yvex_source_acquisition_operation operation, before;
+    yvex_error err;
+    FILE *stream;
+    YVEX_TEST_ASSERT(mkdtemp(root) != NULL, "isolated observation root");
+    snprintf(source, sizeof(source), "%s/source", root);
+    snprintf(cache, sizeof(cache), "%s/cache", root);
+    snprintf(payload, sizeof(payload), "%s/source/model.safetensors", root);
+    snprintf(partial, sizeof(partial), "%s/cache/model.incomplete", root);
+    snprintf(event, sizeof(event), "%s/event.json", root);
+    snprintf(link, sizeof(link), "%s/source/.cache", root);
+    YVEX_TEST_ASSERT(mkdir(source, 0700) == 0 && mkdir(cache, 0700) == 0, "source/cache roots");
+    stream = fopen(payload, "wb");
+    YVEX_TEST_ASSERT(stream && fputs("1234", stream) >= 0 && fclose(stream) == 0, "bounded source file");
+    stream = fopen(partial, "wb");
+    YVEX_TEST_ASSERT(stream && fputs("provider-internal", stream) >= 0 && fclose(stream) == 0, "partial cache file");
+    YVEX_TEST_ASSERT(symlink(cache, link) == 0, "cache alias");
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(yvex_source_acquisition_scan(source, cache, &scan, &err) == YVEX_OK &&
+        scan.bytes == 4ull && scan.files == 1ull && scan.shards == 1ull && scan.partials == 1ull,
+        "cache writes are not committed canonical bytes or files");
+    YVEX_TEST_ASSERT_STREQ(scan.largest_file, "model.safetensors", "relative largest file");
+    memset(&operation, 0, sizeof(operation));
+    operation.lifecycle = YVEX_SOURCE_ACQUISITION_DOWNLOADING;
+    stream = fopen(event, "wb");
+    YVEX_TEST_ASSERT(stream && fputs("{\"schema\":\"yvex.provider.acquisition.event.v1\","
+        "\"sequence\":2,\"kind\":\"retry\",\"retry_count\":1,\"object\":\"model.safetensors\"}", stream) >= 0 &&
+        fclose(stream) == 0, "provider retry fixture");
+    YVEX_TEST_ASSERT(yvex_source_acquisition_observe(source, cache, event, &operation, 100ull, &err) == YVEX_OK,
+        "observe selected tree and typed provider event");
+    YVEX_TEST_ASSERT(operation.lifecycle == YVEX_SOURCE_ACQUISITION_RETRYING &&
+        operation.progress.provider_event_sequence.value == 2ull && operation.progress.retry_count.value == 1ull,
+        "retry remains a distinct lifecycle fact");
+    YVEX_TEST_ASSERT(!operation.progress.inflight_selected_bytes.known &&
+        !operation.progress.current_rate_bytes_per_second.known && !operation.progress.expected_bytes.known,
+        "filesystem observations do not fabricate selected progress or throughput");
+    before = operation;
+    YVEX_TEST_ASSERT(yvex_source_acquisition_observe(link, NULL, event, &operation, 200ull, &err) != YVEX_OK &&
+        !memcmp(&before, &operation, sizeof(operation)), "root symlink refusal is failure atomic");
+    YVEX_TEST_ASSERT(unlink(link) == 0 && unlink(payload) == 0 && unlink(partial) == 0 && unlink(event) == 0 &&
+        rmdir(source) == 0 && rmdir(cache) == 0 && rmdir(root) == 0, "remove exact test-owned fixture");
+    return 0;
+}
+
 int yvex_test_source_acquisition(void)
 {
     if (test_operation_round_trip() != 0) return 1;
     if (test_reconciliation() != 0) return 1;
+    if (test_source_observation() != 0) return 1;
     return 0;
 }

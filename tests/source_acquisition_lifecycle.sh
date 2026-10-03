@@ -119,16 +119,15 @@ test -f "$NORMAL/evidence/build/gemma/gemma-4-12b-it.source-manifest.json"
 # A real PTY gets an in-place, width-bounded projection.  NO_COLOR keeps the
 # same operation facts but selects append-only plain output even on a PTY.
 PTY_ROOT="$ROOT/models-pty"
-pty_command="stty cols 40; env YVEX_CONFIG_DIR=$ROOT/config YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=0 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI=$FAKE_HF $YVEX_BIN source acquire gemma-4-12b-it --models-root $PTY_ROOT --auth required --progress live --tick-seconds 1 --stall-seconds 5"
+pty_command="stty rows 24 cols 40; env YVEX_CONFIG_DIR=$ROOT/config YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=0 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI=$FAKE_HF $YVEX_BIN source acquire gemma-4-12b-it --models-root $PTY_ROOT --auth required --progress live --tick-seconds 1 --stall-seconds 5"
 (unset NO_COLOR; export TERM=xterm-256color; record_terminal "$ROOT/pty.typescript" "$pty_command") </dev/null >/dev/null
 LC_ALL=C grep -q $'\033\[2K' "$ROOT/pty.typescript"
-if grep -q 'files' "$ROOT/pty.typescript"; then
-  printf 'narrow PTY projection exceeded its reduced fact surface\n' >&2
-  exit 1
-fi
+# Responsive REPLAI feedback wraps rather than deleting narrow-terminal facts.
+grep -q 'ACQUIRE' "$ROOT/pty.typescript"
+grep -q 'files' "$ROOT/pty.typescript"
 
 PLAIN_PTY_ROOT="$ROOT/models-plain-pty"
-plain_pty_command="env YVEX_CONFIG_DIR=$ROOT/config YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=0 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI=$FAKE_HF $YVEX_BIN source acquire gemma-4-12b-it --models-root $PLAIN_PTY_ROOT --auth required --progress live --tick-seconds 1 --stall-seconds 5"
+plain_pty_command="stty rows 24 cols 40; env YVEX_CONFIG_DIR=$ROOT/config YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=0 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI=$FAKE_HF $YVEX_BIN source acquire gemma-4-12b-it --models-root $PLAIN_PTY_ROOT --auth required --progress live --tick-seconds 1 --stall-seconds 5"
 NO_COLOR=1 TERM=xterm-256color record_terminal "$ROOT/plain-pty.typescript" "$plain_pty_command" </dev/null >/dev/null
 if LC_ALL=C grep -q $'\033' "$ROOT/plain-pty.typescript"; then
   printf 'NO_COLOR PTY projection contains terminal escapes\n' >&2
@@ -164,7 +163,8 @@ start_fake "$NO_EVENT" 1 4 5 env YVEX_FAKE_HF_DISABLE_EVENTS=1
 wait_nonzero_field "$NO_EVENT" provider_pid
 no_event_initial=$(status_json "$NO_EVENT")
 initial_event=$(printf '%s' "$no_event_initial" | json_field last_provider_event_unix)
-test "$initial_event" != None
+# Launching the provider is a process fact, not a structured provider event.
+test "$initial_event" = None
 test "$(printf '%s' "$no_event_initial" | json_field provider_event_sequence)" = None
 wait_field "$NO_EVENT" health healthy
 no_event=$(status_json "$NO_EVENT")
@@ -262,7 +262,7 @@ if env YVEX_CONFIG_DIR="$ROOT/config" YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF"
   printf 'resume unexpectedly admitted an orphan provider\n' >&2
   exit 1
 fi
-grep -q 'orphan provider is still active' "$ROOT/crash-resume.err"
+grep -q 'authenticated orphan provider remains active; stop it before resume' "$ROOT/crash-resume.err"
 "$YVEX_BIN" source stop gemma-4-12b-it --models-root "$CRASH" \
   --output json >/dev/null
 wait "$START_PID" >/dev/null 2>&1 || true

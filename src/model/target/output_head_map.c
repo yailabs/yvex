@@ -37,42 +37,44 @@ typedef struct {
     const char *shape_relation;
 } output_head_report_facts;
 
+#define OUTPUT_HEAD_TEXT(key, value) { YVEX_MODEL_TARGET_ROW_LITERAL, (value), 0u, key }
 #define OUTPUT_HEAD_LITERAL(text) \
-    { YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u }
-#define OUTPUT_HEAD_STRING(field, format) \
-    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(output_head_report_facts, field) }
-#define OUTPUT_HEAD_INT(field, format) \
-    { YVEX_MODEL_TARGET_ROW_INT, (format), offsetof(output_head_report_facts, field) }
+    { YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u, NULL }
+#define OUTPUT_HEAD_STRING(field, key, format) \
+    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(output_head_report_facts, field), key }
+#define OUTPUT_HEAD_INT(field, key, format) \
+    { YVEX_MODEL_TARGET_ROW_INT, (format), offsetof(output_head_report_facts, field), key }
 
 static const yvex_model_target_row_spec output_head_audit_rows[] = {
-    OUTPUT_HEAD_STRING(status, "output_head_map_status: %s"),
-    OUTPUT_HEAD_STRING(family, "output_head_map_family: %s"),
-    OUTPUT_HEAD_STRING(target, "output_head_map_target_id: %s"),
-    OUTPUT_HEAD_LITERAL("output_head_map_stage: header-output-head-map"),
-    OUTPUT_HEAD_LITERAL("output_head_map_evidence_basis: header-metadata-only"),
-    OUTPUT_HEAD_STRING(source_status, "output_head_map_source_status: %s"),
-    OUTPUT_HEAD_INT(candidate_count, "output_head_candidate_count: %d"),
-    OUTPUT_HEAD_INT(ambiguous_count, "output_head_ambiguous_count: %d"),
-    OUTPUT_HEAD_STRING(native, "output_head_native_name: %s"),
-    OUTPUT_HEAD_STRING(canonical, "output_head_canonical_role: %s"),
-    OUTPUT_HEAD_STRING(mapping, "output_head_mapping_status: %s"),
-    OUTPUT_HEAD_STRING(missing_status, "output_head_missing_status: %s"),
-    OUTPUT_HEAD_LITERAL("embedding_canonical_role: model.embedding.token.weight"),
-    OUTPUT_HEAD_LITERAL("final_norm_canonical_role: model.final_norm.weight"),
-    OUTPUT_HEAD_STRING(tie, "tie_policy_status: %s"),
-    OUTPUT_HEAD_STRING(config_tie, "config_tie_word_embeddings_status: %s"),
-    OUTPUT_HEAD_STRING(shape_relation, "shape_relation_status: %s"),
-    OUTPUT_HEAD_LITERAL("output_head_runtime_consumer_status: target-runtime-owned"),
-    OUTPUT_HEAD_LITERAL("output_head_logits_status: target-capability-dependent"),
-    OUTPUT_HEAD_LITERAL("output_head_artifact_contract_status: artifact-owner"),
-    OUTPUT_HEAD_LITERAL("output_head_runtime_descriptor_status: runtime-owner"),
-    OUTPUT_HEAD_LITERAL("output_head_graph_consumer_status: runtime-logits-owner")
+    OUTPUT_HEAD_STRING(status, "output_head_map_status", "output_head_map_status: %s"),
+    OUTPUT_HEAD_STRING(family, "output_head_map_family", "output_head_map_family: %s"),
+    OUTPUT_HEAD_STRING(target, "output_head_map_target_id", "output_head_map_target_id: %s"),
+    OUTPUT_HEAD_TEXT("output_head_map_stage", "header-output-head-map"),
+    OUTPUT_HEAD_TEXT("output_head_map_evidence_basis", "header-metadata-only"),
+    OUTPUT_HEAD_STRING(source_status, "output_head_map_source_status", "output_head_map_source_status: %s"),
+    OUTPUT_HEAD_INT(candidate_count, "output_head_candidate_count", "output_head_candidate_count: %d"),
+    OUTPUT_HEAD_INT(ambiguous_count, "output_head_ambiguous_count", "output_head_ambiguous_count: %d"),
+    OUTPUT_HEAD_STRING(native, "output_head_native_name", "output_head_native_name: %s"),
+    OUTPUT_HEAD_STRING(canonical, "output_head_canonical_role", "output_head_canonical_role: %s"),
+    OUTPUT_HEAD_STRING(mapping, "output_head_mapping_status", "output_head_mapping_status: %s"),
+    OUTPUT_HEAD_STRING(missing_status, "output_head_missing_status", "output_head_missing_status: %s"),
+    OUTPUT_HEAD_TEXT("embedding_canonical_role", "model.embedding.token.weight"),
+    OUTPUT_HEAD_TEXT("final_norm_canonical_role", "model.final_norm.weight"),
+    OUTPUT_HEAD_STRING(tie, "tie_policy_status", "tie_policy_status: %s"),
+    OUTPUT_HEAD_STRING(config_tie, "config_tie_word_embeddings_status", "config_tie_word_embeddings_status: %s"),
+    OUTPUT_HEAD_STRING(shape_relation, "shape_relation_status", "shape_relation_status: %s"),
+    OUTPUT_HEAD_TEXT("output_head_runtime_consumer_status", "target-runtime-owned"),
+    OUTPUT_HEAD_TEXT("output_head_logits_status", "target-capability-dependent"),
+    OUTPUT_HEAD_TEXT("output_head_artifact_contract_status", "artifact-owner"),
+    OUTPUT_HEAD_TEXT("output_head_runtime_descriptor_status", "runtime-owner"),
+    OUTPUT_HEAD_TEXT("output_head_graph_consumer_status", "runtime-logits-owner")
 };
 
 static const yvex_model_target_row_spec output_head_entry_rows[] = {
-    OUTPUT_HEAD_STRING(native, "output_head.entry.output.native_name: %s"),
-    OUTPUT_HEAD_STRING(canonical, "output_head.entry.output.canonical_role: %s")
-};
+    OUTPUT_HEAD_STRING(native, "output_head.entry.output.native_name",
+                       "output_head.entry.output.native_name: %s"),
+    OUTPUT_HEAD_STRING(canonical, "output_head.entry.output.canonical_role",
+                       "output_head.entry.output.canonical_role: %s")};
 
 #undef OUTPUT_HEAD_LITERAL
 #undef OUTPUT_HEAD_STRING
@@ -322,14 +324,12 @@ int yvex_output_head_map_report_build(
             sizeof(output_head_audit_rows) / sizeof(output_head_audit_rows[0]),
             &facts);
         if (strcmp(status, "output-head-missing") == 0) {
-            yvex_model_target_report_add_row(report,
-                                             "top_blocker: missing-output-head-tensor");
+            yvex_model_target_report_fact_text(report, "top_blocker", "missing-output-head-tensor");
         } else if (strcmp(status, "output-head-ambiguous") == 0) {
-            yvex_model_target_report_add_row(report,
-                                             "top_blocker: ambiguous-output-head-tensor");
+            yvex_model_target_report_fact_text(report, "top_blocker", "ambiguous-output-head-tensor");
         }
         yvex_model_target_report_common_tail(report);
-        yvex_model_target_report_add_row(report, "next_required_rows: V010.MAP.8");
+        yvex_model_target_report_fact_text(report, "next_required_rows", "V010.MAP.8");
         if (strcmp(status, "source-missing") != 0 &&
             strcmp(status, "output-head-missing") != 0) {
             yvex_model_target_report_project_rows(
@@ -339,24 +339,23 @@ int yvex_output_head_map_report_build(
         }
         return YVEX_OK;
     }
-    yvex_model_target_report_add_row(report, "output-head-map: %s [%s]",
-                                     request->target_id,
-                                     strcmp(status, "source-missing") == 0 ? "blocked" : "reported");
-    yvex_model_target_report_add_row(report, "family: %s  evidence: header-only", family);
-    yvex_model_target_report_add_row(report, "head: %s  final_norm: %s  embedding: %s  tie: %s",
-                                     strcmp(status, "source-missing") == 0 ? "missing" : canonical,
-                                     strcmp(status, "source-missing") == 0 ? "missing" : "model.final_norm.weight",
-                                     strcmp(status, "source-missing") == 0 ? "missing" : "model.embedding.token.weight",
-                                     tie);
-    yvex_model_target_report_add_row(report, "shape: %s",
-                                     strcmp(status, "source-missing") == 0 ? "unknown" : "compatible-same-shape");
-    yvex_model_target_report_add_row(report, "top_blocker: %s",
-                                     strcmp(status, "source-missing") == 0
+    yvex_model_target_report_fact_text(report, "output-head-map", request->target_id);
+    yvex_model_target_report_fact_text(report, "family", family);
+    yvex_model_target_report_fact_text(report, "evidence_basis", "header-only");
+    yvex_model_target_report_fact_text(report, "head", strcmp(status, "source-missing") == 0 ? "missing" : canonical);
+    yvex_model_target_report_fact_text(
+        report, "final_norm", strcmp(status, "source-missing") == 0 ? "missing" : "model.final_norm.weight");
+    yvex_model_target_report_fact_text(
+        report, "embedding", strcmp(status, "source-missing") == 0 ? "missing" : "model.embedding.token.weight");
+    yvex_model_target_report_fact_text(report, "tie", tie);
+    yvex_model_target_report_fact_text(
+        report, "shape", strcmp(status, "source-missing") == 0 ? "unknown" : "compatible-same-shape");
+    yvex_model_target_report_fact_text(report, "top_blocker", strcmp(status, "source-missing") == 0
                                          ? (strcmp(family, "gemma") == 0
                                                 ? "missing-gemma-source-path"
                                                 : "missing-qwen-source-path")
                                          : "missing-output-head-runtime-consumer");
-    yvex_model_target_report_add_row(report, "next: V010.MAP.8");
-    yvex_model_target_report_add_row(report, "boundary: mapping only; no logits/runtime/generation");
+    yvex_model_target_report_fact_text(report, "next", "V010.MAP.8");
+    yvex_model_target_report_fact_text(report, "boundary", "mapping only; no logits/runtime/generation");
     return YVEX_OK;
 }

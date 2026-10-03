@@ -1,4 +1,4 @@
-# YVEX: native C/CUDA build. GNU Make >= 4.3 (grouped generated targets).
+# YVEX: C/CUDA engine and Rust product shell. GNU Make >= 4.3.
 # Production membership: config/source_owners.tsv; qualification: config/qa/.
 # Developer entry points below; toolchain, rules and qualification stay separate.
 .DEFAULT_GOAL := all
@@ -34,12 +34,13 @@ help:
 		'  make clean          Remove only the owned build tree/product' \
 		'' \
 		'Overrides: CC AR CPPFLAGS CFLAGS LDFLAGS LDLIBS NVCC NVCCFLAGS' \
+		'           CARGO RUSTC RUSTFLAGS RUST_PROFILE RUST_CARGO_TARGET_DIR' \
 		'           BUILD_DIR YVEX_CUDA_ARCH prefix bindir datadir DESTDIR' \
 		'Guide: docs/guides/build.md; QA: docs/evaluation/qa.md'
 
 info:
 	@printf '%s\n' \
-		'product: ./yvex; static engine library: $(LIBYVEX)' \
+		'product: $(YVEX_BIN); static engine library: $(LIBYVEX)' \
 		'project control: docs/project-control/TASKS.md (ROADMAP.md: macro horizon)' \
 		'release readiness: consult docs/project-control/STATUS.md' \
 		'build directory: $(BUILD_DIR)' \

@@ -326,6 +326,8 @@ static int deepseek_class_profile(
 
         report->status = "architecture-ir-blocked";
         report->exit_code = 5;
+        yvex_core_text_copy(report->target_id, sizeof(report->target_id), request->target_id);
+        yvex_core_text_copy(report->reason, sizeof(report->reason), blocker);
         if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
             yvex_model_target_report_add_row(
                 report,
@@ -341,21 +343,20 @@ static int deepseek_class_profile(
                 report, 4u, request->target_id, "blocked", "not-built",
                 blocker, NULL, NULL, NULL, NULL);
         } else if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
-            yvex_model_target_report_add_row(report, "architecture_ir_status: blocked");
-            yvex_model_target_report_add_row(report, "target_id: %s", request->target_id);
-            yvex_model_target_report_add_row(report, "source_path: %s", source_path);
-            yvex_model_target_report_add_row(report, "source_verification_status: blocked");
-            yvex_model_target_report_add_row(report, "reason: %s", blocker);
-            yvex_model_target_report_add_row(report, "runtime_execution: unsupported");
-            yvex_model_target_report_add_row(report, "generation: unsupported");
+            yvex_model_target_report_fact_text(report, "architecture_ir_status", "blocked");
+            yvex_model_target_report_fact_text(report, "target_id", request->target_id);
+            yvex_model_target_report_fact_text(report, "source_path", source_path);
+            yvex_model_target_report_fact_text(report, "source_verification_status", "blocked");
+            yvex_model_target_report_fact_text(report, "reason", blocker);
+            yvex_model_target_report_fact_text(report, "runtime_execution", "unsupported");
+            yvex_model_target_report_fact_text(report, "generation", "unsupported");
         } else {
-            yvex_model_target_report_add_row(report, "model-class: deepseek");
-            yvex_model_target_report_add_row(report, "target: %s", request->target_id);
-            yvex_model_target_report_add_row(report, "status: architecture-ir-blocked");
-            yvex_model_target_report_add_row(report, "reason: %s", blocker);
-            yvex_model_target_report_add_row(
-                report,
-                "boundary: source verification required; runtime/generation unsupported");
+            yvex_model_target_report_fact_text(report, "model-class", "deepseek");
+            yvex_model_target_report_fact_text(report, "target", request->target_id);
+            yvex_model_target_report_fact_text(report, "status", "architecture-ir-blocked");
+            yvex_model_target_report_fact_text(report, "reason", blocker);
+            yvex_model_target_report_fact_text(
+                report, "boundary", "source verification required; runtime/generation unsupported");
         }
         return YVEX_OK;
     }

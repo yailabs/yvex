@@ -310,12 +310,14 @@ if "$YVEX_BIN" compile source manifest report --family deepseek --release v0.1.0
   > "$OUT_DIR/deepseek-retired-target.out" 2> "$OUT_DIR/deepseek-retired-target.err"; then
   fail "retired DeepSeek target remained executable"
 fi
-grep 'unsupported target: deepseek4-v4-flash; use deepseek4-v4-flash-dspark' \
-  "$OUT_DIR/deepseek-retired-target.err" >/dev/null || fail "retired target migration hint is missing"
+grep 'unsupported target: deepseek4-v4-flash' \
+  "$OUT_DIR/deepseek-retired-target.err" >/dev/null || fail "retired target refusal is missing"
+python3 tests/support/human_field.py "$OUT_DIR/deepseek-retired-target.err" \
+  'deepseek4-v4-flash-dspark' || fail "retired target migration identity is missing"
 
 if "$YVEX_BIN" compile source manifest report --family qwen --release v0.1.0 \
   --strict > "$OUT_DIR/qwen-strict.out" 2> "$OUT_DIR/qwen-strict.err"; then
   fail "strict exact-source mode was accepted for a non-release family"
 fi
-grep -- '--strict is available only for the canonical DeepSeek target' \
-  "$OUT_DIR/qwen-strict.err" >/dev/null || fail "non-release strict refusal is not explicit"
+python3 tests/support/human_field.py "$OUT_DIR/qwen-strict.err" \
+  '--strict is available only for the canonical DeepSeek target' || fail "non-release strict refusal is not explicit"

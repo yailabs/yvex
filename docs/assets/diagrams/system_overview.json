@@ -10,7 +10,7 @@
   "owner": "docs/architecture/README.md",
   "authority": [
     "src/server/engine.c",
-    "src/cli/io/client.c",
+    "src/cli/rust/client.rs",
     "docs/contracts/local-protocol.md",
     "docs/architecture/compiler-ir.md",
     "docs/architecture/runtime-lifecycle.md"

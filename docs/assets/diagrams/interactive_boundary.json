@@ -2,7 +2,7 @@
   "schema": 1,
   "number": 5,
   "title": "Interactive editing is not runtime ownership",
-  "description": "Pinned REPLAI ABI 1 plus presentation extension 1 owns generic editing, documents, geometry, completion menus and quiet-output restoration. YVEX owns domain facts, history/candidate meaning, exact typed requests/channels and cancellation. No editable prompt coexists with generation.",
+  "description": "Pinned REPLAI native Rust owns generic editing, documents, geometry, completion menus and quiet-output restoration. The YVEX Rust product shell owns domain facts, history/candidate meaning, exact typed requests/channels and cancellation. The typed C client retains private-wire ownership. No editable prompt coexists with generation.",
   "size": [
     1200,
     1060
@@ -11,10 +11,11 @@
   "authority": [
     "config/replai.json",
     "docs/decisions/0007-external-terminal-editor.md",
-    "src/cli/io/client.c",
-    "src/cli/io/terminal/private.h",
-    "src/cli/io/terminal/posix.c",
-    "src/cli/io/stream.c",
+    "docs/decisions/0009-rust-product-shell.md",
+    "src/cli/rust/chat.rs",
+    "src/cli/rust/client.rs",
+    "src/cli/rust/interaction.rs",
+    "src/cli/rust/chat_stream.rs",
     "tests/replai_consumer.py"
   ],
   "panels": [
@@ -71,7 +72,7 @@
         194
       ],
       "kind": "external",
-      "title": "REPLAI · ABI 1 / P1",
+      "title": "REPLAI · native Rust",
       "lines": [
         "editing / paste / history",
         "documents / geometry / styles",
@@ -89,7 +90,7 @@
         150
       ],
       "kind": "interface",
-      "title": "YVEX client adapter",
+      "title": "YVEX Rust client shell",
       "lines": [
         "grammar / history admission",
         "attachments → ordered parts",

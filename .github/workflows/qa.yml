@@ -25,9 +25,15 @@ jobs:
           brew install make pkg-config ripgrep coreutils
           echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
           echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+      - name: Select the native FFI compiler library
+        run: |
+          libclang_dir="$(dirname "$(dirname "$(xcrun --find clang)")")/lib"
+          test -f "$libclang_dir/libclang.dylib"
+          echo "LIBCLANG_PATH=$libclang_dir" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
         with:
           toolchain: 1.98.1
+          components: rustfmt, clippy
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: 0.11.28
@@ -46,6 +52,8 @@ jobs:
         run: >-
           make check-qa-registry test-source-ownership test-layout
           test-code-natural test-architecture-boundaries test-repository-layout
+      - name: Check the packaged single Rust product
+        run: make test-packaging test-product-topology
       - name: Upload native evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -66,11 +74,12 @@ jobs:
       - name: Install native QA prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ripgrep zlib1g-dev pkg-config valgrind
+          sudo apt-get install --yes --no-install-recommends ripgrep zlib1g-dev pkg-config valgrind libclang-dev
       - name: Install stable Rust producer toolchain
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
         with:
           toolchain: stable
+          components: rustfmt, clippy
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: 0.11.28

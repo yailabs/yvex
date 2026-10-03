@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 
 #include <yvex/source.h>
+#include <yvex/internal/source_payload.h>
 
 static int make_dir(const char *path)
 {
@@ -53,6 +54,40 @@ static int contains_text(const char *haystack, const char *needle)
     return strstr(haystack, needle) != NULL;
 }
 
+static int source_report_selection(void)
+{
+    yvex_source_report_request request = {0};
+    yvex_error err;
+    request.family = "deepseek";
+    request.release = "v0.1.0";
+    YVEX_TEST_ASSERT(yvex_source_report_request_prepare(&request, &err) == YVEX_OK,
+                     "canonical report family is admitted");
+    YVEX_TEST_ASSERT_STREQ(request.target, YVEX_SOURCE_RELEASE_TARGET_ID,
+                           "DeepSeek default stays source-authored");
+    memset(&request, 0, sizeof(request));
+    request.family = "qwen";
+    request.release = "v0.1.0";
+    request.source = "/synthetic/source/qwen3-14b";
+    YVEX_TEST_ASSERT(yvex_source_report_request_prepare(&request, &err) == YVEX_OK,
+                     "family path selection is shared by product consumers");
+    YVEX_TEST_ASSERT_STREQ(request.target, "qwen3-14b", "derived family target");
+    YVEX_TEST_ASSERT(request.target == request.resolved_target, "derived target borrows caller storage");
+    request.target = "qwen3-8b";
+    YVEX_TEST_ASSERT(yvex_source_report_request_prepare(&request, &err) == YVEX_OK,
+                     "explicit target remains admitted");
+    YVEX_TEST_ASSERT_STREQ(request.target, "qwen3-8b", "explicit target is never replaced by basename");
+    request.strict = 1;
+    YVEX_TEST_ASSERT(yvex_source_report_request_prepare(&request, &err) == YVEX_ERR_INVALID_ARG,
+                     "strict verification does not invent Qwen qualification");
+    request.strict = 0;
+    request.release = "v0.2.0";
+    YVEX_TEST_ASSERT(yvex_source_report_request_prepare(&request, &err) == YVEX_ERR_INVALID_ARG,
+                     "unadmitted report release refuses");
+    YVEX_TEST_ASSERT(yvex_source_report_request_prepare(NULL, &err) == YVEX_ERR_INVALID_ARG,
+                     "null selection refuses before dereference");
+    return 0;
+}
+
 int yvex_test_source_manifest(void)
 {
     const char *root = "build/tests/source_manifest_fixture";
@@ -62,6 +97,8 @@ int yvex_test_source_manifest(void)
     yvex_error err;
     char json[8192];
     int rc;
+
+    YVEX_TEST_ASSERT(source_report_selection() == 0, "shared report selection controls");
 
     YVEX_TEST_ASSERT(system("rm -rf build/tests/source_manifest_fixture") == 0,
                      "clear source manifest fixture");

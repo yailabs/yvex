@@ -66,7 +66,7 @@ qa-ci:
 
 qa-doctor:
 	python3 tools/qa.py doctor
-test-operator-registry: check-operator-registry client
+test-operator-registry: check-operator-registry client $(OPERATOR_REGISTRY_OBJ)
 	YVEX_BIN='$(YVEX_BIN)' BUILD_DIR='$(BUILD_DIR)' python3 tests/test_operator_registry.py
 cuda-info: $(YVEX_BIN)
 	@echo "nvcc: $$(command -v $(NVCC) >/dev/null 2>&1 && command -v $(NVCC) || echo unavailable)"
@@ -139,7 +139,6 @@ test-cuda-no-nvcc: tests/test_cuda_failclosed.sh
 		trap 'exit 143' TERM; \
 		$(MAKE) BUILD_DIR=build/no-nvcc \
 			YVEX_BIN=build/no-nvcc/yvex \
-			REPLAI_PREFIX="$$tmp_dir/replai" \
 			NVCC=__yvex_nvcc_unavailable__ all; \
 		YVEX_BIN=build/no-nvcc/yvex sh tests/test_cuda_failclosed.sh
 
@@ -168,8 +167,9 @@ test-openai-live: client
 		sh tests/live/openai.sh
 
 test-cli: client $(CLI_TEST) $(CLIENT_CUTOVER_TEST)
-	YVEX_BIN='$(YVEX_BIN)' BUILD_DIR='$(BUILD_DIR)' REPLAI_PREFIX='$(REPLAI_PREFIX)' sh $(CLI_TEST)
-	YVEX_BIN='$(YVEX_BIN)' YVEX_CLIENT_LANE_OBJ='$(CLIENT_LANE_OBJ)' \
+	YVEX_BIN='$(YVEX_BIN)' BUILD_DIR='$(BUILD_DIR)' \
+		YVEX_TEST_OUT_DIR='build/tests/cli-$(notdir $(BUILD_DIR))' sh $(CLI_TEST)
+	YVEX_BIN='$(YVEX_BIN)' BUILD_DIR='$(BUILD_DIR)' \
 		sh $(CLIENT_CUTOVER_TEST)
 
 test-materialize: $(TEST_RUNNER)
@@ -347,7 +347,7 @@ test-runtime-streaming: $(TEST_RUNNER)
 test-repl: client $(OPENAI_FAKE_HOST) $(REPL_PTY_TEST) $(TERMIOS_PROBE)
 	YVEX_TEST_TERMIOS_PROBE='$(abspath $(TERMIOS_PROBE))' \
 		YVEX_BIN='$(YVEX_BIN)' YVEX_TEST_HOST='$(OPENAI_FAKE_HOST)' \
-		YVEX_CLIENT_LANE_OBJ='$(CLIENT_LANE_OBJ)' REPLAI_PREFIX='$(REPLAI_PREFIX)' \
+		BUILD_DIR='$(BUILD_DIR)' \
 		sh $(REPL_PTY_TEST)
 
 test-packaging: package
@@ -363,7 +363,7 @@ test-packaging: package
 	@test ! -e '$(BUILD_DIR)/package/developer'
 
 test-product-topology: all package tests/product_topology.sh
-	YVEX_BIN='$(YVEX_BIN)' BUILD_DIR='$(BUILD_DIR)' \
+	+YVEX_BIN='$(YVEX_BIN)' BUILD_DIR='$(BUILD_DIR)' \
 		sh tests/product_topology.sh
 
 test-runtime-client-refoundation-live: client $(NATIVE_TURN_TEST) \
@@ -1155,11 +1155,12 @@ test-gguf-qtype-abi: $(TEST_RUNNER) tests/test_gguf_qtype_abi.sh
 	YVEX_TEST_FILTER=gguf_qtype_abi $(TEST_RUNNER)
 	sh tests/test_gguf_qtype_abi.sh
 
-test-layout: $(LIBYVEX) $(YVEX_BIN) $(TEST_REFERENCE_OBJS) tests/test_source_layout.sh
-	sh tests/test_source_layout.sh
+test-layout: $(LIBYVEX) $(YVEX_BIN) $(TEST_REFERENCE_OBJS) $(OPERATOR_REGISTRY_OBJ) tests/test_source_layout.sh rust-ffi-index
+	+BUILD_DIR='$(BUILD_DIR)' YVEX_LIB='$(LIBYVEX)' YVEX_BIN='$(YVEX_BIN)' \
+		YVEX_REFERENCE_OBJS='$(TEST_REFERENCE_OBJS)' sh tests/test_source_layout.sh
 
 test-code-natural: tests/test_code_natural.sh
-	sh tests/test_code_natural.sh
+	+sh tests/test_code_natural.sh
 
 test-project-control: tests/test_project_control.sh ROADMAP.md CONTRIBUTING.md
 	sh tests/test_project_control.sh
@@ -1179,14 +1180,13 @@ test-surface: tests/test_surface.sh
 	sh tests/test_surface.sh
 
 test-source-ownership: tests/test_source_ownership.sh config/source_owners.tsv
-	sh tests/test_source_ownership.sh
+	+sh tests/test_source_ownership.sh
 
 test-repository-layout: $(LIBYVEX) tests/test_repository_layout.sh Makefile
-	sh tests/test_repository_layout.sh
+	+sh tests/test_repository_layout.sh
 
-test-architecture-boundaries: $(LIBYVEX) $(YVEX_BIN) $(TEST_REFERENCE_OBJS) tests/test_architecture_boundaries.sh
-	YVEX_LIB="$(LIBYVEX)" YVEX_BIN="$(YVEX_BIN)" \
-		YVEX_CLIENT_LANE_OBJ="$(CLIENT_LANE_OBJ)" \
+test-architecture-boundaries: $(LIBYVEX) $(YVEX_BIN) $(TEST_REFERENCE_OBJS) $(OPERATOR_REGISTRY_OBJ) tests/test_architecture_boundaries.sh rust-ffi-index
+	+BUILD_DIR='$(BUILD_DIR)' YVEX_LIB="$(LIBYVEX)" YVEX_BIN="$(YVEX_BIN)" \
 		YVEX_REFERENCE_OBJS="$(TEST_REFERENCE_OBJS)" \
 		sh tests/test_architecture_boundaries.sh
 
@@ -1224,11 +1224,35 @@ test-qwen-admission-live: $(QWEN_ADMISSION_LIVE_RUNNER)
 check-docs: test-documentation-architecture test-project-control test-docs-surface
 	@echo "yvex documentation: ok"
 
-check-guardrails: check-source-manifest $(LIBYVEX) $(YVEX_BIN) \
-		$(TEST_REFERENCE_OBJS)
-	@sh tests/test_source_ownership.sh
-	@sh tests/test_repository_layout.sh
-	@YVEX_LIB="$(LIBYVEX)" YVEX_BIN="$(YVEX_BIN)" \
+.PHONY: test-rust-shell rust-ffi-index
+$(RUST_BENCHMARK_FIXTURE): $(RUST_BENCHMARK_FIXTURE_OBJ) $(LIBYVEX)
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+rust-ffi-index: rust-client
+	+YVEX_NATIVE_BUILD_DIR='$(abspath $(BUILD_DIR))' \
+		CARGO_TARGET_DIR='$(abspath $(RUST_CARGO_TARGET_DIR))' \
+		$(CARGO) test --locked --test rust_structure
+
+test-rust-shell: rust-client $(OPENAI_FAKE_HOST) $(TERMIOS_PROBE) $(RUST_BENCHMARK_FIXTURE) $(TINY_VERTICAL_COMPILER)
+	+$(CARGO) fmt --check
+	+YVEX_NATIVE_BUILD_DIR='$(abspath $(BUILD_DIR))' \
+		CARGO_TARGET_DIR='$(abspath $(RUST_CARGO_TARGET_DIR))' \
+		$(CARGO) test --locked --lib --test rust_structure
+	+YVEX_NATIVE_BUILD_DIR='$(abspath $(BUILD_DIR))' \
+		CARGO_TARGET_DIR='$(abspath $(RUST_CARGO_TARGET_DIR))' \
+		$(CARGO) clippy --locked --all-targets -- -D warnings
+	YVEX_TEST_TERMIOS_PROBE='$(abspath $(TERMIOS_PROBE))' \
+		python3 tests/rust_chat_pty.py --binary '$(RUST_SHELL_BIN)' \
+		--fixture '$(OPENAI_FAKE_HOST)' --output '$(TEST_DIR)/rust-chat'
+	python3 tests/rust_cli_contracts.py --binary '$(RUST_SHELL_BIN)' \
+		--benchmark-fixture '$(RUST_BENCHMARK_FIXTURE)' --tiny-compiler '$(TINY_VERTICAL_COMPILER)'
+
+check-guardrails: check-source-manifest $(LIBYVEX) $(YVEX_BIN) rust-ffi-index \
+		$(TEST_REFERENCE_OBJS) $(OPERATOR_REGISTRY_OBJ)
+	+@sh tests/test_source_ownership.sh
+	+@sh tests/test_repository_layout.sh
+	+@BUILD_DIR='$(BUILD_DIR)' YVEX_LIB="$(LIBYVEX)" YVEX_BIN="$(YVEX_BIN)" \
 		YVEX_REFERENCE_OBJS="$(TEST_REFERENCE_OBJS)" \
 		sh tests/test_architecture_boundaries.sh
 	@test ! -e docs/spine.md
@@ -1252,9 +1276,7 @@ check-guardrails: check-source-manifest $(LIBYVEX) $(YVEX_BIN) \
 	@test -d src
 	@test -d src/app
 	@test -d src/cli
-	@test -d src/cli/commands
-	@test -d src/cli/render
-	@test -d src/cli/io
+	@test -d src/cli/rust
 	@test -d config/operator
 	@test -f config/operator/registry.json
 	@test -f tools/generate_operator_registry.py
@@ -1284,14 +1306,14 @@ check-guardrails: check-source-manifest $(LIBYVEX) $(YVEX_BIN) \
 	@test "$$(find tests -maxdepth 1 -type f -name 'test_cli*.sh' | wc -l | tr -d ' ')" = "0"
 	@test -f include/yvex/server.h
 	@test ! -d fixtures
-	@test -f src/cli/main.c
-	@test -f src/cli/io/server.c
+	@test -f src/cli/rust/main.rs
+	@test -f src/cli/rust/host.rs
 	@test -f src/server/core.c
 	@test -z "$$(git ls-files 'yvex_*.c')"
 	@test -z "$$(git ls-files 'yvex_*_private.h')"
 	@test ! -d ui
 	@test ! -d app
 	@test ! -d desktop
-	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI|c[l]ori-codename|docs/arc[h]ive|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori|github\\.com/yailabs/c[l]ori|yailabs/c[l]ori" --exclude-dir=.git --exclude-dir=build . >/dev/null
+	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI|c[l]ori-codename|docs/arc[h]ive|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori|github\\.com/yailabs/c[l]ori|yailabs/c[l]ori" --exclude-dir=.git --exclude-dir=build --exclude-dir=__pycache__ . >/dev/null
 	@! grep -Ei "production-read[y]|implemented infer[e]nce|implemented ser[v]er|supports C[U]DA|supports M[e]tal|supports M[L]X|supports llama\\.cpp|O[p]enAI-compatible ser[v]er" README.md >/dev/null
 	@! grep -Ei "benchmark results" README.md | grep -vi "benchmark results are not measured" >/dev/null

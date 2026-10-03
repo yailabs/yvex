@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include <yvex/api.h>
+#include <yvex/internal/materialization.h>
 
 #include "tests/test.h"
 
@@ -112,8 +113,78 @@ static int test_cpu_materialization(void)
     return 0;
 }
 
+static int test_failure_report(void)
+{
+    const char *hooks[] = {"YVEX_TEST_FAIL_MATERIALIZE_AFTER_ALLOC",
+                           "YVEX_TEST_FAIL_MATERIALIZE_AFTER_TRANSFER"};
+    const char *phases[] = {"allocation", "transfer"};
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    yvex_tensor_table *tensors = NULL;
+    yvex_backend *backend = NULL;
+    yvex_weight_table *weights = NULL;
+    yvex_materialize_options options;
+    yvex_materialize_summary summary;
+    yvex_backend_memory_stats stats;
+    yvex_error err;
+    yvex_device_tensor *independent = NULL;
+    yvex_backend_tensor_desc descriptor;
+    unsigned int i;
+    YVEX_TEST_ASSERT(open_fixture(&artifact, &gguf, &tensors) == 0, "open fixture");
+    YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK, "open cpu");
+    memset(&options, 0, sizeof(options));
+    options.backend_name = "diagnostic-cpu";
+    memset(&descriptor, 0, sizeof(descriptor));
+    descriptor.name = "independent-owner";
+    descriptor.dtype = YVEX_DTYPE_F32;
+    descriptor.rank = 1;
+    descriptor.dims[0] = 4;
+    descriptor.bytes = 16;
+    YVEX_TEST_ASSERT(yvex_backend_tensor_alloc(backend, &descriptor, &independent, &err) ==
+                     YVEX_OK, "retain an independent allocation");
+    for (i = 0; i < 2; ++i) {
+        YVEX_TEST_ASSERT(setenv(hooks[i], "1", 1) == 0, "set failure hook");
+        YVEX_TEST_ASSERT(yvex_weight_table_materialize_report(&weights, artifact, gguf, tensors,
+                        backend, &options, &summary, &err) == YVEX_ERR_BACKEND,
+                        "native failure remains fail closed");
+        YVEX_TEST_ASSERT(unsetenv(hooks[i]) == 0, "retire failure hook");
+        YVEX_TEST_ASSERT(weights == NULL, "failed table is not published");
+        YVEX_TEST_ASSERT_STREQ(summary.backend_name, "diagnostic-cpu", "surviving backend name");
+        YVEX_TEST_ASSERT_STREQ(summary.materialization_phase, phases[i], "actual failure phase");
+        YVEX_TEST_ASSERT(summary.bytes_planned == 128, "actual planned bytes survive");
+        YVEX_TEST_ASSERT(summary.bytes_allocated == 128, "actual allocated bytes survive");
+        YVEX_TEST_ASSERT(summary.bytes_transferred == (i ? 128 : 0), "actual transferred bytes");
+        YVEX_TEST_ASSERT(summary.cleanup_attempted, "retirement observed");
+        YVEX_TEST_ASSERT_STREQ(summary.cleanup_status, "pass", "accounted cleanup verified");
+        YVEX_TEST_ASSERT(summary.status == YVEX_WEIGHT_STATUS_FAILED, "failure status preserved");
+        YVEX_TEST_ASSERT(summary.execution_ready == 0, "no execution promotion");
+        YVEX_TEST_ASSERT(yvex_backend_get_memory_stats(backend, &stats, &err) == YVEX_OK &&
+                         stats.allocated_bytes == 16, "cleanup preserves independent ownership");
+    }
+    YVEX_TEST_ASSERT(yvex_weight_table_materialize_report(&weights, artifact, gguf, tensors,
+                    backend, &options, &summary, &err) == YVEX_OK, "subsequent recovery");
+    YVEX_TEST_ASSERT_STREQ(summary.materialization_gate, "pass", "recovery gate");
+    yvex_weight_table_close(weights);
+    weights = NULL;
+    YVEX_TEST_ASSERT(yvex_backend_get_memory_stats(backend, &stats, &err) == YVEX_OK &&
+                     stats.allocated_bytes == 16, "recovery retires only its own resources");
+    YVEX_TEST_ASSERT(yvex_weight_table_materialize_report(&weights, artifact, gguf, tensors,
+                    backend, &options, NULL, &err) == YVEX_ERR_INVALID_ARG,
+                    "required diagnostic extent refused");
+    YVEX_TEST_ASSERT(weights == NULL, "invalid request does not publish");
+    yvex_backend_tensor_free(backend, independent);
+    YVEX_TEST_ASSERT(yvex_backend_get_memory_stats(backend, &stats, &err) == YVEX_OK &&
+                     stats.allocated_bytes == 0, "all explicitly owned resources retired");
+    yvex_backend_close(backend);
+    yvex_tensor_table_close(tensors);
+    yvex_gguf_close(gguf);
+    yvex_artifact_close(artifact);
+    return 0;
+}
+
 int yvex_test_materialize_cpu(void)
 {
     if (test_cpu_materialization() != 0) return 1;
+    if (test_failure_report() != 0) return 1;
     return 0;
 }

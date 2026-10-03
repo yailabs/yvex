@@ -542,6 +542,14 @@ int yvex_safetensors_read_header_file_with_facts(
     yvex_native_weight_table *table,
     yvex_safetensors_file_facts *facts,
     yvex_error *err);
+typedef enum {
+    YVEX_SAFETENSORS_EXTENT_VALID = 0,
+    YVEX_SAFETENSORS_EXTENT_TRUNCATED,
+    YVEX_SAFETENSORS_EXTENT_INVALID_HEADER
+} yvex_safetensors_extent;
+/* Header/extent observation only; never payload authentication or admission. */
+int yvex_safetensors_inspect_extent(const char *path,
+    yvex_safetensors_extent *out, yvex_error *err);
 void yvex_source_verification_add_blocker(yvex_source_verification *out,
                                           const char *reason);
 int yvex_source_verification_has_blocker(

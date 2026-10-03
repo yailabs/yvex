@@ -1821,16 +1821,17 @@ int yvex_runtime_private_engine_scheduler_producer_finish(
     return status == YVEX_OK ? leave_status : status;
 }
 
-int yvex_model_engine_scheduler_maximum_width_copy(
-    const yvex_model_engine *model, unsigned long long *width,
-    yvex_error *err)
+int yvex_model_engine_phase_maximum_width_copy(
+    const yvex_model_engine *model, yvex_execution_phase phase,
+    unsigned long long *width, yvex_error *err)
 {
     yvex_model_engine *owner = (yvex_model_engine *)model;
     const yvex_physical_execution_summary *summary;
     unsigned long long common = 0ull, consumers = 0ull, backend, index, candidate;
     int initialized = 0;
     if (width) *width = 0ull;
-    if (!owner || !width || !owner->lifecycle_mutex_ready ||
+    if (!owner || !width || (unsigned int)phase > YVEX_EXECUTION_PHASE_CORRECTION ||
+        !owner->lifecycle_mutex_ready ||
         pthread_mutex_lock(&owner->lifecycle_mutex) != 0)
         return scheduler_refuse(
             err, YVEX_ERR_INVALID_ARG,
@@ -1852,14 +1853,23 @@ int yvex_model_engine_scheduler_maximum_width_copy(
                 (package->consumer != YVEX_EXECUTION_CONSUMER_ROUTED_GATE_UP &&
                  package->consumer != YVEX_EXECUTION_CONSUMER_ROUTED_DOWN))
                 continue;
-            admitted = decision->supported_width_mask &
-                       decision->worklist_width_mask;
+            if (decision->schema_version != YVEX_ENGINE_SPECIALIZATION_SCHEMA_V2) {
+                (void)pthread_mutex_unlock(&owner->lifecycle_mutex);
+                return scheduler_refuse(err, YVEX_ERR_STATE,
+                                        "runtime model phase-width schema is stale");
+            }
+            admitted = yvex_runtime_specialization_phase_width_mask(decision, phase, 1);
+            if (!admitted) {
+                (void)pthread_mutex_unlock(&owner->lifecycle_mutex);
+                return scheduler_refuse(err, YVEX_ERR_STATE,
+                                        "runtime model phase-width policy is invalid");
+            }
             common = initialized ? common & admitted : admitted;
             initialized = 1;
             consumers |= 1ull << (unsigned int)package->consumer;
         }
     }
-    *width = 1ull;
+    *width = phase == YVEX_EXECUTION_PHASE_PREFILL && !initialized ? 0ull : 1ull;
     if (initialized &&
         (consumers & (1ull << YVEX_EXECUTION_CONSUMER_ROUTED_GATE_UP)) &&
         (consumers & (1ull << YVEX_EXECUTION_CONSUMER_ROUTED_DOWN)))
@@ -1868,6 +1878,14 @@ int yvex_model_engine_scheduler_maximum_width_copy(
     (void)pthread_mutex_unlock(&owner->lifecycle_mutex);
     yvex_error_clear(err);
     return YVEX_OK;
+}
+
+int yvex_model_engine_scheduler_maximum_width_copy(
+    const yvex_model_engine *model, unsigned long long *width,
+    yvex_error *err)
+{
+    return yvex_model_engine_phase_maximum_width_copy(
+        model, YVEX_EXECUTION_PHASE_DECODE, width, err);
 }
 
 int yvex_runtime_private_engine_scheduler_step_rendezvous(

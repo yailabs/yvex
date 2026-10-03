@@ -38,12 +38,12 @@ with open(path, "wb") as f:
 PY
 
 "$YVEX_BIN" compile tensor map --arch deepseek4 --native-source "$OUT_DIR/native" --limit 10 > "$OUT_DIR/map.out" 2> "$OUT_DIR/map.err" || fail "tensor-map failed"
-grep 'compile tensor map: deepseek4' "$OUT_DIR/map.out" >/dev/null || fail "missing heading"
-grep 'native=embed.weight' "$OUT_DIR/map.out" >/dev/null || fail "missing embed row"
-grep 'role=token_embedding' "$OUT_DIR/map.out" >/dev/null || fail "missing role"
-grep 'target=token_embd.weight' "$OUT_DIR/map.out" >/dev/null || fail "missing target"
-grep 'status=mapped' "$OUT_DIR/map.out" >/dev/null || fail "missing mapped status"
-grep 'target_shape=unknown' "$OUT_DIR/map.out" >/dev/null || fail "missing no-template target shape"
+grep -E 'compile tensor map: deepseek4|TENSOR MAP  deepseek4' "$OUT_DIR/map.out" >/dev/null || fail "missing heading"
+grep -E 'native=embed.weight|^embed.weight$' "$OUT_DIR/map.out" >/dev/null || fail "missing embed row"
+grep -E 'role=token_embedding|role +token_embedding' "$OUT_DIR/map.out" >/dev/null || fail "missing role"
+grep -E 'target=token_embd.weight|target +token_embd.weight' "$OUT_DIR/map.out" >/dev/null || fail "missing target"
+grep -E 'status=mapped|mapping +mapped' "$OUT_DIR/map.out" >/dev/null || fail "missing mapped status"
+grep -E 'target_shape=unknown|target_shape +unknown' "$OUT_DIR/map.out" >/dev/null || fail "missing no-template target shape"
 grep 'status: tensor-map' "$OUT_DIR/map.out" >/dev/null || fail "missing command status"
 
 "$YVEX_BIN" compile tensor map \
@@ -51,10 +51,10 @@ grep 'status: tensor-map' "$OUT_DIR/map.out" >/dev/null || fail "missing command
   --native-source "$OUT_DIR/native" \
   --template tests/fixtures/gguf/valid-tokenizer-simple.gguf \
   --tensor embed.weight > "$OUT_DIR/template.out" 2> "$OUT_DIR/template.err" || fail "tensor-map template failed"
-grep 'native=embed.weight' "$OUT_DIR/template.out" >/dev/null || fail "missing filtered embed row"
-grep 'target=token_embd.weight' "$OUT_DIR/template.out" >/dev/null || fail "missing template target"
-grep 'target_shape=\[4,8\]' "$OUT_DIR/template.out" >/dev/null || fail "missing template shape"
-grep 'transform=transpose' "$OUT_DIR/template.out" >/dev/null || fail "missing transpose"
+grep -E 'native=embed.weight|^embed.weight$' "$OUT_DIR/template.out" >/dev/null || fail "missing filtered embed row"
+grep -E 'target=token_embd.weight|target +token_embd.weight' "$OUT_DIR/template.out" >/dev/null || fail "missing template target"
+grep -E 'target_shape=\[4,8\]|target_shape +\[4,8\]' "$OUT_DIR/template.out" >/dev/null || fail "missing template shape"
+grep -E 'transform=transpose|transform +transpose' "$OUT_DIR/template.out" >/dev/null || fail "missing transpose"
 
 "$YVEX_BIN" compile tensor map --help > "$OUT_DIR/help.out" 2> "$OUT_DIR/help.err" || fail "help tensor-map failed"
-grep 'usage: yvex compile tensor map' "$OUT_DIR/help.out" >/dev/null || fail "missing help"
+grep -E '^(usage: )?(yvex )?compile tensor map' "$OUT_DIR/help.out" >/dev/null || fail "missing help"

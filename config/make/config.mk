@@ -69,7 +69,12 @@ CFLAGS ?= -O3 -std=c11 -Wall -Wextra -pedantic -Wstrict-prototypes \
 	-Wundef -Wvla -pthread
 DEPFLAGS ?= -MMD -MP
 LDFLAGS ?=
+ifeq ($(YVEX_HOST_OS),Darwin)
+# libSystem provides pthreads; clang's -pthread has no link-time effect here.
+LDLIBS ?= -ldl -lm -lz
+else
 LDLIBS ?= -ldl -pthread -lm -lz
+endif
 ifeq ($(YVEX_NATIVE_METAL),yes)
 override LDLIBS += -framework Foundation -framework Metal
 endif
@@ -104,6 +109,7 @@ OPERATOR_REGISTRY_DIR := $(BUILD_DIR)/generated/operator
 OPERATOR_REGISTRY_HEADER := $(OPERATOR_REGISTRY_DIR)/registry.h
 OPERATOR_REGISTRY_C := $(OPERATOR_REGISTRY_DIR)/registry.c
 OPERATOR_REGISTRY_IDENTITY := $(OPERATOR_REGISTRY_DIR)/registry.sha256
+OPERATOR_REGISTRY_JSON := $(OPERATOR_REGISTRY_DIR)/registry.json
 OPERATOR_REGISTRY_OBJ := $(OBJ_DIR)/generated/operator/registry.o
 DEEPSEEK_SOURCE ?= $(HOME)/lab/models/hf/deepseek/DeepSeek-V4-Flash-DSpark
 DEEPSEEK_MODELS_ROOT ?= $(HOME)/lab/models/gguf
@@ -139,7 +145,27 @@ PINNED_GGML_BUILD ?= $(PINNED_GGML_ROOT)/build-yvex
 LIBYVEX ?= $(LIB_DIR)/libyvex.a
 YVEX_BIN ?= ./yvex
 
-ifneq ($(filter-out clean help info print-build-inputs,$(if $(MAKECMDGOALS),$(MAKECMDGOALS),all)),)
+CARGO ?= cargo
+RUSTC ?= rustc
+RUST_PROFILE ?= release
+RUST_CARGO_TARGET_DIR ?= $(BUILD_DIR)/cargo
+RUST_PROFILE_DIR := $(if $(filter dev test,$(RUST_PROFILE)),debug,$(RUST_PROFILE))
+RUST_SHELL_BIN := $(RUST_CARGO_TARGET_DIR)/$(RUST_PROFILE_DIR)/yvex
+REPLAI_RUST_SOURCE := build/external/replai-source
+RUST_BUILD_CONFIG := $(BUILD_DIR)/generated/rust_build_config
+# Shell/toolchain identity is separate from the C library's material identity.
+# These recursively expanded values never require Rust for `make lib`.
+YVEX_SHELL_BUILD_IDENTITY = $(shell printf '%s\n' \
+	'native=$(YVEX_BUILD_IDENTITY)' \
+	'rustc=$(shell $(RUSTC) -vV 2>/dev/null)' \
+	'cargo=$(shell $(CARGO) --version 2>/dev/null)' \
+	'profile=$(RUST_PROFILE)' 'rustflags=$(RUSTFLAGS)' \
+	'ldflags=$(YVEX_BUILD_LDFLAGS)' 'ldlibs=$(YVEX_BUILD_LDLIBS)' \
+	'cargo-lock=$(shell sha256sum Cargo.lock 2>/dev/null | cut -d" " -f1)' \
+	'replai-pin=$(shell sha256sum config/replai.json 2>/dev/null | cut -d" " -f1)' \
+	| sha256sum | cut -d' ' -f1)
+
+ifneq ($(filter-out clean help info print-build-inputs print-archive-layout,$(if $(MAKECMDGOALS),$(MAKECMDGOALS),all)),)
 include $(SOURCE_MANIFEST_MK)
 include $(QA_REGISTRY_MK)
 endif
@@ -173,23 +199,6 @@ trap 'exit 130' INT; \
 trap 'exit 143' TERM;
 endef
 
-YVEX_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(YVEX_SRCS)) $(OPERATOR_REGISTRY_OBJ)
-CLIENT_LANE_OBJ := $(OBJ_DIR)/src/cli/io/client.o
-CLIENT_TERMINAL_OBJ := $(OBJ_DIR)/src/cli/io/terminal/posix.o
-# Static external dependency; neither the editor nor its header is vendored.
-REPLAI_PREFIX ?= $(abspath $(BUILD_DIR)/external/replai)
-REPLAI_SOURCE ?=
-REPLAI_HEADER := $(REPLAI_PREFIX)/include/replai.h
-REPLAI_ARCHIVE := $(REPLAI_PREFIX)/lib/libreplai_c.a
-
-CLIENT_PROTOCOL_OBJS := \
-	$(OBJ_DIR)/src/core/status.o \
-	$(OBJ_DIR)/src/core/sha256.o \
-	$(OBJ_DIR)/src/core/json.o \
-	$(OBJ_DIR)/src/provider/core.o \
-	$(OBJ_DIR)/src/provider/content.o \
-	$(OBJ_DIR)/src/server/protocol.o \
-	$(OBJ_DIR)/src/server/telemetry.o
 OPENAI_ADAPTER_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(OPENAI_ADAPTER_SRCS))
 
 CUDA_ARCH_FLAG := $(if $(CUDA_EFFECTIVE_ARCH),-arch=$(CUDA_EFFECTIVE_ARCH))
@@ -201,6 +210,7 @@ CUDA_CUBIN := $(if $(CUDA_NATIVE_ARCH),$(patsubst %.cu,$(OBJ_DIR)/%.cubin,$(CUDA
 CUDA_CUBIN_INC := $(OBJ_DIR)/generated/cuda_kernels_cubin.inc
 
 CORE_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
+CORE_OBJS += $(OPENAI_ADAPTER_OBJS)
 CUDA_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CUDA_SRCS))
 CORE_OBJS += $(CUDA_OBJS)
 ifeq ($(YVEX_NATIVE_METAL),yes)
@@ -226,20 +236,11 @@ YVEX_BUILD_LDLIBS := $(LDLIBS)
 YVEX_BUILD_NVCCFLAGS := $(NVCCFLAGS)
 YVEX_BUILD_CUDA_LDFLAGS := $(CUDA_LDFLAGS)
 
-$(OBJ_DIR)/src/cli/commands/graph.o: override CPPFLAGS += -D_XOPEN_SOURCE=700 -I$(BUILD_DIR)/generated
-$(OBJ_DIR)/src/cli/commands/graph.o: $(BUILD_COMMIT_HEADER)
 $(OBJ_DIR)/src/runtime/benchmark.o: override CPPFLAGS += -I$(BUILD_DIR)/generated
 $(OBJ_DIR)/src/runtime/benchmark.o: $(BUILD_COMMIT_HEADER)
 $(OBJ_DIR)/src/runtime/evidence.o: $(BUILD_COMMIT_HEADER)
 $(OBJ_DIR)/src/runtime/generation_context.o: override CPPFLAGS += -I$(BUILD_DIR)/generated
 $(OBJ_DIR)/src/runtime/generation_context.o: $(BUILD_COMMIT_HEADER)
-OPERATOR_REGISTRY_CONSUMER_OBJS := $(OBJ_DIR)/src/cli/main.o \
-	$(OBJ_DIR)/src/cli/commands/graph.o \
-	$(OBJ_DIR)/src/cli/io/client.o $(OBJ_DIR)/src/cli/io/out.o \
-	$(OBJ_DIR)/src/cli/input/operator.o
-$(OPERATOR_REGISTRY_CONSUMER_OBJS): override CPPFLAGS += -I$(BUILD_DIR)/generated
-$(OPERATOR_REGISTRY_CONSUMER_OBJS): $(OPERATOR_REGISTRY_HEADER)
-$(OBJ_DIR)/src/cli/io/client.o: $(BUILD_COMMIT_HEADER)
 
 TEST_RUNNER := $(TEST_DIR)/test
 QUANT_TEST_RUNNER := $(TEST_DIR)/test_quant
@@ -309,6 +310,9 @@ OPENAI_FAKE_HOST_OBJ := $(OBJ_DIR)/tests/integration/openai_host.o
 OPENAI_ADAPTER_HOST_OBJ := $(OBJ_DIR)/tests/integration/openai_adapter.o
 TINY_VERTICAL_COMPILER_OBJ := $(OBJ_DIR)/tests/integration/tiny_compile.o
 NATIVE_TURN_TEST_OBJ := $(OBJ_DIR)/tests/integration/native_turn.o
+RUST_BENCHMARK_FIXTURE := $(TEST_DIR)/rust_benchmark_fixture
+RUST_BENCHMARK_FIXTURE_OBJ := $(OBJ_DIR)/tests/integration/runtime_benchmark.o
+$(RUST_BENCHMARK_FIXTURE_OBJ): tests/test.h $(QA_REGISTRY_HEADER)
 
 RUNNER_OBJS := $(TEST_MAIN_OBJ) $(QUANT_TEST_RUNNER_OBJ) \
 	$(ARTIFACT_TEST_RUNNER_OBJ) $(CUDA_TEST_MAIN_OBJ) $(METAL_TEST_MAIN_OBJ) \
@@ -321,9 +325,8 @@ RUNNER_OBJS := $(TEST_MAIN_OBJ) $(QUANT_TEST_RUNNER_OBJ) \
 	$(TRANSFORMER_LIVE_OBJ) $(DECODE_LIVE_OBJ) $(LOGITS_LIVE_OBJ) $(TOKENIZER_LIVE_OBJ) \
 	$(GENERATION_LIVE_OBJ) $(DECISION_READOUT_LIVE_OBJ) $(QWEN_ADMISSION_LIVE_OBJ) \
 	$(OPENAI_FAKE_HOST_OBJ) $(OPENAI_ADAPTER_HOST_OBJ) \
-	$(TINY_VERTICAL_COMPILER_OBJ) $(NATIVE_TURN_TEST_OBJ)
-DEPENDENCY_FILES := $(CORE_OBJS:.o=.d) $(YVEX_OBJS:.o=.d) \
-	$(OPENAI_ADAPTER_OBJS:.o=.d) $(TEST_UNIT_OBJS:.o=.d) \
+	$(TINY_VERTICAL_COMPILER_OBJ) $(NATIVE_TURN_TEST_OBJ) $(RUST_BENCHMARK_FIXTURE_OBJ)
+DEPENDENCY_FILES := $(CORE_OBJS:.o=.d) $(TEST_UNIT_OBJS:.o=.d) \
 	$(TEST_REFERENCE_OBJS:.o=.d) $(QUANT_TEST_UNIT_OBJS:.o=.d) \
 	$(CUDA_TEST_UNIT_OBJS:.o=.d) $(RUNNER_OBJS:.o=.d)
 

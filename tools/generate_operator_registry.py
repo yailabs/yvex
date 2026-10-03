@@ -422,10 +422,15 @@ def validate_registry(registry: dict[str, Any]) -> list[dict[str, Any]]:
     remote_management_operations = catalog(registry, "remote_management_operations")
     if not all(IDENTIFIER.fullmatch(operation) for operation in remote_management_operations):
         fail("catalogs.remote_management_operations", "contains an invalid operation ID")
-    management_source = pathlib.Path(__file__).resolve().parents[1] / "src/cli/io/management.c"
+    management_source = pathlib.Path(__file__).resolve().parents[1] / "src/cli/rust/management.rs"
+    management_text = management_source.read_text(encoding="utf-8")
+    if "\nfn protocol_response(" not in management_text:
+        fail("catalogs.remote_management_operations", "missing typed management response owner")
+    management_response = management_text.split("\nfn protocol_response(", 1)[1].split("\nfn ", 1)[0]
     implemented_management_operations = set(re.findall(
-        r'!strcmp\(request->operation, "([a-z][a-z0-9.]*)"\)',
-        management_source.read_text(encoding="utf-8"),
+        r'^\s*"([a-z][a-z0-9.]*)"\s*=>',
+        management_response,
+        re.MULTILINE,
     ))
     if remote_management_operations != implemented_management_operations:
         fail("catalogs.remote_management_operations", "remote management operation mismatch with producer")
@@ -969,6 +974,19 @@ def generated(registry_path: pathlib.Path, output: pathlib.Path) -> tuple[str, s
     return render_header(registry), render_source(registry, operations, identity), identity + "\n"
 
 
+def render_rust_registry(registry_path: pathlib.Path) -> str:
+    """Language-neutral expanded input to the typed Rust shell, not a new authority."""
+    registry = load_registry(registry_path)
+    operations = validate_registry(registry)
+    return json.dumps({
+        "schema": SCHEMA,
+        "schema_version": 1,
+        "registry_identity": registry_identity(registry),
+        "operations": operations,
+        "removed_paths": registry["removed_paths"],
+    }, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + "\n"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry", required=True, type=pathlib.Path)
@@ -984,6 +1002,7 @@ def main() -> int:
         arguments.output / "registry.h": header,
         arguments.output / "registry.c": source,
         arguments.output / "registry.sha256": identity,
+        arguments.output / "registry.json": render_rust_registry(arguments.registry),
     }
     if arguments.check:
         stale = [str(path) for path, content in products.items() if not path.exists() or path.read_text(encoding="utf-8") != content]

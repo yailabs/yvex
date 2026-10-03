@@ -99,7 +99,7 @@ def test_generation(registry: dict[str, object]) -> None:
         require(result.returncode == 0, result.stderr)
         result = invoke(REGISTRY, second)
         require(result.returncode == 0, result.stderr)
-        products = ("registry.h", "registry.c", "registry.sha256")
+        products = ("registry.h", "registry.c", "registry.sha256", "registry.json")
         for name in products:
             require((first / name).read_bytes() == (second / name).read_bytes(), f"nondeterministic {name}")
         require(invoke(REGISTRY, first, check=True).returncode == 0, "fresh products rejected")
@@ -493,6 +493,12 @@ def main() -> int:
     require(advanced.returncode == 0, advanced.stderr)
     paths, parent = set(), None
     for line in advanced.stdout.split("ADVANCED AND ENGINEERING", 1)[1].splitlines():
+        # Both qualified product shells derive their hierarchy from the registry:
+        # the C reference nests leaves; Rust's semantic tables show full paths.
+        direct = re.match(r"^(yvex(?: [a-z][a-z0-9-]*)+)\s{2,}\S", line)
+        if direct:
+            paths.add(direct[1])
+            continue
         heading = re.fullmatch(r"  (yvex(?: .*)?)", line)
         if heading:
             parent = heading[1]

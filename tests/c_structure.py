@@ -469,6 +469,12 @@ class Audit:
             if path.is_file() and path.suffix in suffixes
         )
         self.units = {relative(path): parse_unit(path) for path in self.files}
+        # Rust has its own compiler/lint authority, not a pretend C parser.
+        # Its production membership still comes from the same exact manifest.
+        self.rust_files = {
+            relative(path): path for path in (ROOT / "src").rglob("*.rs")
+            if path.is_file()
+        }
         self.translation_units = {
             name: unit for name, unit in self.units.items() if unit.path.suffix in {".c", ".cu", ".m"}
         }
@@ -484,6 +490,20 @@ class Audit:
         self.manifest = {row[0]: row for row in self.manifest_rows}
         self.include_targets = self.resolve_includes()
         self._make_database: str | None = None
+        self._archive_layout: tuple[Path, str] | None = None
+
+    def archive_layout(self) -> tuple[Path, str]:
+        if self._archive_layout is None:
+            result = subprocess.run(
+                ["make", "--no-print-directory", "-s", "print-archive-layout"],
+                cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                check=True,
+            )
+            lines = result.stdout.splitlines()
+            if len(lines) != 2 or not all(lines):
+                raise ValueError("invalid Make-owned archive layout")
+            self._archive_layout = (ROOT / lines[0], lines[1])
+        return self._archive_layout
 
     def load_manifest(self) -> tuple[list[list[str]], list[str]]:
         path = ROOT / self.policy["manifest"]["path"]
@@ -797,7 +817,7 @@ class Audit:
         return result
 
     def archive_snapshot(self) -> dict[str, object]:
-        archive = ROOT / self.policy["archive"]["path"]
+        archive, _ = self.archive_layout()
         if not archive.is_file():
             return {"present": False}
         result = subprocess.run(
@@ -817,7 +837,7 @@ class Audit:
         }
 
     def nm_symbols(self) -> tuple[dict[str, list[str]], list[str]]:
-        archive = ROOT / self.policy["archive"]["path"]
+        archive, _ = self.archive_layout()
         if not archive.is_file():
             return {}, []
         result = subprocess.run(
@@ -850,7 +870,7 @@ class Audit:
 
     def nm_undefined_consumers(self) -> dict[str, list[str]]:
         """Return production object consumers after preprocessing and macro expansion."""
-        archive = ROOT / self.policy["archive"]["path"]
+        archive, _ = self.archive_layout()
         if not archive.is_file():
             return {}
         result = subprocess.run(
@@ -911,7 +931,7 @@ class Audit:
 
     def ownership_violations(self) -> list[str]:
         errors = list(self.manifest_errors)
-        actual = set(self.units)
+        actual = set(self.units) | set(self.rust_files)
         paths = [row[0] for row in self.manifest_rows]
         registered = set(paths)
         if actual != registered:
@@ -1068,6 +1088,16 @@ class Audit:
                         f"hard line width exceeded: {name}:{number}: "
                         f"{width} > {limits['hard_line_width']}"
                     )
+
+        for name, path in self.rust_files.items():
+            lines = path.read_text().splitlines()
+            if not name.startswith("src/cli/rust/"):
+                errors.append(f"Rust production outside operator shell: {name}")
+            if len(lines) > limits["translation_unit_lines"]:
+                errors.append(f"Rust file exceeds line limit: {name}: {len(lines)}")
+            for number, line in enumerate(lines, 1):
+                if len(line.expandtabs(8)) > limits["hard_line_width"]:
+                    errors.append(f"Rust hard line width exceeded: {name}:{number}")
 
         pairs = self.unadmitted_same_stem_pairs()
         if pairs:
@@ -1237,7 +1267,7 @@ class Audit:
 
     def archive_violations(self) -> list[str]:
         errors: list[str] = []
-        archive = ROOT / self.policy["archive"]["path"]
+        archive, prefix = self.archive_layout()
         if not archive.is_file():
             return errors
         result = subprocess.run(
@@ -1250,7 +1280,6 @@ class Audit:
         duplicates = sorted(name for name, count in Counter(members).items() if count > 1)
         if duplicates:
             errors.append(f"duplicate archive member identities: {duplicates}")
-        prefix = self.policy["archive"]["member_prefix"]
         short = [name for name in members if not name.startswith(prefix)]
         if short:
             errors.append(f"archive members lost source-relative identity: {short}")
@@ -1362,7 +1391,7 @@ class Audit:
     def abi_violations(self) -> list[str]:
         errors: list[str] = []
         definitions, foreign = self.nm_symbols()
-        if not definitions and not (ROOT / self.policy["archive"]["path"]).exists():
+        if not definitions and not self.archive_layout()[0].exists():
             return errors
         public = self.public_declarations()
         private = self.private_declarations()
@@ -1402,6 +1431,23 @@ class Audit:
                 symbol_consumers[symbol].append(name)
         for symbol, owners in self.nm_undefined_consumers().items():
             symbol_consumers[symbol].extend(owners)
+        # C token scanning must not pretend to understand Rust. Its syntax test
+        # emits exact-source qualified references with syn, excluding strings/comments.
+        if self.rust_files:
+            index_path = ROOT / os.environ.get("BUILD_DIR", "build") / "generated/rust_ffi_consumers.json"
+            try:
+                index = json.loads(index_path.read_text())
+                if (index.get("schema") != "yvex.rust.ffi-consumers.v1" or
+                        set(index.get("sources", {})) != set(self.rust_files)):
+                    raise ValueError("Rust AST index membership/schema drift")
+                for name, path in self.rust_files.items():
+                    entry = index["sources"][name]
+                    if entry["source"] != path.read_text():
+                        raise ValueError(f"Rust AST index source drift: {name}")
+                    for symbol in entry["symbols"]:
+                        symbol_consumers[symbol].append(name)
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                errors.append(f"Rust FFI consumer evidence unavailable: {error}; run test-rust-shell")
         for symbol in sorted(nonpublic & private):
             consumers = sorted(set(symbol_consumers.get(symbol, [])))
             if len(consumers) < 2:

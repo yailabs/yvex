@@ -33,24 +33,24 @@ cat > "$OUT_DIR/policy.json" <<'JSON'
 JSON
 
 "$YVEX_BIN" compile quant policy inspect --policy "$OUT_DIR/policy.json" > "$OUT_DIR/inspect.out" 2> "$OUT_DIR/inspect.err" || fail "inspect failed"
-grep 'compile quant policy: inspect' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect heading"
-grep 'selector=role:token_embedding qtype=Q8_0' "$OUT_DIR/inspect.out" >/dev/null || fail "missing role rule"
-grep 'requires_imatrix=yes' "$OUT_DIR/inspect.out" >/dev/null || fail "missing imatrix flag"
+grep -E 'compile quant policy: inspect|QUANT POLICY  inspect' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect heading"
+grep -E 'selector=role:token_embedding qtype=Q8_0|role:token_embedding +Q8_0' "$OUT_DIR/inspect.out" >/dev/null || fail "missing role rule"
+grep -E 'requires_imatrix=yes|Q2_K +yes' "$OUT_DIR/inspect.out" >/dev/null || fail "missing imatrix flag"
 
 "$YVEX_BIN" compile quant policy validate --policy "$OUT_DIR/policy.json" > "$OUT_DIR/validate.out" 2> "$OUT_DIR/validate.err" || fail "validate failed"
-grep 'compile quant policy: validate' "$OUT_DIR/validate.out" >/dev/null || fail "missing validate heading"
-grep 'status: quant-policy-' "$OUT_DIR/validate.out" >/dev/null || fail "missing validate status"
+grep -E 'compile quant policy: validate|QUANT POLICY  validate' "$OUT_DIR/validate.out" >/dev/null || fail "missing validate heading"
+python3 tests/support/human_field.py --regex "$OUT_DIR/validate.out" 'status: quant-policy-.*' || fail "missing validate status"
 
 "$YVEX_BIN" compile quant policy derive \
   --template tests/fixtures/gguf/valid-tokenizer-simple.gguf \
   --arch llama \
   --out "$OUT_DIR/derived.json" > "$OUT_DIR/derive.out" 2> "$OUT_DIR/derive.err" || fail "derive failed"
 test -f "$OUT_DIR/derived.json" || fail "derived policy missing"
-grep 'compile quant policy: derived' "$OUT_DIR/derive.out" >/dev/null || fail "missing derive heading"
-grep 'status: quant-policy-written' "$OUT_DIR/derive.out" >/dev/null || fail "missing derive status"
+grep -E 'compile quant policy: derived|QUANT POLICY  derive' "$OUT_DIR/derive.out" >/dev/null || fail "missing derive heading"
+python3 tests/support/human_field.py "$OUT_DIR/derive.out" 'status: quant-policy-written' || fail "missing derive status"
 
 "$YVEX_BIN" compile quant policy validate --policy "$OUT_DIR/derived.json" --template tests/fixtures/gguf/valid-tokenizer-simple.gguf > "$OUT_DIR/derived-validate.out" 2> "$OUT_DIR/derived-validate.err" || fail "derived validate failed"
-grep 'status: quant-policy-' "$OUT_DIR/derived-validate.out" >/dev/null || fail "missing derived validate status"
+python3 tests/support/human_field.py --regex "$OUT_DIR/derived-validate.out" 'status: quant-policy-.*' || fail "missing derived validate status"
 
 "$YVEX_BIN" compile quant policy --help > "$OUT_DIR/help.out" 2> "$OUT_DIR/help.err" || fail "help failed"
-grep 'usage: yvex compile quant policy' "$OUT_DIR/help.out" >/dev/null || fail "missing help"
+grep 'yvex compile quant policy' "$OUT_DIR/help.out" >/dev/null || fail "missing help"

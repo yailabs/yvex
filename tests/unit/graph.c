@@ -231,10 +231,35 @@ static int test_family_descriptor_registration(void)
     return 0;
 }
 
+static int test_component_profile_projection(void)
+{
+    yvex_media_target_profile profile, before;
+    yvex_error err;
+    memset(&profile, 0xa5, sizeof(profile));
+    before = profile;
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(yvex_component_target_profile(NULL, &profile, &err) == YVEX_ERR_INVALID_ARG,
+                     "component profile requires an exact target");
+    YVEX_TEST_ASSERT(memcmp(&profile, &before, sizeof(profile)) == 0,
+                     "invalid target does not publish a partial profile");
+    YVEX_TEST_ASSERT(yvex_component_target_profile("unknown-profile", &profile, &err) == YVEX_ERR_UNSUPPORTED,
+                     "unknown component target fails closed");
+    YVEX_TEST_ASSERT(memcmp(&profile, &before, sizeof(profile)) == 0,
+                     "unknown target leaves the caller record unchanged");
+    YVEX_TEST_ASSERT(yvex_component_target_profile("minimax-h3-fl2va", &profile, &err) == YVEX_OK,
+                     "registered component profile is copied by its canonical owner");
+    YVEX_TEST_ASSERT(profile.schema_version == YVEX_MEDIA_TARGET_PROFILE_SCHEMA_V2 &&
+                         profile.text_artifact && profile.transformer_artifact &&
+                         profile.video_artifact && profile.audio_artifact,
+                     "projection preserves the admitted schema and all component roles");
+    return 0;
+}
+
 int yvex_test_graph(void)
 {
     if (test_graph_from_fixture() != 0) return 1;
     if (test_component_execution_transaction() != 0) return 1;
     if (test_family_descriptor_registration() != 0) return 1;
+    if (test_component_profile_projection() != 0) return 1;
     return 0;
 }

@@ -646,7 +646,22 @@ static int send_generation(int fd, const yvex_client_request *request,
         return YVEX_OK;
     }
     message_base(&message, YVEX_CLIENT_MESSAGE_TURN_STARTED, request);
+    if (!provider && native_prompt_contains(request, "WAIT_EARLY_CANCEL")) {
+        /* Admission may be followed by more progress than a native Unix socket
+         * can buffer. Cancellation must not block the response's only reader. */
+        const int send_buffer = 4096;
+        const struct timespec delay = {0, 500000000L};
+        if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &send_buffer,
+                       sizeof(send_buffer)) != 0) {
+            yvex_error_set(err, YVEX_ERR_IO, "test.openai-host.cancel",
+                           "cannot bound early-cancellation response buffer");
+            return YVEX_ERR_IO;
+        }
+        (void)nanosleep(&delay, NULL);
+    }
     rc = yvex_server_protocol_send(fd, &message, err);
+    if (rc == YVEX_OK && !provider &&
+        native_prompt_contains(request, "NATIVE_LOST_REPLY")) return YVEX_OK;
     if (rc == YVEX_OK && (request_contains(provider, "SLOW_PREFILL") ||
                           request_contains(provider, "SLOW_DECODE") ||
                           request_contains(provider, "STALLED_PROGRESS") ||
@@ -662,7 +677,8 @@ static int send_generation(int fd, const yvex_client_request *request,
         rc = send_native_progress(fd, request, progress_events, err);
     }
     if (rc == YVEX_OK &&
-        (native_prompt_contains(request, "WAIT_PREFILL_CANCEL") ||
+        (native_prompt_contains(request, "WAIT_EARLY_CANCEL") ||
+         native_prompt_contains(request, "WAIT_PREFILL_CANCEL") ||
          native_prompt_contains(request, "WAIT_DECODE_CANCEL")))
         return send_native_cancellation(fd, request, err);
     if (rc == YVEX_OK && native_prompt_contains(request, "WAIT_ASYNC_KEYS")) {
@@ -916,11 +932,10 @@ static int serve_connection(int fd, yvex_error *err)
             if (rc != YVEX_OK) goto done;
         }
         message_base(&message,
-                     request.operation == YVEX_CLIENT_OP_SESSION_LIST
-                         ? YVEX_CLIENT_MESSAGE_SESSION_LIST
-                         : request.operation == YVEX_CLIENT_OP_GENERATION_CANCEL
-                               ? YVEX_CLIENT_MESSAGE_ACK
-                               : YVEX_CLIENT_MESSAGE_SESSION,
+                     request.operation == YVEX_CLIENT_OP_SESSION_NEW ||
+                         request.operation == YVEX_CLIENT_OP_SESSION_SHOW
+                         ? YVEX_CLIENT_MESSAGE_SESSION
+                         : YVEX_CLIENT_MESSAGE_ACK,
                      &request);
         rc = yvex_server_protocol_send(fd, &message, err);
     }

@@ -14,8 +14,9 @@ package: client config/package_manifest.tsv LICENSE NOTICE.md
 	cp '$(YVEX_BIN)' "$$package_dir/bin/yvex"; \
 	cp config/package_manifest.tsv LICENSE NOTICE.md "$$package_dir/share/yvex/"; \
 	mkdir -p "$$package_dir/share/licenses/replai"; \
-	cp '$(REPLAI_PREFIX)/share/licenses/replai/LICENSE' "$$package_dir/share/licenses/replai/"; \
-	cp '$(REPLAI_PREFIX)/replai-build.json' "$$package_dir/share/yvex/"; \
+	cp '$(REPLAI_RUST_SOURCE)/LICENSE' "$$package_dir/share/licenses/replai/"; \
+	cp '$(REPLAI_RUST_SOURCE).json' "$$package_dir/share/yvex/replai-source.json"; \
+	cp Cargo.lock '$(RUST_BUILD_CONFIG)' "$$package_dir/share/yvex/"; \
 	printf '%s\n' 'yvex package: command and foreground model server' \
 		> "$$package_dir/share/yvex/profile"; \
 	commit=$$(git rev-parse HEAD); \
@@ -33,6 +34,7 @@ package: client config/package_manifest.tsv LICENSE NOTICE.md
 	  printf 'yvex_sha256\t%s\nlibyvex_sha256\t%s\n' \
 		"$$client_sha" "$$library_sha"; \
 	  printf 'distribution_legal_status\tUNQUALIFIED\n'; \
+	  printf 'product_shell\trust\nshell_build_identity\t%s\n' '$(YVEX_SHELL_BUILD_IDENTITY)'; \
 	} > "$$package_dir/share/yvex/build.tsv"
 
 # `package` is a software candidate, not permission to distribute it.
@@ -73,6 +75,7 @@ install: package
 		case "$$path" in path) continue;; bin/*) destination='$(DESTDIR)$(bindir)'/$${path#bin/};; \
 			share/*) destination='$(DESTDIR)$(datadir)'/$${path#share/};; \
 			*) echo "install: unsupported manifest path: $$path" >&2; exit 1;; esac; \
+		$(INSTALL) -d "$$(dirname "$$destination")"; \
 		case "$$path" in bin/*) $(INSTALL_PROGRAM) '$(BUILD_DIR)/package/product/'"$$path" "$$destination";; \
 			*) $(INSTALL_DATA) '$(BUILD_DIR)/package/product/'"$$path" "$$destination";; esac; \
 	done <config/package_manifest.tsv

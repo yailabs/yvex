@@ -20,7 +20,8 @@ contains() {
 
 "$YVEX_BIN" artifact materialize --model "$FIXTURE" --backend cpu >"$OUT_DIR/materialize_cpu.out" 2>"$OUT_DIR/materialize_cpu.err" ||
     fail "materialize cpu exited non-zero"
-contains "$OUT_DIR/materialize_cpu.out" "materialization status: materialized"
+python3 tests/support/human_field.py --regex "$OUT_DIR/materialize_cpu.out" \
+    'materialization[ _]status: materialized' || fail "missing typed materialization status"
 contains "$OUT_DIR/materialize_cpu.out" "model: yvex-tokenizer-test"
 contains "$OUT_DIR/materialize_cpu.out" "backend: cpu"
 contains "$OUT_DIR/materialize_cpu.out" "tensors_total: 1"

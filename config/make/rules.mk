@@ -1,11 +1,21 @@
-.PHONY: replai-dependency
-replai-dependency:
-	python3 tools/prepare_replai.py --prefix '$(REPLAI_PREFIX)' $(if $(REPLAI_SOURCE),--source '$(REPLAI_SOURCE)')
-$(REPLAI_HEADER) $(REPLAI_ARCHIVE): | replai-dependency
-REPLAI_CONSUMER_OBJS := $(CLIENT_LANE_OBJ) $(CLIENT_TERMINAL_OBJ) \
-    $(addprefix $(OBJ_DIR)/src/cli/io/,presentation.o table.o)
-$(REPLAI_CONSUMER_OBJS): override CPPFLAGS += -I$(REPLAI_PREFIX)/include
-$(REPLAI_CONSUMER_OBJS): $(REPLAI_HEADER)
+# Cargo owns Rust incrementality; Make owns the C archive and authenticated source.
+.PHONY: replai-rust-dependency rust-client
+replai-rust-dependency:
+	python3 tools/prepare_replai.py --rust-source '$(REPLAI_RUST_SOURCE)'
+
+rust-client: lib generate-operator-registry $(BUILD_COMMIT_HEADER) $(RUST_BUILD_CONFIG) replai-rust-dependency
+	+YVEX_NATIVE_BUILD_DIR='$(abspath $(BUILD_DIR))' \
+		YVEX_NATIVE_LDFLAGS='$(YVEX_BUILD_LDFLAGS)' YVEX_NATIVE_LDLIBS='$(YVEX_BUILD_LDLIBS)' \
+		RUSTC='$(RUSTC)' RUSTFLAGS='$(RUSTFLAGS)' \
+		CARGO_TARGET_DIR='$(abspath $(RUST_CARGO_TARGET_DIR))' \
+		$(CARGO) build --locked --profile '$(RUST_PROFILE)' --bin yvex
+
+# Structural checks must inspect this invocation's archive and object root,
+# not silently compare an isolated build to the default build directory.
+.PHONY: print-archive-layout
+print-archive-layout:
+	@printf '%s\n' '$(LIBYVEX)' '$(OBJ_DIR)/'
+
 generate-source-manifest: $(SOURCE_MANIFEST_MK) $(SOURCE_FAMILY_HEADER)
 check-source-manifest: $(SOURCE_MANIFEST_MK) $(SOURCE_FAMILY_HEADER)
 	python3 $(SOURCE_MANIFEST_GENERATOR) --manifest $(SOURCE_OWNER_MANIFEST) \
@@ -26,7 +36,7 @@ check-source-manifest: $(SOURCE_MANIFEST_MK) $(SOURCE_FAMILY_HEADER)
 	cmp "$$first_header" "$$second_header"
 
 generate-operator-registry: $(OPERATOR_REGISTRY_HEADER) $(OPERATOR_REGISTRY_C) \
-	$(OPERATOR_REGISTRY_IDENTITY)
+	$(OPERATOR_REGISTRY_IDENTITY) $(OPERATOR_REGISTRY_JSON)
 
 check-operator-registry: generate-operator-registry
 	python3 $(OPERATOR_REGISTRY_GENERATOR) --registry $(OPERATOR_REGISTRY_SOURCE) \
@@ -74,8 +84,9 @@ $(QA_REGISTRY_MK) $(QA_REGISTRY_PROJECTIONS) &: \
 	python3 $(QA_REGISTRY_GENERATOR) --registry $(QA_REGISTRY_SOURCE) \
 		--output-dir $(QA_REGISTRY_DIR)
 
-$(OPERATOR_REGISTRY_HEADER) $(OPERATOR_REGISTRY_C) $(OPERATOR_REGISTRY_IDENTITY) &: \
-		$(OPERATOR_REGISTRY_SOURCE) $(OPERATOR_REGISTRY_GENERATOR)
+$(OPERATOR_REGISTRY_HEADER) $(OPERATOR_REGISTRY_C) $(OPERATOR_REGISTRY_IDENTITY) \
+		$(OPERATOR_REGISTRY_JSON) &: \
+		$(OPERATOR_REGISTRY_SOURCE) $(OPERATOR_REGISTRY_GENERATOR) src/cli/rust/management.rs
 	python3 $(OPERATOR_REGISTRY_GENERATOR) --registry $(OPERATOR_REGISTRY_SOURCE) \
 		--output $(OPERATOR_REGISTRY_DIR)
 
@@ -106,6 +117,15 @@ $(LINK_BUILD_CONFIG): FORCE
 	@set -eu; tmp="$@.tmp.$$$$"; trap 'rm -f "$$tmp"' EXIT HUP INT TERM; \
 	printf '%s\n' 'cc=$(CC)' 'ldflags=$(YVEX_BUILD_LDFLAGS)' \
 		'ldlibs=$(YVEX_BUILD_LDLIBS)' >"$$tmp"; \
+	if test -r "$@" && cmp -s "$$tmp" "$@"; then rm -f "$$tmp"; \
+	else mv "$$tmp" "$@"; fi; trap - EXIT HUP INT TERM
+
+$(RUST_BUILD_CONFIG): FORCE
+	@mkdir -p $(@D)
+	@set -eu; tmp="$@.tmp.$$$$"; trap 'rm -f "$$tmp"' EXIT HUP INT TERM; \
+	printf '%s\n' 'shell-identity=$(YVEX_SHELL_BUILD_IDENTITY)' \
+		'cargo=$(CARGO)' 'rustc=$(RUSTC)' 'profile=$(RUST_PROFILE)' \
+		'rustflags=$(RUSTFLAGS)' 'ldflags=$(YVEX_BUILD_LDFLAGS)' 'ldlibs=$(YVEX_BUILD_LDLIBS)' >"$$tmp"; \
 	if test -r "$@" && cmp -s "$$tmp" "$@"; then rm -f "$$tmp"; \
 	else mv "$$tmp" "$@"; fi; trap - EXIT HUP INT TERM
 
@@ -197,14 +217,13 @@ $(CUDA_CUBIN_INC): $(CUDA_CUBIN)
 			'$(CUDA_NATIVE_ARCH)'; \
 	} >"$$tmp"; mv "$$tmp" "$@"; trap - EXIT HUP INT TERM
 
-$(YVEX_BIN): $(YVEX_OBJS) $(OPENAI_ADAPTER_OBJS) $(LIBYVEX) $(REPLAI_ARCHIVE)
+$(YVEX_BIN): rust-client
 	@mkdir -p $(@D)
 	@set -eu; \
-	replai_libs=$$(PKG_CONFIG_PATH='$(REPLAI_PREFIX)/lib/pkgconfig' \
-		pkg-config --libs-only-l --libs-only-other --static replai); \
-	replai_libs=$$(printf '%s' "$$replai_libs" | sed 's/-lreplai_c//g'); \
-	$(CC) $(CFLAGS) $(YVEX_OBJS) $(OPENAI_ADAPTER_OBJS) $(LIBYVEX) \
-		$(REPLAI_ARCHIVE) $(LDFLAGS) $(LDLIBS) $$replai_libs -o $@
+	if test -r "$@" && cmp -s '$(RUST_SHELL_BIN)' "$@"; then exit 0; fi; \
+	tmp="$@.tmp.$$$$"; trap 'rm -f "$$tmp"' EXIT HUP INT TERM; \
+	cp '$(RUST_SHELL_BIN)' "$$tmp"; chmod 755 "$$tmp"; \
+	mv "$$tmp" "$@"; trap - EXIT HUP INT TERM
 
 $(TEST_MAIN_OBJ) $(CUDA_TEST_MAIN_OBJ): override CPPFLAGS += -I$(BUILD_DIR)/generated
 $(TEST_MAIN_OBJ) $(CUDA_TEST_MAIN_OBJ): $(QA_REGISTRY_HEADER)

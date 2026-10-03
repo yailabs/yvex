@@ -42,6 +42,19 @@ typedef struct {
 } yvex_source_acquisition_u64;
 
 typedef struct {
+    unsigned long long bytes, files, shards, gguf_files, partials, locks;
+    unsigned long long largest_bytes, entries;
+    unsigned long long checked_shards, truncated_shards, invalid_shards;
+    int config_present, tokenizer_present;
+    char largest_file[YVEX_PATH_CAP];
+} yvex_source_acquisition_tree;
+int yvex_source_acquisition_scan(const char *source_path, const char *cache_path,
+    yvex_source_acquisition_tree *out, yvex_error *err);
+/* Explicit audit reads bounded headers; routine progress scans do not. */
+int yvex_source_acquisition_inspect(const char *source_path, const char *cache_path,
+    yvex_source_acquisition_tree *out, yvex_error *err);
+
+typedef struct {
     pid_t pid, process_group;
     unsigned long long start_ticks;
     char boot_id[YVEX_SOURCE_ACQUISITION_BOOT_ID_CAP];
@@ -126,6 +139,14 @@ int yvex_source_acquisition_process_matches(
 int yvex_source_acquisition_reconcile(
     yvex_source_acquisition_operation *operation, unsigned long long now_unix,
     unsigned long long stall_window_seconds, yvex_error *err);
+/* Filesystem/provider observations are not payload or upstream conformance.
+ * An absent tree is a known empty observation; symlinks are never traversed.
+ * cache_path is a separately selected provider-cache root, not a source alias.
+ * On failure operation remains unchanged. Rates of selected bytes stay unknown. */
+int yvex_source_acquisition_observe(
+    const char *source_path, const char *cache_path, const char *event_path,
+    yvex_source_acquisition_operation *operation, unsigned long long now_unix,
+    yvex_error *err);
 
 #ifdef __cplusplus
 }

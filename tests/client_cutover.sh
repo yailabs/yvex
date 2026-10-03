@@ -3,7 +3,7 @@
 set -eu
 
 YVEX_BIN=${YVEX_BIN:-./yvex}
-YVEX_CLIENT_LANE_OBJ=${YVEX_CLIENT_LANE_OBJ:-build/obj/src/cli/io/client.o}
+BUILD_DIR=${BUILD_DIR:-build}
 . tests/support/cleanup.sh
 
 root=$(mktemp -d "${TMPDIR:-/tmp}/yvex-command-architecture.XXXXXX")
@@ -30,10 +30,10 @@ trap cleanup EXIT HUP INT TERM
 "$YVEX_BIN" help >"$root/help"
 grep -F 'YVEX native model execution' "$root/help" >/dev/null
 for expected in \
-    'USE' 'RUNTIME' 'TOOLS' 'META' \
+    'COMMAND' 'PURPOSE' \
     'chat' 'serve' 'host' 'model' 'inspect' 'help' 'version' \
-    'LIFECYCLE' 'READ' 'model search -> model pull -> model prepare' \
-    'serve -> model load -> chat' 'yvex host status / memory / logs'
+    'LIFECYCLE' 'READ' 'model search → model pull → model prepare' \
+    'serve → model load → chat' 'yvex host status / memory / logs'
 do
     grep -F "$expected" "$root/help" >/dev/null
 done
@@ -241,14 +241,14 @@ do
     status=$?
     set -e
     test "$status" -eq 2
-    grep -F 'usage: yvex' "$root/err" >/dev/null
+    python3 tests/support/human_field.py --regex "$root/err" 'hint: yvex help (serve|compile)'
 done
 set +e
 "$YVEX_BIN" serve statu >"$root/out" 2>"$root/err"
 status=$?
 set -e
 test "$status" -eq 2
-grep -F 'usage: yvex serve [options]' "$root/err" >/dev/null
+python3 tests/support/human_field.py "$root/err" 'hint: yvex help serve'
 
 # Registry discovery remains distinct from the model hosted by a running server. No command writes
 # an implicit startup selection, and arbitrary historical binding bytes cannot
@@ -283,7 +283,9 @@ grep -F 'not current' "$root/out" >/dev/null
 ! grep -F 'READY' "$root/out" >/dev/null
 HOME="$home_root" "$YVEX_BIN" profile list >"$root/profiles"
 grep -F 'current-model-runtime-profile' "$root/profiles" >/dev/null
-grep -F 'cuda/text/speculative' "$root/profiles" >/dev/null
+python3 tests/support/human_field.py "$root/profiles" 'backend: cuda'
+python3 tests/support/human_field.py "$root/profiles" 'engine_kind: text'
+python3 tests/support/human_field.py "$root/profiles" 'execution_strategy: speculative'
 test ! -e "$home_root/.config/yvex/model.conf"
 
 set +e
@@ -297,9 +299,9 @@ grep -F 'local runtime socket is absent' "$root/err" >/dev/null
 ! grep -F '/models/current.gguf' "$root/out2" "$root/err" >/dev/null
 
 # The whole ELF links finite offline owners; the runtime-client object has no engine edge.
-test -f "$YVEX_CLIENT_LANE_OBJ"
-! nm -u "$YVEX_CLIENT_LANE_OBJ" | grep -E \
+test -f "$BUILD_DIR/obj/src/server/transport.o"
+! nm -u "$BUILD_DIR/obj/src/server/transport.o" | grep -E \
     'yvex_(runtime_model_open|artifact_materialize|runtime_transformer|runtime_generation_operator_execute|backend_cuda)' \
     >/dev/null
-! nm -u "$YVEX_CLIENT_LANE_OBJ" | grep -E 'execv|execvp' >/dev/null
+! nm -u "$BUILD_DIR/obj/src/server/transport.o" | grep -E 'execv|execvp' >/dev/null
 printf 'test: client_command_architecture\n'

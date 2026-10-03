@@ -8,6 +8,8 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <signal.h>
+#include <sys/wait.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -42,6 +44,33 @@ static int test_native_identity(void)
                      yvex_platform_peer_owned(peers[1]) && !yvex_platform_peer_owned(-1),
                      "only authenticated local peers pass");
     close(peers[0]); close(peers[1]);
+    return 0;
+}
+
+static int test_process_arguments(void)
+{
+    char argument[128], prefix[128];
+    unsigned long long count = 999ull, partial = 999ull;
+    struct timespec pause = {0, 10000000L};
+    pid_t child;
+    int attempt, result = -1, status;
+    snprintf(argument, sizeof(argument), "yvex-platform-argument-%lld-exact", (long long)getpid());
+    snprintf(prefix, sizeof(prefix), "yvex-platform-argument-%lld", (long long)getpid());
+    YVEX_TEST_ASSERT(yvex_platform_process_argument_count(NULL, &count) == -1 && count == 999ull,
+                     "invalid argument observation is failure atomic");
+    child = fork();
+    YVEX_TEST_ASSERT(child >= 0, "isolated process fixture starts");
+    if (!child) { execl("/bin/sh", "sh", "-c", "sleep 10; :", argument, (char *)NULL); _exit(127); }
+    for (attempt = 0; attempt < 100; ++attempt) {
+        result = yvex_platform_process_argument_count(argument, &count);
+        if (result == 0 && count) break;
+        nanosleep(&pause, NULL);
+    }
+    if (result == 0 && count == 1ull) result = yvex_platform_process_argument_count(prefix, &partial);
+    (void)kill(child, SIGTERM);
+    while (waitpid(child, &status, 0) < 0 && errno == EINTR) {}
+    YVEX_TEST_ASSERT(result == 0 && count == 1ull && partial == 0ull,
+                     "same-user process observation matches a whole argument, not a substring");
     return 0;
 }
 
@@ -138,6 +167,7 @@ static int test_native_state_mapping(void)
 int yvex_test_platform(void)
 {
     if (test_native_identity()) return 1;
+    if (test_process_arguments()) return 1;
     if (test_native_publication()) return 1;
     return test_native_state_mapping();
 }

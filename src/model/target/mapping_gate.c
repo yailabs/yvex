@@ -368,39 +368,39 @@ typedef struct {
     int metadata_observed;
 } mapping_gate_audit_facts;
 
+#define MAPPING_TEXT(key, value) { YVEX_MODEL_TARGET_ROW_LITERAL, (value), 0u, key }
+#define NAMING_TEXT(key, value) { YVEX_MODEL_TARGET_ROW_LITERAL, (value), 0u, key }
 #define MAPPING_LITERAL(text) \
-    { YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u }
-#define MAPPING_STRING(field, format) \
-    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(mapping_gate_audit_facts, field) }
-#define MAPPING_INT(field, format) \
-    { YVEX_MODEL_TARGET_ROW_INT, (format), offsetof(mapping_gate_audit_facts, field) }
+    { YVEX_MODEL_TARGET_ROW_LITERAL, (text), 0u, NULL }
+#define MAPPING_STRING(field, key, format) \
+    { YVEX_MODEL_TARGET_ROW_STRING, (format), offsetof(mapping_gate_audit_facts, field), key }
+#define MAPPING_INT(field, key, format) \
+    { YVEX_MODEL_TARGET_ROW_INT, (format), offsetof(mapping_gate_audit_facts, field), key }
 
 static const yvex_model_target_row_spec mapping_gate_audit_rows[] = {
-    MAPPING_STRING(status, "tensor_mapping_gate_status: %s"),
-    MAPPING_STRING(result, "tensor_mapping_gate_result: %s"),
-    MAPPING_STRING(target, "tensor_mapping_gate_target_id: %s"),
-    MAPPING_STRING(family, "tensor_mapping_gate_family: %s"),
-    MAPPING_LITERAL("tensor_naming_map_status: naming-map-profiled"),
-    MAPPING_LITERAL("output_head_map_status: output-head-profiled"),
-    MAPPING_STRING(metadata, "tokenizer_metadata_map_status: %s"),
-    MAPPING_LITERAL("missing_role_report_status: missing-role-report-blocked"),
-    MAPPING_LITERAL("expected_source_role_count: 12"),
-    MAPPING_INT(source_observed, "observed_source_role_count: %d"),
-    MAPPING_LITERAL("expected_metadata_role_count: 4"),
-    MAPPING_INT(metadata_observed, "observed_metadata_role_count: %d"),
-    MAPPING_STRING(missing, "missing_roles: %s"),
-    MAPPING_STRING(ambiguous, "ambiguous_roles: %s"),
-    MAPPING_LITERAL(
-        "downstream_blockers: artifact_contract=missing qtype_policy=missing "
-        "runtime_descriptor=missing graph_consumer=missing backend_residency=missing "
-        "logits_runtime=missing tokenizer_runtime=missing generation_runtime=missing "
-        "eval_benchmark=missing"),
-    MAPPING_STRING(next, "next_required_rows: %s"),
-    MAPPING_LITERAL("payload_bytes_read: false"),
-    MAPPING_LITERAL("artifact_emitted: false"),
-    MAPPING_LITERAL("runtime_descriptor_constructed: false"),
-    MAPPING_LITERAL("graph_consumer_fed: false")
-};
+    MAPPING_STRING(status, "tensor_mapping_gate_status", "tensor_mapping_gate_status: %s"),
+    MAPPING_STRING(result, "tensor_mapping_gate_result", "tensor_mapping_gate_result: %s"),
+    MAPPING_STRING(target, "tensor_mapping_gate_target_id", "tensor_mapping_gate_target_id: %s"),
+    MAPPING_STRING(family, "tensor_mapping_gate_family", "tensor_mapping_gate_family: %s"),
+    MAPPING_TEXT("tensor_naming_map_status", "naming-map-profiled"),
+    MAPPING_TEXT("output_head_map_status", "output-head-profiled"),
+    MAPPING_STRING(metadata, "tokenizer_metadata_map_status", "tokenizer_metadata_map_status: %s"),
+    MAPPING_TEXT("missing_role_report_status", "missing-role-report-blocked"),
+    MAPPING_TEXT("expected_source_role_count", "12"),
+    MAPPING_INT(source_observed, "observed_source_role_count", "observed_source_role_count: %d"),
+    MAPPING_TEXT("expected_metadata_role_count", "4"),
+    MAPPING_INT(metadata_observed, "observed_metadata_role_count", "observed_metadata_role_count: %d"),
+    MAPPING_STRING(missing, "missing_roles", "missing_roles: %s"),
+    MAPPING_STRING(ambiguous, "ambiguous_roles", "ambiguous_roles: %s"),
+    MAPPING_TEXT("downstream_blockers",
+                 "artifact_contract=missing qtype_policy=missing runtime_descriptor=missing "
+                 "graph_consumer=missing backend_residency=missing logits_runtime=missing "
+                 "tokenizer_runtime=missing generation_runtime=missing eval_benchmark=missing"),
+    MAPPING_STRING(next, "next_required_rows", "next_required_rows: %s"),
+    MAPPING_TEXT("payload_bytes_read", "false"),
+    MAPPING_TEXT("artifact_emitted", "false"),
+    MAPPING_TEXT("runtime_descriptor_constructed", "false"),
+    MAPPING_TEXT("graph_consumer_fed", "false")};
 
 static const mapping_gate_block mapping_source_qwen_block = {
     0, 12, 0, 0, 4, "all-source-roles", "none",
@@ -527,8 +527,8 @@ static int mapping_gate_validate(const yvex_model_target_request *request,
     if (!yvex_model_target_supported_source_target(target)) {
         report->status = "unsupported-target";
         report->exit_code = 2;
-        yvex_model_target_report_add_row(report, "status: unsupported-target");
-        yvex_model_target_report_add_row(report, "target_id: %s", target);
+        yvex_model_target_report_fact_text(report, "status", "unsupported-target");
+        yvex_model_target_report_fact_text(report, "target_id", target);
         yvex_model_target_report_add_error(report, "unsupported target: %s", target);
         return 1;
     }
@@ -611,6 +611,10 @@ int yvex_mapping_gate_report_build(const yvex_model_target_request *request,
         return YVEX_OK;
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
+        report->status = state.status;
+        yvex_model_target_report_fact_text(report, "target_id", request->target_id);
+        yvex_model_target_report_fact_text(report, "top_blocker", state.top_blocker);
+        yvex_model_target_report_fact_text(report, "next", state.next_row);
         yvex_model_target_report_add_row(
             report,
             "{\"status\":\"%s\",\"target_id\":\"%s\",\"top_blocker\":\"%s\",\"next\":\"%s\"}",
@@ -618,30 +622,25 @@ int yvex_mapping_gate_report_build(const yvex_model_target_request *request,
         return YVEX_OK;
     }
 
-    yvex_model_target_report_add_row(
-        report, "tensor-mapping-gate: %s [%s]", report->target_id,
-        strcmp(state.result, "pass") == 0 ? "reported" : "blocked");
-    yvex_model_target_report_add_row(report, "gate: v0.1.0  family: %s",
-                                     report->family);
-    yvex_model_target_report_add_row(
-        report,
-        "roles: source %d/12, metadata %d/4, missing %d, ambiguous %d",
-        state.source_observed, state.metadata_observed,
-        state.source_missing + state.metadata_missing, state.source_ambiguous);
+    yvex_model_target_report_fact_text(report, "tensor-mapping-gate", report->target_id);
+    yvex_model_target_report_fact_text(report, "gate", "v0.1.0");
+    yvex_model_target_report_fact_u64(report, "source_roles_required", 12u);
+    yvex_model_target_report_fact_u64(report, "source_roles_observed", (unsigned int)state.source_observed);
+    yvex_model_target_report_fact_u64(report, "metadata_required", 4u);
+    yvex_model_target_report_fact_u64(report, "metadata_observed", (unsigned int)state.metadata_observed);
+    yvex_model_target_report_fact_u64(
+        report, "roles_missing", (unsigned int)(state.source_missing + state.metadata_missing));
+    yvex_model_target_report_fact_u64(report, "roles_ambiguous", (unsigned int)state.source_ambiguous);
     if (strcmp(state.missing_roles, "none") != 0) {
-        yvex_model_target_report_add_row(report, "missing: %s",
-                                         state.missing_roles);
+        yvex_model_target_report_fact_text(report, "missing", state.missing_roles);
     }
     if (strcmp(state.ambiguous_roles, "none") != 0) {
-        yvex_model_target_report_add_row(report, "ambiguous: %s",
-                                         state.ambiguous_roles);
+        yvex_model_target_report_fact_text(report, "ambiguous", state.ambiguous_roles);
     }
-    yvex_model_target_report_add_row(report, "result: %s", state.result);
-    yvex_model_target_report_add_row(report, "top_blocker: %s",
-                                     state.top_blocker);
-    yvex_model_target_report_add_row(report, "next: %s", state.next_row);
-    yvex_model_target_report_add_row(report,
-                                     "boundary: report-only; no artifact/runtime/generation");
+    yvex_model_target_report_fact_text(report, "result", state.result);
+    yvex_model_target_report_fact_text(report, "top_blocker", state.top_blocker);
+    yvex_model_target_report_fact_text(report, "next", state.next_row);
+    yvex_model_target_report_fact_text(report, "boundary", "report-only; no artifact/runtime/generation");
     return YVEX_OK;
 }
 
@@ -653,14 +652,14 @@ static int naming_validate(const yvex_model_target_request *request,
     if (request->output_contract[0]) {
         if (strcmp(request->output_contract, "missing") == 0) {
             report->exit_code = 2;
-            yvex_model_target_report_add_row(report, "status: parser-error");
+            yvex_model_target_report_fact_text(report, "status", "parser-error");
             return 0;
         }
         if (strcmp(request->output_contract, "normal") != 0 &&
             strcmp(request->output_contract, "table") != 0 &&
             strcmp(request->output_contract, "audit") != 0) {
             report->exit_code = 2;
-            yvex_model_target_report_add_row(report, "status: unsupported-mode");
+            yvex_model_target_report_fact_text(report, "status", "unsupported-mode");
             return 0;
         }
     }
@@ -863,100 +862,103 @@ typedef struct {
     const char *coverage;
 } naming_audit_facts;
 
-#define NAMING_STRING_ROW(format_, member_) \
-    {YVEX_MODEL_TARGET_ROW_STRING, format_, offsetof(naming_audit_facts, member_)}
-#define NAMING_LITERAL_ROW(text_) {YVEX_MODEL_TARGET_ROW_LITERAL, text_, 0u}
+#define NAMING_STRING_ROW(key_, format_, member_) \
+    {YVEX_MODEL_TARGET_ROW_STRING, format_, offsetof(naming_audit_facts, member_), key_}
+#define NAMING_LITERAL_ROW(text_) {YVEX_MODEL_TARGET_ROW_LITERAL, text_, 0u, NULL}
 
 static const yvex_model_target_row_spec naming_audit_schema[] = {
-    NAMING_STRING_ROW("tensor_map_status: %s", status),
-    NAMING_STRING_ROW("tensor_map_family: %s", family),
-    NAMING_STRING_ROW("tensor_map_target_id: %s", target),
-    NAMING_LITERAL_ROW("tensor_map_stage: header-naming-map"),
-    NAMING_LITERAL_ROW("tensor_map_evidence_basis: header-metadata-only"),
-    NAMING_STRING_ROW("tensor_map_source_status: %s", presence),
-    NAMING_STRING_ROW("tensor_map_config_status: %s", presence),
-    NAMING_STRING_ROW("tensor_map_tokenizer_status: %s", presence),
-    NAMING_STRING_ROW("tensor_map_tensor_count: %s", total),
-    NAMING_STRING_ROW("tensor_map_mapped_total_count: %s", mapped_total),
-    NAMING_STRING_ROW("tensor_map_unmapped_unknown_count: %s", unknown),
-    NAMING_LITERAL_ROW("tensor_map_ambiguous_count: 0"),
-    NAMING_STRING_ROW("tensor_map_layer_count_observed: %s", layers),
-    NAMING_STRING_ROW("tensor_map_embedding_count: %s", embedding),
-    NAMING_STRING_ROW("tensor_map_attention_count: %s", attention),
-    NAMING_STRING_ROW("tensor_map_attention_q_count: %s", unit),
-    NAMING_STRING_ROW("tensor_map_attention_k_count: %s", unit),
-    NAMING_STRING_ROW("tensor_map_attention_v_count: %s", unit),
-    NAMING_STRING_ROW("tensor_map_attention_o_count: %s", unit),
-    NAMING_STRING_ROW("tensor_map_mlp_count: %s", mlp),
-    NAMING_STRING_ROW("tensor_map_mlp_gate_count: %s", unit),
-    NAMING_STRING_ROW("tensor_map_mlp_up_count: %s", unit),
-    NAMING_STRING_ROW("tensor_map_mlp_down_count: %s", unit),
-    NAMING_STRING_ROW("tensor_map_norm_count: %s", norm),
-    NAMING_STRING_ROW("tensor_map_output_head_count: %s", output),
-    NAMING_STRING_ROW("tensor_map_qwen_linear_attn_count: %s", linear),
-    NAMING_STRING_ROW("tensor_map_moe_router_count: %s", moe),
-    NAMING_STRING_ROW("tensor_map_moe_expert_count: %s", moe),
-    NAMING_STRING_ROW("tensor_map_moe_shared_count: %s", moe),
-    NAMING_STRING_ROW("tensor_map_required_role_coverage_status: %s", coverage),
-    NAMING_LITERAL_ROW("tensor_map_validation_status: lexical-and-header-only"),
-    NAMING_LITERAL_ROW("tensor_map_canonical_role_status: mapped-candidates"),
-    NAMING_LITERAL_ROW("tensor_map_runtime_role_coverage_status: report-only"),
-    NAMING_LITERAL_ROW("tensor_map_artifact_contract_status: not-implemented"),
-    NAMING_LITERAL_ROW("tensor_map_runtime_descriptor_status: not-implemented"),
-    NAMING_LITERAL_ROW("tensor_map_graph_consumer_status: not-implemented")
+    NAMING_STRING_ROW("tensor_map_status", "tensor_map_status: %s", status),
+    NAMING_STRING_ROW("tensor_map_family", "tensor_map_family: %s", family),
+    NAMING_STRING_ROW("tensor_map_target_id", "tensor_map_target_id: %s", target),
+    NAMING_TEXT("tensor_map_stage", "header-naming-map"),
+    NAMING_TEXT("tensor_map_evidence_basis", "header-metadata-only"),
+    NAMING_STRING_ROW("tensor_map_source_status", "tensor_map_source_status: %s", presence),
+    NAMING_STRING_ROW("tensor_map_config_status", "tensor_map_config_status: %s", presence),
+    NAMING_STRING_ROW("tensor_map_tokenizer_status", "tensor_map_tokenizer_status: %s", presence),
+    NAMING_STRING_ROW("tensor_map_tensor_count", "tensor_map_tensor_count: %s", total),
+    NAMING_STRING_ROW("tensor_map_mapped_total_count", "tensor_map_mapped_total_count: %s", mapped_total),
+    NAMING_STRING_ROW("tensor_map_unmapped_unknown_count", "tensor_map_unmapped_unknown_count: %s", unknown),
+    NAMING_TEXT("tensor_map_ambiguous_count", "0"),
+    NAMING_STRING_ROW("tensor_map_layer_count_observed", "tensor_map_layer_count_observed: %s", layers),
+    NAMING_STRING_ROW("tensor_map_embedding_count", "tensor_map_embedding_count: %s", embedding),
+    NAMING_STRING_ROW("tensor_map_attention_count", "tensor_map_attention_count: %s", attention),
+    NAMING_STRING_ROW("tensor_map_attention_q_count", "tensor_map_attention_q_count: %s", unit),
+    NAMING_STRING_ROW("tensor_map_attention_k_count", "tensor_map_attention_k_count: %s", unit),
+    NAMING_STRING_ROW("tensor_map_attention_v_count", "tensor_map_attention_v_count: %s", unit),
+    NAMING_STRING_ROW("tensor_map_attention_o_count", "tensor_map_attention_o_count: %s", unit),
+    NAMING_STRING_ROW("tensor_map_mlp_count", "tensor_map_mlp_count: %s", mlp),
+    NAMING_STRING_ROW("tensor_map_mlp_gate_count", "tensor_map_mlp_gate_count: %s", unit),
+    NAMING_STRING_ROW("tensor_map_mlp_up_count", "tensor_map_mlp_up_count: %s", unit),
+    NAMING_STRING_ROW("tensor_map_mlp_down_count", "tensor_map_mlp_down_count: %s", unit),
+    NAMING_STRING_ROW("tensor_map_norm_count", "tensor_map_norm_count: %s", norm),
+    NAMING_STRING_ROW("tensor_map_output_head_count", "tensor_map_output_head_count: %s", output),
+    NAMING_STRING_ROW("tensor_map_qwen_linear_attn_count", "tensor_map_qwen_linear_attn_count: %s", linear),
+    NAMING_STRING_ROW("tensor_map_moe_router_count", "tensor_map_moe_router_count: %s", moe),
+    NAMING_STRING_ROW("tensor_map_moe_expert_count", "tensor_map_moe_expert_count: %s", moe),
+    NAMING_STRING_ROW("tensor_map_moe_shared_count", "tensor_map_moe_shared_count: %s", moe),
+    NAMING_STRING_ROW("tensor_map_required_role_coverage_status",
+                      "tensor_map_required_role_coverage_status: %s", coverage),
+    NAMING_TEXT("tensor_map_validation_status", "lexical-and-header-only"),
+    NAMING_TEXT("tensor_map_canonical_role_status", "mapped-candidates"),
+    NAMING_TEXT("tensor_map_runtime_role_coverage_status", "report-only"),
+    NAMING_TEXT("tensor_map_artifact_contract_status", "not-implemented"),
+    NAMING_TEXT("tensor_map_runtime_descriptor_status", "not-implemented"),
+    NAMING_TEXT("tensor_map_graph_consumer_status", "not-implemented")};
+
+typedef struct {
+    const char *native_name;
+    const char *canonical_name;
+} naming_candidate;
+
+static const naming_candidate norm_mapping_candidates[] = {
+    {"model.layers.0.pre_feedforward_layernorm.weight", "model.layers.0.mlp.norm.weight"},
+    {"model.layers.0.post_feedforward_layernorm.weight", "model.layers.0.mlp.norm.weight"}
 };
 
-static const char *const norm_mapping_rows[] = {
-    "tensor_map.entry.0.mapping: model.layers.0.pre_feedforward_layernorm.weight "
-    "-> model.layers.0.mlp.norm.weight",
-    "tensor_map.entry.1.mapping: model.layers.0.post_feedforward_layernorm.weight "
-    "-> model.layers.0.mlp.norm.weight"
+static const naming_candidate dense_mapping_candidates[] = {
+    {"model.embed_tokens.weight", "model.embedding.token.weight"},
+    {"model.layers.0.self_attn.q_proj.weight", "model.layers.0.attention.q_proj.weight"},
+    {"model.layers.0.self_attn.k_proj.weight", "model.layers.0.attention.k_proj.weight"},
+    {"model.layers.0.self_attn.v_proj.weight", "model.layers.0.attention.v_proj.weight"},
+    {"model.layers.0.self_attn.o_proj.weight", "model.layers.0.attention.o_proj.weight"},
+    {"model.layers.0.mlp.gate_proj.weight", "model.layers.0.mlp.gate_proj.weight"},
+    {"model.layers.0.mlp.up_proj.weight", "model.layers.0.mlp.up_proj.weight"},
+    {"model.layers.0.mlp.down_proj.weight", "model.layers.0.mlp.down_proj.weight"},
+    {"model.layers.0.input_layernorm.weight", "model.layers.0.attention.norm.weight"},
+    {"model.layers.0.post_attention_layernorm.weight", "model.layers.0.mlp.norm.weight"},
+    {"model.norm.weight", "model.final_norm.weight"},
+    {"lm_head.weight", "model.output_head.weight"}
 };
 
-static const char *const dense_mapping_rows[] = {
-    "tensor_map.entry.0.mapping: model.embed_tokens.weight -> model.embedding.token.weight",
-    "tensor_map.entry.1.mapping: model.layers.0.self_attn.q_proj.weight -> "
-    "model.layers.0.attention.q_proj.weight",
-    "tensor_map.entry.2.mapping: model.layers.0.self_attn.k_proj.weight -> "
-    "model.layers.0.attention.k_proj.weight",
-    "tensor_map.entry.3.mapping: model.layers.0.self_attn.v_proj.weight -> "
-    "model.layers.0.attention.v_proj.weight",
-    "tensor_map.entry.4.mapping: model.layers.0.self_attn.o_proj.weight -> "
-    "model.layers.0.attention.o_proj.weight",
-    "tensor_map.entry.5.mapping: model.layers.0.mlp.gate_proj.weight -> "
-    "model.layers.0.mlp.gate_proj.weight",
-    "tensor_map.entry.6.mapping: model.layers.0.mlp.up_proj.weight -> "
-    "model.layers.0.mlp.up_proj.weight",
-    "tensor_map.entry.7.mapping: model.layers.0.mlp.down_proj.weight -> "
-    "model.layers.0.mlp.down_proj.weight",
-    "tensor_map.entry.8.mapping: model.layers.0.input_layernorm.weight -> "
-    "model.layers.0.attention.norm.weight",
-    "tensor_map.entry.9.mapping: model.layers.0.post_attention_layernorm.weight -> "
-    "model.layers.0.mlp.norm.weight",
-    "tensor_map.entry.10.mapping: model.norm.weight -> model.final_norm.weight",
-    "tensor_map.entry.11.mapping: lm_head.weight -> model.output_head.weight"
+static const naming_candidate moe_mapping_candidates[] = {
+    {"model.language_model.embed_tokens.weight", "model.embedding.token.weight"},
+    {"model.language_model.layers.0.self_attn.q_proj.weight", "model.layers.0.attention.q_proj.weight"},
+    {"model.language_model.layers.0.self_attn.k_proj.weight", "model.layers.0.attention.k_proj.weight"},
+    {"model.language_model.layers.0.self_attn.v_proj.weight", "model.layers.0.attention.v_proj.weight"},
+    {"model.language_model.layers.0.self_attn.o_proj.weight", "model.layers.0.attention.o_proj.weight"},
+    {"model.language_model.layers.0.linear_attn.A_log", "model.layers.0.qwen_linear_attn.A_log"},
+    {"model.language_model.layers.0.mlp.gate.weight", "model.layers.0.moe.router.weight"},
+    {"model.language_model.layers.0.mlp.experts.gate_up_proj", "model.layers.0.moe.experts.all.gate_up_proj.weight"},
+    {"model.language_model.layers.0.mlp.shared_expert.down_proj.weight",
+     "model.layers.0.moe.shared_expert.down_proj.weight"}
 };
 
-static const char *const moe_mapping_rows[] = {
-    "tensor_map.entry.0.mapping: model.language_model.embed_tokens.weight -> "
-    "model.embedding.token.weight",
-    "tensor_map.entry.1.mapping: model.language_model.layers.0.self_attn.q_proj.weight "
-    "-> model.layers.0.attention.q_proj.weight",
-    "tensor_map.entry.2.mapping: model.language_model.layers.0.self_attn.k_proj.weight "
-    "-> model.layers.0.attention.k_proj.weight",
-    "tensor_map.entry.3.mapping: model.language_model.layers.0.self_attn.v_proj.weight "
-    "-> model.layers.0.attention.v_proj.weight",
-    "tensor_map.entry.4.mapping: model.language_model.layers.0.self_attn.o_proj.weight "
-    "-> model.layers.0.attention.o_proj.weight",
-    "tensor_map.entry.5.mapping: model.language_model.layers.0.linear_attn.A_log -> "
-    "model.layers.0.qwen_linear_attn.A_log",
-    "tensor_map.entry.6.mapping: model.language_model.layers.0.mlp.gate.weight -> "
-    "model.layers.0.moe.router.weight",
-    "tensor_map.entry.7.mapping: model.language_model.layers.0.mlp.experts.gate_up_proj "
-    "-> model.layers.0.moe.experts.all.gate_up_proj.weight",
-    "tensor_map.entry.8.mapping: model.language_model.layers.0.mlp.shared_expert.down_proj.weight "
-    "-> model.layers.0.moe.shared_expert.down_proj.weight"
-};
+/* Preserve the existing report-only candidate names as separate typed facts.
+ * These examples are not authenticated role mappings or runtime admission. */
+static void naming_candidate_facts(yvex_model_target_report *report,
+                                   const naming_candidate *candidates,
+                                   size_t count,
+                                   size_t first)
+{
+    size_t index;
+    for (index = 0u; index < count; ++index) {
+        char name[96];
+        (void)snprintf(name, sizeof(name), "tensor_map.entry.%zu.native_name", first + index);
+        yvex_model_target_report_fact_text(report, name, candidates[index].native_name);
+        (void)snprintf(name, sizeof(name), "tensor_map.entry.%zu.canonical_name", first + index);
+        yvex_model_target_report_fact_text(report, name, candidates[index].canonical_name);
+    }
+}
 
 static void naming_audit_rows(yvex_model_target_report *report,
                               const yvex_model_target_request *request,
@@ -989,45 +991,39 @@ static void naming_audit_rows(yvex_model_target_report *report,
         report, naming_audit_schema,
         sizeof(naming_audit_schema) / sizeof(naming_audit_schema[0]), &facts);
     if (!missing && norm_only) {
-        yvex_model_target_report_add_rows(
-            report, norm_mapping_rows,
-            sizeof(norm_mapping_rows) / sizeof(norm_mapping_rows[0]));
+        naming_candidate_facts(report, norm_mapping_candidates,
+            sizeof(norm_mapping_candidates) / sizeof(norm_mapping_candidates[0]), 0u);
     } else if (!missing && dense_style) {
-        yvex_model_target_report_add_rows(
-            report, dense_mapping_rows,
-            sizeof(dense_mapping_rows) / sizeof(dense_mapping_rows[0]));
+        naming_candidate_facts(report, dense_mapping_candidates,
+            sizeof(dense_mapping_candidates) / sizeof(dense_mapping_candidates[0]), 0u);
         if (strcmp(unknown, "0") != 0) {
-            yvex_model_target_report_add_row(
-                report,
-                "tensor_map.entry.12.native_name: model.layers.0.weird_unknown.weight");
-            yvex_model_target_report_add_row(report, "tensor_map.entry.12.mapping_status: unmapped-unknown");
+            yvex_model_target_report_fact_text(report, "tensor_map.entry.12.native_name",
+                                               "model.layers.0.weird_unknown.weight");
+            yvex_model_target_report_fact_text(report, "tensor_map.entry.12.mapping_status", "unmapped-unknown");
             yvex_model_target_report_add_row(report, "model.layers.0.weird_unknown.weight");
-            yvex_model_target_report_add_row(report, "mapping_status: unmapped-unknown");
+            yvex_model_target_report_fact_text(report, "mapping_status", "unmapped-unknown");
         }
     } else if (!missing) {
-        yvex_model_target_report_add_rows(
-            report, moe_mapping_rows,
-            sizeof(moe_mapping_rows) / sizeof(moe_mapping_rows[0]));
+        naming_candidate_facts(report, moe_mapping_candidates,
+            sizeof(moe_mapping_candidates) / sizeof(moe_mapping_candidates[0]), 0u);
     }
     if (!missing && !dense_style && strcmp(family, "gemma") == 0) {
-        yvex_model_target_report_add_row(
-            report, "tensor_map.entry.9.mapping: "
-                    "model.language_model.layers.0.layer_scalar -> "
-                    "model.layers.0.layer_scalar");
+        const naming_candidate scalar = {
+            "model.language_model.layers.0.layer_scalar", "model.layers.0.layer_scalar"};
+        naming_candidate_facts(report, &scalar, 1u, 9u);
     }
     if (!missing && !dense_qwen && !norm_only) {
         yvex_model_target_report_add_row(report, "model.layers.0.weird_unknown.weight");
-        yvex_model_target_report_add_row(report, "mapping_status: %s",
-                                         strcmp(unknown, "0") == 0 ? "mapped-candidate" : "unmapped-unknown");
+        yvex_model_target_report_fact_text(
+            report, "mapping_status", strcmp(unknown, "0") == 0 ? "mapped-candidate" : "unmapped-unknown");
     }
     yvex_model_target_report_common_tail(report);
     if (missing) {
-        yvex_model_target_report_add_row(report, "top_blocker: %s",
-                                         strcmp(family, "gemma") == 0
+        yvex_model_target_report_fact_text(report, "top_blocker", strcmp(family, "gemma") == 0
                                              ? "missing-gemma-source-path"
                                              : "missing-qwen-source-path");
     }
-    yvex_model_target_report_add_row(report, "next_required_rows: V010.MAP.8");
+    yvex_model_target_report_fact_text(report, "next_required_rows", "V010.MAP.8");
 }
 
 #undef NAMING_LITERAL_ROW
@@ -1098,26 +1094,21 @@ int yvex_tensor_naming_report_build(
                           coverage, source_present);
         return YVEX_OK;
     }
-    yvex_model_target_report_add_row(report, "tensor-map: %s [%s]",
-                                     request->target_id,
-                                     missing_source || norm_only ? "blocked" :
-                                     strcmp(status, "naming-map-profiled") == 0
-                                         ? "reported" : status);
-    yvex_model_target_report_add_row(report, "family: %s  stage: header-naming-map  evidence: header-only", family);
-    yvex_model_target_report_add_row(report,
-                                     "roles: total=%s embedding=%s attention=%s "
-                                     "mlp=%s norm=%s head=%s moe=%s unknown=%s",
-                                     strcmp(unknown, "0") == 0 ? total : "12",
-                                     missing_source || norm_only ? "0" : "1",
-                                     missing_source || norm_only ? "0" : "4",
-                                     missing_source || norm_only ? "0" : "3",
-                                     missing_source ? "0" : (norm_only ? "2" : "3"),
-                                     missing_source || norm_only ? "0" : "1",
-                                     moe, unknown);
-    yvex_model_target_report_add_row(report, "layers: %s",
-                                     missing_source ? "0" : "1");
-    yvex_model_target_report_add_row(report, "top_blocker: %s",
-                                     missing_source
+    yvex_model_target_report_fact_text(report, "tensor-map", request->target_id);
+    yvex_model_target_report_fact_text(report, "family", family);
+    yvex_model_target_report_fact_text(report, "tensor_map_status", status);
+    yvex_model_target_report_fact_text(report, "evidence_basis", "header-only");
+    yvex_model_target_report_fact_u64(
+        report, "roles_total", strtoull(strcmp(unknown, "0") == 0 ? total : "12", NULL, 10));
+    yvex_model_target_report_fact_u64(report, "roles_embedding", missing_source || norm_only ? 0u : 1u);
+    yvex_model_target_report_fact_u64(report, "roles_attention", missing_source || norm_only ? 0u : 4u);
+    yvex_model_target_report_fact_u64(report, "roles_mlp", missing_source || norm_only ? 0u : 3u);
+    yvex_model_target_report_fact_u64(report, "roles_norm", missing_source ? 0u : norm_only ? 2u : 3u);
+    yvex_model_target_report_fact_u64(report, "roles_head", missing_source || norm_only ? 0u : 1u);
+    yvex_model_target_report_fact_u64(report, "roles_moe", strtoull(moe, NULL, 10));
+    yvex_model_target_report_fact_u64(report, "roles_unknown", strtoull(unknown, NULL, 10));
+    yvex_model_target_report_fact_text(report, "layers", missing_source ? "0" : "1");
+    yvex_model_target_report_fact_text(report, "top_blocker", missing_source
                                          ? (strcmp(family, "gemma") == 0
                                                 ? "missing-gemma-source-path"
                                                 : "missing-qwen-source-path")
@@ -1126,7 +1117,7 @@ int yvex_tensor_naming_report_build(
                                      : strcmp(family, "gemma") == 0
                                          ? "missing-dense-runtime-role-validation"
                                          : "missing-qwen-tensor-role-map");
-    yvex_model_target_report_add_row(report, "next: V010.MAP.8");
-    yvex_model_target_report_add_row(report, "boundary: report-only; use --audit for tensor entries");
+    yvex_model_target_report_fact_text(report, "next", "V010.MAP.8");
+    yvex_model_target_report_fact_text(report, "boundary", "report-only; use --audit for tensor entries");
     return YVEX_OK;
 }

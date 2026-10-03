@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1204" role="img" aria-labelledby="title desc">
+<title id="title">DeepSeek GB10 phase-specific prefill characterization</title>
+<desc id="desc">characterization; Bounded warm characterization, not release performance, an SLA, long-context qualification, sustained decode or upstream full-model conformance.. Values are printed beside each bar.</desc>
+<rect width="1000" height="1204" rx="12" fill="#faf8ff"/>
+<g font-family="Arial, sans-serif" fill="#231735">
+<text x="30" y="38" font-size="23" font-weight="700">DeepSeek GB10 phase-specific prefill characterization</text>
+<text x="30" y="67" font-size="16">CHARACTERIZATION · s · not an automatic capability promotion</text>
+<text x="30" y="129" font-size="18">baseline 22 input prefill_s</text>
+<rect x="330" y="110" width="31.753" height="27" rx="4" fill="#7541ba"/>
+<text x="381.753" y="129" font-size="17">3.44973</text>
+<text x="30" y="187" font-size="18">baseline 22 input ttft_turn_s</text>
+<rect x="330" y="168" width="38.073" height="27" rx="4" fill="#7541ba"/>
+<text x="388.073" y="187" font-size="17">4.13639</text>
+<text x="30" y="245" font-size="18">baseline 22 input http_s</text>
+<rect x="330" y="226" width="47.239" height="27" rx="4" fill="#7541ba"/>
+<text x="397.239" y="245" font-size="17">5.13218</text>
+<text x="30" y="303" font-size="18">baseline 106 input prefill_s</text>
+<rect x="330" y="284" width="139.782" height="27" rx="4" fill="#7541ba"/>
+<text x="489.782" y="303" font-size="17">15.1864</text>
+<text x="30" y="361" font-size="18">baseline 106 input ttft_turn_s</text>
+<rect x="330" y="342" width="146.291" height="27" rx="4" fill="#7541ba"/>
+<text x="496.291" y="361" font-size="17">15.8936</text>
+<text x="30" y="419" font-size="18">baseline 106 input http_s</text>
+<rect x="330" y="400" width="155.897" height="27" rx="4" fill="#7541ba"/>
+<text x="505.897" y="419" font-size="17">16.9373</text>
+<text x="30" y="477" font-size="18">baseline 346 input prefill_s</text>
+<rect x="330" y="458" width="453.298" height="27" rx="4" fill="#7541ba"/>
+<text x="803.298" y="477" font-size="17">49.2481</text>
+<text x="30" y="535" font-size="18">baseline 346 input ttft_turn_s</text>
+<rect x="330" y="516" width="459.906" height="27" rx="4" fill="#7541ba"/>
+<text x="809.906" y="535" font-size="17">49.966</text>
+<text x="30" y="593" font-size="18">baseline 346 input http_s</text>
+<rect x="330" y="574" width="470.000" height="27" rx="4" fill="#7541ba"/>
+<text x="820.000" y="593" font-size="17">51.0626</text>
+<text x="30" y="651" font-size="18">candidate 22 input prefill_s</text>
+<rect x="330" y="632" width="22.488" height="27" rx="4" fill="#7541ba"/>
+<text x="372.488" y="651" font-size="17">2.4432</text>
+<text x="30" y="709" font-size="18">candidate 22 input ttft_turn_s</text>
+<rect x="330" y="690" width="29.076" height="27" rx="4" fill="#7541ba"/>
+<text x="379.076" y="709" font-size="17">3.15896</text>
+<text x="30" y="767" font-size="18">candidate 22 input http_s</text>
+<rect x="330" y="748" width="47.977" height="27" rx="4" fill="#7541ba"/>
+<text x="397.977" y="767" font-size="17">5.21245</text>
+<text x="30" y="825" font-size="18">candidate 106 input prefill_s</text>
+<rect x="330" y="806" width="93.461" height="27" rx="4" fill="#7541ba"/>
+<text x="443.461" y="825" font-size="17">10.1539</text>
+<text x="30" y="883" font-size="18">candidate 106 input ttft_turn_s</text>
+<rect x="330" y="864" width="99.975" height="27" rx="4" fill="#7541ba"/>
+<text x="449.975" y="883" font-size="17">10.8616</text>
+<text x="30" y="941" font-size="18">candidate 106 input http_s</text>
+<rect x="330" y="922" width="119.855" height="27" rx="4" fill="#7541ba"/>
+<text x="469.855" y="941" font-size="17">13.0215</text>
+<text x="30" y="999" font-size="18">candidate 346 input prefill_s</text>
+<rect x="330" y="980" width="288.541" height="27" rx="4" fill="#7541ba"/>
+<text x="638.541" y="999" font-size="17">31.3482</text>
+<text x="30" y="1057" font-size="18">candidate 346 input ttft_turn_s</text>
+<rect x="330" y="1038" width="295.155" height="27" rx="4" fill="#7541ba"/>
+<text x="645.155" y="1057" font-size="17">32.0668</text>
+<text x="30" y="1115" font-size="18">candidate 346 input http_s</text>
+<rect x="330" y="1096" width="313.263" height="27" rx="4" fill="#7541ba"/>
+<text x="663.263" y="1115" font-size="17">34.0341</text>
+</g></svg>

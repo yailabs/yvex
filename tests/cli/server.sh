@@ -38,39 +38,8 @@ SOCKET_ROOT=$(realpath "$SOCKET_ROOT")
 SOCKET_PATH=$SOCKET_ROOT/yvex/yvexd.sock
 chmod 0700 "$SOCKET_ROOT"
 
-scope_cppflags=-D_POSIX_C_SOURCE=200809L
-scope_gc=-Wl,--gc-sections
-if test "$(uname -s)" = Darwin; then
-    scope_cppflags="$scope_cppflags -D_DARWIN_C_SOURCE"
-    scope_gc=-Wl,-dead_strip
-fi
-
-# Link the actual renderer; section GC excludes unrelated porcelain consumers.
-${CC:-cc} -std=c11 -Wall -Wextra -Werror $scope_cppflags -I. -Iinclude \
-    -I"${BUILD_DIR:-build}/generated" -I"${REPLAI_PREFIX:-build/external/replai}/include" \
-    -ffunction-sections -fdata-sections \
-    tests/integration/cli_logs.c src/cli/render/runtime.c src/cli/io/events.c src/cli/io/out.c \
-    src/cli/io/presentation.c src/cli/io/table.c src/cli/io/terminal/posix.c src/core/status.c \
-    "${REPLAI_PREFIX:-build/external/replai}/lib/libreplai_c.a" \
-    $(PKG_CONFIG_PATH="${REPLAI_PREFIX:-build/external/replai}/lib/pkgconfig" pkg-config --libs --static replai) \
-    -pthread "$scope_gc" -Wl,-rpath,"${REPLAI_PREFIX:-build/external/replai}/lib" -o "$OUT_DIR/log-renderer"
-NO_COLOR=1 "$OUT_DIR/log-renderer" >"$OUT_DIR/log-renderer.out"
-${CC:-cc} -std=c11 -Wall -Wextra -Werror $scope_cppflags -I. -Iinclude \
-    -I"${REPLAI_PREFIX:-build/external/replai}/include" -ffunction-sections -fdata-sections \
-    tests/integration/terminal_scope.c src/cli/io/terminal/posix.c src/core/status.c \
-    "${REPLAI_PREFIX:-build/external/replai}/lib/libreplai_c.a" \
-    $(PKG_CONFIG_PATH="${REPLAI_PREFIX:-build/external/replai}/lib/pkgconfig" pkg-config --libs --static replai) \
-    -pthread "$scope_gc" -Wl,-rpath,"${REPLAI_PREFIX:-build/external/replai}/lib" -o "$OUT_DIR/terminal-scope"
-"$OUT_DIR/terminal-scope"
-env -u NO_COLOR YVEX_TEST_PTY_INPUT=none TERM=xterm sh tests/support/record_terminal.sh -q -e -c "$OUT_DIR/log-renderer" \
-    "$OUT_DIR/log-renderer.tty" >"$OUT_DIR/log-renderer.color"
-python3 - "$OUT_DIR/log-renderer.out" "$OUT_DIR/log-renderer.color" <<'PY'
-import pathlib, re, sys
-plain, color = [pathlib.Path(path).read_bytes().decode() for path in sys.argv[1:]]
-assert '\x1b' not in plain and '\r' not in plain
-assert '\x1b[' in color
-assert re.sub(r'\x1b\[[0-9;]*m', '', color).replace('\r\n', '\n') == plain
-PY
+# Renderer measurement/cadence oracles live in client.rs unit tests; native
+# terminal/lifetime evidence lives in interaction.rs and rust_chat_pty.py.
 
 fail()
 {
@@ -129,7 +98,8 @@ cat >"$HOME_ROOT/.local/share/yvex/models.local.json" <<EOF
 EOF
 
 "$YVEX_BIN" serve --help >"$OUT_DIR/help.out" 2>"$OUT_DIR/help.err"
-contains "$OUT_DIR/help.out" 'usage: yvex serve [options]'
+contains "$OUT_DIR/help.out" 'yvex serve [options]'
+contains "$OUT_DIR/help.out" 'operation: host.serve'
 contains "$OUT_DIR/help.out" 'Run the persistent YVEX host in the foreground.'
 contains "$OUT_DIR/help.out" '--workers'
 contains "$OUT_DIR/help.out" '--max-engines'
@@ -143,11 +113,11 @@ contains "$OUT_DIR/help.out" '--openai'
 "$YVEX_BIN" engine unload --help >"$OUT_DIR/unload-help.out"
 "$YVEX_BIN" engine list --help >"$OUT_DIR/models-help.out"
 "$YVEX_BIN" model load --help >"$OUT_DIR/model-load-help.out"
-contains "$OUT_DIR/load-help.out" 'usage: yvex engine load [PROFILE]'
+contains "$OUT_DIR/load-help.out" 'yvex engine load [PROFILE]'
 contains "$OUT_DIR/load-help.out" '--ctx'
-contains "$OUT_DIR/unload-help.out" 'usage: yvex engine unload ENGINE'
-contains "$OUT_DIR/models-help.out" 'usage: yvex engine list [options]'
-contains "$OUT_DIR/model-load-help.out" 'usage: yvex model load [MODEL]'
+contains "$OUT_DIR/unload-help.out" 'yvex engine unload <ENGINE>'
+contains "$OUT_DIR/models-help.out" 'yvex engine list [options]'
+contains "$OUT_DIR/model-load-help.out" 'yvex model load [MODEL]'
 contains "$OUT_DIR/model-load-help.out" '--ctx'
 
 set +e
@@ -240,11 +210,9 @@ while test "$attempt" -lt 100; do
     sleep 0.02
 done
 test "$ready" -eq 1 || fail 'persistent host did not become ready'
-contains "$OUT_DIR/host.out" 'verified inference runtime'
-contains "$OUT_DIR/host.out" 'protocol: 24'
-contains "$OUT_DIR/host.out" '0/2 engines · 2 workers'
-contains "$OUT_DIR/host.out" 'events: lifecycle · progress · resources'
-contains "$OUT_DIR/host.out" 'host ready · Ctrl-C to stop'
+contains "$OUT_DIR/host.out" 'HOST ready · 2 workers · capacity 2'
+contains "$OUT_DIR/host.out" 'protocol 24'
+contains "$OUT_DIR/host.out" 'Ctrl-C to stop'
 not_contains "$OUT_DIR/host.out" '█'
 not_contains "$OUT_DIR/host.out" '▀'
 contains "$OUT_DIR/status.json" '"schema":"yvex.host.status.v1"'
@@ -261,8 +229,8 @@ contains "$OUT_DIR/status.json" '"openai_enabled":false'
 run_client host memory >"$OUT_DIR/memory.out"
 run_client host memory --json >"$OUT_DIR/memory.json"
 contains "$OUT_DIR/memory.out" 'MEMORY'
-contains "$OUT_DIR/memory.out" 'Explicit device'
-contains "$OUT_DIR/memory.out" 'Physical pages'
+contains "$OUT_DIR/memory.out" 'PLACEMENT'
+contains "$OUT_DIR/memory.out" 'physical residency'
 contains "$OUT_DIR/memory.out" 'not reported'
 contains "$OUT_DIR/memory.json" '"schema":"yvex.host.memory.v2"'
 contains "$OUT_DIR/memory.json" '"resident_device_bytes":0'
@@ -309,7 +277,7 @@ HOME="$HOME_ROOT" XDG_RUNTIME_DIR="$SOCKET_ROOT" NO_COLOR=1 TERM=xterm-256color 
 duplicate_host_status=$?
 set -e
 test "$duplicate_host_status" -eq 1
-contains "$OUT_DIR/attached.typescript" 'yvex: host already running'
+contains "$OUT_DIR/attached.typescript" 'host already running'
 contains "$OUT_DIR/attached.typescript" 'yvex host status'
 not_contains "$OUT_DIR/attached.typescript" 'YVEX HOST · VERIFIED INFERENCE'
 not_contains "$OUT_DIR/attached.typescript" 'Interactive host console'
@@ -323,11 +291,89 @@ contains "$OUT_DIR/status-after-probe.json" '"host_ready":true'
 # intent is explicit, format-independent, and exits cleanly on host shutdown.
 run_client host logs >"$OUT_DIR/logs-snapshot.out"
 run_client host logs --json >"$OUT_DIR/logs-snapshot.jsonl"
-contains "$OUT_DIR/logs-snapshot.out" 'host logs · recent retained history'
-not_contains "$OUT_DIR/logs-snapshot.out" 'HOST'
+contains "$OUT_DIR/logs-snapshot.out" 'YVEX logs'
+not_contains "$OUT_DIR/logs-snapshot.out" 'HOST ready'
 not_contains "$OUT_DIR/logs-snapshot.out" 'ENDPOINTS'
 contains "$OUT_DIR/logs-snapshot.jsonl" '"kind":"runtime.ready"'
 contains "$OUT_DIR/logs-snapshot.jsonl" '"kind":"engine.load.failed"'
+# The native REPLAI projection styles typed log categories, not machine facts.
+# A subscriber interrupt must not terminate the isolated producer.
+HOME="$HOME_ROOT" XDG_RUNTIME_DIR="$SOCKET_ROOT" \
+python3 - "$YVEX_BIN" <<'PY'
+import fcntl, json, os, pty, re, select, signal, struct, subprocess, sys, termios, time
+
+binary = sys.argv[1]
+ansi = re.compile(r'\x1b\[[0-9;]*m')
+env = dict(os.environ, TERM='xterm-256color')
+env.pop('NO_COLOR', None)
+env.pop('COLUMNS', None)
+
+def capture(width, extra=(), overrides=None, follow=False):
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 30, width, 0, 0))
+    before = termios.tcgetattr(slave)
+    process = None
+    data = bytearray()
+    try:
+        process = subprocess.Popen([binary, 'host', 'logs', *extra],
+            env={**env, **(overrides or {})}, stdin=subprocess.DEVNULL,
+            stdout=slave, stderr=slave, start_new_session=True)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if select.select([master], [], [], 0.05)[0]:
+                data.extend(os.read(master, 65536))
+            elif process.poll() is not None:
+                break
+            if follow and b'fail' in data:
+                os.kill(process.pid, signal.SIGINT)
+                process.wait(timeout=5)
+                follow = False
+        assert process.poll() is not None, 'log subscriber did not finish'
+        assert process.returncode in (0, -signal.SIGINT, 128 + signal.SIGINT), process.returncode
+        assert termios.tcgetattr(slave) == before, 'subscriber changed terminal settings'
+        return data.decode().replace('\r\n', '\n')
+    finally:
+        if process is not None and process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+        os.close(master)
+        os.close(slave)
+
+for width in (40, 80, 180):
+    styled = capture(width)
+    plain = capture(width, overrides={'NO_COLOR': ''})
+    assert '\x1b[' in styled and '\x1b' not in plain
+    assert ansi.sub('', styled) == plain, (width, styled, plain)
+    assert 'fail' in styled and 'runtime' in styled
+    headers = [line for line in plain.splitlines()
+               if re.match(r'^\d{2}:\d{2}:\d{2} ', line)]
+    assert headers, ('missing producer UTC envelope', width, plain)
+    assert all(re.match(r'^\d{2}:\d{2}:\d{2} yvex:', line)
+               for line in headers), headers
+    assert not any(line.startswith(' ' * 20) for line in plain.splitlines()), plain
+    assert not re.search(r'\b[abc]=\d+', plain), plain
+    assert '\x1b[?1049' not in styled, 'logs must not own alternate screen'
+    assert capture(width, overrides={'TERM': 'dumb'}) == plain
+    structured = capture(width, ['--json'])
+    assert '\x1b' not in structured
+    records = [json.loads(line) for line in structured.splitlines()]
+    assert any(record['kind'] == 'engine.load.failed' for record in records)
+    assert all('wall_time_ns' in record and 'severity' in record for record in records)
+live = capture(80, ['--follow'], follow=True)
+assert 'Ctrl-C to detach' in live and '\x1b[' in live
+# A downstream pipe closing is a successful monitor detach, not a product error
+# or a reason to stop the host. Close before reading to exercise EPIPE reliably.
+for extra in ((), ('--json',), ('--follow',)):
+    process = subprocess.Popen([binary, 'host', 'logs', *extra], env=env,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process.stdout.close()
+    error = process.stderr.read()
+    assert process.wait(timeout=5) == 0, (extra, error)
+    assert not error, (extra, error)
+subprocess.run([binary, 'host', 'status', '--json'], env=env, check=True,
+               stdout=subprocess.DEVNULL, timeout=5)
+print('PASS host logs: compact ds4-style UTC/activity messages; 40/80/180 columns; colors/NO_COLOR/dumb; JSONL; interrupt/EPIPE detach; terminal and producer preserved')
+PY
 run_client host logs --json --follow >"$OUT_DIR/logs-follow.jsonl" &
 logs_pid=$!
 ready=0
@@ -381,17 +427,15 @@ contains "$OUT_DIR/terminal-load.err" 'deployment is not current (malformed-bind
 run_client host stop >/dev/null
 wait "$server_pid"
 server_pid=
-contains "$OUT_DIR/server-terminal.typescript" 'YVEX 0.1.0 · HOST'
-contains "$OUT_DIR/server-terminal.typescript" 'YVEX 0.1.0 · HOST'
-contains "$OUT_DIR/server-terminal.typescript" 'host: 0/2 engines · 2 workers'
-contains "$OUT_DIR/server-terminal.typescript" 'protocol: 24'
+contains "$OUT_DIR/server-terminal.typescript" 'YVEX 0.1.0'
+contains "$OUT_DIR/server-terminal.typescript" 'HOST ready · 2 workers · capacity 2'
+contains "$OUT_DIR/server-terminal.typescript" 'protocol 24'
 contains "$OUT_DIR/server-terminal.typescript" 'native'
 not_contains "$OUT_DIR/server-terminal.typescript" 'LOAD   deepseek4-v4-flash-dspark · g1'
-contains "$OUT_DIR/server-terminal.typescript" 'FAIL'
+contains "$OUT_DIR/server-terminal.typescript" 'fail'
 contains "$OUT_DIR/server-terminal.typescript" 'deepseek4-v4-flash-dspark-'
 contains "$OUT_DIR/server-terminal.typescript" ' generation=0 backend=CPU'
-contains "$OUT_DIR/server-terminal.typescript" 'events: lifecycle · progress · resources'
-contains "$OUT_DIR/server-terminal.typescript" 'host ready · Ctrl-C to stop'
+contains "$OUT_DIR/server-terminal.typescript" 'Ctrl-C to stop'
 not_contains "$OUT_DIR/server-terminal.typescript" 'CONTROL'
 not_contains "$OUT_DIR/server-terminal.typescript" 'OPERATE'
 not_contains "$OUT_DIR/server-terminal.typescript" 'type help'
@@ -422,8 +466,8 @@ test "$ready" -eq 1 || fail 'compact terminal host did not become ready'
 run_client host stop >/dev/null
 wait "$server_pid"
 server_pid=
-contains "$OUT_DIR/server-compact.typescript" 'YVEX 0.1.0 · HOST'
-contains "$OUT_DIR/server-compact.typescript" 'OpenAI: disabled'
+contains "$OUT_DIR/server-compact.typescript" 'YVEX 0.1.0'
+contains "$OUT_DIR/server-compact.typescript" 'OpenAI disabled'
 not_contains "$OUT_DIR/server-compact.typescript" 'Interactive host console'
 test ! -e "$SOCKET_PATH"
 
@@ -438,7 +482,7 @@ runtime.mkdir(mode=0o700)
 env = dict(os.environ, HOME=home, XDG_RUNTIME_DIR=str(runtime), TERM='xterm-256color')
 env.pop('COLUMNS', None)
 env['NO_COLOR'] = '1'
-ready = b'host ready \xc2\xb7 Ctrl-C to stop'
+ready = b'Ctrl-C to stop'
 ansi = re.compile(r'\x1b\[[0-9;]*m')
 captures = {}
 
@@ -466,17 +510,16 @@ for width, colored in [(40, False), (60, False), (76, False), (80, False),
         raw = bytes(data).decode('utf-8')
         assert ('\x1b[' in raw) == colored
         text = ansi.sub('', raw).replace('\r\n', '\n')
-        banner = text.split('host ready', 1)[0]
+        banner = text.split('Ctrl-C to stop', 1)[0]
         lines = [line for line in banner.splitlines() if line.strip()]
-        assert 7 <= len(lines) <= 18, lines
+        assert 3 <= len(lines) <= 18, lines
         for line in lines:
             cells = sum(0 if unicodedata.combining(c) else
                         2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1
                         for c in line)
             assert cells <= width, (width, cells, line)
-        for fact in ('YVEX 0.1.0 · HOST', 'verified inference runtime',
-                     'host 0/2 engines · 2 workers', 'protocol 24',
-                     'OpenAI disabled', 'lifecycle', 'progress', 'resources'):
+        for fact in ('YVEX 0.1.0', 'HOST ready · 2 workers · capacity 2',
+                     'protocol 24', 'OpenAI disabled'):
             assert re.sub(r'\s+', '', fact) in re.sub(r'\s+', '', banner), (width, fact, banner)
         expected = str(runtime / 'yvex/yvexd.sock')
         assert expected in re.sub(r'\s+', '', banner), (expected, banner)

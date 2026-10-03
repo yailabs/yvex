@@ -116,12 +116,14 @@ private local protocol. It opens no artifacts, initializes no CUDA state,
 starts no host, and loads no engine. A missing host produces the explicit
 `yvex serve` remediation; a missing engine points to `yvex model load`.
 
-The linear editor is the externally linked REPLAI ABI 1 implementation. It owns
+The linear editor is the pinned REPLAI implementation consumed natively by the
+Rust product shell, without a C-ABI round trip. It owns
 grapheme editing, history navigation, paste, resize/redraw and exact terminal
 restoration. YVEX supplies prompt values, history admission, registry completion
 and interrupt meaning. During generation the editor is closed; YVEX owns stream
 meaning and protocol cancellation while REPLAI owns quiet feedback and terminal
-restoration. See [the dependency decision](../decisions/0007-external-terminal-editor.md)
+restoration. See [the product-shell decision](../decisions/0009-rust-product-shell.md)
+and [the retained producer decision](../decisions/0007-external-terminal-editor.md)
 for the exact pin, build requirements and lifecycle evidence. Registry-derived
 slash operations remain limited to conversation and session use:
 
@@ -187,6 +189,13 @@ runtime loading.
 
 Source commands inspect exact provenance, artifact commands inspect immutable
 compiled packages, and profile commands inspect deployment configuration.
+`profile show PROFILE` uses the same typed deployment fact as `profile list`,
+including exact capability masks and admission blockers; its JSON identity is
+`yvex.profile.v1`. It is not an alias for artifact inspection. Descriptor,
+metadata and tensor geometry are reached through `artifact show` and
+`inspect artifact metadata|tensors`. Those observations do not claim execution.
+`inspect paths configure|resolve` projects the native path-policy owner;
+configuration reset removes configuration only, never acquired payloads.
 Specialized compiler phases remain discoverable below `compile`. Bounded
 component execution and measurement live under `bench`; read-only engineering
 evidence lives under `inspect`. Offline commands neither require nor start a
@@ -198,6 +207,7 @@ state; it does not parent the provider for the duration of the transfer. The
 detached supervisor is a narrow acquisition worker, not the hosted runtime, a
 generic daemon or a job scheduler. It owns one immutable provider/repository/
 revision/selection generation and exits at a terminal acquisition state.
+Interrupting the observing CLI detaches it and leaves that acquisition running.
 
 `model status` and the advanced `source status` reopen the durable operation.
 `model stop`/`source stop` authenticate the supervisor or provider process
@@ -266,6 +276,28 @@ typed stream from another process; `--json` selects the machine JSONL
 projection and `--follow` makes continuous intent explicit. No second logging
 authority or administrative REPL exists.
 
+Human log categories use semantic terminal colors for progress, completion,
+warnings and failures, shared with foreground host logs. Color is supplementary:
+`NO_COLOR`, non-TTY output and JSONL remain unstyled; event identities, metrics
+and follow/cancellation semantics do not depend on color.
+
+Ordinary human logs use short producer UTC time, `yvex:`, exact session/request
+identity and a compact activity/message, without padded severity/category columns.
+The activity and its facts share semantic color; time and identity are secondary.
+Warnings and errors retain their explicit level. `--verbose` adds the full UTC
+date/time with milliseconds, level, producer sequence and diagnostic details,
+including rolling-rate populations and speculative counts. Missing producer time
+remains explicitly unavailable, never replaced with the client's clock. Metrics
+keep their units and rate scope. Wrapped words use a two-cell continuation rather
+than a wide hanging gutter; REPLAI owns terminal-cell geometry.
+
+The ordinary view suppresses successful health/catalog polling, informational
+attach/detach, uncontended queue entries and redundant final progress updates.
+Warnings, failures and terminal outcomes remain visible. `--verbose` exposes
+those diagnostic events; JSONL retains the complete machine projection without
+human noise/cadence filtering. Closing a downstream pipe or interrupting the log
+subscriber detaches observation; it does not cancel work or stop the host.
+
 ## Non-claims
 
 This local product architecture does not establish public HTTP serving,
@@ -278,6 +310,11 @@ The common human grammar is identity → aligned responsive fields → blockers 
 secondary facts. Normal model lists emphasize state, execution, format, size and
 available representations. `show`, audit and JSON retain deep lineage. `--wide`
 explicitly adds useful metadata; terminal width does not silently opt into it.
+The default list includes every logical model in the native catalog, including
+source-only entries and models outside the selected working set. Deployment
+selection does not hide catalog entries. Model names use the terminal accent,
+states have semantic emphasis, and secondary facts are dimmed; plain output
+retains the same entries and facts.
 Engine entries retain their detailed facts in responsive records. Session fleets
 and benchmark comparisons use lightweight tables, with structural record fallback
 at narrow widths. Important fields are not elided.
@@ -300,7 +337,8 @@ The existing nested `source acquire status|stop|resume|cleanup` spellings remain
 registry-authored compatibility aliases, not parser-only subcommands.
 
 `source acquire --json` emits one terminal `yvex.model.pull.v1` result on stdout;
-provider output and progress remain on stderr. The detached supervisor publishes
+Typed progress goes to stderr; provider stdout/stderr stay in the recorded
+provider logs, whose paths are exposed by the audit receipt. The detached supervisor publishes
 a bounded structured result before its terminal operation state. An attaching
 client consumes that result, never reconstructing it from provider/human logs.
 An unavailable terminal result fails closed, and starting a replacement supervisor
@@ -317,3 +355,14 @@ the finite-decision producer, and the existing read-only remote management facts
 This inventory neither creates CLI paths nor promotes runtime maturity. Finite
 decisions are not chat. Remote mutation remains deferred. QA and programmatic
 one-shot generation remain deliberately absent from ordinary product commands.
+
+Controlled `artifact emit` writes a bounded fixture representation; its
+`--native-source` compatibility hint does not turn it into native conversion.
+`quant convert` owns the admitted native conversion path. Template inspection
+reports observed metadata and tensor facts, not artifact or runtime admission.
+
+Materialization consumes authenticated artifact facts and native backend
+outcomes. Its private operator report retains the actual phase and byte counts
+after failed work is retired. Failure cleanup and final resource retirement are
+distinct observations; neither implies inference readiness. The installed C
+materialization API remains unchanged.

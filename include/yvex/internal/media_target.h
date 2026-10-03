@@ -168,6 +168,12 @@ typedef struct yvex_media_target_profile {
     unsigned long long maximum_aspect_numerator, maximum_aspect_denominator;
 } yvex_media_target_profile;
 
+/* Copy the registered immutable family profile through the generic catalog.
+ * Borrowed strings remain static; failure never publishes a partial profile. */
+int yvex_component_target_profile(const char *target,
+                                   yvex_media_target_profile *out,
+                                   yvex_error *err);
+
 typedef int (*yvex_media_plan_fn)(
     yvex_runtime_av_plan *, const yvex_media_plan_request *, yvex_error *);
 typedef int (*yvex_media_layout_fn)(

@@ -3,17 +3,243 @@
 
 #include <yvex/internal/platform.h>
 #include <yvex/internal/source_acquisition.h>
+#include <yvex/internal/source.h>
 
 #include <yvex/internal/core.h>
 #include <yvex/internal/io.h>
 
 #include <errno.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+typedef yvex_source_acquisition_tree acquisition_tree;
+
+static int acquisition_suffix(const char *name, const char *suffix)
+{
+    size_t length = strlen(name), tail = strlen(suffix);
+    return length >= tail && !strcmp(name + length - tail, suffix);
+}
+
+static int acquisition_tree_walk(int descriptor, const char *path, int cache, int inspect, unsigned int depth,
+                                acquisition_tree *out, yvex_error *err)
+{
+    DIR *directory;
+    struct dirent *entry;
+    int rc = YVEX_OK;
+    if (depth > 64u) {
+        close(descriptor);
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "source.acquisition.observe", "tree depth exceeds observation bound");
+        return YVEX_ERR_BOUNDS;
+    }
+    directory = fdopendir(descriptor);
+    if (!directory) {
+        close(descriptor);
+        yvex_error_set(err, YVEX_ERR_IO, "source.acquisition.observe", "cannot open selected directory");
+        return YVEX_ERR_IO;
+    }
+    for (;;) {
+        char child[YVEX_PATH_CAP];
+        struct stat status;
+        int written;
+        errno = 0;
+        entry = readdir(directory);
+        if (!entry) { if (errno) rc = YVEX_ERR_IO; break; }
+        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+        if (++out->entries > 1000000ull) { rc = YVEX_ERR_BOUNDS; break; }
+        written = snprintf(child, sizeof(child), "%s/%s", path, entry->d_name);
+        if (written < 0 || (size_t)written >= sizeof(child)) { rc = YVEX_ERR_BOUNDS; break; }
+        if (fstatat(dirfd(directory), entry->d_name, &status, AT_SYMLINK_NOFOLLOW) != 0) {
+            if (errno == ENOENT) continue; /* An in-flight provider may rename a partial. */
+            rc = YVEX_ERR_IO;
+            break;
+        }
+        if (S_ISDIR(status.st_mode)) {
+            int nested = openat(dirfd(directory), entry->d_name, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY);
+            if (nested < 0) {
+                if (errno == ENOENT) continue;
+                rc = YVEX_ERR_IO;
+                break;
+            }
+            rc = acquisition_tree_walk(
+                nested, child, cache || !strcmp(entry->d_name, ".cache"), inspect, depth + 1u, out, err);
+            if (rc != YVEX_OK) break;
+        } else if (S_ISREG(status.st_mode)) {
+            if (acquisition_suffix(entry->d_name, ".lock")) out->locks++;
+            if (acquisition_suffix(entry->d_name, ".partial") ||
+                acquisition_suffix(entry->d_name, ".incomplete") ||
+                acquisition_suffix(entry->d_name, ".tmp") || strstr(entry->d_name, ".part")) out->partials++;
+            if (!cache) {
+                unsigned long long bytes = status.st_size > 0 ? (unsigned long long)status.st_size : 0ull;
+                if (bytes > ~0ull - out->bytes) { rc = YVEX_ERR_BOUNDS; break; }
+                out->bytes += bytes;
+                out->files++;
+                if (acquisition_suffix(entry->d_name, ".safetensors")) {
+                    out->shards++;
+                    if (inspect) {
+                        yvex_safetensors_extent extent;
+                        rc = yvex_safetensors_inspect_extent(child, &extent, err);
+                        if (rc != YVEX_OK) break;
+                        out->checked_shards++;
+                        out->truncated_shards += extent == YVEX_SAFETENSORS_EXTENT_TRUNCATED;
+                        out->invalid_shards += extent == YVEX_SAFETENSORS_EXTENT_INVALID_HEADER;
+                    }
+                }
+                if (acquisition_suffix(entry->d_name, ".gguf")) out->gguf_files++;
+                if (!strcmp(entry->d_name, "config.json")) out->config_present = 1;
+                if (!strncmp(entry->d_name, "tokenizer.", 10u) ||
+                    !strcmp(entry->d_name, "tokenizer_config.json")) out->tokenizer_present = 1;
+                if (bytes > out->largest_bytes) {
+                    out->largest_bytes = bytes;
+                    snprintf(out->largest_file, sizeof(out->largest_file), "%s", child);
+                }
+            }
+        }
+    }
+    closedir(directory);
+    if (rc != YVEX_OK)
+        yvex_error_set(err, rc, "source.acquisition.observe", "selected tree cannot be observed within bounds");
+    return rc;
+}
+
+static int acquisition_tree_observe(const char *path, int cache, int inspect, acquisition_tree *out, yvex_error *err)
+{
+    int descriptor = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_DIRECTORY);
+    if (descriptor < 0) {
+        if (errno == ENOENT) return YVEX_OK;
+        yvex_error_set(err, YVEX_ERR_IO, "source.acquisition.observe",
+                       "cannot open selected tree without following links");
+        return YVEX_ERR_IO;
+    }
+    return acquisition_tree_walk(descriptor, path, cache, inspect, 0u, out, err);
+}
+
+static int acquisition_scan(const char *source, const char *cache, int inspect,
+    yvex_source_acquisition_tree *out, yvex_error *err)
+{
+    acquisition_tree next = {0};
+    int rc;
+    if (!source || !source[0] || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source.acquisition.observe", "source and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = acquisition_tree_observe(source, 0, inspect, &next, err);
+    if (rc == YVEX_OK && cache && cache[0]) rc = acquisition_tree_observe(cache, 1, 0, &next, err);
+    if (rc == YVEX_OK) {
+        size_t length = strlen(source);
+        if (!strncmp(next.largest_file, source, length) && next.largest_file[length] == '/')
+            memmove(next.largest_file, next.largest_file + length + 1u, strlen(next.largest_file + length + 1u) + 1u);
+        *out = next;
+    }
+    return rc;
+}
+
+int yvex_source_acquisition_scan(const char *source, const char *cache,
+    yvex_source_acquisition_tree *out, yvex_error *err)
+{
+    return acquisition_scan(source, cache, 0, out, err);
+}
+
+int yvex_source_acquisition_inspect(const char *source, const char *cache,
+    yvex_source_acquisition_tree *out, yvex_error *err)
+{
+    return acquisition_scan(source, cache, 1, out, err);
+}
+
+static void acquisition_event_observe(const char *path, yvex_source_acquisition_operation *operation,
+                                      unsigned long long now)
+{
+    char *record, schema[64], kind[32], object[YVEX_SOURCE_ACQUISITION_OBJECT_CAP] = {0};
+    unsigned long long sequence = 0ull, retries = 0ull;
+    size_t length = 0u;
+    yvex_error err;
+    yvex_json json;
+    const char *value;
+    if (!path || !path[0]) return;
+    yvex_error_clear(&err);
+    record = yvex_read_bounded_file(path, 4096u, &length, &err);
+    if (!record) return;
+    yvex_json_init(&json, record, length);
+    if (!yvex_json_skip_value(&json) || !yvex_json_complete(&json) ||
+        !yvex_json_probe_string_field(record, "schema", schema, sizeof(schema)) ||
+        strcmp(schema, "yvex.provider.acquisition.event.v1") ||
+        !yvex_json_probe_string_field(record, "kind", kind, sizeof(kind))) goto done;
+    value = yvex_json_probe_field_value(record, "sequence");
+    if (!value) goto done;
+    yvex_json_init(&json, value, strlen(value));
+    if (!yvex_json_u64(&json, &sequence) || !sequence ||
+        (operation->progress.provider_event_sequence.known &&
+         sequence <= operation->progress.provider_event_sequence.value)) goto done;
+    if (!strcmp(kind, "retry")) {
+        value = yvex_json_probe_field_value(record, "retry_count");
+        if (!value) goto done;
+        yvex_json_init(&json, value, strlen(value));
+        if (!yvex_json_u64(&json, &retries)) goto done;
+        operation->lifecycle = YVEX_SOURCE_ACQUISITION_RETRYING;
+        operation->health = YVEX_SOURCE_ACQUISITION_HEALTH_DEGRADED;
+        operation->progress.retry_count = (yvex_source_acquisition_u64){retries, 1};
+        snprintf(operation->reason, sizeof(operation->reason), "provider-retrying");
+    } else if (!strcmp(kind, "progress")) {
+        if (operation->lifecycle == YVEX_SOURCE_ACQUISITION_RETRYING)
+            operation->lifecycle = YVEX_SOURCE_ACQUISITION_DOWNLOADING;
+        operation->progress.last_progress_unix = (yvex_source_acquisition_u64){now, 1};
+        snprintf(operation->reason, sizeof(operation->reason), "provider-progress");
+    } else if (strcmp(kind, "heartbeat")) goto done;
+    operation->progress.last_provider_event_unix = (yvex_source_acquisition_u64){now, 1};
+    operation->progress.provider_event_sequence = (yvex_source_acquisition_u64){sequence, 1};
+    if (yvex_json_probe_string_field(record, "object", object, sizeof(object)))
+        snprintf(operation->progress.current_object, sizeof(operation->progress.current_object), "%s", object);
+done:
+    free(record);
+}
+
+int yvex_source_acquisition_observe(const char *source, const char *cache, const char *event,
+    yvex_source_acquisition_operation *operation, unsigned long long now, yvex_error *err)
+{
+    acquisition_tree tree = {0};
+    yvex_source_acquisition_operation next;
+    unsigned long long writes = 0ull;
+    int rc, advanced;
+    if (!source || !source[0] || !operation) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source.acquisition.observe", "source and operation are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = yvex_source_acquisition_scan(source, cache, &tree, err);
+    if (rc != YVEX_OK) return rc;
+    next = *operation;
+    advanced = !next.progress.committed_bytes.known || next.progress.committed_bytes.value != tree.bytes ||
+               !next.progress.completed_files.known || next.progress.completed_files.value != tree.files;
+    next.progress.committed_bytes = (yvex_source_acquisition_u64){tree.bytes, 1};
+    next.progress.completed_files = (yvex_source_acquisition_u64){tree.files, 1};
+    next.progress.completed_shards = (yvex_source_acquisition_u64){tree.shards, 1};
+    next.progress.provider_partial_objects = (yvex_source_acquisition_u64){tree.partials, 1};
+    next.progress.provider_lock_objects = (yvex_source_acquisition_u64){tree.locks, 1};
+    if (next.progress.selected_files.known && tree.files <= next.progress.selected_files.value)
+        next.progress.incomplete_files =
+            (yvex_source_acquisition_u64){next.progress.selected_files.value - tree.files, 1};
+    if (yvex_source_acquisition_process_matches(&next.provider_process) &&
+        yvex_platform_process_write_bytes(next.provider_process.pid, &writes)) {
+        unsigned long long previous = next.progress.provider_activity_bytes.value;
+        advanced |= !next.progress.provider_activity_bytes.known ||
+                    next.progress.provider_activity_bytes.value != writes;
+        if (next.progress.provider_activity_bytes.known && now > next.updated_unix && writes >= previous) {
+            unsigned long long rate = (writes - previous) / (now - next.updated_unix);
+            next.progress.provider_activity_current_bytes_per_second = (yvex_source_acquisition_u64){rate, 1};
+            if (next.progress.provider_activity_rolling_bytes_per_second.known)
+                rate = next.progress.provider_activity_rolling_bytes_per_second.value / 4ull * 3ull + rate / 4ull;
+            next.progress.provider_activity_rolling_bytes_per_second = (yvex_source_acquisition_u64){rate, 1};
+        }
+        next.progress.provider_activity_bytes = (yvex_source_acquisition_u64){writes, 1};
+    }
+    if (advanced) next.progress.last_progress_unix = (yvex_source_acquisition_u64){now, 1};
+    acquisition_event_observe(event, &next, now);
+    *operation = next;
+    return YVEX_OK;
+}
 
 #define ACQUISITION_RECORD_CAP (YVEX_PATH_CAP * 3u + 16384u)
 

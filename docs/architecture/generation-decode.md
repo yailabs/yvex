@@ -36,6 +36,17 @@ Prefill, ordinary decode, DSpark draft, target verification, and correction are
 phase-specific work over one model schedule. They are not parallel model
 implementations.
 
+Configured prefill chunk size is not proof of physical parallelism. Prompt
+execution resolves its phase-specific implementation width from the opened
+engine, clamps real suffix batches to that admitted width, and preserves exact
+position/state associations. Decode, draft, verification and correction retain
+their own source-admitted populations. The
+[specialization owner](deployment-specialization.md) seals those separate width
+policies; capacity planning accounts for the corresponding larger work arena.
+Wider prefill can reduce repeated traversal and synchronization while increasing
+session preparation and peak memory. Compare complete-request measurements,
+not only the inner prefill span.
+
 ```text
 rendered prompt -> exact tokenizer IDs -> prefix admission -> suffix prefill
   -> target/draft/verify work -> normalized hidden -> output head -> selection

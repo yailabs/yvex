@@ -47,7 +47,8 @@ contains "$OUT_DIR/tokens.out" "generation: unsupported"
 contains "$OUT_DIR/tokens.out" "status: token-input-pass"
 
 expect_fail empty "$YVEX_BIN" inspect input tokens --model "$MODEL" --tokens ""
-contains "$OUT_DIR/empty.err" "token-list-empty"
+contains "$OUT_DIR/empty.err" "YVEX_ERR_INVALID_ARG"
+contains "$OUT_DIR/empty.err" "--tokens is required"
 expect_fail double_comma "$YVEX_BIN" inspect input tokens --model "$MODEL" --tokens 1,,2
 contains "$OUT_DIR/double_comma.err" "token-parse-invalid"
 expect_fail alpha "$YVEX_BIN" inspect input tokens --model "$MODEL" --tokens abc
@@ -58,7 +59,8 @@ expect_fail overflow "$YVEX_BIN" inspect input tokens --model "$MODEL" \
     --tokens 184467440737095516160
 contains "$OUT_DIR/overflow.err" "token-id-overflow"
 expect_fail out_of_vocab "$YVEX_BIN" inspect input tokens --model "$MODEL" --tokens 8
-contains "$OUT_DIR/out_of_vocab.out" "token_bounds_status: fail"
+test ! -s "$OUT_DIR/out_of_vocab.out" || fail "refused input published a successful projection"
+contains "$OUT_DIR/out_of_vocab.err" "YVEX_ERR_BOUNDS"
 contains "$OUT_DIR/out_of_vocab.err" "token-out-of-vocab"
 
 "$YVEX_BIN" inspect input prompt --model "$TOKENIZER_FIXTURE" --text "hello world" \
@@ -68,7 +70,8 @@ contains "$OUT_DIR/prompt.out" "token_count: 3"
 contains "$OUT_DIR/prompt.out" "status: token-input-pass"
 
 expect_fail tokenizer_missing "$YVEX_BIN" inspect input prompt --model "$MODEL" --text hello
-contains "$OUT_DIR/tokenizer_missing.out" "tokenizer_status: unsupported"
-contains "$OUT_DIR/tokenizer_missing.err" "tokenizer-metadata-missing"
+test ! -s "$OUT_DIR/tokenizer_missing.out" || fail "unsupported tokenizer published input"
+contains "$OUT_DIR/tokenizer_missing.err" "YVEX_ERR_UNSUPPORTED"
+contains "$OUT_DIR/tokenizer_missing.err" "bounded legacy token input does not admit this tokenizer"
 
 printf 'cli token input: ok\n'

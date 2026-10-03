@@ -20,6 +20,12 @@ One `yvex` executable exposes the operator product. The C surface, private local
 protocol, OpenAI compatibility adapter and restricted remote-management bootstrap
 have different trust and compatibility boundaries.
 
+The canonical product shell is Rust; [ADR 0009](../decisions/0009-rust-product-shell.md)
+owns that split. Generated registry metadata drives parsing/help/discovery and
+completion. Private compiler-derived FFI adapts C-owned typed operations;
+runtime clients consume the existing C transport, never a second wire parser.
+C/CUDA remains the independently buildable computational library.
+
 ## Integration map
 
 | Consumer | Supported seam | Boundary |
@@ -39,6 +45,22 @@ is checked without exposing the private local Unix wire. YAI may consume
 producer facts through its bounded provider adapter; Studio may inspect
 YVEX-owned operator facts directly. Case-affecting actions still cross YAI
 admission. There is no remote model/lifecycle mutation contract in this slice.
+
+## Native operator facts
+
+Operator projections consume the native identity-verification result and typed
+materialization outcome, not human output or failure-injection environment
+variables. A private diagnostic boundary retains failed-work phase, byte counts
+and observed backend-accounting cleanup after resource retirement. It does not
+change the installed C API, promote weights-only materialization into execution,
+or transfer artifact/backend admission semantics to a renderer.
+
+The Rust shell shares one typed human event projection between foreground host
+output and retained/live `host logs`: short producer UTC time, exact request
+identity and compact colored activity/messages. Full severity/date/sequence and
+diagnostic populations remain available under `--verbose` and in JSONL.
+REPLAI owns semantic styling and responsive geometry; human
+noise/cadence filtering never changes retained events or the JSONL contract.
 
 ## YAI boundary
 
@@ -65,11 +87,11 @@ flowchart TB
   n_terminal["EXTERNAL<br/>Terminal / user<br/>input and displayed results"]:::external
   subgraph n_panel_0["a  REPLAI terminal substrate"]
     direction TB
-  n_editor["EXTERNAL<br/>REPLAI · ABI 1 / P1<br/>editing / paste / history"]:::external
+  n_editor["EXTERNAL<br/>REPLAI · native Rust<br/>editing / paste / history"]:::external
   end
   subgraph n_panel_1["b  Client"]
     direction TB
-  n_client["INTERFACE<br/>YVEX client adapter<br/>grammar / history admission"]:::interface
+  n_client["INTERFACE<br/>YVEX Rust client shell<br/>grammar / history admission"]:::interface
   n_protocol["INTERFACE<br/>Typed local protocol<br/>bounded UDS requests"]:::interface
   n_render["INTERFACE<br/>YVEX display intent<br/>typed facts / channels"]:::interface
   end
@@ -116,30 +138,34 @@ and [`config/replai.json`](../../config/replai.json) owns its exact pin. YVEX
 retains prompt facts, history admission, candidate meaning, reconnect,
 attachments, exact channel interpretation and presentation intent. REPLAI owns
 cell geometry, responsive documents, semantic styles, menus and quiet feedback
-through separately queried presentation extension 1, without an editor lifetime
-for ordinary commands. JSON remains a sibling serializer of typed facts. Ctrl-C while editing is a generic REPLAI
+through its native Rust surface, without an editor lifetime for ordinary
+commands. Its independent C ABI 1/P1 remains a producer feature, not the current
+YVEX consumer seam. JSON remains a sibling serializer of typed facts. Ctrl-C while editing is a generic REPLAI
 event; during generation it enters YVEX cancellation and quiet-output handling.
 EOF, exit and transport failure follow their distinct close/recovery paths.
 Historical `repl_` helper names do not establish another editor.
 
-The private `src/cli/io/terminal/` contract exposes terminal observation,
-opaque output/capture scopes and interrupt counts, not descriptors, signals or
-console layouts. The current POSIX implementation adapts the editor entrypoint,
-captures interrupts and driven resize wakes, and joins its watch before
-application context expires. Borrowed input FDs and decoder deadlines come from
-REPLAI; neither is a product semantic type.
+`src/cli/rust/interaction.rs` adapts borrowed REPLAI input readiness, decoder
+deadlines and process-scoped notifications. It joins its notification worker
+before application context expires. Borrowed FDs and signals are mechanics,
+not product semantic types. The old C terminal adapter is retired.
 The client callback decides which generation to cancel; terminal capture never
 owns engine/session meaning. Output-state admission and restoration failures
 stop chat instead of continuing with uncertain terminal state.
 
-This is an interface portability boundary, not cross-platform qualification.
-Linux PTY tests exercise the implementation and the pinned REPLAI ABI, which
-has retained base Linux/macOS POSIX qualification. The new optional extension
-has independently retained native Linux qualification; base evidence is not
-automatically promoted into extension/platform evidence. YVEX itself remains Linux-qualified;
-a macOS or Windows port must qualify its
-platform adapter, editor dependency and local transport; neither a POSIX signal
-nor a Windows console event is a generic request type.
+An interrupt before `TURN_STARTED` retains pending intent. Once admitted, one
+scoped cancellation worker uses the existing typed C client while the response
+reader continues draining progress. The reader never synchronously waits on
+that second connection: bounded Unix-socket backpressure must not deadlock the
+two streams. The worker is joined before another prompt/turn can begin, and
+unconfirmed cancellation is not presented as an admitted outcome.
+
+This is an interface portability boundary, not automatic cross-platform
+qualification. Retained [macOS native foundation](../evaluation/macos-native.md)
+evidence qualifies its exact prior C-shell/CPU/terminal snapshot. The Rust shell
+has Linux PTY/software evidence; actual macOS requalification remains a gate of
+the migration Task. Neither that foundation nor CLI portability qualifies Metal
+or CUDA/model execution. A signal or console event is not a request type.
 
 [Real chat PTY tests](../../tests/repl_pty.sh), their
 [consumer assertions](../../tests/replai_consumer.py), and the
@@ -151,7 +177,7 @@ its default branch does not change the pinned dependency.
 
 ## Implementation and evidence
 
-[src/server](../../src/server) · [src/client](../../src/cli/io/client.c) · [include/yvex/server.h](../../include/yvex/server.h) · [config/operator/registry.json](../../config/operator/registry.json)
+[src/server](../../src/server) · [Rust client](../../src/cli/rust/client.rs) · [include/yvex/server.h](../../include/yvex/server.h) · [config/operator/registry.json](../../config/operator/registry.json)
 
 [QA selection](../evaluation/qa.md) · [Current state](../project-control/STATUS.md)
 
