@@ -166,6 +166,14 @@ current owner rather than restoring the removed C CLI. Existing exact model
 and primitive evidence remain historical until combined-source regression is
 earned. This Task does not select full-model Metal or any successor milestone.
 
+The [2026-10-03 checkpoint](../evaluation/macos-main-integration.md) records
+source-stable Mac/Linux native 15 PASS, Metal 2 PASS and both exact Qwen CPU
+continuations at `cb457a83`, including published main through `0ffe591d`.
+Intermediate Mac/Linux CI each passes 121 tests at its recorded source. The
+operator explicitly renewed the publication hold: retain IN PROGRESS, do not
+integrate/push main or create `feature/macos-metal2` until final-main publication
+is confirmed and any later published delta has been reconciled and qualified.
+
 ## Delivery progression
 
 1. Shared architecture and compiler foundation — qualified ownership cutovers.

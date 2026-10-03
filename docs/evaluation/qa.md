@@ -74,7 +74,8 @@ IDs; it is not a copied Make recipe.
 the exclusive `metal-device` resource. Its native Darwin-arm64 prerequisite
 does not assert an actual GPU; real device/pipeline admission and dispatch are
 mandatory assertions in the test. Missing hardware prerequisites are BLOCKED,
-not CPU fallback or PASS. `native` selects 14 CPU/platform/host/terminal cases,
+not CPU fallback or PASS. `native` selects 15 CPU/platform/host/terminal cases,
+including native Rust shell contracts and real PTY lifecycle,
 including explicit invalid or unavailable Metal refusal, without requiring a
 GPU. The [Metal foundation evidence](macos-metal.md) remains separate from
 full-model, performance and release evidence.

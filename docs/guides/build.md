@@ -72,10 +72,11 @@ root objects or historical executables.
 
 ## macOS native CPU build
 
-The retained native Darwin qualification covers the prior C-shell/CPU/terminal
-snapshot, not the new Rust product shell. Requalify the Rust shell on macOS with
-the native lane before extending that claim. The intended Darwin path retains
-the same single executable and local protocol.
+The original native Darwin report covers the prior C-shell/CPU/terminal snapshot.
+The [integration checkpoint](../evaluation/macos-main-integration.md) separately
+qualifies the new Rust product shell through the 15-case native lane on Mac and
+Linux. The same single executable and local protocol remain authoritative;
+publication into main still follows the operator's integration gate.
 Install the Xcode Command Line Tools and modern GNU Make; Apple's bundled Make
 3.81 cannot parse the build. The qualified toolchain uses Rust 1.98.1 for the
 pinned REPLAI producer and Python 3.14 for QA:
