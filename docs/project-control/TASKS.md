@@ -69,10 +69,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 40 | 33 | 0 | 1 | 6 |
+| 41 | 33 | 1 | 1 | 6 |
 <!-- task-counts:end -->
 
-**33/40 selected Tasks complete.** This denominator includes the significant
+**33/41 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -149,6 +149,22 @@ rendered card/license and canonical catalog location are independently verified.
 The exact release is PUBLISHED without changing artifact-set identity.
 `progression_decision=proceed`, `downstream_safe=true` only for these CPU/artifact
 and retained Metal primitive bounds. No next Metal/model milestone is selected.
+
+## Independently selected Metal integration
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `INTEGRATION.MACOS.METAL.MAIN.0` | Reconcile the closed Metal/Qwen pressure branch with published main, qualify the combined product and integrate before creating the successor branch | P1 | 🔵 IN PROGRESS | Published, clean Spark/main `06f234b6`; retain the Rust product shell, native Metal primitive and bounded Qwen CPU semantics. Reconcile build/source ownership, backend inspection and affected QA; publish the qualified integration and create `feature/macos-metal2` from integrated main. |
+
+The operator authorized this integration sequence, initially paused it for
+unfinished main work, and resumed it on 2026-10-03. Live Spark checkout and
+GitHub agree at clean `06f234b607899586a70fc2c7b3bf11c0dbcf6bd5`; the Metal
+pressure branch starts clean at `09bf86abcf09401e7db67932cf906449441c4c87`.
+Integrate published histories with merge. Preserve the new Rust shell and
+phase-specific execution work; migrate the Metal backend projection into its
+current owner rather than restoring the removed C CLI. Existing exact model
+and primitive evidence remain historical until combined-source regression is
+earned. This Task does not select full-model Metal or any successor milestone.
 
 ## Delivery progression
 
