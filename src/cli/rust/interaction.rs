@@ -82,18 +82,8 @@ impl Notifications {
             deadline.map(|d| d.at().saturating_duration_since(Instant::now()))
         };
         // Neither borrowed source survives advancement, close or reopen.
-        #[cfg(debug_assertions)]
-        trace_drive("wait", format!("{interest:?} timeout={timeout:?}"));
         let (input, notification) =
             wait(interaction.input_source()?, self.source.as_fd(), timeout)?;
-        #[cfg(debug_assertions)]
-        trace_drive(
-            "wake",
-            format!(
-                "input={input} notification={notification} due={:?}",
-                deadline.map(|d| d.at().saturating_duration_since(Instant::now()))
-            ),
-        );
         if notification {
             let events = self.take()?;
             if events & 4 != 0 {
@@ -107,37 +97,12 @@ impl Notifications {
             }
         }
         if input || interest == WaitInterest::Ready {
-            let outcome = interaction.advance(Wake::InputReady)?;
-            #[cfg(debug_assertions)]
-            trace_drive(
-                "input",
-                format!("event={:?}", outcome.as_ref().map(std::mem::discriminant)),
-            );
-            Ok(outcome)
+            Ok(interaction.advance(Wake::InputReady)?)
         } else if let Some(due) = deadline.filter(|d| Instant::now() >= d.at()) {
-            let outcome = interaction.advance(Wake::Deadline(due))?;
-            #[cfg(debug_assertions)]
-            trace_drive(
-                "deadline",
-                format!("event={:?}", outcome.as_ref().map(std::mem::discriminant)),
-            );
-            Ok(outcome)
+            Ok(interaction.advance(Wake::Deadline(due))?)
         } else {
             Ok(None)
         }
-    }
-}
-
-// Temporary debug-only qualification probe: no input text or domain data.
-#[cfg(debug_assertions)]
-fn trace_drive(stage: &str, value: String) {
-    if let Some(path) = std::env::var_os("YVEX_TEST_DRIVE_TRACE")
-        && let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-    {
-        let _ = writeln!(file, "{:?} {stage} {value}", Instant::now());
     }
 }
 

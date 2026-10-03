@@ -45,7 +45,7 @@ transfer merely to refresh presentation.
 | Operator contracts | Registry, existing JSON schemas, typed C operations and retained C executable | Isolated source/artifact/profile/account/model/engineering fixtures | Equivalent machine facts, refusal and publication boundaries | Native differential controls pass; no legacy dispatcher | Exact schema values, exit identities and emitted bytes where contractual | PASS | Exercised operator contracts, not whole-model execution |
 | Chat and host logs | REPLAI interaction contract and typed local events | Real PTYs at 40/80/180 columns; styled/plain/NO_COLOR/dumb; Unicode | Safe completion, resize, exact channels, cancellation/resync and terminal restoration | Qualified fixture controls pass; SIGINT/EPIPE detach leaves host alive | No alternate screen, opaque background or stale-draft mutation | PASS | Terminal/lifecycle behavior under isolated fixtures |
 | Native C consumers | Installed headers, typed C client and private protocol v24 | Independent C readers and C/C++ public-record compilation | Same records, one server owner, no upward Rust dependency | Independent consumer and package controls pass | Exact layouts; 40 public records; one executable | PASS | Preserved C ABI and tested local protocol scope |
-| GNU Make | Build rules, source/package manifests and Cargo lock | Incremental/relink/clean/DESTDIR/invalid-path checks | Correct ownership and complete atomic product publication | Eleven focused build checks pass | No arbitrary root cleanup; library build independent of Cargo | PASS | Tested build and staging contracts, not legal release permission |
+| GNU Make | Build rules, source/package manifests and Cargo lock | Incremental/relink/clean/DESTDIR/invalid-path checks | Correct ownership and complete atomic product publication | Thirteen focused host build checks pass | No arbitrary root cleanup; library build independent of Cargo; caller link overrides retained | PASS | Tested build and staging contracts, not legal release permission |
 
 These isolated software/PTY results do not qualify model quality, GPU inference,
 Metal or the YAI/Studio chain. The source-stable mapped campaign
@@ -57,10 +57,48 @@ source stability is valid. The mandatory unavailable live/reference assets
 keep the aggregate non-green; isolated shell/software evidence does not replace
 them. Both mapped ASan/LeakSanitizer and UBSan lanes pass, including the final
 Rust-to-instrumented-C link, HTTP, real tiny CPU model and terminal lifecycle.
-Rust checks pass 49 unit tests and five structural tests; the isolated worker
+Rust checks pass 51 unit tests and five structural tests; the isolated worker
 lifetime test executes the deliberately ignored signal test in its own process.
 The official Python 2.50.0 and JavaScript 7.1.0 OpenAI consumers also pass
 model/chat/Responses/SSE/tool-loop fixtures, not real producer inference.
+Clean-checkout qualification caught a C benchmark fixture outside admitted test
+membership; it now lives under `tests/integration/`, without weakening the
+classifier. GNU Make database inspection selects the explicit introspection
+target, so recursive Cargo recipes cannot run merely to inspect build inputs.
+Darwin retains its native `libSystem` pthread linkage instead of forwarding a
+Linux-only linker option. Tooling components are explicit CI prerequisites.
+
+The clean `06f234b607899586a70fc2c7b3bf11c0dbcf6bd5` mapped repair run
+`6e73bb9b22751a73b844eedad8225ce5b7cf2efb455b90f49b830c722cddb223`
+passes all 119 selected software assertions, including both sanitizer lanes;
+its start/finish tree is clean and source stability is valid. The
+[hosted Linux run](https://github.com/yailabs/yvex/actions/runs/37126530947)
+passes 120 hermetic assertions with valid source stability, plus real-chat
+Valgrind. Its receipt is
+`a481127bcf4f77639d61f6d3cebfe1448497deffffab850265e3633fc906b9f7`.
+The completion-test repair at clean `0fbb4c188f5842f5758d29844f737c2fabf947fd`
+passes all 115 mapped assertions under receipt
+`8dfbaf37b2e47e9cbb6a07490b299c49c0d4d497e032c391d5ca2b837b884e2c`.
+These clean software gates do not resolve the separate full-model asset blockers.
+
+Cancellation before admission is exercised with a bounded producer socket send
+buffer. A synchronous cancellation acknowledgement could block the only response
+reader and deadlock progress; one joined cancellation worker preserves draining
+and the exact typed acknowledgement/refusal boundary. The fixture verifies one
+cancel dispatch, no automatic retry after lost delivery, subsequent independent
+work and restored terminal state. PTY completion synchronization starts its idle
+interval after observed Escape consumption, not after the caller's write. A
+deliberately delayed reader falsifies the earlier sender-side timing assumption.
+The hosted Darwin trace observes correct expiry of a 250 ms producer deadline
+after a 344 ms reactor wait under scheduling load; the semantic PTY control
+allows delivery margin rather than pretending that a 300 ms sender sleep proves
+expiry. The producer timeout and fragmented-sequence policy are unchanged, and
+temporary tracing is removed. This is not a deadline-latency or platform SLA.
+One-shot terminal captures drain while the child runs and before releasing the
+last slave, rather than treating teardown as an output-delivery boundary.
+Temporary fixture roots are canonicalized before sealed benchmark operations;
+Darwin's `/var` alias cannot substitute for the canonical asset-path contract.
+
 Actual hosted macOS Rust qualification remains a separate closure gate. The running public
 DeepSeek producer remains the previously qualified phase-geometry executable;
 interface tests do not replace it. The compiled software package retains

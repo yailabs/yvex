@@ -82,9 +82,10 @@ pinned REPLAI producer and Python 3.14 for QA:
 
 ```sh
 brew install make pkg-config ripgrep coreutils python@3.14
-rustup toolchain install 1.98.1
+rustup toolchain install 1.98.1 --component rustfmt --component clippy
 export PATH="$(brew --prefix make)/libexec/gnubin:$(brew --prefix coreutils)/libexec/gnubin:$(brew --prefix python@3.14)/libexec/bin:$PATH"
 export RUSTUP_TOOLCHAIN=1.98.1
+export LIBCLANG_PATH="$(dirname "$(dirname "$(xcrun --find clang)")")/lib"
 make -j4
 python3 tools/qa.py run native
 ```

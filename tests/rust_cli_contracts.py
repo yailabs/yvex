@@ -90,7 +90,7 @@ def terminal_output(binary: Path, words: list[str], environment: dict[str, str])
 def accounts(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-accounts-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         environment = dict(os.environ)
         for name in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"):
             environment.pop(name, None)
@@ -193,7 +193,7 @@ def tokenizers(binary: Path, reference: Path | None) -> int:
 def paths(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-paths-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         environment = dict(os.environ)
         environment.pop("YVEX_MODELS_ROOT", None)
         environment.update({
@@ -250,7 +250,7 @@ def paths(binary: Path, reference: Path | None) -> int:
 def catalogs(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-catalog-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         models = directory / "models"
         models.mkdir()
         fixture = ROOT / "tests/fixtures/gguf/valid-tokenizer-simple.gguf"
@@ -345,7 +345,7 @@ def profiles(binary: Path, reference: Path | None) -> int:
     count = 0
     fixture = ROOT / "tests/fixtures/gguf/valid-tokenizer-simple.gguf"
     with tempfile.TemporaryDirectory(prefix="yvex-rust-profile-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         environment = {**os.environ, "YVEX_CONFIG_DIR": str(root / "config"), "NO_COLOR": "1", "COLUMNS": "180"}
         registry = root / "models.json"
         alias = "deepseek4-v4-flash-dspark-selected-embed"
@@ -427,7 +427,7 @@ def profiles(binary: Path, reference: Path | None) -> int:
 def sources(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-source-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         source = root / "source"
         source.mkdir()
         (source / "config.json").write_text('{}\n')
@@ -574,7 +574,7 @@ def integrity(binary: Path, reference: Path | None) -> int:
 def native_weights(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-native-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         source = root / "sorgente_日本語"
         source.mkdir()
         header = {
@@ -630,7 +630,7 @@ def native_weights(binary: Path, reference: Path | None) -> int:
 def artifact_construction(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-emission-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         environment = {**os.environ, "NO_COLOR": "1", "COLUMNS": "220"}
         for qtype, expected_bytes in (("F32", 128), ("F16", 64)):
             output = root / f"owned-{qtype}.gguf"
@@ -692,7 +692,7 @@ def artifact_construction(binary: Path, reference: Path | None) -> int:
 def conversion(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-conversion-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         source = root / "native"
         source.mkdir()
         payload = struct.pack("<32e", *(index / 16 for index in range(32)))
@@ -754,7 +754,7 @@ def conversion(binary: Path, reference: Path | None) -> int:
 def materialization(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-materialization-") as temporary:
-        environment = {**os.environ, "YVEX_MODELS_REGISTRY": str(Path(temporary) / "models.json"),
+        environment = {**os.environ, "YVEX_MODELS_REGISTRY": str(Path(temporary).resolve() / "models.json"),
                        "NO_COLOR": "1", "COLUMNS": "220"}
         fixture = ROOT / "tests/fixtures/gguf/valid-tokenizer-simple.gguf"
         words = ["artifact", "materialize", "--model", str(fixture), "--backend", "cpu"]
@@ -812,7 +812,7 @@ def materialization(binary: Path, reference: Path | None) -> int:
 def artifact_gates(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-artifact-gates-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         environment = {**os.environ, "NO_COLOR": "1", "COLUMNS": "220",
                        "YVEX_MODELS_REGISTRY": str(root / "models.json")}
         fixture = ROOT / "tests/fixtures/gguf/valid-tokenizer-simple.gguf"
@@ -881,7 +881,7 @@ def artifact_gates(binary: Path, reference: Path | None) -> int:
 def tensor_mapping(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-mapping-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         environment = {**os.environ, "NO_COLOR": "1", "COLUMNS": "220"}
         template = ROOT / "tests/fixtures/gguf/valid-tokenizer-simple.gguf"
         for fixture, name, shape in (("known", "embed.weight", [8, 4]),
@@ -935,7 +935,7 @@ def tensor_mapping(binary: Path, reference: Path | None) -> int:
 def quant_documents(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-quant-documents-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         environment = {**os.environ, "NO_COLOR": "1", "COLUMNS": "220"}
         template = ROOT / "tests/fixtures/gguf/valid-tokenizer-simple.gguf"
         policy = root / "policy.json"
@@ -1048,7 +1048,7 @@ def quant_documents(binary: Path, reference: Path | None) -> int:
 def physical_variants(binary: Path, reference: Path | None) -> int:
     """Native source/plan admission refuses before publication; no model fixtures fabricated."""
     with tempfile.TemporaryDirectory(prefix="yvex-rust-variant-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         environment = {**os.environ, "NO_COLOR": "1", "COLUMNS": "180"}
         base = ["--target", "minimax-h3-fl2va", "--source", "/does/not/exist"]
         controls = [
@@ -1101,7 +1101,7 @@ def physical_variants(binary: Path, reference: Path | None) -> int:
 def provider_catalog(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-discovery-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         models = directory / "models"
         models.mkdir()
         registry = directory / "empty.json"
@@ -1183,7 +1183,7 @@ def model_distribution(binary: Path, reference: Path | None) -> int:
     """Storage/export use native receipts; unique or external bytes are never evicted."""
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-distribution-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         models = directory / "models"
         models.mkdir()
         registry = directory / "registry.json"
@@ -1293,7 +1293,7 @@ def model_distribution(binary: Path, reference: Path | None) -> int:
 def local_acquisition(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-acquisition-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         models = directory / "models"
         models.mkdir()
         input_file = directory / "tiny-unqualified.gguf"
@@ -1396,7 +1396,7 @@ def attention_operations(binary: Path, reference: Path | None) -> int:
     operations = [operation for operation in registry["operations"]
                   if operation["operation_id"].startswith("execute.graph.attention.")]
     with tempfile.TemporaryDirectory(prefix="yvex-rust-attention-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         models = directory / "models"
         models.mkdir()
         environment = {**os.environ, "YVEX_CONFIG_DIR": str(directory / "config"),
@@ -1513,7 +1513,7 @@ def benchmark_publication(binary: Path, reference: Path | None, fixture: Path) -
     """Real native storage/compatibility mechanics over explicit synthetic timing records."""
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-benchmark-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         environment = {**os.environ, "NO_COLOR": "1"}
         for name, mode in [("baseline", "same"), ("current", "same"), ("regressed", "regressed")]:
             result = subprocess.run([str(fixture), str(directory / name), mode],
@@ -1570,7 +1570,7 @@ def graph_pipeline_operations(binary: Path, reference: Path | None) -> int:
     """Native computational refusals must not become a legacy dispatcher or fixture success."""
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-pipeline-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         environment = {**os.environ, "YVEX_CONFIG_DIR": str(directory / "config"),
                        "YVEX_DATA_DIR": str(directory / "data"), "NO_COLOR": "1"}
         artifact = directory / "missing.gguf"
@@ -1638,7 +1638,7 @@ def graph_pipeline_operations(binary: Path, reference: Path | None) -> int:
 def generation_operations(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-generation-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         environment = {**os.environ, "YVEX_CONFIG_DIR": str(directory / "config"),
                        "YVEX_DATA_DIR": str(directory / "data"), "NO_COLOR": "1"}
         artifact = directory / "missing.gguf"
@@ -1698,7 +1698,7 @@ def native_pipeline(binary: Path, reference: Path | None, compiler: Path) -> int
     """Real compiled CPU computation, not a producer fixture response or model qualification."""
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-native-pipeline-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         environment = {**os.environ, "YVEX_CONFIG_DIR": str(directory / "config"),
                        "YVEX_DATA_DIR": str(directory / "data"), "NO_COLOR": "1"}
         artifact = directory / "tiny.gguf"
@@ -1800,7 +1800,7 @@ def runtime_inputs(binary: Path, reference: Path | None) -> int:
 def native_media(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-media-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         environment = {**os.environ, "NO_COLOR": "1", "YVEX_CONFIG_DIR": str(directory / "config"),
                        "YVEX_DATA_DIR": str(directory / "data")}
         video = directory / "video.f32"
@@ -1906,7 +1906,7 @@ def diagnostic_fixture(path: Path) -> None:
 def artifact_diagnostics(binary: Path) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-diagnostics-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         model = directory / "inventory.gguf"
         diagnostic_fixture(model)
         environment = {**os.environ, "NO_COLOR": "1", "COLUMNS": "180",
@@ -2023,7 +2023,7 @@ def artifact_diagnostics(binary: Path) -> int:
 def model_preparation(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-preparation-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         models = directory / "models"
         models.mkdir()
         registry = directory / "models.local.json"
@@ -2113,7 +2113,7 @@ def model_preparation(binary: Path, reference: Path | None) -> int:
 def artifact_preparation(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-artifact-preparation-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         source = root / "source"
         source.mkdir()
         payload = struct.pack("<32e", *(index / 16 for index in range(32)))
@@ -2191,7 +2191,7 @@ def artifact_preparation(binary: Path, reference: Path | None) -> int:
 def artifact_check(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-artifact-check-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         environment = {**os.environ, "NO_COLOR": "1", "COLUMNS": "220",
                        "YVEX_CONFIG_DIR": str(root / "config"), "YVEX_DATA_DIR": str(root / "data")}
         artifact = root / "slice.gguf"
@@ -2262,7 +2262,7 @@ def artifact_check(binary: Path, reference: Path | None) -> int:
 def target_catalog(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-targets-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         environment = {**os.environ, "NO_COLOR": "1", "YVEX_CONFIG_DIR": str(directory / "config"),
                        "YVEX_DATA_DIR": str(directory / "data"), "YVEX_MODELS_ROOT": str(directory / "models")}
         words = ["inspect", "target", "list", "--json"]
@@ -2303,7 +2303,7 @@ def target_catalog(binary: Path, reference: Path | None) -> int:
 def artifact_inventory(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-artifact-inventory-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         root = directory / "models"
         environment = {**os.environ, "NO_COLOR": "1", "COLUMNS": "80",
                        "YVEX_CONFIG_DIR": str(directory / "config"),
@@ -2381,7 +2381,7 @@ def artifact_inventory(binary: Path, reference: Path | None) -> int:
 def target_engineering(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-target-engineering-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         source = directory / "source"
         source.mkdir()
         header = {"model.embed_tokens.weight": {"dtype": "F16", "shape": [4], "data_offsets": [0, 8]},
@@ -2517,7 +2517,7 @@ def target_engineering(binary: Path, reference: Path | None) -> int:
 def remote_acquisition(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-remote-pull-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         environment = {**os.environ, "NO_COLOR": "1", "COLUMNS": "240",
                        "YVEX_CONFIG_DIR": str(directory / "config"),
                        "YVEX_HF_CLI": str(ROOT / "tests/fixtures/bin/fake-hf"),
@@ -2611,7 +2611,7 @@ def acquisition_loaded_image(binary: Path) -> int:
     if not Path("/proc/self/exe").exists():
         return 0  # Linux loaded-image guarantee; macOS is qualified separately.
     with tempfile.TemporaryDirectory(prefix="yvex-rust-loaded-image-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         executable = directory / "yvex"
         shutil.copy2(binary, executable)
         marker = directory / "metadata-entered"
@@ -2652,7 +2652,7 @@ def acquisition_loaded_image(binary: Path) -> int:
 def supervised_acquisition(binary: Path, reference: Path | None) -> int:
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-acquisition-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         environment = {**os.environ, "NO_COLOR": "1",
                        "YVEX_CONFIG_DIR": str(directory / "config"),
                        "YVEX_HF_CLI": str(ROOT / "tests/fixtures/bin/fake-hf"),
