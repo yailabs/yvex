@@ -253,6 +253,9 @@ for columns in (40, 80, 180):
         for styled in (False, True):
             master, slave = pty.openpty()
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 30, columns, 0, 0))
+            attributes = termios.tcgetattr(slave)
+            attributes[1] &= ~termios.OPOST
+            termios.tcsetattr(slave, termios.TCSANOW, attributes)
             env = dict(os.environ, TERM='xterm-256color')
             env.pop('COLUMNS', None)
             env.pop('NO_COLOR', None)

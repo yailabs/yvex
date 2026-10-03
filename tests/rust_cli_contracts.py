@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import struct
 import tempfile
+import termios
 import time
 
 
@@ -41,6 +42,9 @@ def normalized(value):
 def terminal_output(binary: Path, words: list[str], environment: dict[str, str]) -> str:
     """Capture bounded catalog output through a real terminal, without a host."""
     master, slave = pty.openpty()
+    attributes = termios.tcgetattr(slave)
+    attributes[1] &= ~termios.OPOST
+    termios.tcsetattr(slave, termios.TCSANOW, attributes)
     child = None
     try:
         child = subprocess.Popen([str(binary), *words], cwd=ROOT, env=environment,
@@ -1493,7 +1497,7 @@ def benchmark_publication(binary: Path, reference: Path | None, fixture: Path) -
     """Real native storage/compatibility mechanics over explicit synthetic timing records."""
     count = 0
     with tempfile.TemporaryDirectory(prefix="yvex-rust-benchmark-") as temporary:
-        directory = Path(temporary)
+        directory = Path(temporary).resolve()
         environment = {**os.environ, "NO_COLOR": "1"}
         for name, mode in [("baseline", "same"), ("current", "same"), ("regressed", "regressed")]:
             result = subprocess.run([str(fixture), str(directory / name), mode],
