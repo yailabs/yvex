@@ -62,6 +62,7 @@ def run(binary, fixture, output):
                             # Delay consumption, not terminal protocol expiry: a
                             # sender-side sleep cannot prove the host read Esc.
                             os.kill(chat.process.pid, signal.SIGSTOP)
+                        trace_before = len(chat.drive_trace.read_text().splitlines()) if chat.drive_trace.exists() else 0
                         dismiss = chat.send(b"\x1b")
                         if columns == 80:
                             chat.quiet()
@@ -78,6 +79,9 @@ def run(binary, fixture, output):
                         chat.wait(b"REASONING", start)
                         chat.wait(ENABLE, start)
                         assert b"unknown or incomplete terminal sequence" not in chat.data[dismiss:]
+                        if chat.drive_trace.exists():
+                            for line in chat.drive_trace.read_text().splitlines()[trace_before:]:
+                                print("completion drive: " + line, flush=True)
                         fcntl.ioctl(chat.slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 55, 0, 0))
                         started = time.monotonic()
                         start = len(chat.data)

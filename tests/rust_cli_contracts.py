@@ -12,6 +12,7 @@ import pty
 from pathlib import Path
 import re
 import runpy
+import select
 import shutil
 import subprocess
 import struct
@@ -41,25 +42,46 @@ def normalized(value):
 def terminal_output(binary: Path, words: list[str], environment: dict[str, str]) -> str:
     """Capture bounded catalog output through a real terminal, without a host."""
     master, slave = pty.openpty()
+    process = None
     try:
-        result = subprocess.run([str(binary), *words], cwd=ROOT, env=environment,
-                                stdout=slave, stderr=subprocess.PIPE, timeout=15)
-        assert result.returncode == 0, result.stderr
-        os.close(slave)
-        slave = -1
+        os.set_blocking(master, False)
+        process = subprocess.Popen([str(binary), *words], cwd=ROOT, env=environment,
+                                   stdout=slave, stderr=subprocess.PIPE)
         chunks = []
+        deadline = time.monotonic() + 15
         while True:
-            try:
-                chunk = os.read(master, 4096)
-            except OSError as error:
-                if error.errno == errno.EIO:
+            assert time.monotonic() < deadline, ("terminal output timeout", words)
+            while select.select([master], [], [], 0.02 if process.poll() is None else 0)[0]:
+                try:
+                    chunk = os.read(master, 4096)
+                except OSError as error:
+                    if error.errno in (errno.EIO, errno.EAGAIN):
+                        break
+                    raise
+                if not chunk:
                     break
-                raise
-            if not chunk:
+                chunks.append(chunk)
+            if process.poll() is not None:
+                # Drain before closing the caller-owned slave: Darwin may
+                # discard pending output when the last slave disappears.
+                while select.select([master], [], [], 0)[0]:
+                    try:
+                        chunk = os.read(master, 4096)
+                    except OSError as error:
+                        if error.errno in (errno.EIO, errno.EAGAIN):
+                            break
+                        raise
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
                 break
-            chunks.append(chunk)
+        _, error = process.communicate(timeout=1)
+        assert process.returncode == 0, error
         return b"".join(chunks).decode().replace("\r\n", "\n")
     finally:
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
         if slave >= 0:
             os.close(slave)
         os.close(master)
