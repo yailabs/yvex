@@ -2787,7 +2787,9 @@ def supervised_acquisition(binary: Path, reference: Path | None) -> int:
         assert removed["deleted_paths"] == 1 and not lock.exists() and partial.exists(), removed
         count += 3
         # Exact argv matching blocks cleanup while another owner uses this source.
-        owner = subprocess.Popen(["/bin/sh", "-c", "sleep 5", str(source)])
+        # Retain the shell and its exact source argument: some shells exec a
+        # sole final command, replacing argv with sleep's unrelated arguments.
+        owner = subprocess.Popen(["/bin/sh", "-c", "sleep 5; :", str(source)])
         try:
             time.sleep(0.05)
             checked("cleanup", root, "--failed-partials", "--yes", expected=1)
