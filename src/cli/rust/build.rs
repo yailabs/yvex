@@ -312,7 +312,9 @@ fn native_standard_headers(mut builder: bindgen::Builder) -> bindgen::Builder {
     {
         // Replace libclang's builtin tree rather than adding a duplicate stdint.h
         // whose include_next guard can hide the SDK's integer typedefs.
-        return builder.clang_arg("-resource-dir").clang_arg(directory.trim());
+        return builder
+            .clang_arg("-resource-dir")
+            .clang_arg(directory.trim());
     }
     let mut words = compiler.split_whitespace();
     if let Some(program) = words.next()

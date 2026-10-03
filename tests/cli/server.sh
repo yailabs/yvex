@@ -474,69 +474,70 @@ test ! -e "$SOCKET_PATH"
 # Real PTY geometry, truthful options and ANSI/plain equivalence. No model loads.
 python3 - "$YVEX_BIN" "$HOME_ROOT" "$SOCKET_ROOT" <<'PY'
 import fcntl, os, pathlib, pty, re, select, struct, subprocess, sys, termios, time
-import unicodedata
+import tempfile, unicodedata
 
 binary, home, runtime = sys.argv[1:]
-runtime = pathlib.Path(runtime) / 'é界é界'
-runtime.mkdir(mode=0o700)
-env = dict(os.environ, HOME=home, XDG_RUNTIME_DIR=str(runtime), TERM='xterm-256color')
-env.pop('COLUMNS', None)
-env['NO_COLOR'] = '1'
-ready = b'Ctrl-C to stop'
-ansi = re.compile(r'\x1b\[[0-9;]*m')
-captures = {}
+with tempfile.TemporaryDirectory(prefix='yvx-', dir='/tmp') as terminal_runtime:
+    runtime = pathlib.Path(terminal_runtime).resolve() / 'é界é界'
+    runtime.mkdir(mode=0o700)
+    env = dict(os.environ, HOME=home, XDG_RUNTIME_DIR=str(runtime), TERM='xterm-256color')
+    env.pop('COLUMNS', None)
+    env['NO_COLOR'] = '1'
+    ready = b'Ctrl-C to stop'
+    ansi = re.compile(r'\x1b\[[0-9;]*m')
+    captures = {}
 
-for width, colored in [(40, False), (60, False), (76, False), (80, False),
-                       (132, False), (160, False), (80, True)]:
-    trial = dict(env)
-    if colored:
-        trial.pop('NO_COLOR')
-    master, slave = pty.openpty()
-    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 30, width, 0, 0))
-    proc = None
-    try:
-        proc = subprocess.Popen([binary, 'serve', '--openai', 'off', '--workers', '2',
-                                 '--max-engines', '2'], env=trial, stdin=subprocess.DEVNULL,
-                                stdout=slave, stderr=slave, start_new_session=True)
-        data = bytearray()
-        deadline = time.monotonic() + 10
-        while ready not in data and time.monotonic() < deadline and proc.poll() is None:
-            if select.select([master], [], [], 0.1)[0]:
-                data.extend(os.read(master, 65536))
-        assert ready in data, (width, 'host readiness', bytes(data))
-        subprocess.run([binary, 'host', 'stop'], env=trial, check=True, timeout=5,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        assert proc.wait(timeout=5) == 0
-        raw = bytes(data).decode('utf-8')
-        assert ('\x1b[' in raw) == colored
-        text = ansi.sub('', raw).replace('\r\n', '\n')
-        banner = text.split('Ctrl-C to stop', 1)[0]
-        lines = [line for line in banner.splitlines() if line.strip()]
-        assert 3 <= len(lines) <= 18, lines
-        for line in lines:
-            cells = sum(0 if unicodedata.combining(c) else
-                        2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1
-                        for c in line)
-            assert cells <= width, (width, cells, line)
-        for fact in ('YVEX 0.1.0', 'HOST ready · 2 workers · capacity 2',
-                     'protocol 24', 'OpenAI disabled'):
-            assert re.sub(r'\s+', '', fact) in re.sub(r'\s+', '', banner), (width, fact, banner)
-        expected = str(runtime / 'yvex/yvexd.sock')
-        assert expected in re.sub(r'\s+', '', banner), (expected, banner)
-        assert '...' not in banner and '█' not in banner
-        if not colored:
-            captures[width] = banner
-        else:
-            assert banner == captures[width]
-        assert not (runtime / 'yvex/yvexd.sock').exists()
-        print(f'banner PTY: {width} columns, color={colored}, '
-              f'{len(lines)} content rows, width/identity/cleanup PASS')
-    finally:
-        if proc is not None and proc.poll() is None:
-            proc.terminate()
-            proc.wait(timeout=5)
-        os.close(master)
-        os.close(slave)
+    for width, colored in [(40, False), (60, False), (76, False), (80, False),
+                           (132, False), (160, False), (80, True)]:
+        trial = dict(env)
+        if colored:
+            trial.pop('NO_COLOR')
+        master, slave = pty.openpty()
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 30, width, 0, 0))
+        proc = None
+        try:
+            proc = subprocess.Popen([binary, 'serve', '--openai', 'off', '--workers', '2',
+                                     '--max-engines', '2'], env=trial, stdin=subprocess.DEVNULL,
+                                    stdout=slave, stderr=slave, start_new_session=True)
+            data = bytearray()
+            deadline = time.monotonic() + 10
+            while ready not in data and time.monotonic() < deadline and proc.poll() is None:
+                if select.select([master], [], [], 0.1)[0]:
+                    data.extend(os.read(master, 65536))
+            assert ready in data, (width, 'host readiness', bytes(data))
+            subprocess.run([binary, 'host', 'stop'], env=trial, check=True, timeout=5,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            assert proc.wait(timeout=5) == 0
+            raw = bytes(data).decode('utf-8')
+            assert ('\x1b[' in raw) == colored
+            text = ansi.sub('', raw).replace('\r\n', '\n')
+            banner = text.split('Ctrl-C to stop', 1)[0]
+            lines = [line for line in banner.splitlines() if line.strip()]
+            assert 3 <= len(lines) <= 18, lines
+            for line in lines:
+                cells = sum(0 if unicodedata.combining(c) else
+                            2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1
+                            for c in line)
+                assert cells <= width, (width, cells, line)
+            for fact in ('YVEX 0.1.0', 'HOST ready · 2 workers · capacity 2',
+                         'protocol 24', 'OpenAI disabled'):
+                assert re.sub(r'\s+', '', fact) in re.sub(r'\s+', '', banner), (width, fact, banner)
+            expected = str(runtime / 'yvex/yvexd.sock')
+            assert expected in re.sub(r'\s+', '', banner), (expected, banner)
+            assert '...' not in banner and '█' not in banner
+            if not colored:
+                captures[width] = banner
+            else:
+                assert banner == captures[width]
+            assert not (runtime / 'yvex/yvexd.sock').exists()
+            print(f'banner PTY: {width} columns, color={colored}, '
+                  f'{len(lines)} content rows, width/identity/cleanup PASS')
+        finally:
+            if proc is not None and proc.poll() is None:
+                proc.terminate()
+                proc.wait(timeout=5)
+            os.close(master)
+            os.close(slave)
 PY
 
 printf 'cli persistent server lifecycle: ok\n'

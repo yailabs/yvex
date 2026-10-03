@@ -70,13 +70,22 @@ class BuildContract(unittest.TestCase):
 
     def test_platform_thread_link_defaults_preserve_overrides(self):
         projection = "--eval=print-link-defaults:;@printf '%s\\n' '$(LDLIBS)'"
-        darwin = self.make("YVEX_HOST_OS=Darwin", projection, "print-link-defaults")
+        darwin = self.make("YVEX_HOST_OS=Darwin", "YVEX_HOST_ARCH=x86_64",
+                           projection, "print-link-defaults")
         linux = self.make("YVEX_HOST_OS=Linux", projection, "print-link-defaults")
         self.assertEqual(darwin.splitlines()[-1], "-ldl -lm -lz")
         self.assertEqual(linux.splitlines()[-1], "-ldl -pthread -lm -lz")
-        override = self.make("YVEX_HOST_OS=Darwin", "LDLIBS=-lconsumer",
+        override = self.make("YVEX_HOST_OS=Darwin", "YVEX_HOST_ARCH=x86_64", "LDLIBS=-lconsumer",
                              projection, "print-link-defaults")
         self.assertEqual(override.splitlines()[-1], "-lconsumer")
+        metal = self.make("YVEX_HOST_OS=Darwin", "YVEX_HOST_ARCH=arm64",
+                          projection, "print-link-defaults")
+        self.assertEqual(metal.splitlines()[-1],
+                         "-ldl -lm -lz -framework Foundation -framework Metal")
+        metal_override = self.make("YVEX_HOST_OS=Darwin", "YVEX_HOST_ARCH=arm64",
+                                   "LDLIBS=-lconsumer", projection, "print-link-defaults")
+        self.assertEqual(metal_override.splitlines()[-1],
+                         "-lconsumer -framework Foundation -framework Metal")
 
     def test_database_inspection_does_not_build_the_default_product(self):
         output = self.make("-pn", "print-build-inputs", "CARGO=false", "RUSTC=false",
