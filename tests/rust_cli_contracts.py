@@ -1694,6 +1694,39 @@ def computational_semantics(value):
     return value
 
 
+def native_pipeline_capacity(environment: dict[str, str]) -> dict[str, str]:
+    """Declare fixture capacity only on explicit hosted opt-in, never host admission."""
+    result = environment.copy()
+    if result.get("YVEX_TEST_FIXTURE_CAPACITY") != "1":
+        return result
+    variables = ("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES",
+                 "YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES",
+                 "YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES")
+    assert not any(name in result for name in variables), (
+        "native pipeline fixture cannot replace caller-injected capacity facts")
+    result[variables[0]] = result[variables[1]] = "137438953472"
+    return result
+
+
+def native_pipeline_capacity_controls() -> None:
+    ordinary = {"NO_COLOR": "1", "YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES": "1"}
+    assert native_pipeline_capacity(ordinary) == ordinary
+    hosted = {"NO_COLOR": "1", "YVEX_TEST_FIXTURE_CAPACITY": "1"}
+    declared = native_pipeline_capacity(hosted)
+    assert declared["YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES"] == "137438953472"
+    assert declared["YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES"] == "137438953472"
+    assert "YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES" not in hosted
+    for name in ("YVEX_TEST_RUNTIME_TOTAL_MEMORY_BYTES",
+                 "YVEX_TEST_RUNTIME_AVAILABLE_MEMORY_BYTES",
+                 "YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES"):
+        try:
+            native_pipeline_capacity({**hosted, name: "1"})
+        except AssertionError as error:
+            assert "cannot replace" in str(error)
+        else:
+            raise AssertionError(f"declared fixture capacity overwrote {name}")
+
+
 def native_pipeline(binary: Path, reference: Path | None, compiler: Path) -> int:
     """Real compiled CPU computation, not a producer fixture response or model qualification."""
     count = 0
@@ -1701,13 +1734,19 @@ def native_pipeline(binary: Path, reference: Path | None, compiler: Path) -> int
         directory = Path(temporary).resolve()
         environment = {**os.environ, "YVEX_CONFIG_DIR": str(directory / "config"),
                        "YVEX_DATA_DIR": str(directory / "data"), "NO_COLOR": "1"}
+        native_pipeline_capacity_controls()
+        environment = native_pipeline_capacity(environment)
+        if environment.get("YVEX_TEST_FIXTURE_CAPACITY") == "1":
+            print("native pipeline fixture: declared 128 GiB admission capacity; not host memory evidence",
+                  flush=True)
         artifact = directory / "tiny.gguf"
         (directory / "bindings").mkdir()
         subprocess.run(["python3", str(ROOT / "tests/integration/tiny_model.py"), str(artifact)],
                        check=True, capture_output=True, text=True, timeout=15)
         compiled = subprocess.run([str(compiler), str(artifact), str(directory / "bindings"),
-                                   str(directory / "input")], check=True, capture_output=True,
+                                   str(directory / "input")], capture_output=True,
                                   text=True, env=environment, timeout=15)
+        assert compiled.returncode == 0, ("native fixture compilation failed", compiled)
         binding = dict(line.split("=", 1) for line in compiled.stdout.splitlines())["binding_path"]
         common = ["--target", "tiny-executable", "--artifact", str(artifact), "--runtime-binding", binding,
                   "--backend", "cpu"]

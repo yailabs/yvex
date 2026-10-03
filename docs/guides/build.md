@@ -105,7 +105,8 @@ weakening byte authentication.
 
 The `native` lane uses actual host memory by default and retains the runtime's
 minimum system reserve. The hosted macOS job explicitly sets
-`YVEX_TEST_FIXTURE_CAPACITY=1` for two tiny model-admission fixtures; their
+`YVEX_TEST_FIXTURE_CAPACITY=1` for the binding, tiny-vertical and Rust native
+pipeline model-admission fixtures; their
 declared envelope is reported in the test logs. That CI mode qualifies fixture
 execution, not available host capacity. Keep it unset for local model-admission
 qualification; the evaluation report records the distinction.

@@ -98,6 +98,12 @@ One-shot terminal captures drain while the child runs and before releasing the
 last slave, rather than treating teardown as an output-delivery boundary.
 Temporary fixture roots are canonicalized before sealed benchmark operations;
 Darwin's `/var` alias cannot substitute for the canonical asset-path contract.
+The Rust native pipeline fixture honors the existing hosted capacity opt-in
+inside its isolated children, just like the binding and tiny-vertical fixtures.
+It declares 128 GiB, refuses any caller-injected capacity override, retains the
+explicit low-budget refusal/recovery controls and does not establish host memory
+admission. Ordinary local execution still uses actual capacity. Compilation
+failures retain captured diagnostics rather than hiding stderr in an exception.
 
 Actual hosted macOS Rust qualification remains a separate closure gate. The running public
 DeepSeek producer remains the previously qualified phase-geometry executable;
