@@ -103,6 +103,12 @@ indexer. No external REPLAI pin or public wire layout changes are required.
 Generated FFI uses the selected Clang resource directory rather than layering
 duplicate builtin standard headers over the SDK. Native framework flags are
 passed as Cargo framework dependencies; they are absent on Linux.
+For instrumented Darwin archives, Cargo explicitly links the selected native
+compiler's sanitizer runtime and its loader path; Rust's `-nodefaultlibs` would
+otherwise suppress it. Missing requested runtimes fail the build. The complete
+ASan/LeakSanitizer recipe still requires a compiler supporting LeakSanitizer;
+Apple Clang arm64 does not supply that qualification. Standalone UBSan remains
+a separate supported build path, not a substitute claim for leak detection.
 
 [Native qualification and remaining limits](../evaluation/macos-native.md)
 cover CPU fixtures, Unix peers, immutable state and real terminal lifecycle.

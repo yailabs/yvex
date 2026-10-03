@@ -89,6 +89,7 @@ fn native_link_inputs(build: &std::path::Path) {
         });
         let flags =
             shlex::split(&flags).expect("native link flags must have balanced shell quoting");
+        darwin_sanitizer_inputs(&flags);
         // rustc passes -nodefaultlibs. GNU's driver consequently omits its
         // automatic sanitizer runtimes even when -fsanitize reaches the link.
         // Keep them explicit and before the ordinary native/system libraries.
@@ -129,6 +130,52 @@ fn native_link_inputs(build: &std::path::Path) {
                 println!("cargo:rustc-link-arg={flag}");
             }
         }
+    }
+}
+
+fn darwin_sanitizer_inputs(flags: &[String]) {
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+        return;
+    }
+    let sanitizers = flags
+        .iter()
+        .filter_map(|flag| flag.strip_prefix("-fsanitize="))
+        .flat_map(|value| value.split(','))
+        .collect::<std::collections::BTreeSet<_>>();
+    for (sanitizer, runtime) in [
+        ("address", "asan"),
+        ("undefined", "ubsan"),
+        ("thread", "tsan"),
+    ] {
+        if !sanitizers.contains(sanitizer) {
+            continue;
+        }
+        // rustc's -nodefaultlibs also suppresses Apple's compiler-rt inputs.
+        // Ask the selected native compiler for its runtime, not an SDK guess.
+        println!("cargo:rerun-if-env-changed=CC");
+        let compiler = env::var("CC").unwrap_or_else(|_| "cc".into());
+        let words = shlex::split(&compiler).expect("native compiler must have balanced quoting");
+        let (program, arguments) = words.split_first().expect("native compiler is required");
+        let library = format!("libclang_rt.{runtime}_osx_dynamic.dylib");
+        let output = Command::new(program)
+            .args(arguments)
+            .arg(format!("-print-file-name={library}"))
+            .output()
+            .expect("query native sanitizer runtime");
+        assert!(
+            output.status.success(),
+            "native sanitizer runtime query failed"
+        );
+        let path = PathBuf::from(String::from_utf8(output.stdout).unwrap().trim());
+        assert!(
+            path.is_file(),
+            "requested native sanitizer runtime is unavailable"
+        );
+        println!("cargo:rustc-link-arg={}", path.display());
+        println!(
+            "cargo:rustc-link-arg=-Wl,-rpath,{}",
+            path.parent().unwrap().display()
+        );
     }
 }
 
