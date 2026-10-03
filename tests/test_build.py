@@ -66,6 +66,16 @@ class BuildContract(unittest.TestCase):
         output = self.make(f"LIBYVEX={archive}", f"OBJ_DIR={objects}", "-s", "print-archive-layout")
         self.assertEqual(output.splitlines()[-2:], [str(archive), str(objects) + "/"])
 
+    def test_platform_thread_link_defaults_preserve_overrides(self):
+        projection = "--eval=print-link-defaults:;@printf '%s\\n' '$(LDLIBS)'"
+        darwin = self.make("YVEX_HOST_OS=Darwin", projection, "print-link-defaults")
+        linux = self.make("YVEX_HOST_OS=Linux", projection, "print-link-defaults")
+        self.assertEqual(darwin.splitlines()[-1], "-ldl -lm -lz")
+        self.assertEqual(linux.splitlines()[-1], "-ldl -pthread -lm -lz")
+        override = self.make("YVEX_HOST_OS=Darwin", "LDLIBS=-lconsumer",
+                             projection, "print-link-defaults")
+        self.assertEqual(override.splitlines()[-1], "-lconsumer")
+
     def test_library_remains_independent_of_rust_and_terminal_source(self):
         _, target = self.fixture()
         archive = self.build / "lib/libyvex.a"

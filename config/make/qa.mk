@@ -363,7 +363,7 @@ test-packaging: package
 	@test ! -e '$(BUILD_DIR)/package/developer'
 
 test-product-topology: all package tests/product_topology.sh
-	YVEX_BIN='$(YVEX_BIN)' BUILD_DIR='$(BUILD_DIR)' \
+	+YVEX_BIN='$(YVEX_BIN)' BUILD_DIR='$(BUILD_DIR)' \
 		sh tests/product_topology.sh
 
 test-runtime-client-refoundation-live: client $(NATIVE_TURN_TEST) \

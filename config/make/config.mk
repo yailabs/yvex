@@ -63,7 +63,12 @@ CFLAGS ?= -O3 -std=c11 -Wall -Wextra -pedantic -Wstrict-prototypes \
 	-Wundef -Wvla -pthread
 DEPFLAGS ?= -MMD -MP
 LDFLAGS ?=
+ifeq ($(YVEX_HOST_OS),Darwin)
+# libSystem provides pthreads; clang's -pthread has no link-time effect here.
+LDLIBS ?= -ldl -lm -lz
+else
 LDLIBS ?= -ldl -pthread -lm -lz
+endif
 TEST_CPPFLAGS := $(CPPFLAGS)
 
 BUILD_DIR ?= build
