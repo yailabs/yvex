@@ -23,9 +23,9 @@ human_contains() {
     python3 tests/support/human_field.py "$1" "$2" || fail "$1 missing: $2"
 }
 
-make -pn YVEX_CUDA_ARCH=auto CUDA_AUTO_ARCH=sm_121 >"$OUT_DIR/make-auto.out"
+make -pn print-build-inputs YVEX_CUDA_ARCH=auto CUDA_AUTO_ARCH=sm_121 >"$OUT_DIR/make-auto.out"
 contains "$OUT_DIR/make-auto.out" "CUDA_EFFECTIVE_ARCH := sm_121"
-make -pn YVEX_CUDA_ARCH=sm_90 CUDA_AUTO_ARCH=sm_121 >"$OUT_DIR/make-explicit.out"
+make -pn print-build-inputs YVEX_CUDA_ARCH=sm_90 CUDA_AUTO_ARCH=sm_121 >"$OUT_DIR/make-explicit.out"
 contains "$OUT_DIR/make-explicit.out" "CUDA_EFFECTIVE_ARCH := sm_90"
 
 if grep -RIn -E 'Fallback embedded PTX|\.visible[[:space:]]+\.entry' \

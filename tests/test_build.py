@@ -76,6 +76,13 @@ class BuildContract(unittest.TestCase):
                              projection, "print-link-defaults")
         self.assertEqual(override.splitlines()[-1], "-lconsumer")
 
+    def test_database_inspection_does_not_build_the_default_product(self):
+        output = self.make("-pn", "print-build-inputs", "CARGO=false", "RUSTC=false",
+                           "YVEX_CUDA_ARCH=auto", "CUDA_AUTO_ARCH=sm_121")
+        self.assertIn("CUDA_EFFECTIVE_ARCH := sm_121", output)
+        self.assertFalse((self.build / "lib/libyvex.a").exists())
+        self.assertFalse((self.build / "cargo").exists())
+
     def test_library_remains_independent_of_rust_and_terminal_source(self):
         _, target = self.fixture()
         archive = self.build / "lib/libyvex.a"

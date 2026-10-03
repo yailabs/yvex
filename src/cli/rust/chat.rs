@@ -520,6 +520,7 @@ struct Interrupts {
     dispatched: AtomicBool,
     count: AtomicUsize,
     terminate: AtomicBool,
+    worker: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
 impl Interrupts {
@@ -550,22 +551,58 @@ impl Interrupts {
     }
 
     fn cancel(&self, binding: &Binding) {
+        let Ok(mut worker) = self.worker.lock() else {
+            eprintln!("yvex: cancellation unconfirmed: worker ownership poisoned");
+            return;
+        };
         if !self.claim() {
             return;
         }
-        let outcome = (|| -> Result<()> {
-            let mut connection = Client::connect(None)?;
-            connection.timeout(2000)?;
-            let request = binding.request(
-                &mut connection,
-                raw::yvex_client_operation_YVEX_CLIENT_OP_GENERATION_CANCEL,
-            )?;
-            connection.send(&request)?;
-            client::response(&mut connection, &request)?;
-            Ok(())
-        })();
-        if let Err(error) = outcome {
-            eprintln!("yvex: cancellation unconfirmed: {error}");
+        let binding = binding.clone();
+        // A pending interrupt is dispatched after admission, but its control
+        // connection must never block the generation response's only reader.
+        // Native socket backpressure can otherwise deadlock both connections.
+        match std::thread::Builder::new()
+            .name("yvex-chat-cancel".into())
+            .spawn(move || {
+                let outcome = (|| -> Result<()> {
+                    let mut connection = Client::connect(None)?;
+                    connection.timeout(2000)?;
+                    let request = binding.request(
+                        &mut connection,
+                        raw::yvex_client_operation_YVEX_CLIENT_OP_GENERATION_CANCEL,
+                    )?;
+                    connection.send(&request)?;
+                    client::response(&mut connection, &request)?;
+                    Ok(())
+                })();
+                if let Err(error) = outcome {
+                    eprintln!("yvex: cancellation unconfirmed: {error}");
+                }
+            }) {
+            Ok(handle) => *worker = Some(handle),
+            Err(error) => eprintln!("yvex: cancellation unconfirmed: {error}"),
+        }
+    }
+
+    fn finish(&self) -> Result<()> {
+        let worker = {
+            let mut worker = self.worker.lock().map_err(|_| "cancel worker poisoned")?;
+            self.active.store(false, Ordering::Release);
+            worker.take()
+        };
+        // No cancellation from this turn may survive into the next prompt.
+        if let Some(worker) = worker {
+            worker.join().map_err(|_| "cancel worker panicked")?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for Interrupts {
+    fn drop(&mut self) {
+        if let Err(error) = self.finish() {
+            eprintln!("yvex: cancellation cleanup unconfirmed: {error}");
         }
     }
 }
@@ -909,7 +946,7 @@ pub(crate) fn run(
                 interrupts.cancel(&session.binding);
             },
         );
-        interrupts.active.store(false, Ordering::Release);
+        interrupts.finish()?;
         notifications.take()?;
         finish_delivery(outcome, &mut attachments, &mut resynchronize, width, styled)?;
     }
@@ -923,6 +960,23 @@ pub(crate) fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn turn_finish_retires_its_cancel_worker_before_another_turn() {
+        let state = Interrupts::default();
+        state.begin();
+        let completed = Arc::new(AtomicBool::new(false));
+        let observed = completed.clone();
+        *state.worker.lock().unwrap() = Some(std::thread::spawn(move || {
+            observed.store(true, Ordering::Release);
+        }));
+        state.finish().unwrap();
+        assert!(completed.load(Ordering::Acquire));
+        assert!(state.worker.lock().unwrap().is_none());
+        assert!(!state.active.load(Ordering::Acquire));
+        state.begin();
+        assert_eq!(state.count.load(Ordering::Acquire), 0);
+        assert!(!state.dispatched.load(Ordering::Acquire));
+    }
     #[test]
     fn early_cancel_is_pending_until_admission_and_dispatches_once() {
         let state = Interrupts::default();

@@ -91,6 +91,8 @@ def run(binary, fixture, output):
                         chat.send(b"\x03")
                         chat.wait(ENABLE, start)
                         assert b"cancellation admitted" in transcript(chat.data[start:])
+                        assert log_path.read_text().count(
+                            f"generation.cancel {chat.name}\n") == 4, "cancel dispatch was missing or repeated"
                         start = chat.send(b"NATIVE_LOST_REPLY\r")
                         chat.wait(ENABLE, start)
                         assert b"DELIVERY INDETERMINATE" in transcript(chat.data[start:])

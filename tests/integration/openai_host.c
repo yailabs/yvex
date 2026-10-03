@@ -647,7 +647,16 @@ static int send_generation(int fd, const yvex_client_request *request,
     }
     message_base(&message, YVEX_CLIENT_MESSAGE_TURN_STARTED, request);
     if (!provider && native_prompt_contains(request, "WAIT_EARLY_CANCEL")) {
+        /* Admission may be followed by more progress than a native Unix socket
+         * can buffer. Cancellation must not block the response's only reader. */
+        const int send_buffer = 4096;
         const struct timespec delay = {0, 500000000L};
+        if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &send_buffer,
+                       sizeof(send_buffer)) != 0) {
+            yvex_error_set(err, YVEX_ERR_IO, "test.openai-host.cancel",
+                           "cannot bound early-cancellation response buffer");
+            return YVEX_ERR_IO;
+        }
         (void)nanosleep(&delay, NULL);
     }
     rc = yvex_server_protocol_send(fd, &message, err);

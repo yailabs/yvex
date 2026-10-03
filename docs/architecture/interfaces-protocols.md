@@ -153,6 +153,13 @@ The client callback decides which generation to cancel; terminal capture never
 owns engine/session meaning. Output-state admission and restoration failures
 stop chat instead of continuing with uncertain terminal state.
 
+An interrupt before `TURN_STARTED` retains pending intent. Once admitted, one
+scoped cancellation worker uses the existing typed C client while the response
+reader continues draining progress. The reader never synchronously waits on
+that second connection: bounded Unix-socket backpressure must not deadlock the
+two streams. The worker is joined before another prompt/turn can begin, and
+unconfirmed cancellation is not presented as an admitted outcome.
+
 This is an interface portability boundary, not automatic cross-platform
 qualification. Retained [macOS native foundation](../evaluation/macos-native.md)
 evidence qualifies its exact prior C-shell/CPU/terminal snapshot. The Rust shell
