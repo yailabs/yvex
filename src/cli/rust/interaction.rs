@@ -111,11 +111,7 @@ impl Notifications {
             #[cfg(debug_assertions)]
             trace_drive(
                 "input",
-                format!(
-                    "event={:?} next={:?}",
-                    outcome.as_ref().map(std::mem::discriminant),
-                    interaction.wait_interest()?
-                ),
+                format!("event={:?}", outcome.as_ref().map(std::mem::discriminant)),
             );
             Ok(outcome)
         } else if let Some(due) = deadline.filter(|d| Instant::now() >= d.at()) {
@@ -123,11 +119,7 @@ impl Notifications {
             #[cfg(debug_assertions)]
             trace_drive(
                 "deadline",
-                format!(
-                    "event={:?} next={:?}",
-                    outcome.as_ref().map(std::mem::discriminant),
-                    interaction.wait_interest()?
-                ),
+                format!("event={:?}", outcome.as_ref().map(std::mem::discriminant)),
             );
             Ok(outcome)
         } else {
