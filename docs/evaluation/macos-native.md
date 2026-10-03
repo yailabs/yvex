@@ -123,6 +123,37 @@ exact workflow source snapshot. A hosted pass with this declared envelope
 qualifies native fixture execution and lifecycle; it does not qualify the
 runner's actual memory admission or promise a usable 8B/14B model.
 
+## Rust product-shell qualification (2026-10-03)
+
+The independently selected Rust migration is qualified on clean main
+`25710bd4df7d082a951cbb64dec9f1d74cc6e2a9`, tree
+`494a56a6cefb4c424612067601d8252ac379ad12`. The
+[hosted run](https://github.com/yailabs/yvex/actions/runs/37132550648) passes
+all 14 native assertions on macOS 15.7.9 arm64, Apple Clang 17, Python 3.14.6
+and Rust 1.98.1. Receipt
+`37b57ec55957c9e72b6c9d4a1438c940f122fc4fce1eee5ebb0f92669aea5f41`
+records valid clean start/finish stability and native build identity
+`323cd4746601d535c2d103121b4ef1b42388ecbaf87d421e4b5ad8737fc2beee`.
+The subsequent ownership, layout, structure, build and single-product packaging
+steps also pass; a native-lane pass alone is not substituted for the whole job.
+
+This proves the actual Rust consumer, not automatic inheritance from the
+historical C-shell snapshot above. Native REPLAI chat passes at 40/80/180 columns,
+including rich completion, driven resize, exact reasoning/final channels,
+early/admitted cancellation, lost-response/no-retry, recovery and restored
+termios. Rust fmt/clippy, 51 unit and five structural tests pass. The isolated
+native pipeline executes real tiny CPU computation and retains low-budget
+refusal/recovery. The hosted capacity opt-in applies only to binding,
+tiny-vertical and native-pipeline fixture children; it does not establish the
+runner's actual model-admission capacity. The independent C ABI and private wire
+v24 remain unchanged. Linux hermetic qualification of this identical source is
+120 PASS plus real-chat Valgrind, with valid stability.
+
+No Metal, full conversation checkpoint, YAI/SDK/Studio chain, release performance
+or customer-distribution claim follows. The exact Rust source/package and
+terminal observations remain under
+[retained observations](retained-observations.md#rust-product-shell-qualification-2026-10-03).
+
 ## Remaining problems and next boundaries
 
 | Boundary | Current problem / required evidence |

@@ -161,11 +161,11 @@ two streams. The worker is joined before another prompt/turn can begin, and
 unconfirmed cancellation is not presented as an admitted outcome.
 
 This is an interface portability boundary, not automatic cross-platform
-qualification. Retained [macOS native foundation](../evaluation/macos-native.md)
-evidence qualifies its exact prior C-shell/CPU/terminal snapshot. The Rust shell
-has Linux PTY/software evidence; actual macOS requalification remains a gate of
-the migration Task. Neither that foundation nor CLI portability qualifies Metal
-or CUDA/model execution. A signal or console event is not a request type.
+qualification. [Native qualification](../evaluation/macos-native.md#rust-product-shell-qualification-2026-10-03)
+records actual macOS Rust/CPU/PTY execution separately from the historical
+C-shell foundation and Linux hermetic evidence. Neither native interface
+qualification nor CLI portability qualifies Metal or CUDA/model execution.
+A signal or console event is not a request type.
 
 [Real chat PTY tests](../../tests/repl_pty.sh), their
 [consumer assertions](../../tests/replai_consumer.py), and the

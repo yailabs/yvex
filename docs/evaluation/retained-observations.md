@@ -109,7 +109,36 @@ the exact source argument. Shell tail-exec optimization is not evidence of an
 active argument owner; cleanup must refuse while the actual owner remains live
 and preserve both source and partial state.
 
-Actual hosted macOS Rust qualification remains a separate closure gate. The running public
+Clean published `25710bd4df7d082a951cbb64dec9f1d74cc6e2a9`, tree
+`494a56a6cefb4c424612067601d8252ac379ad12`, passes the complete
+[hosted Linux/macOS run](https://github.com/yailabs/yvex/actions/runs/37132550648).
+Linux passes 120 hermetic assertions under receipt
+`9f2bf10f520e1ee7734102d32d0caef682616720f80db2ae50cf0d1004ea06cc`,
+plus the unsuppressed real-chat Valgrind step. macOS passes 14 native assertions
+under receipt
+`37b57ec55957c9e72b6c9d4a1438c940f122fc4fce1eee5ebb0f92669aea5f41`,
+then ownership/build and single-product packaging checks. Both receipts record
+clean valid source stability. [Native platform evidence](macos-native.md#rust-product-shell-qualification-2026-10-03)
+separates declared fixture capacity from actual-memory admission and the prior
+C-shell foundation. The clean local `441a9542` repair campaign also passes all
+117 mapped assertions in receipt
+`82134e658c2bb336a0945825cf5285fb66bfe17fd2ccf0f2d487e69a77c049e2`;
+the hosted-capacity fixture change passes all 115 mapped assertions in clean
+`ad155496` receipt
+`fb4003031323218bf28e06da9e66f227c7cfcb3819c4b7da68e4746951c33689`.
+These software claims do not remove unrelated producer/release asset gates.
+
+The final clean source `25710bd4` also passes all 123 obligations selected by
+`python3 tools/qa.py run --changed 61706207e8b96909d73ebc4a7f42bfb46716ac6e`:
+zero FAIL/SKIP/BLOCKED/ERROR, including quantization and runtime
+ASan/LeakSanitizer/UBSan, the three GGUF numerical gates and official encoding
+vectors. The invocation supplies the exact admitted artifact/binding and pinned
+source plus `tokenizers` 0.20.3, rather than treating unconfigured assets as
+absent capabilities. The generated source-stability receipt remains under
+`build/qa/evidence/`; this shell-only selection excludes the separately
+published prefill implementation and its full external producer gates.
+
+The running public
 DeepSeek producer remains the previously qualified phase-geometry executable;
 interface tests do not replace it. The compiled software package retains
 `distribution.legal.v1`'s UNQUALIFIED marker: Cargo's exact shipped components
@@ -219,7 +248,8 @@ oracle for the prefill optimization.
 
 This is not 14K/32K latency qualification, sustained decode, a release/SLA,
 official full-model numerical conformance or YAI product-chain closure. Focused
-publication remains pending. The distinct legacy bootstrap `cuda.native` asset
+producer implementation is published in `61706207e8b96909d73ebc4a7f42bfb46716ac6e`.
+The distinct legacy bootstrap `cuda.native` asset
 blocker and retained broader numerical gates remain explicit; this pass does
 not erase earlier pipeline numerical failures or turn them into missing assets.
 Raw synthetic evidence stays outside Git at

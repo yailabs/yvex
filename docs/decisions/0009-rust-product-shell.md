@@ -63,9 +63,10 @@ Process-scoped signal notifications have joined workers and bounded wake state;
 REPLAI remains the sole terminal capture/restoration owner. This does not export
 the retired C terminal-scope API or promise an embeddable Rust signal API.
 
-Linux software/PTY evidence and actual macOS qualification remain separate
-gates in the selected [Task](../project-control/TASKS.md). Retained native macOS
-foundation evidence does not qualify this new shell automatically. A build or
+Linux software/PTY evidence and actual macOS qualification are separately earned
+gates in the selected [Task](../project-control/TASKS.md), with exact receipts in
+[Evaluation](../evaluation/retained-observations.md#rust-product-shell-qualification-2026-10-03).
+Retained native macOS foundation evidence does not qualify this new shell automatically. A build or
 source-package pass does not qualify model execution or customer distribution.
 Cargo inputs join the fail-closed legal policy; candidates remain UNQUALIFIED
 until an exact compiled package's component/notices closure is reviewed.
