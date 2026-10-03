@@ -290,7 +290,7 @@ OPENAI_ADAPTER_HOST_OBJ := $(OBJ_DIR)/tests/integration/openai_adapter.o
 TINY_VERTICAL_COMPILER_OBJ := $(OBJ_DIR)/tests/integration/tiny_compile.o
 NATIVE_TURN_TEST_OBJ := $(OBJ_DIR)/tests/integration/native_turn.o
 RUST_BENCHMARK_FIXTURE := $(TEST_DIR)/rust_benchmark_fixture
-RUST_BENCHMARK_FIXTURE_OBJ := $(OBJ_DIR)/tests/support/runtime_benchmark_fixture.o
+RUST_BENCHMARK_FIXTURE_OBJ := $(OBJ_DIR)/tests/integration/runtime_benchmark.o
 $(RUST_BENCHMARK_FIXTURE_OBJ): tests/test.h $(QA_REGISTRY_HEADER)
 
 RUNNER_OBJS := $(TEST_MAIN_OBJ) $(QUANT_TEST_RUNNER_OBJ) \

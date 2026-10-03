@@ -1,4 +1,4 @@
-/* Consumer fixture: reuse the independently registered native benchmark test record. */
+/* Rust consumer fixture: reuse the registered native benchmark test record. */
 #include "tests/unit/runtime_benchmark.c"
 int main(int argc, char **argv)
 {
