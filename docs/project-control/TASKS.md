@@ -15,7 +15,7 @@ publication: {html: true, pdf: true, index: true}
 [Up](README.md)
 
 Selected program: **YVEX shared compiler/runtime delivery**.
-Current phase: **Rust shell, initial macOS/Metal integration and public documentation alignment COMPLETE; Metal2 runtime prerequisites IN PROGRESS; bounded prefill retains external qualification gates; A03 is READY**.
+Current phase: **Rust shell, initial macOS/Metal integration, public documentation alignment and Metal2 program refoundation COMPLETE; exact small-Qwen CPU conversation selected IN PROGRESS (implementation not started by this pass); bounded prefill retains external qualification gates; A03 is READY**.
 The main-line selected implementation boundary remains **A03 encoder-decoder**,
 READY and unstarted. The independently selected [Metal2 Task Pack](#metal2-qwen-gpu-task-pack)
 continues on `feature/macos-metal2` toward exact Qwen 0.8B GPU generation in
@@ -71,10 +71,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 49 | 36 | 1 | 5 | 7 |
+| 52 | 37 | 1 | 7 | 7 |
 <!-- task-counts:end -->
 
-**36/49 selected Tasks complete.** This denominator includes the significant
+**37/52 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -210,61 +210,173 @@ is routed rather than rerun; no live GPU or model claim is added.
 `progression_decision=proceed`, `downstream_safe=true` for this documentation
 alignment only.
 
-## Metal2 Qwen GPU Task Pack
-
-The operator resumed Metal development on 2026-10-03 and requested that this
-sequence be recorded here. The pressure worktree is
-`/Users/mothx/Developer/YAI/yvex-metal`, branch `feature/macos-metal2`.
-It starts from integrated `0408e2d3` and incorporates published main's
-documentation-only `d79b60f2` by fast-forward before this selection. `main`
-remains integration authority; the primary Spark checkout and its services
-are untouched. The closed foundation and integration records above describe
-their exit-time selection, before this successor was authorized.
+## Metal2 program refoundation
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `METAL.RUNTIME.ADMISSION.0` | Establish common model-admission, physical memory-domain capacity and specialization lifetime prerequisites for a third backend | P1 | 🔵 IN PROGRESS | Starts with live owner/contract investigation. Common owners select admitted capabilities and numerical classes, account shared system RAM once, preserve reserve/refusal and checked generation/resource cleanup, and refuse incomplete operation coverage. Qualify positive bounded lifecycle and negative admission/capacity/stale-owner paths plus CPU/CUDA regressions; this prerequisite alone does not admit Qwen on Metal. |
-| `METAL.QWEN.PRIMITIVES.0` | Realize the exact Qwen text embedding, projection and elementwise numerical requirements on Metal | P1 | ⬜ READY | Discover requirements from authenticated plans and numerical contracts; qualify the needed BF16/F32 embedding, linear projections, normalization, RoPE and activation/residual operations through existing backend seams. Independent references and declared criteria cover rounding, shape/dtype refusal, synchronization and cleanup. Component evidence alone does not qualify attention or a model. |
-| `METAL.QWEN.STATE.ATTENTION.0` | Realize Qwen causal attention and gated-delta recurrent work with transactional state on Metal | P1 | ⬜ READY | Depends on admitted primitive realizations and common lifetime prerequisites. Qualify both operation/state classes through existing execution descriptions and session coordination, including numerical references, sequence isolation, cancellation, rollback and release. Required precision must be satisfied or the realization refuses; no hidden CPU work or Metal-only state lifecycle. |
-| `METAL.QWEN.SMALLMODEL.CLI.0` | Load the exact Qwen3.5-0.8B text model on the Apple GPU and generate through standard `./yvex chat` with REPLAI | P1 | ⬜ READY | Depends on all required admitted operations, memory capacity and state/lifetime coverage. Admit the exact source-qualified conversation template, special tokens, channels and stop policy through existing family/compiler contracts. Prove GPU prefill/decode against independent source-precision references, then real multi-turn chat through the ordinary host/client and REPLAI, including cancellation, reset/session isolation, terminal restoration and load/unload/refusal controls. Surface truthful copy/resource observations and preserve exact backend selection. A bench-only continuation does not close this Task; broader models, performance and release readiness retain separate gates. |
-| `INTEGRATION.METAL2.MAIN.0` | Reconcile and qualify the earned Metal2 milestone with published main before integration and a successor branch | P1 | ⬜ READY | Depends on the earned implementation/evidence scope above. Refresh main/Spark ownership and unpublished-work state, merge published histories, qualify the combined source on macOS CPU/Metal and affected Linux/CUDA lanes, and publish only the claim actually supported. Integrate on main and create the next Metal branch after qualification; missing mandatory evidence prevents closure. |
+| `METAL2.PROGRAM.REFOUNDATION.0` | Correct the selected Metal2 dependency graph without implementing its successor Tasks | Closed | ✅ COMPLETE | Live source/owner investigation separates the former five Tasks into seven earned-exit boundaries. Exact CPU conversation admission is the sole executable IN PROGRESS selection; runtime admission and later exits are READY. Documentation/project-control checks pass with historical claims and implementation preserved. This closes planning only, not any successor capability. |
 
-Only `METAL.RUNTIME.ADMISSION.0` is active, initially in investigation; later
-rows are selected pending their dependencies, with no implementation or closure
-claimed. Primitive investigation may inform the common admission requirements,
-but it must not substitute a permissive Metal-specific model bypass. A03 remains
-READY on the independent main workstream.
+The operator selected this project-control-only outcome on 2026-10-04 from
+clean published `feature/macos-metal2` at
+`c73473b85a498ae72dfa5ba8a68db62efd1bb078`. Published `main` is
+`d79b60f209e3f9ae5e86275136bc7a6ebd95c7b9` and is already an ancestor.
+The independent Linux main workstream remains untouched. This pass selects
+no implementation change or new runtime/capability evidence.
 
-The operator explicitly requires generation in `./yvex chat` with the standard
-REPLAI integration as the user-facing exit. The existing 0.8B qualification
-admits raw completion only; it does not supply conversation authority. The CLI
-Task therefore owns the required source/family/compiler conversation admission
-and its exact tokenizer/template/stop contracts, with any artifact or binding
-change authenticated and documented. Reuse the qualified tensor payload and
-existing runtime/server/client lifecycle; do not invent a prompt template,
-parse human output as an integration API or create a Metal chat executable.
-Registered real chat PTY controls and retained model/session evidence must show
-interactive GPU generation, multiple turns, Ctrl-C and terminal restoration;
-raw generation and primitive tests are supporting evidence only. See
+The refoundation changes only this Task ledger: selected exits/dependencies,
+one executable selection and valid counts. Code, executable architecture,
+ABI/build behavior, artifacts/registries, `STATUS.md` maturity, structural ADR
+selections and sibling repositories are unchanged. Canonical owner links route
+future implementation and qualification; historical evidence records are not
+rewritten and no numerical, GPU, model, terminal or benchmark observation is
+created. `make docs-check` validates documentation ownership/links, publication,
+controlled Task states/counts and project-control negative controls. Final
+validation precedes the focused commit. `progression_decision=proceed`,
+`downstream_safe=true` for this corrected implementation program only.
+
+## Metal2 Qwen GPU Task Pack
+
+The operator selected the initial five-Task sequence on 2026-10-03 at
+`c73473b8`, after integrated `0408e2d3` and documentation-only main `d79b60f2`.
+`METAL2.PROGRAM.REFOUNDATION.0` refines that unimplemented selection on
+2026-10-04 into seven distinct architectural exits. The pressure worktree is
+`/Users/mothx/Developer/YAI/yvex-metal`, branch `feature/macos-metal2`; `main`
+remains integration authority. Primary Spark work and services are untouched.
+Historical completed Tasks and their evidence retain their earned scope.
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `QWEN3.5.SMALL.CONVERSATION.ADMISSION.0` | Admit the exact small checkpoint's source-authored conversation policy and normal CPU chat | P1 | 🔵 IN PROGRESS | Immediate executable selection; implementation has not begun in this pass. Bind exact pinned source/template authority to tokenizer and compiler/runtime policy; qualify special tokens, role framing, generation prompt, channels and stop/EOS distinctions against authenticated source prompt/token references, with mismatched or unauthenticated authority refused before mutation. Earn real multi-turn CPU `./yvex chat` through existing sessions. Backend-independent conversation capability only; no Metal execution claim. |
+| `METAL.RUNTIME.ADMISSION.0` | Establish backend-neutral model admission, numerical/physical compatibility, capacity and generation-bound resource lifetime | P1 | ⬜ READY | Next Metal architectural prerequisite. Investigate and correct genuinely owned generic capability, quant/numerical, physical-variant and materialization compatibility, specialization, operation coverage and engine-generation lifetime seams. Select admitted implementations from operation/numerical and physical requirements, account unified RAM once with system reserve, and qualify capacity/stale-owner/refusal/cleanup plus CPU/CUDA compatibility. Incomplete required operation sets refuse; no Qwen Metal execution follows. |
+| `METAL.QWEN.STATELESS.EXECUTION.0` | Close the exact authenticated small-Qwen text program's stateless numerical/physical requirements on Metal | P1 | ⬜ READY | Uses the common admission/capability architecture. Derive all required stateless realizations from sealed forward/output programs and their numerical contracts, including embedding, linear projections, normalization, activation/gated products, residual work, output normalization/logit projection and conversions; include positional work only where stateless in the admitted program. Qualify relevant shapes/dtypes, independent references, rounding, synchronization, refusal and cleanup. Missing required coverage remains a failed prerequisite, not model admission; no attention/state/full-model claim. |
+| `METAL.QWEN.STATEFUL.EXECUTION.0` | Close the exact small-Qwen program's stateful operation and session-state requirements on Metal | P1 | ⬜ READY | Depends on common admission/lifetime and required stateless realizations. Qualify program-derived causal convolution/gated-delta recurrence and full causal attention, their convolution/recurrent/KV state, positional evolution and prefill/decode transition. Prove numerical references, transactional publication, state identity, isolation, cancellation, rollback/refusal, reset, generation retirement and cleanup through existing owners. No hidden CPU fallback or alternate session lifecycle; operation/state closure alone earns no full-model or chat claim. |
+| `METAL.QWEN.FULLMODEL.0` | Generate real continuations with the exact Qwen3.5-0.8B text artifact through a Metal model engine | P1 | ⬜ READY | Depends on runtime admission and complete required stateless/stateful coverage. Bind the exact qualified artifact and authenticated runtime binding to explicit Metal device/backend identity; prove full prefill and decode on the GPU, generated continuations, CPU/YVEX comparison and retained independent source-precision reference evidence where applicable, truthful materialization/resource/copy facts, load/unload/refusal and cleanup. No hidden CPU model computation. Earn bounded full-model Metal generation only; REPLAI/chat, performance, broader models and release remain separate. |
+| `METAL.QWEN.CHAT.0` | Qualify exact Qwen Metal generation in standard `./yvex model load ...` and `./yvex chat` with Rust/REPLAI | P1 | ⬜ READY | Depends on qualified exact conversation admission and full-model Metal generation. Prove explicit Metal-backed identity, first and subsequent conversational turns, session continuity/isolation, Ctrl-C during generation and subsequent use as contractually permitted, reset, unload/reload and terminal restoration. Use ordinary host/client typed APIs and standard REPLAI; no alternate Metal CLI or human-output parsing. Earn this exact checkpoint's interactive product composition, not general Metal/performance/release readiness. |
+| `INTEGRATION.METAL2.MAIN.0` | Reconcile the qualified seven-boundary program with current published main and integrate only earned claims | P1 | ⬜ READY | Depends on the earned conversation, runtime, stateless/stateful, full-model and chat exits above. Refresh published main and primary Spark ownership/unpublished-work state; preserve unrelated work, merge published histories, and qualify the combined source in affected macOS CPU/Metal and Linux/CUDA regression lanes. Integrate/publish only after required evidence passes, then create the successor branch. No automatic broader capability or release promotion; missing mandatory evidence prevents closure. |
+
+Only `QWEN3.5.SMALL.CONVERSATION.ADMISSION.0` is selected IN PROGRESS as an
+executable successor. Its status denotes the next authorized implementation,
+not implementation or qualification performed by this refoundation. The other
+six rows remain READY and dependency-bound. `METAL.RUNTIME.ADMISSION.0` returns
+to READY: its earlier activity was owner investigation and project-control
+selection, with no implementation/evidence beyond the qualified foundation.
+A03 remains READY on the independent main workstream.
+
+Conversation admission is the first execution priority, not a numerical
+dependency of raw GPU completion. The dependency graph is:
+
+- Common runtime admission informs stateless closure; required stateless
+  realizations and common lifetime enable stateful closure. All three are
+  prerequisites of full-model Metal generation.
+- Exact CPU conversation admission and full-model Metal generation independently
+  gate the standard Metal chat/REPLAI composition.
+- Final integration depends on all earned exits and combined-source regression;
+  a lower boundary never supplies missing evidence for a later one.
+
+The initial unimplemented `METAL.QWEN.PRIMITIVES.0` becomes
+`METAL.QWEN.STATELESS.EXECUTION.0`; `METAL.QWEN.STATE.ATTENTION.0` becomes
+`METAL.QWEN.STATEFUL.EXECUTION.0`. The combined
+`METAL.QWEN.SMALLMODEL.CLI.0` is replaced by distinct conversation admission,
+full-model GPU generation and interactive Metal chat Tasks. Runtime admission
+and final integration keep their IDs. These are selection refinements, not
+completed deliveries or fabricated implementation history.
+
+### Exact conversation authority and preserved CLI boundary
+
+Live `qwen_small_tokenizer_policy` in the
+[Qwen graph recipe](../../src/graph/families/qwen3_5.c) explicitly selects
+`YVEX_TOKENIZER_PROMPT_VERBATIM`. The `qwen_conversation` protocol in the
+[Qwen model owner](../../src/model/families/qwen3_5.c) is bound to the larger source
+revision `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`; it cannot authenticate
+the small checkpoint's conversation grammar. The exact small catalog source is
+`Qwen/Qwen3.5-0.8B@2fc06364715b967f1860aea9cf38778875588b17`.
+The observed `model has no admitted conversation template` refusal is a valid
+server/runtime result, consistent with the raw-only family policy, not a Rust
+CLI defect. No CLI change is selected to bypass, hide or reinterpret it.
+
+The independent conversation Task must authenticate that exact revision's
+template authority (including `tokenizer_config.json#chat_template` if present),
+tokenizer bytes and special-token semantics, role framing, generation prompt,
+channels and relevant stop behavior. It must qualify the distinction between
+the existing raw model EOS 248044 and tokenizer conversation EOS 248046, rather
+than inheriting another checkpoint's policy or inventing a generation sidecar.
+Source/family/compiler/tokenizer owners supply the admitted immutable policy;
+runtime/server consume it through existing contracts. Mismatched revision,
+template digest or unauthenticated authority refuses before session mutation.
+If immutable packaging/binding changes are required by the live contract,
+authenticate their new identities and preserve the original raw-completion
+artifact/binding and evidence; do not relabel or overwrite historical bytes.
+
+CPU multi-turn `./yvex chat` closes only exact conversation admission and normal
+session composition. The later `METAL.QWEN.CHAT.0` must independently demonstrate
+that policy composed with the qualified Metal engine, the canonical Rust shell
+and standard REPLAI. Preserve typed client/server delivery; no implicit CLI
+prompt construction, frontend-owned model template, fallback, alternate Metal
+CLI or human-output parsing. Real model/session and registered PTY evidence must
+cover turns, Ctrl-C, continued use, reset and terminal restoration, not merely
+the appearance of one response. See
 [interactive client](../guides/interactive-client.md),
 [interfaces](../architecture/interfaces-protocols.md) and the
 [exact small-checkpoint boundary](../model-families/qwen3.8-text.md#exact-small-text-checkpoint).
 
+### Common admission and backend-owned execution
+
 Generic defects belong to their canonical owners (`runtime.capacity`,
-`runtime.core`, `runtime.specialization`, deployment and affected contracts).
-Resolve an owned common semantic boundary coherently, with CPU/CUDA compatibility,
-rather than extending two-backend assumptions with another kind conditional.
+`runtime.core`, `runtime.specialization`, compiler/runtime capability records,
+quant/numerical compatibility, model materialization/deployment and affected
+contracts). Live examples include CPU/CUDA readiness fields in
+`include/yvex/internal/compiler.h`, compute fields in
+`include/yvex/internal/quant_numeric.h`, two-kind admission/specialization bounds,
+and residency selection in `src/model/materialization.c`. These are pressure
+surfaces to investigate, not a mandate to extend every record with Metal fields.
+The runtime Task must audit physical-variant compatibility, complete operation
+coverage and affected consumers/serialized schemas as one coherent generic
+boundary, retaining CPU/CUDA semantics and fail-closed stale-layout admission.
+
+The intended selection direction is operation/numerical requirements → physical
+realization requirements → backend capability/specialization → selected
+implementation. Do not proliferate `metal_compute_available`,
+`metal_prefill_ready`, `CPU || CUDA || METAL`, or repeated backend-kind switches
+in generic owners. Any backend-specific field needs live proof that it represents
+a canonical semantic abstraction rather than another two-way expansion.
 If legitimate ownership or required external authority cannot be established,
 record the exact owner, missing semantic change and blocker before proceeding
 with dependent implementation. Metal device resources and kernel realization
 remain backend-owned; this temporary branch creates no second architecture.
 
+Stateless/stateful membership comes from the authenticated forward/output
+program, including operation versions, numerical classes, real shapes and
+physical requirements, not a copied CUDA kernel list. Live small-Qwen topology
+has 24 text layers: 18 recurrent/linear-attention and six full-attention layers.
+Its 320 text tensors retain 284 BF16 tensors and 36 F32 recurrent vectors;
+embedding and output share one physical parameter. Stateless output normalization
+and F32 logit publication are required coverage. Positional/rotary work contained
+inside a fused stateful attention operation remains that operation's obligation,
+without inventing an extra stateless ABI to fit this plan. Stateful convolution,
+recurrent and KV state use the normal transaction/session/generation owners.
+Every required realization executes on Metal under its contract or refuses
+admission explicitly; absent mandatory execution evidence cannot close operation
+coverage or permit full-model admission. No silent precision lowering or CPU
+model-computation fallback is permitted.
+
 Apple unified memory is one physical domain, shared with macOS and applications.
 Addressable/mapped/allocated bytes, temporary storage, recommended working set
-and measured residency remain distinct; unmeasured facts stay unknown. No silent
-precision lowering, cross-backend fallback, relaxed system reserve or inference
-support inferred from primitive presence is authorized. Darwin/Metal tooling
-must remain absent from Linux/CUDA build requirements.
+and measured residency remain distinct from system reserve; unmeasured facts
+stay unknown. Shared storage does not mean no-copy host APIs or a measured
+physical resident working set. `METAL.QWEN.FULLMODEL.0` binds the existing
+qualified text artifact identity and authenticated binding to explicit Metal
+engine/device facts, full GPU prefill/decode and real continuations, retaining
+CPU/YVEX and applicable independent source-precision references. A passing
+primitive, component benchmark or resource estimate cannot close it. Tokenization,
+protocol and operator I/O may remain host-owned; all required claimed Metal
+model computation must be GPU execution. No relaxed system reserve or inferred
+model support. Darwin/Metal tooling remains separate from Linux/CUDA builds.
+The exact existing GGUF baseline is 1,528,566,432 bytes, full-file SHA-256
+`0c5776eb6b1f2abb3a35f2324aabc4d8b7693856650b799e88161f7167feded6`,
+as retained in the small-model qualification owner. Full-model Metal must name
+that artifact and its admitted binding; a later conversation-enabled immutable
+binding remains a distinct authenticated identity, not retroactive raw-binding
+qualification.
 
 Each implementation Task updates its affected architecture/contracts and the
 evaluation owner at the earned scope, following [QA ownership](../evaluation/qa.md)
@@ -272,9 +384,13 @@ and registered change obligations. Current [Status](STATUS.md), the
 [backend boundary](../architecture/backend-execution.md#apple-silicon-metal-foundation)
 and [numerical ABI](../contracts/numerical-abi.md) remain the capability authority;
 this selection changes no maturity row, ABI, artifact identity or cross-repository
-consumer. Reconcile published main before editing shared owners and again before
-publication. Completion requires source-stable evidence and an explicit scoped
-`progression_decision` / `downstream_safe`, not merely a passing build or this plan.
+consumer. Existing [Metal foundation](../evaluation/macos-metal.md),
+[small-model CPU](../evaluation/macos-small-model.md) and
+[main integration](../evaluation/macos-main-integration.md) records are retained
+observations, not evidence for the newly selected exits. Reconcile published
+main before editing shared owners and again before publication. Completion
+requires source-stable evidence and an explicit scoped `progression_decision` /
+`downstream_safe`, not merely a passing build or this plan.
 
 ## Delivery progression
 
