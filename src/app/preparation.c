@@ -407,7 +407,15 @@ static int prepare_rebind_source(const model_prepare_options *options,
     }
     rc = yvex_operator_paths_resolve(&paths, options->models_root,
                                      &plan->operator_paths, err);
-    if (rc == YVEX_OK &&
+    /* Acquisition owns the managed path (including its selection identity).
+     * Rebinding must retain an already resolved exact source, not reconstruct
+     * a different revision-only location. Verification below authenticates it. */
+    if (rc == YVEX_OK && plan->source &&
+        !strcmp(plan->source->repository, plan->source_identity->upstream_repo_id) &&
+        !strcmp(plan->source->revision, plan->source_identity->upstream_revision))
+        (void)snprintf(plan->recovered_source.path,
+                       sizeof(plan->recovered_source.path), "%s", plan->source->path);
+    else if (rc == YVEX_OK &&
         !yvex_source_target_path(plan->recovered_source.path,
                                  sizeof(plan->recovered_source.path),
                                  plan->operator_paths.models_root,
@@ -791,6 +799,29 @@ static int prepare_store_plan(model_prepare_plan *plan, yvex_error *err)
     return YVEX_OK;
 }
 
+/* A replacement binding is another immutable deployment, so retain the old
+ * profile and give the new one a semantic identity instead of reusing its alias. */
+static int prepare_rebound_alias(model_prepare_plan *plan, yvex_error *err)
+{
+    yvex_runtime_binding *binding = NULL;
+    yvex_runtime_binding_summary summary = {0};
+    char alias[YVEX_MODEL_LIBRARY_NAME_CAP];
+    int written, rc = yvex_runtime_binding_open(&binding, plan->binding_path,
+                                                &summary, NULL, NULL, err);
+    if (rc == YVEX_OK) {
+        written = snprintf(alias, sizeof(alias), "%s-%.16s",
+                             plan->profile_alias, summary.identity);
+        if (written < 0 || (size_t)written >= sizeof(alias)) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "model.prepare.rebind",
+                           "rebound profile identity exceeds alias capacity");
+            rc = YVEX_ERR_BOUNDS;
+        } else
+            (void)snprintf(plan->profile_alias, sizeof(plan->profile_alias), "%s", alias);
+    }
+    yvex_runtime_binding_close(binding);
+    return rc;
+}
+
 static int prepare_binding(model_prepare_plan *plan,
                            const model_prepare_options *options,
                            int *published, yvex_error *err)
@@ -811,8 +842,10 @@ static int prepare_binding(model_prepare_plan *plan,
     request.family_adapter_id = plan->execution->adapter_id;
     request.family_adapter_version = plan->execution->adapter_version;
     request.rebind_existing_artifact = plan->rebind_existing_artifact;
-    return yvex_runtime_binding_compile_publish(plan->execution->compiler, &request,
-                                                plan->binding_path, published, err);
+    int rc = yvex_runtime_binding_compile_publish(plan->execution->compiler, &request,
+                                                  plan->binding_path, published, err);
+    return rc == YVEX_OK && plan->rebind_existing_artifact
+               ? prepare_rebound_alias(plan, err) : rc;
 }
 
 static int prepare_ready_verify(const model_prepare_options *options,

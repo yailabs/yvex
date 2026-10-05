@@ -790,10 +790,10 @@ python3 tests/support/human_field.py "$ROOT/inspect-bad-output.err" 'invalid val
 
 "$YVEX_BIN" profile create --path "$ARTIFACT" --registry "$REG" \
   --alias deepseek4-v4-flash-dspark-runtime-incomplete > "$ROOT/add-incomplete.out"
-SERVER_RUNTIME="$ROOT/server-runtime"
-yvex_test_cleanup "$SERVER_RUNTIME"
-mkdir -m 700 "$SERVER_RUNTIME"
 (
+  # Runtime roots must be absolute; keep the Unix socket below Darwin's path
+  # bound and independent of any operator host already running on this machine.
+  SERVER_RUNTIME=$(mktemp -d /tmp/yvex-cli-models.XXXXXX)
   server_pid=
   finish_model_host()
   {
@@ -803,6 +803,7 @@ mkdir -m 700 "$SERVER_RUNTIME"
       XDG_RUNTIME_DIR="$SERVER_RUNTIME" "$YVEX_BIN" host stop >/dev/null 2>&1 || true
       wait "$server_pid" 2>/dev/null || true
     fi
+    rmdir "$SERVER_RUNTIME" 2>/dev/null || true
     exit "$status"
   }
   trap finish_model_host EXIT HUP INT TERM

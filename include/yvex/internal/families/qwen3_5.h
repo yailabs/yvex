@@ -18,6 +18,7 @@ extern "C" {
 #define YVEX_QWEN3_5_GENERATION_STOP_CAP 4u
 #define YVEX_QWEN3_5_ADAPTER_ID 0x5157454e335f35ull
 #define YVEX_QWEN3_5_ADAPTER_VERSION 3ull
+#define YVEX_QWEN3_5_SMALL_ADAPTER_VERSION 4ull
 #define YVEX_QWEN3_5_LOGICAL_TRANSFORM_IDENTITY \
     "696effbc4ff0ef46962ca566cf00502c14ec2dd502c0650db725b76bd51111ce"
 
@@ -187,7 +188,7 @@ typedef struct {
 } yvex_qwen3_5_api;
 
 const yvex_qwen3_5_api *yvex_model_register_qwen3_5(void);
-const yvex_conversation_protocol *yvex_model_qwen3_5_conversation(void);
+const yvex_conversation_protocol *yvex_model_qwen3_5_conversation(const char *target_id);
 int yvex_qwen3_5_program_build(yvex_ir_module **out,
     const yvex_qwen3_5_architecture *architecture, const char *source_identity, yvex_error *err);
 

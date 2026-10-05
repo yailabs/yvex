@@ -642,6 +642,58 @@ static int plan_identity_build(yvex_tokenizer *tokenizer)
     return 1;
 }
 
+/* The complete authenticated config is canonical. A separate GGUF template,
+ * if present, is only a redundant representation and must agree exactly. */
+static int embedded_template_admit(const yvex_tokenizer *tokenizer,
+                                    const yvex_gguf *gguf, yvex_error *err)
+{
+    const yvex_conversation_protocol *conversation = tokenizer->conversation;
+    const char *revision, *config;
+    unsigned long long count, config_count;
+    char identity[YVEX_SHA256_HEX_CAP], key[128];
+    char *decoded = NULL;
+    yvex_json json;
+    yvex_json_iter members;
+    yvex_json_item item;
+    int accepted = 0;
+
+    if (!conversation || strcmp(conversation->source_encoding_path,
+                                 "tokenizer_config.json#chat_template"))
+        return YVEX_OK;
+    if (!gguf_string(gguf, "yvex.tokenizer.config.json", &config, &config_count) ||
+        config_count >= SIZE_MAX) goto cleanup;
+    yvex_json_init(&json, config, (size_t)config_count);
+    if (!yvex_json_iter_begin(&json, &members, YVEX_JSON_COLLECTION_OBJECT))
+        goto cleanup;
+    while ((item = yvex_json_object_member(&members, key, sizeof(key))) ==
+           YVEX_JSON_ITEM_READY) {
+        if (!strcmp(key, "chat_template")) {
+            if (decoded) goto cleanup;
+            decoded = yvex_json_string_dup(&json, (size_t)config_count + 1u);
+            if (!decoded) goto cleanup;
+        } else if (!yvex_json_skip_value(&json)) goto cleanup;
+    }
+    if (item != YVEX_JSON_ITEM_END || !decoded ||
+        !raw_sha256(decoded, strlen(decoded), identity) ||
+        strcmp(identity, conversation->source_encoding_identity) ||
+        (tokenizer->chat_template &&
+         (tokenizer->chat_template_len != strlen(decoded) ||
+          memcmp(tokenizer->chat_template, decoded, strlen(decoded)))) ||
+        !gguf_string(gguf, "general.source.revision", &revision, &count) ||
+        count != strlen(conversation->source_revision) ||
+        memcmp(revision, conversation->source_revision, (size_t)count))
+        goto cleanup;
+    accepted = 1;
+cleanup:
+    free(decoded);
+    if (!accepted) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "tokenizer.plan.template",
+                       "embedded conversation authority differs from the compiled policy");
+        return YVEX_ERR_FORMAT;
+    }
+    return YVEX_OK;
+}
+
 static int exact_policy_admit(yvex_tokenizer *tokenizer, const yvex_gguf *gguf,
                               yvex_error *err)
 {
@@ -719,7 +771,7 @@ static int exact_policy_admit(yvex_tokenizer *tokenizer, const yvex_gguf *gguf,
                        "tokenizer JSON/config identities differ from the compiled policy");
         return YVEX_ERR_UNSUPPORTED;
     }
-    return YVEX_OK;
+    return embedded_template_admit(tokenizer, gguf, err);
 }
 
 /*

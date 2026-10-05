@@ -1324,9 +1324,65 @@ static const yvex_conversation_protocol qwen_conversation = {
     .eos_token_id = 248046u, .pad_token_id = 248044u,
     .eos_present = 1, .pad_present = 1};
 
-const yvex_conversation_protocol *yvex_model_qwen3_5_conversation(void)
+/* Exact 0.8B tokenizer_config.json#chat_template, decoded UTF-8 SHA-256.
+ * Its default disables thinking and prior assistant reasoning is omitted.
+ * Shared XML syntax below is independently present in these pinned bytes. */
+static const yvex_conversation_protocol qwen_small_conversation = {
+    .schema_version = YVEX_CONVERSATION_PROTOCOL_SCHEMA_V2,
+    .family_adapter_id = YVEX_QWEN3_5_ADAPTER_ID,
+    .family_adapter_version = YVEX_QWEN3_5_SMALL_ADAPTER_VERSION,
+    .architecture = YVEX_QWEN3_5_FAMILY_KEY,
+    .source_revision = "2fc06364715b967f1860aea9cf38778875588b17",
+    .source_encoding_path = "tokenizer_config.json#chat_template",
+    .source_encoding_identity =
+        "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+    .bos = "", .eos = "<|im_end|>",
+    .system = "<|im_start|>system\n",
+    .user = "<|im_start|>user\n",
+    .assistant = "<|im_start|>assistant\n",
+    .message_end = "<|im_end|>\n",
+    .latest_reminder = "",
+    .thinking_start = "<think>", .thinking_start_suffix = "\n",
+    .thinking_end_prefix = "\n", .thinking_end = "</think>",
+    .thinking_end_suffix = "\n\n",
+    .tool_result_start = "\n<tool_response>\n",
+    .tool_result_end = "\n</tool_response>",
+    .tool_result_group_start = "<|im_start|>user",
+    .dsml = "<tool_call>", .tool_calls_start = "",
+    .tool_calls_end = "", .tool_invoke_start = "<tool_call>\n<function=",
+    .tool_invoke_name_end = ">\n",
+    .tool_invoke_end = "</function>\n</tool_call>",
+    .tool_parameter_start = "<parameter=",
+    .tool_parameter_name_end = ">\n", .tool_parameter_kind_end = "",
+    .tool_parameter_end = "\n</parameter>\n",
+    .reasoning_effort_low = "",
+    .reasoning_effort_max = "",
+    .tools_prefix = qwen_tools_prefix, .tools_suffix = qwen_tools_suffix,
+    .response_format_prefix = "",
+    .grammar = YVEX_CONVERSATION_GRAMMAR_ROLE_ENVELOPED,
+    .tool_grammar = YVEX_CONVERSATION_TOOL_GRAMMAR_XML_ELEMENTS,
+    .default_reasoning_policy = YVEX_REASONING_DISABLED,
+    .drop_prior_reasoning_by_default = 1, .tools_preserve_reasoning = 1,
+    .tool_results_merge_into_user = 1,
+    .tokenizer_model = "gpt2", .tokenizer_pre = "qwen2",
+    .tokenizer_json_identity =
+        "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+    .tokenizer_config_identity =
+        "49e2b6e395f959f077f1e992b338919c0d4a9732fc6e613995e06557f843500c",
+    .vocabulary_size = 248070ull, .base_vocabulary_size = 248044ull,
+    .merge_count = 247587ull, .added_token_count = 26ull,
+    .special_token_count = 14ull,
+    .eos_token_id = 248046u, .pad_token_id = 248044u,
+    .eos_present = 1, .pad_present = 1};
+
+
+const yvex_conversation_protocol *yvex_model_qwen3_5_conversation(const char *target_id)
 {
-    return &qwen_conversation;
+    if (!target_id) return NULL;
+    if (!strcmp(target_id, YVEX_SOURCE_QWEN3_5_08B_TARGET_ID))
+        return &qwen_small_conversation;
+    return !strcmp(target_id, YVEX_QWEN3_8_27B_TARGET_ID)
+               ? &qwen_conversation : NULL;
 }
 
 /* Source projection owns composition. Neither the IR nor later execution

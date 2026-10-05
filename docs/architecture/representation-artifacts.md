@@ -79,6 +79,16 @@ rebuild the package or binding.
 
 ## Implementation and evidence
 
+Rebinding an existing admitted artifact can change compiled conversation or
+execution meaning without changing tensor bytes. The compiler re-verifies the
+exact acquired source, reproduces the package's immutable creation metadata
+(including its historical prompt-policy name) and validates the original
+physical layout. Explicit calibration `none` retains its absence meaning.
+The new binding carries the current authenticated tokenizer policy; historical
+package creation metadata does not override it. Managed preparation preserves
+the old deployment profile and publishes a new profile identified by the new
+binding. It does not overwrite the old binding, alias or model payload.
+
 [src/gguf](../../src/gguf) · [src/model/compilation](../../src/model/compilation) · [include/yvex/qtype.h](../../include/yvex/qtype.h) · [include/yvex/quant.h](../../include/yvex/quant.h)
 
 [QA selection](../evaluation/qa.md) · [Current state](../project-control/STATUS.md)

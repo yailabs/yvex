@@ -97,12 +97,27 @@ static int prompt_utf8_span(const char *text, unsigned long long declared,
     return 1;
 }
 
-static int prompt_messages_valid(const yvex_prompt_message *messages,
+static int prompt_user_query(const yvex_conversation_protocol *conversation,
+                              const yvex_prompt_message *message)
+{
+    prompt_span content, start, end;
+    if (!prompt_utf8_span(message->content, message->content_len, &content) ||
+        !prompt_utf8_span(conversation->tool_result_start, 0u, &start) ||
+        !prompt_utf8_span(conversation->tool_result_end, 0u, &end)) return 0;
+    return !start.count || !end.count || content.count < start.count + end.count ||
+           memcmp(content.bytes, start.bytes, (size_t)start.count) ||
+           memcmp(content.bytes + content.count - end.count,
+                   end.bytes, (size_t)end.count);
+}
+
+static int prompt_messages_valid(const yvex_conversation_protocol *conversation,
+                                 const yvex_prompt_message *messages,
                                  unsigned long long count,
                                  int generation_prompt)
 {
     unsigned long long index;
     yvex_prompt_role prior = YVEX_PROMPT_ROLE_SYSTEM;
+    int user_query = 0;
 
     if (!messages || !count) return 0;
     for (index = 0u; index < count; ++index) {
@@ -122,10 +137,12 @@ static int prompt_messages_valid(const yvex_prompt_message *messages,
                                messages[index].reasoning_content_len,
                                &reasoning)))
             return 0;
+        if (role == YVEX_PROMPT_ROLE_USER && prompt_user_query(conversation, &messages[index]))
+            user_query = 1;
         prior = role;
     }
-    return !generation_prompt || prior == YVEX_PROMPT_ROLE_USER ||
-           prior == YVEX_PROMPT_ROLE_TOOL;
+    return user_query && (!generation_prompt || prior == YVEX_PROMPT_ROLE_USER ||
+           prior == YVEX_PROMPT_ROLE_TOOL);
 }
 
 static const char *reasoning_instruction(
@@ -152,7 +169,7 @@ static int prompt_system_append(prompt_builder *builder,
     if (message && !prompt_utf8_span(message->content, message->content_len,
                                      &content))
         return YVEX_ERR_FORMAT;
-    if (!instruction[0] && !content.count) return YVEX_OK;
+    if (!instruction[0] && !content.count && !message) return YVEX_OK;
     rc = prompt_literal(builder, conversation->system, err);
     if (rc == YVEX_OK && instruction[0])
         rc = prompt_literal(builder, instruction, err);
@@ -199,7 +216,8 @@ static int prompt_turns_append(prompt_builder *builder,
     int tool_group = 0, rc = YVEX_OK;
 
     for (scan = count; scan > index; --scan)
-        if (messages[scan - 1u].role == YVEX_PROMPT_ROLE_USER) {
+        if (messages[scan - 1u].role == YVEX_PROMPT_ROLE_USER &&
+            prompt_user_query(conversation, &messages[scan - 1u])) {
             last_user = scan - 1u;
             break;
         }
@@ -354,7 +372,7 @@ int yvex_tokenizer_prompt_render_v2(
          (options->mode == YVEX_PROMPT_MODE_CHAT)) ||
         (options->reasoning_policy == YVEX_REASONING_LOW &&
          !tokenizer->plan.low_reasoning_supported) ||
-        !prompt_messages_valid(messages, message_count,
+        !prompt_messages_valid(conversation, messages, message_count,
                                options->add_generation_prompt)) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "tokenizer.prompt",
                        "messages and reasoning policy are not admitted");

@@ -11,6 +11,7 @@
 #include <yvex/internal/family_catalog.h>
 #include <yvex/internal/families/deepseek_v4.h>
 #include <yvex/internal/families/qwen3_5.h>
+#include <yvex/internal/source_catalog.h>
 
 #include <pthread.h>
 #include <sched.h>
@@ -304,6 +305,59 @@ static int test_compiled_family_policy(void)
     free(encoded.data);
     free(repeated.data);
     free(direct_encoded.data);
+    return 0;
+}
+
+static int test_small_qwen_conversation(void)
+{
+    const yvex_graph_execution_binding *execution = yvex_graph_execution_find(
+        0u, 0u, YVEX_SOURCE_QWEN3_5_08B_TARGET_ID);
+    yvex_tokenizer tokenizer;
+    yvex_token_info tokens[4];
+    yvex_prompt_message messages[3] = {
+        {.schema_version = YVEX_PROMPT_MESSAGE_SCHEMA_V1,
+         .role = YVEX_PROMPT_ROLE_USER, .content = "first"},
+        {.schema_version = YVEX_PROMPT_MESSAGE_SCHEMA_V1,
+         .role = YVEX_PROMPT_ROLE_ASSISTANT, .content = "answer",
+         .reasoning_content = "private reasoning"},
+        {.schema_version = YVEX_PROMPT_MESSAGE_SCHEMA_V1,
+         .role = YVEX_PROMPT_ROLE_USER, .content = "second"}};
+    yvex_rendered_prompt prompt = {0};
+    yvex_tokenizer_family_policy larger;
+    yvex_error err;
+    static const char expected[] =
+        "<|im_start|>user\nfirst<|im_end|>\n"
+        "<|im_start|>assistant\nanswer<|im_end|>\n"
+        "<|im_start|>user\nsecond<|im_end|>\n"
+        "<|im_start|>assistant\n<think>\n\n</think>\n\n";
+    fixture_open(&tokenizer, tokens);
+    YVEX_TEST_ASSERT(execution && execution->compiler &&
+        execution->compiler->tokenizer_policy(&tokenizer.compiled_policy, &err) &&
+        yvex_tokenizer_family_policy_conversation(&tokenizer.compiled_policy,
+            &tokenizer.conversation_view), "exact small Qwen conversation compiles");
+    tokenizer.conversation = &tokenizer.conversation_view;
+    tokenizer.plan.default_reasoning_policy = YVEX_REASONING_DISABLED;
+    tokenizer.plan.low_reasoning_supported = 0;
+    YVEX_TEST_ASSERT(tokenizer.compiled_policy.prompt_policy == YVEX_TOKENIZER_PROMPT_CONVERSATION &&
+        tokenizer.compiled_policy.vocabulary_size == 248070u &&
+        !strcmp(tokenizer.conversation->source_revision,
+            "2fc06364715b967f1860aea9cf38778875588b17") &&
+        !strcmp(tokenizer.conversation->source_encoding_identity,
+            "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80") &&
+        tokenizer.conversation->drop_prior_reasoning_by_default &&
+        !tokenizer.conversation->reasoning_effort_low[0] &&
+        !tokenizer.conversation->reasoning_effort_max[0],
+        "small checkpoint owns its exact source template and disabled default");
+    YVEX_TEST_ASSERT(qwen_fixture_compiler()->tokenizer_policy(&larger, &err) &&
+        strcmp(larger.policy_identity, tokenizer.compiled_policy.policy_identity),
+        "small and larger Qwen conversation authority remain distinct");
+    YVEX_TEST_ASSERT(yvex_prompt_render(&prompt, &tokenizer, messages, 3u, NULL, &err) == YVEX_OK &&
+        prompt.len == sizeof(expected) - 1u && !memcmp(prompt.text, expected, prompt.len),
+        "small Qwen multi-turn drops prior reasoning and closes default generation prefix");
+    yvex_rendered_prompt_free(&prompt);
+    messages[1].role = YVEX_PROMPT_ROLE_SYSTEM;
+    YVEX_TEST_ASSERT(yvex_prompt_render(&prompt, &tokenizer, messages, 3u, NULL, &err) ==
+        YVEX_ERR_INVALID_ARG && !prompt.text, "misplaced system refuses without prompt publication");
     return 0;
 }
 
@@ -1255,6 +1309,8 @@ int yvex_test_runtime_tokenizer(void)
     if (test_source_multiturn_and_tools() != 0)
         return 1;
     if (test_source_developer_boundary() != 0)
+        return 1;
+    if (test_small_qwen_conversation() != 0)
         return 1;
     if (test_qwen_prompt_policy() != 0)
         return 1;

@@ -30,6 +30,13 @@ terminal adapters project typed results; they do not infer model grammar from
 prose. [Speculation and finite results](advanced-generation.md) reuse this
 substrate where their distinct semantics apply.
 
+Families compile a bounded conversation grammar from the exact checkpoint's
+authenticated template and tokenizer assets. Common role-envelope rendering
+preserves an explicitly empty system message, requires a real user query and
+uses source-declared tool-result delimiters when locating that query. Prior
+reasoning removal and the generation prefix follow compiled policy. The runtime
+does not execute arbitrary Jinja or let a frontend supply model role markers.
+
 ## Generation vocabulary
 
 Prefill, ordinary decode, DSpark draft, target verification, and correction are

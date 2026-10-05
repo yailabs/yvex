@@ -202,6 +202,15 @@ the same engine manager.
 
 ## Prompt, execution, and publication
 
+Conversation policy is compiled from exact source authority. For an encoding
+owned by `tokenizer_config.json#chat_template`, admission authenticates the
+complete tokenizer/config assets, the decoded template digest and pinned source
+revision. A redundant package template must agree. Missing or mismatched
+authority cannot produce an admitted runtime tokenizer. Model generation EOS
+and tokenizer conversation EOS remain distinct facts; conversation decoding and
+turn termination consume the admitted tokenizer policy. Raw token input retains
+its explicit generation contract.
+
 Conversation rendering and tokenization produce the complete prompt. Prefix
 reuse is admitted only when the session's committed token ledger is an exact
 prefix. The runtime prefills only the suffix. Incompatible prefix, context

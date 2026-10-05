@@ -411,3 +411,7 @@ $(METAL_TEST_MAIN_OBJ): $(QA_REGISTRY_HEADER) $(QA_REGISTRY_DIR)/metal_registry.
 $(METAL_TEST_RUNNER): $(METAL_TEST_MAIN_OBJ) $(METAL_TEST_UNIT_OBJ) $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(METAL_TEST_MAIN_OBJ) $(METAL_TEST_UNIT_OBJ) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+$(TEST_DIR)/qwen_small_conversation: $(OBJ_DIR)/tests/live/qwen_small_conversation.o $(LIBYVEX)
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@

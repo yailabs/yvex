@@ -1317,3 +1317,13 @@ check-guardrails: check-source-manifest $(LIBYVEX) $(YVEX_BIN) rust-ffi-index \
 	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI|c[l]ori-codename|docs/arc[h]ive|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori|github\\.com/yailabs/c[l]ori|yailabs/c[l]ori" --exclude-dir=.git --exclude-dir=build --exclude-dir=__pycache__ . >/dev/null
 	@! grep -Ei "production-read[y]|implemented infer[e]nce|implemented ser[v]er|supports C[U]DA|supports M[e]tal|supports M[L]X|supports llama\\.cpp|O[p]enAI-compatible ser[v]er" README.md >/dev/null
 	@! grep -Ei "benchmark results" README.md | grep -vi "benchmark results are not measured" >/dev/null
+
+.PHONY: test-qwen-small-conversation-reference
+test-qwen-small-conversation-reference: $(TEST_DIR)/qwen_small_conversation
+	@test -n "$(YVEX_QWEN_SMALL_SOURCE)" -a -n "$(YVEX_QWEN_SMALL_ARTIFACT)" -a -n "$(YVEX_QWEN_SMALL_BINDING)" -a -n "$(YVEX_QWEN_SMALL_REFERENCE_PYTHON)"
+	$(YVEX_QWEN_SMALL_REFERENCE_PYTHON) tests/reference/qwen_small_conversation.py "$(YVEX_QWEN_SMALL_SOURCE)" "$(YVEX_QWEN_SMALL_ARTIFACT)" "$(YVEX_QWEN_SMALL_BINDING)" "$(abspath $(TEST_DIR)/qwen_small_conversation)"
+
+.PHONY: test-qwen-small-chat-live
+test-qwen-small-chat-live: all
+	@test -n "$(YVEX_QWEN_SMALL_ARTIFACT)" -a -n "$(YVEX_QWEN_SMALL_BINDING)"
+	python3 tests/live/qwen_small_chat.py ./yvex "$(YVEX_QWEN_SMALL_ARTIFACT)" "$(YVEX_QWEN_SMALL_BINDING)" "$(BUILD_DIR)/tests/qwen-small-chat"

@@ -689,7 +689,10 @@ static int qwen_semantic_model_build(yvex_semantic_model_ir **out,
             "execution-specialization", "text-first"};
         request.schema_version = YVEX_SEMANTIC_MODEL_IR_SCHEMA_V2;
         request.family_adapter_id = YVEX_QWEN3_5_ADAPTER_ID;
-        request.family_adapter_version = YVEX_QWEN3_5_ADAPTER_VERSION;
+        request.family_adapter_version = !strcmp(architecture->product_id,
+                                                YVEX_SOURCE_QWEN3_5_08B_TARGET_ID)
+                                             ? YVEX_QWEN3_5_SMALL_ADAPTER_VERSION
+                                             : YVEX_QWEN3_5_ADAPTER_VERSION;
         request.target_id = architecture->product_id;
         request.source_model_identity = verification->manifest_payload_identity;
         request.logical_model_identity = architecture->architecture_identity;
@@ -1201,7 +1204,7 @@ static int qwen_tokenizer_policy(yvex_tokenizer_family_policy *out,
                                  yvex_error *err)
 {
     return yvex_tokenizer_family_policy_compile(
-               out, yvex_model_qwen3_5_conversation(),
+               out, yvex_model_qwen3_5_conversation(YVEX_QWEN3_8_27B_TARGET_ID),
                YVEX_TOKENIZER_KIND_GGML_GPT2,
                YVEX_TOKENIZER_MODEL_BPE_BYTELEVEL,
                YVEX_TOKENIZER_PROMPT_CONVERSATION, err) == YVEX_OK;
@@ -1218,20 +1221,11 @@ static const yvex_family_descriptor yvex_graph_family_descriptor_qwen3_5 = {
 
 static int qwen_small_tokenizer_policy(yvex_tokenizer_family_policy *out, yvex_error *err)
 {
-    /* This milestone admits raw completion only. Conversation rendering is
-     * refused until this checkpoint's distinct template is qualified. */
-    static const yvex_tokenizer_direct_policy policy = {
-        .family_adapter_id = YVEX_QWEN3_5_ADAPTER_ID, .family_adapter_version = YVEX_QWEN3_5_ADAPTER_VERSION,
-        .tokenizer_kind = YVEX_TOKENIZER_KIND_GGML_GPT2, .model_policy = YVEX_TOKENIZER_MODEL_BPE_BYTELEVEL,
-        .prompt_policy = YVEX_TOKENIZER_PROMPT_VERBATIM,
-        .vocabulary_size = 248070ull, .base_vocabulary_size = 248044ull, .merge_count = 247587ull,
-        .added_token_count = 26ull, .special_token_count = 14ull,
-        .eos_token_id = 248046u, .pad_token_id = 248044u, .eos_present = 1, .pad_present = 1,
-        .architecture = YVEX_QWEN3_5_FAMILY_KEY, .tokenizer_model = "gpt2", .tokenizer_pre = "qwen2",
-        .tokenizer_json_identity = "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
-        .tokenizer_config_identity = "49e2b6e395f959f077f1e992b338919c0d4a9732fc6e613995e06557f843500c",
-        .prompt_name = "verbatim-qwen3.5-0.8b-v1"};
-    return yvex_tokenizer_family_policy_compile_direct(out, &policy, err) == YVEX_OK;
+    return yvex_tokenizer_family_policy_compile(
+               out, yvex_model_qwen3_5_conversation(YVEX_SOURCE_QWEN3_5_08B_TARGET_ID),
+               YVEX_TOKENIZER_KIND_GGML_GPT2,
+               YVEX_TOKENIZER_MODEL_BPE_BYTELEVEL,
+               YVEX_TOKENIZER_PROMPT_CONVERSATION, err) == YVEX_OK;
 }
 
 static const yvex_family_binding_pipeline qwen_small_binding_pipeline = {
@@ -1243,7 +1237,7 @@ static const yvex_family_binding_pipeline qwen_small_binding_pipeline = {
     .tokenizer_architecture = YVEX_QWEN3_5_FAMILY_KEY, .tokenizer_model = "gpt2", .tokenizer_pre = "qwen2"};
 static const yvex_family_compiler_adapter qwen_small_compiler = {
     .schema_version = YVEX_FAMILY_COMPILER_SCHEMA_V2,
-    .adapter_id = YVEX_QWEN3_5_ADAPTER_ID, .adapter_version = YVEX_QWEN3_5_ADAPTER_VERSION,
+    .adapter_id = YVEX_QWEN3_5_ADAPTER_ID, .adapter_version = YVEX_QWEN3_5_SMALL_ADAPTER_VERSION,
     .target_id = YVEX_SOURCE_QWEN3_5_08B_TARGET_ID, .family = YVEX_QWEN3_5_FAMILY_KEY,
     .logical_transform_identity = QWEN_SMALL_TRANSFORM_IDENTITY,
     .graph = qwen_graph_compile, .operator_graph_build = yvex_operator_graph_ir_build_decoder,
@@ -1254,12 +1248,15 @@ static const yvex_family_compiler_adapter qwen_small_compiler = {
 static const yvex_model_deployment_defaults qwen_small_deployment = {
     .schema_version = YVEX_MODEL_DEPLOYMENT_DEFAULTS_SCHEMA_CURRENT,
     .logical_family = YVEX_QWEN3_5_FAMILY_KEY, .logical_model = YVEX_SOURCE_QWEN3_5_08B_TARGET_ID,
-    .quant_preset = QWEN_SMALL_PRESET, .backend = "cpu", .engine_kind = "text", .execution_strategy = "target-only"};
+    .quant_preset = QWEN_SMALL_PRESET, .backend = "cpu", .engine_kind = "text", .execution_strategy = "target-only",
+    /* The source-faithful payload already contains the authenticated sidecars.
+     * Conversation admission replaces only its compiled binding, not tensors. */
+    .rebind_artifact_identity = "0c5776eb6b1f2abb3a35f2324aabc4d8b7693856650b799e88161f7167feded6"};
 static const yvex_graph_execution_binding *qwen_small_execution_binding(void)
 {
     static const yvex_graph_execution_binding execution = {
         .schema_version = YVEX_GRAPH_EXECUTION_BINDING_SCHEMA_V1,
-        .adapter_id = YVEX_QWEN3_5_ADAPTER_ID, .adapter_version = YVEX_QWEN3_5_ADAPTER_VERSION,
+        .adapter_id = YVEX_QWEN3_5_ADAPTER_ID, .adapter_version = YVEX_QWEN3_5_SMALL_ADAPTER_VERSION,
         .target_id = YVEX_SOURCE_QWEN3_5_08B_TARGET_ID, .family_name = YVEX_QWEN3_5_FAMILY_KEY,
         .logical_transform_identity = QWEN_SMALL_TRANSFORM_IDENTITY, .operator_family_key = "qwen",
         .operator_artifact_filename = "qwen3.5-0.8b-source-faithful.gguf",

@@ -62,6 +62,7 @@ typedef struct {
     yvex_speculation_family_policy speculation_policy;
     yvex_tokenizer_family_policy tokenizer_policy;
     char artifact_imatrix_identity[YVEX_SHA256_HEX_CAP];
+    char artifact_prompt_policy[YVEX_TOKENIZER_POLICY_NAME_CAP];
 } binding_compiler;
 
 static void family_runtime_binding_release(void *owner);
@@ -251,6 +252,10 @@ static int binding_compiler_artifact_imatrix(
     value = yvex_gguf_metadata_find(compiler->gguf,
                                     "yvex.quant.imatrix.identity");
     if (!value) return YVEX_OK;
+    /* Writer/physical-plan vocabulary explicitly represents no calibration
+     * as "none". Rebinding preserves that fact rather than requiring a digest. */
+    if (yvex_gguf_value_as_string(value, &text, &count) == YVEX_OK &&
+        count == 4u && !memcmp(text, "none", 4u)) return YVEX_OK;
     if (yvex_gguf_value_as_string(value, &text, &count) != YVEX_OK ||
         count != YVEX_SHA256_HEX_BYTES - 1u) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "compilation.runtime-binding",
@@ -363,7 +368,7 @@ static int binding_compiler_quant(
 
 static int binding_compiler_writer_build(
     binding_compiler *compiler, const char *required_execution_identity,
-    yvex_error *err)
+    int rebind_existing_artifact, yvex_error *err)
 {
     const yvex_runtime_descriptor_summary *descriptor =
         yvex_runtime_descriptor_summary_get(compiler->descriptor);
@@ -401,6 +406,26 @@ static int binding_compiler_writer_build(
                 YVEX_TOKENIZER_PROMPT_CONVERSATION
             ? NULL
             : compiler->tokenizer_policy.direct_prompt_name;
+    if (rebind_existing_artifact) {
+        const yvex_gguf_value *value = yvex_gguf_metadata_find(
+            compiler->gguf, "yvex.tokenizer.prompt_policy");
+        const char *text;
+        unsigned long long count;
+        /* Reproduce the immutable package's creation envelope. The newly
+         * compiled tokenizer policy in the binding owns execution semantics. */
+        writer.input.complete.tokenizer_prompt_policy = NULL;
+        if (value) {
+            if (yvex_gguf_value_as_string(value, &text, &count) != YVEX_OK ||
+                !count || count >= sizeof(compiler->artifact_prompt_policy)) {
+                yvex_error_set(err, YVEX_ERR_FORMAT, "compilation.runtime-binding",
+                               "artifact prompt metadata is malformed");
+                return YVEX_ERR_FORMAT;
+            }
+            memcpy(compiler->artifact_prompt_policy, text, (size_t)count);
+            compiler->artifact_prompt_policy[count] = '\0';
+            writer.input.complete.tokenizer_prompt_policy = compiler->artifact_prompt_policy;
+        }
+    }
     writer.input.complete.tokenizer_unk_present =
         compiler->tokenizer_policy.unk_present;
     writer.input.complete.tokenizer_unk_token_id =
@@ -418,7 +443,7 @@ static int binding_compiler_writer(
                                ? NULL
                                : compiler->admission.quant_execution_identity;
 
-    return binding_compiler_writer_build(compiler, required, err);
+    return binding_compiler_writer_build(compiler, required, request->rebind_existing_artifact, err);
 }
 
 static int binding_compiler_prepare(
@@ -656,7 +681,7 @@ static int variant_complete_quant(
             compiler->quant_policy, imatrix.complete ? imatrix.imatrix_identity : NULL, err);
     if (rc == YVEX_OK)
         rc = variant_backend_validate(request->backend, compiler->quant, err);
-    if (rc == YVEX_OK) rc = binding_compiler_writer_build(compiler, NULL, err);
+    if (rc == YVEX_OK) rc = binding_compiler_writer_build(compiler, NULL, 0, err);
     return rc;
 }
 
