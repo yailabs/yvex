@@ -17,6 +17,7 @@ mod chat_stream;
 pub mod client;
 #[allow(unsafe_code)]
 pub mod ffi;
+mod finite_remote;
 mod generation;
 mod generation_projection;
 pub mod help;
@@ -221,8 +222,15 @@ fn dispatch(
             },
             Err(error) => refused_error(&error, width, styled),
         },
-        operation if operation.starts_with("management.") => {
-            match management::dispatch(invocation) {
+        operation
+            if operation.starts_with("management.") || operation == "finite.remote.protocol" =>
+        {
+            let result = if operation == "finite.remote.protocol" {
+                finite_remote::protocol(invocation)
+            } else {
+                management::dispatch(invocation)
+            };
+            match result {
                 Ok(output) => output,
                 Err(reason) => refused(reason, None, width, styled, 2),
             }

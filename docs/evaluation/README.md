@@ -24,6 +24,7 @@ Software correctness, independent numerical conformance, artifact integrity, run
 - [Quality Assurance Architecture](qa.md)
 - [External Reference-Engineering Baseline](reference-baseline.md)
 - [Retained Execution Observations](retained-observations.md)
+- [Remote finite-decision producer qualification](finite-decision-remote.md)
 
 ## macOS and Apple Silicon evidence
 

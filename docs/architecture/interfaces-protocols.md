@@ -39,6 +39,7 @@ does not grant model admission or new public management operations.
 | Same-user client | [Local protocol](../contracts/local-protocol.md) | Exact version and generation checks |
 | Application provider | [OpenAI adapter](../contracts/openai-compatibility.md) | Bounded compatibility, not universal API parity |
 | Remote operator | [Remote management](../contracts/remote-management.md) | Read-only enrolled identity/status bootstrap |
+| Remote finite compute consumer | [Finite producer v1](../contracts/finite-decision-remote.md) | Explicit compute enrollment, separate JSON schemas, exact generation/population/model lineage |
 
 The public platform SDK in
 [`yailabs/yai-sdk`](https://github.com/yailabs/yai-sdk) now has a separate
@@ -73,6 +74,10 @@ model, compiled representation and computational execution. A YAI consumer may
 use a qualified public seam; it must not infer producer capability from private
 structs, a model name or a research target. The finite local producer does not
 establish a YAI ABI, and future W → E state ingress remains unimplemented.
+Remote finite computation now has its own explicit SSH grant and versioned
+public JSON request/result projection. Its typed result preserves computational
+identities and remains uncalibrated; it does not confer Case authority. SDK/YAI
+consumer implementation and real Exon→DGX qualification are separate owners.
 
 ## Provider progress
 
@@ -221,3 +226,9 @@ It authenticates enrolled client keys through OpenSSH and reads host facts
 through the existing private local protocol; it neither exposes that socket
 remotely nor creates a second host lifecycle. Mutating remote control and a
 production deployment qualification are not yet implemented.
+
+An explicitly enrolled finite-compute key selects `yvex management finite-protocol`
+instead, with [independent schemas](../contracts/finite-decision-remote.md).
+The Rust adapter calls the installed public C finite client; the C client owns
+the private-wire exchange, result validation and connection cleanup. No remote
+lifecycle mutation, shell, socket forwarding or human-output parsing is involved.

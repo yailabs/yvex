@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "yvex.finite.response.v1",
+  "title": "YVEX remote finite-decision response v1",
+  "$comment": "Exactly one success result or refusal/error, never partial scores. Consumers additionally match request/candidate/model identities; correlation is not deduplication.",
+  "oneOf": [
+    {
+      "type":"object", "additionalProperties":false,
+      "required":["schema","request_id","status","dispatch_state","reason"],
+      "properties": {
+        "schema":{"const":"yvex.finite.response.v1"},
+        "request_id":{"type":"null"}, "status":{"const":"refused"},
+        "dispatch_state":{"const":"not_dispatched"}, "reason":{"type":"string", "minLength":1}
+      }
+    },
+    {
+      "type":"object", "additionalProperties":false,
+      "required":["schema","request_id","operation","model_alias","device_identity","authenticated_peer","status","dispatch_state","reason","error"],
+      "properties": {
+        "schema":{"const":"yvex.finite.response.v1"}, "request_id":{"$ref":"#/$defs/identity"},
+        "operation":{"const":"finite.decision.execute"}, "model_alias":{"type":"string", "minLength":1},
+        "device_identity":{"$ref":"#/$defs/peer"}, "authenticated_peer":{"$ref":"#/$defs/peer"},
+        "status":{"const":"error"}, "dispatch_state":{"const":"outcome_unavailable"},
+        "reason":{"const":"producer_error"},
+        "error":{"type":"object", "additionalProperties":false, "required":["code","name","owner"],
+                 "properties":{"code":{"type":"integer", "maximum":-1}, "name":{"type":"string"}, "owner":{"type":"string"}}}
+      }
+    },
+    {
+      "type":"object", "additionalProperties":false,
+      "required":["schema","request_id","operation","model_alias","device_identity","authenticated_peer","status","dispatch_state","result"],
+      "properties": {
+        "schema":{"const":"yvex.finite.response.v1"}, "request_id":{"$ref":"#/$defs/identity"},
+        "operation":{"const":"finite.decision.execute"}, "model_alias":{"type":"string", "minLength":1},
+        "device_identity":{"$ref":"#/$defs/peer"}, "authenticated_peer":{"$ref":"#/$defs/peer"},
+        "status":{"const":"ok"}, "dispatch_state":{"const":"completed"}, "result":{"$ref":"#/$defs/result"}
+      }
+    }
+  ],
+  "$defs": {
+    "identity":{"type":"string", "pattern":"^[0-9a-f]{64}$"},
+    "peer":{"type":"string", "pattern":"^ssh-ed25519:sha256:[0-9a-f]{64}$"},
+    "u64":{"type":"integer", "minimum":0, "maximum":18446744073709551615},
+    "result": {
+      "type":"object", "additionalProperties":false,
+      "required":["schema_version","score_kind","engine_generation","token_count","candidate_count","model_forward_count","sampling_invocation_count","generated_token_count","resident_backbone_count","elapsed_nanoseconds","source_mapped_bytes","parameter_execution_bytes","workspace_host_bytes","workspace_device_bytes","source_identity","logical_model_identity","binding_identity","tokenizer_identity","physical_program_identity","input_policy_identity","input_identity","candidate_population_identity","result_identity","calibrated","candidates"],
+      "properties": {
+        "schema_version":{"const":1}, "score_kind":{"const":"model-logit"},
+        "engine_generation":{"type":"integer", "minimum":1, "maximum":18446744073709551615},
+        "token_count":{"$ref":"#/$defs/u64"}, "candidate_count":{"type":"integer", "minimum":1, "maximum":8},
+        "model_forward_count":{"const":1}, "sampling_invocation_count":{"const":0},
+        "generated_token_count":{"const":0}, "resident_backbone_count":{"const":1},
+        "elapsed_nanoseconds":{"$ref":"#/$defs/u64"}, "source_mapped_bytes":{"$ref":"#/$defs/u64"},
+        "parameter_execution_bytes":{"$ref":"#/$defs/u64"}, "workspace_host_bytes":{"$ref":"#/$defs/u64"},
+        "workspace_device_bytes":{"$ref":"#/$defs/u64"}, "source_identity":{"$ref":"#/$defs/identity"},
+        "logical_model_identity":{"$ref":"#/$defs/identity"}, "binding_identity":{"$ref":"#/$defs/identity"},
+        "tokenizer_identity":{"$ref":"#/$defs/identity"}, "physical_program_identity":{"$ref":"#/$defs/identity"},
+        "input_policy_identity":{"$ref":"#/$defs/identity"}, "input_identity":{"$ref":"#/$defs/identity"},
+        "candidate_population_identity":{"$ref":"#/$defs/identity"}, "result_identity":{"$ref":"#/$defs/identity"},
+        "calibrated":{"const":false},
+        "candidates":{"type":"array", "minItems":1, "maxItems":8,
+          "items":{"type":"object", "additionalProperties":false, "required":["id","raw_score","relative_candidate_probability"],
+            "properties":{"id":{"type":"string", "minLength":1, "maxLength":127},
+              "raw_score":{"type":"number"}, "relative_candidate_probability":{"type":"number", "minimum":0, "maximum":1}}}}
+      }
+    }
+  }
+}

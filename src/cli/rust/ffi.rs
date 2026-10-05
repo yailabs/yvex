@@ -36,6 +36,7 @@ mod artifact;
 pub(crate) mod catalog;
 pub(crate) mod distribution;
 pub(crate) mod execution;
+pub(crate) mod finite;
 pub(crate) mod generation;
 pub(crate) mod media;
 pub(crate) mod pipeline;

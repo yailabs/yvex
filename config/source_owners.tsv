@@ -18,6 +18,8 @@ src/cli/rust/paths.rs	cli	cli.rust_paths_projection	generic	private	module-inter
 src/cli/rust/plumbing.rs	cli	cli.rust_catalog_plumbing	generic	private	module-interface	cli.rust	interface	none
 src/cli/rust/main.rs	cli	cli.rust_entry	entrypoint	private	entrypoint	cli.rust	entrypoint	none
 src/cli/rust/management.rs	cli	cli.rust_management	generic	private	platform-interface	cli.rust	implementation	none
+src/cli/rust/finite_remote.rs	cli	cli.remote_finite_producer	generic	private	platform-interface	cli.rust	implementation	none
+src/cli/rust/ffi/finite.rs	cli	cli.native_finite_producer	generic	private	typed-ffi	cli.rust	implementation	none
 src/cli/rust/ffi.rs	cli	cli.native_client	generic	private	typed-ffi	cli.rust	implementation	none
 src/cli/rust/ffi/registry.rs	cli	cli.native_registry	generic	private	typed-ffi	cli.rust	implementation	none
 src/cli/rust/ffi/source.rs	cli	cli.native_source	generic	private	typed-ffi	cli.rust	implementation	none

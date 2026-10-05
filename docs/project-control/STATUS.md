@@ -38,6 +38,9 @@ publication: {html: true, pdf: true, index: true}
   dynamic ready-sequence join/leave is not established.
 - **Interfaces:** local protocol v24, bounded OpenAI adapter, real provider progress;
   remote identity/status bootstrap does not establish mutating remote management.
+  The [remote finite producer](../contracts/finite-decision-remote.md) separately
+  exposes one identity-bound computation under an explicit SSH peer grant.
+  Loopback producer qualification is not installed Exon→DGX/SDK integration.
 - **Platforms:** main integrates the Rust shell, native macOS CPU execution and
   an early Apple Silicon Metal backend. Metal device/storage/F32-embedding
   primitives are qualified; full-model Metal admission and execution remain open.
