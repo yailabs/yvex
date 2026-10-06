@@ -15,7 +15,7 @@ publication: {html: true, pdf: true, index: true}
 [Up](README.md)
 
 Selected program: **YVEX shared compiler/runtime delivery**.
-Current phase: **Rust shell, initial macOS/Metal integration, public documentation alignment, Metal2 program refoundation and exact small-Qwen CPU conversation COMPLETE; Metal runtime admission is READY; bounded prefill retains external qualification gates; A03 is READY**.
+Current phase: **Rust shell, initial macOS/Metal integration, public documentation alignment, Metal2 program refoundation and exact small-Qwen CPU conversation COMPLETE; Metal2/main testing convergence IN PROGRESS; Metal runtime admission is READY; bounded prefill retains external qualification gates; A03 is READY**.
 The main-line selected implementation boundary remains **A03 encoder-decoder**,
 READY and unstarted. The independently selected [Metal2 Task Pack](#metal2-qwen-gpu-task-pack)
 continues on `feature/macos-metal2` toward exact Qwen 0.8B GPU generation in
@@ -71,10 +71,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 52 | 38 | 0 | 7 | 7 |
+| 53 | 38 | 1 | 7 | 7 |
 <!-- task-counts:end -->
 
-**38/52 selected Tasks complete.** This denominator includes the significant
+**38/53 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -233,6 +233,21 @@ created. `make docs-check` validates documentation ownership/links, publication,
 controlled Task states/counts and project-control negative controls. Final
 validation precedes the focused commit. `progression_decision=proceed`,
 `downstream_safe=true` for this corrected implementation program only.
+
+## Metal2/main testing convergence
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `METAL2.MAIN.TESTING.CONVERGENCE.0` | Merge current published main into Metal2 and inherit canonical model qualification before further Metal implementation | P1 | 🔵 IN PROGRESS | Preserve published Metal2/refoundation/conversation history with a semantic main-to-pressure merge; retain main and unpublished Spark work. Inspect published qualification owners, reconcile shared QA/control state, and qualify combined-source documentation, framework, model/conversation/raw CPU, Metal foundation and affected Linux/CUDA consumers. Future Metal Tasks consume one common methodology with backend-specific evidence. No Metal successor implementation or history rewrite. |
+
+Selected on 2026-10-06 at `6e84d28d` on `feature/macos-metal2`. Initial live
+published main is `803dd98d`, merge base `d79b60f2`, with Metal2 five commits
+ahead and one behind. The published main delta adds the finite-decision remote
+producer and its registered integration fixture; it does not yet contain the
+new qualification framework observed among unpublished primary Spark files.
+Those moving files are not integration authority and must be published before
+the requested methodology convergence can close. Qwen CPU conversation remains
+COMPLETE; `METAL.RUNTIME.ADMISSION.0` remains READY throughout this pass.
 
 ## Metal2 Qwen GPU Task Pack
 
