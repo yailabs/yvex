@@ -16,6 +16,11 @@ publication: {html: true, pdf: true, index: true}
 
 ## Qualified small-checkpoint boundary — 2026-10-02
 
+This record retains the original raw-completion and publication claim. The
+later [exact CPU conversation qualification](qwen-small-conversation.md) adds
+source-authenticated chat through a new binding to the unchanged artifact;
+it does not rewrite the historical evidence below or qualify Metal inference.
+
 The operator resumed `MACOS.SMALLMODEL.CLI.0` on `feature/macos-metal`, starting
 at clean `10ac0d8da586b110f32104af22d83e51a9293b9d`. Selection is `73d3cce4`;
 family-owned exact-target catalogs are introduced at `cc7a9c79`. The qualified

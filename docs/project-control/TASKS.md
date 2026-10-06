@@ -15,7 +15,7 @@ publication: {html: true, pdf: true, index: true}
 [Up](README.md)
 
 Selected program: **YVEX shared compiler/runtime delivery**.
-Current phase: **Rust shell, initial macOS/Metal integration, public documentation alignment and Metal2 program refoundation COMPLETE; exact small-Qwen CPU conversation IN PROGRESS, implementation under qualification; bounded prefill retains external qualification gates; A03 is READY**.
+Current phase: **Rust shell, initial macOS/Metal integration, public documentation alignment, Metal2 program refoundation and exact small-Qwen CPU conversation COMPLETE; Metal runtime admission is READY; bounded prefill retains external qualification gates; A03 is READY**.
 The main-line selected implementation boundary remains **A03 encoder-decoder**,
 READY and unstarted. The independently selected [Metal2 Task Pack](#metal2-qwen-gpu-task-pack)
 continues on `feature/macos-metal2` toward exact Qwen 0.8B GPU generation in
@@ -71,10 +71,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 52 | 37 | 1 | 7 | 7 |
+| 52 | 38 | 0 | 7 | 7 |
 <!-- task-counts:end -->
 
-**37/52 selected Tasks complete.** This denominator includes the significant
+**38/52 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -246,7 +246,7 @@ Historical completed Tasks and their evidence retain their earned scope.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `QWEN3.5.SMALL.CONVERSATION.ADMISSION.0` | Admit the exact small checkpoint's source-authored conversation policy and normal CPU chat | P1 | 🔵 IN PROGRESS | Exact pinned config/template authority now compiles through the family and common tokenizer; existing source-faithful payload is rebound without tensor changes. Qualification must close independent exact prompt/token references and authority refusals, raw CPU preservation, same-session real multi-turn standard CPU chat and affected regressions. CLI/REPLAI remain unchanged. Backend-independent conversation capability only; no Metal execution claim. |
+| `QWEN3.5.SMALL.CONVERSATION.ADMISSION.0` | Admit the exact small checkpoint's source-authored conversation policy and normal CPU chat | P1 | ✅ COMPLETE | Exact `2fc06364…` config/template authority compiles through the family and common tokenizer; existing source-faithful payload is rebound without tensor changes. Clean-source evidence closes 24 independent exact prompt/token cases, five malformed and four authority refusals, 16 retained upstream raw token matches and two real same-session Ada turns through normal CPU load/chat. Affected Mac/Linux, sanitizer and existing CUDA controls pass with initial failures/retries retained. CLI/REPLAI are unchanged. [Qualification](../evaluation/qwen-small-conversation.md) earns exact CPU conversation only; no Metal execution claim. |
 | `METAL.RUNTIME.ADMISSION.0` | Establish backend-neutral model admission, numerical/physical compatibility, capacity and generation-bound resource lifetime | P1 | ⬜ READY | Next Metal architectural prerequisite. Investigate and correct genuinely owned generic capability, quant/numerical, physical-variant and materialization compatibility, specialization, operation coverage and engine-generation lifetime seams. Select admitted implementations from operation/numerical and physical requirements, account unified RAM once with system reserve, and qualify capacity/stale-owner/refusal/cleanup plus CPU/CUDA compatibility. Incomplete required operation sets refuse; no Qwen Metal execution follows. |
 | `METAL.QWEN.STATELESS.EXECUTION.0` | Close the exact authenticated small-Qwen text program's stateless numerical/physical requirements on Metal | P1 | ⬜ READY | Uses the common admission/capability architecture. Derive all required stateless realizations from sealed forward/output programs and their numerical contracts, including embedding, linear projections, normalization, activation/gated products, residual work, output normalization/logit projection and conversions; include positional work only where stateless in the admitted program. Qualify relevant shapes/dtypes, independent references, rounding, synchronization, refusal and cleanup. Missing required coverage remains a failed prerequisite, not model admission; no attention/state/full-model claim. |
 | `METAL.QWEN.STATEFUL.EXECUTION.0` | Close the exact small-Qwen program's stateful operation and session-state requirements on Metal | P1 | ⬜ READY | Depends on common admission/lifetime and required stateless realizations. Qualify program-derived causal convolution/gated-delta recurrence and full causal attention, their convolution/recurrent/KV state, positional evolution and prefill/decode transition. Prove numerical references, transactional publication, state identity, isolation, cancellation, rollback/refusal, reset, generation retirement and cleanup through existing owners. No hidden CPU fallback or alternate session lifecycle; operation/state closure alone earns no full-model or chat claim. |
@@ -254,13 +254,15 @@ Historical completed Tasks and their evidence retain their earned scope.
 | `METAL.QWEN.CHAT.0` | Qualify exact Qwen Metal generation in standard `./yvex model load ...` and `./yvex chat` with Rust/REPLAI | P1 | ⬜ READY | Depends on qualified exact conversation admission and full-model Metal generation. Prove explicit Metal-backed identity, first and subsequent conversational turns, session continuity/isolation, Ctrl-C during generation and subsequent use as contractually permitted, reset, unload/reload and terminal restoration. Use ordinary host/client typed APIs and standard REPLAI; no alternate Metal CLI or human-output parsing. Earn this exact checkpoint's interactive product composition, not general Metal/performance/release readiness. |
 | `INTEGRATION.METAL2.MAIN.0` | Reconcile the qualified seven-boundary program with current published main and integrate only earned claims | P1 | ⬜ READY | Depends on the earned conversation, runtime, stateless/stateful, full-model and chat exits above. Refresh published main and primary Spark ownership/unpublished-work state; preserve unrelated work, merge published histories, and qualify the combined source in affected macOS CPU/Metal and Linux/CUDA regression lanes. Integrate/publish only after required evidence passes, then create the successor branch. No automatic broader capability or release promotion; missing mandatory evidence prevents closure. |
 
-Only `QWEN3.5.SMALL.CONVERSATION.ADMISSION.0` is selected IN PROGRESS as an
-executable successor. Its status denotes the next authorized implementation,
-not implementation or qualification performed by this refoundation. The other
-six rows remain READY and dependency-bound. `METAL.RUNTIME.ADMISSION.0` returns
-to READY: its earlier activity was owner investigation and project-control
-selection, with no implementation/evidence beyond the qualified foundation.
-A03 remains READY on the independent main workstream.
+At refoundation, only `QWEN3.5.SMALL.CONVERSATION.ADMISSION.0` was selected
+IN PROGRESS; no successor implementation was claimed by that planning pass.
+Its independent implementation and qualification close on 2026-10-06 at the
+bounded CPU exit above. The remaining six rows are READY and dependency-bound;
+no next implementation is started automatically. `METAL.RUNTIME.ADMISSION.0`
+is the next architectural prerequisite: its earlier activity remains owner
+investigation and project-control selection, with no implementation/evidence
+beyond the qualified foundation. A03 remains READY on the independent main
+workstream.
 
 Conversation admission is the first execution priority, not a numerical
 dependency of raw GPU completion. The dependency graph is:
@@ -283,8 +285,8 @@ completed deliveries or fabricated implementation history.
 
 ### Exact conversation authority and preserved CLI boundary
 
-Live `qwen_small_tokenizer_policy` in the
-[Qwen graph recipe](../../src/graph/families/qwen3_5.c) explicitly selects
+At refoundation, `qwen_small_tokenizer_policy` in the
+[Qwen graph recipe](../../src/graph/families/qwen3_5.c) selected
 `YVEX_TOKENIZER_PROMPT_VERBATIM`. The `qwen_conversation` protocol in the
 [Qwen model owner](../../src/model/families/qwen3_5.c) is bound to the larger source
 revision `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`; it cannot authenticate
@@ -294,18 +296,17 @@ The observed `model has no admitted conversation template` refusal is a valid
 server/runtime result, consistent with the raw-only family policy, not a Rust
 CLI defect. No CLI change is selected to bypass, hide or reinterpret it.
 
-The independent conversation Task must authenticate that exact revision's
-template authority (including `tokenizer_config.json#chat_template` if present),
-tokenizer bytes and special-token semantics, role framing, generation prompt,
-channels and relevant stop behavior. It must qualify the distinction between
-the existing raw model EOS 248044 and tokenizer conversation EOS 248046, rather
-than inheriting another checkpoint's policy or inventing a generation sidecar.
-Source/family/compiler/tokenizer owners supply the admitted immutable policy;
-runtime/server consume it through existing contracts. Mismatched revision,
-template digest or unauthenticated authority refuses before session mutation.
-If immutable packaging/binding changes are required by the live contract,
-authenticate their new identities and preserve the original raw-completion
-artifact/binding and evidence; do not relabel or overwrite historical bytes.
+The completed conversation Task authenticates that exact revision's
+`tokenizer_config.json#chat_template`, decoded SHA-256 `273d8e0e…`, full config
+and tokenizer bytes. The small adapter version 4 compiles its source-authored
+role/generation/stop policy; raw model EOS 248044 and tokenizer conversation EOS
+248046 remain distinct. Source/family/compiler/tokenizer owners supply the
+immutable policy; runtime/server consume it through existing contracts.
+Mismatched revision, template/config digest and tampered policy refuse.
+The unchanged existing artifact gains a new immutable binding `dd5b2dbd…` and
+binding-qualified profile; historical package creation metadata, raw binding and
+raw evidence are preserved. [Exact qualification](../evaluation/qwen-small-conversation.md)
+records independent bytes/IDs, refusals and real CPU multi-turn composition.
 
 CPU multi-turn `./yvex chat` closes only exact conversation admission and normal
 session composition. The later `METAL.QWEN.CHAT.0` must independently demonstrate

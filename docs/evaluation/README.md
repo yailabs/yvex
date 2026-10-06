@@ -36,6 +36,7 @@ records retain the original source identities and distinct claims:
 | Does the native product work on macOS? | [Native qualification](macos-native.md) | Platform, CPU/host and terminal lifecycle |
 | What executes on the Apple GPU? | [Metal foundation](macos-metal.md) | Device/pipeline, shared buffers, F32 embedding and refusal/cleanup |
 | Has a real model generated on the Mac? | [Small-model CPU qualification](macos-small-model.md) | Exact Qwen 0.8B artifact, two bounded upstream continuation matches and publication |
+| Does the exact small Qwen checkpoint support normal chat? | [Small-Qwen conversation](qwen-small-conversation.md) | Authenticated source template, exact independent prompt/token references, raw regression and real same-session multi-turn CPU product chat |
 
 The CPU model result does not qualify Metal inference. Full-model Metal,
 performance and release evidence remain separate gates.

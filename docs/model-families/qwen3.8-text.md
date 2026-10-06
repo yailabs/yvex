@@ -73,12 +73,28 @@ embedding/output uses one physical parameter. The source-faithful preset is
 
 The small source has no generation configuration file. Its explicit YVEX greedy
 policy uses model EOS 248044; tokenizer conversation EOS 248046 remains a
-separate source fact. Only verbatim raw completion is selected; no conversation
-template, vision or MTP capability is admitted by this integration. The
+separate source fact. Original small-model integration selected only verbatim
+raw completion. The
 [Mac evidence](../evaluation/macos-small-model.md) records actual preparation,
 CPU generation, independent reference comparison and exact public distribution.
 Clean `17e5e0a1` qualifies two exact eight-token CPU continuations and normal
-host load/unload/stop; full-model Metal and conversation remain unsupported.
+host load/unload/stop.
+
+[Exact conversation qualification](../evaluation/qwen-small-conversation.md) at
+clean `b2faa907` separately authenticates this revision's
+`tokenizer_config.json#chat_template`, decoded SHA-256
+`273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80`.
+Small adapter version 4 compiles the conversation policy through the common
+tokenizer; larger adapter version 3 and its different source/template authority
+are retained. Independent references qualify 24 exact prompt/token streams,
+malformed/authority refusal and special-token facts. Normal CPU `model load`
+and Rust/REPLAI `chat` produce two real turns in the same session; the original
+16 raw greedy tokens remain exact. A new authenticated binding `dd5b2dbd…`
+selects current conversation semantics without rewriting the artifact, tokenizer
+assets, tensors, physical layout or historical raw binding. No frontend template
+or Metal implementation is introduced. Full-model Metal, vision/MTP and general
+conversation quality remain unsupported/unqualified.
+
 The exact artifact is publicly distributed at verified HF commit
 `7eab0fd727ccd5148f127466934790f344d44d38`; the canonical catalog binds the
 same file identity to its PUBLISHED location. Distribution is not a general
