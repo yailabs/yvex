@@ -15,7 +15,7 @@ publication: {html: true, pdf: true, index: true}
 [Up](README.md)
 
 Selected program: **YVEX shared compiler/runtime delivery**.
-Current phase: **Rust shell, initial macOS/Metal integration, public documentation alignment, Metal2 program refoundation and exact small-Qwen CPU conversation COMPLETE; Metal2/main testing convergence IN PROGRESS; Metal runtime admission is READY; bounded prefill retains external qualification gates; A03 is READY**.
+Current phase: **Rust shell, initial macOS/Metal integration, public documentation alignment, Metal2 program refoundation and exact small-Qwen CPU conversation COMPLETE; Metal2/main testing convergence BLOCKED on main publication and Spark qualification recovery; Metal runtime admission is READY; bounded prefill retains external qualification gates; A03 is READY**.
 The main-line selected implementation boundary remains **A03 encoder-decoder**,
 READY and unstarted. The independently selected [Metal2 Task Pack](#metal2-qwen-gpu-task-pack)
 continues on `feature/macos-metal2` toward exact Qwen 0.8B GPU generation in
@@ -71,7 +71,7 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 54 | 39 | 1 | 7 | 7 |
+| 54 | 39 | 0 | 7 | 8 |
 <!-- task-counts:end -->
 
 **39/54 selected Tasks complete.** This denominator includes the significant
@@ -251,7 +251,7 @@ validation precedes the focused commit. `progression_decision=proceed`,
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `METAL2.MAIN.TESTING.CONVERGENCE.0` | Merge current published main into Metal2 and inherit canonical model qualification before further Metal implementation | P1 | 🔵 IN PROGRESS | Preserve published Metal2/refoundation/conversation history with a semantic main-to-pressure merge; retain main and unpublished Spark work. Inspect published qualification owners, reconcile shared QA/control state, and qualify combined-source documentation, framework, model/conversation/raw CPU, Metal foundation and affected Linux/CUDA consumers. Future Metal Tasks consume one common methodology with backend-specific evidence. No Metal successor implementation or history rewrite. |
+| `METAL2.MAIN.TESTING.CONVERGENCE.0` | Merge current published main into Metal2 and inherit canonical model qualification before further Metal implementation | P1 | ⛔ BLOCKED | Published main `803dd98d` is merged normally at `b3222de2`; existing common QA, exact Qwen CPU conversation/raw regression and Metal foundation are preserved. The new main qualification framework remains unpublished, and Spark transport loss prevents final Linux sanitizer/reference recovery. [Intermediate evidence](../evaluation/metal2-main-convergence.md) retains passes, failed Mac diagnostics and exact external gates. Future Metal Tasks consume one common model methodology; no successor implementation or history rewrite. |
 
 Selected on 2026-10-06 at `6e84d28d` on `feature/macos-metal2`. Initial live
 published main is `803dd98d`, merge base `d79b60f2`, with Metal2 five commits
@@ -261,6 +261,16 @@ new qualification framework observed among unpublished primary Spark files.
 Those moving files are not integration authority and must be published before
 the requested methodology convergence can close. Qwen CPU conversation remains
 COMPLETE; `METAL.RUNTIME.ADMISSION.0` remains READY throughout this pass.
+The normal merge is qualified at its published intermediate scope. Full
+convergence remains BLOCKED until the new framework is published and merged,
+its changed owners are inspected, and mandatory Linux evidence is recovered
+or requalified. Spark is offline after CI/native PASS; inspect the owned
+sanitizer process/receipt before rerunning it. No source or authentication
+policy is changed to bypass these gates.
+
+`progression_decision=blocked_external`; `downstream_safe=false` for full
+methodology convergence. Historical completed Tasks and capability maturity
+remain unchanged.
 
 ## Metal2 Qwen GPU Task Pack
 
@@ -278,7 +288,7 @@ Historical completed Tasks and their evidence retain their earned scope.
 | `METAL.RUNTIME.ADMISSION.0` | Establish backend-neutral model admission, numerical/physical compatibility, capacity and generation-bound resource lifetime | P1 | ⬜ READY | Next Metal architectural prerequisite. Investigate and correct genuinely owned generic capability, quant/numerical, physical-variant and materialization compatibility, specialization, operation coverage and engine-generation lifetime seams. Select admitted implementations from operation/numerical and physical requirements, account unified RAM once with system reserve, and qualify capacity/stale-owner/refusal/cleanup plus CPU/CUDA compatibility. Incomplete required operation sets refuse; no Qwen Metal execution follows. |
 | `METAL.QWEN.STATELESS.EXECUTION.0` | Close the exact authenticated small-Qwen text program's stateless numerical/physical requirements on Metal | P1 | ⬜ READY | Uses the common admission/capability architecture. Derive all required stateless realizations from sealed forward/output programs and their numerical contracts, including embedding, linear projections, normalization, activation/gated products, residual work, output normalization/logit projection and conversions; include positional work only where stateless in the admitted program. Qualify relevant shapes/dtypes, independent references, rounding, synchronization, refusal and cleanup. Missing required coverage remains a failed prerequisite, not model admission; no attention/state/full-model claim. |
 | `METAL.QWEN.STATEFUL.EXECUTION.0` | Close the exact small-Qwen program's stateful operation and session-state requirements on Metal | P1 | ⬜ READY | Depends on common admission/lifetime and required stateless realizations. Qualify program-derived causal convolution/gated-delta recurrence and full causal attention, their convolution/recurrent/KV state, positional evolution and prefill/decode transition. Prove numerical references, transactional publication, state identity, isolation, cancellation, rollback/refusal, reset, generation retirement and cleanup through existing owners. No hidden CPU fallback or alternate session lifecycle; operation/state closure alone earns no full-model or chat claim. |
-| `METAL.QWEN.FULLMODEL.0` | Generate real continuations with the exact Qwen3.5-0.8B text artifact through a Metal model engine | P1 | ⬜ READY | Depends on runtime admission and complete required stateless/stateful coverage. Bind the exact qualified artifact and authenticated runtime binding to explicit Metal device/backend identity; prove full prefill and decode on the GPU, generated continuations, CPU/YVEX comparison and retained independent source-precision reference evidence where applicable, truthful materialization/resource/copy facts, load/unload/refusal and cleanup. No hidden CPU model computation. Earn bounded full-model Metal generation only; REPLAI/chat, performance, broader models and release remain separate. |
+| `METAL.QWEN.FULLMODEL.0` | Generate real continuations with the exact Qwen3.5-0.8B text artifact through a Metal model engine | P1 | ⬜ READY | Depends on runtime admission and complete required stateless/stateful coverage. Use the canonical common model-testing/reference/PASS discipline, with Metal physical execution as an additional evidence dimension. Bind the exact qualified artifact and authenticated runtime binding to explicit Metal device/backend identity; prove full prefill and decode on the GPU, generated continuations, CPU/YVEX comparison and retained independent source-precision reference evidence where applicable, truthful materialization/resource/copy facts, load/unload/refusal and cleanup. No hidden CPU model computation. Earn bounded full-model Metal generation only; REPLAI/chat, performance, broader models and release remain separate. |
 | `METAL.QWEN.CHAT.0` | Qualify exact Qwen Metal generation in standard `./yvex model load ...` and `./yvex chat` with Rust/REPLAI | P1 | ⬜ READY | Depends on qualified exact conversation admission and full-model Metal generation. Prove explicit Metal-backed identity, first and subsequent conversational turns, session continuity/isolation, Ctrl-C during generation and subsequent use as contractually permitted, reset, unload/reload and terminal restoration. Use ordinary host/client typed APIs and standard REPLAI; no alternate Metal CLI or human-output parsing. Earn this exact checkpoint's interactive product composition, not general Metal/performance/release readiness. |
 | `INTEGRATION.METAL2.MAIN.0` | Reconcile the qualified seven-boundary program with current published main and integrate only earned claims | P1 | ⬜ READY | Depends on the earned conversation, runtime, stateless/stateful, full-model and chat exits above. Refresh published main and primary Spark ownership/unpublished-work state; preserve unrelated work, merge published histories, and qualify the combined source in affected macOS CPU/Metal and Linux/CUDA regression lanes. Integrate/publish only after required evidence passes, then create the successor branch. No automatic broader capability or release promotion; missing mandatory evidence prevents closure. |
 
@@ -406,6 +416,17 @@ as retained in the small-model qualification owner. Full-model Metal must name
 that artifact and its admitted binding; a later conversation-enabled immutable
 binding remains a distinct authenticated identity, not retroactive raw-binding
 qualification.
+
+Future Metal2 model qualification has one canonical authority: published main's
+common model-testing/evidence framework, [QA](../evaluation/qa.md), registered
+change obligations and [measurement methodology](../evaluation/benchmarks/methodology.md).
+The [convergence record](../evaluation/metal2-main-convergence.md) distinguishes
+currently inherited published owners from the stronger framework still awaiting
+publication. Component correctness, independent source/model conformance,
+conversation behavior, lifecycle, physical execution and performance stay
+separate. Metal adds backend evidence rather than a different model PASS or
+promotion rule. Existing earned records keep their historical scope; the new
+framework's future required qualification does not erase completed Tasks.
 
 Each implementation Task updates its affected architecture/contracts and the
 evaluation owner at the earned scope, following [QA ownership](../evaluation/qa.md)
