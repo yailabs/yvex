@@ -100,8 +100,9 @@ retired socket/listener and released singleton lock establish actual teardown,
 not an inferred successful exit code. No active request was terminated.
 
 The same DeepSeek model/artifact/binding/specialization and speculative strategy,
-32768 context and 64-position prefill configuration were restored. Its current
-generation is 3; finite alias `laya-typed-finite-cpu` is generation 2. An initial
+32768 context and 64-position prefill configuration were restored. Its
+generation was 3; finite alias `laya-typed-finite-cpu` was generation 2 for the
+original LAN controls below. An initial
 idle reload used the registry's 4096 default; it was corrected through supported
 unload/load with explicit 32768 before the restoration evidence. No user
 session existed during that correction. Generation must not be used as a
@@ -125,6 +126,36 @@ The four LAN controls include two full-model executions and two refusal paths;
 they are not a workload/performance campaign. Durations are characterization of
 this fixture only. The remote control's outer SSH round trip includes the DGX
 control hop to Exon and is not pure client-observed Exon latency.
+
+### Current generation after the coordinated idle window
+
+The independently qualified installed executable is unchanged. The subsequent
+operator-approved idle Host restart reset its process-local engine generations;
+the finite engine now remains **generation 1**, with specialization
+`ff6f2d5c61e15657abbee3762fa2f0bdb71191f20437cce71afd7cc5d73b1228`.
+All six durable model/input-policy identities, the approved server pins and
+the YAI finite-only enrollment are unchanged. Consumers must use the current
+generation, not the historical generation 2 in the original LAN receipt.
+
+The current [machine handoff](data/finite-lan-20261006.json) separates those
+historical remote controls from fresh installed public-C local recovery. The
+original three-candidate fixture again matches its independent checkpoint
+reference within the predeclared tolerance; a request for retired generation 2
+refuses with `YVEX_ERR_STATE` and no result. The result identity changes with
+the generation by contract; equal model scores do not make result identities
+interchangeable. This is not a new Exon/SDK/YAI consumer qualification.
+
+DeepSeek is restored at generation 7 at this capture, with the same model,
+artifact, binding, specialization, context 32768, chunk 64 and speculative
+strategy. A new synthetic `Return OK.` recovery completes with HTTP 200 and
+natural stop; no operator/Case prompt is replayed. Typed snapshots show zero
+active/queued work, sessions, leases, attached clients and transient state.
+HTTPS certificate inspection matches the previously approved pin; neither
+public listener was restarted or re-enrolled. Further model reloads can change
+DeepSeek's generation without changing the finite engine's generation.
+
+Raw post-window controls and snapshots remain at
+`/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/post-profile-recovery-v7`.
 
 ### Exact consumer boundary and limits
 

@@ -35,7 +35,7 @@
   },
   "model": {
     "alias": "laya-typed-finite-cpu",
-    "engine_generation": 2,
+    "engine_generation": 1,
     "engine_kind": "finite-decision",
     "backend": "cpu",
     "strategy": "not-applicable",
@@ -48,7 +48,7 @@
     "tokenizer_identity": "6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30",
     "physical_program_identity": "cc2bbc47dbe9e053299e948a8bb4a5b4b234f6c37a3f2ad08a118dfe190625b1",
     "input_policy_identity": "8c3ecc1adba6928c3255b24f2d1eb0dd1a6843795473b8f3521cb25094e4c042",
-    "specialization_identity": "9cb3d3669b48b5a66e6fc90782f4d7adb6c4f908e3d29896d587dae715199fb2"
+    "specialization_identity": "ff6f2d5c61e15657abbee3762fa2f0bdb71191f20437cce71afd7cc5d73b1228"
   },
   "bounds": {
     "candidate_count": {"minimum": 1, "maximum": 8},
@@ -61,6 +61,9 @@
     "truncation": false
   },
   "qualified_controls": {
+    "scope": "historical Exon LAN qualification before the coordinated idle Host restart; not a new remote execution at the current generation",
+    "engine_generation": 2,
+    "specialization_identity": "9cb3d3669b48b5a66e6fc90782f4d7adb6c4f908e3d29896d587dae715199fb2",
     "path": "Exon LAN -> approved dedicated SSH -> public producer -> resident Host",
     "positive_and_independent_recovery": 2,
     "stale_generation": "YVEX_ERR_STATE, no result",
@@ -77,9 +80,25 @@
     "result_identity": "c29d83173a3430c2b69d4dea17ec99768190688f25cbbc693085c5a9ab6a7b77",
     "raw_evidence": "remote-controls.json"
   },
+  "post_window_controls": {
+    "path": "installed public C local producer -> resident Host; not renewed Exon SDK/YAI qualification",
+    "engine_generation": 1,
+    "specialization_identity": "ff6f2d5c61e15657abbee3762fa2f0bdb71191f20437cce71afd7cc5d73b1228",
+    "positive": "PASS; original 29-token three-candidate fixture, ordered candidate IDs and all six model/input-policy identities retained",
+    "stale_generation": "generation 2 -> YVEX_ERR_STATE (-8), no result",
+    "sampling_invocation_count": 0,
+    "generated_token_count": 0,
+    "upstream_max_abs_logit_delta": 0.00000393391589359,
+    "predeclared_absolute_tolerance": 0.0001,
+    "producer_elapsed_seconds": 37.963957106,
+    "result_identity": "8401dc233d6ff80cf694c105fa06e52f63b98fc448ad9728cdd8adc1b897135a",
+    "raw_evidence": "/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/post-profile-recovery-v7",
+    "remote_trust_or_grant_changed": false,
+    "case_prompt_replayed": false
+  },
   "deepseek_preserved": {
     "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
-    "engine_generation": 3,
+    "engine_generation": 7,
     "context": 32768,
     "prefill_chunk": 64,
     "strategy": "speculative",
@@ -87,7 +106,7 @@
     "artifact_identity": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
     "binding_identity": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
     "specialization_identity": "6c3e33a0ea61e9a371dc551d595b5a68e6f28e3059cde0ee49fc1370939c8350",
-    "fresh_synthetic_recovery": "HTTP 200; 8 prompt / 3 committed output tokens; terminal length bound",
+    "fresh_synthetic_recovery": "HTTP 200; 7 prompt / 1 committed output token; natural stop; explicit output bound 3",
     "case_prompt_replayed": false
   },
   "https_management": {
