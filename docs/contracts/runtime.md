@@ -453,7 +453,7 @@ does not modify source snapshots or artifacts.
 
 ## Compatibility and non-claims
 
-Hosted behavior crosses private local protocol v24 and the bounded OpenAI
+Hosted behavior crosses private local protocol v25 and the bounded OpenAI
 compatibility profile v3. Pre-v0.1 private protocol versions may refuse rather
 than decode compatibly. Public and internal C ABI follow their typed header and
 schema contracts.

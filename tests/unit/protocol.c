@@ -35,6 +35,7 @@ static int test_request_roundtrip(void)
     source.operation = YVEX_CLIENT_OP_GENERATION_TURN;
     source.request_number = 42u;
     strcpy(source.session_name, "main");
+    memset(source.expected_session_identity, 'a', 64u);
     source.prompt = prompt;
     source.prompt_bytes = sizeof(prompt);
     source.media_condition_count = 2u;
@@ -78,6 +79,7 @@ static int test_request_roundtrip(void)
     YVEX_TEST_ASSERT(decoded.operation == source.operation, "request operation");
     YVEX_TEST_ASSERT(decoded.request_number == 42u, "request number");
     YVEX_TEST_ASSERT_STREQ(decoded.session_name, "main", "session name");
+    YVEX_TEST_ASSERT_STREQ(decoded.expected_session_identity, source.expected_session_identity, "exact session fence roundtrip");
     YVEX_TEST_ASSERT(decoded.prompt_bytes == sizeof(prompt), "prompt extent");
     YVEX_TEST_ASSERT(memcmp(decoded.prompt, prompt, sizeof(prompt)) == 0,
                      "prompt bytes including NUL");
@@ -105,6 +107,12 @@ static int test_request_roundtrip(void)
     yvex_content_parts_close(&owned_content, decoded.content_part_count);
     yvex_provider_request_close(&owned_provider);
 
+    source.expected_session_identity[0] = 'z';
+    YVEX_TEST_ASSERT(yvex_protocol_request_encode(&source, frame, sizeof(frame), &count, &err) == YVEX_ERR_INVALID_ARG, "malformed identity refuses");
+    source.expected_session_identity[0] = 'a';
+    source.operation = YVEX_CLIENT_OP_SESSION_NEW;
+    YVEX_TEST_ASSERT(yvex_protocol_request_encode(&source, frame, sizeof(frame), &count, &err) == YVEX_ERR_INVALID_ARG, "creation cannot claim an existing identity");
+    source.operation = YVEX_CLIENT_OP_GENERATION_TURN;
     source.schema_version++;
     count = 99u;
     rc = yvex_protocol_request_encode(&source, frame, sizeof(frame), &count, &err);
@@ -390,6 +398,7 @@ static int test_schema_refusals(void)
 
     memset(&message, 0, sizeof(message));
     message.schema_version = YVEX_LOCAL_PROTOCOL_VERSION;
+    memset(message.host_instance_identity, 'c', 64u);
     message.kind = YVEX_CLIENT_MESSAGE_ACK;
     YVEX_TEST_ASSERT(
         yvex_protocol_message_encode(&message, frame, sizeof(frame), &count,
@@ -563,6 +572,7 @@ static int test_message_roundtrip(void)
     source.status = YVEX_OK;
     source.request_number = 9u;
     strcpy(source.session_name, "session-a");
+    memset(source.host_instance_identity, 'd', 64u);
     source.runtime.schema_version = YVEX_SERVER_SUMMARY_SCHEMA_V2;
     source.runtime.metrics.schema_version = YVEX_RUNTIME_METRICS_SCHEMA_VERSION;
     source.runtime.metrics.resources.schema_version =
@@ -606,6 +616,7 @@ static int test_message_roundtrip(void)
     rc = yvex_protocol_message_decode(frame, count, &decoded, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "message decode");
     YVEX_TEST_ASSERT(decoded.kind == YVEX_CLIENT_MESSAGE_STATUS, "message kind");
+    YVEX_TEST_ASSERT_STREQ(decoded.host_instance_identity, source.host_instance_identity, "Host lifetime nonce roundtrip");
     YVEX_TEST_ASSERT(decoded.runtime.status == YVEX_SERVER_STATUS_READY,
                      "runtime status");
     YVEX_TEST_ASSERT(decoded.runtime.host_ready &&
@@ -964,7 +975,7 @@ static int test_stale_frame_refusal(void)
                      "stale peer thread");
     rc = yvex_client_connect(&client, path, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT && client == NULL &&
-                         strstr(yvex_error_message(&err), "version 24") != NULL,
+                         strstr(yvex_error_message(&err), "version 25") != NULL,
                      "immediately prior v23 frame explicitly refuses");
     YVEX_TEST_ASSERT(pthread_join(thread, NULL) == 0, "stale peer join");
     (void)close(peer.listener);

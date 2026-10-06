@@ -17,7 +17,7 @@ publication: {html: true, pdf: true, index: true}
 <!-- maturity-counts:start -->
 | Established | Partial | Open | Later | Total |
 | ---: | ---: | ---: | ---: | ---: |
-| 35 | 44 | 58 | 14 | 151 |
+| 35 | 47 | 55 | 14 | 151 |
 <!-- maturity-counts:end -->
 
 ## Product, engineering and qualification
@@ -36,8 +36,10 @@ publication: {html: true, pdf: true, index: true}
   machinery. Native Cognitive State E is still an open research boundary.
 - **Execution:** cooperative ready progress and real batch/worklist populations;
   dynamic ready-sequence join/leave is not established.
-- **Interfaces:** local protocol v24, bounded OpenAI adapter, real provider progress;
-  remote identity/status bootstrap does not establish mutating remote management.
+- **Interfaces:** local protocol v25, bounded OpenAI adapter, real provider progress;
+  36 typed product-management operations share native owners and durable receipts.
+  Standalone HTTPS/pairing and same-user local management are under cross-client
+  qualification; [network contract](../contracts/network-management.md).
   The [remote finite producer](../contracts/finite-decision-remote.md) separately
   exposes one identity-bound computation under an explicit SSH peer grant.
   Loopback producer qualification is not installed Exon→DGX/SDK integration.
@@ -461,9 +463,9 @@ tokenizer kind is explicitly weaker than executing its processor.
 | Apple Silicon Metal backend foundation | 🟢 ESTABLISHED | Tested M5 Pro admits a real compute pipeline through the common backend, owns shared buffers and executes F32 embedding with zero bit mismatches against an independent host oracle; checked refusal/cleanup, resource known bits and CPU/platform regressions pass. | Qualify additional numerical/physical realizations independently and resolve canonical memory-domain capacity and model-specialization lifetime before admitting Metal engines. No model, performance or release readiness follows. | P / S / Q | [Metal qualification](../evaluation/macos-metal.md); [backend owner](../architecture/backend-execution.md#apple-silicon-metal-foundation) |
 | macOS real small-model execution and publication | 🟢 ESTABLISHED | Exact Qwen 0.8B mixed BF16/F32 tied text artifact qualifies CPU load/generation and two independent eight-token continuations. Clean `17e5e0a1`: Mac/Linux CI 120 and native 14 each PASS; Metal 2 PASS. Public HF `7eab0fd7` has verified exact bytes/card/license and a canonical PUBLISHED location; initial credential refusal is resolved by Mac OAuth login. Final integrated source `d47f468d` requalifies both exact eight-token CPU prefixes; [integration evidence](../evaluation/macos-main-integration.md) retains source and gate limits. | Preserve exact artifact, bounded execution and publication scope. Metal model operations, conversation templates, long-context/quality and full-model numerical conformance remain separate. | P / S / Q | [Mac small-model evidence](../evaluation/macos-small-model.md); [family integration](../model-families/integration.md) |
 | Windows Console/ConPTY execution | 🔴 OPEN | No qualified Windows product terminal backend. | Platform mechanics beneath the same semantic contract, independently tested. | X | [Platform boundary][system] |
-| Remote production transport | 🔴 OPEN | A restricted SSH identity/status bootstrap has bounded two-machine fixture evidence, but no supervised production management endpoint or mutating operation contract. Local/loopback inference is not remote serving. | Persistent secure deployment, governed lifecycle operations and reliability evidence. | X | [Remote management bootstrap][remote-management]; [Compatibility scope][openai] |
-| Authentication | 🔴 OPEN | Bootstrap v1 authenticates pinned SSH host and enrolled Ed25519 client keys at its narrow scope; broad product remote request authorization remains unqualified. | Persistent listener security audit, authorization for governed operations and key-rotation/revocation evidence. | X | [Remote management bootstrap][remote-management] |
-| TLS | 🔴 OPEN | No qualified product transport-security boundary. | Secure lifecycle and negative evidence if remote scope is admitted. | X | [Compatibility scope][openai] |
+| Remote production transport | 🟡 PARTIAL | Standalone authenticated HTTPS and same-user local management project 36 lifecycle operations with durable receipts; explicit mDNS discovery and local pairing. Native TLS/SDK/tiny-CPU evidence is isolated. | Operator deployment, real LAN discovery and long-lived reliability qualification. Remote inference remains a separate contract. | X | [Network management](../contracts/network-management.md); [Producer evidence](../evaluation/product-management-control-plane.md) |
+| Authentication | 🟡 PARTIAL | Pinned TLS service identity, explicitly approved credential digests and per-request revocation; local socket checks OS peer UID and selected identity before dispatch. Existing SSH grants remain separate. | Operational security/reliability and deployed identity-rotation qualification. | X | [Network management](../contracts/network-management.md); [Producer evidence](../evaluation/product-management-control-plane.md) |
+| TLS | 🟡 PARTIAL | Pinned rustls HTTPS management with protected persistent certificate identity; wrong identity, malformed framing and bounded-client controls qualify on generated loopback identities. | Deployed identity rotation and long-lived remote reliability qualification; inference transport is separate. | X | [Network management](../contracts/network-management.md); [Producer evidence](../evaluation/product-management-control-plane.md) |
 | Multi-tenant isolation | ⚪ LATER | Session isolation is not a tenant/security boundary. | Tenant identity, resource/security isolation and operational evidence. | X / S | [Runtime contract][runtime-contract]; [release scope][release] |
 
 Portable architecture means product semantics → generic interaction contract →

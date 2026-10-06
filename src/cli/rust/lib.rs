@@ -24,6 +24,13 @@ pub mod help;
 pub mod host;
 mod interaction;
 mod management;
+mod management_network;
+mod management_pairing;
+mod management_local;
+mod management_product;
+mod management_jobs;
+mod management_runtime;
+mod management_models;
 mod media;
 mod paths;
 mod pipeline;
@@ -228,7 +235,15 @@ fn dispatch(
             let result = if operation == "finite.remote.protocol" {
                 finite_remote::protocol(invocation)
             } else {
-                management::dispatch(invocation)
+                match operation {
+                    "management.product.protocol" => management_product::protocol(invocation),
+                    op if op.starts_with("management.network.")
+                        || op.starts_with("management.pairing.") => {
+                        management_network::dispatch(invocation)
+                    }
+                    "management.product.worker" => management_product::worker(invocation),
+                    _ => management::dispatch(invocation),
+                }
             };
             match result {
                 Ok(output) => output,
@@ -444,7 +459,7 @@ mod tests {
         assert_eq!(output.exit, 0);
         let json: serde_json::Value = serde_json::from_str(&output.text).unwrap();
         assert_eq!(json["schema"], "yvex.version.v1");
-        assert_eq!(json["local_protocol_version"], 24);
+        assert_eq!(json["local_protocol_version"], 25);
         assert!(!output.text.contains('\u{1b}'));
     }
     #[test]

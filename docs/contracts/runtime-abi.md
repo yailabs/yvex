@@ -48,7 +48,7 @@ engine kind from text execution strategy while retaining alias, package,
 backend, capacity, memory, and generation facts. Engine schema v1 is refused
 before the added fields are read.
 The source-authored conversation boundary admits provider request/wire schema
-v4, tokenizer plan v5, tokenizer provider result v2, and local protocol v24.
+v4, tokenizer plan v5, tokenizer provider result v2, and local protocol v25.
 Runtime event schema v6, generation plan schema v7, and generation result
 schema v5 are current. Generation plan ABI v5 added the workload-profile identity
 required to bind phase evidence to the compiled workload. Generation result

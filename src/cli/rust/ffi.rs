@@ -84,7 +84,8 @@ pub(crate) use registry::{
 };
 pub(crate) use source::native_weights;
 pub(crate) use source::{
-    ManifestRequest, ReportRequest, SourceReport, source_manifest, source_report, source_verify,
+    ManifestRequest, ReportRequest, SourceReport, source_manifest, source_report,
+    source_verification_target, source_verify,
 };
 
 pub(crate) fn snapshot(path: &str, maximum: usize) -> Result<Vec<u8>, Error> {
@@ -260,25 +261,25 @@ pub(crate) struct Paths {
 }
 
 pub(crate) fn profile_remove(alias: &str, registry: Option<&str>) -> Result<(), Error> {
+    profile_remove_exact(alias, None, registry)
+}
+pub(crate) fn profile_remove_exact(
+    alias: &str,
+    expected: Option<&str>,
+    registry: Option<&str>,
+) -> Result<(), Error> {
     let alias = argument(Some(alias))?.expect("required alias");
+    let expected = argument(expected)?;
     let registry = argument(registry)?;
-    let options = raw::yvex_model_registry_options {
-        registry_path: pointer(&registry),
-        create_if_missing: 1,
-    };
-    let mut native = std::ptr::null_mut();
     let mut failure = raw::yvex_error::default();
-    // The registry owns its entries; remove/save copy inputs before the guard closes it.
-    let mut status = unsafe { raw::yvex_model_registry_open(&mut native, &options, &mut failure) };
-    if status == 0 {
-        status = unsafe { raw::yvex_model_registry_remove(native, alias.as_ptr(), &mut failure) };
-    }
-    if status == 0 {
-        status = unsafe { raw::yvex_model_registry_save(native, pointer(&registry), &mut failure) };
-    }
-    unsafe {
-        raw::yvex_model_registry_close(native);
-    }
+    let status = unsafe {
+        raw::yvex_model_registry_remove_exact(
+            alias.as_ptr(),
+            pointer(&expected),
+            pointer(&registry),
+            &mut failure,
+        )
+    };
     if status != 0 {
         return Err(error(status, &failure));
     }
@@ -1314,6 +1315,18 @@ impl Client {
         self.send(&request)
     }
 
+    pub(crate) fn host_identity(&self) -> Result<String, Error> {
+        let mut out = [0; raw::YVEX_SHA256_HEX_CAP as usize];
+        let mut report = raw::yvex_error::default();
+        let status = unsafe {
+            raw::yvex_client_host_identity(self.native.as_ptr(), out.as_mut_ptr(), &mut report)
+        };
+        if status != 0 {
+            return Err(error(status, &report));
+        }
+        Ok(text(&out))
+    }
+
     pub(crate) fn timeout(&mut self, milliseconds: u64) -> Result<(), Error> {
         let mut report = raw::yvex_error::default();
         let status = unsafe {
@@ -1868,7 +1881,7 @@ mod tests {
     #[test]
     fn exact_leaf_contract() {
         assert_eq!(version(), "0.1.0");
-        assert_eq!(LOCAL_PROTOCOL_VERSION, 24);
+        assert_eq!(LOCAL_PROTOCOL_VERSION, 25);
         assert_eq!(text(&[65, 0, 66]), "A");
     }
     #[test]

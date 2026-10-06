@@ -1,5 +1,5 @@
 <!-- docs:metadata
-title: Local Protocol v24
+title: Local Protocol v25
 id: yvex.contracts.local-protocol
 document: reference
 status: current
@@ -8,17 +8,33 @@ audience: [engineer, agent, evaluator]
 publication: {html: true, pdf: true, index: true}
 -->
 
-# Local Protocol v24
+# Local Protocol v25
 
 **Exact producer/consumer requirements at this boundary.**
 
 [Up](README.md)
 
-Schema/version: `YVEX_LOCAL_PROTOCOL_VERSION = 24`.
+Schema/version: `YVEX_LOCAL_PROTOCOL_VERSION = 25`.
 
 Authority: `include/yvex/server.h` and `src/server/protocol.c`. This document
 explains the wire and lifecycle contract; code remains authoritative for exact
 field layout and bounds.
+
+Protocol 25 projects a Host-authored random lifetime nonce in its handshake and
+adds `expected_session_identity` to Session mutation requests. The nonce is not
+a machine identity; an approved management key remains the remote trust owner.
+Text Session identity uses the `yvex.server.session.v2` domain, exact model and
+engine generation, name and a monotonic allocation lifetime sequence. Reset
+preserves that identity; close/recreate and fork allocate a new identity.
+Sequence exhaustion refuses rather than wrapping. No paths or timestamps enter
+the identity.
+An omitted fence preserves existing local-client behavior. When supplied, the
+text Session owner checks the exact identity under its registry lock and the
+existing engine/Session serialization lane before reset, fork, close or generation.
+Cancellation checks the same identity under its registry lock. Reusing a display
+name after close cannot target the replacement Session. Media Sessions currently
+lack a published lifetime identity; fenced requests refuse rather than acting on
+a name. Protocol 24 peers are refused by version negotiation before decoding.
 
 ## Producer and consumer
 
@@ -29,18 +45,18 @@ Unix-domain socket and is not a public network API.
 
 ## Framing and negotiation
 
-Every connection negotiates version 24 and exchanges bounded typed frames.
+Every connection negotiates version 25 and exchanges bounded typed frames.
 Lengths, enums, strings, arrays, message/tool fields, and correlations are
 validated before dispatch. Oversized, truncated, duplicate, unknown, or
 malformed fields refuse without entering the server scheduler.
 
-Every earlier version, including v23, is refused explicitly. There is no private
+Every earlier version, including v24, is refused explicitly. There is no private
 pre-v0.1 compatibility decoder. Unknown operations and response kinds fail
 closed.
 
 ## Operations
 
-Protocol v24 carries host status/stop, engine load/list/unload, demand-active
+Protocol v25 carries host status/stop, engine load/list/unload, demand-active
 model lease acquire/release, model and memory
 facts for each engine generation, text, media or finite-decision engine kind, target-only or
 speculative text execution strategy,
@@ -257,7 +273,7 @@ accepted prefix, confidence facts, separate draft/verification/commit timing,
 effective committed rate, and policy identity. Exact seconds are never
 reconstructed from rounded rates.
 
-Protocol v24 retains measurement schema v1. Each record identifies
+Protocol v25 retains measurement schema v1. Each record identifies
 its phase scope, host/device clock, top-level/nested/enclosing/overlapping
 composition, work unit, and availability. A cumulative rate uses the complete
 declared work/duration denominator; rolling decode uses its own recent work and
@@ -334,7 +350,7 @@ summed into a synthetic total.
 
 ## Non-claims
 
-Protocol v24 is not a public remote API, authentication protocol, TLS transport,
+Protocol v25 is not a public remote API, authentication protocol, TLS transport,
 stable cross-version SDK promise, distributed serving protocol, or model
 quality contract. Versioned checkpoints preserve the admitted model and
 semantic-session state across restart; the in-memory fork does not create a

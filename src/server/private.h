@@ -129,7 +129,7 @@ struct server_session_registry {
     server_session *sessions;
     unsigned long long capacity, count, next_id, runnable_sequences;
     int mutex_ready, closing, compatible_operation_batching;
-    unsigned long long engine_generation;
+    unsigned long long engine_generation, next_lifetime_sequence;
     server_event_scope event_scope;
 };
 
@@ -400,7 +400,7 @@ int yvex_server_sessions_console_status(server_session_registry *registry,
                                         yvex_error *err);
 int yvex_server_sessions_cancel(server_session_registry *registry,
                                    const char *session_name,
-                                   yvex_error *err);
+                                   const char *expected_identity, yvex_error *err);
 void yvex_server_sessions_cancel_all(server_session_registry *registry);
 int yvex_server_sessions_close(server_session_registry **registry,
                                   yvex_error *err);
@@ -463,7 +463,7 @@ int yvex_server_engine_lease_execute(
     server_engine_lease *, const yvex_client_request *, const char *, double,
     server_message_emit, void *, yvex_error *);
 int yvex_server_engine_lease_cancel(
-    server_engine_lease *, const char *, yvex_error *);
+    server_engine_lease *, const char *, const char *, yvex_error *);
 int yvex_server_engine_lease_console_status(
     server_engine_lease *, const char *, yvex_console_status *,
     yvex_client_partial_turn *, yvex_error *);

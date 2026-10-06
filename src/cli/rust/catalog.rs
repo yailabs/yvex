@@ -182,7 +182,7 @@ fn source_json(source: &raw::yvex_local_source_record) -> Value {
         "digest": ffi::text(&source.digest), "size_bytes": source.size_bytes, "size_known": source.size_known != 0 })
 }
 
-fn profile_json(profile: &raw::yvex_model_runtime_profile_fact) -> Value {
+pub(crate) fn profile_json(profile: &raw::yvex_model_runtime_profile_fact) -> Value {
     json!({ "identity": ffi::text(&profile.alias), "artifact_identity": ffi::text(&profile.artifact_identity),
         "backend": ffi::text(&profile.backend), "engine_kind": ffi::text(&profile.engine_kind),
         "strategy": ffi::text(&profile.execution_strategy), "context": profile.context_capacity,
@@ -200,7 +200,7 @@ fn publication_json(publication: &raw::yvex_model_publication) -> Value {
         "state": "PUBLISHED" })
 }
 
-fn artifact_json(
+pub(crate) fn artifact_json(
     model: &ModelSnapshot,
     artifact: &raw::yvex_model_artifact_fact,
     local: bool,
@@ -257,8 +257,8 @@ fn components(
         .collect()
 }
 
-struct ModelView {
-    contract: Value,
+pub(crate) struct ModelView {
+    pub contract: Value,
     size: Option<u64>,
 }
 
@@ -563,7 +563,10 @@ fn loaded_json(model: &ModelSnapshot, engine: &raw::yvex_server_engine_summary) 
         "generation": engine.generation, "sessions": engine.session_count })
 }
 
-fn facts(model: &ModelSnapshot, engines: &[raw::yvex_server_engine_summary]) -> ModelView {
+pub(crate) fn facts(
+    model: &ModelSnapshot,
+    engines: &[raw::yvex_server_engine_summary],
+) -> ModelView {
     let selector = selector(model);
     let loaded: Vec<_> = engines
         .iter()
@@ -1085,7 +1088,7 @@ pub(crate) fn dispatch(
     Ok(output)
 }
 
-fn query_matches(entry: &raw::yvex_model_library_entry, query: &str) -> bool {
+pub(crate) fn query_matches(entry: &raw::yvex_model_library_entry, query: &str) -> bool {
     let query = query.to_ascii_lowercase();
     [
         &entry.display_name[..],
@@ -1139,7 +1142,7 @@ pub(crate) fn selected_model(
     Ok((library, index, snapshot))
 }
 
-fn storage_projection(facts: &ffi::catalog::StorageFacts) -> Value {
+pub(crate) fn storage_projection(facts: &ffi::catalog::StorageFacts) -> Value {
     let rows = facts
         .rows
         .iter()
@@ -1503,7 +1506,7 @@ fn remote_product_status(model: &raw::yvex_remote_model) -> &'static str {
         _ => "unknown",
     }
 }
-fn remote_json(
+pub(crate) fn remote_json(
     snapshot: &ffi::catalog::RemoteSnapshot,
     model: &ffi::catalog::RemoteModel,
 ) -> Result<Value, Error> {

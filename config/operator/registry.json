@@ -136,6 +136,152 @@
       "syntax.path",
       "syntax.text",
       "syntax.u64"
+    ],
+    "remote_product_management_operations": [
+      {
+        "operation": "registry.accounts",
+        "kind": "read"
+      },
+      {
+        "operation": "model.storage",
+        "kind": "read"
+      },
+      {
+        "operation": "source.verify",
+        "kind": "job"
+      },
+      {
+        "operation": "package.verify",
+        "kind": "job"
+      },
+      {
+        "operation": "model.evict",
+        "kind": "job"
+      },
+      {
+        "operation": "management.capabilities",
+        "kind": "read"
+      },
+      {
+        "operation": "model.list",
+        "kind": "read"
+      },
+      {
+        "operation": "model.get",
+        "kind": "read"
+      },
+      {
+        "operation": "model.search",
+        "kind": "read"
+      },
+      {
+        "operation": "model.inspect",
+        "kind": "read"
+      },
+      {
+        "operation": "acquisition.start",
+        "kind": "job"
+      },
+      {
+        "operation": "acquisition.get",
+        "kind": "read"
+      },
+      {
+        "operation": "acquisition.cancel",
+        "kind": "job"
+      },
+      {
+        "operation": "acquisition.resume",
+        "kind": "job"
+      },
+      {
+        "operation": "build.start",
+        "kind": "job"
+      },
+      {
+        "operation": "package.get",
+        "kind": "read"
+      },
+      {
+        "operation": "host.get",
+        "kind": "read"
+      },
+      {
+        "operation": "engine.list",
+        "kind": "read"
+      },
+      {
+        "operation": "engine.load",
+        "kind": "job"
+      },
+      {
+        "operation": "engine.unload",
+        "kind": "job"
+      },
+      {
+        "operation": "session.list",
+        "kind": "read"
+      },
+      {
+        "operation": "session.get",
+        "kind": "read"
+      },
+      {
+        "operation": "session.create",
+        "kind": "job"
+      },
+      {
+        "operation": "session.fork",
+        "kind": "job"
+      },
+      {
+        "operation": "session.close",
+        "kind": "job"
+      },
+      {
+        "operation": "session.reset",
+        "kind": "job"
+      },
+      {
+        "operation": "generation.start",
+        "kind": "job"
+      },
+      {
+        "operation": "generation.cancel",
+        "kind": "job"
+      },
+      {
+        "operation": "job.list",
+        "kind": "read"
+      },
+      {
+        "operation": "job.get",
+        "kind": "read"
+      },
+      {
+        "operation": "observe.events",
+        "kind": "read"
+      },
+      {
+        "operation": "profile.scan",
+        "kind": "job"
+      },
+      {
+        "operation": "profile.verify",
+        "kind": "job"
+      },
+      {
+        "operation": "profile.create",
+        "kind": "job"
+      },
+      {
+        "operation": "profile.remove",
+        "kind": "job"
+      },
+      {
+        "operation": "source.cleanup",
+        "kind": "job"
+      }
     ]
   },
   "discovery_schema": "yvex.command.discovery.v1",
@@ -679,7 +825,11 @@
       },
       {
         "description": "Select the bounded artifact check level.",
-        "enum_values": ["quick", "runtime", "full"],
+        "enum_values": [
+          "quick",
+          "runtime",
+          "full"
+        ],
         "name": "--level",
         "takes_value": true,
         "value_type": "enum"
@@ -692,7 +842,11 @@
       },
       {
         "description": "Select the human presentation mode.",
-        "enum_values": ["normal", "table", "audit"],
+        "enum_values": [
+          "normal",
+          "table",
+          "audit"
+        ],
         "name": "--output",
         "takes_value": true,
         "value_type": "enum"
@@ -1192,7 +1346,26 @@
       },
       {
         "description": "Inject a bounded allocation-proof failure at an explicit phase.",
-        "enum_values": ["preflight", "resolve-model", "artifact-identity", "tensor-inventory", "role-coverage", "placement-plan", "memory-budget", "backend-preflight", "materialize-embedding", "materialize-normalization", "materialize-attention", "materialize-mlp", "materialize-moe", "materialize-output", "materialize-tokenizer", "cleanup", "complete", "failed"],
+        "enum_values": [
+          "preflight",
+          "resolve-model",
+          "artifact-identity",
+          "tensor-inventory",
+          "role-coverage",
+          "placement-plan",
+          "memory-budget",
+          "backend-preflight",
+          "materialize-embedding",
+          "materialize-normalization",
+          "materialize-attention",
+          "materialize-mlp",
+          "materialize-moe",
+          "materialize-output",
+          "materialize-tokenizer",
+          "cleanup",
+          "complete",
+          "failed"
+        ],
         "name": "--fail-after-phase",
         "takes_value": true,
         "value_type": "enum"
@@ -1247,7 +1420,15 @@
       },
       {
         "description": "Select the reported residency policy; this flag does not admit a runtime strategy.",
-        "enum_values": ["resident", "host-staged", "ssd-staged", "hybrid", "ssd-streamed", "managed-memory", "distributed"],
+        "enum_values": [
+          "resident",
+          "host-staged",
+          "ssd-staged",
+          "hybrid",
+          "ssd-streamed",
+          "managed-memory",
+          "distributed"
+        ],
         "name": "--residency",
         "takes_value": true,
         "value_type": "enum"
@@ -1421,7 +1602,10 @@
         "name": "--output",
         "takes_value": true,
         "value_type": "enum",
-        "enum_values": ["normal", "audit"]
+        "enum_values": [
+          "normal",
+          "audit"
+        ]
       },
       {
         "description": "Set project.",
@@ -1493,7 +1677,11 @@
       },
       {
         "description": "Select a bounded tensor-map role report.",
-        "enum_values": ["output-head", "tokenizer", "missing-roles"],
+        "enum_values": [
+          "output-head",
+          "tokenizer",
+          "missing-roles"
+        ],
         "name": "--role",
         "takes_value": true,
         "value_type": "enum"
@@ -3071,7 +3259,11 @@
       },
       {
         "description": "Select the human presentation mode.",
-        "enum_values": ["table", "audit", "json"],
+        "enum_values": [
+          "table",
+          "audit",
+          "json"
+        ],
         "name": "--output",
         "takes_value": true,
         "value_type": "enum"
@@ -3230,7 +3422,11 @@
     "cli_offline_model_registry_read": [
       {
         "description": "Select the human presentation mode.",
-        "enum_values": ["normal", "table", "audit"],
+        "enum_values": [
+          "normal",
+          "table",
+          "audit"
+        ],
         "name": "--output",
         "takes_value": true,
         "value_type": "enum"
@@ -3291,14 +3487,22 @@
       },
       {
         "description": "Select the human presentation mode.",
-        "enum_values": ["normal", "table", "audit", "json"],
+        "enum_values": [
+          "normal",
+          "table",
+          "audit",
+          "json"
+        ],
         "name": "--output",
         "takes_value": true,
         "value_type": "enum"
       },
       {
         "description": "Set provider.",
-        "enum_values": ["hf", "huggingface"],
+        "enum_values": [
+          "hf",
+          "huggingface"
+        ],
         "name": "--provider",
         "takes_value": true,
         "value_type": "enum"
@@ -3473,7 +3677,10 @@
     "cli_offline_quant_explain": [
       {
         "description": "Select the requested admitted execution backend.",
-        "enum_values": ["cpu", "cuda"],
+        "enum_values": [
+          "cpu",
+          "cuda"
+        ],
         "name": "--backend",
         "takes_value": true,
         "value_type": "enum"
@@ -3548,15 +3755,21 @@
     "cli_offline_quant_imatrix": [
       {
         "description": "Record the source manifest associated with calibration.",
-        "name": "--source-manifest", "takes_value": true, "value_type": "path"
+        "name": "--source-manifest",
+        "takes_value": true,
+        "value_type": "path"
       },
       {
         "description": "Validate calibration coverage against this quantization policy.",
-        "name": "--quant-policy", "takes_value": true, "value_type": "path"
+        "name": "--quant-policy",
+        "takes_value": true,
+        "value_type": "path"
       },
       {
         "description": "Record the calibration command; does not execute it.",
-        "name": "--command", "takes_value": true, "value_type": "text"
+        "name": "--command",
+        "takes_value": true,
+        "value_type": "text"
       },
       {
         "description": "Set arch.",
@@ -3616,19 +3829,27 @@
     "cli_offline_quant_job": [
       {
         "description": "Record the source manifest associated with this job.",
-        "name": "--source-manifest", "takes_value": true, "value_type": "path"
+        "name": "--source-manifest",
+        "takes_value": true,
+        "value_type": "path"
       },
       {
         "description": "Record the quantization policy path.",
-        "name": "--quant-policy", "takes_value": true, "value_type": "path"
+        "name": "--quant-policy",
+        "takes_value": true,
+        "value_type": "path"
       },
       {
         "description": "Record the calibration manifest path.",
-        "name": "--imatrix-manifest", "takes_value": true, "value_type": "path"
+        "name": "--imatrix-manifest",
+        "takes_value": true,
+        "value_type": "path"
       },
       {
         "description": "Record the calibration data path.",
-        "name": "--imatrix", "takes_value": true, "value_type": "path"
+        "name": "--imatrix",
+        "takes_value": true,
+        "value_type": "path"
       },
       {
         "description": "Set arch.",
@@ -3878,7 +4099,10 @@
     "cli_offline_quant_summarize": [
       {
         "description": "Select the requested admitted execution backend.",
-        "enum_values": ["cpu", "cuda"],
+        "enum_values": [
+          "cpu",
+          "cuda"
+        ],
         "name": "--backend",
         "takes_value": true,
         "value_type": "enum"
@@ -4691,14 +4915,18 @@
     ],
     "host_logs": [
       {
-        "conflicts": ["--verbose"],
+        "conflicts": [
+          "--verbose"
+        ],
         "description": "Emit the command-owned JSON contract; no terminal styling.",
         "name": "--json",
         "takes_value": false,
         "value_type": "boolean"
       },
       {
-        "conflicts": ["--json"],
+        "conflicts": [
+          "--json"
+        ],
         "description": "Enable verbose.",
         "name": "--verbose",
         "takes_value": false,
@@ -4850,7 +5078,19 @@
       "help_group": "Security",
       "lane": "offline-engine",
       "operation_id": "management.peer.enroll",
-      "flags": [{"name":"--scope","description":"Explicit peer grant; management is read-only, finite-decision permits bounded computation.","takes_value":true,"value_type":"enum","enum_values":["management","finite-decision"]}],
+      "flags": [
+        {
+          "name": "--scope",
+          "description": "Explicit read-only, finite-computation or product-management peer grant.",
+          "takes_value": true,
+          "value_type": "enum",
+          "enum_values": [
+            "management",
+            "finite-decision",
+            "product-management"
+          ]
+        }
+      ],
       "side_effects": "atomically enrolls one exact peer key with a forced command",
       "summary": "Enroll an operator-approved peer identity.",
       "test_owner": "tests/integration/remote_management.sh",
@@ -4942,24 +5182,50 @@
     },
     {
       "operation_id": "finite.remote.protocol",
-      "command_path": ["management", "finite-protocol"],
+      "command_path": [
+        "management",
+        "finite-protocol"
+      ],
       "adapter_id": "finite_remote",
-      "adapter_argv": ["finite-protocol"],
+      "adapter_argv": [
+        "finite-protocol"
+      ],
       "architectural_plane": "Integrate",
       "arguments": [
-        {"name":"host_public_key","required":true,"multiplicity":"one","validator":"syntax.path","value_type":"path","completion_provider":"filesystem"},
-        {"name":"peer_identity","required":true,"multiplicity":"one","validator":"syntax.text","value_type":"text","completion_provider":"none"},
-        {"name":"trust_file","required":true,"multiplicity":"one","validator":"syntax.path","value_type":"path","completion_provider":"filesystem"}
+        {
+          "name": "host_public_key",
+          "required": true,
+          "multiplicity": "one",
+          "validator": "syntax.path",
+          "value_type": "path",
+          "completion_provider": "filesystem"
+        },
+        {
+          "name": "peer_identity",
+          "required": true,
+          "multiplicity": "one",
+          "validator": "syntax.text",
+          "value_type": "text",
+          "completion_provider": "none"
+        },
+        {
+          "name": "trust_file",
+          "required": true,
+          "multiplicity": "one",
+          "validator": "syntax.path",
+          "value_type": "path",
+          "completion_provider": "filesystem"
+        }
       ],
-      "documentation_owner":"docs/contracts/finite-decision-remote.md",
-      "help_group":"Consumer APIs",
-      "input_schema":"yvex.finite.request.v1",
-      "result_schema":"yvex.finite.response.v1",
-      "lane":"runtime-client",
-      "side_effects":"one explicitly enrolled bounded finite model computation; no lifecycle or Case mutation",
-      "summary":"Serve one authenticated finite-decision request; enrolled SSH forced command only.",
-      "test_owner":"tests/integration/finite_remote.py",
-      "visibility":"automation"
+      "documentation_owner": "docs/contracts/finite-decision-remote.md",
+      "help_group": "Consumer APIs",
+      "input_schema": "yvex.finite.request.v1",
+      "result_schema": "yvex.finite.response.v1",
+      "lane": "runtime-client",
+      "side_effects": "one explicitly enrolled bounded finite model computation; no lifecycle or Case mutation",
+      "summary": "Serve one authenticated finite-decision request; enrolled SSH forced command only.",
+      "test_owner": "tests/integration/finite_remote.py",
+      "visibility": "automation"
     },
     {
       "CLI_projection": false,
@@ -8878,7 +9144,10 @@
           "completion_provider": "none",
           "sensitive_display": "ordinary",
           "range": "delegated",
-          "enum_values": ["configure", "resolve"]
+          "enum_values": [
+            "configure",
+            "resolve"
+          ]
         }
       ],
       "backend_requirement": "optional",
@@ -9669,6 +9938,294 @@
       "summary": "Score a bounded semantic-neutral frontier on an exact resident engine generation.",
       "test_owner": "tests/live/laya_native.c",
       "visibility": "API-only"
+    },
+    {
+      "adapter_argv": [
+        "product-protocol"
+      ],
+      "adapter_id": "management",
+      "architectural_plane": "System",
+      "arguments": [
+        {
+          "completion_provider": "filesystem",
+          "multiplicity": "one",
+          "name": "host_public_key",
+          "required": true,
+          "validator": "syntax.path",
+          "value_type": "path"
+        },
+        {
+          "completion_provider": "none",
+          "multiplicity": "one",
+          "name": "peer_identity",
+          "required": true,
+          "validator": "syntax.text",
+          "value_type": "text"
+        },
+        {
+          "completion_provider": "filesystem",
+          "multiplicity": "one",
+          "name": "trust_file",
+          "required": true,
+          "validator": "syntax.path",
+          "value_type": "path"
+        }
+      ],
+      "command_path": [
+        "management",
+        "product-protocol"
+      ],
+      "documentation_owner": "docs/contracts/remote-management.md",
+      "help_group": "Security",
+      "input_schema": "yvex.management.request.v2",
+      "lane": "offline-engine",
+      "operation_id": "management.product.protocol",
+      "result_schema": "yvex.management.response.v2",
+      "side_effects": "explicitly granted product management with durable operation receipts",
+      "summary": "Serve one authenticated product-management request.",
+      "test_owner": "tests/integration/product_management.py",
+      "visibility": "automation"
+    },
+    {
+      "adapter_argv": [
+        "product-worker"
+      ],
+      "adapter_id": "management",
+      "architectural_plane": "System",
+      "arguments": [
+        {
+          "completion_provider": "none",
+          "multiplicity": "one",
+          "name": "peer_identity",
+          "required": true,
+          "validator": "syntax.text",
+          "value_type": "text"
+        },
+        {
+          "completion_provider": "none",
+          "multiplicity": "one",
+          "name": "job_id",
+          "required": true,
+          "validator": "syntax.text",
+          "value_type": "text"
+        }
+      ],
+      "command_path": [
+        "management",
+        "product-worker"
+      ],
+      "documentation_owner": "docs/contracts/remote-management.md",
+      "help_group": "Security",
+      "lane": "offline-engine",
+      "operation_id": "management.product.worker",
+      "side_effects": "execute one admitted durable product operation without redispatch",
+      "summary": "Internal product operation worker.",
+      "test_owner": "tests/integration/product_management.py",
+      "visibility": "automation"
+    },
+    {
+      "adapter_argv": [
+        "serve"
+      ],
+      "adapter_id": "management",
+      "architectural_plane": "System",
+      "arguments": [],
+      "command_path": [
+        "management",
+        "serve"
+      ],
+      "documentation_owner": "docs/contracts/network-management.md",
+      "help_group": "Security",
+      "lane": "offline-engine",
+      "operation_id": "management.network.serve",
+      "flags": [
+        {
+          "name": "--state-dir",
+          "description": "Private native management service directory.",
+          "takes_value": true,
+          "value_type": "path"
+        },
+        {
+          "name": "--bind",
+          "description": "Explicit management IP:port; default127.0.0.1:18080.",
+          "takes_value": true,
+          "value_type": "text"
+        },
+        {
+          "name": "--name",
+          "description": "Public service display name.",
+          "takes_value": true,
+          "value_type": "text"
+        },
+        {
+          "name": "--advertise",
+          "description": "Explicitly advertise the LAN management service through mDNS.",
+          "takes_value": false,
+          "value_type": "boolean"
+        }
+      ],
+      "side_effects": "local management service and explicit credential-digest approval; no YAI authority",
+      "summary": "Run the authenticated HTTPS and same-user management service.",
+      "test_owner": "tests/integration/network_management.py",
+      "visibility": "product-default"
+    },
+    {
+      "adapter_argv": [
+        "network-identity"
+      ],
+      "adapter_id": "management",
+      "architectural_plane": "System",
+      "arguments": [],
+      "command_path": [
+        "management",
+        "network-identity"
+      ],
+      "documentation_owner": "docs/contracts/network-management.md",
+      "help_group": "Security",
+      "lane": "offline-engine",
+      "operation_id": "management.network.identity",
+      "flags": [
+        {
+          "name": "--state-dir",
+          "description": "Private native management service directory.",
+          "takes_value": true,
+          "value_type": "path"
+        }
+      ],
+      "side_effects": "local management service and explicit credential-digest approval; no YAI authority",
+      "summary": "Show the local service certificate identity.",
+      "test_owner": "tests/integration/network_management.py",
+      "visibility": "product-default"
+    },
+    {
+      "adapter_argv": [
+        "pairing-open"
+      ],
+      "adapter_id": "management",
+      "architectural_plane": "System",
+      "arguments": [],
+      "command_path": [
+        "management",
+        "pairing-open"
+      ],
+      "documentation_owner": "docs/contracts/network-management.md",
+      "help_group": "Security",
+      "lane": "offline-engine",
+      "operation_id": "management.pairing.open",
+      "flags": [
+        {
+          "name": "--state-dir",
+          "description": "Private native management service directory.",
+          "takes_value": true,
+          "value_type": "path"
+        }
+      ],
+      "side_effects": "local management service and explicit credential-digest approval; no YAI authority",
+      "summary": "Open a bounded local approval window.",
+      "test_owner": "tests/integration/network_management.py",
+      "visibility": "product-default"
+    },
+    {
+      "adapter_argv": [
+        "pairing-list"
+      ],
+      "adapter_id": "management",
+      "architectural_plane": "System",
+      "arguments": [],
+      "command_path": [
+        "management",
+        "pairing-list"
+      ],
+      "documentation_owner": "docs/contracts/network-management.md",
+      "help_group": "Security",
+      "lane": "offline-engine",
+      "operation_id": "management.pairing.list",
+      "flags": [
+        {
+          "name": "--state-dir",
+          "description": "Private native management service directory.",
+          "takes_value": true,
+          "value_type": "path"
+        }
+      ],
+      "side_effects": "local management service and explicit credential-digest approval; no YAI authority",
+      "summary": "List management pairing requests and grants.",
+      "test_owner": "tests/integration/network_management.py",
+      "visibility": "product-default"
+    },
+    {
+      "adapter_argv": [
+        "pairing-approve"
+      ],
+      "adapter_id": "management",
+      "architectural_plane": "System",
+      "arguments": [
+        {
+          "name": "request_id",
+          "value_type": "text",
+          "required": true,
+          "multiplicity": "one",
+          "validator": "syntax.text",
+          "completion_provider": "none"
+        }
+      ],
+      "command_path": [
+        "management",
+        "pairing-approve"
+      ],
+      "documentation_owner": "docs/contracts/network-management.md",
+      "help_group": "Security",
+      "lane": "offline-engine",
+      "operation_id": "management.pairing.approve",
+      "flags": [
+        {
+          "name": "--state-dir",
+          "description": "Private native management service directory.",
+          "takes_value": true,
+          "value_type": "path"
+        }
+      ],
+      "side_effects": "local management service and explicit credential-digest approval; no YAI authority",
+      "summary": "Approve one exact pending management client.",
+      "test_owner": "tests/integration/network_management.py",
+      "visibility": "product-default"
+    },
+    {
+      "adapter_argv": [
+        "pairing-revoke"
+      ],
+      "adapter_id": "management",
+      "architectural_plane": "System",
+      "arguments": [
+        {
+          "name": "request_id",
+          "value_type": "text",
+          "required": true,
+          "multiplicity": "one",
+          "validator": "syntax.text",
+          "completion_provider": "none"
+        }
+      ],
+      "command_path": [
+        "management",
+        "pairing-revoke"
+      ],
+      "documentation_owner": "docs/contracts/network-management.md",
+      "help_group": "Security",
+      "lane": "offline-engine",
+      "operation_id": "management.pairing.revoke",
+      "flags": [
+        {
+          "name": "--state-dir",
+          "description": "Private native management service directory.",
+          "takes_value": true,
+          "value_type": "path"
+        }
+      ],
+      "side_effects": "local management service and explicit credential-digest approval; no YAI authority",
+      "summary": "Revoke one exact management client grant.",
+      "test_owner": "tests/integration/network_management.py",
+      "visibility": "product-default"
     }
   ],
   "removed_paths": [

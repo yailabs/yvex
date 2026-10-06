@@ -55,6 +55,7 @@ struct yvex_server {
     yvex_server_options options;
     yvex_server_summary summary;
     char socket_path[YVEX_SERVER_SOCKET_PATH_CAP];
+    char instance_identity[YVEX_SHA256_HEX_CAP];
     char lock_path[YVEX_SERVER_SOCKET_PATH_CAP];
     server_telemetry *telemetry;
     server_engine_manager *engines;
@@ -228,6 +229,21 @@ static int server_synchronization_open(yvex_server *server, yvex_error *err)
     return YVEX_OK;
 }
 
+static int server_instance_identity(yvex_server *server, yvex_error *err)
+{
+    static const char hex[] = "0123456789abcdef";
+    unsigned char bytes[32];
+    size_t i;
+    if (!yvex_platform_random_bytes(bytes, sizeof(bytes)))
+        return server_refuse(err, YVEX_ERR_STATE, "host identity entropy unavailable");
+    for (i = 0u; i < sizeof(bytes); ++i) {
+        server->instance_identity[i * 2u] = hex[bytes[i] >> 4u];
+        server->instance_identity[i * 2u + 1u] = hex[bytes[i] & 15u];
+    }
+    server->instance_identity[64] = '\0';
+    return YVEX_OK;
+}
+
 int yvex_server_create(yvex_server **out, const yvex_server_options *options,
                        yvex_error *err)
 {
@@ -245,7 +261,8 @@ int yvex_server_create(yvex_server **out, const yvex_server_options *options,
     server->listen_fd = -1;
     server->lock_fd = -1;
     atomic_init(&server->stopping, 0);
-    rc = server_options_admit(server, options, err);
+    rc = server_instance_identity(server, err);
+    if (rc == YVEX_OK) rc = server_options_admit(server, options, err);
     admitted = &server->options;
     if (rc == YVEX_OK) rc = server_synchronization_open(server, err);
     if (rc == YVEX_OK) {
@@ -898,7 +915,8 @@ static int client_wait_work(server_work_item *item, int fd, yvex_error *err)
             yvex_error cancel_error;
             (void)pthread_mutex_unlock(&item->mutex);
             int cancel_rc = yvex_server_engine_lease_cancel(
-                &item->engine, item->request.session_name, &cancel_error);
+                &item->engine, item->request.session_name,
+                item->request.expected_session_identity, &cancel_error);
             if (cancel_rc == YVEX_OK)
                 cancel_sent = 1;
             (void)pthread_mutex_lock(&item->mutex);
@@ -1124,7 +1142,7 @@ static void *client_main(void *opaque)
                 request.engine_generation, &lease, &engine, &err);
             if (rc == YVEX_OK)
                 rc = yvex_server_engine_lease_cancel(
-                    &lease, request.session_name, &err);
+                    &lease, request.session_name, request.expected_session_identity, &err);
             yvex_server_engine_manager_release(server->engines, &lease);
             if (rc == YVEX_OK) {
                 yvex_client_message message;
@@ -1154,6 +1172,8 @@ static void *client_main(void *opaque)
             message.request_number = request.request_number;
             (void)snprintf(message.reason, sizeof(message.reason), "protocol-v%u",
                            YVEX_LOCAL_PROTOCOL_VERSION);
+            memcpy(message.host_instance_identity, server->instance_identity,
+                   sizeof(message.host_instance_identity));
             rc = yvex_server_protocol_send(fd, &message, &err);
         } else {
             server_work_item item;

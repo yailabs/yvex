@@ -208,6 +208,14 @@ int yvex_platform_peer_owned(int fd)
 #endif
 }
 
+int yvex_platform_random_bytes(void *out, size_t length)
+{
+    int rc;
+    if (!out || !length || length > 256u) return 0;
+    do { rc = getentropy(out, length); } while (rc != 0 && errno == EINTR);
+    return rc == 0;
+}
+
 int yvex_platform_boot_id(char *out, size_t capacity)
 {
     size_t length;

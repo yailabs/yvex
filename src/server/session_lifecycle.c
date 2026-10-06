@@ -34,14 +34,16 @@ static int session_identity(server_session_registry *registry,
     yvex_sha256 hash;
     unsigned char digest[YVEX_SHA256_DIGEST_BYTES];
     yvex_error err;
-    if (!yvex_model_engine_view_get(registry->model) ||
+    if (registry->next_lifetime_sequence == UINT64_MAX ||
+        !yvex_model_engine_view_get(registry->model) ||
         yvex_model_engine_summary_copy(registry->model, &model, &err) !=
             YVEX_OK)
         return 0;
     yvex_sha256_init(&hash);
-    if (!yvex_sha256_update_text(&hash, "yvex.server.session.v1") ||
+    if (!yvex_sha256_update_text(&hash, "yvex.server.session.v2") ||
         !yvex_sha256_update_text(&hash, model.runtime_model_identity) ||
         !yvex_sha256_update_u64(&hash, registry->engine_generation) ||
+        !yvex_sha256_update_u64(&hash, ++registry->next_lifetime_sequence) ||
         !yvex_sha256_update_text(&hash, name) ||
         !yvex_sha256_final(&hash, digest))
         return 0;

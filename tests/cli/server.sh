@@ -211,12 +211,12 @@ while test "$attempt" -lt 100; do
 done
 test "$ready" -eq 1 || fail 'persistent host did not become ready'
 contains "$OUT_DIR/host.out" 'HOST ready · 2 workers · capacity 2'
-contains "$OUT_DIR/host.out" 'protocol 24'
+contains "$OUT_DIR/host.out" 'protocol 25'
 contains "$OUT_DIR/host.out" 'Ctrl-C to stop'
 not_contains "$OUT_DIR/host.out" '█'
 not_contains "$OUT_DIR/host.out" '▀'
 contains "$OUT_DIR/status.json" '"schema":"yvex.host.status.v1"'
-contains "$OUT_DIR/status.json" '"protocol":24'
+contains "$OUT_DIR/status.json" '"protocol":25'
 contains "$OUT_DIR/status.json" '"status":2'
 contains "$OUT_DIR/status.json" '"host_ready":true'
 contains "$OUT_DIR/status.json" '"engine_count":0'
@@ -429,7 +429,7 @@ wait "$server_pid"
 server_pid=
 contains "$OUT_DIR/server-terminal.typescript" 'YVEX 0.1.0'
 contains "$OUT_DIR/server-terminal.typescript" 'HOST ready · 2 workers · capacity 2'
-contains "$OUT_DIR/server-terminal.typescript" 'protocol 24'
+contains "$OUT_DIR/server-terminal.typescript" 'protocol 25'
 contains "$OUT_DIR/server-terminal.typescript" 'native'
 not_contains "$OUT_DIR/server-terminal.typescript" 'LOAD   deepseek4-v4-flash-dspark · g1'
 contains "$OUT_DIR/server-terminal.typescript" 'fail'
@@ -520,7 +520,7 @@ with tempfile.TemporaryDirectory(prefix='yvx-', dir='/tmp') as terminal_runtime:
                             for c in line)
                 assert cells <= width, (width, cells, line)
             for fact in ('YVEX 0.1.0', 'HOST ready · 2 workers · capacity 2',
-                         'protocol 24', 'OpenAI disabled'):
+                         'protocol 25', 'OpenAI disabled'):
                 assert re.sub(r'\s+', '', fact) in re.sub(r'\s+', '', banner), (width, fact, banner)
             expected = str(runtime / 'yvex/yvexd.sock')
             assert expected in re.sub(r'\s+', '', banner), (expected, banner)

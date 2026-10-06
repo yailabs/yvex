@@ -1,4 +1,4 @@
-/* Canonical bounded finite-decision payload codec for local protocol v24. */
+/* Canonical bounded finite-decision payload codec for local protocol v25. */
 #include <yvex/internal/finite_producer_wire.h>
 #include <yvex/internal/core.h>
 #include <math.h>

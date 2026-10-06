@@ -148,78 +148,89 @@ fn publish_profile(view: &View, imatrix: Option<&str>) -> Result<()> {
     )?;
     Ok(())
 }
-pub(crate) fn dispatch(invocation: &Invocation<'_>, width: usize, styled: bool) -> Result<Output> {
-    let machine = invocation.has("--json");
-    let _lease = ffi::preparation::lock(
-        invocation.value("--models-root"),
-        &invocation.positionals[0],
-    )?;
-    let (library, index, model) = catalog::selected_model(invocation)?;
-    let selector = catalog::selector(&model);
-    if model.entry.profile_launchable != 0
-        && !invocation.has("--quant")
-        && !invocation.has("--imatrix")
-    {
-        ffi::preparation::verify_ready(&library, index, request(invocation))?;
-        return present(
-            json!({"schema": "yvex.model.prepare.v1", "model": selector,
-            "state": "READY", "changed": false}),
-            machine,
-            width,
-            styled,
-            0,
-        );
-    }
-    let mut context = match Preparation::open(&library, index, request(invocation)) {
-        Ok(context) => context,
-        Err(error) => {
-            let reason = if model
-                .sources
-                .first()
-                .is_some_and(|source| ffi::text(&source.format).eq_ignore_ascii_case("gguf"))
-            {
-                concat!(
-                    "existing GGUF is preserved without requantization, ",
-                    "but this representation has no admitted runtime binding"
-                )
-                .to_owned()
-            } else {
-                error.message
-            };
-            return present(
-                json!({"schema": "yvex.model.prepare.v1", "model": selector,
-                "state": "BLOCKED", "changed": false, "blocker": reason}),
-                machine,
-                width,
-                styled,
-                if error.code == -10 { 2 } else { 3 },
-            );
+// Shared product composition; both the CLI and public management consume this owner.
+pub(crate) fn prepare_model(selector: &str, request: Request<'_>) -> Result<Value> {
+    let _lease = ffi::preparation::lock(request.root, selector)?;
+    let library = ffi::Library::open(request.root, request.registry)?;
+    let mut selected = None;
+    for index in 0..library.count() {
+        if library.matches(index, selector)? {
+            if selected.is_some() {
+                return Err(ffi::Error {
+                    code: raw::yvex_status_YVEX_ERR_INVALID_ARG,
+                    owner: "model.selector".into(),
+                    message: "model selector is ambiguous".into(),
+                }
+                .into());
+            }
+            selected = Some(index);
         }
-    };
+    }
+    let index = selected.ok_or_else(|| ffi::Error {
+        code: raw::yvex_status_YVEX_ERR_INVALID_ARG,
+        owner: "model.selector".into(),
+        message: "model selector not found".into(),
+    })?;
+    let model = library.snapshot(index)?;
+    let selector = catalog::selector(&model);
+    if model.entry.profile_launchable != 0 && request.quant.is_none() && request.imatrix.is_none() {
+        ffi::preparation::verify_ready(&library, index, request)?;
+        return Ok(json!({"schema": "yvex.model.prepare.v1", "model": selector,
+            "state": "READY", "changed": false}));
+    }
+    let dry = request.dry;
+    let imatrix = request.imatrix;
+    let mut context = Preparation::open(&library, index, request).map_err(|error| ffi::Error {
+        code: error.code,
+        owner: "model.prepare.blocked".into(),
+        message: if model
+            .sources
+            .first()
+            .is_some_and(|source| ffi::text(&source.format).eq_ignore_ascii_case("gguf"))
+        {
+            concat!(
+                "existing GGUF is preserved without requantization, ",
+                "but this representation has no admitted runtime binding"
+            )
+            .into()
+        } else {
+            error.message
+        },
+    })?;
     let view = context.view()?;
-    if invocation.has("--dry-run") {
-        return present(plan(&view, &selector), machine, width, styled, 0);
+    if dry {
+        return Ok(plan(&view, &selector));
     }
     context.verify()?;
-    if !view.rebind && compile(&mut context, invocation.value("--imatrix"), index)? {
-        return present(
-            ready(&context.view()?, &selector, false, false),
-            machine,
-            width,
-            styled,
-            0,
-        );
+    if !view.rebind && compile(&mut context, imatrix, index)? {
+        return Ok(ready(&context.view()?, &selector, false, false));
     }
     let published = context.binding()?;
     let view = context.view()?;
-    publish_profile(&view, invocation.value("--imatrix"))?;
-    present(
-        ready(&view, &selector, true, published),
-        machine,
-        width,
-        styled,
-        0,
-    )
+    publish_profile(&view, imatrix)?;
+    Ok(ready(&view, &selector, true, published))
+}
+
+pub(crate) fn dispatch(invocation: &Invocation<'_>, width: usize, styled: bool) -> Result<Output> {
+    match prepare_model(&invocation.positionals[0], request(invocation)) {
+        Ok(value) => present(value, invocation.has("--json"), width, styled, 0),
+        Err(error) => {
+            let Some(native) = error.downcast_ref::<ffi::Error>() else {
+                return Err(error);
+            };
+            if native.owner != "model.prepare.blocked" {
+                return Err(error);
+            }
+            present(
+                json!({"schema": "yvex.model.prepare.v1", "model": invocation.positionals[0],
+                "state": "BLOCKED", "changed": false, "blocker": native.message}),
+                invocation.has("--json"),
+                width,
+                styled,
+                if native.code == -10 { 2 } else { 3 },
+            )
+        }
+    }
 }
 
 struct RecipePaths {

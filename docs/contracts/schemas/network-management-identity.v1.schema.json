@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "$id": "yvex.management.identity.v1",
+  "required": [
+    "schema",
+    "device_identity",
+    "display_name",
+    "protocol",
+    "pairing_available"
+  ],
+  "properties": {
+    "schema": {
+      "const": "yvex.management.identity.v1"
+    },
+    "device_identity": {
+      "type": "string",
+      "pattern": "^tls-sha256:[0-9a-f]{64}$"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "protocol": {
+      "const": "yvex.management.v2"
+    },
+    "pairing_available": {
+      "type": "boolean"
+    }
+  }
+}

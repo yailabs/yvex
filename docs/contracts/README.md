@@ -25,7 +25,7 @@ Public ABI and wire contracts are not interchangeable with internal transient sc
 - [Computational Program Contract](computational-programs.md)
 - [Events and Telemetry Contract](events-telemetry.md)
 - [Computed Index Contract](index-programs.md)
-- [Local Protocol v24](local-protocol.md)
+- [Local Protocol v25](local-protocol.md)
 - [Model release evidence](model-release.md)
 - [Model storage contract](model-storage.md)
 - [Internal Numerical Execution ABI](numerical-abi.md)
@@ -34,3 +34,8 @@ Public ABI and wire contracts are not interchangeable with internal transient sc
 - [Remote finite-decision producer v1](finite-decision-remote.md)
 - [Internal Runtime ABI](runtime-abi.md)
 - [Hosted Runtime Contract](runtime.md)
+
+- [Product management v2](product-management.md): explicit lifecycle grant, exact Jobs and Session lifetime fences.
+- [Product lifecycle operation classification](product-management-lifecycle-map.md): ordinary product parity, host provisioning and bounded local filesystem interactions.
+
+- [Native network management](network-management.md): standalone HTTPS, local same-user socket, explicit pairing and optional LAN discovery.

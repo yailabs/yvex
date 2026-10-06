@@ -73,6 +73,7 @@ CATALOG_KEYS = {
     "default_providers",
     "protocol_operations",
     "remote_management_operations",
+    "remote_product_management_operations",
     "renderers",
     "validators",
 }
@@ -419,6 +420,16 @@ def validate_registry(registry: dict[str, Any]) -> list[dict[str, Any]]:
     validators = catalog(registry, "validators")
     renderers = catalog(registry, "renderers")
     protocols = catalog(registry, "protocol_operations")
+    product_operations = catalogs.get("remote_product_management_operations", [])
+    if not isinstance(product_operations, list) or not product_operations:
+        fail("catalogs.remote_product_management_operations", "requires typed operation descriptors")
+    product_ids = []
+    for descriptor in product_operations:
+        if not isinstance(descriptor, dict) or set(descriptor) != {"operation", "kind"} or not IDENTIFIER.fullmatch(descriptor.get("operation", "")) or descriptor["kind"] not in {"read", "job", "control"}:
+            fail("catalogs.remote_product_management_operations", "invalid product descriptor")
+        product_ids.append(descriptor["operation"])
+    if len(set(product_ids)) != len(product_ids):
+        fail("catalogs.remote_product_management_operations", "duplicate product operation")
     remote_management_operations = catalog(registry, "remote_management_operations")
     if not all(IDENTIFIER.fullmatch(operation) for operation in remote_management_operations):
         fail("catalogs.remote_management_operations", "contains an invalid operation ID")

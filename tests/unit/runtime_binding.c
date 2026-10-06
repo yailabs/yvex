@@ -2991,6 +2991,20 @@ static int test_runtime_model_verified_reopen(
     return 0;
 }
 
+static int test_server_session_lifetime(
+    const binding_fixture *fixture, const yvex_runtime_binding_prepare_result *prepared)
+{
+    yvex_model_engine *model = NULL;
+    yvex_model_engine_failure failure;
+    yvex_error err;
+    int rc;
+    YVEX_TEST_ASSERT(runtime_model_open_fixture(fixture, prepared, &model, &failure, &err) == YVEX_OK,
+        "tiny admitted CPU model opens for server Session lifecycle");
+    rc = yvex_test_server_session_lifetimes(model);
+    yvex_model_engine_close(&model);
+    return rc;
+}
+
 static int test_runtime_model_session_reuse(
     const binding_fixture *fixture, const yvex_runtime_binding_prepare_result *prepared)
 {
@@ -5428,6 +5442,7 @@ static int runtime_binding_suite(int cuda_only)
         if (test_runtime_model_compiled_execution(&fixture, &prepared) != 0) goto done;
         if (test_runtime_model_progress(&fixture, &prepared) != 0) goto done;
         if (test_runtime_model_verified_reopen(&fixture, &prepared, root) != 0) goto done;
+        if (test_server_session_lifetime(&fixture, &prepared) != 0) goto done;
         if (test_runtime_model_session_reuse(&fixture, &prepared) != 0) goto done;
         if (test_runtime_concurrent_session_isolation(&fixture, &prepared) != 0) goto done;
         if (test_runtime_concurrent_close_drain(&fixture, &prepared) != 0) goto done;

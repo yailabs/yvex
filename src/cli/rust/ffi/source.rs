@@ -1,5 +1,5 @@
 // Borrowed source reports are pinned, bounds-checked and copied at the FFI boundary.
-use super::{Error, argument, borrowed_text, error, extent_error, pointer, raw};
+use super::{argument, borrowed_text, error, extent_error, pointer, raw, Error};
 use std::ffi::CString;
 
 pub(crate) struct ManifestRequest<'a> {
@@ -147,6 +147,33 @@ pub(crate) fn source_manifest(
         return Err(error(status, &failure));
     }
     Ok(summary)
+}
+
+// Resolve verifier identity from its native repository/revision catalog, never a UI alias.
+pub(crate) fn source_verification_target(
+    repository: &str,
+    revision: &str,
+) -> Result<String, Error> {
+    let repository = argument(Some(repository))?;
+    let identity =
+        unsafe { raw::yvex_source_target_identity_find_repository(pointer(&repository)) };
+    if identity.is_null() {
+        return Err(Error {
+            code: raw::yvex_status_YVEX_ERR_STATE,
+            owner: "source_verify".into(),
+            message: "source_verification_contract_unavailable".into(),
+        });
+    }
+    // Native catalog entries are immutable process-lifetime records.
+    let identity = unsafe { &*identity };
+    if unsafe { borrowed_text(identity.upstream_revision)? } != revision {
+        return Err(Error {
+            code: raw::yvex_status_YVEX_ERR_STATE,
+            owner: "source_verify".into(),
+            message: "source_verification_revision_unsupported".into(),
+        });
+    }
+    unsafe { borrowed_text(identity.target_id) }
 }
 
 pub(crate) fn source_verify(

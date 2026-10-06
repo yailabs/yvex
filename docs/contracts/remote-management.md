@@ -25,6 +25,9 @@ may reuse this restricted SSH substrate only with explicit `--scope finite-decis
 enrollment. It is not a management v1 operation: existing keys remain management-only,
 and the two admitted management reads and schemas are unchanged.
 
+The separate [product management v2](product-management.md) lifecycle grant uses
+`--scope product-management`; existing read-only enrollments are unchanged.
+
 ## Transport and trust
 
 One SSH connection carries one UTF-8 JSON request line on standard input and

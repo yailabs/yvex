@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "$id": "yvex.management.pairing.v1",
+  "required": [
+    "schema",
+    "request_id",
+    "posture",
+    "scope",
+    "expires_at_unix_ms",
+    "reason"
+  ],
+  "properties": {
+    "schema": {
+      "const": "yvex.management.pairing.v1"
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "posture": {
+      "enum": [
+        "pending",
+        "approved",
+        "revoked",
+        "expired",
+        "refused"
+      ]
+    },
+    "scope": {
+      "const": "product-management"
+    },
+    "expires_at_unix_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

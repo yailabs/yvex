@@ -396,16 +396,33 @@ impl Progress {
     }
 }
 
-pub(crate) fn cleanup(invocation: &Invocation<'_>, width: usize, styled: bool) -> Result<Output> {
-    let provenance = selected(invocation)?;
-    let paths = ffi::Paths::with_models_root(invocation.value("--models-root"))?;
-    let root = ffi::text(&paths.operator.models_root);
-    guarded(&provenance, &root)?;
-    let dry = invocation.has("--dry-run");
-    let execute = invocation.has("--yes") && !dry;
+pub(crate) struct CleanupOptions {
+    pub stale_locks: bool,
+    pub provider_cache: bool,
+    pub failed_partials: bool,
+    pub receipts: bool,
+    pub logs: bool,
+    pub dry: bool,
+    pub confirm: bool,
+    pub expected_generation: Option<(String, u64)>,
+}
+pub(crate) struct CleanupReport {
+    pub value: serde_json::Value,
+    deleted_sidecars: usize,
+    deleted_logs: usize,
+    deleted_source_paths: usize,
+}
+pub(crate) fn cleanup_source(
+    provenance: &Provenance,
+    root: &str,
+    options: CleanupOptions,
+) -> Result<CleanupReport> {
+    guarded(provenance, root)?;
+    let dry = options.dry;
+    let execute = options.confirm && !dry;
     let _control = if execute {
         Some(ffi::preparation::lock(
-            Some(&root),
+            Some(root),
             &ffi::text(&provenance.operation_path),
         )?)
     } else {
@@ -413,13 +430,21 @@ pub(crate) fn cleanup(invocation: &Invocation<'_>, width: usize, styled: bool) -
     };
     let operation_path = ffi::text(&provenance.operation_path);
     if Path::new(&operation_path).try_exists()? {
-        let operation = native::read(&provenance)?;
+        let operation = native::read(provenance)?;
+        if let Some((identity, generation)) = &options.expected_generation
+            && (ffi::text(&operation.operation_id) != *identity
+                || operation.generation != *generation)
+        {
+            return Err(crate::acquire::state_error("stale_acquisition_generation").into());
+        }
         if native::matches(&operation.supervisor)
             || native::matches(&operation.provider_process)
             || (!native::terminal(&operation) && now()?.saturating_sub(operation.created_unix) < 10)
         {
             return Err(crate::acquire::state_error("cleanup refuses active acquisition").into());
         }
+    } else if options.expected_generation.is_some() {
+        return Err(crate::acquire::state_error("acquisition_identity_unavailable").into());
     }
     if native::process_count(&ffi::text(&provenance.local_source_dir))? != 0 {
         return Err(crate::acquire::state_error(
@@ -429,7 +454,7 @@ pub(crate) fn cleanup(invocation: &Invocation<'_>, width: usize, styled: bool) -
     }
     let _transfer = if execute {
         Some(native::try_transfer_lock(
-            &root,
+            root,
             &ffi::text(&provenance.repo_id),
             &ffi::text(&provenance.revision),
         )?)
@@ -441,8 +466,8 @@ pub(crate) fn cleanup(invocation: &Invocation<'_>, width: usize, styled: bool) -
     let mut logs = Vec::<PathBuf>::new();
     let source = PathBuf::from(ffi::text(&provenance.local_source_dir));
     let mut seen = 0;
-    if invocation.has("--stale-locks") {
-        if let Some(cache) = cache_path(&provenance, &root) {
+    if options.stale_locks {
+        if let Some(cache) = cache_path(provenance, root) {
             guarded_parents(Path::new(&cache), Path::new(&root))?;
             lock_candidates(Path::new(&cache), 0, &mut seen, &mut candidates)?;
         }
@@ -453,17 +478,17 @@ pub(crate) fn cleanup(invocation: &Invocation<'_>, width: usize, styled: bool) -
             &mut candidates,
         )?;
     }
-    if invocation.has("--all-provider-cache") {
+    if options.provider_cache {
         candidates.push(Path::new(&ffi::text(&provenance.local_source_dir)).join(".cache"));
     }
     let report = ffi::text(&provenance.download_report_path);
     let base = report
         .strip_suffix(".download-report.json")
         .ok_or_else(|| refusal("invalid report path"))?;
-    if invocation.has("--failed-partials") {
+    if options.failed_partials {
         candidates.push(ffi::text(&provenance.local_source_dir).into());
     }
-    if invocation.has("--receipts") || invocation.has("--failed-partials") {
+    if options.receipts || options.failed_partials {
         sidecars.extend(
             [
                 ffi::text(&provenance.download_report_path),
@@ -480,7 +505,7 @@ pub(crate) fn cleanup(invocation: &Invocation<'_>, width: usize, styled: bool) -
             .map(PathBuf::from),
         );
     }
-    if invocation.has("--logs") || invocation.has("--failed-partials") {
+    if options.logs || options.failed_partials {
         let log = ffi::text(&provenance.supervisor_log_path);
         let base = log
             .strip_suffix(".acquisition.supervisor.log")
@@ -527,8 +552,43 @@ pub(crate) fn cleanup(invocation: &Invocation<'_>, width: usize, styled: bool) -
     }
     let value = json!({"schema": "yvex.source.cleanup.v1", "target": ffi::text(&provenance.target_id),
         "status": if dry { "model-download-cleanup-dry-run" } else if execute { "model-download-cleanup" }
-            else { "model-download-cleanup-confirmation-required" }, "dry_run": dry, "yes": invocation.has("--yes"),
+            else { "model-download-cleanup-confirmation-required" }, "dry_run": dry, "yes": options.confirm,
         "delete_candidates": candidates, "deleted_paths": deleted, "missing": missing});
+    Ok(CleanupReport {
+        value,
+        deleted_sidecars,
+        deleted_logs,
+        deleted_source_paths,
+    })
+}
+
+pub(crate) fn cleanup(invocation: &Invocation<'_>, width: usize, styled: bool) -> Result<Output> {
+    let provenance = selected(invocation)?;
+    let paths = ffi::Paths::with_models_root(invocation.value("--models-root"))?;
+    let root = ffi::text(&paths.operator.models_root);
+    let report = cleanup_source(
+        &provenance,
+        &root,
+        CleanupOptions {
+            stale_locks: invocation.has("--stale-locks"),
+            provider_cache: invocation.has("--all-provider-cache"),
+            failed_partials: invocation.has("--failed-partials"),
+            receipts: invocation.has("--receipts"),
+            logs: invocation.has("--logs"),
+            dry: invocation.has("--dry-run"),
+            confirm: invocation.has("--yes"),
+            expected_generation: None,
+        },
+    )?;
+    let value = report.value;
+    let candidates = value["delete_candidates"]
+        .as_array()
+        .expect("cleanup candidates");
+    let deleted = value["deleted_paths"].as_u64().expect("deleted count");
+    let missing = value["missing"].as_u64().expect("missing count");
+    let deleted_sidecars = report.deleted_sidecars;
+    let deleted_logs = report.deleted_logs;
+    let deleted_source_paths = report.deleted_source_paths;
     let machine = invocation.has("--json") || invocation.value("--output") == Some("json");
     let mut text = if machine {
         format!("{value}\n")
@@ -592,7 +652,7 @@ fn cleanup_audit(
     )?)
 }
 
-fn state(provenance: &Provenance) -> Result<native::Operation> {
+pub(crate) fn state(provenance: &Provenance) -> Result<native::Operation> {
     let mut operation = native::read(provenance)?;
     if native::matches(&operation.supervisor)
         || native::terminal(&operation)
@@ -650,7 +710,11 @@ fn wait_process(identity: &native::Process, timeout: Duration) -> bool {
     !native::matches(identity)
 }
 
-fn stop(provenance: &Provenance, timeout: Duration, force: bool) -> Result<native::Operation> {
+pub(crate) fn stop(
+    provenance: &Provenance,
+    timeout: Duration,
+    force: bool,
+) -> Result<native::Operation> {
     let mut operation = native::read(provenance)?;
     let supervisor_active = native::matches(&operation.supervisor);
     if native::matches(&operation.provider_process) && !supervisor_active {

@@ -930,6 +930,7 @@ pub fn host_status(socket: Option<&str>) -> Result<HostStatus, Error> {
 }
 
 impl HostStatus {
+    pub(crate) fn from_snapshot(snapshot: raw::yvex_server_summary) -> Self { Self { snapshot } }
     pub fn memory_json(&self) -> Value {
         let metrics = &self.snapshot.metrics;
         json!({ "schema": "yvex.host.memory.v2", "rss_bytes": metrics.current_rss_bytes,
@@ -1195,6 +1196,9 @@ pub(crate) fn engine_json(engine: &raw::yvex_server_engine_summary) -> Value {
             "outputs": kinds(engine.capabilities.output_kinds), "properties": engine.capabilities.execution_properties,
             "maximum_input_parts": engine.capabilities.maximum_input_parts },
         "target": ffi::text(&engine.target_id), "model_identity": ffi::text(&engine.runtime_model_identity),
+        "runtime_binding_identity":ffi::text(&engine.runtime_binding_identity),
+        "artifact_identity":ffi::text(&engine.artifact_identity),
+        "capacity_plan_identity":ffi::text(&engine.capacity_plan_identity),
         "specialization_identity": ffi::text(&engine.specialization_identity) })
 }
 

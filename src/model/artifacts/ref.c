@@ -8,6 +8,10 @@
 #include <yvex/registry.h>
 
 #include <stdio.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <sys/stat.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
@@ -97,12 +101,78 @@ static void registry_apply_metadata(yvex_model_registry_entry *entry,
     entry->primary_tensor_dims = snapshot->primary_tensor_dims;
     entry->primary_tensor_rank = snapshot->entry.primary_tensor_rank;
     entry->primary_tensor_bytes = snapshot->entry.primary_tensor_bytes;
+    if (!entry->support_level) entry->support_level = snapshot->entry.support_level;
     entry->selected_embedding_ready = snapshot->entry.selected_embedding_ready;
     entry->selected_embedding_hidden_size = snapshot->entry.selected_embedding_hidden_size;
     entry->selected_embedding_vocab_size = snapshot->entry.selected_embedding_vocab_size;
     entry->selected_embedding_output_count = snapshot->entry.selected_embedding_output_count;
     entry->selected_embedding_slice_bytes = snapshot->entry.selected_embedding_slice_bytes;
     entry->execution_ready = 0;
+}
+
+/* Full read/check/write transaction; atomic rename alone cannot fence a stale alias. */
+static int registry_transaction_lock(const char *requested, char *path, size_t cap,
+                                      int *descriptor, yvex_error *err)
+{
+    char lock_path[4096];
+    struct stat metadata;
+    int rc, fd, length;
+    *descriptor = -1;
+    if (requested && requested[0]) {
+        length = snprintf(path, cap, "%s", requested);
+        if (length < 0 || (size_t)length >= cap) return YVEX_ERR_BOUNDS;
+    } else {
+        rc = yvex_model_registry_default_path(path, cap, err);
+        if (rc != YVEX_OK) return rc;
+    }
+    length = snprintf(lock_path, sizeof(lock_path), "%s.transaction.lock", path);
+    if (length < 0 || (size_t)length >= sizeof(lock_path)) return YVEX_ERR_BOUNDS;
+    rc = yvex_core_mkdir_parent(lock_path, "model_registry_transaction", err);
+    if (rc != YVEX_OK) return rc;
+    fd = open(lock_path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
+    if (fd < 0 || fstat(fd, &metadata) != 0 || !S_ISREG(metadata.st_mode) ||
+        metadata.st_uid != geteuid() || (metadata.st_mode & 0022) != 0) {
+        if (fd >= 0) close(fd);
+        yvex_error_set(err, YVEX_ERR_IO, "model_registry_transaction", "registry transaction lock unavailable");
+        return YVEX_ERR_IO;
+    }
+    do { rc = flock(fd, LOCK_EX); } while (rc < 0 && errno == EINTR);
+    if (rc != 0) {
+        close(fd);
+        yvex_error_set(err, YVEX_ERR_IO, "model_registry_transaction", "registry transaction lock failed");
+        return YVEX_ERR_IO;
+    }
+    *descriptor = fd;
+    return YVEX_OK;
+}
+
+int yvex_model_registry_remove_exact(const char *alias, const char *expected_sha256,
+                                      const char *registry_path, yvex_error *err)
+{
+    char path[4096];
+    yvex_model_registry *registry = NULL;
+    const yvex_model_registry_entry *entry;
+    yvex_model_registry_options options = {path, 1};
+    int descriptor = -1, rc;
+    if (!alias || !alias[0]) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_registry_remove", "alias is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = registry_transaction_lock(registry_path, path, sizeof(path), &descriptor, err);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_model_registry_open(&registry, &options, err);
+    if (rc == YVEX_OK && expected_sha256) {
+        entry = yvex_model_registry_find(registry, alias);
+        if (!entry || !entry->sha256 || strcmp(entry->sha256, expected_sha256)) {
+            yvex_error_set(err, YVEX_ERR_STATE, "model_registry_remove", "stale_profile_package");
+            rc = YVEX_ERR_STATE;
+        }
+    }
+    if (rc == YVEX_OK) rc = yvex_model_registry_remove(registry, alias, err);
+    if (rc == YVEX_OK) rc = yvex_model_registry_save(registry, path, err);
+    yvex_model_registry_close(registry);
+    close(descriptor);
+    return rc;
 }
 
 int yvex_model_registry_create(const yvex_model_registry_entry *requested,
@@ -116,7 +186,8 @@ int yvex_model_registry_create(const yvex_model_registry_entry *requested,
     yvex_artifact_file_identity identity;
     yvex_model_registry_options options = {registry_path, 1};
     yvex_model_registry *registry = NULL;
-    int rc;
+    int rc, descriptor = -1;
+    char locked_path[4096];
     if (!requested || !requested->path || !out ||
         requested->schema_version != YVEX_MODEL_REGISTRY_ENTRY_SCHEMA_CURRENT) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_registry_create",
@@ -140,7 +211,6 @@ int yvex_model_registry_create(const yvex_model_registry_entry *requested,
     yvex_error_clear(err);
     if (!entry.producer) entry.producer = "yvex";
     if (!entry.artifact_schema) entry.artifact_schema = "v1";
-    if (!entry.support_level) entry.support_level = "";
     if (!entry.alias || !entry.alias[0]) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_registry_create",
                        "alias is required when filename is not canonical");
@@ -158,17 +228,21 @@ int yvex_model_registry_create(const yvex_model_registry_entry *requested,
         rc = yvex_model_registry_startup_validate(&entry, err);
         if (rc != YVEX_OK) return rc;
     }
+    rc = registry_transaction_lock(registry_path, locked_path, sizeof(locked_path), &descriptor, err);
+    if (rc != YVEX_OK) return rc;
+    options.registry_path = locked_path;
     rc = yvex_model_registry_open(&registry, &options, err);
     if (rc == YVEX_OK && replace_existing && yvex_model_registry_find(registry, entry.alias))
         rc = yvex_model_registry_remove(registry, entry.alias, err);
     if (rc == YVEX_OK) rc = yvex_model_registry_add(registry, &entry, err);
-    if (rc == YVEX_OK) rc = yvex_model_registry_save(registry, registry_path, err);
+    if (rc == YVEX_OK) rc = yvex_model_registry_save(registry, locked_path, err);
     if (rc == YVEX_OK) {
         snprintf(out->alias, sizeof(out->alias), "%s", entry.alias);
         snprintf(out->sha256, sizeof(out->sha256), "%s", identity.sha256);
         out->file_size = identity.file_size;
     }
     yvex_model_registry_close(registry);
+    close(descriptor);
     return rc;
 }
 

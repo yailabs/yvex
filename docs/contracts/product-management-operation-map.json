@@ -1,0 +1,1110 @@
+{
+  "schema": "yvex.product-management.operation-map.v1",
+  "scope": "published operator registry; management v2 classification",
+  "operations": [
+    {
+      "operation": "management.identity",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "management.trust.init",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "management.peer.enroll",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "management.peer.revoke",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "management.protocol",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "finite.remote.protocol",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Separate existing finite-decision grant/protocol; no implicit product-management authority."
+    },
+    {
+      "operation": "artifact.status.projected",
+      "class": "ordinary_product",
+      "public_operation": "package.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "runtime.host",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Local process/service provisioning remains explicitly administered."
+    },
+    {
+      "operation": "runtime.start",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Interactive local host/process selection remains CLI-owned."
+    },
+    {
+      "operation": "runtime.status",
+      "class": "ordinary_product",
+      "public_operation": "host.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "runtime.stop",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Local process/service administration remains explicitly administered."
+    },
+    {
+      "operation": "runtime.trace",
+      "class": "ordinary_product",
+      "public_operation": "observe.events",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "runtime.watch",
+      "class": "ordinary_product",
+      "public_operation": "observe.events",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "artifact.verify.projected",
+      "class": "ordinary_product",
+      "public_operation": "package.verify",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "command.discovery.quant",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "console.status",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "reasoning.policy.disabled",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "reasoning.policy.low",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "reasoning.policy.enabled",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "reasoning.policy.maximum",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "console.context",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "execute.graph",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "http.chat.completions",
+      "class": "ordinary_product",
+      "public_operation": "existing inference HTTP contract",
+      "reason": "Existing separate inference contract; native management grants no YAI Case authority."
+    },
+    {
+      "operation": "http.health",
+      "class": "ordinary_product",
+      "public_operation": "existing inference HTTP contract",
+      "reason": "Existing separate inference contract; native management grants no YAI Case authority."
+    },
+    {
+      "operation": "http.models.list",
+      "class": "ordinary_product",
+      "public_operation": "existing inference HTTP contract",
+      "reason": "Existing separate inference contract; native management grants no YAI Case authority."
+    },
+    {
+      "operation": "http.models.show",
+      "class": "ordinary_product",
+      "public_operation": "existing inference HTTP contract",
+      "reason": "Existing separate inference contract; native management grants no YAI Case authority."
+    },
+    {
+      "operation": "http.responses",
+      "class": "ordinary_product",
+      "public_operation": "existing inference HTTP contract",
+      "reason": "Existing separate inference contract; native management grants no YAI Case authority."
+    },
+    {
+      "operation": "model.registry",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "model.status.projected",
+      "class": "ordinary_product",
+      "public_operation": "model.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "model.use",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "protocol.handshake",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "repl.attachment.attach",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "repl.attachment.list",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "repl.attachment.clear",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "repl.quit",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "artifact.materialize",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "artifact.inspect",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "artifact.verify",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "generation.chat",
+      "class": "ordinary_product",
+      "public_operation": "generation.start",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "model.search",
+      "class": "ordinary_product",
+      "public_operation": "model.search",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "artifact.prepare",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Explicit source/manifest/output recipe compilation and selected tensor artifacts. Ordinary model.prepare is exposed as build.start; this lower-level compiler recipe is not the same workflow and requires typed plan/staging identities before remote promotion."
+    },
+    {
+      "operation": "artifact.emit.controlled",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "artifact.template",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "tensor.map",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "quant.convert",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "quant.emit",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "quant.imatrix",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "quant.job",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "quant.plan",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "quant.policy",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "quant.probe",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "quant.preset",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "source.manifest",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "source.payload.verify",
+      "class": "ordinary_product",
+      "public_operation": "source.verify",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "command.completion",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "artifact.materialize.gate",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "artifact.model.gate",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.capture",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.compare",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.prepare",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.replay",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.execute",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.state.exercise",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.state.validate",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.component.audio-vae",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.component.video-vae",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.media.publish",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.media.generate",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "input.prepare",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.moe.execute",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "tokenizer.decode",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "tokenizer.encode",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "tokenizer.prompt",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.transformer.decode",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.transformer.generate",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.transformer.logits",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.transformer.execute",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.transformer.sample",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "command.discovery",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "artifact.check",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "artifact.verify.report",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "artifact.metadata",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "artifact.registry.list",
+      "class": "ordinary_product",
+      "public_operation": "model.list",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "artifact.registry.status",
+      "class": "ordinary_product",
+      "public_operation": "model.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "artifact.tensors",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.capabilities",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.describe",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.plan",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.residency.inspect",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.state.inspect",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "system.backend",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "context.report",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "evidence.model",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "inspect.model.full.report",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "inspect.model.full.materialization_plan",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "inspect.model.full.descriptor",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "inspect.model.full.family_runtime",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.materialization.full_model",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "evidence.moe",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "quant.qtype.support",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "quant.explain",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "quant.summarize",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "source.native.inspect",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "evidence.target",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "tensor.collection.report",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "tokenizer.show",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "model.list",
+      "class": "ordinary_product",
+      "public_operation": "model.list",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "model.show",
+      "class": "ordinary_product",
+      "public_operation": "model.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "model.storage",
+      "class": "ordinary_product",
+      "public_operation": "model.storage",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "model.evict",
+      "class": "ordinary_product",
+      "public_operation": "model.evict",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "model.pull",
+      "class": "ordinary_product",
+      "public_operation": "acquisition.start",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "model.prepare",
+      "class": "ordinary_product",
+      "public_operation": "build.start",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "model.acquisition.status",
+      "class": "ordinary_product",
+      "public_operation": "acquisition.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "model.acquisition.stop",
+      "class": "ordinary_product",
+      "public_operation": "acquisition.cancel",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "model.push",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Filesystem export needs a bounded artifact-transfer/destination contract; never arbitrary remote paths."
+    },
+    {
+      "operation": "model.load",
+      "class": "ordinary_product",
+      "public_operation": "engine.load",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "model.unload",
+      "class": "ordinary_product",
+      "public_operation": "engine.unload",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "model.active",
+      "class": "ordinary_product",
+      "public_operation": "engine.list",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "execute.graph.attention.benchmark.compare",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.benchmark",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.cuda_graph.inspect",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.cuda_graph.invalidate",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.cuda_graph.list",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.cuda_graph.release",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.cuda_graph.update",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.cuda_graph.warmup",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.qualify",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.profile",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "execute.graph.attention.trace",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "session.attach",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "generation.cancel",
+      "class": "ordinary_product",
+      "public_operation": "generation.cancel",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "session.close",
+      "class": "ordinary_product",
+      "public_operation": "session.close",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "session.detach",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "session.fork",
+      "class": "ordinary_product",
+      "public_operation": "session.fork",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "session.list",
+      "class": "ordinary_product",
+      "public_operation": "session.list",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "session.new",
+      "class": "ordinary_product",
+      "public_operation": "session.create",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "session.reset",
+      "class": "ordinary_product",
+      "public_operation": "session.reset",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "session.state.restore",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Checkpoint import needs bounded artifact upload/identity/admission; private filesystem reads are not exposed."
+    },
+    {
+      "operation": "session.state.save",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Checkpoint export needs bounded file transfer and destination authority; private path writes are not exposed."
+    },
+    {
+      "operation": "session.show",
+      "class": "ordinary_product",
+      "public_operation": "session.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "provider.account.ensure",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Host provider setup/installation is local administration, not a remote package-manager grant."
+    },
+    {
+      "operation": "provider.account.login",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Interactive credential provisioning belongs to the Host registry provider; management consumes opaque references only."
+    },
+    {
+      "operation": "provider.account.logout",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Host provider credential lifecycle is separate from computational job inputs."
+    },
+    {
+      "operation": "provider.list",
+      "class": "ordinary_product",
+      "public_operation": "registry.accounts",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "provider.account.status",
+      "class": "ordinary_product",
+      "public_operation": "registry.accounts",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "provider.account.whoami",
+      "class": "ordinary_product",
+      "public_operation": "registry.accounts",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "system.cuda",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "system.paths",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "system.version",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "host.serve",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Local service provisioning selects listener/OS lifetime; remote management does not replace an operator-owned service."
+    },
+    {
+      "operation": "artifact.list",
+      "class": "ordinary_product",
+      "public_operation": "model.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "source.inspect",
+      "class": "ordinary_product",
+      "public_operation": "model.inspect",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "source.acquire",
+      "class": "ordinary_product",
+      "public_operation": "acquisition.start",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "source.cleanup",
+      "class": "ordinary_product",
+      "public_operation": "source.cleanup",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "source.resume",
+      "class": "ordinary_product",
+      "public_operation": "acquisition.resume",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "source.status",
+      "class": "ordinary_product",
+      "public_operation": "acquisition.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "source.stop",
+      "class": "ordinary_product",
+      "public_operation": "acquisition.cancel",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "source.list",
+      "class": "ordinary_product",
+      "public_operation": "model.list",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "source.show",
+      "class": "ordinary_product",
+      "public_operation": "model.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "profile.list",
+      "class": "ordinary_product",
+      "public_operation": "model.list",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "profile.show",
+      "class": "ordinary_product",
+      "public_operation": "model.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "profile.create",
+      "class": "ordinary_product",
+      "public_operation": "profile.create",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "profile.remove",
+      "class": "ordinary_product",
+      "public_operation": "profile.remove",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "profile.scan",
+      "class": "ordinary_product",
+      "public_operation": "profile.scan",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "profile.verify",
+      "class": "ordinary_product",
+      "public_operation": "profile.verify",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "host.status",
+      "class": "ordinary_product",
+      "public_operation": "host.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "host.memory",
+      "class": "ordinary_product",
+      "public_operation": "host.get",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "host.logs",
+      "class": "ordinary_product",
+      "public_operation": "observe.events",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "host.stop",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Local service administration can affect unrelated clients; not granted by product-management enrollment."
+    },
+    {
+      "operation": "engine.load",
+      "class": "ordinary_product",
+      "public_operation": "engine.load",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "engine.unload",
+      "class": "ordinary_product",
+      "public_operation": "engine.unload",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "engine.list",
+      "class": "ordinary_product",
+      "public_operation": "engine.list",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "engine.show",
+      "class": "ordinary_product",
+      "public_operation": "engine.list",
+      "reason": "Shared canonical lifecycle owner; presentation differs by client."
+    },
+    {
+      "operation": "system.cuda.bandwidth",
+      "class": "advanced_engineering",
+      "public_operation": null,
+      "reason": "Low-level compiler/tensor/materialization/numerical diagnostic owner; ordinary source/build/package lifecycle uses the public product projections."
+    },
+    {
+      "operation": "http.chat.preflight",
+      "class": "ordinary_product",
+      "public_operation": "existing inference HTTP contract",
+      "reason": "Existing separate inference contract; native management grants no YAI Case authority."
+    },
+    {
+      "operation": "finite.decision.producer",
+      "class": "unsupported_remote",
+      "public_operation": null,
+      "reason": "Separate finite computation contract; not merged with Session management."
+    },
+    {
+      "operation": "management.product.protocol",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "management.product.worker",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Enrollment, discovery, terminal interaction or connection-local selection; no screen-shaped RPC mirror."
+    },
+    {
+      "operation": "management.network.serve",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Local native service provisioning/approval; remote clients may request pairing but cannot approve their own grant."
+    },
+    {
+      "operation": "management.network.identity",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Local native service provisioning/approval; remote clients may request pairing but cannot approve their own grant."
+    },
+    {
+      "operation": "management.pairing.open",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Local native service provisioning/approval; remote clients may request pairing but cannot approve their own grant."
+    },
+    {
+      "operation": "management.pairing.list",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Local native service provisioning/approval; remote clients may request pairing but cannot approve their own grant."
+    },
+    {
+      "operation": "management.pairing.approve",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Local native service provisioning/approval; remote clients may request pairing but cannot approve their own grant."
+    },
+    {
+      "operation": "management.pairing.revoke",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Local native service provisioning/approval; remote clients may request pairing but cannot approve their own grant."
+    }
+  ]
+}

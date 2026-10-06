@@ -6,6 +6,7 @@
  */
 #define _POSIX_C_SOURCE 200809L
 #include "src/server/private.h"
+#include <yvex/internal/platform.h>
 
 #include <errno.h>
 #include <stdint.h>
@@ -24,6 +25,7 @@
 
 struct yvex_client {
     int fd;
+    char host_instance_identity[YVEX_SHA256_HEX_CAP];
 };
 
 static int transport_refuse(yvex_error *err, yvex_status status,
@@ -254,12 +256,30 @@ int yvex_client_connect(yvex_client **out, const char *socket_path,
         }
         return yvex_error_code(err);
     }
+    memcpy(client->host_instance_identity, response.host_instance_identity,
+           sizeof(client->host_instance_identity));
     if (yvex_client_timeout_set(client, 0u, err) != YVEX_OK) {
         (void)close(client->fd);
         free(client);
         return yvex_error_code(err);
     }
     *out = client;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_client_host_identity(yvex_client *client,
+                              char out[YVEX_SHA256_HEX_CAP], yvex_error *err)
+{
+    size_t i;
+    if (!client || client->fd < 0 || !out || strlen(client->host_instance_identity) != 64u)
+        return transport_refuse(err, YVEX_ERR_STATE, "host incarnation unavailable");
+    for (i = 0u; i < 64u; ++i) {
+        char value = client->host_instance_identity[i];
+        if (!((value >= '0' && value <= '9') || (value >= 'a' && value <= 'f')))
+            return transport_refuse(err, YVEX_ERR_FORMAT, "host incarnation malformed");
+    }
+    memcpy(out, client->host_instance_identity, YVEX_SHA256_HEX_CAP);
     yvex_error_clear(err);
     return YVEX_OK;
 }

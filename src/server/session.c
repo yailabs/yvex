@@ -1733,6 +1733,14 @@ int yvex_server_sessions_execute(server_session_registry *registry,
         request->operation != YVEX_CLIENT_OP_SESSION_LIST)
         session = yvex_server_session_find_locked(registry,
                                                   request->session_name);
+    /* The engine request queue serializes this Session name until completion.
+     * Resolve its lifetime under the same registry lock as the mutation. */
+    if (request->expected_session_identity[0] && (!session ||
+        strcmp(request->expected_session_identity, session->identity) != 0)) {
+        rc = YVEX_ERR_STATE;
+        yvex_error_set(err, rc, "server.session.identity", "stale Session identity");
+        goto done;
+    }
     if (request->operation == YVEX_CLIENT_OP_SESSION_NEW) {
         rc = yvex_server_session_create_locked(
             registry, request->session_name, &session, err);
@@ -1914,7 +1922,7 @@ int yvex_server_sessions_console_status(server_session_registry *registry,
 
 int yvex_server_sessions_cancel(server_session_registry *registry,
                                    const char *session_name,
-                                   yvex_error *err)
+                                   const char *expected_identity, yvex_error *err)
 {
     server_session *session;
     if (!registry || !session_name ||
@@ -1924,8 +1932,9 @@ int yvex_server_sessions_cancel(server_session_registry *registry,
         return YVEX_ERR_INVALID_ARG;
     }
     session = yvex_server_session_find_locked(registry, session_name);
-    if (!session || !atomic_load_explicit(&session->active_turn,
-                                          memory_order_acquire)) {
+    if (!session || (expected_identity && expected_identity[0] &&
+        strcmp(expected_identity, session->identity) != 0) ||
+        !atomic_load_explicit(&session->active_turn, memory_order_acquire)) {
         (void)pthread_mutex_unlock(&registry->mutex);
         yvex_error_set(err, YVEX_ERR_STATE, "server.session.cancel",
                        "session has no active turn");

@@ -38,18 +38,27 @@ does not grant model admission or new public management operations.
 | Embedded integrator | [C API](../contracts/c-api.md) | Installed vs internal ABI tiers remain explicit |
 | Same-user client | [Local protocol](../contracts/local-protocol.md) | Exact version and generation checks |
 | Application provider | [OpenAI adapter](../contracts/openai-compatibility.md) | Bounded compatibility, not universal API parity |
-| Remote operator | [Remote management](../contracts/remote-management.md) | Read-only enrolled identity/status bootstrap |
+| Product operator | [Network management](../contracts/network-management.md) | Same-user local socket or authenticated HTTPS, explicit pairing/revocation; 36 typed lifecycle operations |
+| Advanced SSH operator | [Remote management](../contracts/remote-management.md) | Separate read, product-management and finite grants |
 | Remote finite compute consumer | [Finite producer v1](../contracts/finite-decision-remote.md) | Explicit compute enrollment, separate JSON schemas, exact generation/population/model lineage |
 
 The public platform SDK in
-[`yailabs/yai-sdk`](https://github.com/yailabs/yai-sdk) now has a separate
-`yvex-sdk` Rust client domain for those two remote-management reads. The SDK
-does not own source/model/runtime truth. YVEX's canonical operator registry
-exports the exact read-only remote operation set, and producer-vs-client parity
-is checked without exposing the private local Unix wire. YAI may consume
-producer facts through its bounded provider adapter; Studio may inspect
-YVEX-owned operator facts directly. Case-affecting actions still cross YAI
-admission. There is no remote model/lifecycle mutation contract in this slice.
+[`yailabs/yai-sdk`](https://github.com/yailabs/yai-sdk) has a separate `yvex-sdk`
+client domain for producer-owned [product management](../contracts/product-management.md).
+Its 36 operations consume Source/model/build/package, Host/Engine/Session,
+Jobs and observation truth. Capability discovery is explicit; neither runtime
+brand nor version spelling is capability evidence. CLI and SDK consume the same
+domain owners. Direct computational generation is separate from a governed YAI
+Case execution and never writes to a Case.
+
+The standalone native service provides a private same-user Unix socket for
+local automatic discovery and authenticated HTTPS for explicit remote enrollment.
+Optional mDNS advertises discovery hints, never trust. TLS identity and local
+OS-peer identity are separate from computational Host nonce, inference address
+and YAI authority. The same bounded operation dispatcher and peer-scoped durable
+receipt owner serve every authorized transport. Existing restricted SSH grants
+retain their meaning; they are not required by the ordinary Studio connection UI.
+Producer and consumer evidence remain separately qualified.
 
 ## Native operator facts
 
@@ -232,3 +241,11 @@ instead, with [independent schemas](../contracts/finite-decision-remote.md).
 The Rust adapter calls the installed public C finite client; the C client owns
 the private-wire exchange, result validation and connection cleanup. No remote
 lifecycle mutation, shell, socket forwarding or human-output parsing is involved.
+
+## Public product management
+
+[Management v2](../contracts/product-management.md) exposes existing Source, Build,
+Package, Engine and Session owners through a separate explicit SSH grant. Durable
+peer-scoped receipts preserve uncertain outcomes. CLI and SDK are sibling clients;
+no consumer parses CLI output or gains Case authority. Native protocol 25 fences
+Session lifetimes and projects a Host-owned instance nonce.

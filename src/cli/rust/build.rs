@@ -261,7 +261,7 @@ fn native_bindings(root: &std::path::Path) -> bindgen::Builder {
         .allowlist_function("yvex_model_ref_verify_integrity")
         .allowlist_function("yvex_model_metadata_snapshot_read")
         .allowlist_function("yvex_model_registry_compare_metadata")
-        .allowlist_function(concat!("yvex_model_registry_(open|close|remove|save|",
+        .allowlist_function(concat!("yvex_model_registry_(open|close|remove|remove_exact|save|",
             "scan_root|scan_free|find|create|verify|derive|default_path)"))
         .allowlist_function(
             "yvex_(paths_(default|project)|operator_paths_.*|run_dir_(prepare|create))",

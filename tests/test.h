@@ -11,6 +11,8 @@
 #include "qa/test_declarations.h"
 
 /* Cross-owner fixture helper; it is not a runner registration. */
+struct yvex_model_engine;
+int yvex_test_server_session_lifetimes(struct yvex_model_engine *model);
 struct yvex_artifact_lowering_map;
 int yvex_test_deepseek_map_fixture_build(struct yvex_artifact_lowering_map **out);
 

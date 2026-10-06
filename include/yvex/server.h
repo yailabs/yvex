@@ -10,7 +10,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define YVEX_LOCAL_PROTOCOL_VERSION 24u
+#define YVEX_LOCAL_PROTOCOL_VERSION 25u
 #define YVEX_CLIENT_MEDIA_CONDITION_SCHEMA_V1 1u
 #define YVEX_CLIENT_MEDIA_CONDITION_CAP 2u
 #define YVEX_CLIENT_MEDIA_RESULT_SCHEMA_V1 1u
@@ -484,6 +484,8 @@ typedef struct {
     yvex_reasoning_policy reasoning_policy;
     const yvex_provider_request *provider_request;
     char model_lease_identity[YVEX_SERVER_ID_CAP];
+    /* Optional exact Session lifetime fence; never inferred from its display name. */
+    char expected_session_identity[YVEX_SHA256_HEX_CAP];
 } yvex_client_request;
 typedef struct {
     unsigned int schema_version;
@@ -549,23 +551,21 @@ typedef struct {
     yvex_console_status console;
     yvex_server_event event;
     yvex_execution_measurement measurement;
+    char host_instance_identity[YVEX_SHA256_HEX_CAP];
 } yvex_client_message;
 int yvex_server_create(yvex_server **out, const yvex_server_options *options, yvex_error *err);
 int yvex_server_start(yvex_server *server, yvex_error *err);
-int yvex_server_engine_load(
-    yvex_server *server, const yvex_server_engine_options *options,
+int yvex_server_engine_load(yvex_server *server, const yvex_server_engine_options *options,
     yvex_server_engine_summary *summary, yvex_error *err);
 int yvex_server_engine_unload(
     yvex_server *server, const char *alias, unsigned long long generation,
     yvex_server_engine_summary *summary, yvex_error *err);
-int yvex_server_engine_snapshot(
-    const yvex_server *server, yvex_server_engine_summary *engines,
+int yvex_server_engine_snapshot(const yvex_server *server, yvex_server_engine_summary *engines,
     unsigned long long capacity, unsigned long long *count, yvex_error *err);
 int yvex_server_serve(yvex_server *server, yvex_error *err);
 int yvex_server_stop(yvex_server *server, yvex_error *err);
 int yvex_server_finish(yvex_server *server, yvex_error *err);
-int yvex_server_get_summary(const yvex_server *server,
-                            yvex_server_summary *out, yvex_error *err);
+int yvex_server_get_summary(const yvex_server *server, yvex_server_summary *out, yvex_error *err);
 int yvex_server_event_next(yvex_server *server, unsigned long long after_sequence,
                            int wait, yvex_server_event *event, yvex_error *err);
 int yvex_server_event_json(const yvex_server_event *event, char *output,
@@ -576,22 +576,22 @@ const char *yvex_server_session_state_name(yvex_server_session_state state);
 void yvex_server_close(yvex_server **server);
 int yvex_client_connect(yvex_client **out, const char *socket_path, yvex_error *err);
 int yvex_client_timeout_set(yvex_client *client, unsigned long long milliseconds, yvex_error *err);
+/* Host-authored lifetime nonce. Device identity remains the approved SSH host key. */
+int yvex_client_host_identity(yvex_client *client, char out[YVEX_SHA256_HEX_CAP], yvex_error *err);
 int yvex_client_send(yvex_client *client, const yvex_client_request *request, yvex_error *err);
 int yvex_client_receive(yvex_client *client, yvex_client_message *message, yvex_error *err);
 void yvex_client_close(yvex_client **client);
 int yvex_protocol_request_encode(const yvex_client_request *request,
                                  unsigned char *output, unsigned long long capacity,
                                  unsigned long long *byte_count, yvex_error *err);
-int yvex_protocol_request_decode(const unsigned char *input,
-                                 unsigned long long byte_count,
+int yvex_protocol_request_decode(const unsigned char *input, unsigned long long byte_count,
                                  yvex_client_request *request, unsigned char **owned_prompt,
                                  yvex_content_part **owned_content,
                                  yvex_provider_request **owned_provider, yvex_error *err);
 int yvex_protocol_message_encode(const yvex_client_message *message,
                                  unsigned char *output, unsigned long long capacity,
                                  unsigned long long *byte_count, yvex_error *err);
-int yvex_protocol_message_decode(const unsigned char *input,
-                                 unsigned long long byte_count,
+int yvex_protocol_message_decode(const unsigned char *input, unsigned long long byte_count,
                                  yvex_client_message *message, yvex_error *err);
 int yvex_server_socket_path(char output[YVEX_SERVER_SOCKET_PATH_CAP], yvex_error *err);
 #ifdef __cplusplus

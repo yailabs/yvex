@@ -32,6 +32,11 @@ int yvex_model_registry_create(const yvex_model_registry_entry *requested,
                                 const char *registry_path, int replace_existing,
                                 yvex_model_registry_creation *out, yvex_error *err);
 
+/* Remove under the same native transaction lock as creation. When provided,
+ * the expected immutable package digest must match the current alias. */
+int yvex_model_registry_remove_exact(const char *alias, const char *expected_sha256,
+                                      const char *registry_path, yvex_error *err);
+
 typedef struct {
     int passed, metadata_checked;
     char identity_status[24], metadata_status[24], readiness_status[24];

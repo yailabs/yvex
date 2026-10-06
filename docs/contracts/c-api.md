@@ -338,13 +338,13 @@ reasoning, at most one assistant tool call, and its original field semantics.
 Clone and wire-decode publish only a complete owned request graph. The provider
 owner neither parses HTTP nor renders model-family prompt syntax.
 
-`<yvex/server.h>` protocol v24 carries the sealed provider request through the
+`<yvex/server.h>` protocol v25 carries the sealed provider request through the
 private Unix socket. Provider output messages distinguish assistant text,
 explicit reasoning, function calls, usage, terminal completion, and failure.
 Typed events bind the provider adapter, provider-request identity, and external
 correlation ID while excluding prompt and output content.
 
-The current wire contract is [Local Protocol v24](local-protocol.md).
+The current wire contract is [Local Protocol v25](local-protocol.md).
 It owns operation layout, negotiation, generation routing, typed content,
 execution preflight, per-engine load context, finite-decision requests and
 availability semantics. Every earlier wire version refuses; there is no private

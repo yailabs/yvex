@@ -25,6 +25,7 @@ Software correctness, independent numerical conformance, artifact integrity, run
 - [External Reference-Engineering Baseline](reference-baseline.md)
 - [Retained Execution Observations](retained-observations.md)
 - [Remote finite-decision producer qualification](finite-decision-remote.md)
+- [Product management control-plane qualification](product-management-control-plane.md)
 
 ## macOS and Apple Silicon evidence
 

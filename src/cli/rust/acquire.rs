@@ -392,7 +392,14 @@ pub(crate) fn parent(path: &str) -> Result<()> {
     Ok(())
 }
 
-fn start(invocation: &Invocation<'_>, request: &Request) -> Result<native::Operation> {
+pub(crate) struct StartOptions {
+    pub worker_words: Vec<String>,
+    pub expected_bytes: Option<u64>,
+    pub selected_shards: Option<u64>,
+    pub expected_generation: Option<(String, u64)>,
+}
+
+pub(crate) fn start_request(request: &Request, options: StartOptions) -> Result<native::Operation> {
     let record = &request.provenance;
     parent(&ffi::text(&record.operation_path))?;
     parent(&ffi::text(&record.supervisor_log_path))?;
@@ -402,6 +409,13 @@ fn start(invocation: &Invocation<'_>, request: &Request) -> Result<native::Opera
     } else {
         None
     };
+    if let Some((identity, generation)) = &options.expected_generation
+        && !previous.as_ref().is_some_and(|previous| {
+            ffi::text(&previous.operation_id) == *identity && previous.generation == *generation
+        })
+    {
+        return Err(state_error("stale_acquisition_generation").into());
+    }
     if let Some(previous) = &previous {
         if ffi::text(&previous.selection_identity) != request.selection {
             return Err(state_error("existing operation has another source selection").into());
@@ -418,7 +432,7 @@ fn start(invocation: &Invocation<'_>, request: &Request) -> Result<native::Opera
     }
     acquisition::guarded(record, &request.root)?;
     let locks = acquisition::stale_locks(record, &request.root, false)?;
-    if locks != 0 && !invocation.has("--clear-stale-locks") {
+    if locks != 0 && !request.clear_stale_locks {
         return Err(state_error(
             "stale-lock-candidates: inspect or explicitly clear before resume",
         )
@@ -461,48 +475,24 @@ fn start(invocation: &Invocation<'_>, request: &Request) -> Result<native::Opera
         acquisition::now()?,
         request.stall,
     )?;
-    for (flag, fact) in [
-        ("--expected-bytes", &mut operation.progress.expected_bytes),
-        ("--selected-shards", &mut operation.progress.selected_shards),
+    for (value, fact) in [
+        (
+            options.expected_bytes,
+            &mut operation.progress.expected_bytes,
+        ),
+        (
+            options.selected_shards,
+            &mut operation.progress.selected_shards,
+        ),
     ] {
-        if invocation.has(flag) {
-            *fact = raw::yvex_source_acquisition_u64 {
-                value: number(invocation, flag, 1)?,
-                known: 1,
-            };
+        if let Some(value) = value {
+            *fact = raw::yvex_source_acquisition_u64 { value, known: 1 };
         }
     }
     native::publish(record, &operation)?;
     acquisition_report::retain(request, None, "model-download-running", None)?;
     let log = acquisition_worker::private_log(&ffi::text(&record.supervisor_log_path))?;
-    let mut words = invocation.operation.command_path.clone();
-    words.extend(invocation.positionals.clone());
-    for (flag, value) in &invocation.ordered_flags {
-        if ["--revision", "--release", "--models-root"].contains(&flag.as_str()) {
-            continue;
-        }
-        words.push(flag.clone());
-        if invocation
-            .operation
-            .flags
-            .iter()
-            .find(|entry| entry.name == *flag)
-            .is_some_and(|entry| entry.takes_value)
-        {
-            words.push(value.clone());
-        }
-    }
-    words.extend([
-        "--models-root".into(),
-        request.root.clone(),
-        if ffi::text(&record.provider) == "github" {
-            "--release"
-        } else {
-            "--revision"
-        }
-        .into(),
-        ffi::text(&record.revision),
-    ]);
+    let words = options.worker_words;
     // Spawn the loaded product image, not a pathname Cargo/install may replace.
     // On Linux the child inherits this executable identity across fork/exec.
     let child = Command::new(worker_program()?)
@@ -536,6 +526,53 @@ fn start(invocation: &Invocation<'_>, request: &Request) -> Result<native::Opera
         let _ = child.wait();
     });
     Ok(operation)
+}
+
+fn start(invocation: &Invocation<'_>, request: &Request) -> Result<native::Operation> {
+    let record = &request.provenance;
+    let mut words = invocation.operation.command_path.clone();
+    words.extend(invocation.positionals.clone());
+    for (flag, value) in &invocation.ordered_flags {
+        if ["--revision", "--release", "--models-root"].contains(&flag.as_str()) {
+            continue;
+        }
+        words.push(flag.clone());
+        if invocation
+            .operation
+            .flags
+            .iter()
+            .find(|entry| entry.name == *flag)
+            .is_some_and(|entry| entry.takes_value)
+        {
+            words.push(value.clone());
+        }
+    }
+    words.extend([
+        "--models-root".into(),
+        request.root.clone(),
+        if ffi::text(&record.provider) == "github" {
+            "--release"
+        } else {
+            "--revision"
+        }
+        .into(),
+        ffi::text(&record.revision),
+    ]);
+    start_request(
+        request,
+        StartOptions {
+            worker_words: words,
+            expected_generation: None,
+            expected_bytes: invocation
+                .has("--expected-bytes")
+                .then(|| number(invocation, "--expected-bytes", 1))
+                .transpose()?,
+            selected_shards: invocation
+                .has("--selected-shards")
+                .then(|| number(invocation, "--selected-shards", 1))
+                .transpose()?,
+        },
+    )
 }
 
 fn worker_program() -> Result<std::path::PathBuf> {

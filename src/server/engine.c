@@ -1563,16 +1563,20 @@ int yvex_server_engine_lease_preflight(
 }
 
 int yvex_server_engine_lease_cancel(server_engine_lease *lease,
-                                    const char *session, yvex_error *err)
+                                    const char *session, const char *expected_identity,
+                                    yvex_error *err)
 {
     server_engine *engine = lease ? lease->engine : NULL;
     if (!engine || engine->generation != lease->generation ||
         (!engine->media && !engine->sessions))
         return engine_refuse(err, YVEX_ERR_STATE,
                              "live engine lease is required");
+    if (engine->media && expected_identity && expected_identity[0])
+        return engine_refuse(err, YVEX_ERR_UNSUPPORTED,
+                             "media Session identity fencing is not published");
     return engine->media
                ? yvex_server_media_registry_cancel(engine->media, session, err)
-               : yvex_server_sessions_cancel(engine->sessions, session, err);
+               : yvex_server_sessions_cancel(engine->sessions, session, expected_identity, err);
 }
 
 int yvex_server_engine_lease_console_status(

@@ -41,6 +41,7 @@ enum {
     TAG_MEDIA_LAST_IMAGE,
     TAG_MEDIA_EXECUTION,
     TAG_LOAD_CONTEXT_CAPACITY,
+    TAG_EXPECTED_SESSION_IDENTITY,
     TAG_MESSAGE_KIND = 32,
     TAG_STATUS,
     TAG_REASON,
@@ -260,7 +261,7 @@ enum {
     TAG_ENGINE_MODEL_LEASES,
     TAG_ENGINE_CAPABILITIES,
     TAG_EXECUTION_PREFLIGHT,
-    TAG_FINITE_REQUEST
+    TAG_FINITE_REQUEST, TAG_HOST_INSTANCE_IDENTITY
 };
 typedef struct {
     unsigned char *data;
@@ -608,6 +609,7 @@ int yvex_protocol_request_encode(const yvex_client_request *request,
         !writer_u64(&writer, TAG_LOAD_CONTEXT_CAPACITY,
                     request->load_context_capacity) ||
         !writer_text(&writer, TAG_SESSION_NAME, request->session_name) ||
+        !writer_text(&writer, TAG_EXPECTED_SESSION_IDENTITY, request->expected_session_identity) ||
         !writer_field(&writer, request->operation == YVEX_CLIENT_OP_FINITE_DECISION
                       ? TAG_FINITE_REQUEST : TAG_PROMPT, request->prompt,
                       request->prompt_bytes) ||
@@ -707,6 +709,10 @@ int yvex_protocol_request_decode(const unsigned char *input,
         case TAG_SESSION_NAME:
             valid = reader_text(bytes, count, candidate.session_name,
                                 sizeof(candidate.session_name));
+            break;
+        case TAG_EXPECTED_SESSION_IDENTITY:
+            valid = reader_text(bytes, count, candidate.expected_session_identity,
+                                sizeof(candidate.expected_session_identity));
             break;
         case TAG_PROMPT:
         case TAG_FINITE_REQUEST:
@@ -1046,6 +1052,7 @@ static int protocol_message_core_write(wire_writer *writer,
         MESSAGE_U64(TAG_STREAM_CHANNEL, message->stream_channel) &&
         MESSAGE_U64(TAG_MESSAGE_AVAILABILITY_FLAGS, message_flags) &&
         MESSAGE_U64(TAG_SESSION_STATE, message->session_state) &&
+        writer_text(writer, TAG_HOST_INSTANCE_IDENTITY, message->host_instance_identity) &&
         writer_text(writer, TAG_SESSION_IDENTITY,
                     message->session_identity) &&
         writer_text(writer, TAG_TURN_IDENTITY, message->turn_identity) &&
@@ -1555,6 +1562,9 @@ static int message_base_field(yvex_client_message *candidate, unsigned int tag,
         valid = reader_u64(bytes, count, &value) &&
                 value <= YVEX_SERVER_SESSION_FAILED;
         if (valid) candidate->session_state = (yvex_server_session_state)value;
+        break;
+    case TAG_HOST_INSTANCE_IDENTITY:
+        valid = reader_text(bytes, count, candidate->host_instance_identity, sizeof(candidate->host_instance_identity));
         break;
     case TAG_SESSION_IDENTITY:
         valid = reader_text(bytes, count, candidate->session_identity,

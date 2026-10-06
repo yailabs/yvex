@@ -136,6 +136,19 @@ static int request_fork_fields_valid(const yvex_client_request *request)
     return request->fork_session_name[0] && request->maximum_prefix_bytes;
 }
 
+static int request_session_identity_valid(const yvex_client_request *request)
+{
+    if (!memchr(request->expected_session_identity, '\0',
+                sizeof(request->expected_session_identity))) return 0;
+    if (!request->expected_session_identity[0]) return 1;
+    return yvex_sha256_hex_valid(request->expected_session_identity) &&
+        (request->operation == YVEX_CLIENT_OP_SESSION_RESET ||
+         request->operation == YVEX_CLIENT_OP_SESSION_FORK ||
+         request->operation == YVEX_CLIENT_OP_SESSION_CLOSE ||
+         request->operation == YVEX_CLIENT_OP_GENERATION_TURN ||
+         request->operation == YVEX_CLIENT_OP_GENERATION_CANCEL);
+}
+
 static int request_content_fields_valid(const yvex_client_request *request)
 {
     if (!request->content_part_count)
@@ -229,6 +242,7 @@ int yvex_server_protocol_request_fields_valid(
              !request->min_p && !request->typical_p && !request->seed &&
              !request->event_after_sequence && !request->trace_content &&
              request->trace_level == YVEX_SERVER_TRACE_SUMMARY)) &&
+           request_session_identity_valid(request) &&
            request_state_fields_valid(request) &&
            request_fork_fields_valid(request) &&
            request_content_fields_valid(request) &&
@@ -245,7 +259,9 @@ int yvex_server_protocol_message_valid(const yvex_client_message *message)
 #define ENUM_VALID(value, first, last) \
     ((int)(value) >= (int)(first) && (value) <= (last))
 #define BOOL_VALID(value) ((value) == 0 || (value) == 1)
-    return ENUM_VALID(message->kind, YVEX_CLIENT_MESSAGE_ACK,
+    return memchr(message->host_instance_identity, '\0', sizeof(message->host_instance_identity)) &&
+           (!message->host_instance_identity[0] || yvex_sha256_hex_valid(message->host_instance_identity)) &&
+           ENUM_VALID(message->kind, YVEX_CLIENT_MESSAGE_ACK,
                       YVEX_CLIENT_MESSAGE_FINITE_DECISION) &&
            (message->kind != YVEX_CLIENT_MESSAGE_FINITE_DECISION ||
             (message->status == YVEX_OK && message->byte_count > 0u)) &&

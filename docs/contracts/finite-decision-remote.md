@@ -139,6 +139,6 @@ producer facts. No SDK, YAI or Studio modification is part of this delivery.
 `tests/integration/finite_remote.py` exercises the real restricted SSH producer
 and its public C client, with a synthetic native peer for wire/result negatives.
 That fixture is not real model quality or Exon→DGX product qualification.
-Management v1, private protocol v24 and installed C ABI v1 retain their identities.
+Management v1, private protocol v25 and installed C ABI v1 retain their identities.
 Actual installed listener/key approval and real model/Exon integration remain
 separate qualification facts, never inferred from a loopback fixture.

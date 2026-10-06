@@ -1576,8 +1576,119 @@ static int test_provider_telemetry(void)
     return 0;
 }
 
+static int session_fence_emit(void *context, const yvex_client_message *message, yvex_error *err)
+{
+    (void)message; (void)err;
+    (*(unsigned int *)context)++;
+    return YVEX_OK;
+}
+
+/* Called with the real tiny admitted CPU model from unit.runtime_binding. */
+int yvex_test_server_session_lifetimes(yvex_model_engine *model)
+{
+    server_session_registry *registry = NULL;
+    server_telemetry *telemetry = NULL;
+    server_session *session = NULL;
+    server_event_scope scope = {0};
+    yvex_server_engine_options options = {0};
+    yvex_model_engine_summary model_summary;
+    yvex_runtime_execution_session *anchor = NULL;
+    yvex_runtime_session_open_request open = {0};
+    yvex_runtime_session_summary summary;
+    yvex_model_engine_failure failure;
+    yvex_client_request request = {0};
+    char first[YVEX_SHA256_HEX_CAP], second[YVEX_SHA256_HEX_CAP];
+    unsigned int emitted = 0u;
+    yvex_error err;
+    open.backend = YVEX_BACKEND_KIND_CPU;
+    YVEX_TEST_ASSERT(yvex_runtime_session_open(&anchor, model, &open, &failure, &err) == YVEX_OK &&
+        yvex_runtime_session_summary_copy(anchor, &summary, &err) == YVEX_OK &&
+        yvex_model_engine_summary_copy(model, &model_summary, &err) == YVEX_OK,
+        "actual admitted model provides Session specialization");
+    options.backend = YVEX_BACKEND_KIND_CPU;
+    options.engine_kind = scope.engine_kind = YVEX_SERVER_ENGINE_TEXT;
+    options.execution_strategy = scope.execution_strategy = YVEX_SERVER_EXECUTION_TARGET_ONLY;
+    options.maximum_sessions = 2u;
+    options.context_capacity = 8u;
+    options.maximum_new_tokens = 2u;
+    options.maximum_output_bytes = 128u;
+    strcpy(scope.runtime_model_identity, model_summary.runtime_model_identity);
+    strcpy(scope.artifact_identity, model_summary.artifact_identity);
+    strcpy(scope.specialization_identity, summary.engine_specialization_identity);
+    YVEX_TEST_ASSERT(yvex_runtime_session_close(&anchor, &err) == YVEX_OK &&
+        yvex_server_telemetry_open(&telemetry, 16u, &err) == YVEX_OK &&
+        yvex_server_sessions_open(&registry, model, &options, 1u, 1u, 0,
+            &scope, telemetry, &err) == YVEX_OK, "actual Session registry opens");
+    YVEX_TEST_ASSERT(pthread_mutex_lock(&registry->mutex) == 0, "actual registry lock");
+    YVEX_TEST_ASSERT(yvex_server_session_create_locked(registry, "reused", &session, &err) == YVEX_OK,
+        "actual Session first lifetime creates");
+    strcpy(first, session->identity);
+    YVEX_TEST_ASSERT(yvex_server_session_reset_locked(registry, session, &err) == YVEX_OK &&
+        !strcmp(first, session->identity), "reset preserves actual lifetime identity");
+    YVEX_TEST_ASSERT(yvex_server_session_close_locked(registry, session, &err) == YVEX_OK &&
+        yvex_server_session_create_locked(registry, "reused", &session, &err) == YVEX_OK &&
+        strcmp(first, session->identity) != 0 && registry->next_lifetime_sequence == 2u,
+        "close and recreate same name allocate a distinct actual lifetime");
+    strcpy(second, session->identity);
+    pthread_mutex_unlock(&registry->mutex);
+    request.operation = YVEX_CLIENT_OP_SESSION_CLOSE;
+    strcpy(request.session_name, "reused");
+    strcpy(request.expected_session_identity, first);
+    YVEX_TEST_ASSERT(yvex_server_sessions_execute(registry, &request, "old", 0.0,
+        session_fence_emit, &emitted, &err) == YVEX_ERR_STATE && emitted == 0u &&
+        registry->count == 1u && !strcmp(session->identity, second),
+        "old actual lifetime refuses against recreated same-name Session");
+    strcpy(request.expected_session_identity, second);
+    YVEX_TEST_ASSERT(yvex_server_sessions_execute(registry, &request, "current", 0.0,
+        session_fence_emit, &emitted, &err) == YVEX_OK && emitted == 1u && registry->count == 0u,
+        "current actual lifetime closes normally");
+    YVEX_TEST_ASSERT(yvex_server_sessions_close(&registry, &err) == YVEX_OK, "actual registry cleanup");
+    yvex_server_telemetry_close(&telemetry);
+    return 0;
+}
+
+static int test_session_lifetime_fence(void)
+{
+    server_session_registry registry = {0};
+    server_session session = {0};
+    yvex_client_request request = {0};
+    yvex_error err;
+    unsigned int emitted = 0u, i;
+    const yvex_client_operation mutations[] = {
+        YVEX_CLIENT_OP_SESSION_RESET, YVEX_CLIENT_OP_SESSION_FORK,
+        YVEX_CLIENT_OP_SESSION_CLOSE, YVEX_CLIENT_OP_GENERATION_TURN};
+    YVEX_TEST_ASSERT(pthread_mutex_init(&registry.mutex, NULL) == 0, "fence mutex");
+    registry.sessions = &session;
+    registry.capacity = 1u;
+    strcpy(session.name, "reused-name");
+    session.state = YVEX_SERVER_SESSION_READY;
+    server_test_identity(session.identity, 'b');
+    atomic_init(&session.active_turn, 1);
+    atomic_init(&session.cancel_requested, 0);
+    strcpy(request.session_name, session.name);
+    server_test_identity(request.expected_session_identity, 'a');
+    for (i = 0u; i < sizeof(mutations) / sizeof(mutations[0]); ++i) {
+        request.operation = mutations[i];
+        YVEX_TEST_ASSERT(yvex_server_sessions_execute(&registry, &request, "test", 0.0,
+            session_fence_emit, &emitted, &err) == YVEX_ERR_STATE,
+            "stale lifetime refuses before reset/fork/close/generation");
+        YVEX_TEST_ASSERT(session.state == YVEX_SERVER_SESSION_READY &&
+            session.identity[0] == 'b' && emitted == 0u,
+            "same-name replacement retains state without publication");
+    }
+    YVEX_TEST_ASSERT(yvex_server_sessions_cancel(&registry, session.name,
+        request.expected_session_identity, &err) == YVEX_ERR_STATE &&
+        atomic_load(&session.cancel_requested) == 0, "stale cancellation cannot affect replacement");
+    YVEX_TEST_ASSERT(yvex_server_sessions_cancel(&registry, session.name,
+        session.identity, &err) == YVEX_OK && atomic_load(&session.cancel_requested) == 1,
+        "exact active lifetime cancellation remains available");
+    pthread_mutex_destroy(&registry.mutex);
+    return 0;
+}
+
 int yvex_test_server(void)
 {
+    if (test_session_lifetime_fence() != 0) return 1;
     if (test_automatic_reasoning_policy() != 0) return 1;
     if (test_request_queue_serialization() != 0) return 1;
     if (test_session_store() != 0) return 1;

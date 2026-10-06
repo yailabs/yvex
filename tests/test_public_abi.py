@@ -112,11 +112,11 @@ RECORDS = {
         "include/yvex/server.h", "YVEX_CLIENT_MEDIA_CONDITION_SCHEMA_V1", 1, 524,
         "15b251a93051e0f0cf0c70e1a14c2cdcb019b54d7e27851b6c36b02bcac9802b"),
     "yvex_client_request": (
-        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 24, 2120,
-        "ec8504a565fad81fb7297bcf2fc3dbaa3f4065c8480c0a5d49fddc3264722d28"),
+        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 25, 2184,
+        "9b024b3755da96847ef091a85b799668a09c7cf827f7cb4b8b0faddb2ca5f0de"),
     "yvex_client_message": (
-        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 24, 11344,
-        "89817068a9a56a76a5a55c2fbe22497200a34ddf8873f8a91da2a66ac9f4404e"),
+        "include/yvex/server.h", "YVEX_LOCAL_PROTOCOL_VERSION", 25, 11416,
+        "c27ee5dce272039e7e006d0074a7d98d63c90719dfde10f9a74d92891a9545f4"),
     "yvex_tokenizer_plan_summary": (
         "include/yvex/tokenizer.h", "YVEX_TOKENIZER_PLAN_SCHEMA_CURRENT", 5, 872,
         "93fbfdefccd98e3add82e774a6ae9d3aa50384dd991e9bdc0cd90a01d5cdcb6e"),
@@ -230,7 +230,7 @@ def compiler_source() -> str:
         '"prompt conversation value changed");',
         'ABI_ASSERT(YVEX_TOKENIZER_PROMPT_VERBATIM == 2, '
         '"prompt verbatim value changed");',
-        'ABI_ASSERT(YVEX_LOCAL_PROTOCOL_VERSION == 24u, "local protocol identity changed");',
+        'ABI_ASSERT(YVEX_LOCAL_PROTOCOL_VERSION == 25u, "local protocol identity changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_NONE == 0, "engine-kind none value changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_TEXT == 1, "engine-kind text value changed");',
         'ABI_ASSERT(YVEX_SERVER_ENGINE_MEDIA == 2, "engine-kind media value changed");',

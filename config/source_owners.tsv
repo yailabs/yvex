@@ -460,3 +460,10 @@ src/core/platform.c	core	core.platform	generic	private	platform-interface	reposi
 include/yvex/internal/backend_resource.h	backend	backend.core	generic	private	internal-abi	backend,runtime,tests	interface	none
 src/backend/metal.c	backend	backend.metal.admission	backend	private	platform-interface	backend	implementation	none
 src/backend/metal/native.m	backend	backend.metal.execution	backend	private	platform-interface	backend	implementation	none
+src/cli/rust/management_product.rs	cli	cli.management_product	generic	private	platform-interface	cli.rust	implementation	none
+src/cli/rust/management_jobs.rs	cli	cli.management_jobs	generic	private	resource-lifecycle	cli.rust	implementation	none
+src/cli/rust/management_runtime.rs	cli	cli.management_runtime	generic	private	protocol-client	cli.rust	implementation	none
+src/cli/rust/management_models.rs	cli	cli.management_models	generic	private	typed-projection	cli.rust	implementation	none
+src/cli/rust/management_network.rs	cli	cli.management_network	generic	private	platform-interface	cli.rust	implementation	none
+src/cli/rust/management_pairing.rs	cli	cli.management_pairing	generic	private	platform-interface	cli.rust	implementation	none
+src/cli/rust/management_local.rs	cli	cli.management_local	generic	private	platform-interface	cli.rust	implementation	none

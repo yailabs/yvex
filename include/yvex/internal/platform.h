@@ -16,6 +16,8 @@ int yvex_platform_cache_release_available(void);
 int yvex_platform_file_cache_release(int fd, off_t offset, off_t length);
 int yvex_platform_rename_noreplace(const char *source, const char *destination);
 int yvex_platform_peer_owned(int fd);
+/* OS entropy for process-lifetime opaque identities; maximum 256 bytes. */
+int yvex_platform_random_bytes(void *out, size_t length);
 int yvex_platform_boot_id(char *out, size_t capacity);
 int yvex_platform_process_start(pid_t pid, unsigned long long *out);
 ssize_t yvex_platform_executable(char *out, size_t capacity);

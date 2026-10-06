@@ -144,7 +144,7 @@ fn trust_line_identity(line: &str) -> Result<&str> {
     let words: Vec<_> = command.split(' ').collect();
     if words.len() != 6
         || words[1] != "management"
-        || !matches!(words[2], "protocol" | "finite-protocol")
+        || !matches!(words[2], "protocol" | "finite-protocol" | "product-protocol")
         || words[4] != identity
         || ![words[0], words[3], words[5]].into_iter().all(safe_path)
     {
@@ -215,6 +215,7 @@ fn change(invocation: &Invocation<'_>, enroll: bool) -> Result<Output> {
         let protocol = match scope {
             "management" => "protocol",
             "finite-decision" => "finite-protocol",
+            "product-management" => "product-protocol",
             _ => return Err("unsupported_peer_scope"),
         };
         let line = format!(

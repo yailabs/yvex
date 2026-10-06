@@ -843,6 +843,11 @@ int yvex_server_media_registry_execute(
     (void)queue_seconds;
     if (!registry || !request || !emit || pthread_mutex_lock(&registry->mutex) != 0)
         return media_refuse(err, YVEX_ERR_INVALID_ARG, "media request registry is required");
+    if (request->expected_session_identity[0]) {
+        rc = media_refuse(err, YVEX_ERR_UNSUPPORTED,
+                         "media Session identity fencing is not published");
+        goto done;
+    }
     if (registry->closing) {
         rc = media_refuse(err, YVEX_ERR_STATE, "media request registry is closing");
         goto done;

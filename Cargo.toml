@@ -26,11 +26,16 @@ resolver = "3"
 replai = { path = "build/external/replai-source" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
-rustix = { version = "1.1.5", features = ["termios", "event", "fs", "process"] }
+rustix = { version = "1.1.5", features = ["termios", "event", "fs", "process", "net"] }
 signal-hook = "0.3.18"
+rustls = { version = "=0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
+rcgen = "=0.13.2"
+httparse = "=1.10.1"
+sha2 = "0.10.9"
+mdns-sd = "0.15.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-nix = { version = "=0.31.3", default-features = false, features = ["poll"] }
+nix = { version = "=0.31.3", default-features = false, features = ["poll", "socket", "user"] }
 
 [build-dependencies]
 bindgen = "0.72.1"

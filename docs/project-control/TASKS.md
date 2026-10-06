@@ -69,14 +69,22 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 45 | 37 | 0 | 1 | 7 |
+| 46 | 37 | 1 | 1 | 7 |
 <!-- task-counts:end -->
 
-**37/45 selected Tasks complete.** This denominator includes the significant
+**37/46 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
 candidates are not selected Tasks.
+
+## Product management delivery
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `YVEX.STUDIO.COMPUTE.CONTROL.PLANE.0` | Promote ordinary YVEX product lifecycle through public management and sibling SDK/Studio clients | P1 | 🔵 IN PROGRESS | 36 shared operations, standalone HTTPS/mDNS and same-user public socket, local pairing/revocation, exact Jobs/Session fences and typed SDK; isolated native TLS/CPU/vault controls pass. Real remote/native Studio acceptance remains separate; [evidence](../evaluation/product-management-control-plane.md). |
+
+Authorized 2026-10-06. Work starts from published `803dd98d` in an isolated Exon checkout; concurrent unpublished Spark runtime/client/qualification work is preserved. No unselected training, A03, Core semantics or operator Case mutation is selected.
 
 ## Remote finite-decision producer
 
