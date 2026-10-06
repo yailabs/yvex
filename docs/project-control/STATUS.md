@@ -17,7 +17,7 @@ publication: {html: true, pdf: true, index: true}
 <!-- maturity-counts:start -->
 | Established | Partial | Open | Later | Total |
 | ---: | ---: | ---: | ---: | ---: |
-| 35 | 47 | 55 | 14 | 151 |
+| 35 | 48 | 54 | 14 | 151 |
 <!-- maturity-counts:end -->
 
 ## Product, engineering and qualification
@@ -513,7 +513,7 @@ meaning, generation cancellation and semantic rendering.
 | Full-model release benchmark | 🔴 OPEN | Bounded characterization does not close release performance evidence. | Latency, throughput, memory and reliability after evaluation. | Q | [Release doctrine][doctrine]; [v0.1][release] |
 | Release qualification | 🔴 OPEN | Required version-specific gates have not closed together. | Every mandatory gate, claim audit and exact release identity. | Q | [Release doctrine][doctrine]; [v0.1][release] |
 | Reproducible artifact release | 🟡 PARTIAL | Source/build/publication and verified rehydration exist; no qualified final v0.1 variant. | Reproducible selected recipe/artifact and independent final qualification. | P / Q | [Model release contract][model-release]; [lifecycle][lifecycle] |
-| Remote operational qualification | 🔴 OPEN | A disposable Exon → Spark forced-command fixture qualifies identity/status and refusal mechanics only; no persistent production operation has been qualified. | Security/reliability/operator qualification for governed remote lifecycle. | Q / X | [Remote management bootstrap][remote-management]; [Release nonclaims][release] |
+| Remote operational qualification | 🟡 PARTIAL | Actual native Studio → isolated Spark HTTPS qualifies verified pairing, 36 operations, tiny CPU load/Session/generation and protected restart; existing deployed runtime is preserved. | Physical-LAN discovery, production deployment, long-lived reliability and real-model qualification remain independent. | Q / X | [Producer evidence](../evaluation/product-management-control-plane.md); [Release nonclaims][release] |
 
 Software QA, including bounded numerical tests, is not a declaration that the
 official DeepSeek full-model test vectors have been run and passed. Every

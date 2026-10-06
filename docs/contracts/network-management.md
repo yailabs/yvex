@@ -16,8 +16,8 @@ publication: {html: true, pdf: true, index: true}
 
 The selected Studio compute-control-plane program includes a standalone YVEX
 management service, explicit remote pairing, local automatic same-user discovery
-and optional LAN discovery. Implementation and qualification are in progress;
-this contract does not claim a reachable or qualified operator deployment.
+and optional LAN discovery. Local native and isolated cross-machine HTTPS paths
+are qualified; this contract does not claim an installed operator deployment.
 
 The single `yvex` executable owns this service independently of Studio and YAI.
 A persistent management service can observe a stopped or zero-engine computational

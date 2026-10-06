@@ -104,6 +104,40 @@ stable Clippy 1.93.1 with `--ignore-rust-version` reports one pre-existing
 warnings were repaired. This is not reported as a green aggregate lint gate.
 Documentation, QA, source ownership and repository layout gates pass.
 
+## Native desktop to isolated Spark HTTPS
+
+Published producer `6e6e8f9c4372e7ed3446402df344bf301ab44752` was built for
+Linux aarch64 in a private temporary Spark checkout, using two CPU build jobs.
+Spark could not resolve GitHub, so the exact published Git bundle and verified
+public dependency sources were transferred for an offline build. Source remained
+clean. The binary SHA-256 is
+`9dccdffdb6ef1d8e9a8eda0ea9d13043b2da938ff26ca1e63a60f91263edde8a`.
+No operator installation, dirty source checkout, active Host or model was replaced.
+
+The actual Tauri Studio client reached that isolated service over HTTPS through
+Tailscale. Public certificate identity was compared with the server-local value;
+a generated protected native credential entered pending state and its exact
+request was approved locally. Studio automatically connected, discovered 36
+operations, read the zero-engine Host and tiny model profile, then authored
+Engine load, Session creation and direct generation through the public SDK.
+All three durable jobs succeeded: one generated token, one committed turn.
+Studio restart restored the protected connection. The isolated Case generation
+stayed 3 before and after; no operator Case was involved.
+
+The tiny model is a deterministic compiled CPU fixture. Spark admission consumed
+actual physical capacity observations, with no synthetic capacity override.
+This proves real cross-machine transport and native client/computation composition;
+it is not real-model quality, CUDA qualification or human visual acceptance.
+Tailscale reachability is not a physical-LAN mDNS acceptance claim. SSH was used
+only for isolated deployment and local approval, never by Studio's client transport.
+
+The first attempt truthfully refused because the disposable environment lacked
+HOME; it was repaired with a private test home before the successful run. Both
+generated grants were revoked, the client removed its native credential and only
+the verified temporary service/Host processes were stopped. Public source/build
+and cleanup evidence is retained locally under `spark-https`; Studio's native
+result and screenshots are under `/tmp/studio-native-yvex-spark`.
+
 ## Real anonymous registry observation
 
 The public management `model.search` and `model.inspect` operations were exercised

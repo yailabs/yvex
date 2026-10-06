@@ -82,7 +82,7 @@ candidates are not selected Tasks.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `YVEX.STUDIO.COMPUTE.CONTROL.PLANE.0` | Promote ordinary YVEX product lifecycle through public management and sibling SDK/Studio clients | P1 | 🔵 IN PROGRESS | 36 shared operations, standalone HTTPS/mDNS and same-user public socket, local pairing/revocation, exact Jobs/Session fences and typed SDK; isolated native TLS/CPU/vault controls pass. Real remote/native Studio acceptance remains separate; [evidence](../evaluation/product-management-control-plane.md). |
+| `YVEX.STUDIO.COMPUTE.CONTROL.PLANE.0` | Promote ordinary YVEX product lifecycle through public management and sibling SDK/Studio clients | P1 | 🔵 IN PROGRESS | 36 shared operations, standalone HTTPS/mDNS and same-user public socket, local pairing/revocation, exact Jobs/Session fences and typed SDK; isolated native TLS/CPU/vault controls and actual Studio → isolated Spark HTTPS tiny generation/restart pass. Consumer publication and human/operator deployment acceptance remain separate; [evidence](../evaluation/product-management-control-plane.md). |
 
 Authorized 2026-10-06. Work starts from published `803dd98d` in an isolated Exon checkout; concurrent unpublished Spark runtime/client/qualification work is preserved. No unselected training, A03, Core semantics or operator Case mutation is selected.
 
