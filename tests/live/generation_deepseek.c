@@ -2025,7 +2025,8 @@ static int live_physical_capacity_proof(yvex_model_engine *model,
     const yvex_model_engine_view *view = yvex_model_engine_view_get(model);
     const yvex_speculation_family_policy *policy = NULL;
     unsigned long long width = 0ull, expected = 0ull;
-    int rc = yvex_model_engine_scheduler_maximum_width_copy(model, &width, err);
+    int rc = yvex_model_engine_phase_maximum_width_copy(
+        model, YVEX_EXECUTION_PHASE_PREFILL, &width, err);
     if (rc == YVEX_OK && (!view || !yvex_runtime_binding_policies(
             view->compiled_binding, NULL, NULL, &policy) || !policy))
         rc = YVEX_ERR_STATE;
@@ -2034,7 +2035,7 @@ static int live_physical_capacity_proof(yvex_model_engine *model,
     for (unsigned int mode = 0u; rc == YVEX_OK && mode < 2u; ++mode) {
         options.mode = mode ? YVEX_EXECUTION_GENERATION_SPECULATIVE
                             : YVEX_EXECUTION_GENERATION_TARGET_ONLY;
-        expected = width > 1ull && width < 64ull ? width : 64ull;
+        expected = width && width < 64ull ? width : 64ull;
         if (mode && policy->block_size + 2ull > expected)
             expected = policy->block_size + 2ull;
         rc = yvex_runtime_capacity_derive(model, session, &options,
