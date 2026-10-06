@@ -138,6 +138,48 @@ the verified temporary service/Host processes were stopped. Public source/build
 and cleanup evidence is retained locally under `spark-https`; Studio's native
 result and screenshots are under `/tmp/studio-native-yvex-spark`.
 
+## Operator Spark LAN rollout
+
+On 2026-10-06, operator-authorized deployment installed clean published source
+`c8e7bc9e8ad41fb71a2fa047c2ec4e5a11c21e5f`, tree
+`a9e8d5d13461a707bb92fb99297a50d0ab7104a4`, using the supported `make install`
+path in a separate checkout. Its executable SHA-256 is
+`487944b1039f780e572cfa90e8272e9c330e180b245179b3dfffc29e41221710`.
+The unpublished CUDA/qualification candidate was not deployed. The independent
+user supervisor `yvex-management.service` starts HTTPS and mDNS without a
+dependency that restarts or replaces `yvex-host.service`.
+
+The public operator handoff is retained outside Git at
+`/home/dgmothx/lab/models/evidence/yvex-management-rollout-20261006/handoff.json`;
+the read-only reproduction probe and receipt share that directory. The handoff
+owns deployed endpoint, certificate fingerprint and observed Engine identity.
+Addresses are operational observations, not permanent product identities.
+
+| Control | Expected | Observed | Claim |
+| --- | --- | --- | --- |
+| Installed software | Clean published source, matching build/install executable | PASS; installed version reports source clean, exact commit/tree and protocol 25 | Identity-bound management software; not release readiness |
+| Physical-LAN HTTPS, Exon → DGX | Certificate pin checked before HTTP; public identity only | PASS; `/v1/identity` returns 200 with the exact server-local TLS identity | Deployed LAN reachability, not enrollment |
+| Physical-LAN discovery | Resolved `_yvex-management._tcp.local.` announcement during a five-second Exon observation | PASS; address/port, service name, protocol and fingerprint resolve on Exon's Wi-Fi interface | Real LAN discovery; not authorization or global discovery |
+| Anonymous management | Refuse inventory/operation dispatch | PASS; 403 `credential_required` | Authentication fence retained |
+| Same-user public management | Discover 36 operations; read native catalog | PASS; protocol 25, catalog readable with runtime observation explicitly unavailable | Public operation inventory and local catalog, not live Engine visibility |
+| Old Host compatibility | Refuse protocol mismatch without mutation or fabricated lifetime identity | PASS; `host.get` reports unavailable; `engine.list` unavailable | Fail-closed compatibility, not a stopped Host |
+| Operator runtime preservation | Same process, executable, Engine and generation; no inference dispatch | PASS; existing protocol-24 Host and DeepSeek generation 1 remain active; process restart count stays zero | No operator runtime/model replacement or Case retry |
+| Isolated TLS/UDS controls on installed binary | Existing 12-control generated-identity suite passes | PASS; `network_management.py` including restart, revocation, framing, deadline and unsafe-storage refusal | Software/security regression, distinct from operator enrollment |
+
+The listener is now operational for discovery/identity and local catalog reads.
+Pairing remains closed by default; no new client was enrolled or automatically
+trusted. The operator explicitly approved the new TLS pin, separately from the
+previously approved SSH identity. Actual Studio enrollment and its real native
+consumption remain consumer evidence.
+
+The preserved operator Host still runs `803dd98d` with private protocol 24.
+Management requires protocol 25's genuine Host/Session lifetime fences, so this
+rollout does **not** qualify administration of that resident DeepSeek Engine.
+A separately coordinated Host upgrade is required; no compatibility shim,
+fake nonce, old CLI parsing or implicit restart was introduced. The Host's
+loopback OpenAI listener remains distinct from management HTTPS. No finite-decision
+Engine is resident, and management enrollment grants no finite computation.
+
 ## Real anonymous registry observation
 
 The public management `model.search` and `model.inspect` operations were exercised
@@ -197,7 +239,8 @@ evaluation, promotion and their provenance/recovery require producer semantic
 owners. Existing Model/Package/Job identities provide composition seams, not
 fabricated training support.
 
-Actual operator Spark deployment, Studio native visual acceptance, real-model
-management mutations and full commercial/release qualification retain their own
-consumer/environment evidence. This producer record alone does not close those
-boundaries.
+Operator HTTPS/discovery rollout is qualified at the bounded scope above. Actual
+Studio enrollment/visual acceptance, protocol-compatible operator runtime
+administration, real-model management mutations, long-lived reliability and full
+commercial/release qualification retain their own consumer/environment evidence.
+This producer record alone does not close those boundaries.

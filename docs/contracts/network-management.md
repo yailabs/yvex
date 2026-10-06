@@ -17,7 +17,9 @@ publication: {html: true, pdf: true, index: true}
 The selected Studio compute-control-plane program includes a standalone YVEX
 management service, explicit remote pairing, local automatic same-user discovery
 and optional LAN discovery. Local native and isolated cross-machine HTTPS paths
-are qualified; this contract does not claim an installed operator deployment.
+are qualified. The [operator rollout](../evaluation/product-management-control-plane.md#operator-spark-lan-rollout)
+also establishes deployed HTTPS identity and physical-LAN discovery, not complete
+runtime administration or an enrolled Studio consumer.
 
 The single `yvex` executable owns this service independently of Studio and YAI.
 A persistent management service can observe a stopped or zero-engine computational
@@ -26,6 +28,15 @@ The existing 36 versioned product operations and durable receipt owner remain
 unchanged. No new YAI ProviderTarget, trust, Principal, Case or inference grant is
 created by management enrollment. SSH read/finite/product grants retain their
 existing meaning and remain an advanced compatibility transport.
+
+The management service and computational Host must use the same admitted private
+protocol for runtime operations. A reachable management listener does not make
+an older Host compatible: protocol 25's Host and Session lifetime fences cannot
+be synthesized for protocol 24. With an incompatible preserved Host, `host.get`
+reports `unavailable`, engine/session operations refuse, and model catalog reads
+retain `runtime_observation: unavailable`. This is not a stopped or zero-engine
+Host claim. Upgrade the Host only through a coordinated supported lifecycle;
+management startup never performs that upgrade implicitly.
 
 ## HTTPS identity and discovery
 
