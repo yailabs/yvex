@@ -7,11 +7,14 @@
 #include <yvex/internal/core.h>
 
 #include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #define YVEX_JSON_DEPTH_CAP 64u
 
@@ -33,13 +36,25 @@ char *yvex_read_bounded_file(const char *path,
     FILE *fp;
     char *data;
     size_t wanted;
-    int read_failed;
+    int descriptor, read_failed;
 
     if (length) *length = 0u;
-    if (!path || stat(path, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0) {
+    if (!path) return NULL;
+    descriptor = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (descriptor < 0) {
+        if (errno != ENOENT && errno != ENOTDIR && errno != ELOOP)
+            yvex_error_setf(err, YVEX_ERR_IO, "source_metadata_read",
+                           "cannot read metadata file: %s", path);
+        return NULL;
+    }
+    /* Atomic replacement may change the pathname between sizing and opening.
+     * Bind both facts to one descriptor; nonregular inputs must not block. */
+    if (fstat(descriptor, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0) {
+        (void)close(descriptor);
         return NULL;
     }
     if ((unsigned long long)st.st_size > (unsigned long long)cap) {
+        (void)close(descriptor);
         yvex_error_setf(err, YVEX_ERR_BOUNDS, "source_metadata_read",
                         "metadata file exceeds bounded read limit: %s", path);
         return NULL;
@@ -47,12 +62,14 @@ char *yvex_read_bounded_file(const char *path,
     wanted = (size_t)st.st_size;
     data = (char *)malloc(wanted + 1u);
     if (!data) {
+        (void)close(descriptor);
         yvex_error_set(err, YVEX_ERR_NOMEM, "source_metadata_read",
                        "metadata buffer allocation failed");
         return NULL;
     }
-    fp = fopen(path, "rb");
+    fp = fdopen(descriptor, "rb");
     if (!fp) {
+        (void)close(descriptor);
         free(data);
         yvex_error_setf(err, YVEX_ERR_IO, "source_metadata_read",
                         "cannot read metadata file: %s", path);

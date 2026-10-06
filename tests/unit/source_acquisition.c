@@ -3,11 +3,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include <yvex/internal/source_acquisition.h>
+#include <yvex/internal/core.h>
 
 #include "tests/test.h"
 
@@ -192,10 +195,110 @@ static int test_source_observation(void)
     return 0;
 }
 
+typedef struct {
+    const char *path;
+    const char *pending;
+    const char *large;
+    atomic_int finished;
+    atomic_int failed;
+} acquisition_atomic_reader_fixture;
+
+static void *replace_acquisition_record(void *opaque)
+{
+    acquisition_atomic_reader_fixture *fixture = opaque;
+    size_t iteration;
+    for (iteration = 0u; iteration < 20000u; ++iteration) {
+        const char *record = iteration % 2u ? fixture->large : "{}";
+        size_t length = strlen(record);
+        FILE *stream = fopen(fixture->pending, "wb");
+        int failed;
+        if (!stream) {
+            atomic_store(&fixture->failed, 1);
+            break;
+        }
+        failed = fwrite(record, 1u, length, stream) != length;
+        if (fclose(stream) != 0) failed = 1;
+        if (failed || rename(fixture->pending, fixture->path) != 0) {
+            atomic_store(&fixture->failed, 1);
+            break;
+        }
+    }
+    atomic_store(&fixture->finished, 1);
+    return NULL;
+}
+
+static int test_atomic_record_reader(void)
+{
+    char root[] = "/tmp/yvex-acquisition-read-XXXXXX";
+    char path[YVEX_PATH_CAP], pending[YVEX_PATH_CAP], large[8192];
+    acquisition_atomic_reader_fixture fixture;
+    pthread_t writer;
+    FILE *stream;
+    size_t reads = 0u, torn = 0u;
+    int joined, cleaned;
+    YVEX_TEST_ASSERT(mkdtemp(root) != NULL, "atomic reader fixture root");
+    snprintf(path, sizeof(path), "%s/operation.json", root);
+    snprintf(pending, sizeof(pending), "%s/operation.pending", root);
+    memset(large, ' ', sizeof(large) - 1u);
+    large[0] = '{';
+    large[sizeof(large) - 2u] = '}';
+    large[sizeof(large) - 1u] = '\0';
+    stream = fopen(path, "wb");
+    YVEX_TEST_ASSERT(stream && fputs("{}", stream) >= 0 && fclose(stream) == 0,
+                     "initial immutable reader record");
+    {
+        yvex_error err;
+        size_t length = 123u;
+        char *record;
+        yvex_error_clear(&err);
+        record = yvex_read_bounded_file(path, 1u, &length, &err);
+        YVEX_TEST_ASSERT(!record && length == 0u && yvex_error_code(&err) == YVEX_ERR_BOUNDS,
+                         "oversized opened metadata still refuses");
+        YVEX_TEST_ASSERT(mkfifo(pending, 0600) == 0, "nonregular reader fixture");
+        yvex_error_clear(&err);
+        YVEX_TEST_ASSERT(!yvex_read_bounded_file(pending, sizeof(large), &length, &err) &&
+                         length == 0u, "FIFO refuses without waiting for a writer");
+        YVEX_TEST_ASSERT(unlink(pending) == 0, "remove exact FIFO fixture");
+        YVEX_TEST_ASSERT(!yvex_read_bounded_file(root, sizeof(large), &length, &err) &&
+                         length == 0u, "directory is not metadata");
+        YVEX_TEST_ASSERT(!yvex_read_bounded_file(pending, sizeof(large), &length, &err) &&
+                         length == 0u, "absent optional metadata remains absent");
+    }
+    fixture.path = path;
+    fixture.pending = pending;
+    fixture.large = large;
+    atomic_init(&fixture.finished, 0);
+    atomic_init(&fixture.failed, 0);
+    YVEX_TEST_ASSERT(pthread_create(&writer, NULL, replace_acquisition_record,
+                                    &fixture) == 0, "concurrent atomic publisher");
+    do {
+        yvex_error err;
+        size_t length = 0u;
+        char *record;
+        yvex_error_clear(&err);
+        record = yvex_read_bounded_file(path, sizeof(large), &length, &err);
+        if (!record || !((length == 2u && !memcmp(record, "{}", 2u)) ||
+                         (length == sizeof(large) - 1u &&
+                          !memcmp(record, large, sizeof(large) - 1u)))) ++torn;
+        free(record);
+        ++reads;
+    } while (!atomic_load(&fixture.finished) || reads < 20000u);
+    joined = pthread_join(writer, NULL);
+    (void)unlink(pending);
+    cleaned = unlink(path) == 0 && rmdir(root) == 0;
+    YVEX_TEST_ASSERT(joined == 0 && cleaned && !atomic_load(&fixture.failed),
+                     "publisher retired and exact fixture cleaned");
+    fprintf(stderr, "atomic metadata reader: %zu torn/%zu reads\n", torn, reads);
+    YVEX_TEST_ASSERT(torn == 0u,
+                     "bounded read must bind size and bytes to one opened inode");
+    return 0;
+}
+
 int yvex_test_source_acquisition(void)
 {
     if (test_operation_round_trip() != 0) return 1;
     if (test_reconciliation() != 0) return 1;
     if (test_source_observation() != 0) return 1;
+    if (test_atomic_record_reader() != 0) return 1;
     return 0;
 }

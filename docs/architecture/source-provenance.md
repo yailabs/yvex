@@ -32,6 +32,13 @@ stale PID or a foreign generation cannot silently resume a different transfer.
 Unknown provider progress remains unknown. A successful download does not
 establish a model's architecture or executable support.
 
+Atomic sidecar publication and bounded reading compose through one opened file
+identity. The generic metadata reader sizes and reads that descriptor, rather
+than sizing a pathname which can be replaced before open. A concurrent reader
+therefore sees an old or new complete published record, not a mixed-size view.
+Bounds and nonregular-file refusal remain independent of that snapshot rule;
+this is not payload verification or an inference-performance claim.
+
 Explicit source-status audit uses the native safetensors header owner to
 distinguish malformed headers from declared tensor extents beyond the available
 payload. This is a bounded structural observation, not payload authentication

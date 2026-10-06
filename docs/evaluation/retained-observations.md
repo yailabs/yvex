@@ -1083,3 +1083,28 @@ object, then reopened through the normal verification receipt. The existing
 roughly 510 GB V4.1 transfer remains motivating evidence, not a mutated fixture.
 Acquisition completion still does not establish model support, artifact
 readiness or release qualification.
+
+## Atomic metadata-reader qualification (2026-10-06)
+
+The registered acquisition-state unit reproduces a generic bounded-reader race:
+with atomic replacements between two complete records, pathname sizing followed
+by a separate open observes 1,787 inconsistent reads in 316,878 attempts. The
+repair opens first and sizes/reads that same descriptor. Capacity, optional
+absence and nonregular-file refusal remain intact; FIFO refusal cannot wait
+for a writer. This is a metadata reliability repair, not inference acceleration.
+
+The isolated ASan/LeakSanitizer/UBSan control reports zero inconsistent records
+in 196,977 reads, with no reported sanitizer error. Its frozen base is
+`c57d333bb3a3f63d9c0d720c8016455cdeb7da41`, tree
+`b525c7379420a0530606e02e9bba5982099bd4e7`, delta
+`00cd905955f765a450b6cc374c3b3b0806cb87140dcb2e2a4e88892e339bf2b9`;
+receipt `59c43619e536d90b96cad83a69832c655de578e9c77c4ac94268d78a3421ce71`.
+The metadata-reader and unit source bytes match the integrated competitive
+candidate exactly. Replayable source, instrumented runner, receipts and the
+original failing control remain under the existing external evidence root:
+`/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/software-scope-20261006.4rXu7G`.
+
+These observations qualify concurrent atomic metadata publication at the stated
+software boundary. They neither establish model quality/performance nor repair
+the independent repeated-8K numerical failure. No production host was replaced
+or operator request replayed for this control.
