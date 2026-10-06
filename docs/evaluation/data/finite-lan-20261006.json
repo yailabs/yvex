@@ -1,0 +1,115 @@
+{
+  "schema": "yvex.finite.operational-handoff.v1",
+  "observed_date_utc": "2026-10-06",
+  "task": "INTERFACES.FINITE.DECISION.LAN.OPERATIONAL.0",
+  "producer_state": "operational",
+  "finite_transport": {
+    "kind": "restricted-openssh-jsonl-v1",
+    "address": "192.168.1.70",
+    "port": 18002,
+    "user": "dgmothx",
+    "host_key_fingerprint": "SHA256:g0InFX6YhOWST8sC/+z09zvDJp5D5UQjKucVbKgi7P8",
+    "device_identity": "ssh-ed25519:sha256:834227157e9884e5924fcb02ffecf4f73bc3269e43e544232ae7156ca822ecff",
+    "approved_pin_reuse_host_key_alias": "[192.168.66.30]:18002",
+    "remote_command": null,
+    "tty_forwarding_shell": false
+  },
+  "client_grant": {
+    "client": "yai-finite-decision:exon",
+    "public_key_fingerprint": "SHA256:FaS1mxEZJViNRyWByx7Quoj/tDl7KR2SR+pktUP9zj0",
+    "authenticated_peer": "ssh-ed25519:sha256:15a4b59b111925588d472581cb1ed0ba88ffb4397b291d9247ea64b543fdce3d",
+    "scope": "finite-decision",
+    "management_lifecycle_grant": false
+  },
+  "software": {
+    "source_commit": "a46ddf5ee8c8b0fc4938a53f02fc372d9a00d116",
+    "source_tree": "31387594c05c11e98a48a67c6fb92db19c60be7d",
+    "executable_sha256": "c7cfe0e0684bad13016154097ad14bfa08f30914b445c086276b912a048947ba",
+    "native_library_sha256": "a43ad8faa582486bda785e7b674755166272b9f4159600dfdeed0311ff431883",
+    "installed_via": "make install, immutable commit prefix",
+    "private_protocol": 25,
+    "public_request_schema": "yvex.finite.request.v1",
+    "public_response_schema": "yvex.finite.response.v1",
+    "operation": "finite.decision.execute",
+    "contract": "https://github.com/yailabs/yvex/blob/a46ddf5ee8c8b0fc4938a53f02fc372d9a00d116/docs/contracts/finite-decision-remote.md"
+  },
+  "model": {
+    "alias": "laya-typed-finite-cpu",
+    "engine_generation": 2,
+    "engine_kind": "finite-decision",
+    "backend": "cpu",
+    "strategy": "not-applicable",
+    "upstream_repository": "convaiinnovations/laya-typed-decisions",
+    "upstream_revision": "1a793eb568e6718f15941d08f85432581df534e3",
+    "representation": "F16 source, F32 ordered CPU execution",
+    "source_identity": "4fa56de72383a9d3efa9cfa78955733c81b9fc8067a587ca4beb82c78107a24e",
+    "logical_model_identity": "323675a2776d5346e0457af7c8deb4c1713fdc9057a4683a5bc55666500dfce8",
+    "binding_identity": "5d1d4598c32c8317efbacfa3097cc4e630485cb9722e1f25e3fc3fe802fa1c41",
+    "tokenizer_identity": "6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30",
+    "physical_program_identity": "cc2bbc47dbe9e053299e948a8bb4a5b4b234f6c37a3f2ad08a118dfe190625b1",
+    "input_policy_identity": "8c3ecc1adba6928c3255b24f2d1eb0dd1a6843795473b8f3521cb25094e4c042",
+    "specialization_identity": "9cb3d3669b48b5a66e6fc90782f4d7adb6c4f908e3d29896d587dae715199fb2"
+  },
+  "bounds": {
+    "candidate_count": {"minimum": 1, "maximum": 8},
+    "question_utf8_bytes_exclusive_maximum": 256,
+    "context_utf8_bytes_exclusive_maximum": 512,
+    "alias_candidate_id_candidate_text_utf8_bytes_exclusive_maximum": 128,
+    "rendered_tokens_maximum": 64,
+    "request_jsonl_bytes_including_lf_maximum": 32768,
+    "candidate_ids": "unique, nonempty, ordered",
+    "truncation": false
+  },
+  "qualified_controls": {
+    "path": "Exon LAN -> approved dedicated SSH -> public producer -> resident Host",
+    "positive_and_independent_recovery": 2,
+    "stale_generation": "YVEX_ERR_STATE, no result",
+    "duplicate_candidate_id": "not_dispatched, no result",
+    "fixture": "Select the best option. / A short state. / continue, stop, escalate",
+    "fixture_token_count": 29,
+    "model_forward_count_per_response": 1,
+    "sampling_invocation_count": 0,
+    "generated_token_count": 0,
+    "calibrated": false,
+    "upstream_max_abs_logit_delta": 0.000003933915893594708,
+    "predeclared_absolute_tolerance": 0.0001,
+    "producer_elapsed_seconds": [37.979803178, 38.021581935],
+    "result_identity": "c29d83173a3430c2b69d4dea17ec99768190688f25cbbc693085c5a9ab6a7b77",
+    "raw_evidence": "remote-controls.json"
+  },
+  "deepseek_preserved": {
+    "alias": "deepseek4-v4-flash-dspark-deepseek-v4-flash-mixed-iq2xxs-q2k-mxfp4-v1-cuda",
+    "engine_generation": 3,
+    "context": 32768,
+    "prefill_chunk": 64,
+    "strategy": "speculative",
+    "model_identity": "cf8ebc69dae8e38f96a47418e8efcebdc47bc4ed05bac76d6974ccc1379e0e7e",
+    "artifact_identity": "b669d80726cf83331c0d8016debbde44cf965a1503c33f605e92ea4e550ee87f",
+    "binding_identity": "8cdb4929c523bd42e3fb82fa18ceed0a0a6732d6efd1d852c88398c8d2d6cd5e",
+    "specialization_identity": "6c3e33a0ea61e9a371dc551d595b5a68e6f28e3059cde0ee49fc1370939c8350",
+    "fresh_synthetic_recovery": "HTTP 200; 8 prompt / 3 committed output tokens; terminal length bound",
+    "case_prompt_replayed": false
+  },
+  "https_management": {
+    "url": "https://192.168.1.70:18080",
+    "approved_pin": "tls-sha256:df09a3fb3d3158adb0e7f2ef3bfcef9810b74a461498854ac52f9ada2545e293",
+    "service_restarted": false,
+    "finite_inference_endpoint": false,
+    "native_host_get": "PASS: protocol-compatible running Host"
+  },
+  "idle_at_evidence_capture": {
+    "active_requests": 0, "active_http_requests": 0, "queue_depth": 0,
+    "sessions": 0, "engine_work_leases_attached_clients": 0,
+    "transient_current_bytes": 0,
+    "finite_persistent_workspace_host_bytes": 214580740
+  },
+  "consumer_rules": {
+    "verify": ["approved host pin", "request/schema/alias", "engine generation", "ordered candidate IDs", "six model/input-policy identities"],
+    "request_id_deduplicates": false,
+    "automatic_retry": false,
+    "loss_after_dispatch": "outcome unavailable; no blind replay",
+    "semantic_case_authority": false,
+    "fast_search_low_latency_qualification": false,
+    "remote_sdk_owner": "YAI / yai-sdk concurrent owner; not implemented by this YVEX delivery"
+  }
+}

@@ -140,6 +140,11 @@ result and screenshots are under `/tmp/studio-native-yvex-spark`.
 
 ## Operator Spark LAN rollout
 
+This subsection records the initial rollout before the coordinated Host upgrade.
+The [installed finite follow-up](finite-decision-remote.md#installed-lan-producer)
+owns the later protocol-25 Host replacement and native management recovery; it
+preserves this earlier no-restart evidence rather than rewriting it.
+
 On 2026-10-06, operator-authorized deployment installed clean published source
 `c8e7bc9e8ad41fb71a2fa047c2ec4e5a11c21e5f`, tree
 `a9e8d5d13461a707bb92fb99297a50d0ab7104a4`, using the supported `make install`
@@ -239,8 +244,10 @@ evaluation, promotion and their provenance/recovery require producer semantic
 owners. Existing Model/Package/Job identities provide composition seams, not
 fabricated training support.
 
-Operator HTTPS/discovery rollout is qualified at the bounded scope above. Actual
-Studio enrollment/visual acceptance, protocol-compatible operator runtime
-administration, real-model management mutations, long-lived reliability and full
-commercial/release qualification retain their own consumer/environment evidence.
-This producer record alone does not close those boundaries.
+Operator HTTPS/discovery rollout is qualified at the bounded scope above. The
+later coordinated Host upgrade establishes protocol-compatible native Host
+observation with unchanged DeepSeek and an admitted finite CPU engine. Actual
+Studio enrollment/visual acceptance, remote real-model management mutations,
+long-lived reliability and full commercial/release qualification retain their
+own consumer/environment evidence. These producer records alone do not close
+those boundaries.

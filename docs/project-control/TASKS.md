@@ -69,10 +69,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 47 | 37 | 2 | 1 | 7 |
+| 47 | 38 | 1 | 1 | 7 |
 <!-- task-counts:end -->
 
-**37/47 selected Tasks complete.** This denominator includes the significant
+**38/47 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -82,7 +82,7 @@ candidates are not selected Tasks.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `YVEX.STUDIO.COMPUTE.CONTROL.PLANE.0` | Promote ordinary YVEX product lifecycle through public management and sibling SDK/Studio clients | P1 | 🔵 IN PROGRESS | 36 shared operations, standalone HTTPS/mDNS and same-user public socket, local pairing/revocation, exact Jobs/Session fences and typed SDK; isolated native TLS/CPU/vault controls and actual Studio → isolated Spark HTTPS tiny generation/restart pass. Operator DGX HTTPS identity/LAN discovery now pass from Exon with the existing runtime preserved; protocol-24 Host cannot be administered by protocol-25 management. Coordinated Host upgrade, actual operator enrollment and consumer acceptance remain; [evidence](../evaluation/product-management-control-plane.md). |
+| `YVEX.STUDIO.COMPUTE.CONTROL.PLANE.0` | Promote ordinary YVEX product lifecycle through public management and sibling SDK/Studio clients | P1 | 🔵 IN PROGRESS | 36 shared operations, standalone HTTPS/mDNS and same-user public socket, local pairing/revocation, exact Jobs/Session fences and typed SDK; isolated native TLS/CPU/vault controls and actual Studio → isolated Spark HTTPS tiny generation/restart pass. Operator DGX HTTPS identity/LAN discovery pass from Exon; the coordinated protocol-25 Host upgrade now restores native management observation with unchanged DeepSeek configuration. Actual Studio consumer acceptance and real-model management evidence remain; [evidence](../evaluation/product-management-control-plane.md). |
 
 Authorized 2026-10-06. Work starts from published `803dd98d` in an isolated Exon checkout; concurrent unpublished Spark runtime/client/qualification work is preserved. No unselected training, A03, Core semantics or operator Case mutation is selected.
 
@@ -102,7 +102,7 @@ A03 remains READY. No DeepSeek, Metal or Laya lifecycle work is selected here.
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |
-| `INTERFACES.FINITE.DECISION.LAN.OPERATIONAL.0` | Admit the already qualified finite CPU package through ordinary Host lifecycle and qualify the approved Exon LAN producer | P1 | 🔵 IN PROGRESS | Exact tensor-program deployment, independent existing checkpoint/input contract, approved finite-only client/server identities, real resident generation and public response, refusal/recovery, unchanged DeepSeek package and coordinated operator Host replacement if required. |
+| `INTERFACES.FINITE.DECISION.LAN.OPERATIONAL.0` | Admit the already qualified finite CPU package through ordinary Host lifecycle and qualify the approved Exon LAN producer | P1 | ✅ COMPLETE | Published `a46ddf5e` loader, supported immutable installation and coordinated idle protocol-25 Host replacement; finite CPU generation 2 and restored DeepSeek generation 3 retain exact model/binding/configuration. Approved Exon SSH positive/refusal/recovery and zero transient/work/lease/session controls pass. [Public operational handoff and evidence](../evaluation/finite-decision-remote.md#installed-lan-producer); SDK/YAI and low-latency Fast Search remain independent. |
 
 Authorized 2026-10-06. This is the installed producer follow-up, not reopening
 the published v1 contract or authorizing SDK/YAI/Studio work. Generic deployment

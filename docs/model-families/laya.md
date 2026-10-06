@@ -48,16 +48,24 @@ selects output rows, returns raw logits and a numerically stable uncalibrated
 softmax relative to the disclosed finite candidate population. It performs
 one non-autoregressive forward, zero sampling and zero generated tokens.
 
-An independently resident engine generation can be loaded into an otherwise
-empty persistent host. `<yvex/server_finite_decision.h>` exposes direct
+An independently resident engine generation loads through the ordinary registry
+loader using an authenticated `tensor-program` deployment profile. It can share
+the persistent Host with a separately loaded text engine, without becoming
+chat-capable. `<yvex/server_finite_decision.h>` exposes direct
 token-domain execution; `<yvex/finite_decision_producer.h>` exposes the
-process-safe, generation-bound local producer on private protocol v24. A client
+process-safe, generation-bound local producer on private protocol v25. A client
 need not know Laya tokenizer IDs, marker positions or templates. Neither path
 is an OpenAI-compatible route or a YAI semantic contract. Old protocol versions
 refuse at negotiation. The CPU engine owns mapped source bytes and temporary
 F32 execution workspace; `parameter_execution_bytes` is a logical F32
 parameter extent, not an additional resident allocation. CUDA execution is
 currently unsupported and fails closed.
+
+The [installed LAN evidence](../evaluation/finite-decision-remote.md#installed-lan-producer)
+qualifies the same bounded producer over its separately versioned public SSH
+contract, with an explicit finite-only peer grant. HTTPS management is not a
+finite-inference endpoint; SDK/YAI integration and low-latency Fast Search remain
+independent consumer/performance gates.
 
 The bounded producer comparison uses the independent upstream tokenizer and
 PyTorch model on `Select the best option.` / `A short state.` with candidates

@@ -59,10 +59,88 @@ The native peer is synthetic: it does not establish Laya/another model's logits,
 calibration, new model admission, inference performance or the actual Exon→DGX
 chain. Existing independently qualified local model evidence retains its scope.
 An approved installed listener, host pin, enrolled YAI key and admitted resident
-finite engine are still needed for actual remote integration. No remote SDK
-method is claimed by this delivery; the concurrent YAI/SDK owner implements it.
+finite engine were separate exits from that original fixture delivery; the
+installed follow-up below now qualifies those producer facts. No remote SDK
+method is claimed here; the concurrent YAI/SDK owner implements it.
 The bounded input/result and conservative unknown-outcome/no-retry semantics
 are specified in the public contract, not reconstructed from human CLI output.
 
 `progression_decision=proceed`, `downstream_safe=true` only for typed SDK
 consumer implementation against this producer. A03 remains READY.
+
+## Installed LAN producer
+
+`INTERFACES.FINITE.DECISION.LAN.OPERATIONAL.0` qualifies the actual Exon LAN
+client, the explicitly approved dedicated SSH listener and a real finite CPU
+engine in the operator Host on 2026-10-06. This is not a replay of a YAI Case.
+The machine-readable [public operational handoff](data/finite-lan-20261006.json)
+owns exact endpoint, approved server/client identities, source/build, model
+lineage, generation, bounds and the two producer-authored control durations.
+Operational addresses and process-local generations are observations, not
+permanent product identities. Consumers must requalify generation after reload.
+
+The installed source is `a46ddf5ee8c8b0fc4938a53f02fc372d9a00d116`, tree
+`31387594c05c11e98a48a67c6fb92db19c60be7d`; executable SHA-256 is
+`c7cfe0e0684bad13016154097ad14bfa08f30914b445c086276b912a048947ba`.
+It was independently built, qualified and pushed from a clean checkout, then
+installed through `make install` into an immutable commit prefix. The dirty
+DeepSeek optimization candidate was neither discarded nor deployed.
+
+Generic `tensor-program` registry admission authenticates the binding/source,
+finite kind, non-generative strategy, row capacity and bounded CPU workspace
+before engine publication. Unsupported CUDA and foreign source/binding profiles
+fail closed. This adds no wire/public C layout and no family-name memory policy.
+
+The operator explicitly approved a coordinated idle window. Preflight observed
+zero active/HTTP/queued work, sessions, model leases and attached operator
+clients before supported Host shutdown. The old Host completed teardown before
+the replacement bound protocol 25. Its old service exit code was 3 after the
+post-shutdown client observation failed; the recorded shutdown-complete event,
+retired socket/listener and released singleton lock establish actual teardown,
+not an inferred successful exit code. No active request was terminated.
+
+The same DeepSeek model/artifact/binding/specialization and speculative strategy,
+32768 context and 64-position prefill configuration were restored. Its current
+generation is 3; finite alias `laya-typed-finite-cpu` is generation 2. An initial
+idle reload used the registry's 4096 default; it was corrected through supported
+unload/load with explicit 32768 before the restoration evidence. No user
+session existed during that correction. Generation must not be used as a
+durable substitute for model identity.
+
+| Evidence plane / control | Authority and input | Expected | Observed | Claim earned |
+| --- | --- | --- | --- | --- |
+| Checkpoint/component reference | Existing exact `convaiinnovations/laya-typed-decisions` revision and independently captured upstream input/logits | Same 29-token three-candidate control; absolute tolerance `1e-4` | Two LAN responses preserve the previously qualified scores and exact six model/input-policy identities | Bounded numerical equivalence, not checkpoint-wide quality/calibration |
+| Deployment/lifecycle | Real registered package, ordinary Host loader, admitted CPU resources | Finite-only kind/strategy, authenticated binding, bounded capacity and rollback | Real checkpoint loader, capacity refusal, cancellation/disconnect, stale generation, unload/reload and recovery pass | Exact CPU engine lifecycle, not CUDA or new model admission |
+| Product path | Exon → approved restricted SSH → public C producer → operator Host | Matching approved peer/server, correlation, alias, generation and original candidate IDs | Positive and independent recovery complete; result identity agrees; one forward/backbone and zero sampling/generation | Installed public finite producer, not SDK/YAI semantic integration |
+| Remote negatives | Stale generation and duplicate candidate IDs | No scores published for stale work; malformed population not dispatched | `YVEX_ERR_STATE` without result; duplicate population refused before dispatch | Fail-closed public producer |
+| Cleanup/coexistence | Typed native Host/Engine snapshots after controls | Zero requests, queue, sessions, work, leases, attached clients and transient bytes; both engines remain ready | All zero; finite persistent workspace remains intentionally owned by its engine | No transient leak or retirement of DeepSeek |
+| DeepSeek recovery | New synthetic non-thinking request, output bound 3, original model configuration | Terminal bounded response after coordinated replacement | HTTP 200, 8 prompt / 3 committed output tokens, terminal length bound | Producer remains executable; not a throughput/SLA or YAI Case qualification |
+| Management preservation | Existing HTTPS process/identity plus native public `host.get` | Same approved TLS certificate, no management restart; current Host observable | Exon observes the same certificate digest; local public management sees running protocol-25 Host | Reachability and native management compatibility, not remote Studio acceptance |
+| Source-stable software | Clean accepted source; mapped fast/structural, real Laya, restricted SSH, PTY and OpenAI lanes | No failing or blocked applicable checks | Fast 100 PASS; structural 18 PASS; real CPU, SSH, PTY and OpenAI 1 PASS each; docs reader builds | Changed-owner software/contract regressions; no new macOS/sanitizer or release claim |
+
+Raw source-stable QA receipts, pre/post typed snapshots, real request/responses,
+public pin observations and configuration backups remain outside Git at
+`/home/dgmothx/lab/models/evidence/finite-lan-rollout-20261006.9Y2m9i`.
+The four LAN controls include two full-model executions and two refusal paths;
+they are not a workload/performance campaign. Durations are characterization of
+this fixture only. The remote control's outer SSH round trip includes the DGX
+control hop to Exon and is not pure client-observed Exon latency.
+
+### Exact consumer boundary and limits
+
+Finite inference uses **restricted OpenSSH JSONL v1**, not the HTTPS management
+router. The approved client retains only `finite-decision`, not remote
+load/unload or Host control. A new HTTPS finite-computation route is not claimed.
+The public contract owns input bounds, candidate/result identity, conservative
+unknown-outcome semantics and no blind retry; the consumer never forwards or
+encodes the private socket protocol and never parses human CLI output.
+
+The CPU control remains expensive and is **not** low-latency Fast Search
+qualification. Scores are uncalibrated and confer no Case authority. YAI/SDK
+and Studio consumption, semantic search usefulness, broader input/quality,
+performance targets, remote HTTPS computation and release readiness remain
+independent gates. No private key, bearer or Case material is in this handoff.
+
+`progression_decision=proceed`, `downstream_safe=true` for connecting the remote
+typed YAI/SDK consumer to this exact installed producer only. A03 stays READY;
+the separate DeepSeek competitive/residency delivery remains unfinished.
