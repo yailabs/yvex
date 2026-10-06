@@ -26,3 +26,4 @@ Numbered ADRs retain context, decision, consequences and alternatives. Adoption 
 - [0007 — External terminal editor ownership](0007-external-terminal-editor.md)
 - [0008 — Task-based documentation architecture](0008-task-based-documentation.md)
 - [0009 — Rust product shell over the C/CUDA engine](0009-rust-product-shell.md)
+- [0010 — Native product management and explicit connection authority](0010-native-product-management.md)
