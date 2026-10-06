@@ -9,6 +9,8 @@
 #include <yvex/finite_decision_producer.h>
 #include <yvex/server_finite_decision.h>
 #include <yvex/internal/finite_producer_wire.h>
+#include <yvex/internal/server_loader.h>
+#include <yvex/registry.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -35,7 +37,7 @@ static void producer_fixture(yvex_finite_producer_request *producer,
     producer->schema_version = YVEX_FINITE_PRODUCER_SCHEMA_V1;
     producer->expected_generation = generation;
     producer->candidate_count = 3u;
-    strcpy(producer->model_alias, "laya-typed");
+    strcpy(producer->model_alias, "laya-typed-finite-cpu");
     strcpy(producer->question, "Select the best option.");
     strcpy(producer->context, "A short state.");
     strcpy(producer->candidates[0].id, "continue");
@@ -147,6 +149,37 @@ static int cancel_after_entry(void *context)
     return *polls > 1u;
 }
 
+static int register_profile(const char *registry_path, const char *source_path,
+    const char *binding_path, yvex_error *err)
+{
+    yvex_model_registry *registry = NULL;
+    const yvex_model_registry_options options = {
+        .registry_path = registry_path, .create_if_missing = 1};
+    const yvex_model_registry_entry entry = {
+        .schema_version = YVEX_MODEL_REGISTRY_ENTRY_SCHEMA_CURRENT,
+        .alias = "laya-typed-finite-cpu", .family = "laya", .model = "typed-decisions",
+        .path = source_path, .sha256 = LAYA_EXPECTED_SOURCE,
+        .runtime_profile = "tensor-program", .runtime_binding = binding_path,
+        .runtime_target = "laya-typed-decisions", .runtime_backend = "cpu",
+        .runtime_engine_kind = "finite-decision",
+        .runtime_execution_strategy = "not-applicable", .runtime_context = 64u};
+    int rc = yvex_model_registry_open(&registry, &options, err);
+    if (rc == YVEX_OK) rc = yvex_model_registry_add(registry, &entry, err);
+    if (rc == YVEX_OK) rc = yvex_model_registry_save(registry, registry_path, err);
+    yvex_model_registry_close(registry);
+    return rc;
+}
+
+static int load_profile(yvex_server_registry_loader *loader, yvex_server *server,
+    yvex_server_engine_summary *summary, yvex_error *err)
+{
+    unsigned long long count = 0u;
+    int rc = yvex_server_registry_model_load(loader, server, "laya-typed-finite-cpu", 0u, err);
+    if (rc == YVEX_OK)
+        rc = yvex_server_engine_snapshot(server, summary, 1u, &count, err);
+    return rc == YVEX_OK && count == 1u ? YVEX_OK : YVEX_ERR_STATE;
+}
+
 static int diagnostic(const char *checkpoint_directory, const char *program)
 {
     yvex_error err = {0};
@@ -157,11 +190,16 @@ static int diagnostic(const char *checkpoint_directory, const char *program)
     yvex_finite_decision_engine *engine = NULL;
     yvex_finite_input *input_policy = NULL;
     yvex_server *server = NULL;
+    yvex_server_registry_loader *loader = NULL;
     pthread_t serving;
     int serving_started = 0;
     char temporary[] = "/tmp/yvex-laya-binding-XXXXXX";
     char binding_path[256] = {0};
     char socket_path[256] = {0};
+    char registry_path[256] = {0};
+    char *previous_registry = getenv("YVEX_MODELS_REGISTRY")
+                                  ? strdup(getenv("YVEX_MODELS_REGISTRY")) : NULL;
+    int registry_selected = 0;
     int temporary_ready = 0;
     int rc = 1;
     const size_t count = sizeof(tokens) / sizeof(tokens[0]);
@@ -348,6 +386,13 @@ static int diagnostic(const char *checkpoint_directory, const char *program)
     if (yvex_finite_decision_engine_close(&engine, &err) != YVEX_OK) goto done;
     if (snprintf(socket_path, sizeof(socket_path), "%s/host.sock", temporary) >=
         (int)sizeof(socket_path)) goto done;
+    if (snprintf(registry_path, sizeof(registry_path), "%s/models.json", temporary) >=
+        (int)sizeof(registry_path) ||
+        register_profile(registry_path, admitted.weight_path, binding_path, &err) != YVEX_OK ||
+        setenv("YVEX_MODELS_REGISTRY", registry_path, 1) != 0) goto done;
+    registry_selected = 1;
+    if (yvex_server_registry_loader_create(&loader, YVEX_SERVER_TRACE_STAGES,
+            &err) != YVEX_OK) goto done;
     yvex_server_options host_options = {.schema_version = YVEX_SERVER_OPTIONS_SCHEMA_CURRENT,
         .socket_path = socket_path, .request_queue_capacity = 2u,
         .worker_count = 1u, .maximum_engines = 1u};
@@ -356,18 +401,15 @@ static int diagnostic(const char *checkpoint_directory, const char *program)
     yvex_server_summary host_summary = {0};
     if (yvex_server_get_summary(server, &host_summary, &err) != YVEX_OK ||
         !host_summary.host_ready || host_summary.engine_count != 0u) goto done;
-    yvex_server_engine_options resident = {.schema_version = YVEX_SERVER_ENGINE_SCHEMA_CURRENT,
-        .alias = "laya-typed", .artifact_path = admitted.weight_path,
-        .runtime_binding_path = binding_path,
-        .target_id = "laya-typed-decisions", .backend = YVEX_BACKEND_KIND_CPU,
-        .engine_kind = YVEX_SERVER_ENGINE_FINITE_DECISION,
-        .execution_strategy = YVEX_SERVER_EXECUTION_NOT_APPLICABLE,
-        .context_capacity = 64u, .maximum_output_bytes = sizeof(yvex_finite_decision_result),
-        .maximum_host_bytes = options.maximum_host_bytes,
-        .maximum_device_bytes = options.maximum_device_bytes,
-        .maximum_sessions = 1u, .concurrent_sequences = 1u};
     yvex_server_engine_summary loaded = {0}, unloaded = {0};
-    if (yvex_server_engine_load(server, &resident, &loaded, &err) != YVEX_OK ||
+    if (getenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES") ||
+        setenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES", "1", 1) != 0) goto done;
+    int refused = yvex_server_registry_model_load(loader, server, "laya-typed-finite-cpu", 0u, &err);
+    if (unsetenv("YVEX_TEST_RUNTIME_CGROUP_AVAILABLE_MEMORY_BYTES") != 0 ||
+        refused != YVEX_ERR_NOMEM ||
+        yvex_server_get_summary(server, &host_summary, &err) != YVEX_OK ||
+        host_summary.engine_count != 0u) goto done;
+    if (load_profile(loader, server, &loaded, &err) != YVEX_OK ||
         loaded.state != YVEX_SERVER_ENGINE_LOADED ||
         loaded.engine_kind != YVEX_SERVER_ENGINE_FINITE_DECISION ||
         !loaded.execution_ready) goto done;
@@ -390,7 +432,7 @@ static int diagnostic(const char *checkpoint_directory, const char *program)
     decision.candidates = candidates;
     decision.expected_generation = loaded.generation;
     memset(&result, 0, sizeof(result));
-    if (yvex_server_finite_decision_execute(server, resident.alias, &decision,
+    if (yvex_server_finite_decision_execute(server, "laya-typed-finite-cpu", &decision,
             &result, &err) != YVEX_OK ||
         fabs(result.candidates[0].raw_logit - (double)expected[0]) > tolerance ||
         result.sampling_invocation_count || result.generated_token_count ||
@@ -400,24 +442,25 @@ static int diagnostic(const char *checkpoint_directory, const char *program)
     if (getrusage(RUSAGE_SELF, &usage) != 0) goto done;
     printf("host_forward_elapsed_ns=%llu observed_process_peak_rss_bytes=%llu\n",
         result.elapsed_nanoseconds, (unsigned long long)usage.ru_maxrss * 1024ull);
-    if (yvex_server_engine_unload(server, resident.alias, loaded.generation,
+    if (yvex_server_engine_unload(server, "laya-typed-finite-cpu", loaded.generation,
             &unloaded, &err) != YVEX_OK) goto done;
     memset(&result, 0, sizeof(result));
-    if (yvex_server_finite_decision_execute(server, resident.alias, &decision,
+    if (yvex_server_finite_decision_execute(server, "laya-typed-finite-cpu", &decision,
             &result, &err) == YVEX_OK || result.schema_version) goto done;
     yvex_error_clear(&err);
     yvex_server_engine_summary replacement = {0};
-    if (yvex_server_engine_load(server, &resident, &replacement, &err) != YVEX_OK ||
+    if (load_profile(loader, server, &replacement, &err) != YVEX_OK ||
         replacement.generation <= loaded.generation ||
         replacement.engine_kind != YVEX_SERVER_ENGINE_FINITE_DECISION) goto done;
     if (!client_process(program, "--client-stale", socket_path, loaded.generation)) goto done;
-    if (yvex_server_finite_decision_execute(server, resident.alias, &decision,
+    if (yvex_server_finite_decision_execute(server, "laya-typed-finite-cpu", &decision,
             &result, &err) == YVEX_OK || result.schema_version) goto done;
     yvex_error_clear(&err);
-    if (yvex_server_engine_unload(server, resident.alias, replacement.generation,
+    if (yvex_server_engine_unload(server, "laya-typed-finite-cpu", replacement.generation,
             &unloaded, &err) != YVEX_OK) goto done;
-    printf("host_empty_start=1 host_generation=%llu replacement_generation=%llu "
-        "host_unloaded=1 stale_refusal=1\n", loaded.generation, replacement.generation);
+    printf("host_empty_start=1 registry_loader=1 capacity_refusal=1 host_generation=%llu "
+        "replacement_generation=%llu host_unloaded=1 stale_refusal=1\n",
+        loaded.generation, replacement.generation);
     if (yvex_server_stop(server, &err) != YVEX_OK ||
         yvex_server_finish(server, &err) != YVEX_OK) goto done;
     if (serving_started) { pthread_join(serving, NULL); serving_started = 0; }
@@ -432,11 +475,18 @@ done:
     if (rc) fprintf(stderr, "laya native: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
     if (engine) (void)yvex_finite_decision_engine_close(&engine, &err);
     yvex_server_close(&server);
+    yvex_server_registry_loader_close(&loader);
+    if (registry_selected) {
+        if (previous_registry) (void)setenv("YVEX_MODELS_REGISTRY", previous_registry, 1);
+        else (void)unsetenv("YVEX_MODELS_REGISTRY");
+    }
+    free(previous_registry);
     yvex_laya_program_close(&compiled);
     yvex_tensor_binding_close(&package);
     yvex_tensor_source_close(&source);
     if (temporary_ready) {
         if (binding_path[0]) unlink(binding_path);
+        if (registry_path[0]) unlink(registry_path);
         rmdir(temporary);
     }
     return rc;

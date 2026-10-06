@@ -101,6 +101,14 @@ compatible sampler/checkpoint state; a stale profile itself is never reused.
 Artifact drift, binding drift, unsupported qtypes, missing roles, resource
 overflow, or incompatible runtime requirements refuse before model execution.
 
+The registry's `tensor-program` deployment class authenticates a tensor binding
+rather than reading it as a generative GGUF binding. Its source digest, optional
+source extent and input-position bound must agree with that binding. It retains
+`finite-decision` capability and `not-applicable` execution strategy through
+catalog and Host admission. The current tensor-source provider is CPU-only;
+compatibility does not promote another backend or model/input grammar. Real
+engine open revalidates source bytes and acquires the bounded physical stage.
+
 
 ## Implementation and evidence
 

@@ -30,6 +30,13 @@ typedef struct {
     unsigned long long sampling_workspace_bytes, physical_rows;
 } yvex_runtime_capacity;
 
+/* Live host/cgroup observation, not a reservation or package identity. */
+int yvex_runtime_private_memory_capacity(
+    unsigned long long *total_bytes, unsigned long long *available_bytes,
+    int *process_limited);
+unsigned long long yvex_runtime_private_system_reserve(
+    unsigned long long capacity_bytes);
+
 int yvex_runtime_capacity_derive(
     yvex_model_engine *model, yvex_runtime_execution_session *session,
     const yvex_runtime_capacity_options *options, yvex_runtime_capacity *out,

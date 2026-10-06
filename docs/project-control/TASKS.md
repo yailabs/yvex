@@ -69,10 +69,10 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 46 | 37 | 1 | 1 | 7 |
+| 47 | 37 | 2 | 1 | 7 |
 <!-- task-counts:end -->
 
-**37/46 selected Tasks complete.** This denominator includes the significant
+**37/47 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
@@ -97,6 +97,19 @@ This delivery owns the YVEX producer/contract, not SDK or YAI integration.
 Its real SSH fixture uses a synthetic native peer: it does not qualify model
 quality, an installed production listener or the actual Exon→DGX chain.
 A03 remains READY. No DeepSeek, Metal or Laya lifecycle work is selected here.
+
+### Installed LAN producer follow-up
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `INTERFACES.FINITE.DECISION.LAN.OPERATIONAL.0` | Admit the already qualified finite CPU package through ordinary Host lifecycle and qualify the approved Exon LAN producer | P1 | 🔵 IN PROGRESS | Exact tensor-program deployment, independent existing checkpoint/input contract, approved finite-only client/server identities, real resident generation and public response, refusal/recovery, unchanged DeepSeek package and coordinated operator Host replacement if required. |
+
+Authorized 2026-10-06. This is the installed producer follow-up, not reopening
+the published v1 contract or authorizing SDK/YAI/Studio work. Generic deployment
+admission must not classify a finite engine as chat-capable. No new Laya
+checkpoint, CUDA acceleration, calibration, semantic decision authority or A03
+work is selected. Existing DeepSeek work and user-owned runtime are preserved;
+an operator Host replacement requires a coordinated idle window.
 
 ## Independently selected macOS qualification
 

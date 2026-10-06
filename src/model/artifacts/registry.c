@@ -522,7 +522,7 @@ int yvex_model_registry_startup_validate(const yvex_model_registry_entry *entry,
                                          yvex_error *err)
 {
     struct stat installation;
-    int composite, media, text, not_applicable, target_only, speculative;
+    int composite, tensor_program, finite, media, text, not_applicable, target_only, speculative;
 
     if (!entry ||
         entry->schema_version != YVEX_MODEL_REGISTRY_ENTRY_SCHEMA_CURRENT) {
@@ -532,6 +532,10 @@ int yvex_model_registry_startup_validate(const yvex_model_registry_entry *entry,
     }
     composite = entry->runtime_profile &&
                 strcmp(entry->runtime_profile, "composite") == 0;
+    tensor_program = entry->runtime_profile &&
+                     strcmp(entry->runtime_profile, "tensor-program") == 0;
+    finite = entry->runtime_engine_kind &&
+             strcmp(entry->runtime_engine_kind, "finite-decision") == 0;
     media = entry->runtime_engine_kind &&
             strcmp(entry->runtime_engine_kind, "media") == 0;
     text = entry->runtime_engine_kind &&
@@ -543,12 +547,13 @@ int yvex_model_registry_startup_validate(const yvex_model_registry_entry *entry,
     speculative = entry->runtime_execution_strategy &&
                   strcmp(entry->runtime_execution_strategy, "speculative") == 0;
     if ((entry->runtime_profile && entry->runtime_profile[0] &&
-         strcmp(entry->runtime_profile, "single-artifact") != 0 && !composite) ||
+         strcmp(entry->runtime_profile, "single-artifact") != 0 &&
+         !composite && !tensor_program) ||
         !entry->runtime_target ||
         !entry->runtime_target[0] || !entry->runtime_backend ||
         (strcmp(entry->runtime_backend, "cpu") != 0 &&
          strcmp(entry->runtime_backend, "cuda") != 0) ||
-        (!text && !media) ||
+        (!text && !media && !finite) ||
         (!target_only && !speculative && !not_applicable) ||
         (composite &&
          ((!entry->runtime_installation || entry->runtime_installation[0] != '/') ||
@@ -560,8 +565,9 @@ int yvex_model_registry_startup_validate(const yvex_model_registry_entry *entry,
          ((!entry->path || entry->path[0] != '/') ||
           (!entry->runtime_binding || entry->runtime_binding[0] != '/') ||
           (entry->runtime_installation && entry->runtime_installation[0]) ||
-          !text || not_applicable ||
-          entry->runtime_context == 0ull))) {
+          entry->runtime_context == 0ull ||
+          (tensor_program ? (!finite || !not_applicable)
+                          : (!text || not_applicable))))) {
         yvex_error_set(err, YVEX_ERR_STATE, "model_registry_startup",
                        "model has no complete startup profile");
         return YVEX_ERR_STATE;

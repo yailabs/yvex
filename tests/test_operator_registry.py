@@ -436,7 +436,7 @@ def test_completion() -> None:
     match = re.search(r"candidates='([^']*)'", root_case)
     require(match is not None, "missing Bash root completion candidates")
     root_candidates = set(match.group(1).split())
-    require(root_candidates == {"chat", "help", "host", "inspect", "model",
+    require(root_candidates == {"chat", "help", "host", "inspect", "management", "model",
                                 "serve", "version"},
             f"top-level completion leaks plumbing: {sorted(root_candidates)}")
     with tempfile.TemporaryDirectory(prefix="yvex-completion-") as temporary:

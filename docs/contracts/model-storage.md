@@ -142,6 +142,15 @@ consumer and provenance review; normal downloads do not rearrange that history.
 material. The configured artifact registry remains the catalog authority;
 directory scans do not create a second registry or establish lineage.
 
+Registered deployment grammar distinguishes `single-artifact` text profiles,
+`composite` media profiles and `tensor-program` finite-decision profiles.
+The last requires absolute source/binding paths, a positive input-position
+bound and `not-applicable` generation strategy; it does not accept a composite
+installation. The authenticated tensor binding owns the exact source/program
+contract. Existing registry v8 fields/layout remain unchanged. Older consumers
+that do not admit this profile discriminator refuse it rather than reinterpret
+it as text. Loading still revalidates the exact source and runtime resources.
+
 ## Supervised acquisition operations
 
 A provider transfer is a durable source operation, not the lifetime of the

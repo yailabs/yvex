@@ -19,6 +19,7 @@
 #include <yvex/internal/dense_program.h>
 #include <yvex/internal/families/laya.h>
 #include <yvex/internal/tensor_binding.h>
+#include <yvex/internal/deployment_compatibility.h>
 #include <yvex/internal/execution.h>
 #include <yvex/internal/program.h>
 #include <yvex/internal/program_kernels.h>
@@ -146,6 +147,37 @@ static int program_laya_bidirectional_recipe(void)
             yvex_tensor_binding_summary_get(reopened)->physical_program_identity),
         "compiled physical program and parameter directory reopen under one sealed binding");
     yvex_tensor_binding_close(&reopened);
+    char absolute_binding[YVEX_PATH_CAP];
+    YVEX_TEST_ASSERT(realpath(path, absolute_binding), "absolute compiled fixture binding");
+    yvex_model_registry_entry deployment = {
+        .schema_version = YVEX_MODEL_REGISTRY_ENTRY_SCHEMA_CURRENT,
+        .alias = "finite-control", .path = absolute_binding,
+        .runtime_profile = "tensor-program", .runtime_binding = absolute_binding,
+        .runtime_target = "compiled-finite-control", .runtime_backend = "cpu",
+        .runtime_engine_kind = "finite-decision", .runtime_execution_strategy = "not-applicable",
+        .runtime_context = 4u, .sha256 = program_source, .file_size = 1024u};
+    yvex_deployment_compatibility compatibility = {0};
+    YVEX_TEST_ASSERT(yvex_deployment_compatibility_evaluate(&deployment, &compatibility, &err)
+        == YVEX_OK && compatibility.current &&
+        !strcmp(compatibility.runtime_binding_identity, published.identity) &&
+        !strcmp(compatibility.artifact_identity, program_source),
+        "finite deployment authenticates exact source/binding without opening execution");
+    deployment.sha256 = program_other;
+    YVEX_TEST_ASSERT(yvex_deployment_compatibility_evaluate(&deployment, &compatibility, &err)
+        == YVEX_OK && !compatibility.current &&
+        compatibility.status == YVEX_DEPLOYMENT_COMPATIBILITY_ARTIFACT_MISMATCH,
+        "finite deployment refuses a foreign source identity");
+    deployment.sha256 = program_source;
+    deployment.runtime_backend = "cuda";
+    YVEX_TEST_ASSERT(yvex_deployment_compatibility_evaluate(&deployment, &compatibility, &err)
+        == YVEX_OK && !compatibility.current &&
+        compatibility.status == YVEX_DEPLOYMENT_COMPATIBILITY_UNSUPPORTED_TARGET,
+        "finite deployment refuses unsupported acceleration without CPU fallback");
+    deployment.runtime_backend = "cpu";
+    deployment.runtime_context = 5u;
+    YVEX_TEST_ASSERT(yvex_deployment_compatibility_evaluate(&deployment, &compatibility, &err)
+        == YVEX_OK && !compatibility.current,
+        "finite deployment cannot exceed the compiled row envelope");
     YVEX_TEST_ASSERT(yvex_tensor_binding_publish(path, &binding, &published, &err) != YVEX_OK,
         "immutable binding publication refuses overwrite");
     int fd = open(path, O_WRONLY);

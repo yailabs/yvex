@@ -13,6 +13,7 @@
 #include <yvex/internal/graph.h>
 #include <yvex/internal/media_target.h>
 #include <yvex/internal/runtime.h>
+#include <yvex/internal/tensor_binding.h>
 #include <yvex/model.h>
 
 static int compatibility_finish(
@@ -237,6 +238,43 @@ static int compatibility_single(
         err);
 }
 
+static int compatibility_tensor_program(
+    const yvex_model_registry_entry *entry,
+    yvex_deployment_compatibility *result, yvex_error *err)
+{
+    /* Inspect the authenticated compiled package, not a family name or payload.
+     * The finite engine repeats source/parameter and backend admission at load. */
+    yvex_tensor_binding *binding = NULL;
+    int rc = yvex_tensor_binding_open(&binding, entry->runtime_binding, err);
+    if (rc != YVEX_OK)
+        return compatibility_finish(result,
+            YVEX_DEPLOYMENT_COMPATIBILITY_MALFORMED_BINDING,
+            "compiled tensor-program binding is unavailable or malformed", err);
+    const yvex_tensor_binding_summary *summary = yvex_tensor_binding_summary_get(binding);
+    const yvex_program_physical_summary *program =
+        yvex_program_physical_summary_get(yvex_tensor_binding_program(binding));
+    yvex_deployment_compatibility_status status = YVEX_DEPLOYMENT_COMPATIBILITY_CURRENT;
+    const char *reason = "compiled tensor-program binding is current; source and execution re-admitted at load";
+    if (!entry->sha256 || !yvex_sha256_hex_valid(entry->sha256) ||
+        strcmp(entry->sha256, summary->source_identity) ||
+        (entry->file_size && entry->file_size != summary->source_bytes)) {
+        status = YVEX_DEPLOYMENT_COMPATIBILITY_ARTIFACT_MISMATCH;
+        reason = "tensor-program binding names a different immutable source";
+    } else if (strcmp(entry->runtime_backend, "cpu")) {
+        status = YVEX_DEPLOYMENT_COMPATIBILITY_UNSUPPORTED_TARGET;
+        reason = "finite tensor-program deployment currently admits only CPU execution";
+    } else if (!program || entry->runtime_context > program->maximum_rows) {
+        status = YVEX_DEPLOYMENT_COMPATIBILITY_INCOMPLETE;
+        reason = "finite row capacity exceeds the authenticated program envelope";
+    }
+    (void)snprintf(result->runtime_binding_identity,
+        sizeof(result->runtime_binding_identity), "%s", summary->identity);
+    (void)snprintf(result->artifact_identity,
+        sizeof(result->artifact_identity), "%s", summary->source_identity);
+    yvex_tensor_binding_close(&binding);
+    return compatibility_finish(result, status, reason, err);
+}
+
 int yvex_deployment_compatibility_evaluate(
     const yvex_model_registry_entry *entry,
     yvex_deployment_compatibility *result, yvex_error *err)
@@ -261,6 +299,8 @@ int yvex_deployment_compatibility_evaluate(
             yvex_error_message(&structural), err);
     if (entry->runtime_profile && !strcmp(entry->runtime_profile, "composite"))
         return compatibility_composite(entry, result, err);
+    if (entry->runtime_profile && !strcmp(entry->runtime_profile, "tensor-program"))
+        return compatibility_tensor_program(entry, result, err);
     return compatibility_single(entry, result, err);
 }
 

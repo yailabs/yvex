@@ -492,15 +492,10 @@ int yvex_runtime_private_reject_as(
     unsigned long long actual, const char *reason, yvex_error *err,
     yvex_status status);
 int yvex_runtime_private_success(yvex_error *err);
-int yvex_runtime_private_memory_capacity(
-    unsigned long long *total_bytes, unsigned long long *available_bytes,
-    int *process_limited);
 /* Caller holds the lifecycle lock or unpublished-session construction lease. */
 void yvex_runtime_private_session_sequence_summary_bind(
     yvex_runtime_session_summary *summary,
     const yvex_sequence_state_summary *sequence);
-unsigned long long yvex_runtime_private_system_reserve(
-    unsigned long long capacity_bytes);
 int yvex_runtime_private_weight_placement_select(
     const yvex_runtime_binding *binding, yvex_backend_kind backend_kind,
     yvex_backend *backend,

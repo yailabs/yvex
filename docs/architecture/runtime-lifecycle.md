@@ -113,7 +113,14 @@ can select model and variant from linear tables; automation supplies `MODEL`
 and `--variant` when needed. Advanced `engine load PROFILE` retains the exact
 plumbing operation for qualification. A text profile opens one authenticated
 artifact and runtime binding; a composite MiniMax profile opens its component
-set under one logical engine. The engine becomes routable only after package admission,
+set under one logical engine. A `tensor-program` profile opens an authenticated
+tensor binding and its exact source as a finite-decision engine, with
+`not-applicable` generation strategy. The current source provider admits CPU
+only: an exact CUDA request refuses, never falls back. Its bounded physical
+stage uses the canonical live host/cgroup capacity observation minus the
+existing system reserve; unavailable capacity or insufficient workspace refuses
+before publishing an engine. This is admission, not a memory reservation.
+The engine becomes routable only after package admission,
 specialization, required resources, scheduler, tokenizer/component objects, and
 execution capability are ready.
 

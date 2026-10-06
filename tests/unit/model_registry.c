@@ -466,6 +466,40 @@ static int test_composite_profile(void)
     return 0;
 }
 
+static int test_finite_profile(void)
+{
+    const char *model_path =
+        "build/tests/model-registry/deepseek4-v4-flash-dspark-selected-embed-F16-noimatrix-yvex-v1.gguf";
+    char absolute_model[YVEX_PATH_CAP];
+    yvex_model_registry_entry entry;
+    yvex_error err = {0};
+    YVEX_TEST_ASSERT(realpath(model_path, absolute_model), "finite syntax reference extent");
+    fill_entry(&entry, absolute_model, absolute_model);
+    entry.runtime_profile = "tensor-program";
+    entry.runtime_engine_kind = "finite-decision";
+    entry.runtime_backend = "cpu";
+    entry.runtime_execution_strategy = "not-applicable";
+    entry.runtime_context = 64u;
+    YVEX_TEST_ASSERT(yvex_model_registry_startup_validate(&entry, &err) == YVEX_OK,
+        "finite compiled tensor profile has independent non-generative grammar");
+    entry.runtime_execution_strategy = "target-only";
+    YVEX_TEST_ASSERT(yvex_model_registry_startup_validate(&entry, &err) == YVEX_ERR_STATE,
+        "finite profile cannot request autoregressive execution");
+    entry.runtime_execution_strategy = "not-applicable";
+    entry.runtime_engine_kind = "text";
+    YVEX_TEST_ASSERT(yvex_model_registry_startup_validate(&entry, &err) == YVEX_ERR_STATE,
+        "tensor-program profile cannot masquerade as text");
+    entry.runtime_engine_kind = "finite-decision";
+    entry.runtime_profile = "single-artifact";
+    YVEX_TEST_ASSERT(yvex_model_registry_startup_validate(&entry, &err) == YVEX_ERR_STATE,
+        "finite binding cannot masquerade as ordinary decoder binding");
+    entry.runtime_profile = "tensor-program";
+    entry.runtime_context = 0u;
+    YVEX_TEST_ASSERT(yvex_model_registry_startup_validate(&entry, &err) == YVEX_ERR_STATE,
+        "finite profile needs bounded row capacity");
+    return 0;
+}
+
 static int test_invalid_args(void)
 {
     yvex_model_registry_entry entry;
@@ -1043,6 +1077,7 @@ int yvex_test_model_registry(void)
     if (test_integrity_metadata_admission() != 0) return 1;
     if (test_registry_lifecycle() != 0) return 1;
     if (test_composite_profile() != 0) return 1;
+    if (test_finite_profile() != 0) return 1;
     if (test_legacy_startup_axes() != 0) return 1;
     if (test_logical_model_library() != 0) return 1;
     if (test_source_logical_relationship() != 0) return 1;

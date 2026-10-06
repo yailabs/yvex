@@ -5,6 +5,7 @@
 #include <yvex/internal/core.h>
 #include <yvex/internal/deployment_compatibility.h>
 #include <yvex/internal/graph.h>
+#include <yvex/internal/runtime_capacity.h>
 #include <yvex/internal/server_media.h>
 #include <yvex/registry.h>
 #include <limits.h>
@@ -93,6 +94,8 @@ static int profile_copy(registry_profile *profile,
             YVEX_MODEL_CAPABILITY_PROFILE_CONDITIONED_AUDIOVISUAL_GENERATION;
     else if (!strcmp(profile->engine_kind, "text"))
         capability_profile = YVEX_MODEL_CAPABILITY_PROFILE_TEXT_GENERATION;
+    else if (!strcmp(profile->engine_kind, "finite-decision"))
+        capability_profile = YVEX_MODEL_CAPABILITY_PROFILE_FINITE_DECISION;
     else
         return 0;
     return yvex_model_capability_profile_describe(
@@ -147,6 +150,7 @@ static void engine_profile_defaults(yvex_server_engine_options *options,
                                     const registry_profile *profile)
 {
     int media_requested = !strcmp(profile->engine_kind, "media");
+    int finite_requested = !strcmp(profile->engine_kind, "finite-decision");
 
     memset(options, 0, sizeof(*options));
     options->schema_version = YVEX_SERVER_ENGINE_SCHEMA_CURRENT;
@@ -157,9 +161,10 @@ static void engine_profile_defaults(yvex_server_engine_options *options,
     options->backend = media_requested || !strcmp(profile->backend, "cuda")
                            ? YVEX_BACKEND_KIND_CUDA : YVEX_BACKEND_KIND_CPU;
     options->engine_kind = media_requested ? YVEX_SERVER_ENGINE_MEDIA
-                                           : YVEX_SERVER_ENGINE_TEXT;
+                          : finite_requested ? YVEX_SERVER_ENGINE_FINITE_DECISION
+                                             : YVEX_SERVER_ENGINE_TEXT;
     options->execution_strategy =
-        media_requested ? YVEX_SERVER_EXECUTION_NOT_APPLICABLE
+        media_requested || finite_requested ? YVEX_SERVER_EXECUTION_NOT_APPLICABLE
                         : (!strcmp(profile->execution_strategy, "speculative")
                                ? YVEX_SERVER_EXECUTION_SPECULATIVE
                                : YVEX_SERVER_EXECUTION_TARGET_ONLY);
@@ -171,6 +176,29 @@ static void engine_profile_defaults(yvex_server_engine_options *options,
     options->concurrent_sequences = 1u;
     options->trace_level = YVEX_SERVER_TRACE_STAGES;
     options->capabilities = profile->capabilities;
+}
+
+static int finite_workspace_budget(yvex_server_engine_options *options,
+                                   yvex_error *err)
+{
+    unsigned long long total, available, reserve;
+    int process_limited;
+    if (!yvex_runtime_private_memory_capacity(&total, &available, &process_limited)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "server.model-loader",
+                       "live finite workspace capacity is unavailable");
+        return YVEX_ERR_STATE;
+    }
+    reserve = yvex_runtime_private_system_reserve(total);
+    if (available <= reserve) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "server.model-loader",
+                       "finite workspace has no capacity after system reserve");
+        return YVEX_ERR_NOMEM;
+    }
+    /* Physical-stage allocation remains bounded; this observation neither
+     * reserves memory nor promises throughput. No device allocation is admitted. */
+    options->maximum_host_bytes = available - reserve;
+    options->maximum_device_bytes = 0ull;
+    return YVEX_OK;
 }
 
 static int media_configuration_defaults(
@@ -317,8 +345,8 @@ int yvex_server_registry_model_load(void *opaque, yvex_server *server,
         }
         selected.context_capacity = requested_context_capacity;
     }
-    selected.maximum_new_tokens = media_requested ? 0ull
-                                                  : selected.context_capacity;
+    selected.maximum_new_tokens = selected.engine_kind == YVEX_SERVER_ENGINE_TEXT
+                                      ? selected.context_capacity : 0ull;
     selected.trace_level = context->trace_level;
     memset(&media_configuration, 0, sizeof(media_configuration));
     if (media_requested) {
@@ -327,6 +355,8 @@ int yvex_server_registry_model_load(void *opaque, yvex_server *server,
         if (rc == YVEX_OK)
             rc = media_prepare(&profile, &media_configuration, &media_host,
                                &media, &selected, err);
+    } else if (selected.engine_kind == YVEX_SERVER_ENGINE_FINITE_DECISION) {
+        rc = finite_workspace_budget(&selected, err);
     } else {
         rc = YVEX_OK;
     }
