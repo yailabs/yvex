@@ -42,14 +42,18 @@ does not grant model admission or new public management operations.
 | Advanced SSH operator | [Remote management](../contracts/remote-management.md) | Separate read, product-management and finite grants |
 | Remote finite compute consumer | [Finite producer v1](../contracts/finite-decision-remote.md) | Explicit compute enrollment, separate JSON schemas, exact generation/population/model lineage |
 
-The public platform SDK in
-[`yailabs/yai-sdk`](https://github.com/yailabs/yai-sdk) has a separate `yvex-sdk`
-client domain for producer-owned [product management](../contracts/product-management.md).
-Its 36 operations consume Source/model/build/package, Host/Engine/Session,
-Jobs and observation truth. Capability discovery is explicit; neither runtime
-brand nor version spelling is capability evidence. CLI and SDK consume the same
-domain owners. Direct computational generation is separate from a governed YAI
-Case execution and never writes to a Case.
+YVEX owns its independent public client in `sdk/rust` (`yvex-sdk` 0.2) and
+`sdk/typescript` (`@yvex/sdk`). The Rust crate is an independent workspace: importing
+management requires neither the YVEX compiler nor YAI. The historical yai-sdk
+package is a compatibility reexport of the exact published YVEX client.
+[ADR 0011](../decisions/0011-independent-platform-client.md) owns this dependency direction.
+
+The 36 management operations consume Source/model/build/package, Host/Engine/Session,
+Jobs and observation truth. Capability discovery is explicit; neither runtime brand
+nor version spelling is capability evidence. CLI and independent SDK clients consume
+the same domain owners. Direct computational generation remains separate from a
+YAI Case. The SDK also owns read freshness: absent data, an observed empty collection,
+and stale retained evidence are different states.
 
 The standalone native service provides a private same-user Unix socket for
 local automatic discovery and authenticated HTTPS for explicit remote enrollment.

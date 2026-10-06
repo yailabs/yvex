@@ -168,6 +168,11 @@ def main():
             assert planned['result']['state'] == 'PLANNED' and not planned['result']['changed'], planned
             assert planned['result']['revision'] == build_revision
             assert planned['result']['target'] == 'deepseek4-v4-flash-dspark'
+            assert len(planned['result']['plan_id']) == 64
+            same_plan = job('build.start', {'model':'build-plan','dry_run':True,'expected_plan':planned['result']['plan_id']})
+            assert same_plan['state'] == 'succeeded' and same_plan['result']['plan_id'] == planned['result']['plan_id']
+            stale_plan = job('build.start', {'model':'build-plan','dry_run':False,'expected_plan':'0'*64})
+            assert stale_plan['state'] == 'failed' and 'build_plan_changed_review_again' in stale_plan['reason'], stale_plan
             assert not list((root / 'models').rglob('physical.plan'))
             assert record.read_bytes() == before_record
             # No valid compiler input is invented from the small download fixture.

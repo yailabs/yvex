@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 700
+
 /* Parameter lowering evidence uses metadata, never model payloads or execution. */
 #include "tests/test.h"
 #include "tests/support/signal_program.h"

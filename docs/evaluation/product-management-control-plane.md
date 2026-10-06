@@ -20,7 +20,7 @@ The producer adds 36 capability-discovered product management operations over
 authenticated HTTPS or a same-user public Unix socket; restricted SSH remains an
 advanced transport with a distinct grant. Existing read-only
 management v1 and separately granted finite computation retain their scopes.
-The complete 184-operation CLI catalog has an explicit ordinary-product,
+The complete 186-operation CLI catalog has an explicit ordinary-product,
 advanced-engineering, CLI-interaction or unsupported-remote disposition.
 
 Protocol 25 carries a genuine Host lifetime nonce and Session lifetime identity.
@@ -251,3 +251,56 @@ Studio enrollment/visual acceptance, remote real-model management mutations,
 long-lived reliability and full commercial/release qualification retain their
 own consumer/environment evidence. These producer records alone do not close
 those boundaries.
+
+## Independent platform client and headless ownership
+
+The current platform convergence slice consumes published Exon `ee34eb22` plus
+the owned repository delta. The canonical independent MIT client now lives in
+YVEX `sdk/rust` and `sdk/typescript`; compatibility composition in YAI SDK does
+not create another producer or credential owner. The public product inventory
+remains 36 operations. Two local installation/recovery controls bring the
+classified CLI inventory to 186.
+
+| Test / lane | Authority / oracle | Input / fixture | Expected | Observed | Metric / tolerance | Result | Claim supported |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Headless ownership | Producer pairing ledger and pinned TLS router | `network_ownership.py`, private disposable service/invitation | No anonymous administration; separate product grant; revision refusal; exact receipt; revoke | All controls pass, secrets absent from ledger/status | Exact identities and revisions | PASS | Secure explicit initial installation bootstrap followed by remote administration |
+| Canonical SDK and native vault | Public SDK and desktop Secret Service | Same fixture with `YVEX_SDK_CONNECTIONS_EXAMPLE`; fresh process per command | Safe import, protected credential restore, explicit approval, revoke, cleanup | All controls pass; only generated credential keys created/deleted | Exact profile and peer identities | PASS | Native protected owner continuity across client restarts; not operator enrollment |
+| Lost response | SDK request journal against generated TLS owner fixture | Claim with unusable reply; action with disconnected response | Only GET status/receipt after loss | Four connections contain exactly one claim POST and one action POST | No redispatch | PASS | Missing response does not authorize repeated owner mutation |
+| Historical Host state | Actual isolated zero-engine CPU Host with persistent management service | Observe, supported stop, observe, attempt operational access | Exact old snapshot retained separately; current identity/status absent; operations refuse | `last_known` preserved; Engine list/load refuse | Exact status and Host nonce | PASS | Historical evidence is not current admission or residency |
+| Model build/profile | Existing producer-owned planning and native catalog | Controlled remote-provider fixture; profile create/verify; dry run; stale plan ID | Source/build identity retained; stale reviewed plan cannot execute | Existing model/source/profile lane passes | Exact plan ID/revision; no compiler execution inferred | PASS | Profile v3 projection and reviewed-plan fence |
+| SDK conformance | Canonical independent workspace | `cargo test --manifest-path sdk/rust/Cargo.toml --features native-credentials` | Preserve finite, SSH, local, HTTPS and owner semantics | 39 tests pass | Refusal, bounds, pinning, recovery | PASS | Independent client contract; fixture protocols are not hardware performance evidence |
+
+Reproduction uses `YVEX_BIN=build/platform-control/yvex` and
+`python3 tests/integration/network_ownership.py`; its SDK variant also sets
+`YVEX_SDK_CONNECTIONS_EXAMPLE` to the canonical native-credentials example.
+`network_management.py` retains ordinary HTTPS/UDS and Host-history controls.
+All service roots, credentials and model data in these lanes are disposable.
+No operator YAI Case, remote grant, DGX service or foreign checkout is modified.
+
+The installation owner must still issue and securely deliver the expiring invite
+once. This is not zero-touch enrollment. Subsequent request-window/approval/revoke
+operations use authenticated owner endpoints, so routine remote administration
+does not need SSH or a desktop on the server. An ownership claim does not grant
+product management, remote inference or YAI authority. Actual operator onboarding,
+Studio visual acceptance, real-model runtime actions and release qualification
+remain distinct evidence owned by their consumer/deployment lanes.
+
+## Real DGX direct-session consumer evidence
+
+A separate canonical SDK consumer run observed the installed protocol-25 Host
+and its text Engine generation 3 plus finite Engine generation 2 over the
+operator-approved pinned HTTPS connection. A new diagnostic Session outside YAI
+was created, generated the public final output `YVEX ready` (4 generated tokens,
+12 prompt tokens, 3.361 seconds producer completion metric), and was closed via
+exact Jobs. No loaded Engine was restarted or replaced.
+
+The first create was explicitly refused before dispatch: `unsafe_job_parent`.
+The owned data parent had mode 0775; removing group-write changed it to 0755,
+after which the same non-dispatched request identity was accepted. This retained
+the security fence rather than weakening it. Evidence is in the Exon consumer
+run `yvex-platform-convergence` (request/receipt/result identities retained).
+
+The YAI Provider endpoint `127.0.0.1:18001` refused connection. HTTPS management
+does not replace that inference transport. No historical SEND was retried and
+no Tech Infra mutation was performed. These facts qualify real direct generation,
+not fresh acquisition/build/load or a governed Case response.

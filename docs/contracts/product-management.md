@@ -144,3 +144,26 @@ Future Dataset/recipe/run/checkpoint/adapter/evaluation/promotion owners must
 publish their own versioned lineage and operations. A derived model re-enters the
 same Source/Build/Package/Runtime path. This contract reserves no fake Training
 operations and permits no direct mining of YAI Case data.
+
+## Platform convergence: observation and planning
+
+Canonical public client: `sdk/rust` and `sdk/typescript`, independently owned by
+YVEX. Read observations distinguish never observed, loading, current, stale,
+unavailable, failed and unsupported. An absent value is not an empty collection.
+Producer `host.get` may supply `last_known` with exact old Host instance, status and
+observation time when its computational socket is unavailable. This bounded service
+cache is observation only; Engine/Session mutations still require a current nonce.
+A management-service restart may legitimately have no retained observation.
+
+Runtime profile C schema v3 appends `readiness` and exact `compatibility`. The native
+compatibility owner maps ready, blocked and incompatible outcomes; unknown remains
+unknown. Existing JSON `launchable` and `blocker` remain compatible. Older producers
+may omit the new fields, which never means an unlaunchable profile is available.
+
+A dry-run `build.start` returns `plan_id`. A subsequent explicit build may provide
+`expected_plan`; the shared preparation owner compares exact source/revision,
+package/profile lineage and resolved plan under its existing source lease, before
+compilation or publication. A changed plan fails with `build_plan_changed_review_again`.
+This is a concurrency fence, not a reservation of memory or promised compilation.
+Old unfenced clients retain their existing semantics; Studio's guided flow passes
+the observed fence when the producer supplies it.

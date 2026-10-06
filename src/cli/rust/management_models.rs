@@ -124,6 +124,7 @@ struct Start {
 #[serde(deny_unknown_fields)]
 struct Build {
     model: String,
+    expected_plan: Option<String>,
     quant: Option<String>,
     #[serde(default)]
     dry_run: bool,
@@ -859,7 +860,7 @@ pub(crate) fn execute(operation: &str, value: &Value) -> Result<Value> {
             if let Some(quant) = &request.quant {
                 bounded(quant, 128)?;
             }
-            preparation::prepare_model(
+            preparation::prepare_model_expected(
                 &request.model,
                 ffi::preparation::Request {
                     root: None,
@@ -868,6 +869,7 @@ pub(crate) fn execute(operation: &str, value: &Value) -> Result<Value> {
                     imatrix: None,
                     dry: request.dry_run,
                 },
+                request.expected_plan.as_deref(),
             )
             .map_err(domain)
         }
@@ -1076,6 +1078,11 @@ pub(crate) fn validate(operation: &str, value: &Value) -> Result<()> {
         "build.start" => {
             let request: Build = input(value)?;
             text(&request.model, 512)?;
+            if let Some(plan) = request.expected_plan {
+                if plan.len() != 64 || !plan.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    return Err(invalid("invalid_build_plan_identity"));
+                }
+            }
             if let Some(quant) = request.quant {
                 text(&quant, 128)?;
             }

@@ -1,0 +1,1077 @@
+{
+  "schema": "yvex.sdk.management-contract.v2",
+  "request_schema": "yvex.management.request.v2",
+  "response_schema": "yvex.management.response.v2",
+  "grant": "product-management",
+  "max_request_bytes": 131072,
+  "max_response_bytes": 1048576,
+  "types": {
+    "OperationKind": {
+      "$enum": [
+        "read",
+        "job",
+        "control"
+      ]
+    },
+    "JobState": {
+      "$enum": [
+        "accepted",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "indeterminate"
+      ]
+    },
+    "DispatchState": {
+      "$enum": [
+        "not_dispatched",
+        "outcome_unavailable",
+        "completed"
+      ]
+    },
+    "ResponseStatus": {
+      "$enum": [
+        "ok",
+        "refused",
+        "unavailable",
+        "unsupported"
+      ]
+    },
+    "HostState": {
+      "$enum": [
+        "running",
+        "stopped",
+        "unavailable"
+      ]
+    },
+    "Reasoning": {
+      "$enum": [
+        "disabled",
+        "enabled",
+        "low",
+        "maximum"
+      ]
+    },
+    "EmptyInput": {},
+    "OperationCapability": {
+      "operation": "string",
+      "kind": "OperationKind"
+    },
+    "Capabilities": {
+      "protocol": "string",
+      "producer_version": "string",
+      "local_protocol": "u64",
+      "operations": "array:OperationCapability",
+      "limits": "map:u64"
+    },
+    "Job": {
+      "job_id": "string",
+      "operation": "string",
+      "state": "JobState",
+      "submitted_at_unix_ms": "u64",
+      "updated_at_unix_ms": "u64",
+      "input": "json",
+      "result": "nullable:json",
+      "reason": "nullable:string"
+    },
+    "JobInput": {
+      "job_id": "string"
+    },
+    "JobList": {
+      "jobs": "array:JobSummary",
+      "retention_limit": "u64",
+      "truncated": "bool"
+    },
+    "ListInput": {
+      "limit": "optional:u32"
+    },
+    "ModelInput": {
+      "model": "string"
+    },
+    "EngineLoadInput": {
+      "profile": "string",
+      "context_capacity": "optional:u64",
+      "host_instance": "string"
+    },
+    "EngineInput": {
+      "model": "string",
+      "generation": "u64"
+    },
+    "SessionInput": {
+      "model": "string",
+      "generation": "u64",
+      "name": "string"
+    },
+    "SessionForkInput": {
+      "model": "string",
+      "generation": "u64",
+      "name": "string",
+      "fork_name": "string",
+      "maximum_prefix_bytes": "u64",
+      "host_instance": "string",
+      "session_identity": "string"
+    },
+    "GenerationInput": {
+      "model": "string",
+      "generation": "u64",
+      "name": "string",
+      "prompt": "string",
+      "maximum_new_tokens": "u64",
+      "reasoning": "Reasoning",
+      "host_instance": "string",
+      "session_identity": "string"
+    },
+    "GenerationCancelInput": {
+      "model": "string",
+      "generation": "u64",
+      "name": "string",
+      "host_instance": "string",
+      "session_identity": "string"
+    },
+    "EventsInput": {
+      "after_sequence": "optional:u64",
+      "limit": "optional:u32"
+    },
+    "Source": {
+      "provider": "string",
+      "repository": "string",
+      "revision": "string",
+      "origin_uri": "string",
+      "storage": "string",
+      "path": "string",
+      "format": "string",
+      "precision": "string",
+      "verification": "string",
+      "state": "string",
+      "digest": "string",
+      "size_bytes": "u64",
+      "size_known": "bool"
+    },
+    "Publication": {
+      "provider": "string",
+      "repository": "string",
+      "revision": "string",
+      "filename": "string",
+      "sha256": "string",
+      "manifest_filename": "string",
+      "manifest_sha256": "string",
+      "size_bytes": "u64",
+      "state": "string"
+    },
+    "Artifact": {
+      "identity": "string",
+      "path": "string",
+      "format": "string",
+      "quant_precision": "string",
+      "size_bytes": "u64",
+      "tensor_count": "u64",
+      "local_available": "bool",
+      "remote_locations": "array:Publication"
+    },
+    "EngineCapabilities": {
+      "input_mask": "u64",
+      "output_mask": "u64",
+      "properties": "u64",
+      "maximum_input_parts": "u64",
+      "inputs": "optional:array:string",
+      "outputs": "optional:array:string"
+    },
+    "RuntimeProfile": {
+      "identity": "string",
+      "artifact_identity": "string",
+      "backend": "string",
+      "engine_kind": "string",
+      "strategy": "string",
+      "context": "u64",
+      "launchable": "bool",
+      "blocker": "string",
+      "capabilities": "EngineCapabilities",
+      "readiness": "optional:ProfileReadiness",
+      "compatibility": "optional:string"
+    },
+    "Model": {
+      "selector": "string",
+      "identity": "string",
+      "name": "string",
+      "family": "string",
+      "origin": "string",
+      "format": "string",
+      "quant_precision": "string",
+      "state": "string",
+      "execution": "string",
+      "location": "string",
+      "selected_profile": "nullable:string",
+      "representation_count": "u64",
+      "sources": "array:Source",
+      "representations": "array:Artifact",
+      "profiles": "array:RuntimeProfile",
+      "loaded_engines": "array:LoadedModelEngine",
+      "components": "array:json",
+      "working_set": "bool"
+    },
+    "ModelList": {
+      "schema": "optional:string",
+      "models": "array:Model",
+      "truncated": "optional:bool",
+      "runtime_observation": "string"
+    },
+    "ModelDetail": {
+      "schema": "optional:string",
+      "model": "Model",
+      "runtime_observation": "string"
+    },
+    "EngineCapacity": {
+      "sessions": "u64",
+      "runnable_work": "u64",
+      "physical_sequence_width": "u64",
+      "cooperative_scheduling": "bool",
+      "compatible_operation_batching": "bool",
+      "continuous_batching": "bool"
+    },
+    "ResourceObservation": {
+      "schema_version": "u64",
+      "available": "u64",
+      "placement": "string",
+      "physical_residency_known": "bool",
+      "unified_memory": "bool",
+      "components": "u64",
+      "model_artifact_bytes": "u64",
+      "model_mapped_bytes": "u64",
+      "model_prepared_bytes": "u64",
+      "model_explicit_host_bytes": "u64",
+      "model_explicit_device_bytes": "u64",
+      "model_device_addressable_bytes": "u64",
+      "session_attention_allocated_bytes": "u64",
+      "session_attention_resident_bytes": "u64",
+      "session_attention_virtual_bytes": "u64",
+      "session_attention_page_table_bytes": "u64",
+      "session_recurrent_state_bytes": "u64",
+      "session_convolution_state_bytes": "u64",
+      "session_candidate_state_bytes": "u64",
+      "session_physical_state_bytes": "u64",
+      "activation_arena_current_bytes": "u64",
+      "activation_arena_peak_bytes": "u64",
+      "workspace_current_bytes": "u64",
+      "workspace_peak_bytes": "u64",
+      "transient_current_bytes": "u64",
+      "transient_peak_bytes": "u64",
+      "process_rss_current_bytes": "u64",
+      "process_rss_peak_bytes": "u64",
+      "logical_upload_bytes": "u64",
+      "logical_download_bytes": "u64"
+    },
+    "Engine": {
+      "alias": "string",
+      "generation": "u64",
+      "state": "string",
+      "backend": "u64",
+      "engine_kind": "string",
+      "execution_strategy": "string",
+      "execution_ready": "bool",
+      "continuous_batching": "bool",
+      "context_capacity": "u64",
+      "prefill_chunk_tokens": "u64",
+      "maximum_new_tokens": "u64",
+      "maximum_sessions": "u64",
+      "configured_physical_sequence_width": "u64",
+      "active_work": "u64",
+      "sessions": "u64",
+      "attached_clients": "u64",
+      "model_leases": "u64",
+      "activity": "string",
+      "mapped_package_bytes": "u64",
+      "resident_host_bytes": "u64",
+      "resident_device_bytes": "u64",
+      "prepared_bytes": "u64",
+      "capacity": "EngineCapacity",
+      "resources": "ResourceObservation",
+      "capabilities": "EngineCapabilities",
+      "target": "string",
+      "model_identity": "string",
+      "specialization_identity": "string",
+      "runtime_binding_identity": "string",
+      "artifact_identity": "string",
+      "capacity_plan_identity": "string"
+    },
+    "EngineList": {
+      "schema": "optional:string",
+      "engines": "array:Engine",
+      "host_instance": "nullable:string",
+      "truncated": "bool"
+    },
+    "Session": {
+      "name": "string",
+      "identity": "string",
+      "state": "string",
+      "position": "u64",
+      "turns": "u64",
+      "model": "optional:string",
+      "generation": "optional:u64",
+      "context_used": "nullable:u64",
+      "kv_used_bytes": "nullable:u64"
+    },
+    "SessionList": {
+      "schema": "optional:string",
+      "sessions": "array:Session",
+      "host_instance": "nullable:string",
+      "truncated": "bool"
+    },
+    "SessionDetail": {
+      "schema": "optional:string",
+      "session": "nullable:Session",
+      "host_instance": "string"
+    },
+    "HostSnapshot": {
+      "schema": "string",
+      "protocol": "u64",
+      "status": "i64",
+      "host_ready": "bool",
+      "engine_count": "u64",
+      "loaded_engine_count": "u64",
+      "draining_engine_count": "u64",
+      "maximum_engines": "u64",
+      "workers": "u64",
+      "session_count": "u64",
+      "requests": "u64",
+      "uptime_ns": "u64",
+      "active_sessions": "u64",
+      "total_sessions": "u64",
+      "queue_depth": "u64",
+      "queue_capacity": "u64",
+      "active_requests": "u64",
+      "completed_requests": "u64",
+      "failed_requests": "u64",
+      "cancelled_requests": "u64",
+      "openai_enabled": "bool",
+      "openai_ready": "bool",
+      "openai_port": "u64",
+      "rss_bytes": "u64",
+      "peak_rss_bytes": "u64",
+      "mapped_artifact_bytes": "u64",
+      "resident_host_bytes": "u64",
+      "resident_device_bytes": "u64",
+      "resources": "ResourceObservation"
+    },
+    "HostObservation": {
+      "state": "HostState",
+      "status": "nullable:HostSnapshot",
+      "host_instance": "nullable:string",
+      "reason": "optional:nullable:string",
+      "last_known": "optional:nullable:LastKnownHost"
+    },
+    "Event": {
+      "sequence": "u64",
+      "process": "u64",
+      "wall_time_ns": "u64",
+      "monotonic_time_ns": "u64",
+      "kind": "string",
+      "severity": "u64",
+      "session": "string",
+      "request": "string",
+      "turn": "string",
+      "phase": "string",
+      "identity": "string",
+      "measurement_available": "u64",
+      "measurement_completed": "u64",
+      "measurement_total": "u64",
+      "measurement_duration_ns": "u64",
+      "seconds": "f64",
+      "rate": "f64"
+    },
+    "Events": {
+      "events": "array:Event",
+      "next_sequence": "u64",
+      "truncated": "bool",
+      "host_instance": "string"
+    },
+    "EngineMutationInput": {
+      "model": "string",
+      "generation": "u64",
+      "host_instance": "string"
+    },
+    "SessionMutationInput": {
+      "model": "string",
+      "generation": "u64",
+      "name": "string",
+      "host_instance": "string",
+      "session_identity": "string"
+    },
+    "SessionCreateInput": {
+      "model": "string",
+      "generation": "u64",
+      "name": "string",
+      "host_instance": "string"
+    },
+    "ModelListInput": {
+      "query": "optional:string",
+      "limit": "optional:u32"
+    },
+    "SearchInput": {
+      "query": "optional:string",
+      "author": "optional:string",
+      "filter": "optional:string",
+      "page": "optional:u32",
+      "limit": "optional:u32"
+    },
+    "InspectInput": {
+      "repository": "string",
+      "revision": "optional:string"
+    },
+    "PackageInput": {
+      "model": "string",
+      "package": "string"
+    },
+    "SourceInput": {
+      "source": "string"
+    },
+    "AcquisitionInput": {
+      "repository": "string",
+      "revision": "string",
+      "representation": "string",
+      "name": "optional:string",
+      "authentication": "optional:RegistryAuthentication",
+      "credential_ref": "optional:string"
+    },
+    "RegistryAuthentication": {
+      "$enum": [
+        "anonymous",
+        "configured"
+      ]
+    },
+    "AcquisitionCancelInput": {
+      "source": "string",
+      "expected_operation_id": "string",
+      "expected_generation": "u64"
+    },
+    "BuildInput": {
+      "model": "string",
+      "quant": "optional:string",
+      "dry_run": "optional:bool",
+      "expected_plan": "optional:string"
+    },
+    "StorageInput": {
+      "model": "string",
+      "include_caches": "optional:bool"
+    },
+    "RemoteRepresentation": {
+      "identity": "string",
+      "format": "string",
+      "precision": "string",
+      "precision_evidence": "string",
+      "file_pattern": "string",
+      "compatibility": "string",
+      "file_count": "u64",
+      "size_bytes": "u64",
+      "size_known": "bool",
+      "provisional": "bool",
+      "local": "json"
+    },
+    "RemoteFile": {
+      "path": "string",
+      "kind": "string",
+      "representation": "string",
+      "size_bytes": "u64",
+      "size_known": "bool"
+    },
+    "RemoteModel": {
+      "provider": "string",
+      "repository": "string",
+      "requested_revision": "string",
+      "resolved_revision": "string",
+      "kind": "string",
+      "kind_evidence": "string",
+      "model_identity": "string",
+      "family_affinity": "string",
+      "family_evidence": "string",
+      "architecture": "string",
+      "base_model": "string",
+      "support_stage": "string",
+      "product_status": "string",
+      "engine_state": "string",
+      "local_source_revision": "bool",
+      "local_package_revision": "bool",
+      "local_source": "bool",
+      "local_package": "bool",
+      "local_related_revision": "bool",
+      "kind_provisional": "bool",
+      "canonical": "bool",
+      "ranking_score": "f64",
+      "provider_rank": "u64",
+      "gated_known": "bool",
+      "gated": "bool",
+      "parameter_count_known": "bool",
+      "parameter_count": "u64",
+      "representations": "array:RemoteRepresentation",
+      "files": "array:RemoteFile"
+    },
+    "SearchResult": {
+      "schema": "string",
+      "authorities": "array:string",
+      "query": "string",
+      "provider_result_count": "u64",
+      "models": "array:RemoteModel"
+    },
+    "PackageDetail": {
+      "model": "string",
+      "package": "Artifact",
+      "profiles": "array:RuntimeProfile"
+    },
+    "Acquisition": {
+      "schema": "string",
+      "operation_id": "string",
+      "generation": "u64",
+      "provider": "string",
+      "repository": "string",
+      "target_id": "string",
+      "family": "string",
+      "revision": "string",
+      "selection_identity": "string",
+      "lifecycle": "string",
+      "health": "string",
+      "current_object": "nullable:string",
+      "active": "bool",
+      "stop_available": "bool",
+      "resume_available": "bool",
+      "reason": "string",
+      "result": "nullable:string",
+      "expected_bytes": "nullable:u64",
+      "committed_bytes": "nullable:u64",
+      "selected_files": "nullable:u64",
+      "completed_files": "nullable:u64",
+      "current_rate_bytes_per_second": "nullable:u64",
+      "rolling_rate_bytes_per_second": "nullable:u64"
+    },
+    "AcquisitionObservation": {
+      "acquisition": "Acquisition"
+    },
+    "RegistryAccounts": {
+      "providers": "array:RegistryAccount",
+      "credential_configuration": "string"
+    },
+    "StorageObservation": {
+      "schema": "string",
+      "rows": "array:json",
+      "logical_bytes": "u64"
+    },
+    "RegistryAccount": {
+      "provider": "string",
+      "auth_state": "string",
+      "account": "string",
+      "credential_source": "string",
+      "cli_present": "bool",
+      "status": "string",
+      "blocker": "string",
+      "credential_ref": "nullable:string",
+      "credential_provisioning": "string"
+    },
+    "LoadedModelEngine": {
+      "profile_identity": "string",
+      "variant": "string",
+      "generation": "u64",
+      "sessions": "u64"
+    },
+    "AcquisitionResumeInput": {
+      "source": "string",
+      "expected_operation_id": "string",
+      "expected_generation": "u64",
+      "authentication": "optional:RegistryAuthentication",
+      "credential_ref": "optional:string"
+    },
+    "OutputChannel": {
+      "$enum": [
+        "final_text",
+        "public_reasoning",
+        "tool_call",
+        "tool_result",
+        "control",
+        "error"
+      ]
+    },
+    "GenerationChannel": {
+      "channel": "OutputChannel",
+      "text": "string",
+      "bytes": "optional:array:u32"
+    },
+    "GenerationMetrics": {
+      "prompt_tokens": "u64",
+      "generated_tokens": "u64",
+      "reasoning_tokens": "u64",
+      "final_tokens": "u64",
+      "stop_reason": "u64",
+      "total_completion_seconds": "f64",
+      "final_position": "u64"
+    },
+    "GenerationResult": {
+      "host_instance": "string",
+      "model": "string",
+      "generation": "u64",
+      "session": "string",
+      "channels": "array:GenerationChannel",
+      "turn_identity": "nullable:string",
+      "complete": "bool",
+      "progress": "optional:Event",
+      "metrics": "optional:GenerationMetrics"
+    },
+    "Acknowledgement": {
+      "host_instance": "string",
+      "acknowledged": "bool",
+      "reason": "string"
+    },
+    "EngineResult": {
+      "host_instance": "string",
+      "engine": "Engine"
+    },
+    "SessionResult": {
+      "host_instance": "string",
+      "session": "Session"
+    },
+    "BuildResult": {
+      "schema": "string",
+      "model": "string",
+      "state": "string",
+      "changed": "bool",
+      "source": "optional:string",
+      "revision": "optional:string",
+      "target": "optional:string",
+      "quant": "optional:string",
+      "backend": "optional:string",
+      "artifact": "optional:string",
+      "profile": "optional:string",
+      "action": "optional:string",
+      "creation_reproducible": "optional:bool",
+      "runtime_binding": "optional:string",
+      "binding_published": "optional:bool",
+      "plan_id": "optional:string"
+    },
+    "JobSummary": {
+      "job_id": "string",
+      "operation": "string",
+      "state": "JobState",
+      "submitted_at_unix_ms": "u64",
+      "updated_at_unix_ms": "u64",
+      "reason": "nullable:string"
+    },
+    "RepresentationKind": {
+      "$enum": [
+        "source",
+        "package"
+      ]
+    },
+    "EvictInput": {
+      "model": "string",
+      "representation": "string",
+      "kind": "RepresentationKind",
+      "dry_run": "optional:bool",
+      "confirm": "optional:bool"
+    },
+    "SourceVerification": {
+      "source": "string",
+      "revision": "string",
+      "payload_identity": "string",
+      "payload_trust": "string",
+      "shards": "u64",
+      "tensors": "u64",
+      "logical_tensor_bytes": "u64",
+      "physical_bytes_read": "u64",
+      "published_identity_reused": "bool"
+    },
+    "PackageVerification": {
+      "model": "string",
+      "package": "string",
+      "checked": "bool",
+      "passed": "bool",
+      "native_status": "i64",
+      "sha256": "string",
+      "digest_status": "string",
+      "format": "string",
+      "tensor_count": "u64",
+      "file_size": "u64",
+      "error_count": "u64",
+      "warning_count": "u64"
+    },
+    "Eviction": {
+      "schema": "string",
+      "changed": "bool",
+      "local": "bool",
+      "logical_bytes": "u64",
+      "allocated_bytes": "u64",
+      "path": "string"
+    },
+    "ProfileScan": {
+      "candidates": "array:ProfileCandidate",
+      "truncated": "bool"
+    },
+    "ProfileCandidate": {
+      "alias": "string",
+      "family": "string",
+      "model": "string",
+      "scope": "string",
+      "artifact_class": "string",
+      "qprofile": "string",
+      "calibration": "string",
+      "path": "string"
+    },
+    "ProfileInput": {
+      "profile": "string"
+    },
+    "ProfileVerification": {
+      "profile": "string",
+      "passed": "bool",
+      "identity_status": "string",
+      "metadata_status": "string",
+      "readiness_status": "string",
+      "status": "string",
+      "reason": "string",
+      "registered_sha256": "string",
+      "current_sha256": "string",
+      "registered_size": "u64",
+      "current_size": "u64"
+    },
+    "ProfileCreateInput": {
+      "model": "string",
+      "package": "string",
+      "alias": "string",
+      "base_profile": "optional:string",
+      "context": "optional:u64"
+    },
+    "ProfileCreated": {
+      "profile": "string",
+      "package": "string",
+      "file_size": "u64",
+      "created": "bool"
+    },
+    "ProfileRemoveInput": {
+      "profile": "string",
+      "expected_package": "string",
+      "confirm": "bool"
+    },
+    "ProfileRemoved": {
+      "profile": "string",
+      "removed": "bool"
+    },
+    "SourceCleanupInput": {
+      "source": "string",
+      "expected_operation_id": "string",
+      "expected_generation": "u64",
+      "stale_locks": "optional:bool",
+      "failed_partials": "optional:bool",
+      "receipts": "optional:bool",
+      "logs": "optional:bool",
+      "provider_cache": "optional:bool",
+      "dry_run": "optional:bool",
+      "confirm": "optional:bool"
+    },
+    "SourceCleanup": {
+      "schema": "string",
+      "target": "string",
+      "status": "string",
+      "dry_run": "bool",
+      "yes": "bool",
+      "delete_candidates": "array:string",
+      "deleted_paths": "u64",
+      "missing": "u64"
+    },
+    "ProfileReadiness": {
+      "$enum": [
+        "ready",
+        "blocked",
+        "incompatible",
+        "unavailable",
+        "unknown"
+      ]
+    },
+    "LastKnownHost": {
+      "host_instance": "string",
+      "status": "HostSnapshot",
+      "observed_at_unix_ms": "u64"
+    }
+  },
+  "operations": [
+    {
+      "operation": "management.capabilities",
+      "kind": "read",
+      "input": "EmptyInput",
+      "output": "Capabilities"
+    },
+    {
+      "operation": "model.list",
+      "kind": "read",
+      "input": "ModelListInput",
+      "output": "ModelList"
+    },
+    {
+      "operation": "model.get",
+      "kind": "read",
+      "input": "ModelInput",
+      "output": "ModelDetail"
+    },
+    {
+      "operation": "engine.list",
+      "kind": "read",
+      "input": "EmptyInput",
+      "output": "EngineList"
+    },
+    {
+      "operation": "engine.load",
+      "kind": "job",
+      "input": "EngineLoadInput",
+      "output": "Job"
+    },
+    {
+      "operation": "engine.unload",
+      "kind": "job",
+      "input": "EngineMutationInput",
+      "output": "Job"
+    },
+    {
+      "operation": "host.get",
+      "kind": "read",
+      "input": "EmptyInput",
+      "output": "HostObservation"
+    },
+    {
+      "operation": "session.list",
+      "kind": "read",
+      "input": "EngineInput",
+      "output": "SessionList"
+    },
+    {
+      "operation": "session.get",
+      "kind": "read",
+      "input": "SessionInput",
+      "output": "SessionDetail"
+    },
+    {
+      "operation": "session.create",
+      "kind": "job",
+      "input": "SessionCreateInput",
+      "output": "Job"
+    },
+    {
+      "operation": "session.fork",
+      "kind": "job",
+      "input": "SessionForkInput",
+      "output": "Job"
+    },
+    {
+      "operation": "session.close",
+      "kind": "job",
+      "input": "SessionMutationInput",
+      "output": "Job"
+    },
+    {
+      "operation": "generation.start",
+      "kind": "job",
+      "input": "GenerationInput",
+      "output": "Job"
+    },
+    {
+      "operation": "generation.cancel",
+      "kind": "job",
+      "input": "GenerationCancelInput",
+      "output": "Job"
+    },
+    {
+      "operation": "job.list",
+      "kind": "read",
+      "input": "ListInput",
+      "output": "JobList"
+    },
+    {
+      "operation": "job.get",
+      "kind": "read",
+      "input": "JobInput",
+      "output": "Job"
+    },
+    {
+      "operation": "observe.events",
+      "kind": "read",
+      "input": "EventsInput",
+      "output": "Events"
+    },
+    {
+      "operation": "model.search",
+      "kind": "read",
+      "input": "SearchInput",
+      "output": "SearchResult"
+    },
+    {
+      "operation": "model.inspect",
+      "kind": "read",
+      "input": "InspectInput",
+      "output": "SearchResult"
+    },
+    {
+      "operation": "model.storage",
+      "kind": "read",
+      "input": "StorageInput",
+      "output": "StorageObservation"
+    },
+    {
+      "operation": "registry.accounts",
+      "kind": "read",
+      "input": "EmptyInput",
+      "output": "RegistryAccounts"
+    },
+    {
+      "operation": "package.get",
+      "kind": "read",
+      "input": "PackageInput",
+      "output": "PackageDetail"
+    },
+    {
+      "operation": "acquisition.get",
+      "kind": "read",
+      "input": "SourceInput",
+      "output": "AcquisitionObservation"
+    },
+    {
+      "operation": "acquisition.start",
+      "kind": "job",
+      "input": "AcquisitionInput",
+      "output": "Job"
+    },
+    {
+      "operation": "acquisition.resume",
+      "kind": "job",
+      "input": "AcquisitionResumeInput",
+      "output": "Job"
+    },
+    {
+      "operation": "acquisition.cancel",
+      "kind": "job",
+      "input": "AcquisitionCancelInput",
+      "output": "Job"
+    },
+    {
+      "operation": "build.start",
+      "kind": "job",
+      "input": "BuildInput",
+      "output": "Job"
+    },
+    {
+      "operation": "session.reset",
+      "kind": "job",
+      "input": "SessionMutationInput",
+      "output": "Job"
+    },
+    {
+      "operation": "source.verify",
+      "kind": "job",
+      "input": "SourceInput",
+      "output": "Job"
+    },
+    {
+      "operation": "package.verify",
+      "kind": "job",
+      "input": "PackageInput",
+      "output": "Job"
+    },
+    {
+      "operation": "model.evict",
+      "kind": "job",
+      "input": "EvictInput",
+      "output": "Job"
+    },
+    {
+      "operation": "profile.scan",
+      "kind": "job",
+      "input": "EmptyInput",
+      "output": "Job"
+    },
+    {
+      "operation": "profile.verify",
+      "kind": "job",
+      "input": "ProfileInput",
+      "output": "Job"
+    },
+    {
+      "operation": "profile.create",
+      "kind": "job",
+      "input": "ProfileCreateInput",
+      "output": "Job"
+    },
+    {
+      "operation": "profile.remove",
+      "kind": "job",
+      "input": "ProfileRemoveInput",
+      "output": "Job"
+    },
+    {
+      "operation": "source.cleanup",
+      "kind": "job",
+      "input": "SourceCleanupInput",
+      "output": "Job"
+    }
+  ],
+  "job_results": {
+    "engine.load": [
+      "EngineResult"
+    ],
+    "engine.unload": [
+      "EngineResult",
+      "Acknowledgement"
+    ],
+    "session.create": [
+      "SessionResult"
+    ],
+    "session.fork": [
+      "SessionResult"
+    ],
+    "session.close": [
+      "Acknowledgement"
+    ],
+    "session.reset": [
+      "Acknowledgement"
+    ],
+    "generation.start": [
+      "GenerationResult"
+    ],
+    "generation.cancel": [
+      "Acknowledgement"
+    ],
+    "acquisition.start": [
+      "AcquisitionObservation"
+    ],
+    "acquisition.resume": [
+      "AcquisitionObservation"
+    ],
+    "acquisition.cancel": [
+      "AcquisitionObservation"
+    ],
+    "build.start": [
+      "BuildResult"
+    ],
+    "source.verify": [
+      "SourceVerification"
+    ],
+    "package.verify": [
+      "PackageVerification"
+    ],
+    "model.evict": [
+      "Eviction"
+    ],
+    "profile.verify": [
+      "ProfileVerification"
+    ],
+    "profile.create": [
+      "ProfileCreated"
+    ],
+    "profile.remove": [
+      "ProfileRemoved"
+    ],
+    "source.cleanup": [
+      "SourceCleanup"
+    ],
+    "profile.scan": [
+      "ProfileScan"
+    ]
+  },
+  "producer_schemas": {
+    "request_schema_path": "docs/contracts/schemas/product-management-request.v2.schema.json",
+    "request_schema_sha256": "72c576995acaf89504532e30bc09bdd51d8cc655f7f7aa04848f916a25ce3667",
+    "response_schema_path": "docs/contracts/schemas/product-management-response.v2.schema.json",
+    "response_schema_sha256": "7c3dda5e09a45d64f46e72ba3710e2635cee5af1921db291abf89439d9df32b6"
+  }
+}

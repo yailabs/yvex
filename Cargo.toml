@@ -19,7 +19,7 @@ name = "rust_structure"
 path = "tests/rust_structure.rs"
 
 [workspace]
-exclude = ["build/external/replai-source"]
+exclude = ["build/external/replai-source", "sdk/rust"]
 resolver = "3"
 
 [dependencies]

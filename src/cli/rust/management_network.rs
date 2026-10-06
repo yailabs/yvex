@@ -76,6 +76,29 @@ impl Service {
             ("GET", "/v1/pairing/status") if uid.is_none() => self
                 .store
                 .status(&bearer(request.authorization.as_deref())?),
+            ("POST", "/v1/owner/bootstrap") if uid.is_none() => {
+                let input =
+                    serde_json::from_slice(&request.body).map_err(|_| "invalid_owner_bootstrap")?;
+                self.store.claim_owner(input)
+            }
+            ("GET", "/v1/owner/status") if uid.is_none() => self
+                .store
+                .owner_status(&bearer(request.authorization.as_deref())?),
+            ("GET", "/v1/owner/connections") if uid.is_none() => self
+                .store
+                .owner_connections(&bearer(request.authorization.as_deref())?),
+            ("POST", "/v1/owner/actions") if uid.is_none() => {
+                let input =
+                    serde_json::from_slice(&request.body).map_err(|_| "invalid_owner_action")?;
+                self.store
+                    .owner_action(&bearer(request.authorization.as_deref())?, input)
+            }
+            ("GET", path) if uid.is_none() && path.starts_with("/v1/owner/actions/") => {
+                self.store.owner_receipt(
+                    &bearer(request.authorization.as_deref())?,
+                    path.trim_start_matches("/v1/owner/actions/"),
+                )
+            }
             ("POST", "/v1/management") => {
                 if request
                     .expected_device
@@ -474,6 +497,15 @@ pub(crate) fn dispatch(invocation: &Invocation<'_>) -> Result<Output> {
                 "display_name":"YVEX","protocol":"yvex.management.v2",
                 "pairing_available":store.available()?})
         }
+        "management.owner.invite" => store.owner_invite(
+            invocation
+                .value("--endpoint")
+                .ok_or("owner_endpoint_required")?,
+            invocation
+                .value("--output")
+                .ok_or("invitation_output_required")?,
+        )?,
+        "management.owner.revoke" => store.revoke_owner(&invocation.positionals[0])?,
         "management.pairing.open" => store.open_window()?,
         "management.pairing.list" => store.list()?,
         "management.pairing.approve" => store.decide(&invocation.positionals[0], true)?,

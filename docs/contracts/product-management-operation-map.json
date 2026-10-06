@@ -1105,6 +1105,18 @@
       "class": "cli_interaction",
       "public_operation": null,
       "reason": "Local native service provisioning/approval; remote clients may request pairing but cannot approve their own grant."
+    },
+    {
+      "operation": "management.owner.invite",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Initial local installation bootstrap issues a private single-use invitation; remote ownership claims use the separate pinned HTTPS ownership contract, never anonymous self-approval."
+    },
+    {
+      "operation": "management.owner.revoke",
+      "class": "cli_interaction",
+      "public_operation": null,
+      "reason": "Local installation recovery can revoke the owner. Authenticated remote administration uses the separately versioned ownership API, not an ordinary product-management grant."
     }
   ]
 }

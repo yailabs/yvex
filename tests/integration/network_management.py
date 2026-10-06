@@ -29,6 +29,7 @@ def main():
             env.pop(key, None)
         state = root / 'service'
         process = None
+        host_process = None
         certificate = None
         server = None
         service_socket = None
@@ -140,6 +141,43 @@ def main():
                           'Content-Length: 0\r\n']:
                 assert exchange('GET', '/v1/identity', credential=token, extra=extra)[0] == 403
             assert operation('model.list', {'token': 'not-an-input'}, credential=token)[1]['status'] == 'refused'
+            # Same persistent management service keeps historical Host truth separately from admission.
+            assert operation('host.get', credential=token)[1]['data']['last_known'] is None
+            with socket.socket() as reservation:
+                reservation.bind(('127.0.0.1', 0))
+                host_port = reservation.getsockname()[1]
+            host_process = subprocess.Popen([str(BINARY), 'serve', '--workers', '1', '--openai-port', str(host_port)],
+                                            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                live = operation('host.get', credential=token)[1]['data']
+                if live['state'] == 'running':
+                    break
+                assert host_process.poll() is None, host_process.stderr.read()
+                time.sleep(.03)
+            assert live['state'] == 'running' and live['host_instance'] is not None
+            assert live['last_known'] is None
+            stopped = subprocess.run([str(BINARY), 'host', 'stop'], env=env, text=True,
+                                     capture_output=True, timeout=20)
+            assert stopped.returncode == 0, stopped.stderr
+            host_process.wait(timeout=15)
+            host_process = None
+            historical = operation('host.get', credential=token)[1]['data']
+            assert historical['state'] == 'stopped'
+            assert historical['host_instance'] is None and historical['status'] is None
+            assert historical['last_known']['host_instance'] == live['host_instance']
+            assert historical['last_known']['status'] == live['status']
+            assert historical['last_known']['observed_at_unix_ms'] > 0
+            assert operation('engine.list', credential=token)[1]['status'] != 'ok'
+            _, refused_load = operation('engine.load', {'host_instance': live['host_instance'],
+                'profile': 'missing-fixture'}, credential=token)
+            for _ in range(100):
+                _, load_receipt = operation('job.get', {'job_id': refused_load['data']['job_id']}, token)
+                if load_receipt['data']['state'] not in ['accepted', 'running']:
+                    break
+                time.sleep(.02)
+            assert load_receipt['data']['state'] == 'failed'
+            assert operation('host.get', credential=token)[1]['data']['last_known'] == historical['last_known']
             job_identity = secrets.token_hex(32)
             # Existing source owner refuses a missing exact model; receipt still provides recovery.
             _, submitted = operation('source.verify', {'source': 'missing-fixture'}, token,
@@ -186,11 +224,14 @@ def main():
             print(json.dumps({'result': 'PASS', 'evidence_class': 'generated_loopback_TLS_and_same_user_UDS',
                               'controls': ['public identity only', 'closed/pending/approved pairing',
                                            'strict framing', 'wrong credential', 'private stable TLS identity',
-                                           '36 shared operations', 'durable receipt restart',
+                                           '36 shared operations', 'last-known Host is historical, never admission', 'durable receipt restart',
                                            'transport-separated receipt access', 'remote revoke/local continuity',
                                            '8-connection bound', 'absolute TLS deadline', 'unsafe storage refusal'],
                               'operator_state_touched': False}))
         finally:
+            if host_process is not None:
+                host_process.terminate()
+                host_process.wait(timeout=15)
             stop()
 
 

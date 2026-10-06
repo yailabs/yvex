@@ -187,6 +187,7 @@ pub(crate) fn profile_json(profile: &raw::yvex_model_runtime_profile_fact) -> Va
         "backend": ffi::text(&profile.backend), "engine_kind": ffi::text(&profile.engine_kind),
         "strategy": ffi::text(&profile.execution_strategy), "context": profile.context_capacity,
         "launchable": profile.launchable != 0, "blocker": ffi::text(&profile.blocker),
+        "readiness": ffi::text(&profile.readiness), "compatibility": ffi::text(&profile.compatibility),
         "capabilities": { "input_mask": profile.capabilities.input_kinds,
             "output_mask": profile.capabilities.output_kinds, "properties": profile.capabilities.execution_properties,
             "maximum_input_parts": profile.capabilities.maximum_input_parts } })

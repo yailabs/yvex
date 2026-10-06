@@ -1,0 +1,19 @@
+{
+  "schema": "platform.sdk.yvex.finite.remote.v1",
+  "source_revision": "803dd98d4c54d7a26cb3c08def6b350be51b7179",
+  "producer_operation": "finite.decision.execute",
+  "producer_entry_operation": "finite.remote.protocol",
+  "request_schema": "yvex.finite.request.v1",
+  "response_schema": "yvex.finite.response.v1",
+  "request_schema_path": "docs/contracts/schema/finite-request-v1.schema.json",
+  "response_schema_path": "docs/contracts/schema/finite-response-v1.schema.json",
+  "request_schema_sha256": "4fd1958ce1787b0de9be1d14ff80b95f155763c955e5bb5639d70eb6d712072e",
+  "response_schema_sha256": "c292c20ca93711977cc6d1b66d996dcc8c369735e3b729eb27c14c11f77ed4cf",
+  "transport": "restricted_ssh",
+  "required_grant": "finite-decision",
+  "request_line_max_bytes": 32768,
+  "client_response_max_bytes": 32768,
+  "automatic_retry": false,
+  "score_semantics": "model_logit_and_relative_uncalibrated_candidate_probability",
+  "posture": "client_contract_only_runtime_qualification_separate"
+}

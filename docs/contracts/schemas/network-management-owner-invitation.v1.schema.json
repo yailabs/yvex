@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "$id": "yvex.management.owner.invitation.v1",
+  "required": [
+    "schema",
+    "endpoint",
+    "device_identity",
+    "invitation_id",
+    "invitation_secret",
+    "expires_at_unix_ms"
+  ],
+  "properties": {
+    "schema": {
+      "const": "yvex.management.owner.invitation.v1"
+    },
+    "endpoint": {
+      "type": "string",
+      "pattern": "^https://",
+      "maxLength": 2048
+    },
+    "device_identity": {
+      "type": "string",
+      "pattern": "^tls-sha256:[0-9a-f]{64}$"
+    },
+    "invitation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "invitation_secret": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "expires_at_unix_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    }
+  }
+}

@@ -40,8 +40,8 @@ RECORDS = {
         "include/yvex/content.h", "YVEX_MODEL_CAPABILITY_SCHEMA_V1", 1, 40,
         "5fa40648f26a80705e537cabb1e5aab46f9313628985ad45f58875a69ed5f4f6"),
     "yvex_model_runtime_profile_fact": (
-        "include/yvex/catalog.h", "YVEX_MODEL_RUNTIME_PROFILE_SCHEMA_CURRENT", 2, 13152,
-        "1e143b2978d7b53afede41832f76f8f18ddb574909c9f638a5c10abfc1d0172a"),
+        "include/yvex/catalog.h", "YVEX_MODEL_RUNTIME_PROFILE_SCHEMA_CURRENT", 3, 13216,
+        "e9a5ab7add8cfd2ca8ae0759d634f02a7f9dfd506f82b1913e397dd8d0652653"),
     "yvex_model_registry_entry": (
         "include/yvex/registry.h", "YVEX_MODEL_REGISTRY_ENTRY_SCHEMA_CURRENT", 1, 304,
         "5e137d2540df9dfcfb8d6ec7402cf0a0480b8aa00495f2b93869fc7fa869263f"),

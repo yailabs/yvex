@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "yvex.management.owner.action-receipt.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "scope",
+    "owner_ref",
+    "request_id",
+    "action",
+    "target_ref",
+    "revision",
+    "posture",
+    "reason"
+  ],
+  "properties": {
+    "schema": {
+      "const": "yvex.management.owner.action-receipt.v1"
+    },
+    "scope": {
+      "const": "pairing-administration"
+    },
+    "owner_ref": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "pairing_open",
+        "pairing_approve",
+        "pairing_revoke",
+        "owner_revoke"
+      ]
+    },
+    "target_ref": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "posture": {
+      "type": "string",
+      "enum": [
+        "applied",
+        "refused"
+      ]
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z_]+$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

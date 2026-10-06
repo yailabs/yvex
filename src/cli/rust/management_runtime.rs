@@ -5,7 +5,35 @@ use crate::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::time::{Duration, Instant};
+use std::{
+    sync::{Mutex, OnceLock},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
+
+// A bounded observation cache, never an execution or admission source.
+// The socket fence prevents a changed local endpoint inheriting another Host.
+static LAST_HOST: OnceLock<Mutex<Option<(String, Value)>>> = OnceLock::new();
+fn retained_host() -> Option<Value> {
+    let socket = ffi::default_socket().ok()?;
+    let cache = LAST_HOST.get_or_init(|| Mutex::new(None)).lock().ok()?;
+    cache
+        .as_ref()
+        .filter(|(path, _)| path == &socket)
+        .map(|(_, value)| value.clone())
+}
+fn retain_host(identity: &str, status: &Value) {
+    let Ok(socket) = ffi::default_socket() else {
+        return;
+    };
+    let Ok(mut cache) = LAST_HOST.get_or_init(|| Mutex::new(None)).lock() else {
+        return;
+    };
+    *cache = Some((
+        socket,
+        json!({"host_instance":identity,"status":status,
+        "observed_at_unix_ms":SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64}),
+    ));
+}
 
 type Result<T> = std::result::Result<T, Error>;
 pub(crate) fn failure(reason: &str) -> Error {
@@ -199,7 +227,7 @@ pub(crate) fn read(operation: &str, input: &Value) -> Result<Value> {
                     .is_some_and(|p| !std::path::Path::new(&p).exists());
                 return Ok(json!({
                     "state":if stopped {"stopped"} else {"unavailable"},
-                    "status":null,"host_instance":null,"reason":e.to_string()
+                    "status":null,"host_instance":null,"reason":e.to_string(),"last_known":retained_host()
                 }));
             }
         };
@@ -209,9 +237,11 @@ pub(crate) fn read(operation: &str, input: &Value) -> Result<Value> {
         if reply.kind != raw::yvex_client_message_kind_YVEX_CLIENT_MESSAGE_STATUS {
             return Err(failure("invalid_host_response"));
         }
+        let status = client::HostStatus::from_snapshot(reply.runtime).json();
+        retain_host(&id, &status);
         return Ok(json!({
             "state":"running","host_instance":id,
-            "status":client::HostStatus::from_snapshot(reply.runtime).json(),"reason":null
+            "status":status,"reason":null,"last_known":null
         }));
     }
     let (mut c, id) = connection(None)?;

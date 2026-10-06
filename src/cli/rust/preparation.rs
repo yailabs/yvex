@@ -10,6 +10,7 @@ use crate::{
     registry::Invocation,
 };
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn request<'a>(invocation: &'a Invocation<'_>) -> Request<'a> {
@@ -150,6 +151,59 @@ fn publish_profile(view: &View, imatrix: Option<&str>) -> Result<()> {
 }
 // Shared product composition; both the CLI and public management consume this owner.
 pub(crate) fn prepare_model(selector: &str, request: Request<'_>) -> Result<Value> {
+    prepare_model_expected(selector, request, None)
+}
+fn seal_plan(mut plan: Value, model: &ffi::ModelSnapshot, expected: Option<&str>) -> Result<Value> {
+    let sources: Vec<_> = model
+        .sources
+        .iter()
+        .map(|source| {
+            json!([
+                ffi::text(&source.repository),
+                ffi::text(&source.revision),
+                ffi::text(&source.digest)
+            ])
+        })
+        .collect();
+    let packages: Vec<_> = model
+        .artifacts
+        .iter()
+        .map(|(artifact, _)| ffi::text(&artifact.identity))
+        .collect();
+    let profiles: Vec<_> = model
+        .profiles
+        .iter()
+        .map(|profile| {
+            json!([
+                ffi::text(&profile.alias),
+                ffi::text(&profile.artifact_identity),
+                ffi::text(&profile.runtime_binding),
+                ffi::text(&profile.backend),
+                ffi::text(&profile.execution_strategy),
+                profile.context_capacity
+            ])
+        })
+        .collect();
+    let lineage = json!({"plan":plan,"sources":sources,"packages":packages,"profiles":profiles});
+    let identity = format!("{:x}", Sha256::digest(serde_json::to_vec(&lineage)?));
+    if expected.is_some_and(|expected| expected != identity) {
+        return Err(ffi::Error {
+            code: raw::yvex_status_YVEX_ERR_STATE,
+            owner: "model.prepare.stale_plan".into(),
+            message: "build_plan_changed_review_again".into(),
+        }
+        .into());
+    }
+    plan["plan_id"] = json!(identity);
+    Ok(plan)
+}
+// The comparison is inside the existing source-preparation lease, before verify,
+// compilation or profile publication. It is not a second scheduler/reservation.
+pub(crate) fn prepare_model_expected(
+    selector: &str,
+    request: Request<'_>,
+    expected: Option<&str>,
+) -> Result<Value> {
     let _lease = ffi::preparation::lock(request.root, selector)?;
     let library = ffi::Library::open(request.root, request.registry)?;
     let mut selected = None;
@@ -175,8 +229,12 @@ pub(crate) fn prepare_model(selector: &str, request: Request<'_>) -> Result<Valu
     let selector = catalog::selector(&model);
     if model.entry.profile_launchable != 0 && request.quant.is_none() && request.imatrix.is_none() {
         ffi::preparation::verify_ready(&library, index, request)?;
-        return Ok(json!({"schema": "yvex.model.prepare.v1", "model": selector,
-            "state": "READY", "changed": false}));
+        return seal_plan(
+            json!({"schema": "yvex.model.prepare.v1", "model": selector,
+            "state": "READY", "changed": false}),
+            &model,
+            expected,
+        );
     }
     let dry = request.dry;
     let imatrix = request.imatrix;
@@ -198,8 +256,9 @@ pub(crate) fn prepare_model(selector: &str, request: Request<'_>) -> Result<Valu
         },
     })?;
     let view = context.view()?;
+    let reviewed = seal_plan(plan(&view, &selector), &model, expected)?;
     if dry {
-        return Ok(plan(&view, &selector));
+        return Ok(reviewed);
     }
     context.verify()?;
     if !view.rebind && compile(&mut context, imatrix, index)? {

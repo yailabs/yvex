@@ -625,6 +625,8 @@ static int test_logical_model_library(void)
                      "historical profiles aggregate without creating false readiness");
     profile = yvex_model_library_profile_at(library, 0u, 0u);
     YVEX_TEST_ASSERT(profile && !profile->launchable &&
+                         !strcmp(profile->readiness, "incompatible") &&
+                         !strcmp(profile->compatibility, "malformed-binding") &&
                          strstr(profile->blocker, "malformed") != NULL,
                      "structurally present but malformed bindings remain historical only");
     YVEX_TEST_ASSERT(!strcmp(logical->family, "deepseek4") &&

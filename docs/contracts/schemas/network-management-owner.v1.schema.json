@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "yvex.management.owner.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "scope",
+    "owner_ref",
+    "client_name",
+    "posture",
+    "revision"
+  ],
+  "properties": {
+    "schema": {
+      "const": "yvex.management.owner.v1"
+    },
+    "scope": {
+      "const": "pairing-administration"
+    },
+    "owner_ref": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "client_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "posture": {
+      "type": "string",
+      "enum": [
+        "approved",
+        "revoked"
+      ]
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    }
+  }
+}

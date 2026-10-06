@@ -1,0 +1,49 @@
+{
+  "schema": "platform.sdk.yvex.finite.v1",
+  "source_revision": "67a7905ea9deb98b0704629a1f979634e19007fb",
+  "header": "yvex/finite_decision_producer.h",
+  "symbol": "yvex_finite_producer_execute_local",
+  "producer_schema": 1,
+  "limits": {
+    "MAX_CANDIDATES": 8,
+    "QUESTION_CAP": 256,
+    "CONTEXT_CAP": 512,
+    "CANDIDATE_TEXT_CAP": 128,
+    "ID_CAP": 128
+  },
+  "records": {
+    "yvex_error": {
+      "header": "yvex/core.h",
+      "size_64bit": 356,
+      "declaration_sha256": "60225d16431814a6e5da04d4f71dbb7378dd6d9b59cb75d4db9f24824bcd8729"
+    },
+    "yvex_finite_producer_candidate": {
+      "size_64bit": 256,
+      "declaration_sha256": "ffe0d8a5c40e456d432f05f25167b6e4ffc77d5c625ea94079525bdd2a60d322"
+    },
+    "yvex_finite_producer_candidate_result": {
+      "size_64bit": 144,
+      "declaration_sha256": "eddc9efbaf5c21ad146f4f942be11d09452f939b9d87dd94c9875e2e9afa883c"
+    },
+    "yvex_finite_producer_request": {
+      "size_64bit": 2968,
+      "declaration_sha256": "d53dc10d8ed4f5acce32e6a61c9b911bd30a98736dc2da625068a1471a8bf322"
+    },
+    "yvex_finite_producer_result": {
+      "size_64bit": 1848,
+      "declaration_sha256": "bf73f148f7fa52291eeee5e6c8daf91b55cb7a452289179b0c3fdf8c7beb8cea"
+    }
+  },
+  "enums": {
+    "yvex_status": {
+      "header": "yvex/core.h",
+      "declaration_sha256": "6ac744d9dc406e50069cff71e93881307471eb573400b7e6126bbe0c5e8b69d8"
+    },
+    "yvex_finite_producer_score_kind": {
+      "declaration_sha256": "210e6fb5376a0f06d479582b84303234f159d644c317800eff8b54bfcca04ebd"
+    }
+  },
+  "error_limits": {"YVEX_ERROR_WHERE_CAP": 96, "YVEX_ERROR_MESSAGE_CAP": 256},
+  "score_semantics": "model_logit_and_relative_uncalibrated_candidate_probability",
+  "posture": "client_contract_only_runtime_qualification_separate"
+}

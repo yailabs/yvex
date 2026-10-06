@@ -102,7 +102,7 @@ Pairing status is:
 
 Postures are `pending`, `approved`, `revoked`, `expired` and `refused`. Expiry is
 the approval-request deadline, not a silently expiring approved grant. Approved
-grants remain until explicit local revocation. A lost pairing response is recovered
+grants remain until explicit local or authenticated owner revocation. A lost pairing response is recovered
 by authenticated `GET /v1/pairing/status`; submitting the same digest while its
 request exists is idempotent. Status requires `Authorization: Bearer <64hex>`.
 The producer never returns the bearer or infers its ownership from a request ID.
@@ -111,8 +111,8 @@ A local `management pairing-open` action opens a 120-second request window.
 Startup never opens it. Pending requests are bounded to 32; approved/revoked
 records to 128. `pairing-list` shows exact request identity and client label.
 `pairing-approve REQUEST_ID` approves one unexpired pending request;
-`pairing-revoke REQUEST_ID` revokes one exact record. These actions are local
-operator actions and have no remote self-approval endpoint. A remote label,
+`pairing-revoke REQUEST_ID` revokes one exact record. These CLI actions remain local. The separately bootstrapped ownership API below
+authorizes remote pairing administration; ordinary clients have no self-approval endpoint. A remote label,
 LAN origin or discovery result never authorizes itself. Revocation is reobserved
 for every new request; already admitted owner work retains normal recovery rules.
 
@@ -178,3 +178,60 @@ approval window; `pairing-list` and `pairing-approve REQUEST_ID` authorize one
 identified client. `pairing-revoke REQUEST_ID` prevents its future requests.
 No pairing command installs a service, changes a firewall, starts an Engine or
 modifies a YAI Case. A deployment supervisor may own process startup separately.
+
+## Headless ownership bootstrap
+
+A server installation may explicitly issue a single-use owner invitation file with
+`management owner-invite --endpoint https://HOST:PORT --output /private/invite.json`.
+The file is mode 0600 and contains the exact TLS service identity, a random
+256-bit invitation secret and a ten-minute deadline. Standard output contains
+only the invitation identity/deadline and destination path. The installation owner
+must deliver this file through a trusted channel; discovering a LAN service does
+not establish ownership. No invitation is created at service startup.
+
+The native public SDK inspects the file without exposing its secret to the
+renderer. Explicit operator confirmation prepares a separate protected owner
+credential and then claims the invitation over the pinned HTTPS connection.
+`POST /v1/owner/bootstrap` consumes it once for that exact client credential hash.
+A lost response is recovered with authenticated `GET /v1/owner/status`, never an
+automatic second claim. Owner scope is `pairing-administration`, not
+`product-management`, inference permission or YAI authority. Existing management
+clients do not become owners. An owner still explicitly approves each ordinary
+client connection.
+
+Once claimed, authenticated owner endpoints provide the current pairing ledger
+(`/v1/owner/connections`) and revision-fenced actions (`/v1/owner/actions`) for
+opening a bounded request window, approving or revoking an exact client, and
+revoking the owner credential. Every action supplies an exact request identity
+and expected ledger revision. The receipt is durably retained in the same ledger
+transaction as its change. Its authenticated observation endpoint is
+`GET /v1/owner/actions/REQUEST_ID`; loss does not authorize blind redispatch.
+Ordinary product-management bearers cannot call these administration endpoints.
+Revoked owners can observe their own status/receipts but cannot administer peers.
+
+The local installation owner can revoke an owner through
+`management owner-revoke CREDENTIAL_HASH`; issuing another bootstrap invitation
+requires that no active owner remains. TLS certificate rotation stays an explicit
+new trust boundary. Neither ownership claim, approval nor revocation starts a
+computational Host, loads a model or changes a YAI Case. This is an explicit
+installation bootstrap, not zero-touch enrollment.
+
+### Qualification and client recovery
+
+`tests/integration/network_ownership.py` qualifies an actual disposable TLS service,
+private invitation, wrong-proof refusal, separate scopes, remote explicit approval,
+revision refusal, retained receipts and both revocations. With
+`YVEX_SDK_CONNECTIONS_EXAMPLE` it uses the canonical public SDK and the actual OS
+protected credential store, restarting the client process for every operation and
+deleting only generated test credentials afterward. These are controlled local
+service proofs, not DGX/operator enrollment or human acceptance.
+
+The SDK's `ConnectionManager` exposes invitation inspection/import, owner claim,
+status, connections, revision-fenced actions, exact receipt observation and local
+forget. Owner profiles remain separate from product clients. Invitation secrets
+and bearer material never enter TypeScript or ordinary profile metadata. A lost
+claim stays `claiming`; another call observes status. A lost action remains in
+`pending_requests`; another call observes its exact receipt. An unknown receipt
+is uncertainty, not permission to dispatch again. Owner receipts retain up to 256
+identities; capacity exhaustion refuses rather than recycling them. Local recovery
+can revoke an owner and issue a fresh invitation without deleting model/runtime data.

@@ -10226,6 +10226,83 @@
       "summary": "Revoke one exact management client grant.",
       "test_owner": "tests/integration/network_management.py",
       "visibility": "product-default"
+    },
+    {
+      "adapter_argv": [
+        "owner-invite"
+      ],
+      "adapter_id": "management",
+      "architectural_plane": "System",
+      "arguments": [],
+      "command_path": [
+        "management",
+        "owner-invite"
+      ],
+      "documentation_owner": "docs/contracts/network-management.md",
+      "help_group": "Security",
+      "lane": "offline-engine",
+      "operation_id": "management.owner.invite",
+      "flags": [
+        {
+          "name": "--state-dir",
+          "description": "Private native management service directory.",
+          "takes_value": true,
+          "value_type": "path"
+        },
+        {
+          "name": "--endpoint",
+          "description": "Advertised HTTPS management origin for this installation.",
+          "takes_value": true,
+          "value_type": "text"
+        },
+        {
+          "name": "--output",
+          "description": "New owner-only invitation file; its secret is not printed.",
+          "takes_value": true,
+          "value_type": "path"
+        }
+      ],
+      "side_effects": "local management service and explicit credential-digest approval; no YAI authority",
+      "summary": "Create a private one-use headless owner invitation.",
+      "test_owner": "tests/integration/network_ownership.py",
+      "visibility": "product-default"
+    },
+    {
+      "adapter_argv": [
+        "owner-revoke"
+      ],
+      "adapter_id": "management",
+      "architectural_plane": "System",
+      "arguments": [
+        {
+          "name": "request_id",
+          "value_type": "text",
+          "required": true,
+          "multiplicity": "one",
+          "validator": "syntax.text",
+          "completion_provider": "none"
+        }
+      ],
+      "command_path": [
+        "management",
+        "owner-revoke"
+      ],
+      "documentation_owner": "docs/contracts/network-management.md",
+      "help_group": "Security",
+      "lane": "offline-engine",
+      "operation_id": "management.owner.revoke",
+      "flags": [
+        {
+          "name": "--state-dir",
+          "description": "Private native management service directory.",
+          "takes_value": true,
+          "value_type": "path"
+        }
+      ],
+      "side_effects": "local management service and explicit credential-digest approval; no YAI authority",
+      "summary": "Revoke an exact remote pairing administrator.",
+      "test_owner": "tests/integration/network_ownership.py",
+      "visibility": "product-default"
     }
   ],
   "removed_paths": [

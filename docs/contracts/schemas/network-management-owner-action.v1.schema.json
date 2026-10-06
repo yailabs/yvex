@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "yvex.management.owner.action.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "request_id",
+    "expected_revision",
+    "action",
+    "target_ref"
+  ],
+  "properties": {
+    "schema": {
+      "const": "yvex.management.owner.action.v1"
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "expected_revision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "pairing_open",
+        "pairing_approve",
+        "pairing_revoke",
+        "owner_revoke"
+      ]
+    },
+    "target_ref": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "pairing_open"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "target_ref": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "target_ref": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  ]
+}

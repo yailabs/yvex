@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "$id": "yvex.management.owner.bootstrap.v1",
+  "required": [
+    "schema",
+    "invitation_secret",
+    "credential_hash",
+    "client_name"
+  ],
+  "properties": {
+    "schema": {
+      "const": "yvex.management.owner.bootstrap.v1"
+    },
+    "invitation_secret": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "credential_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "client_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    }
+  }
+}

@@ -238,7 +238,8 @@ fn dispatch(
                 match operation {
                     "management.product.protocol" => management_product::protocol(invocation),
                     op if op.starts_with("management.network.")
-                        || op.starts_with("management.pairing.") => {
+                        || op.starts_with("management.pairing.")
+                        || op.starts_with("management.owner.") => {
                         management_network::dispatch(invocation)
                     }
                     "management.product.worker" => management_product::worker(invocation),

@@ -209,8 +209,9 @@ const yvex_local_package_record *yvex_local_catalog_package_at(
 #define YVEX_MODEL_LIBRARY_REASON_CAP 192u
 #define YVEX_MODEL_RUNTIME_PROFILE_SCHEMA_V1 1u
 #define YVEX_MODEL_RUNTIME_PROFILE_SCHEMA_V2 2u
+#define YVEX_MODEL_RUNTIME_PROFILE_SCHEMA_V3 3u
 #define YVEX_MODEL_RUNTIME_PROFILE_SCHEMA_CURRENT \
-    YVEX_MODEL_RUNTIME_PROFILE_SCHEMA_V2
+    YVEX_MODEL_RUNTIME_PROFILE_SCHEMA_V3
 
 /* A model-library snapshot groups physical and launch facts under one exact logical identity.
  * It owns only copied catalog metadata; artifacts, profiles, engines, and source payloads retain
@@ -274,6 +275,9 @@ typedef struct {
     int launchable;
     char blocker[YVEX_MODEL_LIBRARY_REASON_CAP];
     yvex_model_capability_summary capabilities;
+    /* v3: producer admission classification; never derive readiness from prose. */
+    char readiness[32];
+    char compatibility[32];
 } yvex_model_runtime_profile_fact;
 
 int yvex_model_library_open(yvex_model_library **out,

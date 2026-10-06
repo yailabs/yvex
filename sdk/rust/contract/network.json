@@ -1,0 +1,190 @@
+{
+  "authority": "YVEX docs/contracts/network-management.md; safe connection registry is SDK-owned",
+  "types": {
+    "IdentityObservation": {
+      "schema": "string",
+      "device_identity": "string",
+      "display_name": "string",
+      "protocol": "string",
+      "pairing_available": "bool"
+    },
+    "HostCandidate": {
+      "endpoint": "string",
+      "identity": "IdentityObservation",
+      "certificate_sha256": "string"
+    },
+    "PairingPosture": {
+      "$enum": [
+        "pending",
+        "approved",
+        "revoked",
+        "expired",
+        "refused"
+      ]
+    },
+    "PairingObservation": {
+      "schema": "string",
+      "request_id": "string",
+      "posture": "PairingPosture",
+      "scope": "string",
+      "expires_at_unix_ms": "u64",
+      "reason": "nullable:string"
+    },
+    "ConnectionTransport": {
+      "$enum": [
+        "https",
+        "local"
+      ]
+    },
+    "ConnectionPosture": {
+      "$enum": [
+        "unpaired",
+        "pending",
+        "approved",
+        "revoked",
+        "expired",
+        "refused"
+      ]
+    },
+    "ConnectionProfile": {
+      "profile_ref": "string",
+      "transport": "ConnectionTransport",
+      "endpoint": "string",
+      "device_identity": "string",
+      "peer_identity": "string",
+      "display_name": "string",
+      "client_name": "string",
+      "pairing_posture": "ConnectionPosture",
+      "expires_at_unix_ms": "nullable:u64"
+    },
+    "DiscoveredHost": {
+      "service_name": "string",
+      "endpoint": "string",
+      "display_name": "string",
+      "advertised_device_identity": "nullable:string",
+      "trusted": "bool"
+    },
+    "OwnerPosture": {
+      "$enum": [
+        "approved",
+        "revoked"
+      ]
+    },
+    "OwnerProfilePosture": {
+      "$enum": [
+        "prepared",
+        "claiming",
+        "approved",
+        "revoked"
+      ]
+    },
+    "OwnerActionKind": {
+      "$enum": [
+        "pairing_open",
+        "pairing_approve",
+        "pairing_revoke",
+        "owner_revoke"
+      ]
+    },
+    "OwnerActionPosture": {
+      "$enum": [
+        "applied",
+        "refused"
+      ]
+    },
+    "OwnerInvitationPreview": {
+      "endpoint": "string",
+      "device_identity": "string",
+      "invitation_id": "string",
+      "expires_at_unix_ms": "u64"
+    },
+    "OwnerProfile": {
+      "profile_ref": "string",
+      "endpoint": "string",
+      "device_identity": "string",
+      "peer_identity": "string",
+      "client_name": "string",
+      "posture": "OwnerProfilePosture",
+      "pending_requests": "array:string"
+    },
+    "OwnerObservation": {
+      "schema": "string",
+      "scope": "string",
+      "owner_ref": "string",
+      "client_name": "string",
+      "posture": "OwnerPosture",
+      "revision": "u64"
+    },
+    "OwnerPeer": {
+      "request_id": "string",
+      "client_name": "string",
+      "posture": "PairingPosture",
+      "scope": "string",
+      "expires_at_unix_ms": "u64"
+    },
+    "OwnerAdministrationObservation": {
+      "schema": "string",
+      "scope": "string",
+      "owner_ref": "string",
+      "revision": "u64",
+      "open_until_unix_ms": "u64",
+      "peers": "array:OwnerPeer"
+    },
+    "OwnerActionRequest": {
+      "schema": "string",
+      "request_id": "string",
+      "expected_revision": "u64",
+      "action": "OwnerActionKind",
+      "target_ref": "nullable:string"
+    },
+    "OwnerActionReceipt": {
+      "schema": "string",
+      "scope": "string",
+      "owner_ref": "string",
+      "request_id": "string",
+      "action": "OwnerActionKind",
+      "target_ref": "nullable:string",
+      "revision": "u64",
+      "posture": "OwnerActionPosture",
+      "reason": "nullable:string"
+    }
+  },
+  "producer_schemas": {
+    "identity": {
+      "path": "docs/contracts/schemas/network-management-identity.v1.schema.json",
+      "sha256": "8c681b8343ff93a5d05f8816346a387d78879f168cc066c7bee93b6cb3d22f60"
+    },
+    "pairing-request": {
+      "path": "docs/contracts/schemas/network-management-pairing-request.v1.schema.json",
+      "sha256": "318f04cc298a2ae1932d91e6d7df710bb3e9157eb83e84462803c936c5824ea5"
+    },
+    "pairing": {
+      "path": "docs/contracts/schemas/network-management-pairing.v1.schema.json",
+      "sha256": "0ac144f132c6b31809099b41c61b52b80bdcf76c259b9f40fffa1895f4aada3c"
+    },
+    "owner": {
+      "path": "docs/contracts/schemas/network-management-owner.v1.schema.json",
+      "sha256": "1b6bef69c29abf1cb35b46cc930b4855ce85bb106bc95a06648fc3c63acacb27"
+    },
+    "owner-connections": {
+      "path": "docs/contracts/schemas/network-management-owner-connections.v1.schema.json",
+      "sha256": "05369a1b91d5642d0b6642bd127312bcf9fc04c8d6f1f9864bf7e218662f3b1b"
+    },
+    "owner-action": {
+      "path": "docs/contracts/schemas/network-management-owner-action.v1.schema.json",
+      "sha256": "e0ff45cf4f7021ee241ed5db76f1fc9c8bb52eba62aa711c5a09b26817c5e3d5"
+    },
+    "owner-action-receipt": {
+      "path": "docs/contracts/schemas/network-management-owner-action-receipt.v1.schema.json",
+      "sha256": "59ef6a72fd5e0da21eed5906d99c52a7655acc73c77e8d2731e4c6bf55e8f736"
+    },
+    "owner-invitation": {
+      "path": "docs/contracts/schemas/network-management-owner-invitation.v1.schema.json",
+      "sha256": "9023348a022dbbc2221f24cfdebfe3df1d8432868249f8344d98cb798b04f07b"
+    },
+    "owner-bootstrap": {
+      "path": "docs/contracts/schemas/network-management-owner-bootstrap.v1.schema.json",
+      "sha256": "f8dee13958e64efb219a1dda357ca8566e2a23dca8fcc3e1275506763e1122e7"
+    }
+  }
+}

@@ -972,6 +972,26 @@ static int library_profile_add(library_model *model,
     fact->launchable = yvex_deployment_compatibility_evaluate(
                            entry, &compatibility, &admission) == YVEX_OK &&
                        compatibility.current;
+    local_copy(fact->compatibility, sizeof(fact->compatibility),
+               yvex_deployment_compatibility_status_name(compatibility.status));
+    local_copy(fact->readiness, sizeof(fact->readiness),
+               fact->launchable ? "ready" : "unknown");
+    if (!fact->launchable) {
+        switch (compatibility.status) {
+        case YVEX_DEPLOYMENT_COMPATIBILITY_INCOMPLETE:
+        case YVEX_DEPLOYMENT_COMPATIBILITY_MISSING_DEPENDENCY:
+        case YVEX_DEPLOYMENT_COMPATIBILITY_STALE_BINDING:
+            local_copy(fact->readiness, sizeof(fact->readiness), "blocked");
+            break;
+        case YVEX_DEPLOYMENT_COMPATIBILITY_UNSUPPORTED_TARGET:
+        case YVEX_DEPLOYMENT_COMPATIBILITY_MALFORMED_BINDING:
+        case YVEX_DEPLOYMENT_COMPATIBILITY_ARTIFACT_MISMATCH:
+            local_copy(fact->readiness, sizeof(fact->readiness), "incompatible");
+            break;
+        default:
+            break;
+        }
+    }
     if (!fact->launchable)
         local_compatibility_blocker(fact->blocker, sizeof(fact->blocker),
                                     &compatibility, &admission);

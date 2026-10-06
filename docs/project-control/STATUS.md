@@ -20,6 +20,17 @@ publication: {html: true, pdf: true, index: true}
 | 35 | 48 | 54 | 14 | 151 |
 <!-- maturity-counts:end -->
 
+## Platform control-plane convergence
+
+The selected milestone has qualified the independent MIT public SDK (`sdk/rust`
+0.2 and `@yvex/sdk`), explicit headless ownership, typed observation retention,
+profile v3 readiness and exact reviewed-build-plan fencing. Product management
+remains 36 operations; CLI classification covers 186 entries. CPU, protocol,
+native-vault and recovery evidence is recorded in
+[control-plane evaluation](../evaluation/product-management-control-plane.md).
+Studio native visual acceptance and the complete real model-to-Case vertical
+remain separate closure requirements; the milestone is not declared complete.
+
 ## Product, engineering and qualification
 
 | View | Current bounded posture | Major limit |

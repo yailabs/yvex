@@ -1,0 +1,20 @@
+{
+  "name": "@yvex/sdk",
+  "version": "0.2.0",
+  "license": "MIT",
+  "description": "Independent public YVEX platform types; native transport is the Rust yvex-sdk",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./sdk/typescript/index.ts"
+    }
+  },
+  "files": [
+    "sdk/typescript",
+    "sdk/rust/contract",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "python3 sdk/tools/generate.py --check"
+  }
+}

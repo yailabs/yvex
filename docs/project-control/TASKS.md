@@ -69,14 +69,25 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 47 | 38 | 1 | 1 | 7 |
+| 48 | 38 | 2 | 1 | 7 |
 <!-- task-counts:end -->
 
-**38/47 selected Tasks complete.** This denominator includes the significant
+**38/48 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
 candidates are not selected Tasks.
+
+## Selected platform convergence
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `YVEX.PLATFORM.CONTROL.PLANE.CONVERGENCE.0` | Converge public platform management, independent SDK ownership and graphical clients | P1 | 🔵 IN PROGRESS | Canonical YVEX-owned client, typed observation/planning, secure headless owner onboarding, real lifecycle and consumer qualification. Supersedes the incomplete product composition exit of the previous control-plane slice; preserves its qualified protocol/recovery foundations. |
+
+Authorized 2026-10-06. Producer work starts from published `ee34eb22` on Exon.
+The Spark development checkout remains foreign concurrent work. Installed runtime
+is observed before any qualification; no implicit restart, historical request replay
+or unselected Training/A03/Core work is authorized by this record.
 
 ## Product management delivery
 

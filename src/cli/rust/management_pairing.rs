@@ -44,12 +44,59 @@ pub(crate) fn credential_hash(raw: &str) -> Result<String> {
 pub(crate) struct Store {
     root: PathBuf,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct State {
     schema: String,
     open_until: u64,
     peers: Vec<Peer>,
+    #[serde(default)]
+    revision: u64,
+    #[serde(default)]
+    owners: Vec<Owner>,
+    #[serde(default)]
+    invitation: Option<Invitation>,
+    #[serde(default)]
+    owner_receipts: Vec<OwnerReceipt>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Owner {
+    credential_hash: String,
+    client_name: String,
+    posture: String,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Invitation {
+    invitation_id: String,
+    expires_at: u64,
+    consumed_by: Option<String>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OwnerReceipt {
+    owner_ref: String,
+    request_id: String,
+    input: Value,
+    receipt: Value,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct OwnerBootstrap {
+    pub schema: String,
+    pub invitation_secret: String,
+    pub credential_hash: String,
+    pub client_name: String,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct OwnerAction {
+    pub schema: String,
+    pub request_id: String,
+    pub expected_revision: u64,
+    pub action: String,
+    pub target_ref: Option<String>,
 }
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -190,9 +237,16 @@ impl Store {
                 schema: "yvex.management.pairing.ledger.v1".into(),
                 open_until: 0,
                 peers: Vec::new(),
+                revision: 0,
+                owners: Vec::new(),
+                invitation: None,
+                owner_receipts: Vec::new(),
             },
         };
-        if state.schema != "yvex.management.pairing.ledger.v1"
+        if !matches!(
+            state.schema.as_str(),
+            "yvex.management.pairing.ledger.v1" | "yvex.management.pairing.ledger.v2"
+        ) || !valid_owner_state(&state)
             || state.peers.len() > PENDING_CAP + GRANT_CAP
             || state.peers.iter().any(|peer| {
                 !management_jobs::identity(&peer.credential_hash)
@@ -208,7 +262,13 @@ impl Store {
         Ok(state)
     }
     fn write(&self, state: &State) -> Result<()> {
-        save(&self.root.join("pairing.json"), state)
+        let mut next = state.clone();
+        next.schema = "yvex.management.pairing.ledger.v2".into();
+        next.revision = next
+            .revision
+            .checked_add(1)
+            .ok_or("pairing_revision_exhausted")?;
+        save(&self.root.join("pairing.json"), &next)
     }
     pub(crate) fn identity(&self) -> Result<Identity> {
         let _guard = self.lock()?;
@@ -348,6 +408,225 @@ impl Store {
         self.write(&state)?;
         Ok(reply)
     }
+    pub(crate) fn owner_invite(&self, endpoint: &str, output: &str) -> Result<Value> {
+        if !endpoint.starts_with("https://")
+            || endpoint.len() > 2048
+            || endpoint.contains(['@', '?', '#'])
+            || endpoint.chars().any(char::is_whitespace)
+        {
+            return Err("invalid_owner_endpoint");
+        }
+        let output = Path::new(output);
+        if !output.is_absolute() || output.exists() {
+            return Err("invalid_invitation_output");
+        }
+        let parent = output.parent().ok_or("invalid_invitation_output")?;
+        let metadata = fs::symlink_metadata(parent).map_err(|_| "invitation_output_unavailable")?;
+        if !metadata.is_dir()
+            || metadata.uid() != rustix::process::geteuid().as_raw()
+            || metadata.mode() & 0o077 != 0
+        {
+            return Err("unsafe_invitation_output");
+        }
+        let device = self.identity()?.device();
+        let _guard = self.lock()?;
+        let mut state = self.state()?;
+        if state.owners.iter().any(|owner| owner.posture == "approved") {
+            return Err("owner_already_configured");
+        }
+        let mut secret = [0u8; 32];
+        rustls::crypto::ring::default_provider()
+            .secure_random
+            .fill(&mut secret)
+            .map_err(|_| "invitation_random_unavailable")?;
+        let invitation_id = digest(&secret);
+        let secret = secret
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        let expires_at = now() + 600_000;
+        let bundle = json!({"schema":"yvex.management.owner.invitation.v1",
+            "endpoint":endpoint,"device_identity":device,"invitation_id":invitation_id,
+            "invitation_secret":secret,"expires_at_unix_ms":expires_at});
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .custom_flags(OFlags::NOFOLLOW.bits() as i32)
+            .open(output)
+            .map_err(|_| "invitation_output_unavailable")?;
+        let result = (|| {
+            file.write_all(&serde_json::to_vec(&bundle).map_err(|_| "invitation_encoding")?)
+                .and_then(|_| file.sync_all())
+                .map_err(|_| "invitation_output_unavailable")?;
+            state.invitation = Some(Invitation {
+                invitation_id: invitation_id.clone(),
+                expires_at,
+                consumed_by: None,
+            });
+            self.write(&state)
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(output);
+        }
+        result?;
+        Ok(
+            json!({"schema":"yvex.management.owner.invitation.created.v1",
+            "invitation_id":invitation_id,"device_identity":device,
+            "expires_at_unix_ms":expires_at,"output":output}),
+        )
+    }
+    pub(crate) fn claim_owner(&self, request: OwnerBootstrap) -> Result<Value> {
+        if request.schema != "yvex.management.owner.bootstrap.v1"
+            || !management_jobs::identity(&request.credential_hash)
+            || !valid_name(&request.client_name)
+        {
+            return Err("invalid_owner_bootstrap");
+        }
+        let invitation_id = credential_hash(&request.invitation_secret)?;
+        let _guard = self.lock()?;
+        let mut state = self.state()?;
+        let invitation = state
+            .invitation
+            .as_ref()
+            .ok_or("owner_invitation_unavailable")?;
+        if invitation.invitation_id != invitation_id {
+            return Err("owner_invitation_invalid");
+        }
+        if let Some(consumed_by) = &invitation.consumed_by {
+            if consumed_by != &request.credential_hash {
+                return Err("owner_invitation_consumed");
+            }
+            return owner_projection(&state, consumed_by);
+        }
+        if invitation.expires_at <= now() {
+            return Err("owner_invitation_expired");
+        }
+        if state.owners.iter().any(|owner| owner.posture == "approved") {
+            return Err("owner_already_configured");
+        }
+        if state.owners.len() >= 16 {
+            return Err("owner_retention_capacity");
+        }
+        if state
+            .owners
+            .iter()
+            .any(|owner| owner.credential_hash == request.credential_hash)
+        {
+            return Err("owner_identity_previously_used");
+        }
+        state.owners.push(Owner {
+            credential_hash: request.credential_hash.clone(),
+            client_name: request.client_name,
+            posture: "approved".into(),
+        });
+        state.invitation.as_mut().unwrap().consumed_by = Some(request.credential_hash.clone());
+        self.write(&state)?;
+        state.revision += 1;
+        owner_projection(&state, &request.credential_hash)
+    }
+    pub(crate) fn owner_status(&self, hash: &str) -> Result<Value> {
+        let _guard = self.lock()?;
+        owner_projection(&self.state()?, hash)
+    }
+    pub(crate) fn owner_connections(&self, hash: &str) -> Result<Value> {
+        let _guard = self.lock()?;
+        let state = self.state()?;
+        require_owner(&state, hash)?;
+        Ok(json!({"schema":"yvex.management.owner.connections.v1",
+            "scope":"pairing-administration","owner_ref":hash,"revision":state.revision,
+            "open_until_unix_ms":state.open_until,"peers":state.peers.iter().map(|peer| {
+                json!({"request_id":peer.credential_hash,"client_name":peer.client_name,
+                    "posture":projection(peer,now())["posture"],"scope":"product-management",
+                    "expires_at_unix_ms":peer.expires_at})
+            }).collect::<Vec<_>>()}))
+    }
+    pub(crate) fn owner_action(&self, hash: &str, request: OwnerAction) -> Result<Value> {
+        if request.schema != "yvex.management.owner.action.v1"
+            || !management_jobs::identity(&request.request_id)
+            || !matches!(
+                request.action.as_str(),
+                "pairing_open" | "pairing_approve" | "pairing_revoke" | "owner_revoke"
+            )
+            || (request.action == "pairing_open") != request.target_ref.is_none()
+            || request
+                .target_ref
+                .as_deref()
+                .is_some_and(|v| !management_jobs::identity(v))
+        {
+            return Err("invalid_owner_action");
+        }
+        let _guard = self.lock()?;
+        let mut state = self.state()?;
+        require_owner(&state, hash)?;
+        let input = serde_json::to_value(&request).map_err(|_| "invalid_owner_action")?;
+        if let Some(existing) = state
+            .owner_receipts
+            .iter()
+            .find(|r| r.owner_ref == hash && r.request_id == request.request_id)
+        {
+            return if existing.input == input {
+                Ok(existing.receipt.clone())
+            } else {
+                Err("owner_request_identity_conflict")
+            };
+        }
+        if state.owner_receipts.len() >= 256 {
+            return Err("owner_receipt_retention_capacity");
+        }
+        let next_revision = state
+            .revision
+            .checked_add(1)
+            .ok_or("pairing_revision_exhausted")?;
+        let refusal = if state.revision != request.expected_revision {
+            Some("stale_owner_revision")
+        } else {
+            apply_owner_action(&mut state, &request).err()
+        };
+        let receipt = json!({"schema":"yvex.management.owner.action-receipt.v1",
+            "scope":"pairing-administration","owner_ref":hash,"request_id":request.request_id,
+            "action":request.action,"target_ref":request.target_ref,"revision":next_revision,
+            "posture":if refusal.is_some() {"refused"} else {"applied"},"reason":refusal});
+        state.owner_receipts.push(OwnerReceipt {
+            owner_ref: hash.into(),
+            request_id: request.request_id,
+            input,
+            receipt: receipt.clone(),
+        });
+        self.write(&state)?;
+        Ok(receipt)
+    }
+    pub(crate) fn owner_receipt(&self, hash: &str, request: &str) -> Result<Value> {
+        if !management_jobs::identity(request) {
+            return Err("invalid_owner_request_identity");
+        }
+        let _guard = self.lock()?;
+        let state = self.state()?;
+        // Revocation still permits observation of this credential's own prior outcome.
+        owner_projection(&state, hash)?;
+        state
+            .owner_receipts
+            .iter()
+            .find(|r| r.owner_ref == hash && r.request_id == request)
+            .map(|r| r.receipt.clone())
+            .ok_or("owner_request_unknown")
+    }
+    pub(crate) fn revoke_owner(&self, hash: &str) -> Result<Value> {
+        if !management_jobs::identity(hash) {
+            return Err("invalid_owner_identity");
+        }
+        let _guard = self.lock()?;
+        let mut state = self.state()?;
+        let owner = state
+            .owners
+            .iter_mut()
+            .find(|o| o.credential_hash == hash)
+            .ok_or("owner_unknown")?;
+        owner.posture = "revoked".into();
+        self.write(&state)?;
+        state.revision += 1;
+        owner_projection(&state, hash)
+    }
     pub(crate) fn list(&self) -> Result<Value> {
         let _guard = self.lock()?;
         let state = self.state()?;
@@ -357,6 +636,99 @@ impl Store {
                 value["client_name"] = json!(p.client_name); value }).collect::<Vec<_>>()}),
         )
     }
+}
+fn valid_owner_state(state: &State) -> bool {
+    state.owners.len() <= 16
+        && state.owner_receipts.len() <= 256
+        && state.owners.iter().all(|o| {
+            management_jobs::identity(&o.credential_hash)
+                && valid_name(&o.client_name)
+                && matches!(o.posture.as_str(), "approved" | "revoked")
+        })
+        && state
+            .owners
+            .iter()
+            .filter(|o| o.posture == "approved")
+            .count()
+            <= 1
+        && state.invitation.as_ref().is_none_or(|i| {
+            management_jobs::identity(&i.invitation_id)
+                && i.consumed_by
+                    .as_deref()
+                    .is_none_or(management_jobs::identity)
+        })
+        && state.owner_receipts.iter().all(|r| {
+            management_jobs::identity(&r.owner_ref)
+                && management_jobs::identity(&r.request_id)
+                && r.receipt["schema"] == "yvex.management.owner.action-receipt.v1"
+                && r.receipt["owner_ref"] == r.owner_ref
+                && r.receipt["request_id"] == r.request_id
+        })
+}
+fn require_owner(state: &State, hash: &str) -> Result<()> {
+    if state
+        .owners
+        .iter()
+        .any(|o| o.credential_hash == hash && o.posture == "approved")
+    {
+        Ok(())
+    } else {
+        Err("owner_administration_required")
+    }
+}
+fn owner_projection(state: &State, hash: &str) -> Result<Value> {
+    let owner = state
+        .owners
+        .iter()
+        .find(|o| o.credential_hash == hash)
+        .ok_or("owner_unknown")?;
+    Ok(
+        json!({"schema":"yvex.management.owner.v1","scope":"pairing-administration",
+        "owner_ref":hash,"client_name":owner.client_name,"posture":owner.posture,
+        "revision":state.revision}),
+    )
+}
+fn apply_owner_action(state: &mut State, request: &OwnerAction) -> Result<()> {
+    let target = request.target_ref.as_deref().unwrap_or("");
+    match request.action.as_str() {
+        "pairing_open" => state.open_until = now() + WINDOW_MS,
+        "owner_revoke" => {
+            let owner = state
+                .owners
+                .iter_mut()
+                .find(|o| o.credential_hash == target)
+                .ok_or("owner_unknown")?;
+            owner.posture = "revoked".into();
+        }
+        "pairing_approve" | "pairing_revoke" => {
+            if request.action == "pairing_approve"
+                && state
+                    .peers
+                    .iter()
+                    .filter(|p| p.posture != "pending")
+                    .count()
+                    >= GRANT_CAP
+            {
+                return Err("pairing_grant_capacity");
+            }
+            let peer = state
+                .peers
+                .iter_mut()
+                .find(|p| p.credential_hash == target)
+                .ok_or("pairing_request_unknown")?;
+            if request.action == "pairing_approve" {
+                if peer.posture != "pending" || peer.expires_at <= now() {
+                    return Err("pairing_request_not_pending");
+                }
+                peer.posture = "approved".into();
+                peer.approved_at = Some(now());
+            } else {
+                peer.posture = "revoked".into();
+            }
+        }
+        _ => return Err("unsupported_owner_action"),
+    }
+    Ok(())
 }
 pub(crate) fn valid_name(name: &str) -> bool {
     !name.trim().is_empty() && name.len() <= 80 && !name.chars().any(char::is_control)
@@ -438,6 +810,182 @@ mod tests {
         )
         .unwrap();
         assert!(store.identity().is_err());
+        fs::remove_dir_all(store.root.parent().unwrap()).unwrap();
+    }
+    fn bootstrap(store: &Store) -> (String, String) {
+        let output = store.root.parent().unwrap().join("owner-invite.json");
+        let created = store
+            .owner_invite("https://127.0.0.1:18080", output.to_str().unwrap())
+            .unwrap();
+        let bundle: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+        assert_eq!(fs::metadata(&output).unwrap().mode() & 0o777, 0o600);
+        let secret = bundle["invitation_secret"].as_str().unwrap().to_owned();
+        assert!(!created.to_string().contains(&secret));
+        let owner = credential_hash(&"12".repeat(32)).unwrap();
+        let result = store
+            .claim_owner(OwnerBootstrap {
+                schema: "yvex.management.owner.bootstrap.v1".into(),
+                invitation_secret: secret.clone(),
+                credential_hash: owner.clone(),
+                client_name: "Owner fixture".into(),
+            })
+            .unwrap();
+        assert_eq!(result["scope"], "pairing-administration");
+        assert_eq!(result["posture"], "approved");
+        assert!(
+            store.authorize(&owner).is_err(),
+            "Ownership never grants product management"
+        );
+        assert!(
+            !fs::read_to_string(store.root.join("pairing.json"))
+                .unwrap()
+                .contains(&secret)
+        );
+        (owner, secret)
+    }
+    fn owner_request(state: &State, id: &str, action: &str, target: Option<&str>) -> OwnerAction {
+        OwnerAction {
+            schema: "yvex.management.owner.action.v1".into(),
+            request_id: id.repeat(32),
+            expected_revision: state.revision,
+            action: action.into(),
+            target_ref: target.map(str::to_owned),
+        }
+    }
+    #[test]
+    fn headless_owner_requires_invitation_and_keeps_management_separate() {
+        let store = store();
+        let (owner, secret) = bootstrap(&store);
+        let ordinary = credential_hash(&"34".repeat(32)).unwrap();
+        assert!(store.owner_connections(&ordinary).is_err());
+        assert_eq!(
+            store.claim_owner(OwnerBootstrap {
+                schema: "yvex.management.owner.bootstrap.v1".into(),
+                invitation_secret: secret,
+                credential_hash: ordinary.clone(),
+                client_name: "Replay".into()
+            }),
+            Err("owner_invitation_consumed")
+        );
+        let open = owner_request(&store.state().unwrap(), "01", "pairing_open", None);
+        let open_result = store.owner_action(&owner, open).unwrap();
+        assert_eq!(open_result["posture"], "applied");
+        assert_eq!(
+            store.request(&ordinary, "Ordinary client").unwrap()["posture"],
+            "pending"
+        );
+        assert!(store.authorize(&ordinary).is_err());
+        let approve = owner_request(
+            &store.state().unwrap(),
+            "02",
+            "pairing_approve",
+            Some(&ordinary),
+        );
+        let approved = store.owner_action(&owner, approve).unwrap();
+        assert_eq!(approved["posture"], "applied");
+        assert!(store.authorize(&ordinary).is_ok());
+        assert!(
+            store.owner_connections(&ordinary).is_err(),
+            "Management clients cannot administer pairing"
+        );
+        assert_eq!(
+            store.owner_receipt(&owner, &"02".repeat(32)).unwrap(),
+            approved
+        );
+        let revoke = owner_request(
+            &store.state().unwrap(),
+            "03",
+            "pairing_revoke",
+            Some(&ordinary),
+        );
+        store.owner_action(&owner, revoke).unwrap();
+        assert!(store.authorize(&ordinary).is_err());
+        fs::remove_dir_all(store.root.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn owner_revision_receipts_and_revocation_do_not_replay_actions() {
+        let store = store();
+        let (owner, secret) = bootstrap(&store);
+        let request = owner_request(&store.state().unwrap(), "04", "pairing_open", None);
+        let input = serde_json::to_vec(&request).unwrap();
+        let applied = store.owner_action(&owner, request).unwrap();
+        let revision = store.state().unwrap().revision;
+        assert_eq!(
+            store
+                .owner_action(&owner, serde_json::from_slice(&input).unwrap())
+                .unwrap(),
+            applied
+        );
+        assert_eq!(store.state().unwrap().revision, revision);
+        let mut conflict: OwnerAction = serde_json::from_slice(&input).unwrap();
+        conflict.expected_revision += 1;
+        assert_eq!(
+            store.owner_action(&owner, conflict),
+            Err("owner_request_identity_conflict")
+        );
+        let mut stale = owner_request(&store.state().unwrap(), "05", "pairing_open", None);
+        stale.expected_revision = 0;
+        let old_window = store.state().unwrap().open_until;
+        assert_eq!(
+            store.owner_action(&owner, stale).unwrap()["reason"],
+            "stale_owner_revision"
+        );
+        assert_eq!(store.state().unwrap().open_until, old_window);
+        let revoke = owner_request(&store.state().unwrap(), "06", "owner_revoke", Some(&owner));
+        assert_eq!(
+            store.owner_action(&owner, revoke).unwrap()["posture"],
+            "applied"
+        );
+        assert!(store.owner_connections(&owner).is_err());
+        assert_eq!(store.owner_status(&owner).unwrap()["posture"], "revoked");
+        assert_eq!(
+            store.owner_receipt(&owner, &"06".repeat(32)).unwrap()["posture"],
+            "applied"
+        );
+        assert_eq!(
+            store
+                .claim_owner(OwnerBootstrap {
+                    schema: "yvex.management.owner.bootstrap.v1".into(),
+                    invitation_secret: secret,
+                    credential_hash: owner,
+                    client_name: "Replay".into()
+                })
+                .unwrap()["posture"],
+            "revoked"
+        );
+        fs::remove_dir_all(store.root.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn expired_or_wrong_invitation_never_creates_owner() {
+        let store = store();
+        let path = store.root.parent().unwrap().join("invite.json");
+        store
+            .owner_invite("https://127.0.0.1:18080", path.to_str().unwrap())
+            .unwrap();
+        let bundle: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        let mut state = store.state().unwrap();
+        state.invitation.as_mut().unwrap().expires_at = 1;
+        store.write(&state).unwrap();
+        let owner = credential_hash(&"78".repeat(32)).unwrap();
+        assert_eq!(
+            store.claim_owner(OwnerBootstrap {
+                schema: "yvex.management.owner.bootstrap.v1".into(),
+                invitation_secret: bundle["invitation_secret"].as_str().unwrap().into(),
+                credential_hash: owner.clone(),
+                client_name: "Expired".into()
+            }),
+            Err("owner_invitation_expired")
+        );
+        assert_eq!(
+            store.claim_owner(OwnerBootstrap {
+                schema: "yvex.management.owner.bootstrap.v1".into(),
+                invitation_secret: "00".repeat(32),
+                credential_hash: owner.clone(),
+                client_name: "Wrong".into()
+            }),
+            Err("owner_invitation_invalid")
+        );
+        assert_eq!(store.owner_status(&owner), Err("owner_unknown"));
         fs::remove_dir_all(store.root.parent().unwrap()).unwrap();
     }
     #[test]
