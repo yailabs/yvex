@@ -185,6 +185,7 @@ fn native_bindings(root: &std::path::Path) -> bindgen::Builder {
             "yvex_shell.h",
             concat!(
                 "#include <yvex/core.h>\n#include <yvex/server.h>\n#include <yvex/catalog.h>\n",
+                "#include <yvex/finite_decision_producer.h>\n",
                 "#include <yvex/internal/media_target.h>\n",
                 "#include <yvex/internal/model_target.h>\n",
                 "#include <yvex/internal/server_loader.h>\n",
@@ -299,6 +300,7 @@ fn native_bindings(root: &std::path::Path) -> bindgen::Builder {
         )
         .allowlist_function("yvex_server_(create|start|serve|stop|finish|close|socket_path)")
         .allowlist_function("yvex_server_(event_next|event_kind_name|get_summary)")
+        .allowlist_function("yvex_finite_producer_execute_local")
         .allowlist_function("yvex_server_registry_.*")
         .allowlist_function("yvex_artifact_(open|close)")
         .allowlist_function("yvex_artifact_sha256_hex_bytes")

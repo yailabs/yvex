@@ -71,16 +71,29 @@ the real isolated SSH fixture, and converges published development onto
 <!-- task-counts:start -->
 | Total selected | Complete | In progress | Ready | Blocked |
 | ---: | ---: | ---: | ---: | ---: |
-| 53 | 38 | 1 | 7 | 7 |
+| 54 | 39 | 1 | 7 | 7 |
 <!-- task-counts:end -->
 
-**38/53 selected Tasks complete.** This denominator includes the significant
+**39/54 selected Tasks complete.** This denominator includes the significant
 retained delivery sequence, two independent completed interface Tasks and the
 completed CLI/REPLAI refoundation and native macOS qualification. It is not
 YVEX product completion. Research
 candidates are not selected Tasks.
 
+## Remote finite-decision producer
+
+| ID | Task | Priority | Status | Dependency / Exit |
+| --- | --- | --- | --- | --- |
+| `INTERFACES.FINITE.DECISION.REMOTE.PRODUCER.0` | Publish an authenticated bounded finite-decision producer for an independently owned remote SDK consumer | P1 | ✅ COMPLETE | [Public contract](../contracts/finite-decision-remote.md) and machine schemas; 32 real restricted-SSH/public-C-client controls, management regression, Rust/C/protocol/CLI/PTY/structural evidence pass. [Exact scope](../evaluation/finite-decision-remote.md) excludes actual installed Exon→DGX/SDK/model-quality integration. |
+
+Independently authorized on 2026-10-05 for the Exon YAI → DGX YVEX boundary.
+This delivery owns the YVEX producer/contract, not SDK or YAI integration.
+Its real SSH fixture uses a synthetic native peer: it does not qualify model
+quality, an installed production listener or the actual Exon→DGX chain.
+A03 remains READY. No DeepSeek, Metal or Laya lifecycle work is selected here.
+
 ## Independently selected macOS qualification
+
 
 | ID | Task | Priority | Status | Dependency / Exit |
 | --- | --- | --- | --- | --- |

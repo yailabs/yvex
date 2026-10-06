@@ -67,6 +67,9 @@ The result names raw model logits, a relative distribution over precisely that
 population (not calibrated confidence), source/model/binding/tokenizer/program,
 input-policy and execution identities, plus zero-generation/resource evidence.
 The existing direct `<yvex/finite_decision.h>` token-domain API is unchanged.
+The [remote finite producer](finite-decision-remote.md) projects the same typed
+request/result through an explicitly enrolled SSH process. It does not change
+these installed records or expose the private local wire to remote consumers.
 
 The common-runtime cutover intentionally retired the former installed
 `runtime.h`, `generation.h`, and `metrics.h` diagnostic contracts. Those

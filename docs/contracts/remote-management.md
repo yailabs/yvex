@@ -20,6 +20,11 @@ DGX Spark is one qualification fixture, not a type or routing rule. The
 OpenAI-compatible listener and YVEX's private Unix socket are **not** remote
 management transports.
 
+The separately versioned [remote finite-decision producer](finite-decision-remote.md)
+may reuse this restricted SSH substrate only with explicit `--scope finite-decision`
+enrollment. It is not a management v1 operation: existing keys remain management-only,
+and the two admitted management reads and schemas are unchanged.
+
 ## Transport and trust
 
 One SSH connection carries one UTF-8 JSON request line on standard input and

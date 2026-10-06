@@ -95,6 +95,12 @@ bounded migration hint and never dispatch their former operation.
 
 ## Process roles
 
+Remote finite-compute enrollment is explicit:
+`yvex management enroll ... --scope finite-decision`. Without the flag,
+management peers remain read-only. The enrolled forced `management finite-protocol`
+mode serves the [public JSON contract](../contracts/finite-decision-remote.md);
+it is not an ordinary generation command or an administrative shell.
+
 ### Foreground host
 
 `yvex serve` always attempts to become the persistent foreground host. It owns

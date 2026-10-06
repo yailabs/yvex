@@ -7,6 +7,7 @@
     "reason": "unknown ownership expands to conservative CPU composition evidence"
   },
   "change_classes": [
+    {"id":"remote-finite-producer","patterns":["src/cli/rust/finite_remote.rs","src/cli/rust/ffi/finite.rs","src/cli/rust/management.rs","tests/integration/finite_remote.py","tests/integration/finite_remote_peer.c"],"lanes":["structural","native"],"tests":["integration.finite-remote","integration.remote-management","integration.rust-shell","unit.protocol","unit.server"],"reason":"public remote computation requires real restricted SSH, explicit compute grant, exact result identities, stale/population refusal and unchanged read-only management; a synthetic peer does not qualify a model"},
     {"id":"metal-foundation","patterns":["src/backend/metal.c","src/backend/metal/*","include/yvex/internal/backend_resource.h","tests/unit/backend_metal.c"],"lanes":["metal","native","structural"],"tests":["metal.foundation","metal.failure","unit.backend_metal_refusal","unit.backend_cpu","unit.backend_ops"],"reason":"native shared-buffer execution must earn GPU, bit-exact semantic, fail-closed cleanup and CPU/platform evidence separately"},
     {
       "id": "materialization-outcome",

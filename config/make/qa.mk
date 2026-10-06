@@ -1224,7 +1224,15 @@ test-qwen-admission-live: $(QWEN_ADMISSION_LIVE_RUNNER)
 check-docs: test-documentation-architecture test-project-control test-docs-surface
 	@echo "yvex documentation: ok"
 
-.PHONY: test-rust-shell rust-ffi-index
+.PHONY: test-rust-shell rust-ffi-index test-finite-remote
+$(TEST_DIR)/finite-remote-peer: $(OBJ_DIR)/tests/integration/finite_remote_peer.o $(LIBYVEX)
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+test-finite-remote: rust-client $(TEST_DIR)/finite-remote-peer
+	YVEX_BIN='$(abspath $(YVEX_BIN))' YVEX_FINITE_REMOTE_PEER='$(abspath $(TEST_DIR)/finite-remote-peer)' \
+		python3 tests/integration/finite_remote.py
+
 $(RUST_BENCHMARK_FIXTURE): $(RUST_BENCHMARK_FIXTURE_OBJ) $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@

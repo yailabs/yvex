@@ -57,6 +57,7 @@
         "host_memory",
         "host_status",
         "host_stop",
+        "finite_remote",
         "model_load",
         "model_unload",
         "reasoning_disabled",
@@ -4849,6 +4850,7 @@
       "help_group": "Security",
       "lane": "offline-engine",
       "operation_id": "management.peer.enroll",
+      "flags": [{"name":"--scope","description":"Explicit peer grant; management is read-only, finite-decision permits bounded computation.","takes_value":true,"value_type":"enum","enum_values":["management","finite-decision"]}],
       "side_effects": "atomically enrolls one exact peer key with a forced command",
       "summary": "Enroll an operator-approved peer identity.",
       "test_owner": "tests/integration/remote_management.sh",
@@ -4937,6 +4939,27 @@
       "summary": "Serve one authenticated management request.",
       "test_owner": "tests/integration/remote_management.sh",
       "visibility": "automation"
+    },
+    {
+      "operation_id": "finite.remote.protocol",
+      "command_path": ["management", "finite-protocol"],
+      "adapter_id": "finite_remote",
+      "adapter_argv": ["finite-protocol"],
+      "architectural_plane": "Integrate",
+      "arguments": [
+        {"name":"host_public_key","required":true,"multiplicity":"one","validator":"syntax.path","value_type":"path","completion_provider":"filesystem"},
+        {"name":"peer_identity","required":true,"multiplicity":"one","validator":"syntax.text","value_type":"text","completion_provider":"none"},
+        {"name":"trust_file","required":true,"multiplicity":"one","validator":"syntax.path","value_type":"path","completion_provider":"filesystem"}
+      ],
+      "documentation_owner":"docs/contracts/finite-decision-remote.md",
+      "help_group":"Consumer APIs",
+      "input_schema":"yvex.finite.request.v1",
+      "result_schema":"yvex.finite.response.v1",
+      "lane":"runtime-client",
+      "side_effects":"one explicitly enrolled bounded finite model computation; no lifecycle or Case mutation",
+      "summary":"Serve one authenticated finite-decision request; enrolled SSH forced command only.",
+      "test_owner":"tests/integration/finite_remote.py",
+      "visibility":"automation"
     },
     {
       "CLI_projection": false,

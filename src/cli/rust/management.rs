@@ -143,7 +143,8 @@ fn trust_line_identity(line: &str) -> Result<&str> {
     }
     let words: Vec<_> = command.split(' ').collect();
     if words.len() != 6
-        || words[1..3] != ["management", "protocol"]
+        || words[1] != "management"
+        || !matches!(words[2], "protocol" | "finite-protocol")
         || words[4] != identity
         || ![words[0], words[3], words[5]].into_iter().all(safe_path)
     {
@@ -210,12 +211,18 @@ fn change(invocation: &Invocation<'_>, enroll: bool) -> Result<Output> {
         if !safe_path(executable) {
             return Err("unsafe_executable_path");
         }
+        let scope = invocation.value("--scope").unwrap_or("management");
+        let protocol = match scope {
+            "management" => "protocol",
+            "finite-decision" => "finite-protocol",
+            _ => return Err("unsupported_peer_scope"),
+        };
         let line = format!(
             concat!(
-                "restrict,command=\"{} management protocol {} {} {}\" ",
+                "restrict,command=\"{} management {} {} {} {}\" ",
                 "ssh-ed25519 {} yvex-management:{}\n"
             ),
-            executable, words[2], peer, path, encoded, peer
+            executable, protocol, words[2], peer, path, encoded, peer
         );
         if line.len() >= REQUEST_CAP {
             return Err("entry_too_large");
@@ -305,7 +312,7 @@ fn protocol_response(request: &Request, device: &str, peer: &str) -> Value {
     result
 }
 
-fn protocol(invocation: &Invocation<'_>) -> Result<Output> {
+pub(crate) fn authenticate(invocation: &Invocation<'_>, scope: &str) -> Result<(String, String)> {
     let nonempty = |key| std::env::var_os(key).is_some_and(|value| !value.is_empty());
     let words = &invocation.positionals;
     if !nonempty("SSH_CONNECTION")
@@ -317,15 +324,38 @@ fn protocol(invocation: &Invocation<'_>) -> Result<Output> {
     }
     let (device, _) = key_identity(&words[0])?;
     let peer = &words[1];
-    let mut response = json!({"schema":"yvex.management.response.v1", "request_id":null,
-        "status":"refused", "reason":"peer_revoked_or_authority_unavailable"});
-    if safe_path(&words[2])
-        && trust_snapshot(&words[2])
-            .and_then(|text| trust_find(&text, peer))
-            .ok()
-            .flatten()
-            .is_some()
-    {
+    if !safe_path(&words[2]) {
+        return Err("peer_revoked_or_authority_unavailable");
+    }
+    let trust = trust_snapshot(&words[2])?;
+    let range = trust_find(&trust, peer)?.ok_or("peer_revoked_or_authority_unavailable")?;
+    let command = trust[range]
+        .split_once("\" ssh-ed25519 ")
+        .ok_or("trust_file_malformed")?
+        .0;
+    if command.split(' ').nth(2) != Some(scope) {
+        return Err("peer_revoked_or_authority_unavailable");
+    }
+    Ok((device, peer.clone()))
+}
+
+fn protocol(invocation: &Invocation<'_>) -> Result<Output> {
+    let (device, peer) = match authenticate(invocation, "protocol") {
+        Ok(identity) => identity,
+        Err("restricted_ssh_required") => return Err("restricted_ssh_required"),
+        Err(_) => {
+            return Ok(Output::standard(
+                format!(
+                    "{}\n",
+                    json!({
+            "schema":"yvex.management.response.v1", "request_id":null,
+            "status":"refused", "reason":"peer_revoked_or_authority_unavailable"})
+                ),
+                0,
+            ));
+        }
+    };
+    let response = {
         let mut input = io::stdin().lock().take(REQUEST_CAP as u64);
         let mut bytes = Vec::new();
         if input
@@ -335,12 +365,12 @@ fn protocol(invocation: &Invocation<'_>) -> Result<Output> {
         {
             return Err("request_unavailable");
         }
-        response = match parse_request(&bytes) {
-            Ok(request) => protocol_response(&request, &device, peer),
+        match parse_request(&bytes) {
+            Ok(request) => protocol_response(&request, &device, &peer),
             Err(_) => json!({"schema":"yvex.management.response.v1", "request_id":null,
                 "status":"refused", "reason":"malformed_request"}),
-        };
-    }
+        }
+    };
     Ok(Output::standard(format!("{response}\n"), 0))
 }
 

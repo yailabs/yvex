@@ -31,5 +31,6 @@ Public ABI and wire contracts are not interchangeable with internal transient sc
 - [Internal Numerical Execution ABI](numerical-abi.md)
 - [YVEX OpenAI Compatibility Profile v3](openai-compatibility.md)
 - [Remote management bootstrap v1](remote-management.md)
+- [Remote finite-decision producer v1](finite-decision-remote.md)
 - [Internal Runtime ABI](runtime-abi.md)
 - [Hosted Runtime Contract](runtime.md)
