@@ -551,10 +551,14 @@ impl Store {
         require_owner(&state, hash)?;
         Ok(json!({"schema":"yvex.management.owner.connections.v1",
             "scope":"pairing-administration","owner_ref":hash,"revision":state.revision,
-            "open_until_unix_ms":state.open_until,"available_actions":["pairing_open","pairing_approve","pairing_revoke","owner_revoke","service_control_grant","service_control_revoke"],"peers":state.peers.iter().map(|peer| {
+            "open_until_unix_ms":state.open_until,
+            "available_actions":["pairing_open","pairing_approve","pairing_revoke",
+                "owner_revoke","service_control_grant","service_control_revoke"],
+            "peers":state.peers.iter().map(|peer| {
                 json!({"request_id":peer.credential_hash,"client_name":peer.client_name,
                     "posture":projection(peer,now())["posture"],"scope":"product-management",
-                    "expires_at_unix_ms":peer.expires_at,"service_control_granted":peer.service_control&&peer.posture=="approved"})
+                    "expires_at_unix_ms":peer.expires_at,
+                    "service_control_granted":peer.service_control&&peer.posture=="approved"})
             }).collect::<Vec<_>>()}))
     }
     pub(crate) fn owner_action(&self, hash: &str, request: OwnerAction) -> Result<Value> {

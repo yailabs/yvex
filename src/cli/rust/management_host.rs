@@ -248,7 +248,12 @@ pub(crate) fn observation(root: Option<&Path>, granted: bool) -> Result<Value> {
         None
     };
     Ok(
-        json!({"schema":"yvex.host.control.v1","ownership":ownership,"revision":c.as_ref().map_or(0,|c|c.revision),"state":state,"host_instance":instance,"configured":c.is_some(),"service_control_granted":granted,"can_start":allowed&&state=="stopped","can_stop":allowed&&state=="running","can_restart":allowed&&state=="running","reason":reason,"inference_port":c.map(|c|c.openai_port)}),
+        json!({"schema":"yvex.host.control.v1","ownership":ownership,
+            "revision":c.as_ref().map_or(0,|c|c.revision),"state":state,
+            "host_instance":instance,"configured":c.is_some(),
+            "service_control_granted":granted,"can_start":allowed&&state=="stopped",
+            "can_stop":allowed&&state=="running","can_restart":allowed&&state=="running",
+            "reason":reason,"inference_port":c.map(|c|c.openai_port)}),
     )
 }
 pub(crate) fn validate(operation: &str, value: &Value) -> Result<()> {
@@ -395,7 +400,10 @@ pub(crate) fn execute(
     c.action_id = Some(id.into());
     let previous = i.host_instance.clone();
     let revision = c.revision;
-    let receipt = |phase: &str, instance: Option<&str>| json!({"schema":"yvex.host.control.result.v1","phase":phase,"revision":revision,"previous_host_instance":previous,"host_instance":instance,"models_restored":false});
+    let receipt = |phase: &str, instance: Option<&str>| {
+        json!({"schema":"yvex.host.control.result.v1","phase":phase,"revision":revision,
+            "previous_host_instance":previous,"host_instance":instance,"models_restored":false})
+    };
     if operation != "host.start" {
         c.pending_phase = Some("stopping".into());
         save(&root, "configuration.json", &c)?;
@@ -507,7 +515,14 @@ mod tests {
         ] {
             assert!(validate("host.start", &input).is_err());
         }
-        assert!(validate("host.stop",&json!({"expected_revision":1,"host_instance":"a".repeat(64),"acknowledge_disruption":true})).is_ok());
+        assert!(
+            validate(
+                "host.stop",
+                &json!({"expected_revision":1,
+            "host_instance":"a".repeat(64),"acknowledge_disruption":true})
+            )
+            .is_ok()
+        );
         for input in [
             json!({"expected_revision":1}),
             json!({"expected_revision":1,"host_instance":"a".repeat(64)}),
