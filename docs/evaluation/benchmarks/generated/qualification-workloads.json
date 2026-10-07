@@ -413,6 +413,14 @@
           "outcomes": []
         },
         {
+          "id": "deepseek-installed-native-coding-36",
+          "target_identity": "5883df3513715bbfad7e50e1fcaf099db9bc2ddefa25b071ba5d97497e609263",
+          "path": "product-native-v25",
+          "plane": "product-path",
+          "state": "CHARACTERIZED",
+          "outcomes": []
+        },
+        {
           "id": "deepseek-integrated-native-coding-29",
           "target_identity": "417305bdd2bbdf7a1da09f3e6a7ed75ebe6c6714de69577d325850de4093bd48",
           "path": "product-native/native-v25",

@@ -129,24 +129,39 @@ control hop to Exon and is not pure client-observed Exon latency.
 
 ### Current generation after the coordinated idle window
 
-The independently qualified installed executable is unchanged. The subsequent
-operator-approved idle Host restart reset its process-local engine generations;
-the finite engine now remains **generation 1**, with specialization
+The 2026-10-07 operator-approved idle replacement installs clean published
+`a444bcdd384f6abfc79b07d1a26d93c17c4a97c0` through `make install` under its
+immutable prefix. Runtime executable SHA-256 is
+`e1ea8e02ad223a3fffb2ecc6839ee354658bd97a6e23c7e6b0651007d4ad3b4d`.
+The machine handoff separates this **resident Host** from the unchanged public
+forced-command producer at `a46ddf5e` and the independently running HTTPS
+management listener. Neither transport was restarted or re-enrolled.
+The previous Host had zero active/HTTP/queued work, sessions, leases, attached
+clients and transient bytes. Its process, socket and singleton ownership retired
+after one supported shutdown request before the replacement started; shutdown
+ACK alone was not treated as completed teardown.
+
+The finite engine remains **generation 1**, with specialization
 `ff6f2d5c61e15657abbee3762fa2f0bdb71191f20437cce71afd7cc5d73b1228`.
 All six durable model/input-policy identities, the approved server pins and
 the YAI finite-only enrollment are unchanged. Consumers must use the current
 generation, not the historical generation 2 in the original LAN receipt.
 
 The current [machine handoff](data/finite-lan-20261006.json) separates those
-historical remote controls from fresh installed public-C local recovery. The
+historical controls from fresh installed public-C local recovery and four new
+Exon calls through the approved public restricted-SSH listener. The
 original three-candidate fixture again matches its independent checkpoint
 reference within the predeclared tolerance; a request for retired generation 2
 refuses with `YVEX_ERR_STATE` and no result. The result identity changes with
 the generation by contract; equal model scores do not make result identities
-interchangeable. This is not a new Exon/SDK/YAI consumer qualification.
+interchangeable. Both fresh LAN positive/recovery calls preserve the six model
+identities and ordered candidate IDs; stale generation publishes no result and
+duplicate IDs refuse before dispatch. This renews the real producer/transport
+control, not SDK/YAI semantic acceptance or low-latency Fast Search qualification.
+No client private key was copied and no trust/grant was changed.
 
-DeepSeek is restored at generation 7 at this capture, with the same model,
-artifact, binding, specialization, context 32768, chunk 64 and speculative
+DeepSeek is restored at **generation 2** at this capture, with the same model,
+artifact and binding, context 32768, chunk 64 and speculative
 strategy. A new synthetic `Return OK.` recovery completes with HTTP 200 and
 natural stop; no operator/Case prompt is replayed. Typed snapshots show zero
 active/queued work, sessions, leases, attached clients and transient state.
@@ -154,8 +169,38 @@ HTTPS certificate inspection matches the previously approved pin; neither
 public listener was restarted or re-enrolled. Further model reloads can change
 DeepSeek's generation without changing the finite engine's generation.
 
+Its specialization changes to the admitted computational candidate's
+`3fb4ce2033294ae726603f187d8538eff314b0c3f383977d2616d11c9aa29144`;
+this is not silently described as the prior deployment identity. Four fresh
+coding controls from the actual installed Rust qualification command each
+commit 256 tokens and preserve one token-ledger identity. The local receipt is
+not upstream model-quality, target-only throughput, release or YAI evidence.
+The [generated target detail](benchmarks/generated/qualification-deepseek-installed-native-coding-36.md)
+projects that structured LOCAL receipt, retaining the first coding request
+separately from the three subsequent samples and keeping unknown hardware/kernel
+and resource-observation authority explicit. Its source/build context is bound
+by the separately retained live-executable and source-capture witnesses.
+The finite numerical control still matches the independently captured reference
+within `1e-4`; malformed and overlong input publish no result. Persistent finite
+workspace is intentionally owned, not leaked transient work.
+
+Load observations in this window are **already-cached** single samples, not
+cold-load improvements over the earlier residency observation. They do not
+establish physical residency from a mapping or device address.
+
 Raw post-window controls and snapshots remain at
-`/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL/post-profile-recovery-v7`.
+`/home/dgmothx/lab/models/evidence/deepseek-competitive-20261005.oO7lAU/checked-program-window-20261006.Dxl0HL`:
+`published-product-rollout-v33`, `published-product-controls-v34`,
+`published-native-coding-v36`, `published-product-recovery-v37` and
+`published-product-lan-v38`.
+The failed outer-lock and exact-profile-as-model CLI attempts were refused
+before dispatch and retained; the corrected ordinary `v4-flash --variant ...`
+command neither redispatched indeterminate work nor replayed a Case prompt.
+A direct non-SSH invocation of the forced-command adapter also refuses with
+`restricted_ssh_required` before dispatch; it is not counted as successful
+inference. Only the actual approved SSH invocation provides the renewed LAN
+evidence. Its outer round trip includes the DGX control hop to Exon, not pure
+Exon client latency.
 
 ### Exact consumer boundary and limits
 
